@@ -1,0 +1,33 @@
+/* Checkbox : case arrondie (maquettes Main.html .chk, PC-Aujourdhui.html). */
+.ct-checkbox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ct-hit-target-min);
+  min-height: var(--ct-hit-target-min);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ct-checkbox__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-text);
+  background: var(--ct-color-surface);
+  flex-shrink: 0;
+}
+
+.ct-checkbox[data-checked='true'] .ct-checkbox__box {
+  background: var(--ct-color-accent);
+  border-color: var(--ct-color-accent);
+}
+
+.ct-checkbox:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

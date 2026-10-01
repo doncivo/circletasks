@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { newEntityId } from './id';
 import {
+  asEntityId,
+  asHexColor,
+  asLocalDateTime,
+  isHexColor,
+  isLocalDateTime,
+  isWeekday,
+  type TaskId,
   asDeviceId,
   asId,
   asIsoDateTime,
@@ -54,5 +62,28 @@ describe('types de base', () => {
     expect(() => asId('x')).toThrow(TypeError);
     expect(() => asLocalDate('2026-02-30')).toThrow(TypeError);
     expect(() => asLocalTime('25:00')).toThrow(TypeError);
+  });
+
+  it('valide date-heure locale flottante, couleur, jour de semaine', () => {
+    expect(isLocalDateTime('2026-10-01T09:30')).toBe(true);
+    expect(isLocalDateTime('2026-10-01')).toBe(false);
+    expect(isLocalDateTime('2026-10-01T09:30:00')).toBe(false);
+    expect(isLocalDateTime('2026-10-01T09:30T10:00')).toBe(false);
+    expect(asLocalDateTime('2026-10-01T23:59')).toBe('2026-10-01T23:59');
+    expect(() => asLocalDateTime('2026-02-30T10:00')).toThrow(TypeError);
+    expect(isHexColor('#2f6b7a')).toBe(true);
+    expect(isHexColor('#2F6B7A')).toBe(false);
+    expect(asHexColor('#b5483b')).toBe('#b5483b');
+    expect(isWeekday(1)).toBe(true);
+    expect(isWeekday(7)).toBe(true);
+    expect(isWeekday(0)).toBe(false);
+    expect(isWeekday(1.5)).toBe(false);
+  });
+
+  it('construit des identifiants typés', () => {
+    const uuid = '0f8fad5b-d9cb-469f-a165-70867728950e';
+    expect(asEntityId<TaskId>(uuid)).toBe(uuid);
+    expect(() => asEntityId<TaskId>('x')).toThrow(TypeError);
+    expect(newEntityId<TaskId>({ next: () => asId(uuid) })).toBe(uuid);
   });
 });

@@ -1,0 +1,57 @@
+/* Toast : bandeau « Annuler » (maquette Gestes.html, role=status). */
+.ct-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-nav-bg);
+  color: var(--ct-color-accent-on);
+  overflow: hidden;
+}
+
+.ct-toast__bar {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.14);
+  transform-origin: left;
+  animation-name: ct-toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes ct-toast-countdown {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.ct-toast__message {
+  position: relative;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  flex-grow: 1;
+}
+
+.ct-toast__action {
+  position: relative;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-tab-routines);
+  color: var(--ct-color-tab-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-bold);
+  font-size: var(--ct-font-size-text-sm);
+  cursor: pointer;
+}
+
+.ct-toast__action:focus-visible {
+  outline: 2px solid var(--ct-color-accent-on);
+  outline-offset: 2px;
+}

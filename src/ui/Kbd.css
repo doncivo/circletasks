@@ -1,0 +1,14 @@
+/* Kbd : jeton de raccourci clavier (maquette PC-Aujourdhui.html, classe .kb). */
+.ct-kbd {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-xs);
+  padding: 2px 6px;
+  border: 1px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text-secondary);
+  white-space: nowrap;
+}

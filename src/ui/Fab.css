@@ -1,0 +1,20 @@
+/* Fab : bouton rond d'ajout (maquettes Main.html #3A2A66, Main-Sombre.html #C9BEE6). */
+.ct-fab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: var(--ct-color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ct-fab:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ct-fab:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

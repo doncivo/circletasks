@@ -1,0 +1,22 @@
+/* SpacePills : pastilles Pro / Perso / Tout (maquettes Main.html, PC-Aujourdhui.html). */
+.ct-space-pills {
+  display: flex;
+  gap: var(--ct-space-2);
+}
+
+.ct-space-pills__pill {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--ct-radius-pill);
+  border: 1.5px solid;
+  background: var(--ct-color-surface);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  cursor: pointer;
+}
+
+.ct-space-pills__pill:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

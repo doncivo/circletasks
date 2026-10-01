@@ -1,7 +1,16 @@
 /**
  * Repositories : seul point d'accès à la base pour les features (CLAUDE.md).
- * Chaque repository reçoit un `SqlExecutor` (driver ou transaction), convertit les
- * lignes snake_case en entités du domaine et ne contient aucune règle métier.
- * Premiers repositories : agent data-model, ordre 1.
+ * Contrats : ADR 0004 et src/db/repositories/common.ts (règles communes).
+ * Implémentations SQL : agent data-model, dans src/db/repositories/sql/, exposées par
+ * une `RepositoryFactory` nommée `createSqlRepositories`.
  */
-export {};
+export * from './common';
+export * from './dataAccess';
+export type * from './spaceRepository';
+export type * from './taskRepository';
+export type * from './routineRepository';
+export type * from './reminderRepository';
+export type * from './goalRepository';
+export type * from './settingsRepository';
+export type * from './agendaRepository';
+export * from './sql';

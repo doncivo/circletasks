@@ -1,0 +1,43 @@
+/* TabRail : colonne d'onglets verticaux (maquettes Main.html, PC-Aujourdhui.html). */
+.ct-tab-rail {
+  flex-shrink: 0;
+  height: 100%;
+  background: var(--ct-color-nav-bg);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-sizing: border-box;
+  padding: 64px 0 28px 0;
+  padding-bottom: calc(28px + var(--ct-safe-area-bottom));
+}
+
+.ct-tab-rail[data-layout='pc'] {
+  padding: 28px 0 24px 0;
+}
+
+.ct-tab-rail__spacer {
+  flex-grow: 1;
+}
+
+.ct-tab-rail__tab {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0 16px 16px 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ct-tab-rail__label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  letter-spacing: 0.02em;
+}
+
+.ct-tab-rail__tab:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: -2px;
+}

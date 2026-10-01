@@ -29,4 +29,10 @@ export type TArgs<K extends MessageKey> = [ParamNames<ValueAt<Source, K>>] exten
   ? []
   : [params: MessageParams<K>];
 
+/**
+ * Clés sans paramètre : utilisables dans des tables de configuration (onglets,
+ * raccourcis, messages d'annulation) puis passées telles quelles à t().
+ */
+export type PlainMessageKey = { [K in MessageKey]: TArgs<K> extends [] ? K : never }[MessageKey];
+
 export type Locale = 'fr' | 'en';
