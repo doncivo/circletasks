@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Semaine</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.mchk{width:20px;height:20px;border:2px solid #2E2150;border-radius:6px;background:#FFFFFF;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.day{display:flex;gap:12px;padding:10px 8px;border-bottom:1px solid #E6E2EE}
+.dl{width:48px;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.it{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;min-height:26px}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Main.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; gap: 12px; padding: 52px 20px 28px 20px; box-sizing: border-box;">
+<div style="display: flex; align-items: flex-end; justify-content: space-between;">
+<div style="display: flex; flex-direction: column; gap: 2px;">
+<span style="font-size: 15px; font-weight: 600; color: #5E557A;">Semaine 39 · 2026</span>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 40px; line-height: 1.05; font-weight: 700;">21 – 27 sept.</h1>
+</div>
+<div style="display: flex;">
+<button class="ib" aria-label="Semaine précédente"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<button class="ib" aria-label="Semaine suivante"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: flex; gap: 8px; align-items: center;">
+<button class="pill" style="border: 1.5px solid #2F6B7A; color: #2F6B7A;">Pro</button>
+<button class="pill" style="border: 1.5px solid #B5483B; color: #B5483B;">Perso</button>
+<button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+<button class="pill" style="margin-left: auto; border: 1.5px solid #D9D4E4; color: #2E2150;">Cette semaine</button>
+</div>
+<div style="display: flex; flex-direction: column;">
+<section class="day"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">LUN.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">21</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it" style="color: #5E557A; text-decoration: line-through;"><button class="mchk" aria-label="Rouvrir : Faire mon lit" aria-pressed="true" style="background: #2E2150;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>Faire mon lit</div>
+<div class="it" style="color: #5E557A; text-decoration: line-through;"><button class="mchk" aria-label="Rouvrir : Relire le contrat" aria-pressed="true" style="background: #2E2150;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>Relire le contrat</div>
+</div></section>
+<section class="day"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">MAR.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">22</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it" style="color: #5E557A; text-decoration: line-through;"><button class="mchk" aria-label="Rouvrir : Appeler la banque" aria-pressed="true" style="background: #2E2150;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button>Appeler la banque</div>
+</div></section>
+<section class="day" style="background: #F3F1F6; border-radius: 12px; border-bottom: 0;"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #1F6698;">MER.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700; color: #1F6698;">23</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it" style="color: #1F6698;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1F6698" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path></svg>10:00 Point client</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Envoyer la facture"></button>09:00 Envoyer la facture</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Appeler le notaire"></button>14:00 Appeler le notaire</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Sport"></button>18:00 Sport</div>
+</div></section>
+<section class="day"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">JEU.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">24</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it"><button class="mchk" aria-label="Terminer : Réunion d'équipe"></button>11:00 Réunion d'équipe</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Préparer le dépôt GitHub"></button>Préparer le dépôt GitHub</div>
+</div></section>
+<section class="day"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">VEN.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">25</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it" style="color: #B5483B;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B5483B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h16v-7H4z"></path><path d="M4 15.5c2 1.3 4 1.3 6 0s4-1.3 6 0 3 1 4 .5M12 13V9"></path></svg>Anniversaire de Karim</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Clôture mensuelle"></button>Clôture mensuelle</div>
+<div class="it"><button class="mchk" aria-label="Terminer : Sport"></button>18:00 Sport</div>
+</div></section>
+<section class="day"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">SAM.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">26</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<div class="it"><button class="mchk" aria-label="Terminer : Courses"></button>Courses</div>
+</div></section>
+<section class="day" style="border-bottom: 0;"><div class="dl"><span style="font-size: 12px; font-weight: 700; color: #5E557A;">DIM.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">27</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; justify-content: center;">
+<button style="align-self: flex-start; height: 32px; padding: 0 12px; border: 1.5px dashed #B8B1C8; border-radius: 10px; background: #FFFFFF; color: #5E557A; font: 600 14px 'DM Sans', sans-serif; cursor: pointer;">+ Ajouter</button>
+</div></section>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; align-items: center; justify-content: flex-end;">
+<a href="Ajout.html" aria-label="Ajouter" style="width: 64px; height: 64px; border-radius: 32px; background: #3A2A66; display: flex; align-items: center; justify-content: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></a>
+</div>
+</main>
+</div>
+</body>
+</html>

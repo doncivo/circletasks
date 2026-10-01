@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PC — Semaine</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:118px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:8px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.col{display:flex;flex-direction:column;gap:8px;padding:12px 10px;border-radius:14px}
+.hd{display:flex;align-items:baseline;gap:8px;padding:0 4px 8px 4px;border-bottom:1px solid #E6E2EE}
+.card{display:flex;align-items:flex-start;gap:8px;padding:10px;border:1px solid #E6E2EE;border-radius:10px;background:#FFFFFF}
+.mchk{width:18px;height:18px;border:2px solid #2E2150;border-radius:5px;background:#FFFFFF;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;cursor:pointer}
+.t{font-size:14px;font-weight:700;line-height:1.3}
+.s{font-size:12px;color:#5E557A}
+.ev{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;background:#E3EEF5}
+.add{height:34px;border:1.5px dashed #C9C2D8;border-radius:10px;background:transparent;color:#5E557A;font:600 13px "DM Sans",sans-serif;cursor:pointer}
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 900px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 72px; height: 900px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 28px 0 24px 0; box-sizing: border-box;">
+<a class="tab" href="PC-Aujourdhui.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="PC-Semaine.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Semaine</span></a>
+<a class="tab" href="PC-Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="PC-Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="PC-Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="#" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 900px; display: flex; flex-direction: column; gap: 14px; padding: 28px 36px 28px 36px; box-sizing: border-box;">
+<div style="display: flex; align-items: flex-end; justify-content: space-between;">
+<div style="display: flex; flex-direction: column; gap: 2px;">
+<span style="font-size: 16px; font-weight: 600; color: #5E557A;">Semaine 39</span>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 52px; line-height: 1; font-weight: 700;">21 – 27 septembre 2026</h1>
+</div>
+<div style="display: flex; align-items: center; gap: 8px;">
+<button class="pill" style="border: 1.5px solid #2F6B7A; color: #2F6B7A;">Pro</button>
+<button class="pill" style="border: 1.5px solid #B5483B; color: #B5483B;">Perso</button>
+<button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+<span style="width: 16px;"></span>
+<button class="ib" aria-label="Semaine précédente"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<button class="pill" style="border: 1.5px solid #D9D4E4; color: #2E2150;">Cette semaine</button>
+<button class="ib" aria-label="Semaine suivante"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 96px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 2px solid #3F7FC4; border-radius: 12px;">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3F7FC4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.2"></circle></svg>
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #2F6BA8;">OBJECTIF</span>
+<span style="font-size: 15px; font-weight: 700; flex-grow: 1;">Finaliser le PRD CircleTasks</span>
+<span style="font-size: 14px; font-weight: 700;">2/5</span>
+</div>
+<div style="flex-grow: 1; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px;">
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">LUN.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">21</span></div>
+<div class="card" style="background: #FAF9FC;"><button class="mchk" aria-label="Rouvrir : Faire mon lit" aria-pressed="true" style="background: #2E2150;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><div><div class="t" style="color: #5E557A; text-decoration: line-through;">Faire mon lit</div><div class="s">07:30 · Routine</div></div></div>
+<div class="card" style="background: #FAF9FC;"><button class="mchk" aria-label="Rouvrir : Relire le contrat" aria-pressed="true" style="background: #2E2150;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><div><div class="t" style="color: #5E557A; text-decoration: line-through;">Relire le contrat</div><div class="s">Pro</div></div></div>
+<div class="card" style="background: #FAF9FC;"><button class="mchk" aria-label="Rouvrir : Sport" aria-pressed="true" style="background: #2E2150;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><div><div class="t" style="color: #5E557A; text-decoration: line-through;">Sport</div><div class="s">18:00 · Routine</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">MAR.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">22</span></div>
+<div class="card" style="background: #FAF9FC;"><button class="mchk" aria-label="Rouvrir : Appeler la banque" aria-pressed="true" style="background: #2E2150;"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><div><div class="t" style="color: #5E557A; text-decoration: line-through;">Appeler la banque</div><div class="s">Perso</div></div></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Mettre à jour le budget"></button><div><div class="t">Mettre à jour le budget</div><div class="s">reportée · Pro</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col" style="background: #F3F1F6;"><div class="hd" style="border-bottom-color: #D6D0E3;"><span style="font-size: 13px; font-weight: 700; color: #1F6698;">MER.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700; color: #1F6698;">23</span></div>
+<div class="ev"><span class="t">10:00 Point client</span><span class="s" style="color: #1F6698;">Google Agenda</span></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Envoyer la facture"></button><div><div class="t">Envoyer la facture</div><div class="s">09:00 · Pro</div></div></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Appeler le notaire"></button><div><div class="t">Appeler le notaire</div><div class="s">14:00 · Perso</div></div></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Sport"></button><div><div class="t">Sport</div><div class="s">18:00 · Routine</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">JEU.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">24</span></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Réunion d'équipe"></button><div><div class="t">Réunion d'équipe</div><div class="s">11:00 · Pro</div></div></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Préparer le dépôt GitHub"></button><div><div class="t">Préparer le dépôt GitHub</div><div class="s">Perso · objectif</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">VEN.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">25</span></div>
+<div class="ev" style="background: #FBE7E4;"><span class="t">Anniversaire de Karim</span><span class="s" style="color: #9E3F33;">Annuel · J-2</span></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Clôture mensuelle"></button><div><div class="t">Clôture mensuelle</div><div class="s">Pro · mensuelle</div></div></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Sport"></button><div><div class="t">Sport</div><div class="s">18:00 · Routine</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">SAM.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">26</span></div>
+<div class="card"><button class="mchk" aria-label="Terminer : Courses"></button><div><div class="t">Courses</div><div class="s">Perso · checklist 0/8</div></div></div>
+<button class="add">+ Ajouter</button>
+</section>
+<section class="col"><div class="hd"><span style="font-size: 13px; font-weight: 700; color: #5E557A;">DIM.</span><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">27</span></div>
+<button class="add">+ Ajouter</button>
+</section>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<span style="font-size: 13px; color: #5E557A;">Glisser-déposer une carte pour la changer de jour · Ctrl ← / Ctrl → pour changer de semaine</span>
+<button aria-label="Ajouter" style="width: 60px; height: 60px; border-radius: 30px; background: #3A2A66; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button>
+</div>
+</main>
+</div>
+</body>
+</html>

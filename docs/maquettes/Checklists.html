@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Checklists</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.chk{width:28px;height:28px;border:2px solid #2E2150;border-radius:8px;background:#FFFFFF;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.row{display:flex;align-items:center;gap:14px;padding:14px 16px;background:#F3F1F6;border-radius:14px}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Main.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; gap: 12px; padding: 52px 20px 28px 20px; box-sizing: border-box;">
+<div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+<button aria-label="Choisir une checklist" style="display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border: 1.5px solid #D9D4E4; border-radius: 22px; background: #FFFFFF; color: #2E2150; font: 600 15px 'DM Sans', sans-serif; cursor: pointer;">Valise voyage<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg></button>
+<button style="height: 36px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 18px; background: #FFFFFF; color: #2E2150; font: 600 14px 'DM Sans', sans-serif; cursor: pointer;">Réorganiser</button>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; margin-top: 8px;">
+<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#3E7C5A" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="7" width="16" height="13" rx="2"></rect><path d="M9 7V4.5h6V7M9 10.5v6M15 10.5v6"></path></svg>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 30px; line-height: 1; font-weight: 700; flex-grow: 1;">Valise voyage</h1>
+<button class="ib" aria-label="Vue compacte"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 6.5v4.5M9.5 8.5l2.5 2.5 2.5-2.5M12 17.5V13M9.5 15.5l2.5-2.5 2.5 2.5"></path></svg></button>
+<button class="ib" aria-label="Modifier la checklist"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"></path><path d="M14 7l3 3"></path></svg></button>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: flex; align-items: center; gap: 12px;">
+<div style="flex-grow: 1; height: 8px; border-radius: 4px; background: #EEEAF3;"><div style="width: 50%; height: 8px; border-radius: 4px; background: #3E7C5A;"></div></div>
+<span style="font-size: 15px; font-weight: 700;">3 / 6</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px;">
+<div class="row"><button class="chk" aria-label="Cocher : Adaptateur de prise"></button><span style="font-size: 17px; font-weight: 700;">Adaptateur de prise</span></div>
+<div class="row"><button class="chk" aria-label="Cocher : Crème solaire"></button><span style="font-size: 17px; font-weight: 700;">Crème solaire</span></div>
+<div class="row"><button class="chk" aria-label="Cocher : Attestation d'assurance"></button><span style="font-size: 17px; font-weight: 700;">Attestation d'assurance</span></div>
+<div class="row"><button class="chk" aria-label="Décocher : Passeport" aria-pressed="true" style="background: #2E2150;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><span style="font-size: 17px; font-weight: 600; color: #5E557A; text-decoration: line-through;">Passeport</span></div>
+<div class="row"><button class="chk" aria-label="Décocher : Chargeur" aria-pressed="true" style="background: #2E2150;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><span style="font-size: 17px; font-weight: 600; color: #5E557A; text-decoration: line-through;">Chargeur</span></div>
+<div class="row"><button class="chk" aria-label="Décocher : Billets d'avion" aria-pressed="true" style="background: #2E2150;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><span style="font-size: 17px; font-weight: 600; color: #5E557A; text-decoration: line-through;">Billets d'avion</span></div>
+</div>
+<label style="display: flex;">
+<span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);">Nouvel élément</span>
+<input type="text" placeholder="Ajouter un élément" style="width: 100%; height: 52px; border: 1.5px dashed #C9C2D8; border-radius: 14px; background: #FFFFFF; padding: 0 16px; font: 500 16px 'DM Sans', sans-serif; color: #2E2150; box-sizing: border-box;">
+</label>
+<div style="display: flex; gap: 10px;">
+<button style="height: 40px; padding: 0 16px; border: 1.5px solid #9E3F33; border-radius: 20px; background: #FFFFFF; color: #9E3F33; font: 600 14px 'DM Sans', sans-serif; cursor: pointer;">Effacer les cochés</button>
+<button style="height: 40px; padding: 0 16px; border: 1.5px solid #D9D4E4; border-radius: 20px; background: #FFFFFF; color: #2E2150; font: 600 14px 'DM Sans', sans-serif; cursor: pointer;">Tout décocher</button>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; align-items: center; justify-content: flex-end;">
+<a href="Ajout.html" aria-label="Nouvelle checklist" style="width: 64px; height: 64px; border-radius: 32px; background: #3A2A66; display: flex; align-items: center; justify-content: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></a>
+</div>
+</main>
+</div>
+</body>
+</html>

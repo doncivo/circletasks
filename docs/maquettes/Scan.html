@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Relecture du scan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;family=Caveat:wght@500&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.chk{width:26px;height:26px;border:2px solid #2E2150;border-radius:7px;background:#2E2150;padding:0;display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer}
+.ln{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #ECE9F1}
+.fld{flex-grow:1;height:40px;border:1.5px solid #E1DCEA;border-radius:10px;padding:0 12px;font:600 15px "DM Sans",sans-serif;color:#2E2150;background:#FFFFFF;box-sizing:border-box;min-width:0}
+.hw{font-family:Caveat,cursive;font-size:22px;color:#33406B;line-height:1.35}
+.seg{height:36px;padding:0 16px;border:0;border-radius:10px;font:600 14px "DM Sans",sans-serif;background:transparent;cursor:pointer}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; background: #FFFFFF; display: flex; flex-direction: column; gap: 12px; padding: 52px 20px 28px 20px; box-sizing: border-box; overflow: hidden;">
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<a class="ib" href="Main.html" aria-label="Annuler le scan"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></a>
+<span style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #5E557A;">SCAN TÂCHES</span>
+<span style="width: 44px;"></span>
+</div>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 36px; font-weight: 700;">Relecture</h1>
+<div style="display: flex; gap: 14px; align-items: stretch;">
+<div aria-label="Photo de la liste manuscrite" style="width: 150px; height: 190px; flex-shrink: 0; border-radius: 12px; background: #FBF7EC; border: 1px solid #E8DFC0; padding: 14px 12px; box-sizing: border-box; display: flex; flex-direction: column; transform: rotate(-2deg);">
+<span class="hw">– plombier</span><span class="hw">– ampoules</span><span class="hw">– resto samedi</span><span class="hw">– cantine</span><span class="hw">– garage ?</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; justify-content: center;">
+<span style="font-size: 15px; font-weight: 700;">5 lignes détectées</span>
+<span style="font-size: 14px; line-height: 1.45; color: #5E557A;">Corrigez le texte, décochez ce qu'il ne faut pas créer, puis validez.</span>
+<button style="align-self: flex-start; height: 36px; padding: 0 14px; border: 1.5px solid #D9D4E4; border-radius: 18px; background: #FFFFFF; color: #2E2150; font: 600 13px 'DM Sans', sans-serif; cursor: pointer;">Reprendre la photo</button>
+</div>
+</div>
+<div style="display: flex; flex-direction: column;">
+<div class="ln"><button class="chk" aria-label="Créer cette tâche" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><input class="fld" aria-label="Tâche 1" value="Appeler le plombier"></div>
+<div class="ln"><button class="chk" aria-label="Créer cette tâche" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><input class="fld" aria-label="Tâche 2" value="Acheter des ampoules"></div>
+<div class="ln" style="flex-wrap: wrap;"><button class="chk" aria-label="Créer cette tâche" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><input class="fld" aria-label="Tâche 3" value="Réserver le restaurant"><span style="margin-left: 38px; font-size: 13px; font-weight: 600; color: #1F6698;">Date détectée : sam. 26 sept.</span></div>
+<div class="ln"><button class="chk" aria-label="Créer cette tâche" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10"></path></svg></button><input class="fld" aria-label="Tâche 4" value="Payer la cantine"></div>
+<div class="ln" style="flex-wrap: wrap;"><button class="chk" aria-label="Ne pas créer cette tâche" aria-pressed="false" style="background: #FFFFFF;"></button><input class="fld" aria-label="Tâche 5" value="Garage ?" style="border-color: #D9A441; background: #FFF8E6;"><span style="margin-left: 38px; font-size: 13px; font-weight: 600; color: #8A5A00;">Lecture incertaine, à vérifier</span></div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<span style="font-size: 15px; font-weight: 600;">Espace</span>
+<div style="display: flex; gap: 4px; padding: 4px; background: #F3F1F6; border-radius: 12px;">
+<button class="seg" style="color: #2F6B7A;">Pro</button>
+<button class="seg" aria-pressed="true" style="background: #FFFFFF; color: #B5483B; box-shadow: 0 1px 3px rgba(46,33,80,0.15);">Perso</button>
+</div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<span style="font-size: 15px; font-weight: 600;">Date des tâches sans date</span>
+<span style="font-size: 15px; color: #5E557A;">Aujourd'hui</span>
+</div>
+<div style="flex-grow: 1;"></div>
+<button style="height: 56px; border: 0; border-radius: 28px; background: #3A2A66; color: #FFFFFF; font: 700 17px 'DM Sans', sans-serif; cursor: pointer;">Créer 4 tâches</button>
+</div>
+</body>
+</html>

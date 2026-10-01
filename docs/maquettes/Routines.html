@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Routines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.card{display:flex;flex-direction:column;gap:10px;padding:16px 0;border-bottom:1px solid #E6E2EE}
+.d{width:34px;height:34px;border-radius:17px;border:1.5px solid #D9776B;color:#9E3F33;background:#FFFFFF;font:600 13px "DM Sans",sans-serif;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.d.on{background:#F2A7A0;border-color:#F2A7A0;color:#2E2150}
+.d.off{border-color:#DDD9E4;color:#6F6889;border-style:dashed}
+.ed{height:30px;padding:0 12px;border:0;border-radius:15px;background:#F3F1F6;color:#2E2150;font:600 13px "DM Sans",sans-serif;cursor:pointer}
+.tm{display:flex;align-items:center;gap:6px;font-size:15px;color:#5E557A}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Main.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; gap: 12px; padding: 96px 20px 28px 20px; box-sizing: border-box;">
+<div style="display: flex; align-items: flex-end; justify-content: space-between;">
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 52px; line-height: 1; font-weight: 700;">Routines</h1>
+<button class="ib" aria-label="Vue compacte"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 6.5v4.5M9.5 8.5l2.5 2.5 2.5-2.5M12 17.5V13M9.5 15.5l2.5-2.5 2.5 2.5"></path></svg></button>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: flex; gap: 8px;">
+<button class="pill" style="border: 1.5px solid #2F6B7A; color: #2F6B7A;">Pro</button>
+<button class="pill" style="border: 1.5px solid #B5483B; color: #B5483B;">Perso</button>
+<button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+</div>
+<div style="display: flex; flex-direction: column;">
+<article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#B9770E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v2M5.5 10.5l1.4 1.4M18.5 10.5l-1.4 1.4"></path></svg><span style="font-size: 20px; font-weight: 700; flex-grow: 1;">Faire mon lit</span><a class="ed" href="ModifierRoutine.html" style="display: flex; align-items: center; text-decoration: none;">Éditer</a></div>
+<div style="display: flex; align-items: center; gap: 5px;"><button class="d on" aria-label="Lundi, fait">L</button><button class="d on" aria-label="Mardi, fait">M</button><button class="d on" aria-label="Mercredi, fait">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">3/7</span></div>
+<div class="tm"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>07:30 · Perso · série 12 jours</div>
+</article>
+<article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#2A7AB8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12l-1.6 16H7.6z"></path><path d="M7 10.5h10"></path></svg><span style="font-size: 20px; font-weight: 700; flex-grow: 1;">Boire de l'eau</span><a class="ed" href="ModifierRoutine.html" style="display: flex; align-items: center; text-decoration: none;">Éditer</a></div>
+<div style="display: flex; align-items: center; gap: 5px;"><button class="d on" aria-label="Lundi, fait">L</button><button class="d on" aria-label="Mardi, fait">M</button><button class="d" aria-label="Mercredi">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">2/7</span></div>
+<div class="tm"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>08:30 · Perso</div>
+</article>
+<article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5B43A8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9.5v5M6.5 7.5v9M17.5 7.5v9M20.5 9.5v5M6.5 12h11"></path></svg><span style="font-size: 20px; font-weight: 700; flex-grow: 1;">Sport</span><a class="ed" href="ModifierRoutine.html" style="display: flex; align-items: center; text-decoration: none;">Éditer</a></div>
+<div style="display: flex; align-items: center; gap: 5px;"><button class="d on" aria-label="Lundi, fait">L</button><button class="d off" aria-label="Mardi, non prévu">M</button><button class="d" aria-label="Mercredi">M</button><button class="d off" aria-label="Jeudi, non prévu">J</button><button class="d" aria-label="Vendredi">V</button><button class="d off" aria-label="Samedi, non prévu">S</button><button class="d off" aria-label="Dimanche, non prévu">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">1/3</span></div>
+<div class="tm"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>18:00 · lun., mer., ven.</div>
+</article>
+<article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#3E7C5A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5"></path></svg><span style="font-size: 20px; font-weight: 700; flex-grow: 1;">Lire 20 minutes</span><a class="ed" href="ModifierRoutine.html" style="display: flex; align-items: center; text-decoration: none;">Éditer</a></div>
+<div style="display: flex; align-items: center; gap: 5px;"><button class="d on" aria-label="Lundi, fait">L</button><button class="d on" aria-label="Mardi, fait">M</button><button class="d" aria-label="Mercredi">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">2/7</span></div>
+<div class="tm"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>21:30 · Perso</div>
+</article>
+</div>
+<p style="margin: 4px 0 0 0; font-size: 15px; line-height: 1.45; color: #5E557A;">Gérez vos routines ici et cochez-les dans la liste du jour.</p>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<button style="height: 44px; padding: 0 20px; border: 2px solid #2E2150; border-radius: 22px; background: #FFFFFF; color: #2E2150; font: 700 15px 'DM Sans', sans-serif; cursor: pointer;">Rapport du mois</button>
+<a href="Ajout.html" aria-label="Ajouter une routine" style="width: 64px; height: 64px; border-radius: 32px; background: #3A2A66; display: flex; align-items: center; justify-content: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></a>
+</div>
+</main>
+</div>
+</body>
+</html>

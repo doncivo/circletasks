@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PC — Routines</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:118px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:8px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.card{display:flex;flex-direction:column;gap:10px;padding:16px 18px;border:1px solid #E6E2EE;border-radius:16px;background:#FFFFFF}
+.card.sel{border:2px solid #2E2150;background:#FAF9FC}
+.d{width:34px;height:34px;border-radius:17px;border:1.5px solid #D9776B;color:#9E3F33;background:#FFFFFF;font:600 13px "DM Sans",sans-serif;display:flex;align-items:center;justify-content:center;padding:0;cursor:pointer}
+.d.on{background:#F2A7A0;border-color:#F2A7A0;color:#2E2150}
+.d.off{border-color:#DDD9E4;color:#6F6889;border-style:dashed}
+.ed{height:30px;padding:0 12px;border:0;border-radius:15px;background:#F3F1F6;color:#2E2150;font:600 13px "DM Sans",sans-serif;cursor:pointer}
+.tl{font-size:12px;font-weight:700;letter-spacing:0.05em;color:#5E557A}
+.tv{font-family:Fraunces,Georgia,serif;font-size:30px;font-weight:700;line-height:1.1}
+
+</style>
+</head>
+<body>
+<div style="width: 1440px; height: 900px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 72px; height: 900px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 28px 0 24px 0; box-sizing: border-box;">
+<a class="tab" href="PC-Aujourdhui.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="PC-Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="PC-Routines.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Routines</span></a>
+<a class="tab" href="PC-Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="PC-Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="#" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="width: 820px; height: 900px; display: flex; flex-direction: column; gap: 14px; padding: 28px 40px; box-sizing: border-box;">
+<div style="display: flex; align-items: flex-end; justify-content: space-between; margin-top: 30px;">
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 60px; line-height: 1; font-weight: 700;">Routines</h1>
+<div style="display: flex; align-items: center; gap: 8px;"><div style="display: flex; gap: 8px;">
+<button class="pill" style="border: 1.5px solid #2F6B7A; color: #2F6B7A;">Pro</button>
+<button class="pill" style="border: 1.5px solid #B5483B; color: #B5483B;">Perso</button>
+<button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+</div><button class="ib" aria-label="Vue compacte"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16M4 20h16M12 6.5v4.5M9.5 8.5l2.5 2.5 2.5-2.5M12 17.5V13M9.5 15.5l2.5-2.5 2.5 2.5"></path></svg></button></div>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px;">
+<article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B9770E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7v2M5.5 10.5l1.4 1.4M18.5 10.5l-1.4 1.4"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Faire mon lit</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d on" aria-label="Mardi">M</button><button class="d on" aria-label="Mercredi">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">3/7</span></div>
+<span style="font-size: 14px; color: #5E557A;">07:30 · Perso · série 12 jours</span>
+</article><article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2A7AB8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 4h12l-1.6 16H7.6z"></path><path d="M7 10.5h10"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Boire de l'eau</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d on" aria-label="Mardi">M</button><button class="d" aria-label="Mercredi">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">2/7</span></div>
+<span style="font-size: 14px; color: #5E557A;">08:30 · Perso</span>
+</article><article class="card sel">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#5B43A8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9.5v5M6.5 7.5v9M17.5 7.5v9M20.5 9.5v5M6.5 12h11"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Sport</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d off" aria-label="Mardi">M</button><button class="d" aria-label="Mercredi">M</button><button class="d off" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d off" aria-label="Samedi">S</button><button class="d off" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">1/3</span></div>
+<span style="font-size: 14px; color: #5E557A;">18:00 · lun., mer., ven.</span>
+</article><article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3E7C5A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"></path><path d="M4 20.5V5.5"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Lire 20 minutes</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d on" aria-label="Mardi">M</button><button class="d" aria-label="Mercredi">M</button><button class="d" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d" aria-label="Samedi">S</button><button class="d" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">2/7</span></div>
+<span style="font-size: 14px; color: #5E557A;">21:30 · Perso</span>
+</article><article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#2F6B7A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v4h4M10 12h5M10 16h5"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Revue des e-mails</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d on" aria-label="Mardi">M</button><button class="d" aria-label="Mercredi">M</button><button class="d off" aria-label="Jeudi">J</button><button class="d" aria-label="Vendredi">V</button><button class="d off" aria-label="Samedi">S</button><button class="d off" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">2/3</span></div>
+<span style="font-size: 14px; color: #5E557A;">08:45 · Pro · lun., mer., ven.</span>
+</article><article class="card">
+<div style="display: flex; align-items: center; gap: 10px;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B5483B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg><span style="font-size: 18px; font-weight: 700; flex-grow: 1;">Point hebdo</span><button class="ed">Éditer</button></div>
+<div style="display: flex; align-items: center; gap: 6px;"><button class="d on" aria-label="Lundi">L</button><button class="d off" aria-label="Mardi">M</button><button class="d off" aria-label="Mercredi">M</button><button class="d off" aria-label="Jeudi">J</button><button class="d off" aria-label="Vendredi">V</button><button class="d off" aria-label="Samedi">S</button><button class="d off" aria-label="Dimanche">D</button><span style="margin-left: auto; font-size: 20px; font-weight: 700;">1/1</span></div>
+<span style="font-size: 14px; color: #5E557A;">Lundi 09:00 · Pro</span>
+</article>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 14px; color: #5E557A;">Cochez les routines dans la liste du jour · <b>Ctrl N</b> nouvelle routine</span><button aria-label="Ajouter" style="width: 60px; height: 60px; border-radius: 30px; background: #3A2A66; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></button></div>
+</main>
+<aside aria-label="Rapport de la routine" style="flex-grow: 1; height: 900px; background: #FAF9FC; border-left: 1px solid #E6E2EE; display: flex; flex-direction: column; gap: 16px; padding: 28px 36px; box-sizing: border-box;">
+<div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #5E557A;">RAPPORT DE LA ROUTINE</span><button class="ib" aria-label="Fermer"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></button></div>
+<div style="display: flex; align-items: center; gap: 12px;"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#5B43A8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 9.5v5M6.5 7.5v9M17.5 7.5v9M20.5 9.5v5M6.5 12h11"></path></svg><h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 36px; font-weight: 700;">Sport</h2></div>
+<span style="font-size: 15px; color: #5E557A;">Lundi, mercredi, vendredi à 18:00 · Perso</span>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2EE;"><span class="tl">7 JOURS</span><span class="tv">67 %</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2EE;"><span class="tl">30 JOURS</span><span class="tv">70 %</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2EE;"><span class="tl">90 JOURS</span><span class="tv">74 %</span></div>
+</div>
+<div style="display: flex; gap: 10px;">
+<div style="flex-grow: 1; display: flex; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2EE; font-size: 15px;"><span style="color: #5E557A; font-weight: 600;">Série en cours</span><b>4 séances</b></div>
+<div style="flex-grow: 1; display: flex; justify-content: space-between; padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E2EE; font-size: 15px;"><span style="color: #5E557A; font-weight: 600;">Meilleure série</span><b>11 séances</b></div>
+</div>
+<div style="display: flex; align-items: center; justify-content: space-between;"><span style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #5E557A;">SEPTEMBRE 2026</span><div style="display: flex;"><button class="ib" aria-label="Mois précédent"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button><button class="ib" aria-label="Mois suivant"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button></div></div>
+<div style="display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px;">
+<span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">L</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">M</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">M</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">J</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">V</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">S</span><span style="font-size: 12px; font-weight: 700; color: #5E557A; text-align: center;">D</span>
+<div style="height: 34px;"></div>
+<div style="height: 34px; border-radius: 7px; background: #D9776B; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">1</div>
+<div style="height: 34px; border-radius: 7px; background: #D9776B; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">2</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">3</div>
+<div style="height: 34px; border-radius: 7px; background: #F3F1F6; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">4</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">5</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">6</div>
+<div style="height: 34px; border-radius: 7px; background: #F2A7A0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">7</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">8</div>
+<div style="height: 34px; border-radius: 7px; background: #F2A7A0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">9</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">10</div>
+<div style="height: 34px; border-radius: 7px; background: #F2A7A0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">11</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">12</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">13</div>
+<div style="height: 34px; border-radius: 7px; background: #D9776B; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">14</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">15</div>
+<div style="height: 34px; border-radius: 7px; background: #F2A7A0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">16</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">17</div>
+<div style="height: 34px; border-radius: 7px; background: #D9776B; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">18</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">19</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">20</div>
+<div style="height: 34px; border-radius: 7px; background: #F2A7A0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">21</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">22</div>
+<div style="height: 34px; border-radius: 7px; background: #FFFFFF; border: 2px solid #1F6698; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">23</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">24</div>
+<div style="height: 34px; border-radius: 7px; background: #FFFFFF; border: 1px dashed #DDD9E4; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">25</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">26</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">27</div>
+<div style="height: 34px; border-radius: 7px; background: #FFFFFF; border: 1px dashed #DDD9E4; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">28</div>
+<div style="height: 34px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #6F6889;">29</div>
+<div style="height: 34px; border-radius: 7px; background: #FFFFFF; border: 1px dashed #DDD9E4; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600;">30</div>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; gap: 10px;">
+<button style="height: 44px; padding: 0 18px; border: 1.5px solid #D9D4E4; border-radius: 22px; background: #FFFFFF; color: #2E2150; font: 600 15px 'DM Sans', sans-serif; cursor: pointer;">Mettre en pause</button>
+<button style="height: 44px; padding: 0 18px; border: 1.5px solid #D9D4E4; border-radius: 22px; background: #FFFFFF; color: #2E2150; font: 600 15px 'DM Sans', sans-serif; cursor: pointer;">Archiver</button>
+<button style="margin-left: auto; height: 44px; padding: 0 20px; border: 0; border-radius: 22px; background: #3A2A66; color: #FFFFFF; font: 700 15px 'DM Sans', sans-serif; cursor: pointer;">Modifier</button>
+</div>
+</aside>
+</div>
+</body>
+</html>

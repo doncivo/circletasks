@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Détail d'une tâche</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.fl{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;border-bottom:1px solid #ECE9F1;font-size:15px}
+.fl>span:first-child{color:#5E557A;font-weight:600}
+.v{font-weight:600;text-align:right}
+.chip{font-size:13px;font-weight:600;padding:4px 10px;border-radius:12px;background:#EEEAF3}
+.ab{flex-grow:1;height:48px;border:1.5px solid #D9D4E4;border-radius:24px;background:#FFFFFF;color:#2E2150;font:600 14px "DM Sans",sans-serif;display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;cursor:pointer}
+
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; background: #6E6687; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;">
+<section aria-label="Détail de la tâche" style="height: 916px; background: #FFFFFF; border-radius: 28px 28px 0 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 20px 28px 20px; box-sizing: border-box;">
+<div style="align-self: center; width: 40px; height: 5px; border-radius: 3px; background: #D9D4E4;"></div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<a class="ib" href="Main.html" aria-label="Fermer"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg></a>
+<span style="font-size: 13px; font-weight: 700; letter-spacing: 0.08em; color: #5E557A;">DÉTAIL</span>
+<button class="ib" aria-label="Modifier"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20l1-4L16 5l3 3L8 19z"></path><path d="M14 7l3 3"></path></svg></button>
+</div>
+<div style="display: flex; align-items: center; gap: 14px;">
+<span style="width: 56px; height: 56px; border-radius: 28px; background: #FFFFFF; border: 1.5px solid #E6E2EE; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#B5483B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"></path><path d="M14 3v4h4M10 12h5M10 16h5"></path></svg></span>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 32px; line-height: 1.1; font-weight: 700;">Envoyer la facture</h1>
+</div>
+<button style="display: flex; align-items: center; gap: 12px; height: 52px; padding: 0 16px; border: 2px solid #2E2150; border-radius: 14px; background: #FFFFFF; color: #2E2150; font: 700 16px 'DM Sans', sans-serif; cursor: pointer;"><span style="width: 26px; height: 26px; border: 2px solid #2E2150; border-radius: 7px; box-sizing: border-box;"></span>Marquer comme terminée</button>
+<div style="display: flex; flex-direction: column;">
+<div class="fl"><span>Date</span><span class="v">Mer. 23 sept. · 09:00</span></div>
+<div class="fl"><span>Répétition</span><span class="v">Mensuelle, le 23</span></div>
+<div class="fl"><span>Rappels</span><span style="display: flex; gap: 6px;"><span class="chip">À l'heure</span><span class="chip">30 min avant</span></span></div>
+<div class="fl"><span>Espace · projet</span><span class="v"><span style="color: #2F6B7A;">Pro</span> · Mission client</span></div>
+<div class="fl"><span style="display: flex; align-items: center; gap: 8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3F7FC4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><circle cx="12" cy="12" r="5"></circle><circle cx="12" cy="12" r="1.2"></circle></svg>Objectif de la semaine</span><button aria-label="Rattacher à mon objectif" aria-pressed="false" style="width: 52px; height: 30px; border-radius: 15px; background: #DDD9E4; border: 0; display: flex; align-items: center; padding: 3px; cursor: pointer;"><span style="width: 24px; height: 24px; border-radius: 12px; background: #FFFFFF;"></span></button></div>
+</div>
+<label style="display: flex; flex-direction: column; gap: 6px;">
+<span style="font-size: 15px; font-weight: 600; color: #5E557A;">Note</span>
+<textarea style="height: 96px; border: 1.5px solid #E1DCEA; border-radius: 12px; background: #FFFFFF; padding: 12px 14px; font: 500 15px 'DM Sans', sans-serif; color: #2E2150; resize: none; box-sizing: border-box;">Joindre le relevé d'heures de septembre.</textarea>
+</label>
+<span style="font-size: 13px; color: #5E557A;">Créée le 2 sept. sur le PC · modifiée hier à 18:04</span>
+<div style="flex-grow: 1;"></div>
+<a href="Focus.html" style="height: 56px; border-radius: 28px; background: #3A2A66; color: #FFFFFF; font: 700 17px 'DM Sans', sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; text-decoration: none;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Lancer un Focus</a>
+<div style="display: flex; gap: 8px;">
+<button class="ab">Reporter</button>
+<a class="ab" href="UnJour.html">Un jour</a>
+<button class="ab">Dupliquer</button>
+</div>
+<button style="height: 44px; border: 0; background: transparent; color: #A1271C; font: 700 15px 'DM Sans', sans-serif; cursor: pointer;">Supprimer la tâche</button>
+</section>
+</div>
+</body>
+</html>

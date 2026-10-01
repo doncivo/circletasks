@@ -1,0 +1,26 @@
+# Dépendances et builds
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+src-tauri/target/
+src-tauri/gen/
+
+# Environnement et secrets
+.env
+.env.*
+*.key
+*.pem
+*.p12
+
+# Éditeurs et système
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+
+# Claude Code (réglages locaux)
+.claude/settings.local.json

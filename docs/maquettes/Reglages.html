@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Réglages</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.sh{margin:6px 0 0 0;font-size:12px;font-weight:700;letter-spacing:0.08em;color:#5E557A}
+.r{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:38px;border-bottom:1px solid #ECE9F1;font-size:15px;font-weight:600}
+.v{font-weight:500;color:#5E557A;font-size:14px;text-align:right}
+.sw{width:48px;height:28px;border-radius:14px;border:0;display:flex;align-items:center;padding:3px;cursor:pointer;flex-shrink:0}
+.sw span{width:22px;height:22px;border-radius:11px;background:#FFFFFF}
+.lk{height:30px;padding:0 12px;border:1.5px solid #D9D4E4;border-radius:15px;background:#FFFFFF;color:#2E2150;font:600 13px "DM Sans",sans-serif;cursor:pointer}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Main.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" style="background: #9DBBC9;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; gap: 2px; padding: 48px 20px 20px 20px; box-sizing: border-box;">
+<h1 style="margin: 0 0 8px 0; font-family: Fraunces, Georgia, serif; font-size: 44px; line-height: 1; font-weight: 700;">Réglages</h1>
+<div style="display: flex; align-items: center; margin-bottom: 4px;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<h2 class="sh">GÉNÉRAL</h2>
+<div class="r"><span>Thème · semaine · heure</span><span class="v">Système · lundi · 24 h</span></div>
+<div class="r"><span>Fuseau horaire</span><span class="v">Europe/Paris (automatique)</span></div>
+<h2 class="sh">TÂCHES</h2>
+<div class="r"><span>Reporter les tâches non faites</span><button class="sw" aria-label="Reporter les tâches non faites" aria-pressed="true" style="background: #2E2150; justify-content: flex-end;"><span></span></button></div>
+<div class="r"><span>Masquer les routines de la liste</span><button class="sw" aria-label="Masquer les routines de la liste" aria-pressed="false" style="background: #DDD9E4;"><span></span></button></div>
+<div class="r"><span>Jours fériés</span><span class="v">France, Tunisie</span></div>
+<h2 class="sh">RAPPELS</h2>
+<div class="r"><span>Récapitulatifs</span><span class="v">07:30 · 21:00</span></div>
+<div class="r"><span>Silence <span style="color: #2F6B7A;">Pro</span></span><span class="v">19:00 – 08:00, week-end</span></div>
+<h2 class="sh">ESPACES ET CALENDRIERS</h2>
+<div class="r"><span>Espaces et projets</span><span class="v">Pro (3) · Perso (2)</span></div>
+<div class="r"><span>Agendas · Rappels Apple</span><span class="v" style="color: #2F6B4A;">Connectés · 2 listes</span></div>
+<h2 class="sh">SYNCHRONISATION</h2>
+<div class="r"><span style="display: flex; flex-direction: column;">iCloud Drive / CircleTasks<span style="font-size: 13px; font-weight: 500; color: #2F6B4A;">À jour · il y a 2 min</span></span><a class="lk" href="Synchro.html" style="display: flex; align-items: center; text-decoration: none;">Détails</a></div>
+<div class="r"><span style="display: flex; flex-direction: column;">Appareil associé<span style="font-size: 13px; font-weight: 500; color: #5E557A;">PC Windows · 1 conflit cette semaine</span></span><a class="lk" href="Appairage.html" style="display: flex; align-items: center; text-decoration: none;">Associer</a></div>
+<h2 class="sh">DONNÉES ET SÉCURITÉ</h2>
+<div class="r"><span>Verrouillage Face ID</span><button class="sw" aria-label="Verrouillage Face ID" aria-pressed="false" style="background: #DDD9E4;"><span></span></button></div>
+<div class="r"><span style="display: flex; flex-direction: column;">Sauvegarde automatique<span style="font-size: 13px; font-weight: 500; color: #5E557A;">Aujourd'hui 03:00 · 14 versions</span></span><button class="lk">Restaurer</button></div>
+<h2 class="sh">À PROPOS</h2>
+<div class="r" style="border-bottom: 0;"><span style="display: flex; flex-direction: column;">Version 1.0.0<span style="font-size: 13px; font-weight: 600; color: #9E3F33;">Signature SideStore : expire dans 5 jours</span></span><button class="lk">Logs</button></div>
+</main>
+</div>
+</body>
+</html>

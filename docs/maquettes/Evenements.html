@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>iPhone — Événements</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&amp;family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&amp;display=swap">
+<style>
+body{margin:0;font-family:"DM Sans",system-ui,sans-serif;color:#2E2150;background:#FFFFFF}
+a{color:#2E2150}a:hover{color:#4A3A7A}
+.tab{display:flex;align-items:center;justify-content:center;height:112px;border-radius:0 16px 16px 0;text-decoration:none;color:#2E2150;margin-right:6px}
+.tab span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600;font-size:15px;letter-spacing:0.02em}
+.ib{width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:transparent;border:0;color:#2E2150;padding:0;cursor:pointer}
+.pill{height:32px;padding:0 14px;border-radius:16px;font:600 13px "DM Sans",sans-serif;background:#FFFFFF;cursor:pointer}
+.mh{margin:10px 0 2px 0;font-size:13px;font-weight:700;letter-spacing:0.08em;color:#5E557A}
+.ev{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid #E6E2EE}
+.dt{width:46px;display:flex;flex-direction:column;align-items:center;flex-shrink:0}
+.tag{font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px}
+</style>
+</head>
+<body>
+<div style="width: 440px; height: 956px; display: flex; background: #FFFFFF; overflow: hidden;">
+<nav aria-label="Navigation principale" style="width: 64px; height: 956px; flex-shrink: 0; background: #2E2150; display: flex; flex-direction: column; gap: 6px; padding: 64px 0 28px 0; box-sizing: border-box;">
+<a class="tab" href="Main.html" style="background: #B9C8A3;"><span>Tâches</span></a>
+<a class="tab" href="Semaine.html" style="background: #C9BEE6;"><span>Semaine</span></a>
+<a class="tab" href="Routines.html" style="background: #F2A7A0;"><span>Routines</span></a>
+<a class="tab" href="Evenements.html" aria-current="page" style="background: #FFFFFF; margin-right: 0px;"><span>Événements</span></a>
+<a class="tab" href="Checklists.html" style="background: #E8DFC0;"><span>Checklists</span></a>
+<div style="flex-grow: 1;"></div>
+<a class="tab" href="Reglages.html" style="background: #CFCFD4;"><span>Réglages</span></a>
+</nav>
+<main style="flex-grow: 1; height: 956px; display: flex; flex-direction: column; gap: 12px; padding: 96px 20px 28px 20px; box-sizing: border-box;">
+<div style="display: flex; align-items: flex-end; justify-content: space-between;">
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 36px; line-height: 1; font-weight: 700;">Événements</h1>
+<div style="display: flex; align-items: center;">
+<button class="ib" aria-label="Année précédente" style="width: 36px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+<span style="font-size: 20px; font-weight: 700;">2026</span>
+<button class="ib" aria-label="Année suivante" style="width: 36px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg></button>
+</div>
+</div>
+<div style="display: flex; align-items: center;"><div style="width: 80px; height: 3px; background: #2E2150;"></div><div style="flex-grow: 1; height: 1px; background: #2E2150;"></div></div>
+<div style="display: flex; gap: 8px;">
+<button class="pill" style="border: 1.5px solid #2F6B7A; color: #2F6B7A;">Pro</button>
+<button class="pill" style="border: 1.5px solid #B5483B; color: #B5483B;">Perso</button>
+<button class="pill" aria-pressed="true" style="border: 1.5px solid #2E2150; background: #2E2150; color: #FFFFFF;">Tout</button>
+</div>
+<div style="display: flex; flex-direction: column;">
+<h2 class="mh">SEPTEMBRE</h2>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">23</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">MER.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Point client</span><span style="font-size: 14px; color: #5E557A;">10:00 – 11:00 · Google Agenda</span></div>
+<span class="tag" style="background: #E3EEF5; color: #1F6698;">Aujourd'hui</span></div>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">25</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">VEN.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Anniversaire de Karim</span><span style="font-size: 14px; color: #5E557A;">Annuel · 34 ans</span></div>
+<span class="tag" style="background: #FBE7E4; color: #9E3F33;">J-2</span></div>
+<h2 class="mh">OCTOBRE</h2>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">5</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">LUN.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Comité de direction</span><span style="font-size: 14px; color: #5E557A;">Mensuel · Pro</span></div>
+<span class="tag" style="background: #F3F1F6; color: #2E2150;">J-12</span></div>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">15</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">JEU.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Fête de l'Évacuation</span><span style="font-size: 14px; color: #5E557A;">Jour férié · Tunisie</span></div>
+<span class="tag" style="background: #E7F0EA; color: #2F6B4A;">Férié TN</span></div>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">20</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">MAR.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Point trimestriel</span><span style="font-size: 14px; color: #5E557A;">09:30 · Pro</span></div>
+<span class="tag" style="background: #F3F1F6; color: #2E2150;">J-27</span></div>
+<h2 class="mh">NOVEMBRE</h2>
+<div class="ev"><div class="dt"><span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 700;">1</span><span style="font-size: 12px; font-weight: 700; color: #5E557A;">DIM.</span></div>
+<div style="display: flex; flex-direction: column; gap: 3px; flex-grow: 1;"><span style="font-size: 17px; font-weight: 700;">Toussaint</span><span style="font-size: 14px; color: #5E557A;">Jour férié · France</span></div>
+<span class="tag" style="background: #E3EEF5; color: #1F6698;">Férié FR</span></div>
+</div>
+<div style="flex-grow: 1;"></div>
+<div style="display: flex; align-items: center; justify-content: space-between;">
+<button style="height: 44px; padding: 0 20px; border: 2px solid #2E2150; border-radius: 22px; background: #FFFFFF; color: #2E2150; font: 700 15px 'DM Sans', sans-serif; cursor: pointer;">Calendrier</button>
+<a href="AjoutEvenement.html" aria-label="Ajouter un événement" style="width: 64px; height: 64px; border-radius: 32px; background: #3A2A66; display: flex; align-items: center; justify-content: center;"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg></a>
+</div>
+</main>
+</div>
+</body>
+</html>
