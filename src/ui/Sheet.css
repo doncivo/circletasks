@@ -1,0 +1,34 @@
+/* Sheet : feuille plein écran iPhone (maquettes Ajout.html, Detail.html). */
+.ct-sheet__backdrop {
+  position: fixed;
+  inset: 0;
+  background: #6e6687;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  z-index: 100;
+}
+
+.ct-sheet {
+  max-height: calc(100% - 40px);
+  background: var(--ct-color-surface);
+  border-radius: var(--ct-radius-xl) var(--ct-radius-xl) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding: 12px 20px calc(28px + var(--ct-safe-area-bottom)) 20px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.ct-sheet:focus-visible {
+  outline: none;
+}
+
+.ct-sheet__handle {
+  align-self: center;
+  width: 40px;
+  height: 5px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-border-strong);
+}

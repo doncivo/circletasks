@@ -2,7 +2,7 @@ import { en } from './en';
 import { fr } from './fr';
 import type { Locale, MessageKey, Messages, TArgs } from './types';
 
-export type { Locale, MessageKey, MessageParams, Messages } from './types';
+export type { Locale, MessageKey, MessageParams, Messages, PlainMessageKey } from './types';
 
 const catalogs: Record<Locale, Messages> = { fr, en };
 

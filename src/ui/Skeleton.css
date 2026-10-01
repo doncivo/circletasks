@@ -1,0 +1,30 @@
+/* Skeleton : squelette de chargement, pulsation discrète. */
+.ct-skeleton-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+.ct-skeleton {
+  background: var(--ct-color-surface-input);
+  animation: ct-skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes ct-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* prefers-reduced-motion : repli statique, déjà neutralisé globalement (tokens.css),
+   opacité fixée ici pour éviter un clignotement figé à mi-course. */
+@media (prefers-reduced-motion: reduce) {
+  .ct-skeleton {
+    animation: none;
+    opacity: 0.7;
+  }
+}

@@ -175,6 +175,16 @@ h6 {
   line-height: 1;
 }
 
+/* Texte réservé aux lecteurs d'écran (libellés de champs, ex. Ajout.html : "Nouvelle tâche"). */
+.ct-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 /* prefers-reduced-motion : aucune animation ni transition imposée (CLAUDE.md, PRD 5). */
 @media (prefers-reduced-motion: reduce) {
   *,

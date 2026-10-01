@@ -1,0 +1,48 @@
+/* ListRow : ligne de tâche / routine (maquettes Main.html, PC-Aujourdhui.html .row). */
+.ct-list-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-list-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-list-row__title {
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-item);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+span.ct-list-row__title {
+  cursor: default;
+}
+
+.ct-list-row__title[data-done='true'] {
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+  text-decoration: line-through;
+}
+
+.ct-list-row__subtitle {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-list-row__title:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

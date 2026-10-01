@@ -1,0 +1,49 @@
+/* TextField : champ de saisie des maquettes (Main.html, Ajout.html). */
+.ct-text-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-1);
+}
+
+.ct-text-field__label {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-text-field__control {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+  padding: 0 16px;
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-medium);
+  font-size: var(--ct-font-size-item);
+  color: var(--ct-color-text);
+  box-sizing: border-box;
+}
+
+.ct-text-field__control::placeholder {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-text-field__control--multiline {
+  height: 110px;
+  padding: 12px 14px;
+  resize: none;
+  border: 1.5px solid var(--ct-color-border-strong);
+  background: var(--ct-color-surface);
+  font-size: var(--ct-font-size-text);
+  font-family: var(--ct-font-text);
+}
+
+.ct-text-field__control:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-text-field__control:disabled {
+  opacity: 0.6;
+}

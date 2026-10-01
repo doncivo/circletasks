@@ -2,13 +2,8 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { useAppStore } from './features/app/appStore';
-
-vi.mock('./features/app/bootstrap', () => ({
-  bootstrapDatabase: vi.fn(async () => {
-    useAppStore.getState().setDbStatus('ready');
-    return undefined;
-  }),
-}));
+import { INITIAL_NAVIGATION, useNavigationStore } from './features/app/navigation';
+import { t } from './i18n';
 
 function mockViewport(width: number): void {
   vi.stubGlobal('matchMedia', (query: string) => ({
@@ -19,18 +14,20 @@ function mockViewport(width: number): void {
   }));
 }
 
-describe('App (coquille)', () => {
+describe('App (coquille, T-01)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
-    useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null });
+    useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null, spaceFilter: 'all' });
+    useNavigationStore.setState(INITIAL_NAVIGATION);
   });
 
-  it('affiche le titre traduit et démarre la base', async () => {
+  it('démarre la base réelle et affiche l’écran Aujourd’hui sur l’onglet Tâches', async () => {
     mockViewport(1440);
     render(<App />);
-    expect(screen.getByRole('heading', { level: 1, name: 'CircleTasks' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading')).toBeVisible();
+    expect(await screen.findByText(t('tasks.todayBadge'))).toBeInTheDocument();
     expect(useAppStore.getState().dbStatus).toBe('ready');
+    const tasksTab = screen.getByRole('button', { name: t('nav.tabs.tasks') });
+    expect(tasksTab).toHaveAttribute('aria-current', 'page');
   });
 
   it('choisit la mise en page PC à partir de 1024 px', () => {
@@ -49,6 +46,6 @@ describe('App (coquille)', () => {
     mockViewport(440);
     useAppStore.setState({ dbStatus: 'error' });
     render(<App />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Impossible d’ouvrir la base de données.');
+    expect(screen.getByRole('alert')).toHaveTextContent(t('app.dbError'));
   });
 });

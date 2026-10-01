@@ -1,0 +1,570 @@
+import { parseIcon, type GoalProgress, type NewRecurrence, type NewTask, type Recurrence, type RecurrencePatch, type Task, type TaskPatch } from '../../../domain/model';
+import type {
+  GoalId,
+  IsoDateTime,
+  LocalDate,
+  LocalTime,
+  ProjectId,
+  RecurrenceId,
+  SpaceFilter,
+  SpaceId,
+  TaskId,
+} from '../../../domain/types';
+import type { WriteStamper, WriteStamp } from '../../../domain/hlc';
+import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
+import type { RecurrenceRepository, TaskRepository } from '../taskRepository';
+import type { InstantRange, ReadOptions, SortOrderEntry } from '../common';
+import { deletedClause, fromJson, fromJsonOrNull, inClause, readSyncMeta, requireMapped, requireRow, spaceFilterClause, toJson, type SyncRow } from './sqlHelpers';
+
+interface TaskRow extends SqlRow, SyncRow {
+  readonly space_id: string;
+  readonly project_id: string | null;
+  readonly title: string;
+  readonly note: string;
+  readonly date: string | null;
+  readonly time: string | null;
+  readonly status: string;
+  readonly done_at: string | null;
+  readonly sort_order: number;
+  readonly carried_over: number;
+  readonly recurrence_id: string | null;
+  readonly series_index: number | null;
+  readonly goal_id: string | null;
+  readonly icon: string | null;
+  readonly someday: number;
+  readonly source: string;
+  readonly external_id: string | null;
+}
+
+function rowToTask(row: TaskRow): Task {
+  return {
+    id: row.id as TaskId,
+    spaceId: row.space_id as SpaceId,
+    projectId: row.project_id as ProjectId | null,
+    title: row.title,
+    note: row.note,
+    date: row.date as LocalDate | null,
+    time: row.time as LocalTime | null,
+    status: row.status as Task['status'],
+    doneAt: row.done_at as IsoDateTime | null,
+    sortOrder: row.sort_order,
+    carriedOver: row.carried_over === 1,
+    recurrenceId: row.recurrence_id as RecurrenceId | null,
+    seriesIndex: row.series_index,
+    goalId: row.goal_id as GoalId | null,
+    icon: parseIcon(row.icon),
+    someday: row.someday === 1,
+    source: row.source as Task['source'],
+    externalId: row.external_id,
+    ...readSyncMeta(row),
+  };
+}
+
+function taskFromNew(input: NewTask, stamp: WriteStamp): Task {
+  return {
+    ...input,
+    createdAt: stamp.at,
+    updatedAt: stamp.at,
+    deletedAt: null,
+    deviceId: stamp.deviceId,
+    hlc: stamp.hlc,
+  };
+}
+
+/** Ajoute `days` jours à une date locale (arithmétique pure, sans fuseau). */
+function addDaysToLocalDate(date: LocalDate, days: number): LocalDate {
+  const [year, month, day] = date.split('-').map(Number);
+  const d = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, (day ?? 1) + days));
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${String(d.getUTCFullYear())}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` as LocalDate;
+}
+
+const TASK_COLUMNS =
+  'id, space_id, project_id, title, note, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, goal_id, icon, someday, source, external_id, created_at, updated_at, deleted_at, device_id, hlc';
+
+export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): TaskRepository {
+  async function fetchById(id: TaskId, options?: ReadOptions): Promise<TaskRow | undefined> {
+    const rows = await db.select<TaskRow>(`SELECT * FROM task WHERE id = ? ${deletedClause(options)} LIMIT 1`, [id]);
+    return rows[0];
+  }
+
+  async function fetchByIds(ids: readonly TaskId[]): Promise<Task[]> {
+    if (ids.length === 0) return [];
+    const { sql, params } = inClause(ids);
+    const rows = await db.select<TaskRow>(`SELECT * FROM task WHERE id IN ${sql}`, params);
+    const byId = new Map(rows.map((row) => [row.id, rowToTask(row)]));
+    return ids.map((id) => requireRow(byId.get(id), 'task', id));
+  }
+
+  /** Applique un même jeu de colonnes à chaque id, un tampon distinct par ligne (règle commune n°3). */
+  async function updateEach(ids: readonly TaskId[], setSql: string, extraParams: (id: TaskId) => SqlValue[]): Promise<Task[]> {
+    for (const id of ids) {
+      await db.execute(`UPDATE task SET ${setSql} WHERE id = ? AND deleted_at IS NULL`, [...extraParams(id), id]);
+    }
+    return fetchByIds(ids);
+  }
+
+  return {
+    async getById(id, options) {
+      const row = await fetchById(id, options);
+      return row ? rowToTask(row) : null;
+    },
+
+    async create(task: NewTask) {
+      const stamp = stamper.next();
+      await db.execute(
+        `INSERT INTO task (${TASK_COLUMNS})
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        [
+          task.id,
+          task.spaceId,
+          task.projectId,
+          task.title,
+          task.note,
+          task.date,
+          task.time,
+          task.status,
+          task.doneAt,
+          task.sortOrder,
+          task.carriedOver ? 1 : 0,
+          task.recurrenceId,
+          task.seriesIndex,
+          task.goalId,
+          task.icon ? encodeIconValue(task.icon) : null,
+          task.someday ? 1 : 0,
+          task.source,
+          task.externalId,
+          stamp.at,
+          stamp.at,
+          stamp.deviceId,
+          stamp.hlc,
+        ],
+      );
+      return taskFromNew(task, stamp);
+    },
+
+    async createMany(tasks: readonly NewTask[]) {
+      const created: Task[] = [];
+      for (const task of tasks) {
+        const stamp = stamper.next();
+        await db.execute(
+          `INSERT INTO task (${TASK_COLUMNS})
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          [
+            task.id,
+            task.spaceId,
+            task.projectId,
+            task.title,
+            task.note,
+            task.date,
+            task.time,
+            task.status,
+            task.doneAt,
+            task.sortOrder,
+            task.carriedOver ? 1 : 0,
+            task.recurrenceId,
+            task.seriesIndex,
+            task.goalId,
+            task.icon ? encodeIconValue(task.icon) : null,
+            task.someday ? 1 : 0,
+            task.source,
+            task.externalId,
+            stamp.at,
+            stamp.at,
+            stamp.deviceId,
+            stamp.hlc,
+          ],
+        );
+        created.push(taskFromNew(task, stamp));
+      }
+      return created;
+    },
+
+    async update(id: TaskId, patch: TaskPatch) {
+      const stamp = stamper.next();
+      const sets: string[] = [];
+      const params: SqlValue[] = [];
+      if (patch.spaceId !== undefined) {
+        sets.push('space_id = ?');
+        params.push(patch.spaceId);
+      }
+      if (patch.projectId !== undefined) {
+        sets.push('project_id = ?');
+        params.push(patch.projectId);
+      }
+      if (patch.title !== undefined) {
+        sets.push('title = ?');
+        params.push(patch.title);
+      }
+      if (patch.note !== undefined) {
+        sets.push('note = ?');
+        params.push(patch.note);
+      }
+      if (patch.date !== undefined) {
+        sets.push('date = ?');
+        params.push(patch.date);
+      }
+      if (patch.time !== undefined) {
+        sets.push('time = ?');
+        params.push(patch.time);
+      }
+      if (patch.status !== undefined) {
+        sets.push('status = ?');
+        params.push(patch.status);
+      }
+      if (patch.doneAt !== undefined) {
+        sets.push('done_at = ?');
+        params.push(patch.doneAt);
+      }
+      if (patch.sortOrder !== undefined) {
+        sets.push('sort_order = ?');
+        params.push(patch.sortOrder);
+      }
+      if (patch.carriedOver !== undefined) {
+        sets.push('carried_over = ?');
+        params.push(patch.carriedOver ? 1 : 0);
+      }
+      if (patch.recurrenceId !== undefined) {
+        sets.push('recurrence_id = ?');
+        params.push(patch.recurrenceId);
+      }
+      if (patch.seriesIndex !== undefined) {
+        sets.push('series_index = ?');
+        params.push(patch.seriesIndex);
+      }
+      if (patch.goalId !== undefined) {
+        sets.push('goal_id = ?');
+        params.push(patch.goalId);
+      }
+      if (patch.icon !== undefined) {
+        sets.push('icon = ?');
+        params.push(patch.icon ? encodeIconValue(patch.icon) : null);
+      }
+      if (patch.someday !== undefined) {
+        sets.push('someday = ?');
+        params.push(patch.someday ? 1 : 0);
+      }
+      sets.push('updated_at = ?', 'device_id = ?', 'hlc = ?');
+      params.push(stamp.at, stamp.deviceId, stamp.hlc);
+      await db.execute(`UPDATE task SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`, [...params, id]);
+      return requireMapped(await fetchById(id), 'task', id, rowToTask);
+    },
+
+    async complete(id: TaskId, doneAt: IsoDateTime) {
+      const stamp = stamper.next();
+      await db.execute(
+        "UPDATE task SET status = 'done', done_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL",
+        [doneAt, stamp.at, stamp.deviceId, stamp.hlc, id],
+      );
+      return requireMapped(await fetchById(id), 'task', id, rowToTask);
+    },
+
+    async reopen(id: TaskId) {
+      const stamp = stamper.next();
+      await db.execute(
+        "UPDATE task SET status = 'todo', done_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL",
+        [stamp.at, stamp.deviceId, stamp.hlc, id],
+      );
+      return requireMapped(await fetchById(id), 'task', id, rowToTask);
+    },
+
+    async reschedule(ids: readonly TaskId[], date: LocalDate, time?: LocalTime | null) {
+      const setTime = time !== undefined;
+      return updateEach(
+        ids,
+        `date = ?${setTime ? ', time = ?' : ''}, someday = 0, carried_over = 0, updated_at = ?, device_id = ?, hlc = ?`,
+        () => {
+          const stamp = stamper.next();
+          const values: SqlValue[] = [date];
+          if (setTime) values.push(time ?? null);
+          values.push(stamp.at, stamp.deviceId, stamp.hlc);
+          return values;
+        },
+      );
+    },
+
+    async moveToSomeday(ids: readonly TaskId[]) {
+      return updateEach(ids, 'date = NULL, time = NULL, someday = 1, updated_at = ?, device_id = ?, hlc = ?', () => {
+        const stamp = stamper.next();
+        return [stamp.at, stamp.deviceId, stamp.hlc];
+      });
+    },
+
+    async carryOver(ids: readonly TaskId[], date: LocalDate) {
+      return updateEach(ids, 'date = ?, carried_over = 1, updated_at = ?, device_id = ?, hlc = ?', () => {
+        const stamp = stamper.next();
+        return [date, stamp.at, stamp.deviceId, stamp.hlc];
+      });
+    },
+
+    async moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null) {
+      return updateEach(ids, 'space_id = ?, project_id = ?, updated_at = ?, device_id = ?, hlc = ?', () => {
+        const stamp = stamper.next();
+        return [spaceId, projectId, stamp.at, stamp.deviceId, stamp.hlc];
+      });
+    },
+
+    async setSortOrders(entries: readonly SortOrderEntry<TaskId>[]) {
+      for (const entry of entries) {
+        const stamp = stamper.next();
+        await db.execute(
+          'UPDATE task SET sort_order = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL',
+          [entry.sortOrder, stamp.at, stamp.deviceId, stamp.hlc, entry.id],
+        );
+      }
+    },
+
+    async softDelete(ids: readonly TaskId[]) {
+      for (const id of ids) {
+        const stamp = stamper.next();
+        await db.execute(
+          'UPDATE task SET deleted_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL',
+          [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id],
+        );
+      }
+      if (ids.length === 0) return [];
+      const { sql, params } = inClause(ids);
+      const rows = await db.select<TaskRow>(`SELECT * FROM task WHERE id IN ${sql}`, params);
+      const byId = new Map(rows.map((row) => [row.id, rowToTask(row)]));
+      return ids.map((id) => requireRow(byId.get(id), 'task', id));
+    },
+
+    async restore(ids: readonly TaskId[]) {
+      for (const id of ids) {
+        const stamp = stamper.next();
+        await db.execute(
+          'UPDATE task SET deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
+          [stamp.at, stamp.deviceId, stamp.hlc, id],
+        );
+      }
+      return fetchByIds(ids);
+    },
+
+    async listForDay(date: LocalDate, filter: SpaceFilter) {
+      const f = spaceFilterClause(filter);
+      const rows = await db.select<TaskRow>(
+        `SELECT * FROM task WHERE deleted_at IS NULL AND date = ? ${f.sql} ORDER BY sort_order, id`,
+        [date, ...f.params],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async listForWeek(weekStart: LocalDate, filter: SpaceFilter) {
+      const weekEnd = addDaysToLocalDate(weekStart, 6);
+      const f = spaceFilterClause(filter);
+      const rows = await db.select<TaskRow>(
+        `SELECT * FROM task WHERE deleted_at IS NULL AND date BETWEEN ? AND ? ${f.sql} ORDER BY date, sort_order, id`,
+        [weekStart, weekEnd, ...f.params],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async listSomeday(filter: SpaceFilter, projectId?: ProjectId) {
+      const f = spaceFilterClause(filter);
+      const params: SqlValue[] = [...f.params];
+      let sql = `SELECT * FROM task WHERE deleted_at IS NULL AND someday = 1 ${f.sql}`;
+      if (projectId !== undefined) {
+        sql += ' AND project_id = ?';
+        params.push(projectId);
+      }
+      sql += ' ORDER BY sort_order, id';
+      const rows = await db.select<TaskRow>(sql, params);
+      return rows.map(rowToTask);
+    },
+
+    async countSomeday(filter: SpaceFilter) {
+      const f = spaceFilterClause(filter);
+      const rows = await db.select<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM task WHERE deleted_at IS NULL AND someday = 1 ${f.sql}`,
+        f.params,
+      );
+      return rows[0]?.n ?? 0;
+    },
+
+    async listUndoneBefore(date: LocalDate) {
+      const rows = await db.select<TaskRow>(
+        "SELECT * FROM task WHERE deleted_at IS NULL AND status = 'todo' AND date IS NOT NULL AND date < ? ORDER BY date, sort_order, id",
+        [date],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async listDone(range: InstantRange, filter: SpaceFilter) {
+      const f = spaceFilterClause(filter);
+      const rows = await db.select<TaskRow>(
+        `SELECT * FROM task WHERE deleted_at IS NULL AND status = 'done' AND done_at >= ? AND done_at < ? ${f.sql} ORDER BY done_at`,
+        [range.from, range.to, ...f.params],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async listByGoal(goalId: GoalId) {
+      const rows = await db.select<TaskRow>(
+        'SELECT * FROM task WHERE deleted_at IS NULL AND goal_id = ? ORDER BY sort_order, id',
+        [goalId],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async progressByGoal(goalIds: readonly GoalId[]) {
+      const result = new Map<GoalId, GoalProgress>(goalIds.map((id) => [id, { done: 0, total: 0 }]));
+      if (goalIds.length === 0) return result;
+      const { sql, params } = inClause(goalIds);
+      const rows = await db.select<{ goal_id: string; status: string; n: number }>(
+        `SELECT goal_id, status, COUNT(*) AS n FROM task WHERE deleted_at IS NULL AND goal_id IN ${sql} GROUP BY goal_id, status`,
+        params,
+      );
+      for (const row of rows) {
+        const goalId = row.goal_id as GoalId;
+        const current = result.get(goalId) ?? { done: 0, total: 0 };
+        result.set(goalId, {
+          done: current.done + (row.status === 'done' ? row.n : 0),
+          total: current.total + row.n,
+        });
+      }
+      return result;
+    },
+
+    async listByRecurrence(recurrenceId: RecurrenceId) {
+      const rows = await db.select<TaskRow>(
+        'SELECT * FROM task WHERE deleted_at IS NULL AND recurrence_id = ? ORDER BY series_index, id',
+        [recurrenceId],
+      );
+      return rows.map(rowToTask);
+    },
+
+    async listTrash(since: IsoDateTime, filter: SpaceFilter) {
+      const f = spaceFilterClause(filter);
+      const rows = await db.select<TaskRow>(
+        `SELECT * FROM task WHERE deleted_at IS NOT NULL AND deleted_at >= ? ${f.sql} ORDER BY deleted_at DESC`,
+        [since, ...f.params],
+      );
+      return rows.map(rowToTask);
+    },
+  };
+}
+
+/** Icône déjà validée côté domaine (`encodeIcon` lève si invalide) ; conversion locale. */
+function encodeIconValue(icon: NonNullable<Task['icon']>): string {
+  return icon.kind === 'lucide' ? `lucide:${icon.name}` : `emoji:${icon.value}`;
+}
+
+interface RecurrenceRow extends SqlRow, SyncRow {
+  readonly freq: string;
+  readonly interval: number;
+  readonly weekdays: string;
+  readonly month_day: number | null;
+  readonly nth_weekday: string | null;
+  readonly until: string | null;
+  readonly count: number | null;
+}
+
+function rowToRecurrence(row: RecurrenceRow): Recurrence {
+  return {
+    id: row.id as RecurrenceId,
+    freq: row.freq as Recurrence['freq'],
+    interval: row.interval,
+    weekdays: fromJson(row.weekdays, []),
+    monthDay: row.month_day,
+    nthWeekday: fromJsonOrNull(row.nth_weekday),
+    until: row.until as LocalDate | null,
+    count: row.count,
+    ...readSyncMeta(row),
+  };
+}
+
+export function createRecurrenceRepository(db: SqlExecutor, stamper: WriteStamper): RecurrenceRepository {
+  async function fetchById(id: RecurrenceId, options?: ReadOptions): Promise<RecurrenceRow | undefined> {
+    const rows = await db.select<RecurrenceRow>(
+      `SELECT * FROM recurrence WHERE id = ? ${deletedClause(options)} LIMIT 1`,
+      [id],
+    );
+    return rows[0];
+  }
+
+  return {
+    async getById(id, options) {
+      const row = await fetchById(id, options);
+      return row ? rowToRecurrence(row) : null;
+    },
+
+    async create(recurrence: NewRecurrence) {
+      const stamp = stamper.next();
+      await db.execute(
+        `INSERT INTO recurrence (id, freq, interval, weekdays, month_day, nth_weekday, until, count, created_at, updated_at, deleted_at, device_id, hlc)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        [
+          recurrence.id,
+          recurrence.freq,
+          recurrence.interval,
+          toJson(recurrence.weekdays),
+          recurrence.monthDay,
+          recurrence.nthWeekday ? toJson(recurrence.nthWeekday) : null,
+          recurrence.until,
+          recurrence.count,
+          stamp.at,
+          stamp.at,
+          stamp.deviceId,
+          stamp.hlc,
+        ],
+      );
+      return requireMapped(await fetchById(recurrence.id), 'recurrence', recurrence.id, rowToRecurrence);
+    },
+
+    async update(id: RecurrenceId, patch: RecurrencePatch) {
+      const stamp = stamper.next();
+      const sets: string[] = [];
+      const params: SqlValue[] = [];
+      if (patch.freq !== undefined) {
+        sets.push('freq = ?');
+        params.push(patch.freq);
+      }
+      if (patch.interval !== undefined) {
+        sets.push('interval = ?');
+        params.push(patch.interval);
+      }
+      if (patch.weekdays !== undefined) {
+        sets.push('weekdays = ?');
+        params.push(toJson(patch.weekdays));
+      }
+      if (patch.monthDay !== undefined) {
+        sets.push('month_day = ?');
+        params.push(patch.monthDay);
+      }
+      if (patch.nthWeekday !== undefined) {
+        sets.push('nth_weekday = ?');
+        params.push(patch.nthWeekday ? toJson(patch.nthWeekday) : null);
+      }
+      if (patch.until !== undefined) {
+        sets.push('until = ?');
+        params.push(patch.until);
+      }
+      if (patch.count !== undefined) {
+        sets.push('count = ?');
+        params.push(patch.count);
+      }
+      sets.push('updated_at = ?', 'device_id = ?', 'hlc = ?');
+      params.push(stamp.at, stamp.deviceId, stamp.hlc);
+      await db.execute(`UPDATE recurrence SET ${sets.join(', ')} WHERE id = ? AND deleted_at IS NULL`, [...params, id]);
+      return requireMapped(await fetchById(id), 'recurrence', id, rowToRecurrence);
+    },
+
+    async softDelete(id: RecurrenceId) {
+      const stamp = stamper.next();
+      await db.execute(
+        'UPDATE recurrence SET deleted_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL',
+        [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id],
+      );
+      return requireMapped(await fetchById(id, { includeDeleted: true }), 'recurrence', id, rowToRecurrence);
+    },
+
+    async restore(id: RecurrenceId) {
+      const stamp = stamper.next();
+      await db.execute(
+        'UPDATE recurrence SET deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
+        [stamp.at, stamp.deviceId, stamp.hlc, id],
+      );
+      return requireMapped(await fetchById(id), 'recurrence', id, rowToRecurrence);
+    },
+  };
+}

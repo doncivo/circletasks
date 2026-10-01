@@ -21,20 +21,49 @@ export type SpaceId = Brand<Id, 'SpaceId'>;
 /** Identifiant d'appareil (UUID généré au premier lancement, stocké localement). */
 export type DeviceId = Brand<Id, 'DeviceId'>;
 
+/*
+ * Identifiants typés par entité (ADR 0004) : un `TaskId` ne peut pas être passé là
+ * où un `RoutineId` est attendu. Construction : `asEntityId<TaskId>(texte)` ou
+ * `newEntityId<TaskId>(ids)` (src/domain/id.ts).
+ */
+export type ProjectId = Brand<Id, 'ProjectId'>;
+export type TaskId = Brand<Id, 'TaskId'>;
+export type RecurrenceId = Brand<Id, 'RecurrenceId'>;
+export type RoutineId = Brand<Id, 'RoutineId'>;
+export type RoutineLogId = Brand<Id, 'RoutineLogId'>;
+export type ReminderId = Brand<Id, 'ReminderId'>;
+export type GoalId = Brand<Id, 'GoalId'>;
+export type EventId = Brand<Id, 'EventId'>;
+export type ChecklistId = Brand<Id, 'ChecklistId'>;
+export type ChecklistItemId = Brand<Id, 'ChecklistItemId'>;
+
 /** Date civile locale sans fuseau, 'YYYY-MM-DD'. */
 export type LocalDate = Brand<string, 'LocalDate'>;
 
 /** Heure locale flottante (sans fuseau), 24 h, 'HH:mm'. */
 export type LocalTime = Brand<string, 'LocalTime'>;
 
+/**
+ * Date et heure locales flottantes (sans fuseau), 'YYYY-MM-DDTHH:mm'.
+ * Sert aux échéances de rappel (`reminder.fire_at`) : 10:00 reste 10:00 dans le
+ * fuseau où se trouve l'iPhone (T-11, N-06).
+ */
+export type LocalDateTime = Brand<string, 'LocalDateTime'>;
+
 /** Instant UTC au format ISO 8601 avec millisecondes, ex. '2026-10-01T21:30:00.000Z'. */
 export type IsoDateTime = Brand<string, 'IsoDateTime'>;
 
 /**
- * Horloge logique hybride sérialisée (format défini par sync-icloud, ordre 4).
- * Doit rester triable lexicographiquement : la plus grande gagne.
+ * Horloge logique hybride sérialisée, triable lexicographiquement : la plus grande
+ * gagne. Format et générateur : src/domain/hlc.ts (ADR 0005).
  */
 export type Hlc = Brand<string, 'Hlc'>;
+
+/** Couleur '#rrggbb' en minuscules (espaces, projets). */
+export type HexColor = Brand<string, 'HexColor'>;
+
+/** Jour de semaine ISO 8601 : 1 = lundi … 7 = dimanche (la semaine commence le lundi). */
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
 /** Filtre d'espace appliqué partout : un espace précis ou « Tout ». */
 export type SpaceFilter = SpaceId | 'all';
@@ -72,6 +101,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 const LOCAL_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const LOCAL_TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
 const ISO_DATE_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/;
 
 export function isId(value: string): value is Id {
   return UUID_RE.test(value);
@@ -97,6 +127,19 @@ export function isIsoDateTime(value: string): value is IsoDateTime {
   return ISO_DATE_TIME_RE.test(value) && !Number.isNaN(Date.parse(value));
 }
 
+export function isLocalDateTime(value: string): value is LocalDateTime {
+  const [date, time, ...rest] = value.split('T');
+  return rest.length === 0 && date !== undefined && time !== undefined && isLocalDate(date) && isLocalTime(time);
+}
+
+export function isHexColor(value: string): value is HexColor {
+  return HEX_COLOR_RE.test(value);
+}
+
+export function isWeekday(value: number): value is Weekday {
+  return Number.isInteger(value) && value >= 1 && value <= 7;
+}
+
 function assertFormat<T extends string>(value: string, guard: (v: string) => v is T, label: string): T {
   if (!guard(value)) throw new TypeError(`${label} invalide : « ${value} »`);
   return value;
@@ -109,3 +152,11 @@ export const asLocalDate = (value: string): LocalDate => assertFormat(value, isL
 export const asLocalTime = (value: string): LocalTime => assertFormat(value, isLocalTime, 'LocalTime');
 export const asIsoDateTime = (value: string): IsoDateTime =>
   assertFormat(value, isIsoDateTime, 'IsoDateTime');
+export const asLocalDateTime = (value: string): LocalDateTime =>
+  assertFormat(value, isLocalDateTime, 'LocalDateTime');
+export const asHexColor = (value: string): HexColor => assertFormat(value, isHexColor, 'HexColor');
+
+/** Identifiant typé d'entité à partir d'un texte (lecture de base, paramètre de route). */
+export function asEntityId<T extends Id>(value: string): T {
+  return asId(value) as T;
+}

@@ -1,0 +1,142 @@
+/* Écran Aujourd'hui (A-01, T-01) : en-tête, pastilles, liste, création rapide. */
+.ct-today {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-4);
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.ct-today__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-today__month {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-today__dateRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-today__day {
+  font-size: var(--ct-font-size-display-mobile);
+}
+
+.ct-today[data-layout='pc'] .ct-today__day {
+  font-size: var(--ct-font-size-display-pc);
+}
+
+.ct-today__badge {
+  border: 1.5px solid var(--ct-color-today-badge, #1f6698);
+  color: var(--ct-color-today-badge, #1f6698);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  border-radius: var(--ct-radius-sm);
+  text-transform: uppercase;
+}
+
+.ct-today__list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.ct-today__empty {
+  margin: 0;
+  padding: var(--ct-space-4) var(--ct-space-1);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text);
+}
+
+.ct-today__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg, #f8e4e1);
+  color: var(--ct-color-danger, #a1271c);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-today__addRow {
+  display: flex;
+}
+
+.ct-today__bottomRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Feuille « Nouvelle tâche » (iPhone, Ajout.html) : l'ordre du DOM suit l'ordre
+   visuel (en-tête, champ Titre, espace, bouton Enregistrer) ; le focus est posé
+   explicitement sur le champ Titre à l'ouverture (TodayScreen.tsx), sans recourir à
+   l'ordre CSS pour tromper le piège de focus de `Sheet`. */
+.ct-task-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  height: 100%;
+}
+
+.ct-task-sheet__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-task-sheet__heading {
+  font-size: var(--ct-font-size-heading-sm);
+}
+
+.ct-task-sheet__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-task-sheet__spaces {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--ct-color-surface-input);
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-task-sheet__spaceButton {
+  flex-grow: 1;
+  height: 38px;
+  border: 0;
+  border-radius: var(--ct-radius-sm);
+  background: transparent;
+  color: var(--ct-space-color, var(--ct-color-text));
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-text-sm);
+  cursor: pointer;
+}
+
+/* Espace sélectionné (pas de style inline par espace, voir revue). */
+.ct-task-sheet__spaceButton[aria-pressed='true'] {
+  background: var(--ct-color-surface);
+  box-shadow: 0 1px 3px rgba(46, 33, 80, 0.15);
+}
+
+.ct-task-sheet__spacer {
+  flex-grow: 1;
+}

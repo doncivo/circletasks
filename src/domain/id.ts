@@ -36,3 +36,8 @@ export function createUuidGenerator(random?: RandomBytes): IdGenerator {
 }
 
 export const uuidGenerator: IdGenerator = createUuidGenerator();
+
+/** Nouvel identifiant typé d'entité : `newEntityId<TaskId>(ids)` (ADR 0004). */
+export function newEntityId<T extends Id>(ids: IdGenerator): T {
+  return ids.next() as T;
+}
