@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Permissions minimales de la fenêtre principale (PC et iPhone).",
+  "windows": ["main"],
+  "platforms": ["windows", "iOS"],
+  "permissions": ["core:default", "sql:default", "sql:allow-execute"]
+}
