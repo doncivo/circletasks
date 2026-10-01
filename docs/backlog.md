@@ -9,9 +9,9 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
 | PREP-01 | Prérequis et comptes (PRD section 2) | Ali | à faire |
-| PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | en cours |
-| PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | en revue |
-| PREP-04 | Installer les polices Fraunces et DM Sans en local et la bibliothèque lucide-react | ui-design-system | à faire |
+| PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
+| PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | en revue (attend v3 + Expo) |
+| PREP-04 | Installer les polices Fraunces et DM Sans en local et la bibliothèque lucide-react | ui-design-system | fait |
 
 ## Ordre 1 — Socle
 
