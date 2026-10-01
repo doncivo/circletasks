@@ -72,8 +72,11 @@ Toutes compatibles iOS : soit exécutées dans la WebView (JS pur), soit outils 
 | crate tauri 2, tauri-build 2 | Runtime | MIT / Apache-2.0 | — | oui |
 | crate tauri-plugin-sql 2 (feature `sqlite`) | SQLite via sqlx, SQLite embarqué avec FTS5 et JSON1 | MIT / Apache-2.0 (SQLite : domaine public) | ~1,5 Mo natif | oui |
 | crates serde, serde_json | Sérialisation des futures commandes | MIT / Apache-2.0 | — | oui |
+| @fontsource-variable/fraunces (PREP-04) | Police des titres, fichiers locaux (`src/ui/theme/fonts.css`) | SIL OFL 1.1 | ~124 Ko woff2 (latin + latin-ext, normal) | oui (fichiers statiques) |
+| @fontsource-variable/dm-sans (PREP-04) | Police du texte courant, fichiers locaux | SIL OFL 1.1 | ~54 Ko woff2 (latin + latin-ext, normal) | oui (fichiers statiques) |
+| lucide-react (PREP-04) | Icônes au trait des maquettes, `src/ui/Icon.tsx` | ISC | ~0,5 Ko par icône importée nommément (tree-shaking) | oui (JS) |
 
-Total JS de la coquille : ~49 Ko gzip. Le profil release Rust est optimisé taille (`lto`, `opt-level = "s"`, `strip`) pour tenir l'installeur sous 15 Mo (PRD 8).
+Total JS de la coquille : ~49 Ko gzip (hors icônes à l'usage). Polices : ~178 Ko de woff2 embarqués, non chargés depuis Internet (docs/licences.md). Le profil release Rust est optimisé taille (`lto`, `opt-level = "s"`, `strip`) pour tenir l'installeur sous 15 Mo (PRD 8).
 
 **Développement et tests uniquement (non embarquées)**
 
@@ -90,7 +93,7 @@ Total JS de la coquille : ~49 Ko gzip. Le profil release Rust est optimisé tail
 | eslint 10, @eslint/js, typescript-eslint 8, eslint-plugin-react-hooks 7, globals | Lint | MIT |
 | @types/react, @types/react-dom, @types/node | Types | MIT |
 
-Écartés : bibliothèques i18n (ADR 0003), sql.js (pas de FTS5, ADR 0002), polices et lucide-react (PREP-04).
+Écartés : bibliothèques i18n (ADR 0003), sql.js (pas de FTS5, ADR 0002).
 
 ## Conséquences
 

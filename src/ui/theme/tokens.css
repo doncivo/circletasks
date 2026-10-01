@@ -1,0 +1,188 @@
+/**
+ * Jetons CSS du design system CircleTasks (PREP-04).
+ *
+ * Source des couleurs : PRD section 5 « Écrans et navigation › Principes d'interface »
+ * et maquettes validées docs/maquettes/Main.html (clair), Main-Sombre.html (sombre),
+ * PC-Aujourdhui.html. Les teintes des onglets sont identiques dans les deux thèmes ;
+ * seuls le fond, le texte et quelques accents changent (voir Main-Sombre.html).
+ *
+ * Thème système par défaut : sans attribut, le thème suit `prefers-color-scheme`.
+ * `document.documentElement.dataset.theme = 'light' | 'dark'` (réglages, ordre 1)
+ * force un choix explicite et prend le pas sur la préférence système.
+ */
+
+@import './fonts.css';
+
+:root {
+  /* Polices : jamais chargées depuis Internet (fichiers locaux, voir fonts.css). */
+  --ct-font-title: 'Fraunces Variable', Georgia, serif;
+  --ct-font-text: 'DM Sans Variable', system-ui, sans-serif;
+  --ct-font-weight-regular: 400;
+  --ct-font-weight-medium: 500;
+  --ct-font-weight-semibold: 600;
+  --ct-font-weight-bold: 700;
+
+  /* Échelle typographique en rem : respecte le zoom et le texte agrandi à 200 %. */
+  --ct-font-size-xs: 0.75rem; /* 12px */
+  --ct-font-size-sm: 0.8125rem; /* 13px */
+  --ct-font-size-text-sm: 0.875rem; /* 14px */
+  --ct-font-size-text: 0.9375rem; /* 15px */
+  --ct-font-size-text-lg: 1.0625rem; /* 17px */
+  --ct-font-size-item: 1.125rem; /* 18px */
+  --ct-font-size-heading-sm: 1.375rem; /* 22px */
+  --ct-font-size-heading: 2.125rem; /* 34px */
+  --ct-font-size-display-mobile: 3.25rem; /* 52px, date du jour sur iPhone */
+  --ct-font-size-display-pc: 4rem; /* 64px, date du jour sur PC */
+
+  /* Rayons de bordure (boutons, cartes, champs, pastilles). */
+  --ct-radius-sm: 6px;
+  --ct-radius-md: 10px;
+  --ct-radius-lg: 14px;
+  --ct-radius-xl: 20px;
+  --ct-radius-pill: 999px;
+  --ct-radius-round: 50%;
+
+  /* Espacements. */
+  --ct-space-1: 4px;
+  --ct-space-2: 8px;
+  --ct-space-3: 12px;
+  --ct-space-4: 16px;
+  --ct-space-5: 20px;
+  --ct-space-6: 28px;
+  --ct-space-7: 36px;
+  --ct-space-8: 52px;
+
+  /* Zone tactile minimale (PRD 5 : ≥ 44 points) et marges de sécurité iOS. */
+  --ct-hit-target-min: 44px;
+  --ct-safe-area-top: env(safe-area-inset-top, 0px);
+  --ct-safe-area-right: env(safe-area-inset-right, 0px);
+  --ct-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --ct-safe-area-left: env(safe-area-inset-left, 0px);
+
+  /* Teintes des onglets verticaux : identiques en clair et en sombre (Main-Sombre.html). */
+  --ct-color-tab-tasks: #b9c8a3;
+  --ct-color-tab-week: #c9bee6;
+  --ct-color-tab-routines: #f2a7a0;
+  --ct-color-tab-events: #9dbbc9;
+  --ct-color-tab-checklists: #e8dfc0;
+  --ct-color-tab-settings: #cfcfd4;
+  /* Texte des onglets colorés : toujours foncé, quel que soit le thème (lisible sur pastel). */
+  --ct-color-tab-text: #2e2150;
+
+  /* Thème clair (valeurs par défaut de :root ; voir prefers-color-scheme ci-dessous). */
+  --ct-color-bg: #ffffff;
+  --ct-color-surface: #ffffff;
+  --ct-color-surface-raised: #faf9fc;
+  --ct-color-surface-input: #f3f1f6;
+  --ct-color-border: #e6e2ee;
+  --ct-color-border-strong: #d9d4e4;
+  --ct-color-text: #2e2150;
+  --ct-color-text-secondary: #5e557a;
+  --ct-color-nav-bg: #2e2150;
+  --ct-color-tab-active-bg: #ffffff;
+  --ct-color-accent: #3a2a66;
+  --ct-color-accent-on: #ffffff;
+  --ct-color-space-pro: #2f6b7a;
+  --ct-color-space-perso: #b5483b;
+  --ct-color-goal: #3f7fc4;
+}
+
+/* Thème sombre, dérivé de Main-Sombre.html : appliqué automatiquement si le système
+   le demande, sauf si les réglages forcent le thème clair. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ct-color-bg: #1c1630;
+    --ct-color-surface: #1c1630;
+    --ct-color-surface-raised: #22334a;
+    --ct-color-surface-input: #2a2242;
+    --ct-color-border: #3a3155;
+    --ct-color-border-strong: #4a4066;
+    --ct-color-text: #f1eef8;
+    --ct-color-text-secondary: #b7aecd;
+    --ct-color-nav-bg: #120e20;
+    --ct-color-tab-active-bg: #1c1630;
+    --ct-color-accent: #c9bee6;
+    --ct-color-accent-on: #1c1630;
+    --ct-color-space-pro: #7fc3cf;
+    --ct-color-space-perso: #f0a091;
+    --ct-color-goal: #8db8ec;
+  }
+}
+
+/* Réglages (ordre 1) : choix explicite du thème, prioritaire sur le système. */
+:root[data-theme='dark'] {
+  --ct-color-bg: #1c1630;
+  --ct-color-surface: #1c1630;
+  --ct-color-surface-raised: #22334a;
+  --ct-color-surface-input: #2a2242;
+  --ct-color-border: #3a3155;
+  --ct-color-border-strong: #4a4066;
+  --ct-color-text: #f1eef8;
+  --ct-color-text-secondary: #b7aecd;
+  --ct-color-nav-bg: #120e20;
+  --ct-color-tab-active-bg: #1c1630;
+  --ct-color-accent: #c9bee6;
+  --ct-color-accent-on: #1c1630;
+  --ct-color-space-pro: #7fc3cf;
+  --ct-color-space-perso: #f0a091;
+  --ct-color-goal: #8db8ec;
+}
+
+:root[data-theme='light'] {
+  --ct-color-bg: #ffffff;
+  --ct-color-surface: #ffffff;
+  --ct-color-surface-raised: #faf9fc;
+  --ct-color-surface-input: #f3f1f6;
+  --ct-color-border: #e6e2ee;
+  --ct-color-border-strong: #d9d4e4;
+  --ct-color-text: #2e2150;
+  --ct-color-text-secondary: #5e557a;
+  --ct-color-nav-bg: #2e2150;
+  --ct-color-tab-active-bg: #ffffff;
+  --ct-color-accent: #3a2a66;
+  --ct-color-accent-on: #ffffff;
+  --ct-color-space-pro: #2f6b7a;
+  --ct-color-space-perso: #b5483b;
+  --ct-color-goal: #3f7fc4;
+}
+
+/* Application globale (main.tsx importe ce fichier une seule fois). */
+html {
+  font-size: 100%; /* respecte le zoom du système et le texte agrandi jusqu'à 200 %. */
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: var(--ct-color-bg);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-regular);
+  font-size: var(--ct-font-size-text);
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1;
+}
+
+/* prefers-reduced-motion : aucune animation ni transition imposée (CLAUDE.md, PRD 5). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
