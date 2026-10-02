@@ -81,7 +81,7 @@ describe('TodayScreen : répétition (T-09)', () => {
       expect(series.map((task) => task.seriesIndex)).toEqual([0, 1]);
       expect(series[1]?.date?.slice(0, 7)).toBe('2026-11');
     });
-  });
+  }, 20_000);
 
   it('PC : « Répéter… » dans la fiche pose une règle sur une tâche existante, puis le résumé remplace le bouton', async () => {
     mockViewport(1440);

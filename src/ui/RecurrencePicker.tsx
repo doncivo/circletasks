@@ -1,9 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { RecurrenceFields } from '../domain/model';
-import { weekdayOf, parseLocalDate } from '../domain/localDate';
+import { addDays, weekdayOf, parseLocalDate } from '../domain/localDate';
 import { defaultRecurrence } from '../domain/recurrenceRules';
 import { recurrenceLabel } from '../domain/recurrenceLabel';
-import type { LocalDate, Weekday } from '../domain/types';
+import { isLocalDate, type LocalDate, type Weekday } from '../domain/types';
 import { t } from '../i18n';
 import { formatMessageRef } from '../i18n/formatRecurrence';
 import './RecurrencePicker.css';
@@ -56,12 +56,14 @@ function rebase(rule: RecurrenceFields, from: LocalDate, to: LocalDate): Recurre
  * Section « Répétition » de la saisie (Ajout.html, T-09) : radios « Une fois » (défaut), « Hebdo »,
  * « Mensuel », « Annuel », jours de la semaine pour Hebdo, et lien « Autre » (tous les N jours,
  * Nᵉ jour de la semaine du mois). Contrôlé : la règle est calculée par src/domain
- * (`defaultRecurrence`), la fin (date, nombre de fois) relève de T-10.
+ * (`defaultRecurrence`). T-10 : dans « Autre », la fin de la répétition (jamais, « Fin le » une date, « Après » N
+ * occurrences) ; `until` et `count` sont exclusifs, et conservés quand on change de fréquence.
  */
 export function RecurrencePicker({ value, onChange, startDate, className }: RecurrencePickerProps) {
   const labelId = useId();
   const [otherOpen, setOtherOpen] = useState(false);
   const [daysDraft, setDaysDraft] = useState('');
+  const [countDraft, setCountDraft] = useState('');
   const previousStart = useRef<LocalDate | null>(startDate);
 
   // La date de la tâche change : une règle devient inactive sans date, sinon elle suit le nouveau jour par défaut.
@@ -79,13 +81,16 @@ export function RecurrencePicker({ value, onChange, startDate, className }: Recu
 
   const disabled = startDate === null;
   const current = choiceOf(value);
-  const custom = value !== null && current === null;
+  const ended = value !== null && (value.until !== null || value.count !== null);
+  const custom = value !== null && (current === null || ended);
   const showOther = otherOpen || custom;
 
   function choose(choice: Choice): void {
     if (startDate === null) return;
     setOtherOpen(false);
-    onChange(choice === 'once' ? null : defaultRecurrence(choice === 'weekly' ? 'weekly' : choice === 'monthly' ? 'monthly' : 'yearly', startDate));
+    if (choice === 'once') return onChange(null);
+    const base = defaultRecurrence(choice === 'weekly' ? 'weekly' : choice === 'monthly' ? 'monthly' : 'yearly', startDate);
+    onChange({ ...base, until: value?.until ?? null, count: value?.count ?? null });
   }
 
   function toggleWeekday(day: Weekday): void {
@@ -99,7 +104,7 @@ export function RecurrencePicker({ value, onChange, startDate, className }: Recu
   function pickDaysMode(): void {
     if (startDate === null) return;
     setDaysDraft('2');
-    onChange({ ...defaultRecurrence('daily', startDate), interval: 2 });
+    onChange({ ...defaultRecurrence('daily', startDate), interval: 2, until: value?.until ?? null, count: value?.count ?? null });
   }
 
   function pickNthMode(): void {
@@ -107,6 +112,8 @@ export function RecurrencePicker({ value, onChange, startDate, className }: Recu
     const { day } = parseLocalDate(startDate);
     onChange({
       ...defaultRecurrence('monthly', startDate),
+      until: value?.until ?? null,
+      count: value?.count ?? null,
       monthDay: null,
       nthWeekday: { nth: Math.min(4, Math.ceil(day / 7)) as 1 | 2 | 3 | 4, weekday: weekdayOf(startDate) },
     });
@@ -118,7 +125,28 @@ export function RecurrencePicker({ value, onChange, startDate, className }: Recu
     if (value?.freq === 'daily' && Number.isInteger(n) && n >= 2) onChange({ ...value, interval: n });
   }
 
+  function pickEnd(kind: 'never' | 'until' | 'count'): void {
+    if (value === null || startDate === null) return;
+    if (kind === 'never') onChange({ ...value, until: null, count: null });
+    else if (kind === 'until') onChange({ ...value, count: null, until: value.until ?? addDays(startDate, 7) });
+    else {
+      setCountDraft('6');
+      onChange({ ...value, until: null, count: value.count ?? 6 });
+    }
+  }
+
+  function changeUntil(text: string): void {
+    if (value && isLocalDate(text)) onChange({ ...value, count: null, until: text });
+  }
+
+  function changeCount(text: string): void {
+    setCountDraft(text);
+    const n = Number(text);
+    if (value && Number.isInteger(n) && n >= 1) onChange({ ...value, until: null, count: n });
+  }
+
   const dailyMode = value?.freq === 'daily';
+  const endKind = value?.until != null ? 'until' : value?.count != null ? 'count' : 'never';
   const nthMode = value?.freq === 'monthly' && value.nthWeekday !== null;
 
   return (
@@ -240,6 +268,60 @@ export function RecurrencePicker({ value, onChange, startDate, className }: Recu
                     </option>
                   ))}
                 </select>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!disabled && showOther && value && (
+        <div className="ct-recurrence__panel" role="radiogroup" aria-label={t('tasks.repeatEndLabel')}>
+          <div className="ct-recurrence__panelRow">
+            <button type="button" role="radio" aria-checked={endKind === 'never'} className="ct-recurrence__radio" onClick={() => pickEnd('never')}>
+              <span className="ct-recurrence__dot" aria-hidden="true">
+                {endKind === 'never' && <span className="ct-recurrence__dotFill" />}
+              </span>
+              {t('tasks.repeatEndNever')}
+            </button>
+          </div>
+          <div className="ct-recurrence__panelRow">
+            <button type="button" role="radio" aria-checked={endKind === 'until'} className="ct-recurrence__radio" onClick={() => pickEnd('until')}>
+              <span className="ct-recurrence__dot" aria-hidden="true">
+                {endKind === 'until' && <span className="ct-recurrence__dotFill" />}
+              </span>
+              {t('tasks.repeatEndUntil')}
+            </button>
+            {endKind === 'until' && (
+              <input
+                type="date"
+                aria-label={t('tasks.repeatEndDateLabel')}
+                className="ct-recurrence__control"
+                min={startDate ?? undefined}
+                value={value.until ?? ''}
+                onChange={(event) => changeUntil(event.target.value)}
+              />
+            )}
+          </div>
+          <div className="ct-recurrence__panelRow">
+            <button type="button" role="radio" aria-checked={endKind === 'count'} className="ct-recurrence__radio" onClick={() => pickEnd('count')}>
+              <span className="ct-recurrence__dot" aria-hidden="true">
+                {endKind === 'count' && <span className="ct-recurrence__dotFill" />}
+              </span>
+              {t('tasks.repeatEndCount')}
+            </button>
+            {endKind === 'count' && (
+              <>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  aria-label={t('tasks.repeatEndCountLabel')}
+                  className="ct-recurrence__control ct-recurrence__number"
+                  value={countDraft === '' ? String(value.count ?? 6) : countDraft}
+                  onChange={(event) => changeCount(event.target.value)}
+                />
+                <span>{t('tasks.repeatEndTimes')}</span>
               </>
             )}
           </div>

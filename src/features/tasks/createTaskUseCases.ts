@@ -1,6 +1,7 @@
 import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
@@ -87,7 +88,9 @@ function createPostponeUndoCommand(deps: TaskUseCaseDeps, entries: readonly Post
         for (const { before, after } of entries) {
           const current = await repos.tasks.getById(after.id);
           if (!current || current.hlc !== after.hlc) continue;
-          written.push(await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, carriedOver: before.carriedOver }));
+          written.push(
+            await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, carriedOver: before.carriedOver, seriesTemplate: before.seriesTemplate }),
+          );
         }
         return written;
       });
@@ -179,6 +182,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         carriedOver: false,
         recurrenceId: null,
         seriesIndex: null,
+        seriesTemplate: null,
         goalId: input.goalId ?? null,
         icon: input.icon ?? null,
         someday,
@@ -291,7 +295,9 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           // Terminée : ignorée (critère 9). Planification inchangée : rien à écrire ni à annuler.
           if (!next.ok || (next.value.date === before.date && next.value.time === before.time && !before.someday)) continue;
           // Un report manuel efface le badge « reportée » (T-06 critère 4) ; il ne le pose jamais.
-          done.push({ before, after: await repos.tasks.update(id, { ...next.value, carriedOver: false }) });
+          // Occurrence récurrente reportée sans choix (lot, appel direct) : « cette occurrence », la série garde son ancre (T-10).
+          const diverge = before.recurrenceId !== null && before.seriesTemplate === null ? { seriesTemplate: divergedTemplate(before) } : {};
+          done.push({ before, after: await repos.tasks.update(id, { ...next.value, carriedOver: false, ...diverge }) });
         }
         return done;
       });

@@ -6,6 +6,7 @@ export type {
   TaskUseCases,
 } from './taskUseCases';
 export { createTaskUseCases } from './createTaskUseCases';
+export { createSeriesUseCases, type SeriesError, type SeriesUseCases } from './seriesUseCases';
 export { TaskDetail } from './TaskDetail';
 export { taskDetailStore, type TaskDetailState, type TaskDetailStatus } from './taskDetailStore';
 export { createCarryOverUseCases, type CarryOverUseCases } from './carryOverUseCases';

@@ -1,7 +1,9 @@
 import { todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { RecurrenceFields, Reminder, Task } from '../../domain/model';
+import { seriesAnchorDate, seriesSourceOf } from '../../domain/recurrenceEdit';
 import { buildNextOccurrence, decideNextOccurrence } from '../../domain/recurrenceNext';
+import { nextOccurrenceDate } from '../../domain/recurrenceRules';
 import type { LocalDate, ReminderId, TaskId } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
 import type { TaskUseCaseDeps } from './taskUseCases';
@@ -34,12 +36,17 @@ function fieldsOf(rule: RecurrenceFields): RecurrenceFields {
  * ne sont pas stockées (une tâche récurrente ne stocke que l'occurrence en cours, PRD 6) : on crée
  * la première occurrence à partir d'aujourd'hui, `seriesIndex` comptant les occurrences sautées
  * (une fin « après N fois » reste exacte).
+ *
+ * T-10 : une occurrence modifiée « cette occurrence » (`seriesTemplate`) génère la suivante avec les
+ * valeurs de la série et la date calculée depuis sa date prévue d'origine. `ignoreDue` : génère même si
+ * `source` n'est ni terminée ni passée (suppression « cette occurrence »).
  */
 export async function createNextOccurrence(
   deps: RecurrenceDeps,
   repos: Repositories,
   source: Task,
   today: LocalDate,
+  options: { readonly ignoreDue?: boolean } = {},
 ): Promise<CreatedOccurrence | null> {
   if (source.recurrenceId === null) return null;
   const stored = await repos.recurrences.getById(source.recurrenceId);
@@ -48,9 +55,16 @@ export async function createNextOccurrence(
   const siblings = await repos.tasks.listByRecurrence(source.recurrenceId, { includeDeleted: true });
   const existingSeriesIndexes = siblings.flatMap((t) => (t.seriesIndex === null ? [] : [t.seriesIndex]));
 
-  const first = decideNextOccurrence({ task: source, rule, today, existingSeriesIndexes });
+  const first = decideNextOccurrence({ task: source, rule, today, existingSeriesIndexes, ...(options.ignoreDue ? { ignoreDue: true } : {}) });
   if (!first.create) return null;
-  let { date, seriesIndex } = first;
+  let { seriesIndex } = first;
+  let date = first.date;
+  const anchor = seriesAnchorDate(source);
+  if (anchor !== null && anchor !== source.date) {
+    const fromSeries = nextOccurrenceDate(rule, anchor, source.seriesIndex ?? 0);
+    if (fromSeries === null) return null;
+    date = fromSeries;
+  }
   while (date < today) {
     const again = decideNextOccurrence({
       task: { date, status: 'todo', recurrenceId: source.recurrenceId, seriesIndex },
@@ -62,7 +76,7 @@ export async function createNextOccurrence(
   }
 
   const offsets = (await repos.reminders.listForTarget({ type: 'task', id: source.id })).map((r) => r.offsetMin);
-  const built = buildNextOccurrence(source, {
+  const built = buildNextOccurrence(seriesSourceOf(source), {
     taskId: newEntityId<TaskId>(deps.ids),
     date,
     seriesIndex,

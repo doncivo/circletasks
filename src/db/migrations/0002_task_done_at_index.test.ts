@@ -9,7 +9,6 @@ import { migrate, readAppliedMigrations } from '../migrator';
 import { createDataAccess } from '../repositories/dataAccess';
 import { createSqlRepositories } from '../repositories/sql';
 import { SPACE_PRO_ID } from '../seed/defaultSpaces';
-import { sampleTask } from '../seed/sampleData';
 import { migrations } from './index';
 import { migration0001CoreTables } from './0001_core_tables';
 
@@ -27,14 +26,19 @@ describe('migration 0002 (T-07) : index done_at sur une base 0001 avec données'
     const stamper = createWriteStamper(clock, createHlcClock({ clock, deviceId }));
     const data = createDataAccess(db, stamper, createSqlRepositories);
     const id = asEntityId<TaskId>('70000000-0000-4000-8000-000000000001');
-    await data.repos.tasks.create(sampleTask({ id, title: 'Avant 0002', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-09-23') }));
-    await data.repos.tasks.complete(id, new Date('2026-09-23T18:04:00').toISOString() as IsoDateTime);
+    // Écriture SQL directe : le repository écrit les colonnes des migrations suivantes (0003, T-10), absentes d'une base 0001.
+    const doneAt = new Date('2026-09-23T18:04:00').toISOString() as IsoDateTime;
+    await db.execute(
+      `INSERT INTO task (id, space_id, title, date, status, done_at, created_at, updated_at, device_id, hlc)
+       VALUES (?, ?, 'Avant 0002', '2026-09-23', 'done', ?, ?, ?, ?, 'h')`,
+      [id, SPACE_PRO_ID, doneAt, doneAt, doneAt, deviceId],
+    );
 
     const report = await migrate(db, migrations);
-    expect(report.applied).toEqual([2]);
+    expect(report.applied).toEqual([2, 3]);
     const again = await migrate(db, migrations);
     expect(again.applied).toEqual([]);
-    expect((await readAppliedMigrations(db)).map((m) => m.version)).toEqual([1, 2]);
+    expect((await readAppliedMigrations(db)).map((m) => m.version)).toEqual([1, 2, 3]);
 
     const idx = await db.select<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_task_status_done_at'");
     expect(idx).toHaveLength(1);

@@ -30,6 +30,7 @@ export { ListRow, type ListRowProps } from './ListRow';
 export { Skeleton, type SkeletonProps } from './Skeleton';
 export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from './ActionMenu';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
+export { ChoiceDialog, type ChoiceDialogProps, type ChoiceOption } from './ChoiceDialog';
 export { DatePrompt, type DatePromptProps } from './DatePrompt';
 export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
