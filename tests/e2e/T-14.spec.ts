@@ -250,7 +250,7 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       await page.getByLabel('Nouvelle tâche').press('Enter');
       await page.getByRole('button', { name: 'À reporter' }).click();
       const detail = page.getByRole('complementary', { name: 'Détail de la tâche' });
-      await detail.getByRole('button', { name: 'Reporter' }).click();
+      await detail.getByRole('button', { name: 'Reporter', exact: true }).click();
       await page.getByRole('menu', { name: 'Reporter la tâche' }).getByText('Choisir une date', { exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Choisir une date' });
 
@@ -261,7 +261,7 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       await expect(dialog).toHaveCount(0);
       await expect(page.getByRole('status')).toHaveCount(0); // rien n'a été reporté
 
-      await detail.getByRole('button', { name: 'Reporter' }).click();
+      await detail.getByRole('button', { name: 'Reporter', exact: true }).click();
       await page.getByRole('menu', { name: 'Reporter la tâche' }).getByText('Choisir une date', { exact: true }).click();
       await dialog.getByRole('button', { name: '30 septembre' }).click();
       await dialog.getByRole('button', { name: 'Valider' }).click();

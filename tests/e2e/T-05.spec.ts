@@ -160,7 +160,9 @@ test.describe('T-05 — reporter une tâche', () => {
     const detail = detailOf(page, testInfo);
     await expect(detail.getByRole('button', { name: 'Reporter' })).toBeVisible();
 
-    await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
+    // iPhone : bouton encadré de la fiche ; PC : case de la ligne (le panneau n'a pas ce bouton).
+    if (testInfo.project.name === 'iphone') await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
+    else await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
 
     await expect(detail.getByRole('button', { name: 'Reporter' })).toHaveCount(0);
   });

@@ -5,7 +5,7 @@ import { DONE_PERIOD_KINDS, groupDoneByDay, localTimeOfInstant } from '../../dom
 import type { Space, Task } from '../../domain/model';
 import { t } from '../../i18n';
 import { formatDayLabel, formatDonePeriodLabel } from '../../i18n/format';
-import { Checkbox, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout } from '../../ui';
+import { Checkbox, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout, spaceTextColor } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -22,7 +22,7 @@ function doneSubtitle(task: Task, spaces: readonly Space[]) {
       {space && (
         <>
           {' · '}
-          <span style={{ color: space.color }}>{space.name}</span>
+          <span style={{ color: spaceTextColor(space.color) }}>{space.name}</span>
         </>
       )}
     </>

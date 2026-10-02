@@ -73,10 +73,38 @@ async function clickUndo(page: Page, info: Info, detail: Locator, title: string)
   return isIphone(info) ? openDetail(page, title) : detail;
 }
 
-/** Ouvre l'éditeur de règle, choisit « Autre » et rend la section de fin. */
-async function openEndEditor(detail: Locator): Promise<void> {
+/**
+ * Ouvre l'éditeur de règle et rend sa portée. PC : la ligne Répétition de la fiche ; iPhone (Q15) : « Modifier » ouvre la feuille
+ * d'ajout pré-remplie, qui porte le même sélecteur de répétition.
+ */
+async function openRuleEditor(page: Page, info: Info, detail: Locator): Promise<Locator> {
+  if (isIphone(info)) {
+    await detail.getByRole('button', { name: 'Modifier', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: 'Modifier la tâche' });
+    await expect(sheet).toBeVisible();
+    return sheet;
+  }
   await detail.getByRole('button', { name: 'Modifier la répétition de la tâche' }).click();
-  await detail.getByRole('button', { name: /Autre : tous les N jours/ }).click();
+  return detail;
+}
+
+/** Valide l'éditeur de règle : « Valider » (PC) ou « Enregistrer » (feuille iPhone). */
+const applyRule = (scope: Locator, info: Info) => scope.getByRole('button', { name: isIphone(info) ? 'Enregistrer' : 'Valider', exact: true }).click();
+
+/** Ouvre l'éditeur de règle, choisit « Autre » et rend sa portée. */
+async function openEndEditor(page: Page, info: Info, detail: Locator): Promise<Locator> {
+  const scope = await openRuleEditor(page, info, detail);
+  await scope.getByRole('button', { name: /Autre : tous les N jours/ }).click();
+  return scope;
+}
+
+/** « Arrêter la répétition » : bouton de l'éditeur (PC) ou choix « Une fois » dans la feuille « Modifier » (iPhone). */
+async function stopRule(page: Page, info: Info, detail: Locator): Promise<void> {
+  const scope = await openRuleEditor(page, info, detail);
+  if (isIphone(info)) {
+    await scope.getByRole('radio', { name: 'Une fois' }).click();
+    await applyRule(scope, info);
+  } else await scope.getByRole('button', { name: 'Arrêter la répétition' }).click();
 }
 
 test.describe('T-10 : modifier ou arrêter une récurrence', () => {
@@ -151,10 +179,10 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
 
-    await openEndEditor(detail);
-    await detail.getByRole('radio', { name: 'Fin le' }).click();
-    await detail.getByLabel('Date de fin').fill('2026-12-31');
-    await detail.getByRole('button', { name: 'Valider' }).click();
+    const scope = await openEndEditor(page, info, detail);
+    await scope.getByRole('radio', { name: 'Fin le' }).click();
+    await scope.getByLabel('Date de fin').fill('2026-12-31');
+    await applyRule(scope, info);
     const question = page.getByRole('alertdialog', { name: 'Modifier la répétition ?' });
     await expect(question.getByRole('button', { name: 'Cette occurrence' })).toHaveCount(0);
     await question.getByRole('button', { name: 'Toutes les suivantes' }).click();
@@ -167,10 +195,10 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     const title = `Fin courte ${info.project.name}`;
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
-    await openEndEditor(detail);
-    await detail.getByRole('radio', { name: 'Fin le' }).click();
-    await detail.getByLabel('Date de fin').fill('2026-09-30');
-    await detail.getByRole('button', { name: 'Valider' }).click();
+    const scope = await openEndEditor(page, info, detail);
+    await scope.getByRole('radio', { name: 'Fin le' }).click();
+    await scope.getByLabel('Date de fin').fill('2026-09-30');
+    await applyRule(scope, info);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Toutes les suivantes' }).click();
     await closeDetail(page, detail);
 
@@ -186,16 +214,16 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
 
-    await openEndEditor(detail);
-    await detail.getByRole('radio', { name: 'Après' }).click();
-    await detail.getByLabel('Nombre d’occurrences').fill('6');
-    await detail.getByRole('button', { name: 'Valider' }).click();
+    const scope = await openEndEditor(page, info, detail);
+    await scope.getByRole('radio', { name: 'Après' }).click();
+    await scope.getByLabel('Nombre d’occurrences').fill('6');
+    await applyRule(scope, info);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Toutes les suivantes' }).click();
     await expect(detail.getByTestId('recurrence-detail')).toContainText('Mensuelle, le 23, 6 fois');
 
-    await detail.getByRole('button', { name: 'Modifier la répétition de la tâche' }).click();
-    await detail.getByLabel('Nombre d’occurrences').fill('1');
-    await detail.getByRole('button', { name: 'Valider' }).click();
+    const again = await openRuleEditor(page, info, detail);
+    await again.getByLabel('Nombre d’occurrences').fill('1');
+    await applyRule(again, info);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Toutes les suivantes' }).click();
     await expect(detail.getByTestId('recurrence-detail')).toContainText('1 fois');
     await closeDetail(page, detail);
@@ -211,10 +239,10 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
 
-    await openEndEditor(detail);
-    await detail.getByRole('radio', { name: 'Fin le' }).click();
-    await detail.getByLabel('Date de fin').fill('2026-09-10');
-    await detail.getByRole('button', { name: 'Valider' }).click();
+    const scope = await openEndEditor(page, info, detail);
+    await scope.getByRole('radio', { name: 'Fin le' }).click();
+    await scope.getByLabel('Date de fin').fill('2026-09-10');
+    await applyRule(scope, info);
     await page.getByRole('alertdialog').getByRole('button', { name: 'Toutes les suivantes' }).click();
     await expect(detail.getByRole('alert')).toContainText('La date de fin précède la date de la tâche.');
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Mensuelle, le 23');
@@ -226,14 +254,14 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     let detail = await openDetail(page, title);
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Mensuelle, le 23');
 
-    await detail.getByRole('button', { name: 'Arrêter la répétition' }).click();
+    await stopRule(page, info, detail);
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Une fois');
     await expect(page.getByRole('status')).toContainText('Répétition de');
 
     detail = await clickUndo(page, info, detail, title);
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Mensuelle, le 23');
 
-    await detail.getByRole('button', { name: 'Arrêter la répétition' }).click();
+    await stopRule(page, info, detail);
     await closeDetail(page, detail);
     await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
     await advanceDays(page, 30);

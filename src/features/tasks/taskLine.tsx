@@ -1,0 +1,45 @@
+import type { ReactNode } from 'react';
+import { spaceTextColor } from '../../ui';
+import type { RecurrenceFields, Space, Task } from '../../domain/model';
+import { recurrenceLabel } from '../../domain/recurrenceLabel';
+import { taskLineSegments } from '../../domain/taskLine';
+import { t } from '../../i18n';
+import { formatMessageRef } from '../../i18n/formatRecurrence';
+
+export interface TaskSubtitleOptions {
+  readonly spaces: readonly Space[];
+  /** Filtre « Tout » : l'espace est affiché en couleur (« 09:00 · Pro »). */
+  readonly showSpace: boolean;
+  /** Règle de la série (T-09), si connue. */
+  readonly rule: RecurrenceFields | undefined;
+}
+
+/**
+ * Sous-ligne d'une tâche (« 09:00 · reportée · Pro · mensuelle ») : composition par le domaine
+ * (`taskLineSegments`), rendu ici (couleur de l'espace, libellés i18n). Partagée par toutes les listes
+ * de tâches (Aujourd'hui, Semaine, Un jour) ; `undefined` s'il n'y a rien à afficher.
+ */
+export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtitleOptions): ReactNode {
+  const segments = taskLineSegments(task, { showSpace, hasRule: rule !== undefined });
+  if (segments.length === 0) return undefined;
+  const parts: ReactNode[] = [];
+  for (const segment of segments) {
+    if (segment.kind === 'time') parts.push(segment.time);
+    else if (segment.kind === 'carried') parts.push(<span key="carried" className="ct-today__carried">{t('tasks.carriedOver')}</span>);
+    else if (segment.kind === 'space') {
+      const space = spaces.find((s) => s.id === segment.spaceId);
+      if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
+    } else if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
+  }
+  if (parts.length === 0) return undefined;
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 && ' · '}
+          {part}
+        </span>
+      ))}
+    </>
+  );
+}

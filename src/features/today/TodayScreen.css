@@ -49,8 +49,8 @@
 }
 
 .ct-today__badge {
-  border: 1.5px solid var(--ct-color-today-badge, #1f6698);
-  color: var(--ct-color-today-badge, #1f6698);
+  border: 1.5px solid var(--ct-color-today-badge);
+  color: var(--ct-color-today-badge);
   font-size: var(--ct-font-size-xs);
   font-weight: var(--ct-font-weight-bold);
   letter-spacing: 0.08em;
@@ -83,21 +83,50 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+/* Champ d'ajout pleine largeur (PC-Aujourdhui.html) ; sur PC, le champ « Date » de T-14 est dans le même cadre gris. */
 .ct-today__addRow {
   display: flex;
   gap: var(--ct-space-2);
-  align-items: flex-end;
+  align-items: center;
 }
 
-/* Champ « Date » de la saisie en ligne PC (T-14, PC-Date.html). */
+.ct-today__addRow[data-layout='pc'] {
+  padding-right: var(--ct-space-2);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-today__addRow[data-layout='pc'] .ct-today__addField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-today__addRow[data-layout='pc'] .ct-text-field__control {
+  min-height: 48px;
+  background: transparent;
+  font-size: var(--ct-font-size-text);
+}
+
+/* Champ « Date » de la saisie en ligne PC (T-14). */
 .ct-today__dateField {
   width: 220px;
   flex-shrink: 0;
 }
 
+/* Interrupteur à gauche, aide au centre (PC), bouton « + » à droite, collés en bas de l'écran. */
 .ct-today__bottomRow {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.ct-today__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
 }
 
 /* Feuille « Nouvelle tâche » (iPhone, Ajout.html) : l'ordre du DOM suit l'ordre
@@ -149,7 +178,7 @@
   border: 0;
   border-radius: var(--ct-radius-sm);
   background: transparent;
-  color: var(--ct-space-color, var(--ct-color-text));
+  color: color-mix(in srgb, var(--ct-space-color, var(--ct-color-text)), #ffffff var(--ct-space-white, 0%));
   font-family: var(--ct-font-text);
   font-weight: var(--ct-font-weight-semibold);
   font-size: var(--ct-font-size-text-sm);
@@ -175,7 +204,12 @@
 /* Icônes d'accès rapide en haut à droite (Main.html) ; T-07 : « Rapport mensuel » seul. */
 .ct-today__quickIcons {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+}
+
+.ct-today__quickSpacer {
+  flex-grow: 1;
 }
 
 .ct-today__iconButton {
@@ -194,4 +228,203 @@
 .ct-today__iconButton:focus-visible {
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
+}
+
+/* Objectif épinglé (A-01, Main.html : cadre bleu, légende, titre, avancement). */
+.ct-today-goal {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  padding: var(--ct-space-3) 14px;
+  border: 2px solid var(--ct-color-goal);
+  border-radius: var(--ct-radius-lg);
+  min-width: 0;
+  flex-grow: 1;
+}
+
+.ct-today-goal[data-compact='true'] {
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-today-goal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-today-goal__caption {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ct-color-goal);
+}
+
+.ct-today-goal__title {
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-today-goal__progress {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Événements du jour : bandeau bleu clair, lecture seule. */
+.ct-today-events {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-today-event {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  padding: 10px 14px;
+  background: var(--ct-color-event-bg);
+  border-radius: var(--ct-radius-md);
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-today-event__time {
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-today-event__title {
+  font-weight: var(--ct-font-weight-medium);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ct-today-event__source {
+  margin-left: auto;
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-event-text);
+  white-space: nowrap;
+}
+
+.ct-today-banners {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-today-banners[data-layout='pc'] {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.ct-today-banners[data-layout='pc'] .ct-today-events {
+  width: 250px;
+  flex-shrink: 0;
+}
+
+/* Checklists du jour. */
+.ct-today-checklists__title {
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ct-color-text-secondary);
+  padding: var(--ct-space-2) 0;
+}
+
+.ct-today-checklists__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-today-checklists__item {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--ct-space-3) 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* État vide (Main-Vide.html). */
+.ct-today-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ct-space-4);
+  padding: var(--ct-space-6) var(--ct-space-1) var(--ct-space-2);
+}
+
+.ct-today-empty .ct-today__empty {
+  padding: 0;
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+
+.ct-today-empty__icons {
+  display: flex;
+  gap: var(--ct-space-3);
+}
+
+.ct-today-empty__pill {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-today-empty__help {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ct-color-text-secondary);
+}
+
+/* En-tête : date à gauche, flèches de jour (PC) et vue compacte à droite, puis filet (Main.html). */
+.ct-today__headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-today__headerActions {
+  display: flex;
+  align-items: center;
+}
+
+.ct-today__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-today__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-today[data-layout='pc'] .ct-today__ruleAccent {
+  width: 96px;
+}
+
+.ct-today__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+/* Champ « Date » intégré au cadre gris du champ d'ajout (PC) : bordure discrète, pas d'accent permanent. */
+.ct-today__addRow .ct-date-editor__field {
+  border: 1.5px solid var(--ct-color-border-strong);
 }

@@ -1,6 +1,7 @@
 import { createStore } from 'zustand';
 import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { IconRef, RecurrenceFields, TaskPatch } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, TaskPatch } from '../../domain/model';
+import { validateTaskTitle } from '../../domain/taskRules';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { LocalDate, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -21,11 +22,22 @@ export interface TaskDetailState {
   readonly taskId: TaskId | null;
   /** Règle de récurrence de la tâche affichée (T-09), `null` : une fois ou pas encore lue. */
   readonly recurrence: RecurrenceFields | null;
+  /** Avances des rappels de la tâche (M5), lues pour la fiche ; l'édition revient à N-02. */
+  readonly reminders: readonly ReminderOffsetMin[];
+  /** Titre de l'objectif rattaché (OB-03), `null` : non rattachée. */
+  readonly goalTitle: string | null;
   readonly status: TaskDetailStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
   /** Charge la tâche `id` (publiée dans `taskEntities`) pour la fiche. Ne rejette jamais. */
   load(id: TaskId): Promise<void>;
+  /**
+   * Modifie des champs de la tâche (titre, date, heure, « Un jour », espace…) depuis la fiche (A-08, critère 8) ; titre vidé ou
+   * trop long refusé (T-01). Rend true si écrit. Ne rejette jamais ; `errorKey` pose le message.
+   */
+  updateFields(patch: TaskPatch): Promise<boolean>;
+  /** Bouton « Un jour » (A-08, SD-03) : date et heure retirées ; annulable. Rend true si rangée. Ne rejette jamais. */
+  moveToSomeday(): Promise<boolean>;
   /** Enregistre la note à la perte de focus (critères 7 à 9). Ne rejette jamais. */
   updateNote(note: string): Promise<void>;
   /** Change ou retire (`null`) l'icône depuis la pastille (critère 5). Ne rejette jamais. */
@@ -108,12 +120,14 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
   return createStore<TaskDetailState>()((set, get) => ({
     taskId: null,
     recurrence: null,
+    reminders: [],
+    goalTitle: null,
     status: 'idle',
     errorKey: null,
 
     async load(id) {
       const requestedId = ++requestId;
-      set({ taskId: id, recurrence: null, status: 'loading', errorKey: null });
+      set({ taskId: id, recurrence: null, reminders: [], goalTitle: null, status: 'loading', errorKey: null });
       try {
         const task = await container.data.repos.tasks.getById(id);
         if (requestedId !== requestId) return;
@@ -125,10 +139,49 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         // Règle de la série (T-09) : sa lecture ne bloque pas l'affichage de la fiche.
         const recurrence = task.recurrenceId ? await container.data.repos.recurrences.getById(task.recurrenceId).catch(() => null) : null;
         if (requestedId !== requestId) return;
-        set({ status: 'ready', errorKey: null, recurrence });
+        // Rappels et objectif : affichage seulement, leur lecture ne bloque pas la fiche.
+        const reminders = await container.data.repos.reminders.listForTarget({ type: 'task', id }).then((rows) => rows.map((row) => row.offsetMin), () => []);
+        const goalTitle = task.goalId ? await container.data.repos.goals.getById(task.goalId).then((goal) => goal?.title ?? null, () => null) : null;
+        if (requestedId !== requestId) return;
+        set({ status: 'ready', errorKey: null, recurrence, reminders, goalTitle });
       } catch {
         if (requestedId !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.detailLoadError' });
+      }
+    },
+
+    async updateFields(patch) {
+      const { taskId } = get();
+      if (!taskId) return false;
+      const write = { ...patch };
+      if (patch.title !== undefined) {
+        const title = validateTaskTitle(patch.title);
+        if (!title.ok) {
+          set({ status: 'error', errorKey: 'detail.titleRequired' });
+          return false;
+        }
+        write.title = title.value;
+      }
+      try {
+        await useCases.update(taskId, write);
+        set({ status: 'ready', errorKey: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.detailSaveError' });
+        return false;
+      }
+    },
+
+    async moveToSomeday() {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const moved = await useCases.moveToSomeday([taskId]);
+        set({ status: 'ready', errorKey: null });
+        return moved.length > 0;
+      } catch {
+        set({ status: 'error', errorKey: 'detail.somedayError' });
+        return false;
       }
     },
 

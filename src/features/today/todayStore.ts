@@ -3,13 +3,16 @@ import { todayLocal } from '../../domain/clock';
 import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
-import type { LocalDate, LocalTime, RecurrenceId, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
+import type { TodayRow } from '../../domain/todayList';
+import type { LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
+import { EMPTY_TODAY_EXTRAS, loadTodayExtras, toggleRoutineViaSources, type TodayExtras } from './todaySources';
 import type { CreateTaskError } from '../tasks/taskUseCases';
 
 /** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
@@ -38,6 +41,18 @@ export interface TodayState {
   readonly taskIds: readonly TaskId[];
   /** Règles des séries affichées (T-09) : sous-ligne « mensuelle » ; une règle ne change pas avant T-10. */
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
+  /** Routines, événements, checklists et objectif fournis par les modules (A-01, `todaySources`) ; vides tant qu'ils n'existent pas. */
+  readonly extras: TodayExtras;
+  /** Une source d'éléments du jour a échoué : message dédié, les tâches restent affichées. */
+  readonly extrasFailed: boolean;
+  /** A-03 : réglage `today.hideRoutines` lu au chargement ; les routines masquées ne sont pas listées (elles restent dans leur onglet et la Semaine). */
+  readonly hideRoutines: boolean;
+  /** A-05 : mode édition (suppression, poignées, sélection multiple) ; jamais mémorisé (l'écran le coupe en se fermant). */
+  readonly editMode: boolean;
+  /** A-06 : vue compacte d'Aujourd'hui (`view.compact.today`, local à l'appareil), lue au chargement. */
+  readonly compact: boolean;
+  /** A-05 : tâches sélectionnées (routines, objectif et événements ne le sont jamais, Q13). */
+  readonly selection: ReadonlySet<TaskId>;
   readonly status: TodayStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -95,6 +110,28 @@ export interface TodayState {
    * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
    */
   syncRecurrences(): Promise<void>;
+  /**
+   * A-02 : déplace la tâche `id` à la position `toIndex` de `rows` (éléments à faire affichés) ; le domaine ramène une
+   * destination interdite (l'heure est prioritaire, Q11), l'ordre est écrit puis annulable. Renvoie le résultat
+   * (null : élément non déplaçable ou échec, `actionErrorKey` posé). Ne rejette jamais.
+   */
+  moveRow(rows: readonly TodayRow[], id: string, toIndex: number): Promise<MoveOutcome | null>;
+  /** A-06 : bascule la vue compacte et la mémorise (réglage local, les autres écrans gardent leur valeur). Ne rejette jamais. */
+  setCompact(compact: boolean): Promise<void>;
+  /** A-05 : active ou coupe le mode édition ; la sélection est vidée dans les deux cas. */
+  setEditMode(active: boolean): void;
+  /** A-05 : ajoute ou retire une tâche de la sélection. */
+  toggleSelection(id: TaskId): void;
+  /** A-05 : ajoute des tâches à la sélection (Maj+clic : intervalle). */
+  addToSelection(ids: readonly TaskId[]): void;
+  /** A-05 : reporte la sélection (T-05, un seul message « Annuler »), puis la vide. Ne rejette jamais. */
+  postponeSelected(target: PostponeTarget): Promise<void>;
+  /** A-05 : supprime la sélection vers la corbeille (T-08, un seul message « Annuler »), puis la vide. Ne rejette jamais. */
+  removeSelected(): Promise<void>;
+  /** A-05, Q12 : déplace la sélection vers un espace (et un projet, ES-04), sans changer la date ; annulable en une fois. Ne rejette jamais. */
+  moveSelected(spaceId: SpaceId, projectId?: ProjectId | null): Promise<void>;
+  /** R-03 : valide ou annule la validation d'une routine du jour (via la source de routines) ; recharge les éléments du jour. Ne rejette jamais. */
+  toggleRoutine(id: RoutineId): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -132,23 +169,39 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
   const fetchDay = async (date: LocalDate, filter: SpaceFilter): Promise<Task[]> =>
     sortTasksForDay(await listAndPublish(date, filter));
 
+  // Sélection encore affichée : une tâche reportée, supprimée ou déplacée hors de la vue n'en fait plus partie.
+  const selectedOf = (state: Pick<TodayState, 'selection' | 'taskIds'>): TaskId[] =>
+    state.taskIds.filter((id) => state.selection.has(id) && container.taskEntities.get(id) !== undefined);
+
   return createStore<TodayState>()((set, get) => ({
     date: null,
     filter: 'all',
     taskIds: [],
     recurrences: new Map<RecurrenceId, RecurrenceFields>(),
+    extras: EMPTY_TODAY_EXTRAS,
+    extrasFailed: false,
+    hideRoutines: false,
+    editMode: false,
+    compact: false,
+    selection: new Set<TaskId>(),
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
 
     async load(date, filter) {
       const id = ++requestId;
-      set({ status: 'loading', date, filter, errorKey: null, actionErrorKey: null });
+      // Changer de jour ou de filtre vide la sélection (A-05) : elle ne porte que sur ce qui est affiché.
+      const changed = get().date !== date || get().filter !== filter;
+      set({ status: 'loading', date, filter, errorKey: null, actionErrorKey: null, ...(changed ? { selection: new Set<TaskId>() } : {}) });
       try {
         const tasks = await fetchDay(date, filter);
         const recurrences = await loadRecurrences(tasks, get().recurrences);
+        const { extras, failed } = await loadTodayExtras(container, date, filter);
+        // Un réglage illisible n'empêche pas l'affichage : routines affichées par défaut.
+        const hideRoutines = await container.data.repos.settings.get('today.hideRoutines').catch(() => false);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ taskIds: tasks.map((task) => task.id), recurrences, status: 'ready' });
+        const compact = await container.data.repos.settings.get('view.compact').then((value) => value.today, () => false);
+        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, hideRoutines, compact, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });
@@ -251,6 +304,90 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       if (recurrences !== known) set({ recurrences });
     },
 
+    async setCompact(compact) {
+      const previous = get().compact;
+      set({ compact });
+      try {
+        const stored = await container.data.repos.settings.get('view.compact');
+        await container.data.repos.settings.set('view.compact', { ...stored, today: compact });
+      } catch {
+        set({ compact: previous, actionErrorKey: 'tasks.detailSaveError' });
+      }
+    },
+
+    setEditMode(active) {
+      set({ editMode: active, selection: new Set<TaskId>() });
+    },
+
+    toggleSelection(id) {
+      const next = new Set(get().selection);
+      if (!next.delete(id)) next.add(id);
+      set({ selection: next });
+    },
+
+    addToSelection(ids) {
+      set({ selection: new Set([...get().selection, ...ids]) });
+    },
+
+    async postponeSelected(target) {
+      const ids = selectedOf(get());
+      if (ids.length === 0) return;
+      try {
+        await useCases.postpone(ids, target);
+        set({ actionErrorKey: null, selection: new Set<TaskId>() });
+      } catch {
+        set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
+    async removeSelected() {
+      const ids = selectedOf(get());
+      if (ids.length === 0) return;
+      try {
+        await useCases.remove(ids, { continueSeries: true });
+        set({ actionErrorKey: null, selection: new Set<TaskId>() });
+      } catch {
+        set({ actionErrorKey: 'tasks.deleteError' });
+      }
+    },
+
+    async moveSelected(spaceId, projectId = null) {
+      const ids = selectedOf(get());
+      if (ids.length === 0) return;
+      try {
+        await useCases.moveToSpace(ids, spaceId, projectId);
+        set({ actionErrorKey: null, selection: new Set<TaskId>() });
+      } catch {
+        set({ actionErrorKey: 'today.moveError' });
+      }
+    },
+
+    async moveRow(rows, id, toIndex) {
+      const outcome = moveTaskRow(rows, id, toIndex);
+      if (!outcome) return null;
+      if (outcome.changes.length === 0) return outcome;
+      try {
+        await useCases.reorder(outcome.changes.map((change) => ({ id: change.id as TaskId, sortOrder: change.sortOrder })));
+        set({ actionErrorKey: null });
+        return outcome;
+      } catch {
+        set({ actionErrorKey: 'today.reorderError' });
+        return null;
+      }
+    },
+
+    async toggleRoutine(routineId) {
+      const { date, filter } = get();
+      if (date === null) return;
+      try {
+        await toggleRoutineViaSources(container, routineId, date);
+        const { extras, failed } = await loadTodayExtras(container, date, filter);
+        set({ extras, extrasFailed: failed, actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.completeError' });
+      }
+    },
+
     async remove(id, scope) {
       if (!get().taskIds.includes(id)) return;
       try {
@@ -273,6 +410,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
 export interface TodayView {
   readonly date: LocalDate | null;
   readonly filter: SpaceFilter;
+}
+
+/**
+ * Tâches du jour affiché, non triées (entités lues dans la source unique, `selectTasks`) : date, « Un jour » et espace
+ * sont revérifiés, une tâche reportée ou déplacée quitte la liste aussitôt. Le tri est celui du domaine (`buildTodayList`).
+ */
+export function selectTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>, view: TodayView): Task[] {
+  return selectTasks(taskIds, entities, (task) =>
+    view.date === null ? true : task.date === view.date && !task.someday && (view.filter === 'all' || task.spaceId === view.filter),
+  );
 }
 
 /**

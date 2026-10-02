@@ -31,6 +31,26 @@ describe('navigation', () => {
     expect(useNavigationStore.getState().route).toEqual({ tab: 'week', weekStart: null, somedayPanel: true });
   });
 
+  it('goToToday réinitialise le jour affiché et le dernier écran de Tâches, et ferme la fiche (A-04, Q10)', () => {
+    const nav = useNavigationStore.getState();
+    nav.navigate({ tab: 'tasks', screen: 'today', date: '2026-10-03' as LocalDate });
+    nav.openDetail(task);
+    nav.goToToday();
+    expect(useNavigationStore.getState()).toMatchObject({ route: { tab: 'tasks', screen: 'today' }, detail: null });
+    expect(useNavigationStore.getState().route).not.toHaveProperty('date');
+    expect(useNavigationStore.getState().lastRoutes.tasks).toEqual({ tab: 'tasks', screen: 'today' });
+  });
+
+  it('toucher l’onglet Tâches depuis un sous-écran ramène à Aujourd’hui ; les autres onglets gardent leur dernier écran (A-04 critère 4)', () => {
+    const nav = useNavigationStore.getState();
+    nav.navigate({ tab: 'tasks', screen: 'done' });
+    nav.navigate({ tab: 'routines', screen: 'report' });
+    nav.goToTab('tasks');
+    expect(useNavigationStore.getState().route).toEqual({ tab: 'tasks', screen: 'today' });
+    nav.goToTab('routines');
+    expect(useNavigationStore.getState().route).toEqual({ tab: 'routines', screen: 'report' });
+  });
+
   it('Échap ferme la surcouche du dessus, puis le détail, puis rien', () => {
     const nav = useNavigationStore.getState();
     nav.openDetail(task);

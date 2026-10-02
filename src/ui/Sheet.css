@@ -32,3 +32,8 @@
   border-radius: var(--ct-radius-pill);
   background: var(--ct-color-border-strong);
 }
+
+/* Fiche détail iPhone (Detail.html) : quasi plein écran, marge haute de 40 px. */
+.ct-sheet--tall {
+  height: calc(100% - 40px);
+}

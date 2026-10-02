@@ -1,0 +1,30 @@
+.ct-status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ct-space-3);
+  min-height: 28px;
+  padding: 2px max(var(--ct-space-3), var(--ct-safe-area-left)) 2px max(var(--ct-space-3), var(--ct-safe-area-right));
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-status-banner__action {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-status-banner__action:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

@@ -1,5 +1,6 @@
 export { PC_MEDIA_QUERY, PC_MIN_WIDTH_PX, useLayout, type Layout } from './useLayout';
 export { Icon, type IconProps } from './Icon';
+export { spaceTextColor } from './spaceColor';
 export {
   ICON_CATALOG,
   ICON_CATALOG_ENTRIES,
@@ -16,7 +17,7 @@ export { IconChooser, type IconChooserProps } from './IconChooser';
 export { EMOJI_CATALOG, type EmojiCatalogEntry } from './emojiCatalog';
 export { Kbd, type KbdProps } from './Kbd';
 export { TabRail, type TabRailItem, type TabRailProps } from './TabRail';
-export { AppShell, type AppShellProps } from './AppShell';
+export { AppShell, useDetailSlot, type AppShellProps } from './AppShell';
 export { Fab, type FabProps } from './Fab';
 export { SpacePills, type SpacePillItem, type SpacePillsProps } from './SpacePills';
 export { useFocusTrap, type UseFocusTrapOptions } from './useFocusTrap';
@@ -38,3 +39,21 @@ export { DateEditor, DateField, type DateEditorProps, type DateFieldProps } from
 export { DatePicker, type DatePickerProps } from './DatePicker';
 export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
+export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
+export { DragHandle, type DragHandleProps } from './DragHandle';
+export { CompactToggle, type CompactToggleProps } from './CompactToggle';
+export {
+  EditModeSwitch,
+  RemoveButton,
+  SelectCircle,
+  SelectionBar,
+  SelectionBarButton,
+  type EditModeSwitchProps,
+  type RemoveButtonProps,
+  type SelectCircleProps,
+  type SelectionBarButtonProps,
+  type SelectionBarProps,
+} from './EditControls';
+export { ListSkeleton, type ListSkeletonProps } from './ListSkeleton';
+export { StatusBanner, type StatusBannerProps } from './StatusBanner';
+export { useDelayedFlag } from './useDelayedFlag';

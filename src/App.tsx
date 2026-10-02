@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
-import { AppContainerProvider } from './features/app/AppContainerContext';
+import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp } from './features/app/bootstrap';
@@ -9,6 +9,9 @@ import { TABS, useNavigationStore, type TabDefinition, type TabId } from './feat
 import { startDesktopIntegration } from './features/app/desktop';
 import { toKeyInput } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
+import { registerTabShortcuts } from './features/app/tabShortcuts';
+import { AppStatusBanner } from './features/app/AppStatusBanner';
+import { startNetworkStatus } from './features/app/appStatus';
 import { SettingsScreen } from './features/settings';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
@@ -32,8 +35,15 @@ const SETTINGS_ITEM = requireTab('settings');
  * (aucun écran inventé) ; `route.tab` reste la seule source de vérité.
  */
 function AppShellContent() {
+  const container = useAppContainer();
   const route = useNavigationStore((s) => s.route);
   const goToTab = useNavigationStore((s) => s.goToTab);
+
+  // A-09 : état du réseau (« Hors ligne »).
+  useEffect(() => startNetworkStatus(), []);
+
+  // A-04 : Alt+1 à Alt+6 (registre de raccourcis, actifs même dans un champ de saisie).
+  useEffect(() => registerTabShortcuts(container.shortcuts), [container]);
 
   return (
     <AppShell
@@ -46,6 +56,7 @@ function AppShellContent() {
         />
       }
     >
+      <AppStatusBanner />
       <UpdateBanner />
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? <ReportScreen /> : route.screen === 'done' ? <DoneTasksScreen /> : <TodayScreen />

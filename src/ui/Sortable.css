@@ -1,0 +1,47 @@
+/* Glisser-déposer d'une liste (A-02) : ligne tenue, lignes qui s'écartent, indicateur d'insertion. */
+.ct-sortable[data-sorting='true'] {
+  user-select: none;
+  cursor: grabbing;
+}
+
+.ct-sortable [data-sortable-id] {
+  position: relative;
+  transition: transform 150ms ease;
+}
+
+/* Ligne tenue (PC-Semaine-UnJour.html : bordure violette, ombre) : suit le pointeur sans transition. */
+.ct-sortable [data-sortable-id][data-dragging='true'] {
+  z-index: 2;
+  transition: none;
+  background: var(--ct-color-surface);
+  border-radius: var(--ct-radius-md);
+  box-shadow: 0 6px 18px rgba(46, 33, 80, 0.2);
+  outline: 2px solid var(--ct-color-accent);
+}
+
+/* Indicateur d'insertion (souris) : trait d'accent avant ou après la ligne visée. */
+.ct-sortable [data-sortable-id][data-drop='before']::before,
+.ct-sortable [data-sortable-id][data-drop='after']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-accent);
+  pointer-events: none;
+}
+
+.ct-sortable [data-sortable-id][data-drop='before']::before {
+  top: -2px;
+}
+
+.ct-sortable [data-sortable-id][data-drop='after']::after {
+  bottom: -2px;
+}
+
+/* Poignée : le toucher ne fait jamais défiler la liste quand on la saisit. */
+.ct-sortable__handle {
+  touch-action: none;
+  cursor: grab;
+}

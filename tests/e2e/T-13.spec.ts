@@ -108,10 +108,14 @@ test.describe('T-13 — annulation généralisée', () => {
     const title = `Fiche ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
     const detail = await openDetail(page, title);
-    await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
+    const phone = testInfo.project.name === 'iphone';
+    // iPhone : bouton encadré de la fiche ; PC : case de la ligne, le panneau reste ouvert.
+    if (phone) await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
+    else await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
     await expect(status(page)).toContainText(`« ${title} » terminée`);
     await status(page).getByRole('button', { name: 'Annuler' }).click();
-    await expect(detail.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false');
+    if (phone) await expect(detail.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false');
+    else await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toBeVisible();
   });
 
   test('Ctrl+Z est global : il fonctionne depuis l’onglet Réglages (critère 4)', async ({ page }, testInfo) => {

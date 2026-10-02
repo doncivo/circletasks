@@ -484,33 +484,32 @@ describe('TodayScreen (T-01)', () => {
     await screen.findByRole('checkbox', { name: 'Terminer : Boire de l’eau' });
   });
 
-  it('« Marquer comme terminée » dans la fiche termine la tâche et la ligne le reflète (T-04, critère 1)', async () => {
+  it('PC : terminer se fait sur la case de la ligne (le panneau n’a pas de bouton « Marquer comme terminée »), la ligne le reflète (T-04, critère 1)', async () => {
     mockViewport(1440);
     renderToday(container);
     await addTaskInline('Envoyer la facture');
 
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
     const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
+    expect(within(panel).queryByRole('button', { name: 'Marquer comme terminée' })).toBeNull();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' }));
 
-    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
     expect(await screen.findByRole('checkbox', { name: 'Rouvrir : Envoyer la facture' })).toBeInTheDocument();
   });
 
-  it('cocher dans la liste met à jour la fiche ouverte, et son bouton rouvre au lieu de re-terminer (source unique)', async () => {
+  it('cocher dans la liste met à jour la fiche ouverte (source unique) : « Reporter » disparaît, puis revient en décochant', async () => {
     mockViewport(1440);
     renderToday(container);
     await addTaskInline('Envoyer la facture');
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
     const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
-    const doneButton = () => within(panel).getByRole('button', { name: 'Marquer comme terminée' });
-    expect(doneButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' }));
-    await waitFor(() => expect(doneButton()).toHaveAttribute('aria-pressed', 'true'));
+    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Reporter' })).toBeNull());
 
-    fireEvent.click(doneButton());
-    await waitFor(() => expect(doneButton()).toHaveAttribute('aria-pressed', 'false'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Rouvrir : Envoyer la facture' }));
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument());
     expect(container.undo.getSnapshot().size).toBe(1); // une seule complétion enregistrée
   });
 
@@ -520,12 +519,12 @@ describe('TodayScreen (T-01)', () => {
     await addTaskInline('Envoyer la facture');
     fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
     const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
-    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
-    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' }));
+    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Reporter' })).toBeNull());
 
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
 
-    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false'));
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument());
   });
 
   it('affiche l’erreur sans rejet non géré si l’écriture de la complétion échoue (T-04)', async () => {
@@ -665,7 +664,7 @@ describe('TodayScreen (T-01)', () => {
     const panel = await openDetailOf('Courses');
     expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
 
-    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Courses' }));
 
     await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Reporter' })).not.toBeInTheDocument());
   });

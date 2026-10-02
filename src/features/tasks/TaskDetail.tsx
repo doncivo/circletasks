@@ -1,27 +1,19 @@
-import { Check, Copy, X } from 'lucide-react';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { IconRef, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
-import type { LocalDate } from '../../domain/types';
-import { RULE_EDIT_SCOPES, ruleChanged, scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
-import { recurrenceLabel } from '../../domain/recurrenceLabel';
-import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { PlainMessageKey } from '../../i18n';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
+import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
-import { formatMessageRef } from '../../i18n/formatRecurrence';
-import { Button, ChoiceDialog, DetailPanel, Icon, IconChooser, IconView, RecurrencePicker, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
+import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
-import { DeleteTaskConfirm } from './DeleteTaskConfirm';
-import { DuplicatePrompt } from './DuplicatePrompt';
-import { PostponeAction } from './PostponeAction';
+import { TaskDetailBody } from './TaskDetailBody';
 import { taskDetailStore } from './taskDetailStore';
+import type { TaskDetailApi } from './useTaskDetailEdits';
 import './TaskDetail.css';
 
 /**
- * Fiche détail d'une tâche (A-08), limitée par T-03 aux zones icône et note : la
- * fiche complète (date, récurrence, rappels, espace, projet, objectif, boutons
- * Focus / Reporter / Un jour / Dupliquer / Supprimer) arrive avec A-08. Panneau à
- * droite sur PC, feuille plein écran sur iPhone (`useLayout`, ADR 0004).
+ * Fiche détail d'une tâche (A-08) : panneau à droite sur PC, feuille quasi plein écran sur iPhone (`useLayout`, ADR 0004). Le
+ * panneau PC se loge dans l'emplacement de la coquille (pleine hauteur, contre le bord droit) quand elle en fournit un.
  *
  * La tâche affichée est lue dans `container.taskEntities` (source unique, ADR 0004).
  */
@@ -29,437 +21,109 @@ export function TaskDetail() {
   const detail = useNavigationStore((s) => s.detail);
   const closeDetail = useNavigationStore((s) => s.closeDetail);
   const layout = useLayout();
+  const slot = useDetailSlot();
 
   const taskId = detail?.type === 'task' ? detail.id : null;
-  // Tâche lue dans la source unique (ADR 0004, avenant) : toute écriture, d'où qu'elle
-  // vienne (liste, annulation), est reflétée ici sans copie à synchroniser.
+  // Tâche lue dans la source unique (ADR 0004, avenant) : toute écriture, d'où qu'elle vienne (liste, annulation), est reflétée ici.
   const entities = useTaskEntities();
   const task = taskId ? entities.get(taskId) : undefined;
   const status = useFeatureStore(taskDetailStore, (s) => s.status);
   const errorKey = useFeatureStore(taskDetailStore, (s) => s.errorKey);
+  const reminders = useFeatureStore(taskDetailStore, (s) => s.reminders);
+  const goalTitle = useFeatureStore(taskDetailStore, (s) => s.goalTitle);
+  const recurrence = useFeatureStore(taskDetailStore, (s) => s.recurrence);
   const load = useFeatureStore(taskDetailStore, (s) => s.load);
-  const updateNote = useFeatureStore(taskDetailStore, (s) => s.updateNote);
-  const updateIcon = useFeatureStore(taskDetailStore, (s) => s.updateIcon);
-  const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
-  const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
-  const postponeSeries = useFeatureStore(taskDetailStore, (s) => s.postponeSeries);
   const remove = useFeatureStore(taskDetailStore, (s) => s.remove);
   const duplicate = useFeatureStore(taskDetailStore, (s) => s.duplicate);
-  const recurrence = useFeatureStore(taskDetailStore, (s) => s.recurrence);
-  const setRecurrence = useFeatureStore(taskDetailStore, (s) => s.setRecurrence);
+  const refreshRecurrence = useFeatureStore(taskDetailStore, (s) => s.refreshRecurrence);
+  const updateNote = useFeatureStore(taskDetailStore, (s) => s.updateNote);
+  const updateIcon = useFeatureStore(taskDetailStore, (s) => s.updateIcon);
+  const updateFields = useFeatureStore(taskDetailStore, (s) => s.updateFields);
   const applySeriesEdit = useFeatureStore(taskDetailStore, (s) => s.applySeriesEdit);
+  const setRecurrence = useFeatureStore(taskDetailStore, (s) => s.setRecurrence);
   const updateRecurrence = useFeatureStore(taskDetailStore, (s) => s.updateRecurrence);
   const stopRecurrence = useFeatureStore(taskDetailStore, (s) => s.stopRecurrence);
-  const refreshRecurrence = useFeatureStore(taskDetailStore, (s) => s.refreshRecurrence);
+  const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
+  const postponeSeries = useFeatureStore(taskDetailStore, (s) => s.postponeSeries);
+  const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
+  const moveToSomeday = useFeatureStore(taskDetailStore, (s) => s.moveToSomeday);
+  const spaces = useAppStore((s) => s.spaces);
+  const appDay = useAppStore((s) => s.day);
   // T-10 critère 8 : « Annuler » (message ou Ctrl+Z) d'une modification de règle ne touche pas la tâche ; la règle affichée est relue.
-  const { undo } = useAppContainer();
+  const { undo, clock } = useAppContainer();
   const undoSnapshot = useSyncExternalStore(undo.subscribe, undo.getSnapshot);
   const recurrenceId = task?.recurrenceId ?? null;
   useEffect(() => {
     if (recurrenceId !== null) void refreshRecurrence();
   }, [recurrenceId, undoSnapshot, refreshRecurrence]);
 
-  // Note non enregistrée (perte de focus pas encore survenue) : la fiche la
-  // sauvegarde aussi à la fermeture (critère 8), y compris par Échap, qui ne
-  // déclenche pas de `blur` sur le champ. `TaskDetailBody` tient la référence à
-  // jour à chaque rendu (pas un effet : simple affectation, pas un `setState`).
+  // Note non enregistrée (perte de focus pas encore survenue) : la fiche la sauvegarde aussi à la fermeture, y compris par Échap, qui
+  // ne déclenche pas de `blur`. `useTaskDetailEdits` tient la référence à jour à chaque rendu.
   const flushNoteRef = useRef<() => boolean>(() => false);
+  /** Saisie en place en cours (titre, date, heure, espace) : annule et rend true ; null si aucune. */
+  const cancelInlineRef = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     if (taskId) void load(taskId);
   }, [taskId, load]);
 
+  const api: TaskDetailApi = useMemo(
+    () => ({ updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday }),
+    [updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday],
+  );
+
   if (!taskId) return null;
 
   function handleClose(): void {
+    // Échap pendant une saisie en place : annule la saisie sans fermer la fiche (A-08 critère 8).
+    if (cancelInlineRef.current?.()) return;
     // Note modifiée sur une occurrence récurrente : la question « cette occurrence / toutes les suivantes » s'affiche, la fiche reste ouverte.
     if (flushNoteRef.current()) return;
     closeDetail();
   }
 
-  // La tâche affichée (`task?.id`) sert de clé à `TaskDetailBody` : changer de
-  // tâche remonte un composant frais plutôt que de synchroniser le brouillon de
-  // note et l'état du sélecteur d'icône par effet (pas de setState dans un effet).
-  const content =
-    task ? (
-      <TaskDetailBody
-        key={task.id}
-        task={task}
-        flushNoteRef={flushNoteRef}
-        onClose={handleClose}
-        showCloseButton={layout === 'mobile'}
-        updateNote={updateNote}
-        updateIcon={updateIcon}
-        toggleDone={toggleDone}
-        postpone={postpone}
-        postponeSeries={postponeSeries}
-        duplicate={duplicate}
-        recurrence={recurrence}
-        setRecurrence={setRecurrence}
-        applySeriesEdit={applySeriesEdit}
-        updateRecurrence={updateRecurrence}
-        stopRecurrence={stopRecurrence}
-        // Suppression confirmée (T-08, critère 2) : la tâche part dans la corbeille, la fiche se ferme
-        // (sans réécrire la note : la tâche n'existe plus ; la perte de focus l'a déjà enregistrée).
-        // `scope` : occurrence d'une série (T-10 critère 7).
-        onDelete={async (scope) => {
-          if (await remove(scope)) closeDetail();
-        }}
-        errorKey={status === 'error' ? errorKey : null}
-      />
-    ) : status === 'error' && errorKey ? (
-      <p role="alert" className="ct-task-detail__error">
-        {t(errorKey)}
-      </p>
-    ) : null;
+  // La tâche affichée (`task.id`) sert de clé à `TaskDetailBody` : changer de tâche remonte un composant frais plutôt que de
+  // synchroniser brouillons et sélecteurs par effet.
+  const content = task ? (
+    <TaskDetailBody
+      key={task.id}
+      task={task}
+      api={api}
+      flushNoteRef={flushNoteRef}
+      cancelInlineRef={cancelInlineRef}
+      spaces={spaces}
+      today={appDay ?? todayLocal(clock)}
+      nowMs={clock.nowMs()}
+      reminders={reminders}
+      goalTitle={goalTitle}
+      recurrence={recurrence}
+      isMobile={layout === 'mobile'}
+      onClose={handleClose}
+      duplicate={duplicate}
+      // Suppression confirmée (T-08) : la tâche part dans la corbeille et la fiche se ferme. `scope` : occurrence d'une série (T-10).
+      onDelete={async (scope) => {
+        if (await remove(scope)) closeDetail();
+      }}
+      errorKey={status === 'error' ? errorKey : null}
+    />
+  ) : status === 'error' && errorKey ? (
+    <p role="alert" className="ct-task-detail__error">
+      {t(errorKey)}
+    </p>
+  ) : null;
 
   if (layout === 'pc') {
-    return (
+    const panel = (
       <DetailPanel label={t('tasks.detailLabel')} onClose={handleClose} width={588}>
         {content}
       </DetailPanel>
     );
+    return slot ? createPortal(panel, slot) : panel;
   }
 
   return (
-    <Sheet open onClose={handleClose} label={t('tasks.detailLabel')}>
+    <Sheet open onClose={handleClose} label={t('tasks.detailLabel')} className="ct-sheet--tall">
       {content}
     </Sheet>
-  );
-}
-
-interface TaskDetailBodyProps {
-  task: Task;
-  /** Enregistre la note en attente ; rend true si une question (T-10) doit être posée avant de fermer. */
-  flushNoteRef: React.MutableRefObject<() => boolean>;
-  onClose: () => void;
-  /** Feuille iPhone : `Sheet` ne porte pas de bouton de fermeture intégré (contrairement à `DetailPanel`, PC). */
-  showCloseButton: boolean;
-  updateNote: (note: string) => Promise<void>;
-  updateIcon: (icon: IconRef | null) => Promise<void>;
-  /** Bouton « Marquer comme terminée » / « Rouvrir » (T-04, Detail.html). */
-  toggleDone: () => Promise<void>;
-  /** « Reporter » / « Planifier » (T-05). */
-  postpone: (target: PostponeTarget) => Promise<void>;
-  /** T-10 : report d'une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». */
-  postponeSeries: (target: PostponeTarget, scope: SeriesScope) => Promise<void>;
-  /** T-12 : « Dupliquer » ; la copie est créée à `date` (null : « Un jour »), la fiche reste sur l'original. */
-  duplicate: (date: LocalDate | null) => Promise<boolean>;
-  /** Règle de la série (T-09), `null` : tâche non récurrente. */
-  recurrence: RecurrenceFields | null;
-  /** « Répéter… » : pose une règle sur une tâche datée (T-09) ; la modification / l'arrêt relèvent de T-10. */
-  setRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
-  /** T-10 : applique une modification à « cette occurrence » ou « toutes les suivantes ». */
-  applySeriesEdit: (patch: TaskPatch, scope: SeriesScope) => Promise<boolean>;
-  /** T-10 : nouvelle règle pour « toutes les suivantes ». */
-  updateRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
-  /** T-10 : « Arrêter la répétition ». */
-  stopRecurrence: () => Promise<boolean>;
-  /** Suppression confirmée (T-08) ; la fiche parente se ferme si elle réussit. `scope` : T-10. */
-  onDelete: (scope?: SeriesScope) => Promise<void>;
-  /** Échec d'enregistrement ou de report à afficher (la tâche reste affichée). */
-  errorKey: PlainMessageKey | null;
-}
-
-/** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, postponeSeries, duplicate, recurrence, setRecurrence, applySeriesEdit, updateRecurrence, stopRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
-  const [duplicateOpen, setDuplicateOpen] = useState(false);
-  const [repeatOpen, setRepeatOpen] = useState(false);
-  const [repeatDraft, setRepeatDraft] = useState<RecurrenceFields | null>(null);
-  const [noteDraft, setNoteDraft] = useState(task.note);
-  // La note change hors de la zone de saisie (« Annuler » d'une modification, T-10 critère 8) : le champ la suit.
-  const [seenNote, setSeenNote] = useState(task.note);
-  if (task.note !== seenNote) {
-    setSeenNote(task.note);
-    setNoteDraft(task.note);
-  }
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  // T-10 : modification en attente du choix « cette occurrence / toutes les suivantes ».
-  const [pendingEdit, setPendingEdit] = useState<TaskPatch | null>(null);
-  const [ruleEditOpen, setRuleEditOpen] = useState(false);
-  /** `undefined` : règle non touchée ; `null` : « Une fois » choisi (arrêt). */
-  const [ruleDraft, setRuleDraft] = useState<RecurrenceFields | null | undefined>(undefined);
-  const [ruleScopeOpen, setRuleScopeOpen] = useState(false);
-  /** Report d'une occurrence récurrente en attente du choix de portée (T-10 critère 4). */
-  const [pendingPostpone, setPendingPostpone] = useState<PostponeTarget | null>(null);
-  /** Note en cours d'écriture après le choix : la perte de focus qui suit ne repose pas la question. */
-  const savingNote = useRef<string | null>(null);
-
-  /** La modification d'une occurrence récurrente passe par la question ; rend true si elle est posée. */
-  function askScope(patch: TaskPatch): boolean {
-    if (scopeChoicesForEdit(task, patch).length === 0) return false;
-    setPendingEdit(patch);
-    return true;
-  }
-
-  /** Enregistre la note si elle a changé ; rend true si la question de portée est posée (la fiche ne doit pas se fermer). */
-  function flushNote(): boolean {
-    if (noteDraft === task.note || savingNote.current === noteDraft) return false;
-    if (askScope({ note: noteDraft })) return true;
-    void updateNote(noteDraft);
-    return false;
-  }
-
-  function chooseScope(scope: SeriesScope): void {
-    const patch = pendingEdit;
-    setPendingEdit(null);
-    if (!patch) return;
-    savingNote.current = patch.note ?? null;
-    void applySeriesEdit(patch, scope).then((ok) => {
-      savingNote.current = null;
-      if (!ok && patch.note !== undefined) setNoteDraft(task.note);
-    });
-  }
-
-  function cancelScope(): void {
-    if (pendingEdit?.note !== undefined) setNoteDraft(task.note);
-    setPendingEdit(null);
-  }
-
-  function applyRuleDraft(): void {
-    setRuleScopeOpen(false);
-    if (ruleDraft === undefined || (ruleDraft !== null && recurrence && !ruleChanged(recurrence, ruleDraft))) {
-      setRuleEditOpen(false);
-      return;
-    }
-    // « Une fois » : arrêt de la répétition ; sinon « toutes les suivantes » seulement (T-10 critère 4).
-    const done = ruleDraft === null ? stopRecurrence() : updateRecurrence(ruleDraft);
-    void done.then((ok) => {
-      if (ok) setRuleEditOpen(false);
-    });
-  }
-
-  // Tient la référence du parent à jour après chaque rendu (pas de tableau de
-  // dépendances) : `handleClose` appelle toujours la dernière version de
-  // `flushNote`, sans provoquer de rendu supplémentaire (mutation de ref, pas
-  // `setState`).
-  useEffect(() => {
-    flushNoteRef.current = flushNote;
-  });
-
-  function chooseIcon(icon: IconRef | null): void {
-    if (!askScope({ icon })) void updateIcon(icon);
-    setPickerOpen(false);
-  }
-
-  return (
-    <div className="ct-task-detail">
-      {showCloseButton && (
-        <div className="ct-task-detail__closeRow">
-          <button type="button" className="ct-task-detail__close" aria-label={t('common.close')} onClick={onClose}>
-            <Icon icon={X} />
-          </button>
-        </div>
-      )}
-      <div className="ct-task-detail__header">
-        <button
-          type="button"
-          className="ct-task-detail__iconButton"
-          aria-label={task.icon ? t('tasks.changeIcon') : t('tasks.iconFieldLabel')}
-          aria-expanded={pickerOpen}
-          onClick={() => setPickerOpen((open) => !open)}
-        >
-          {task.icon ? (
-            <IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} />
-          ) : (
-            <span className="ct-task-detail__iconPlaceholder" aria-hidden="true" />
-          )}
-        </button>
-        <h2 className="ct-task-detail__title">{task.title}</h2>
-      </div>
-
-      {/* « Marquer comme terminée » (T-04, Detail.html) : libellé constant, l'état est porté
-          par `aria-pressed` seul ; la ligne appelante reflète la tâche via `taskEntities`. */}
-      <Button
-        variant="secondary"
-        pressed={task.status === 'done'}
-        onClick={() => void toggleDone()}
-        className="ct-task-detail__doneButton"
-      >
-        <Icon icon={Check} size={18} />
-        {t('tasks.markDone')}
-      </Button>
-
-      <div className="ct-task-detail__actions">
-        <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? async (target) => setPendingPostpone(target) : postpone} />
-        {/* « Dupliquer » (T-12, Detail.html ; PC : ajouté pour A-08, écart documenté) : possible aussi sur une tâche terminée. */}
-        <Button variant="secondary" ariaLabel={t('tasks.duplicateLabel')} onClick={() => setDuplicateOpen(true)} className="ct-task-detail__duplicateButton">
-          <Icon icon={Copy} size={18} />
-          {t('tasks.duplicate')}
-        </Button>
-      </div>
-      {duplicateOpen && (
-        <DuplicatePrompt
-          task={task}
-          onClose={() => setDuplicateOpen(false)}
-          onConfirm={(date) => {
-            setDuplicateOpen(false);
-            void duplicate(date);
-          }}
-        />
-      )}
-
-      {errorKey && (
-        <p role="alert" className="ct-task-detail__error">
-          {t(errorKey)}
-        </p>
-      )}
-
-      {pickerOpen && (
-        <div className="ct-task-detail__iconEditor">
-          <IconChooser value={task.icon} onChange={chooseIcon} />
-          {task.icon && (
-            <Button variant="secondary" onClick={() => chooseIcon(null)}>
-              {t('tasks.removeIcon')}
-            </Button>
-          )}
-        </div>
-      )}
-
-      {/* Répétition (Detail.html : « Répétition  Mensuelle, le 23 »). Résumé en lecture seule pour une
-          tâche récurrente ; « Répéter… » pour une tâche datée, non terminée, sans règle (T-09). */}
-      {task.recurrenceId !== null ? (
-        recurrence && (
-          <div className="ct-task-detail__repeat">
-            <div className="ct-task-detail__row">
-              <span>{t('tasks.repeatLabel')}</span>
-              <span className="ct-task-detail__rowValue" data-testid="recurrence-detail">
-                {formatMessageRef(recurrenceLabel(recurrence, task.date))}
-              </span>
-            </div>
-            {task.status !== 'done' ? (
-              <>
-                <Button
-                  variant="secondary"
-                  expanded={ruleEditOpen}
-                  ariaLabel={t('tasks.repeatEditLabel')}
-                  onClick={() => {
-                    setRuleDraft(undefined);
-                    setRuleEditOpen((open) => !open);
-                  }}
-                >
-                  {t('tasks.repeatEdit')}
-                </Button>
-                <Button variant="secondary" onClick={() => void stopRecurrence()}>
-                  {t('tasks.repeatStop')}
-                </Button>
-                {ruleEditOpen ? (
-                  <div className="ct-task-detail__iconEditor">
-                    <RecurrencePicker value={ruleDraft === undefined ? recurrence : ruleDraft} onChange={setRuleDraft} startDate={task.date} />
-                    <Button disabled={ruleDraft === undefined} onClick={() => (ruleDraft === null ? applyRuleDraft() : setRuleScopeOpen(true))}>
-                      {t('tasks.repeatApply')}
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-          </div>
-        )
-      ) : (
-        task.date !== null &&
-        task.status !== 'done' && (
-          <div className="ct-task-detail__repeat">
-            <div className="ct-task-detail__row">
-              <span>{t('tasks.repeatLabel')}</span>
-              <span className="ct-task-detail__rowValue" data-testid="recurrence-detail">
-                {t('tasks.repeatOnce')}
-              </span>
-            </div>
-            <Button
-              variant="secondary"
-              expanded={repeatOpen}
-              ariaLabel={t('tasks.repeatActionLabel')}
-              onClick={() => {
-                setRepeatDraft(null);
-                setRepeatOpen((open) => !open);
-              }}
-            >
-              {t('tasks.repeatAction')}
-            </Button>
-            {repeatOpen && (
-              <div className="ct-task-detail__iconEditor">
-                <RecurrencePicker value={repeatDraft} onChange={setRepeatDraft} startDate={task.date} />
-                <Button
-                  disabled={repeatDraft === null}
-                  onClick={() => {
-                    if (!repeatDraft) return;
-                    void setRecurrence(repeatDraft).then((ok) => {
-                      if (ok) setRepeatOpen(false);
-                    });
-                  }}
-                >
-                  {t('tasks.repeatApply')}
-                </Button>
-              </div>
-            )}
-          </div>
-        )
-      )}
-
-      <TextField
-        label={t('tasks.noteLabel')}
-        visibleLabel
-        multiline
-        value={noteDraft}
-        onChange={setNoteDraft}
-        onBlur={flushNote}
-        className="ct-task-detail__note"
-      />
-
-      {pendingEdit ? (
-        <ChoiceDialog
-          title={t('tasks.seriesEditTitle', { title: task.title })}
-          description={t('tasks.seriesEditBody')}
-          options={[
-            { id: 'occurrence', label: t('tasks.seriesScopeOccurrence') },
-            { id: 'following', label: t('tasks.seriesScopeFollowing') },
-          ]}
-          onChoose={chooseScope}
-          onCancel={cancelScope}
-        />
-      ) : null}
-      {pendingPostpone ? (
-        <ChoiceDialog
-          title={t('tasks.seriesPostponeTitle', { title: task.title })}
-          description={t('tasks.seriesPostponeBody')}
-          options={[
-            { id: 'occurrence', label: t('tasks.seriesScopeOccurrence') },
-            { id: 'following', label: t('tasks.seriesScopeFollowing') },
-          ]}
-          onChoose={(scope) => {
-            const target = pendingPostpone;
-            setPendingPostpone(null);
-            void postponeSeries(target, scope);
-          }}
-          onCancel={() => setPendingPostpone(null)}
-        />
-      ) : null}
-      {ruleScopeOpen ? (
-        <ChoiceDialog
-          title={t('tasks.seriesRuleTitle')}
-          description={t('tasks.seriesRuleBody')}
-          options={RULE_EDIT_SCOPES.map((id) => ({ id, label: t('tasks.seriesScopeFollowing') }))}
-          onChoose={applyRuleDraft}
-          onCancel={() => setRuleScopeOpen(false)}
-        />
-      ) : null}
-
-      {/* « Supprimer la tâche » (iPhone) / « Supprimer » (PC) : texte rouge, confirmation puis corbeille (T-08). */}
-      <button type="button" className="ct-task-detail__delete" onClick={() => setConfirmOpen(true)}>
-        {t(showCloseButton ? 'tasks.deleteTask' : 'tasks.deleteTaskPc')}
-      </button>
-      {confirmOpen && (
-        <DeleteTaskConfirm
-          task={task}
-          onCancel={() => setConfirmOpen(false)}
-          onConfirm={(scope) => {
-            setConfirmOpen(false);
-            void onDelete(scope);
-          }}
-        />
-      )}
-    </div>
   );
 }

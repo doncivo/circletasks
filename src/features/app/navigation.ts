@@ -35,8 +35,13 @@ export const TABS: readonly TabDefinition[] = [
 
 /** Écrans internes de chaque onglet. Ajouter un écran = ajouter un membre ici. */
 export type Route =
-  /** Aujourd'hui (A-01) et écrans ouverts par les icônes du haut : Un jour, Objectif, Rapport mensuel (lien vers terminées, T-07), terminées. La corbeille s'ouvre depuis Réglages (T-08, Q6). */
-  | { readonly tab: 'tasks'; readonly screen: 'today' | 'someday' | 'goals' | 'report' | 'done' }
+  /**
+   * Aujourd'hui (A-01) : `date` absente = jour courant ; une date explicite vient des flèches « Jour précédent /
+   * Jour suivant » (PC, Q10). Retour au jour courant : `goToToday()` (onglet « Tâches », Alt+1, A-04).
+   */
+  | { readonly tab: 'tasks'; readonly screen: 'today'; readonly date?: LocalDate }
+  /** Écrans ouverts par les icônes du haut : Un jour, Objectif, Rapport mensuel (lien vers terminées, T-07), terminées. La corbeille s'ouvre depuis Réglages (T-08, Q6). */
+  | { readonly tab: 'tasks'; readonly screen: 'someday' | 'goals' | 'report' | 'done' }
   /** `weekStart` null = semaine courante ; `somedayPanel` : panneau « Un jour » PC (S-06). */
   | { readonly tab: 'week'; readonly weekStart: LocalDate | null; readonly somedayPanel: boolean }
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
@@ -77,8 +82,13 @@ export interface NavigationState {
   readonly lastRoutes: { readonly [K in TabId]: Extract<Route, { tab: K }> };
   readonly detail: DetailTarget | null;
   readonly overlays: readonly Overlay[];
-  /** A-04, Alt+1…6 : va sur l'onglet, à son dernier écran ; ferme la fiche détail. */
+  /**
+   * A-04, Alt+1…6 : va sur l'onglet, à son dernier écran ; ferme la fiche détail. L'onglet « Tâches » fait
+   * exception : il ramène toujours à Aujourd'hui du jour courant (`goToToday`), même depuis un sous-écran.
+   */
   goToTab(tab: TabId): void;
+  /** A-04 : Aujourd'hui du jour courant (réinitialise la date affichée et le dernier écran de l'onglet Tâches) ; ferme la fiche. */
+  goToToday(): void;
   navigate(route: Route): void;
   openDetail(target: DetailTarget): void;
   closeDetail(): void;
@@ -100,7 +110,11 @@ export const INITIAL_NAVIGATION: NavigationData = {
 /** État d'interface pur, sans dépendance : store de module (réinitialiser avec INITIAL_NAVIGATION en test). */
 export const useNavigationStore = create<NavigationState>()((set, get) => ({
   ...INITIAL_NAVIGATION,
-  goToTab: (tab) => set((s) => ({ route: s.lastRoutes[tab], detail: null })),
+  goToTab: (tab) => {
+    if (tab === 'tasks') get().goToToday();
+    else set((s) => ({ route: s.lastRoutes[tab], detail: null }));
+  },
+  goToToday: () => set((s) => ({ route: DEFAULT_ROUTES.tasks, lastRoutes: { ...s.lastRoutes, tasks: DEFAULT_ROUTES.tasks }, detail: null })),
   navigate: (route) =>
     set((s) => ({ route, lastRoutes: { ...s.lastRoutes, [route.tab]: route }, detail: route.tab === s.route.tab ? s.detail : null })),
   openDetail: (detail) => set({ detail }),
