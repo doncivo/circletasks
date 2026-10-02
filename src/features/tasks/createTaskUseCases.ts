@@ -2,9 +2,11 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewTask, Task, TaskPatch } from '../../domain/model';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
+import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
 import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { Result, TaskId } from '../../domain/types';
+import { formatDayLabel } from '../../i18n/format';
 import { NotImplementedError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
 import type { CreateTaskError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
@@ -27,6 +29,39 @@ function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task): Undo
       const current = await deps.data.repos.tasks.getById(completed.id);
       if (!current || current.hlc !== completed.hlc) return 'stale';
       deps.taskEntities.publish([await deps.data.repos.tasks.reopen(completed.id)]);
+      return 'undone';
+    },
+  };
+}
+
+/** État d'une tâche avant et après un report (commande d'annulation, T-05). */
+interface PostponedEntry {
+  readonly before: Task;
+  readonly after: Task;
+}
+
+/**
+ * Commande annulable d'un report (T-05, T-13) : annuler = nouvelle écriture qui
+ * remet date, heure et « Un jour » d'avant. Une tâche modifiée depuis (hlc différent
+ * de celui écrit par le report) n'est pas touchée ; si aucune ne peut l'être : 'stale'.
+ */
+function createPostponeUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[], label: Pick<UndoableCommand, 'labelKey' | 'labelParams'>): UndoableCommand {
+  return {
+    kind: 'postpone',
+    count: entries.length,
+    ...label,
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const written: Task[] = [];
+        for (const { before, after } of entries) {
+          const current = await repos.tasks.getById(after.id);
+          if (!current || current.hlc !== after.hlc) continue;
+          written.push(await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday }));
+        }
+        return written;
+      });
+      if (restored.length === 0) return 'stale';
+      deps.taskEntities.publish(restored);
       return 'undone';
     },
   };
@@ -142,8 +177,36 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.taskEntities.publish([reopened]);
       return reopened;
     },
-    postpone() {
-      return Promise.reject(new NotImplementedError('taskUseCases.postpone : à implémenter (T-05, SD-02, A-05)'));
+    async postpone(ids, target): Promise<Task[]> {
+      // Q4 : tout se calcule depuis aujourd'hui (src/domain/taskPostpone) ; l'heure est conservée.
+      const today = todayLocal(deps.clock);
+      const resolved = resolvePostponeDate(today, target);
+      if (!resolved.ok) throw new RangeError('Date de report invalide');
+      const entries = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before) continue;
+          const next = postponeTask(before, today, target);
+          // Terminée : ignorée (critère 9). Planification inchangée : rien à écrire ni à annuler.
+          if (!next.ok || (next.value.date === before.date && next.value.time === before.time && !before.someday)) continue;
+          // `carriedOver` n'est jamais posé ici (critère 7, réservé à T-06).
+          done.push({ before, after: await repos.tasks.update(id, next.value) });
+        }
+        return done;
+      });
+      if (entries.length === 0) return [];
+      const tasks = entries.map((entry) => entry.after);
+      deps.taskEntities.publish(tasks);
+      const first = entries[0];
+      const label: Pick<UndoableCommand, 'labelKey' | 'labelParams'> =
+        entries.length > 1 || !first
+          ? {}
+          : resolved.value === nextDayFrom(today)
+            ? { labelKey: 'undo.postponeTomorrow', labelParams: { title: first.before.title } }
+            : { labelKey: 'undo.postponeDate', labelParams: { title: first.before.title, date: formatDayLabel(resolved.value) } };
+      deps.undo.push(createPostponeUndoCommand(deps, entries, label));
+      return tasks;
     },
     moveToDay() {
       return Promise.reject(new NotImplementedError('taskUseCases.moveToDay : à implémenter (S-02, S-06)'));

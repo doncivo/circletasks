@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { UNDO_LABEL_KEYS, UNDO_STACK_CAPACITY, UNDO_TOAST_MS, createUndoStack, type UndoableCommand } from './undo';
+import { UNDO_LABEL_KEYS, UNDO_STACK_CAPACITY, UNDO_TOAST_MS, createUndoStack, undoMessage, type UndoableCommand } from './undo';
 
 const command = (undo: () => Promise<'undone' | 'stale'> = async () => 'undone'): UndoableCommand => ({
   kind: 'complete',
@@ -87,5 +87,13 @@ describe('undoMessage (T-04, critère 3)', () => {
       '« Courses » terminée',
     );
     expect(undoMessage({ kind: 'delete', count: 1, undo: async () => 'undone' })).toBe('Tâche supprimée');
+  });
+});
+
+describe('undoMessage (typage de t, T-05)', () => {
+  it('compose le libellé du type, ou le libellé propre à la commande, avec ses paramètres', () => {
+    expect(undoMessage({ ...command(), labelParams: { title: 'Courses' } })).toBe('« Courses » terminée');
+    expect(undoMessage({ ...command(), kind: 'postpone' })).toBe('Tâche reportée');
+    expect(undoMessage({ ...command(), kind: 'postpone', labelKey: 'undo.postponeTomorrow', labelParams: { title: 'Courses' } })).toBe('« Courses » reportée à demain');
   });
 });

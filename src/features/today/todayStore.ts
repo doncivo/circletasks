@@ -1,9 +1,11 @@
 import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
 import type { IconRef, Task } from '../../domain/model';
+import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
 import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
+import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { CreateTaskError } from '../tasks/taskUseCases';
@@ -61,6 +63,12 @@ export interface TodayState {
    * la liste. Ignore un id absent de la liste affichée. Ne rejette jamais.
    */
   toggleDone(id: TaskId): Promise<void>;
+  /**
+   * Reporte une tâche de la liste (T-05 : « Demain », « Semaine prochaine », date ;
+   * Ctrl+D = demain). Annulable (le cas d'usage pousse la commande). La tâche quitte
+   * la liste aussitôt (`resolveTodayTasks` revérifie la date) sans recharger. Ne rejette jamais.
+   */
+  postpone(id: TaskId, target: PostponeTarget): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -147,14 +155,35 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         set({ actionErrorKey: 'tasks.completeError' });
       }
     },
+
+    async postpone(id, target) {
+      if (!get().taskIds.includes(id)) return;
+      try {
+        await useCases.postpone([id], target);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
   }));
 });
 
-/** Tâches affichées (entités lues dans la source unique, tri Q11 / T-04 : terminées en bas). */
-export function resolveTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>): Task[] {
-  const tasks = taskIds.flatMap((id) => {
-    const task = entities.get(id);
-    return task ? [task] : [];
-  });
+/** Jour et filtre d'espace d'une vue « Aujourd'hui » : une tâche qui n'y correspond plus en sort. */
+export interface TodayView {
+  readonly date: LocalDate | null;
+  readonly filter: SpaceFilter;
+}
+
+/**
+ * Tâches affichées (entités lues dans la source unique, tri Q11 / T-04 : terminées en bas).
+ * Avec `view`, date, « Un jour » et espace sont revérifiés (`selectTasks`) : une tâche
+ * reportée hors du jour (T-05) ou changée d'espace quitte la liste immédiatement.
+ */
+export function resolveTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>, view?: TodayView): Task[] {
+  const tasks = selectTasks(taskIds, entities, (task) =>
+    !view || view.date === null
+      ? true
+      : task.date === view.date && !task.someday && (view.filter === 'all' || task.spaceId === view.filter),
+  );
   return sortTasksForDay(tasks);
 }

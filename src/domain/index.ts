@@ -6,3 +6,5 @@ export * from './model';
 export * from './taskRules';
 export * from './taskSchedule';
 export * from './taskCompletion';
+export * from './localDate';
+export * from './taskPostpone';

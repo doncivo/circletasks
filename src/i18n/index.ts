@@ -34,10 +34,23 @@ function interpolate(text: string, params: Record<string, string | number> | und
   });
 }
 
+function translateRaw(locale: Locale, key: MessageKey, params: Record<string, string | number> | undefined): string {
+  const text = lookup(catalogs[locale], key) ?? lookup(fr, key) ?? key;
+  return interpolate(text, params);
+}
+
 /** Traduit une clé dans une langue donnée ; repli sur le français, puis sur la clé. */
 export function translate<K extends MessageKey>(locale: Locale, key: K, ...args: TArgs<K>): string {
-  const text = lookup(catalogs[locale], key) ?? lookup(fr, key) ?? key;
-  return interpolate(text, args[0]);
+  return translateRaw(locale, key, args[0]);
+}
+
+/**
+ * Traduction d'une clé connue seulement à l'exécution (tables de configuration,
+ * libellés d'annulation) : paramètres optionnels, un paramètre manquant reste
+ * visible sous la forme `{nom}`. Préférer `t()` quand la clé est un littéral.
+ */
+export function tDynamic(key: MessageKey, params?: Readonly<Record<string, string | number>>): string {
+  return translateRaw(current, key, params as Record<string, string | number> | undefined);
 }
 
 /** Traduit une clé dans la langue courante. */
