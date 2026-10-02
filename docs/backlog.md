@@ -31,14 +31,14 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | T-12 | M1 | Je duplique une tâche | tasks-planning | fait |
 | T-13 | M1 | J'annule ma dernière action | tasks-planning | fait |
 | T-14 | M1 | Je choisis une date adaptée à mon appareil | tasks-planning | fait |
-| A-01 | M2 | J'ouvre l'app sur la liste du jour | tasks-planning | en cours |
-| A-02 | M2 | Je réordonne ma liste | tasks-planning | en cours |
-| A-03 | M2 | Je masque les routines de la liste du jour | tasks-planning | en cours |
-| A-04 | M2 | J'accède à Aujourd'hui en un geste | tasks-planning | en cours |
-| A-05 | M2 | Je passe en mode édition | tasks-planning | en cours |
-| A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | en cours |
-| A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | en cours |
-| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours |
+| A-01 | M2 | J'ouvre l'app sur la liste du jour | tasks-planning | fait |
+| A-02 | M2 | Je réordonne ma liste | tasks-planning | fait |
+| A-03 | M2 | Je masque les routines de la liste du jour | tasks-planning | fait |
+| A-04 | M2 | J'accède à Aujourd'hui en un geste | tasks-planning | fait |
+| A-05 | M2 | Je passe en mode édition | tasks-planning | fait |
+| A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | fait |
+| A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | fait |
+| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours (critères 9-10 : bandeaux synchro et iCloud à l'ordre 4, alerte agenda à l'ordre 2) |
 | S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | à faire |
 | S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | à faire |
 | S-03 | M3 | Je navigue entre semaines | tasks-planning | à faire |
