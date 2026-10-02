@@ -1,7 +1,7 @@
 # Dépendances et builds
 node_modules/
 dist/
-coverage/
+coverage*/
 playwright-report/
 test-results/
 src-tauri/target/

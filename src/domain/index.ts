@@ -4,3 +4,4 @@ export * from './id';
 export * from './hlc';
 export * from './model';
 export * from './taskRules';
+export * from './taskSchedule';

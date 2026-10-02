@@ -1,10 +1,16 @@
 import { todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
-import type { NewTask, Task } from '../../domain/model';
+import type { NewTask, Task, TaskPatch } from '../../domain/model';
 import { validateTaskTitle } from '../../domain/taskRules';
+import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { Result, TaskId } from '../../domain/types';
 import { NotImplementedError } from '../../db/repositories';
 import type { CreateTaskError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
+
+/** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
+function touchesSchedule(patch: TaskPatch): boolean {
+  return patch.date !== undefined || patch.time !== undefined || patch.someday !== undefined;
+}
 
 /**
  * Implémentation des cas d'usage « tâches » (contrat : `./taskUseCases.ts`, ADR 0004).
@@ -51,8 +57,30 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       return { ok: true, value: created };
     },
 
-    update() {
-      return Promise.reject(new NotImplementedError('taskUseCases.update : à implémenter (T-02, T-03, A-08)'));
+    async update(id: TaskId, patch: TaskPatch): Promise<Task> {
+      // T-02 : date, heure et « Un jour » passent par les invariants de
+      // src/domain avant d'atteindre le repository (ADR 0004, règle 6 de
+      // db/repositories/common.ts : aucune règle métier côté repository).
+      // Les autres champs du patch (titre, note, icône…) sont posés par T-03 /
+      // A-08, transmis tels quels ici : `update` reste le point d'entrée unique
+      // de la fiche détail (commentaire de `TaskRepository.update`).
+      if (!touchesSchedule(patch)) {
+        return deps.data.repos.tasks.update(id, patch);
+      }
+      const current = await deps.data.repos.tasks.getById(id);
+      if (!current) return deps.data.repos.tasks.update(id, patch); // laisse le repository lever RepositoryError('not-found')
+
+      // `exactOptionalPropertyTypes` (tsconfig) distingue « champ absent » de
+      // « champ présent valant undefined » : on n'inclut une clé que si `patch`
+      // la fournit réellement, pour ne pas écraser l'état courant par erreur.
+      const scheduled = setTaskSchedule(scheduleOf(current), {
+        ...(patch.date !== undefined ? { date: patch.date } : {}),
+        ...(patch.time !== undefined ? { time: patch.time } : {}),
+        ...(patch.someday !== undefined ? { someday: patch.someday } : {}),
+      });
+      if (!scheduled.ok) throw new ScheduleInvariantError(scheduled.error);
+
+      return deps.data.repos.tasks.update(id, { ...patch, ...scheduled.value });
     },
     complete() {
       return Promise.reject(new NotImplementedError('taskUseCases.complete : à implémenter (T-04)'));

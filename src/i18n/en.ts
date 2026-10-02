@@ -32,6 +32,8 @@ export const en: Messages = {
     titleLabel: 'Title',
     addPlaceholder: 'Add a task',
     addPlaceholderPc: 'Add a task — e.g. “Call Paul tomorrow at 10am”',
+    dateLabel: 'Date',
+    timeLabel: 'Time',
     save: 'Save',
     todayBadge: 'Today',
     emptyToday: 'Nothing planned today.',

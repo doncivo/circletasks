@@ -155,4 +155,46 @@ describe('TodayScreen (T-01)', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByText('Ne pas enregistrer')).not.toBeInTheDocument();
   });
+
+  it('affiche l’heure sous le titre quand une tâche en a une (critère 2, T-02)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Appeler le notaire' } });
+    fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '14:00' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+
+    const row = await screen.findByText('Appeler le notaire');
+    expect(row.closest('.ct-list-row')).toHaveTextContent('14:00');
+  });
+
+  it('une tâche datée sur un autre jour que l’affichage n’apparaît pas dans Aujourd’hui (critère 1, T-02)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Jeudi prochain' } });
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-08' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+
+    await waitFor(() => expect(screen.getByText('Rien de prévu aujourd’hui.')).toBeInTheDocument());
+    expect(screen.queryByText('Jeudi prochain')).not.toBeInTheDocument();
+    const thursday = await container.data.repos.tasks.listForDay('2026-10-08' as never, 'all');
+    expect(thursday.map((task) => task.title)).toEqual(['Jeudi prochain']);
+  });
+
+  it('la feuille « Nouvelle tâche » porte ses propres champs Date et Heure (iPhone, T-02)', async () => {
+    mockViewport(440);
+    renderToday(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Faire les courses' } });
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-08' } });
+    fireEvent.change(within(dialog).getByLabelText('Heure'), { target: { value: '09:00' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const thursday = await container.data.repos.tasks.listForDay('2026-10-08' as never, 'all');
+    expect(thursday).toMatchObject([{ title: 'Faire les courses', time: '09:00' }]);
+  });
 });

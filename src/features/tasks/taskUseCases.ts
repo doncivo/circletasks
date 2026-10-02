@@ -39,7 +39,12 @@ export type PostponeTarget = 'tomorrow' | 'next-week' | { readonly date: LocalDa
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
   create(input: CreateTaskInput): Promise<Result<Task, CreateTaskError>>;
-  /** Fiche détail (A-08) ; non annulable. */
+  /**
+   * Fiche détail (A-08) ; non annulable. Quand `patch` touche `date`, `time` ou
+   * `someday`, les invariants de planification (T-02, `src/domain/taskSchedule`)
+   * sont appliqués avant l'écriture : lève `ScheduleInvariantError` si la
+   * combinaison est invalide (heure sans date résultante).
+   */
   update(id: TaskId, patch: TaskPatch): Promise<Task>;
   /** T-04 (+ occurrence suivante si récurrente, T-09) ; annulable. */
   complete(id: TaskId): Promise<Task>;

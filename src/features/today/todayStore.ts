@@ -1,11 +1,18 @@
 import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
 import type { Task } from '../../domain/model';
-import type { LocalDate, Result, SpaceFilter, SpaceId } from '../../domain/types';
+import { sortTasksForDay } from '../../domain/taskSchedule';
+import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { CreateTaskError } from '../tasks/taskUseCases';
+
+/** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
+export interface NewTaskSchedule {
+  readonly date?: LocalDate;
+  readonly time?: LocalTime | null;
+}
 
 export type TodayStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -29,9 +36,14 @@ export interface TodayState {
    * Crée une tâche dans `spaceId` (déjà résolu par l'appelant, ES-02) et recharge la
    * liste du jour courant pour qu'elle reflète le filtre actif (une tâche créée
    * dans un autre espace que le filtre n'apparaît pas, comme partout ailleurs).
+   * `schedule.date` (T-02) permet de dater la tâche sur un autre jour que celui
+   * affiché (ex. jeudi prochain depuis Aujourd'hui) : la liste rechargée reste
+   * celle du jour affiché, pas celle de la tâche créée (critère 1 : une tâche
+   * créée pour un autre jour n'apparaît pas dans Aujourd'hui). Absent : le jour
+   * affiché, comme avant T-02.
    * Ne rejette jamais : les échecs sont renvoyés dans le `Result`.
    */
-  addTask(title: string, spaceId: SpaceId): Promise<Result<Task, TodayAddTaskError>>;
+  addTask(title: string, spaceId: SpaceId, schedule?: NewTaskSchedule): Promise<Result<Task, TodayAddTaskError>>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -40,8 +52,10 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
   // d'un appel plus ancien qui se termine après lui est ignoré (pas d'état périmé).
   let requestId = 0;
 
-  const fetchDay = (date: LocalDate, filter: SpaceFilter): Promise<Task[]> =>
-    container.data.repos.tasks.listForDay(date, filter);
+  // Ordre d'affichage final (T-02, Q11) : à l'heure d'abord par heure croissante,
+  // puis sans heure dans l'ordre manuel du repository, terminées en bas (T-04).
+  const fetchDay = async (date: LocalDate, filter: SpaceFilter): Promise<Task[]> =>
+    sortTasksForDay(await container.data.repos.tasks.listForDay(date, filter));
 
   return createStore<TodayState>()((set, get) => ({
     date: null,
@@ -63,16 +77,27 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       }
     },
 
-    async addTask(title, spaceId) {
+    async addTask(title, spaceId, schedule) {
       const { date, filter } = get();
-      const effectiveDate = date ?? todayLocal(container.clock);
+      const viewedDate = date ?? todayLocal(container.clock);
+      // La tâche est datée sur `schedule.date` si fourni (ex. un autre jour,
+      // critère 1), sinon sur le jour affiché, comme avant T-02. La liste
+      // rechargée reste celle du jour affiché, qu'il s'agisse ou non du même jour.
+      const taskDate = schedule?.date ?? viewedDate;
       try {
-        const result = await useCases.create({ title, spaceId, date: effectiveDate });
+        // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `time` que si
+        // `schedule` le fournit explicitement.
+        const result = await useCases.create({
+          title,
+          spaceId,
+          date: taskDate,
+          ...(schedule?.time !== undefined ? { time: schedule.time } : {}),
+        });
         if (!result.ok) return result;
         const id = ++requestId;
         try {
-          const tasks = await fetchDay(effectiveDate, filter);
-          if (id === requestId) set({ date: effectiveDate, tasks, status: 'ready', errorKey: null });
+          const tasks = await fetchDay(viewedDate, filter);
+          if (id === requestId) set({ date: viewedDate, tasks, status: 'ready', errorKey: null });
         } catch {
           if (id === requestId) set({ status: 'error', errorKey: 'tasks.todayError' });
         }

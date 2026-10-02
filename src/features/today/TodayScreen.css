@@ -70,6 +70,25 @@
 
 .ct-today__addRow {
   display: flex;
+  gap: var(--ct-space-2);
+  align-items: flex-end;
+}
+
+/* Champ Date / Heure minimal de la saisie en ligne (T-02), remplacé par le
+   sélecteur adapté à l'appareil de T-14. */
+.ct-today__scheduleField {
+  display: flex;
+}
+
+.ct-today__scheduleInput {
+  height: 44px;
+  padding: 0 var(--ct-space-2);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
 }
 
 .ct-today__bottomRow {
@@ -108,6 +127,20 @@
   border: 0;
   color: var(--ct-color-text);
   cursor: pointer;
+}
+
+/* Champ Date / Heure minimal de la feuille « Nouvelle tâche » (T-02), remplacé
+   par la feuille de roues de T-14. */
+.ct-task-sheet__schedule {
+  display: flex;
+  gap: var(--ct-space-3);
+}
+
+.ct-task-sheet__scheduleField {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .ct-task-sheet__spaces {
