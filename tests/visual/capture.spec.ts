@@ -246,6 +246,17 @@ const SCREENS: Screen[] = [
       await expect(dialog.getByRole('checkbox', { name: 'À l’heure' })).toHaveAttribute('aria-checked', 'true');
     },
   },
+  {
+    // Réglages : section RAPPELS, ligne « Récapitulatifs » 07:30 · 21:00 (N-04, QB-09). Les autres sections arrivent avec M12.
+    name: 'Reglages',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await expect(page.getByRole('button', { name: /^Récapitulatifs :/ })).toBeVisible();
+    },
+  },
 ];
 
 for (const screen of SCREENS) {

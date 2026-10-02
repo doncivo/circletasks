@@ -287,6 +287,7 @@ export const en: Messages = {
     recapEveningSwitch: 'Evening summary',
     recapMorningTime: 'Morning summary time (HH:MM)',
     recapEveningTime: 'Evening summary time (HH:MM)',
+    recapTimePlaceholder: 'HH:MM',
     recapTimeInvalid: 'Invalid time: enter HH:MM, for example 07:30.',
     recapOrderError: 'The evening time must come after the morning time',
     recapSave: 'Save',

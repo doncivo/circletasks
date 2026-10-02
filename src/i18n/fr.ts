@@ -290,6 +290,7 @@ export const fr = {
     recapEveningSwitch: 'Récapitulatif du soir',
     recapMorningTime: 'Heure du récapitulatif du matin (HH:MM)',
     recapEveningTime: 'Heure du récapitulatif du soir (HH:MM)',
+    recapTimePlaceholder: 'HH:MM',
     recapTimeInvalid: 'Heure invalide : saisissez HH:MM, par exemple 07:30.',
     recapOrderError: 'L’heure du soir doit suivre celle du matin',
     recapSave: 'Enregistrer',

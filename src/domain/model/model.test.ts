@@ -49,7 +49,7 @@ describe('rappels (N-02)', () => {
 describe('réglages', () => {
   it('fournit une valeur par défaut et une portée pour chaque clé', () => {
     expect(defaultSetting('spaces.filter')).toBe('all');
-    expect(defaultSetting('reminders.morningRecap')).toEqual({ enabled: true, time: '08:00' });
+    expect(defaultSetting('reminders.morningRecap')).toEqual({ enabled: true, time: '07:30' });
     expect(isSharedSetting('general.theme')).toBe(true);
     expect(isSharedSetting('device.id')).toBe(false);
     for (const def of Object.values(SETTINGS_DEFINITIONS)) {
