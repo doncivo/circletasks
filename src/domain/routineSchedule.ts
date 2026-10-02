@@ -242,7 +242,7 @@ export function routinesForDay(
     const done = doneByRoutine.get(routine.id as RoutineId) ?? new Set<LocalDate>();
     const doneToday = done.has(date);
     if (isQuotaRule(routine) && !doneToday && quotaReached(routine, done, date, routinePauses)) continue;
-    out.push({ routine, done: doneToday });
+    out.push({ routine, done: doneToday, ...(routinePauses.length > 0 ? { pauses: routinePauses } : {}) });
   }
   return out;
 }

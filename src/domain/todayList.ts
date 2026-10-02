@@ -1,4 +1,5 @@
 import type { Checklist, ChecklistSummary, Goal, GoalProgress, IconRef, Routine, Task } from './model';
+import { isPausedAt, type DateInterval } from './routineSchedule';
 import type { Id, LocalDate, LocalTime, SpaceFilter, SpaceId } from './types';
 
 /**
@@ -15,6 +16,8 @@ import type { Id, LocalDate, LocalTime, SpaceFilter, SpaceId } from './types';
 export interface TodayRoutineEntry {
   readonly routine: Routine;
   readonly done: boolean;
+  /** Périodes de pause de la routine (R-05) : sans elles, le booléen `paused` fait foi. */
+  readonly pauses?: readonly DateInterval[];
 }
 
 /** Événement du jour, interne (M7) ou externe lu dans un agenda (M8) ; lecture seule. */
@@ -133,7 +136,7 @@ export function buildTodayList(input: TodayListInput): TodayList {
     ? []
     : unique(
         (input.routines ?? []).filter(
-          (entry) => entry.routine.deletedAt === null && !entry.routine.archived && inSpace(filter, entry.routine.spaceId),
+          (entry) => entry.routine.deletedAt === null && !entry.routine.archived && !isPausedAt(entry.routine, date, entry.pauses ?? []) && inSpace(filter, entry.routine.spaceId),
         ),
         (entry) => entry.routine.id,
       );
