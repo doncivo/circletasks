@@ -9,6 +9,11 @@
   box-sizing: border-box;
 }
 
+/* Le contenu défile dans la feuille : aucun bloc ne s'écrase quand le formulaire dépasse la hauteur. */
+.ct-routine-form > * {
+  flex-shrink: 0;
+}
+
 .ct-routine-form__header {
   display: flex;
   align-items: center;
@@ -219,6 +224,7 @@
 
 .ct-routine-form__actions .ct-button {
   height: 56px;
+  font-size: 1.0625rem;
 }
 
 /* « Tous les N jours / semaines » (ModifierRoutine-N.html) : encart gris, pas, bascule jours / semaines, départ, aperçu. */

@@ -9,8 +9,10 @@ import { t } from '../../i18n';
 import { CompactToggle, ConfirmDialog, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import { useNavigationStore } from '../app/navigation';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
+import { RoutineReport } from './RoutineReport';
 import { RoutineStreakBox } from './RoutineStreakBox';
 import { RoutinesArchived } from './RoutinesArchived';
 import { onRoutinesChanged } from './routineEvents';
@@ -28,7 +30,7 @@ type Editor =
 function RoutinePanel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
   const ref = useFocusTrap<HTMLElement>({ active: true, onEscape: onClose });
   return (
-    <aside ref={ref} tabIndex={-1} aria-label={label} className="ct-detail-panel ct-routines__panel" style={{ width: 588 }}>
+    <aside ref={ref} tabIndex={-1} aria-label={label} className="ct-detail-panel ct-routines__panel" style={{ width: 548 }}>
       {children}
     </aside>
   );
@@ -41,6 +43,7 @@ function RoutinePanel({ label, onClose, children }: { label: string; onClose: ()
  */
 export function RoutinesScreen() {
   const container = useAppContainer();
+  const navigate = useNavigationStore((s) => s.navigate);
   const layout = useLayout();
   const slot = useDetailSlot();
   const spaceFilter = useAppStore((s) => s.spaceFilter);
@@ -64,9 +67,12 @@ export function RoutinesScreen() {
   const toggleDay = useFeatureStore(routinesStore, (s) => s.toggleDay);
   const refresh = useFeatureStore(routinesStore, (s) => s.refresh);
   const setArchived = useFeatureStore(routinesStore, (s) => s.setArchived);
+  const setPaused = useFeatureStore(routinesStore, (s) => s.setPaused);
   const defaultOffsets = useFeatureStore(routinesStore, (s) => s.defaultOffsets);
 
   const [editor, setEditor] = useState<Editor | null>(null);
+  /** Routine dont le rapport est ouvert : sélection de la carte (PC, panneau de droite) ou feuille « Rapport de la routine » (iPhone). */
+  const [reportId, setReportId] = useState<RoutineId | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   /** Routine dont l'archivage attend la confirmation. */
   const [archiveTarget, setArchiveTarget] = useState<Routine | null>(null);
@@ -92,6 +98,8 @@ export function RoutinesScreen() {
     setEditor(null);
     setFormError(null);
   };
+
+  const reportRoutine: Routine | null = routines.find((routine) => routine.id === reportId) ?? null;
 
   const editedRoutine: Routine | null = editor?.mode === 'edit' ? (routines.find((routine) => routine.id === editor.id) ?? null) : null;
 
@@ -135,6 +143,20 @@ export function RoutinesScreen() {
         defaultOffsets={defaultOffsets}
       />
     ) : null;
+  const report = reportRoutine ? (
+    <RoutineReport
+      key={reportRoutine.id}
+      routine={reportRoutine}
+      spaces={spaces}
+      done={doneByRoutine.get(reportRoutine.id as RoutineId) ?? EMPTY_DONE}
+      today={today}
+      onClose={() => setReportId(null)}
+      onTogglePause={() => void setPaused(reportRoutine.id as RoutineId, !reportRoutine.paused)}
+      onArchive={() => setArchiveTarget(reportRoutine)}
+      {...(layout === 'pc' ? { onModify: () => void openEdit(reportRoutine.id as RoutineId) } : {})}
+    />
+  ) : null;
+  const reportLabel = t('routines.report.panelLabel');
   const formLabel = editor?.mode === 'edit' ? t('routines.form.editTitle') : t('routines.form.newTitle');
 
   return (
@@ -175,7 +197,9 @@ export function RoutinesScreen() {
                 today={today}
                 layout={layout}
                 compact={compact}
+                selected={reportId === routine.id}
                 onEdit={() => void openEdit(routine.id as RoutineId)}
+                onOpen={() => setReportId(routine.id as RoutineId)}
                 onToggleDay={(date) => void toggleDay(routine.id as RoutineId, date)}
               />
             </div>
@@ -193,7 +217,9 @@ export function RoutinesScreen() {
             {t('routines.hintCheck')} <Kbd keys="Ctrl+N" separator=" " /> {t('routines.hintNew')}
           </span>
         ) : (
-          <span />
+          <button type="button" className="ct-routines__monthReport" onClick={() => navigate({ tab: 'routines', screen: 'report' })}>
+            {t('routines.monthReport.open')}
+          </button>
         )}
         <Fab onClick={openCreate} label={layout === 'pc' ? t('common.add') : t('routines.add')} />
       </div>
@@ -208,12 +234,25 @@ export function RoutinesScreen() {
             const id = archiveTarget.id as RoutineId;
             setArchiveTarget(null);
             void setArchived(id, true).then((done) => {
-              if (done) closeEditor();
+              if (done) {
+                closeEditor();
+                setReportId((current) => (current === id ? null : current));
+              }
             });
           }}
         />
       )}
 
+      {report && !form && layout === 'mobile' && (
+        <Sheet open onClose={() => setReportId(null)} label={reportLabel} className="ct-sheet--tall">
+          {report}
+        </Sheet>
+      )}
+      {report && !form && layout === 'pc' && (
+        <PanelPortal slot={slot} label={reportLabel} onClose={() => setReportId(null)}>
+          {report}
+        </PanelPortal>
+      )}
       {form && layout === 'mobile' && (
         <Sheet open onClose={closeEditor} label={formLabel} className="ct-sheet--tall">
           {form}

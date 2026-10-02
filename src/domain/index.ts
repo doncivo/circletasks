@@ -32,3 +32,4 @@ export * from './routineSchedule';
 
 export * from './routineReminder';
 export * from './routineStreaks';
+export * from './routineReport';

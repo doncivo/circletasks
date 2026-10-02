@@ -12,7 +12,7 @@ import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
-import { registerRoutinesSource, RoutinesScreen } from './features/routines';
+import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
@@ -70,7 +70,7 @@ function AppShellContent() {
       ) : route.tab === 'week' ? (
         <WeekScreen />
       ) : route.tab === 'routines' ? (
-        <RoutinesScreen />
+        route.screen === 'report' ? <RoutinesMonthReport /> : <RoutinesScreen />
       ) : route.tab === 'settings' ? (
         route.screen === 'trash' ? <TrashScreen /> : <SettingsScreen />
       ) : (

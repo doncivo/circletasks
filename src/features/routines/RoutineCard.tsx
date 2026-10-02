@@ -19,6 +19,10 @@ export interface RoutineCardProps {
   /** Vue compacte (A-06) : une ligne de titre, sans ligne d'informations. */
   readonly compact: boolean;
   readonly onEdit: () => void;
+  /** Carte sélectionnée (PC : son rapport est dans le panneau de droite). */
+  readonly selected: boolean;
+  /** Ouvre le rapport de la routine : clic sur la carte (PC) ou toucher du corps de la carte (iPhone), hors ronds et « Éditer » (R-06, QB-06). */
+  readonly onOpen: () => void;
   /** Valide ou rouvre un jour de la semaine (R-03) : ronds d'aujourd'hui et des jours passés seulement (QB-03). */
   readonly onToggleDay: (date: LocalDate) => void;
 }
@@ -30,7 +34,7 @@ const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text
  * prévus en pointillés), compteur « faits / prévus » de la semaine en cours, ligne « heure · espace · fréquence ». Tout est calculé
  * à l'affichage par src/domain (aucune occurrence stockée).
  */
-export function RoutineCard({ routine, spaces, done, today, layout, compact, onEdit, onToggleDay }: RoutineCardProps) {
+export function RoutineCard({ routine, spaces, done, today, layout, compact, selected, onEdit, onOpen, onToggleDay }: RoutineCardProps) {
   const weekStart = mondayOf(today);
   const rounds = useMemo(() => weekRounds(routine, done, weekStart, today), [routine, done, weekStart, today]);
   const counter = useMemo(() => weekCounter(routine, done, weekStart), [routine, done, weekStart]);
@@ -42,10 +46,24 @@ export function RoutineCard({ routine, spaces, done, today, layout, compact, onE
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
 
   return (
-    <article className="ct-routine-card" data-layout={layout} data-compact={compact} data-paused={routine.paused}>
+    <article
+      className="ct-routine-card"
+      data-layout={layout}
+      data-compact={compact}
+      data-paused={routine.paused}
+      data-selected={selected}
+      onClick={(event) => {
+        // Corps de la carte seulement : les ronds et « Éditer » ont leur propre action (R-06 critère 6).
+        if (!(event.target as HTMLElement).closest('button')) onOpen();
+      }}
+    >
       <div className="ct-routine-card__head">
         {routine.icon && <IconView icon={routine.icon} color={color ?? 'currentColor'} size={layout === 'pc' ? 28 : 30} />}
-        <h2 className="ct-routine-card__title">{routine.title}</h2>
+        <h2 className="ct-routine-card__title">
+          <button type="button" className="ct-routine-card__open" aria-haspopup="dialog" onClick={onOpen}>
+            {routine.title}
+          </button>
+        </h2>
         <button type="button" className="ct-routine-card__edit" aria-label={t('routines.editLabel', { title: routine.title })} onClick={onEdit}>
           {t('routines.edit')}
         </button>
