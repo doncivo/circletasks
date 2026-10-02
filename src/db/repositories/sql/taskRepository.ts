@@ -385,7 +385,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
     async listDone(range: InstantRange, filter: SpaceFilter) {
       const f = spaceFilterClause(filter);
       const rows = await db.select<TaskRow>(
-        `SELECT * FROM task WHERE deleted_at IS NULL AND status = 'done' AND done_at >= ? AND done_at < ? ${f.sql} ORDER BY done_at`,
+        `SELECT * FROM task WHERE deleted_at IS NULL AND status = 'done' AND done_at >= ? AND done_at < ? ${f.sql} ORDER BY done_at, id`,
         [range.from, range.to, ...f.params],
       );
       return rows.map(rowToTask);

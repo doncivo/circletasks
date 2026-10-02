@@ -35,8 +35,8 @@ export const TABS: readonly TabDefinition[] = [
 
 /** Écrans internes de chaque onglet. Ajouter un écran = ajouter un membre ici. */
 export type Route =
-  /** Aujourd'hui (A-01) et écrans ouverts par les icônes du haut : Un jour, Objectif, terminées, corbeille. */
-  | { readonly tab: 'tasks'; readonly screen: 'today' | 'someday' | 'goals' | 'done' | 'trash' }
+  /** Aujourd'hui (A-01) et écrans ouverts par les icônes du haut : Un jour, Objectif, Rapport mensuel (lien vers terminées, T-07), terminées, corbeille. */
+  | { readonly tab: 'tasks'; readonly screen: 'today' | 'someday' | 'goals' | 'report' | 'done' | 'trash' }
   /** `weekStart` null = semaine courante ; `somedayPanel` : panneau « Un jour » PC (S-06). */
   | { readonly tab: 'week'; readonly weekStart: LocalDate | null; readonly somedayPanel: boolean }
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }

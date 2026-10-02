@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { ChartColumn, X } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { Space, Task } from '../../domain/model';
@@ -96,6 +96,7 @@ export function TodayScreen() {
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(todayStore, (s) => s.postpone);
   const openDetail = useNavigationStore((s) => s.openDetail);
+  const navigate = useNavigationStore((s) => s.navigate);
 
   // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
   // reçu le focus (case ou titre), via `onFocus` posé sur le conteneur de chaque
@@ -197,6 +198,19 @@ export function TodayScreen() {
   return (
     <div className="ct-today-shell" data-layout={layout}>
       <div className="ct-today">
+        {/* Icône graphique « Rapport mensuel » (Main.html, T-07 / Q5) ; les autres icônes d'accès
+            rapide (Un jour, Objectif, Recherche) arrivent avec leurs stories. */}
+        <div className="ct-today__quickIcons">
+          <button
+            type="button"
+            className="ct-today__iconButton"
+            aria-label={t('report.openFromToday')}
+            onClick={() => navigate({ tab: 'tasks', screen: 'report' })}
+          >
+            <Icon icon={ChartColumn} size={layout === 'pc' ? 24 : 26} />
+          </button>
+        </div>
+
         <div className="ct-today__header">
           <span className="ct-today__month">{header.monthLine}</span>
           <div className="ct-today__dateRow">

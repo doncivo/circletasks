@@ -194,3 +194,27 @@
 .ct-today__carried {
   font-weight: var(--ct-font-weight-semibold);
 }
+
+/* Icônes d'accès rapide en haut à droite (Main.html) ; T-07 : « Rapport mensuel » seul. */
+.ct-today__quickIcons {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-today__iconButton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-today__iconButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

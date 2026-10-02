@@ -15,7 +15,7 @@ import { tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'postpone' | 'move' | 'someday' | 'duplicate' | 'delete';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'duplicate' | 'delete';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -58,6 +58,7 @@ export const UNDO_TOAST_MS = 5_000;
 /** Libellé du message « Annuler » par type d'action. */
 export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   complete: 'undo.complete',
+  reopen: 'undo.reopen',
   postpone: 'undo.postpone',
   move: 'undo.move',
   someday: 'undo.someday',

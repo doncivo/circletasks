@@ -8,6 +8,7 @@ import { TABS, useNavigationStore, type TabDefinition, type TabId } from './feat
 import { toKeyInput } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { SettingsScreen } from './features/settings';
+import { DoneTasksScreen, ReportScreen } from './features/tasks';
 import { t } from './i18n';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
@@ -43,7 +44,7 @@ function AppShellContent() {
       }
     >
       {route.tab === 'tasks' ? (
-        <TodayScreen />
+        route.screen === 'report' ? <ReportScreen /> : route.screen === 'done' ? <DoneTasksScreen /> : <TodayScreen />
       ) : route.tab === 'settings' ? (
         <SettingsScreen />
       ) : (
