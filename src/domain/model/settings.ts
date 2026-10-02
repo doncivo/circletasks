@@ -41,8 +41,8 @@ export interface SettingsValues {
   'desktop.closeToTray': boolean;
   /** D-02 : démarrage avec Windows, réduit. */
   'desktop.launchAtStartup': boolean;
-  /** D-03 : suivi de la vérification de mise à jour (toutes les 24 h). */
-  'desktop.updater': { readonly lastCheckAt: IsoDateTime | null; readonly skippedVersion: string | null };
+  /** D-03 : dernière vérification de mise à jour (toutes les 24 h). Pas d'« ignorer cette version » (QB-16). */
+  'desktop.updater': { readonly lastCheckAt: IsoDateTime | null };
   /** ADR 0005 : identifiant de cet appareil, créé au premier lancement. */
   'device.id': DeviceId | null;
 }
@@ -70,7 +70,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'onboarding.completed': { scope: 'local', defaultValue: false },
   'desktop.closeToTray': { scope: 'local', defaultValue: true },
   'desktop.launchAtStartup': { scope: 'local', defaultValue: false },
-  'desktop.updater': { scope: 'local', defaultValue: { lastCheckAt: null, skippedVersion: null } },
+  'desktop.updater': { scope: 'local', defaultValue: { lastCheckAt: null } },
   'device.id': { scope: 'local', defaultValue: null },
 };
 

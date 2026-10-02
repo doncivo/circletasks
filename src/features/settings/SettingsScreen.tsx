@@ -3,14 +3,16 @@ import { t } from '../../i18n';
 import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { AboutSection } from './AboutSection';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
 /**
  * Écran Réglages minimal (Reglages.html) : section « TÂCHES » avec l'interrupteur « Reporter
  * les tâches non faites » (T-06), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
- * « Corbeille » (T-08, Q6 : unique point d'accès). Aucun autre réglage n'est simulé : ils
- * arrivent avec M12.
+ * « Corbeille » (T-08, Q6 : unique point d'accès). Sur PC seulement : section « GÉNÉRAL » avec
+ * « Démarrer avec Windows » (D-02) et section « À PROPOS » (D-03). Aucun autre réglage n'est
+ * simulé : ils arrivent avec M12.
  */
 export function SettingsScreen() {
   const load = useFeatureStore(settingsStore, (s) => s.load);
@@ -18,6 +20,8 @@ export function SettingsScreen() {
   const status = useFeatureStore(settingsStore, (s) => s.status);
   const errorKey = useFeatureStore(settingsStore, (s) => s.errorKey);
   const setCarryOverUndone = useFeatureStore(settingsStore, (s) => s.setCarryOverUndone);
+  const launchAtStartup = useFeatureStore(settingsStore, (s) => s.launchAtStartup);
+  const setLaunchAtStartup = useFeatureStore(settingsStore, (s) => s.setLaunchAtStartup);
   const navigate = useNavigationStore((s) => s.navigate);
 
   useEffect(() => {
@@ -35,6 +39,15 @@ export function SettingsScreen() {
         <p className="ct-settings__error" role="alert">
           {t(errorKey)}
         </p>
+      )}
+      {launchAtStartup !== null && (
+        <>
+          <h2 className="ct-settings__section">{t('settings.sectionGeneral')}</h2>
+          <div className="ct-settings__row">
+            <span>{t('settings.launchAtStartup')}</span>
+            <Switch checked={launchAtStartup} onChange={(value) => void setLaunchAtStartup(value)} label={t('settings.launchAtStartup')} />
+          </div>
+        </>
       )}
       <h2 className="ct-settings__section">{t('settings.sectionTasks')}</h2>
       <div className="ct-settings__row">
@@ -58,6 +71,7 @@ export function SettingsScreen() {
           {t('settings.trashOpen')}
         </Button>
       </div>
+      <AboutSection />
     </div>
   );
 }

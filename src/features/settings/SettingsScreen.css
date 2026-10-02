@@ -60,6 +60,22 @@
   font-size: var(--ct-font-size-text-sm);
 }
 
+/* Ligne à deux niveaux (« Version… » + état, Reglages.html). */
+.ct-settings__stack {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-settings__hint {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-settings__hint--danger {
+  color: var(--ct-color-danger);
+}
+
 /* Bouton lien de ligne (.lk de Reglages.html). */
 .ct-settings__link {
   height: 30px;
