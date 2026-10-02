@@ -1,5 +1,5 @@
 import { addDays } from '../../domain/localDate';
-import { groupDoneDates, mondayOf, routinesForDay } from '../../domain/routineSchedule';
+import { groupDoneDates, mondayOf, pausesByRoutine, routinesForDay } from '../../domain/routineSchedule';
 import { registerTodaySource, type TodaySource } from '../today/todaySources';
 import { onRoutinesChanged } from './routineEvents';
 import { createRoutineUseCases } from './routineUseCases';
@@ -13,11 +13,12 @@ export const routinesTodaySource: TodaySource = {
   id: 'routines',
   async load(container, date, filter) {
     const weekStart = mondayOf(date);
-    const [routines, logs] = await Promise.all([
+    const [routines, logs, pauses] = await Promise.all([
       container.data.repos.routines.listForFilter(filter),
       container.data.repos.routineLogs.listForRange({ from: weekStart, to: addDays(weekStart, 6) }, filter),
+      container.data.repos.routines.listPauses(filter),
     ]);
-    return { routines: routinesForDay(routines, groupDoneDates(logs), date) };
+    return { routines: routinesForDay(routines, groupDoneDates(logs), date, pausesByRoutine(pauses)) };
   },
   async toggleRoutine(container, routineId, date, done) {
     await createRoutineUseCases(container).setDone(routineId, date, done);

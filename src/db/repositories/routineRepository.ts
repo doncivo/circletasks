@@ -1,5 +1,5 @@
-import type { NewRoutine, Routine, RoutineLog, RoutinePatch } from '../../domain/model';
-import type { IsoDateTime, LocalDate, RoutineId, RoutineLogId, SpaceFilter } from '../../domain/types';
+import type { NewRoutine, Routine, RoutineLog, RoutinePatch, RoutinePause } from '../../domain/model';
+import type { IsoDateTime, LocalDate, RoutineId, RoutineLogId, RoutinePauseId, SpaceFilter } from '../../domain/types';
 import type { DateRange, ReadOptions } from './common';
 
 /** Routines (M4). Les occurrences se calculent dans src/domain, jamais en base. */
@@ -20,6 +20,18 @@ export interface RoutineRepository {
   setArchived(id: RoutineId, archived: boolean): Promise<Routine>;
   softDelete(id: RoutineId): Promise<Routine>;
   restore(id: RoutineId): Promise<Routine>;
+
+  /** R-04, R-05 : périodes de pause des routines du filtre (supprimées exclues), de la plus ancienne à la plus récente. */
+  listPauses(filter: SpaceFilter): Promise<RoutinePause[]>;
+  /** R-05 : périodes de pause d'une routine. */
+  listPausesForRoutine(routineId: RoutineId): Promise<RoutinePause[]>;
+  /** R-05 : ouvre une période de pause (`to_date` NULL) à partir de `fromDate`. */
+  createPause(pause: { readonly id: RoutinePauseId; readonly routineId: RoutineId; readonly fromDate: LocalDate }): Promise<RoutinePause>;
+  /** R-05 : ferme (`toDate`) ou rouvre (null) une période. */
+  setPauseEnd(id: RoutinePauseId, toDate: LocalDate | null): Promise<RoutinePause>;
+  /** R-05 : supprime logiquement une période qui n'a couvert aucun jour ; `restorePause` l'annule. */
+  deletePause(id: RoutinePauseId): Promise<RoutinePause>;
+  restorePause(id: RoutinePauseId): Promise<RoutinePause>;
 }
 
 /** Validations de routines (R-03, R-04, R-06). Unique (routine_id, date). */

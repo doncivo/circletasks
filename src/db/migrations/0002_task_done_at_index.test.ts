@@ -35,10 +35,10 @@ describe('migration 0002 (T-07) : index done_at sur une base 0001 avec données'
     );
 
     const report = await migrate(db, migrations);
-    expect(report.applied).toEqual([2, 3, 4, 5]);
+    expect(report.applied).toEqual([2, 3, 4, 5, 6]);
     const again = await migrate(db, migrations);
     expect(again.applied).toEqual([]);
-    expect((await readAppliedMigrations(db)).map((m) => m.version)).toEqual([1, 2, 3, 4, 5]);
+    expect((await readAppliedMigrations(db)).map((m) => m.version)).toEqual([1, 2, 3, 4, 5, 6]);
 
     const idx = await db.select<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_task_status_done_at'");
     expect(idx).toHaveLength(1);

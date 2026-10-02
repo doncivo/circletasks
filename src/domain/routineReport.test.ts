@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './localDate';
 import { completionRate, formatPercent, monthAggregate, monthHeatmap, monthRate, rateBetween } from './routineReport';
+import { OPEN_PAUSE_END, pausesByRoutine } from './routineSchedule';
 import { d, doneSet, makeRoutine } from './routineTestKit';
 import type { LocalDate, RoutineId } from './types';
 
@@ -171,6 +172,19 @@ describe('monthHeatmap (R-06 critère 3)', () => {
   });
 });
 
+describe('pausesByRoutine', () => {
+  it('regroupe les périodes par routine, pause ouverte sans fin, supprimées ignorées', () => {
+    const r = makeRoutine();
+    const base = { routineId: r.id, createdAt: 'z', updatedAt: 'z', deviceId: 'd', hlc: 'h' };
+    const map = pausesByRoutine([
+      { ...base, id: 'p1', fromDate: d('2026-09-01'), toDate: d('2026-09-05'), deletedAt: null } as never,
+      { ...base, id: 'p2', fromDate: d('2026-09-20'), toDate: null, deletedAt: null } as never,
+      { ...base, id: 'p3', fromDate: d('2026-08-01'), toDate: d('2026-08-02'), deletedAt: 'x' } as never,
+    ]);
+    expect(map.get(r.id)).toEqual([{ from: '2026-09-01', to: '2026-09-05' }, { from: '2026-09-20', to: OPEN_PAUSE_END }]);
+  });
+});
+
 describe('monthAggregate (Rapport.html, ROUTINES — JOURS COMPLÉTÉS)', () => {
   const today = d('2026-09-23');
   const lit = makeRoutine({ title: 'Faire mon lit', startDate: d('2026-01-01') });
@@ -196,14 +210,16 @@ describe('monthAggregate (Rapport.html, ROUTINES — JOURS COMPLÉTÉS)', () => 
     expect(map.cells.every((cell) => cell.state === 'none')).toBe(true);
   });
 
-  it('routines archivées ou en pause : seules leurs validations comptent (R-05 critère 6)', () => {
+  it('routine archivée : seules ses validations comptent (R-05 critère 6) ; routine en pause : jours de pause exclus', () => {
     const archived = makeRoutine({ title: 'Ancienne', archived: true, startDate: d('2026-01-01') });
     const paused = makeRoutine({ title: 'En pause', paused: true, startDate: d('2026-01-01') });
     const doneByRoutine = doneBy([archived, ['2026-09-02']], [paused, ['2026-09-02', '2026-09-03']]);
-    const map = monthAggregate([archived, paused], doneByRoutine, 2026, 9, today);
-    expect(map.cells[1]).toMatchObject({ state: 'all', planned: 2, done: 2 }); // 2 sept.
-    expect(map.cells[2]).toMatchObject({ state: 'all', planned: 1, done: 1 }); // 3 sept.
-    expect(map.cells[3]?.state).toBe('none'); // aucun jour prévu connu pour ces routines
+    const pauses = new Map<RoutineId, { from: LocalDate; to: LocalDate }[]>([[paused.id as RoutineId, [{ from: d('2026-09-04'), to: d('9999-12-31') }]]]);
+    const map = monthAggregate([archived, paused], doneByRoutine, 2026, 9, today, pauses);
+    expect(map.cells[0]).toMatchObject({ state: 'missed', planned: 1, done: 0 }); // 1er sept. : prévu avant la pause
+    expect(map.cells[1]).toMatchObject({ state: 'all', planned: 2, done: 2 });
+    expect(map.cells[2]).toMatchObject({ state: 'all', planned: 1, done: 1 });
+    expect(map.cells[3]?.state).toBe('none'); // pause : aucun jour prévu
   });
 
   it('« X fois par semaine » : un jour validé compte comme prévu et fait ; supprimée ignorée', () => {

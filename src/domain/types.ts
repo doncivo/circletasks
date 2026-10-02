@@ -31,6 +31,7 @@ export type TaskId = Brand<Id, 'TaskId'>;
 export type RecurrenceId = Brand<Id, 'RecurrenceId'>;
 export type RoutineId = Brand<Id, 'RoutineId'>;
 export type RoutineLogId = Brand<Id, 'RoutineLogId'>;
+export type RoutinePauseId = Brand<Id, 'RoutinePauseId'>;
 export type ReminderId = Brand<Id, 'ReminderId'>;
 export type GoalId = Brand<Id, 'GoalId'>;
 export type EventId = Brand<Id, 'EventId'>;

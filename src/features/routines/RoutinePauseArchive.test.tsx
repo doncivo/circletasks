@@ -49,7 +49,7 @@ describe('Routines : pause et archivage (R-05)', () => {
     expect((await loadTodayExtras(h.container, '2026-10-02' as LocalDate, 'all')).extras.routines).toEqual([]);
     expect((await loadTodayExtras(h.container, '2026-10-05' as LocalDate, 'all')).extras.routines).toEqual([]);
     // Ronds inactifs, validations passées intactes.
-    expect(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Vendredi' })).toHaveAttribute('aria-disabled', 'true');
+    expect(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Vendredi, non prévu' })).toHaveAttribute('aria-disabled', 'true');
     expect(within(card('Faire mon lit')).getByRole('checkbox', { name: 'Jeudi, fait' })).toBeChecked();
     expect(await h.container.data.repos.routineLogs.listForRoutine(lit.id as RoutineId, FULL)).toHaveLength(1);
   });

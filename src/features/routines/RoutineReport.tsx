@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { parseLocalDate } from '../../domain/localDate';
 import type { Routine, Space } from '../../domain/model';
 import { completionRate, formatPercent, monthHeatmap, type HeatmapState } from '../../domain/routineReport';
+import type { DateInterval } from '../../domain/routineSchedule';
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
@@ -16,6 +17,8 @@ export interface RoutineReportProps {
   readonly spaces: readonly Space[];
   /** Dates validées de la routine (historique complet : archivées comprises, R-05 critère 6). */
   readonly done: ReadonlySet<LocalDate>;
+  /** Périodes de pause de la routine. */
+  readonly pauses: readonly DateInterval[];
   readonly today: LocalDate;
   /** Boutons du bas : « Mettre en pause / Reprendre », « Archiver », « Modifier » (absent sur iPhone : « Éditer » de la carte est le seul accès au formulaire, QB-06). */
   readonly onTogglePause: () => void;
@@ -43,12 +46,12 @@ const CELL_LABEL_KEYS: { readonly [S in HeatmapState]: 'routines.report.cellDone
  * du mois avec flèches de mois (jamais au-delà du mois courant), actions. Même contenu dans le panneau PC et la feuille iPhone.
  * Tout est calculé à l'affichage par src/domain.
  */
-export function RoutineReport({ routine, spaces, done, today, onTogglePause, onArchive, onModify, onClose }: RoutineReportProps) {
+export function RoutineReport({ routine, spaces, done, pauses, today, onTogglePause, onArchive, onModify, onClose }: RoutineReportProps) {
   const current = parseLocalDate(today);
   const [month, setMonth] = useState({ year: current.year, month: current.month });
-  const rates = useMemo(() => RATE_PERIODS.map(({ days }) => completionRate(routine, done, today, days)), [routine, done, today]);
-  const streaks = useMemo(() => computeStreaks(routine, done, today), [routine, done, today]);
-  const heatmap = useMemo(() => monthHeatmap(routine, done, month.year, month.month, today), [routine, done, month, today]);
+  const rates = useMemo(() => RATE_PERIODS.map(({ days }) => completionRate(routine, done, today, days, pauses)), [routine, done, today, pauses]);
+  const streaks = useMemo(() => computeStreaks(routine, done, today, pauses), [routine, done, today, pauses]);
+  const heatmap = useMemo(() => monthHeatmap(routine, done, month.year, month.month, today, pauses), [routine, done, month, today, pauses]);
   const spaceName = spaces.find((space) => space.id === routine.spaceId)?.name ?? '';
   const schedule = scheduleLong(routine);
   const subtitle = routine.time ? t('routines.report.subtitleAt', { schedule, time: routine.time, space: spaceName }) : t('routines.report.subtitle', { schedule, space: spaceName });

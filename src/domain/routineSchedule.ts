@@ -1,5 +1,5 @@
 import { addDays, weekdayOf } from './localDate';
-import type { Routine, RoutineLog } from './model';
+import type { Routine, RoutineLog, RoutinePause } from './model';
 import type { TodayRoutineEntry } from './todayList';
 import type { LocalDate, RoutineId, Weekday } from './types';
 
@@ -21,6 +21,21 @@ export type RoutineState = Pick<Routine, 'paused' | 'archived' | 'deletedAt'>;
 export interface DateInterval {
   readonly from: LocalDate;
   readonly to: LocalDate;
+}
+
+/** Fin d'une pause ouverte : aucune reprise connue. */
+export const OPEN_PAUSE_END = '9999-12-31' as LocalDate;
+
+/** Périodes de pause (supprimées exclues) de chaque routine ; une pause ouverte court sans fin. */
+export function pausesByRoutine(pauses: readonly RoutinePause[]): Map<RoutineId, DateInterval[]> {
+  const out = new Map<RoutineId, DateInterval[]>();
+  for (const pause of pauses) {
+    if (pause.deletedAt !== null) continue;
+    const list = out.get(pause.routineId) ?? [];
+    list.push({ from: pause.fromDate, to: pause.toDate ?? OPEN_PAUSE_END });
+    out.set(pause.routineId, list);
+  }
+  return out;
 }
 
 /** Nombre de jours civils entre deux dates (positif si `to` est après `from`). */
@@ -210,13 +225,15 @@ export function routinesForDay(
   routines: readonly Routine[],
   doneByRoutine: ReadonlyMap<RoutineId, ReadonlySet<LocalDate>>,
   date: LocalDate,
+  pauses: ReadonlyMap<RoutineId, readonly DateInterval[]> = new Map<RoutineId, readonly DateInterval[]>(),
 ): TodayRoutineEntry[] {
   const out: TodayRoutineEntry[] = [];
   for (const routine of routines) {
-    if (!isActive(routine) || !isPlannedOn(routine, date)) continue;
+    const routinePauses = pauses.get(routine.id as RoutineId) ?? [];
+    if (!isActive(routine) || !isPlannedOn(routine, date, routinePauses)) continue;
     const done = doneByRoutine.get(routine.id as RoutineId) ?? new Set<LocalDate>();
     const doneToday = done.has(date);
-    if (isQuotaRule(routine) && !doneToday && quotaReached(routine, done, date)) continue;
+    if (isQuotaRule(routine) && !doneToday && quotaReached(routine, done, date, routinePauses)) continue;
     out.push({ routine, done: doneToday });
   }
   return out;

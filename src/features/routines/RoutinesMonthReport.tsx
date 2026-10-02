@@ -42,6 +42,7 @@ export function RoutinesMonthReport() {
   const routines = useFeatureStore(routinesStore, (s) => s.routines);
   const archived = useFeatureStore(routinesStore, (s) => s.archived);
   const doneByRoutine = useFeatureStore(routinesStore, (s) => s.doneByRoutine);
+  const pausesOf = useFeatureStore(routinesStore, (s) => s.pausesOf);
   const status = useFeatureStore(routinesStore, (s) => s.status);
   const errorKey = useFeatureStore(routinesStore, (s) => s.errorKey);
   const load = useFeatureStore(routinesStore, (s) => s.load);
@@ -53,15 +54,16 @@ export function RoutinesMonthReport() {
   }, [spaceFilter]);
 
   const aggregate = useMemo(
-    () => monthAggregate([...routines, ...archived], doneByRoutine, month.year, month.month, today),
-    [routines, archived, doneByRoutine, month, today],
+    () => monthAggregate([...routines, ...archived], doneByRoutine, month.year, month.month, today, pausesOf),
+    [routines, archived, doneByRoutine, pausesOf, month, today],
   );
   const rates = useMemo(
     () =>
-      routines
-        .filter((routine) => !routine.paused)
-        .map((routine) => ({ routine, rate: monthRate(routine, doneByRoutine.get(routine.id as RoutineId) ?? EMPTY_DONE, month.year, month.month, today) })),
-    [routines, doneByRoutine, month, today],
+      routines.map((routine) => ({
+        routine,
+        rate: monthRate(routine, doneByRoutine.get(routine.id as RoutineId) ?? EMPTY_DONE, month.year, month.month, today, pausesOf.get(routine.id as RoutineId) ?? []),
+      })),
+    [routines, doneByRoutine, pausesOf, month, today],
   );
   const atCurrentMonth = month.year === current.year && month.month === current.month;
   const locale = getLocale() === 'fr' ? 'fr-FR' : 'en-US';

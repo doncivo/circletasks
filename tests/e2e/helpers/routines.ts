@@ -42,6 +42,8 @@ export interface DirectRoutine {
   readonly done?: readonly string[];
   /** Avances (minutes) des rappels de la routine ; échéance posée à la date de départ (données seulement, aucun envoi). */
   readonly reminders?: readonly number[];
+  /** Périodes de pause passées (jours inclus) ; la routine n'est pas en pause aujourd'hui. */
+  readonly pauses?: readonly { readonly from: string; readonly to: string }[];
 }
 
 let sequence = 0;
@@ -78,6 +80,21 @@ export async function insertRoutines(page: Page, items: readonly DirectRoutine[]
             `00000000${String(offset + order).padStart(5, '0')}-0000-e2e`,
           ],
         );
+        let pauseOrder = 0;
+        for (const pause of item.pauses ?? []) {
+          pauseOrder += 1;
+          await hooks.execute(
+            `INSERT INTO routine_pause (id, routine_id, from_date, to_date, created_at, updated_at, device_id, hlc)
+             VALUES (?, ?, ?, ?, '2026-01-01T08:00:00.000Z', '2026-01-01T08:00:00.000Z', 'e2e', ?)`,
+            [
+              `86000000-0000-4000-8000-${String((offset + order) * 10 + pauseOrder).padStart(12, '0')}`,
+              id,
+              pause.from,
+              pause.to,
+              `30000${String(offset + order).padStart(4, '0')}${String(pauseOrder).padStart(4, '0')}-0000-e2e`,
+            ],
+          );
+        }
         let reminderOrder = 0;
         for (const offset of item.reminders ?? []) {
           reminderOrder += 1;

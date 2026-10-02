@@ -161,9 +161,8 @@ export interface MonthAggregate {
 }
 
 /**
- * Carte mensuelle de toutes les routines : par jour, validées / prévues. Les routines archivées ou en pause (dont les jours
- * prévus passés ne sont pas connus, pas d'historique de pause) ne comptent que par leurs validations, qui restent dans les
- * statistiques (R-05 critère 6). « Tout validé » : toutes les occurrences du jour faites ; « partiel » : au moins une ; « manqué » :
+ * Carte mensuelle de toutes les routines : par jour, validées / prévues, hors jours de pause (`pauses`). Les routines archivées
+ * (dont la date d'archivage n'est pas connue) ne comptent que par leurs validations, qui restent dans les statistiques (R-05 critère 6). « Tout validé » : toutes les occurrences du jour faites ; « partiel » : au moins une ; « manqué » :
  * jour passé sans validation ; « à venir » : aujourd'hui non terminé et jours futurs.
  */
 export function monthAggregate(
@@ -172,6 +171,7 @@ export function monthAggregate(
   year: number,
   month: number,
   today: LocalDate,
+  pauses: ReadonlyMap<RoutineId, readonly DateInterval[]> = new Map<RoutineId, readonly DateInterval[]>(),
 ): MonthAggregate {
   const { leadingBlanks, cells } = monthCells(year, month, (date, day): AggregateCell => {
     let planned = 0;
@@ -179,8 +179,8 @@ export function monthAggregate(
     for (const routine of routines) {
       if (routine.deletedAt !== null) continue;
       const done = doneByRoutine.get(routine.id as RoutineId)?.has(date) ?? false;
-      const trackPlan = !routine.paused && !routine.archived && !isQuotaRule(routine);
-      if (trackPlan ? isPlannedOn(routine, date) : done) {
+      const trackPlan = !routine.archived && !isQuotaRule(routine);
+      if (trackPlan ? isPlannedOn(routine, date, pauses.get(routine.id as RoutineId) ?? []) : done) {
         planned += 1;
         if (done) doneCount += 1;
       }

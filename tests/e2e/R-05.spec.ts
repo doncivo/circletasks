@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
 import { cardOf, insertRoutines, openRoutines, reopenRoutines, routineForm } from './helpers/routines';
-import { todayTab } from './helpers/today';
+import { isPhone as isPhoneProject, todayTab } from './helpers/today';
 import { dayOf, openWeek } from './helpers/week';
 
 /**
@@ -34,7 +34,7 @@ test.describe('R-05 — pause et archivage', () => {
     const card = cardOf(page, 'Faire mon lit');
     await expect(card).toContainText('En pause');
     await expect(card.getByRole('checkbox', { name: 'Mardi, fait' })).toBeVisible(); // historique intact
-    await expect(card.getByRole('checkbox', { name: 'Mercredi', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await expect(card.getByRole('checkbox', { name: 'Mercredi, non prévu' })).toHaveAttribute('aria-disabled', 'true');
 
     await todayTab(page).click();
     await expect(page.locator('.ct-list-row').filter({ hasText: 'Faire mon lit' })).toHaveCount(0);
@@ -103,5 +103,27 @@ test.describe('R-05 — pause et archivage', () => {
     await expect(cardOf(page, 'Faire mon lit')).toHaveCount(0);
     await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
     await expect(cardOf(page, 'Faire mon lit')).toBeVisible();
+  });
+
+  test('pause de 5 jours puis reprise : la série et les taux ignorent les jours de pause (R-04 critère 5)', async ({ page }, testInfo) => {
+    // Validé du 12 au 14 et du 20 au 22 sept. ; pause du 15 au 19 ; aujourd'hui mer. 23 non validé : série 6 (sans la pause : 3).
+    await insertRoutines(page, [
+      {
+        title: 'Faire mon lit',
+        startDate: '2026-09-01',
+        done: ['2026-09-12', '2026-09-13', '2026-09-14', '2026-09-20', '2026-09-21', '2026-09-22'],
+        pauses: [{ from: '2026-09-15', to: '2026-09-19' }],
+      },
+      { title: 'Sans pause', startDate: '2026-09-01', done: ['2026-09-12', '2026-09-13', '2026-09-14', '2026-09-20', '2026-09-21', '2026-09-22'] },
+    ]);
+    await reopenRoutines(page);
+    await expect(cardOf(page, 'Faire mon lit')).toContainText('série 6 jours');
+    await expect(cardOf(page, 'Sans pause')).toContainText('série 3 jours');
+    await cardOf(page, 'Faire mon lit').locator('.ct-routine-card__info').click();
+    const report = isPhoneProject(testInfo) ? page.getByRole('dialog', { name: 'Rapport de la routine' }) : page.getByRole('complementary', { name: 'Rapport de la routine' });
+    // 7 jours (17 -> 23) : 17 à 19 en pause, 20 à 22 validés, aujourd'hui exclu : 100 %.
+    await expect(report.getByRole('group', { name: 'Taux sur 7 jours : 100 %' })).toBeVisible();
+    await expect(report.getByRole('img', { name: '17 septembre' })).toHaveAttribute('data-state', 'none'); // jour de pause : non prévu
+    await expect(report.getByRole('img', { name: '14 septembre, fait' })).toBeVisible();
   });
 });

@@ -55,6 +55,7 @@ export function RoutinesScreen() {
   const routines = useFeatureStore(routinesStore, (s) => s.routines);
   const archived = useFeatureStore(routinesStore, (s) => s.archived);
   const doneByRoutine = useFeatureStore(routinesStore, (s) => s.doneByRoutine);
+  const pausesOf = useFeatureStore(routinesStore, (s) => s.pausesOf);
   const compact = useFeatureStore(routinesStore, (s) => s.compact);
   const status = useFeatureStore(routinesStore, (s) => s.status);
   const errorKey = useFeatureStore(routinesStore, (s) => s.errorKey);
@@ -139,7 +140,7 @@ export function RoutinesScreen() {
           ) : undefined
         }
         initialOffsets={editor.mode === 'edit' ? editor.offsets : []}
-        editExtras={editedRoutine ? <RoutineStreakBox streaks={computeStreaks(editedRoutine, doneByRoutine.get(editedRoutine.id as RoutineId) ?? EMPTY_DONE, today)} /> : undefined}
+        editExtras={editedRoutine ? <RoutineStreakBox streaks={computeStreaks(editedRoutine, doneByRoutine.get(editedRoutine.id as RoutineId) ?? EMPTY_DONE, today, pausesOf.get(editedRoutine.id as RoutineId) ?? [])} /> : undefined}
         defaultOffsets={defaultOffsets}
       />
     ) : null;
@@ -149,6 +150,7 @@ export function RoutinesScreen() {
       routine={reportRoutine}
       spaces={spaces}
       done={doneByRoutine.get(reportRoutine.id as RoutineId) ?? EMPTY_DONE}
+      pauses={pausesOf.get(reportRoutine.id as RoutineId) ?? []}
       today={today}
       onClose={() => setReportId(null)}
       onTogglePause={() => void setPaused(reportRoutine.id as RoutineId, !reportRoutine.paused)}
@@ -194,6 +196,7 @@ export function RoutinesScreen() {
                 routine={routine}
                 spaces={spaces}
                 done={doneByRoutine.get(routine.id as RoutineId) ?? EMPTY_DONE}
+                pauses={pausesOf.get(routine.id as RoutineId) ?? []}
                 today={today}
                 layout={layout}
                 compact={compact}

@@ -166,3 +166,88 @@ describe('cas d’usage des routines : validation (R-03)', () => {
     expect(await cases().update(id, { fields: fields({ title: '' }), reminderOffsets: [] })).toEqual({ ok: false, error: 'empty-title' });
   });
 });
+
+describe('historique des pauses (R-04 critère 5, R-05)', () => {
+  let db: TestDb;
+  let container: AppContainer;
+
+  beforeEach(async () => {
+    const device = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000302');
+    db = await openTestDb(device, '2026-09-25T10:00:00.000Z');
+    container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: device }), data: db.data });
+  });
+  afterEach(() => db.close());
+
+  const periods = async (id: RoutineId) => (await db.data.repos.routines.listPausesForRoutine(id)).map((p) => [p.fromDate, p.toDate]);
+  async function create(): Promise<RoutineId> {
+    const result = await createRoutineUseCases(container).create({ fields: fields(), reminderOffsets: [] });
+    if (!result.ok) throw new Error(result.error);
+    return result.value.id as RoutineId;
+  }
+
+  it('pause ouvre une période à aujourd’hui, reprise la ferme à la veille ; paused reste cohérent', async () => {
+    const cases = createRoutineUseCases(container);
+    const id = await create();
+    await cases.setPaused(id, true);
+    expect(await periods(id)).toEqual([['2026-09-25', null]]);
+    expect((await db.data.repos.routines.getById(id))?.paused).toBe(true);
+    db.clock.set('2026-09-30T10:00:00.000Z');
+    await cases.setPaused(id, false);
+    expect(await periods(id)).toEqual([['2026-09-25', '2026-09-29']]);
+    expect((await db.data.repos.routines.getById(id))?.paused).toBe(false);
+    // Seconde pause : nouvelle période, l'historique reste.
+    db.clock.set('2026-10-05T10:00:00.000Z');
+    await cases.setPaused(id, true);
+    expect(await periods(id)).toEqual([['2026-09-25', '2026-09-29'], ['2026-10-05', null]]);
+    expect([...(await db.data.repos.routines.listPauses('all'))].length).toBe(2);
+  });
+
+  it('pause puis reprise le même jour : la période, vide, est supprimée', async () => {
+    const cases = createRoutineUseCases(container);
+    const id = await create();
+    await cases.setPaused(id, true);
+    await cases.setPaused(id, false);
+    expect(await periods(id)).toEqual([]);
+  });
+
+  it('annuler une pause supprime sa période ; annuler une reprise la rouvre (ou la restaure si elle avait été supprimée)', async () => {
+    const cases = createRoutineUseCases(container);
+    const id = await create();
+    await cases.setPaused(id, true);
+    expect((await container.undo.undoLast()).status).toBe('undone');
+    expect(await periods(id)).toEqual([]);
+    expect((await db.data.repos.routines.getById(id))?.paused).toBe(false);
+
+    await cases.setPaused(id, true);
+    db.clock.set('2026-09-28T10:00:00.000Z');
+    await cases.setPaused(id, false);
+    expect(await periods(id)).toEqual([['2026-09-25', '2026-09-27']]);
+    expect((await container.undo.undoLast()).status).toBe('undone');
+    expect(await periods(id)).toEqual([['2026-09-25', null]]);
+
+    // Pause et reprise le même jour, puis annulation de la reprise : la période supprimée est restaurée.
+    await cases.setPaused(id, false);
+    container.undo.clear();
+    const id2 = await create();
+    await cases.setPaused(id2, true);
+    await cases.setPaused(id2, false);
+    expect(await periods(id2)).toEqual([]);
+    await container.undo.undoLast();
+    expect(await periods(id2)).toEqual([['2026-09-28', null]]);
+  });
+
+  it('le formulaire (champ paused) tient l’historique à jour ; un jour de pause ne se valide pas', async () => {
+    const cases = createRoutineUseCases(container);
+    const id = await create();
+    await cases.update(id, { fields: fields({ paused: true }), reminderOffsets: [] });
+    expect(await periods(id)).toEqual([['2026-09-25', null]]);
+    expect(await cases.setDone(id, d25(), true)).toBe('ignored');
+    db.clock.set('2026-09-27T10:00:00.000Z');
+    await cases.update(id, { fields: fields({ paused: false }), reminderOffsets: [] });
+    expect(await periods(id)).toEqual([['2026-09-25', '2026-09-26']]);
+    expect(await cases.setDone(id, d25(), true)).toBe('ignored'); // jour de pause passé : non prévu
+    expect(await cases.setDone(id, '2026-09-27' as LocalDate, true)).toBe('validated');
+  });
+});
+
+const d25 = (): LocalDate => '2026-09-25' as LocalDate;

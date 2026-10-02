@@ -1,5 +1,5 @@
-import { parseIcon, type NewRoutine, type Routine, type RoutineLog, type RoutinePatch } from '../../../domain/model';
-import type { IsoDateTime, LocalDate, LocalTime, RoutineId, RoutineLogId, SpaceFilter, SpaceId } from '../../../domain/types';
+import { parseIcon, type NewRoutine, type Routine, type RoutineLog, type RoutinePatch, type RoutinePause } from '../../../domain/model';
+import type { IsoDateTime, LocalDate, LocalTime, RoutineId, RoutineLogId, RoutinePauseId, SpaceFilter, SpaceId } from '../../../domain/types';
 import type { WriteStamper } from '../../../domain/hlc';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 import type { RoutineLogRepository, RoutineRepository } from '../routineRepository';
@@ -42,7 +42,27 @@ function encodeIconValue(icon: NonNullable<Routine['icon']>): string {
   return icon.kind === 'lucide' ? `lucide:${icon.name}` : `emoji:${icon.value}`;
 }
 
+interface RoutinePauseRow extends SqlRow, SyncRow {
+  readonly routine_id: string;
+  readonly from_date: string;
+  readonly to_date: string | null;
+}
+
+function rowToPause(row: RoutinePauseRow): RoutinePause {
+  return {
+    id: row.id as RoutinePauseId,
+    routineId: row.routine_id as RoutineId,
+    fromDate: row.from_date as LocalDate,
+    toDate: row.to_date as LocalDate | null,
+    ...readSyncMeta(row),
+  };
+}
+
 export function createRoutineRepository(db: SqlExecutor, stamper: WriteStamper): RoutineRepository {
+  async function fetchPause(id: RoutinePauseId): Promise<RoutinePauseRow | undefined> {
+    return (await db.select<RoutinePauseRow>('SELECT * FROM routine_pause WHERE id = ? LIMIT 1', [id]))[0];
+  }
+
   async function fetchById(id: RoutineId, options?: ReadOptions): Promise<RoutineRow | undefined> {
     const rows = await db.select<RoutineRow>(`SELECT * FROM routine WHERE id = ? ${deletedClause(options)} LIMIT 1`, [id]);
     return rows[0];
@@ -169,6 +189,49 @@ export function createRoutineRepository(db: SqlExecutor, stamper: WriteStamper):
         [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id],
       );
       return requireMapped(await fetchById(id, { includeDeleted: true }), 'routine', id, rowToRoutine);
+    },
+
+    async listPauses(filter: SpaceFilter) {
+      const f = spaceFilterClause(filter, 'routine.space_id');
+      const rows = await db.select<RoutinePauseRow>(
+        `SELECT routine_pause.* FROM routine_pause JOIN routine ON routine.id = routine_pause.routine_id
+         WHERE routine_pause.deleted_at IS NULL ${f.sql} ORDER BY routine_pause.from_date`,
+        f.params,
+      );
+      return rows.map(rowToPause);
+    },
+
+    async listPausesForRoutine(routineId: RoutineId) {
+      const rows = await db.select<RoutinePauseRow>('SELECT * FROM routine_pause WHERE routine_id = ? AND deleted_at IS NULL ORDER BY from_date', [routineId]);
+      return rows.map(rowToPause);
+    },
+
+    async createPause(pause) {
+      const stamp = stamper.next();
+      await db.execute(
+        `INSERT INTO routine_pause (id, routine_id, from_date, to_date, created_at, updated_at, deleted_at, device_id, hlc)
+         VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, ?)`,
+        [pause.id, pause.routineId, pause.fromDate, stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
+      );
+      return requireMapped(await fetchPause(pause.id), 'routine_pause', pause.id, rowToPause);
+    },
+
+    async setPauseEnd(id: RoutinePauseId, toDate: LocalDate | null) {
+      const stamp = stamper.next();
+      await db.execute('UPDATE routine_pause SET to_date = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL', [toDate, stamp.at, stamp.deviceId, stamp.hlc, id]);
+      return requireMapped(await fetchPause(id), 'routine_pause', id, rowToPause);
+    },
+
+    async deletePause(id: RoutinePauseId) {
+      const stamp = stamper.next();
+      await db.execute('UPDATE routine_pause SET deleted_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL', [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id]);
+      return requireMapped(await fetchPause(id), 'routine_pause', id, rowToPause);
+    },
+
+    async restorePause(id: RoutinePauseId) {
+      const stamp = stamper.next();
+      await db.execute('UPDATE routine_pause SET deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL', [stamp.at, stamp.deviceId, stamp.hlc, id]);
+      return requireMapped(await fetchPause(id), 'routine_pause', id, rowToPause);
     },
 
     async restore(id: RoutineId) {

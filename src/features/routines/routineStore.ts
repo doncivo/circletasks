@@ -1,7 +1,7 @@
 import { createStore } from 'zustand';
 import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import type { RoutineError } from '../../domain/routineRules';
-import { groupDoneDates } from '../../domain/routineSchedule';
+import { groupDoneDates, pausesByRoutine, type DateInterval } from '../../domain/routineSchedule';
 import type { LocalDate, Result, RoutineId, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -28,6 +28,8 @@ export interface RoutinesState {
   readonly archived: readonly Routine[];
   /** Dates validées de chaque routine, historique complet. */
   readonly doneByRoutine: ReadonlyMap<RoutineId, ReadonlySet<LocalDate>>;
+  /** Périodes de pause de chaque routine (R-04 critère 5) : ignorées par séries, taux, cartes. Pause ouverte : sans fin. */
+  readonly pausesOf: ReadonlyMap<RoutineId, readonly DateInterval[]>;
   /** Avances cochées d'office quand on donne une heure à une nouvelle routine (`reminders.defaultOffsets`, QB-08). */
   readonly defaultOffsets: readonly ReminderOffsetMin[];
   /** A-06 : vue compacte de l'onglet (`view.compact.routines`, local à l'appareil), lue au chargement. */
@@ -74,6 +76,7 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       routines: all.filter((routine) => !routine.archived),
       archived: all.filter((routine) => routine.archived),
       doneByRoutine: groupDoneDates(logs),
+      pausesOf: pausesByRoutine(await container.data.repos.routines.listPauses(filter)),
     };
   };
 
@@ -82,6 +85,7 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
     routines: [],
     archived: [],
     doneByRoutine: new Map<RoutineId, ReadonlySet<LocalDate>>(),
+    pausesOf: new Map<RoutineId, readonly DateInterval[]>(),
     compact: false,
     defaultOffsets: [0],
     status: 'idle',

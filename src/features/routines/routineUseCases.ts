@@ -4,8 +4,8 @@ import { addDays } from '../../domain/localDate';
 import type { NewReminder, ReminderOffsetMin, Routine, RoutineFields } from '../../domain/model';
 import { mergeReminderOffsets, normalizeReminderOffsets, routineReminderFireAt } from '../../domain/routineReminder';
 import { validateRoutine, type RoutineError } from '../../domain/routineRules';
-import { canToggleDay, doneDatesOf, mondayOf } from '../../domain/routineSchedule';
-import type { LocalDate, ReminderId, Result, RoutineId, RoutineLogId } from '../../domain/types';
+import { canToggleDay, doneDatesOf, mondayOf, pausesByRoutine } from '../../domain/routineSchedule';
+import type { LocalDate, ReminderId, Result, RoutineId, RoutineLogId, RoutinePauseId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
@@ -92,6 +92,41 @@ function reopenedCommand(deps: RoutineUseCaseDeps, routine: Routine, date: Local
   };
 }
 
+/** Ce qu'a fait un changement de pause sur l'historique des périodes (pour l'annuler). */
+type PauseRecord = { readonly kind: 'opened'; readonly id: RoutinePauseId } | { readonly kind: 'closed'; readonly id: RoutinePauseId; readonly deleted: boolean } | null;
+
+
+/**
+ * Historique des pauses (R-04 critère 5) : mettre en pause ouvre une période à `today` ; reprendre la ferme à la veille, ou la supprime
+ * logiquement si elle n'a couvert aucun jour (pause et reprise le même jour).
+ */
+async function syncPausePeriod(deps: RoutineUseCaseDeps, repos: Repos, routineId: RoutineId, paused: boolean): Promise<PauseRecord> {
+  const today = todayLocal(deps.clock);
+  const periods = await repos.routines.listPausesForRoutine(routineId);
+  const open = periods.find((period) => period.toDate === null);
+  if (paused) {
+    if (open) return null;
+    const created = await repos.routines.createPause({ id: newEntityId<RoutinePauseId>(deps.ids), routineId, fromDate: today });
+    return { kind: 'opened', id: created.id as RoutinePauseId };
+  }
+  if (!open) return null;
+  const yesterday = addDays(today, -1);
+  if (yesterday < open.fromDate) {
+    await repos.routines.deletePause(open.id as RoutinePauseId);
+    return { kind: 'closed', id: open.id as RoutinePauseId, deleted: true };
+  }
+  await repos.routines.setPauseEnd(open.id as RoutinePauseId, yesterday);
+  return { kind: 'closed', id: open.id as RoutinePauseId, deleted: false };
+}
+
+/** Annule l'effet de `syncPausePeriod` sur les périodes. */
+async function undoPausePeriod(repos: Repos, record: PauseRecord): Promise<void> {
+  if (!record) return;
+  if (record.kind === 'opened') await repos.routines.deletePause(record.id);
+  else if (record.deleted) await repos.routines.restorePause(record.id);
+  else await repos.routines.setPauseEnd(record.id, null);
+}
+
 /**
  * Annulation d'un changement d'état d'une routine (pause, archivage) : remet l'état d'avant, seulement si la routine n'a pas changé
  * depuis (même hlc que celui écrit par l'action ; sinon 'stale', rien n'est écrit).
@@ -100,6 +135,7 @@ function stateCommand(
   deps: RoutineUseCaseDeps,
   written: Routine,
   patch: { readonly paused: boolean } | { readonly archived: boolean },
+  record: PauseRecord,
   labelKey: 'routines.undo.paused' | 'routines.undo.resumed' | 'routines.undo.archived' | 'routines.undo.restored',
 ): UndoableCommand {
   return {
@@ -110,7 +146,10 @@ function stateCommand(
     async undo() {
       const current = await deps.data.repos.routines.getById(written.id as RoutineId);
       if (!current || current.hlc !== written.hlc) return 'stale';
-      await deps.data.repos.routines.update(written.id as RoutineId, patch);
+      await deps.data.transaction(async (repos) => {
+        await repos.routines.update(written.id as RoutineId, patch);
+        await undoPausePeriod(repos, record);
+      });
       emitRoutinesChanged(deps.data);
       return 'undone';
     },
@@ -149,7 +188,9 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
       const checked = validateRoutine(input.fields);
       if (!checked.ok) return checked;
       const updated = await deps.data.transaction(async (repos) => {
+        const before = await repos.routines.getById(id);
         const routine = await repos.routines.update(id, checked.value);
+        if (before && before.paused !== routine.paused) await syncPausePeriod(deps, repos, id, routine.paused);
         const existing = (await repos.reminders.listForTarget({ type: 'routine', id })).map((reminder) => reminder.offsetMin);
         // Les avances que le formulaire ne montre pas (N-02) restent ; sans heure, plus aucun rappel.
         const offsets = mergeReminderOffsets(existing, input.reminderOffsets);
@@ -170,12 +211,13 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
           const weekStart = mondayOf(date);
           const week = doneDatesOf(await repos.routineLogs.listForRoutine(id, { from: weekStart, to: addDays(weekStart, 6) }), id);
           const today = todayLocal(deps.clock);
+          const pauses = pausesByRoutine(await repos.routines.listPausesForRoutine(id)).get(id) ?? [];
           if (done) {
-            if (week.has(date) || !canToggleDay(routine, week, date, today)) return { result: 'ignored' };
+            if (week.has(date) || !canToggleDay(routine, week, date, today, pauses)) return { result: 'ignored' };
             const log = await repos.routineLogs.markDone(id, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
             return { result: 'validated', command: validatedCommand(deps, routine, date, log.hlc) };
           }
-          if (!week.has(date) || !canToggleDay(routine, week, date, today)) return { result: 'ignored' };
+          if (!week.has(date) || !canToggleDay(routine, week, date, today, pauses)) return { result: 'ignored' };
           await repos.routineLogs.unmark(id, date);
           return { result: 'reopened', command: reopenedCommand(deps, routine, date) };
         },
@@ -188,8 +230,11 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
     async setPaused(id, paused) {
       const before = await deps.data.repos.routines.getById(id);
       if (!before || before.paused === paused) return null;
-      const written = await deps.data.repos.routines.setPaused(id, paused);
-      deps.undo.push(stateCommand(deps, written, { paused: before.paused }, paused ? 'routines.undo.paused' : 'routines.undo.resumed'));
+      const { written, record } = await deps.data.transaction(async (repos) => ({
+        written: await repos.routines.setPaused(id, paused),
+        record: await syncPausePeriod(deps, repos, id, paused),
+      }));
+      deps.undo.push(stateCommand(deps, written, { paused: before.paused }, record, paused ? 'routines.undo.paused' : 'routines.undo.resumed'));
       emitRoutinesChanged(deps.data);
       return written;
     },
@@ -198,7 +243,7 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
       const before = await deps.data.repos.routines.getById(id);
       if (!before || before.archived === archived) return null;
       const written = await deps.data.repos.routines.setArchived(id, archived);
-      deps.undo.push(stateCommand(deps, written, { archived: before.archived }, archived ? 'routines.undo.archived' : 'routines.undo.restored'));
+      deps.undo.push(stateCommand(deps, written, { archived: before.archived }, null, archived ? 'routines.undo.archived' : 'routines.undo.restored'));
       emitRoutinesChanged(deps.data);
       return written;
     },
