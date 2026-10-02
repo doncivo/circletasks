@@ -1,3 +1,4 @@
+import { routinesEn } from './en.routines';
 import type { Messages } from './types';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
@@ -520,6 +521,7 @@ export const en: Messages = {
     stale: 'Cannot undo: the task has changed',
     failed: 'Unable to undo this action.',
   },
+  routines: routinesEn,
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',

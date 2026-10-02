@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createTask, openToday } from '../e2e/helpers/today';
+import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
 
 /**
@@ -63,6 +64,25 @@ async function prepareWeek(page: Page): Promise<void> {
   await openWeek(page);
 }
 
+/** Routines des maquettes (semaine du 21 au 27 sept. 2026, mercredi 23) : icônes du catalogue le plus proche (pas de « soleil »). */
+const SERIES_12 = Array.from({ length: 12 }, (_, i) => `2026-09-${String(12 + i).padStart(2, '0')}`);
+const ROUTINE_SEED: DirectRoutine[] = [
+  { title: 'Faire mon lit', space: 'perso', time: '07:30', icon: 'lucide:bed', done: SERIES_12 },
+  { title: "Boire de l'eau", space: 'perso', time: '08:30', icon: 'lucide:glass-water', done: ['2026-09-21', '2026-09-22'] },
+  { title: 'Sport', space: 'perso', time: '18:00', icon: 'lucide:dumbbell', scheduleType: 'weekdays', weekdays: [1, 3, 5], done: ['2026-09-21'] },
+  { title: 'Lire 20 minutes', space: 'perso', time: '21:30', icon: 'lucide:book-open', done: ['2026-09-21', '2026-09-22'] },
+];
+const ROUTINE_SEED_PC: DirectRoutine[] = [
+  ...ROUTINE_SEED,
+  { title: 'Revue des e-mails', space: 'pro', time: '08:45', icon: 'lucide:mail', scheduleType: 'weekdays', weekdays: [1, 3, 5], done: ['2026-09-21', '2026-09-23'] },
+  { title: 'Point hebdo', space: 'pro', time: '09:00', icon: 'lucide:clock', scheduleType: 'weekdays', weekdays: [1], done: ['2026-09-21'] },
+];
+
+async function prepareRoutines(page: Page, items: DirectRoutine[]): Promise<void> {
+  await insertRoutines(page, items);
+  await openRoutines(page);
+}
+
 interface Screen {
   name: string;
   mockup: string;
@@ -121,6 +141,8 @@ const SCREENS: Screen[] = [
   },
   { name: 'Semaine', mockup: 'Semaine.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareWeek },
   { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: prepareWeek },
+  { name: 'Routines', mockup: 'Routines.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareRoutines(page, ROUTINE_SEED) },
+  { name: 'PC-Routines', mockup: 'PC-Routines.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareRoutines(page, ROUTINE_SEED_PC) },
 ];
 
 for (const screen of SCREENS) {

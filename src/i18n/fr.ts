@@ -1,3 +1,4 @@
+import { routinesFr } from './fr.routines';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -523,6 +524,7 @@ export const fr = {
     stale: 'Action impossible à annuler : la tâche a changé',
     failed: 'Impossible d’annuler cette action.',
   },
+  routines: routinesFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

@@ -27,3 +27,6 @@ export * from './taskDetailEdit';
 export * from './week';
 export * from './externalEvents';
 export * from './taskMove';
+export * from './routineRules';
+export * from './routineSchedule';
+

@@ -1,0 +1,144 @@
+@import './routineTokens.css';
+
+/* Carte de routine (Routines.html : iPhone, filet entre cartes ; PC-Routines.html : carte à bord, sélection #2E2150). */
+.ct-routine-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  min-width: 0;
+}
+
+.ct-routine-card[data-layout='pc'] {
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface);
+}
+
+.ct-routine-card[data-layout='pc'][data-selected='true'] {
+  border: 2px solid var(--ct-color-text);
+  padding: 13px 15px;
+}
+
+.ct-routine-card[data-paused='true'] .ct-routine-card__title {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-card__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-routine-card__title {
+  flex-grow: 1;
+  min-width: 0;
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: 1.25rem; /* 20 px (Routines.html) */
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.ct-routine-card[data-layout='pc'] .ct-routine-card__title {
+  font-size: var(--ct-font-size-item);
+}
+
+.ct-routine-card__edit {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-routine-card__week {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ct-routine-card[data-layout='pc'] .ct-routine-card__week {
+  gap: 6px;
+}
+
+/* Rond d'un jour : bord #D9776B (prévu), fond #F2A7A0 (fait), pointillés (non prévu). */
+.ct-routine-card__round {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ct-routine-ring);
+  background: var(--ct-color-surface);
+  color: var(--ct-routine-ring-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ct-routine-card__round[data-state='done'] {
+  background: var(--ct-routine-done);
+  border-color: var(--ct-routine-done);
+  color: var(--ct-routine-done-text);
+}
+
+.ct-routine-card__round[data-state='off'] {
+  border-color: var(--ct-routine-off-border);
+  border-style: dashed;
+  color: var(--ct-routine-off-text);
+}
+
+.ct-routine-card__round[aria-disabled='true'] {
+  cursor: default;
+}
+
+.ct-routine-card__round:focus-visible,
+.ct-routine-card__edit:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-routine-card__counter {
+  margin-left: auto;
+  font-size: 1.25rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-routine-card__info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-card[data-layout='pc'] .ct-routine-card__info {
+  font-size: var(--ct-font-size-text-sm);
+}
+
+/* Vue compacte (A-06) : cartes resserrées, sans ligne d'informations. */
+.ct-routine-card[data-compact='true'] {
+  gap: 6px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.ct-routine-card[data-compact='true'] .ct-routine-card__title {
+  font-size: var(--ct-font-size-text-lg);
+}
