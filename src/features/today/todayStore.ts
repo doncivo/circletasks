@@ -16,6 +16,8 @@ import type { CreateTaskError } from '../tasks/taskUseCases';
 export interface NewTaskSchedule {
   readonly date?: LocalDate;
   readonly time?: LocalTime | null;
+  /** T-14 : « Un jour » choisi dans le sélecteur : tâche sans date ni heure (`date` et `time` ignorés). */
+  readonly someday?: boolean;
   /** T-09 : répétition choisie à la saisie (absent : une fois). */
   readonly recurrence?: RecurrenceFields | null;
 }
@@ -83,6 +85,11 @@ export interface TodayState {
    * « cette occurrence » génère la suivante, « toutes les suivantes » arrête la série). Ne rejette jamais.
    */
   remove(id: TaskId, scope?: SeriesScope): Promise<void>;
+  /**
+   * T-12 : duplique une tâche de la liste (Ctrl+Maj+D après choix de la date) ; annulable. `date` null : « Un jour ».
+   * La copie apparaît dans la liste si elle tombe sur le jour affiché (rechargement). Ne rejette jamais.
+   */
+  duplicate(id: TaskId, date: LocalDate | null): Promise<void>;
   /**
    * T-09 : lit les règles des séries affichées pas encore connues (ex. règle posée depuis la fiche),
    * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
@@ -161,8 +168,9 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         const result = await useCases.create({
           title,
           spaceId,
-          date: taskDate,
-          ...(schedule?.time !== undefined ? { time: schedule.time } : {}),
+          date: schedule?.someday ? null : taskDate,
+          ...(schedule?.someday ? { someday: true } : {}),
+          ...(schedule?.time !== undefined && !schedule.someday ? { time: schedule.time } : {}),
           ...(icon !== undefined ? { icon } : {}),
           ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
         });
@@ -221,6 +229,15 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         set({ actionErrorKey: result.ok ? null : 'tasks.postponeError' });
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
+    async duplicate(id, date) {
+      try {
+        await useCases.duplicate(id, date);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.duplicateError' });
       }
     },
 

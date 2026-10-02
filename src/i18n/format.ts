@@ -30,3 +30,39 @@ export function formatDonePeriodLabel(kind: 'day' | 'week' | 'month', from: stri
     ? `${fmt({ day: 'numeric' }, from)} – ${fmt({ day: 'numeric', month: 'short' }, to)}`
     : `${fmt({ day: 'numeric', month: 'short' }, from)} – ${fmt({ day: 'numeric', month: 'short' }, to)}`;
 }
+
+const intlLocale = (): string => (getLocale() === 'fr' ? 'fr-FR' : 'en-US');
+const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Jour complet pour le bandeau « Compris : » (« vendredi 25 sept. »), selon la langue courante. */
+export function formatDayFull(isoDate: string): string {
+  return new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', day: 'numeric', month: 'short', timeZone: 'UTC' }).format(utcDate(isoDate));
+}
+
+/** Libellé d'un jour de la roue iPhone (« Jeu. 24 sept. »), première lettre en majuscule. */
+export function formatWheelDay(isoDate: string): string {
+  return capitalize(formatDayLabel(isoDate));
+}
+
+/** Titre du mini-calendrier (« Septembre 2026 »). */
+export function formatMonthTitle(year: number, month: number): string {
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  return capitalize(new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date));
+}
+
+/** Initiales des jours, lundi en premier (« L M M J V S D »). */
+export function weekdayInitials(): string[] {
+  const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'narrow', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i)))); // 1er janv. 2024 : lundi
+}
+
+/** Nom accessible d'une case du calendrier (« 25 septembre »). */
+export function formatDayAria(isoDate: string): string {
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
+}
+
+/** Noms complets des jours, lundi en premier (« lundi »…), pour les en-têtes de colonne du calendrier. */
+export function weekdayNamesLong(): string[] {
+  const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i))));
+}

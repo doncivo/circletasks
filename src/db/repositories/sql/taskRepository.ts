@@ -343,11 +343,22 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return ids.map((id) => requireRow(byId.get(id), 'task', id));
     },
 
+    async discard(ids: readonly TaskId[]) {
+      for (const id of ids) {
+        const stamp = stamper.next();
+        await db.execute(
+          'UPDATE task SET deleted_at = ?, discarded = 1, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL',
+          [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id],
+        );
+      }
+      return fetchByIds(ids);
+    },
+
     async restore(ids: readonly TaskId[]) {
       for (const id of ids) {
         const stamp = stamper.next();
         await db.execute(
-          'UPDATE task SET deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
+          'UPDATE task SET deleted_at = NULL, discarded = 0, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
           [stamp.at, stamp.deviceId, stamp.hlc, id],
         );
       }
@@ -450,7 +461,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
     async listTrash(since: IsoDateTime, filter: SpaceFilter) {
       const f = spaceFilterClause(filter);
       const rows = await db.select<TaskRow>(
-        `SELECT * FROM task WHERE deleted_at IS NOT NULL AND deleted_at >= ? AND (series_index IS NULL OR series_index >= 0) ${f.sql} ORDER BY deleted_at DESC`,
+        `SELECT * FROM task WHERE deleted_at IS NOT NULL AND deleted_at >= ? AND discarded = 0 AND (series_index IS NULL OR series_index >= 0) ${f.sql} ORDER BY deleted_at DESC`,
         [since, ...f.params],
       );
       return rows.map(rowToTask);

@@ -10,7 +10,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | --- | --- | --- | --- |
 | PREP-01 | Prérequis et comptes (PRD section 2) | Ali | à faire |
 | PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
-| PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | en revue (attend v3 + Expo) |
+| PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | fait (v3 + Expo indisponibles) |
 | PREP-04 | Installer les polices Fraunces et DM Sans en local et la bibliothèque lucide-react | ui-design-system | fait |
 
 ## Ordre 1 — Socle
@@ -27,10 +27,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | T-08 | M1 | Je supprime une tâche | tasks-planning | fait |
 | T-09 | M1 | Je rends une tâche récurrente | tasks-planning | fait |
 | T-10 | M1 | Je modifie ou arrête une récurrence | tasks-planning | fait |
-| T-11 | M1 | Mes heures restent justes quand je change de pays | tasks-planning | à faire |
-| T-12 | M1 | Je duplique une tâche | tasks-planning | à faire |
-| T-13 | M1 | J'annule ma dernière action | tasks-planning | à faire |
-| T-14 | M1 | Je choisis une date adaptée à mon appareil | tasks-planning | à faire |
+| T-11 | M1 | Mes heures restent justes quand je change de pays | tasks-planning | fait |
+| T-12 | M1 | Je duplique une tâche | tasks-planning | fait |
+| T-13 | M1 | J'annule ma dernière action | tasks-planning | fait |
+| T-14 | M1 | Je choisis une date adaptée à mon appareil | tasks-planning | fait |
 | A-01 | M2 | J'ouvre l'app sur la liste du jour | tasks-planning | à faire |
 | A-02 | M2 | Je réordonne ma liste | tasks-planning | à faire |
 | A-03 | M2 | Je masque les routines de la liste du jour | tasks-planning | à faire |

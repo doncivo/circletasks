@@ -47,6 +47,11 @@ export interface TaskRepository {
 
   /** T-08 : vers la corbeille (deleted_at). */
   softDelete(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * T-12 : abandon d'une tâche qui n'a jamais existé pour l'utilisateur (copie annulée) : suppression logique
+   * (tombstone conservé pour la synchro) mais exclue de la corbeille (`listTrash`), rien à restaurer.
+   */
+  discard(ids: readonly TaskId[]): Promise<Task[]>;
   /** Annulation de T-08, restauration depuis la corbeille. */
   restore(ids: readonly TaskId[]): Promise<Task[]>;
 

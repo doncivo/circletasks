@@ -1,15 +1,16 @@
 import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import { duplicateTask } from '../../domain/taskDuplicate';
 import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
 import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
-import type { RecurrenceId, Result, TaskId } from '../../domain/types';
+import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
-import { NotImplementedError } from '../../db/repositories';
+import { NotImplementedError, RepositoryError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
 import { createNextOccurrence, UNDONE_OCCURRENCE_INDEX, type CreatedOccurrence } from './recurrenceUseCases';
 import type { CreateTaskError, SetRecurrenceError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
@@ -129,6 +130,32 @@ function createDeleteUndoCommand(deps: TaskUseCaseDeps, deleted: readonly Task[]
       });
       if (restored.length === 0) return 'stale';
       deps.taskEntities.publish(restored);
+      return 'undone';
+    },
+  };
+}
+
+/**
+ * Commande annulable d'une duplication (T-12, T-13) : annuler = supprimer la copie (et ses rappels), tant qu'elle
+ * n'a pas été modifiée depuis (hlc identique à celui écrit par la duplication) ; sinon 'stale'. Comme pour l'occurrence
+ * annulée de T-09, la copie est écartée (`discard`) : tombstone conservé pour la synchro, exclue de la corbeille
+ * (rien à restaurer). Elle n'appartient à aucune série : aucun `series_index` n'est touché.
+ */
+function createDuplicateUndoCommand(deps: TaskUseCaseDeps, copy: Task): UndoableCommand {
+  return {
+    kind: 'duplicate',
+    count: 1,
+    labelParams: { title: copy.title },
+    async undo() {
+      const removed = await deps.data.transaction(async (repos) => {
+        const current = await repos.tasks.getById(copy.id);
+        if (!current || current.hlc !== copy.hlc) return false;
+        const [gone] = await repos.tasks.discard([copy.id]);
+        await repos.reminders.softDeleteForTarget({ type: 'task', id: copy.id }, gone?.deletedAt ?? undefined);
+        return true;
+      });
+      if (!removed) return 'stale';
+      deps.taskEntities.remove([copy.id]);
       return 'undone';
     },
   };
@@ -320,8 +347,27 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     moveToSomeday() {
       return Promise.reject(new NotImplementedError('taskUseCases.moveToSomeday : à implémenter (SD-03)'));
     },
-    duplicate() {
-      return Promise.reject(new NotImplementedError('taskUseCases.duplicate : à implémenter (T-12)'));
+    async duplicate(id: TaskId, date: LocalDate | null): Promise<Task> {
+      // T-12 : copie titre, note, icône, espace, projet, heure et rappels (même avance) ; une transaction.
+      const copy = await deps.data.transaction(async (repos) => {
+        const source = await repos.tasks.getById(id);
+        if (!source) throw new RepositoryError('not-found', 'task', id);
+        const offsets = (await repos.reminders.listForTarget({ type: 'task', id })).map((r) => r.offsetMin);
+        const built = duplicateTask(source, {
+          taskId: newEntityId<TaskId>(deps.ids),
+          date,
+          reminderOffsets: offsets,
+          newReminderId: () => newEntityId<ReminderId>(deps.ids),
+          // Fin de liste du jour (même règle que la création, en attendant l'insertion par milieu d'A-02).
+          sortOrder: deps.clock.nowMs(),
+        });
+        const created = await repos.tasks.create(built.task);
+        if (built.reminders.length > 0) await repos.reminders.replaceForTarget({ type: 'task', id: created.id }, built.reminders);
+        return created;
+      });
+      deps.taskEntities.publish([copy]);
+      deps.undo.push(createDuplicateUndoCommand(deps, copy));
+      return copy;
     },
     async remove(ids): Promise<Task[]> {
       // T-08 : suppression logique (deleted_at) + rappels de la tâche rendus inactifs, en une transaction.

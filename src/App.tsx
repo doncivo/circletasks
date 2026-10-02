@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
+import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp } from './features/app/bootstrap';
 import type { AppContainer } from './features/app/container';
 import { TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
@@ -112,6 +113,8 @@ export function App() {
       {container ? (
         <AppContainerProvider container={container}>
           <AppShellContent />
+          {/* Bandeau « Annuler » et Ctrl+Z globaux (T-13) : au-dessus de tous les écrans. */}
+          <UndoToast />
         </AppContainerProvider>
       ) : (
         dbStatus !== 'error' && <h1>{t('app.name')}</h1>

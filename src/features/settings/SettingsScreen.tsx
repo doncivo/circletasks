@@ -2,12 +2,13 @@ import { useEffect } from 'react';
 import { t } from '../../i18n';
 import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
+import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
 /**
- * Écran Réglages minimal (Reglages.html) : section « TÂCHES » avec l'interrupteur « Reporter
+ * Écran Réglages minimal (Reglages.html) : section « GÉNÉRAL » avec la seule ligne « Fuseau horaire » (T-11, lecture seule), section « TÂCHES » avec l'interrupteur « Reporter
  * les tâches non faites » (T-06), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
  * « Corbeille » (T-08, Q6 : unique point d'accès). Aucun autre réglage n'est simulé : ils
  * arrivent avec M12.
@@ -18,6 +19,7 @@ export function SettingsScreen() {
   const status = useFeatureStore(settingsStore, (s) => s.status);
   const errorKey = useFeatureStore(settingsStore, (s) => s.errorKey);
   const setCarryOverUndone = useFeatureStore(settingsStore, (s) => s.setCarryOverUndone);
+  const timeZone = useAppStore((s) => s.timeZone);
   const navigate = useNavigationStore((s) => s.navigate);
 
   useEffect(() => {
@@ -36,6 +38,13 @@ export function SettingsScreen() {
           {t(errorKey)}
         </p>
       )}
+      <h2 className="ct-settings__section">{t('settings.sectionGeneral')}</h2>
+      <div className="ct-settings__row">
+        <span>{t('settings.timeZone')}</span>
+        <span className="ct-settings__value">
+          {timeZone ? t('settings.timeZoneAuto', { zone: timeZone }) : t('settings.timeZoneUnknown')}
+        </span>
+      </div>
       <h2 className="ct-settings__section">{t('settings.sectionTasks')}</h2>
       <div className="ct-settings__row">
         <span>{t('settings.carryOverUndone')}</span>

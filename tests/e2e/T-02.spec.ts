@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { setWheels, typeDate } from './helpers/schedule';
 
 /**
  * T-02 — J'affecte une date et une heure optionnelle.
@@ -31,8 +32,7 @@ async function createTask(
     await page.getByRole('button', { name: 'Ajouter' }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(input.title);
-    if (input.date) await dialog.getByLabel('Date').fill(input.date);
-    if (input.time) await dialog.getByLabel('Heure').fill(input.time);
+    await setWheels(page, dialog, { ...(input.date ? { date: input.date } : {}), ...(input.time ? { time: input.time } : {}) });
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(dialog).not.toBeVisible();
     return;
@@ -40,8 +40,7 @@ async function createTask(
 
   const titleField = page.getByLabel('Nouvelle tâche');
   await titleField.fill(input.title);
-  if (input.date) await page.getByLabel('Date').fill(input.date);
-  if (input.time) await page.getByLabel('Heure').fill(input.time);
+  if (input.date || input.time) await typeDate(page, [input.date, input.time].filter(Boolean).join(' '));
   await titleField.press('Enter');
   // Le champ se vide et retrouve le focus après la création (critère 1, T-01) :
   // un signal fiable que la soumission a bien été traitée, y compris quand la

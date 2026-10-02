@@ -1,7 +1,10 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { isLocalDate, type LocalDate } from '../domain/types';
+import type { DateChoice } from '../domain/dateInput';
+import type { LocalDate, LocalTime } from '../domain/types';
 import { t } from '../i18n';
 import { Button } from './Button';
+import { DateEditor } from './DateField';
+import { DateWheels } from './DateWheels';
 import { Sheet } from './Sheet';
 import { useFocusTrap } from './useFocusTrap';
 import { useLayout } from './useLayout';
@@ -13,32 +16,40 @@ export interface DatePromptProps {
   label: string;
   /** Libellé du bouton de validation (ex. « Valider »). */
   confirmLabel: string;
-  /** Date proposée à l'ouverture. */
-  initialValue: LocalDate;
-  /** Date valide choisie ; Échap / « Fermer » n'appellent que `onClose`. */
-  onConfirm: (date: LocalDate) => void;
+  /** Aujourd'hui, fourni par l'appelant (horloge du conteneur). */
+  today: LocalDate;
+  /** Date proposée à l'ouverture ; null : « Un jour » présélectionné (avec `allowSomeday`, T-12 / Q8). */
+  initialValue: LocalDate | null;
+  /** Heure proposée à l'ouverture (avec `showTime`). */
+  initialTime?: LocalTime | null;
+  /** Propose « Un jour » (sans date) ; `onConfirm(null, null)` quand il est validé (T-12, SD-02). */
+  allowSomeday?: boolean;
+  /** Choisit aussi une heure (défaut : non ; le report conserve l'heure de la tâche). */
+  showTime?: boolean;
+  /** Date et heure valides choisies (date null : « Un jour ») ; Échap / « Fermer » n'appellent que `onClose`. */
+  onConfirm: (date: LocalDate | null, time: LocalTime | null) => void;
   onClose: () => void;
 }
 
 /**
- * Choix d'une date (T-05, « Choisir une date »). Version minimale : champ de date
- * natif, en attendant le sélecteur adapté à l'appareil de T-14 (roues iPhone,
- * mini-calendrier PC) qui le remplacera sans changer ce contrat. Feuille sur
- * iPhone, fenêtre centrée sur PC.
+ * Fenêtre « Choisir une date » (T-05, T-12, SD-02) avec le sélecteur de date adapté à l'appareil (T-14) :
+ * sur iPhone, une feuille avec puces et roues ; sur PC, une fenêtre centrée avec champ à saisie libre
+ * (« demain », « lun. 10h »), puces « Aujourd'hui / Demain / Lundi prochain / Un jour » et mini-calendrier.
+ * Entrée ou le bouton de validation applique, Échap ou « Fermer » ne change rien.
  */
-export function DatePrompt({ open, label, confirmLabel, initialValue, onConfirm, onClose }: DatePromptProps) {
+export function DatePrompt({ open, ...props }: DatePromptProps) {
   const layout = useLayout();
   if (!open) return null;
-  const form = <DatePromptForm label={label} confirmLabel={confirmLabel} initialValue={initialValue} onConfirm={onConfirm} onClose={onClose} />;
+  const form = <DatePromptForm layout={layout} {...props} />;
   if (layout === 'mobile') {
     return (
-      <Sheet open onClose={onClose} label={label}>
+      <Sheet open onClose={props.onClose} label={props.label}>
         {form}
       </Sheet>
     );
   }
   return (
-    <DatePromptModal label={label} onClose={onClose}>
+    <DatePromptModal label={props.label} onClose={props.onClose}>
       {form}
     </DatePromptModal>
   );
@@ -55,26 +66,49 @@ function DatePromptModal({ label, onClose, children }: { label: string; onClose:
   );
 }
 
-function DatePromptForm({ label, confirmLabel, initialValue, onConfirm, onClose }: Omit<DatePromptProps, 'open'>) {
-  const [value, setValue] = useState<string>(initialValue);
-  const valid = isLocalDate(value);
+function DatePromptForm({
+  layout,
+  label,
+  confirmLabel,
+  today,
+  initialValue,
+  initialTime = null,
+  allowSomeday = false,
+  showTime = false,
+  onConfirm,
+  onClose,
+}: Omit<DatePromptProps, 'open'> & { layout: 'pc' | 'mobile' }) {
+  const startChoice: DateChoice =
+    initialValue === null && allowSomeday ? { date: null, time: null } : { date: initialValue ?? today, time: showTime ? initialTime : null };
+  const [choice, setChoice] = useState<DateChoice | null>(startChoice);
+
+  function confirm(next: DateChoice | null): void {
+    if (next) onConfirm(next.date, next.date === null ? null : showTime ? next.time : null);
+  }
 
   function handleSubmit(event: FormEvent): void {
     event.preventDefault();
-    if (isLocalDate(value)) onConfirm(value);
+    confirm(choice);
   }
 
   return (
     <form className="ct-date-prompt" onSubmit={handleSubmit}>
       <h2 className="ct-date-prompt__heading">{label}</h2>
-      <input
-        type="date"
-        aria-label={t('tasks.postponeDateLabel')}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        className="ct-date-prompt__input"
-      />
-      <Button type="submit" fullWidth disabled={!valid}>
+      {layout === 'mobile' ? (
+        <DateWheels value={choice ?? startChoice} today={today} onChange={setChoice} allowSomeday={allowSomeday} showTime={showTime} />
+      ) : (
+        <DateEditor
+          mode="inline"
+          value={startChoice}
+          today={today}
+          allowSomeday={allowSomeday}
+          showTime={showTime}
+          autoFocus
+          onDraftChange={setChoice}
+          onCommit={confirm}
+        />
+      )}
+      <Button type="submit" fullWidth disabled={choice === null}>
         {confirmLabel}
       </Button>
       <Button variant="secondary" fullWidth onClick={onClose}>

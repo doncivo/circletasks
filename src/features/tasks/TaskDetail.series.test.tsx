@@ -7,6 +7,7 @@ import { asEntityId, asLocalDate, type DeviceId, type TaskId } from '../../domai
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from './createTaskUseCases';
@@ -44,6 +45,7 @@ describe('TaskDetail : modifier ou arrêter une récurrence (T-10)', () => {
     render(
       <AppContainerProvider container={container}>
         <TaskDetail />
+        <UndoToast />
       </AppContainerProvider>,
     );
     await screen.findByText(LOYER);

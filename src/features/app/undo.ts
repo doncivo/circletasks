@@ -1,4 +1,4 @@
-import { tDynamic, type MessageKey } from '../../i18n';
+import { getLocale, tDynamic, type MessageKey } from '../../i18n';
 
 /**
  * Actions annulables (T-13, ADR 0005) : terminer, reporter, déplacer, dupliquer,
@@ -67,6 +67,16 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   series: 'undo.seriesOccurrence',
 };
 
+/** Libellé du message pour une action par lot (A-05) : « 3 tâches reportées » (pluriel via `Intl.PluralRules`). */
+const UNDO_MANY_KEYS: { readonly [K in UndoKind]?: MessageKey } = {
+  complete: 'undo.manyComplete',
+  postpone: 'undo.manyPostpone',
+  move: 'undo.manyMove',
+  someday: 'undo.manySomeday',
+  duplicate: 'undo.manyDuplicate',
+  delete: 'undo.deleteMany',
+};
+
 export function createUndoStack(capacity: number = UNDO_STACK_CAPACITY): UndoStack {
   let commands: UndoableCommand[] = [];
   let pushCount = 0;
@@ -111,7 +121,15 @@ export function createUndoStack(capacity: number = UNDO_STACK_CAPACITY): UndoSta
   };
 }
 
-/** Texte du message « Annuler » d'une commande : libellé du type d'action + `labelParams`. */
+/**
+ * Texte du message « Annuler » d'une commande : libellé propre à la commande (`labelKey`) s'il existe,
+ * sinon pluriel d'un lot (`count` > 1) ou libellé du type d'action + `labelParams`.
+ */
 export function undoMessage(command: UndoableCommand): string {
-  return tDynamic(command.labelKey ?? UNDO_LABEL_KEYS[command.kind], command.labelParams);
+  if (command.labelKey) return tDynamic(command.labelKey, command.labelParams);
+  const many = UNDO_MANY_KEYS[command.kind];
+  if (many && new Intl.PluralRules(getLocale()).select(command.count) !== 'one') {
+    return tDynamic(many, { ...command.labelParams, count: command.count });
+  }
+  return tDynamic(UNDO_LABEL_KEYS[command.kind], command.labelParams);
 }

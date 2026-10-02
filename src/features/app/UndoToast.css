@@ -1,0 +1,16 @@
+/* Hôte du bandeau « Annuler » (Gestes.html) : en bas d'écran, au-dessus des feuilles (100), du sélecteur de date (100) et des dialogues (200). */
+.ct-undo-host {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--ct-space-4) + env(safe-area-inset-bottom, 0px));
+  z-index: 300;
+  width: min(560px, calc(100% - 2 * var(--ct-space-4)));
+  transform: translateX(-50%);
+  box-shadow: 0 6px 20px rgba(46, 33, 80, 0.28);
+  border-radius: var(--ct-radius-lg);
+}
+
+/* iPhone : au-dessus du bouton + et de l'interrupteur d'édition (64 px, Gestes.html). */
+.app-shell[data-layout='mobile'] .ct-undo-host {
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}

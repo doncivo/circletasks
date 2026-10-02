@@ -4,6 +4,7 @@ import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
+import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
@@ -38,7 +39,23 @@ describe('SettingsScreen (T-06)', () => {
   afterEach(async () => {
     cleanup();
     useNavigationStore.setState(INITIAL_NAVIGATION);
+    useAppStore.setState({ timeZone: null });
     await db.close();
+  });
+
+  it('T-11 : la ligne « Fuseau horaire » affiche le fuseau courant suivi de « (automatique) » (critère 5)', () => {
+    useAppStore.setState({ timeZone: 'Europe/Paris' });
+    renderScreen();
+    expect(screen.getByText('GÉNÉRAL')).toBeInTheDocument();
+    expect(screen.getByText('Fuseau horaire')).toBeInTheDocument();
+    expect(screen.getByText('Europe/Paris (automatique)')).toBeInTheDocument();
+  });
+
+  it('T-11 : le fuseau suit le store quand il change (critère 6)', async () => {
+    useAppStore.setState({ timeZone: 'Europe/Paris' });
+    renderScreen();
+    useAppStore.getState().setTimeZone('Africa/Tunis');
+    expect(await screen.findByText('Africa/Tunis (automatique)')).toBeInTheDocument();
   });
 
   it('installation neuve : l’interrupteur est activé (critère 11)', async () => {

@@ -31,6 +31,9 @@ export interface AppState {
   readonly carryOverFailed: boolean;
   /** T-09 : la dernière création d'occurrences récurrentes a échoué (message propre, dans Aujourd'hui). */
   readonly recurrenceFailed: boolean;
+  /** T-11 : fuseau IANA courant de l'appareil (détecté au démarrage et au retour au premier plan). */
+  readonly timeZone: string | null;
+  setTimeZone(timeZone: string): void;
   setDbStatus(status: DbStatus, errorDetail?: string): void;
   setDay(day: LocalDate): void;
   setCarryOverFailed(failed: boolean): void;
@@ -47,6 +50,8 @@ export const useAppStore = create<AppState>()((set) => ({
   day: null,
   carryOverFailed: false,
   recurrenceFailed: false,
+  timeZone: null,
+  setTimeZone: (timeZone) => set({ timeZone }),
   setDbStatus: (dbStatus, errorDetail) => set({ dbStatus, dbErrorDetail: errorDetail ?? null }),
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),

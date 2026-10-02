@@ -97,3 +97,19 @@ describe('undoMessage (typage de t, T-05)', () => {
     expect(undoMessage({ ...command(), kind: 'postpone', labelKey: 'undo.postponeTomorrow', labelParams: { title: 'Courses' } })).toBe('« Courses » reportée à demain');
   });
 });
+
+describe('undoMessage au pluriel (T-13, critère 6)', () => {
+  it('un lot de plusieurs éléments donne le message au pluriel, un seul le singulier', () => {
+    expect(undoMessage({ ...command(), kind: 'postpone', count: 3 })).toBe('3 tâches reportées');
+    expect(undoMessage({ ...command(), kind: 'complete', count: 2 })).toBe('2 tâches terminées');
+    expect(undoMessage({ ...command(), kind: 'move', count: 4 })).toBe('4 tâches déplacées');
+    expect(undoMessage({ ...command(), kind: 'someday', count: 3 })).toBe('3 tâches rangées dans « Un jour »');
+    expect(undoMessage({ ...command(), kind: 'postpone', count: 1 })).toBe('Tâche reportée');
+  });
+
+  it('le message de déplacement cite le titre et le jour', () => {
+    expect(undoMessage({ ...command(), kind: 'move', labelKey: 'undo.moveDate', labelParams: { title: 'Courses', date: 'jeu. 24' } })).toBe(
+      '« Courses » déplacée au jeu. 24',
+    );
+  });
+});

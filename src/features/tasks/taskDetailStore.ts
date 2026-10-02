@@ -2,7 +2,7 @@ import { createStore } from 'zustand';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { IconRef, RecurrenceFields, TaskPatch } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
-import type { TaskId } from '../../domain/types';
+import type { LocalDate, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createTaskUseCases } from './createTaskUseCases';
@@ -37,6 +37,8 @@ export interface TaskDetailState {
   toggleDone(): Promise<void>;
   /** Bouton « Reporter » / « Planifier » (T-05) : annulable, la fiche reste ouverte. Ne rejette jamais. */
   postpone(target: PostponeTarget): Promise<void>;
+  /** T-12 : duplique la tâche affichée à `date` (null : « Un jour ») ; annulable, la fiche reste sur l'original. Rend true si créée. Ne rejette jamais. */
+  duplicate(date: LocalDate | null): Promise<boolean>;
   /** T-10 critère 4 : reporte une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes » ; annulable. Ne rejette jamais. */
   postponeSeries(target: PostponeTarget, scope: SeriesScope): Promise<void>;
   /**
@@ -156,6 +158,19 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         set({ errorKey: null });
       } catch {
         set({ status: 'error', errorKey: 'tasks.postponeError' });
+      }
+    },
+
+    duplicate: async (date) => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        await useCases.duplicate(taskId, date);
+        set({ errorKey: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.duplicateError' });
+        return false;
       }
     },
 

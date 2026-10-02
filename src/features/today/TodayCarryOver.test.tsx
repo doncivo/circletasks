@@ -5,6 +5,7 @@ import { asEntityId, asLocalDate, asLocalTime, type DeviceId } from '../../domai
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -49,6 +50,7 @@ describe('TodayScreen : badge « reportée » (T-06)', () => {
     render(
       <AppContainerProvider container={container}>
         <TodayScreen />
+        <UndoToast />
       </AppContainerProvider>,
     );
 

@@ -19,3 +19,4 @@ export { TrashScreen } from './TrashScreen';
 export { trashStore, type TrashState, type TrashStatus } from './trashStore';
 export { createTrashUseCases, type TrashUseCases } from './trashUseCases';
 export { DeleteTaskConfirm } from './DeleteTaskConfirm';
+export { DuplicatePrompt } from './DuplicatePrompt';

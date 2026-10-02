@@ -1,6 +1,7 @@
-import { Check, X } from 'lucide-react';
+import { Check, Copy, X } from 'lucide-react';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { IconRef, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import type { LocalDate } from '../../domain/types';
 import { RULE_EDIT_SCOPES, ruleChanged, scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import type { PostponeTarget } from '../../domain/taskPostpone';
@@ -11,6 +12,7 @@ import { Button, ChoiceDialog, DetailPanel, Icon, IconChooser, IconView, Recurre
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
+import { DuplicatePrompt } from './DuplicatePrompt';
 import { PostponeAction } from './PostponeAction';
 import { taskDetailStore } from './taskDetailStore';
 import './TaskDetail.css';
@@ -42,6 +44,7 @@ export function TaskDetail() {
   const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(taskDetailStore, (s) => s.postponeSeries);
   const remove = useFeatureStore(taskDetailStore, (s) => s.remove);
+  const duplicate = useFeatureStore(taskDetailStore, (s) => s.duplicate);
   const recurrence = useFeatureStore(taskDetailStore, (s) => s.recurrence);
   const setRecurrence = useFeatureStore(taskDetailStore, (s) => s.setRecurrence);
   const applySeriesEdit = useFeatureStore(taskDetailStore, (s) => s.applySeriesEdit);
@@ -90,6 +93,7 @@ export function TaskDetail() {
         toggleDone={toggleDone}
         postpone={postpone}
         postponeSeries={postponeSeries}
+        duplicate={duplicate}
         recurrence={recurrence}
         setRecurrence={setRecurrence}
         applySeriesEdit={applySeriesEdit}
@@ -139,6 +143,8 @@ interface TaskDetailBodyProps {
   postpone: (target: PostponeTarget) => Promise<void>;
   /** T-10 : report d'une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». */
   postponeSeries: (target: PostponeTarget, scope: SeriesScope) => Promise<void>;
+  /** T-12 : « Dupliquer » ; la copie est créée à `date` (null : « Un jour »), la fiche reste sur l'original. */
+  duplicate: (date: LocalDate | null) => Promise<boolean>;
   /** Règle de la série (T-09), `null` : tâche non récurrente. */
   recurrence: RecurrenceFields | null;
   /** « Répéter… » : pose une règle sur une tâche datée (T-09) ; la modification / l'arrêt relèvent de T-10. */
@@ -156,7 +162,8 @@ interface TaskDetailBodyProps {
 }
 
 /** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, postponeSeries, recurrence, setRecurrence, applySeriesEdit, updateRecurrence, stopRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
+function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, postponeSeries, duplicate, recurrence, setRecurrence, applySeriesEdit, updateRecurrence, stopRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
+  const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [repeatDraft, setRepeatDraft] = useState<RecurrenceFields | null>(null);
   const [noteDraft, setNoteDraft] = useState(task.note);
@@ -275,7 +282,24 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
         {t('tasks.markDone')}
       </Button>
 
-      <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? async (target) => setPendingPostpone(target) : postpone} />
+      <div className="ct-task-detail__actions">
+        <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? async (target) => setPendingPostpone(target) : postpone} />
+        {/* « Dupliquer » (T-12, Detail.html ; PC : ajouté pour A-08, écart documenté) : possible aussi sur une tâche terminée. */}
+        <Button variant="secondary" ariaLabel={t('tasks.duplicateLabel')} onClick={() => setDuplicateOpen(true)} className="ct-task-detail__duplicateButton">
+          <Icon icon={Copy} size={18} />
+          {t('tasks.duplicate')}
+        </Button>
+      </div>
+      {duplicateOpen && (
+        <DuplicatePrompt
+          task={task}
+          onClose={() => setDuplicateOpen(false)}
+          onConfirm={(date) => {
+            setDuplicateOpen(false);
+            void duplicate(date);
+          }}
+        />
+      )}
 
       {errorKey && (
         <p role="alert" className="ct-task-detail__error">

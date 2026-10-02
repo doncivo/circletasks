@@ -32,5 +32,9 @@ export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from './ActionM
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export { ChoiceDialog, type ChoiceDialogProps, type ChoiceOption } from './ChoiceDialog';
 export { DatePrompt, type DatePromptProps } from './DatePrompt';
+export { WheelPicker, WHEEL_ITEM_HEIGHT, type WheelItem, type WheelPickerProps } from './WheelPicker';
+export { DateWheels, type DateWheelsProps } from './DateWheels';
+export { DateEditor, DateField, type DateEditorProps, type DateFieldProps } from './DateField';
+export { DatePicker, type DatePickerProps } from './DatePicker';
 export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';

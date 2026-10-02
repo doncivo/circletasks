@@ -6,10 +6,13 @@
       "Bash(cargo *)", "Bash(rustup *)",
       "Bash(git status*)", "Bash(git diff*)", "Bash(git log*)", "Bash(git add *)",
       "Bash(git commit *)", "Bash(git switch *)", "Bash(git checkout -b *)", "Bash(git merge *)",
+      "Bash(git worktree *)", "Bash(git branch*)",
+      "Bash(git push*)", "Bash(git remote *)", "Bash(git fetch*)", "Bash(git pull*)",
       "Bash(ls *)", "Bash(mkdir *)", "Bash(cat *)"
     ],
     "deny": [
-      "Bash(git push*)", "Bash(git reset --hard*)", "Bash(rm -rf *)",
+      "Bash(git push --force*)", "Bash(git push -f*)", "Bash(git push --force-with-lease*)",
+      "Bash(git reset --hard*)", "Bash(rm -rf *)",
       "Read(./.env*)", "Read(./**/*.key)"
     ]
   }
