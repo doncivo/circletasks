@@ -22,3 +22,4 @@ export * from './calendarMonth';
 export * from './wheelChoices';
 export * from './taskLine';
 export * from './todayList';
+export * from './taskReorder';

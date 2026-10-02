@@ -77,6 +77,6 @@ export interface TaskUseCases {
   duplicate(id: TaskId, date: LocalDate | null): Promise<Task>;
   /** T-08 : corbeille (rappels compris) ; annulable. */
   remove(ids: readonly TaskId[]): Promise<Task[]>;
-  /** A-02, SD-04, Alt+↑/↓ ; non annulable. */
+  /** A-02, SD-04, Alt+↑/↓ ; annulable (message « Tâche déplacée », T-13). */
   reorder(entries: readonly SortOrderEntry<TaskId>[]): Promise<void>;
 }

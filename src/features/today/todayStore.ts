@@ -3,6 +3,8 @@ import { todayLocal } from '../../domain/clock';
 import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
+import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
+import type { TodayRow } from '../../domain/todayList';
 import type { LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
@@ -100,6 +102,12 @@ export interface TodayState {
    * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
    */
   syncRecurrences(): Promise<void>;
+  /**
+   * A-02 : déplace la tâche `id` à la position `toIndex` de `rows` (éléments à faire affichés) ; le domaine ramène une
+   * destination interdite (l'heure est prioritaire, Q11), l'ordre est écrit puis annulable. Renvoie le résultat
+   * (null : élément non déplaçable ou échec, `actionErrorKey` posé). Ne rejette jamais.
+   */
+  moveRow(rows: readonly TodayRow[], id: string, toIndex: number): Promise<MoveOutcome | null>;
   /** R-03 : valide ou annule la validation d'une routine du jour (via la source de routines) ; recharge les éléments du jour. Ne rejette jamais. */
   toggleRoutine(id: RoutineId): Promise<void>;
 }
@@ -259,6 +267,20 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       const known = get().recurrences;
       const recurrences = await loadRecurrences(shown, known);
       if (recurrences !== known) set({ recurrences });
+    },
+
+    async moveRow(rows, id, toIndex) {
+      const outcome = moveTaskRow(rows, id, toIndex);
+      if (!outcome) return null;
+      if (outcome.changes.length === 0) return outcome;
+      try {
+        await useCases.reorder(outcome.changes.map((change) => ({ id: change.id as TaskId, sortOrder: change.sortOrder })));
+        set({ actionErrorKey: null });
+        return outcome;
+      } catch {
+        set({ actionErrorKey: 'today.reorderError' });
+        return null;
+      }
     },
 
     async toggleRoutine(routineId) {

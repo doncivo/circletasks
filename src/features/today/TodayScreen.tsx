@@ -10,7 +10,7 @@ import type { DateChoice } from '../../domain/dateInput';
 import type { LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout, useSortable } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -63,6 +63,7 @@ export function TodayScreen() {
   const extras = useFeatureStore(todayStore, (s) => s.extras);
   const extrasFailed = useFeatureStore(todayStore, (s) => s.extrasFailed);
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
+  const moveRow = useFeatureStore(todayStore, (s) => s.moveRow);
   const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(todayStore, (s) => s.status);
   const errorKey = useFeatureStore(todayStore, (s) => s.errorKey);
@@ -107,6 +108,7 @@ export function TodayScreen() {
     [dayTasks, extras, viewDate, viewedDate, viewFilter],
   );
   const routinesCheckable = canToggleRoutines();
+
 
   // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
   // reçu le focus (case ou titre), via `onFocus` posé sur le conteneur de chaque
@@ -153,6 +155,53 @@ export function TodayScreen() {
     });
   }, [container, focusedTaskId]);
   const duplicateTarget = duplicateTargetId ? entities.get(duplicateTargetId) : undefined;
+
+  // Réordonnancement (A-02) : glisser à la souris (ligne) ou au toucher (poignée du mode édition, A-05), Alt+↑/↓.
+  // Le domaine ramène une destination interdite par l'heure (Q11) ; le résultat est annoncé aux lecteurs d'écran.
+  const [announcement, setAnnouncement] = useState<{ readonly text: string; readonly n: number } | null>(null);
+  const focusAfterMove = useRef<string | null>(null);
+  const listRef = useRef(list);
+  useEffect(() => {
+    listRef.current = list;
+  });
+  const applyMove = useCallback(
+    async (id: string, toIndex: number): Promise<void> => {
+      const outcome = await moveRow(listRef.current.rows, id, toIndex);
+      if (!outcome) return;
+      focusAfterMove.current = id;
+      const text =
+        outcome.changes.length === 0 && outcome.clamped
+          ? t('today.moveUnchanged')
+          : t('today.moved', { position: outcome.toIndex + 1, total: outcome.total });
+      setAnnouncement((previous) => ({ text, n: (previous?.n ?? 0) + 1 }));
+    },
+    [moveRow],
+  );
+  const sortable = useSortable({
+    ids: list.rows.map((row) => row.id),
+    isMovable: (id) => list.rows.some((row) => row.id === id && row.kind === 'task'),
+    onMove: (id, toIndex) => void applyMove(id, toIndex),
+  });
+  // Le focus suit la ligne déplacée (critère 3).
+  useEffect(() => {
+    const id = focusAfterMove.current;
+    if (!id) return;
+    focusAfterMove.current = null;
+    document.querySelector<HTMLElement>(`[data-sortable-id="${id}"] .ct-list-row__title`)?.focus();
+  });
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    const move = (delta: number) => () => {
+      const index = listRef.current.rows.findIndex((row) => row.id === focusedTaskId);
+      if (index >= 0) void applyMove(focusedTaskId, index + delta);
+    };
+    const offUp = container.shortcuts.register('list.moveUp', move(-1));
+    const offDown = container.shortcuts.register('list.moveDown', move(1));
+    return () => {
+      offUp();
+      offDown();
+    };
+  }, [container, focusedTaskId, applyMove]);
 
   const [inlineTitle, setInlineTitle] = useState('');
   // Champ « Date » de la saisie PC (T-14) : saisie libre et mini-calendrier ; null = jour affiché.
@@ -354,8 +403,19 @@ export function TodayScreen() {
               <TodayEmpty message={viewedDate === today ? t('tasks.emptyToday') : t('today.emptyDay', { weekday: formatWeekdayName(viewedDate) })} />
             )}
             {(list.rows.length > 0 || list.doneRows.length > 0) && (
-              <div className="ct-today__list" aria-label={t('today.listLabel')} role="list">
-                {[...list.rows, ...list.doneRows].map((row) => (
+              <div {...sortable.containerProps} className={`ct-today__list ${sortable.containerProps.className}`} aria-label={t('today.listLabel')} role="list">
+                {list.rows.map((row) => (
+                  <div
+                    key={row.id}
+                    role="listitem"
+                    onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}
+                    {...sortable.itemProps(row.id)}
+                    {...(row.kind === 'task' ? sortable.dragProps(row.id, 'row') : {})}
+                  >
+                    {row.kind === 'task' ? renderTaskRow(row) : renderRoutineRow(row)}
+                  </div>
+                ))}
+                {list.doneRows.map((row) => (
                   <div key={row.id} role="listitem" onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}>
                     {row.kind === 'task' ? renderTaskRow(row) : renderRoutineRow(row)}
                   </div>
@@ -363,6 +423,10 @@ export function TodayScreen() {
               </div>
             )}
             <TodayChecklists items={list.checklists} />
+            {/* Annonce du déplacement aux lecteurs d'écran (A-02 critère 3) ; ni role="status" (réservé au bandeau « Annuler »). */}
+            <div key={announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
+              {announcement?.text}
+            </div>
           </>
         )}
 

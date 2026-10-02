@@ -395,6 +395,10 @@ export const en: Messages = {
     emptyDay: 'Nothing planned this {weekday}.',
     emptyHelp: 'Add a task below, or schedule a task kept in “Someday”.',
     sourceError: 'Some items of the day could not be loaded.',
+    moveHandle: 'Move: {title}',
+    moved: 'Moved to position {position} of {total}',
+    moveUnchanged: 'Position unchanged: the time takes priority over the manual order.',
+    reorderError: 'Unable to reorder the list.',
   },
   undo: {
     action: 'Undo',

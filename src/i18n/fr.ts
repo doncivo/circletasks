@@ -398,6 +398,10 @@ export const fr = {
     emptyDay: 'Rien de prévu ce {weekday}.',
     emptyHelp: 'Ajoutez une tâche ci-dessous, ou planifiez une tâche gardée dans « Un jour ».',
     sourceError: 'Certains éléments du jour n’ont pas pu être chargés.',
+    moveHandle: 'Déplacer : {title}',
+    moved: 'Déplacée en position {position} sur {total}',
+    moveUnchanged: 'Position inchangée : l’heure prime sur l’ordre manuel.',
+    reorderError: 'Impossible de réordonner la liste.',
   },
   undo: {
     action: 'Annuler',

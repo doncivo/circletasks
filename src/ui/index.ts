@@ -38,3 +38,5 @@ export { DateEditor, DateField, type DateEditorProps, type DateFieldProps } from
 export { DatePicker, type DatePickerProps } from './DatePicker';
 export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
+export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
+export { DragHandle, type DragHandleProps } from './DragHandle';

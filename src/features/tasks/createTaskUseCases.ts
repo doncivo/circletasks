@@ -161,6 +161,39 @@ function createDuplicateUndoCommand(deps: TaskUseCaseDeps, copy: Task): Undoable
   };
 }
 
+/**
+ * Commande annulable d'un réordonnancement (A-02, T-13) : annuler = nouvelle écriture qui rétablit les `sortOrder`
+ * d'avant, pour les seules tâches non modifiées depuis (hlc identique à celui écrit par le déplacement) ; si
+ * aucune ne peut l'être : 'stale', rien n'est écrit.
+ */
+function createReorderUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[]): UndoableCommand {
+  return {
+    kind: 'move',
+    count: 1,
+    labelKey: 'undo.move',
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const writable = [];
+        for (const { before, after } of entries) {
+          const current = await repos.tasks.getById(after.id);
+          if (current && current.hlc === after.hlc) writable.push({ id: before.id, sortOrder: before.sortOrder });
+        }
+        if (writable.length === 0) return [];
+        await repos.tasks.setSortOrders(writable);
+        const written: Task[] = [];
+        for (const entry of writable) {
+          const back = await repos.tasks.getById(entry.id);
+          if (back) written.push(back);
+        }
+        return written;
+      });
+      if (restored.length === 0) return 'stale';
+      deps.taskEntities.publish(restored);
+      return 'undone';
+    },
+  };
+}
+
 /** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
 function touchesSchedule(patch: TaskPatch): boolean {
   return patch.date !== undefined || patch.time !== undefined || patch.someday !== undefined;
@@ -392,8 +425,26 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(createDeleteUndoCommand(deps, deleted));
       return deleted;
     },
-    reorder() {
-      return Promise.reject(new NotImplementedError('taskUseCases.reorder : à implémenter (A-02, SD-04)'));
+    async reorder(entries): Promise<void> {
+      if (entries.length === 0) return;
+      // A-02 : ordre manuel écrit en une transaction ; la tâche relue porte le hlc de l'écriture (annulation, T-13).
+      const moved = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        const before = new Map<TaskId, Task>();
+        for (const entry of entries) {
+          const task = await repos.tasks.getById(entry.id);
+          if (task) before.set(task.id, task);
+        }
+        await repos.tasks.setSortOrders(entries.filter((entry) => before.has(entry.id)));
+        for (const [id, previous] of before) {
+          const after = await repos.tasks.getById(id);
+          if (after) done.push({ before: previous, after });
+        }
+        return done;
+      });
+      if (moved.length === 0) return;
+      deps.taskEntities.publish(moved.map((entry) => entry.after));
+      deps.undo.push(createReorderUndoCommand(deps, moved));
     },
   };
 }
