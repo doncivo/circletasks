@@ -133,7 +133,7 @@ export function buildTodayList(input: TodayListInput): TodayList {
     ? []
     : unique(
         (input.routines ?? []).filter(
-          (entry) => entry.routine.deletedAt === null && !entry.routine.archived && !entry.routine.paused && inSpace(filter, entry.routine.spaceId),
+          (entry) => entry.routine.deletedAt === null && !entry.routine.archived && inSpace(filter, entry.routine.spaceId),
         ),
         (entry) => entry.routine.id,
       );

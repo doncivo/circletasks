@@ -62,6 +62,14 @@ export function isQuotaRule(rule: Pick<RoutineRule, 'scheduleType'>): boolean {
   return rule.scheduleType === 'x_per_week';
 }
 
+/**
+ * La routine est-elle en pause ce jour-là ? Dépend de la période de pause qui couvre la date, pas du booléen `paused` (une routine
+ * en pause depuis mercredi reste active lundi et mardi). Sans aucune période connue (donnée ancienne), le booléen fait foi.
+ */
+export function isPausedAt(routine: Pick<Routine, 'paused'>, date: LocalDate, pauses: readonly DateInterval[]): boolean {
+  return pauses.length > 0 ? isPausedOn(date, pauses) : routine.paused;
+}
+
 /** `date` tombe-t-elle dans une période de pause ? */
 export function isPausedOn(date: LocalDate, pauses: readonly DateInterval[]): boolean {
   return pauses.some((pause) => date >= pause.from && date <= pause.to);
@@ -174,7 +182,7 @@ export function canToggleDay(
   today: LocalDate,
   pauses: readonly DateInterval[] = [],
 ): boolean {
-  if (routine.paused || routine.archived || routine.deletedAt !== null || date > today) return false;
+  if (routine.archived || routine.deletedAt !== null || isPausedAt(routine, date, pauses) || date > today) return false;
   if (done.has(date)) return true;
   if (!isPlannedOn(routine, date, pauses)) return false;
   return !isQuotaRule(routine) || !quotaReached(routine, done, date, pauses);
@@ -211,8 +219,8 @@ export function weekRounds(
 }
 
 /** La routine compte-t-elle dans les listes du jour ? (ni supprimée, ni archivée, ni en pause). */
-export function isActive(routine: RoutineState): boolean {
-  return routine.deletedAt === null && !routine.archived && !routine.paused;
+export function isActive(routine: RoutineState, date?: LocalDate, pauses: readonly DateInterval[] = []): boolean {
+  return routine.deletedAt === null && !routine.archived && (date === undefined ? !routine.paused : !isPausedAt(routine, date, pauses));
 }
 
 /**
@@ -230,7 +238,7 @@ export function routinesForDay(
   const out: TodayRoutineEntry[] = [];
   for (const routine of routines) {
     const routinePauses = pauses.get(routine.id as RoutineId) ?? [];
-    if (!isActive(routine) || !isPlannedOn(routine, date, routinePauses)) continue;
+    if (!isActive(routine, date, routinePauses) || !isPlannedOn(routine, date, routinePauses)) continue;
     const done = doneByRoutine.get(routine.id as RoutineId) ?? new Set<LocalDate>();
     const doneToday = done.has(date);
     if (isQuotaRule(routine) && !doneToday && quotaReached(routine, done, date, routinePauses)) continue;

@@ -6,6 +6,7 @@ import {
   doneDatesOf,
   groupDoneDates,
   isActive,
+  isPausedAt,
   isPausedOn,
   isPlannedOn,
   isQuotaRule,
@@ -269,5 +270,29 @@ describe('routinesForDay (R-01 critère 11, R-03, R-05, QB-01)', () => {
   it('une routine pas encore commencée n’apparaît pas', () => {
     const future = makeRoutine({ startDate: d('2026-10-01') });
     expect(routinesForDay([future], new Map<RoutineId, Set<LocalDate>>(), wednesday)).toEqual([]);
+  });
+});
+
+describe('activité selon la période de pause (et non le booléen)', () => {
+  const routine = makeRoutine({ paused: true });
+  const pauses = [{ from: d('2026-09-30'), to: d('9999-12-31') }];
+
+  it('en pause depuis mercredi : active lundi et mardi, inactive dès mercredi', () => {
+    expect(isActive(routine, d('2026-09-28'), pauses)).toBe(true);
+    expect(isActive(routine, d('2026-09-29'), pauses)).toBe(true);
+    expect(isActive(routine, d('2026-09-30'), pauses)).toBe(false);
+    expect(routinesForDay([routine], new Map<RoutineId, Set<LocalDate>>(), d('2026-09-29'), new Map([[routine.id as RoutineId, pauses]]))).toHaveLength(1);
+    expect(routinesForDay([routine], new Map<RoutineId, Set<LocalDate>>(), d('2026-10-01'), new Map([[routine.id as RoutineId, pauses]]))).toHaveLength(0);
+  });
+
+  it('jour passé validable avant la pause, pas pendant', () => {
+    expect(canToggleDay(routine, doneSet(), d('2026-09-29'), d('2026-10-02'), pauses)).toBe(true);
+    expect(canToggleDay(routine, doneSet(), d('2026-10-01'), d('2026-10-02'), pauses)).toBe(false);
+  });
+
+  it('sans période connue, le booléen fait foi', () => {
+    expect(isPausedAt(routine, d('2026-09-29'), [])).toBe(true);
+    expect(isPausedAt(makeRoutine(), d('2026-09-29'), [])).toBe(false);
+    expect(isActive(routine)).toBe(false);
   });
 });

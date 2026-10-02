@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { renderWeek } from '../week/testKit';
 import { renderToday } from '../today/testKit';
+import { createRoutineUseCases } from './routineUseCases';
 import { registerRoutinesSource, unregisterRoutinesSource } from './routinesSource';
 import { mockViewport, renderRoutines, seedLog, seedRoutine, setupRoutines, teardownRoutines, type RoutinesHarness } from './testKit';
 
@@ -204,5 +205,39 @@ describe('Aujourd’hui et Semaine : valider une routine (R-03)', () => {
       const day = document.querySelector(`.ct-week-day[data-date="${date}"]`) as HTMLElement;
       await waitFor(() => expect(within(day).queryByText('Courir')).toBeNull());
     }
+  });
+});
+
+describe('Semaine : routine en pause depuis mercredi (R-05)', () => {
+  let h: RoutinesHarness;
+  beforeEach(async () => {
+    h = await setupRoutines('233');
+    registerRoutinesSource();
+    mockViewport(1440);
+  });
+  afterEach(async () => {
+    unregisterRoutinesSource();
+    await teardownRoutines(h);
+  });
+
+  it('visible et validable lundi et mardi passés, absente à partir de mercredi', async () => {
+    const lit = await seedRoutine(h, { title: 'Faire mon lit' });
+    const cases = createRoutineUseCases(h.container);
+    h.db.clock.set('2026-09-30T10:00:00.000Z');
+    await cases.setPaused(lit.id as RoutineId, true);
+    h.db.clock.set('2026-10-02T10:00:00.000Z');
+    renderWeek(h.container);
+    const day = async (date: string) =>
+      waitFor(() => {
+        const el = document.querySelector(`.ct-week-day[data-date="${date}"]`) as HTMLElement | null;
+        if (!el) throw new Error(date);
+        return el;
+      });
+    const monday = await day('2026-09-28');
+    fireEvent.click(await within(monday).findByRole('checkbox', { name: 'Terminer : Faire mon lit' }));
+    await waitFor(() => expect(within(monday).getByRole('checkbox', { name: 'Rouvrir : Faire mon lit' })).toBeChecked());
+    expect(await logDates(h, lit.id as RoutineId)).toEqual(['2026-09-28']);
+    expect(within(await day('2026-09-29')).getByText('Faire mon lit')).toBeInTheDocument();
+    for (const date of ['2026-09-30', '2026-10-01', '2026-10-02']) expect(within(await day(date)).queryByText('Faire mon lit')).toBeNull();
   });
 });
