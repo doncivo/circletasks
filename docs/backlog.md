@@ -39,11 +39,11 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | fait |
 | A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | fait |
 | A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours (critères 9-10 : bandeaux synchro et iCloud à l'ordre 4, alerte agenda à l'ordre 2) |
-| S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | à faire |
-| S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | à faire |
-| S-03 | M3 | Je navigue entre semaines | tasks-planning | à faire |
-| S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | à faire |
-| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | à faire |
+| S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | en cours |
+| S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | en cours |
+| S-03 | M3 | Je navigue entre semaines | tasks-planning | en cours |
+| S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | en cours |
+| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | en cours |
 | S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | à faire |
 | R-01 | M4 | Je crée une routine avec icône et fréquence | routines | à faire |
 | R-02 | M4 | J'associe une heure optionnelle | routines | à faire |
