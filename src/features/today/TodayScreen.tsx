@@ -1,6 +1,7 @@
 import { X } from 'lucide-react';
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
+import type { Space, Task } from '../../domain/model';
 import type { IconRef } from '../../domain/model/icon';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
 import { asLocalDate, asLocalTime, type SpaceId, type TaskId } from '../../domain/types';
@@ -22,6 +23,27 @@ function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: strin
   const monthLine = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(date);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
   return { monthLine, dayLine: `${String(day ?? 1)} ${weekday}` };
+}
+
+/**
+ * Sous-ligne d'une tâche : heure ; une tâche reportée automatiquement (T-06) ajoute le
+ * badge « reportée » et l'espace en couleur (« reportée · Pro », PC-Semaine.html).
+ */
+function taskSubtitle(task: Task, spaces: readonly Space[]): ReactNode {
+  if (!task.carriedOver) return task.time ?? undefined;
+  const space = spaces.find((s) => s.id === task.spaceId);
+  return (
+    <>
+      {task.time ? `${task.time} · ` : ''}
+      <span className="ct-today__carried">{t('tasks.carriedOver')}</span>
+      {space && (
+        <>
+          {' · '}
+          <span style={{ color: space.color }}>{space.name}</span>
+        </>
+      )}
+    </>
+  );
 }
 
 /**
@@ -92,7 +114,10 @@ export function TodayScreen() {
     return container.shortcuts.register('list.postponeTomorrow', () => void postpone(focusedTaskId, 'tomorrow'));
   }, [container, focusedTaskId, postpone]);
 
-  const today = todayLocal(container.clock);
+  // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
+  const appDay = useAppStore((s) => s.day);
+  const carryOverFailed = useAppStore((s) => s.carryOverFailed);
+  const today = appDay ?? todayLocal(container.clock);
   const header = formatTodayHeader(today);
 
   const [inlineTitle, setInlineTitle] = useState('');
@@ -115,10 +140,10 @@ export function TodayScreen() {
 
   useEffect(() => {
     void load(today, spaceFilter);
-    // `today` est stable le temps de la session (pas de minuit simulé ici, T-06) ;
-    // seul un changement de filtre doit recharger la liste. `load` ne rejette jamais.
+    // Recharge au changement de filtre et au passage de minuit (T-06, `today` suit `appDay`).
+    // `load` ne rejette jamais.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceFilter]);
+  }, [spaceFilter, today]);
 
   // Déplace le focus dans le champ Titre après l'ouverture de la feuille : le DOM
   // suit l'ordre visuel de la maquette (en-tête puis champ Titre), donc le piège de
@@ -183,6 +208,7 @@ export function TodayScreen() {
         <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
 
         {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
+        {carryOverFailed && <p className="ct-today__error" role="alert">{t('tasks.carryOverError')}</p>}
         {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
 
         {status === 'error' ? null : tasks.length === 0 ? (
@@ -193,7 +219,7 @@ export function TodayScreen() {
               <div key={task.id} onFocus={() => setFocusedTaskId(task.id)}>
                 <ListRow
                   title={task.title}
-                  subtitle={task.time ?? undefined}
+                  subtitle={taskSubtitle(task, spaces)}
                   done={task.status === 'done'}
                   leading={
                     <Checkbox

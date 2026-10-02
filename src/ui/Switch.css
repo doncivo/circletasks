@@ -1,0 +1,46 @@
+/* Switch : interrupteur (maquette Reglages.html .sw). */
+.ct-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ct-hit-target-min);
+  min-height: var(--ct-hit-target-min);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ct-switch__track {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  width: 48px;
+  height: 28px;
+  padding: 3px;
+  border-radius: 14px;
+  background: var(--ct-color-switch-off, #ddd9e4);
+}
+
+.ct-switch[data-checked='true'] .ct-switch__track {
+  background: var(--ct-color-nav-bg);
+  justify-content: flex-end;
+}
+
+.ct-switch__thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: #ffffff;
+}
+
+.ct-switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.ct-switch:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
