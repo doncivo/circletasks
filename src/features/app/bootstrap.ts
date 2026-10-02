@@ -42,7 +42,7 @@ export async function bootstrapDatabase(
     return db;
   } catch (error) {
     if (db) await db.close().catch(() => undefined);
-    setDbStatus('error', error instanceof Error ? error.message : String(error), error instanceof MigrationBackupError);
+    setDbStatus('error', { detail: error instanceof Error ? error.message : String(error), backupFailed: error instanceof MigrationBackupError });
     return undefined;
   }
 }
@@ -105,7 +105,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
     });
   } catch (error) {
-    useAppStore.getState().setDbStatus('error', error instanceof Error ? error.message : String(error));
+    useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });
     return undefined;
   }
 }

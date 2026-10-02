@@ -8,9 +8,8 @@
 //! - quotidienne (P-04) : `circletasks-daily-AAAAMMJJ.db` (14 versions, politique propre à P-04).
 //!
 //! Le nettoyage ne touche QUE les fichiers du préfixe de migration : il ne supprime jamais une
-//! sauvegarde quotidienne, et inversement. La cohérence de la copie suppose un point de contrôle
-//! WAL fait juste avant par le front (`PRAGMA wal_checkpoint(TRUNCATE)`, base inactive) ; le
-//! fichier `-wal` éventuellement non vide est de toute façon copié avec la base.
+//! sauvegarde quotidienne, et inversement. La copie est faite par `VACUUM INTO` (cohérente, WAL inclus).
+//! Le front fait en plus un `PRAGMA wal_checkpoint(TRUNCATE)` (busy = 0 exigé) avant l'appel.
 
 use std::fs;
 use std::io;
@@ -95,8 +94,25 @@ pub fn prune_migration_backups(dir: &Path, keep: usize) -> io::Result<usize> {
     Ok(excess)
 }
 
-/// Copie la base dans `backups_dir` sous le nom de migration, puis nettoie. Écriture atomique :
-/// copie vers un `.tmp` puis renommage, pour qu'une sauvegarde partielle ne porte jamais son nom final.
+/// Supprime les `.tmp` orphelins d'une sauvegarde interrompue (début de chaque sauvegarde).
+fn remove_orphan_tmp(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for path in entries.filter_map(Result::ok).map(|e| e.path()) {
+        let is_tmp = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with(MIGRATION_PREFIX) && n.ends_with(".tmp"));
+        if is_tmp {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+/// Copie cohérente de la base dans `backups_dir` sous le nom de migration, puis nettoie.
+/// `VACUUM INTO` vers un `.tmp` (lecture seule de la source : le `-wal` est pris en compte, aucune
+/// copie de `-wal` nécessaire), `sync_all`, puis renommage : une sauvegarde partielle ne porte jamais
+/// son nom final. Base absente alors que `from_version >= 1` : erreur `no-database` (jamais un succès
+/// silencieux) ; `from_version == 0` : base neuve, rien à sauvegarder (`path: None`).
 pub fn create_migration_backup(
     db_path: &Path,
     backups_dir: &Path,
@@ -109,31 +125,30 @@ pub fn create_migration_backup(
         return Err(BackupError::new("bad-stamp", format!("horodatage invalide : {stamp}")));
     }
     if !db_path.is_file() {
+        if from_version >= 1 {
+            return Err(BackupError::new("no-database", format!("base introuvable : {}", db_path.display())));
+        }
         return Ok(BackupOutcome { path: None, removed: 0 });
     }
     let io_err = |e: io::Error| BackupError::new("io", e.to_string());
+    let sql_err = |e: rusqlite::Error| BackupError::new("sqlite", e.to_string());
     fs::create_dir_all(backups_dir).map_err(io_err)?;
+    remove_orphan_tmp(backups_dir);
     let target = backups_dir.join(migration_backup_name(from_version, to_version, stamp));
     let tmp = sidecar(&target, ".tmp");
 
-    let wal = sidecar(db_path, "-wal");
-    let wal_len = fs::metadata(&wal).map(|m| m.len()).unwrap_or(0);
-    let copied = fs::copy(db_path, &tmp).and_then(|_| {
-        if wal_len > 0 {
-            fs::copy(&wal, sidecar(&target, "-wal")).map(|_| ())
-        } else {
-            Ok(())
-        }
-    });
-    if let Err(e) = copied {
+    let result = (|| {
+        let conn = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql_err)?;
+        conn.busy_timeout(std::time::Duration::from_secs(5)).map_err(sql_err)?;
+        conn.execute("VACUUM INTO ?1", [tmp.to_string_lossy().as_ref()]).map_err(sql_err)?;
+        drop(conn);
+        fs::File::options().write(true).open(&tmp).and_then(|f| f.sync_all()).map_err(io_err)?;
+        fs::rename(&tmp, &target).map_err(io_err)
+    })();
+    if let Err(e) = result {
         let _ = fs::remove_file(&tmp);
-        let _ = fs::remove_file(sidecar(&target, "-wal"));
-        return Err(io_err(e));
+        return Err(e);
     }
-    fs::rename(&tmp, &target).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        io_err(e)
-    })?;
     // Le nettoyage ne doit jamais faire échouer une sauvegarde réussie.
     let removed = prune_migration_backups(backups_dir, keep).unwrap_or(0);
     Ok(BackupOutcome { path: Some(target.to_string_lossy().into_owned()), removed })

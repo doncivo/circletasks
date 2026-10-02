@@ -96,7 +96,37 @@ fn keeps_only_the_five_latest_migration_backups_and_spares_daily_ones() {
     let migration: Vec<_> = names.iter().filter(|n| n.starts_with("circletasks-pre-migration-") && n.ends_with(".db")).collect();
     assert_eq!(migration.len(), 5);
     assert!(migration[0].contains("20261002T101503Z"), "les plus anciennes sont supprimées : {migration:?}");
-    assert_eq!(names.iter().filter(|n| n.ends_with("-wal")).count(), 5, "un -wal par sauvegarde conservée, pas d orphelin");
+    assert!(!names.iter().any(|n| n.ends_with("-wal") || n.ends_with(".tmp")), "VACUUM INTO : ni -wal ni .tmp : {names:?}");
     assert!(names.contains(&"circletasks-daily-20261001.db".to_owned()));
     assert_eq!(prune_migration_backups(&backups, 5).unwrap(), 0);
+}
+
+#[test]
+fn missing_database_with_existing_version_is_an_error() {
+    let dir = tempfile::tempdir().expect("tmp");
+    let err = create_migration_backup(&dir.path().join(DB_FILE), &dir.path().join(BACKUP_DIR), 2, 4, "20261002T101500Z", 5).unwrap_err();
+    assert_eq!(err.code, "no-database");
+}
+
+#[test]
+fn orphan_tmp_files_are_removed_at_the_start_of_a_backup() {
+    let dir = tempfile::tempdir().expect("tmp");
+    let _conn = make_db(dir.path(), 2);
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let orphan = backups.join("circletasks-pre-migration-v0001-to-v0002-20250101T000000Z.db.tmp");
+    fs::write(&orphan, b"partiel").unwrap();
+    create_migration_backup(&dir.path().join(DB_FILE), &backups, 1, 4, "20261002T101500Z", 5).unwrap();
+    assert!(!orphan.exists());
+}
+
+#[test]
+fn rerunning_with_the_same_stamp_replaces_the_backup() {
+    let dir = tempfile::tempdir().expect("tmp");
+    let _conn = make_db(dir.path(), 2);
+    let backups = dir.path().join(BACKUP_DIR);
+    for _ in 0..2 {
+        let out = create_migration_backup(&dir.path().join(DB_FILE), &backups, 1, 4, "20261002T101500Z", 5).unwrap();
+        assert_eq!(count(Path::new(&out.path.unwrap())), 2);
+    }
 }

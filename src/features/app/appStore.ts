@@ -36,7 +36,7 @@ export interface AppState {
   /** T-11 : fuseau IANA courant de l'appareil (détecté au démarrage et au retour au premier plan). */
   readonly timeZone: string | null;
   setTimeZone(timeZone: string): void;
-  setDbStatus(status: DbStatus, errorDetail?: string, backupFailed?: boolean): void;
+  setDbStatus(status: DbStatus, options?: { readonly detail?: string; readonly backupFailed?: boolean }): void;
   setDay(day: LocalDate): void;
   setCarryOverFailed(failed: boolean): void;
   setRecurrenceFailed(failed: boolean): void;
@@ -55,7 +55,7 @@ export const useAppStore = create<AppState>()((set) => ({
   recurrenceFailed: false,
   timeZone: null,
   setTimeZone: (timeZone) => set({ timeZone }),
-  setDbStatus: (dbStatus, errorDetail, backupFailed) => set({ dbStatus, dbErrorDetail: errorDetail ?? null, dbBackupFailed: backupFailed ?? false }),
+  setDbStatus: (dbStatus, options) => set({ dbStatus, dbErrorDetail: options?.detail ?? null, dbBackupFailed: options?.backupFailed ?? false }),
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
   setRecurrenceFailed: (recurrenceFailed) => set({ recurrenceFailed }),
