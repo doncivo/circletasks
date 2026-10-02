@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import { computeStreaks } from '../../domain/routineStreaks';
-import { resolveDefaultSpaceId } from '../../domain/taskRules';
-import type { LocalDate, RoutineId, SpaceId } from '../../domain/types';
+import type { LocalDate, RoutineId } from '../../domain/types';
 import { t } from '../../i18n';
 import { CompactToggle, ConfirmDialog, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
 import { RoutineReport } from './RoutineReport';
@@ -77,7 +77,9 @@ export function RoutinesScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   /** Routine dont l'archivage attend la confirmation. */
   const [archiveTarget, setArchiveTarget] = useState<Routine | null>(null);
-  const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
+  // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
+  const defaultSpaceId = useDefaultSpaceId();
+  const announceCreation = useAnnounceCreation();
 
   useEffect(() => {
     void load(spaceFilter);
@@ -115,18 +117,19 @@ export function RoutinesScreen() {
       setFormError(t('routines.saveError'));
       return false;
     }
+    if (editor?.mode !== 'edit') announceCreation(result.value.spaceId);
     closeEditor();
     return true;
   }
 
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
   const form =
-    editor && fallbackSpaceId && (editor.mode === 'create' || editedRoutine) ? (
+    editor && defaultSpaceId && (editor.mode === 'create' || editedRoutine) ? (
       <RoutineForm
         key={editor.mode === 'edit' ? editor.id : 'new'}
         routine={editedRoutine}
         spaces={spaces}
-        initialSpaceId={resolveDefaultSpaceId(spaceFilter, fallbackSpaceId)}
+        initialSpaceId={defaultSpaceId}
         today={today}
         onSubmit={save}
         onClose={closeEditor}

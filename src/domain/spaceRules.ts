@@ -1,5 +1,5 @@
 import type { Space } from './model';
-import { asHexColor, type HexColor, type Result } from './types';
+import { asHexColor, type HexColor, type Result, type SpaceFilter, type SpaceId } from './types';
 
 /** Longueur maximale du nom d'un espace (ES-01 critère 4) : contrainte technique proposée par la fiche. */
 export const SPACE_NAME_MAX_LENGTH = 30;
@@ -84,4 +84,25 @@ export function mixWithWhite(hex: string, white: number): string {
 /** Nombre de projets actifs (non archivés, non supprimés) d'un espace : ligne « Espaces et projets » de Réglages (ES-01 critère 2). */
 export function activeProjectCount(projects: readonly { readonly spaceId: string; readonly archived: boolean; readonly deletedAt: string | null }[], spaceId: string): number {
   return projects.filter((project) => project.spaceId === spaceId && !project.archived && project.deletedAt === null).length;
+}
+
+type SpaceRank = Pick<Space, 'id' | 'sortOrder'>;
+
+/**
+ * Espace proposé à toute création (ES-02, décision T-01) : celui du filtre quand il vaut Pro ou Perso, sinon le premier espace
+ * (Pro). Règle unique de toutes les fenêtres d'ajout (tâche, routine, objectif ; événement et checklist à l'ordre 2). Renvoie
+ * null seulement tant que les espaces ne sont pas chargés ; un filtre qui ne désigne aucun espace connu retombe sur le premier.
+ */
+export function defaultSpaceFor(filter: SpaceFilter, spaces: readonly SpaceRank[]): SpaceId | null {
+  if (filter !== 'all' && spaces.some((space) => space.id === filter)) return filter;
+  const first = [...spaces].sort((a, b) => a.sortOrder - b.sortOrder)[0];
+  return first ? first.id : null;
+}
+
+/**
+ * ES-02 critère 4 : faut-il annoncer « Ajouté dans <espace> » ? Oui quand l'élément créé est dans un espace que le filtre actif
+ * masque (Perso créé pendant le filtre Pro) : il n'apparaîtra pas dans la liste affichée.
+ */
+export function isCreatedOutsideFilter(filter: SpaceFilter, spaceId: SpaceId): boolean {
+  return filter !== 'all' && filter !== spaceId;
 }

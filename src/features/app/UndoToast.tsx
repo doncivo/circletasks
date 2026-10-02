@@ -1,14 +1,10 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useNoticeStore } from './notice';
 import { t } from '../../i18n';
 import { Toast } from '../../ui';
 import { useAppContainer } from './AppContainerContext';
 import { undoMessage } from './undo';
 import './UndoToast.css';
-
-interface Notice {
-  readonly id: number;
-  readonly text: string;
-}
 
 /**
  * Bandeau « Annuler » global (T-13, Gestes.html) : monté une fois dans la coquille de l'app (App.tsx),
@@ -26,24 +22,34 @@ export function UndoToast() {
   // `closedAt` mémorise le `pushCount` déjà fermé (bouton « Annuler », Ctrl+Z ou délai écoulé) :
   // le message reste masqué tant qu'aucune nouvelle commande n'arrive.
   const [closedAt, setClosedAt] = useState(-1);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const notice = useNoticeStore((s) => s.notice);
+  const showNotice = useNoticeStore((s) => s.show);
+  const clearNotice = useNoticeStore((s) => s.clear);
 
   const runUndo = useCallback(async (): Promise<void> => {
     setClosedAt(container.undo.getSnapshot().pushCount);
     try {
       const result = await container.undo.undoLast();
-      if (result.status === 'stale') setNotice({ id: Date.now(), text: t('undo.stale') });
+      if (result.status === 'stale') showNotice(t('undo.stale'));
     } catch {
-      setNotice({ id: Date.now(), text: t('undo.failed') });
+      showNotice(t('undo.failed'));
     }
-  }, [container]);
+  }, [container, showNotice]);
+
+  // Le message appartient à ce bandeau : il ne survit pas à son démontage (tests, changement de conteneur).
+  useEffect(() => clearNotice, [clearNotice]);
+
+  // Une nouvelle action annulable prend la place d'un message : le bandeau « Annuler » prime.
+  useEffect(() => {
+    if (snapshot.pushCount > 0) clearNotice();
+  }, [snapshot.pushCount, clearNotice]);
 
   useEffect(() => container.shortcuts.register('app.undo', () => void runUndo()), [container, runUndo]);
 
   if (notice) {
     return (
       <div className="ct-undo-host">
-        <Toast message={notice.text} resetKey={notice.id} onTimeout={() => setNotice(null)} />
+        <Toast message={notice.text} resetKey={notice.id} onTimeout={clearNotice} />
       </div>
     );
   }

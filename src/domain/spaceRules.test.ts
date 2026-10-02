@@ -6,6 +6,8 @@ import {
   SPACE_NAME_MAX_LENGTH,
   SPACE_PALETTES,
   contrastRatio,
+  defaultSpaceFor,
+  isCreatedOutsideFilter,
   isSpaceColorAllowed,
   mixWithWhite,
   spacePalette,
@@ -52,5 +54,23 @@ describe('palettes (ES-01 critères 5 et 7)', () => {
       expect(contrastRatio(mixWithWhite(hex, 0.55), '#1c1630'), hex).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(mixWithWhite(hex, 0.55), '#2a2242'), hex).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe('défaut d’espace d’une création (ES-02, T-01)', () => {
+  it('Pro / Perso : l’espace du filtre ; Tout : Pro', () => {
+    expect(defaultSpaceFor(PERSO, spaces)).toBe(PERSO);
+    expect(defaultSpaceFor(PRO, spaces)).toBe(PRO);
+    expect(defaultSpaceFor('all', spaces)).toBe(PRO);
+    expect(defaultSpaceFor('all', [...spaces].reverse())).toBe(PRO);
+  });
+  it('espaces non chargés : null ; filtre inconnu : le premier espace', () => {
+    expect(defaultSpaceFor('all', [])).toBeNull();
+    expect(defaultSpaceFor(asEntityId<SpaceId>('00000000-0000-4000-8000-0000000000ff'), spaces)).toBe(PRO);
+  });
+  it('« Ajouté dans » seulement hors du filtre actif', () => {
+    expect(isCreatedOutsideFilter(PRO, PERSO)).toBe(true);
+    expect(isCreatedOutsideFilter(PRO, PRO)).toBe(false);
+    expect(isCreatedOutsideFilter('all', PERSO)).toBe(false);
   });
 });

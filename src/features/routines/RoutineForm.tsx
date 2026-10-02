@@ -1,5 +1,5 @@
 import { ChevronDown, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { IconRef, ReminderOffsetMin, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
 import { weekdayOf } from '../../domain/localDate';
 import {
@@ -17,7 +17,7 @@ import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types'
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { formatNextOccurrences, weekdayName } from '../../i18n/formatRoutine';
-import { Button, DatePicker, Icon, IconChooser, Switch, TextField, useLayout } from '../../ui';
+import { Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, TextField, useLayout } from '../../ui';
 import { RoutineTimeEditor } from './RoutineTimeEditor';
 import type { RoutineInput } from './routineUseCases';
 import './RoutineForm.css';
@@ -349,20 +349,7 @@ export function RoutineForm(props: RoutineFormProps) {
 
       <div className="ct-routine-form__spaceRow">
         <span className="ct-routine-form__spaceLabel">{t('routines.form.space')}</span>
-        <div className="ct-routine-form__spaces" role="group" aria-label={t('routines.form.spaceLabel')}>
-          {spaces.map((space) => (
-            <button
-              key={space.id}
-              type="button"
-              aria-pressed={spaceId === space.id}
-              className="ct-routine-form__spaceButton"
-              style={{ '--ct-space-color': space.color } as CSSProperties}
-              onClick={() => setSpaceId(space.id)}
-            >
-              {space.name}
-            </button>
-          ))}
-        </div>
+        <SpaceSegmented layout="compact" items={spaces} value={spaceId} onChange={setSpaceId} label={t('routines.form.spaceLabel')} />
       </div>
 
       {routine && (

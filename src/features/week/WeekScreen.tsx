@@ -1,8 +1,7 @@
 import { useDefaultReminderOffsets } from '../reminders';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import { resolveDefaultSpaceId } from '../../domain/taskRules';
-import type { LocalDate, SpaceId } from '../../domain/types';
+import type { LocalDate } from '../../domain/types';
 import { externalEventsByDay } from '../../domain/externalEvents';
 import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
 import { detectTimeZone } from '../../platform';
@@ -14,6 +13,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { isModalOpen } from '../app/tabShortcuts';
+import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
@@ -36,7 +36,9 @@ export function WeekScreen() {
   const setSpaceFilter = useAppStore((s) => s.setSpaceFilter);
   const spaces = useAppStore((s) => s.spaces);
   const appDay = useAppStore((s) => s.day);
-  const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
+  // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
+  const defaultSpaceId = useDefaultSpaceId();
+  const announceCreation = useAnnounceCreation();
   const route = useNavigationStore((s) => s.route);
   const detail = useNavigationStore((s) => s.detail);
   const openDetail = useNavigationStore((s) => s.openDetail);
@@ -129,11 +131,12 @@ export function WeekScreen() {
   // S-04 : « + Ajouter » d'un jour. Espace par défaut (T-01) : celui du filtre actif, sinon Pro ; jour passé permis.
   const addToDay = useCallback(
     async (date: LocalDate, title: string): Promise<boolean> => {
-      if (!fallbackSpaceId) return false;
-      const result = await addTask({ title, spaceId: resolveDefaultSpaceId(spaceFilter, fallbackSpaceId), date });
+      if (!defaultSpaceId) return false;
+      const result = await addTask({ title, spaceId: defaultSpaceId, date });
+      if (result.ok) announceCreation(defaultSpaceId);
       return result.ok;
     },
-    [addTask, fallbackSpaceId, spaceFilter],
+    [addTask, announceCreation, defaultSpaceId],
   );
 
   // Squelette si le chargement dépasse 150 ms (A-09).
@@ -213,7 +216,7 @@ export function WeekScreen() {
           viewedDate={today}
           today={today}
           spaces={spaces}
-          initialSpaceId={fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null}
+          initialSpaceId={defaultSpaceId}
           defaultOffsets={defaultOffsets}
           onClose={() => setSheetOpen(false)}
           onCreate={async (input) => {
@@ -228,6 +231,7 @@ export function WeekScreen() {
               icon: input.icon,
               reminderOffsets: input.reminderOffsets,
             });
+            if (result.ok) announceCreation(input.spaceId);
             return result.ok;
           }}
         />

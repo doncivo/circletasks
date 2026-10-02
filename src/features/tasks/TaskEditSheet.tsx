@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import { ruleChanged } from '../../domain/recurrenceEdit';
@@ -9,7 +9,7 @@ import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { ReminderBlock } from '../reminders';
-import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField } from '../../ui';
+import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField } from '../../ui';
 
 /** Résultat de la feuille : champs modifiés, et règle de répétition si elle a changé (`null` : « Une fois »). */
 export interface EditSheetResult {
@@ -73,20 +73,7 @@ export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onCl
           offsets={offsets}
           onToggle={(offset) => setOffsets((current) => toggleReminderOffset(current, offset))}
         />
-        <div className="ct-task-sheet__spaces" role="group" aria-label={t('detail.spaceChoiceLabel')}>
-          {spaces.map((space) => (
-            <button
-              key={space.id}
-              type="button"
-              aria-pressed={spaceId === space.id}
-              className="ct-task-sheet__spaceButton"
-              style={{ '--ct-space-color': space.color } as CSSProperties}
-              onClick={() => setSpaceId(space.id)}
-            >
-              {space.name}
-            </button>
-          ))}
-        </div>
+        <SpaceSegmented items={spaces} value={spaceId} onChange={setSpaceId} label={t('detail.spaceChoiceLabel')} />
         <div className="ct-task-sheet__spacer" />
         <Button type="submit" fullWidth disabled={!valid.ok}>
           {t('tasks.save')}

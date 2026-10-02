@@ -5,8 +5,7 @@ import { todayLocal } from '../../domain/clock';
 import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
 import { buildTodayList } from '../../domain/todayList';
-import { resolveDefaultSpaceId } from '../../domain/taskRules';
-import type { LocalDate, SpaceId, TaskId } from '../../domain/types';
+import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
 import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, SpacePills, useDelayedFlag, useLayout } from '../../ui';
@@ -14,6 +13,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useQuickAddStore } from '../app/quickAdd';
+import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
 import { TodayHeader } from './TodayHeader';
@@ -38,7 +38,9 @@ export function TodayScreen() {
   const setSpaceFilter = useAppStore((s) => s.setSpaceFilter);
   // Espaces (ES-01) : lus une fois dans useAppStore (App.tsx, via SpaceRepository), jamais importés depuis db/seed.
   const spaces = useAppStore((s) => s.spaces);
-  const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
+  // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
+  const defaultSpaceId = useDefaultSpaceId();
+  const announceCreation = useAnnounceCreation();
 
   const taskIds = useFeatureStore(todayStore, (s) => s.taskIds);
   const entities = useTaskEntities();
@@ -152,8 +154,9 @@ export function TodayScreen() {
   }, [openCreate]);
 
   async function submitInline(title: string, choice: DateChoice | null): Promise<boolean> {
-    if (!fallbackSpaceId) return false;
-    const result = await addTask(title, resolveDefaultSpaceId(spaceFilter, fallbackSpaceId), scheduleOf(choice));
+    if (!defaultSpaceId) return false;
+    const result = await addTask(title, defaultSpaceId, scheduleOf(choice));
+    if (result.ok) announceCreation(defaultSpaceId);
     return result.ok;
   }
 
@@ -251,11 +254,12 @@ export function TodayScreen() {
             viewedDate={viewedDate}
             today={today}
             spaces={spaces}
-            initialSpaceId={fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null}
+            initialSpaceId={defaultSpaceId}
             defaultOffsets={defaultOffsets}
             onClose={() => setSheetOpen(false)}
             onCreate={async (input) => {
               const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets }, input.icon);
+              if (result.ok) announceCreation(input.spaceId);
               return result.ok;
             }}
           />

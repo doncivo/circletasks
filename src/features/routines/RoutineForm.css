@@ -43,8 +43,7 @@
 
 .ct-routine-form__close:focus-visible,
 .ct-routine-form__day:focus-visible,
-.ct-routine-form__step:focus-visible,
-.ct-routine-form__spaceButton:focus-visible {
+.ct-routine-form__step:focus-visible {
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
@@ -175,32 +174,6 @@
 .ct-routine-form__spaceLabel {
   font-size: var(--ct-font-size-text);
   font-weight: var(--ct-font-weight-semibold);
-}
-
-.ct-routine-form__spaces {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--ct-color-surface-input);
-  border-radius: var(--ct-radius-lg);
-}
-
-.ct-routine-form__spaceButton {
-  height: 38px;
-  padding: 0 var(--ct-space-4);
-  border: 0;
-  border-radius: var(--ct-radius-md);
-  background: transparent;
-  color: color-mix(in srgb, var(--ct-space-color, var(--ct-color-text)), #ffffff var(--ct-space-white, 0%));
-  font-family: var(--ct-font-text);
-  font-weight: var(--ct-font-weight-semibold);
-  font-size: var(--ct-font-size-text-sm);
-  cursor: pointer;
-}
-
-.ct-routine-form__spaceButton[aria-pressed='true'] {
-  background: var(--ct-color-surface);
-  box-shadow: 0 1px 3px rgba(46, 33, 80, 0.15);
 }
 
 .ct-routine-form__error {

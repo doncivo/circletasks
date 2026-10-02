@@ -19,6 +19,7 @@ export const spacesFr = {
   nameEmpty: 'Le nom ne peut pas être vide.',
   nameTooLong: 'Le nom ne doit pas dépasser 30 caractères.',
   nameTaken: 'Ce nom est déjà utilisé par l’autre espace.',
+  addedIn: 'Ajouté dans {name}',
   colors: {
     teal: 'Bleu canard',
     violet: 'Violet',

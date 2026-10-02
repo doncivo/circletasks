@@ -19,6 +19,7 @@ export const spacesEn: Messages['spaces'] = {
   nameEmpty: 'The name cannot be empty.',
   nameTooLong: 'The name must not exceed 30 characters.',
   nameTaken: 'This name is already used by the other space.',
+  addedIn: 'Added to {name}',
   colors: {
     teal: 'Teal',
     violet: 'Violet',

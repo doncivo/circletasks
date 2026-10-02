@@ -1,12 +1,12 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField, type Layout } from '../../ui';
+import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField, type Layout } from '../../ui';
 import { ReminderBlock } from '../reminders';
 import type { NewTaskSchedule } from './todayStore';
 
@@ -142,20 +142,7 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, de
             setOffsets((current) => toggleReminderOffset(current, offset));
           }}
         />
-        <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
-          {spaces.map((space) => (
-            <button
-              key={space.id}
-              type="button"
-              aria-pressed={spaceId === space.id}
-              className="ct-task-sheet__spaceButton"
-              style={{ '--ct-space-color': space.color } as CSSProperties}
-              onClick={() => setSpaceId(space.id)}
-            >
-              {space.name}
-            </button>
-          ))}
-        </div>
+        <SpaceSegmented items={spaces} value={spaceId} onChange={setSpaceId} label={t('detail.spaceChoiceLabel')} />
         <div className="ct-task-sheet__spacer" />
         <Button type="submit" fullWidth disabled={!valid || !spaceId}>
           {t('tasks.save')}
