@@ -147,6 +147,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   });
 
   test('règle : fin le 31 déc. 2026, seul « Toutes les suivantes » est proposé ; le détail affiche la fin (critères 4, 5, 8)', async ({ page }, info) => {
+    test.skip(isIphone(info), 'iPhone (Q15) : la règle se modifie par « Modifier la tâche », la fiche la montre en lecture seule.');
     const title = `Fin date ${info.project.name}`;
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
@@ -164,6 +165,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   });
 
   test('règle : fin le 30 sept. 2026, aucune occurrence n’est créée après cette date (critère 5)', async ({ page }, info) => {
+    test.skip(isIphone(info), 'iPhone (Q15) : la règle se modifie par « Modifier la tâche », la fiche la montre en lecture seule.');
     const title = `Fin courte ${info.project.name}`;
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
@@ -182,6 +184,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   });
 
   test('règle : après 1 occurrence, la terminée ne crée pas de suivante ; « 6 fois » dans le détail (critères 5, 8)', async ({ page }, info) => {
+    test.skip(isIphone(info), 'iPhone (Q15) : la règle se modifie par « Modifier la tâche », la fiche la montre en lecture seule.');
     const title = `Fin nombre ${info.project.name}`;
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
@@ -207,6 +210,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   });
 
   test('règle : une fin avant la date de la tâche est refusée avec un message clair, la règle est inchangée (critère 9)', async ({ page }, info) => {
+    test.skip(isIphone(info), 'iPhone (Q15) : la règle se modifie par « Modifier la tâche », la fiche la montre en lecture seule.');
     const title = `Fin refusée ${info.project.name}`;
     await createMonthly(page, info, title);
     const detail = await openDetail(page, title);
@@ -221,6 +225,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   });
 
   test('« Arrêter la répétition » : « Une fois » dans le détail, aucune suivante, « Annuler » rétablit la règle (critères 6, 8)', async ({ page }, info) => {
+    test.skip(isIphone(info), 'iPhone (Q15) : la règle se modifie par « Modifier la tâche », la fiche la montre en lecture seule.');
     const title = `Arrêt ${info.project.name}`;
     await createMonthly(page, info, title);
     let detail = await openDetail(page, title);

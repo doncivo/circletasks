@@ -213,6 +213,22 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       await waitFor(async () => expect(await stored(task.id)).toMatchObject({ someday: false, date: '2026-09-23', time: '09:00' }));
     });
 
+    it('terminée : « Reporter » et « Un jour » sont absents du panneau (critère 7)', async () => {
+      const task = await open();
+      await container.data.repos.tasks.complete(task.id, '2026-09-23T18:00:00.000Z' as never);
+      cleanup();
+      useNavigationStore.getState().openDetail({ type: 'task', id: task.id });
+      render(
+        <AppContainerProvider container={container}>
+          <TaskDetail />
+        </AppContainerProvider>,
+      );
+      await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+      expect(screen.queryByRole('button', { name: 'Reporter' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Un jour' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Dupliquer la tâche' })).toBeInTheDocument();
+    });
+
     it('rôle complementary « Détail de la tâche » ; Échap ferme (critères 3, 11)', async () => {
       await open();
       expect(screen.getByRole('complementary', { name: 'Détail de la tâche' })).toBeInTheDocument();
@@ -238,9 +254,10 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       expect(within(sheet).queryByLabelText('Date de la tâche')).toBeNull();
       expect(within(sheet).getByText('Espace · projet')).toBeInTheDocument();
       expect(within(sheet).getByLabelText('Note')).toBeEnabled();
-      // « Répéter… » plein écran n'existe plus : la ligne Répétition est cliquable.
+      // Q15 : la répétition est en lecture seule sur iPhone (modification par « Modifier »).
       expect(within(sheet).queryByRole('button', { name: 'Répéter…' })).toBeNull();
-      expect(within(sheet).getByRole('button', { name: 'Rendre la tâche récurrente' })).toHaveTextContent('Une fois');
+      expect(within(sheet).queryByRole('button', { name: 'Rendre la tâche récurrente' })).toBeNull();
+      expect(within(sheet).getByTestId('recurrence-detail')).toHaveTextContent('Une fois');
       expect(within(sheet).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false');
       expect(within(sheet).getByRole('button', { name: 'Supprimer la tâche' })).toBeInTheDocument();
     });

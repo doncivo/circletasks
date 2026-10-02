@@ -183,7 +183,7 @@ export interface TaskDetailFieldsProps {
 export function TaskDetailFields({ task, layout, spaces, today, reminders, goalTitle, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
   const space = spaces.find((candidate) => candidate.id === task.spaceId);
   const inline: InlineProps = { task, onPatch, cancelInlineRef };
-  const repeat: ReactNode = <TaskRepeatRow task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
+  const repeat: ReactNode = <TaskRepeatRow readOnly={layout === 'mobile'} task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
   const goal = goalTitle ?? t('detail.goalNone');
 
   if (layout === 'mobile') {

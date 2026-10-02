@@ -17,6 +17,8 @@ export interface TaskRepeatRowProps {
   readonly updateRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
   /** T-10 : « Arrêter la répétition » ; true si arrêtée. */
   readonly stopRecurrence: () => Promise<boolean>;
+  /** iPhone (Q15) : texte seul, la répétition se modifie par « Modifier la tâche ». */
+  readonly readOnly?: boolean;
 }
 
 /**
@@ -24,7 +26,7 @@ export interface TaskRepeatRowProps {
  * règle sous la ligne (T-09 pose, T-10 modifie ou arrête). Une tâche terminée ou sans date n'est pas modifiable (texte seul ; pas
  * de ligne pour une tâche sans date et sans règle).
  */
-export function TaskRepeatRow({ task, recurrence, setRecurrence, updateRecurrence, stopRecurrence }: TaskRepeatRowProps) {
+export function TaskRepeatRow({ task, recurrence, setRecurrence, updateRecurrence, stopRecurrence, readOnly }: TaskRepeatRowProps) {
   const recurrent = task.recurrenceId !== null;
   const [open, setOpen] = useState(false);
   /** `undefined` : règle non touchée ; `null` : « Une fois » choisi (arrêt). */
@@ -33,7 +35,7 @@ export function TaskRepeatRow({ task, recurrence, setRecurrence, updateRecurrenc
 
   if (recurrent && !recurrence) return null;
   if (!recurrent && task.date === null) return null;
-  const editable = task.status !== 'done';
+  const editable = task.status !== 'done' && !readOnly;
   const value = recurrence ? formatMessageRef(recurrenceLabel(recurrence, task.date)) : t('tasks.repeatOnce');
 
   function toggle(): void {
