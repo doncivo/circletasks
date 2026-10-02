@@ -3,11 +3,12 @@ import { createHlcClock, createWriteStamper, type WriteStamper } from '../../dom
 import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
+import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
-import { openDatabase } from '../../platform/database';
+import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { useAppStore } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
 
@@ -16,19 +17,32 @@ let database: SqlDriver | undefined;
 /**
  * Ouvre la base du runtime courant et applique les migrations. Appelé une fois au
  * démarrage ; l'état est publié dans le store (dbStatus).
- * La sauvegarde avant migration (beforeApply) sera branchée par data-model / desktop-tauri.
+ * Avant toute migration en attente sur une base existante, une sauvegarde est faite (D-03) ;
+ * si elle échoue, rien n’est migré et dbStatus passe à « error » avec dbBackupFailed.
  */
-export async function bootstrapDatabase(open: () => Promise<SqlDriver> = openDatabase): Promise<SqlDriver | undefined> {
+export interface BootstrapDatabaseOptions {
+  readonly clock?: Clock | undefined;
+  /** Port de sauvegarde avant migration ; celui de la plateforme par défaut (aucun en navigateur de dev). */
+  readonly backup?: ((db: SqlDriver) => Promise<MigrationBackup | undefined>) | undefined;
+}
+
+export async function bootstrapDatabase(
+  open: () => Promise<SqlDriver> = openDatabase,
+  options: BootstrapDatabaseOptions = {},
+): Promise<SqlDriver | undefined> {
   const { setDbStatus } = useAppStore.getState();
   setDbStatus('loading');
+  let db: SqlDriver | undefined;
   try {
-    const db = await open();
-    await migrate(db, migrations);
+    db = await open();
+    const port = await (options.backup ?? createMigrationBackup)(db);
+    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock) });
     database = db;
     setDbStatus('ready');
     return db;
   } catch (error) {
-    setDbStatus('error', error instanceof Error ? error.message : String(error));
+    if (db) await db.close().catch(() => undefined);
+    setDbStatus('error', error instanceof Error ? error.message : String(error), error instanceof MigrationBackupError);
     return undefined;
   }
 }
@@ -50,6 +64,8 @@ export interface BootstrapAppOptions {
   readonly ids?: IdGenerator;
   /** Intégration PC ; `openDesktopPlatform` par défaut (null hors Windows installé). */
   readonly desktop?: DesktopPlatform | null;
+  /** Voir BootstrapDatabaseOptions.backup. */
+  readonly backup?: BootstrapDatabaseOptions['backup'];
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -68,7 +84,7 @@ const readOnlyStamper: WriteStamper = {
  * `createSqlRepositories` existe ; le conteneur est alors fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
-  const driver = await bootstrapDatabase(options.open);
+  const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });
   if (!driver) return undefined;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;

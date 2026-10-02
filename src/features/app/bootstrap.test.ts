@@ -1,5 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openSqliteWasmDriver } from '../../db/drivers/sqliteWasm';
+import { migrate } from '../../db/migrator';
+import { migrations } from '../../db/migrations';
 import { useAppStore } from './appStore';
 import { bootstrapDatabase, getDatabase } from './bootstrap';
 
@@ -21,5 +23,25 @@ describe('démarrage de la base', () => {
     const db = await bootstrapDatabase(() => Promise.reject(new Error('disque plein')));
     expect(db).toBeUndefined();
     expect(useAppStore.getState()).toMatchObject({ dbStatus: 'error', dbErrorDetail: 'disque plein' });
+  });
+});
+
+describe('démarrage : sauvegarde avant migration', () => {
+  it('échec de sauvegarde sur une base existante : « error », dbBackupFailed, rien de migré', async () => {
+    const db = await openSqliteWasmDriver();
+    await migrate(db, migrations.slice(0, 1));
+    const result = await bootstrapDatabase(() => Promise.resolve(db), {
+      backup: () => Promise.resolve({ backup: () => Promise.reject(new Error('disque plein')) }),
+    });
+    expect(result).toBeUndefined();
+    expect(useAppStore.getState()).toMatchObject({ dbStatus: 'error', dbBackupFailed: true });
+  });
+
+  it('base neuve : le port n’est jamais appelé', async () => {
+    const backup = vi.fn(() => Promise.resolve());
+    const db = await bootstrapDatabase(openSqliteWasmDriver, { backup: () => Promise.resolve({ backup }) });
+    expect(db).toBeDefined();
+    expect(backup).not.toHaveBeenCalled();
+    expect(useAppStore.getState().dbBackupFailed).toBe(false);
   });
 });

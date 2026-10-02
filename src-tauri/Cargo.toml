@@ -43,6 +43,9 @@ tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
 
 [dev-dependencies]
+# Test de sauvegarde avec un vrai WAL (même libsqlite3-sys 0.30 que sqlx).
+rusqlite = "0.32"
+tempfile = "3"
 # Banc de test de la mise à jour (D-03) : clé jetable générée en mémoire, jamais écrite dans le dépôt.
 tauri = { version = "2", features = ["test"] }
 minisign = "0.7"

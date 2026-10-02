@@ -61,6 +61,7 @@ function AppShellContent() {
 export function App() {
   const layout = useLayout();
   const dbStatus = useAppStore((s) => s.dbStatus);
+  const dbBackupFailed = useAppStore((s) => s.dbBackupFailed);
   const [container, setContainer] = useState<AppContainer | null>(null);
   const mounted = useRef(true);
   const startup = useRef<AppStartup | null>(null);
@@ -118,7 +119,7 @@ export function App() {
   return (
     <div className="app-shell" data-layout={layout} data-db-status={dbStatus}>
       {dbStatus === 'loading' && <p role="status">{t('app.loading')}</p>}
-      {dbStatus === 'error' && <p role="alert">{t('app.dbError')}</p>}
+      {dbStatus === 'error' && <p role="alert">{t(dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
       {container ? (
         <AppContainerProvider container={container}>
           <AppShellContent />

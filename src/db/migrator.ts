@@ -25,6 +25,11 @@ export type AppliedMigration = {
   readonly applied_at: string;
 };
 
+/** Contexte du crochet : `fromVersion` = dernière version appliquée (0 = base neuve). */
+export interface BeforeApplyInfo {
+  readonly fromVersion: number;
+}
+
 export interface MigrateOptions {
   /** Horloge injectée (applied_at) ; par défaut l'horloge système. */
   readonly clock?: Clock;
@@ -32,7 +37,7 @@ export interface MigrateOptions {
    * Appelé une fois avant d'appliquer des migrations en attente (jamais si la base
    * est à jour) : point d'accroche de la sauvegarde automatique (PRD section 7).
    */
-  readonly beforeApply?: (pending: readonly Migration[]) => Promise<void>;
+  readonly beforeApply?: (pending: readonly Migration[], info: BeforeApplyInfo) => Promise<void>;
 }
 
 export interface MigrateReport {
@@ -122,7 +127,7 @@ export async function migrate(
 
   const done = new Set(applied.map((row) => row.version));
   const pending = migrations.filter((m) => !done.has(m.version));
-  if (pending.length > 0 && options.beforeApply) await options.beforeApply(pending);
+  if (pending.length > 0 && options.beforeApply) await options.beforeApply(pending, { fromVersion: applied.at(-1)?.version ?? 0 });
 
   for (const migration of pending) {
     await db.transaction(async (tx) => {

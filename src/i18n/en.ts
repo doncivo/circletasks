@@ -6,6 +6,7 @@ export const en: Messages = {
     name: 'CircleTasks',
     loading: 'Loading…',
     dbError: 'Unable to open the database.',
+    dbBackupError: 'Data update interrupted: the safety backup failed. Your data was not modified. Free some disk space, then restart CircleTasks.',
     version: 'Version {version}',
   },
   common: {
