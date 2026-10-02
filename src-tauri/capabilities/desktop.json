@@ -1,0 +1,21 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "PC Windows uniquement : zone de notification, démarrage avec Windows, mise à jour (D-01 à D-03).",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": [
+    "allow-set-tray-labels",
+    "allow-confirm-quit",
+    "autostart:allow-enable",
+    "autostart:allow-disable",
+    "autostart:allow-is-enabled",
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [{ "url": "https://github.com/doncivo/circletasks-releases/releases/*" }]
+    }
+  ]
+}

@@ -6,7 +6,7 @@ import type { SqlDriver } from '../../db/driver';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
-import { detectOs, detectRuntime } from '../../platform';
+import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
 import { openDatabase } from '../../platform/database';
 import { useAppStore } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
@@ -48,6 +48,8 @@ export interface BootstrapAppOptions {
   readonly repositories?: RepositoryFactory;
   readonly clock?: Clock;
   readonly ids?: IdGenerator;
+  /** Intégration PC ; `openDesktopPlatform` par défaut (null hors Windows installé). */
+  readonly desktop?: DesktopPlatform | null;
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -84,6 +86,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       hlc,
       data,
       platform: { runtime: detectRuntime(), os: detectOs() },
+      desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
     });
   } catch (error) {
     useAppStore.getState().setDbStatus('error', error instanceof Error ? error.message : String(error));

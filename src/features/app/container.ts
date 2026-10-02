@@ -3,7 +3,7 @@ import { systemClock, type Clock } from '../../domain/clock';
 import type { HlcClock } from '../../domain/hlc';
 import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
-import type { OsFamily, Runtime } from '../../platform';
+import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
@@ -28,6 +28,8 @@ export interface AppContainer {
   readonly taskEntities: TaskEntities;
   readonly shortcuts: ShortcutRegistry;
   readonly platform: { readonly runtime: Runtime; readonly os: OsFamily };
+  /** Intégration système du PC Windows (D-01 à D-03, ADR 0006) ; null hors PC (navigateur, iPhone, tests). */
+  readonly desktop: DesktopPlatform | null;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -42,6 +44,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     taskEntities: parts.taskEntities ?? createTaskEntities(),
     shortcuts: parts.shortcuts ?? createShortcutRegistry(),
     platform: parts.platform ?? { runtime: 'web', os: 'other' },
+    desktop: parts.desktop ?? null,
   };
 }
 

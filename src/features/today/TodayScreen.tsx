@@ -13,6 +13,7 @@ import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, Ico
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { useQuickAddStore } from '../app/quickAdd';
 import { DuplicatePrompt, TaskDetail } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import type { NewTaskSchedule } from './todayStore';
@@ -234,6 +235,21 @@ export function TodayScreen() {
   }, [layout, spaceFilter, fallbackSpaceId, viewDate, today]);
 
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
+
+  // D-01 : « Ajout rapide » de la zone de notification = même comportement que Ctrl+N.
+  // Abonnement au store plutôt qu'état lu au rendu : une demande faite avant le montage est prise
+  // au premier passage de la minuterie (après les effets de l'écran), une seule fois.
+  useEffect(() => {
+    const run = (): void => {
+      if (useQuickAddStore.getState().consume()) openCreate();
+    };
+    const initial = window.setTimeout(run, 0);
+    const unsubscribe = useQuickAddStore.subscribe(run);
+    return () => {
+      window.clearTimeout(initial);
+      unsubscribe();
+    };
+  }, [openCreate]);
 
   async function handleInlineSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();

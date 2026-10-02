@@ -6,10 +6,12 @@ import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp } from './features/app/bootstrap';
 import type { AppContainer } from './features/app/container';
 import { TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
+import { startDesktopIntegration } from './features/app/desktop';
 import { toKeyInput } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { SettingsScreen } from './features/settings';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
+import { UpdateBanner } from './features/updater';
 import { t } from './i18n';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
@@ -44,6 +46,7 @@ function AppShellContent() {
         />
       }
     >
+      <UpdateBanner />
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? <ReportScreen /> : route.screen === 'done' ? <DoneTasksScreen /> : <TodayScreen />
       ) : route.tab === 'settings' ? (
@@ -96,6 +99,12 @@ export function App() {
       startup.current = null;
     };
   }, []);
+
+  // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).
+  useEffect(() => {
+    if (!container) return undefined;
+    return startDesktopIntegration(container).dispose;
+  }, [container]);
 
   useEffect(() => {
     if (!container) return undefined;

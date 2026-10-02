@@ -62,9 +62,9 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | à faire |
 | ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | à faire |
 | ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | à faire |
-| D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | à faire |
-| D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | à faire |
-| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | à faire |
+| D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
+| D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
+| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 8-9 sauvegarde avant migration ; 10-11 publication) |
 | OB-01 | M17 | Je fixe un objectif pour la semaine | spaces-goals | à faire |
 | OB-02 | M17 | J'épingle l'objectif en haut de ma liste | spaces-goals | à faire |
 | OB-03 | M17 | Je rattache une tâche à un objectif | spaces-goals | à faire |
