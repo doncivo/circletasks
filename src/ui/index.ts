@@ -40,3 +40,15 @@ export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
 export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
 export { DragHandle, type DragHandleProps } from './DragHandle';
+export {
+  EditModeSwitch,
+  RemoveButton,
+  SelectCircle,
+  SelectionBar,
+  SelectionBarButton,
+  type EditModeSwitchProps,
+  type RemoveButtonProps,
+  type SelectCircleProps,
+  type SelectionBarButtonProps,
+  type SelectionBarProps,
+} from './EditControls';

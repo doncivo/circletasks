@@ -71,12 +71,22 @@ export interface TaskUseCases {
   postpone(ids: readonly TaskId[], target: PostponeTarget): Promise<Task[]>;
   /** S-02, S-06 : glisser vers un jour ; annulable. */
   moveToDay(id: TaskId, date: LocalDate): Promise<Task>;
+  /**
+   * A-05 (Déplacer, lot), ES-05 : change l'espace (et le projet, ES-04) des tâches, sans toucher à leur date ; annulable en une
+   * fois. Les tâches déjà dans cet espace et ce projet sont ignorées ; rend les tâches réellement modifiées. Une occurrence
+   * récurrente déplacée garde les valeurs d'origine pour la suivante (« cette occurrence », T-10).
+   */
+  moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null): Promise<Task[]>;
   /** SD-03 ; annulable. */
   moveToSomeday(ids: readonly TaskId[]): Promise<Task[]>;
   /** T-12 : copie titre, note, icône, espace, projet, rappels ; annulable. */
   duplicate(id: TaskId, date: LocalDate | null): Promise<Task>;
-  /** T-08 : corbeille (rappels compris) ; annulable. */
-  remove(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * T-08 : corbeille (rappels compris) ; annulable en une fois. `continueSeries` (A-05, suppression par lot) : une occurrence
+   * récurrente est supprimée comme « cette occurrence », la suivante est créée ; sinon la série n'est pas touchée (T-10 : le choix
+   * « cette occurrence / toutes les suivantes » passe par `createSeriesUseCases`).
+   */
+  remove(ids: readonly TaskId[], options?: { readonly continueSeries?: boolean }): Promise<Task[]>;
   /** A-02, SD-04, Alt+↑/↓ ; annulable (message « Tâche déplacée », T-13). */
   reorder(entries: readonly SortOrderEntry<TaskId>[]): Promise<void>;
 }

@@ -12,6 +12,17 @@ export interface ListRowProps {
   leading?: ReactNode;
   /** Élément terminé : titre barré, couleur atténuée (Main.html, « Faire mon lit »). */
   done?: boolean;
+  /** Ligne sélectionnée (mode édition, A-05) : fond #F1EEF7. */
+  selected?: boolean;
+  /**
+   * Vue compacte (A-06, Main-Compact.html) : une ligne d'au moins 44 px, pastille de couleur avant le titre (tronqué par « … »),
+   * heure à droite ; sous-ligne et icône masquées.
+   */
+  compact?: boolean;
+  /** Heure affichée à droite en vue compacte (format 24 h) ; rien si absente. */
+  time?: string | null;
+  /** Couleur de la pastille de la vue compacte (couleur de l'icône de l'élément). */
+  dotColor?: string;
   /** Élément de fin de ligne, après l'icône (ex. bouton « Restaurer » de la corbeille, T-08). */
   trailing?: ReactNode;
   /** Ouvre le détail (A-08) ; sans cette prop, le titre n'est pas interactif. */
@@ -33,10 +44,16 @@ export interface ListRowProps {
  *   onActivate={() => openDetail(task.id)}
  * />
  */
-export function ListRow({ title, subtitle, icon, trailing, leading, done, onActivate, className }: ListRowProps) {
+export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, onActivate, className }: ListRowProps) {
   return (
-    <div className={['ct-list-row', className].filter(Boolean).join(' ')} data-done={done ?? false}>
+    <div
+      className={['ct-list-row', className].filter(Boolean).join(' ')}
+      data-done={done ?? false}
+      data-selected={selected ? 'true' : undefined}
+      data-compact={compact ? 'true' : undefined}
+    >
       {leading}
+      {compact && <span className="ct-list-row__dot" style={{ background: dotColor ?? 'var(--ct-color-text-secondary)' }} aria-hidden="true" />}
       <div className="ct-list-row__body">
         {onActivate ? (
           <button type="button" onClick={onActivate} className="ct-list-row__title" data-done={done ?? false}>
@@ -47,9 +64,10 @@ export function ListRow({ title, subtitle, icon, trailing, leading, done, onActi
             {title}
           </span>
         )}
-        {subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
+        {!compact && subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
       </div>
-      {icon}
+      {compact && time && <span className="ct-list-row__time">{time}</span>}
+      {!compact && icon}
       {trailing}
     </div>
   );

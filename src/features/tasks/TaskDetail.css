@@ -129,3 +129,11 @@
   flex-direction: column;
   gap: var(--ct-space-3);
 }
+
+/* Menu de report ouvert au-dessus de son déclencheur (barre de sélection en bas d'écran, A-05). */
+.ct-task-detail__postpone--above .ct-action-menu--popover {
+  top: auto;
+  bottom: calc(100% + var(--ct-space-1));
+  right: 0;
+  left: auto;
+}

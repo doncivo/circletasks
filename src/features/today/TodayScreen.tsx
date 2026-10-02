@@ -1,5 +1,5 @@
 import { ChartColumn, X } from 'lucide-react';
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { addDays } from '../../domain/localDate';
 import type { RecurrenceFields } from '../../domain/model';
@@ -10,16 +10,18 @@ import type { DateChoice } from '../../domain/dateInput';
 import type { LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout, useSortable } from '../../ui';
+import { Button, ChoiceDialog, ConfirmDialog, DatePicker, DragHandle, EditModeSwitch, Fab, Icon, IconChooser, RecurrencePicker, SelectionBar, SelectionBarButton, Sheet, SpacePills, TextField, useLayout, useSortable } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useQuickAddStore } from '../app/quickAdd';
+import { isModalOpen } from '../app/tabShortcuts';
 import { DuplicatePrompt, TaskDetail } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
-import { taskSubtitle } from '../tasks/taskLine';
+import { PostponeAction } from '../tasks/PostponeAction';
 import { TodayHeader } from './TodayHeader';
 import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
+import { TodayRoutineRow, TodayTaskRow } from './TodayRows';
 import { canToggleRoutines } from './todaySources';
 import type { NewTaskSchedule } from './todayStore';
 import { selectTodayTasks, todayStore } from './todayStore';
@@ -65,6 +67,14 @@ export function TodayScreen() {
   const hideRoutines = useFeatureStore(todayStore, (s) => s.hideRoutines);
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
   const moveRow = useFeatureStore(todayStore, (s) => s.moveRow);
+  const editMode = useFeatureStore(todayStore, (s) => s.editMode);
+  const selection = useFeatureStore(todayStore, (s) => s.selection);
+  const setEditMode = useFeatureStore(todayStore, (s) => s.setEditMode);
+  const toggleSelection = useFeatureStore(todayStore, (s) => s.toggleSelection);
+  const addToSelection = useFeatureStore(todayStore, (s) => s.addToSelection);
+  const postponeSelected = useFeatureStore(todayStore, (s) => s.postponeSelected);
+  const removeSelected = useFeatureStore(todayStore, (s) => s.removeSelected);
+  const moveSelected = useFeatureStore(todayStore, (s) => s.moveSelected);
   const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(todayStore, (s) => s.status);
   const errorKey = useFeatureStore(todayStore, (s) => s.errorKey);
@@ -111,6 +121,17 @@ export function TodayScreen() {
   );
   const routinesCheckable = canToggleRoutines();
 
+  // Mode édition (A-05) : tâches affichées dans l'ordre de la liste (Maj+clic : intervalle), sélection encore visible.
+  const visibleTaskIds = useMemo(
+    () => [...list.rows, ...list.doneRows].flatMap((row) => (row.kind === 'task' ? [row.task.id] : [])),
+    [list],
+  );
+  const selectedIds = useMemo(() => visibleTaskIds.filter((id) => selection.has(id)), [visibleTaskIds, selection]);
+  const anchorRef = useRef<TaskId | null>(null);
+  const [batchDeleteOpen, setBatchDeleteOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+  // Le mode édition n'est pas mémorisé : il se coupe en quittant l'écran (changement d'onglet, redémarrage).
+  useEffect(() => () => setEditMode(false), [setEditMode]);
 
   // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
   // reçu le focus (case ou titre), via `onFocus` posé sur le conteneur de chaque
@@ -120,8 +141,9 @@ export function TodayScreen() {
   const [focusedTaskId, setFocusedTaskId] = useState<TaskId | null>(null);
   useEffect(() => {
     if (!focusedTaskId) return undefined;
-    return container.shortcuts.register('list.complete', () => void toggleDone(focusedTaskId));
-  }, [container, focusedTaskId, toggleDone]);
+    // Mode édition : la case « Terminer » est remplacée par le rond de sélection, Espace sélectionne.
+    return container.shortcuts.register('list.complete', () => (editMode ? toggleSelection(focusedTaskId) : void toggleDone(focusedTaskId)));
+  }, [container, focusedTaskId, toggleDone, toggleSelection, editMode]);
 
   // Ctrl+D (T-05, critère 5) : reporte à demain la ligne sélectionnée. Occurrence récurrente : la question
   // « Cette occurrence / Toutes les suivantes » est posée d'abord (T-10 critère 4).
@@ -142,10 +164,28 @@ export function TodayScreen() {
   useEffect(() => {
     if (!focusedTaskId) return undefined;
     return container.shortcuts.register('list.delete', () => {
-      if (container.taskEntities.get(focusedTaskId)) setDeleteTargetId(focusedTaskId);
+      // Mode édition avec une sélection : Suppr supprime la sélection (A-05 critère 10), avec confirmation.
+      if (editMode && selectedIds.length > 0) requestDeleteSelection();
+      else if (container.taskEntities.get(focusedTaskId)) setDeleteTargetId(focusedTaskId);
     });
-  }, [container, focusedTaskId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [container, focusedTaskId, editMode, selectedIds]);
   const deleteTarget = deleteTargetId ? entities.get(deleteTargetId) : undefined;
+
+  /** Supprimer la sélection : une tâche seule suit T-08 (et T-10 pour une série), plusieurs demandent « Supprimer N tâches ? ». */
+  function requestDeleteSelection(): void {
+    const [only] = selectedIds;
+    if (selectedIds.length === 1 && only) setDeleteTargetId(only);
+    else if (selectedIds.length > 1) setBatchDeleteOpen(true);
+  }
+
+  // Échap quitte le mode édition (PC, critère 10) ; les fenêtres et panneaux gardent leur propre Échap.
+  useEffect(() => {
+    if (!editMode) return undefined;
+    return container.shortcuts.register('app.escape', () => {
+      if (!isModalOpen()) setEditMode(false);
+    });
+  }, [container, editMode, setEditMode]);
 
   // Ctrl+Maj+D (T-12, critère 1) : ouvre le choix de la date de la copie pour la ligne sélectionnée
   // (présélectionnée sur la date de l'original) ; rien n'est créé avant la validation.
@@ -316,48 +356,68 @@ export function TodayScreen() {
   }
 
   const iconSize = layout === 'pc' ? 24 : 28;
+  const compact = false;
 
-  function renderTaskRow(row: Extract<TodayRow, { kind: 'task' }>) {
-    const task = row.task;
-    return (
-      <ListRow
-        title={task.title}
-        subtitle={taskSubtitle(task, { spaces, showSpace: spaceFilter === 'all', rule: task.recurrenceId ? recurrences.get(task.recurrenceId) : undefined })}
-        done={task.status === 'done'}
-        leading={
-          <Checkbox
-            checked={task.status === 'done'}
-            onChange={() => void toggleDone(task.id)}
-            label={t(task.status === 'done' ? 'tasks.reopen' : 'tasks.complete', { title: task.title })}
-          />
-        }
-        icon={task.icon ? <IconView icon={task.icon} color={resolveIconRefColor(task.icon)} size={iconSize} /> : undefined}
-        onActivate={() => openDetail({ type: 'task', id: task.id })}
-      />
-    );
+  /** Ctrl+clic ajoute ou retire la ligne de la sélection, Maj+clic étend jusqu'à la dernière ligne cochée (PC, critère 10). */
+  function extendSelection(id: TaskId, shift: boolean): void {
+    const anchor = anchorRef.current;
+    const from = anchor ? visibleTaskIds.indexOf(anchor) : -1;
+    const to = visibleTaskIds.indexOf(id);
+    if (shift && from >= 0 && to >= 0) addToSelection(visibleTaskIds.slice(Math.min(from, to), Math.max(from, to) + 1));
+    else toggleSelection(id);
+    anchorRef.current = id;
   }
 
-  /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; sa case existe quand une source sait valider (R-03). */
-  function renderRoutineRow(row: Extract<TodayRow, { kind: 'routine' }>) {
-    const { routine } = row;
-    const time = rowTime(row);
+  function onRowClick(event: MouseEvent<HTMLElement>, id: TaskId): void {
+    if (!event.ctrlKey && !event.metaKey && !event.shiftKey) return;
+    event.preventDefault();
+    event.stopPropagation();
+    extendSelection(id, event.shiftKey);
+  }
+
+  function renderRow(row: TodayRow, movable: boolean) {
+    if (row.kind === 'routine') {
+      return (
+        <TodayRoutineRow
+          routine={row.routine}
+          time={rowTime(row)}
+          done={row.done}
+          iconSize={iconSize}
+          compact={compact}
+          checkable={routinesCheckable}
+          onToggle={() => void toggleRoutine(row.routine.id as RoutineId)}
+        />
+      );
+    }
+    const task = row.task;
+    const index = list.rows.findIndex((candidate) => candidate.id === row.id);
     return (
-      <ListRow
-        title={routine.title}
-        subtitle={time ? `${time} · ${t('today.routineLabel')}` : t('today.routineLabel')}
-        done={row.done}
-        {...(routinesCheckable
-          ? {
-              leading: (
-                <Checkbox
-                  checked={row.done}
-                  onChange={() => void toggleRoutine(routine.id as RoutineId)}
-                  label={t(row.done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })}
-                />
-              ),
-            }
-          : {})}
-        icon={routine.icon ? <IconView icon={routine.icon} color={resolveIconRefColor(routine.icon)} size={iconSize} /> : undefined}
+      <TodayTaskRow
+        task={task}
+        spaces={spaces}
+        showSpace={spaceFilter === 'all'}
+        rule={task.recurrenceId ? recurrences.get(task.recurrenceId) : undefined}
+        iconSize={iconSize}
+        editMode={editMode}
+        selected={selection.has(task.id)}
+        compact={compact}
+        onToggleDone={() => void toggleDone(task.id)}
+        onOpen={() => openDetail({ type: 'task', id: task.id })}
+        onToggleSelect={() => {
+          anchorRef.current = task.id;
+          toggleSelection(task.id);
+        }}
+        onRemove={() => setDeleteTargetId(task.id)}
+        handle={
+          movable ? (
+            <DragHandle
+              label={t('today.moveHandle', { title: task.title })}
+              {...sortable.dragProps(row.id, 'handle')}
+              onMoveUp={() => void applyMove(row.id, index - 1)}
+              onMoveDown={() => void applyMove(row.id, index + 1)}
+            />
+          ) : null
+        }
       />
     );
   }
@@ -411,15 +471,21 @@ export function TodayScreen() {
                     key={row.id}
                     role="listitem"
                     onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}
+                    onClickCapture={editMode && row.kind === 'task' ? (event) => onRowClick(event, row.task.id) : undefined}
                     {...sortable.itemProps(row.id)}
                     {...(row.kind === 'task' ? sortable.dragProps(row.id, 'row') : {})}
                   >
-                    {row.kind === 'task' ? renderTaskRow(row) : renderRoutineRow(row)}
+                    {renderRow(row, row.kind === 'task')}
                   </div>
                 ))}
                 {list.doneRows.map((row) => (
-                  <div key={row.id} role="listitem" onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}>
-                    {row.kind === 'task' ? renderTaskRow(row) : renderRoutineRow(row)}
+                  <div
+                    key={row.id}
+                    role="listitem"
+                    onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}
+                    onClickCapture={editMode && row.kind === 'task' ? (event) => onRowClick(event, row.task.id) : undefined}
+                  >
+                    {renderRow(row, false)}
                   </div>
                 ))}
               </div>
@@ -430,6 +496,30 @@ export function TodayScreen() {
               {announcement?.text}
             </div>
           </>
+        )}
+
+        {editMode && selectedIds.length > 0 && (
+          <SelectionBar
+            label={t('today.selectionLabel')}
+            countLabel={selectedIds.length === 1 ? t('today.selectedOne') : t('today.selectedMany', { count: selectedIds.length })}
+          >
+            <SelectionBarButton haspopup="dialog" expanded={moveOpen} onClick={() => setMoveOpen(true)}>
+              {t('today.barMove')}
+            </SelectionBarButton>
+            <PostponeAction
+              menuAbove
+              menuLabel={t('today.postponeSelectionMenu')}
+              onPostpone={postponeSelected}
+              trigger={({ expanded, toggle }) => (
+                <SelectionBarButton haspopup="menu" expanded={expanded} onClick={toggle}>
+                  {t('today.barPostpone')}
+                </SelectionBarButton>
+              )}
+            />
+            <SelectionBarButton danger onClick={requestDeleteSelection}>
+              {t('today.barDelete')}
+            </SelectionBarButton>
+          </SelectionBar>
         )}
 
         <form className="ct-today__addRow" onSubmit={handleInlineSubmit}>
@@ -452,6 +542,7 @@ export function TodayScreen() {
         </form>
 
         <div className="ct-today__bottomRow">
+          <EditModeSwitch active={editMode} onChange={setEditMode} label={t('today.editMode')} />
           <Fab onClick={openCreate} label={t('common.add')} />
         </div>
 
@@ -529,6 +620,32 @@ export function TodayScreen() {
             setDuplicateTargetId(null);
             void duplicate(duplicateTarget.id, date);
           }}
+        />
+      )}
+
+      {batchDeleteOpen && (
+        <ConfirmDialog
+          title={t('today.deleteManyTitle', { count: selectedIds.length })}
+          description={t('today.deleteManyBody')}
+          confirmLabel={t('tasks.deleteConfirm')}
+          onConfirm={() => {
+            setBatchDeleteOpen(false);
+            void removeSelected();
+          }}
+          onCancel={() => setBatchDeleteOpen(false)}
+        />
+      )}
+
+      {moveOpen && (
+        <ChoiceDialog
+          title={t('today.moveTitle')}
+          description={t('today.moveBody')}
+          options={spaces.map((space) => ({ id: space.id, label: space.name }))}
+          onChoose={(spaceId) => {
+            setMoveOpen(false);
+            void moveSelected(spaceId);
+          }}
+          onCancel={() => setMoveOpen(false)}
         />
       )}
 

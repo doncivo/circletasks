@@ -13,6 +13,7 @@ import { formatDayLabel } from '../../i18n/format';
 import { NotImplementedError, RepositoryError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
 import { createNextOccurrence, UNDONE_OCCURRENCE_INDEX, type CreatedOccurrence } from './recurrenceUseCases';
+import { createRemoveUndo } from './seriesUseCases';
 import type { CreateTaskError, SetRecurrenceError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
 
 /**
@@ -184,6 +185,33 @@ function createReorderUndoCommand(deps: TaskUseCaseDeps, entries: readonly Postp
         for (const entry of writable) {
           const back = await repos.tasks.getById(entry.id);
           if (back) written.push(back);
+        }
+        return written;
+      });
+      if (restored.length === 0) return 'stale';
+      deps.taskEntities.publish(restored);
+      return 'undone';
+    },
+  };
+}
+
+/**
+ * Commande annulable d'un changement d'espace / projet (A-05, T-13) : annuler = nouvelle écriture qui remet l'espace,
+ * le projet et le gabarit de série d'avant, pour les seules tâches non modifiées depuis (hlc identique) ; sinon 'stale'.
+ */
+function createMoveUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[]): UndoableCommand {
+  const first = entries[0];
+  return {
+    kind: 'move',
+    count: entries.length,
+    ...(entries.length === 1 && first ? { labelKey: 'undo.moveSpace' as const, labelParams: { title: first.before.title } } : {}),
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const written: Task[] = [];
+        for (const { before, after } of entries) {
+          const current = await repos.tasks.getById(after.id);
+          if (!current || current.hlc !== after.hlc) continue;
+          written.push(await repos.tasks.update(before.id, { spaceId: before.spaceId, projectId: before.projectId, seriesTemplate: before.seriesTemplate }));
         }
         return written;
       });
@@ -377,6 +405,29 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     moveToDay() {
       return Promise.reject(new NotImplementedError('taskUseCases.moveToDay : à implémenter (S-02, S-06)'));
     },
+    async moveToSpace(ids, spaceId, projectId): Promise<Task[]> {
+      const entries = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before || (before.spaceId === spaceId && before.projectId === projectId)) continue;
+          const [moved] = await repos.tasks.moveToSpace([id], spaceId, projectId);
+          if (!moved) continue;
+          // Occurrence récurrente : la série garde son espace d'origine (T-10), comme pour un report « cette occurrence ».
+          const after =
+            before.recurrenceId !== null && before.seriesTemplate === null
+              ? await repos.tasks.update(id, { seriesTemplate: divergedTemplate(before) })
+              : moved;
+          done.push({ before, after });
+        }
+        return done;
+      });
+      if (entries.length === 0) return [];
+      const tasks = entries.map((entry) => entry.after);
+      deps.taskEntities.publish(tasks);
+      deps.undo.push(createMoveUndoCommand(deps, entries));
+      return tasks;
+    },
     moveToSomeday() {
       return Promise.reject(new NotImplementedError('taskUseCases.moveToSomeday : à implémenter (SD-03)'));
     },
@@ -402,12 +453,13 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(createDuplicateUndoCommand(deps, copy));
       return copy;
     },
-    async remove(ids): Promise<Task[]> {
+    async remove(ids, options): Promise<Task[]> {
       // T-08 : suppression logique (deleted_at) + rappels de la tâche rendus inactifs, en une transaction.
-      // Point d'extension T-10 : sur une occurrence récurrente, proposer « cette occurrence /
-      // toutes les suivantes » avant d'appeler remove (aucune récurrence n'existe avant T-09).
-      const deleted = await deps.data.transaction(async (repos) => {
+      // `continueSeries` (lot, A-05) : une occurrence récurrente supprimée sans choix est traitée comme « cette
+      // occurrence » : la suivante est créée, la série continue (« toutes les suivantes » : `series.remove`, T-10).
+      const { deleted, nexts } = await deps.data.transaction(async (repos) => {
         const done: Task[] = [];
+        const created: CreatedOccurrence[] = [];
         for (const id of ids) {
           const before = await repos.tasks.getById(id);
           if (!before) continue; // déjà supprimée ou inconnue : rien à faire
@@ -416,13 +468,18 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           // Même deleted_at que la tâche : la restauration ne réactive que les rappels supprimés avec elle.
           await repos.reminders.softDeleteForTarget({ type: 'task', id }, task.deletedAt ?? undefined);
           done.push(task);
+          if (options?.continueSeries && before.recurrenceId !== null) {
+            const next = await createNextOccurrence(deps, repos, before, todayLocal(deps.clock), { ignoreDue: true });
+            if (next) created.push(next);
+          }
         }
-        return done;
+        return { deleted: done, nexts: created };
       });
       if (deleted.length === 0) return [];
       // Source unique : la tâche disparaît de toutes les vues (Aujourd'hui, Terminées, fiche…).
       deps.taskEntities.remove(deleted.map((task) => task.id));
-      deps.undo.push(createDeleteUndoCommand(deps, deleted));
+      if (nexts.length > 0) deps.taskEntities.publish(nexts.map((next) => next.task));
+      deps.undo.push(nexts.length > 0 ? createRemoveUndo(deps, deleted, nexts, null) : createDeleteUndoCommand(deps, deleted));
       return deleted;
     },
     async reorder(entries): Promise<void> {

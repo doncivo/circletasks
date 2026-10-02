@@ -46,3 +46,40 @@ span.ct-list-row__title {
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+/* Ligne sélectionnée (mode édition, Main-Edition.html : fond #F1EEF7, coins arrondis). */
+.ct-list-row[data-selected='true'] {
+  background: var(--ct-color-row-selected);
+  border-radius: var(--ct-radius-md);
+}
+
+/* Vue compacte (A-06, Main-Compact.html) : une ligne ≥ 44 px, pastille de 6 px, titre 16 px tronqué, heure à droite. */
+.ct-list-row[data-compact='true'] {
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  gap: var(--ct-space-3);
+}
+
+.ct-list-row[data-compact='true'] .ct-list-row__title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-list-row__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--ct-radius-round);
+  flex-shrink: 0;
+}
+
+.ct-list-row__time {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+  flex-shrink: 0;
+}

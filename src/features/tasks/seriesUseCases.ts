@@ -80,7 +80,7 @@ interface Entry {
   readonly after: Task;
 }
 
-interface RuleChange {
+export interface RuleChange {
   readonly before: Recurrence;
   readonly after: Recurrence;
 }
@@ -291,7 +291,7 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
       if (!first) return { ok: false, error: 'not-found' };
       deps.taskEntities.remove(deleted.map((t) => t.id));
       if (next) deps.taskEntities.publish([next.task]);
-      deps.undo.push(createRemoveUndo(deps, deleted, next, rule));
+      deps.undo.push(createRemoveUndo(deps, deleted, next ? [next] : [], rule));
       return { ok: true, value: first };
     },
   };
@@ -303,7 +303,7 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
  * si la série était arrêtée, et retire l'occurrence suivante générée par la suppression (marquée
  * « annulée » comme pour T-09, pour qu'elle ne soit ni restaurable ni dupliquée) tant qu'elle n'a pas changé.
  */
-function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[], next: CreatedOccurrence | null, rule: RuleChange | null): UndoableCommand {
+export function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[], nexts: readonly CreatedOccurrence[], rule: RuleChange | null): UndoableCommand {
   const first = deleted[0];
   return {
     kind: 'delete',
@@ -313,7 +313,7 @@ function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[], next:
       : { labelKey: 'undo.deleteMany' as const, labelParams: { count: deleted.length } }),
     async undo() {
       const outcome = await deps.data.transaction(async (repos) => {
-        if (next) {
+        for (const next of nexts) {
           const created = await repos.tasks.getById(next.task.id);
           if (created && created.hlc !== next.task.hlc) return null;
         }
@@ -330,21 +330,21 @@ function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[], next:
           const stored = await repos.recurrences.getById(rule.after.id, { includeDeleted: true });
           if (stored && stored.hlc === rule.after.hlc) await repos.recurrences.restore(rule.after.id);
         }
-        let removedId: TaskId | null = null;
-        if (next) {
+        const removedIds: TaskId[] = [];
+        for (const next of nexts) {
           const created = await repos.tasks.getById(next.task.id);
           if (created) {
             await repos.tasks.update(created.id, { seriesIndex: UNDONE_OCCURRENCE_INDEX });
             const [removed] = await repos.tasks.softDelete([created.id]);
             await repos.reminders.softDeleteForTarget({ type: 'task', id: created.id }, removed?.deletedAt ?? undefined);
-            removedId = created.id;
+            removedIds.push(created.id);
           }
         }
-        return { restored, removedId };
+        return { restored, removedIds };
       });
       if (!outcome) return 'stale';
       deps.taskEntities.publish(outcome.restored);
-      if (outcome.removedId) deps.taskEntities.remove([outcome.removedId]);
+      if (outcome.removedIds.length > 0) deps.taskEntities.remove(outcome.removedIds);
       return 'undone';
     },
   };
