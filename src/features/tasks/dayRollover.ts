@@ -1,7 +1,13 @@
 import { todayLocal } from '../../domain/clock';
+import { uuidGenerator } from '../../domain/id';
 import { msUntilNextLocalMidnight } from '../../domain/taskCarryOver';
 import type { LocalDate } from '../../domain/types';
 import { createCarryOverUseCases, type CarryOverDeps } from './carryOverUseCases';
+import { createRecurrenceUseCases } from './recurrenceUseCases';
+import type { TaskUseCaseDeps } from './taskUseCases';
+
+/** `ids` (génération des occurrences récurrentes, T-09) : générateur UUID par défaut. */
+export type DayRolloverDeps = CarryOverDeps & Partial<Pick<TaskUseCaseDeps, 'ids'>>;
 
 /** Minuterie injectable (tests : fausse minuterie ; Playwright : horloge simulée du navigateur). */
 export interface Timers {
@@ -15,6 +21,8 @@ export interface DayRolloverOptions {
   readonly onDayChange?: (day: LocalDate) => void;
   /** Résultat de chaque report : `true` si échec (affichage d'un message), `false` sinon. */
   readonly onCarryOverResult?: (failed: boolean) => void;
+  /** Résultat de la création des occurrences récurrentes (T-09) : message distinct de celui du report. */
+  readonly onRecurrenceResult?: (failed: boolean) => void;
 }
 
 export interface DayRollover {
@@ -43,9 +51,10 @@ const defaultTimers: Timers = {
  * les contrôles sont sérialisés et idempotents, donc au plus un report effectif par
  * jour local même si plusieurs déclencheurs se chevauchent.
  */
-export function createDayRollover(deps: CarryOverDeps, options: DayRolloverOptions = {}): DayRollover {
+export function createDayRollover(deps: DayRolloverDeps, options: DayRolloverOptions = {}): DayRollover {
   const timers = options.timers ?? defaultTimers;
   const carryOver = createCarryOverUseCases(deps);
+  const recurrence = createRecurrenceUseCases({ ...deps, ids: deps.ids ?? uuidGenerator });
   let handle: unknown = null;
   let stopped = false;
   let lastDay: LocalDate | null = null;
@@ -63,15 +72,24 @@ export function createDayRollover(deps: CarryOverDeps, options: DayRolloverOptio
   };
 
   const runOnce = async (): Promise<void> => {
+    let failed = false;
+    let recurrenceFailed = false;
+    try {
+      // T-09 (Q2) : l'occurrence suivante est créée à sa date normale AVANT le report, qui change
+      // la date des occurrences passées ; un échec n'empêche pas le report.
+      await recurrence.generateDue();
+    } catch {
+      recurrenceFailed = true;
+    }
     try {
       await carryOver.run();
-      lastFailed = false;
-      options.onCarryOverResult?.(false);
     } catch {
       // Échec d'écriture ou de lecture : l'app continue, message dédié, nouvel essai au prochain contrôle.
-      lastFailed = true;
-      options.onCarryOverResult?.(true);
+      failed = true;
     }
+    lastFailed = failed || recurrenceFailed;
+    options.onCarryOverResult?.(failed);
+    options.onRecurrenceResult?.(recurrenceFailed);
     if (stopped) return;
     const day = todayLocal(deps.clock);
     if (day !== lastDay) {

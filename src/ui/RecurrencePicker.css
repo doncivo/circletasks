@@ -1,0 +1,137 @@
+/* Section « Répétition » (Ajout.html, T-09) : radios, jours de la semaine, lien « Autre ». */
+.ct-recurrence {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-recurrence__label {
+  align-self: flex-start;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ct-color-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-recurrence__choices {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+}
+
+.ct-recurrence__radio {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-medium);
+  cursor: pointer;
+}
+
+.ct-recurrence__radio:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ct-recurrence__dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--ct-color-text);
+  border-radius: var(--ct-radius-round);
+}
+
+.ct-recurrence__dotFill {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-text);
+}
+
+.ct-recurrence__hint,
+.ct-recurrence__summary {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-recurrence__weekdays {
+  display: flex;
+  gap: var(--ct-space-1);
+}
+
+.ct-recurrence__weekday {
+  flex: 1 1 0;
+  min-width: 0;
+  height: var(--ct-hit-target-min);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-recurrence__weekday[aria-pressed='true'] {
+  border-color: var(--ct-color-text);
+  background: var(--ct-color-text);
+  color: var(--ct-color-accent-on);
+}
+
+.ct-recurrence__other {
+  align-self: flex-start;
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-accent);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-recurrence__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding: var(--ct-space-3);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-recurrence__panelRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+}
+
+.ct-recurrence__control {
+  height: 40px;
+  padding: 0 var(--ct-space-2);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-recurrence__number {
+  width: 72px;
+}

@@ -1,9 +1,9 @@
 import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
-import type { IconRef, Task } from '../../domain/model';
+import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
-import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { LocalDate, LocalTime, RecurrenceId, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -14,6 +14,8 @@ import type { CreateTaskError } from '../tasks/taskUseCases';
 export interface NewTaskSchedule {
   readonly date?: LocalDate;
   readonly time?: LocalTime | null;
+  /** T-09 : répétition choisie à la saisie (absent : une fois). */
+  readonly recurrence?: RecurrenceFields | null;
 }
 
 export type TodayStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -30,6 +32,8 @@ export interface TodayState {
   readonly filter: SpaceFilter;
   /** Ids des tâches du jour (ordre d'affichage) ; les entités sont lues dans `container.taskEntities` (ADR 0004, avenant). */
   readonly taskIds: readonly TaskId[];
+  /** Règles des séries affichées (T-09) : sous-ligne « mensuelle » ; une règle ne change pas avant T-10. */
+  readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
   readonly status: TodayStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -74,6 +78,11 @@ export interface TodayState {
    * La tâche quitte la liste aussitôt (retirée de `taskEntities`). Ne rejette jamais.
    */
   remove(id: TaskId): Promise<void>;
+  /**
+   * T-09 : lit les règles des séries affichées pas encore connues (ex. règle posée depuis la fiche),
+   * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
+   */
+  syncRecurrences(): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -89,6 +98,24 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     container.taskEntities.publish(loaded);
     return loaded;
   };
+  // Règles des séries du jour (une lecture par série inconnue) ; un échec n'empêche pas l'affichage des tâches.
+  const loadRecurrences = async (
+    tasks: readonly Task[],
+    known: ReadonlyMap<RecurrenceId, RecurrenceFields>,
+  ): Promise<ReadonlyMap<RecurrenceId, RecurrenceFields>> => {
+    const missing = [...new Set(tasks.flatMap((task) => (task.recurrenceId && !known.has(task.recurrenceId) ? [task.recurrenceId] : [])))];
+    if (missing.length === 0) return known;
+    const next = new Map(known);
+    for (const id of missing) {
+      try {
+        const rule = await container.data.repos.recurrences.getById(id);
+        if (rule) next.set(id, rule);
+      } catch {
+        // règle illisible : pas d'indicateur sur la ligne
+      }
+    }
+    return next;
+  };
   const fetchDay = async (date: LocalDate, filter: SpaceFilter): Promise<Task[]> =>
     sortTasksForDay(await listAndPublish(date, filter));
 
@@ -96,6 +123,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     date: null,
     filter: 'all',
     taskIds: [],
+    recurrences: new Map<RecurrenceId, RecurrenceFields>(),
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
@@ -105,8 +133,9 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       set({ status: 'loading', date, filter, errorKey: null, actionErrorKey: null });
       try {
         const tasks = await fetchDay(date, filter);
+        const recurrences = await loadRecurrences(tasks, get().recurrences);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ taskIds: tasks.map((task) => task.id), status: 'ready' });
+        set({ taskIds: tasks.map((task) => task.id), recurrences, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });
@@ -129,12 +158,14 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
           date: taskDate,
           ...(schedule?.time !== undefined ? { time: schedule.time } : {}),
           ...(icon !== undefined ? { icon } : {}),
+          ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
         });
         if (!result.ok) return result;
         const id = ++requestId;
         try {
           const tasks = await fetchDay(viewedDate, filter);
-          if (id === requestId) set({ date: viewedDate, taskIds: tasks.map((task) => task.id), status: 'ready', errorKey: null });
+          const recurrences = await loadRecurrences(tasks, get().recurrences);
+          if (id === requestId) set({ date: viewedDate, taskIds: tasks.map((task) => task.id), recurrences, status: 'ready', errorKey: null });
         } catch {
           if (id === requestId) set({ status: 'error', errorKey: 'tasks.todayError' });
         }
@@ -155,6 +186,12 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         if (current.status === 'done') await useCases.reopen(id);
         else await useCases.complete(id);
         set({ actionErrorKey: null });
+        // T-09 : l'occurrence suivante peut tomber sur le jour affiché (ex. tous les jours) : recharge discrète.
+        const { date, filter } = get();
+        if (current.recurrenceId !== null && current.status !== 'done' && date !== null) {
+          const loaded = await fetchDay(date, filter);
+          set({ taskIds: loaded.map((task) => task.id), recurrences: await loadRecurrences(loaded, get().recurrences) });
+        }
       } catch {
         // Échec d'écriture : la liste reste affichée telle quelle, message dédié.
         set({ actionErrorKey: 'tasks.completeError' });
@@ -169,6 +206,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
       }
+    },
+
+    async syncRecurrences() {
+      const shown = get().taskIds.flatMap((id) => {
+        const task = container.taskEntities.get(id);
+        return task ? [task] : [];
+      });
+      const known = get().recurrences;
+      const recurrences = await loadRecurrences(shown, known);
+      if (recurrences !== known) set({ recurrences });
     },
 
     async remove(id) {

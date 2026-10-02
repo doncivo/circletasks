@@ -66,9 +66,9 @@ export interface TaskRepository {
   listByGoal(goalId: GoalId): Promise<Task[]>;
   /** OB-04 : avancement de plusieurs objectifs en une requête. */
   progressByGoal(goalIds: readonly GoalId[]): Promise<ReadonlyMap<GoalId, GoalProgress>>;
-  /** T-10 : occurrences d'une récurrence. */
-  listByRecurrence(recurrenceId: RecurrenceId): Promise<Task[]>;
-  /** T-08 : corbeille, tâches supprimées depuis `since` (30 jours). */
+  /** T-09, T-10 : occurrences d'une récurrence ; `includeDeleted` : corbeille comprise (pas de doublon de série, T-09). */
+  listByRecurrence(recurrenceId: RecurrenceId, options?: ReadOptions): Promise<Task[]>;
+  /** T-08 : corbeille, tâches supprimées depuis `since` (30 jours) ; hors occurrences retirées par l'annulation d'une complétion (T-09, `series_index` < 0). */
   listTrash(since: IsoDateTime, filter: SpaceFilter): Promise<Task[]>;
   /**
    * T-08 : purge physique des tâches supprimées avant `before` (et de leurs rappels) ; renvoie le

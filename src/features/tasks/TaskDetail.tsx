@@ -1,10 +1,12 @@
 import { Check, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { IconRef, Task } from '../../domain/model';
+import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
+import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';
 import { t } from '../../i18n';
-import { Button, DetailPanel, Icon, IconChooser, IconView, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { formatMessageRef } from '../../i18n/formatRecurrence';
+import { Button, DetailPanel, Icon, IconChooser, IconView, RecurrencePicker, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
@@ -38,6 +40,8 @@ export function TaskDetail() {
   const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
   const remove = useFeatureStore(taskDetailStore, (s) => s.remove);
+  const recurrence = useFeatureStore(taskDetailStore, (s) => s.recurrence);
+  const setRecurrence = useFeatureStore(taskDetailStore, (s) => s.setRecurrence);
 
   // Note non enregistrée (perte de focus pas encore survenue) : la fiche la
   // sauvegarde aussi à la fermeture (critère 8), y compris par Échap, qui ne
@@ -71,6 +75,8 @@ export function TaskDetail() {
         updateIcon={updateIcon}
         toggleDone={toggleDone}
         postpone={postpone}
+        recurrence={recurrence}
+        setRecurrence={setRecurrence}
         // Suppression confirmée (T-08, critère 2) : la tâche part dans la corbeille, la fiche se ferme
         // (sans réécrire la note : la tâche n'existe plus ; la perte de focus l'a déjà enregistrée).
         onDelete={async () => {
@@ -111,6 +117,10 @@ interface TaskDetailBodyProps {
   toggleDone: () => Promise<void>;
   /** « Reporter » / « Planifier » (T-05). */
   postpone: (target: PostponeTarget) => Promise<void>;
+  /** Règle de la série (T-09), `null` : tâche non récurrente. */
+  recurrence: RecurrenceFields | null;
+  /** « Répéter… » : pose une règle sur une tâche datée (T-09) ; la modification / l'arrêt relèvent de T-10. */
+  setRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
   /** Suppression confirmée (T-08) ; la fiche parente se ferme si elle réussit. */
   onDelete: () => Promise<void>;
   /** Échec d'enregistrement ou de report à afficher (la tâche reste affichée). */
@@ -118,7 +128,9 @@ interface TaskDetailBodyProps {
 }
 
 /** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, onDelete, errorKey }: TaskDetailBodyProps) {
+function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, recurrence, setRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [repeatDraft, setRepeatDraft] = useState<RecurrenceFields | null>(null);
   const [noteDraft, setNoteDraft] = useState(task.note);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -195,6 +207,50 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
             </Button>
           )}
         </div>
+      )}
+
+      {/* Répétition (Detail.html : « Répétition  Mensuelle, le 23 »). Résumé en lecture seule pour une
+          tâche récurrente ; « Répéter… » pour une tâche datée, non terminée, sans règle (T-09). */}
+      {task.recurrenceId !== null ? (
+        recurrence && (
+          <div className="ct-task-detail__row">
+            <span>{t('tasks.repeatLabel')}</span>
+            <span className="ct-task-detail__rowValue">{formatMessageRef(recurrenceLabel(recurrence, task.date))}</span>
+          </div>
+        )
+      ) : (
+        task.date !== null &&
+        task.status !== 'done' && (
+          <div className="ct-task-detail__repeat">
+            <Button
+              variant="secondary"
+              expanded={repeatOpen}
+              ariaLabel={t('tasks.repeatActionLabel')}
+              onClick={() => {
+                setRepeatDraft(null);
+                setRepeatOpen((open) => !open);
+              }}
+            >
+              {t('tasks.repeatAction')}
+            </Button>
+            {repeatOpen && (
+              <div className="ct-task-detail__iconEditor">
+                <RecurrencePicker value={repeatDraft} onChange={setRepeatDraft} startDate={task.date} />
+                <Button
+                  disabled={repeatDraft === null}
+                  onClick={() => {
+                    if (!repeatDraft) return;
+                    void setRecurrence(repeatDraft).then((ok) => {
+                      if (ok) setRepeatOpen(false);
+                    });
+                  }}
+                >
+                  {t('tasks.repeatApply')}
+                </Button>
+              </div>
+            )}
+          </div>
+        )
       )}
 
       <TextField

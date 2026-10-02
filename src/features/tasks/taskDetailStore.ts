@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { IconRef } from '../../domain/model';
+import type { IconRef, RecurrenceFields } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -17,6 +17,8 @@ export type TaskDetailStatus = 'idle' | 'loading' | 'ready' | 'error';
  */
 export interface TaskDetailState {
   readonly taskId: TaskId | null;
+  /** Règle de récurrence de la tâche affichée (T-09), `null` : une fois ou pas encore lue. */
+  readonly recurrence: RecurrenceFields | null;
   readonly status: TaskDetailStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -33,6 +35,11 @@ export interface TaskDetailState {
   toggleDone(): Promise<void>;
   /** Bouton « Reporter » / « Planifier » (T-05) : annulable, la fiche reste ouverte. Ne rejette jamais. */
   postpone(target: PostponeTarget): Promise<void>;
+  /**
+   * T-09 : rend la tâche affichée récurrente (aucune règle n'existait). Rend true si la règle est
+   * posée (la fiche la reflète via `taskEntities`), false sinon (message dédié). Ne rejette jamais.
+   */
+  setRecurrence(rule: RecurrenceFields): Promise<boolean>;
   /**
    * Supprime la tâche affichée (T-08, après confirmation par la fiche) : corbeille, annulable 5 s.
    * Rend true si elle est supprimée (la fiche doit se fermer), false en cas d'échec (message dédié,
@@ -67,12 +74,13 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
 
   return createStore<TaskDetailState>()((set, get) => ({
     taskId: null,
+    recurrence: null,
     status: 'idle',
     errorKey: null,
 
     async load(id) {
       const requestedId = ++requestId;
-      set({ taskId: id, status: 'loading', errorKey: null });
+      set({ taskId: id, recurrence: null, status: 'loading', errorKey: null });
       try {
         const task = await container.data.repos.tasks.getById(id);
         if (requestedId !== requestId) return;
@@ -81,7 +89,10 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
           return;
         }
         container.taskEntities.publish([task]);
-        set({ status: 'ready', errorKey: null });
+        // Règle de la série (T-09) : sa lecture ne bloque pas l'affichage de la fiche.
+        const recurrence = task.recurrenceId ? await container.data.repos.recurrences.getById(task.recurrenceId).catch(() => null) : null;
+        if (requestedId !== requestId) return;
+        set({ status: 'ready', errorKey: null, recurrence });
       } catch {
         if (requestedId !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.detailLoadError' });
@@ -99,6 +110,23 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         set({ errorKey: null });
       } catch {
         set({ status: 'error', errorKey: 'tasks.postponeError' });
+      }
+    },
+
+    setRecurrence: async (rule) => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await useCases.setRecurrence(taskId, rule);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: result.error === 'invalid' || result.error === 'needs-date' ? 'tasks.repeatInvalid' : 'tasks.repeatError' });
+          return false;
+        }
+        set({ status: 'ready', errorKey: null, recurrence: rule });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.repeatError' });
+        return false;
       }
     },
 
