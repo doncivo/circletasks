@@ -104,6 +104,10 @@ describe('taskUseCases.duplicate (T-12)', () => {
     expect(entities.get(copy.id)).toBeUndefined();
     const trash = await db.data.repos.tasks.listTrash('2026-01-01T00:00:00.000Z' as never, 'all');
     expect(trash.map((t) => t.id)).not.toContain(copy.id);
+    // Tombstone conservé (synchro), série intacte : aucun series_index n'est touché.
+    const tomb = await db.data.repos.tasks.getById(copy.id, { includeDeleted: true });
+    expect(tomb?.deletedAt).not.toBeNull();
+    expect(tomb?.seriesIndex).toBeNull();
     expect(await db.data.repos.tasks.getById(id)).not.toBeNull();
   });
 

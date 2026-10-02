@@ -73,6 +73,16 @@ describe('duplication depuis Aujourd’hui et la fiche (T-12)', () => {
     expect(await titles()).toEqual(['Courses', 'Courses']);
     expect(screen.getByRole('status')).toHaveTextContent('« Courses » dupliquée');
     expect(screen.queryByRole('complementary', { name: 'Détail de la tâche' })).not.toBeInTheDocument();
+  });
+
+  it('« Annuler » du message supprime la copie, l’original reste (critère 7)', async () => {
+    mockViewport(1440);
+    renderScreen();
+    fireEvent.focus(await screen.findByRole('checkbox', { name: 'Terminer : Courses' }));
+    container.shortcuts.handle(CTRL_SHIFT_D);
+    const dialog = await screen.findByRole('dialog', { name: 'Choisir la date de la copie' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dupliquer' }));
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'Courses' })).toHaveLength(2));
 
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Courses' })).toHaveLength(1));

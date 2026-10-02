@@ -138,8 +138,8 @@ function createDeleteUndoCommand(deps: TaskUseCaseDeps, deleted: readonly Task[]
 /**
  * Commande annulable d'une duplication (T-12, T-13) : annuler = supprimer la copie (et ses rappels), tant qu'elle
  * n'a pas été modifiée depuis (hlc identique à celui écrit par la duplication) ; sinon 'stale'. Comme pour l'occurrence
- * annulée de T-09, la copie est marquée (`UNDONE_OCCURRENCE_INDEX`) avant de partir à la corbeille : elle n'y est pas
- * listée (rien à restaurer), son effacement reste synchronisé.
+ * annulée de T-09, la copie est écartée (`discard`) : tombstone conservé pour la synchro, exclue de la corbeille
+ * (rien à restaurer). Elle n'appartient à aucune série : aucun `series_index` n'est touché.
  */
 function createDuplicateUndoCommand(deps: TaskUseCaseDeps, copy: Task): UndoableCommand {
   return {
@@ -150,8 +150,7 @@ function createDuplicateUndoCommand(deps: TaskUseCaseDeps, copy: Task): Undoable
       const removed = await deps.data.transaction(async (repos) => {
         const current = await repos.tasks.getById(copy.id);
         if (!current || current.hlc !== copy.hlc) return false;
-        await repos.tasks.update(copy.id, { seriesIndex: UNDONE_OCCURRENCE_INDEX });
-        const [gone] = await repos.tasks.softDelete([copy.id]);
+        const [gone] = await repos.tasks.discard([copy.id]);
         await repos.reminders.softDeleteForTarget({ type: 'task', id: copy.id }, gone?.deletedAt ?? undefined);
         return true;
       });
