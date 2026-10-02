@@ -466,6 +466,16 @@ export const fr = {
     deleteManyTitle: 'Supprimer {count} tâches ?',
     deleteManyBody: 'Elles seront conservées 30 jours dans la corbeille.',
   },
+  week: {
+    title: 'Semaine {number}',
+    titleYear: 'Semaine {number} · {year}',
+    daysLabel: 'Jours de la semaine',
+    todayMark: 'aujourd’hui',
+    dayAriaToday: '{day}, aujourd’hui',
+    loadError: 'Impossible de charger la semaine.',
+    sourceError: 'Certains éléments de la semaine n’ont pas pu être chargés.',
+    actionError: 'Impossible de modifier cette tâche.',
+  },
   undo: {
     action: 'Annuler',
     complete: '« {title} » terminée',

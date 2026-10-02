@@ -22,6 +22,8 @@ export interface AppShellProps {
   detail?: ReactNode;
   /** Bouton d'ajout flottant (`<Fab />`), ancré en bas à droite au-dessus du contenu. */
   fab?: ReactNode;
+  /** Le panneau PC se superpose au contenu (Semaine, S-01) au lieu de le rétrécir. */
+  detailOverlay?: boolean;
   className?: string;
 }
 
@@ -34,11 +36,11 @@ export interface AppShellProps {
  *   <TodayScreen />
  * </AppShell>
  */
-export function AppShell({ tabRail, children, detail, fab, className }: AppShellProps) {
+export function AppShell({ tabRail, children, detail, fab, detailOverlay, className }: AppShellProps) {
   const layout = useLayout();
   const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
-    <div className={['ct-app-shell', className].filter(Boolean).join(' ')} data-layout={layout}>
+    <div className={['ct-app-shell', className].filter(Boolean).join(' ')} data-layout={layout} data-detail-overlay={detailOverlay ? 'true' : undefined}>
       {tabRail}
       <DetailSlotContext.Provider value={layout === 'pc' ? slot : null}>
         <main className="ct-app-shell__main">{children}</main>

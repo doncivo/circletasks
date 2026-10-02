@@ -463,6 +463,16 @@ export const en: Messages = {
     deleteManyTitle: 'Delete {count} tasks?',
     deleteManyBody: 'They will be kept in the trash for 30 days.',
   },
+  week: {
+    title: 'Week {number}',
+    titleYear: 'Week {number} · {year}',
+    daysLabel: 'Days of the week',
+    todayMark: 'today',
+    dayAriaToday: '{day}, today',
+    loadError: 'Unable to load the week.',
+    sourceError: 'Some items of the week could not be loaded.',
+    actionError: 'Unable to change this task.',
+  },
   undo: {
     action: 'Undo',
     complete: '“{title}” completed',

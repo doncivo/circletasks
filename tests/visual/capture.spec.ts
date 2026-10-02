@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createTask, openToday } from '../e2e/helpers/today';
+import { insertTasks, openWeek, type DirectTask } from '../e2e/helpers/week';
 
 /**
  * Comparaison visuelle manuelle (npm run visual) : capture l'app et la maquette correspondante à la même
@@ -39,6 +40,24 @@ async function captureApp(page: Page, name: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(400);
   await page.screenshot({ path: resolve(OUT, `${name}-app.png`) });
+}
+
+/** Semaine du 21 au 27 sept. 2026 des maquettes (tâches seulement : routines et événements arrivent avec leurs modules). */
+const WEEK_SEED: DirectTask[] = [
+  { title: 'Relire le contrat', date: '2026-09-21', done: true },
+  { title: 'Appeler la banque', date: '2026-09-22', space: 'perso', done: true },
+  { title: 'Mettre à jour le budget', date: '2026-09-22', carried: true },
+  { title: 'Envoyer la facture', date: '2026-09-23', time: '09:00' },
+  { title: 'Appeler le notaire', date: '2026-09-23', time: '14:00', space: 'perso' },
+  { title: "Réunion d'équipe", date: '2026-09-24', time: '11:00' },
+  { title: 'Préparer le dépôt GitHub', date: '2026-09-24', space: 'perso' },
+  { title: 'Clôture mensuelle', date: '2026-09-25' },
+  { title: 'Courses', date: '2026-09-26', space: 'perso' },
+];
+
+async function prepareWeek(page: Page): Promise<void> {
+  await insertTasks(page, WEEK_SEED);
+  await openWeek(page);
 }
 
 interface Screen {
@@ -97,6 +116,8 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('complementary')).toBeVisible();
     },
   },
+  { name: 'Semaine', mockup: 'Semaine.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareWeek },
+  { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: prepareWeek },
 ];
 
 for (const screen of SCREENS) {

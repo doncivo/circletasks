@@ -96,3 +96,7 @@ Réponse à l'écart de la fiche T-10 (où garder les valeurs de série ?). Une 
 ## Avenant T-12 — copie écartée (`discarded`, 2026-10-02)
 
 Annuler une duplication supprime la copie logiquement et pose `task.discarded = 1` (migration 0004). La copie est alors exclue de la corbeille, garde sa trace de suppression et est purgée à 30 jours comme les autres. `restore` remet `discarded` à 0. `discarded` est une colonne locale : elle ne circule pas dans les journaux de synchronisation, et l'ADR de synchro (ordre 4) devra le préciser.
+
+## Avenant S-01 — vue par plage de dates (2026-10-02)
+
+La Semaine ne garde pas de liste d'ids : `weekStore.load` publie dans `taskEntities` les tâches de la semaine, puis l'écran sélectionne dans la source unique celles dont la date tombe dans la semaine affichée et dont l'espace correspond au filtre (`selectWeekTasks`, parcours de la table des entités, 5 000 entités : quelques ms). Une tâche créée, datée ou déplacée depuis une autre vue (fiche détail, Aujourd'hui, annulation) rejoint ou quitte donc la grille aussitôt, sans le mécanisme d'adoption par rechargement d'Aujourd'hui. Les lectures de la semaine passent par `TaskRepository.listForWeek` (une requête) et les sources d'Aujourd'hui (`todaySources`) pour les routines, événements locaux et checklists de chaque jour.
