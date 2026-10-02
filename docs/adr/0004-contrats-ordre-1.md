@@ -92,3 +92,7 @@ Réponse à l'écart de la fiche T-10 (où garder les valeurs de série ?). Une 
 - Arrêt de la répétition et « toutes les suivantes » d'une suppression : `recurrence.deleted_at` posé (la règle n'existe plus pour `createNextOccurrence`) ; les occurrences à venir déjà créées deviennent des tâches simples (arrêt) ou partent en corbeille (suppression).
 - Suppression « cette occurrence » : la suivante est générée immédiatement (`ignoreDue`) ; son annulation la retire avec le marqueur `series_index = -1` de l'avenant T-09.
 - Annulation (kind `series`, ou `delete` pour la suppression) : commandes fondées sur le hlc, 'stale' si la tâche ou la règle a changé depuis.
+
+## Avenant T-12 — copie écartée (`discarded`, 2026-10-02)
+
+Annuler une duplication supprime la copie logiquement et pose `task.discarded = 1` (migration 0004). La copie est alors exclue de la corbeille, garde sa trace de suppression et est purgée à 30 jours comme les autres. `restore` remet `discarded` à 0. `discarded` est une colonne locale : elle ne circule pas dans les journaux de synchronisation, et l'ADR de synchro (ordre 4) devra le préciser.

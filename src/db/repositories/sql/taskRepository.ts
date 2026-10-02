@@ -358,7 +358,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       for (const id of ids) {
         const stamp = stamper.next();
         await db.execute(
-          'UPDATE task SET deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
+          'UPDATE task SET deleted_at = NULL, discarded = 0, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NOT NULL',
           [stamp.at, stamp.deviceId, stamp.hlc, id],
         );
       }
