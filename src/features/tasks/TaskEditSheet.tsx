@@ -48,7 +48,7 @@ export function TaskEditSheet({ task, spaces, today, recurrence, onClose, onSave
 
   return (
     <Sheet open onClose={onClose} label={t('detail.editSheetTitle')}>
-      <form className="ct-task-sheet" onSubmit={submit}>
+      <form className="ct-task-sheet" noValidate onSubmit={submit}>
         <div className="ct-task-sheet__header">
           <h2 className="ct-task-sheet__heading">{t('detail.editSheetTitle')}</h2>
           <button type="button" className="ct-task-sheet__close" aria-label={t('common.close')} onClick={onClose}>

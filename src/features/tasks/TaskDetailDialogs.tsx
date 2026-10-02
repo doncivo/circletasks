@@ -1,4 +1,5 @@
 import type { Task } from '../../domain/model';
+import { RULE_EDIT_SCOPES } from '../../domain/recurrenceEdit';
 import { t } from '../../i18n';
 import { ChoiceDialog } from '../../ui';
 import type { TaskDetailEdits } from './useTaskDetailEdits';
@@ -17,6 +18,15 @@ export function TaskDetailDialogs({ task, edits }: { task: Pick<Task, 'title'>; 
   const { scope, sheet, postponeScope } = edits;
   return (
     <>
+      {sheet.pendingRule && (
+        <ChoiceDialog
+          title={t('tasks.seriesRuleTitle')}
+          description={t('tasks.seriesRuleBody')}
+          options={RULE_EDIT_SCOPES.map((id) => ({ id, label: t('tasks.seriesScopeFollowing') }))}
+          onChoose={sheet.chooseRule}
+          onCancel={sheet.cancelRule}
+        />
+      )}
       {sheet.pending && (
         <ChoiceDialog
           title={t('tasks.seriesEditTitle', { title: task.title })}

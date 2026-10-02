@@ -42,6 +42,10 @@ export interface TaskDetailEdits {
     readonly setOpen: (open: boolean) => void;
     readonly save: (result: EditSheetResult) => void;
     readonly pending: EditSheetResult | null;
+    /** Règle modifiée sur une série : « Toutes les suivantes » seulement (T-10 critère 4), posée avant l'enregistrement. */
+    readonly pendingRule: EditSheetResult | null;
+    readonly chooseRule: () => void;
+    readonly cancelRule: () => void;
     readonly choose: (scope: SeriesScope) => void;
     readonly cancel: () => void;
   };
@@ -79,6 +83,7 @@ export function useTaskDetailEdits(
   }
   const [pendingEdit, setPendingEdit] = useState<TaskPatch | null>(null);
   const [pendingSheet, setPendingSheet] = useState<EditSheetResult | null>(null);
+  const [pendingRule, setPendingRule] = useState<EditSheetResult | null>(null);
   const [pendingPostpone, setPendingPostpone] = useState<PostponeTarget | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [localErrorKey, setLocalErrorKey] = useState<PlainMessageKey | null>(null);
@@ -161,9 +166,19 @@ export function useTaskDetailEdits(
           setLocalErrorKey('tasks.seriesError');
           return;
         }
+        if (task.recurrenceId !== null && result.rule) setPendingRule(result);
+        else if (scopeChoicesForEdit(task, result.patch).length > 0) setPendingSheet(result);
+        else void applySheet(result);
+      },
+      pendingRule,
+      chooseRule: () => {
+        const result = pendingRule;
+        setPendingRule(null);
+        if (!result) return;
         if (scopeChoicesForEdit(task, result.patch).length > 0) setPendingSheet(result);
         else void applySheet(result);
       },
+      cancelRule: () => setPendingRule(null),
       choose: (scope) => {
         const result = pendingSheet;
         setPendingSheet(null);

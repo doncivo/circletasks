@@ -298,6 +298,19 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       expect((await stored(task.id))?.title).toBe('Envoyer la facture');
     });
 
+    it('« Modifier » : changer la répétition d’une série pose la question « Toutes les suivantes » puis l’applique (T-10, Q15)', async () => {
+      const task = await open({ recurrence: { freq: 'monthly', interval: 1, weekdays: [], monthDay: 23, nthWeekday: null, until: null, count: null } });
+      fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
+      const edit = await screen.findByRole('dialog', { name: 'Modifier la tâche' });
+      fireEvent.click(within(edit).getByRole('radio', { name: 'Hebdo' }));
+      fireEvent.click(within(edit).getByRole('button', { name: 'Enregistrer' }));
+      const dialog = await screen.findByRole('alertdialog', { name: 'Modifier la répétition ?' });
+      expect(within(dialog).queryByRole('button', { name: 'Cette occurrence' })).toBeNull();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Toutes les suivantes' }));
+      await waitFor(() => expect(screen.getByTestId('recurrence-detail')).toHaveTextContent(/Hebdomadaire|Chaque|semaine/i));
+      expect((await stored(task.id))?.recurrenceId).not.toBeNull();
+    });
+
     it('« Modifier » une occurrence récurrente pose la question « cette occurrence / toutes les suivantes »', async () => {
       const task = await open({ recurrence: { freq: 'monthly', interval: 1, weekdays: [], monthDay: 23, nthWeekday: null, until: null, count: null } });
       fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
