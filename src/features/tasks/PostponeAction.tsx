@@ -57,7 +57,7 @@ export function PostponeAction({ task, onPostpone }: PostponeActionProps) {
         initialValue={nextDayFrom(todayLocal(container.clock))}
         onConfirm={(date) => {
           setDateOpen(false);
-          void onPostpone({ date });
+          if (date) void onPostpone({ date });
         }}
         onClose={() => setDateOpen(false)}
       />

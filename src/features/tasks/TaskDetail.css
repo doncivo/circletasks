@@ -74,6 +74,13 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+.ct-task-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+  align-items: flex-start;
+}
+
 .ct-task-detail__postpone {
   position: relative;
   align-self: flex-start;

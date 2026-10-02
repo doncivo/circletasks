@@ -16,3 +16,4 @@ export * from './recurrenceNext';
 export * from './recurrenceLabel';
 export * from './recurrenceEdit';
 export * from './timeZone';
+export * from './taskDuplicate';

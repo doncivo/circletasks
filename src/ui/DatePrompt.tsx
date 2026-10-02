@@ -13,10 +13,12 @@ export interface DatePromptProps {
   label: string;
   /** Libellé du bouton de validation (ex. « Valider »). */
   confirmLabel: string;
-  /** Date proposée à l'ouverture. */
-  initialValue: LocalDate;
-  /** Date valide choisie ; Échap / « Fermer » n'appellent que `onClose`. */
-  onConfirm: (date: LocalDate) => void;
+  /** Date proposée à l'ouverture ; null : « Un jour » présélectionné (avec `allowSomeday`, T-12 / Q8). */
+  initialValue: LocalDate | null;
+  /** Propose « Un jour » (sans date) à côté du champ ; `onConfirm(null)` quand il est validé (T-12). */
+  allowSomeday?: boolean;
+  /** Date valide choisie (null : « Un jour ») ; Échap / « Fermer » n'appellent que `onClose`. */
+  onConfirm: (date: LocalDate | null) => void;
   onClose: () => void;
 }
 
@@ -26,10 +28,10 @@ export interface DatePromptProps {
  * mini-calendrier PC) qui le remplacera sans changer ce contrat. Feuille sur
  * iPhone, fenêtre centrée sur PC.
  */
-export function DatePrompt({ open, label, confirmLabel, initialValue, onConfirm, onClose }: DatePromptProps) {
+export function DatePrompt({ open, label, confirmLabel, initialValue, allowSomeday = false, onConfirm, onClose }: DatePromptProps) {
   const layout = useLayout();
   if (!open) return null;
-  const form = <DatePromptForm label={label} confirmLabel={confirmLabel} initialValue={initialValue} onConfirm={onConfirm} onClose={onClose} />;
+  const form = <DatePromptForm label={label} confirmLabel={confirmLabel} initialValue={initialValue} allowSomeday={allowSomeday} onConfirm={onConfirm} onClose={onClose} />;
   if (layout === 'mobile') {
     return (
       <Sheet open onClose={onClose} label={label}>
@@ -55,13 +57,16 @@ function DatePromptModal({ label, onClose, children }: { label: string; onClose:
   );
 }
 
-function DatePromptForm({ label, confirmLabel, initialValue, onConfirm, onClose }: Omit<DatePromptProps, 'open'>) {
-  const [value, setValue] = useState<string>(initialValue);
-  const valid = isLocalDate(value);
+function DatePromptForm({ label, confirmLabel, initialValue, allowSomeday = false, onConfirm, onClose }: Omit<DatePromptProps, 'open'>) {
+  const [value, setValue] = useState<string>(initialValue ?? '');
+  // « Un jour » : choisi à l'ouverture si l'original l'est, ou par le bouton ; modifier la date le lève.
+  const [someday, setSomeday] = useState(allowSomeday && initialValue === null);
+  const valid = someday || isLocalDate(value);
 
   function handleSubmit(event: FormEvent): void {
     event.preventDefault();
-    if (isLocalDate(value)) onConfirm(value);
+    if (someday) onConfirm(null);
+    else if (isLocalDate(value)) onConfirm(value);
   }
 
   return (
@@ -71,9 +76,17 @@ function DatePromptForm({ label, confirmLabel, initialValue, onConfirm, onClose 
         type="date"
         aria-label={t('tasks.postponeDateLabel')}
         value={value}
-        onChange={(event) => setValue(event.target.value)}
+        onChange={(event) => {
+          setValue(event.target.value);
+          setSomeday(false);
+        }}
         className="ct-date-prompt__input"
       />
+      {allowSomeday && (
+        <Button variant="secondary" fullWidth pressed={someday} onClick={() => setSomeday(true)}>
+          {t('tasks.someday')}
+        </Button>
+      )}
       <Button type="submit" fullWidth disabled={!valid}>
         {confirmLabel}
       </Button>

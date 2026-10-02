@@ -30,6 +30,29 @@ describe('DatePrompt', () => {
     expect(onConfirm).toHaveBeenCalledWith('2026-11-01');
   });
 
+  it('« Un jour » (allowSomeday) : présélectionné si initialValue est null, valide null ; modifier la date le lève (T-12)', () => {
+    mockViewport(1440);
+    const onConfirm = vi.fn();
+    render(<DatePrompt {...props} initialValue={null} allowSomeday onConfirm={onConfirm} onClose={vi.fn()} />);
+    const someday = screen.getByRole('button', { name: 'Un jour' });
+    expect(someday).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+    expect(onConfirm).toHaveBeenLastCalledWith(null);
+    fireEvent.change(screen.getByLabelText('Choisir une date de report'), { target: { value: '2026-11-01' } });
+    expect(someday).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+    expect(onConfirm).toHaveBeenLastCalledWith('2026-11-01');
+    fireEvent.click(someday);
+    fireEvent.click(screen.getByRole('button', { name: 'Valider' }));
+    expect(onConfirm).toHaveBeenLastCalledWith(null);
+  });
+
+  it('sans allowSomeday : pas de bouton « Un jour »', () => {
+    mockViewport(1440);
+    render(<DatePrompt {...props} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Un jour' })).not.toBeInTheDocument();
+  });
+
   it('Échap (PC) et Fermer (iPhone) n’appliquent rien', () => {
     mockViewport(1440);
     const onConfirm = vi.fn();

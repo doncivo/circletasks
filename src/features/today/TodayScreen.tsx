@@ -12,7 +12,7 @@ import { Button, ChoiceDialog, Checkbox, Fab, Icon, IconChooser, IconView, ListR
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
-import { TaskDetail } from '../tasks';
+import { DuplicatePrompt, TaskDetail } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import type { NewTaskSchedule } from './todayStore';
 import { resolveTodayTasks, todayStore } from './todayStore';
@@ -106,6 +106,7 @@ export function TodayScreen() {
   const postpone = useFeatureStore(todayStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(todayStore, (s) => s.postponeSeries);
   const remove = useFeatureStore(todayStore, (s) => s.remove);
+  const duplicate = useFeatureStore(todayStore, (s) => s.duplicate);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
   const navigate = useNavigationStore((s) => s.navigate);
@@ -144,6 +145,17 @@ export function TodayScreen() {
     });
   }, [container, focusedTaskId]);
   const deleteTarget = deleteTargetId ? entities.get(deleteTargetId) : undefined;
+
+  // Ctrl+Maj+D (T-12, critère 1) : ouvre le choix de la date de la copie pour la ligne sélectionnée
+  // (présélectionnée sur la date de l'original) ; rien n'est créé avant la validation.
+  const [duplicateTargetId, setDuplicateTargetId] = useState<TaskId | null>(null);
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    return container.shortcuts.register('list.duplicate', () => {
+      if (container.taskEntities.get(focusedTaskId)) setDuplicateTargetId(focusedTaskId);
+    });
+  }, [container, focusedTaskId]);
+  const duplicateTarget = duplicateTargetId ? entities.get(duplicateTargetId) : undefined;
 
   // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
   const appDay = useAppStore((s) => s.day);
@@ -184,6 +196,22 @@ export function TodayScreen() {
     // `load` ne rejette jamais.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceFilter, today]);
+
+  // T-12 : une tâche du jour affiché publiée ailleurs (copie créée depuis la fiche, dupliquée vers aujourd'hui)
+  // rejoint la liste par un rechargement ; chaque identifiant n'est tenté qu'une fois (pas de boucle si la base ne la renvoie pas).
+  const adoptTried = useRef(new Set<TaskId>());
+  useEffect(() => {
+    if (viewDate === null || status !== 'ready') return;
+    const known = new Set(taskIds);
+    let missing = false;
+    for (const task of entities.values()) {
+      if (task.date !== viewDate || task.someday || known.has(task.id) || adoptTried.current.has(task.id)) continue;
+      if (viewFilter !== 'all' && task.spaceId !== viewFilter) continue;
+      adoptTried.current.add(task.id);
+      missing = true;
+    }
+    if (missing) void load(viewDate, viewFilter);
+  }, [entities, taskIds, viewDate, viewFilter, status, load]);
 
   // Déplace le focus dans le champ Titre après l'ouverture de la feuille : le DOM
   // suit l'ordre visuel de la maquette (en-tête puis champ Titre), donc le piège de
@@ -421,6 +449,17 @@ export function TodayScreen() {
             void postponeSeries(postponeSeriesTask.id, 'tomorrow', scope);
           }}
           onCancel={() => setPostponeSeriesId(null)}
+        />
+      )}
+
+      {duplicateTarget && (
+        <DuplicatePrompt
+          task={duplicateTarget}
+          onClose={() => setDuplicateTargetId(null)}
+          onConfirm={(date) => {
+            setDuplicateTargetId(null);
+            void duplicate(duplicateTarget.id, date);
+          }}
         />
       )}
 
