@@ -49,6 +49,8 @@ export interface TodayState {
   readonly hideRoutines: boolean;
   /** A-05 : mode édition (suppression, poignées, sélection multiple) ; jamais mémorisé (l'écran le coupe en se fermant). */
   readonly editMode: boolean;
+  /** A-06 : vue compacte d'Aujourd'hui (`view.compact.today`, local à l'appareil), lue au chargement. */
+  readonly compact: boolean;
   /** A-05 : tâches sélectionnées (routines, objectif et événements ne le sont jamais, Q13). */
   readonly selection: ReadonlySet<TaskId>;
   readonly status: TodayStatus;
@@ -114,6 +116,8 @@ export interface TodayState {
    * (null : élément non déplaçable ou échec, `actionErrorKey` posé). Ne rejette jamais.
    */
   moveRow(rows: readonly TodayRow[], id: string, toIndex: number): Promise<MoveOutcome | null>;
+  /** A-06 : bascule la vue compacte et la mémorise (réglage local, les autres écrans gardent leur valeur). Ne rejette jamais. */
+  setCompact(compact: boolean): Promise<void>;
   /** A-05 : active ou coupe le mode édition ; la sélection est vidée dans les deux cas. */
   setEditMode(active: boolean): void;
   /** A-05 : ajoute ou retire une tâche de la sélection. */
@@ -178,6 +182,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     extrasFailed: false,
     hideRoutines: false,
     editMode: false,
+    compact: false,
     selection: new Set<TaskId>(),
     status: 'idle',
     errorKey: null,
@@ -195,7 +200,8 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         // Un réglage illisible n'empêche pas l'affichage : routines affichées par défaut.
         const hideRoutines = await container.data.repos.settings.get('today.hideRoutines').catch(() => false);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, hideRoutines, status: 'ready' });
+        const compact = await container.data.repos.settings.get('view.compact').then((value) => value.today, () => false);
+        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, hideRoutines, compact, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });
@@ -296,6 +302,17 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       const known = get().recurrences;
       const recurrences = await loadRecurrences(shown, known);
       if (recurrences !== known) set({ recurrences });
+    },
+
+    async setCompact(compact) {
+      const previous = get().compact;
+      set({ compact });
+      try {
+        const stored = await container.data.repos.settings.get('view.compact');
+        await container.data.repos.settings.set('view.compact', { ...stored, today: compact });
+      } catch {
+        set({ compact: previous, actionErrorKey: 'tasks.detailSaveError' });
+      }
     },
 
     setEditMode(active) {

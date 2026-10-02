@@ -40,6 +40,7 @@ export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
 export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
 export { DragHandle, type DragHandleProps } from './DragHandle';
+export { CompactToggle, type CompactToggleProps } from './CompactToggle';
 export {
   EditModeSwitch,
   RemoveButton,

@@ -402,6 +402,7 @@ export const en: Messages = {
     reorderError: 'Unable to reorder the list.',
     moveError: 'Unable to move these tasks.',
     editMode: 'Edit mode',
+    compactView: 'Compact view',
     select: 'Select: {title}',
     deselect: 'Deselect: {title}',
     remove: 'Delete: {title}',

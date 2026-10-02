@@ -405,6 +405,7 @@ export const fr = {
     reorderError: 'Impossible de réordonner la liste.',
     moveError: 'Impossible de déplacer ces tâches.',
     editMode: 'Mode édition',
+    compactView: 'Vue compacte',
     select: 'Sélectionner : {title}',
     deselect: 'Désélectionner : {title}',
     remove: 'Supprimer : {title}',

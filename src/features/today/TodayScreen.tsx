@@ -10,7 +10,7 @@ import type { DateChoice } from '../../domain/dateInput';
 import type { LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { Button, ChoiceDialog, ConfirmDialog, DatePicker, DragHandle, EditModeSwitch, Fab, Icon, IconChooser, RecurrencePicker, SelectionBar, SelectionBarButton, Sheet, SpacePills, TextField, useLayout, useSortable } from '../../ui';
+import { Button, ChoiceDialog, ConfirmDialog, DatePicker, CompactToggle, DragHandle, EditModeSwitch, Fab, Icon, IconChooser, RecurrencePicker, SelectionBar, SelectionBarButton, Sheet, SpacePills, TextField, useLayout, useSortable } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -68,6 +68,8 @@ export function TodayScreen() {
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
   const moveRow = useFeatureStore(todayStore, (s) => s.moveRow);
   const editMode = useFeatureStore(todayStore, (s) => s.editMode);
+  const compact = useFeatureStore(todayStore, (s) => s.compact);
+  const setCompact = useFeatureStore(todayStore, (s) => s.setCompact);
   const selection = useFeatureStore(todayStore, (s) => s.selection);
   const setEditMode = useFeatureStore(todayStore, (s) => s.setEditMode);
   const toggleSelection = useFeatureStore(todayStore, (s) => s.toggleSelection);
@@ -356,7 +358,6 @@ export function TodayScreen() {
   }
 
   const iconSize = layout === 'pc' ? 24 : 28;
-  const compact = false;
 
   /** Ctrl+clic ajoute ou retire la ligne de la sélection, Maj+clic étend jusqu'à la dernière ligne cochée (PC, critère 10). */
   function extendSelection(id: TaskId, shift: boolean): void {
@@ -442,6 +443,7 @@ export function TodayScreen() {
           date={viewedDate}
           today={today}
           layout={layout}
+          actions={<CompactToggle active={compact} onChange={(value) => void setCompact(value)} label={t('today.compactView')} />}
           {...(layout === 'pc' ? { onPreviousDay: () => goToDay(addDays(viewedDate, -1)), onNextDay: () => goToDay(addDays(viewedDate, 1)) } : {})}
         />
 
@@ -457,8 +459,8 @@ export function TodayScreen() {
           <>
             {(list.goal || list.events.length > 0) && (
               <div className="ct-today-banners" data-layout={layout}>
-                {list.goal && <TodayGoalCard entry={list.goal} compact={false} />}
-                <TodayEventBands events={list.events} compact={false} />
+                {list.goal && <TodayGoalCard entry={list.goal} compact={compact} />}
+                <TodayEventBands events={list.events} compact={compact} />
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
