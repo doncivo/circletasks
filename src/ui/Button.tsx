@@ -11,6 +11,8 @@ export interface ButtonProps {
   disabled?: boolean;
   fullWidth?: boolean;
   type?: 'button' | 'submit';
+  /** Bouton à deux états (ex. « Marquer comme terminée » / « Rouvrir », T-04) : `aria-pressed`. */
+  pressed?: boolean;
   className?: string;
 }
 
@@ -22,12 +24,13 @@ export interface ButtonProps {
  * <Button onClick={onSave}>{t('tasks.save')}</Button>
  * <Button variant="secondary" onClick={onPostpone}>{t('tasks.postpone')}</Button>
  */
-export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', className }: ButtonProps) {
+export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, className }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
       className={['ct-button', `ct-button--${variant}`, fullWidth && 'ct-button--full', className].filter(Boolean).join(' ')}
     >
       {children}

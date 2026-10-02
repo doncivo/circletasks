@@ -79,3 +79,13 @@ describe('pile d’annulation (T-13)', () => {
     expect(UNDO_LABEL_KEYS.delete).toBe('undo.delete');
   });
 });
+
+describe('undoMessage (T-04, critère 3)', () => {
+  it('interpole le titre dans le libellé de la commande', async () => {
+    const { undoMessage } = await import('./undo');
+    expect(undoMessage({ kind: 'complete', count: 1, labelParams: { title: 'Courses' }, undo: async () => 'undone' })).toBe(
+      '« Courses » terminée',
+    );
+    expect(undoMessage({ kind: 'delete', count: 1, undo: async () => 'undone' })).toBe('Tâche supprimée');
+  });
+});

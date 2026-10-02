@@ -12,7 +12,7 @@ import type { AppContainer } from '../app/container';
  * Chaque action annulable (T-13) pousse elle-même sa commande dans `deps.undo`
  * avant de rendre la main : le store n'a rien à faire pour l'annulation.
  */
-export type TaskUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo'>;
+export type TaskUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;
 
 export interface CreateTaskInput {
   /** Saisie brute ; trim et validation par src/domain. */

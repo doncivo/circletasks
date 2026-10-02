@@ -36,3 +36,9 @@ La synchro (ordre 4) fusionne champ par champ selon l'horloge logique hybride la
 - data-model : chaque table synchronisée a `id`, `created_at`, `updated_at`, `deleted_at`, `device_id`, `hlc` NOT NULL (sauf `deleted_at`) et un index utile à `maxHlc()`.
 - Les tests de repositories vérifient qu'une écriture change `updated_at` et augmente `hlc`.
 - La pile d'annulation est perdue à la fermeture : conforme à T-13 (« dans la session »).
+
+## Avenant (T-04) — Libellé paramétré du message « Annuler »
+
+- `UndoableCommand` gagne `labelParams?: Record<string, string | number>` ; `UNDO_LABEL_KEYS` accepte toute `MessageKey` (plus seulement les clés sans paramètre) et `undoMessage(command)` compose le texte.
+- `undo.complete` devient « « {title} » terminée » (critère 3 de T-04) ; la commande de complétion renseigne `labelParams: { title }`. Les autres types restent sans paramètre jusqu'à leur story (le pluriel par lot A-05 passera aussi par `labelParams`).
+- Une commande publie la tâche qu'elle réécrit dans `container.taskEntities` (ADR 0004, avenant) : l'interface n'a rien à rafraîchir après « Annuler ».

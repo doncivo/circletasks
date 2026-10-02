@@ -1,17 +1,18 @@
 import { X } from 'lucide-react';
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { IconRef } from '../../domain/model/icon';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
-import { asLocalDate, asLocalTime, type SpaceId } from '../../domain/types';
+import { asLocalDate, asLocalTime, type SpaceId, type TaskId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
-import { Button, Fab, Icon, IconChooser, IconView, ListRow, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
-import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { Button, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { TaskDetail } from '../tasks';
 import type { NewTaskSchedule } from './todayStore';
-import { todayStore } from './todayStore';
+import { resolveTodayTasks, todayStore } from './todayStore';
+import { UndoToast } from './UndoToast';
 import './TodayScreen.css';
 
 function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: string } {
@@ -56,13 +57,27 @@ export function TodayScreen() {
   const spaces = useAppStore((s) => s.spaces);
   const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
 
-  const tasks = useFeatureStore(todayStore, (s) => s.tasks);
+  const taskIds = useFeatureStore(todayStore, (s) => s.taskIds);
+  const entities = useTaskEntities();
+  const tasks = useMemo(() => resolveTodayTasks(taskIds, entities), [taskIds, entities]);
+  const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(todayStore, (s) => s.status);
   const errorKey = useFeatureStore(todayStore, (s) => s.errorKey);
   const load = useFeatureStore(todayStore, (s) => s.load);
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
-  const setTaskInPlace = useFeatureStore(todayStore, (s) => s.setTaskInPlace);
+  const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const openDetail = useNavigationStore((s) => s.openDetail);
+
+  // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
+  // reçu le focus (case ou titre), via `onFocus` posé sur le conteneur de chaque
+  // ligne (React délègue `onFocus` sur `focusin`, qui remonte depuis les enfants).
+  // Pas de surcouche de sélection dédiée : A-02 (flèches haut/bas, Alt+↑/↓)
+  // branchera `list.previous` / `list.next` sur ce même état le moment venu.
+  const [focusedTaskId, setFocusedTaskId] = useState<TaskId | null>(null);
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    return container.shortcuts.register('list.complete', () => void toggleDone(focusedTaskId));
+  }, [container, focusedTaskId, toggleDone]);
 
   const today = todayLocal(container.clock);
   const header = formatTodayHeader(today);
@@ -154,6 +169,7 @@ export function TodayScreen() {
 
         <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
 
+        {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
         {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
 
         {status === 'error' ? null : tasks.length === 0 ? (
@@ -161,17 +177,29 @@ export function TodayScreen() {
         ) : (
           <div className="ct-today__list">
             {tasks.map((task) => (
-              <ListRow
-                key={task.id}
-                title={task.title}
-                subtitle={task.time ?? undefined}
-                done={task.status === 'done'}
-                icon={task.icon ? <IconView icon={task.icon} color={resolveIconRefColor(task.icon)} size={layout === 'pc' ? 24 : 28} /> : undefined}
-                onActivate={() => openDetail({ type: 'task', id: task.id })}
-              />
+              <div key={task.id} onFocus={() => setFocusedTaskId(task.id)}>
+                <ListRow
+                  title={task.title}
+                  subtitle={task.time ?? undefined}
+                  done={task.status === 'done'}
+                  leading={
+                    <Checkbox
+                      checked={task.status === 'done'}
+                      onChange={() => void toggleDone(task.id)}
+                      label={t(task.status === 'done' ? 'tasks.reopen' : 'tasks.complete', { title: task.title })}
+                    />
+                  }
+                  icon={task.icon ? <IconView icon={task.icon} color={resolveIconRefColor(task.icon)} size={layout === 'pc' ? 24 : 28} /> : undefined}
+                  onActivate={() => openDetail({ type: 'task', id: task.id })}
+                />
+              </div>
             ))}
           </div>
         )}
+
+        {/* Bandeau « Annuler » (T-04) après une complétion, branché sur `UndoStack`
+            (ADR 0005) ; T-13 généralisera son emplacement aux autres actions. */}
+        <UndoToast />
 
         <form className="ct-today__addRow" onSubmit={handleInlineSubmit}>
           <TextField
@@ -279,7 +307,7 @@ export function TodayScreen() {
         </Sheet>
       </div>
 
-      <TaskDetail onTaskUpdated={setTaskInPlace} />
+      <TaskDetail />
     </div>
   );
 }

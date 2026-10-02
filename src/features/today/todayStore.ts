@@ -2,7 +2,7 @@ import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
 import type { IconRef, Task } from '../../domain/model';
 import { sortTasksForDay } from '../../domain/taskSchedule';
-import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId } from '../../domain/types';
+import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
@@ -26,10 +26,13 @@ export type TodayAddTaskError = CreateTaskError | 'unexpected';
 export interface TodayState {
   readonly date: LocalDate | null;
   readonly filter: SpaceFilter;
-  readonly tasks: readonly Task[];
+  /** Ids des tâches du jour (ordre d'affichage) ; les entités sont lues dans `container.taskEntities` (ADR 0004, avenant). */
+  readonly taskIds: readonly TaskId[];
   readonly status: TodayStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
+  /** Échec d'une action sur une tâche (terminer / rouvrir) : message dédié, la liste reste affichée. */
+  readonly actionErrorKey: PlainMessageKey | null;
   /** (Re)charge les tâches datées de `date` pour le filtre d'espace donné. Ne rejette jamais. */
   load(date: LocalDate, filter: SpaceFilter): Promise<void>;
   /**
@@ -52,13 +55,12 @@ export interface TodayState {
     icon?: IconRef | null,
   ): Promise<Result<Task, TodayAddTaskError>>;
   /**
-   * Répercute dans la liste affichée une tâche modifiée ailleurs (fiche détail,
-   * T-03 : icône, note) : remplace l'entrée de même id si elle est affichée,
-   * ignore sans erreur si `task` n'appartient pas au jour courant. Synchrone
-   * (pas de lecture base) : `TaskDetail` l'appelle après chaque écriture réussie
-   * pour que la ligne reflète l'icône ou la note à jour sans recharger la liste.
+   * Termine ou rouvre une tâche (T-04 : case de la ligne, raccourci Espace)
+   * selon son état courant dans la liste affichée ; répercute le nouvel état
+   * (tri recalculé, terminées en bas, `sortTasksForDay`) sans recharger toute
+   * la liste. Ignore un id absent de la liste affichée. Ne rejette jamais.
    */
-  setTaskInPlace(task: Task): void;
+  toggleDone(id: TaskId): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -69,23 +71,29 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
 
   // Ordre d'affichage final (T-02, Q11) : à l'heure d'abord par heure croissante,
   // puis sans heure dans l'ordre manuel du repository, terminées en bas (T-04).
+  const listAndPublish = async (date: LocalDate, filter: SpaceFilter): Promise<Task[]> => {
+    const loaded = await container.data.repos.tasks.listForDay(date, filter);
+    container.taskEntities.publish(loaded);
+    return loaded;
+  };
   const fetchDay = async (date: LocalDate, filter: SpaceFilter): Promise<Task[]> =>
-    sortTasksForDay(await container.data.repos.tasks.listForDay(date, filter));
+    sortTasksForDay(await listAndPublish(date, filter));
 
   return createStore<TodayState>()((set, get) => ({
     date: null,
     filter: 'all',
-    tasks: [],
+    taskIds: [],
     status: 'idle',
     errorKey: null,
+    actionErrorKey: null,
 
     async load(date, filter) {
       const id = ++requestId;
-      set({ status: 'loading', date, filter, errorKey: null });
+      set({ status: 'loading', date, filter, errorKey: null, actionErrorKey: null });
       try {
         const tasks = await fetchDay(date, filter);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ tasks, status: 'ready' });
+        set({ taskIds: tasks.map((task) => task.id), status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });
@@ -113,7 +121,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         const id = ++requestId;
         try {
           const tasks = await fetchDay(viewedDate, filter);
-          if (id === requestId) set({ date: viewedDate, tasks, status: 'ready', errorKey: null });
+          if (id === requestId) set({ date: viewedDate, taskIds: tasks.map((task) => task.id), status: 'ready', errorKey: null });
         } catch {
           if (id === requestId) set({ status: 'error', errorKey: 'tasks.todayError' });
         }
@@ -124,10 +132,29 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       }
     },
 
-    setTaskInPlace(task) {
-      const { tasks } = get();
-      if (!tasks.some((existing) => existing.id === task.id)) return; // pas dans la liste affichée (autre jour, filtre)
-      set({ tasks: sortTasksForDay(tasks.map((existing) => (existing.id === task.id ? task : existing))) });
+    async toggleDone(id) {
+      if (!get().taskIds.includes(id)) return; // pas dans la liste affichée
+      const current = container.taskEntities.get(id);
+      if (!current) return;
+      try {
+        // Le cas d'usage publie la tâche écrite dans  : la ligne, la
+        // fiche ouverte et le tri (terminées en bas) la reflètent sans autre copie.
+        if (current.status === 'done') await useCases.reopen(id);
+        else await useCases.complete(id);
+        set({ actionErrorKey: null });
+      } catch {
+        // Échec d'écriture : la liste reste affichée telle quelle, message dédié.
+        set({ actionErrorKey: 'tasks.completeError' });
+      }
     },
   }));
 });
+
+/** Tâches affichées (entités lues dans la source unique, tri Q11 / T-04 : terminées en bas). */
+export function resolveTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>): Task[] {
+  const tasks = taskIds.flatMap((id) => {
+    const task = entities.get(id);
+    return task ? [task] : [];
+  });
+  return sortTasksForDay(tasks);
+}

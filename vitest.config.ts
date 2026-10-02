@@ -13,6 +13,8 @@ export default mergeConfig(
             name: 'node',
             environment: 'node',
             include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts'],
+            // Mesures de performance : hors de `npm run test` (script `test:perf`).
+            exclude: ['**/*.perf.test.ts', '**/node_modules/**'],
           },
         },
         {

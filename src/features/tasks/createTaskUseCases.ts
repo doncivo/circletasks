@@ -1,11 +1,36 @@
-import { todayLocal } from '../../domain/clock';
+import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewTask, Task, TaskPatch } from '../../domain/model';
+import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { validateTaskTitle } from '../../domain/taskRules';
 import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { Result, TaskId } from '../../domain/types';
 import { NotImplementedError } from '../../db/repositories';
+import type { UndoableCommand } from '../app/undo';
 import type { CreateTaskError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
+
+/**
+ * Commande annulable d'une complétion (T-04, T-13, ADR 0005) : annuler = rouvrir
+ * la tâche, mais seulement si elle n'a pas changé depuis (hlc identique à celui
+ * écrit par `complete`) ; sinon 'stale', sans rien écrire.
+ *
+ * Point d'extension (T-09) : si `complete()` a créé l'occurrence suivante d'une
+ * récurrence, cette commande devra aussi la supprimer ici (critère 7) — rien
+ * n'est fait tant que T-09 n'existe pas.
+ */
+function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task): UndoableCommand {
+  return {
+    kind: 'complete',
+    count: 1,
+    labelParams: { title: completed.title },
+    async undo() {
+      const current = await deps.data.repos.tasks.getById(completed.id);
+      if (!current || current.hlc !== completed.hlc) return 'stale';
+      deps.taskEntities.publish([await deps.data.repos.tasks.reopen(completed.id)]);
+      return 'undone';
+    },
+  };
+}
 
 /** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
 function touchesSchedule(patch: TaskPatch): boolean {
@@ -54,6 +79,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         externalId: null,
       };
       const created = await deps.data.repos.tasks.create(newTask);
+      deps.taskEntities.publish([created]);
       return { ok: true, value: created };
     },
 
@@ -64,11 +90,16 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       // Les autres champs du patch (titre, note, icône…) sont posés par T-03 /
       // A-08, transmis tels quels ici : `update` reste le point d'entrée unique
       // de la fiche détail (commentaire de `TaskRepository.update`).
+      const write = async (changes: TaskPatch): Promise<Task> => {
+        const written = await deps.data.repos.tasks.update(id, changes);
+        deps.taskEntities.publish([written]);
+        return written;
+      };
       if (!touchesSchedule(patch)) {
-        return deps.data.repos.tasks.update(id, patch);
+        return write(patch);
       }
       const current = await deps.data.repos.tasks.getById(id);
-      if (!current) return deps.data.repos.tasks.update(id, patch); // laisse le repository lever RepositoryError('not-found')
+      if (!current) return write(patch); // laisse le repository lever RepositoryError('not-found')
 
       // `exactOptionalPropertyTypes` (tsconfig) distingue « champ absent » de
       // « champ présent valant undefined » : on n'inclut une clé que si `patch`
@@ -80,13 +111,36 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       });
       if (!scheduled.ok) throw new ScheduleInvariantError(scheduled.error);
 
-      return deps.data.repos.tasks.update(id, { ...patch, ...scheduled.value });
+      return write({ ...patch, ...scheduled.value });
     },
-    complete() {
-      return Promise.reject(new NotImplementedError('taskUseCases.complete : à implémenter (T-04)'));
+    async complete(id: TaskId): Promise<Task> {
+      // Invariant status ⇔ doneAt posé par src/domain (T-04) ; le repository ne
+      // fait qu'écrire les deux colonnes ensemble (règle commune n°6).
+      const current = await deps.data.repos.tasks.getById(id);
+      // Idempotent (domaine) : déjà terminée, rien à écrire ni à annuler.
+      if (current && isCompleted(current)) {
+        deps.taskEntities.publish([current]);
+        return current;
+      }
+      const { doneAt } = completeTask(current ?? { status: 'todo', doneAt: null }, nowIso(deps.clock));
+      const updated = await deps.data.repos.tasks.complete(id, doneAt);
+      deps.taskEntities.publish([updated]);
+
+      // Point d'extension T-09 (récurrence) : si `updated.recurrenceId` n'est pas
+      // null, générer ici l'occurrence suivante (src/domain/recurrence.ts, à
+      // écrire par T-09) et l'annuler avec la même commande. Non implémenté :
+      // seule l'occurrence courante est terminée.
+
+      deps.undo.push(createCompleteUndoCommand(deps, updated));
+      return updated;
     },
-    reopen() {
-      return Promise.reject(new NotImplementedError('taskUseCases.reopen : à implémenter (T-04)'));
+    async reopen(id: TaskId): Promise<Task> {
+      // Rouvrir une tâche terminée n'est pas annulable (contrat `TaskUseCases.reopen`) :
+      // décocher une tâche terminée est déjà, du point de vue utilisateur,
+      // l'annulation de la complétion précédente (critère 5).
+      const reopened = await deps.data.repos.tasks.reopen(id);
+      deps.taskEntities.publish([reopened]);
+      return reopened;
     },
     postpone() {
       return Promise.reject(new NotImplementedError('taskUseCases.postpone : à implémenter (T-05, SD-02, A-05)'));

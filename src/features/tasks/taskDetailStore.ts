@@ -1,5 +1,5 @@
 import { createStore } from 'zustand';
-import type { IconRef, Task } from '../../domain/model';
+import type { IconRef } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -9,21 +9,27 @@ export type TaskDetailStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /**
  * État et actions de la fiche détail d'une tâche (A-08), limité par T-03 aux
- * zones icône et note (fiche complète hors périmètre de cette story). Une
- * instance par conteneur (`defineFeatureStore`, ADR 0004).
+ * zones icône et note, plus le bouton terminer / rouvrir (T-04). Une instance par
+ * conteneur (`defineFeatureStore`, ADR 0004). La tâche affichée n'est PAS copiée
+ * ici : seul `taskId` est gardé, l'entité est lue dans `container.taskEntities`
+ * (ADR 0004, avenant « Source unique des tâches chargées »).
  */
 export interface TaskDetailState {
   readonly taskId: TaskId | null;
-  readonly task: Task | null;
   readonly status: TaskDetailStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
-  /** Charge la tâche `id` pour l'affichage dans la fiche. Ne rejette jamais. */
+  /** Charge la tâche `id` (publiée dans `taskEntities`) pour la fiche. Ne rejette jamais. */
   load(id: TaskId): Promise<void>;
   /** Enregistre la note à la perte de focus (critères 7 à 9). Ne rejette jamais. */
   updateNote(note: string): Promise<void>;
   /** Change ou retire (`null`) l'icône depuis la pastille (critère 5). Ne rejette jamais. */
   updateIcon(icon: IconRef | null): Promise<void>;
+  /**
+   * Bouton « Marquer comme terminée » (T-04, critère 1) : bascule selon le statut
+   * courant de la tâche affichée. Ne rejette jamais.
+   */
+  toggleDone(): Promise<void>;
 }
 
 export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: AppContainer) => {
@@ -32,14 +38,18 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
   // ancienne qui se termine après un appel plus récent, même principe que todayStore).
   let requestId = 0;
 
-  async function applyPatch(set: (partial: Partial<TaskDetailState>) => void, get: () => TaskDetailState, patch: { note: string } | { icon: IconRef | null }): Promise<void> {
+  async function run(
+    set: (partial: Partial<TaskDetailState>) => void,
+    get: () => TaskDetailState,
+    action: (taskId: TaskId) => Promise<unknown>,
+  ): Promise<void> {
     const { taskId } = get();
     if (!taskId) return;
     const id = ++requestId;
     try {
-      const updated = await useCases.update(taskId, patch);
+      await action(taskId); // le cas d'usage publie la tâche écrite dans `taskEntities`
       if (id !== requestId) return; // un chargement ou une écriture plus récente a pris le dessus
-      set({ task: updated, status: 'ready', errorKey: null });
+      set({ status: 'ready', errorKey: null });
     } catch {
       if (id !== requestId) return;
       set({ status: 'error', errorKey: 'tasks.detailSaveError' });
@@ -48,7 +58,6 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
 
   return createStore<TaskDetailState>()((set, get) => ({
     taskId: null,
-    task: null,
     status: 'idle',
     errorKey: null,
 
@@ -62,14 +71,23 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
           set({ status: 'error', errorKey: 'tasks.detailLoadError' });
           return;
         }
-        set({ task, status: 'ready', errorKey: null });
+        container.taskEntities.publish([task]);
+        set({ status: 'ready', errorKey: null });
       } catch {
         if (requestedId !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.detailLoadError' });
       }
     },
 
-    updateNote: (note) => applyPatch(set, get, { note }),
-    updateIcon: (icon) => applyPatch(set, get, { icon }),
+    updateNote: (note) => run(set, get, (id) => useCases.update(id, { note })),
+    updateIcon: (icon) => run(set, get, (id) => useCases.update(id, { icon })),
+
+    toggleDone: () =>
+      run(set, get, (id) => {
+        // Statut lu dans la source unique : une tâche déjà terminée depuis la liste
+        // n'est pas terminée une seconde fois (`complete` est de toute façon idempotent).
+        const current = container.taskEntities.get(id);
+        return current?.status === 'done' ? useCases.reopen(id) : useCases.complete(id);
+      }),
   }));
 });

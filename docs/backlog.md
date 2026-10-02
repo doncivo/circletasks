@@ -20,8 +20,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | T-01 | M1 | Je crée une tâche avec un titre seul | tasks-planning | fait |
 | T-02 | M1 | J'affecte une date et une heure optionnelle | tasks-planning | fait |
 | T-03 | M1 | J'ajoute une note et une icône | tasks-planning | fait |
-| T-04 | M1 | Je marque une tâche terminée | tasks-planning | en cours |
-| T-05 | M1 | Je reporte une tâche | tasks-planning | à faire |
+| T-04 | M1 | Je marque une tâche terminée | tasks-planning | fait |
+| T-05 | M1 | Je reporte une tâche | tasks-planning | en cours |
 | T-06 | M1 | Les tâches non faites passent au lendemain | tasks-planning | à faire |
 | T-07 | M1 | Je consulte les tâches terminées | tasks-planning | à faire |
 | T-08 | M1 | Je supprime une tâche | tasks-planning | à faire |
