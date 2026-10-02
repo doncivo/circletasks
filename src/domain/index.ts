@@ -5,3 +5,4 @@ export * from './hlc';
 export * from './model';
 export * from './taskRules';
 export * from './taskSchedule';
+export * from './taskCompletion';

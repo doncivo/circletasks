@@ -32,7 +32,8 @@ describe('taskDetailStore (T-03)', () => {
 
     await store.getState().load(task.id);
 
-    expect(store.getState()).toMatchObject({ status: 'ready', task: { id: task.id, note: 'Relevé de septembre' } });
+    expect(store.getState()).toMatchObject({ status: 'ready', taskId: task.id });
+    expect(container.taskEntities.get(task.id)).toMatchObject({ note: 'Relevé de septembre' });
   });
 
   it('enregistre une note multi-lignes, conservée telle quelle (critères 7, 9, 11)', async () => {
@@ -41,13 +42,13 @@ describe('taskDetailStore (T-03)', () => {
     await store.getState().load(task.id);
 
     await store.getState().updateNote('Ligne 1\nLigne 2');
-    expect(store.getState().task?.note).toBe('Ligne 1\nLigne 2');
+    expect(container.taskEntities.get(task.id)?.note).toBe('Ligne 1\nLigne 2');
 
     const persisted = await container.data.repos.tasks.getById(task.id);
     expect(persisted?.note).toBe('Ligne 1\nLigne 2');
 
     await store.getState().updateNote('');
-    expect(store.getState().task?.note).toBe('');
+    expect(container.taskEntities.get(task.id)?.note).toBe('');
   });
 
   it('change puis retire l’icône depuis la fiche (critère 5)', async () => {
@@ -56,10 +57,10 @@ describe('taskDetailStore (T-03)', () => {
     await store.getState().load(task.id);
 
     await store.getState().updateIcon({ kind: 'lucide', name: 'phone' });
-    expect(store.getState().task?.icon).toEqual({ kind: 'lucide', name: 'phone' });
+    expect(container.taskEntities.get(task.id)?.icon).toEqual({ kind: 'lucide', name: 'phone' });
 
     await store.getState().updateIcon(null);
-    expect(store.getState().task?.icon).toBeNull();
+    expect(container.taskEntities.get(task.id)?.icon).toBeNull();
 
     const persisted = await container.data.repos.tasks.getById(task.id);
     expect(persisted?.icon).toBeNull();
@@ -72,11 +73,10 @@ describe('taskDetailStore (T-03)', () => {
     await store.getState().updateNote('À relire');
     await store.getState().updateIcon({ kind: 'emoji', value: '📞' });
 
-    const other = taskDetailStore.get(
-      createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data }),
-    );
+    const otherContainer = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data });
+    const other = taskDetailStore.get(otherContainer);
     await other.getState().load(task.id);
-    expect(other.getState().task).toMatchObject({ note: 'À relire', icon: { kind: 'emoji', value: '📞' } });
+    expect(otherContainer.taskEntities.get(task.id)).toMatchObject({ note: 'À relire', icon: { kind: 'emoji', value: '📞' } });
   });
 
   it('publie une erreur sans rejet non géré si le chargement échoue', async () => {
@@ -96,6 +96,31 @@ describe('taskDetailStore (T-03)', () => {
 
     await expect(store.getState().updateNote('x')).resolves.toBeUndefined();
     expect(store.getState()).toMatchObject({ status: 'error', errorKey: 'tasks.detailSaveError' });
+  });
+
+  it('toggleDone termine puis rouvre la tâche affichée (T-04, critères 1, 5)', async () => {
+    const task = await createTask();
+    const store = taskDetailStore.get(container);
+    await store.getState().load(task.id);
+
+    await store.getState().toggleDone();
+    expect(container.taskEntities.get(task.id)).toMatchObject({ status: 'done' });
+    expect(container.taskEntities.get(task.id)?.doneAt).not.toBeNull();
+
+    await store.getState().toggleDone();
+    expect(container.taskEntities.get(task.id)).toMatchObject({ status: 'todo', doneAt: null });
+  });
+
+  it('toggleDone ne re-termine pas une tâche déjà terminée ailleurs : la fiche la rouvre (source unique)', async () => {
+    const task = await createTask();
+    const store = taskDetailStore.get(container);
+    await store.getState().load(task.id);
+    const done = await createTaskUseCases(container).complete(task.id); // terminée depuis la liste
+    expect(container.taskEntities.get(task.id)).toEqual(done);
+
+    await store.getState().toggleDone();
+
+    expect(container.taskEntities.get(task.id)).toMatchObject({ status: 'todo', doneAt: null });
   });
 
   it('isole les instances par conteneur (ADR 0004)', () => {

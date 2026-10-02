@@ -1,4 +1,4 @@
-import type { PlainMessageKey } from '../../i18n';
+import { t, type MessageKey } from '../../i18n';
 
 /**
  * Actions annulables (T-13, ADR 0005) : terminer, reporter, déplacer, dupliquer,
@@ -23,6 +23,8 @@ export interface UndoableCommand {
   readonly kind: UndoKind;
   /** Nombre d'éléments touchés (sélection multiple A-05). */
   readonly count: number;
+  /** Paramètres du libellé du message « Annuler » (ex. { title } pour « « {title} » terminée »). */
+  readonly labelParams?: Readonly<Record<string, string | number>>;
   undo(): Promise<UndoOutcome>;
 }
 
@@ -52,7 +54,7 @@ export const UNDO_STACK_CAPACITY = 20;
 export const UNDO_TOAST_MS = 5_000;
 
 /** Libellé du message « Annuler » par type d'action. */
-export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: PlainMessageKey } = {
+export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   complete: 'undo.complete',
   postpone: 'undo.postpone',
   move: 'undo.move',
@@ -103,4 +105,10 @@ export function createUndoStack(capacity: number = UNDO_STACK_CAPACITY): UndoSta
       return () => listeners.delete(listener);
     },
   };
+}
+
+/** Texte du message « Annuler » d'une commande : libellé du type d'action + `labelParams`. */
+export function undoMessage(command: UndoableCommand): string {
+  const translate = t as (key: MessageKey, params?: Readonly<Record<string, string | number>>) => string;
+  return translate(UNDO_LABEL_KEYS[command.kind], command.labelParams);
 }

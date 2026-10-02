@@ -49,6 +49,10 @@ export const fr = {
     changeIcon: 'Changer l’icône',
     removeIcon: 'Retirer l’icône',
     noIcon: 'Aucune icône',
+    complete: 'Terminer : {title}',
+    reopen: 'Rouvrir : {title}',
+    markDone: 'Marquer comme terminée',
+    completeError: 'Impossible de terminer ou rouvrir cette tâche.',
   },
   icons: {
     modeIcon: 'Icône',
@@ -125,7 +129,7 @@ export const fr = {
   },
   undo: {
     action: 'Annuler',
-    complete: 'Tâche terminée',
+    complete: '« {title} » terminée',
     postpone: 'Tâche reportée',
     move: 'Tâche déplacée',
     someday: 'Tâche rangée dans « Un jour »',

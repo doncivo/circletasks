@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { todayLocal } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
@@ -367,6 +367,168 @@ describe('TodayScreen (T-01)', () => {
     await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Détail de la tâche' })).not.toBeInTheDocument());
     const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
     expect(persisted[0]?.note).toBe('À relire');
+  });
+
+  async function addTaskInline(title: string): Promise<void> {
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: title } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    await screen.findByText(title);
+  }
+
+  it('cocher la case termine la tâche : case cochée, titre barré, libellé « Rouvrir », toast (T-04, critères 1, 3, 9)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Boire de l’eau');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' }));
+
+    const box = await screen.findByRole('checkbox', { name: 'Rouvrir : Boire de l’eau' });
+    expect(box).toHaveAttribute('aria-checked', 'true');
+    const row = box.closest('.ct-list-row') as HTMLElement;
+    expect(row).toHaveAttribute('data-done', 'true');
+    expect(screen.getByRole('status')).toHaveTextContent('« Boire de l’eau » terminée');
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]).toMatchObject({ status: 'done' });
+    expect(persisted[0]?.doneAt).not.toBeNull();
+  });
+
+  it('une tâche terminée descend sous les tâches à faire (T-04, critère 2)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Première');
+    db.clock.advance(1);
+    await addTaskInline('Seconde');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Première' }));
+    await screen.findByRole('checkbox', { name: 'Rouvrir : Première' });
+
+    const titles = Array.from(document.querySelectorAll('.ct-list-row__title')).map((el) => el.textContent);
+    expect(titles).toEqual(['Seconde', 'Première']);
+  });
+
+  it('Annuler dans les 5 s rouvre la tâche et remonte sa ligne (T-04, critère 3)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Première');
+    db.clock.advance(1);
+    await addTaskInline('Seconde');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Première' }));
+    await screen.findByRole('checkbox', { name: 'Rouvrir : Première' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+    await screen.findByRole('checkbox', { name: 'Terminer : Première' });
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    const titles = Array.from(document.querySelectorAll('.ct-list-row__title')).map((el) => el.textContent);
+    expect(titles).toEqual(['Première', 'Seconde']);
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted.find((t) => t.title === 'Première')).toMatchObject({ status: 'todo', doneAt: null });
+  });
+
+  it('le message disparaît après 5 s mais la tâche reste terminée (T-04, critère 3)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Boire de l’eau');
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' }));
+      await screen.findByRole('status');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_001);
+      });
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: 'Rouvrir : Boire de l’eau' })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('décocher une tâche terminée la rouvre sans message « Annuler » supplémentaire (T-04, critère 5)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Boire de l’eau');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' }));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Rouvrir : Boire de l’eau' }));
+
+    await screen.findByRole('checkbox', { name: 'Terminer : Boire de l’eau' });
+    expect(container.undo.getSnapshot().size).toBe(1);
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]).toMatchObject({ status: 'todo', doneAt: null });
+  });
+
+  it('Espace sur la ligne sélectionnée termine puis rouvre la tâche (T-04, critère 6)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Boire de l’eau');
+
+    fireEvent.focus(screen.getByRole('button', { name: 'Boire de l’eau' }));
+    await waitFor(() => expect(container.shortcuts.activeIds()).toContain('list.complete'));
+    const press = () =>
+      container.shortcuts.handle({ key: ' ', code: 'Space', ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, editable: false });
+
+    press();
+    await screen.findByRole('checkbox', { name: 'Rouvrir : Boire de l’eau' });
+    press();
+    await screen.findByRole('checkbox', { name: 'Terminer : Boire de l’eau' });
+  });
+
+  it('« Marquer comme terminée » dans la fiche termine la tâche et la ligne le reflète (T-04, critère 1)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Envoyer la facture');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
+
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
+    expect(await screen.findByRole('checkbox', { name: 'Rouvrir : Envoyer la facture' })).toBeInTheDocument();
+  });
+
+  it('cocher dans la liste met à jour la fiche ouverte, et son bouton rouvre au lieu de re-terminer (source unique)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Envoyer la facture');
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    const doneButton = () => within(panel).getByRole('button', { name: 'Marquer comme terminée' });
+    expect(doneButton()).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Envoyer la facture' }));
+    await waitFor(() => expect(doneButton()).toHaveAttribute('aria-pressed', 'true'));
+
+    fireEvent.click(doneButton());
+    await waitFor(() => expect(doneButton()).toHaveAttribute('aria-pressed', 'false'));
+    expect(container.undo.getSnapshot().size).toBe(1); // une seule complétion enregistrée
+  });
+
+  it('Annuler met à jour la fiche ouverte (source unique, sans rechargement)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Envoyer la facture');
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false'));
+  });
+
+  it('affiche l’erreur sans rejet non géré si l’écriture de la complétion échoue (T-04)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Boire de l’eau');
+    vi.spyOn(container.data.repos.tasks, 'complete').mockRejectedValueOnce(new Error('boom'));
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de terminer ou rouvrir cette tâche.');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' })).toBeInTheDocument(); // liste conservée
   });
 
   it('iPhone : la fiche détail s’ouvre en feuille plein écran et se ferme par « Fermer » (A-08, critère 2)', async () => {

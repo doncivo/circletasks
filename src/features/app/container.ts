@@ -5,6 +5,7 @@ import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
 import type { OsFamily, Runtime } from '../../platform';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
+import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
 
 /**
@@ -23,6 +24,8 @@ export interface AppContainer {
   readonly hlc: HlcClock;
   readonly data: DataAccess;
   readonly undo: UndoStack;
+  /** Source unique des tâches chargées (ADR 0004, avenant). */
+  readonly taskEntities: TaskEntities;
   readonly shortcuts: ShortcutRegistry;
   readonly platform: { readonly runtime: Runtime; readonly os: OsFamily };
 }
@@ -36,6 +39,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     hlc: parts.hlc,
     data: parts.data,
     undo: parts.undo ?? createUndoStack(),
+    taskEntities: parts.taskEntities ?? createTaskEntities(),
     shortcuts: parts.shortcuts ?? createShortcutRegistry(),
     platform: parts.platform ?? { runtime: 'web', os: 'other' },
   };

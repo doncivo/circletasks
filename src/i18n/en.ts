@@ -46,6 +46,10 @@ export const en: Messages = {
     changeIcon: 'Change icon',
     removeIcon: 'Remove icon',
     noIcon: 'No icon',
+    complete: 'Complete: {title}',
+    reopen: 'Reopen: {title}',
+    markDone: 'Mark as done',
+    completeError: 'Unable to complete or reopen this task.',
   },
   icons: {
     modeIcon: 'Icon',
@@ -122,7 +126,7 @@ export const en: Messages = {
   },
   undo: {
     action: 'Undo',
-    complete: 'Task completed',
+    complete: '“{title}” completed',
     postpone: 'Task postponed',
     move: 'Task moved',
     someday: 'Task moved to “Someday”',

@@ -4,7 +4,8 @@ import { asEntityId, asLocalDate, asLocalTime, type DeviceId, type TaskId } from
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createAppContainer, type AppContainer } from '../app/container';
-import { todayStore } from './todayStore';
+import { createTaskUseCases } from '../tasks/createTaskUseCases';
+import { resolveTodayTasks, todayStore } from './todayStore';
 
 const DEVICE = asEntityId<DeviceId>('50000000-0000-4000-8000-000000000001');
 const DAY = asLocalDate('2026-10-02');
@@ -20,14 +21,18 @@ describe('todayStore (T-01)', () => {
 
   afterEach(() => db.close());
 
+  // Tâches affichées : ids du store + entités de la source unique, triées (T-02, T-04).
+  const shown = (store: { getState(): { taskIds: readonly TaskId[] } }) =>
+    resolveTodayTasks(store.getState().taskIds, container.taskEntities.getSnapshot());
+
   it('charge une liste vide puis ajoute une tâche visible aussitôt (critères 1, 3, 11, 16)', async () => {
     const store = todayStore.get(container);
     await store.getState().load(DAY, 'all');
-    expect(store.getState().tasks).toEqual([]);
+    expect(shown(store)).toEqual([]);
 
     const result = await store.getState().addTask('Appeler le notaire', SPACE_PRO_ID);
     expect(result.ok).toBe(true);
-    expect(store.getState().tasks.map((task) => task.title)).toEqual(['Appeler le notaire']);
+    expect(shown(store).map((task) => task.title)).toEqual(['Appeler le notaire']);
 
     const persisted = await container.data.repos.tasks.listForDay(DAY, 'all');
     expect(persisted).toHaveLength(1);
@@ -38,7 +43,7 @@ describe('todayStore (T-01)', () => {
     await store.getState().load(DAY, 'all');
     const result = await store.getState().addTask('   ', SPACE_PRO_ID);
     expect(result.ok).toBe(false);
-    expect(store.getState().tasks).toEqual([]);
+    expect(shown(store)).toEqual([]);
   });
 
   it('une tâche créée hors du filtre actif n’apparaît pas dans la liste rechargée (critère 10)', async () => {
@@ -46,7 +51,7 @@ describe('todayStore (T-01)', () => {
     await store.getState().load(DAY, SPACE_PRO_ID);
     const result = await store.getState().addTask('Envoyer la facture', SPACE_PERSO_ID);
     expect(result.ok).toBe(true);
-    expect(store.getState().tasks).toEqual([]);
+    expect(shown(store)).toEqual([]);
   });
 
   it('load() n’échoue jamais : publie un statut d’erreur si la lecture échoue', async () => {
@@ -97,7 +102,7 @@ describe('todayStore (T-01)', () => {
     db.clock.advance(1);
     await store.getState().addTask('D sans heure', SPACE_PRO_ID);
 
-    expect(store.getState().tasks.map((task) => task.title)).toEqual([
+    expect(shown(store).map((task) => task.title)).toEqual([
       'B (09:00)',
       'A (14:00)',
       'C sans heure',
@@ -112,35 +117,72 @@ describe('todayStore (T-01)', () => {
     const result = await store.getState().addTask('Jeudi prochain', SPACE_PRO_ID, { date: thursday });
 
     expect(result.ok).toBe(true);
-    expect(store.getState().tasks).toEqual([]); // toujours la liste du jour affiché (DAY), pas celle de jeudi
+    expect(shown(store)).toEqual([]); // toujours la liste du jour affiché (DAY), pas celle de jeudi
     expect(store.getState().date).toBe(DAY);
     const thursdayTasks = await container.data.repos.tasks.listForDay(thursday, 'all');
     expect(thursdayTasks.map((task) => task.title)).toEqual(['Jeudi prochain']);
   });
 
-  it('setTaskInPlace répercute une tâche modifiée ailleurs (fiche détail, T-03) sur la ligne affichée', async () => {
+  it('lit les tâches dans la source unique : une écriture ailleurs (fiche détail) est reflétée sans copie (ADR 0004 avenant)', async () => {
     const store = todayStore.get(container);
     await store.getState().load(DAY, 'all');
     await store.getState().addTask('Envoyer la facture', SPACE_PRO_ID);
-    const [task] = store.getState().tasks;
+    const [task] = shown(store);
     if (!task) throw new Error('fixture manquante');
 
-    store.getState().setTaskInPlace({ ...task, icon: { kind: 'lucide', name: 'phone' }, note: 'À relire' });
+    const updated = await createTaskUseCases(container).update(task.id, { note: 'À relire' });
 
-    expect(store.getState().tasks).toMatchObject([{ icon: { kind: 'lucide', name: 'phone' }, note: 'À relire' }]);
+    expect(updated.note).toBe('À relire');
+    expect(shown(store)).toMatchObject([{ note: 'À relire' }]);
   });
 
-  it('setTaskInPlace ignore une tâche absente de la liste affichée (autre jour, autre filtre)', async () => {
+  it('toggleDone termine une tâche et la descend sous les tâches à faire (T-04, critères 1, 2)', async () => {
     const store = todayStore.get(container);
     await store.getState().load(DAY, 'all');
-    await store.getState().addTask('Envoyer la facture', SPACE_PRO_ID);
-    const before = store.getState().tasks;
+    await store.getState().addTask('Boire de l’eau', SPACE_PRO_ID);
+    await store.getState().addTask('Faire mon lit', SPACE_PRO_ID);
+    const [first] = shown(store);
+    if (!first) throw new Error('fixture manquante');
 
-    const other = before[0];
-    if (!other) throw new Error('fixture manquante');
-    store.getState().setTaskInPlace({ ...other, id: asEntityId<TaskId>('99999999-0000-4000-8000-000000000099') });
+    await store.getState().toggleDone(first.id);
 
-    expect(store.getState().tasks).toEqual(before);
+    const titles = shown(store).map((task) => task.title);
+    expect(titles.at(-1)).toBe(first.title); // terminée : descendue en bas
+    expect(shown(store).find((task) => task.id === first.id)).toMatchObject({ status: 'done' });
+    expect(shown(store).find((task) => task.id === first.id)?.doneAt).not.toBeNull();
+  });
+
+  it('toggleDone rouvre une tâche terminée, doneAt redevient null (T-04, critère 5)', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Boire de l’eau', SPACE_PRO_ID);
+    const [task] = shown(store);
+    if (!task) throw new Error('fixture manquante');
+
+    await store.getState().toggleDone(task.id);
+    await store.getState().toggleDone(task.id);
+
+    expect(shown(store).find((t) => t.id === task.id)).toMatchObject({ status: 'todo', doneAt: null });
+  });
+
+  it('toggleDone ignore un id absent de la liste affichée', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await expect(store.getState().toggleDone(asEntityId<TaskId>('99999999-0000-4000-8000-000000000099'))).resolves.toBeUndefined();
+    expect(store.getState().status).toBe('ready');
+  });
+
+  it('toggleDone n’échoue jamais : publie un statut d’erreur si l’écriture échoue', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Boire de l’eau', SPACE_PRO_ID);
+    const [task] = shown(store);
+    if (!task) throw new Error('fixture manquante');
+    vi.spyOn(container.data.repos.tasks, 'complete').mockRejectedValueOnce(new Error('boom'));
+
+    await expect(store.getState().toggleDone(task.id)).resolves.toBeUndefined();
+    expect(store.getState()).toMatchObject({ status: 'ready', actionErrorKey: 'tasks.completeError' });
+    expect(shown(store)).toHaveLength(1); // la liste reste affichée
   });
 
   it('isole les instances par conteneur (ADR 0004)', async () => {

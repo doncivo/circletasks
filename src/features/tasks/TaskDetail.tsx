@@ -1,9 +1,9 @@
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { IconRef, Task } from '../../domain/model';
 import { t } from '../../i18n';
 import { Button, DetailPanel, Icon, IconChooser, IconView, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
-import { useFeatureStore } from '../app/AppContainerContext';
+import { useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { taskDetailStore } from './taskDetailStore';
 import './TaskDetail.css';
@@ -14,23 +14,24 @@ import './TaskDetail.css';
  * Focus / Reporter / Un jour / Dupliquer / Supprimer) arrive avec A-08. Panneau à
  * droite sur PC, feuille plein écran sur iPhone (`useLayout`, ADR 0004).
  *
- * `onTaskUpdated` (T-03) : appelé après chaque écriture réussie (icône, note)
- * pour que l'écran appelant (Aujourd'hui, Semaine…) répercute le changement sur
- * sa ligne sans recharger toute la liste (ex. `todayStore.setTaskInPlace`).
+ * La tâche affichée est lue dans `container.taskEntities` (source unique, ADR 0004).
  */
-export function TaskDetail({ onTaskUpdated }: { onTaskUpdated?: (task: Task) => void }) {
+export function TaskDetail() {
   const detail = useNavigationStore((s) => s.detail);
   const closeDetail = useNavigationStore((s) => s.closeDetail);
   const layout = useLayout();
 
   const taskId = detail?.type === 'task' ? detail.id : null;
-
-  const task = useFeatureStore(taskDetailStore, (s) => s.task);
+  // Tâche lue dans la source unique (ADR 0004, avenant) : toute écriture, d'où qu'elle
+  // vienne (liste, annulation), est reflétée ici sans copie à synchroniser.
+  const entities = useTaskEntities();
+  const task = taskId ? entities.get(taskId) : undefined;
   const status = useFeatureStore(taskDetailStore, (s) => s.status);
   const errorKey = useFeatureStore(taskDetailStore, (s) => s.errorKey);
   const load = useFeatureStore(taskDetailStore, (s) => s.load);
   const updateNote = useFeatureStore(taskDetailStore, (s) => s.updateNote);
   const updateIcon = useFeatureStore(taskDetailStore, (s) => s.updateIcon);
+  const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
 
   // Note non enregistrée (perte de focus pas encore survenue) : la fiche la
   // sauvegarde aussi à la fermeture (critère 8), y compris par Échap, qui ne
@@ -41,14 +42,6 @@ export function TaskDetail({ onTaskUpdated }: { onTaskUpdated?: (task: Task) => 
   useEffect(() => {
     if (taskId) void load(taskId);
   }, [taskId, load]);
-
-  // Répercute la tâche à jour sur la ligne d'Aujourd'hui (ou de tout autre écran
-  // appelant) après chaque chargement ou écriture réussie : `onTaskUpdated` est un
-  // simple appel de fonction (pas un `setState` React), sans risque de rendu en
-  // cascade pour la règle `react-hooks/set-state-in-effect`.
-  useEffect(() => {
-    if (task) onTaskUpdated?.(task);
-  }, [task, onTaskUpdated]);
 
   if (!taskId) return null;
 
@@ -61,7 +54,7 @@ export function TaskDetail({ onTaskUpdated }: { onTaskUpdated?: (task: Task) => 
   // tâche remonte un composant frais plutôt que de synchroniser le brouillon de
   // note et l'état du sélecteur d'icône par effet (pas de setState dans un effet).
   const content =
-    task && task.id === taskId ? (
+    task ? (
       <TaskDetailBody
         key={task.id}
         task={task}
@@ -70,6 +63,7 @@ export function TaskDetail({ onTaskUpdated }: { onTaskUpdated?: (task: Task) => 
         showCloseButton={layout === 'mobile'}
         updateNote={updateNote}
         updateIcon={updateIcon}
+        toggleDone={toggleDone}
       />
     ) : status === 'error' && errorKey ? (
       <p role="alert" className="ct-task-detail__error">
@@ -100,10 +94,12 @@ interface TaskDetailBodyProps {
   showCloseButton: boolean;
   updateNote: (note: string) => Promise<void>;
   updateIcon: (icon: IconRef | null) => Promise<void>;
+  /** Bouton « Marquer comme terminée » / « Rouvrir » (T-04, Detail.html). */
+  toggleDone: () => Promise<void>;
 }
 
 /** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon }: TaskDetailBodyProps) {
+function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone }: TaskDetailBodyProps) {
   const [noteDraft, setNoteDraft] = useState(task.note);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -149,6 +145,18 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
         </button>
         <h2 className="ct-task-detail__title">{task.title}</h2>
       </div>
+
+      {/* « Marquer comme terminée » (T-04, Detail.html) : libellé constant, l'état est porté
+          par `aria-pressed` seul ; la ligne appelante reflète la tâche via `taskEntities`. */}
+      <Button
+        variant="secondary"
+        pressed={task.status === 'done'}
+        onClick={() => void toggleDone()}
+        className="ct-task-detail__doneButton"
+      >
+        <Icon icon={Check} size={18} />
+        {t('tasks.markDone')}
+      </Button>
 
       {pickerOpen && (
         <div className="ct-task-detail__iconEditor">

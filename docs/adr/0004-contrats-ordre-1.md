@@ -64,3 +64,11 @@ L'ordre 1 fait intervenir cinq agents en parallèle (data-model, domain-logic, u
 2. Valeur par défaut de T-06 (`tasks.carryOverUndone`) : fixée à vrai (comportement NoteCircle), à confirmer.
 3. Liens tâche → checklist et tâche → événement externe (PRD 6, « option ») : pas de colonne à l'ordre 1 ; à ajouter par migration à l'ordre 2 (K-04, C-03).
 4. Libellés d'annulation au singulier « Tâche … » : pluriel par lot (A-05) à traiter avec `Intl.PluralRules` (accessibility-i18n).
+
+## Avenant (T-04) — Source unique des tâches chargées
+
+- Contexte : T-04 a montré qu'une tâche écrite depuis un écran (case de la liste, fiche détail, « Annuler ») restait périmée dans les autres stores qui en gardaient une copie.
+- Règle : `AppContainer.taskEntities` (`src/features/app/taskEntities.ts`) est le seul endroit où vivent les `Task` chargées, indexées par id. Un hlc inférieur n'écrase jamais une entité plus récente.
+- Les cas d'usage y publient toute `Task` qu'ils lisent ou écrivent (création, mise à jour, terminer / rouvrir, commandes d'annulation, plus tard report, déplacement, duplication ; `remove` pour la corbeille). Les repositories ne publient pas. Les lectures de listes (`load`) publient aussi ce qu'elles chargent.
+- Les stores d'écran (Aujourd'hui, fiche détail, demain Semaine, Un jour) ne gardent que des ids, des ordres et leurs états de chargement / d'erreur ; ils ne copient jamais une `Task`. Les composants lisent via `useTaskEntities()` puis calculent l'affichage (ex. `resolveTodayTasks`). Aucun « rafraîchissement après action » ni `setTaskInPlace` : toute nouvelle story branchée sur une tâche suit cette règle.
+- Les actions sont idempotentes dans le domaine (ex. `completeTask` sur une tâche déjà terminée ne change rien), car deux écrans peuvent agir sur la même tâche.
