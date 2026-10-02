@@ -18,6 +18,8 @@ export interface RoutineCardProps {
   /** Vue compacte (A-06) : une ligne de titre, sans ligne d'informations. */
   readonly compact: boolean;
   readonly onEdit: () => void;
+  /** Valide ou rouvre un jour de la semaine (R-03) : ronds d'aujourd'hui et des jours passés seulement (QB-03). */
+  readonly onToggleDay: (date: LocalDate) => void;
 }
 
 const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
@@ -27,7 +29,7 @@ const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text
  * prévus en pointillés), compteur « faits / prévus » de la semaine en cours, ligne « heure · espace · fréquence ». Tout est calculé
  * à l'affichage par src/domain (aucune occurrence stockée).
  */
-export function RoutineCard({ routine, spaces, done, today, layout, compact, onEdit }: RoutineCardProps) {
+export function RoutineCard({ routine, spaces, done, today, layout, compact, onEdit, onToggleDay }: RoutineCardProps) {
   const weekStart = mondayOf(today);
   const rounds = useMemo(() => weekRounds(routine, done, weekStart, today), [routine, done, weekStart, today]);
   const counter = useMemo(() => weekCounter(routine, done, weekStart), [routine, done, weekStart]);
@@ -59,6 +61,9 @@ export function RoutineCard({ routine, spaces, done, today, layout, compact, onE
               data-state={round.done ? 'done' : round.planned ? 'planned' : 'off'}
               data-date={round.date}
               className="ct-routine-card__round"
+              onClick={() => {
+                if (round.toggleable) onToggleDay(round.date);
+              }}
             >
               {day.charAt(0)}
             </button>

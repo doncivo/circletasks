@@ -76,11 +76,13 @@ export interface TodayRoutineRowProps {
   readonly inline: boolean;
   /** La routine est validable depuis la liste (une source de routines sait le faire, R-03). */
   readonly checkable: boolean;
+  /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
+  readonly disabled?: boolean;
   readonly onToggle: () => void;
 }
 
 /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; jamais sélectionnable ni déplaçable (Q13). */
-export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, checkable, onToggle }: TodayRoutineRowProps) {
+export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, checkable, disabled = false, onToggle }: TodayRoutineRowProps) {
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
   return (
     <ListRow
@@ -90,7 +92,7 @@ export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline
       inlineSubtitle={inline}
       {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle: time ? `${time} · ${t('today.routineLabel')}` : t('today.routineLabel') })}
       {...(checkable
-        ? { leading: <Checkbox compact={compact} checked={done} onChange={onToggle} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })} /> }
+        ? { leading: <Checkbox compact={compact} checked={done} disabled={disabled} onChange={onToggle} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })} /> }
         : {})}
       icon={!compact && routine.icon ? <IconView icon={routine.icon} color={color ?? 'currentColor'} size={iconSize} /> : undefined}
     />

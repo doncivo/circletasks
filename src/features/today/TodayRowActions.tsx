@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { TaskId } from '../../domain/types';
+import type { RoutineId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { ChoiceDialog } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
@@ -12,6 +12,9 @@ export interface TodayRowActions {
   /** Ligne « sélectionnée » au clavier : la dernière ayant reçu le focus (case, titre ou poignée). */
   readonly focusedTaskId: TaskId | null;
   readonly setFocusedTaskId: (id: TaskId) => void;
+  /** Routine « sélectionnée » au clavier (R-03 critère 8) : Espace la valide ou la rouvre. */
+  readonly focusedRoutineId: RoutineId | null;
+  readonly setFocusedRoutineId: (id: RoutineId) => void;
   /** Fenêtres ouvertes par les raccourcis et le « − » : report d'une série, copie, suppression. */
   readonly dialogs: ReactNode;
 }
@@ -28,7 +31,13 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
   const postponeSeries = useFeatureStore(todayStore, (s) => s.postponeSeries);
   const remove = useFeatureStore(todayStore, (s) => s.remove);
   const duplicate = useFeatureStore(todayStore, (s) => s.duplicate);
-  const [focusedTaskId, setFocusedTaskId] = useState<TaskId | null>(null);
+  const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
+  // Une seule ligne est « sélectionnée » : tâche ou routine (la dernière à avoir reçu le focus).
+  const [focus, setFocus] = useState<{ readonly task: TaskId | null; readonly routine: RoutineId | null }>({ task: null, routine: null });
+  const focusedTaskId = focus.task;
+  const focusedRoutineId = focus.routine;
+  const setFocusedTaskId = (id: TaskId): void => setFocus({ task: id, routine: null });
+  const setFocusedRoutineId = (id: RoutineId): void => setFocus({ task: null, routine: id });
   const [postponeSeriesId, setPostponeSeriesId] = useState<TaskId | null>(null);
   const [duplicateTargetId, setDuplicateTargetId] = useState<TaskId | null>(null);
   const { editMode, selectedIds, toggle, requestDeleteSelection, deleteTargetId, setDeleteTargetId } = edit;
@@ -38,6 +47,12 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
     // Mode édition : la case « Terminer » est remplacée par le rond de sélection, Espace sélectionne.
     return container.shortcuts.register('list.complete', () => (editMode ? toggle(focusedTaskId) : void toggleDone(focusedTaskId)));
   }, [container, focusedTaskId, toggleDone, toggle, editMode]);
+
+  // R-03 critère 8 : Espace sur la routine sélectionnée la valide ou la rouvre (pas en mode édition : les routines n'y sont pas modifiables, Q13).
+  useEffect(() => {
+    if (!focusedRoutineId || editMode) return undefined;
+    return container.shortcuts.register('list.complete', () => void toggleRoutine(focusedRoutineId));
+  }, [container, focusedRoutineId, toggleRoutine, editMode]);
 
   // Ctrl+D (T-05) : reporte à demain ; une occurrence récurrente pose d'abord « Cette occurrence / Toutes les suivantes » (T-10).
   useEffect(() => {
@@ -110,5 +125,5 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
     </>
   );
 
-  return { focusedTaskId, setFocusedTaskId, dialogs };
+  return { focusedTaskId, setFocusedTaskId, focusedRoutineId, setFocusedRoutineId, dialogs };
 }

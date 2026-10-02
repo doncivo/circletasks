@@ -23,6 +23,10 @@ export const routinesFr = {
   timesPerWeek: '{count} fois par semaine',
   everyNDays: 'tous les {count} jours',
   everyNWeeksOn: 'toutes les {count} semaines : {days}',
+  undo: {
+    validated: '« {title} » validée',
+    reopened: '« {title} » rouverte',
+  },
   form: {
     newTitle: 'Nouvelle routine',
     editTitle: 'Modifier la routine',

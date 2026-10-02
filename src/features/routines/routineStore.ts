@@ -44,6 +44,13 @@ export interface RoutinesState {
   create(input: RoutineInput): Promise<Result<Routine, RoutineSaveError>>;
   /** R-01, R-02, R-07 : enregistre le formulaire d'une routine puis recharge. Ne rejette jamais. */
   update(id: RoutineId, input: RoutineInput): Promise<Result<Routine, RoutineSaveError>>;
+  /**
+   * R-03 : valide le jour `date` d'une routine, ou le rouvre s'il l'était (ronds L à D de la carte) ; annulable 5 s. Rien ne se passe
+   * pour un jour futur, non prévu, ou si le quota de « X fois par semaine » est atteint. Ne rejette jamais.
+   */
+  toggleDay(id: RoutineId, date: LocalDate): Promise<void>;
+  /** Relit routines et validations sans passer par `loading` (une validation annulée ailleurs, R-03). Ne rejette jamais. */
+  refresh(): Promise<void>;
   /** R-02 : avances des rappels d'une routine (cases du formulaire de modification). Ne rejette jamais (aucune avance en cas d'échec). */
   reminderOffsets(id: RoutineId): Promise<readonly ReminderOffsetMin[]>;
 }
@@ -52,6 +59,9 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
   const useCases = createRoutineUseCases(container);
   // Jeton de requête : le résultat d'un chargement dépassé par un plus récent est ignoré.
   let requestId = 0;
+  let refreshId = 0;
+  // Jours en cours de validation : un second clic pendant l'écriture est ignoré (double clic : une seule validation, R-03 critère 3).
+  const daysBusy = new Set<string>();
 
   const read = async (filter: SpaceFilter) => {
     const all = await container.data.repos.routines.listForFilter(filter, { includeArchived: true });
@@ -121,6 +131,36 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       } catch {
         set({ actionErrorKey: 'routines.saveError' });
         return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    async refresh() {
+      // Un `load` lancé pendant la relecture reste prioritaire : on ne touche pas à son jeton.
+      const loadToken = requestId;
+      const token = ++refreshId;
+      try {
+        const data = await read(get().filter);
+        if (loadToken === requestId && token === refreshId && get().status !== 'idle') set(data);
+      } catch {
+        // Relecture discrète : l'affichage reste celui d'avant.
+      }
+    },
+
+    async toggleDay(id, date) {
+      // État voulu lu à l'instant du clic : deux clics rapides valident une fois (R-03 critère 3).
+      const done = get().doneByRoutine.get(id)?.has(date) ?? false;
+      const busyKey = `${id}|${date}`;
+      if (daysBusy.has(busyKey)) return;
+      daysBusy.add(busyKey);
+      try {
+        await useCases.setDone(id, date, !done);
+        // Relecture discrète (sans passer par `loading`) : les ronds et le compteur se mettent à jour sur place.
+        const data = await read(get().filter);
+        set({ ...data, actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.completeError' });
+      } finally {
+        daysBusy.delete(busyKey);
       }
     },
 

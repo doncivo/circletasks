@@ -10,6 +10,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
+import { onRoutinesChanged } from './routineEvents';
 import { routinesStore } from './routineStore';
 import type { RoutineInput } from './routineUseCases';
 import './RoutinesScreen.css';
@@ -56,6 +57,8 @@ export function RoutinesScreen() {
   const create = useFeatureStore(routinesStore, (s) => s.create);
   const update = useFeatureStore(routinesStore, (s) => s.update);
   const reminderOffsets = useFeatureStore(routinesStore, (s) => s.reminderOffsets);
+  const toggleDay = useFeatureStore(routinesStore, (s) => s.toggleDay);
+  const refresh = useFeatureStore(routinesStore, (s) => s.refresh);
   const defaultOffsets = useFeatureStore(routinesStore, (s) => s.defaultOffsets);
 
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -67,6 +70,9 @@ export function RoutinesScreen() {
     // `load` ne rejette jamais ; recharge au changement de filtre d'espace.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceFilter]);
+
+  // Validation annulée ailleurs (message « Annuler », Ctrl+Z) : les ronds et compteurs se relisent.
+  useEffect(() => onRoutinesChanged(container.data, () => void refresh()), [container, refresh]);
 
   const openCreate = useCallback((): void => {
     setFormError(null);
@@ -155,6 +161,7 @@ export function RoutinesScreen() {
                 layout={layout}
                 compact={compact}
                 onEdit={() => void openEdit(routine.id as RoutineId)}
+                onToggleDay={(date) => void toggleDay(routine.id as RoutineId, date)}
               />
             </div>
           ))}

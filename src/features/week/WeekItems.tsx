@@ -74,14 +74,17 @@ export interface WeekRoutineItemProps {
   readonly layout: Layout;
   /** Une source de routines sait valider (R-03) : la case est affichée. */
   readonly checkable: boolean;
+  /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
+  readonly disabled?: boolean;
   readonly onToggle: () => void;
 }
 
 /** Routine du jour (M4) : placée par son heure, jamais déplaçable (Q11) ; « 07:30 · Routine » sur PC. */
-export function WeekRoutineItem({ routine, time, done, layout, checkable, onToggle }: WeekRoutineItemProps) {
+export function WeekRoutineItem({ routine, time, done, layout, checkable, disabled = false, onToggle }: WeekRoutineItemProps) {
   const checkbox = checkable ? (
     <Checkbox
       checked={done}
+      disabled={disabled}
       onChange={onToggle}
       label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })}
       size={BOX_SIZE[layout]}

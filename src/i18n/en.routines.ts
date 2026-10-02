@@ -22,6 +22,10 @@ export const routinesEn: Messages['routines'] = {
   timesPerWeek: '{count} times a week',
   everyNDays: 'every {count} days',
   everyNWeeksOn: 'every {count} weeks: {days}',
+  undo: {
+    validated: '“{title}” done',
+    reopened: '“{title}” reopened',
+  },
   form: {
     newTitle: 'New routine',
     editTitle: 'Edit routine',

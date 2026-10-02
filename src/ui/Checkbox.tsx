@@ -12,6 +12,8 @@ export interface CheckboxProps {
   compact?: boolean;
   /** Côté de la case en px (la Semaine : 18 px sur PC, 20 px sur iPhone, maquettes PC-Semaine.html et Semaine.html). */
   size?: number;
+  /** Case inactive (ex. routine d'un jour futur, R-03 critère 11) : grisée, `aria-disabled`, sans effet au clic ; reste focalisable. */
+  disabled?: boolean;
   /** Côté de la zone cliquable en px ; 44 par défaut (PRD 5). La Semaine PC la réduit : la souris n'a pas besoin de 44 px. */
   hitSize?: number;
   className?: string;
@@ -27,7 +29,7 @@ const COMPACT_SIZE = 22;
  * @example
  * <Checkbox checked={task.done} onChange={toggle} label={t('tasks.complete', { title })} />
  */
-export function Checkbox({ checked, onChange, label, compact, size: sizeOverride, hitSize, className }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, compact, size: sizeOverride, hitSize, disabled, className }: CheckboxProps) {
   const layout = useLayout();
   const size = sizeOverride ?? (compact ? COMPACT_SIZE : SIZE[layout]);
   const hit = hitSize === undefined ? 'var(--ct-hit-target-min)' : `${String(hitSize)}px`;
@@ -37,7 +39,11 @@ export function Checkbox({ checked, onChange, label, compact, size: sizeOverride
       role="checkbox"
       aria-checked={checked}
       aria-label={label}
-      onClick={() => onChange(!checked)}
+      aria-disabled={disabled ? true : undefined}
+      data-disabled={disabled ? true : undefined}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
       className={['ct-checkbox', className].filter(Boolean).join(' ')}
       data-checked={checked}
       style={{ minWidth: hit, minHeight: hit }}

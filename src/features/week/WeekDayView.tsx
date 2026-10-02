@@ -27,6 +27,8 @@ export interface WeekDayViewProps {
   readonly showSpace: boolean;
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
   readonly routinesCheckable: boolean;
+  /** Jour futur : cases des routines inactives (R-03 critère 11). */
+  readonly routinesDisabled?: boolean;
   readonly openedTaskId: TaskId | null;
   /** Squelette de chargement (A-09) à la place des éléments. */
   readonly skeleton: boolean;
@@ -70,6 +72,7 @@ export function WeekDayView(props: WeekDayViewProps) {
           done={row.done}
           layout={layout}
           checkable={props.routinesCheckable}
+          disabled={props.routinesDisabled ?? false}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId, day.date)}
         />
       );

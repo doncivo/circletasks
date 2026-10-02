@@ -511,6 +511,7 @@ export const en: Messages = {
     seriesOccurrence: '“{title}” edited (this occurrence)',
     seriesFollowing: '“{title}” edited (all following)',
     seriesRule: 'Repeat of “{title}” edited',
+    routine: 'Routine updated',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',

@@ -28,8 +28,16 @@ export interface TodaySource {
   readonly id: string;
   /** Éléments du jour `date` pour le filtre d'espace ; peut rejeter (l'écran affiche alors un message et garde le reste). */
   load(container: AppContainer, date: LocalDate, filter: SpaceFilter): Promise<Partial<TodayExtras>>;
-  /** Valider / annuler la validation d'une routine depuis la liste (R-03) ; sans elle, la ligne n'a pas de case. */
-  toggleRoutine?(container: AppContainer, routineId: RoutineId, date: LocalDate): Promise<void>;
+  /**
+   * Valider (`done` vrai) ou rouvrir une routine depuis la liste (R-03) ; sans elle, la ligne n'a pas de case. L'état voulu est passé
+   * explicitement (et non « basculer ») : un double clic ne valide jamais deux fois ni ne défait la validation.
+   */
+  toggleRoutine?(container: AppContainer, routineId: RoutineId, date: LocalDate, done: boolean): Promise<void>;
+  /**
+   * S'abonne aux changements des éléments de la source (ex. une validation annulée par « Annuler » ou Ctrl+Z, qui écrit en base sans
+   * passer par l'écran) : l'écran se relit. Renvoie le désabonnement.
+   */
+  subscribe?(container: AppContainer, onChange: () => void): () => void;
 }
 
 const sources: TodaySource[] = [];
@@ -43,14 +51,22 @@ export function registerTodaySource(source: TodaySource): () => void {
   };
 }
 
+/** Abonne `onChange` aux changements de toutes les sources qui en signalent ; renvoie le désabonnement global. */
+export function subscribeToTodaySources(container: AppContainer, onChange: () => void): () => void {
+  const unsubscribes = sources.flatMap((source) => (source.subscribe ? [source.subscribe(container, onChange)] : []));
+  return () => {
+    for (const unsubscribe of unsubscribes) unsubscribe();
+  };
+}
+
 /** Une source de routines sait-elle valider ? (affiche la case des routines) */
 export function canToggleRoutines(): boolean {
   return sources.some((source) => source.toggleRoutine !== undefined);
 }
 
-export async function toggleRoutineViaSources(container: AppContainer, routineId: RoutineId, date: LocalDate): Promise<void> {
+export async function toggleRoutineViaSources(container: AppContainer, routineId: RoutineId, date: LocalDate, done: boolean): Promise<void> {
   const source = sources.find((candidate) => candidate.toggleRoutine !== undefined);
-  await source?.toggleRoutine?.(container, routineId, date);
+  await source?.toggleRoutine?.(container, routineId, date, done);
 }
 
 /** Fusionne les sources enregistrées ; `failed` : au moins une a échoué (les autres restent affichées). */

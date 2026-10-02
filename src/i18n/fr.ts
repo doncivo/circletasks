@@ -515,6 +515,7 @@ export const fr = {
     seriesFollowing: '« {title} » modifiée (toutes les suivantes)',
     seriesRule: 'Répétition de « {title} » modifiée',
     seriesStop: 'Répétition de « {title} » arrêtée',
+    routine: 'Routine modifiée',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',

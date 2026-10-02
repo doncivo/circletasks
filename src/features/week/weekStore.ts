@@ -86,6 +86,8 @@ export interface WeekState {
   toggleDone(id: TaskId): Promise<void>;
   /** R-03 : valide ou annule la validation d'une routine d'un jour de la semaine. Ne rejette jamais. */
   toggleRoutine(id: RoutineId, date: LocalDate): Promise<void>;
+  /** Relit les éléments des autres modules des sept jours (une routine validée ou annulée ailleurs). Ne rejette jamais. */
+  refreshExtras(): Promise<void>;
   /** T-09 : lit les règles des séries affichées pas encore connues. Ne rejette jamais. */
   syncRecurrences(tasks: readonly Task[]): Promise<void>;
 }
@@ -118,6 +120,8 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
   const series = createSeriesUseCases(container);
   // Jeton de requête : le résultat d'un chargement dépassé par un plus récent est ignoré (navigation rapide entre semaines).
   let requestId = 0;
+  // Routines (par jour) en cours de validation : un second clic pendant l'écriture est ignoré (R-03 critère 3).
+  const routinesBusy = new Set<string>();
 
   const loadRecurrences = async (
     tasks: readonly Task[],
@@ -253,15 +257,36 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
 
     async toggleRoutine(routineId, date) {
       const { weekStart, filter } = get();
-      if (weekStart === null) return;
+      const entry = get().extras.get(date)?.routines?.find((candidate) => candidate.routine.id === routineId);
+      const busyKey = `${routineId}|${date}`;
+      if (weekStart === null || !entry || routinesBusy.has(busyKey)) return;
+      routinesBusy.add(busyKey);
       try {
-        await toggleRoutineViaSources(container, routineId, date);
-        const { extras: day, failed } = await loadTodayExtras(container, date, filter);
-        const extras = new Map(get().extras);
-        extras.set(date, day);
-        set({ extras, extrasFailed: failed, actionErrorKey: null });
+        await toggleRoutineViaSources(container, routineId, date, !entry.done);
+        // Toute la semaine est relue : valider peut atteindre le quota d'une routine « X fois par semaine » (QB-01) et la retirer des autres jours.
+        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter)) })));
+        if (get().weekStart !== weekStart) return;
+        const extras = new Map<LocalDate, WeekDayExtras>();
+        for (const { day, extras: dayExtras } of loaded) if (dayExtras !== EMPTY_TODAY_EXTRAS) extras.set(day, dayExtras);
+        set({ extras, extrasFailed: loaded.some((day) => day.failed), actionErrorKey: null });
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+      } finally {
+        routinesBusy.delete(busyKey);
+      }
+    },
+
+    async refreshExtras() {
+      const { weekStart, filter } = get();
+      if (weekStart === null) return;
+      try {
+        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter)) })));
+        if (get().weekStart !== weekStart) return;
+        const extras = new Map<LocalDate, WeekDayExtras>();
+        for (const { day, extras: dayExtras } of loaded) if (dayExtras !== EMPTY_TODAY_EXTRAS) extras.set(day, dayExtras);
+        set({ extras, extrasFailed: loaded.some((day) => day.failed) });
+      } catch {
+        set({ extrasFailed: true });
       }
     },
 

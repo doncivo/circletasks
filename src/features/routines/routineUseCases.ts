@@ -1,11 +1,15 @@
 import { newEntityId } from '../../domain/id';
-import { todayLocal } from '../../domain/clock';
+import { nowIso, todayLocal } from '../../domain/clock';
+import { addDays } from '../../domain/localDate';
 import type { NewReminder, ReminderOffsetMin, Routine, RoutineFields } from '../../domain/model';
 import { mergeReminderOffsets, normalizeReminderOffsets, routineReminderFireAt } from '../../domain/routineReminder';
 import { validateRoutine, type RoutineError } from '../../domain/routineRules';
-import type { ReminderId, Result, RoutineId } from '../../domain/types';
+import { canToggleDay, doneDatesOf, mondayOf } from '../../domain/routineSchedule';
+import type { LocalDate, ReminderId, Result, RoutineId, RoutineLogId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
+import type { UndoableCommand } from '../app/undo';
+import { emitRoutinesChanged } from './routineEvents';
 
 /**
  * Cas d'usage « routines » (ADR 0004) : les stores appellent ces fonctions, jamais les repositories directement. Les règles
@@ -30,9 +34,53 @@ export interface RoutineUseCases {
   update(id: RoutineId, input: RoutineInput): Promise<Result<Routine, RoutineError>>;
   /** R-02 : avances des rappels actuels d'une routine. */
   reminderOffsets(id: RoutineId): Promise<ReminderOffsetMin[]>;
+  /**
+   * R-03 : valide (`done` vrai) ou rouvre le jour `date` d'une routine ; annulable 5 s (T-13). Une validation par routine et par jour
+   * (`routine_log` unique) : valider un jour déjà validé n'écrit rien (double clic, synchro). Refusés sans rien écrire : jour futur,
+   * jour non prévu, routine en pause ou archivée, « X fois par semaine » dont le quota est atteint (QB-01, QB-03). Renvoie ce qui a
+   * été fait.
+   */
+  setDone(id: RoutineId, date: LocalDate, done: boolean): Promise<'validated' | 'reopened' | 'ignored'>;
 }
 
 type Repos = DataAccess['repos'];
+
+/**
+ * Annulation d'une validation (T-13) : retire la validation, seulement si elle n'a pas changé depuis (même hlc que celui écrit par
+ * l'action : sinon une synchro ou une autre action l'a touchée, 'stale', rien n'est écrit).
+ */
+function validatedCommand(deps: RoutineUseCaseDeps, routine: Routine, date: LocalDate, hlc: string): UndoableCommand {
+  return {
+    kind: 'routine',
+    count: 1,
+    labelKey: 'routines.undo.validated',
+    labelParams: { title: routine.title },
+    async undo() {
+      const [current] = await deps.data.repos.routineLogs.listForRoutine(routine.id as RoutineId, { from: date, to: date });
+      if (!current || current.hlc !== hlc) return 'stale';
+      await deps.data.repos.routineLogs.unmark(routine.id as RoutineId, date);
+      emitRoutinesChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
+/** Annulation d'une réouverture : revalide le jour, sauf s'il l'a été entre-temps (autre action, synchro). */
+function reopenedCommand(deps: RoutineUseCaseDeps, routine: Routine, date: LocalDate): UndoableCommand {
+  return {
+    kind: 'routine',
+    count: 1,
+    labelKey: 'routines.undo.reopened',
+    labelParams: { title: routine.title },
+    async undo() {
+      const [current] = await deps.data.repos.routineLogs.listForRoutine(routine.id as RoutineId, { from: date, to: date });
+      if (current) return 'stale';
+      await deps.data.repos.routineLogs.markDone(routine.id as RoutineId, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
+      emitRoutinesChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
 
 export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases {
   /** Remplace les rappels d'une routine : échéance de la prochaine occurrence (aujourd'hui compris) pour chaque avance. */
@@ -58,6 +106,7 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
         if (routine.time !== null && input.reminderOffsets.length > 0) await writeReminders(repos, routine, input.reminderOffsets);
         return routine;
       });
+      emitRoutinesChanged(deps.data);
       return { ok: true, value: created };
     },
 
@@ -72,7 +121,33 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
         if (existing.length > 0 || (routine.time !== null && offsets.length > 0)) await writeReminders(repos, routine, offsets);
         return routine;
       });
+      emitRoutinesChanged(deps.data);
       return { ok: true, value: updated };
+    },
+
+    async setDone(id, date, done) {
+      // Lecture, contrôle et écriture en une transaction : deux validations simultanées du même jour (double clic, synchro locale)
+      // se suivent, la seconde voit la première et n'écrit rien (routine_log unique par routine et par jour, critère 3).
+      const outcome = await deps.data.transaction(
+        async (repos): Promise<{ readonly result: 'validated' | 'reopened' | 'ignored'; readonly command?: UndoableCommand }> => {
+          const routine = await repos.routines.getById(id);
+          if (!routine) return { result: 'ignored' };
+          const weekStart = mondayOf(date);
+          const week = doneDatesOf(await repos.routineLogs.listForRoutine(id, { from: weekStart, to: addDays(weekStart, 6) }), id);
+          const today = todayLocal(deps.clock);
+          if (done) {
+            if (week.has(date) || !canToggleDay(routine, week, date, today)) return { result: 'ignored' };
+            const log = await repos.routineLogs.markDone(id, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
+            return { result: 'validated', command: validatedCommand(deps, routine, date, log.hlc) };
+          }
+          if (!week.has(date) || !canToggleDay(routine, week, date, today)) return { result: 'ignored' };
+          await repos.routineLogs.unmark(id, date);
+          return { result: 'reopened', command: reopenedCommand(deps, routine, date) };
+        },
+      );
+      if (outcome.command) deps.undo.push(outcome.command);
+      if (outcome.result !== 'ignored') emitRoutinesChanged(deps.data);
+      return outcome.result;
     },
 
     async reminderOffsets(id) {
