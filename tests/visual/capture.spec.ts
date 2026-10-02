@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { createTask, openToday } from '../e2e/helpers/today';
-import { insertTasks, openWeek, type DirectTask } from '../e2e/helpers/week';
+import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
 
 /**
  * Comparaison visuelle manuelle (npm run visual) : capture l'app et la maquette correspondante à la même
@@ -42,7 +42,7 @@ async function captureApp(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: resolve(OUT, `${name}-app.png`) });
 }
 
-/** Semaine du 21 au 27 sept. 2026 des maquettes (tâches seulement : routines et événements arrivent avec leurs modules). */
+/** Semaine du 21 au 27 sept. 2026 des maquettes (tâches et « Point client » ; routines, anniversaire et objectif arrivent avec leurs modules). */
 const WEEK_SEED: DirectTask[] = [
   { title: 'Relire le contrat', date: '2026-09-21', done: true },
   { title: 'Appeler la banque', date: '2026-09-22', space: 'perso', done: true },
@@ -57,6 +57,9 @@ const WEEK_SEED: DirectTask[] = [
 
 async function prepareWeek(page: Page): Promise<void> {
   await insertTasks(page, WEEK_SEED);
+  // « Point client » 10:00 (Google Agenda) : 08:00Z en septembre à Paris ; l'anniversaire (événement local) attend le module Événements.
+  await seedCalendarAccount(page);
+  await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
   await openWeek(page);
 }
 

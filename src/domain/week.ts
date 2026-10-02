@@ -52,6 +52,8 @@ export interface WeekInput {
   readonly tasks: readonly Task[];
   /** Éléments des autres modules par jour ; un jour absent n'a que ses tâches. */
   readonly extras?: ReadonlyMap<LocalDate, WeekDayExtras>;
+  /** Événements des agendas externes par jour (S-05, `externalEventsByDay`) : ajoutés aux événements fournis par les sources. */
+  readonly externalEvents?: ReadonlyMap<LocalDate, readonly TodayEventEntry[]>;
 }
 
 export interface WeekDay {
@@ -74,6 +76,8 @@ export function buildWeek(input: WeekInput): WeekDay[] {
   }
   return days.map((date) => {
     const extras = input.extras?.get(date);
+    const external = input.externalEvents?.get(date);
+    const events = external ? [...(extras?.events ?? []), ...external] : extras?.events;
     return {
       date,
       list: buildTodayList({
@@ -81,7 +85,7 @@ export function buildWeek(input: WeekInput): WeekDay[] {
         filter: input.filter,
         tasks: byDate.get(date) ?? [],
         ...(extras?.routines ? { routines: extras.routines } : {}),
-        ...(extras?.events ? { events: extras.events } : {}),
+        ...(events ? { events } : {}),
         ...(extras?.checklists ? { checklists: extras.checklists } : {}),
       }),
     };

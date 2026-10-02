@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
 import type { LocalDate, SpaceId } from '../../domain/types';
-import { addWeeks, buildWeek, isoWeekOf, weekStartOf } from '../../domain/week';
+import { externalEventsByDay } from '../../domain/externalEvents';
+import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
+import { detectTimeZone } from '../../platform';
 import { t } from '../../i18n';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
@@ -14,6 +16,7 @@ import { isModalOpen } from '../app/tabShortcuts';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
 import { canToggleRoutines } from '../today/todaySources';
+import { ExternalEventDetail } from './ExternalEventDetail';
 import { WeekDayView } from './WeekDayView';
 import { WeekHeader } from './WeekHeader';
 import { useWeekMoves } from './useWeekMoves';
@@ -41,6 +44,8 @@ export function WeekScreen() {
 
   const recurrences = useFeatureStore(weekStore, (s) => s.recurrences);
   const extras = useFeatureStore(weekStore, (s) => s.extras);
+  const externalEvents = useFeatureStore(weekStore, (s) => s.externalEvents);
+  const calendarAccounts = useFeatureStore(weekStore, (s) => s.calendarAccounts);
   const extrasFailed = useFeatureStore(weekStore, (s) => s.extrasFailed);
   const actionErrorKey = useFeatureStore(weekStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(weekStore, (s) => s.status);
@@ -89,7 +94,14 @@ export function WeekScreen() {
   }, [weekStart, spaceFilter]);
 
   const tasks = useMemo(() => selectWeekTasks(entities, weekStart, spaceFilter), [entities, weekStart, spaceFilter]);
-  const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras }), [weekStart, spaceFilter, tasks, extras]);
+  // Événements des agendas externes (S-05) : convertis dans le fuseau COURANT de l'appareil à chaque rendu utile, donc recalés
+  // aussitôt qu'il change (T-11) ; filtrés par l'espace de leur agenda (ES-06).
+  const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
+  const external = useMemo(
+    () => externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter }),
+    [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter],
+  );
+  const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external]);
 
   // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la carte.
   const hasUnknownRule = tasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
@@ -166,6 +178,7 @@ export function WeekScreen() {
               dragProps={moves.dragProps}
               drop={moves.dropFor(day.date)}
               onFocusTask={moves.setFocusedTaskId}
+              onOpenEvent={(id) => openDetail({ type: 'externalEvent', id })}
               onAddTask={addToDay}
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id, date) => void toggleRoutine(id, date)}
@@ -214,6 +227,7 @@ export function WeekScreen() {
       {moves.ghost}
       {moves.dialogs}
       <TaskDetail />
+      <ExternalEventDetail />
     </div>
   );
 }

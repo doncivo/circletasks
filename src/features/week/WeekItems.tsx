@@ -116,33 +116,45 @@ export function WeekRoutineItem({ routine, time, done, layout, checkable, onTogg
 export interface WeekEventItemProps {
   readonly event: TodayEventEntry;
   readonly layout: Layout;
+  /** Ouvre la fiche en lecture seule d'un événement externe (S-05) ; absent : l'événement n'est pas interactif. */
+  readonly onOpen?: () => void;
 }
 
 /**
- * Événement du jour, lecture seule : sans case ni poignée. Externe (agenda lu par M8) : fond #E3EEF5 et nom de l'agenda ;
- * interne (M7) : style distinct (anniversaire, #FBE7E4).
+ * Événement du jour, lecture seule : sans case, sans poignée, jamais déplaçable. Externe (agenda lu par M8) : fond #E3EEF5, nom de
+ * l'agenda, bouton qui ouvre la fiche en lecture seule, annoncé « Événement, lecture seule » ; interne (M7) : style distinct
+ * (anniversaire, #FBE7E4).
  */
-export function WeekEventItem({ event, layout }: WeekEventItemProps) {
+export function WeekEventItem({ event, layout, onOpen }: WeekEventItemProps) {
   const external = event.calendarName !== null;
   const when = event.allDay ? null : event.startTime;
-  const icon = event.icon ? (
-    <IconView icon={event.icon} size={18} color="currentColor" />
-  ) : (
-    <Icon icon={CalendarDays} size={18} />
-  );
-  if (layout === 'mobile') {
-    return (
-      <div className="ct-week-event" data-layout="mobile" data-source={external ? 'external' : 'local'}>
+  const icon = event.icon ? <IconView icon={event.icon} size={18} color="currentColor" /> : <Icon icon={CalendarDays} size={18} />;
+  const source = external ? 'external' : 'local';
+  const readOnly = external ? <span className="ct-visually-hidden">{`, ${t('week.eventReadOnly')}`}</span> : null;
+  const interactive = external && onOpen !== undefined;
+  const props = { className: 'ct-week-event', 'data-layout': layout, 'data-source': source };
+  const content =
+    layout === 'mobile' ? (
+      <>
         {icon}
         {when && <span className="ct-week-item__time">{when}</span>}
         <span className="ct-week-item__title">{event.title}</span>
-      </div>
+        {readOnly}
+      </>
+    ) : (
+      <>
+        <span className="ct-week-item__title">{when ? `${when} ${event.title}` : event.title}</span>
+        {(event.allDay || event.calendarName) && (
+          <span className="ct-week-event__source">{[event.allDay ? t('today.eventAllDay') : null, event.calendarName].filter(Boolean).join(' · ')}</span>
+        )}
+        {readOnly}
+      </>
     );
-  }
-  return (
-    <div className="ct-week-event" data-layout="pc" data-source={external ? 'external' : 'local'}>
-      <span className="ct-week-item__title">{when ? `${when} ${event.title}` : event.title}</span>
-      {event.calendarName && <span className="ct-week-event__source">{event.calendarName}</span>}
-    </div>
+  return interactive ? (
+    <button type="button" {...props} onClick={onOpen}>
+      {content}
+    </button>
+  ) : (
+    <div {...props}>{content}</div>
   );
 }

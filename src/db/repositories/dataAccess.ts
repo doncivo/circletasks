@@ -1,6 +1,6 @@
 import type { WriteStamper } from '../../domain/hlc';
 import type { SqlDriver, SqlExecutor } from '../driver';
-import type { ChecklistRepository, EventRepository } from './agendaRepository';
+import type { CalendarAccountRepository, ChecklistRepository, EventRepository, ExternalEventRepository } from './agendaRepository';
 import type { GoalRepository } from './goalRepository';
 import type { ReminderRepository } from './reminderRepository';
 import type { RoutineLogRepository, RoutineRepository } from './routineRepository';
@@ -21,6 +21,8 @@ export interface Repositories {
   readonly settings: SettingsRepository;
   readonly events: EventRepository;
   readonly checklists: ChecklistRepository;
+  readonly externalEvents: ExternalEventRepository;
+  readonly calendarAccounts: CalendarAccountRepository;
   readonly syncMeta: SyncMetaRepository;
 }
 

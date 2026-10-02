@@ -1,7 +1,7 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayRow } from '../../domain/todayList';
-import type { LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
+import type { ExternalEventId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
@@ -36,6 +36,8 @@ export interface WeekDayViewProps {
   readonly drop?: WeekDropState | null;
   readonly onFocusTask?: (id: TaskId) => void;
   readonly onToggleDone: (id: TaskId) => void;
+  /** Ouvre la fiche en lecture seule d'un événement externe (S-05). */
+  readonly onOpenEvent?: (id: ExternalEventId) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
   readonly onOpen: (id: TaskId) => void;
   /** S-04 : ajout rapide en bas du jour ; crée la tâche de ce jour et rend true si elle l'est. */
@@ -123,7 +125,12 @@ export function WeekDayView(props: WeekDayViewProps) {
           ) : (
             <>
               {day.list.events.map((event) => (
-                <WeekEventItem key={event.id} event={event} layout={layout} />
+                <WeekEventItem
+                  key={event.id}
+                  event={event}
+                  layout={layout}
+                  {...(props.onOpenEvent ? { onOpen: () => props.onOpenEvent?.(event.id as ExternalEventId) } : {})}
+                />
               ))}
               {day.list.rows.map(renderRow)}
               {day.list.doneRows.map(renderRow)}

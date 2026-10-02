@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChecklistId, EventId, GoalId, LocalDate, RoutineId, TaskId } from '../../domain/types';
+import type { ChecklistId, EventId, ExternalEventId, GoalId, LocalDate, RoutineId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { ShortcutId } from './shortcuts';
 
@@ -64,6 +64,8 @@ export type DetailTarget =
   | { readonly type: 'routine'; readonly id: RoutineId }
   | { readonly type: 'goal'; readonly id: GoalId }
   | { readonly type: 'event'; readonly id: EventId }
+  /** Événement d'un agenda externe (S-05) : fiche en lecture seule. */
+  | { readonly type: 'externalEvent'; readonly id: ExternalEventId }
   | { readonly type: 'checklist'; readonly id: ChecklistId };
 
 /**

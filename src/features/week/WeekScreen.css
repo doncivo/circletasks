@@ -402,10 +402,24 @@ button.ct-week-item__title {
 .ct-week-event[data-layout='pc'] {
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 2px;
   padding: 8px 10px;
+  border: 0;
   border-radius: var(--ct-radius-md);
   background: var(--ct-color-event-external-bg);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+button.ct-week-event {
+  cursor: pointer;
+}
+
+button.ct-week-event:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
 }
 
 .ct-week-event[data-layout='pc'][data-source='local'] {
@@ -425,7 +439,12 @@ button.ct-week-item__title {
   display: flex;
   align-items: center;
   gap: var(--ct-space-2);
-  min-height: 32px;
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
   color: var(--ct-color-event-text);
 }
 
@@ -601,4 +620,11 @@ button.ct-week-item__title {
 
 .ct-week__addInput::placeholder {
   color: var(--ct-color-text-secondary);
+}
+
+/* Fiche d'un événement externe : lecture seule (S-05). */
+.ct-week-eventDetail__note {
+  margin: 0;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
 }

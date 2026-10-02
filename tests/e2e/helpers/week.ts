@@ -85,3 +85,57 @@ export async function insertTasks(page: Page, items: readonly DirectTask[]): Pro
     }
   }, items);
 }
+
+const SPACE_PRO = '00000000-0000-4000-8000-000000000001';
+const SPACE_PERSO = '00000000-0000-4000-8000-000000000002';
+
+/** Compte « Google Agenda » avec trois agendas : Travail (Pro), Famille (Perso), Libre (non rattaché). Jeu de test, aucun connecteur avant K-01. */
+export async function seedCalendarAccount(page: Page): Promise<void> {
+  await page.evaluate(
+    async ([pro, perso]) => {
+      await window.__ctTest?.seedCalendarAccount({
+        id: 'acc-google',
+        provider: 'google',
+        label: 'Google Agenda',
+        calendars: [
+          { id: 'pro', name: 'Travail', spaceId: pro as never, shown: true },
+          { id: 'perso', name: 'Famille', spaceId: perso as never, shown: true },
+          { id: 'libre', name: 'Libre', spaceId: null, shown: true },
+        ],
+      });
+    },
+    [SPACE_PRO, SPACE_PERSO] as const,
+  );
+}
+
+export interface ExternalEventSeed {
+  readonly id: string;
+  readonly title: string;
+  readonly startUtc: string;
+  readonly endUtc?: string | null;
+  readonly allDay?: boolean;
+  readonly calendarId?: 'pro' | 'perso' | 'libre';
+}
+
+/** Pose un événement d'agenda externe en base (instants UTC). */
+export async function seedExternalEvent(page: Page, event: ExternalEventSeed): Promise<void> {
+  await page.evaluate(
+    async (seed) => {
+      await window.__ctTest?.seedExternalEvent({
+        id: seed.id,
+        accountId: 'acc-google',
+        calendarId: seed.calendarId ?? 'pro',
+        title: seed.title,
+        startUtc: seed.startUtc,
+        endUtc: seed.endUtc ?? null,
+        allDay: seed.allDay ?? false,
+      });
+    },
+    event,
+  );
+}
+
+/** Heure locale « HH:mm » d'un instant UTC dans le fuseau `timeZone` (calcul indépendant de l'app, pour les attentes). */
+export function localTime(instantUtc: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone }).format(new Date(instantUtc));
+}

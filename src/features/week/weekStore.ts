@@ -1,13 +1,14 @@
 import { createStore } from 'zustand';
 import { addDays } from '../../domain/localDate';
-import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
+import type { CalendarAccount, ExternalEvent, IconRef, RecurrenceFields, Task } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
 import type { TodayRow } from '../../domain/todayList';
 import type { WeekDayExtras } from '../../domain/week';
 import { weekDays } from '../../domain/week';
-import type { LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { InstantRange } from '../../db/repositories';
+import type { IsoDateTime, LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
@@ -46,6 +47,13 @@ export interface WeekState {
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
   /** Routines, événements locaux et checklists de chaque jour, fournis par leurs modules (`todaySources`) ; vides tant qu'ils n'existent pas. */
   readonly extras: ReadonlyMap<LocalDate, WeekDayExtras>;
+  /**
+   * Événements des agendas externes de la semaine (S-05), tels que lus en base (instants UTC) : l'écran les convertit dans le fuseau
+   * courant et les filtre par espace à chaque rendu (`externalEventsByDay`), donc un changement de fuseau les recale sans relecture.
+   */
+  readonly externalEvents: readonly ExternalEvent[];
+  /** Comptes d'agenda (rattachement des agendas à un espace, nom de la source). */
+  readonly calendarAccounts: readonly CalendarAccount[];
   /** Une source d'éléments de la semaine a échoué : message dédié, les tâches restent affichées. */
   readonly extrasFailed: boolean;
   readonly status: WeekStatus;
@@ -99,6 +107,14 @@ export function selectWeekTasks(entities: ReadonlyMap<TaskId, Task>, weekStart: 
   return tasks;
 }
 
+/**
+ * Plage UTC lue pour une semaine : un jour de marge de chaque côté couvre tous les fuseaux (±14 h) et les journées entières, qui
+ * stockent leur date civile en UTC ; le calcul exact par jour local est fait par `externalEventsByDay`.
+ */
+export function externalEventRange(weekStart: LocalDate): InstantRange {
+  return { from: `${addDays(weekStart, -1)}T00:00:00Z` as IsoDateTime, to: `${addDays(weekStart, 8)}T00:00:00Z` as IsoDateTime };
+}
+
 export const weekStore = defineFeatureStore<WeekState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
   const series = createSeriesUseCases(container);
@@ -128,6 +144,8 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
     filter: 'all',
     recurrences: new Map<RecurrenceId, RecurrenceFields>(),
     extras: new Map<LocalDate, WeekDayExtras>(),
+    externalEvents: [],
+    calendarAccounts: [],
     extrasFailed: false,
     status: 'idle',
     errorKey: null,
@@ -142,10 +160,22 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
         const recurrences = await loadRecurrences(tasks, get().recurrences);
         // Un jour à la fois via les sources d'Aujourd'hui (routines, événements locaux, checklists) : aucune tant que leurs modules n'existent pas.
         const loaded = await Promise.all(weekDays(weekStart).map(async (date) => ({ date, ...(await loadTodayExtras(container, date, filter)) })));
+        // Agendas externes (S-05) : lecture seule, une requête pour la semaine ; un échec ne masque pas les tâches.
+        let externalEvents: readonly ExternalEvent[] = [];
+        let calendarAccounts: readonly CalendarAccount[] = [];
+        let externalFailed = false;
+        try {
+          [externalEvents, calendarAccounts] = await Promise.all([
+            container.data.repos.externalEvents.listBetween(externalEventRange(weekStart)),
+            container.data.repos.calendarAccounts.listAll(),
+          ]);
+        } catch {
+          externalFailed = true;
+        }
         if (id !== requestId) return;
         const extras = new Map<LocalDate, WeekDayExtras>();
         for (const { date, extras: day } of loaded) if (day !== EMPTY_TODAY_EXTRAS) extras.set(date, day);
-        set({ recurrences, extras, extrasFailed: loaded.some((day) => day.failed), status: 'ready' });
+        set({ recurrences, extras, externalEvents, calendarAccounts, extrasFailed: externalFailed || loaded.some((day) => day.failed), status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'week.loadError' });
