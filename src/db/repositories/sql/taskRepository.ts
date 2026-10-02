@@ -1,4 +1,5 @@
-import { parseIcon, type GoalProgress, type NewRecurrence, type NewTask, type Recurrence, type RecurrencePatch, type Task, type TaskPatch } from '../../../domain/model';
+import { decodeSeriesTemplate } from '../../../domain/recurrenceEdit';
+import { parseIcon, type GoalProgress, type NewRecurrence, type NewTask, type Recurrence, type RecurrencePatch, type SeriesTemplate, type Task, type TaskPatch } from '../../../domain/model';
 import {
   asEntityId,
   type GoalId,
@@ -31,11 +32,23 @@ interface TaskRow extends SqlRow, SyncRow {
   readonly carried_over: number;
   readonly recurrence_id: string | null;
   readonly series_index: number | null;
+  readonly series_template: string | null;
   readonly goal_id: string | null;
   readonly icon: string | null;
   readonly someday: number;
   readonly source: string;
   readonly external_id: string | null;
+}
+
+/** JSON de la colonne `series_template`, validé par le domaine ; illisible ou invalide : null (la série reprend les valeurs de l'occurrence). */
+function parseSeriesTemplate(json: string | null): SeriesTemplate | null {
+  if (json === null) return null;
+  const decoded = decodeSeriesTemplate(json);
+  return decoded.ok ? decoded.value : null;
+}
+
+function encodeSeriesTemplate(template: SeriesTemplate | null): string | null {
+  return template === null ? null : JSON.stringify({ ...template, icon: template.icon ? encodeIconValue(template.icon) : null });
 }
 
 function rowToTask(row: TaskRow): Task {
@@ -53,6 +66,7 @@ function rowToTask(row: TaskRow): Task {
     carriedOver: row.carried_over === 1,
     recurrenceId: row.recurrence_id as RecurrenceId | null,
     seriesIndex: row.series_index,
+    seriesTemplate: parseSeriesTemplate(row.series_template),
     goalId: row.goal_id as GoalId | null,
     icon: parseIcon(row.icon),
     someday: row.someday === 1,
@@ -74,7 +88,7 @@ function taskFromNew(input: NewTask, stamp: WriteStamp): Task {
 }
 
 const TASK_COLUMNS =
-  'id, space_id, project_id, title, note, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, goal_id, icon, someday, source, external_id, created_at, updated_at, deleted_at, device_id, hlc';
+  'id, space_id, project_id, title, note, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, series_template, goal_id, icon, someday, source, external_id, created_at, updated_at, deleted_at, device_id, hlc';
 
 export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): TaskRepository {
   async function fetchById(id: TaskId, options?: ReadOptions): Promise<TaskRow | undefined> {
@@ -108,7 +122,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       const stamp = stamper.next();
       await db.execute(
         `INSERT INTO task (${TASK_COLUMNS})
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         [
           task.id,
           task.spaceId,
@@ -123,6 +137,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
           task.carriedOver ? 1 : 0,
           task.recurrenceId,
           task.seriesIndex,
+          encodeSeriesTemplate(task.seriesTemplate),
           task.goalId,
           task.icon ? encodeIconValue(task.icon) : null,
           task.someday ? 1 : 0,
@@ -143,7 +158,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
         const stamp = stamper.next();
         await db.execute(
           `INSERT INTO task (${TASK_COLUMNS})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
           [
             task.id,
             task.spaceId,
@@ -158,6 +173,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
             task.carriedOver ? 1 : 0,
             task.recurrenceId,
             task.seriesIndex,
+            encodeSeriesTemplate(task.seriesTemplate),
             task.goalId,
             task.icon ? encodeIconValue(task.icon) : null,
             task.someday ? 1 : 0,
@@ -225,6 +241,10 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       if (patch.seriesIndex !== undefined) {
         sets.push('series_index = ?');
         params.push(patch.seriesIndex);
+      }
+      if (patch.seriesTemplate !== undefined) {
+        sets.push('series_template = ?');
+        params.push(encodeSeriesTemplate(patch.seriesTemplate));
       }
       if (patch.goalId !== undefined) {
         sets.push('goal_id = ?');

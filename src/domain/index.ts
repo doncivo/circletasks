@@ -14,3 +14,4 @@ export * from './taskTrash';
 export * from './recurrenceRules';
 export * from './recurrenceNext';
 export * from './recurrenceLabel';
+export * from './recurrenceEdit';

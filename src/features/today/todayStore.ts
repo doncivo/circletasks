@@ -7,6 +7,8 @@ import type { LocalDate, LocalTime, RecurrenceId, Result, SpaceFilter, SpaceId, 
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import type { SeriesScope } from '../../domain/recurrenceEdit';
+import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { CreateTaskError } from '../tasks/taskUseCases';
 
@@ -73,11 +75,14 @@ export interface TodayState {
    * la liste aussitôt (`resolveTodayTasks` revérifie la date) sans recharger. Ne rejette jamais.
    */
   postpone(id: TaskId, target: PostponeTarget): Promise<void>;
+  /** T-10 critère 4 : reporte une occurrence récurrente (Ctrl+D) pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
+  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<void>;
   /**
    * Supprime une tâche de la liste (T-08 : Suppr après confirmation) : corbeille, annulable 5 s.
-   * La tâche quitte la liste aussitôt (retirée de `taskEntities`). Ne rejette jamais.
+   * La tâche quitte la liste aussitôt (retirée de `taskEntities`). `scope` : occurrence d'une série récurrente (T-10,
+   * « cette occurrence » génère la suivante, « toutes les suivantes » arrête la série). Ne rejette jamais.
    */
-  remove(id: TaskId): Promise<void>;
+  remove(id: TaskId, scope?: SeriesScope): Promise<void>;
   /**
    * T-09 : lit les règles des séries affichées pas encore connues (ex. règle posée depuis la fiche),
    * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
@@ -87,6 +92,7 @@ export interface TodayState {
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
+  const series = createSeriesUseCases(container);
   // Jeton de requête : si un appel plus récent a démarré entre-temps, le résultat
   // d'un appel plus ancien qui se termine après lui est ignoré (pas d'état périmé).
   let requestId = 0;
@@ -208,6 +214,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       }
     },
 
+    async postponeSeries(id, target, scope) {
+      if (!get().taskIds.includes(id)) return;
+      try {
+        const result = await series.postpone(id, target, scope);
+        set({ actionErrorKey: result.ok ? null : 'tasks.postponeError' });
+      } catch {
+        set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
     async syncRecurrences() {
       const shown = get().taskIds.flatMap((id) => {
         const task = container.taskEntities.get(id);
@@ -218,10 +234,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       if (recurrences !== known) set({ recurrences });
     },
 
-    async remove(id) {
+    async remove(id, scope) {
       if (!get().taskIds.includes(id)) return;
       try {
-        await useCases.remove([id]);
+        if (scope) {
+          const result = await series.remove(id, scope);
+          if (!result.ok) {
+            set({ actionErrorKey: 'tasks.deleteError' });
+            return;
+          }
+        } else await useCases.remove([id]);
         set({ actionErrorKey: null });
       } catch {
         set({ actionErrorKey: 'tasks.deleteError' });

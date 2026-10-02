@@ -82,3 +82,13 @@ Annuler la complétion d'une occurrence récurrente supprime logiquement l'occur
 - sa trace de suppression est conservée pour la synchronisation (ordre 4), où `series_index` circule comme un entier ordinaire.
 
 Conséquence : aucune contrainte `CHECK (series_index >= 0)` ne doit être ajoutée sur `task.series_index`. Le contrat de synchro (Y-*) devra mentionner ce marqueur.
+
+## Avenant T-10 — valeurs de série et occurrence modifiée « cette occurrence » (2026-10-02)
+
+Réponse à l'écart de la fiche T-10 (où garder les valeurs de série ?). Une récurrence ne stocke toujours que l'occurrence en cours (PRD 6) ; les valeurs de série (titre, note, icône, heure, espace, projet) restent celles de l'occurrence courante, que `buildNextOccurrence` recopie.
+
+- « Toutes les suivantes » : l'occurrence courante change et redevient la référence (`series_template` effacé) ; les occurrences à faire déjà créées reprennent les valeurs ; les terminées et les passées ne sont jamais réécrites.
+- « Cette occurrence » : migration 0003, colonne `task.series_template` (JSON, NULL par défaut) qui garde les valeurs de série d'avant la modification et la date prévue d'origine. L'occurrence suivante est construite depuis ce gabarit (`seriesSourceOf`) et sa date calculée depuis la date d'origine (`seriesAnchorDate`) : déplacer ou modifier une occurrence ne décale ni n'altère la série. Colonne ordinaire pour la synchro (ordre 4).
+- Arrêt de la répétition et « toutes les suivantes » d'une suppression : `recurrence.deleted_at` posé (la règle n'existe plus pour `createNextOccurrence`) ; les occurrences à venir déjà créées deviennent des tâches simples (arrêt) ou partent en corbeille (suppression).
+- Suppression « cette occurrence » : la suivante est générée immédiatement (`ignoreDue`) ; son annulation la retire avec le marqueur `series_index = -1` de l'avenant T-09.
+- Annulation (kind `series`, ou `delete` pour la suppression) : commandes fondées sur le hlc, 'stale' si la tâche ou la règle a changé depuis.

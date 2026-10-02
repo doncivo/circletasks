@@ -8,7 +8,7 @@ import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from 
 import { asLocalDate, asLocalTime, type SpaceId, type TaskId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { formatMessageRef } from '../../i18n/formatRecurrence';
-import { Button, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { Button, ChoiceDialog, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -104,6 +104,7 @@ export function TodayScreen() {
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(todayStore, (s) => s.postpone);
+  const postponeSeries = useFeatureStore(todayStore, (s) => s.postponeSeries);
   const remove = useFeatureStore(todayStore, (s) => s.remove);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
@@ -120,11 +121,18 @@ export function TodayScreen() {
     return container.shortcuts.register('list.complete', () => void toggleDone(focusedTaskId));
   }, [container, focusedTaskId, toggleDone]);
 
-  // Ctrl+D (T-05, critère 5) : reporte à demain la ligne sélectionnée.
+  // Ctrl+D (T-05, critère 5) : reporte à demain la ligne sélectionnée. Occurrence récurrente : la question
+  // « Cette occurrence / Toutes les suivantes » est posée d'abord (T-10 critère 4).
+  const [postponeSeriesId, setPostponeSeriesId] = useState<TaskId | null>(null);
   useEffect(() => {
     if (!focusedTaskId) return undefined;
-    return container.shortcuts.register('list.postponeTomorrow', () => void postpone(focusedTaskId, 'tomorrow'));
+    return container.shortcuts.register('list.postponeTomorrow', () => {
+      const task = container.taskEntities.get(focusedTaskId);
+      if (task?.recurrenceId && task.status === 'todo') setPostponeSeriesId(focusedTaskId);
+      else void postpone(focusedTaskId, 'tomorrow');
+    });
   }, [container, focusedTaskId, postpone]);
+  const postponeSeriesTask = postponeSeriesId ? entities.get(postponeSeriesId) : undefined;
 
   // Suppr (T-08, critère 1) : demande confirmation pour la ligne sélectionnée ; rien n'est
   // supprimé avant la confirmation. Le raccourci ne s'applique pas dans un champ de saisie (shortcuts.ts).
@@ -400,13 +408,29 @@ export function TodayScreen() {
 
       <TaskDetail />
 
+      {postponeSeriesTask && (
+        <ChoiceDialog
+          title={t('tasks.seriesPostponeTitle', { title: postponeSeriesTask.title })}
+          description={t('tasks.seriesPostponeBody')}
+          options={[
+            { id: 'occurrence', label: t('tasks.seriesScopeOccurrence') },
+            { id: 'following', label: t('tasks.seriesScopeFollowing') },
+          ]}
+          onChoose={(scope) => {
+            setPostponeSeriesId(null);
+            void postponeSeries(postponeSeriesTask.id, 'tomorrow', scope);
+          }}
+          onCancel={() => setPostponeSeriesId(null)}
+        />
+      )}
+
       {deleteTarget && (
         <DeleteTaskConfirm
           task={deleteTarget}
           onCancel={() => setDeleteTargetId(null)}
-          onConfirm={() => {
+          onConfirm={(scope) => {
             setDeleteTargetId(null);
-            void remove(deleteTarget.id);
+            void remove(deleteTarget.id, scope);
           }}
         />
       )}

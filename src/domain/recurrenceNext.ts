@@ -26,6 +26,11 @@ export interface NextOccurrenceInput {
    * garantit l'absence de doublon après redémarrage ou double déclenchement (critère 12).
    */
   readonly existingSeriesIndexes?: readonly number[];
+  /**
+   * Génère la suivante même si l'occurrence n'est ni terminée ni passée : suppression « cette
+   * occurrence » d'une occurrence à venir (T-10 critère 7).
+   */
+  readonly ignoreDue?: boolean;
 }
 
 /**
@@ -38,7 +43,7 @@ export function decideNextOccurrence(input: NextOccurrenceInput): NextOccurrence
   const { task, rule, today } = input;
   if (rule === null || task.recurrenceId === null) return { create: false, reason: 'no_recurrence' };
   if (task.date === null) return { create: false, reason: 'no_date' };
-  if (task.status === 'todo' && task.date >= today) return { create: false, reason: 'not_due' };
+  if (input.ignoreDue !== true && task.status === 'todo' && task.date >= today) return { create: false, reason: 'not_due' };
   const index = task.seriesIndex ?? 0;
   if ((input.existingSeriesIndexes ?? []).some((i) => i > index)) {
     return { create: false, reason: 'already_generated' };
@@ -93,6 +98,7 @@ export function buildNextOccurrence(previous: Task, options: BuildNextOccurrence
     carriedOver: false,
     recurrenceId: previous.recurrenceId,
     seriesIndex: options.seriesIndex,
+    seriesTemplate: null,
     goalId: previous.goalId,
     icon: previous.icon,
     someday: false,

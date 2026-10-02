@@ -152,6 +152,7 @@ describe('buildNextOccurrence', () => {
     carriedOver: true,
     recurrenceId: recId,
     seriesIndex: 0,
+    seriesTemplate: null,
     goalId: null,
     icon: { kind: 'lucide', name: 'house' } as unknown as IconRef,
     someday: false,
@@ -204,5 +205,19 @@ describe('buildNextOccurrence', () => {
   it('sans heure : les rappels sont omis', () => {
     const { reminders } = buildNextOccurrence({ ...previous, time: null }, { ...opts, reminderOffsets: [0] });
     expect(reminders).toEqual([]);
+  });
+});
+
+describe('decideNextOccurrence : ignoreDue (T-10 critère 7)', () => {
+  const todo = { date: d('2026-09-30'), status: 'todo' as const, recurrenceId: recId, seriesIndex: 1 };
+
+  it('une occurrence à venir ne génère rien, sauf avec ignoreDue', () => {
+    expect(decideNextOccurrence({ task: todo, rule: monthly23, today: d('2026-09-23') })).toEqual({ create: false, reason: 'not_due' });
+    expect(decideNextOccurrence({ task: todo, rule: monthly23, today: d('2026-09-23'), ignoreDue: true })).toMatchObject({ create: true, date: '2026-10-23', seriesIndex: 2 });
+  });
+
+  it('ignoreDue respecte la fin de série et les occurrences déjà créées', () => {
+    expect(decideNextOccurrence({ task: todo, rule: { ...monthly23, count: 2 }, today: d('2026-09-23'), ignoreDue: true })).toEqual({ create: false, reason: 'series_ended' });
+    expect(decideNextOccurrence({ task: todo, rule: monthly23, today: d('2026-09-23'), ignoreDue: true, existingSeriesIndexes: [2] })).toEqual({ create: false, reason: 'already_generated' });
   });
 });

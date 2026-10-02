@@ -1,10 +1,12 @@
 import { createStore } from 'zustand';
 import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { IconRef, RecurrenceFields } from '../../domain/model';
+import type { IconRef, RecurrenceFields, TaskPatch } from '../../domain/model';
+import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createTaskUseCases } from './createTaskUseCases';
+import { createSeriesUseCases, type SeriesError } from './seriesUseCases';
 
 export type TaskDetailStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -35,6 +37,8 @@ export interface TaskDetailState {
   toggleDone(): Promise<void>;
   /** Bouton « Reporter » / « Planifier » (T-05) : annulable, la fiche reste ouverte. Ne rejette jamais. */
   postpone(target: PostponeTarget): Promise<void>;
+  /** T-10 critère 4 : reporte une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes » ; annulable. Ne rejette jamais. */
+  postponeSeries(target: PostponeTarget, scope: SeriesScope): Promise<void>;
   /**
    * T-09 : rend la tâche affichée récurrente (aucune règle n'existait). Rend true si la règle est
    * posée (la fiche la reflète via `taskEntities`), false sinon (message dédié). Ne rejette jamais.
@@ -45,11 +49,38 @@ export interface TaskDetailState {
    * Rend true si elle est supprimée (la fiche doit se fermer), false en cas d'échec (message dédié,
    * la tâche reste affichée). Ne rejette jamais.
    */
-  remove(): Promise<boolean>;
+  remove(scope?: SeriesScope): Promise<boolean>;
+  /**
+   * T-10 critères 1 à 3 : applique `patch` (note, icône…) à l'occurrence affichée, pour « cette occurrence »
+   * ou « toutes les suivantes » (choisi par la fiche). Rend true si écrit. Annulable. Ne rejette jamais.
+   */
+  applySeriesEdit(patch: TaskPatch, scope: SeriesScope): Promise<boolean>;
+  /** T-10 critères 4, 5, 9 : nouvelle règle (fréquence, jours, fin) pour « toutes les suivantes ». Rend true si écrite. Ne rejette jamais. */
+  updateRecurrence(rule: RecurrenceFields): Promise<boolean>;
+  /** T-10 critère 6 : « Arrêter la répétition » ; la tâche devient simple. Rend true si arrêtée. Ne rejette jamais. */
+  stopRecurrence(): Promise<boolean>;
+  /** Relit la règle de la série (après une annulation, T-10 critère 8). Ne rejette jamais. */
+  refreshRecurrence(): Promise<void>;
+}
+
+/** Message de l'erreur métier d'une modification de série (T-10, critère 9 : fin dépassée). */
+function seriesErrorKey(error: SeriesError): PlainMessageKey {
+  switch (error) {
+    case 'end-in-past':
+      return 'tasks.seriesEndInPast';
+    case 'end-before-start':
+      return 'tasks.seriesEndBeforeStart';
+    case 'empty-title':
+    case 'title-too-long':
+      return 'tasks.seriesTitleInvalid';
+    default:
+      return 'tasks.seriesError';
+  }
 }
 
 export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
+  const series = createSeriesUseCases(container);
   // Jeton de requête : ignore une réponse périmée (chargement ou écriture plus
   // ancienne qui se termine après un appel plus récent, même principe que todayStore).
   let requestId = 0;
@@ -113,6 +144,21 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
       }
     },
 
+    postponeSeries: async (target, scope) => {
+      const { taskId } = get();
+      if (!taskId) return;
+      try {
+        const result = await series.postpone(taskId, target, scope);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: 'tasks.postponeError' });
+          return;
+        }
+        set({ errorKey: null });
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.postponeError' });
+      }
+    },
+
     setRecurrence: async (rule) => {
       const { taskId } = get();
       if (!taskId) return false;
@@ -130,18 +176,87 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
       }
     },
 
-    remove: async () => {
+    remove: async (scope) => {
       const { taskId } = get();
       if (!taskId) return false;
       // Une écriture ou un chargement plus ancien ne doit pas écraser l'état après la suppression.
       requestId += 1;
       try {
-        await useCases.remove([taskId]); // retire la tâche de `taskEntities` : toutes les vues la perdent
+        if (scope) {
+          const result = await series.remove(taskId, scope);
+          if (!result.ok) {
+            set({ status: 'error', errorKey: 'tasks.deleteError' });
+            return false;
+          }
+        } else await useCases.remove([taskId]); // retire la tâche de `taskEntities` : toutes les vues la perdent
         set({ taskId: null, status: 'idle', errorKey: null });
         return true;
       } catch {
         set({ status: 'error', errorKey: 'tasks.deleteError' });
         return false;
+      }
+    },
+
+    applySeriesEdit: async (patch, scope) => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await series.updateOccurrence(taskId, patch, scope);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: seriesErrorKey(result.error) });
+          return false;
+        }
+        set({ status: 'ready', errorKey: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.detailSaveError' });
+        return false;
+      }
+    },
+
+    updateRecurrence: async (rule) => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await series.updateRule(taskId, rule);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: seriesErrorKey(result.error) });
+          return false;
+        }
+        set({ status: 'ready', errorKey: null, recurrence: result.value });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.seriesError' });
+        return false;
+      }
+    },
+
+    stopRecurrence: async () => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await series.stop(taskId);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: seriesErrorKey(result.error) });
+          return false;
+        }
+        set({ status: 'ready', errorKey: null, recurrence: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.seriesError' });
+        return false;
+      }
+    },
+
+    refreshRecurrence: async () => {
+      const { taskId } = get();
+      if (!taskId) return;
+      try {
+        const task = container.taskEntities.get(taskId);
+        const recurrence = task?.recurrenceId ? await container.data.repos.recurrences.getById(task.recurrenceId) : null;
+        if (get().taskId === taskId) set({ recurrence });
+      } catch {
+        // la fiche garde la règle affichée ; la prochaine ouverture la relit
       }
     },
 

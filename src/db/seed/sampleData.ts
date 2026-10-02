@@ -32,6 +32,7 @@ const DEFAULT_TASK_FIELDS = {
   carriedOver: false,
   recurrenceId: null,
   seriesIndex: null,
+  seriesTemplate: null,
   goalId: null,
   icon: null,
   someday: false,
