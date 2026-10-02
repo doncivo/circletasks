@@ -1,6 +1,6 @@
-import { ChevronDown, X } from 'lucide-react';
+import { Check, ChevronDown, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
-import type { IconRef, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
+import type { IconRef, ReminderOffsetMin, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
 import { weekdayOf } from '../../domain/localDate';
 import {
   clampInterval,
@@ -10,12 +10,15 @@ import {
   TIMES_PER_WEEK_MIN,
   validateRoutine,
 } from '../../domain/routineRules';
+import { ROUTINE_FORM_OFFSETS } from '../../domain/routineReminder';
 import { nextOccurrences } from '../../domain/routineSchedule';
-import type { LocalDate, SpaceId, Weekday } from '../../domain/types';
+import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { formatNextOccurrences, weekdayName } from '../../i18n/formatRoutine';
 import { Button, DatePicker, Icon, IconChooser, TextField, useLayout } from '../../ui';
+import { RoutineTimeEditor } from './RoutineTimeEditor';
+import type { RoutineInput } from './routineUseCases';
 import './RoutineForm.css';
 
 /** Choix du sélecteur « Fréquence » : les cinq types de la base, « Tous les N jours » regroupant jours et semaines (R-07). */
@@ -50,7 +53,11 @@ export interface RoutineFormProps {
   readonly initialSpaceId: SpaceId;
   readonly today: LocalDate;
   /** Enregistre ; renvoie vrai si c'est fait (le formulaire se ferme alors), faux sinon (il reste ouvert). */
-  readonly onSubmit: (fields: RoutineFields) => Promise<boolean>;
+  readonly onSubmit: (input: RoutineInput) => Promise<boolean>;
+  /** Avances des rappels actuels de la routine modifiée (cases « À l'heure », « 30 min »). */
+  readonly initialOffsets?: readonly ReminderOffsetMin[];
+  /** Avances cochées d'office quand on donne une heure à une nouvelle routine (`reminders.defaultOffsets`, QB-08). */
+  readonly defaultOffsets?: readonly ReminderOffsetMin[];
   readonly onClose: () => void;
   /** Message d'échec d'enregistrement. */
   readonly errorMessage: string | null;
@@ -68,7 +75,7 @@ export interface RoutineFormProps {
  * nom est vide ou qu'aucun jour n'est choisi.
  */
 export function RoutineForm(props: RoutineFormProps) {
-  const { routine, spaces, initialSpaceId, today, onSubmit, onClose, errorMessage, editExtras, archiveAction, autoFocus } = props;
+  const { routine, spaces, initialSpaceId, today, onSubmit, onClose, errorMessage, editExtras, archiveAction, autoFocus, initialOffsets = [], defaultOffsets = [0] } = props;
   const headingId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(routine?.title ?? '');
@@ -83,6 +90,10 @@ export function RoutineForm(props: RoutineFormProps) {
   const [interval, setIntervalValue] = useState(routine?.interval ?? 2);
   const [startDate, setStartDate] = useState<LocalDate>(routine?.startDate ?? today);
   const [startPickerOpen, setStartPickerOpen] = useState(false);
+  const [time, setTime] = useState<LocalTime | null>(routine?.time ?? null);
+  const [timeOpen, setTimeOpen] = useState(false);
+  const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>(initialOffsets);
+  const [offsetsTouched, setOffsetsTouched] = useState(false);
   const [spaceId, setSpaceId] = useState<SpaceId>(routine?.spaceId ?? initialSpaceId);
   const [saving, setSaving] = useState(false);
 
@@ -96,7 +107,7 @@ export function RoutineForm(props: RoutineFormProps) {
     timesPerWeek: choice === 'x_per_week' ? timesPerWeek : null,
     interval: choice === 'every_n' ? interval : null,
     startDate: choice === 'every_n' ? startDate : (routine?.startDate ?? today),
-    time: routine?.time ?? null,
+    time,
     paused: routine?.paused ?? false,
     archived: routine?.archived ?? false,
   };
@@ -114,7 +125,7 @@ export function RoutineForm(props: RoutineFormProps) {
     if (!valid || saving) return;
     setSaving(true);
     try {
-      await onSubmit(fields);
+      await onSubmit({ fields, reminderOffsets: time === null ? [] : offsets.filter((offset) => ROUTINE_FORM_OFFSETS.includes(offset)) });
     } finally {
       setSaving(false);
     }
@@ -128,6 +139,17 @@ export function RoutineForm(props: RoutineFormProps) {
   /** « Toutes les N semaines » : jours préréglés sur le jour de la date de départ (QB-04) tant qu'ils ne sont pas modifiés. */
   function presetDays(nextUnit: IntervalUnit, date: LocalDate): void {
     if (nextUnit === 'weeks' && !daysTouched) setWeekdays([weekdayOf(date)]);
+  }
+
+  /** Heure choisie : une nouvelle routine reçoit les avances par défaut (« À l'heure », QB-08) tant qu'on n'a pas touché aux cases. */
+  function chooseTime(next: LocalTime | null): void {
+    if (next !== null && time === null && !offsetsTouched && routine?.time == null) setOffsets(defaultOffsets);
+    setTime(next);
+  }
+
+  function toggleOffset(offset: ReminderOffsetMin): void {
+    setOffsetsTouched(true);
+    setOffsets((current) => (current.includes(offset) ? current.filter((value) => value !== offset) : [...current, offset]));
   }
 
   function chooseFrequency(next: FrequencyChoice): void {
@@ -306,6 +328,41 @@ export function RoutineForm(props: RoutineFormProps) {
           <span className="ct-routine-form__timesUnit">{t('routines.form.timesUnit')}</span>
         </div>
       )}
+
+      <span className="ct-routine-form__label">{t('routines.form.timeAndReminder')}</span>
+      <div className="ct-routine-form__timeRow">
+        <button
+          type="button"
+          className="ct-routine-form__timeButton"
+          aria-expanded={timeOpen}
+          aria-label={t('routines.form.timeButton', { time: time ?? t('routines.form.noTime') })}
+          onClick={() => setTimeOpen((open) => !open)}
+        >
+          {time ?? t('routines.form.noTimeShort')}
+        </button>
+        {ROUTINE_FORM_OFFSETS.map((offset) => {
+          const checked = time !== null && offsets.includes(offset);
+          return (
+            <button
+              key={offset}
+              type="button"
+              role="checkbox"
+              aria-checked={checked}
+              aria-disabled={time === null}
+              className="ct-routine-form__reminder"
+              onClick={() => {
+                if (time !== null) toggleOffset(offset);
+              }}
+            >
+              <span className="ct-routine-form__box" data-checked={checked}>
+                {checked && <Check size={14} strokeWidth={3.4} aria-hidden="true" />}
+              </span>
+              {t(offset === 0 ? 'routines.form.reminderAtTime' : 'routines.form.reminder30')}
+            </button>
+          );
+        })}
+      </div>
+      {timeOpen && <RoutineTimeEditor value={time} onChange={chooseTime} layout={layout} />}
 
       <div className="ct-routine-form__spaceRow">
         <span className="ct-routine-form__spaceLabel">{t('routines.form.space')}</span>

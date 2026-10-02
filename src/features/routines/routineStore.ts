@@ -1,11 +1,11 @@
 import { createStore } from 'zustand';
-import type { Routine, RoutineFields } from '../../domain/model';
+import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import type { RoutineError } from '../../domain/routineRules';
 import { groupDoneDates } from '../../domain/routineSchedule';
 import type { LocalDate, Result, RoutineId, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
-import { createRoutineUseCases } from './routineUseCases';
+import { createRoutineUseCases, type RoutineInput } from './routineUseCases';
 
 export type RoutinesStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -28,6 +28,8 @@ export interface RoutinesState {
   readonly archived: readonly Routine[];
   /** Dates validées de chaque routine, historique complet. */
   readonly doneByRoutine: ReadonlyMap<RoutineId, ReadonlySet<LocalDate>>;
+  /** Avances cochées d'office quand on donne une heure à une nouvelle routine (`reminders.defaultOffsets`, QB-08). */
+  readonly defaultOffsets: readonly ReminderOffsetMin[];
   /** A-06 : vue compacte de l'onglet (`view.compact.routines`, local à l'appareil), lue au chargement. */
   readonly compact: boolean;
   readonly status: RoutinesStatus;
@@ -39,9 +41,11 @@ export interface RoutinesState {
   /** A-06 : bascule la vue compacte et la mémorise. Ne rejette jamais. */
   setCompact(compact: boolean): Promise<void>;
   /** R-01, R-07 : crée une routine puis recharge. Ne rejette jamais : les échecs sont dans le `Result`. */
-  create(fields: RoutineFields): Promise<Result<Routine, RoutineSaveError>>;
+  create(input: RoutineInput): Promise<Result<Routine, RoutineSaveError>>;
   /** R-01, R-02, R-07 : enregistre le formulaire d'une routine puis recharge. Ne rejette jamais. */
-  update(id: RoutineId, fields: RoutineFields): Promise<Result<Routine, RoutineSaveError>>;
+  update(id: RoutineId, input: RoutineInput): Promise<Result<Routine, RoutineSaveError>>;
+  /** R-02 : avances des rappels d'une routine (cases du formulaire de modification). Ne rejette jamais (aucune avance en cas d'échec). */
+  reminderOffsets(id: RoutineId): Promise<readonly ReminderOffsetMin[]>;
 }
 
 export const routinesStore = defineFeatureStore<RoutinesState>((container: AppContainer) => {
@@ -65,6 +69,7 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
     archived: [],
     doneByRoutine: new Map<RoutineId, ReadonlySet<LocalDate>>(),
     compact: false,
+    defaultOffsets: [0],
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
@@ -77,7 +82,9 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
         // Réglage illisible : vue détaillée par défaut.
         const compact = await container.data.repos.settings.get('view.compact').then((value) => value.routines, () => false);
         if (id !== requestId) return;
-        set({ ...data, compact, status: 'ready' });
+        const defaultOffsets = await container.data.repos.settings.get('reminders.defaultOffsets').catch((): readonly ReminderOffsetMin[] => [0]);
+        if (id !== requestId) return;
+        set({ ...data, compact, defaultOffsets, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'routines.loadError' });
@@ -95,9 +102,9 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       }
     },
 
-    async create(fields) {
+    async create(input) {
       try {
-        const result = await useCases.create(fields);
+        const result = await useCases.create(input);
         if (result.ok) await get().load(get().filter);
         return result;
       } catch {
@@ -106,14 +113,22 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       }
     },
 
-    async update(id, fields) {
+    async update(id, input) {
       try {
-        const result = await useCases.update(id, fields);
+        const result = await useCases.update(id, input);
         if (result.ok) await get().load(get().filter);
         return result;
       } catch {
         set({ actionErrorKey: 'routines.saveError' });
         return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    async reminderOffsets(id) {
+      try {
+        return await useCases.reminderOffsets(id);
+      } catch {
+        return [];
       }
     },
   }));

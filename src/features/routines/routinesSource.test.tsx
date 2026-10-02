@@ -35,6 +35,16 @@ describe('Source des routines dans Aujourd’hui (R-01 critère 11, R-03 critèr
     expect(screen.getByText('08:30 · Routine')).toBeInTheDocument();
   });
 
+  it('une routine sans heure vient après les éléments horodatés, sans heure affichée (R-02 critère 3)', async () => {
+    await seedRoutine(h, { title: 'Ranger le bureau' });
+    await seedTask(h, { title: 'Appeler le notaire', time: '09:00' });
+    renderToday(h.container);
+    await screen.findByRole('button', { name: 'Appeler le notaire' });
+    const titles = Array.from(document.querySelectorAll('.ct-today__list .ct-list-row__title')).map((node) => node.textContent);
+    expect(titles).toEqual(['Appeler le notaire', 'Ranger le bureau']);
+    expect(screen.getByText('Routine')).toBeInTheDocument(); // sous-ligne sans heure
+  });
+
   it('une routine non prévue ce jour (Sport lun., mer., ven. un mardi) n’apparaît pas', async () => {
     await seedRoutine(h, { title: 'Sport', scheduleType: 'weekdays', weekdays: [1, 3, 5] });
     const tuesday = await loadTodayExtras(h.container, day('2026-09-29'), 'all');

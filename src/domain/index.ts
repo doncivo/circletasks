@@ -30,3 +30,4 @@ export * from './taskMove';
 export * from './routineRules';
 export * from './routineSchedule';
 
+export * from './routineReminder';

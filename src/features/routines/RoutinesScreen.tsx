@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
-import type { Routine, RoutineFields } from '../../domain/model';
+import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
 import type { LocalDate, RoutineId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -11,10 +11,14 @@ import { useAppStore } from '../app/appStore';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
 import { routinesStore } from './routineStore';
+import type { RoutineInput } from './routineUseCases';
 import './RoutinesScreen.css';
 
 /** Formulaire ouvert : création, ou modification d'une routine. */
-type Editor = { readonly mode: 'create' } | { readonly mode: 'edit'; readonly id: RoutineId };
+type Editor =
+  | { readonly mode: 'create' }
+  /** `offsets` : avances des rappels actuels, lues avant d'ouvrir le formulaire (cases « À l'heure », « 30 min »). */
+  | { readonly mode: 'edit'; readonly id: RoutineId; readonly offsets: readonly ReminderOffsetMin[] };
 
 /** Panneau de droite du PC (PC-Routines.html) : même emplacement que la fiche détail des tâches, sans l'en-tête « DÉTAIL ». */
 function RoutinePanel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
@@ -51,6 +55,8 @@ export function RoutinesScreen() {
   const setCompact = useFeatureStore(routinesStore, (s) => s.setCompact);
   const create = useFeatureStore(routinesStore, (s) => s.create);
   const update = useFeatureStore(routinesStore, (s) => s.update);
+  const reminderOffsets = useFeatureStore(routinesStore, (s) => s.reminderOffsets);
+  const defaultOffsets = useFeatureStore(routinesStore, (s) => s.defaultOffsets);
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -76,8 +82,13 @@ export function RoutinesScreen() {
 
   const editedRoutine: Routine | null = editor?.mode === 'edit' ? (routines.find((routine) => routine.id === editor.id) ?? null) : null;
 
-  async function save(fields: RoutineFields): Promise<boolean> {
-    const result = editor?.mode === 'edit' ? await update(editor.id, fields) : await create(fields);
+  async function openEdit(id: RoutineId): Promise<void> {
+    setFormError(null);
+    setEditor({ mode: 'edit', id, offsets: await reminderOffsets(id) });
+  }
+
+  async function save(input: RoutineInput): Promise<boolean> {
+    const result = editor?.mode === 'edit' ? await update(editor.id, input) : await create(input);
     if (!result.ok) {
       setFormError(t('routines.saveError'));
       return false;
@@ -99,6 +110,8 @@ export function RoutinesScreen() {
         onClose={closeEditor}
         errorMessage={formError}
         autoFocus={editor.mode === 'create'}
+        initialOffsets={editor.mode === 'edit' ? editor.offsets : []}
+        defaultOffsets={defaultOffsets}
       />
     ) : null;
   const formLabel = editor?.mode === 'edit' ? t('routines.form.editTitle') : t('routines.form.newTitle');
@@ -141,10 +154,7 @@ export function RoutinesScreen() {
                 today={today}
                 layout={layout}
                 compact={compact}
-                onEdit={() => {
-                  setFormError(null);
-                  setEditor({ mode: 'edit', id: routine.id as RoutineId });
-                }}
+                onEdit={() => void openEdit(routine.id as RoutineId)}
               />
             </div>
           ))}

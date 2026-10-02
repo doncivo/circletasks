@@ -129,3 +129,27 @@ export async function reopenRoutines(page: Page): Promise<void> {
   await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
   await openRoutines(page);
 }
+
+/**
+ * Règle l'heure d'un formulaire de routine ouvert : champ HH:MM au clavier sur PC, roues sur iPhone (flèche haut = élément suivant,
+ * « — » puis 00 à 23, minutes par pas de 5). `null` : efface l'heure.
+ */
+export async function setRoutineTime(page: Page, form: Locator, testInfo: { project: { name: string } }, time: string | null): Promise<void> {
+  const button = form.getByRole('button', { name: /^Heure de la routine/ });
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  if (!isPhone(testInfo)) {
+    if (time === null) await form.getByRole('button', { name: 'Effacer l’heure' }).click();
+    else await form.getByLabel('Heure (HH:MM)').fill(time);
+    return;
+  }
+  const hours = form.getByRole('spinbutton', { name: 'Heures' });
+  await hours.focus();
+  await page.keyboard.press('Home');
+  if (time === null) return;
+  const [hour, minute] = time.split(':').map(Number);
+  for (let i = 0; i < (hour ?? 0) + 1; i += 1) await page.keyboard.press('ArrowUp');
+  const minutes = form.getByRole('spinbutton', { name: 'Minutes' });
+  await minutes.focus();
+  await page.keyboard.press('Home');
+  for (let i = 0; i < Math.round((minute ?? 0) / 5); i += 1) await page.keyboard.press('ArrowUp');
+}
