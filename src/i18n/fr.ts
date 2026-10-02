@@ -286,6 +286,7 @@ export const fr = {
     trashOpen: 'Ouvrir',
     trashOpenLabel: 'Ouvrir la corbeille',
     carryOverUndone: 'Reporter les tâches non faites',
+    hideRoutines: 'Masquer les routines de la liste',
     loadError: 'Impossible de lire les réglages.',
     saveError: 'Impossible d’enregistrer ce réglage.',
   },

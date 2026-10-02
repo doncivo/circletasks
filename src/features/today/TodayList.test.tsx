@@ -168,6 +168,34 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       await waitFor(() => expect(toggle).toHaveBeenCalledTimes(1));
     });
 
+    it('« Masquer les routines » retire les routines de la liste, pas les tâches ; les décocher les ramène (A-03 critères 2, 5)', async () => {
+      await seedTask(h, { title: 'Une tâche' });
+      plug({ routines: [{ routine: routine('Boire de l’eau', '08:30'), done: false }, { routine: routine('Faire mon lit', '07:00'), done: true }] });
+      await h.container.data.repos.settings.set('today.hideRoutines', true);
+      mockViewport(440);
+      const first = renderToday(h.container);
+      await screen.findByRole('button', { name: 'Une tâche' });
+      expect(screen.queryByText('Boire de l’eau')).toBeNull();
+      expect(screen.queryByText('Faire mon lit')).toBeNull();
+      expect(screen.queryByText(/Routine/)).toBeNull();
+      first.unmount();
+
+      await h.container.data.repos.settings.set('today.hideRoutines', false);
+      renderToday(h.container);
+      expect(await screen.findByText('Boire de l’eau')).toBeInTheDocument();
+      expect(screen.getByText('Faire mon lit')).toBeInTheDocument(); // avec son état : validée, en bas
+      expect(screen.getByRole('button', { name: 'Une tâche' })).toBeInTheDocument();
+    });
+
+    it('une journée sans tâche dont les routines sont masquées affiche l’état vide (A-03 critère 7)', async () => {
+      plug({ routines: [{ routine: routine('Sport', '18:00'), done: false }] });
+      await h.container.data.repos.settings.set('today.hideRoutines', true);
+      mockViewport(440);
+      renderToday(h.container);
+      expect(await screen.findByText('Rien de prévu aujourd’hui.')).toBeInTheDocument();
+      expect(screen.queryByText('Sport')).toBeNull();
+    });
+
     it('un échec de source affiche un message sans masquer les tâches', async () => {
       await seedTask(h, { title: 'Reste visible' });
       unregister.push(registerTodaySource({ id: 'cassee', load: () => Promise.reject(new Error('boom')) }));

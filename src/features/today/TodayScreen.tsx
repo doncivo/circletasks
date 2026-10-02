@@ -62,6 +62,7 @@ export function TodayScreen() {
   const viewFilter = useFeatureStore(todayStore, (s) => s.filter);
   const extras = useFeatureStore(todayStore, (s) => s.extras);
   const extrasFailed = useFeatureStore(todayStore, (s) => s.extrasFailed);
+  const hideRoutines = useFeatureStore(todayStore, (s) => s.hideRoutines);
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
   const moveRow = useFeatureStore(todayStore, (s) => s.moveRow);
   const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
@@ -104,8 +105,9 @@ export function TodayScreen() {
         events: extras.events,
         checklists: extras.checklists,
         goal: extras.goal,
+        hideRoutines,
       }),
-    [dayTasks, extras, viewDate, viewedDate, viewFilter],
+    [dayTasks, extras, hideRoutines, viewDate, viewedDate, viewFilter],
   );
   const routinesCheckable = canToggleRoutines();
 

@@ -45,6 +45,8 @@ export interface TodayState {
   readonly extras: TodayExtras;
   /** Une source d'éléments du jour a échoué : message dédié, les tâches restent affichées. */
   readonly extrasFailed: boolean;
+  /** A-03 : réglage `today.hideRoutines` lu au chargement ; les routines masquées ne sont pas listées (elles restent dans leur onglet et la Semaine). */
+  readonly hideRoutines: boolean;
   readonly status: TodayStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -154,6 +156,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     recurrences: new Map<RecurrenceId, RecurrenceFields>(),
     extras: EMPTY_TODAY_EXTRAS,
     extrasFailed: false,
+    hideRoutines: false,
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
@@ -165,8 +168,10 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         const tasks = await fetchDay(date, filter);
         const recurrences = await loadRecurrences(tasks, get().recurrences);
         const { extras, failed } = await loadTodayExtras(container, date, filter);
+        // Un réglage illisible n'empêche pas l'affichage : routines affichées par défaut.
+        const hideRoutines = await container.data.repos.settings.get('today.hideRoutines').catch(() => false);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, status: 'ready' });
+        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, hideRoutines, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });

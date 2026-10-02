@@ -283,6 +283,7 @@ export const en: Messages = {
     trashOpen: 'Open',
     trashOpenLabel: 'Open the trash',
     carryOverUndone: 'Carry over unfinished tasks',
+    hideRoutines: 'Hide routines from the list',
     loadError: 'Unable to read settings.',
     saveError: 'Unable to save this setting.',
   },

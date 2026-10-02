@@ -9,8 +9,8 @@ import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
 /**
- * Écran Réglages minimal (Reglages.html) : section « GÉNÉRAL » avec la seule ligne « Fuseau horaire » (T-11, lecture seule), section « TÂCHES » avec l'interrupteur « Reporter
- * les tâches non faites » (T-06), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
+ * Écran Réglages minimal (Reglages.html) : section « GÉNÉRAL » avec la seule ligne « Fuseau horaire » (T-11, lecture seule), section « TÂCHES » avec les interrupteurs « Reporter
+ * les tâches non faites » (T-06) et « Masquer les routines de la liste » (A-03), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
  * « Corbeille » (T-08, Q6 : unique point d'accès). Sur PC seulement : section « GÉNÉRAL » avec
  * « Démarrer avec Windows » (D-02) et section « À PROPOS » (D-03). Aucun autre réglage n'est
  * simulé : ils arrivent avec M12.
@@ -21,6 +21,8 @@ export function SettingsScreen() {
   const status = useFeatureStore(settingsStore, (s) => s.status);
   const errorKey = useFeatureStore(settingsStore, (s) => s.errorKey);
   const setCarryOverUndone = useFeatureStore(settingsStore, (s) => s.setCarryOverUndone);
+  const hideRoutines = useFeatureStore(settingsStore, (s) => s.hideRoutines);
+  const setHideRoutines = useFeatureStore(settingsStore, (s) => s.setHideRoutines);
   const timeZone = useAppStore((s) => s.timeZone);
   const launchAtStartup = useFeatureStore(settingsStore, (s) => s.launchAtStartup);
   const setLaunchAtStartup = useFeatureStore(settingsStore, (s) => s.setLaunchAtStartup);
@@ -62,6 +64,15 @@ export function SettingsScreen() {
           checked={carryOverUndone}
           onChange={(value) => void setCarryOverUndone(value)}
           label={t('settings.carryOverUndone')}
+          disabled={status !== 'ready' && status !== 'error'}
+        />
+      </div>
+      <div className="ct-settings__row">
+        <span>{t('settings.hideRoutines')}</span>
+        <Switch
+          checked={hideRoutines}
+          onChange={(value) => void setHideRoutines(value)}
+          label={t('settings.hideRoutines')}
           disabled={status !== 'ready' && status !== 'error'}
         />
       </div>

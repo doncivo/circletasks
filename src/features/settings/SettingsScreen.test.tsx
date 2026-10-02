@@ -94,6 +94,47 @@ describe('SettingsScreen (T-06)', () => {
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'trash' });
   });
 
+  describe('« Masquer les routines de la liste » (A-03)', () => {
+    const hide = () => screen.getByRole('switch', { name: 'Masquer les routines de la liste' });
+
+    it('est désactivé par défaut, dans la section TÂCHES (critère 1)', async () => {
+      renderScreen();
+      await waitFor(() => expect(hide()).not.toBeDisabled());
+      expect(hide()).toHaveAttribute('aria-checked', 'false');
+      expect(screen.getByText('Masquer les routines de la liste')).toBeInTheDocument();
+    });
+
+    it('bascule, s’enregistre dans le réglage partagé et persiste après redémarrage (critère 6)', async () => {
+      renderScreen();
+      await waitFor(() => expect(hide()).not.toBeDisabled());
+      hide().click();
+      await waitFor(() => expect(hide()).toHaveAttribute('aria-checked', 'true'));
+      await waitFor(async () => expect(await db.data.repos.settings.get('today.hideRoutines')).toBe(true));
+      cleanup();
+      renderScreen(containerWith(db.data));
+      await waitFor(() => expect(hide()).toHaveAttribute('aria-checked', 'true'));
+      hide().click();
+      await waitFor(async () => expect(await db.data.repos.settings.get('today.hideRoutines')).toBe(false));
+    });
+
+    it('est un bouton focalisable annoncé « interrupteur, activé / désactivé » (critère 8 ; Espace : e2e)', async () => {
+      renderScreen();
+      await waitFor(() => expect(hide()).not.toBeDisabled());
+      expect(hide().tagName).toBe('BUTTON');
+      expect(hide()).toHaveAttribute('role', 'switch');
+      hide().focus();
+      expect(hide()).toHaveFocus();
+    });
+
+    it('échec d’écriture : retour à la valeur enregistrée et message', async () => {
+      renderScreen(containerWith(failing('set')));
+      await waitFor(() => expect(hide()).not.toBeDisabled());
+      hide().click();
+      expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
+      expect(hide()).toHaveAttribute('aria-checked', 'false');
+    });
+  });
+
   it('échec de lecture : message, pas de rejet', async () => {
     renderScreen(containerWith(failing('get')));
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de lire les réglages.');
