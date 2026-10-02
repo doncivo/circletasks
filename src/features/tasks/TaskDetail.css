@@ -371,3 +371,14 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+.ct-task-detail__chip[data-inactive='true'] {
+  opacity: 0.45;
+}
+
+.ct-task-detail__reminderEdit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-2) var(--ct-space-3);
+}

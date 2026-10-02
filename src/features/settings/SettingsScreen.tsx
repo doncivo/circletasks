@@ -4,6 +4,7 @@ import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { formatRecapSummary } from '../reminders';
 import { AboutSection } from './AboutSection';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
@@ -23,6 +24,7 @@ export function SettingsScreen() {
   const setCarryOverUndone = useFeatureStore(settingsStore, (s) => s.setCarryOverUndone);
   const hideRoutines = useFeatureStore(settingsStore, (s) => s.hideRoutines);
   const setHideRoutines = useFeatureStore(settingsStore, (s) => s.setHideRoutines);
+  const recaps = useFeatureStore(settingsStore, (s) => s.recaps);
   const timeZone = useAppStore((s) => s.timeZone);
   const launchAtStartup = useFeatureStore(settingsStore, (s) => s.launchAtStartup);
   const setLaunchAtStartup = useFeatureStore(settingsStore, (s) => s.setLaunchAtStartup);
@@ -76,6 +78,16 @@ export function SettingsScreen() {
           disabled={status !== 'ready' && status !== 'error'}
         />
       </div>
+      <h2 className="ct-settings__section">{t('reminders.sectionTitle')}</h2>
+      <button
+        type="button"
+        className="ct-settings__row ct-settings__rowButton"
+        aria-label={`${t('reminders.recaps')} : ${formatRecapSummary(recaps)}`}
+        onClick={() => navigate({ tab: 'settings', screen: 'reminders' })}
+      >
+        <span>{t('reminders.recaps')}</span>
+        <span className="ct-settings__value">{formatRecapSummary(recaps)}</span>
+      </button>
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
       <div className="ct-settings__row">
         <span>{t('settings.trash')}</span>

@@ -2,6 +2,7 @@ import { expect, test, type Browser, type Page } from '@playwright/test';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
+import { setWheels } from '../e2e/helpers/schedule';
 import { createTask, openToday } from '../e2e/helpers/today';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
@@ -229,6 +230,31 @@ const SCREENS: Screen[] = [
       await prepareRoutines(page, ROUTINE_SEED);
       await page.getByRole('button', { name: 'Rapport du mois' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'septembre' })).toBeVisible();
+    },
+  },
+  {
+    // Feuille « Nouvelle tâche » avec une heure (14:00) : bloc Rappel actif, « À l'heure » cochée d'office (N-02, QB-08).
+    name: 'Ajout',
+    mockup: 'Ajout.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Ajouter' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+      await dialog.getByLabel('Titre').fill('Appeler le notaire');
+      await setWheels(page, dialog, { time: '14:00' });
+      await expect(dialog.getByRole('checkbox', { name: 'À l’heure' })).toHaveAttribute('aria-checked', 'true');
+    },
+  },
+  {
+    // Réglages : section RAPPELS, ligne « Récapitulatifs » 07:30 · 21:00 (N-04, QB-09). Les autres sections arrivent avec M12.
+    name: 'Reglages',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await expect(page.getByRole('button', { name: /^Récapitulatifs :/ })).toBeVisible();
     },
   },
 ];

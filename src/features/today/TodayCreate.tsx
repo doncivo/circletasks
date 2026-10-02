@@ -1,11 +1,13 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
-import type { IconRef, RecurrenceFields, Space } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
+import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField, type Layout } from '../../ui';
+import { ReminderBlock } from '../reminders';
 import type { NewTaskSchedule } from './todayStore';
 
 /**
@@ -68,20 +70,31 @@ export interface TodayCreateSheetProps {
   readonly spaces: readonly Space[];
   /** Espace présélectionné (filtre actif, ES-02). */
   readonly initialSpaceId: SpaceId | null;
+  /** Avances cochées d'office à la première heure donnée (`reminders.defaultOffsets`, QB-08) ; [0] par défaut. */
+  readonly defaultOffsets?: readonly ReminderOffsetMin[];
   readonly onClose: () => void;
-  readonly onCreate: (input: { title: string; spaceId: SpaceId; choice: DateChoice; recurrence: RecurrenceFields | null; icon: IconRef | null }) => Promise<boolean>;
+  readonly onCreate: (input: {
+    title: string;
+    spaceId: SpaceId;
+    choice: DateChoice;
+    recurrence: RecurrenceFields | null;
+    icon: IconRef | null;
+    reminderOffsets: readonly ReminderOffsetMin[];
+  }) => Promise<boolean>;
 }
 
 /**
  * Feuille « Nouvelle tâche » (iPhone, Ajout.html) : titre, icône, roues de date (« Aujourd'hui » / jour affiché, sans heure,
  * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
  */
-export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, onClose, onCreate }: TodayCreateSheetProps) {
+export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, defaultOffsets = [0], onClose, onCreate }: TodayCreateSheetProps) {
   const [title, setTitle] = useState('');
   const [choice, setChoice] = useState<DateChoice>({ date: viewedDate, time: null });
   const [spaceId, setSpaceId] = useState<SpaceId | null>(initialSpaceId);
   const [icon, setIcon] = useState<IconRef | null>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceFields | null>(null);
+  const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
+  const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const valid = validateTaskTitle(title).ok;
 
@@ -92,10 +105,17 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, on
     return () => window.clearTimeout(id);
   }, []);
 
+  function changeChoice(next: DateChoice | null): void {
+    const value = next ?? { date: today, time: null };
+    setOffsets((current) => offsetsAfterTimeChange(current, choice.date === null ? null : choice.time, value.date === null ? null : value.time, offsetsTouched, defaultOffsets));
+    setChoice(value);
+  }
+
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!valid || !spaceId) return;
-    if (await onCreate({ title, spaceId, choice, recurrence: choice.date === null ? null : recurrence, icon })) onClose();
+    const reminderOffsets = choice.date === null || choice.time === null ? [] : offsets;
+    if (await onCreate({ title, spaceId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets })) onClose();
   }
 
   return (
@@ -111,8 +131,17 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, on
         {/* Choix Icône / Emoji (T-03, Ajout.html). */}
         <IconChooser value={icon} onChange={setIcon} />
         {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}
-        <DatePicker value={choice} today={today} onChange={(next) => setChoice(next ?? { date: today, time: null })} />
+        <DatePicker value={choice} today={today} onChange={changeChoice} />
         <RecurrencePicker value={recurrence} onChange={setRecurrence} startDate={choice.date ?? viewedDate} />
+        {/* Rappels (N-02, Ajout.html) : grisés sans heure (QB-07) ; « À l'heure » cochée d'office à la première heure (QB-08). */}
+        <ReminderBlock
+          time={choice.date === null ? null : choice.time}
+          offsets={offsets}
+          onToggle={(offset) => {
+            setOffsetsTouched(true);
+            setOffsets((current) => toggleReminderOffset(current, offset));
+          }}
+        />
         <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
           {spaces.map((space) => (
             <button

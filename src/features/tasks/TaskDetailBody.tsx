@@ -167,6 +167,7 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
         spaces={spaces}
         today={today}
         reminders={props.reminders}
+        setReminders={api.setReminders}
         goalTitle={props.goalTitle}
         recurrence={recurrence}
         onPatch={edits.commitPatch}
@@ -235,7 +236,7 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
         />
       )}
       {isMobile && edits.sheet.open && (
-        <TaskEditSheet task={task} spaces={spaces} today={today} recurrence={recurrence} onClose={() => edits.sheet.setOpen(false)} onSave={edits.sheet.save} />
+        <TaskEditSheet task={task} spaces={spaces} today={today} recurrence={recurrence} reminders={props.reminders} onClose={() => edits.sheet.setOpen(false)} onSave={edits.sheet.save} />
       )}
       <TaskDetailDialogs task={task} edits={edits} />
     </div>

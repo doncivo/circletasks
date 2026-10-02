@@ -1,4 +1,6 @@
 import { createStore } from 'zustand';
+import { defaultSetting } from '../../domain/model';
+import { validateRecapSettings, type RecapSettings, type RecapSettingsError } from '../../domain/recap';
 import type { PlainMessageKey } from '../../i18n';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -20,7 +22,14 @@ export interface SettingsState {
    * (la ligne n'existe alors pas).
    */
   readonly launchAtStartup: boolean | null;
+  /** N-04 : récapitulatifs du matin et du soir (`reminders.morningRecap` / `eveningRecap`, partagés ; 07:30 et 21:00 actifs par défaut, QB-09). */
+  readonly recaps: RecapSettings;
   readonly errorKey: PlainMessageKey | null;
+  /**
+   * N-04 : enregistre les récapitulatifs après validation (heures 24 h, soir après matin). Rend 'ok', l'erreur de validation (rien
+   * n'est écrit) ou 'error' (écriture impossible). Aucune notification n'est planifiée (ordre 5, iPhone). Ne rejette jamais.
+   */
+  saveRecaps(next: RecapSettings): Promise<'ok' | RecapSettingsError | 'error'>;
   /** Lit les réglages (défaut : activé, Q1). Ne rejette jamais. */
   load(): Promise<void>;
   /** Enregistre le choix ; en cas d'échec, l'interrupteur revient à la valeur enregistrée. Ne rejette jamais. */
@@ -37,16 +46,19 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
     carryOverUndone: true,
     hideRoutines: false,
     launchAtStartup: null,
+    recaps: { morning: defaultSetting('reminders.morningRecap'), evening: defaultSetting('reminders.eveningRecap') },
     errorKey: null,
 
     async load() {
       set({ status: 'loading', errorKey: null });
       try {
-        const [carryOverUndone, hideRoutines] = await Promise.all([
+        const [carryOverUndone, hideRoutines, morning, evening] = await Promise.all([
           container.data.repos.settings.get('tasks.carryOverUndone'),
           container.data.repos.settings.get('today.hideRoutines'),
+          container.data.repos.settings.get('reminders.morningRecap'),
+          container.data.repos.settings.get('reminders.eveningRecap'),
         ]);
-        set({ carryOverUndone, hideRoutines, status: 'ready' });
+        set({ carryOverUndone, hideRoutines, recaps: { morning, evening }, status: 'ready' });
       } catch {
         set({ status: 'error', errorKey: 'settings.loadError' });
         return;
@@ -64,6 +76,21 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
       } catch (error) {
         logDesktopFailure('autostart-read', error);
         set({ errorKey: 'settings.loadError' });
+      }
+    },
+
+    async saveRecaps(next) {
+      const checked = validateRecapSettings(next);
+      if (!checked.ok) return checked.error;
+      const previous = get().recaps;
+      set({ recaps: checked.value, errorKey: null });
+      try {
+        await container.data.repos.settings.set('reminders.morningRecap', checked.value.morning);
+        await container.data.repos.settings.set('reminders.eveningRecap', checked.value.evening);
+        return 'ok';
+      } catch {
+        set({ recaps: previous, errorKey: 'reminders.recapSaveError' });
+        return 'error';
       }
     },
 

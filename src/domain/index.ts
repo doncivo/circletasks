@@ -31,5 +31,7 @@ export * from './routineRules';
 export * from './routineSchedule';
 
 export * from './routineReminder';
+export * from './reminders';
+export * from './recap';
 export * from './routineStreaks';
 export * from './routineReport';

@@ -15,6 +15,7 @@ import type { RecurrenceId, Result, TaskId } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
 import { createNextOccurrence, type CreatedOccurrence } from './recurrenceUseCases';
 import { createRemoveUndo, type RuleChange } from './undoCommands';
+import { syncTaskReminders } from './reminderSync';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
 /** Erreurs métier de la modification d'une série (T-10) ; les erreurs d'écriture rejettent. */
@@ -107,7 +108,9 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
       for (const { before, after } of entries) {
         const current = await repos.tasks.getById(after.id);
         if (!current || current.hlc !== after.hlc) continue;
-        written.push(await repos.tasks.update(before.id, restorePatch(before)));
+        const back = await repos.tasks.update(before.id, restorePatch(before));
+        await syncTaskReminders(repos, back);
+        written.push(back);
       }
       let ruleDone = false;
       if (rule) {
@@ -158,12 +161,16 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
         if (write.date !== undefined && write.date !== current.date && current.carriedOver) write.carriedOver = false;
         write.seriesTemplate = scope === 'occurrence' ? divergedTemplate(current) : null;
 
-        const entries: Entry[] = [{ before: current, after: await repos.tasks.update(id, write) }];
+        const first = await repos.tasks.update(id, write);
+        await syncTaskReminders(repos, first);
+        const entries: Entry[] = [{ before: current, after: first }];
         if (scope === 'following') {
           const values = seriesValuesPatch(write);
           if (Object.keys(values).length > 0) {
             for (const later of await laterTodoOccurrences(repos, current)) {
-              entries.push({ before: later, after: await repos.tasks.update(later.id, values) });
+              const laterAfter = await repos.tasks.update(later.id, values);
+              await syncTaskReminders(repos, laterAfter);
+              entries.push({ before: later, after: laterAfter });
             }
           }
         }

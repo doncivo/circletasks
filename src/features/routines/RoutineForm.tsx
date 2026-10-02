@@ -1,4 +1,4 @@
-import { Check, ChevronDown, X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import type { IconRef, ReminderOffsetMin, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
 import { weekdayOf } from '../../domain/localDate';
@@ -10,7 +10,8 @@ import {
   TIMES_PER_WEEK_MIN,
   validateRoutine,
 } from '../../domain/routineRules';
-import { ROUTINE_FORM_OFFSETS } from '../../domain/routineReminder';
+import { ROUTINE_FORM_OFFSETS, ROUTINE_QUICK_OFFSETS } from '../../domain/routineReminder';
+import { ReminderChoices } from '../reminders';
 import { nextOccurrences } from '../../domain/routineSchedule';
 import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types';
 import { t } from '../../i18n';
@@ -341,27 +342,8 @@ export function RoutineForm(props: RoutineFormProps) {
         >
           {time ?? t('routines.form.noTimeShort')}
         </button>
-        {ROUTINE_FORM_OFFSETS.map((offset) => {
-          const checked = time !== null && offsets.includes(offset);
-          return (
-            <button
-              key={offset}
-              type="button"
-              role="checkbox"
-              aria-checked={checked}
-              aria-disabled={time === null}
-              className="ct-routine-form__reminder"
-              onClick={() => {
-                if (time !== null) toggleOffset(offset);
-              }}
-            >
-              <span className="ct-routine-form__box" data-checked={checked}>
-                {checked && <Check size={14} strokeWidth={3.4} aria-hidden="true" />}
-              </span>
-              {t(offset === 0 ? 'routines.form.reminderAtTime' : 'routines.form.reminder30')}
-            </button>
-          );
-        })}
+        {/* N-02 : « À l'heure », « 30 min » (ModifierRoutine.html) puis « Plus… » pour les six avances. */}
+        <ReminderChoices offsets={offsets} enabled={time !== null} onToggle={toggleOffset} quick={ROUTINE_QUICK_OFFSETS} plusLabel={t('reminders.more')} />
       </div>
       {timeOpen && <RoutineTimeEditor value={time} onChange={chooseTime} layout={layout} />}
 

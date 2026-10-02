@@ -36,6 +36,13 @@ export interface TaskDetailState {
    * trop long refusé (T-01). Rend true si écrit. Ne rejette jamais ; `errorKey` pose le message.
    */
   updateFields(patch: TaskPatch): Promise<boolean>;
+  /**
+   * N-02 : remplace les rappels de la tâche affichée par ces avances (lignes ajoutées / supprimées logiquement). Rend true si
+   * enregistrés ; sans heure, refusé. Aucune notification n'est planifiée (ordre 5). Ne rejette jamais.
+   */
+  setReminders(offsets: readonly ReminderOffsetMin[]): Promise<boolean>;
+  /** N-02 : feuille « Modifier » : champs et rappels en une transaction. Rend true si écrit. Ne rejette jamais. */
+  updateFieldsAndReminders(patch: TaskPatch, offsets: readonly ReminderOffsetMin[]): Promise<boolean>;
   /** Bouton « Un jour » (A-08, SD-03) : date et heure retirées ; annulable. Rend true si rangée. Ne rejette jamais. */
   moveToSomeday(): Promise<boolean>;
   /** Enregistre la note à la perte de focus (critères 7 à 9). Ne rejette jamais. */
@@ -165,6 +172,41 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
       try {
         await useCases.update(taskId, write);
         set({ status: 'ready', errorKey: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.detailSaveError' });
+        return false;
+      }
+    },
+
+    async setReminders(offsets) {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await useCases.setReminders(taskId, offsets);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: 'reminders.saveError' });
+          return false;
+        }
+        set({ status: 'ready', errorKey: null, reminders: result.value });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'reminders.saveError' });
+        return false;
+      }
+    },
+
+    async updateFieldsAndReminders(patch, offsets) {
+      const { taskId } = get();
+      if (!taskId) return false;
+      try {
+        const result = await useCases.updateWithReminders(taskId, patch, offsets);
+        if (!result.ok) {
+          set({ status: 'error', errorKey: 'reminders.saveError' });
+          return false;
+        }
+        const rows = await container.data.repos.reminders.listForTarget({ type: 'task', id: taskId });
+        set({ status: 'ready', errorKey: null, reminders: rows.map((row) => row.offsetMin) });
         return true;
       } catch {
         set({ status: 'error', errorKey: 'tasks.detailSaveError' });

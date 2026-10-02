@@ -1,3 +1,4 @@
+import { useDefaultReminderOffsets } from '../reminders';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
@@ -115,6 +116,7 @@ export function WeekScreen() {
 
   // Bouton « + » (feuille « Nouvelle tâche », T-01) : date présélectionnée = aujourd'hui ; Ctrl+N de même.
   const [sheetOpen, setSheetOpen] = useState(false);
+  const defaultOffsets = useDefaultReminderOffsets();
   const openCreate = useCallback((): void => setSheetOpen(true), []);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
@@ -212,6 +214,7 @@ export function WeekScreen() {
           today={today}
           spaces={spaces}
           initialSpaceId={fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null}
+          defaultOffsets={defaultOffsets}
           onClose={() => setSheetOpen(false)}
           onCreate={async (input) => {
             const schedule = scheduleOf(input.choice);
@@ -223,6 +226,7 @@ export function WeekScreen() {
               ...(schedule.time !== undefined ? { time: schedule.time } : {}),
               recurrence: input.recurrence,
               icon: input.icon,
+              reminderOffsets: input.reminderOffsets,
             });
             return result.ok;
           }}

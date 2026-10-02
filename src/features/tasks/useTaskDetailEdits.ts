@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { IconRef, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';
@@ -19,6 +19,8 @@ export interface TaskDetailApi {
   readonly postponeSeries: (target: PostponeTarget, scope: SeriesScope) => Promise<void>;
   readonly toggleDone: () => Promise<void>;
   readonly moveToSomeday: () => Promise<boolean>;
+  readonly setReminders: (offsets: readonly ReminderOffsetMin[]) => Promise<boolean>;
+  readonly updateFieldsAndReminders: (patch: TaskPatch, offsets: readonly ReminderOffsetMin[]) => Promise<boolean>;
 }
 
 export interface TaskDetailEdits {
@@ -122,9 +124,16 @@ export function useTaskDetailEdits(
   }
 
   async function applySheet(result: EditSheetResult, scope?: SeriesScope): Promise<void> {
-    if (Object.keys(result.patch).length > 0) {
-      const ok = scope ? await api.applySeriesEdit(result.patch, scope) : await api.updateFields(result.patch);
-      if (!ok) return;
+    const hasPatch = Object.keys(result.patch).length > 0;
+    if (hasPatch && !scope && result.reminders !== undefined) {
+      // Champs et rappels : une seule transaction, rien d'écrit en cas d'échec (N-02).
+      if (!(await api.updateFieldsAndReminders(result.patch, result.reminders))) return;
+    } else {
+      if (hasPatch) {
+        const ok = scope ? await api.applySeriesEdit(result.patch, scope) : await api.updateFields(result.patch);
+        if (!ok) return;
+      }
+      if (result.reminders !== undefined) await api.setReminders(result.reminders);
     }
     if (result.rule === undefined) return;
     if (task.recurrenceId === null) {

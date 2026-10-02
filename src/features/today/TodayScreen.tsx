@@ -1,3 +1,4 @@
+import { useDefaultReminderOffsets } from '../reminders';
 import { ChartColumn } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
@@ -129,6 +130,7 @@ export function TodayScreen() {
   // Création : saisie en ligne (PC) ou feuille « Nouvelle tâche » (iPhone).
   const inlineInputRef = useRef<HTMLInputElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const defaultOffsets = useDefaultReminderOffsets();
   const openCreate = useCallback((): void => {
     if (layout === 'pc') inlineInputRef.current?.focus();
     else setSheetOpen(true);
@@ -250,9 +252,10 @@ export function TodayScreen() {
             today={today}
             spaces={spaces}
             initialSpaceId={fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null}
+            defaultOffsets={defaultOffsets}
             onClose={() => setSheetOpen(false)}
             onCreate={async (input) => {
-              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence }, input.icon);
+              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets }, input.icon);
               return result.ok;
             }}
           />

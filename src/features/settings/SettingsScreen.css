@@ -91,3 +91,17 @@
   font-size: var(--ct-font-size-text-sm);
   text-align: right;
 }
+
+/* Ligne cliquable (Récapitulatifs, N-04) : même aspect qu'une ligne de valeur. */
+.ct-settings__rowButton {
+  width: 100%;
+  padding: 0;
+  border-top: 0;
+  border-left: 0;
+  border-right: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}

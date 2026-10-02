@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
-import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
@@ -23,6 +23,8 @@ export interface NewTaskSchedule {
   readonly someday?: boolean;
   /** T-09 : répétition choisie à la saisie (absent : une fois). */
   readonly recurrence?: RecurrenceFields | null;
+  /** N-02 : avances des rappels (feuille d'ajout) ; absent avec une heure : réglage `reminders.defaultOffsets` (QB-08). */
+  readonly reminderOffsets?: readonly ReminderOffsetMin[];
 }
 
 export type TodayStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -222,6 +224,8 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       try {
         // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `time` / `icon` que
         // si l'appelant les fournit explicitement.
+        const hasTime = schedule?.time != null && !schedule.someday;
+        const reminderOffsets = schedule?.reminderOffsets ?? (hasTime ? await container.data.repos.settings.get('reminders.defaultOffsets').catch((): readonly ReminderOffsetMin[] => []) : []);
         const result = await useCases.create({
           title,
           spaceId,
@@ -230,6 +234,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
           ...(schedule?.time !== undefined && !schedule.someday ? { time: schedule.time } : {}),
           ...(icon !== undefined ? { icon } : {}),
           ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
+          ...(reminderOffsets.length > 0 ? { reminderOffsets } : {}),
         });
         if (!result.ok) return result;
         const id = ++requestId;
