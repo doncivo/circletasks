@@ -60,3 +60,4 @@ export {
 export { ListSkeleton, type ListSkeletonProps } from './ListSkeleton';
 export { StatusBanner, type StatusBannerProps } from './StatusBanner';
 export { useDelayedFlag } from './useDelayedFlag';
+export { ColorSwatches, type ColorSwatchChoice, type ColorSwatchesProps } from './ColorSwatches';

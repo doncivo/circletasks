@@ -1,0 +1,35 @@
+/* Palette de couleurs (Bienvenue.html .sw) : disque de 28 px, anneau double pour la couleur choisie. */
+.ct-swatches {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ct-swatches__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ct-hit-target-min);
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ct-swatches__dot {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ct-radius-round);
+}
+
+.ct-swatches__dot[data-checked='true'] {
+  box-shadow:
+    0 0 0 3px var(--ct-color-bg),
+    0 0 0 5px var(--ct-swatch);
+}
+
+.ct-swatches__item:focus-visible .ct-swatches__dot {
+  outline: 2px solid var(--ct-color-text);
+  outline-offset: 6px;
+}

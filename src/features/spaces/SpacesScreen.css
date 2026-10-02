@@ -1,0 +1,83 @@
+/* Écran « Espaces et projets » (ES-01, ES-04) : mêmes codes que Réglages ; carte d'espace de Bienvenue.html. */
+.ct-spaces-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-spaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.ct-spaces__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-spaces__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-spaces__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-spaces__error,
+.ct-space-editor__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-space-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding: var(--ct-space-4);
+  border: 2px solid;
+  border-radius: var(--ct-radius-lg);
+}
+
+.ct-space-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-space-editor__caption {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.06em;
+}
+
+.ct-space-editor__colors {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-space-editor__colorCaption {
+  flex-grow: 1;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}

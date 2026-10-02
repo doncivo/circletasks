@@ -1,3 +1,4 @@
+import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import type { Messages } from './types';
 
@@ -26,10 +27,7 @@ export const en: Messages = {
       settings: 'Settings',
     },
   },
-  spaces: {
-    all: 'All',
-    filterLabel: 'Space filter',
-  },
+  spaces: spacesEn,
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',

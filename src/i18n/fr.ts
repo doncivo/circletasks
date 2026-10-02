@@ -1,3 +1,4 @@
+import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
@@ -29,10 +30,7 @@ export const fr = {
       settings: 'Réglages',
     },
   },
-  spaces: {
-    all: 'Tout',
-    filterLabel: 'Filtre d’espace',
-  },
+  spaces: spacesFr,
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',

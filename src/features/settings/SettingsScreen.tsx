@@ -5,6 +5,7 @@ import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { formatRecapSummary } from '../reminders';
+import { SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
@@ -88,6 +89,8 @@ export function SettingsScreen() {
         <span>{t('reminders.recaps')}</span>
         <span className="ct-settings__value">{formatRecapSummary(recaps)}</span>
       </button>
+      <h2 className="ct-settings__section">{t('spaces.sectionTitle')}</h2>
+      <SpacesSummaryRow />
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
       <div className="ct-settings__row">
         <span>{t('settings.trash')}</span>

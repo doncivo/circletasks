@@ -35,3 +35,4 @@ export * from './reminders';
 export * from './recap';
 export * from './routineStreaks';
 export * from './routineReport';
+export * from './spaceRules';
