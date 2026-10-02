@@ -387,3 +387,69 @@ button.ct-week-item__title {
   font-size: var(--ct-font-size-sm);
   color: var(--ct-color-text-secondary);
 }
+
+/* Glisser-déposer entre jours (S-02, PC-Semaine-UnJour.html). */
+.ct-week__itemSlot {
+  position: relative;
+}
+
+.ct-week__itemSlot[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+/* La carte tenue : le pointeur « saisit », la sélection de texte et le menu de l'appui long sont coupés. */
+.ct-week[data-sorting='true'] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.ct-week[data-sorting='true'] * {
+  cursor: grabbing;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week__itemSlot {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Zone cible : « Déposer ici · jeu. 24 » (pointillés violets, fond #F1EEF7). */
+.ct-week__dropHere {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  box-sizing: border-box;
+  border: 2px dashed var(--ct-color-icon-purple);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-row-selected);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-icon-purple);
+  text-align: center;
+}
+
+/* Repère d'insertion dans le même jour (A-02) : trait d'accent avant la carte visée, ou après la dernière. */
+.ct-week__itemSlot[data-insert='before']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-accent);
+  pointer-events: none;
+}
+
+.ct-week__insert {
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-accent);
+}
+
+/* Routines et événements ne se déplacent pas : curseur « interdit » quand on tente de les saisir. */
+.ct-week-item[data-kind='routine']:active,
+.ct-week-event:active {
+  cursor: not-allowed;
+}

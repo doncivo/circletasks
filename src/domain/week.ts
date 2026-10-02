@@ -87,3 +87,18 @@ export function buildWeek(input: WeekInput): WeekDay[] {
     };
   });
 }
+
+/**
+ * Position finale, dans les éléments à faire du jour (`rows`, routines comprises), de la tâche `draggedId` lâchée à la position
+ * `dropIndex` parmi les AUTRES tâches du jour (à faire puis terminées, dans l'ordre affiché), telle que la mesure le glisser :
+ * nombre d'autres tâches situées au-dessus du pointeur. Lâchée après la dernière tâche à faire, elle passe en fin de liste.
+ * Le domaine (`moveTaskRow`) ramène ensuite cette position dans le groupe autorisé par l'heure (Q11).
+ */
+export function rowIndexForDrop(list: Pick<TodayList, 'rows' | 'doneRows'>, draggedId: string, dropIndex: number): number {
+  const others = [...list.rows, ...list.doneRows].filter((row) => row.kind === 'task' && row.id !== draggedId);
+  const rowsWithout = list.rows.filter((row) => row.id !== draggedId);
+  const anchor = others[Math.max(0, Math.trunc(dropIndex))];
+  if (!anchor) return rowsWithout.length;
+  const position = rowsWithout.findIndex((row) => row.id === anchor.id);
+  return position < 0 ? rowsWithout.length : position;
+}

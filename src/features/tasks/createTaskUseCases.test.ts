@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { todayLocal } from '../../domain/clock';
 import { uuidGenerator } from '../../domain/id';
 import { ScheduleInvariantError } from '../../domain/taskSchedule';
-import { asEntityId, asLocalDate, asLocalTime, type DeviceId, type TaskId } from '../../domain/types';
+import { asEntityId, asLocalDate, asLocalTime, type DeviceId } from '../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createTaskEntities } from '../app/taskEntities';
@@ -83,12 +83,6 @@ describe('createTaskUseCases.create (T-01)', () => {
     const result = await useCases.create({ title: 'Envoyer la facture', spaceId: SPACE_PERSO_ID });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.spaceId).toBe(SPACE_PERSO_ID);
-  });
-
-  it('lève NotImplementedError pour les autres cas d’usage, non livrés par T-01', async () => {
-    await expect(
-      useCases.moveToDay(asEntityId<TaskId>('00000000-0000-4000-8000-000000000099'), asLocalDate('2026-10-03')),
-    ).rejects.toThrow(/à implémenter/);
   });
 
   it('refuse une heure sans date (critère T-02 symétrique à T-01)', async () => {

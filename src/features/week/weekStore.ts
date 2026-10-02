@@ -1,11 +1,16 @@
 import { createStore } from 'zustand';
 import { addDays } from '../../domain/localDate';
 import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
+import type { SeriesScope } from '../../domain/recurrenceEdit';
+import type { PostponeTarget } from '../../domain/taskPostpone';
+import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
+import type { TodayRow } from '../../domain/todayList';
 import type { WeekDayExtras } from '../../domain/week';
 import { weekDays } from '../../domain/week';
 import type { LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { CreateTaskError } from '../tasks/taskUseCases';
 import { EMPTY_TODAY_EXTRAS, loadTodayExtras, toggleRoutineViaSources } from '../today/todaySources';
@@ -55,6 +60,22 @@ export interface WeekState {
    * si son espace correspond au filtre. Ne rejette jamais : les échecs sont renvoyés dans le `Result`.
    */
   addTask(input: NewWeekTask): Promise<Result<Task, WeekAddTaskError>>;
+  /**
+   * S-02 : déplace une tâche vers un autre jour (glisser-déposer, Alt+←/→) : la date est écrite et publiée aussitôt, annulable
+   * (T-13). Pour une occurrence récurrente, ne déplace que cette occurrence ; « toutes les suivantes » : `moveSeries`. Ne rejette jamais.
+   */
+  moveToDay(id: TaskId, date: LocalDate): Promise<void>;
+  /** S-02, T-10 : déplace une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
+  moveSeries(id: TaskId, date: LocalDate, scope: SeriesScope): Promise<void>;
+  /** S-02 critère 9 : Ctrl+D, reporte la tâche choisie (T-05) ; annulable. Ne rejette jamais. */
+  postpone(id: TaskId, target: PostponeTarget): Promise<void>;
+  /** S-02, T-10 : report d'une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
+  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<void>;
+  /**
+   * S-02 critère 10 : réordonne dans un même jour (A-02, Q11) : seul l'ordre entre tâches sans heure (ou de même heure) change.
+   * Renvoie le résultat (null : élément non déplaçable ou échec). Ne rejette jamais.
+   */
+  moveRow(rows: readonly TodayRow[], id: string, toIndex: number): Promise<MoveOutcome | null>;
   /** Termine ou rouvre une tâche (T-04, case de la carte). Ne rejette jamais. */
   toggleDone(id: TaskId): Promise<void>;
   /** R-03 : valide ou annule la validation d'une routine d'un jour de la semaine. Ne rejette jamais. */
@@ -80,6 +101,7 @@ export function selectWeekTasks(entities: ReadonlyMap<TaskId, Task>, weekStart: 
 
 export const weekStore = defineFeatureStore<WeekState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
+  const series = createSeriesUseCases(container);
   // Jeton de requête : le résultat d'un chargement dépassé par un plus récent est ignoré (navigation rapide entre semaines).
   let requestId = 0;
 
@@ -144,6 +166,58 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       } catch {
         set({ actionErrorKey: 'tasks.detailSaveError' });
         return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    async moveToDay(id, date) {
+      try {
+        await useCases.moveToDay(id, date);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'week.moveError' });
+      }
+    },
+
+    async moveSeries(id, date, scope) {
+      // « Cette occurrence » : même déplacement qu'une tâche simple (la série garde son ancre) ; « toutes les suivantes » : la série repart de la nouvelle date.
+      if (scope === 'occurrence') return get().moveToDay(id, date);
+      try {
+        const result = await series.postpone(id, { date }, scope);
+        set({ actionErrorKey: result.ok ? null : 'week.moveError' });
+      } catch {
+        set({ actionErrorKey: 'week.moveError' });
+      }
+    },
+
+    async postpone(id, target) {
+      try {
+        await useCases.postpone([id], target);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
+    async postponeSeries(id, target, scope) {
+      try {
+        const result = await series.postpone(id, target, scope);
+        set({ actionErrorKey: result.ok ? null : 'tasks.postponeError' });
+      } catch {
+        set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
+    async moveRow(rows, id, toIndex) {
+      const outcome = moveTaskRow(rows, id, toIndex);
+      if (!outcome) return null;
+      if (outcome.changes.length === 0) return outcome;
+      try {
+        await useCases.reorder(outcome.changes.map((change) => ({ id: change.id as TaskId, sortOrder: change.sortOrder })));
+        set({ actionErrorKey: null });
+        return outcome;
+      } catch {
+        set({ actionErrorKey: 'today.reorderError' });
+        return null;
       }
     },
 

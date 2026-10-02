@@ -2,6 +2,7 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
 import { duplicateTask } from '../../domain/taskDuplicate';
+import { moveTaskToDate } from '../../domain/taskMove';
 import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
@@ -10,13 +11,14 @@ import { validateTaskTitle } from '../../domain/taskRules';
 import { canMoveToSomeday, ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
-import { NotImplementedError, RepositoryError } from '../../db/repositories';
+import { RepositoryError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
 import { createNextOccurrence, type CreatedOccurrence } from './recurrenceUseCases';
 import {
   createCompleteUndoCommand,
   createDeleteUndoCommand,
   createDuplicateUndoCommand,
+  createMoveDayUndoCommand,
   createMoveUndoCommand,
   createPostponeUndoCommand,
   createRemoveUndo,
@@ -205,8 +207,25 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(createPostponeUndoCommand(deps, entries, label));
       return tasks;
     },
-    moveToDay() {
-      return Promise.reject(new NotImplementedError('taskUseCases.moveToDay : à implémenter (S-02, S-06)'));
+    async moveToDay(id, date): Promise<Task> {
+      // S-02, S-06 : seule la date change (domaine `moveTaskToDate`) ; la tâche prend la fin de l'ordre manuel du jour d'arrivée.
+      // Une occurrence récurrente déplacée garde les valeurs de la série pour la suivante (« cette occurrence », T-10).
+      const { before, after } = await deps.data.transaction(async (repos) => {
+        const current = await repos.tasks.getById(id);
+        if (!current) throw new RepositoryError('not-found', 'task', id);
+        const siblings = await repos.tasks.listForDay(date, 'all');
+        const last = siblings.reduce<number | null>((max, other) => (other.id === id || (max !== null && other.sortOrder <= max) ? max : other.sortOrder), null);
+        const moved = moveTaskToDate(current, date, last);
+        if (!moved.ok) {
+          if (moved.error === 'same-day') return { before: current, after: current };
+          throw new RangeError('Date de déplacement invalide');
+        }
+        const diverge = current.recurrenceId !== null && current.status === 'todo' && current.seriesTemplate === null ? { seriesTemplate: divergedTemplate(current) } : {};
+        return { before: current, after: await repos.tasks.update(id, { ...moved.value, ...diverge }) };
+      });
+      deps.taskEntities.publish([after]);
+      if (after !== before) deps.undo.push(createMoveDayUndoCommand(deps, before, after, formatDayLabel(date)));
+      return after;
     },
     async moveToSpace(ids, spaceId, projectId): Promise<Task[]> {
       const entries = await deps.data.transaction(async (repos) => {

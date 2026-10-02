@@ -133,3 +133,9 @@ export function formatWeekDayHeader(isoDate: string): { weekday: string; day: st
   const weekday = new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', timeZone: 'UTC' }).format(date);
   return { weekday: weekday.toLocaleUpperCase(intlLocale()), day: String(date.getUTCDate()) };
 }
+
+/** Jour d'une zone de dépôt (« jeu. 24 ») : jour court en minuscules et numéro, sans mois (la Semaine ne montre qu'une semaine). */
+export function formatDropDayLabel(isoDate: string): string {
+  const { weekday, day } = formatWeekDayHeader(isoDate);
+  return `${weekday.toLocaleLowerCase(intlLocale())} ${day}`;
+}

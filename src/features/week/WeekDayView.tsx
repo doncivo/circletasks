@@ -1,12 +1,21 @@
-import type { ReactNode } from 'react';
+import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayRow } from '../../domain/todayList';
 import type { LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
-import { formatDayFull, formatWeekDayHeader } from '../../i18n/format';
+import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
 import { WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
+
+/** Ce que le jour montre pendant un glisser : zone « Déposer ici » (autre jour) ou repère d'insertion (même jour, A-02). */
+export type WeekDropState = { readonly kind: 'move' } | { readonly kind: 'reorder'; readonly index: number; readonly draggedId: TaskId };
+
+export interface WeekItemDragProps {
+  readonly 'data-drag-id': string;
+  readonly 'data-dragging': 'true' | undefined;
+  readonly onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+}
 
 export interface WeekDayViewProps {
   readonly day: WeekDay;
@@ -20,6 +29,11 @@ export interface WeekDayViewProps {
   readonly openedTaskId: TaskId | null;
   /** Squelette de chargement (A-09) à la place des éléments. */
   readonly skeleton: boolean;
+  /** Glisser (S-02) : propriétés de saisie d'une tâche ; absent : aucune carte n'est déplaçable. */
+  readonly dragProps?: (id: TaskId) => WeekItemDragProps;
+  /** Glisser en cours au-dessus de ce jour. */
+  readonly drop?: WeekDropState | null;
+  readonly onFocusTask?: (id: TaskId) => void;
   readonly onToggleDone: (id: TaskId) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
   readonly onOpen: (id: TaskId) => void;
@@ -28,43 +42,70 @@ export interface WeekDayViewProps {
 }
 
 /**
- * Un jour de la Semaine : colonne (PC) ou section (iPhone). Contenu dans l'ordre du domaine : événements en tête, éléments à
- * faire (heure puis ordre manuel), terminés ; le bas du jour reste visible quand la colonne défile (S-01 critère 9).
+ * Un jour de la Semaine : colonne (PC) ou section (iPhone), aussi zone de dépôt du glisser (`data-drop-zone`). Contenu dans l'ordre
+ * du domaine : événements en tête, éléments à faire (heure puis ordre manuel), terminés ; le bas du jour reste visible quand la
+ * colonne défile (S-01 critère 9).
  */
 export function WeekDayView(props: WeekDayViewProps) {
-  const { day, layout, isToday, skeleton } = props;
+  const { day, layout, isToday, skeleton, drop } = props;
   const header = formatWeekDayHeader(day.date);
   const full = formatDayFull(day.date);
   const label = isToday ? t('week.dayAriaToday', { day: full }) : full;
 
-  const renderRow = (row: TodayRow) =>
-    row.kind === 'routine' ? (
-      <WeekRoutineItem
+  // Autres tâches du jour dans l'ordre affiché : le repère d'insertion se place avant celle que vise le pointeur.
+  const taskIds = [...day.list.rows, ...day.list.doneRows].filter((row) => row.kind === 'task').map((row) => row.id);
+  const insertBefore = drop?.kind === 'reorder' ? (taskIds.filter((id) => id !== drop.draggedId)[drop.index] ?? null) : null;
+
+  const renderRow = (row: TodayRow) => {
+    if (row.kind === 'routine') {
+      return (
+        <WeekRoutineItem
+          key={row.id}
+          routine={row.routine}
+          time={rowTime(row)}
+          done={row.done}
+          layout={layout}
+          checkable={props.routinesCheckable}
+          onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId, day.date)}
+        />
+      );
+    }
+    const id = row.task.id;
+    return (
+      <div
         key={row.id}
-        routine={row.routine}
-        time={rowTime(row)}
-        done={row.done}
-        layout={layout}
-        checkable={props.routinesCheckable}
-        onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId, day.date)}
-      />
-    ) : (
-      <div key={row.id} className="ct-week__itemSlot" data-task-id={row.task.id}>
+        className="ct-week__itemSlot"
+        data-task-id={id}
+        data-insert={insertBefore === id ? 'before' : undefined}
+        onFocus={() => props.onFocusTask?.(id)}
+        {...props.dragProps?.(id)}
+      >
         <WeekTaskItem
           task={row.task}
           layout={layout}
           spaces={props.spaces}
           showSpace={props.showSpace}
           rule={row.task.recurrenceId ? props.recurrences.get(row.task.recurrenceId) : undefined}
-          opened={props.openedTaskId === row.task.id}
-          onToggleDone={() => props.onToggleDone(row.task.id)}
-          onOpen={() => props.onOpen(row.task.id)}
+          opened={props.openedTaskId === id}
+          onToggleDone={() => props.onToggleDone(id)}
+          onOpen={() => props.onOpen(id)}
         />
       </div>
     );
+  };
 
   return (
-    <section role="group" className="ct-week-day" data-layout={layout} data-today={isToday || undefined} data-date={day.date} aria-label={label} {...(isToday ? { 'aria-current': 'date' as const } : {})}>
+    <section
+      role="group"
+      className="ct-week-day"
+      data-layout={layout}
+      data-today={isToday || undefined}
+      data-date={day.date}
+      data-drop-zone={day.date}
+      data-drop={drop?.kind}
+      aria-label={label}
+      {...(isToday ? { 'aria-current': 'date' as const } : {})}
+    >
       <div className="ct-week-day__head">
         <span className="ct-week-day__weekday" aria-hidden="true">
           {header.weekday}
@@ -84,7 +125,13 @@ export function WeekDayView(props: WeekDayViewProps) {
               ))}
               {day.list.rows.map(renderRow)}
               {day.list.doneRows.map(renderRow)}
+              {drop?.kind === 'reorder' && insertBefore === null && <div className="ct-week__insert" aria-hidden="true" />}
             </>
+          )}
+          {drop?.kind === 'move' && (
+            <div className="ct-week__dropHere" aria-hidden="true">
+              {t('week.dropHere', { day: formatDropDayLabel(day.date) })}
+            </div>
           )}
         </div>
         {props.footer}

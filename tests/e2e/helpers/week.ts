@@ -42,6 +42,8 @@ export interface DirectTask {
   readonly done?: boolean;
   /** Badge « reportée » (T-06). */
   readonly carried?: boolean;
+  /** Série « tous les jours » (règle posée en base) : l'occurrence est la première de la série. */
+  readonly daily?: boolean;
 }
 
 /** Insère des tâches en base (espace, état et badge maîtrisés) ; à appeler avant d'ouvrir l'écran qui les affiche. */
@@ -53,9 +55,18 @@ export async function insertTasks(page: Page, items: readonly DirectTask[]): Pro
     for (const item of tasks) {
       order += 1;
       const n = String(order).padStart(12, '0');
+      const stamp = `00000000000${String(order).padStart(4, '0')}-0000-e2e`;
+      const ruleId = `31000000-0000-4000-8000-${n}`;
+      if (item.daily) {
+        await hooks.execute(
+          `INSERT INTO recurrence (id, freq, interval, weekdays, created_at, updated_at, device_id, hlc)
+           VALUES (?, 'daily', 1, '[]', '2026-09-20T08:00:00.000Z', '2026-09-20T08:00:00.000Z', 'e2e', ?)`,
+          [ruleId, stamp],
+        );
+      }
       await hooks.execute(
-        `INSERT INTO task (id, space_id, title, date, time, status, done_at, sort_order, carried_over, created_at, updated_at, device_id, hlc)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '2026-09-20T08:00:00.000Z', '2026-09-20T08:00:00.000Z', 'e2e', ?)`,
+        `INSERT INTO task (id, space_id, title, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, created_at, updated_at, device_id, hlc)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '2026-09-20T08:00:00.000Z', '2026-09-20T08:00:00.000Z', 'e2e', ?)`,
         [
           `30000000-0000-4000-8000-${n}`,
           item.space === 'perso' ? '00000000-0000-4000-8000-000000000002' : '00000000-0000-4000-8000-000000000001',
@@ -66,7 +77,9 @@ export async function insertTasks(page: Page, items: readonly DirectTask[]): Pro
           item.done ? '2026-09-22T08:00:00.000Z' : null,
           order,
           item.carried ? 1 : 0,
-          `00000000000${String(order).padStart(4, '0')}-0000-e2e`,
+          item.daily ? ruleId : null,
+          item.daily ? 0 : null,
+          stamp,
         ],
       );
     }

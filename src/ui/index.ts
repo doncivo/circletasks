@@ -41,6 +41,8 @@ export { Switch, type SwitchProps } from './Switch';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
 export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
 export { DragHandle, type DragHandleProps } from './DragHandle';
+export { useZoneDrag, type UseZoneDragOptions, type ZoneDrag, type ZoneDragState } from './useZoneDrag';
+export { DragGhost, type DragGhostProps } from './DragGhost';
 export { CompactToggle, type CompactToggleProps } from './CompactToggle';
 export {
   EditModeSwitch,

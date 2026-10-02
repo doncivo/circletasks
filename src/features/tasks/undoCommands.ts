@@ -277,3 +277,33 @@ export function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[]
     },
   };
 }
+
+/**
+ * Commande annulable d'un déplacement vers un autre jour (S-02, T-13) : annuler = nouvelle écriture qui remet date, « Un jour »,
+ * badge « reportée », ordre manuel et gabarit de série d'avant, tant que la tâche n'a pas changé depuis (hlc identique à celui
+ * écrit par le déplacement) ; sinon 'stale', rien n'est écrit. L'heure et l'espace ne changent pas au déplacement.
+ */
+export function createMoveDayUndoCommand(deps: TaskUseCaseDeps, before: Task, after: Task, dateLabel: string): UndoableCommand {
+  return {
+    kind: 'move',
+    count: 1,
+    labelKey: 'undo.moveDate',
+    labelParams: { title: before.title, date: dateLabel },
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const current = await repos.tasks.getById(after.id);
+        if (!current || current.hlc !== after.hlc) return null;
+        return repos.tasks.update(before.id, {
+          date: before.date,
+          someday: before.someday,
+          carriedOver: before.carriedOver,
+          sortOrder: before.sortOrder,
+          seriesTemplate: before.seriesTemplate,
+        });
+      });
+      if (!restored) return 'stale';
+      deps.taskEntities.publish([restored]);
+      return 'undone';
+    },
+  };
+}

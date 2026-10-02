@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Task } from './model';
 import { sortTasksForDay } from './taskSchedule';
 import { asEntityId, asLocalDate, asLocalTime, type SpaceId } from './types';
-import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from './week';
+import { addWeeks, buildWeek, isoWeekOf, rowIndexForDrop, weekDays, weekStartOf } from './week';
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
 const PERSO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000002');
@@ -124,5 +124,33 @@ describe('buildWeek (S-01 critères 4 et 6)', () => {
     const days = buildWeek({ weekStart: week, filter: 'all', tasks: [task('a', '2026-09-23')], extras });
     expect(days[2]?.list.events.map((event) => event.id)).toEqual(['e']);
     expect(days[1]?.list.events).toEqual([]);
+  });
+});
+
+describe('rowIndexForDrop (S-02 critère 10)', () => {
+  const week = d('2026-09-21');
+  const list = buildWeek({
+    weekStart: week,
+    filter: 'all',
+    tasks: [
+      task('9h', '2026-09-23', { time: asLocalTime('09:00') }),
+      task('a', '2026-09-23', { sortOrder: 1 }),
+      task('b', '2026-09-23', { sortOrder: 2 }),
+      task('c', '2026-09-23', { sortOrder: 3 }),
+      task('faite', '2026-09-23', { status: 'done', sortOrder: 4 }),
+    ],
+  }).at(2)?.list ?? { rows: [], doneRows: [] };
+
+  it('compte les autres tâches au-dessus du pointeur', () => {
+    // Ordre affiché : 9h, a, b, c | faite
+    expect(rowIndexForDrop(list, 'c', 0)).toBe(0); // avant 9h (sera ramené derrière l'heure par moveTaskRow)
+    expect(rowIndexForDrop(list, 'c', 2)).toBe(2); // avant « b »
+    expect(rowIndexForDrop(list, 'a', 3)).toBe(3); // après « c », avant « faite » : fin des éléments à faire
+    expect(rowIndexForDrop(list, 'a', 4)).toBe(3); // sous la tâche terminée : fin de liste
+  });
+
+  it('une position absurde est ramenée dans la liste', () => {
+    expect(rowIndexForDrop(list, 'a', 99)).toBe(3);
+    expect(rowIndexForDrop(list, 'a', -5)).toBe(0);
   });
 });

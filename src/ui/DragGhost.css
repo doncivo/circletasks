@@ -1,0 +1,43 @@
+/* Carte volante (PC-Semaine-UnJour.html) : bordure violette, ombre, rotation de -3°. Positionnée par useZoneDrag. */
+.ct-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 50;
+  width: 230px;
+  max-width: 70vw;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-icon-purple);
+  border-radius: 12px;
+  background: var(--ct-color-surface);
+  box-shadow: 0 14px 32px rgba(46, 33, 80, 0.28);
+  pointer-events: none;
+  transform: translate(-9999px, -9999px);
+}
+
+.ct-drag-ghost__grip {
+  display: flex;
+  color: var(--ct-color-icon-purple);
+}
+
+.ct-drag-ghost__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ct-drag-ghost__title {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.ct-drag-ghost__sub {
+  font-size: var(--ct-font-size-xs);
+  color: var(--ct-color-text-secondary);
+}

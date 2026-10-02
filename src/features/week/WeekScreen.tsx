@@ -13,6 +13,7 @@ import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
 import { canToggleRoutines } from '../today/todaySources';
 import { WeekDayView } from './WeekDayView';
 import { WeekHeader } from './WeekHeader';
+import { useWeekMoves } from './useWeekMoves';
 import { selectWeekTasks, weekStore } from './weekStore';
 import './WeekScreen.css';
 
@@ -71,6 +72,9 @@ export function WeekScreen() {
   const openCreate = useCallback((): void => setSheetOpen(true), []);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
+  // Déplacements (S-02) : glisser, clavier, question de portée des tâches récurrentes.
+  const moves = useWeekMoves(days, weekStart, spaces, spaceFilter === 'all');
+
   // Squelette si le chargement dépasse 150 ms (A-09).
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
@@ -78,7 +82,7 @@ export function WeekScreen() {
   const openedTaskId = layout === 'pc' && detail?.type === 'task' ? detail.id : null;
 
   return (
-    <div className="ct-week" data-layout={layout}>
+    <div className="ct-week" data-layout={layout} data-sorting={moves.dragging ? 'true' : undefined}>
       <WeekHeader weekStart={weekStart} layout={layout} pills={pills} />
 
       {actionErrorKey && <p className="ct-week__error" role="alert">{t(actionErrorKey)}</p>}
@@ -99,6 +103,9 @@ export function WeekScreen() {
               routinesCheckable={canToggleRoutines()}
               openedTaskId={openedTaskId}
               skeleton={showSkeleton}
+              dragProps={moves.dragProps}
+              drop={moves.dropFor(day.date)}
+              onFocusTask={moves.setFocusedTaskId}
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id, date) => void toggleRoutine(id, date)}
               onOpen={(id) => openDetail({ type: 'task', id })}
@@ -106,13 +113,13 @@ export function WeekScreen() {
           ))}
         </div>
       )}
-      {/* Annonce aux lecteurs d'écran : chargement (A-09) ; ni role="status" (réservé au bandeau « Annuler »). */}
-      <div className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
-        {showSkeleton ? t('status.loading') : ''}
+      {/* Annonce aux lecteurs d'écran : chargement (A-09), réordonnancement (A-02) ; ni role="status" (réservé au bandeau « Annuler »). */}
+      <div key={moves.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
+        {showSkeleton ? t('status.loading') : moves.announcement?.text}
       </div>
 
       <div className="ct-week__footer">
-        <span className="ct-week__hint" />
+        <span className="ct-week__hint">{layout === 'pc' ? t('week.hintDrag') : null}</span>
         <Fab onClick={openCreate} label={t('common.add')} />
       </div>
 
@@ -139,6 +146,8 @@ export function WeekScreen() {
         />
       )}
 
+      {moves.ghost}
+      {moves.dialogs}
       <TaskDetail />
     </div>
   );
