@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
-import type { ReminderOffsetMin, Task } from '../../domain/model';
+import type { RecurrenceFields, ReminderOffsetMin, Task } from '../../domain/model';
 import { asEntityId, asLocalDate, asLocalTime, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
@@ -9,6 +9,7 @@ import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
+import { defaultRecurrence } from '../../domain/recurrenceRules';
 import { createTaskUseCases } from './createTaskUseCases';
 import { TaskDetail } from './TaskDetail';
 
@@ -42,13 +43,14 @@ describe('Rappels de la fiche détail (N-02)', () => {
     await db.close();
   });
 
-  async function open(time: string | null, offsets: ReminderOffsetMin[]): Promise<Task> {
+  async function open(time: string | null, offsets: ReminderOffsetMin[], recurrence?: RecurrenceFields): Promise<Task> {
     const created = await createTaskUseCases(container).create({
       title: 'Envoyer la facture',
       spaceId: SPACE_PRO_ID,
       date: asLocalDate('2026-09-23'),
       ...(time ? { time: asLocalTime(time) } : {}),
       reminderOffsets: offsets,
+      ...(recurrence ? { recurrence } : {}),
     });
     if (!created.ok) throw new Error('création impossible');
     useNavigationStore.getState().openDetail({ type: 'task', id: created.value.id });
@@ -124,6 +126,32 @@ describe('Rappels de la fiche détail (N-02)', () => {
       const edit = await screen.findByRole('dialog', { name: 'Modifier la tâche' });
       expect(within(edit).getByRole('checkbox', { name: 'À l’heure' })).toHaveAttribute('aria-disabled', 'true');
       expect(within(edit).getByRole('checkbox', { name: '30 min' })).toHaveAttribute('aria-disabled', 'true');
+    });
+
+    it('série, portée choisie : l’enregistrement des rappels échoue (2e transaction) : message affiché, modification de série conservée, aucun rejet', async () => {
+      const task = await open('09:00', [0], defaultRecurrence('daily', asLocalDate('2026-09-23')));
+      // Les écritures de rappels échouent dans toute transaction (la modification de série, elle, n'en écrit aucune ici).
+      const original = container.data.transaction.bind(container.data);
+      vi.spyOn(container.data, 'transaction').mockImplementation((work) =>
+        original((repos) => work({ ...repos, reminders: { ...repos.reminders, replaceForTarget: () => Promise.reject(new Error('boom')) } })),
+      );
+      const unhandled = vi.fn();
+      process.on('unhandledRejection', unhandled);
+      fireEvent.click(screen.getByRole('button', { name: 'Modifier' }));
+      const edit = await screen.findByRole('dialog', { name: 'Modifier la tâche' });
+      fireEvent.change(within(edit).getByLabelText('Titre'), { target: { value: 'Facture série' } });
+      fireEvent.click(within(edit).getByRole('checkbox', { name: '30 min' }));
+      fireEvent.click(within(edit).getByRole('button', { name: 'Enregistrer' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Cette occurrence' }));
+      expect(await screen.findByText('Impossible d’enregistrer les rappels.')).toBeInTheDocument();
+      // La modification de la série reste écrite et les rappels d'origine intacts.
+      expect((await db.data.repos.tasks.getById(task.id))?.title).toBe('Facture série');
+      vi.restoreAllMocks();
+      expect(await stored(task)).toEqual([[0, '2026-09-23T09:00']]);
+      expect(screen.queryByText('30 min avant')).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      process.off('unhandledRejection', unhandled);
+      expect(unhandled).not.toHaveBeenCalled();
     });
   });
 });
