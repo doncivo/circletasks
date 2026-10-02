@@ -55,7 +55,7 @@ Les fichiers de test sont exemptés des règles de frontière (ils peuvent insta
 
 ### Commandes Tauri
 
-Aucune commande Rust personnalisée à ce stade. Toute nouvelle commande sera spécifiée ici ou dans un ADR dédié (nom en `snake_case`, entrées, sortie, erreurs sous forme `{ code, message }`) et exposée côté TypeScript par une fonction de `src/platform/`, jamais par `invoke` dans une feature.
+Une seule commande Rust personnalisée à ce jour : `set_tray_labels` (zone de notification PC, ADR 0006, qui documente aussi les plugins PC ajoutés par D-01 à D-03). Toute nouvelle commande sera spécifiée ici ou dans un ADR dédié (nom en `snake_case`, entrées, sortie, erreurs sous forme `{ code, message }`) et exposée côté TypeScript par une fonction de `src/platform/`, jamais par `invoke` dans une feature.
 
 ### Dépendances retenues
 
