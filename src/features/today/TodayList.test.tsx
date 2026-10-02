@@ -54,6 +54,20 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     expect(proRow.querySelector('.ct-list-row__subtitle')).toHaveTextContent(/^09:00$/);
   });
 
+  it('PC : la ligne dont la fiche est ouverte est surlignée, et la liste reste utilisable (A-08 critères 1, 4)', async () => {
+    await seedTask(h, { title: 'Première' });
+    await seedTask(h, { title: 'Seconde' });
+    mockViewport(1440);
+    renderToday(h.container);
+    fireEvent.click(await screen.findByRole('button', { name: 'Première' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    expect(screen.getAllByRole('button', { name: 'Première' })[0]?.closest('.ct-list-row')).toHaveAttribute('data-selected', 'true');
+    // Une autre tâche choisie : le panneau suit sans se fermer.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Seconde' })[0] as HTMLElement);
+    await waitFor(() => expect(within(panel).getByRole('heading', { name: 'Seconde' })).toBeInTheDocument());
+    expect(screen.getAllByRole('button', { name: 'Seconde' })[0]?.closest('.ct-list-row')).toHaveAttribute('data-selected', 'true');
+  });
+
   it('exclut les tâches des autres jours (critère 4)', async () => {
     await seedTask(h, { title: 'Du jour' });
     await seedTask(h, { title: 'Demain', date: addDays(h.today, 1) });

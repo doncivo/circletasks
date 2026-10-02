@@ -17,6 +17,8 @@ export interface TextFieldProps {
   /** Enregistrement à la perte de focus, sans bouton supplémentaire (Note, T-03 critère 8). */
   onBlur?: () => void;
   disabled?: boolean;
+  /** Focus dans le champ au montage (édition en place, fiche détail). */
+  autoFocus?: boolean;
   className?: string;
 }
 
@@ -29,7 +31,7 @@ export interface TextFieldProps {
  * <TextField label={t('tasks.newTask')} placeholder={t('tasks.addPlaceholder')} value={title} onChange={setTitle} />
  */
 export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, TextFieldProps>(function TextField(
-  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, onBlur, disabled, className },
+  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, onBlur, disabled, autoFocus, className },
   ref,
 ) {
   const id = useId();
@@ -43,6 +45,7 @@ export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Text
           value={value}
           placeholder={placeholder}
           disabled={disabled}
+          autoFocus={autoFocus}
           maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
           onBlur={onBlur}
@@ -56,6 +59,7 @@ export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Text
           value={value}
           placeholder={placeholder}
           disabled={disabled}
+          autoFocus={autoFocus}
           maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
           onBlur={onBlur}

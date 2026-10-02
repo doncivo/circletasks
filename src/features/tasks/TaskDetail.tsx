@@ -1,6 +1,7 @@
-import { Check, Copy, X } from 'lucide-react';
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import type { IconRef, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import { Check, Copy, Pencil, X } from 'lucide-react';
+import { useEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react';
+import { todayLocal } from '../../domain/clock';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import type { LocalDate } from '../../domain/types';
 import { RULE_EDIT_SCOPES, ruleChanged, scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
@@ -8,12 +9,16 @@ import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';
 import { t } from '../../i18n';
 import { formatMessageRef } from '../../i18n/formatRecurrence';
+import { formatStamp } from '../../i18n/format';
 import { Button, ChoiceDialog, DetailPanel, Icon, IconChooser, IconView, RecurrencePicker, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
+import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
 import { DuplicatePrompt } from './DuplicatePrompt';
 import { PostponeAction } from './PostponeAction';
+import { TaskDetailFields } from './TaskDetailFields';
+import { TaskEditSheet, type EditSheetResult } from './TaskEditSheet';
 import { taskDetailStore } from './taskDetailStore';
 import './TaskDetail.css';
 
@@ -38,6 +43,12 @@ export function TaskDetail() {
   const status = useFeatureStore(taskDetailStore, (s) => s.status);
   const errorKey = useFeatureStore(taskDetailStore, (s) => s.errorKey);
   const load = useFeatureStore(taskDetailStore, (s) => s.load);
+  const reminders = useFeatureStore(taskDetailStore, (s) => s.reminders);
+  const goalTitle = useFeatureStore(taskDetailStore, (s) => s.goalTitle);
+  const updateFields = useFeatureStore(taskDetailStore, (s) => s.updateFields);
+  const moveToSomeday = useFeatureStore(taskDetailStore, (s) => s.moveToSomeday);
+  const spaces = useAppStore((s) => s.spaces);
+  const appDay = useAppStore((s) => s.day);
   const updateNote = useFeatureStore(taskDetailStore, (s) => s.updateNote);
   const updateIcon = useFeatureStore(taskDetailStore, (s) => s.updateIcon);
   const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
@@ -52,7 +63,7 @@ export function TaskDetail() {
   const stopRecurrence = useFeatureStore(taskDetailStore, (s) => s.stopRecurrence);
   const refreshRecurrence = useFeatureStore(taskDetailStore, (s) => s.refreshRecurrence);
   // T-10 critère 8 : « Annuler » (message ou Ctrl+Z) d'une modification de règle ne touche pas la tâche ; la règle affichée est relue.
-  const { undo } = useAppContainer();
+  const { undo, clock } = useAppContainer();
   const undoSnapshot = useSyncExternalStore(undo.subscribe, undo.getSnapshot);
   const recurrenceId = task?.recurrenceId ?? null;
   useEffect(() => {
@@ -64,6 +75,8 @@ export function TaskDetail() {
   // déclenche pas de `blur` sur le champ. `TaskDetailBody` tient la référence à
   // jour à chaque rendu (pas un effet : simple affectation, pas un `setState`).
   const flushNoteRef = useRef<() => boolean>(() => false);
+  /** Saisie en place en cours (titre, heure) : annule et rend true ; null si aucune. */
+  const cancelInlineRef = useRef<(() => boolean) | null>(null);
 
   useEffect(() => {
     if (taskId) void load(taskId);
@@ -72,6 +85,8 @@ export function TaskDetail() {
   if (!taskId) return null;
 
   function handleClose(): void {
+    // Échap pendant une saisie en place (titre, heure) : annule la saisie sans fermer la fiche (A-08 critère 8).
+    if (cancelInlineRef.current?.()) return;
     // Note modifiée sur une occurrence récurrente : la question « cette occurrence / toutes les suivantes » s'affiche, la fiche reste ouverte.
     if (flushNoteRef.current()) return;
     closeDetail();
@@ -86,6 +101,14 @@ export function TaskDetail() {
         key={task.id}
         task={task}
         flushNoteRef={flushNoteRef}
+        cancelInlineRef={cancelInlineRef}
+        spaces={spaces}
+        today={appDay ?? todayLocal(clock)}
+        nowMs={clock.nowMs()}
+        reminders={reminders}
+        goalTitle={goalTitle}
+        updateFields={updateFields}
+        moveToSomeday={moveToSomeday}
         onClose={handleClose}
         showCloseButton={layout === 'mobile'}
         updateNote={updateNote}
@@ -132,6 +155,17 @@ interface TaskDetailBodyProps {
   task: Task;
   /** Enregistre la note en attente ; rend true si une question (T-10) doit être posée avant de fermer. */
   flushNoteRef: React.MutableRefObject<() => boolean>;
+  cancelInlineRef: React.MutableRefObject<(() => boolean) | null>;
+  spaces: readonly Space[];
+  today: LocalDate;
+  /** Instant courant (horodatage relatif « modifiée hier à 18:04 »). */
+  nowMs: number;
+  reminders: readonly ReminderOffsetMin[];
+  goalTitle: string | null;
+  /** A-08 critère 8 : modifie des champs de la tâche (titre, date, heure, espace). Rend true si écrit. */
+  updateFields: (patch: TaskPatch) => Promise<boolean>;
+  /** Bouton « Un jour » (SD-03). */
+  moveToSomeday: () => Promise<boolean>;
   onClose: () => void;
   /** Feuille iPhone : `Sheet` ne porte pas de bouton de fermeture intégré (contrairement à `DetailPanel`, PC). */
   showCloseButton: boolean;
@@ -162,7 +196,7 @@ interface TaskDetailBodyProps {
 }
 
 /** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, postponeSeries, duplicate, recurrence, setRecurrence, applySeriesEdit, updateRecurrence, stopRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
+function TaskDetailBody({ task, flushNoteRef, cancelInlineRef, spaces, today, nowMs, reminders, goalTitle, updateFields, moveToSomeday, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, postponeSeries, duplicate, recurrence, setRecurrence, applySeriesEdit, updateRecurrence, stopRecurrence, onDelete, errorKey }: TaskDetailBodyProps) {
   const [duplicateOpen, setDuplicateOpen] = useState(false);
   const [repeatOpen, setRepeatOpen] = useState(false);
   const [repeatDraft, setRepeatDraft] = useState<RecurrenceFields | null>(null);
@@ -239,85 +273,77 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
     flushNoteRef.current = flushNote;
   });
 
+  const isMobile = showCloseButton;
+  const [editOpen, setEditOpen] = useState(false);
+  /** Feuille « Modifier la tâche » enregistrée sur une occurrence récurrente : en attente du choix de portée. */
+  const [pendingSheet, setPendingSheet] = useState<EditSheetResult | null>(null);
+  const [localErrorKey, setLocalErrorKey] = useState<PlainMessageKey | null>(null);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(task.title);
+
+  // Échap pendant la saisie du titre : annule la saisie, la fiche reste ouverte.
+  useEffect(() => {
+    if (!editingTitle) return undefined;
+    const cancel = (): boolean => {
+      setEditingTitle(false);
+      return true;
+    };
+    cancelInlineRef.current = cancel;
+    return () => {
+      if (cancelInlineRef.current === cancel) cancelInlineRef.current = null;
+    };
+  }, [editingTitle, cancelInlineRef]);
+
+  /** Modification d'un champ (A-08 critère 8) : question de portée pour une occurrence récurrente, sinon écriture immédiate. */
+  function commitPatch(patch: TaskPatch): void {
+    setLocalErrorKey(null);
+    if (task.recurrenceId !== null && patch.someday === true) {
+      setLocalErrorKey('tasks.seriesError'); // une occurrence garde une date (T-09 critère 5)
+      return;
+    }
+    if (!askScope(patch)) void updateFields(patch);
+  }
+
+  function startTitleEdit(): void {
+    setTitleDraft(task.title);
+    setEditingTitle(true);
+  }
+
+  function commitTitle(): void {
+    setEditingTitle(false);
+    if (titleDraft.trim() !== task.title) commitPatch({ title: titleDraft });
+  }
+
+  async function applySheet(result: EditSheetResult, scope?: SeriesScope): Promise<void> {
+    if (Object.keys(result.patch).length > 0) {
+      const ok = scope ? await applySeriesEdit(result.patch, scope) : await updateFields(result.patch);
+      if (!ok) return;
+    }
+    if (result.rule === undefined) return;
+    if (task.recurrenceId === null) {
+      if (result.rule) await setRecurrence(result.rule);
+    } else if (result.rule === null) await stopRecurrence();
+    else await updateRecurrence(result.rule);
+  }
+
+  function saveSheet(result: EditSheetResult): void {
+    setEditOpen(false);
+    setLocalErrorKey(null);
+    if (task.recurrenceId !== null && result.patch.someday === true) {
+      setLocalErrorKey('tasks.seriesError');
+      return;
+    }
+    if (scopeChoicesForEdit(task, result.patch).length > 0) setPendingSheet(result);
+    else void applySheet(result);
+  }
+
   function chooseIcon(icon: IconRef | null): void {
     if (!askScope({ icon })) void updateIcon(icon);
     setPickerOpen(false);
   }
 
-  return (
-    <div className="ct-task-detail">
-      {showCloseButton && (
-        <div className="ct-task-detail__closeRow">
-          <button type="button" className="ct-task-detail__close" aria-label={t('common.close')} onClick={onClose}>
-            <Icon icon={X} />
-          </button>
-        </div>
-      )}
-      <div className="ct-task-detail__header">
-        <button
-          type="button"
-          className="ct-task-detail__iconButton"
-          aria-label={task.icon ? t('tasks.changeIcon') : t('tasks.iconFieldLabel')}
-          aria-expanded={pickerOpen}
-          onClick={() => setPickerOpen((open) => !open)}
-        >
-          {task.icon ? (
-            <IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} />
-          ) : (
-            <span className="ct-task-detail__iconPlaceholder" aria-hidden="true" />
-          )}
-        </button>
-        <h2 className="ct-task-detail__title">{task.title}</h2>
-      </div>
-
-      {/* « Marquer comme terminée » (T-04, Detail.html) : libellé constant, l'état est porté
-          par `aria-pressed` seul ; la ligne appelante reflète la tâche via `taskEntities`. */}
-      <Button
-        variant="secondary"
-        pressed={task.status === 'done'}
-        onClick={() => void toggleDone()}
-        className="ct-task-detail__doneButton"
-      >
-        <Icon icon={Check} size={18} />
-        {t('tasks.markDone')}
-      </Button>
-
-      <div className="ct-task-detail__actions">
-        <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? async (target) => setPendingPostpone(target) : postpone} />
-        {/* « Dupliquer » (T-12, Detail.html ; PC : ajouté pour A-08, écart documenté) : possible aussi sur une tâche terminée. */}
-        <Button variant="secondary" ariaLabel={t('tasks.duplicateLabel')} onClick={() => setDuplicateOpen(true)} className="ct-task-detail__duplicateButton">
-          <Icon icon={Copy} size={18} />
-          {t('tasks.duplicate')}
-        </Button>
-      </div>
-      {duplicateOpen && (
-        <DuplicatePrompt
-          task={task}
-          onClose={() => setDuplicateOpen(false)}
-          onConfirm={(date) => {
-            setDuplicateOpen(false);
-            void duplicate(date);
-          }}
-        />
-      )}
-
-      {errorKey && (
-        <p role="alert" className="ct-task-detail__error">
-          {t(errorKey)}
-        </p>
-      )}
-
-      {pickerOpen && (
-        <div className="ct-task-detail__iconEditor">
-          <IconChooser value={task.icon} onChange={chooseIcon} />
-          {task.icon && (
-            <Button variant="secondary" onClick={() => chooseIcon(null)}>
-              {t('tasks.removeIcon')}
-            </Button>
-          )}
-        </div>
-      )}
-
+  const repeatNode = (
+    <>
       {/* Répétition (Detail.html : « Répétition  Mensuelle, le 23 »). Résumé en lecture seule pour une
           tâche récurrente ; « Répéter… » pour une tâche datée, non terminée, sans règle (T-09). */}
       {task.recurrenceId !== null ? (
@@ -398,6 +424,110 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
         )
       )}
 
+    </>
+  );
+
+  return (
+    <div className="ct-task-detail">
+      {isMobile && (
+        <div className="ct-task-detail__topRow">
+          <button type="button" className="ct-task-detail__edit" onClick={() => setEditOpen(true)}>
+            <Icon icon={Pencil} size={20} />
+            {t('detail.edit')}
+          </button>
+          <button type="button" className="ct-task-detail__close" aria-label={t('common.close')} onClick={onClose}>
+            <Icon icon={X} />
+          </button>
+        </div>
+      )}
+      <div className="ct-task-detail__header">
+        <button
+          type="button"
+          className="ct-task-detail__iconButton"
+          aria-label={task.icon ? t('tasks.changeIcon') : t('tasks.iconFieldLabel')}
+          aria-expanded={pickerOpen}
+          onClick={() => setPickerOpen((open) => !open)}
+        >
+          {task.icon ? (
+            <IconView icon={task.icon} size={28} color={resolveIconRefColor(task.icon)} />
+          ) : (
+            <span className="ct-task-detail__iconPlaceholder" aria-hidden="true" />
+          )}
+        </button>
+        {editingTitle ? (
+          <form
+            className="ct-task-detail__titleField"
+            onSubmit={(event) => {
+              event.preventDefault();
+              commitTitle();
+            }}
+          >
+            <TextField label={t('detail.titleLabel')} value={titleDraft} onChange={setTitleDraft} onBlur={commitTitle} maxLength={200} autoFocus />
+          </form>
+        ) : (
+          <h2
+            className={isMobile ? 'ct-task-detail__title' : 'ct-task-detail__title ct-task-detail__title--editable'}
+            {...(isMobile
+              ? {}
+              : {
+                  tabIndex: 0,
+                  'aria-description': t('detail.titleEditHint'),
+                  onClick: startTitleEdit,
+                  onKeyDown: (event: KeyboardEvent<HTMLHeadingElement>) => {
+                    if (event.key === 'Enter' || event.key === 'F2') {
+                      event.preventDefault();
+                      startTitleEdit();
+                    }
+                  },
+                })}
+          >
+            {task.title}
+          </h2>
+        )}
+      </div>
+
+      {/* « Marquer comme terminée » (T-04, Detail.html) : libellé constant, l'état est porté
+          par `aria-pressed` seul ; la ligne appelante reflète la tâche via `taskEntities`. */}
+      <Button
+        variant="secondary"
+        pressed={task.status === 'done'}
+        onClick={() => void toggleDone()}
+        className="ct-task-detail__doneButton"
+      >
+        <Icon icon={Check} size={18} />
+        {t('tasks.markDone')}
+      </Button>
+
+
+      {errorKey && (
+        <p role="alert" className="ct-task-detail__error">
+          {t(errorKey)}
+        </p>
+      )}
+
+      {pickerOpen && (
+        <div className="ct-task-detail__iconEditor">
+          <IconChooser value={task.icon} onChange={chooseIcon} />
+          {task.icon && (
+            <Button variant="secondary" onClick={() => chooseIcon(null)}>
+              {t('tasks.removeIcon')}
+            </Button>
+          )}
+        </div>
+      )}
+
+      <TaskDetailFields
+        task={task}
+        layout={isMobile ? 'mobile' : 'pc'}
+        spaces={spaces}
+        today={today}
+        reminders={reminders}
+        goalTitle={goalTitle}
+        onPatch={commitPatch}
+        cancelInlineRef={cancelInlineRef}
+        repeat={repeatNode}
+      />
+
       <TextField
         label={t('tasks.noteLabel')}
         visibleLabel
@@ -407,7 +537,57 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
         onBlur={flushNote}
         className="ct-task-detail__note"
       />
+      <p className="ct-task-detail__stamp">{t('detail.createdModified', { created: formatStamp(task.createdAt, nowMs), modified: formatStamp(task.updatedAt, nowMs) })}</p>
 
+      <div className="ct-task-detail__actions">
+        <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? async (target) => setPendingPostpone(target) : postpone} />
+        {/* « Un jour » (SD-03) : une tâche à faire, non récurrente (une occurrence garde une date) ; Focus (M10) : absent tant que M10 n'existe pas. */}
+        {task.status === 'todo' && !task.someday && task.recurrenceId === null && (
+          <Button variant="secondary" onClick={() => void moveToSomeday()} className="ct-task-detail__somedayButton">
+            {t('detail.somedayAction')}
+          </Button>
+        )}
+        {/* « Dupliquer » (T-12, Detail.html ; PC : ajouté pour A-08, écart documenté) : possible aussi sur une tâche terminée. */}
+        <Button variant="secondary" ariaLabel={t('tasks.duplicateLabel')} onClick={() => setDuplicateOpen(true)} className="ct-task-detail__duplicateButton">
+          <Icon icon={Copy} size={18} />
+          {t('tasks.duplicate')}
+        </Button>
+      </div>
+      {duplicateOpen && (
+        <DuplicatePrompt
+          task={task}
+          onClose={() => setDuplicateOpen(false)}
+          onConfirm={(date) => {
+            setDuplicateOpen(false);
+            void duplicate(date);
+          }}
+        />
+      )}
+      {localErrorKey && (
+        <p role="alert" className="ct-task-detail__error">
+          {t(localErrorKey)}
+        </p>
+      )}
+
+      {isMobile && editOpen && (
+        <TaskEditSheet task={task} spaces={spaces} today={today} recurrence={recurrence} onClose={() => setEditOpen(false)} onSave={saveSheet} />
+      )}
+      {pendingSheet ? (
+        <ChoiceDialog
+          title={t('tasks.seriesEditTitle', { title: task.title })}
+          description={t('tasks.seriesEditBody')}
+          options={[
+            { id: 'occurrence', label: t('tasks.seriesScopeOccurrence') },
+            { id: 'following', label: t('tasks.seriesScopeFollowing') },
+          ]}
+          onChoose={(scope) => {
+            const result = pendingSheet;
+            setPendingSheet(null);
+            void applySheet(result, scope);
+          }}
+          onCancel={() => setPendingSheet(null)}
+        />
+      ) : null}
       {pendingEdit ? (
         <ChoiceDialog
           title={t('tasks.seriesEditTitle', { title: task.title })}

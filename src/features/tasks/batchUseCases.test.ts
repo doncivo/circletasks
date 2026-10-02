@@ -117,4 +117,25 @@ describe('actions par lot du mode édition (A-05)', () => {
       expect(await db.data.repos.tasks.listByRecurrence(recurrenceId as never)).toHaveLength(0);
     });
   });
+
+  describe('moveToSomeday (« Un jour » de la fiche, A-08)', () => {
+    it('retire date et heure, annulable, ignore terminées, déjà rangées et récurrentes', async () => {
+      const a = await create('A');
+      const done = await create('Faite');
+      await useCases.complete(done);
+      const rule: RecurrenceFields = { freq: 'daily', interval: 1, weekdays: [], monthDay: null, nthWeekday: null, until: null, count: null };
+      const series = await create('Série', { recurrence: rule });
+      const moved = await useCases.moveToSomeday([a, done, series]);
+      expect(moved.map((task) => task.id)).toEqual([a]);
+      expect(await db.data.repos.tasks.getById(a)).toMatchObject({ someday: true, date: null, time: null });
+      expect(await db.data.repos.tasks.getById(done)).toMatchObject({ someday: false });
+      expect(await db.data.repos.tasks.getById(series)).toMatchObject({ someday: false });
+      expect(entities.get(a)?.someday).toBe(true);
+      expect(undoMessage(undo.getSnapshot().top as never)).toBe('« A » rangée dans « Un jour »');
+      expect(await useCases.moveToSomeday([a])).toEqual([]);
+
+      expect((await undo.undoLast()).status).toBe('undone');
+      expect(await db.data.repos.tasks.getById(a)).toMatchObject({ someday: false, date: DAY, time: '09:00' });
+    });
+  });
 });

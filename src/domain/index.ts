@@ -23,3 +23,4 @@ export * from './wheelChoices';
 export * from './taskLine';
 export * from './todayList';
 export * from './taskReorder';
+export * from './taskDetailEdit';

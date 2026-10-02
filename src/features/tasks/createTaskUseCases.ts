@@ -79,9 +79,14 @@ interface PostponedEntry {
  * remet date, heure et « Un jour » d'avant. Une tâche modifiée depuis (hlc différent
  * de celui écrit par le report) n'est pas touchée ; si aucune ne peut l'être : 'stale'.
  */
-function createPostponeUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[], label: Pick<UndoableCommand, 'labelKey' | 'labelParams'>): UndoableCommand {
+function createPostponeUndoCommand(
+  deps: TaskUseCaseDeps,
+  entries: readonly PostponedEntry[],
+  label: Pick<UndoableCommand, 'labelKey' | 'labelParams'>,
+  kind: 'postpone' | 'someday' = 'postpone',
+): UndoableCommand {
   return {
-    kind: 'postpone',
+    kind,
     count: entries.length,
     ...label,
     async undo() {
@@ -428,8 +433,27 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(createMoveUndoCommand(deps, entries));
       return tasks;
     },
-    moveToSomeday() {
-      return Promise.reject(new NotImplementedError('taskUseCases.moveToSomeday : à implémenter (SD-03)'));
+    async moveToSomeday(ids): Promise<Task[]> {
+      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées. Une tâche terminée, déjà rangée ou récurrente
+      // (une occurrence garde une date, T-09) est ignorée.
+      const entries = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before || before.status === 'done' || before.someday || before.recurrenceId !== null) continue;
+          const [after] = await repos.tasks.moveToSomeday([id]);
+          if (after) done.push({ before, after });
+        }
+        return done;
+      });
+      if (entries.length === 0) return [];
+      const tasks = entries.map((entry) => entry.after);
+      deps.taskEntities.publish(tasks);
+      const first = entries[0];
+      deps.undo.push(
+        createPostponeUndoCommand(deps, entries, entries.length === 1 && first ? { labelParams: { title: first.before.title } } : {}, 'someday'),
+      );
+      return tasks;
     },
     async duplicate(id: TaskId, date: LocalDate | null): Promise<Task> {
       // T-12 : copie titre, note, icône, espace, projet, heure et rappels (même avance) ; une transaction.

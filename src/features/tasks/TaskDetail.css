@@ -137,3 +137,120 @@
   right: 0;
   left: auto;
 }
+
+/* Lignes de champs de la fiche (A-08) : PC-Aujourdhui.html .fl (libellé 120 px, valeur), Detail.html (libellé et valeur). */
+.ct-task-detail__fields {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-task-detail__row--field {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-detail-panel .ct-task-detail__row--field {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: var(--ct-space-3);
+}
+
+.ct-task-detail__rowLabel {
+  color: var(--ct-color-text-secondary);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-detail-panel .ct-task-detail__rowValue {
+  text-align: left;
+}
+
+.ct-task-detail__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ct-task-detail__chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--ct-color-surface-input);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-task-detail__spaces {
+  display: inline-flex;
+  gap: var(--ct-space-2);
+}
+
+.ct-task-detail__spaceButton {
+  min-height: 32px;
+  padding: 0 var(--ct-space-3);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  background: transparent;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-task-detail__spaceButton[aria-pressed='true'] {
+  background: var(--ct-color-surface-input);
+  border-color: currentColor;
+}
+
+.ct-task-detail__spaceButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-task-detail__fieldError {
+  display: block;
+  margin-top: var(--ct-space-1);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-task-detail__stamp {
+  margin: 0;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-sm);
+}
+
+.ct-task-detail__topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-task-detail__edit {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+/* Titre éditable sur place (PC) : le titre est un bouton de la taille du titre. */
+.ct-task-detail__title--editable {
+  cursor: text;
+}
+
+.ct-task-detail__title--editable:focus-visible,
+.ct-task-detail__edit:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-task-detail__titleField {
+  flex-grow: 1;
+}

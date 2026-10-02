@@ -1,4 +1,4 @@
-import { getLocale } from './index';
+import { getLocale, t } from './index';
 
 /** Jour court lisible (« lun. 28 sept. »), selon la langue courante ; date civile, sans effet de fuseau. */
 export function formatDayLabel(isoDate: string): string {
@@ -82,4 +82,27 @@ export function formatTodayHeader(isoDate: string, style: 'short' | 'long'): { m
 /** Nom du jour de la semaine (« dimanche »), pour la phrase de l'état vide (Main-Vide.html). */
 export function formatWeekdayName(isoDate: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
+}
+
+/** Date de la fiche détail (« Mer. 23 sept. 2026 »), première lettre en majuscule. */
+export function formatDetailDate(isoDate: string): string {
+  return capitalize(new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(utcDate(isoDate)));
+}
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/**
+ * Horodatage relatif de la fiche détail (« aujourd'hui à 18:04 », « hier à 18:04 », « le 2 sept. à 18:04 ») pour un
+ * instant UTC ISO, dans le fuseau de l'appareil, heures en 24 h.
+ */
+export function formatStamp(isoInstant: string, nowMs: number): string {
+  const then = new Date(isoInstant);
+  const now = new Date(nowMs);
+  const dayStart = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((dayStart(now) - dayStart(then)) / 86_400_000);
+  const time = `${pad2(then.getHours())}:${pad2(then.getMinutes())}`;
+  if (days === 0) return t('detail.stampToday', { time });
+  if (days === 1) return t('detail.stampYesterday', { time });
+  const date = new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', ...(then.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) }).format(then);
+  return t('detail.stampOn', { date, time });
 }

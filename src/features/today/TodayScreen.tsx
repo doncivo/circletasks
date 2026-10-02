@@ -89,6 +89,7 @@ export function TodayScreen() {
   const duplicate = useFeatureStore(todayStore, (s) => s.duplicate);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
+  const detail = useNavigationStore((s) => s.detail);
   const navigate = useNavigationStore((s) => s.navigate);
   const route = useNavigationStore((s) => s.route);
 
@@ -401,6 +402,7 @@ export function TodayScreen() {
         iconSize={iconSize}
         editMode={editMode}
         selected={selection.has(task.id)}
+        opened={layout === 'pc' && detail?.type === 'task' && detail.id === task.id}
         compact={compact}
         onToggleDone={() => void toggleDone(task.id)}
         onOpen={() => openDetail({ type: 'task', id: task.id })}

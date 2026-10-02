@@ -20,6 +20,8 @@ export interface TodayTaskRowProps {
   readonly iconSize: number;
   readonly editMode: boolean;
   readonly selected: boolean;
+  /** Fiche détail ouverte sur cette tâche (PC) : ligne surlignée (A-08 critère 1). */
+  readonly opened: boolean;
   /** Vue compacte (A-06) : une ligne, pastille de couleur, heure à droite. */
   readonly compact: boolean;
   readonly onToggleDone: () => void;
@@ -30,7 +32,7 @@ export interface TodayTaskRowProps {
   readonly handle: ReactNode;
 }
 
-export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode, selected, compact, onToggleDone, onOpen, onToggleSelect, onRemove, handle }: TodayTaskRowProps) {
+export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode, selected, opened, compact, onToggleDone, onOpen, onToggleSelect, onRemove, handle }: TodayTaskRowProps) {
   const done = task.status === 'done';
   const color = task.icon ? resolveIconRefColor(task.icon) : undefined;
   const subtitle = editMode && done ? t('today.doneBadge') : taskSubtitle(task, { spaces, showSpace, rule });
@@ -38,7 +40,7 @@ export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode
     <ListRow
       title={task.title}
       done={done}
-      selected={editMode && selected}
+      selected={(editMode && selected) || opened}
       compact={compact}
       {...(compact ? { time: task.time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle })}
       leading={
