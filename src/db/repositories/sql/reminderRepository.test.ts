@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { asEntityId, type DeviceId, type ReminderId, type TaskId } from '../../../domain/types';
+import { asEntityId, type DeviceId, type Hlc, type ReminderId, type TaskId } from '../../../domain/types';
 import { openTestDb, type TestDb } from './testSetup';
 
 const DEVICE = asEntityId<DeviceId>('30000000-0000-4000-8000-000000000004');
@@ -52,7 +52,10 @@ describe('ReminderRepository (SQL)', () => {
     expect(deleted).toHaveLength(1);
     expect(await db.data.repos.reminders.listForTarget(target)).toEqual([]);
 
-    const restored = await db.data.repos.reminders.restoreForTarget(target);
+    const deletedAt = deleted[0]?.deletedAt;
+    if (!deletedAt) throw new Error('deleted_at attendu');
+    // hlc vide : antérieur à tout hlc réel, comme celui de la tâche supprimée juste avant ses rappels.
+    const restored = await db.data.repos.reminders.restoreForTarget(target, { deletedAt, hlc: '' as Hlc });
     expect(restored).toHaveLength(1);
     expect(await db.data.repos.reminders.listForTarget(target)).toHaveLength(1);
   });

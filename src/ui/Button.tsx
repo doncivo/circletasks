@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import './Button.css';
 
-export type ButtonVariant = 'primary' | 'secondary';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger';
 
 export interface ButtonProps {
   /** Libellé visible : texte déjà résolu par l'appelant via t(), jamais en dur ici. */
@@ -17,18 +17,20 @@ export interface ButtonProps {
   haspopup?: 'menu';
   /** État ouvert / fermé du menu associé : `aria-expanded`. */
   expanded?: boolean;
+  /** Nom accessible quand le libellé visible ne suffit pas (ex. « Restaurer : <titre> ») : `aria-label`. */
+  ariaLabel?: string;
   className?: string;
 }
 
 /**
- * Bouton primaire (rempli, accent) ou secondaire (contour), désactivable.
+ * Bouton primaire (rempli, accent), secondaire (contour) ou destructif (rempli, couleur de danger : suppression, T-08), désactivable.
  * Styles des maquettes Ajout.html (« Enregistrer ») et Detail.html (« Reporter »).
  *
  * @example
  * <Button onClick={onSave}>{t('tasks.save')}</Button>
  * <Button variant="secondary" onClick={onPostpone}>{t('tasks.postpone')}</Button>
  */
-export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, className }: ButtonProps) {
+export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, ariaLabel, className }: ButtonProps) {
   return (
     <button
       type={type}
@@ -37,6 +39,7 @@ export function Button({ children, onClick, variant = 'primary', disabled, fullW
       aria-pressed={pressed}
       aria-haspopup={haspopup}
       aria-expanded={expanded}
+      aria-label={ariaLabel}
       className={['ct-button', `ct-button--${variant}`, fullWidth && 'ct-button--full', className].filter(Boolean).join(' ')}
     >
       {children}

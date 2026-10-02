@@ -4,6 +4,7 @@ import { Button } from './Button';
 
 const SAVE = 'Enregistrer';
 const POSTPONE = 'Reporter';
+const DELETE = 'Supprimer';
 
 describe('Button', () => {
   it('rend le libellé fourni par l’appelant', () => {
@@ -34,5 +35,10 @@ describe('Button', () => {
   it('applique la variante secondaire', () => {
     render(<Button variant="secondary">{POSTPONE}</Button>);
     expect(screen.getByRole('button')).toHaveClass('ct-button--secondary');
+  });
+
+  it('applique la variante destructive', () => {
+    render(<Button variant="danger">{DELETE}</Button>);
+    expect(screen.getByRole('button')).toHaveClass('ct-button--danger');
   });
 });

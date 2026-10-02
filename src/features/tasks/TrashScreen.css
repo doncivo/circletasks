@@ -1,0 +1,80 @@
+/* Écran Corbeille (T-08). Aucune maquette dédiée : mêmes codes que « Tâches terminées » (T-07). */
+.ct-trash-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.ct-trash-shell[data-layout='mobile'] {
+  display: block;
+}
+
+.ct-trash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-trash__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-trash__iconButton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-trash__title {
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-trash__intro {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-trash__empty {
+  margin: 0;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-trash__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-trash__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-trash__restore {
+  height: 36px;
+  padding: 0 var(--ct-space-3);
+  font-size: var(--ct-font-size-text-sm);
+  flex-shrink: 0;
+}
+
+.ct-trash__space {
+  color: var(--ct-space-color);
+}

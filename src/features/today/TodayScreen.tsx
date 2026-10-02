@@ -11,6 +11,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { TaskDetail } from '../tasks';
+import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import type { NewTaskSchedule } from './todayStore';
 import { resolveTodayTasks, todayStore } from './todayStore';
 import { UndoToast } from './UndoToast';
@@ -95,6 +96,7 @@ export function TodayScreen() {
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(todayStore, (s) => s.postpone);
+  const remove = useFeatureStore(todayStore, (s) => s.remove);
   const openDetail = useNavigationStore((s) => s.openDetail);
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -114,6 +116,17 @@ export function TodayScreen() {
     if (!focusedTaskId) return undefined;
     return container.shortcuts.register('list.postponeTomorrow', () => void postpone(focusedTaskId, 'tomorrow'));
   }, [container, focusedTaskId, postpone]);
+
+  // Suppr (T-08, critère 1) : demande confirmation pour la ligne sélectionnée ; rien n'est
+  // supprimé avant la confirmation. Le raccourci ne s'applique pas dans un champ de saisie (shortcuts.ts).
+  const [deleteTargetId, setDeleteTargetId] = useState<TaskId | null>(null);
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    return container.shortcuts.register('list.delete', () => {
+      if (container.taskEntities.get(focusedTaskId)) setDeleteTargetId(focusedTaskId);
+    });
+  }, [container, focusedTaskId]);
+  const deleteTarget = deleteTargetId ? entities.get(deleteTargetId) : undefined;
 
   // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
   const appDay = useAppStore((s) => s.day);
@@ -361,6 +374,17 @@ export function TodayScreen() {
       </div>
 
       <TaskDetail />
+
+      {deleteTarget && (
+        <DeleteTaskConfirm
+          task={deleteTarget}
+          onCancel={() => setDeleteTargetId(null)}
+          onConfirm={() => {
+            setDeleteTargetId(null);
+            void remove(deleteTarget.id);
+          }}
+        />
+      )}
     </div>
   );
 }

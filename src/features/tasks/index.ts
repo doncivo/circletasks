@@ -14,3 +14,7 @@ export { DoneTasksScreen } from './DoneTasksScreen';
 export { ReportScreen } from './ReportScreen';
 export { doneTasksStore, resolveDoneTasks, type DoneTasksState, type DoneTasksStatus } from './doneTasksStore';
 export { createDoneTasksUseCases, type DoneTasksUseCases } from './doneTasksUseCases';
+export { TrashScreen } from './TrashScreen';
+export { trashStore, type TrashState, type TrashStatus } from './trashStore';
+export { createTrashUseCases, type TrashUseCases } from './trashUseCases';
+export { DeleteTaskConfirm } from './DeleteTaskConfirm';

@@ -74,6 +74,39 @@ function createPostponeUndoCommand(deps: TaskUseCaseDeps, entries: readonly Post
   };
 }
 
+/**
+ * Commande annulable d'une suppression (T-08, T-13) : annuler = nouvelle écriture qui
+ * sort la tâche de la corbeille (date, ordre, espace inchangés) et réactive ses rappels.
+ * Une tâche modifiée depuis (hlc différent de celui écrit par la suppression, ex. déjà
+ * restaurée ou purgée) n'est pas touchée ; si aucune ne peut l'être : 'stale'.
+ */
+function createDeleteUndoCommand(deps: TaskUseCaseDeps, deleted: readonly Task[]): UndoableCommand {
+  const first = deleted[0];
+  return {
+    kind: 'delete',
+    count: deleted.length,
+    ...(deleted.length === 1 && first
+      ? { labelParams: { title: first.title } }
+      : { labelKey: 'undo.deleteMany' as const, labelParams: { count: deleted.length } }),
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const written: Task[] = [];
+        for (const task of deleted) {
+          const current = await repos.tasks.getById(task.id, { includeDeleted: true });
+          if (!current || current.deletedAt === null || current.hlc !== task.hlc) continue;
+          const [back] = await repos.tasks.restore([task.id]);
+          await repos.reminders.restoreForTarget({ type: 'task', id: task.id }, { deletedAt: current.deletedAt, hlc: current.hlc });
+          if (back) written.push(back);
+        }
+        return written;
+      });
+      if (restored.length === 0) return 'stale';
+      deps.taskEntities.publish(restored);
+      return 'undone';
+    },
+  };
+}
+
 /** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
 function touchesSchedule(patch: TaskPatch): boolean {
   return patch.date !== undefined || patch.time !== undefined || patch.someday !== undefined;
@@ -232,8 +265,28 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     duplicate() {
       return Promise.reject(new NotImplementedError('taskUseCases.duplicate : à implémenter (T-12)'));
     },
-    remove() {
-      return Promise.reject(new NotImplementedError('taskUseCases.remove : à implémenter (T-08)'));
+    async remove(ids): Promise<Task[]> {
+      // T-08 : suppression logique (deleted_at) + rappels de la tâche rendus inactifs, en une transaction.
+      // Point d'extension T-10 : sur une occurrence récurrente, proposer « cette occurrence /
+      // toutes les suivantes » avant d'appeler remove (aucune récurrence n'existe avant T-09).
+      const deleted = await deps.data.transaction(async (repos) => {
+        const done: Task[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before) continue; // déjà supprimée ou inconnue : rien à faire
+          const [task] = await repos.tasks.softDelete([id]);
+          if (!task) continue;
+          // Même deleted_at que la tâche : la restauration ne réactive que les rappels supprimés avec elle.
+          await repos.reminders.softDeleteForTarget({ type: 'task', id }, task.deletedAt ?? undefined);
+          done.push(task);
+        }
+        return done;
+      });
+      if (deleted.length === 0) return [];
+      // Source unique : la tâche disparaît de toutes les vues (Aujourd'hui, Terminées, fiche…).
+      deps.taskEntities.remove(deleted.map((task) => task.id));
+      deps.undo.push(createDeleteUndoCommand(deps, deleted));
+      return deleted;
     },
     reorder() {
       return Promise.reject(new NotImplementedError('taskUseCases.reorder : à implémenter (A-02, SD-04)'));

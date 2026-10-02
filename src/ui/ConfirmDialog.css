@@ -1,0 +1,53 @@
+/* ConfirmDialog : confirmation d'une action destructive (T-08). */
+.ct-confirm__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(46, 33, 80, 0.45);
+}
+
+.ct-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  width: 360px;
+  max-width: calc(100% - 40px);
+  padding: var(--ct-space-5);
+  background: var(--ct-color-surface);
+  border-radius: var(--ct-radius-xl);
+  box-sizing: border-box;
+  font-family: var(--ct-font-text);
+}
+
+.ct-confirm:focus-visible {
+  outline: none;
+}
+
+.ct-confirm__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+  color: var(--ct-color-text);
+}
+
+.ct-confirm__description {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-confirm__actions {
+  display: flex;
+  gap: var(--ct-space-3);
+}
+
+.ct-confirm__cancel {
+  flex: 1 1 0;
+}
+
+.ct-confirm__confirm {
+  flex: 1 1 0;
+}

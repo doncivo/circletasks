@@ -59,3 +59,11 @@
   color: var(--ct-color-danger);
   font-size: var(--ct-font-size-text-sm);
 }
+
+/* Bouton lien de ligne (.lk de Reglages.html). */
+.ct-settings__link {
+  height: 30px;
+  padding: 0 12px;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}

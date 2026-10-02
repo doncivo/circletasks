@@ -1,8 +1,8 @@
 import type { NewReminder, Reminder, ReminderTarget } from '../../../domain/model';
-import type { LocalDateTime, ReminderId } from '../../../domain/types';
-import type { WriteStamper } from '../../../domain/hlc';
+import type { Hlc, IsoDateTime, LocalDateTime, ReminderId } from '../../../domain/types';
+import { compareHlc, type WriteStamper } from '../../../domain/hlc';
 import type { SqlExecutor, SqlRow } from '../../driver';
-import type { ReminderRepository } from '../reminderRepository';
+import type { ReminderDeletionMark, ReminderRepository } from '../reminderRepository';
 import { readSyncMeta, requireMapped, type SyncRow } from './sqlHelpers';
 
 interface ReminderRow extends SqlRow, SyncRow {
@@ -77,25 +77,27 @@ export function createReminderRepository(db: SqlExecutor, stamper: WriteStamper)
       return (await fetchActiveForTarget(target)).map(rowToReminder);
     },
 
-    async softDeleteForTarget(target: ReminderTarget) {
+    async softDeleteForTarget(target: ReminderTarget, deletedAt?: IsoDateTime) {
       const existing = await fetchActiveForTarget(target);
       const result: Reminder[] = [];
       for (const row of existing) {
         const stamp = stamper.next();
         await db.execute(
           'UPDATE reminder SET deleted_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ?',
-          [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, row.id],
+          [deletedAt ?? stamp.at, stamp.at, stamp.deviceId, stamp.hlc, row.id],
         );
         result.push(requireMapped(await fetchById(row.id as ReminderId), 'reminder', row.id, rowToReminder));
       }
       return result;
     },
 
-    async restoreForTarget(target: ReminderTarget) {
-      const deleted = await db.select<ReminderRow>(
+    async restoreForTarget(target: ReminderTarget, deletion: ReminderDeletionMark) {
+      const all = await db.select<ReminderRow>(
         'SELECT * FROM reminder WHERE deleted_at IS NOT NULL AND target_type = ? AND target_id = ?',
         [target.type, target.id],
       );
+      // Seulement les rappels supprimés avec l'élément (même deleted_at, hlc postérieur à celui de l'élément).
+      const deleted = all.filter((row) => row.deleted_at === deletion.deletedAt && compareHlc(row.hlc as Hlc, deletion.hlc) > 0);
       const result: Reminder[] = [];
       for (const row of deleted) {
         const stamp = stamper.next();

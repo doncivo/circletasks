@@ -86,7 +86,7 @@ describe('undoMessage (T-04, critère 3)', () => {
     expect(undoMessage({ kind: 'complete', count: 1, labelParams: { title: 'Courses' }, undo: async () => 'undone' })).toBe(
       '« Courses » terminée',
     );
-    expect(undoMessage({ kind: 'delete', count: 1, undo: async () => 'undone' })).toBe('Tâche supprimée');
+    expect(undoMessage({ kind: 'delete', count: 1, labelParams: { title: 'Courses' }, undo: async () => 'undone' })).toBe('« Courses » supprimée');
   });
 });
 

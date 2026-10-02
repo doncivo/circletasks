@@ -12,6 +12,8 @@ export interface ListRowProps {
   leading?: ReactNode;
   /** Élément terminé : titre barré, couleur atténuée (Main.html, « Faire mon lit »). */
   done?: boolean;
+  /** Élément de fin de ligne, après l'icône (ex. bouton « Restaurer » de la corbeille, T-08). */
+  trailing?: ReactNode;
   /** Ouvre le détail (A-08) ; sans cette prop, le titre n'est pas interactif. */
   onActivate?: () => void;
   className?: string;
@@ -31,7 +33,7 @@ export interface ListRowProps {
  *   onActivate={() => openDetail(task.id)}
  * />
  */
-export function ListRow({ title, subtitle, icon, leading, done, onActivate, className }: ListRowProps) {
+export function ListRow({ title, subtitle, icon, trailing, leading, done, onActivate, className }: ListRowProps) {
   return (
     <div className={['ct-list-row', className].filter(Boolean).join(' ')} data-done={done ?? false}>
       {leading}
@@ -48,6 +50,7 @@ export function ListRow({ title, subtitle, icon, leading, done, onActivate, clas
         {subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
       </div>
       {icon}
+      {trailing}
     </div>
   );
 }

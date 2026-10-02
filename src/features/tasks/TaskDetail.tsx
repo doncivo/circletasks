@@ -7,6 +7,7 @@ import { t } from '../../i18n';
 import { Button, DetailPanel, Icon, IconChooser, IconView, Sheet, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { DeleteTaskConfirm } from './DeleteTaskConfirm';
 import { PostponeAction } from './PostponeAction';
 import { taskDetailStore } from './taskDetailStore';
 import './TaskDetail.css';
@@ -36,6 +37,7 @@ export function TaskDetail() {
   const updateIcon = useFeatureStore(taskDetailStore, (s) => s.updateIcon);
   const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
+  const remove = useFeatureStore(taskDetailStore, (s) => s.remove);
 
   // Note non enregistrée (perte de focus pas encore survenue) : la fiche la
   // sauvegarde aussi à la fermeture (critère 8), y compris par Échap, qui ne
@@ -69,6 +71,11 @@ export function TaskDetail() {
         updateIcon={updateIcon}
         toggleDone={toggleDone}
         postpone={postpone}
+        // Suppression confirmée (T-08, critère 2) : la tâche part dans la corbeille, la fiche se ferme
+        // (sans réécrire la note : la tâche n'existe plus ; la perte de focus l'a déjà enregistrée).
+        onDelete={async () => {
+          if (await remove()) closeDetail();
+        }}
         errorKey={status === 'error' ? errorKey : null}
       />
     ) : status === 'error' && errorKey ? (
@@ -104,14 +111,17 @@ interface TaskDetailBodyProps {
   toggleDone: () => Promise<void>;
   /** « Reporter » / « Planifier » (T-05). */
   postpone: (target: PostponeTarget) => Promise<void>;
+  /** Suppression confirmée (T-08) ; la fiche parente se ferme si elle réussit. */
+  onDelete: () => Promise<void>;
   /** Échec d'enregistrement ou de report à afficher (la tâche reste affichée). */
   errorKey: PlainMessageKey | null;
 }
 
 /** Contenu de la fiche pour une tâche donnée ; remonté (par `key`) à chaque changement de tâche. */
-function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, errorKey }: TaskDetailBodyProps) {
+function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNote, updateIcon, toggleDone, postpone, onDelete, errorKey }: TaskDetailBodyProps) {
   const [noteDraft, setNoteDraft] = useState(task.note);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function flushNote(): void {
     if (noteDraft !== task.note) void updateNote(noteDraft);
@@ -196,6 +206,21 @@ function TaskDetailBody({ task, flushNoteRef, onClose, showCloseButton, updateNo
         onBlur={flushNote}
         className="ct-task-detail__note"
       />
+
+      {/* « Supprimer la tâche » (iPhone) / « Supprimer » (PC) : texte rouge, confirmation puis corbeille (T-08). */}
+      <button type="button" className="ct-task-detail__delete" onClick={() => setConfirmOpen(true)}>
+        {t(showCloseButton ? 'tasks.deleteTask' : 'tasks.deleteTaskPc')}
+      </button>
+      {confirmOpen && (
+        <DeleteTaskConfirm
+          task={task}
+          onCancel={() => setConfirmOpen(false)}
+          onConfirm={() => {
+            setConfirmOpen(false);
+            void onDelete();
+          }}
+        />
+      )}
     </div>
   );
 }
