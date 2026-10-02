@@ -434,3 +434,11 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+/* Les boutons restent visibles quand le formulaire dépasse la hauteur de la feuille ou du panneau (défilement du contenu). */
+.ct-routine-form__actions {
+  position: sticky;
+  bottom: 0;
+  padding: var(--ct-space-2) 0;
+  background: var(--ct-color-surface);
+}

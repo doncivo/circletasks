@@ -35,6 +35,19 @@ async function seed(page: Page, testInfo: { project: { name: string } }): Promis
   await createTask(page, testInfo, { title: 'Envoyer la facture', time: '09:00' });
   await createTask(page, testInfo, { title: 'Appeler le notaire', time: '14:00' });
   await createTask(page, testInfo, { title: 'Acheter du pain' });
+  // Routines d'Aujourd'hui (Main.html, PC-Aujourdhui.html) : « Boire de l'eau » 08:30, « Faire mon lit » validée, Sport 18:00 (PC).
+  await insertRoutines(page, [
+    { title: "Boire de l'eau", space: 'perso', time: '08:30', icon: 'lucide:glass-water', done: ['2026-09-22'] },
+    { title: 'Faire mon lit', space: 'perso', time: '07:30', icon: 'lucide:bed', done: ['2026-09-23'] },
+    // Sport 18:00 : seulement dans PC-Aujourdhui.html.
+    ...(testInfo.project.name === 'pc'
+      ? [{ title: 'Sport', space: 'perso', time: '18:00', icon: 'lucide:dumbbell', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-06-01' } satisfies DirectRoutine]
+      : []),
+  ]);
+  // Aujourd'hui relit ses routines à l'ouverture : on repasse par la Semaine.
+  await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Envoyer la facture', exact: true })).toBeVisible();
 }
 
 async function captureApp(page: Page, name: string): Promise<void> {
@@ -61,6 +74,12 @@ async function prepareWeek(page: Page): Promise<void> {
   // « Point client » 10:00 (Google Agenda) : 08:00Z en septembre à Paris ; l'anniversaire (événement local) attend le module Événements.
   await seedCalendarAccount(page);
   await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
+  // Routines de la Semaine (PC-Semaine.html : « 07:30 · Routine », « 18:00 · Routine » les lundis, mercredis et vendredis).
+  await insertRoutines(page, [
+    // « Faire mon lit » le lundi seulement, comme la maquette.
+    { title: 'Faire mon lit', space: 'perso', time: '07:30', icon: 'lucide:bed', scheduleType: 'weekdays', weekdays: [1], startDate: '2026-09-01', done: ['2026-09-21'] },
+    { title: 'Sport', space: 'perso', time: '18:00', icon: 'lucide:dumbbell', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-06-01', done: ['2026-09-21'] },
+  ]);
   await openWeek(page);
 }
 
