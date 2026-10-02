@@ -45,13 +45,13 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | fait |
 | S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | en cours (critères 9-10 : alimentation par M8, ordre 2) |
 | S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | à faire |
-| R-01 | M4 | Je crée une routine avec icône et fréquence | routines | en cours |
-| R-02 | M4 | J'associe une heure optionnelle | routines | en cours |
-| R-03 | M4 | Je valide une routine du jour | routines | en cours |
-| R-04 | M4 | Je suis ma série | routines | en cours |
-| R-05 | M4 | Je mets une routine en pause ou l'archive | routines | en cours |
-| R-06 | M4 | Je consulte le rapport de routine | routines | en cours |
-| R-07 | M4 | Je planifie une routine tous les N jours ou toutes les N semaines | routines | en cours |
+| R-01 | M4 | Je crée une routine avec icône et fréquence | routines | fait |
+| R-02 | M4 | J'associe une heure optionnelle | routines | fait |
+| R-03 | M4 | Je valide une routine du jour | routines | fait |
+| R-04 | M4 | Je suis ma série | routines | fait |
+| R-05 | M4 | Je mets une routine en pause ou l'archive | routines | fait |
+| R-06 | M4 | Je consulte le rapport de routine | routines | fait |
+| R-07 | M4 | Je planifie une routine tous les N jours ou toutes les N semaines | routines | fait |
 | N-02 | M5 | Je choisis une avance (0, 5, 15, 30, 60 min, 1 jour) | notifications | à faire |
 | N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | à faire |
 | ES-01 | M13 | J'ai deux espaces Pro et Perso | spaces-goals | à faire |
