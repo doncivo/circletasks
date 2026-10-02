@@ -18,8 +18,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
 | T-01 | M1 | Je crée une tâche avec un titre seul | tasks-planning | fait |
-| T-02 | M1 | J'affecte une date et une heure optionnelle | tasks-planning | à faire |
-| T-03 | M1 | J'ajoute une note et une icône | tasks-planning | à faire |
+| T-02 | M1 | J'affecte une date et une heure optionnelle | tasks-planning | fait |
+| T-03 | M1 | J'ajoute une note et une icône | tasks-planning | en cours |
 | T-04 | M1 | Je marque une tâche terminée | tasks-planning | à faire |
 | T-05 | M1 | Je reporte une tâche | tasks-planning | à faire |
 | T-06 | M1 | Les tâches non faites passent au lendemain | tasks-planning | à faire |

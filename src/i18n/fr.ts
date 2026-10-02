@@ -35,6 +35,8 @@ export const fr = {
     titleLabel: 'Titre',
     addPlaceholder: 'Ajouter une tâche',
     addPlaceholderPc: 'Ajouter une tâche — ex. « Appeler Paul demain 10h »',
+    dateLabel: 'Date',
+    timeLabel: 'Heure',
     save: 'Enregistrer',
     todayBadge: 'Aujourd’hui',
     emptyToday: 'Rien de prévu aujourd’hui.',

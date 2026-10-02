@@ -2,11 +2,12 @@ import { X } from 'lucide-react';
 import { type CSSProperties, type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
-import type { SpaceId } from '../../domain/types';
+import { asLocalDate, asLocalTime, type SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { Button, Fab, Icon, ListRow, Sheet, SpacePills, TextField, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import type { NewTaskSchedule } from './todayStore';
 import { todayStore } from './todayStore';
 import './TodayScreen.css';
 
@@ -17,6 +18,20 @@ function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: strin
   const monthLine = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(date);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
   return { monthLine, dayLine: `${String(day ?? 1)} ${weekday}` };
+}
+
+/**
+ * Lit les champs natifs `<input type="date">` / `<input type="time">` (T-02,
+ * champ minimal remplacé par le sélecteur adapté à l'appareil de T-14) : chaîne
+ * vide = non fourni (jour affiché par défaut pour la date, pas d'heure).
+ */
+function readSchedule(dateValue: string, timeValue: string): NewTaskSchedule {
+  // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `date` / `time` que
+  // lorsqu'une valeur est saisie, plutôt que de les poser à `undefined`.
+  return {
+    ...(dateValue !== '' ? { date: asLocalDate(dateValue) } : {}),
+    ...(timeValue !== '' ? { time: asLocalTime(timeValue) } : {}),
+  };
 }
 
 /**
@@ -46,10 +61,16 @@ export function TodayScreen() {
   const header = formatTodayHeader(today);
 
   const [inlineTitle, setInlineTitle] = useState('');
+  // Champ Date / Heure minimal (T-02) : natif, remplacé par le sélecteur adapté à
+  // l'appareil (roue iPhone, mini-calendrier et saisie libre PC) de T-14.
+  const [inlineDate, setInlineDate] = useState('');
+  const [inlineTime, setInlineTime] = useState('');
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTitle, setSheetTitle] = useState('');
+  const [sheetDate, setSheetDate] = useState('');
+  const [sheetTime, setSheetTime] = useState('');
   const [sheetSpaceId, setSheetSpaceId] = useState<SpaceId | null>(null);
   const sheetTitleRef = useRef<HTMLInputElement>(null);
 
@@ -78,6 +99,8 @@ export function TodayScreen() {
       return;
     }
     setSheetTitle('');
+    setSheetDate('');
+    setSheetTime('');
     setSheetSpaceId(fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null);
     setSheetOpen(true);
   }, [layout, spaceFilter, fallbackSpaceId]);
@@ -88,9 +111,11 @@ export function TodayScreen() {
     event.preventDefault();
     if (!fallbackSpaceId) return;
     const spaceId = resolveDefaultSpaceId(spaceFilter, fallbackSpaceId);
-    const result = await addTask(inlineTitle, spaceId);
+    const result = await addTask(inlineTitle, spaceId, readSchedule(inlineDate, inlineTime));
     if (result.ok) {
       setInlineTitle('');
+      setInlineDate('');
+      setInlineTime('');
       inlineInputRef.current?.focus();
     }
   }
@@ -100,7 +125,7 @@ export function TodayScreen() {
   async function handleSheetSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!sheetTitleValid || !sheetSpaceId) return;
-    const result = await addTask(sheetTitle, sheetSpaceId);
+    const result = await addTask(sheetTitle, sheetSpaceId, readSchedule(sheetDate, sheetTime));
     if (result.ok) setSheetOpen(false);
   }
 
@@ -123,7 +148,7 @@ export function TodayScreen() {
       ) : (
         <div className="ct-today__list">
           {tasks.map((task) => (
-            <ListRow key={task.id} title={task.title} />
+            <ListRow key={task.id} title={task.title} subtitle={task.time ?? undefined} done={task.status === 'done'} />
           ))}
         </div>
       )}
@@ -137,6 +162,33 @@ export function TodayScreen() {
           onChange={setInlineTitle}
           maxLength={TASK_TITLE_MAX_LENGTH}
         />
+        {/* Champ Date / Heure minimal (T-02), remplacé par le sélecteur adapté à
+            l'appareil de T-14 : saisie native, optionnelle. Seulement sur PC : sur
+            iPhone, la saisie rapide passe par la feuille « Nouvelle tâche »
+            (Fab), qui porte ses propres champs Date / Heure — éviter deux champs
+            de même libellé visibles à la fois. */}
+        {layout === 'pc' && (
+          <>
+            <label className="ct-today__scheduleField">
+              <span className="ct-visually-hidden">{t('tasks.dateLabel')}</span>
+              <input
+                type="date"
+                value={inlineDate}
+                onChange={(event) => setInlineDate(event.target.value)}
+                className="ct-today__scheduleInput"
+              />
+            </label>
+            <label className="ct-today__scheduleField">
+              <span className="ct-visually-hidden">{t('tasks.timeLabel')}</span>
+              <input
+                type="time"
+                value={inlineTime}
+                onChange={(event) => setInlineTime(event.target.value)}
+                className="ct-today__scheduleInput"
+              />
+            </label>
+          </>
+        )}
       </form>
 
       <div className="ct-today__bottomRow">
@@ -158,6 +210,29 @@ export function TodayScreen() {
             onChange={setSheetTitle}
             maxLength={TASK_TITLE_MAX_LENGTH}
           />
+          {/* Champ Date / Heure minimal (T-02), remplacé par la feuille de roues de
+              T-14 : saisie native, optionnelle (date vide = jour affiché, pas de puce
+              « Un jour » avant T-14). */}
+          <div className="ct-task-sheet__schedule">
+            <label className="ct-task-sheet__scheduleField">
+              <span className="ct-text-field__label">{t('tasks.dateLabel')}</span>
+              <input
+                type="date"
+                value={sheetDate}
+                onChange={(event) => setSheetDate(event.target.value)}
+                className="ct-text-field__control"
+              />
+            </label>
+            <label className="ct-task-sheet__scheduleField">
+              <span className="ct-text-field__label">{t('tasks.timeLabel')}</span>
+              <input
+                type="time"
+                value={sheetTime}
+                onChange={(event) => setSheetTime(event.target.value)}
+                className="ct-text-field__control"
+              />
+            </label>
+          </div>
           <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
             {spaces.map((space) => (
               <button
