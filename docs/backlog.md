@@ -54,14 +54,14 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | R-07 | M4 | Je planifie une routine tous les N jours ou toutes les N semaines | routines | fait |
 | N-02 | M5 | Je choisis une avance (0, 5, 15, 30, 60 min, 1 jour) | notifications | fait |
 | N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | fait |
-| ES-01 | M13 | J'ai deux espaces Pro et Perso | spaces-goals | à faire |
-| ES-02 | M13 | Chaque élément appartient à un espace | spaces-goals | à faire |
-| ES-03 | M13 | Je filtre Pro / Perso / Tout | spaces-goals | à faire |
-| ES-04 | M13 | Je crée des projets dans un espace | spaces-goals | à faire |
-| ES-05 | M13 | Je déplace un élément d'un espace ou projet à l'autre | spaces-goals | à faire |
-| ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | à faire |
-| ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | à faire |
-| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | à faire |
+| ES-01 | M13 | J'ai deux espaces Pro et Perso | spaces-goals | en cours |
+| ES-02 | M13 | Chaque élément appartient à un espace | spaces-goals | en cours |
+| ES-03 | M13 | Je filtre Pro / Perso / Tout | spaces-goals | en cours |
+| ES-04 | M13 | Je crée des projets dans un espace | spaces-goals | en cours |
+| ES-05 | M13 | Je déplace un élément d'un espace ou projet à l'autre | spaces-goals | en cours |
+| ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | en cours |
+| ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | en cours |
+| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | en cours |
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
 | D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
 | D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 10-11 : publication, attend le workflow de release et les secrets GitHub) |
