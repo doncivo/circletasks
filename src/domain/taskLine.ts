@@ -1,0 +1,31 @@
+import type { Task } from './model';
+import type { LocalTime, SpaceId } from './types';
+
+/**
+ * Segments de la sous-ligne d'une tâche (« 09:00 · reportée · Pro · mensuelle », Main.html,
+ * PC-Semaine.html), dans l'ordre d'affichage : heure, badge « reportée » (T-06), espace (filtre « Tout »
+ * seulement : en filtre Pro ou Perso il est redondant), résumé de la récurrence (T-09).
+ * Source unique de la composition, partagée par Aujourd'hui, la Semaine et « Un jour » ; le rendu
+ * (couleur de l'espace, libellés) est fait par l'interface.
+ */
+export type TaskLineSegment =
+  | { readonly kind: 'time'; readonly time: LocalTime }
+  | { readonly kind: 'carried' }
+  | { readonly kind: 'space'; readonly spaceId: SpaceId }
+  | { readonly kind: 'repeat' };
+
+export interface TaskLineOptions {
+  /** Filtre « Tout » : l'espace est affiché. */
+  readonly showSpace: boolean;
+  /** La règle de la série est connue : le résumé de récurrence est affiché. */
+  readonly hasRule: boolean;
+}
+
+export function taskLineSegments(task: Pick<Task, 'time' | 'carriedOver' | 'spaceId'>, options: TaskLineOptions): TaskLineSegment[] {
+  const segments: TaskLineSegment[] = [];
+  if (task.time) segments.push({ kind: 'time', time: task.time });
+  if (task.carriedOver) segments.push({ kind: 'carried' });
+  if (options.showSpace) segments.push({ kind: 'space', spaceId: task.spaceId });
+  if (options.hasRule) segments.push({ kind: 'repeat' });
+  return segments;
+}

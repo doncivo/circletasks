@@ -20,3 +20,5 @@ export * from './taskDuplicate';
 export * from './dateInput';
 export * from './calendarMonth';
 export * from './wheelChoices';
+export * from './taskLine';
+export * from './todayList';

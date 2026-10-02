@@ -1,14 +1,15 @@
 import { ChartColumn, X } from 'lucide-react';
-import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import type { RecurrenceFields, Space, Task } from '../../domain/model';
-import { recurrenceLabel } from '../../domain/recurrenceLabel';
+import { addDays } from '../../domain/localDate';
+import type { RecurrenceFields } from '../../domain/model';
 import type { IconRef } from '../../domain/model/icon';
+import { buildTodayList, rowTime, type TodayRow } from '../../domain/todayList';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
 import type { DateChoice } from '../../domain/dateInput';
-import type { SpaceId, TaskId } from '../../domain/types';
-import { getLocale, t } from '../../i18n';
-import { formatMessageRef } from '../../i18n/formatRecurrence';
+import type { LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
+import { t } from '../../i18n';
+import { formatWeekdayName } from '../../i18n/format';
 import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
@@ -16,44 +17,13 @@ import { useNavigationStore } from '../app/navigation';
 import { useQuickAddStore } from '../app/quickAdd';
 import { DuplicatePrompt, TaskDetail } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
+import { taskSubtitle } from '../tasks/taskLine';
+import { TodayHeader } from './TodayHeader';
+import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
+import { canToggleRoutines } from './todaySources';
 import type { NewTaskSchedule } from './todayStore';
-import { resolveTodayTasks, todayStore } from './todayStore';
+import { selectTodayTasks, todayStore } from './todayStore';
 import './TodayScreen.css';
-
-function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: string } {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  const date = new Date(year ?? 1970, (month ?? 1) - 1, day ?? 1);
-  const locale = getLocale() === 'fr' ? 'fr-FR' : 'en-US';
-  const monthLine = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(date);
-  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
-  return { monthLine, dayLine: `${String(day ?? 1)} ${weekday}` };
-}
-
-/**
- * Sous-ligne d'une tâche : heure ; une tâche reportée automatiquement (T-06) ajoute le
- * badge « reportée » et l'espace en couleur (« reportée · Pro », PC-Semaine.html) ; une
- * tâche récurrente (T-09) ajoute l'espace et le résumé de la règle (« 09:00 · Pro · mensuelle »,
- * Main.html).
- */
-function taskSubtitle(task: Task, spaces: readonly Space[], rule: RecurrenceFields | undefined): ReactNode {
-  if (!task.carriedOver && !rule) return task.time ?? undefined;
-  const space = spaces.find((s) => s.id === task.spaceId);
-  const parts: ReactNode[] = [];
-  if (task.time) parts.push(task.time);
-  if (task.carriedOver) parts.push(<span key="carried" className="ct-today__carried">{t('tasks.carriedOver')}</span>);
-  if (space) parts.push(<span key="space" style={{ color: space.color }}>{space.name}</span>);
-  if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
-  return (
-    <>
-      {parts.map((part, index) => (
-        <span key={index}>
-          {index > 0 && ' · '}
-          {part}
-        </span>
-      ))}
-    </>
-  );
-}
 
 /**
  * Planification choisie dans le sélecteur de date (T-14) : aucun choix = jour affiché ; « Un jour » = tâche
@@ -90,11 +60,9 @@ export function TodayScreen() {
   const recurrences = useFeatureStore(todayStore, (s) => s.recurrences);
   const viewDate = useFeatureStore(todayStore, (s) => s.date);
   const viewFilter = useFeatureStore(todayStore, (s) => s.filter);
-  // Date et espace revérifiés à chaque rendu (selectTasks) : une tâche reportée quitte la liste aussitôt (T-05).
-  const tasks = useMemo(
-    () => resolveTodayTasks(taskIds, entities, { date: viewDate, filter: viewFilter }),
-    [taskIds, entities, viewDate, viewFilter],
-  );
+  const extras = useFeatureStore(todayStore, (s) => s.extras);
+  const extrasFailed = useFeatureStore(todayStore, (s) => s.extrasFailed);
+  const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
   const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(todayStore, (s) => s.status);
   const errorKey = useFeatureStore(todayStore, (s) => s.errorKey);
@@ -108,6 +76,37 @@ export function TodayScreen() {
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
   const navigate = useNavigationStore((s) => s.navigate);
+  const route = useNavigationStore((s) => s.route);
+
+  // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
+  const appDay = useAppStore((s) => s.day);
+  const carryOverFailed = useAppStore((s) => s.carryOverFailed);
+  const recurrenceFailed = useAppStore((s) => s.recurrenceFailed);
+  const today = appDay ?? todayLocal(container.clock);
+  // Jour affiché : le jour courant, ou celui choisi par les flèches « Jour précédent / suivant » (PC, Q10).
+  const viewedDate: LocalDate = route.tab === 'tasks' && route.screen === 'today' && route.date ? route.date : today;
+  const goToDay = (date: LocalDate): void => navigate(date === today ? { tab: 'tasks', screen: 'today' } : { tab: 'tasks', screen: 'today', date });
+
+  // Date et espace revérifiés à chaque rendu (selectTasks) : une tâche reportée quitte la liste aussitôt (T-05).
+  const dayTasks = useMemo(
+    () => selectTodayTasks(taskIds, entities, { date: viewDate, filter: viewFilter }),
+    [taskIds, entities, viewDate, viewFilter],
+  );
+  // Assemblage de la liste du jour (domaine) : objectif, événements, routines et tâches mêlées, terminés, checklists.
+  const list = useMemo(
+    () =>
+      buildTodayList({
+        date: viewDate ?? viewedDate,
+        filter: viewFilter,
+        tasks: dayTasks,
+        routines: extras.routines,
+        events: extras.events,
+        checklists: extras.checklists,
+        goal: extras.goal,
+      }),
+    [dayTasks, extras, viewDate, viewedDate, viewFilter],
+  );
+  const routinesCheckable = canToggleRoutines();
 
   // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
   // reçu le focus (case ou titre), via `onFocus` posé sur le conteneur de chaque
@@ -155,13 +154,6 @@ export function TodayScreen() {
   }, [container, focusedTaskId]);
   const duplicateTarget = duplicateTargetId ? entities.get(duplicateTargetId) : undefined;
 
-  // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
-  const appDay = useAppStore((s) => s.day);
-  const carryOverFailed = useAppStore((s) => s.carryOverFailed);
-  const recurrenceFailed = useAppStore((s) => s.recurrenceFailed);
-  const today = appDay ?? todayLocal(container.clock);
-  const header = formatTodayHeader(today);
-
   const [inlineTitle, setInlineTitle] = useState('');
   // Champ « Date » de la saisie PC (T-14) : saisie libre et mini-calendrier ; null = jour affiché.
   const [inlineChoice, setInlineChoice] = useState<DateChoice | null>(null);
@@ -181,17 +173,17 @@ export function TodayScreen() {
   const sheetTitleRef = useRef<HTMLInputElement>(null);
 
   // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la ligne (lecture des règles inconnues).
-  const hasUnknownRule = tasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
+  const hasUnknownRule = dayTasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
   useEffect(() => {
     if (hasUnknownRule) void syncRecurrences();
   }, [hasUnknownRule, syncRecurrences]);
 
   useEffect(() => {
-    void load(today, spaceFilter);
-    // Recharge au changement de filtre et au passage de minuit (T-06, `today` suit `appDay`).
+    void load(viewedDate, spaceFilter);
+    // Recharge au changement de filtre, de jour affiché (flèches PC) et au passage de minuit (T-06, `today` suit `appDay`).
     // `load` ne rejette jamais.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceFilter, today]);
+  }, [spaceFilter, viewedDate]);
 
   // T-12 : une tâche du jour affiché publiée ailleurs (copie créée depuis la fiche, dupliquée vers aujourd'hui)
   // rejoint la liste par un rechargement ; chaque identifiant n'est tenté qu'une fois (pas de boucle si la base ne la renvoie pas).
@@ -227,12 +219,12 @@ export function TodayScreen() {
       return;
     }
     setSheetTitle('');
-    setSheetChoice({ date: viewDate ?? today, time: null });
+    setSheetChoice({ date: viewedDate, time: null });
     setSheetSpaceId(fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null);
     setSheetIcon(null);
     setSheetRecurrence(null);
     setSheetOpen(true);
-  }, [layout, spaceFilter, fallbackSpaceId, viewDate, today]);
+  }, [layout, spaceFilter, fallbackSpaceId, viewedDate]);
 
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
@@ -272,9 +264,56 @@ export function TodayScreen() {
     if (result.ok) setSheetOpen(false);
   }
 
+  const iconSize = layout === 'pc' ? 24 : 28;
+
+  function renderTaskRow(row: Extract<TodayRow, { kind: 'task' }>) {
+    const task = row.task;
+    return (
+      <ListRow
+        title={task.title}
+        subtitle={taskSubtitle(task, { spaces, showSpace: spaceFilter === 'all', rule: task.recurrenceId ? recurrences.get(task.recurrenceId) : undefined })}
+        done={task.status === 'done'}
+        leading={
+          <Checkbox
+            checked={task.status === 'done'}
+            onChange={() => void toggleDone(task.id)}
+            label={t(task.status === 'done' ? 'tasks.reopen' : 'tasks.complete', { title: task.title })}
+          />
+        }
+        icon={task.icon ? <IconView icon={task.icon} color={resolveIconRefColor(task.icon)} size={iconSize} /> : undefined}
+        onActivate={() => openDetail({ type: 'task', id: task.id })}
+      />
+    );
+  }
+
+  /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; sa case existe quand une source sait valider (R-03). */
+  function renderRoutineRow(row: Extract<TodayRow, { kind: 'routine' }>) {
+    const { routine } = row;
+    const time = rowTime(row);
+    return (
+      <ListRow
+        title={routine.title}
+        subtitle={time ? `${time} · ${t('today.routineLabel')}` : t('today.routineLabel')}
+        done={row.done}
+        {...(routinesCheckable
+          ? {
+              leading: (
+                <Checkbox
+                  checked={row.done}
+                  onChange={() => void toggleRoutine(routine.id as RoutineId)}
+                  label={t(row.done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })}
+                />
+              ),
+            }
+          : {})}
+        icon={routine.icon ? <IconView icon={routine.icon} color={resolveIconRefColor(routine.icon)} size={iconSize} /> : undefined}
+      />
+    );
+  }
+
   return (
     <div className="ct-today-shell" data-layout={layout}>
-      <div className="ct-today">
+      <div className="ct-today" data-layout={layout}>
         {/* Icône graphique « Rapport mensuel » (Main.html, T-07 / Q5) ; les autres icônes d'accès
             rapide (Un jour, Objectif, Recherche) arrivent avec leurs stories. */}
         <div className="ct-today__quickIcons">
@@ -288,44 +327,43 @@ export function TodayScreen() {
           </button>
         </div>
 
-        <div className="ct-today__header">
-          <span className="ct-today__month">{header.monthLine}</span>
-          <div className="ct-today__dateRow">
-            <h1 className="ct-today__day">{header.dayLine}</h1>
-            <span className="ct-today__badge">{t('tasks.todayBadge')}</span>
-          </div>
-        </div>
+        <TodayHeader
+          date={viewedDate}
+          today={today}
+          layout={layout}
+          {...(layout === 'pc' ? { onPreviousDay: () => goToDay(addDays(viewedDate, -1)), onNextDay: () => goToDay(addDays(viewedDate, 1)) } : {})}
+        />
 
         <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />
 
         {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
         {carryOverFailed && <p className="ct-today__error" role="alert">{t('tasks.carryOverError')}</p>}
         {recurrenceFailed && <p className="ct-today__error" role="alert">{t('tasks.recurrenceError')}</p>}
+        {extrasFailed && <p className="ct-today__error" role="alert">{t('today.sourceError')}</p>}
         {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
 
-        {status === 'error' ? null : tasks.length === 0 ? (
-          <p className="ct-today__empty">{t('tasks.emptyToday')}</p>
-        ) : (
-          <div className="ct-today__list">
-            {tasks.map((task) => (
-              <div key={task.id} onFocus={() => setFocusedTaskId(task.id)}>
-                <ListRow
-                  title={task.title}
-                  subtitle={taskSubtitle(task, spaces, task.recurrenceId ? recurrences.get(task.recurrenceId) : undefined)}
-                  done={task.status === 'done'}
-                  leading={
-                    <Checkbox
-                      checked={task.status === 'done'}
-                      onChange={() => void toggleDone(task.id)}
-                      label={t(task.status === 'done' ? 'tasks.reopen' : 'tasks.complete', { title: task.title })}
-                    />
-                  }
-                  icon={task.icon ? <IconView icon={task.icon} color={resolveIconRefColor(task.icon)} size={layout === 'pc' ? 24 : 28} /> : undefined}
-                  onActivate={() => openDetail({ type: 'task', id: task.id })}
-                />
+        {status === 'error' ? null : (
+          <>
+            {(list.goal || list.events.length > 0) && (
+              <div className="ct-today-banners" data-layout={layout}>
+                {list.goal && <TodayGoalCard entry={list.goal} compact={false} />}
+                <TodayEventBands events={list.events} compact={false} />
               </div>
-            ))}
-          </div>
+            )}
+            {status === 'ready' && list.isEmpty && (
+              <TodayEmpty message={viewedDate === today ? t('tasks.emptyToday') : t('today.emptyDay', { weekday: formatWeekdayName(viewedDate) })} />
+            )}
+            {(list.rows.length > 0 || list.doneRows.length > 0) && (
+              <div className="ct-today__list" aria-label={t('today.listLabel')} role="list">
+                {[...list.rows, ...list.doneRows].map((row) => (
+                  <div key={row.id} role="listitem" onFocus={() => row.kind === 'task' && setFocusedTaskId(row.task.id)}>
+                    {row.kind === 'task' ? renderTaskRow(row) : renderRoutineRow(row)}
+                  </div>
+                ))}
+              </div>
+            )}
+            <TodayChecklists items={list.checklists} />
+          </>
         )}
 
         <form className="ct-today__addRow" onSubmit={handleInlineSubmit}>
@@ -375,7 +413,7 @@ export function TodayScreen() {
             <RecurrencePicker
               value={sheetRecurrence}
               onChange={setSheetRecurrence}
-              startDate={sheetChoice.date ?? viewDate ?? today}
+              startDate={sheetChoice.date ?? viewedDate}
             />
             <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
               {spaces.map((space) => (

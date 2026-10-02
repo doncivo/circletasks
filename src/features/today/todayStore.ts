@@ -3,13 +3,14 @@ import { todayLocal } from '../../domain/clock';
 import type { IconRef, RecurrenceFields, Task } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
-import type { LocalDate, LocalTime, RecurrenceId, Result, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
+import { EMPTY_TODAY_EXTRAS, loadTodayExtras, toggleRoutineViaSources, type TodayExtras } from './todaySources';
 import type { CreateTaskError } from '../tasks/taskUseCases';
 
 /** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
@@ -38,6 +39,10 @@ export interface TodayState {
   readonly taskIds: readonly TaskId[];
   /** Règles des séries affichées (T-09) : sous-ligne « mensuelle » ; une règle ne change pas avant T-10. */
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
+  /** Routines, événements, checklists et objectif fournis par les modules (A-01, `todaySources`) ; vides tant qu'ils n'existent pas. */
+  readonly extras: TodayExtras;
+  /** Une source d'éléments du jour a échoué : message dédié, les tâches restent affichées. */
+  readonly extrasFailed: boolean;
   readonly status: TodayStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -95,6 +100,8 @@ export interface TodayState {
    * pour l'indicateur « mensuelle » de la ligne. Ne rejette jamais.
    */
   syncRecurrences(): Promise<void>;
+  /** R-03 : valide ou annule la validation d'une routine du jour (via la source de routines) ; recharge les éléments du jour. Ne rejette jamais. */
+  toggleRoutine(id: RoutineId): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -137,6 +144,8 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     filter: 'all',
     taskIds: [],
     recurrences: new Map<RecurrenceId, RecurrenceFields>(),
+    extras: EMPTY_TODAY_EXTRAS,
+    extrasFailed: false,
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
@@ -147,8 +156,9 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       try {
         const tasks = await fetchDay(date, filter);
         const recurrences = await loadRecurrences(tasks, get().recurrences);
+        const { extras, failed } = await loadTodayExtras(container, date, filter);
         if (id !== requestId) return; // une requête plus récente a été lancée entre-temps
-        set({ taskIds: tasks.map((task) => task.id), recurrences, status: 'ready' });
+        set({ taskIds: tasks.map((task) => task.id), recurrences, extras, extrasFailed: failed, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.todayError' });
@@ -251,6 +261,18 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       if (recurrences !== known) set({ recurrences });
     },
 
+    async toggleRoutine(routineId) {
+      const { date, filter } = get();
+      if (date === null) return;
+      try {
+        await toggleRoutineViaSources(container, routineId, date);
+        const { extras, failed } = await loadTodayExtras(container, date, filter);
+        set({ extras, extrasFailed: failed, actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.completeError' });
+      }
+    },
+
     async remove(id, scope) {
       if (!get().taskIds.includes(id)) return;
       try {
@@ -273,6 +295,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
 export interface TodayView {
   readonly date: LocalDate | null;
   readonly filter: SpaceFilter;
+}
+
+/**
+ * Tâches du jour affiché, non triées (entités lues dans la source unique, `selectTasks`) : date, « Un jour » et espace
+ * sont revérifiés, une tâche reportée ou déplacée quitte la liste aussitôt. Le tri est celui du domaine (`buildTodayList`).
+ */
+export function selectTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>, view: TodayView): Task[] {
+  return selectTasks(taskIds, entities, (task) =>
+    view.date === null ? true : task.date === view.date && !task.someday && (view.filter === 'all' || task.spaceId === view.filter),
+  );
 }
 
 /**

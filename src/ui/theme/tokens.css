@@ -89,6 +89,12 @@
      --ct-color-space-perso (même famille de rouge), contraste suffisant sur blanc. */
   --ct-color-danger-bg: #f8e4e1;
   --ct-color-danger: #a1271c;
+  --ct-color-event-bg: #eef4f7;
+  --ct-color-event-text: #1f6698;
+  --ct-color-row-selected: #f1eef7;
+  --ct-color-handle: #8e87a3;
+  --ct-color-select-ring: #b8b1c8;
+  --ct-color-edit-knob: #f2a7a0;
 
   /* Palette des icônes Lucide (T-03, src/ui/iconCatalog.ts) : une couleur fixe par
      icône du catalogue, reprise des traits colorés des maquettes (Ajout.html,
@@ -123,6 +129,12 @@
     --ct-color-goal: #8db8ec;
     --ct-color-danger-bg: #4a2420;
     --ct-color-danger: #f3a79a;
+    --ct-color-event-bg: #22334a;
+    --ct-color-event-text: #8db8ec;
+    --ct-color-row-selected: #2a2242;
+    --ct-color-handle: #b7aecd;
+    --ct-color-select-ring: #6a6088;
+    --ct-color-edit-knob: #f2a7a0;
   }
 }
 
@@ -145,6 +157,12 @@
   --ct-color-goal: #8db8ec;
   --ct-color-danger-bg: #4a2420;
   --ct-color-danger: #f3a79a;
+  --ct-color-event-bg: #22334a;
+  --ct-color-event-text: #8db8ec;
+  --ct-color-row-selected: #2a2242;
+  --ct-color-handle: #b7aecd;
+  --ct-color-select-ring: #6a6088;
+  --ct-color-edit-knob: #f2a7a0;
 }
 
 :root[data-theme='light'] {
@@ -165,6 +183,12 @@
   --ct-color-goal: #3f7fc4;
   --ct-color-danger-bg: #f8e4e1;
   --ct-color-danger: #a1271c;
+  --ct-color-event-bg: #eef4f7;
+  --ct-color-event-text: #1f6698;
+  --ct-color-row-selected: #f1eef7;
+  --ct-color-handle: #8e87a3;
+  --ct-color-select-ring: #b8b1c8;
+  --ct-color-edit-knob: #f2a7a0;
 }
 
 /* Application globale (main.tsx importe ce fichier une seule fois). */

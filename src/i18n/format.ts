@@ -66,3 +66,20 @@ export function weekdayNamesLong(): string[] {
   const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' });
   return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i))));
 }
+
+/**
+ * En-tête d'Aujourd'hui (A-01, Main.html / PC-Aujourdhui.html) : « sept. 2026 » et « 23 mer. » en
+ * format court (iPhone), « septembre 2026 » et « 23 mercredi » en format long (PC).
+ */
+export function formatTodayHeader(isoDate: string, style: 'short' | 'long'): { monthLine: string; dayLine: string } {
+  const locale = intlLocale();
+  const date = utcDate(isoDate);
+  const monthLine = new Intl.DateTimeFormat(locale, { month: style === 'long' ? 'long' : 'short', year: 'numeric', timeZone: 'UTC' }).format(date);
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: style === 'long' ? 'long' : 'short', timeZone: 'UTC' }).format(date);
+  return { monthLine, dayLine: `${String(date.getUTCDate())} ${weekday}` };
+}
+
+/** Nom du jour de la semaine (« dimanche »), pour la phrase de l'état vide (Main-Vide.html). */
+export function formatWeekdayName(isoDate: string): string {
+  return new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
+}
