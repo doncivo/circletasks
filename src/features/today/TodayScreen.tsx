@@ -19,7 +19,7 @@ import { TodayHeader } from './TodayHeader';
 import { TodayListView } from './TodayListView';
 import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
-import { canToggleRoutines } from './todaySources';
+import { canToggleRoutines, subscribeToTodaySources } from './todaySources';
 import { selectTodayTasks, todayStore } from './todayStore';
 import { TodaySelectionBar, TodaySelectionDialogs, useTodayEditMode } from './useTodayEditMode';
 import { useTodayReorder } from './useTodayReorder';
@@ -56,6 +56,7 @@ export function TodayScreen() {
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
+  const refreshExtras = useFeatureStore(todayStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
   const detail = useNavigationStore((s) => s.detail);
@@ -98,6 +99,9 @@ export function TodayScreen() {
   useEffect(() => {
     if (hasUnknownRule) void syncRecurrences();
   }, [hasUnknownRule, syncRecurrences]);
+
+  // Une routine validée ou annulée hors de cet écran (message « Annuler », Ctrl+Z) : les éléments du jour se relisent.
+  useEffect(() => subscribeToTodaySources(container, () => void refreshExtras()), [container, refreshExtras]);
 
   useEffect(() => {
     void load(viewedDate, spaceFilter);
@@ -209,6 +213,7 @@ export function TodayScreen() {
               spaceFilter={spaceFilter}
               recurrences={recurrences}
               routinesCheckable={canToggleRoutines()}
+              routinesDisabled={viewedDate > today}
               openedTaskId={layout === 'pc' && detail?.type === 'task' ? detail.id : null}
               edit={edit}
               rowActions={rowActions}

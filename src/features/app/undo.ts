@@ -2,7 +2,8 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
 
 /**
  * Actions annulables (T-13, ADR 0005) : terminer, reporter, déplacer, dupliquer,
- * supprimer (+ « Un jour », C-05 « Effacer les cochés » à l'ordre 2).
+ * supprimer (+ « Un jour », C-05 « Effacer les cochés » à l'ordre 2), valider ou rouvrir une routine (R-03), archiver, restaurer ou
+ * mettre en pause une routine (R-05).
  *
  * Principe :
  * - le cas d'usage effectue l'action, construit la commande inverse à partir de
@@ -15,7 +16,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'duplicate' | 'delete' | 'series';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'duplicate' | 'delete' | 'series' | 'routine';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -65,6 +66,8 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   duplicate: 'undo.duplicate',
   delete: 'undo.delete',
   series: 'undo.seriesOccurrence',
+  // Les commandes de routine portent toujours leur propre `labelKey` (routines.undo.*) ; ce libellé générique est un repli.
+  routine: 'undo.routine',
 };
 
 /** Libellé du message pour une action par lot (A-05) : « 3 tâches reportées » (pluriel via `Intl.PluralRules`). */

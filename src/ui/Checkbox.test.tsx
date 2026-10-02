@@ -15,6 +15,15 @@ describe('Checkbox', () => {
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
+  it('inactive : aria-disabled, aucun effet au clic, reste focalisable (R-03, jour futur)', () => {
+    const onChange = vi.fn();
+    render(<Checkbox checked={false} disabled onChange={onChange} label="Terminer : Sport" />);
+    const checkbox = screen.getByRole('checkbox');
+    expect(checkbox).toHaveAttribute('aria-disabled', 'true');
+    checkbox.click();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
   it('respecte la zone tactile minimale de 44 px', () => {
     render(<Checkbox checked={false} onChange={() => undefined} label="Terminer : Sport" />);
     const checkbox = screen.getByRole('checkbox');

@@ -31,3 +31,9 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+/* Case inactive (R-03 : routine d'un jour futur) : grisée, curseur « interdit ». */
+.ct-checkbox[data-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

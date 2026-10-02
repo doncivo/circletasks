@@ -1,4 +1,4 @@
-import type { IsoDateTime, LocalDate, LocalTime, RoutineId, RoutineLogId, SpaceId, SyncMeta, Weekday } from '../types';
+import type { IsoDateTime, LocalDate, LocalTime, RoutineId, RoutineLogId, RoutinePauseId, SpaceId, SyncMeta, Weekday } from '../types';
 import type { IconRef } from './icon';
 
 /** Type de planification d'une routine (R-01, R-07). */
@@ -45,4 +45,16 @@ export interface RoutineLog extends SyncMeta {
   readonly routineId: RoutineId;
   readonly date: LocalDate;
   readonly doneAt: IsoDateTime;
+}
+
+/**
+ * Période de pause d'une routine (R-04 critère 5, R-05). Table `routine_pause`, synchronisable. `fromDate` : premier jour de pause ;
+ * `toDate` : dernier jour de pause, null tant que la pause est ouverte. Les jours de pause ne comptent ni dans les séries, ni dans
+ * les taux, ni dans la carte de chaleur ; les validations passées restent intactes.
+ */
+export interface RoutinePause extends SyncMeta {
+  readonly id: RoutinePauseId;
+  readonly routineId: RoutineId;
+  readonly fromDate: LocalDate;
+  readonly toDate: LocalDate | null;
 }

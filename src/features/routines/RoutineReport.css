@@ -1,0 +1,211 @@
+@import './routineTokens.css';
+
+/* Rapport d'une routine (PC-Routines.html, panneau « RAPPORT DE LA ROUTINE ») : tuiles, séries, carte de chaleur, actions. */
+.ct-routine-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-4);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.ct-routine-report__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-routine-report__caption {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-report__close,
+.ct-routine-report__monthButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-routine-report__monthButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ct-routine-report__close:focus-visible,
+.ct-routine-report__monthButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: -2px;
+}
+
+.ct-routine-report__title {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+}
+
+.ct-routine-report__name {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2.25rem;
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+.ct-routine-report__subtitle {
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-report__tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ct-routine-report__tile,
+.ct-routine-report__streak {
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface);
+  border: 1px solid var(--ct-color-border);
+}
+
+.ct-routine-report__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+}
+
+.ct-routine-report__tileLabel {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-report__tileValue {
+  font-family: var(--ct-font-title);
+  font-size: 1.75rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-routine-report__streaks {
+  display: flex;
+  gap: 10px;
+}
+
+.ct-routine-report__streak {
+  flex: 1 1 0;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+  padding: 12px 14px;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-routine-report__streakLabel {
+  color: var(--ct-color-text-secondary);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-routine-report__monthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-routine-report__month {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routine-report__months {
+  display: flex;
+}
+
+.ct-routine-report__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.ct-routine-report__weekday {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text-secondary);
+  text-align: center;
+}
+
+.ct-routine-report__blank {
+  height: 34px;
+}
+
+/* Jour : validé #F2A7A0, prévu non fait #F3F1F6, prévu à venir en pointillés, non prévu vide, aujourd'hui bordé #1F6698. */
+.ct-routine-report__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  box-sizing: border-box;
+  border-radius: 7px;
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text);
+}
+
+.ct-routine-report__cell[data-state='none'] {
+  font-weight: var(--ct-font-weight-regular);
+  color: var(--ct-routine-off-text);
+}
+
+.ct-routine-report__cell[data-state='done'] {
+  background: var(--ct-routine-done);
+  color: var(--ct-routine-done-text);
+}
+
+.ct-routine-report__cell[data-state='missed'] {
+  background: var(--ct-routine-heat-missed);
+}
+
+.ct-routine-report__cell[data-state='upcoming'] {
+  background: var(--ct-color-surface);
+  border: 1px dashed var(--ct-routine-off-border);
+}
+
+.ct-routine-report__cell[data-today='true'] {
+  border: 2px solid var(--ct-routine-today-ring);
+}
+
+.ct-routine-report__spacer {
+  flex-grow: 1;
+}
+
+.ct-routine-report__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ct-routine-report__actions .ct-button {
+  height: 44px;
+  padding: 0 18px;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-routine-report__actions .ct-routine-report__modify {
+  margin-left: auto;
+  font-weight: var(--ct-font-weight-bold);
+}

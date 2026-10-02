@@ -132,6 +132,8 @@ export interface TodayState {
   moveSelected(spaceId: SpaceId, projectId?: ProjectId | null): Promise<void>;
   /** R-03 : valide ou annule la validation d'une routine du jour (via la source de routines) ; recharge les éléments du jour. Ne rejette jamais. */
   toggleRoutine(id: RoutineId): Promise<void>;
+  /** Relit les éléments des autres modules du jour affiché (une routine validée ou annulée ailleurs). Ne rejette jamais. */
+  refreshExtras(): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -140,6 +142,8 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
   // Jeton de requête : si un appel plus récent a démarré entre-temps, le résultat
   // d'un appel plus ancien qui se termine après lui est ignoré (pas d'état périmé).
   let requestId = 0;
+  // Routines en cours de validation : un second clic pendant l'écriture est ignoré (double clic : une seule validation, R-03 critère 3).
+  const routinesBusy = new Set<RoutineId>();
 
   // Ordre d'affichage final (T-02, Q11) : à l'heure d'abord par heure croissante,
   // puis sans heure dans l'ordre manuel du repository, terminées en bas (T-04).
@@ -377,14 +381,29 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     },
 
     async toggleRoutine(routineId) {
-      const { date, filter } = get();
-      if (date === null) return;
+      const { date, filter, extras: current } = get();
+      const entry = current.routines.find((candidate) => candidate.routine.id === routineId);
+      if (date === null || !entry || routinesBusy.has(routineId)) return;
+      routinesBusy.add(routineId);
       try {
-        await toggleRoutineViaSources(container, routineId, date);
+        await toggleRoutineViaSources(container, routineId, date, !entry.done);
         const { extras, failed } = await loadTodayExtras(container, date, filter);
         set({ extras, extrasFailed: failed, actionErrorKey: null });
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+      } finally {
+        routinesBusy.delete(routineId);
+      }
+    },
+
+    async refreshExtras() {
+      const { date, filter } = get();
+      if (date === null) return;
+      try {
+        const { extras, failed } = await loadTodayExtras(container, date, filter);
+        if (get().date === date && get().filter === filter) set({ extras, extrasFailed: failed });
+      } catch {
+        set({ extrasFailed: true });
       }
     },
 

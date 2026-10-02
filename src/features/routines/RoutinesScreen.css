@@ -1,0 +1,138 @@
+/* Onglet Routines (Routines.html : iPhone ; PC-Routines.html : grille de deux colonnes). */
+.ct-routines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* iPhone : le titre démarre plus bas que sur Aujourd'hui (Routines.html, marge haute de 96 px). */
+.ct-routines[data-layout='mobile'] {
+  padding-top: 44px;
+}
+
+.ct-routines[data-layout='pc'] {
+  gap: 14px;
+  padding-top: 30px;
+}
+
+.ct-routines__headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-routines__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-display-mobile);
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-routines[data-layout='pc'] .ct-routines__title {
+  font-size: 3.75rem;
+}
+
+.ct-routines__headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+.ct-routines__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-routines__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-routines__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-routines__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-routines[data-layout='pc'] .ct-routines__list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.ct-routines__item {
+  min-width: 0;
+}
+
+.ct-routines__empty {
+  margin: 0;
+  padding: var(--ct-space-4) var(--ct-space-1);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-routines__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-routines__helper {
+  margin: 4px 0 0;
+  font-size: var(--ct-font-size-text);
+  line-height: 1.45;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-routines__bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  gap: var(--ct-space-3);
+}
+
+.ct-routines__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+/* Panneau de droite : fond surélevé de PC-Routines.html (#FAF9FC). */
+.ct-routines__panel {
+  background: var(--ct-color-surface-raised);
+}
+
+/* « Rapport du mois » (iPhone) : bouton à contour de Routines.html. */
+.ct-routines__monthReport {
+  height: 44px;
+  padding: 0 20px;
+  border: 2px solid var(--ct-color-text);
+  border-radius: 22px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-routines__monthReport:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { asEntityId, asLocalDate, type DeviceId, type RoutineId, type RoutineLogId } from '../../../domain/types';
+import { asEntityId, asLocalDate, type DeviceId, type RoutineId, type RoutineLogId, type RoutinePauseId } from '../../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../seed/defaultSpaces';
 import { openTestDb, type TestDb } from './testSetup';
 
@@ -162,5 +162,27 @@ describe('RoutineLogRepository (SQL)', () => {
     await db.data.repos.routineLogs.markDone(routineId, day, '2026-10-05T08:00:00.000Z' as never, logId);
     expect(await db.data.repos.routineLogs.listForRange({ from: day, to: day }, SPACE_PRO_ID)).toHaveLength(1);
     expect(await db.data.repos.routineLogs.listForRange({ from: day, to: day }, SPACE_PERSO_ID)).toEqual([]);
+  });
+});
+
+describe('RoutineRepository : périodes de pause (R-05)', () => {
+  it('crée, ferme, rouvre, supprime et restaure une période ; filtre par espace', async () => {
+    const db = await openTestDb(DEVICE);
+    const repo = db.data.repos.routines;
+    const base = { spaceId: SPACE_PRO_ID, icon: null, scheduleType: 'daily' as const, weekdays: [], timesPerWeek: null, interval: null, startDate: asLocalDate('2026-09-01'), time: null, paused: false, archived: false };
+    await repo.create({ ...base, id: routineId, title: 'A' });
+    await repo.create({ ...base, id: asEntityId<RoutineId>('80000000-0000-4000-8000-000000000002'), spaceId: SPACE_PERSO_ID, title: 'B' });
+    const pauseId = asEntityId<RoutinePauseId>('85000000-0000-4000-8000-000000000001');
+    const created = await repo.createPause({ id: pauseId, routineId, fromDate: asLocalDate('2026-09-10') });
+    expect(created).toMatchObject({ fromDate: '2026-09-10', toDate: null, deletedAt: null });
+    expect((await repo.setPauseEnd(pauseId, asLocalDate('2026-09-14'))).toDate).toBe('2026-09-14');
+    expect((await repo.setPauseEnd(pauseId, null)).toDate).toBeNull();
+    expect(await repo.listPauses(SPACE_PRO_ID)).toHaveLength(1);
+    expect(await repo.listPauses(SPACE_PERSO_ID)).toHaveLength(0);
+    expect((await repo.deletePause(pauseId)).deletedAt).not.toBeNull();
+    expect(await repo.listPausesForRoutine(routineId)).toEqual([]);
+    expect((await repo.restorePause(pauseId)).deletedAt).toBeNull();
+    expect(await repo.listPauses('all')).toHaveLength(1);
+    await db.close();
   });
 });

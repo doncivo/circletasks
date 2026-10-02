@@ -15,7 +15,7 @@ import { useNavigationStore } from '../app/navigation';
 import { isModalOpen } from '../app/tabShortcuts';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
-import { canToggleRoutines } from '../today/todaySources';
+import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
 import { WeekDayView } from './WeekDayView';
 import { WeekHeader } from './WeekHeader';
@@ -54,6 +54,7 @@ export function WeekScreen() {
   const addTask = useFeatureStore(weekStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(weekStore, (s) => s.toggleDone);
   const toggleRoutine = useFeatureStore(weekStore, (s) => s.toggleRoutine);
+  const refreshExtras = useFeatureStore(weekStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(weekStore, (s) => s.syncRecurrences);
 
   // Jour courant de l'app (T-06) : suit le passage de minuit.
@@ -108,6 +109,9 @@ export function WeekScreen() {
   useEffect(() => {
     if (hasUnknownRule) void syncRecurrences(tasks);
   }, [hasUnknownRule, tasks, syncRecurrences]);
+
+  // Une routine validée ou annulée hors de cet écran (message « Annuler », Ctrl+Z) : les sept jours se relisent.
+  useEffect(() => subscribeToTodaySources(container, () => void refreshExtras()), [container, refreshExtras]);
 
   // Bouton « + » (feuille « Nouvelle tâche », T-01) : date présélectionnée = aujourd'hui ; Ctrl+N de même.
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -173,6 +177,7 @@ export function WeekScreen() {
               showSpace={spaceFilter === 'all'}
               recurrences={recurrences}
               routinesCheckable={canToggleRoutines()}
+              routinesDisabled={day.date > today}
               openedTaskId={openedTaskId}
               skeleton={showSkeleton}
               dragProps={moves.dragProps}

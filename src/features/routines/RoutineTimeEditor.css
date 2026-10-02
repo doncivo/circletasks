@@ -1,0 +1,64 @@
+/* Sélecteur d'heure d'une routine (R-02) : roues iPhone ou champ HH:MM PC. */
+.ct-routine-time {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  flex-wrap: wrap;
+}
+
+.ct-routine-time--wheels {
+  justify-content: center;
+  padding: 0 12px;
+}
+
+.ct-routine-time__wheel {
+  flex: 0 1 120px;
+}
+
+.ct-routine-time__input {
+  width: 110px;
+  height: 46px;
+  padding: 0 var(--ct-space-3);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: 1.25rem;
+  font-weight: var(--ct-font-weight-bold);
+  box-sizing: border-box;
+}
+
+.ct-routine-time__input[aria-invalid='true'] {
+  border-color: var(--ct-color-danger);
+}
+
+.ct-routine-time__input:focus-visible,
+.ct-routine-time__clear:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-routine-time__clear {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-3);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-routine-time__clear:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ct-routine-time__error {
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}

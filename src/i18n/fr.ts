@@ -1,3 +1,4 @@
+import { routinesFr } from './fr.routines';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -514,6 +515,7 @@ export const fr = {
     seriesFollowing: '« {title} » modifiée (toutes les suivantes)',
     seriesRule: 'Répétition de « {title} » modifiée',
     seriesStop: 'Répétition de « {title} » arrêtée',
+    routine: 'Routine modifiée',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -523,6 +525,7 @@ export const fr = {
     stale: 'Action impossible à annuler : la tâche a changé',
     failed: 'Impossible d’annuler cette action.',
   },
+  routines: routinesFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

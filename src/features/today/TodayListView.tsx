@@ -19,6 +19,8 @@ export interface TodayListViewProps {
   readonly spaceFilter: SpaceFilter;
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
   readonly routinesCheckable: boolean;
+  /** Jour futur affiché (flèches PC) : cases des routines inactives (R-03 critère 11). */
+  readonly routinesDisabled: boolean;
   /** Tâche dont la fiche est ouverte (PC) : ligne surlignée. */
   readonly openedTaskId: TaskId | null;
   readonly edit: TodayEditMode;
@@ -38,6 +40,12 @@ export function TodayListView(props: TodayListViewProps) {
   const iconSize = layout === 'pc' ? 24 : 28;
   const inline = layout === 'pc';
 
+  /** Ligne « sélectionnée » au clavier : Espace la termine (tâche) ou la valide (routine, R-03 critère 8). */
+  function focusRow(row: TodayRow): void {
+    if (row.kind === 'task') rowActions.setFocusedTaskId(row.task.id);
+    else rowActions.setFocusedRoutineId(row.routine.id as RoutineId);
+  }
+
   function renderRow(row: TodayRow, movable: boolean) {
     if (row.kind === 'routine') {
       return (
@@ -49,6 +57,7 @@ export function TodayListView(props: TodayListViewProps) {
           compact={compact}
           inline={inline}
           checkable={props.routinesCheckable}
+          disabled={props.routinesDisabled}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId)}
         />
       );
@@ -109,7 +118,7 @@ export function TodayListView(props: TodayListViewProps) {
         <div
           key={row.id}
           role="listitem"
-          onFocus={() => row.kind === 'task' && rowActions.setFocusedTaskId(row.task.id)}
+          onFocus={() => focusRow(row)}
           {...clickCapture(row)}
           {...reorder.sortable.itemProps(row.id)}
           {...(row.kind === 'task' ? reorder.sortable.dragProps(row.id, 'row') : {})}
@@ -118,7 +127,7 @@ export function TodayListView(props: TodayListViewProps) {
         </div>
       ))}
       {list.doneRows.map((row) => (
-        <div key={row.id} role="listitem" onFocus={() => row.kind === 'task' && rowActions.setFocusedTaskId(row.task.id)} {...clickCapture(row)}>
+        <div key={row.id} role="listitem" onFocus={() => focusRow(row)} {...clickCapture(row)}>
           {renderRow(row, false)}
         </div>
       ))}

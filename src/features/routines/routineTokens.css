@@ -1,0 +1,35 @@
+/*
+ * Jetons du module Routines (maquettes Routines.html, PC-Routines.html, ModifierRoutine.html, Rapport.html) : ronds L à D de
+ * la carte, carte de chaleur. Teintes des maquettes ; « fait » est UNE seule teinte (#F2A7A0, décision R-06, docs/decisions.md).
+ * Le texte posé sur « fait » reste foncé dans les deux thèmes (pastel clair).
+ */
+:root {
+  --ct-routine-done: #f2a7a0;
+  --ct-routine-done-text: #2e2150;
+  --ct-routine-ring: #d9776b;
+  --ct-routine-ring-text: #9e3f33;
+  --ct-routine-off-border: #ddd9e4;
+  --ct-routine-off-text: #6f6889;
+  --ct-routine-heat-missed: #f3f1f6;
+  --ct-routine-heat-partial: #f9d3ce;
+  --ct-routine-heat-text: #2e2150;
+  --ct-routine-today-ring: #1f6698;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ct-routine-ring-text: #f3a79a;
+    --ct-routine-off-border: #4a4066;
+    --ct-routine-off-text: #b7aecd;
+    --ct-routine-heat-missed: #2a2242;
+    --ct-routine-today-ring: #8fc4ea;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ct-routine-ring-text: #f3a79a;
+  --ct-routine-off-border: #4a4066;
+  --ct-routine-off-text: #b7aecd;
+  --ct-routine-heat-missed: #2a2242;
+  --ct-routine-today-ring: #8fc4ea;
+}
