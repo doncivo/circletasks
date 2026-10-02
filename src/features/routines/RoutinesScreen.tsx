@@ -122,6 +122,8 @@ export function RoutinesScreen() {
     return true;
   }
 
+  const filteredSpace = spaceFilter === 'all' ? null : spaces.find((space) => space.id === spaceFilter);
+  const emptyMessage = filteredSpace ? t('spaces.emptyRoutines', { space: filteredSpace.name }) : t('routines.empty');
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
   const form =
     editor && defaultSpaceId && (editor.mode === 'create' || editedRoutine) ? (
@@ -190,7 +192,7 @@ export function RoutinesScreen() {
         </p>
       )}
 
-      {status === 'ready' && routines.length === 0 && <p className="ct-routines__empty">{t('routines.empty')}</p>}
+      {status === 'ready' && routines.length === 0 && <p className="ct-routines__empty">{emptyMessage}</p>}
       {routines.length > 0 && (
         <div className="ct-routines__list" role="list" aria-label={t('routines.listLabel')}>
           {routines.map((routine) => (

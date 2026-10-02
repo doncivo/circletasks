@@ -71,6 +71,8 @@ export function WeekDayView(props: WeekDayViewProps) {
           time={rowTime(row)}
           done={row.done}
           layout={layout}
+          spaces={props.spaces}
+          showSpace={props.showSpace}
           checkable={props.routinesCheckable}
           disabled={props.routinesDisabled ?? false}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId, day.date)}

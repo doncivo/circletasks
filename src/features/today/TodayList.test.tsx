@@ -168,7 +168,7 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       useAppStore.getState().setSpaceFilter(SPACE_PERSO_ID);
       mockViewport(440);
       renderToday(h.container);
-      await screen.findByText('Rien de prévu aujourd’hui.');
+      await screen.findByText('Aucune tâche Perso aujourd’hui'); // ES-03 critère 6 : l’état vide nomme l’espace filtré
       expect(screen.queryByText('Réunion Pro')).toBeNull();
       expect(screen.queryByText('Valise')).toBeNull();
     });

@@ -15,7 +15,7 @@ import { startNetworkStatus } from './features/app/appStatus';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
-import { SpacesScreen } from './features/spaces';
+import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
@@ -48,6 +48,10 @@ function AppShellContent() {
 
   // A-09 : état du réseau (« Hors ligne »).
   useEffect(() => startNetworkStatus(), []);
+
+  // ES-03 : Ctrl+1 / Ctrl+2 / Ctrl+3 (Pro / Perso / Tout) et mémorisation du filtre de cet appareil.
+  useEffect(() => registerSpaceShortcuts(container.shortcuts), [container]);
+  useEffect(() => persistSpaceFilter(container), [container]);
 
   // A-04 : Alt+1 à Alt+6 (registre de raccourcis, actifs même dans un champ de saisie).
   useEffect(() => registerTabShortcuts(container.shortcuts), [container]);
@@ -101,6 +105,8 @@ export function App() {
         } catch {
           useAppStore.getState().setSpaces([]);
         }
+        // Filtre Pro / Perso / Tout (ES-03) : dernier choix de cet appareil, restauré avant le premier rendu.
+        await restoreSpaceFilter(created);
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
         const started = startAppStartup(created);

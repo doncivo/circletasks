@@ -4,6 +4,7 @@ import type { CalendarAccount, ExternalEvent, IconRef, RecurrenceFields, Reminde
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
+import { matchesSpaceFilter } from '../../domain/spaceRules';
 import type { TodayRow } from '../../domain/todayList';
 import type { WeekDayExtras } from '../../domain/week';
 import { weekDays } from '../../domain/week';
@@ -103,7 +104,7 @@ export function selectWeekTasks(entities: ReadonlyMap<TaskId, Task>, weekStart: 
   const tasks: Task[] = [];
   for (const task of entities.values()) {
     if (task.deletedAt !== null || task.someday || task.date === null || task.date < weekStart || task.date > end) continue;
-    if (filter !== 'all' && task.spaceId !== filter) continue;
+    if (!matchesSpaceFilter(task, filter)) continue;
     tasks.push(task);
   }
   return tasks;

@@ -4,6 +4,7 @@ import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task } from '../../d
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
+import { matchesSpaceFilter } from '../../domain/spaceRules';
 import type { TodayRow } from '../../domain/todayList';
 import type { LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -442,7 +443,7 @@ export interface TodayView {
  */
 export function selectTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>, view: TodayView): Task[] {
   return selectTasks(taskIds, entities, (task) =>
-    view.date === null ? true : task.date === view.date && !task.someday && (view.filter === 'all' || task.spaceId === view.filter),
+    view.date === null ? true : task.date === view.date && !task.someday && matchesSpaceFilter(task, view.filter),
   );
 }
 
@@ -455,7 +456,7 @@ export function resolveTodayTasks(taskIds: readonly TaskId[], entities: Readonly
   const tasks = selectTasks(taskIds, entities, (task) =>
     !view || view.date === null
       ? true
-      : task.date === view.date && !task.someday && (view.filter === 'all' || task.spaceId === view.filter),
+      : task.date === view.date && !task.someday && matchesSpaceFilter(task, view.filter),
   );
   return sortTasksForDay(tasks);
 }

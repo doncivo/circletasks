@@ -4,3 +4,4 @@ export { spacesStore, type SpacesState, type SpaceRenameOutcome } from './spaces
 export { createSpaceUseCases, type SpaceUseCases } from './spaceUseCases';
 export { SpacesSummaryRow } from './SpacesSummaryRow';
 export { useAnnounceCreation, useDefaultSpaceId } from './useSpaceDefaults';
+export { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './spaceFilter';

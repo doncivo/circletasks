@@ -20,6 +20,9 @@ export const spacesEn: Messages['spaces'] = {
   nameTooLong: 'The name must not exceed 30 characters.',
   nameTaken: 'This name is already used by the other space.',
   addedIn: 'Added to {name}',
+  emptyToday: 'No {space} tasks today',
+  emptyDay: 'No {space} tasks this {weekday}.',
+  emptyRoutines: 'No {space} routines yet.',
   colors: {
     teal: 'Teal',
     violet: 'Violet',

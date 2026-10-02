@@ -1,4 +1,5 @@
 import type { Checklist, ChecklistSummary, Goal, GoalProgress, IconRef, Routine, Task } from './model';
+import { matchesSpaceFilter } from './spaceRules';
 import { isPausedAt, type DateInterval } from './routineSchedule';
 import type { Id, LocalDate, LocalTime, SpaceFilter, SpaceId } from './types';
 
@@ -79,7 +80,7 @@ export function rowIsDone(row: TodayRow): boolean {
   return row.kind === 'task' ? row.task.status === 'done' : row.done;
 }
 
-const inSpace = (filter: SpaceFilter, spaceId: SpaceId | null): boolean => filter === 'all' || spaceId === null || spaceId === filter;
+const inSpace = (filter: SpaceFilter, spaceId: SpaceId | null): boolean => spaceId === null || matchesSpaceFilter({ spaceId }, filter);
 
 /**
  * Ordre d'affichage (Q11) : avec heure d'abord, par heure ; à heure égale ou sans heure, les routines

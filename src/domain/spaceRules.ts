@@ -106,3 +106,12 @@ export function defaultSpaceFor(filter: SpaceFilter, spaces: readonly SpaceRank[
 export function isCreatedOutsideFilter(filter: SpaceFilter, spaceId: SpaceId): boolean {
   return filter !== 'all' && filter !== spaceId;
 }
+
+/**
+ * Un élément est-il visible sous ce filtre d'espace ? (ES-03) « Tout » garde tout ; sinon seuls les éléments de l'espace restent.
+ * Règle unique, appliquée à toute donnée portant un `spaceId` (tâches, routines, objectifs ; événements et checklists à l'ordre 2).
+ * Les lectures de listes filtrent aussi en requête (`spaceFilterClause`) : cette règle revérifie les éléments déjà chargés.
+ */
+export function matchesSpaceFilter(item: { readonly spaceId: SpaceId | string }, filter: SpaceFilter): boolean {
+  return filter === 'all' || item.spaceId === filter;
+}

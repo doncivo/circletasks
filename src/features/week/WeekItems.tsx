@@ -4,7 +4,7 @@ import type { TodayEventEntry } from '../../domain/todayList';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { Checkbox, Icon, IconView, resolveIconRefColor, type Layout } from '../../ui';
-import { taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Éléments d'un jour de la Semaine (S-01) : présentation seule, les actions viennent de l'écran. PC (PC-Semaine.html) : cartes
@@ -72,6 +72,9 @@ export interface WeekRoutineItemProps {
   readonly time: LocalTime | null;
   readonly done: boolean;
   readonly layout: Layout;
+  /** Espaces et filtre « Tout » : l'espace est écrit après « Routine » sur PC (ES-03). */
+  readonly spaces: readonly Space[];
+  readonly showSpace: boolean;
   /** Une source de routines sait valider (R-03) : la case est affichée. */
   readonly checkable: boolean;
   /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
@@ -80,7 +83,7 @@ export interface WeekRoutineItemProps {
 }
 
 /** Routine du jour (M4) : placée par son heure, jamais déplaçable (Q11) ; « 07:30 · Routine » sur PC. */
-export function WeekRoutineItem({ routine, time, done, layout, checkable, disabled = false, onToggle }: WeekRoutineItemProps) {
+export function WeekRoutineItem({ routine, time, done, layout, spaces, showSpace, checkable, disabled = false, onToggle }: WeekRoutineItemProps) {
   const checkbox = checkable ? (
     <Checkbox
       checked={done}
@@ -110,7 +113,7 @@ export function WeekRoutineItem({ routine, time, done, layout, checkable, disabl
       {checkbox}
       <div className="ct-week-item__body">
         {title}
-        <span className="ct-week-item__sub">{time ? `${time} · ${t('today.routineLabel')}` : t('today.routineLabel')}</span>
+        <span className="ct-week-item__sub">{routineSubtitle(routine, time, { spaces, showSpace })}</span>
       </div>
     </div>
   );

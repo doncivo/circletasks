@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
+import { matchesSpaceFilter } from '../../domain/spaceRules';
 import { buildTodayList } from '../../domain/todayList';
 import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -122,7 +123,7 @@ export function TodayScreen() {
     let missing = false;
     for (const task of entities.values()) {
       if (task.date !== viewDate || task.someday || known.has(task.id) || adoptTried.current.has(task.id)) continue;
-      if (viewFilter !== 'all' && task.spaceId !== viewFilter) continue;
+      if (!matchesSpaceFilter(task, viewFilter)) continue;
       adoptTried.current.add(task.id);
       missing = true;
     }
@@ -162,6 +163,18 @@ export function TodayScreen() {
 
   // Squelette si le chargement dépasse 150 ms (A-09) ; la liste est `aria-busy` pendant le chargement.
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
+
+  // ES-03 critère 6 : sous Pro ou Perso, l'écran vide nomme l'espace (« Aucune tâche Pro aujourd'hui »).
+  const filteredSpaceName = spaceFilter === 'all' ? null : (spaces.find((space) => space.id === spaceFilter)?.name ?? null);
+  const weekdayName = formatWeekdayName(viewedDate);
+  const emptyMessage =
+    filteredSpaceName !== null
+      ? viewedDate === today
+        ? t('spaces.emptyToday', { space: filteredSpaceName })
+        : t('spaces.emptyDay', { space: filteredSpaceName, weekday: weekdayName })
+      : viewedDate === today
+        ? t('tasks.emptyToday')
+        : t('today.emptyDay', { weekday: weekdayName });
 
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
   const reportButton = (
@@ -206,7 +219,7 @@ export function TodayScreen() {
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
-              <TodayEmpty message={viewedDate === today ? t('tasks.emptyToday') : t('today.emptyDay', { weekday: formatWeekdayName(viewedDate) })} />
+              <TodayEmpty message={emptyMessage} />
             )}
             <TodayListView
               list={list}
