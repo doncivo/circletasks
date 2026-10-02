@@ -1,0 +1,259 @@
+/* DateField / DateEditor : champ « Date » PC et fenêtre « Choisir une date » (PC-Date.html). */
+.ct-date-editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  font-family: var(--ct-font-text);
+  color: var(--ct-color-text);
+  min-width: 0;
+}
+
+.ct-date-editor__field {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  height: 40px;
+  padding: 0 var(--ct-space-3);
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-accent);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+}
+
+.ct-date-editor__field[data-invalid='true'] {
+  border-color: var(--ct-color-danger);
+}
+
+.ct-date-editor__input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text);
+}
+
+.ct-date-editor__input:focus-visible {
+  outline: none;
+}
+
+.ct-date-editor__field:focus-within {
+  box-shadow: 0 0 0 2px var(--ct-color-surface), 0 0 0 4px var(--ct-color-accent);
+}
+
+.ct-date-editor__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ct-radius-sm);
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  cursor: pointer;
+}
+
+.ct-date-editor__popover {
+  position: absolute;
+  right: 0;
+  z-index: 60;
+  width: 396px;
+  max-width: calc(100vw - 32px);
+  padding: 18px;
+  box-sizing: border-box;
+  border: 1px solid var(--ct-color-border);
+  border-radius: 16px;
+  background: var(--ct-color-surface);
+  box-shadow: 0 16px 40px rgba(20, 12, 40, 0.22);
+}
+
+.ct-date-editor__popover--below {
+  top: calc(100% + var(--ct-space-2));
+}
+
+.ct-date-editor__popover--above {
+  bottom: calc(100% + var(--ct-space-2));
+}
+
+.ct-date-editor__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-date-editor__banner {
+  min-height: 20px;
+  padding: 10px 12px;
+  border-radius: var(--ct-radius-md);
+  background: color-mix(in srgb, var(--ct-color-icon-blue) 12%, var(--ct-color-surface));
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-date-editor__banner:empty {
+  display: none;
+}
+
+.ct-date-editor__banner[data-error='true'] {
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-date-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ct-date-editor__chip {
+  height: 32px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 16px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-date-editor__chip[aria-pressed='true'] {
+  border-color: var(--ct-color-accent);
+  background: var(--ct-color-accent);
+  color: var(--ct-color-accent-on);
+}
+
+.ct-date-editor__monthRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-date-editor__monthTitle {
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-date-editor__monthNav {
+  display: flex;
+}
+
+.ct-date-editor__navButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-date-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.ct-date-editor__weekday {
+  padding: 4px 0;
+  text-align: center;
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-date-editor__day {
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+/* Jour courant cerclé, jour choisi rempli (PC-Date.html). */
+.ct-date-editor__day[data-today='true'] {
+  border: 1.5px solid var(--ct-color-icon-blue);
+  color: var(--ct-color-icon-blue);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-date-editor__day[data-chosen='true'] {
+  border: 0;
+  background: var(--ct-color-accent);
+  color: var(--ct-color-accent-on);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-date-editor__chip:focus-visible,
+.ct-date-editor__navButton:focus-visible,
+.ct-date-editor__day:focus-visible,
+.ct-date-editor__toggle:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-date-editor__timeRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--ct-space-2);
+  border-top: 1px solid var(--ct-color-border);
+}
+
+.ct-date-editor__timeLabel {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-date-editor__timeControl {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ct-date-editor__timeInput {
+  width: 84px;
+  height: 34px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 8px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-date-editor__timeInput[aria-invalid='true'] {
+  border-color: var(--ct-color-danger);
+}
+
+.ct-date-editor__timeInput:disabled {
+  opacity: 0.5;
+}
+
+.ct-date-editor__hint {
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-date-editor__hint--alone {
+  margin: 0;
+}

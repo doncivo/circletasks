@@ -1,0 +1,71 @@
+/* WheelPicker : roue iPhone (Ajout.html) — 5 lignes de 32 px, ligne centrale encadrée sur fond --ct-color-surface-input. */
+.ct-wheel {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 160px;
+  border-radius: var(--ct-radius-lg);
+  font-family: var(--ct-font-text);
+  outline: none;
+}
+
+.ct-wheel:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-wheel__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 64px;
+  height: 32px;
+  box-sizing: border-box;
+  border: 1.5px solid var(--ct-color-text);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  pointer-events: none;
+}
+
+.ct-wheel__viewport {
+  position: relative;
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  overscroll-behavior: contain;
+  padding: 64px 0;
+  box-sizing: border-box;
+  /* Aucune sélection de texte ni retour tactile parasite pendant le défilement. */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.ct-wheel__viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.ct-wheel__item {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  font-size: var(--ct-font-size-text-lg);
+  color: var(--ct-color-text-secondary);
+  white-space: nowrap;
+}
+
+.ct-wheel__item[data-selected='true'] {
+  color: var(--ct-color-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-wheel--disabled {
+  opacity: 0.4;
+}
+
+.ct-wheel--disabled .ct-wheel__viewport {
+  overflow-y: hidden;
+  pointer-events: none;
+}

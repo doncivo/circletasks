@@ -43,8 +43,9 @@ test.describe('T-12 — dupliquer une tâche', () => {
 
     const picker = page.getByRole('dialog', { name: 'Choisir la date de la copie' });
     await expect(picker).toBeVisible();
-    const today = await picker.getByLabel('Choisir une date de report').inputValue();
-    expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // Présélection : la date de l'original (aujourd'hui) ; « Un jour » reste proposé (Q8).
+    if (testInfo.project.name === 'iphone') await expect(picker.getByRole('spinbutton', { name: 'Jour' })).toHaveAttribute('aria-valuetext', 'Aujourd’hui');
+    else await expect(picker.getByRole('textbox', { name: 'Date' })).toHaveValue('Aujourd’hui');
     await picker.getByRole('button', { name: 'Dupliquer' }).click();
 
     await expect(page.getByRole('status')).toContainText(`« ${title} » dupliquée`);

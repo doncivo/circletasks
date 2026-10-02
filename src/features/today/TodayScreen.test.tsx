@@ -167,7 +167,9 @@ describe('TodayScreen (T-01)', () => {
     renderToday(container);
 
     fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Appeler le notaire' } });
-    fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '14:00' } });
+    const dateField = screen.getByRole('combobox', { name: 'Date' });
+    fireEvent.change(dateField, { target: { value: '14:00' } });
+    fireEvent.keyDown(dateField, { key: 'Enter' });
     fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
 
     const row = await screen.findByText('Appeler le notaire');
@@ -179,7 +181,9 @@ describe('TodayScreen (T-01)', () => {
     renderToday(container);
 
     fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Jeudi prochain' } });
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-10-08' } });
+    const dateField = screen.getByRole('combobox', { name: 'Date' });
+    fireEvent.change(dateField, { target: { value: '8/10' } });
+    fireEvent.keyDown(dateField, { key: 'Enter' });
     fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
 
     await waitFor(() => expect(screen.getByText('Rien de prévu aujourd’hui.')).toBeInTheDocument());
@@ -188,15 +192,18 @@ describe('TodayScreen (T-01)', () => {
     expect(thursday.map((task) => task.title)).toEqual(['Jeudi prochain']);
   });
 
-  it('la feuille « Nouvelle tâche » porte ses propres champs Date et Heure (iPhone, T-02)', async () => {
+  it('la feuille « Nouvelle tâche » porte les roues jour, heures et minutes (iPhone, T-02, T-14)', async () => {
     mockViewport(440);
     renderToday(container);
 
     fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Faire les courses' } });
-    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-08' } });
-    fireEvent.change(within(dialog).getByLabelText('Heure'), { target: { value: '09:00' } });
+    // Roue des jours : « Aujourd'hui » (ven. 2 oct.) + 6 = jeu. 8 oct. ; heures : « — » + 10 = 09 ; minutes 00.
+    const dayWheel = within(dialog).getByRole('spinbutton', { name: 'Jour' });
+    for (let i = 0; i < 6; i += 1) fireEvent.keyDown(dayWheel, { key: 'ArrowUp' });
+    const hourWheel = within(dialog).getByRole('spinbutton', { name: 'Heures' });
+    for (let i = 0; i < 10; i += 1) fireEvent.keyDown(hourWheel, { key: 'ArrowUp' });
     fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -589,7 +596,7 @@ describe('TodayScreen (T-01)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Choisir une date' }));
     dialog = await screen.findByRole('dialog', { name: 'Choisir une date' });
-    fireEvent.change(within(dialog).getByLabelText('Choisir une date de report'), { target: { value: '2026-12-24' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Date' }), { target: { value: '24/12/2026' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Valider' }));
 
     await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Terminer : Courses' })).not.toBeInTheDocument());
@@ -606,7 +613,7 @@ describe('TodayScreen (T-01)', () => {
     fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Choisir une date' }));
     const dialog = await screen.findByRole('dialog', { name: 'Choisir une date' });
-    fireEvent.change(within(dialog).getByLabelText('Choisir une date de report'), { target: { value: '2026-12-24' } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Date' }), { target: { value: '24/12/2026' } });
 
     fireEvent.keyDown(document.activeElement ?? dialog, { key: 'Escape' });
 

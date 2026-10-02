@@ -5,10 +5,11 @@ import type { RecurrenceFields, Space, Task } from '../../domain/model';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import type { IconRef } from '../../domain/model/icon';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
-import { asLocalDate, asLocalTime, type SpaceId, type TaskId } from '../../domain/types';
+import type { DateChoice } from '../../domain/dateInput';
+import type { SpaceId, TaskId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { formatMessageRef } from '../../i18n/formatRecurrence';
-import { Button, ChoiceDialog, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { Button, ChoiceDialog, Checkbox, DatePicker, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -54,17 +55,14 @@ function taskSubtitle(task: Task, spaces: readonly Space[], rule: RecurrenceFiel
 }
 
 /**
- * Lit les champs natifs `<input type="date">` / `<input type="time">` (T-02,
- * champ minimal remplacé par le sélecteur adapté à l'appareil de T-14) : chaîne
- * vide = non fourni (jour affiché par défaut pour la date, pas d'heure).
+ * Planification choisie dans le sélecteur de date (T-14) : aucun choix = jour affiché ; « Un jour » = tâche
+ * sans date ; sinon date et heure optionnelle.
  */
-function readSchedule(dateValue: string, timeValue: string): NewTaskSchedule {
-  // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `date` / `time` que
-  // lorsqu'une valeur est saisie, plutôt que de les poser à `undefined`.
-  return {
-    ...(dateValue !== '' ? { date: asLocalDate(dateValue) } : {}),
-    ...(timeValue !== '' ? { time: asLocalTime(timeValue) } : {}),
-  };
+function scheduleOf(choice: DateChoice | null): NewTaskSchedule {
+  // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `date` / `time` que lorsqu'une valeur est choisie.
+  if (choice === null) return {};
+  if (choice.date === null) return { someday: true };
+  return { date: choice.date, ...(choice.time !== null ? { time: choice.time } : {}) };
 }
 
 /**
@@ -164,16 +162,14 @@ export function TodayScreen() {
   const header = formatTodayHeader(today);
 
   const [inlineTitle, setInlineTitle] = useState('');
-  // Champ Date / Heure minimal (T-02) : natif, remplacé par le sélecteur adapté à
-  // l'appareil (roue iPhone, mini-calendrier et saisie libre PC) de T-14.
-  const [inlineDate, setInlineDate] = useState('');
-  const [inlineTime, setInlineTime] = useState('');
+  // Champ « Date » de la saisie PC (T-14) : saisie libre et mini-calendrier ; null = jour affiché.
+  const [inlineChoice, setInlineChoice] = useState<DateChoice | null>(null);
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetTitle, setSheetTitle] = useState('');
-  const [sheetDate, setSheetDate] = useState('');
-  const [sheetTime, setSheetTime] = useState('');
+  // Roues de la feuille « Nouvelle tâche » (T-14) : « Aujourd'hui » à l'ouverture, sans heure (Q9).
+  const [sheetChoice, setSheetChoice] = useState<DateChoice>({ date: null, time: null });
   const [sheetSpaceId, setSheetSpaceId] = useState<SpaceId | null>(null);
   // Choix Icône / Emoji de la feuille « Nouvelle tâche » (T-03, Ajout.html,
   // `IconChooser`) : pas de champ équivalent côté PC (la saisie en ligne n'a pas
@@ -230,13 +226,12 @@ export function TodayScreen() {
       return;
     }
     setSheetTitle('');
-    setSheetDate('');
-    setSheetTime('');
+    setSheetChoice({ date: viewDate ?? today, time: null });
     setSheetSpaceId(fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null);
     setSheetIcon(null);
     setSheetRecurrence(null);
     setSheetOpen(true);
-  }, [layout, spaceFilter, fallbackSpaceId]);
+  }, [layout, spaceFilter, fallbackSpaceId, viewDate, today]);
 
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
@@ -244,11 +239,10 @@ export function TodayScreen() {
     event.preventDefault();
     if (!fallbackSpaceId) return;
     const spaceId = resolveDefaultSpaceId(spaceFilter, fallbackSpaceId);
-    const result = await addTask(inlineTitle, spaceId, readSchedule(inlineDate, inlineTime));
+    const result = await addTask(inlineTitle, spaceId, scheduleOf(inlineChoice));
     if (result.ok) {
       setInlineTitle('');
-      setInlineDate('');
-      setInlineTime('');
+      setInlineChoice(null);
       inlineInputRef.current?.focus();
     }
   }
@@ -258,7 +252,7 @@ export function TodayScreen() {
   async function handleSheetSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!sheetTitleValid || !sheetSpaceId) return;
-    const result = await addTask(sheetTitle, sheetSpaceId, { ...readSchedule(sheetDate, sheetTime), recurrence: sheetRecurrence }, sheetIcon);
+    const result = await addTask(sheetTitle, sheetSpaceId, { ...scheduleOf(sheetChoice), recurrence: sheetChoice.date === null ? null : sheetRecurrence }, sheetIcon);
     if (result.ok) setSheetOpen(false);
   }
 
@@ -327,33 +321,14 @@ export function TodayScreen() {
             onChange={setInlineTitle}
             maxLength={TASK_TITLE_MAX_LENGTH}
           />
-          {/* Champ Date / Heure minimal (T-02), remplacé par le sélecteur adapté à
-              l'appareil de T-14 : saisie native, optionnelle. Seulement sur PC : sur
-              iPhone, la saisie rapide passe par la feuille « Nouvelle tâche »
-              (Fab), qui porte ses propres champs Date / Heure — éviter deux champs
-              de même libellé visibles à la fois. */}
+          {/* Champ « Date » PC (T-14, PC-Date.html) : saisie libre (« demain », « lun. 10h ») et mini-calendrier,
+              facultatif. Seulement sur PC : sur iPhone, la saisie rapide passe par la feuille « Nouvelle tâche »
+              (Fab), qui porte les roues de date — éviter deux sélecteurs visibles à la fois. */}
           {layout === 'pc' && (
-            <>
-              <label className="ct-today__scheduleField">
-                <span className="ct-visually-hidden">{t('tasks.dateLabel')}</span>
-                <input
-                  type="date"
-                  value={inlineDate}
-                  onChange={(event) => setInlineDate(event.target.value)}
-                  className="ct-today__scheduleInput"
-                />
-              </label>
-              <label className="ct-today__scheduleField">
-                <span className="ct-visually-hidden">{t('tasks.timeLabel')}</span>
-                <input
-                  type="time"
-                  value={inlineTime}
-                  onChange={(event) => setInlineTime(event.target.value)}
-                  className="ct-today__scheduleInput"
-                />
-              </label>
-            </>
+            <DatePicker value={inlineChoice} today={today} onChange={setInlineChoice} className="ct-today__dateField" />
           )}
+          {/* Bouton d'envoi masqué : avec deux champs texte (titre, date), Entrée ne soumet le formulaire que par lui. */}
+          <button type="submit" className="ct-visually-hidden" tabIndex={-1} aria-hidden="true" />
         </form>
 
         <div className="ct-today__bottomRow">
@@ -379,33 +354,12 @@ export function TodayScreen() {
             {/* Choix Icône / Emoji (T-03, critères 1, 2, Ajout.html). */}
             <IconChooser value={sheetIcon} onChange={setSheetIcon} />
 
-            {/* Champ Date / Heure minimal (T-02), remplacé par la feuille de roues de
-                T-14 : saisie native, optionnelle (date vide = jour affiché, pas de puce
-                « Un jour » avant T-14). */}
-            <div className="ct-task-sheet__schedule">
-              <label className="ct-task-sheet__scheduleField">
-                <span className="ct-text-field__label">{t('tasks.dateLabel')}</span>
-                <input
-                  type="date"
-                  value={sheetDate}
-                  onChange={(event) => setSheetDate(event.target.value)}
-                  className="ct-text-field__control"
-                />
-              </label>
-              <label className="ct-task-sheet__scheduleField">
-                <span className="ct-text-field__label">{t('tasks.timeLabel')}</span>
-                <input
-                  type="time"
-                  value={sheetTime}
-                  onChange={(event) => setSheetTime(event.target.value)}
-                  className="ct-text-field__control"
-                />
-              </label>
-            </div>
+            {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}
+            <DatePicker value={sheetChoice} today={today} onChange={(choice) => setSheetChoice(choice ?? { date: today, time: null })} />
             <RecurrencePicker
               value={sheetRecurrence}
               onChange={setSheetRecurrence}
-              startDate={sheetDate !== '' ? asLocalDate(sheetDate) : (viewDate ?? today)}
+              startDate={sheetChoice.date ?? viewDate ?? today}
             />
             <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
               {spaces.map((space) => (

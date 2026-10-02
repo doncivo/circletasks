@@ -66,7 +66,7 @@ describe('duplication depuis Aujourd’hui et la fiche (T-12)', () => {
 
     expect(container.shortcuts.handle(CTRL_SHIFT_D)).toBe('list.duplicate');
     const dialog = await screen.findByRole('dialog', { name: 'Choisir la date de la copie' });
-    expect(within(dialog).getByLabelText('Choisir une date de report')).toHaveValue(today);
+    expect(within(dialog).getByRole('textbox', { name: 'Date' })).toHaveValue('Aujourd’hui');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dupliquer' }));
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Courses' })).toHaveLength(2));
@@ -86,7 +86,7 @@ describe('duplication depuis Aujourd’hui et la fiche (T-12)', () => {
     container.shortcuts.handle(CTRL_SHIFT_D);
     const dialog = await screen.findByRole('dialog', { name: 'Choisir la date de la copie' });
     const tomorrow = addDays(today, 1);
-    fireEvent.change(within(dialog).getByLabelText('Choisir une date de report'), { target: { value: tomorrow } });
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Date' }), { target: { value: tomorrow } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dupliquer' }));
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('dupliquée'));
     expect(await titles(tomorrow)).toEqual(['Courses']);
@@ -119,7 +119,7 @@ describe('duplication depuis Aujourd’hui et la fiche (T-12)', () => {
     const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
     fireEvent.click(within(panel).getByRole('button', { name: 'Dupliquer la tâche' }));
     const dialog = await screen.findByRole('dialog', { name: 'Choisir la date de la copie' });
-    expect(within(dialog).getByLabelText('Choisir une date de report')).toHaveValue(today);
+    expect(within(dialog).getByRole('textbox', { name: 'Date' })).toHaveValue('Aujourd’hui');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dupliquer' }));
 
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'Courses' })).toHaveLength(2));

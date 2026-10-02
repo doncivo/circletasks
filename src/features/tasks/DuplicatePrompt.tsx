@@ -20,13 +20,15 @@ interface DuplicatePromptProps {
  */
 export function DuplicatePrompt({ task, onConfirm, onClose }: DuplicatePromptProps) {
   const container = useAppContainer();
+  const today = todayLocal(container.clock);
   return (
     <DatePrompt
       open
       allowSomeday
       label={t('tasks.duplicatePickDate')}
       confirmLabel={t('tasks.duplicate')}
-      initialValue={duplicateDefaultDate(task, todayLocal(container.clock))}
+      today={today}
+      initialValue={duplicateDefaultDate(task, today)}
       onConfirm={onConfirm}
       onClose={onClose}
     />

@@ -16,6 +16,8 @@ import type { CreateTaskError } from '../tasks/taskUseCases';
 export interface NewTaskSchedule {
   readonly date?: LocalDate;
   readonly time?: LocalTime | null;
+  /** T-14 : « Un jour » choisi dans le sélecteur : tâche sans date ni heure (`date` et `time` ignorés). */
+  readonly someday?: boolean;
   /** T-09 : répétition choisie à la saisie (absent : une fois). */
   readonly recurrence?: RecurrenceFields | null;
 }
@@ -166,8 +168,9 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         const result = await useCases.create({
           title,
           spaceId,
-          date: taskDate,
-          ...(schedule?.time !== undefined ? { time: schedule.time } : {}),
+          date: schedule?.someday ? null : taskDate,
+          ...(schedule?.someday ? { someday: true } : {}),
+          ...(schedule?.time !== undefined && !schedule.someday ? { time: schedule.time } : {}),
           ...(icon !== undefined ? { icon } : {}),
           ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
         });

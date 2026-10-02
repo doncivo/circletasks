@@ -1,3 +1,4 @@
+import { addIsoDays, browserToday, dayLabel, setWheels } from './helpers/schedule';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
@@ -121,10 +122,19 @@ test.describe('T-05 — reporter une tâche', () => {
 
     await detail.getByRole('button', { name: 'Reporter' }).click();
     await menuOf().getByText('Choisir une date', { exact: true }).click();
-    await dialog.getByLabel('Choisir une date de report').fill('2030-01-15');
+    // PC : saisie libre ; iPhone : roue des jours (10 jours plus tard).
+    let expectedDay = 'mar. 15 janv.';
+    if (testInfo.project.name === 'iphone') {
+      const target = addIsoDays(await browserToday(page), 10);
+      await dialog.getByRole('button', { name: 'Aujourd’hui' }).click(); // la roue démarre sur demain
+      await setWheels(page, dialog, { date: target });
+      expectedDay = dayLabel(target);
+    } else {
+      await dialog.getByRole('textbox', { name: 'Date' }).fill('15/01/2030');
+    }
     await dialog.getByRole('button', { name: 'Valider' }).click();
 
-    await expect(page.getByRole('status')).toContainText(`« ${title} » reportée au mar. 15 janv.`);
+    await expect(page.getByRole('status')).toContainText(`« ${title} » reportée au ${expectedDay}`);
     await closeDetailOnIphone(page, testInfo);
     await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toHaveCount(0);
   });

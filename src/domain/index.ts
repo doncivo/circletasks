@@ -17,3 +17,6 @@ export * from './recurrenceLabel';
 export * from './recurrenceEdit';
 export * from './timeZone';
 export * from './taskDuplicate';
+export * from './dateInput';
+export * from './calendarMonth';
+export * from './wheelChoices';

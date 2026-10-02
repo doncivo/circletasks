@@ -1,4 +1,4 @@
-/* DatePrompt : choix d'une date (T-05) ; remplacé par le sélecteur de T-14. */
+/* DatePrompt : fenêtre « Choisir une date » (T-05, T-12) avec le sélecteur de T-14. */
 .ct-date-prompt {
   display: flex;
   flex-direction: column;
@@ -13,17 +13,6 @@
   color: var(--ct-color-text);
 }
 
-.ct-date-prompt__input {
-  height: 48px;
-  padding: 0 var(--ct-space-4);
-  background: var(--ct-color-surface-input);
-  border: 1.5px solid var(--ct-color-border);
-  border-radius: var(--ct-radius-md);
-  color: var(--ct-color-text);
-  font-family: var(--ct-font-text);
-  font-size: var(--ct-font-size-text);
-  box-sizing: border-box;
-}
 
 .ct-date-prompt__backdrop {
   position: fixed;
@@ -36,7 +25,7 @@
 }
 
 .ct-date-prompt__modal {
-  width: 360px;
+  width: 440px;
   max-width: calc(100% - 40px);
   padding: var(--ct-space-5);
   background: var(--ct-color-surface);

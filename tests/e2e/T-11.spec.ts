@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { setWheels, typeDate } from './helpers/schedule';
 
 /**
  * T-11 — Mes heures restent justes quand je change de pays.
@@ -32,14 +33,14 @@ async function createTimedTask(page: Page, testInfo: Info, title: string, time: 
     await page.getByRole('button', { name: 'Ajouter' }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
-    await dialog.getByLabel('Heure').fill(time);
+    await setWheels(page, dialog, { time });
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(dialog).not.toBeVisible();
     return;
   }
   const field = page.getByLabel('Nouvelle tâche');
   await field.fill(title);
-  await page.getByLabel('Heure').fill(time);
+  await typeDate(page, time);
   await field.press('Enter');
   await expect(field).toHaveValue('');
 }
