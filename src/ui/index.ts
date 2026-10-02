@@ -32,3 +32,4 @@ export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from './ActionM
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export { DatePrompt, type DatePromptProps } from './DatePrompt';
 export { Switch, type SwitchProps } from './Switch';
+export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';

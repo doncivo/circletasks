@@ -11,3 +11,6 @@ export * from './taskPostpone';
 export * from './taskCarryOver';
 export * from './donePeriod';
 export * from './taskTrash';
+export * from './recurrenceRules';
+export * from './recurrenceNext';
+export * from './recurrenceLabel';

@@ -29,9 +29,12 @@ export interface AppState {
   readonly day: LocalDate | null;
   /** T-06 : le dernier report automatique a échoué (message dans Aujourd'hui). */
   readonly carryOverFailed: boolean;
+  /** T-09 : la dernière création d'occurrences récurrentes a échoué (message propre, dans Aujourd'hui). */
+  readonly recurrenceFailed: boolean;
   setDbStatus(status: DbStatus, errorDetail?: string): void;
   setDay(day: LocalDate): void;
   setCarryOverFailed(failed: boolean): void;
+  setRecurrenceFailed(failed: boolean): void;
   setSpaceFilter(filter: SpaceFilter): void;
   setSpaces(spaces: readonly Space[]): void;
 }
@@ -43,9 +46,11 @@ export const useAppStore = create<AppState>()((set) => ({
   spaces: [],
   day: null,
   carryOverFailed: false,
+  recurrenceFailed: false,
   setDbStatus: (dbStatus, errorDetail) => set({ dbStatus, dbErrorDetail: errorDetail ?? null }),
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
+  setRecurrenceFailed: (recurrenceFailed) => set({ recurrenceFailed }),
   setSpaceFilter: (spaceFilter) => set({ spaceFilter }),
   setSpaces: (spaces) => set({ spaces }),
 }));

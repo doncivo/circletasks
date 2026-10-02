@@ -72,3 +72,13 @@ L'ordre 1 fait intervenir cinq agents en parallèle (data-model, domain-logic, u
 - Les cas d'usage y publient toute `Task` qu'ils lisent ou écrivent (création, mise à jour, terminer / rouvrir, commandes d'annulation, plus tard report, déplacement, duplication ; `remove` pour la corbeille). Les repositories ne publient pas. Les lectures de listes (`load`) publient aussi ce qu'elles chargent.
 - Les stores d'écran (Aujourd'hui, fiche détail, demain Semaine, Un jour) ne gardent que des ids, des ordres et leurs états de chargement / d'erreur ; ils ne copient jamais une `Task`. Les composants lisent via `useTaskEntities()` puis calculent l'affichage (ex. `resolveTodayTasks`). Aucun « rafraîchissement après action » ni `setTaskInPlace` : toute nouvelle story branchée sur une tâche suit cette règle.
 - Les actions sont idempotentes dans le domaine (ex. `completeTask` sur une tâche déjà terminée ne change rien), car deux écrans peuvent agir sur la même tâche.
+
+## Avenant T-09 — occurrence détachée d'une série (2026-10-02)
+
+Annuler la complétion d'une occurrence récurrente supprime logiquement l'occurrence suivante créée par cette complétion. Cette occurrence supprimée reçoit `series_index = -1` (`UNDONE_OCCURRENCE_INDEX`, src/features/tasks/recurrenceUseCases.ts) :
+
+- elle ne compte plus dans la série vivante ;
+- elle est exclue de la corbeille (`listTrash`), ce qui interdit de la restaurer et de créer un doublon ;
+- sa trace de suppression est conservée pour la synchronisation (ordre 4), où `series_index` circule comme un entier ordinaire.
+
+Conséquence : aucune contrainte `CHECK (series_index >= 0)` ne doit être ajoutée sur `task.series_index`. Le contrat de synchro (Y-*) devra mentionner ce marqueur.

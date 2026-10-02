@@ -419,9 +419,9 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return result;
     },
 
-    async listByRecurrence(recurrenceId: RecurrenceId) {
+    async listByRecurrence(recurrenceId: RecurrenceId, options?: ReadOptions) {
       const rows = await db.select<TaskRow>(
-        'SELECT * FROM task WHERE deleted_at IS NULL AND recurrence_id = ? ORDER BY series_index, id',
+        `SELECT * FROM task WHERE recurrence_id = ? ${deletedClause(options)} ORDER BY series_index, id`,
         [recurrenceId],
       );
       return rows.map(rowToTask);
@@ -430,7 +430,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
     async listTrash(since: IsoDateTime, filter: SpaceFilter) {
       const f = spaceFilterClause(filter);
       const rows = await db.select<TaskRow>(
-        `SELECT * FROM task WHERE deleted_at IS NOT NULL AND deleted_at >= ? ${f.sql} ORDER BY deleted_at DESC`,
+        `SELECT * FROM task WHERE deleted_at IS NOT NULL AND deleted_at >= ? AND (series_index IS NULL OR series_index >= 0) ${f.sql} ORDER BY deleted_at DESC`,
         [since, ...f.params],
       );
       return rows.map(rowToTask);

@@ -102,3 +102,23 @@
 .ct-detail-panel .ct-task-detail__delete {
   align-self: flex-end;
 }
+
+/* Ligne « Répétition » (Detail.html, T-09) et éditeur « Répéter… ». */
+.ct-task-detail__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-task-detail__rowValue {
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: right;
+}
+
+.ct-task-detail__repeat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}

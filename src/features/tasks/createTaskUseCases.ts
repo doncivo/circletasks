@@ -1,31 +1,55 @@
 import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
-import type { NewTask, Task, TaskPatch } from '../../domain/model';
+import type { NewRecurrence, NewTask, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
 import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
-import type { Result, TaskId } from '../../domain/types';
+import type { RecurrenceId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { NotImplementedError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
-import type { CreateTaskError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
+import { createNextOccurrence, UNDONE_OCCURRENCE_INDEX, type CreatedOccurrence } from './recurrenceUseCases';
+import type { CreateTaskError, SetRecurrenceError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
 
 /**
  * Commande annulable d'une complétion (T-04, T-13, ADR 0005) : annuler = rouvrir
  * la tâche, mais seulement si elle n'a pas changé depuis (hlc identique à celui
  * écrit par `complete`) ; sinon 'stale', sans rien écrire.
  *
- * Point d'extension (T-09) : si `complete()` a créé l'occurrence suivante d'une
- * récurrence, cette commande devra aussi la supprimer ici (critère 7) — rien
- * n'est fait tant que T-09 n'existe pas.
+ * T-09 : si `complete()` a créé l'occurrence suivante d'une récurrence (`next`), annuler la
+ * supprime aussi, dans la même transaction, tant qu'elle n'a pas été modifiée depuis (sinon
+ * 'stale', rien n'est écrit). Elle est marquée « annulée » (`UNDONE_OCCURRENCE_INDEX`) avant d'aller à
+ * la corbeille : elle n'y est pas listée (pas de doublon à restaurer), son effacement reste synchronisé,
+ * et terminer à nouveau la tâche recrée l'occurrence suivante (critère 12).
  */
-function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task, wasCarriedOver: boolean): UndoableCommand {
+function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task, wasCarriedOver: boolean, next: CreatedOccurrence | null): UndoableCommand {
   return {
     kind: 'complete',
     count: 1,
     labelParams: { title: completed.title },
     async undo() {
+      if (next) {
+        const outcome = await deps.data.transaction(async (repos) => {
+          const current = await repos.tasks.getById(completed.id);
+          if (!current || current.hlc !== completed.hlc) return null;
+          const created = await repos.tasks.getById(next.task.id);
+          if (created && created.hlc !== next.task.hlc) return null;
+          await repos.tasks.reopen(completed.id);
+          const reopened = wasCarriedOver ? await repos.tasks.update(completed.id, { carriedOver: true }) : await repos.tasks.getById(completed.id);
+          if (created) {
+            await repos.tasks.update(created.id, { seriesIndex: UNDONE_OCCURRENCE_INDEX });
+            const [removed] = await repos.tasks.softDelete([created.id]);
+            await repos.reminders.softDeleteForTarget({ type: 'task', id: created.id }, removed?.deletedAt ?? undefined);
+          }
+          return { reopened, removedId: created?.id ?? null };
+        });
+        if (!outcome?.reopened) return 'stale';
+        deps.taskEntities.publish([outcome.reopened]);
+        if (outcome.removedId) deps.taskEntities.remove([outcome.removedId]);
+        return 'undone';
+      }
       const current = await deps.data.repos.tasks.getById(completed.id);
       if (!current || current.hlc !== completed.hlc) return 'stale';
       // T-06 : une tâche reportée retrouve son badge (même transaction que la réouverture).
@@ -131,6 +155,14 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       const time = input.time ?? null;
       if (time && !date) return { ok: false, error: 'time-without-date' };
 
+      // T-09 critère 5 : une récurrence exige une date de départ (règle validée par src/domain).
+      let recurrence: RecurrenceFields | null = null;
+      if (input.recurrence) {
+        const checked = validateRecurrence(input.recurrence, { startDate: date });
+        if (!checked.ok) return { ok: false, error: checked.error.some((e) => e.code === 'start_required') ? 'recurrence-needs-date' : 'recurrence-invalid' };
+        recurrence = checked.value;
+      }
+
       const newTask: NewTask = {
         id: newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
@@ -153,9 +185,30 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         source: 'local',
         externalId: null,
       };
-      const created = await deps.data.repos.tasks.create(newTask);
+      // Récurrence et tâche en une transaction (T-09) : la première occurrence a l'indice 0.
+      const created = recurrence
+        ? await deps.data.transaction(async (repos) => {
+            const rule = await repos.recurrences.create({ ...recurrence, id: newEntityId<RecurrenceId>(deps.ids) } satisfies NewRecurrence);
+            return repos.tasks.create({ ...newTask, recurrenceId: rule.id, seriesIndex: 0 });
+          })
+        : await deps.data.repos.tasks.create(newTask);
       deps.taskEntities.publish([created]);
       return { ok: true, value: created };
+    },
+
+    async setRecurrence(id: TaskId, rule: RecurrenceFields): Promise<Result<Task, SetRecurrenceError>> {
+      const written = await deps.data.transaction(async (repos): Promise<Result<Task, SetRecurrenceError>> => {
+        const current = await repos.tasks.getById(id);
+        if (!current) return { ok: false, error: 'not-found' };
+        // Modifier ou arrêter une règle existante : T-10.
+        if (current.recurrenceId !== null) return { ok: false, error: 'already-recurrent' };
+        const checked = validateRecurrence(rule, { startDate: current.date });
+        if (!checked.ok) return { ok: false, error: checked.error.some((e) => e.code === 'start_required') ? 'needs-date' : 'invalid' };
+        const created = await repos.recurrences.create({ ...checked.value, id: newEntityId<RecurrenceId>(deps.ids) });
+        return { ok: true, value: await repos.tasks.update(id, { recurrenceId: created.id, seriesIndex: 0 }) };
+      });
+      if (written.ok) deps.taskEntities.publish([written.value]);
+      return written;
     },
 
     async update(id: TaskId, patch: TaskPatch): Promise<Task> {
@@ -201,20 +254,19 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       }
       const { doneAt } = completeTask(current ?? { status: 'todo', doneAt: null }, nowIso(deps.clock));
       // T-06 critère 4 : terminer une tâche reportée efface son badge (même transaction).
-      const updated = current?.carriedOver
-        ? await deps.data.transaction(async (repos) => {
-            await repos.tasks.complete(id, doneAt);
-            return repos.tasks.update(id, { carriedOver: false });
-          })
-        : await deps.data.repos.tasks.complete(id, doneAt);
-      deps.taskEntities.publish([updated]);
+      // T-09 : l'occurrence suivante d'une récurrence est créée dans la même transaction.
+      const { updated, next } =
+        current?.carriedOver || current?.recurrenceId
+          ? await deps.data.transaction(async (repos) => {
+              let done = await repos.tasks.complete(id, doneAt);
+              if (current.carriedOver) done = await repos.tasks.update(id, { carriedOver: false });
+              const created = done.recurrenceId ? await createNextOccurrence(deps, repos, done, todayLocal(deps.clock)) : null;
+              return { updated: done, next: created };
+            })
+          : { updated: await deps.data.repos.tasks.complete(id, doneAt), next: null };
+      deps.taskEntities.publish(next ? [updated, next.task] : [updated]);
 
-      // Point d'extension T-09 (récurrence) : si `updated.recurrenceId` n'est pas
-      // null, générer ici l'occurrence suivante (src/domain/recurrence.ts, à
-      // écrire par T-09) et l'annuler avec la même commande. Non implémenté :
-      // seule l'occurrence courante est terminée.
-
-      deps.undo.push(createCompleteUndoCommand(deps, updated, current?.carriedOver ?? false));
+      deps.undo.push(createCompleteUndoCommand(deps, updated, current?.carriedOver ?? false, next));
       return updated;
     },
     async reopen(id: TaskId): Promise<Task> {

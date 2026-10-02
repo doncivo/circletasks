@@ -1,4 +1,4 @@
-import type { IconRef, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { SortOrderEntry } from '../../db/repositories';
@@ -30,9 +30,19 @@ export interface CreateTaskInput {
   readonly goalId?: GoalId | null;
   /** N-02 : avances choisies dans la fenêtre d'ajout. */
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
+  /** T-09 : règle de récurrence ; exige une date (pas de « Un jour »). Règle et tâche créées en une transaction. */
+  readonly recurrence?: RecurrenceFields;
 }
 
-export type CreateTaskError = 'empty-title' | 'title-too-long' | 'time-without-date';
+export type CreateTaskError =
+  | 'empty-title'
+  | 'title-too-long'
+  | 'time-without-date'
+  | 'recurrence-needs-date'
+  | 'recurrence-invalid';
+
+/** Définir une récurrence sur une tâche existante (T-09) ; modifier / arrêter une règle : T-10. */
+export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date' | 'invalid';
 
 /** Cible d'un report (T-05, SD-02) : définie dans src/domain/taskPostpone. */
 export type { PostponeTarget };
@@ -40,6 +50,8 @@ export type { PostponeTarget };
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
   create(input: CreateTaskInput): Promise<Result<Task, CreateTaskError>>;
+  /** T-09 : rend une tâche datée récurrente (règle + `recurrenceId` en une transaction) ; non annulable. */
+  setRecurrence(id: TaskId, rule: RecurrenceFields): Promise<Result<Task, SetRecurrenceError>>;
   /**
    * Fiche détail (A-08) ; non annulable. Quand `patch` touche `date`, `time` ou
    * `someday`, les invariants de planification (T-02, `src/domain/taskSchedule`)

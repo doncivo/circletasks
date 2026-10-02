@@ -1,12 +1,14 @@
 import { ChartColumn, X } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import type { Space, Task } from '../../domain/model';
+import type { RecurrenceFields, Space, Task } from '../../domain/model';
+import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import type { IconRef } from '../../domain/model/icon';
 import { TASK_TITLE_MAX_LENGTH, resolveDefaultSpaceId, validateTaskTitle } from '../../domain/taskRules';
 import { asLocalDate, asLocalTime, type SpaceId, type TaskId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
-import { Button, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
+import { formatMessageRef } from '../../i18n/formatRecurrence';
+import { Button, Checkbox, Fab, Icon, IconChooser, IconView, ListRow, RecurrencePicker, Sheet, SpacePills, TextField, resolveIconRefColor, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -28,21 +30,26 @@ function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: strin
 
 /**
  * Sous-ligne d'une tâche : heure ; une tâche reportée automatiquement (T-06) ajoute le
- * badge « reportée » et l'espace en couleur (« reportée · Pro », PC-Semaine.html).
+ * badge « reportée » et l'espace en couleur (« reportée · Pro », PC-Semaine.html) ; une
+ * tâche récurrente (T-09) ajoute l'espace et le résumé de la règle (« 09:00 · Pro · mensuelle »,
+ * Main.html).
  */
-function taskSubtitle(task: Task, spaces: readonly Space[]): ReactNode {
-  if (!task.carriedOver) return task.time ?? undefined;
+function taskSubtitle(task: Task, spaces: readonly Space[], rule: RecurrenceFields | undefined): ReactNode {
+  if (!task.carriedOver && !rule) return task.time ?? undefined;
   const space = spaces.find((s) => s.id === task.spaceId);
+  const parts: ReactNode[] = [];
+  if (task.time) parts.push(task.time);
+  if (task.carriedOver) parts.push(<span key="carried" className="ct-today__carried">{t('tasks.carriedOver')}</span>);
+  if (space) parts.push(<span key="space" style={{ color: space.color }}>{space.name}</span>);
+  if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
   return (
     <>
-      {task.time ? `${task.time} · ` : ''}
-      <span className="ct-today__carried">{t('tasks.carriedOver')}</span>
-      {space && (
-        <>
-          {' · '}
-          <span style={{ color: space.color }}>{space.name}</span>
-        </>
-      )}
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 && ' · '}
+          {part}
+        </span>
+      ))}
     </>
   );
 }
@@ -82,6 +89,7 @@ export function TodayScreen() {
 
   const taskIds = useFeatureStore(todayStore, (s) => s.taskIds);
   const entities = useTaskEntities();
+  const recurrences = useFeatureStore(todayStore, (s) => s.recurrences);
   const viewDate = useFeatureStore(todayStore, (s) => s.date);
   const viewFilter = useFeatureStore(todayStore, (s) => s.filter);
   // Date et espace revérifiés à chaque rendu (selectTasks) : une tâche reportée quitte la liste aussitôt (T-05).
@@ -97,6 +105,7 @@ export function TodayScreen() {
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(todayStore, (s) => s.postpone);
   const remove = useFeatureStore(todayStore, (s) => s.remove);
+  const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
   const navigate = useNavigationStore((s) => s.navigate);
 
@@ -131,6 +140,7 @@ export function TodayScreen() {
   // Jour courant de l'app (T-06) : suit le passage de minuit (rollover) ; horloge avant le premier contrôle.
   const appDay = useAppStore((s) => s.day);
   const carryOverFailed = useAppStore((s) => s.carryOverFailed);
+  const recurrenceFailed = useAppStore((s) => s.recurrenceFailed);
   const today = appDay ?? todayLocal(container.clock);
   const header = formatTodayHeader(today);
 
@@ -150,7 +160,15 @@ export function TodayScreen() {
   // `IconChooser`) : pas de champ équivalent côté PC (la saisie en ligne n'a pas
   // de maquette pour l'icône, choisie ensuite dans la fiche détail, critère 5).
   const [sheetIcon, setSheetIcon] = useState<IconRef | null>(null);
+  // Répétition (T-09, Ajout.html) : « Une fois » par défaut ; date de départ = date saisie ou jour affiché.
+  const [sheetRecurrence, setSheetRecurrence] = useState<RecurrenceFields | null>(null);
   const sheetTitleRef = useRef<HTMLInputElement>(null);
+
+  // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la ligne (lecture des règles inconnues).
+  const hasUnknownRule = tasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
+  useEffect(() => {
+    if (hasUnknownRule) void syncRecurrences();
+  }, [hasUnknownRule, syncRecurrences]);
 
   useEffect(() => {
     void load(today, spaceFilter);
@@ -181,6 +199,7 @@ export function TodayScreen() {
     setSheetTime('');
     setSheetSpaceId(fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null);
     setSheetIcon(null);
+    setSheetRecurrence(null);
     setSheetOpen(true);
   }, [layout, spaceFilter, fallbackSpaceId]);
 
@@ -204,7 +223,7 @@ export function TodayScreen() {
   async function handleSheetSubmit(event: FormEvent): Promise<void> {
     event.preventDefault();
     if (!sheetTitleValid || !sheetSpaceId) return;
-    const result = await addTask(sheetTitle, sheetSpaceId, readSchedule(sheetDate, sheetTime), sheetIcon);
+    const result = await addTask(sheetTitle, sheetSpaceId, { ...readSchedule(sheetDate, sheetTime), recurrence: sheetRecurrence }, sheetIcon);
     if (result.ok) setSheetOpen(false);
   }
 
@@ -236,6 +255,7 @@ export function TodayScreen() {
 
         {actionErrorKey && <p className="ct-today__error" role="alert">{t(actionErrorKey)}</p>}
         {carryOverFailed && <p className="ct-today__error" role="alert">{t('tasks.carryOverError')}</p>}
+        {recurrenceFailed && <p className="ct-today__error" role="alert">{t('tasks.recurrenceError')}</p>}
         {status === 'error' && errorKey && <p className="ct-today__error" role="alert">{t(errorKey)}</p>}
 
         {status === 'error' ? null : tasks.length === 0 ? (
@@ -246,7 +266,7 @@ export function TodayScreen() {
               <div key={task.id} onFocus={() => setFocusedTaskId(task.id)}>
                 <ListRow
                   title={task.title}
-                  subtitle={taskSubtitle(task, spaces)}
+                  subtitle={taskSubtitle(task, spaces, task.recurrenceId ? recurrences.get(task.recurrenceId) : undefined)}
                   done={task.status === 'done'}
                   leading={
                     <Checkbox
@@ -351,6 +371,11 @@ export function TodayScreen() {
                 />
               </label>
             </div>
+            <RecurrencePicker
+              value={sheetRecurrence}
+              onChange={setSheetRecurrence}
+              startDate={sheetDate !== '' ? asLocalDate(sheetDate) : (viewDate ?? today)}
+            />
             <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
               {spaces.map((space) => (
                 <button

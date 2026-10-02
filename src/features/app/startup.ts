@@ -30,6 +30,7 @@ export function startAppStartup(
   const rollover = createDayRollover(container, {
     onDayChange: (day) => useAppStore.getState().setDay(day),
     onCarryOverResult: (failed) => useAppStore.getState().setCarryOverFailed(failed),
+    onRecurrenceResult: (failed) => useAppStore.getState().setRecurrenceFailed(failed),
   });
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') void rollover.check();
