@@ -1,7 +1,9 @@
+import type { TimeZoneChange } from '../../domain/timeZone';
 import { createDayRollover } from '../tasks/dayRollover';
 import { createTrashUseCases } from '../tasks/trashUseCases';
 import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
+import { createTimeZoneWatcher } from './timeZoneWatcher';
 
 export interface AppStartup {
   /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
@@ -14,12 +16,17 @@ export interface AppStartup {
 export interface StartupEnv {
   readonly document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>;
   readonly window: Pick<Window, 'addEventListener' | 'removeEventListener'>;
+  /** Détection du fuseau (tests) ; défaut : fuseau du système. */
+  readonly detectTimeZone?: () => string | null;
+  /** Point d'extension N-06 : replanification des rappels après un changement de fuseau. */
+  readonly onTimeZoneChange?: (change: TimeZoneChange) => void | Promise<void>;
 }
 
 /**
  * Orchestration de démarrage (T-06) : premier contrôle du report, minuterie de minuit
  * (bornée à 60 s côté rollover, robuste à la veille du PC) et contrôles au retour au
  * premier plan (`visibilitychange`) et à la prise de focus de la fenêtre (`focus`).
+ * T-11 : détection du fuseau au démarrage et au retour au premier plan (`general.timeZone`).
  * T-08 : purge de la corbeille (tâches supprimées depuis plus de 30 jours) lancée au démarrage,
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
  */
@@ -32,14 +39,20 @@ export function startAppStartup(
     onCarryOverResult: (failed) => useAppStore.getState().setCarryOverFailed(failed),
     onRecurrenceResult: (failed) => useAppStore.getState().setRecurrenceFailed(failed),
   });
+  // T-11 : le fuseau est vérifié AVANT le report, pour que « Aujourd'hui » suive la date locale nouvelle.
+  const timeZone = createTimeZoneWatcher(container, {
+    ...(env.detectTimeZone ? { detect: env.detectTimeZone } : {}),
+    onCurrent: (tz) => useAppStore.getState().setTimeZone(tz),
+    ...(env.onTimeZoneChange ? { onChange: env.onTimeZoneChange } : {}),
+  });
   const onCheck = (): void => {
-    if (env.document.visibilityState !== 'hidden') void rollover.check();
+    if (env.document.visibilityState !== 'hidden') void timeZone.check().then(() => rollover.check());
   };
   env.document.addEventListener('visibilitychange', onCheck);
   env.window.addEventListener('focus', onCheck);
-  const ready = rollover.start();
-  void ready.then(() => createTrashUseCases(container).purgeExpired()).catch(() => undefined);
   let disposed = false;
+  const ready = timeZone.check().then(() => (disposed ? undefined : rollover.start()));
+  void ready.then(() => createTrashUseCases(container).purgeExpired()).catch(() => undefined);
   return {
     ready,
     dispose: () => {

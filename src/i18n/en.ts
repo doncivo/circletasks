@@ -223,6 +223,10 @@ export const en: Messages = {
   },
   settings: {
     title: 'Settings',
+    sectionGeneral: 'GENERAL',
+    timeZone: 'Time zone',
+    timeZoneAuto: '{zone} (automatic)',
+    timeZoneUnknown: 'Unknown',
     sectionTasks: 'TASKS',
     sectionData: 'DATA AND SECURITY',
     trash: 'Trash',

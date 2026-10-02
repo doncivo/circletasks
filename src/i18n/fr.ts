@@ -226,6 +226,10 @@ export const fr = {
   },
   settings: {
     title: 'Réglages',
+    sectionGeneral: 'GÉNÉRAL',
+    timeZone: 'Fuseau horaire',
+    timeZoneAuto: '{zone} (automatique)',
+    timeZoneUnknown: 'Inconnu',
     sectionTasks: 'TÂCHES',
     sectionData: 'DONNÉES ET SÉCURITÉ',
     trash: 'Corbeille',

@@ -67,3 +67,11 @@
   font-size: var(--ct-font-size-text-sm);
   font-weight: var(--ct-font-weight-semibold);
 }
+
+/* Valeur en lecture seule d'une ligne (.v de Reglages.html). */
+.ct-settings__value {
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  text-align: right;
+}
