@@ -1,14 +1,15 @@
 import { parseIcon, type GoalProgress, type NewRecurrence, type NewTask, type Recurrence, type RecurrencePatch, type Task, type TaskPatch } from '../../../domain/model';
-import type {
-  GoalId,
-  IsoDateTime,
-  LocalDate,
-  LocalTime,
-  ProjectId,
-  RecurrenceId,
-  SpaceFilter,
-  SpaceId,
-  TaskId,
+import {
+  asEntityId,
+  type GoalId,
+  type IsoDateTime,
+  type LocalDate,
+  type LocalTime,
+  type ProjectId,
+  type RecurrenceId,
+  type SpaceFilter,
+  type SpaceId,
+  type TaskId,
 } from '../../../domain/types';
 import type { WriteStamper, WriteStamp } from '../../../domain/hlc';
 import { addDays } from '../../../domain/localDate';
@@ -433,6 +434,15 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
         [since, ...f.params],
       );
       return rows.map(rowToTask);
+    },
+
+    async purgeDeletedBefore(before: IsoDateTime) {
+      const expired = await db.select<{ id: string }>('SELECT id FROM task WHERE deleted_at IS NOT NULL AND deleted_at < ?', [before]);
+      if (expired.length === 0) return 0;
+      const { sql, params } = inClause(expired.map((row) => asEntityId<TaskId>(row.id)));
+      await db.execute(`DELETE FROM reminder WHERE target_type = 'task' AND target_id IN ${sql}`, params);
+      await db.execute(`DELETE FROM task WHERE id IN ${sql}`, params);
+      return expired.length;
     },
   };
 }

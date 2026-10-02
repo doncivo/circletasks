@@ -10,3 +10,4 @@ export * from './localDate';
 export * from './taskPostpone';
 export * from './taskCarryOver';
 export * from './donePeriod';
+export * from './taskTrash';

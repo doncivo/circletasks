@@ -33,6 +33,12 @@ export interface TaskDetailState {
   toggleDone(): Promise<void>;
   /** Bouton « Reporter » / « Planifier » (T-05) : annulable, la fiche reste ouverte. Ne rejette jamais. */
   postpone(target: PostponeTarget): Promise<void>;
+  /**
+   * Supprime la tâche affichée (T-08, après confirmation par la fiche) : corbeille, annulable 5 s.
+   * Rend true si elle est supprimée (la fiche doit se fermer), false en cas d'échec (message dédié,
+   * la tâche reste affichée). Ne rejette jamais.
+   */
+  remove(): Promise<boolean>;
 }
 
 export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: AppContainer) => {
@@ -93,6 +99,21 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         set({ errorKey: null });
       } catch {
         set({ status: 'error', errorKey: 'tasks.postponeError' });
+      }
+    },
+
+    remove: async () => {
+      const { taskId } = get();
+      if (!taskId) return false;
+      // Une écriture ou un chargement plus ancien ne doit pas écraser l'état après la suppression.
+      requestId += 1;
+      try {
+        await useCases.remove([taskId]); // retire la tâche de `taskEntities` : toutes les vues la perdent
+        set({ taskId: null, status: 'idle', errorKey: null });
+        return true;
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.deleteError' });
+        return false;
       }
     },
 

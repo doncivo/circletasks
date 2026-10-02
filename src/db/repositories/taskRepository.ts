@@ -70,6 +70,12 @@ export interface TaskRepository {
   listByRecurrence(recurrenceId: RecurrenceId): Promise<Task[]>;
   /** T-08 : corbeille, tâches supprimées depuis `since` (30 jours). */
   listTrash(since: IsoDateTime, filter: SpaceFilter): Promise<Task[]>;
+  /**
+   * T-08 : purge physique des tâches supprimées avant `before` (et de leurs rappels) ; renvoie le
+   * nombre de tâches purgées. La date limite est calculée par src/domain/taskTrash (30 jours) ;
+   * condition de synchro (tous les appareils ont lu la suppression) : Y-09, ordre 4.
+   */
+  purgeDeletedBefore(before: IsoDateTime): Promise<number>;
 }
 
 /** Règles de récurrence des tâches (T-09, T-10). */

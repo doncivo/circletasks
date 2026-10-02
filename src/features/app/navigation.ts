@@ -35,14 +35,14 @@ export const TABS: readonly TabDefinition[] = [
 
 /** Écrans internes de chaque onglet. Ajouter un écran = ajouter un membre ici. */
 export type Route =
-  /** Aujourd'hui (A-01) et écrans ouverts par les icônes du haut : Un jour, Objectif, Rapport mensuel (lien vers terminées, T-07), terminées, corbeille. */
-  | { readonly tab: 'tasks'; readonly screen: 'today' | 'someday' | 'goals' | 'report' | 'done' | 'trash' }
+  /** Aujourd'hui (A-01) et écrans ouverts par les icônes du haut : Un jour, Objectif, Rapport mensuel (lien vers terminées, T-07), terminées. La corbeille s'ouvre depuis Réglages (T-08, Q6). */
+  | { readonly tab: 'tasks'; readonly screen: 'today' | 'someday' | 'goals' | 'report' | 'done' }
   /** `weekStart` null = semaine courante ; `somedayPanel` : panneau « Un jour » PC (S-06). */
   | { readonly tab: 'week'; readonly weekStart: LocalDate | null; readonly somedayPanel: boolean }
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
   | { readonly tab: 'events' }
   | { readonly tab: 'checklists'; readonly checklistId: ChecklistId | null }
-  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'general' | 'desktop' | 'about' };
+  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'general' | 'desktop' | 'about' | 'trash' };
 
 export const DEFAULT_ROUTES: { readonly [K in TabId]: Extract<Route, { tab: K }> } = {
   tasks: { tab: 'tasks', screen: 'today' },

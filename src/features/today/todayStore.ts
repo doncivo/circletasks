@@ -69,6 +69,11 @@ export interface TodayState {
    * la liste aussitôt (`resolveTodayTasks` revérifie la date) sans recharger. Ne rejette jamais.
    */
   postpone(id: TaskId, target: PostponeTarget): Promise<void>;
+  /**
+   * Supprime une tâche de la liste (T-08 : Suppr après confirmation) : corbeille, annulable 5 s.
+   * La tâche quitte la liste aussitôt (retirée de `taskEntities`). Ne rejette jamais.
+   */
+  remove(id: TaskId): Promise<void>;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -163,6 +168,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         set({ actionErrorKey: null });
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+      }
+    },
+
+    async remove(id) {
+      if (!get().taskIds.includes(id)) return;
+      try {
+        await useCases.remove([id]);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'tasks.deleteError' });
       }
     },
   }));

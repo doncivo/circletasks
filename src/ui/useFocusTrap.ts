@@ -30,6 +30,12 @@ export interface UseFocusTrapOptions {
  */
 export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFocusTrapOptions) {
   const containerRef = useRef<T | null>(null);
+  // `onEscape` lu par référence : un parent qui recrée son rappel à chaque rendu ne relance pas l'effet
+  // (sinon le focus serait replacé au premier élément à chaque rendu).
+  const onEscapeRef = useRef(onEscape);
+  useEffect(() => {
+    onEscapeRef.current = onEscape;
+  });
 
   useEffect(() => {
     if (!active) return;
@@ -48,7 +54,7 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
       if (activeTraps[activeTraps.length - 1] !== token) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
-        onEscape?.();
+        onEscapeRef.current?.();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -75,7 +81,7 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
       if (index >= 0) activeTraps.splice(index, 1);
       previouslyFocused?.focus();
     };
-  }, [active, onEscape]);
+  }, [active]);
 
   return containerRef;
 }

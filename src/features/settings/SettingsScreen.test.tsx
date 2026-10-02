@@ -4,6 +4,7 @@ import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
+import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { SettingsScreen } from './SettingsScreen';
@@ -36,6 +37,7 @@ describe('SettingsScreen (T-06)', () => {
 
   afterEach(async () => {
     cleanup();
+    useNavigationStore.setState(INITIAL_NAVIGATION);
     await db.close();
   });
 
@@ -65,6 +67,14 @@ describe('SettingsScreen (T-06)', () => {
     toggle().click();
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
     expect(toggle()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('section « DONNÉES ET SÉCURITÉ » : la ligne « Corbeille » ouvre l’écran Corbeille (T-08, critère 5)', async () => {
+    renderScreen();
+    expect(screen.getByRole('heading', { name: 'DONNÉES ET SÉCURITÉ' })).toBeInTheDocument();
+    expect(screen.getByText('Corbeille')).toBeInTheDocument();
+    screen.getByRole('button', { name: 'Ouvrir la corbeille' }).click();
+    expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'trash' });
   });
 
   it('échec de lecture : message, pas de rejet', async () => {

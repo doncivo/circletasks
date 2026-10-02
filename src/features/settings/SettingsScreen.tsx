@@ -1,14 +1,16 @@
 import { useEffect } from 'react';
 import { t } from '../../i18n';
-import { Switch } from '../../ui';
+import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
+import { useNavigationStore } from '../app/navigation';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
 /**
- * Écran Réglages minimal (Reglages.html), limité à la section « TÂCHES » et à
- * l'interrupteur « Reporter les tâches non faites » (T-06). Aucun autre réglage
- * n'est simulé : ils arrivent avec M12.
+ * Écran Réglages minimal (Reglages.html) : section « TÂCHES » avec l'interrupteur « Reporter
+ * les tâches non faites » (T-06), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
+ * « Corbeille » (T-08, Q6 : unique point d'accès). Aucun autre réglage n'est simulé : ils
+ * arrivent avec M12.
  */
 export function SettingsScreen() {
   const load = useFeatureStore(settingsStore, (s) => s.load);
@@ -16,6 +18,7 @@ export function SettingsScreen() {
   const status = useFeatureStore(settingsStore, (s) => s.status);
   const errorKey = useFeatureStore(settingsStore, (s) => s.errorKey);
   const setCarryOverUndone = useFeatureStore(settingsStore, (s) => s.setCarryOverUndone);
+  const navigate = useNavigationStore((s) => s.navigate);
 
   useEffect(() => {
     void load();
@@ -42,6 +45,18 @@ export function SettingsScreen() {
           label={t('settings.carryOverUndone')}
           disabled={status !== 'ready' && status !== 'error'}
         />
+      </div>
+      <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
+      <div className="ct-settings__row">
+        <span>{t('settings.trash')}</span>
+        <Button
+          variant="secondary"
+          ariaLabel={t('settings.trashOpenLabel')}
+          onClick={() => navigate({ tab: 'settings', screen: 'trash' })}
+          className="ct-settings__link"
+        >
+          {t('settings.trashOpen')}
+        </Button>
       </div>
     </div>
   );

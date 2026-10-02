@@ -26,6 +26,12 @@
   color: var(--ct-color-text);
 }
 
+.ct-button--danger {
+  border: 0;
+  background: var(--ct-color-danger);
+  color: var(--ct-color-bg);
+}
+
 .ct-button--full {
   width: 100%;
 }

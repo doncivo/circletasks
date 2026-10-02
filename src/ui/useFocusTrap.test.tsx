@@ -63,3 +63,26 @@ describe('useFocusTrap', () => {
     expect(screen.queryByTestId('trap')).not.toBeInTheDocument();
   });
 });
+
+function Rerendering() {
+  const [count, setCount] = useState(0);
+  const ref = useFocusTrap<HTMLDivElement>({ active: true, onEscape: () => undefined }); // nouveau rappel à chaque rendu
+  return (
+    <div ref={ref} tabIndex={-1}>
+      <button type="button">{FIRST}</button>
+      <button type="button" onClick={() => setCount(count + 1)}>
+        {LAST}
+      </button>
+    </div>
+  );
+}
+
+describe('useFocusTrap : rappel instable', () => {
+  it('le focus ne saute pas au premier élément quand le parent se re-rend', () => {
+    render(<Rerendering />);
+    const last = screen.getByRole('button', { name: LAST });
+    last.focus();
+    fireEvent.click(last);
+    expect(last).toHaveFocus();
+  });
+});

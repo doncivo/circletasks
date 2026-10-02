@@ -24,8 +24,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | T-05 | M1 | Je reporte une tâche | tasks-planning | fait |
 | T-06 | M1 | Les tâches non faites passent au lendemain | tasks-planning | fait |
 | T-07 | M1 | Je consulte les tâches terminées | tasks-planning | fait |
-| T-08 | M1 | Je supprime une tâche | tasks-planning | en cours |
-| T-09 | M1 | Je rends une tâche récurrente | tasks-planning | à faire |
+| T-08 | M1 | Je supprime une tâche | tasks-planning | fait |
+| T-09 | M1 | Je rends une tâche récurrente | tasks-planning | en cours |
 | T-10 | M1 | Je modifie ou arrête une récurrence | tasks-planning | à faire |
 | T-11 | M1 | Mes heures restent justes quand je change de pays | tasks-planning | à faire |
 | T-12 | M1 | Je duplique une tâche | tasks-planning | à faire |

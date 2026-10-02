@@ -29,5 +29,6 @@ export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { ListRow, type ListRowProps } from './ListRow';
 export { Skeleton, type SkeletonProps } from './Skeleton';
 export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from './ActionMenu';
+export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export { DatePrompt, type DatePromptProps } from './DatePrompt';
 export { Switch, type SwitchProps } from './Switch';

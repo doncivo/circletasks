@@ -78,3 +78,27 @@
   position: relative;
   align-self: flex-start;
 }
+
+/* « Supprimer » : bouton texte rouge (Detail.html, PC-Aujourdhui.html), à droite sur PC. */
+.ct-task-detail__delete {
+  align-self: center;
+  height: 44px;
+  padding: 0 var(--ct-space-4);
+  border: 0;
+  border-radius: var(--ct-radius-pill);
+  background: transparent;
+  color: var(--ct-color-danger);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-task-detail__delete:focus-visible {
+  outline: 2px solid var(--ct-color-danger);
+  outline-offset: 2px;
+}
+
+.ct-detail-panel .ct-task-detail__delete {
+  align-self: flex-end;
+}
