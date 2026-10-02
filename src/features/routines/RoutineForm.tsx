@@ -16,7 +16,7 @@ import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types'
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { formatNextOccurrences, weekdayName } from '../../i18n/formatRoutine';
-import { Button, DatePicker, Icon, IconChooser, TextField, useLayout } from '../../ui';
+import { Button, DatePicker, Icon, IconChooser, Switch, TextField, useLayout } from '../../ui';
 import { RoutineTimeEditor } from './RoutineTimeEditor';
 import type { RoutineInput } from './routineUseCases';
 import './RoutineForm.css';
@@ -91,6 +91,7 @@ export function RoutineForm(props: RoutineFormProps) {
   const [startDate, setStartDate] = useState<LocalDate>(routine?.startDate ?? today);
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [time, setTime] = useState<LocalTime | null>(routine?.time ?? null);
+  const [paused, setPaused] = useState(routine?.paused ?? false);
   const [timeOpen, setTimeOpen] = useState(false);
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>(initialOffsets);
   const [offsetsTouched, setOffsetsTouched] = useState(false);
@@ -108,7 +109,7 @@ export function RoutineForm(props: RoutineFormProps) {
     interval: choice === 'every_n' ? interval : null,
     startDate: choice === 'every_n' ? startDate : (routine?.startDate ?? today),
     time,
-    paused: routine?.paused ?? false,
+    paused,
     archived: routine?.archived ?? false,
   };
   const valid = validateRoutine(fields).ok;
@@ -381,6 +382,16 @@ export function RoutineForm(props: RoutineFormProps) {
           ))}
         </div>
       </div>
+
+      {routine && (
+        <div className="ct-routine-form__pauseRow">
+          <span className="ct-routine-form__pauseText">
+            <span className="ct-routine-form__pauseLabel">{t('routines.form.pause')}</span>
+            <span className="ct-routine-form__pauseHint">{t('routines.form.pauseHint')}</span>
+          </span>
+          <Switch checked={paused} onChange={setPaused} label={t('routines.form.pause')} />
+        </div>
+      )}
 
       {editExtras}
 

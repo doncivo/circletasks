@@ -385,3 +385,46 @@
 .ct-routine-form__streakCurrent {
   flex-grow: 1;
 }
+
+/* Pause (modification) : interrupteur et phrase d'aide (ModifierRoutine.html). */
+.ct-routine-form__pauseRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+  padding: 4px 0;
+}
+
+.ct-routine-form__pauseText {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-routine-form__pauseLabel {
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-routine-form__pauseHint {
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+/* « Archiver » : bouton sans fond, texte rouge (ModifierRoutine.html). */
+.ct-routine-form__archive {
+  height: 56px;
+  padding: 0 var(--ct-space-5);
+  border: 0;
+  border-radius: 28px;
+  background: transparent;
+  color: var(--ct-color-danger);
+  font-family: var(--ct-font-text);
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-routine-form__archive:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

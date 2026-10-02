@@ -23,6 +23,13 @@ export const routinesFr = {
   timesPerWeek: '{count} fois par semaine',
   everyNDays: 'tous les {count} jours',
   everyNWeeksOn: 'toutes les {count} semaines : {days}',
+  paused: 'En pause',
+  archived: {
+    toggle: 'Archivées ({count})',
+    listLabel: 'Routines archivées',
+    restore: 'Restaurer',
+    restoreLabel: 'Restaurer la routine {title}',
+  },
   streak: {
     daysOne: '{count} jour',
     daysOther: '{count} jours',
@@ -38,6 +45,10 @@ export const routinesFr = {
   undo: {
     validated: '« {title} » validée',
     reopened: '« {title} » rouverte',
+    paused: '« {title} » mise en pause',
+    resumed: '« {title} » reprise',
+    archived: '« {title} » archivée',
+    restored: '« {title} » restaurée',
   },
   form: {
     newTitle: 'Nouvelle routine',
@@ -75,6 +86,11 @@ export const routinesFr = {
     reminderAtTime: 'À l’heure',
     reminder30: '30 min',
     space: 'Espace',
+    pause: 'Mettre en pause',
+    pauseHint: 'Aucune occurrence tant que la pause dure',
+    archive: 'Archiver',
+    archiveConfirmTitle: 'Archiver « {title} » ?',
+    archiveConfirmBody: 'La routine disparaît de la liste, d’Aujourd’hui et de la Semaine. Son historique est conservé : vous pourrez la restaurer.',
     save: 'Enregistrer',
     spaceLabel: 'Espace de la routine',
   },

@@ -6,12 +6,13 @@ import { computeStreaks } from '../../domain/routineStreaks';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
 import type { LocalDate, RoutineId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { CompactToggle, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
+import { CompactToggle, ConfirmDialog, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
 import { RoutineStreakBox } from './RoutineStreakBox';
+import { RoutinesArchived } from './RoutinesArchived';
 import { onRoutinesChanged } from './routineEvents';
 import { routinesStore } from './routineStore';
 import type { RoutineInput } from './routineUseCases';
@@ -49,6 +50,7 @@ export function RoutinesScreen() {
   const today = appDay ?? todayLocal(container.clock);
 
   const routines = useFeatureStore(routinesStore, (s) => s.routines);
+  const archived = useFeatureStore(routinesStore, (s) => s.archived);
   const doneByRoutine = useFeatureStore(routinesStore, (s) => s.doneByRoutine);
   const compact = useFeatureStore(routinesStore, (s) => s.compact);
   const status = useFeatureStore(routinesStore, (s) => s.status);
@@ -61,10 +63,13 @@ export function RoutinesScreen() {
   const reminderOffsets = useFeatureStore(routinesStore, (s) => s.reminderOffsets);
   const toggleDay = useFeatureStore(routinesStore, (s) => s.toggleDay);
   const refresh = useFeatureStore(routinesStore, (s) => s.refresh);
+  const setArchived = useFeatureStore(routinesStore, (s) => s.setArchived);
   const defaultOffsets = useFeatureStore(routinesStore, (s) => s.defaultOffsets);
 
   const [editor, setEditor] = useState<Editor | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  /** Routine dont l'archivage attend la confirmation. */
+  const [archiveTarget, setArchiveTarget] = useState<Routine | null>(null);
   const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
 
   useEffect(() => {
@@ -118,6 +123,13 @@ export function RoutinesScreen() {
         onClose={closeEditor}
         errorMessage={formError}
         autoFocus={editor.mode === 'create'}
+        archiveAction={
+          editedRoutine ? (
+            <button type="button" className="ct-routine-form__archive" onClick={() => setArchiveTarget(editedRoutine)}>
+              {t('routines.form.archive')}
+            </button>
+          ) : undefined
+        }
         initialOffsets={editor.mode === 'edit' ? editor.offsets : []}
         editExtras={editedRoutine ? <RoutineStreakBox streaks={computeStreaks(editedRoutine, doneByRoutine.get(editedRoutine.id as RoutineId) ?? EMPTY_DONE, today)} /> : undefined}
         defaultOffsets={defaultOffsets}
@@ -171,6 +183,8 @@ export function RoutinesScreen() {
         </div>
       )}
 
+      <RoutinesArchived routines={archived} spaces={spaces} onRestore={(routine) => void setArchived(routine.id as RoutineId, false)} />
+
       {layout === 'mobile' && <p className="ct-routines__helper">{t('routines.helper')}</p>}
 
       <div className="ct-routines__bottomRow">
@@ -183,6 +197,22 @@ export function RoutinesScreen() {
         )}
         <Fab onClick={openCreate} label={layout === 'pc' ? t('common.add') : t('routines.add')} />
       </div>
+
+      {archiveTarget && (
+        <ConfirmDialog
+          title={t('routines.form.archiveConfirmTitle', { title: archiveTarget.title })}
+          description={t('routines.form.archiveConfirmBody')}
+          confirmLabel={t('routines.form.archive')}
+          onCancel={() => setArchiveTarget(null)}
+          onConfirm={() => {
+            const id = archiveTarget.id as RoutineId;
+            setArchiveTarget(null);
+            void setArchived(id, true).then((done) => {
+              if (done) closeEditor();
+            });
+          }}
+        />
+      )}
 
       {form && layout === 'mobile' && (
         <Sheet open onClose={closeEditor} label={formLabel} className="ct-sheet--tall">

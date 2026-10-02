@@ -41,6 +41,16 @@ export interface RoutineUseCases {
    * été fait.
    */
   setDone(id: RoutineId, date: LocalDate, done: boolean): Promise<'validated' | 'reopened' | 'ignored'>;
+  /**
+   * R-05 : met en pause (`true`) ou reprend (`false`) une routine ; annulable. Aucune occurrence tant que la pause dure, historique
+   * intact. Renvoie la routine écrite, null si elle n'existe plus ou est déjà dans l'état voulu.
+   */
+  setPaused(id: RoutineId, paused: boolean): Promise<Routine | null>;
+  /**
+   * R-05 : archive (`true`) ou restaure (`false`) une routine ; annulable 5 s. Ses validations (`routine_log`) restent en base et
+   * dans les statistiques. Renvoie la routine écrite, null si elle n'existe plus ou est déjà dans l'état voulu.
+   */
+  setArchived(id: RoutineId, archived: boolean): Promise<Routine | null>;
 }
 
 type Repos = DataAccess['repos'];
@@ -76,6 +86,31 @@ function reopenedCommand(deps: RoutineUseCaseDeps, routine: Routine, date: Local
       const [current] = await deps.data.repos.routineLogs.listForRoutine(routine.id as RoutineId, { from: date, to: date });
       if (current) return 'stale';
       await deps.data.repos.routineLogs.markDone(routine.id as RoutineId, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
+      emitRoutinesChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
+/**
+ * Annulation d'un changement d'état d'une routine (pause, archivage) : remet l'état d'avant, seulement si la routine n'a pas changé
+ * depuis (même hlc que celui écrit par l'action ; sinon 'stale', rien n'est écrit).
+ */
+function stateCommand(
+  deps: RoutineUseCaseDeps,
+  written: Routine,
+  patch: { readonly paused: boolean } | { readonly archived: boolean },
+  labelKey: 'routines.undo.paused' | 'routines.undo.resumed' | 'routines.undo.archived' | 'routines.undo.restored',
+): UndoableCommand {
+  return {
+    kind: 'routine',
+    count: 1,
+    labelKey,
+    labelParams: { title: written.title },
+    async undo() {
+      const current = await deps.data.repos.routines.getById(written.id as RoutineId);
+      if (!current || current.hlc !== written.hlc) return 'stale';
+      await deps.data.repos.routines.update(written.id as RoutineId, patch);
       emitRoutinesChanged(deps.data);
       return 'undone';
     },
@@ -148,6 +183,24 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
       if (outcome.command) deps.undo.push(outcome.command);
       if (outcome.result !== 'ignored') emitRoutinesChanged(deps.data);
       return outcome.result;
+    },
+
+    async setPaused(id, paused) {
+      const before = await deps.data.repos.routines.getById(id);
+      if (!before || before.paused === paused) return null;
+      const written = await deps.data.repos.routines.setPaused(id, paused);
+      deps.undo.push(stateCommand(deps, written, { paused: before.paused }, paused ? 'routines.undo.paused' : 'routines.undo.resumed'));
+      emitRoutinesChanged(deps.data);
+      return written;
+    },
+
+    async setArchived(id, archived) {
+      const before = await deps.data.repos.routines.getById(id);
+      if (!before || before.archived === archived) return null;
+      const written = await deps.data.repos.routines.setArchived(id, archived);
+      deps.undo.push(stateCommand(deps, written, { archived: before.archived }, archived ? 'routines.undo.archived' : 'routines.undo.restored'));
+      emitRoutinesChanged(deps.data);
+      return written;
     },
 
     async reminderOffsets(id) {

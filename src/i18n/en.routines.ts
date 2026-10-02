@@ -22,6 +22,13 @@ export const routinesEn: Messages['routines'] = {
   timesPerWeek: '{count} times a week',
   everyNDays: 'every {count} days',
   everyNWeeksOn: 'every {count} weeks: {days}',
+  paused: 'Paused',
+  archived: {
+    toggle: 'Archived ({count})',
+    listLabel: 'Archived routines',
+    restore: 'Restore',
+    restoreLabel: 'Restore routine {title}',
+  },
   streak: {
     daysOne: '{count} day',
     daysOther: '{count} days',
@@ -37,6 +44,10 @@ export const routinesEn: Messages['routines'] = {
   undo: {
     validated: '“{title}” done',
     reopened: '“{title}” reopened',
+    paused: '“{title}” paused',
+    resumed: '“{title}” resumed',
+    archived: '“{title}” archived',
+    restored: '“{title}” restored',
   },
   form: {
     newTitle: 'New routine',
@@ -74,6 +85,11 @@ export const routinesEn: Messages['routines'] = {
     reminderAtTime: 'At time',
     reminder30: '30 min',
     space: 'Space',
+    pause: 'Pause',
+    pauseHint: 'No occurrences while paused',
+    archive: 'Archive',
+    archiveConfirmTitle: 'Archive “{title}”?',
+    archiveConfirmBody: 'The routine disappears from the list, Today and the Week. Its history is kept: you can restore it.',
     save: 'Save',
     spaceLabel: 'Routine space',
   },

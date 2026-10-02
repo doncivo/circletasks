@@ -37,8 +37,8 @@ export function RoutineCard({ routine, spaces, done, today, layout, compact, onE
   const streaks = useMemo(() => computeStreaks(routine, done, today), [routine, done, today]);
   const spaceName = spaces.find((space) => space.id === routine.spaceId)?.name ?? null;
   // « série 12 jours » seulement si elle est en cours (R-04 critère 7).
-  const streakText = streaks.current > 0 ? t('routines.streak.info', { value: formatStreak(streaks.current, streaks.unit) }) : null;
-  const info = [routine.time, spaceName, scheduleShort(routine), streakText].filter((part): part is string => Boolean(part));
+  const streakText = !routine.paused && streaks.current > 0 ? t('routines.streak.info', { value: formatStreak(streaks.current, streaks.unit) }) : null;
+  const info = [routine.time, spaceName, scheduleShort(routine), routine.paused ? t('routines.paused') : null, streakText].filter((part): part is string => Boolean(part));
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
 
   return (

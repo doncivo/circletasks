@@ -49,6 +49,10 @@ export interface RoutinesState {
    * pour un jour futur, non prévu, ou si le quota de « X fois par semaine » est atteint. Ne rejette jamais.
    */
   toggleDay(id: RoutineId, date: LocalDate): Promise<void>;
+  /** R-05 : met en pause ou reprend une routine (annulable) puis recharge. Renvoie vrai si c'est fait. Ne rejette jamais. */
+  setPaused(id: RoutineId, paused: boolean): Promise<boolean>;
+  /** R-05 : archive ou restaure une routine (annulable 5 s) puis recharge. Renvoie vrai si c'est fait. Ne rejette jamais. */
+  setArchived(id: RoutineId, archived: boolean): Promise<boolean>;
   /** Relit routines et validations sans passer par `loading` (une validation annulée ailleurs, R-03). Ne rejette jamais. */
   refresh(): Promise<void>;
   /** R-02 : avances des rappels d'une routine (cases du formulaire de modification). Ne rejette jamais (aucune avance en cas d'échec). */
@@ -131,6 +135,30 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       } catch {
         set({ actionErrorKey: 'routines.saveError' });
         return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    async setPaused(id, paused) {
+      try {
+        const written = await useCases.setPaused(id, paused);
+        await get().refresh();
+        set({ actionErrorKey: null });
+        return written !== null;
+      } catch {
+        set({ actionErrorKey: 'routines.saveError' });
+        return false;
+      }
+    },
+
+    async setArchived(id, archived) {
+      try {
+        const written = await useCases.setArchived(id, archived);
+        await get().refresh();
+        set({ actionErrorKey: null });
+        return written !== null;
+      } catch {
+        set({ actionErrorKey: 'routines.saveError' });
+        return false;
       }
     },
 
