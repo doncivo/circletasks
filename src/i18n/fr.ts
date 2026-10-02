@@ -479,6 +479,11 @@ export const fr = {
     seriesMoveBody: 'Cette tâche se répète. Que voulez-vous déplacer ?',
     dropHere: 'Déposer ici · {day}',
     hintDrag: 'Glisser-déposer une carte pour la changer de jour',
+    hintNavigate: 'Ctrl ← / Ctrl → pour changer de semaine',
+    previous: 'Semaine précédente',
+    next: 'Semaine suivante',
+    current: 'Cette semaine',
+    announce: 'Semaine {number}, {range}',
     actionError: 'Impossible de modifier cette tâche.',
   },
   undo: {

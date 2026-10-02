@@ -52,6 +52,58 @@
   gap: var(--ct-space-2);
 }
 
+.ct-week__toolsGap {
+  width: var(--ct-space-4);
+}
+
+.ct-week__arrows {
+  display: flex;
+}
+
+.ct-week__iconButton {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-week__iconButton:focus-visible,
+.ct-week__pill:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+/* « Cette semaine » : pastille neutre ; inactive (aria-disabled) dans la semaine courante. */
+.ct-week__pill {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--ct-radius-pill);
+  border: 1.5px solid var(--ct-color-border-strong);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ct-week__pill[aria-disabled='true'] {
+  color: var(--ct-color-text-secondary);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ct-week[data-layout='mobile'] .ct-week__pill {
+  margin-left: auto;
+}
+
 .ct-week__rule {
   display: flex;
   align-items: center;
@@ -92,6 +144,34 @@
 .ct-week__days {
   display: flex;
   flex-direction: column;
+}
+
+/* iPhone : le défilement vertical reste au navigateur, le balayage horizontal change de semaine (useSwipe). */
+.ct-week__days[data-layout='mobile'] {
+  touch-action: pan-y;
+}
+
+/* Changement de semaine : glissement bref dans le sens du geste (neutralisé par « Réduire les animations », tokens.css). */
+.ct-week__days[data-direction='next'] {
+  animation: ct-week-in-next 180ms ease-out;
+}
+
+.ct-week__days[data-direction='previous'] {
+  animation: ct-week-in-previous 180ms ease-out;
+}
+
+@keyframes ct-week-in-next {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes ct-week-in-previous {
+  from {
+    opacity: 0.4;
+    transform: translateX(-24px);
+  }
 }
 
 .ct-week__days[data-layout='pc'] {

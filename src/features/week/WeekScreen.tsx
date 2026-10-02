@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
 import type { LocalDate, SpaceId } from '../../domain/types';
-import { buildWeek, weekStartOf } from '../../domain/week';
+import { addWeeks, buildWeek, isoWeekOf, weekStartOf } from '../../domain/week';
 import { t } from '../../i18n';
-import { Fab, SpacePills, useDelayedFlag, useLayout } from '../../ui';
+import { addDays } from '../../domain/localDate';
+import { formatWeekRange } from '../../i18n/format';
+import { Fab, SpacePills, useDelayedFlag, useLayout, useSwipe } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { isModalOpen } from '../app/tabShortcuts';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
 import { canToggleRoutines } from '../today/todaySources';
@@ -33,6 +36,7 @@ export function WeekScreen() {
   const route = useNavigationStore((s) => s.route);
   const detail = useNavigationStore((s) => s.detail);
   const openDetail = useNavigationStore((s) => s.openDetail);
+  const navigate = useNavigationStore((s) => s.navigate);
   const entities = useTaskEntities();
 
   const recurrences = useFeatureStore(weekStore, (s) => s.recurrences);
@@ -51,6 +55,32 @@ export function WeekScreen() {
   const today: LocalDate = appDay ?? todayLocal(container.clock);
   // Semaine affichée : celle de la route, ou la semaine courante (lundi premier jour).
   const weekStart: LocalDate = route.tab === 'week' && route.weekStart ? route.weekStart : weekStartOf(today);
+
+  const currentWeekStart = weekStartOf(today);
+  const isCurrentWeek = weekStart === currentWeekStart;
+
+  // S-03 : changer de semaine = naviguer vers la route (la dernière semaine consultée est conservée par onglet pendant la session ;
+  // au redémarrage, `weekStart` null = semaine courante). La semaine courante est toujours notée null : elle suit minuit.
+  const [direction, setDirection] = useState<'next' | 'previous' | null>(null);
+  const goToWeek = useCallback(
+    (target: LocalDate, way: 'next' | 'previous' | null): void => {
+      setDirection(way);
+      navigate({ tab: 'week', weekStart: target === currentWeekStart ? null : target, somedayPanel: route.tab === 'week' ? route.somedayPanel : false });
+    },
+    [navigate, currentWeekStart, route],
+  );
+  const shiftWeek = useCallback((delta: 1 | -1): void => goToWeek(addWeeks(weekStart, delta), delta === 1 ? 'next' : 'previous'), [goToWeek, weekStart]);
+
+  // Ctrl+← / Ctrl+→ (registre de raccourcis, hors champ de saisie) ; ignorés sous une feuille ou une fenêtre modale.
+  useEffect(() => {
+    const guarded = (delta: 1 | -1) => (): void => {
+      if (!isModalOpen()) shiftWeek(delta);
+    };
+    const offs = [container.shortcuts.register('week.previous', guarded(-1)), container.shortcuts.register('week.next', guarded(1))];
+    return () => {
+      for (const off of offs) off();
+    };
+  }, [container, shiftWeek]);
 
   useEffect(() => {
     void load(weekStart, spaceFilter);
@@ -75,6 +105,9 @@ export function WeekScreen() {
   // Déplacements (S-02) : glisser, clavier, question de portée des tâches récurrentes.
   const moves = useWeekMoves(days, weekStart, spaces, spaceFilter === 'all');
 
+  // Balayage horizontal (iPhone) : gauche = semaine suivante, droite = précédente ; abandonné si une carte est tenue pour un glisser (S-02).
+  const swipe = useSwipe({ onSwipe: (way) => shiftWeek(way === 'left' ? 1 : -1), disabled: moves.dragging || layout !== 'mobile' });
+
   // Squelette si le chargement dépasse 150 ms (A-09).
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
@@ -83,14 +116,31 @@ export function WeekScreen() {
 
   return (
     <div className="ct-week" data-layout={layout} data-sorting={moves.dragging ? 'true' : undefined}>
-      <WeekHeader weekStart={weekStart} layout={layout} pills={pills} />
+      <WeekHeader
+        weekStart={weekStart}
+        layout={layout}
+        pills={pills}
+        isCurrent={isCurrentWeek}
+        onPrevious={() => shiftWeek(-1)}
+        onNext={() => shiftWeek(1)}
+        onCurrent={() => goToWeek(currentWeekStart, weekStart < currentWeekStart ? 'next' : 'previous')}
+      />
 
       {actionErrorKey && <p className="ct-week__error" role="alert">{t(actionErrorKey)}</p>}
       {extrasFailed && <p className="ct-week__error" role="alert">{t('week.sourceError')}</p>}
       {status === 'error' && errorKey && <p className="ct-week__error" role="alert">{t(errorKey)}</p>}
 
       {status === 'error' ? null : (
-        <div className="ct-week__days" data-layout={layout} role="group" aria-label={t('week.daysLabel')} aria-busy={status === 'loading'}>
+        <div
+          key={weekStart}
+          className="ct-week__days"
+          data-layout={layout}
+          data-direction={direction ?? undefined}
+          role="group"
+          aria-label={t('week.daysLabel')}
+          aria-busy={status === 'loading'}
+          {...swipe}
+        >
           {days.map((day) => (
             <WeekDayView
               key={day.date}
@@ -113,13 +163,17 @@ export function WeekScreen() {
           ))}
         </div>
       )}
+      {/* Changement de semaine annoncé aux lecteurs d'écran (S-03 critère 8) : « Semaine 40, 28 sept. – 4 oct. ». */}
+      <div className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
+        {t('week.announce', { number: isoWeekOf(weekStart).week, range: formatWeekRange(weekStart, addDays(weekStart, 6), 'short') })}
+      </div>
       {/* Annonce aux lecteurs d'écran : chargement (A-09), réordonnancement (A-02) ; ni role="status" (réservé au bandeau « Annuler »). */}
       <div key={moves.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
         {showSkeleton ? t('status.loading') : moves.announcement?.text}
       </div>
 
       <div className="ct-week__footer">
-        <span className="ct-week__hint">{layout === 'pc' ? t('week.hintDrag') : null}</span>
+        <span className="ct-week__hint">{layout === 'pc' ? `${t('week.hintDrag')} · ${t('week.hintNavigate')}` : null}</span>
         <Fab onClick={openCreate} label={t('common.add')} />
       </div>
 

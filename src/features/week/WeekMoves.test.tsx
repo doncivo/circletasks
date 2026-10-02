@@ -12,6 +12,12 @@ import { mockViewport, renderWeek, seedTask, setupWeek, teardownWeek, type WeekH
 const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({ key: k, code: k, ctrlKey: false, altKey: false, shiftKey: false, metaKey: false, editable: false, ...mods });
 const day = (iso: string): HTMLElement => document.querySelector<HTMLElement>(`[data-date="${iso}"]`) as HTMLElement;
 const titlesOf = (iso: string): string[] => [...day(iso).querySelectorAll('.ct-week-item__title')].map((el) => el.textContent ?? '');
+/** Annonces aux lecteurs d'écran : texte de toutes les zones `aria-live` (semaine affichée, déplacements). */
+const liveRegions = (): HTMLElement => {
+  const holder = document.createElement('div');
+  holder.textContent = [...document.querySelectorAll('[aria-live="polite"]')].map((el) => el.textContent ?? '').join(' | ');
+  return holder;
+};
 const focusTitle = (title: string): void => act(() => screen.getByRole('button', { name: title }).focus());
 const press = (input: KeyInput, h: WeekHarness): void => {
   act(() => {
@@ -112,11 +118,11 @@ describe('Semaine : déplacer une tâche (S-02)', () => {
       press(key('ArrowDown', { altKey: true }), h);
       await waitFor(() => expect(titlesOf('2026-09-30')).toEqual(['À 09h', 'B', 'A']));
       await waitFor(() => expect(screen.getByRole('button', { name: 'A' })).toHaveFocus());
-      expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Déplacée en position 3 sur 3');
+      expect(liveRegions()).toHaveTextContent('Déplacée en position 3 sur 3');
       // « B » est la première tâche sans heure : elle ne passe pas devant la tâche à 09:00.
       focusTitle('B');
       press(key('ArrowUp', { altKey: true }), h);
-      await waitFor(() => expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Position inchangée'));
+      await waitFor(() => expect(liveRegions()).toHaveTextContent('Position inchangée'));
       expect(titlesOf('2026-09-30')).toEqual(['À 09h', 'B', 'A']);
     });
 

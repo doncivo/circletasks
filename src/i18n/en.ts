@@ -476,6 +476,11 @@ export const en: Messages = {
     seriesMoveBody: 'This task repeats. What do you want to move?',
     dropHere: 'Drop here · {day}',
     hintDrag: 'Drag and drop a card to change its day',
+    hintNavigate: 'Ctrl ← / Ctrl → to change week',
+    previous: 'Previous week',
+    next: 'Next week',
+    current: 'This week',
+    announce: 'Week {number}, {range}',
     actionError: 'Unable to change this task.',
   },
   undo: {
