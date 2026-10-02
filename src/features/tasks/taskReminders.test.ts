@@ -154,4 +154,21 @@ describe('rappels des tâches (N-02)', () => {
       ]);
     }
   });
+
+  it('feuille « Modifier » : champs et rappels en une transaction ; rappel refusé, rien n’est écrit', async () => {
+    const task = await create('09:00', [0]);
+    // Heure effacée dans la même feuille que des rappels : refusé, le titre n'est pas écrit non plus.
+    const refused = await taskCases().updateWithReminders(task.id, { title: 'Autre', time: null }, [0, 30]);
+    expect(refused).toEqual({ ok: false, error: 'needs-time' });
+    const stored = await db.data.repos.tasks.getById(task.id);
+    expect(stored?.title).toBe('Point');
+    expect(stored?.time).toBe('09:00');
+    expect(await summary(task)).toEqual([[0, '2026-03-01T09:00']]);
+    const ok = await taskCases().updateWithReminders(task.id, { title: 'Autre', time: asLocalTime('10:00') }, [0, 30]);
+    expect(ok.ok).toBe(true);
+    expect(await summary(task)).toEqual([
+      [30, '2026-03-01T09:30'],
+      [0, '2026-03-01T10:00'],
+    ]);
+  });
 });

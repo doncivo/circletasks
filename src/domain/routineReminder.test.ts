@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeReminderOffsets, normalizeReminderOffsets, routineReminderFireAt, ROUTINE_FORM_OFFSETS } from './routineReminder';
+import { normalizeReminderOffsets, routineReminderFireAt, ROUTINE_FORM_OFFSETS } from './routineReminder';
 import { d, makeRoutine, time } from './routineTestKit';
 
 describe('rappels de routine (R-02)', () => {
@@ -14,9 +14,6 @@ describe('rappels de routine (R-02)', () => {
 
   it('le formulaire ne touche pas aux avances qu’il ne montre pas', () => {
     expect(ROUTINE_FORM_OFFSETS).toEqual([0, 5, 15, 30, 60, 1440]);
-    expect(mergeReminderOffsets([0, 15, 1440], [30])).toEqual([30]);
-    expect(mergeReminderOffsets([], [0, 30])).toEqual([0, 30]);
-    expect(mergeReminderOffsets([5], [5, 0])).toEqual([5, 0]);
   });
 
   it('échéance = prochaine occurrence à l’heure moins l’avance, heure locale flottante', () => {

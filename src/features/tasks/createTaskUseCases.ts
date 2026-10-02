@@ -34,6 +34,15 @@ function touchesSchedule(patch: TaskPatch): boolean {
   return patch.date !== undefined || patch.time !== undefined || patch.someday !== undefined;
 }
 
+type TxRepos = Parameters<Parameters<TaskUseCaseDeps['data']['transaction']>[0]>[0];
+
+/** Refus d'un rappel dans une transaction : annule aussi les champs écrits avec lui. */
+class RemindersRefused extends Error {
+  constructor(readonly reason: SetRemindersError) {
+    super(reason);
+  }
+}
+
 /**
  * Implémentation des cas d'usage « tâches » (contrat : `./taskUseCases.ts`, ADR 0004).
  *
@@ -42,6 +51,40 @@ function touchesSchedule(patch: TaskPatch): boolean {
  * modèle que `createPendingRepositories` (ADR 0004).
  */
 export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
+
+  /** Écrit une modification de la tâche dans la transaction `repos` (invariants T-02, badge T-06, rappels N-02). */
+  async function applyUpdate(repos: TxRepos, id: TaskId, patch: TaskPatch): Promise<Task> {
+    if (!touchesSchedule(patch)) return repos.tasks.update(id, patch);
+    const current = await repos.tasks.getById(id);
+    if (!current) return repos.tasks.update(id, patch); // laisse le repository lever RepositoryError('not-found')
+    // `exactOptionalPropertyTypes` : on n'inclut une clé que si `patch` la fournit réellement.
+    const scheduled = setTaskSchedule(scheduleOf(current), {
+      ...(patch.date !== undefined ? { date: patch.date } : {}),
+      ...(patch.time !== undefined ? { time: patch.time } : {}),
+      ...(patch.someday !== undefined ? { someday: patch.someday } : {}),
+    });
+    if (!scheduled.ok) throw new ScheduleInvariantError(scheduled.error);
+    // T-06 critère 4 : changer la date efface le badge « reportée ».
+    const dateChanged = scheduled.value.date !== current.date || scheduled.value.someday !== current.someday;
+    const task = await repos.tasks.update(id, { ...patch, ...scheduled.value, ...(dateChanged && current.carriedOver ? { carriedOver: false } : {}) });
+    await syncTaskReminders(repos, task);
+    return task;
+  }
+
+  /** Remplace les rappels de `task` ; 'needs-time' sans date et heure, sauf pour un ensemble vide. */
+  async function writeReminders(repos: TxRepos, task: Task, offsets: readonly ReminderOffsetMin[]): Promise<Result<ReminderOffsetMin[], SetRemindersError>> {
+    const target = { type: 'task', id: task.id } as const;
+    const wanted = sortReminderOffsets(offsets);
+    if (wanted.length === 0) {
+      await repos.reminders.replaceForTarget(target, []);
+      return { ok: true, value: [] };
+    }
+    if (!canHaveReminders(task)) return { ok: false, error: 'needs-time' };
+    const rows = buildReminders({ target, date: task.date, time: task.time, offsets: wanted, newReminderId: () => newEntityId<ReminderId>(deps.ids) });
+    const written = await repos.reminders.replaceForTarget(target, rows);
+    return { ok: true, value: sortReminderOffsets(written.map((row) => row.offsetMin)) };
+  }
+
   return {
     async create(input): Promise<Result<Task, CreateTaskError>> {
       const titleResult = validateTaskTitle(input.title);
@@ -109,17 +152,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     async setReminders(id: TaskId, offsets): Promise<Result<ReminderOffsetMin[], SetRemindersError>> {
       return deps.data.transaction(async (repos): Promise<Result<ReminderOffsetMin[], SetRemindersError>> => {
         const task = await repos.tasks.getById(id);
-        if (!task) return { ok: false, error: 'not-found' };
-        const target = { type: 'task', id } as const;
-        const wanted = sortReminderOffsets(offsets);
-        if (wanted.length === 0) {
-          await repos.reminders.replaceForTarget(target, []);
-          return { ok: true, value: [] };
-        }
-        if (!canHaveReminders(task)) return { ok: false, error: 'needs-time' };
-        const rows = buildReminders({ target, date: task.date, time: task.time, offsets: wanted, newReminderId: () => newEntityId<ReminderId>(deps.ids) });
-        const written = await repos.reminders.replaceForTarget(target, rows);
-        return { ok: true, value: sortReminderOffsets(written.map((row) => row.offsetMin)) };
+        return task ? writeReminders(repos, task, offsets) : { ok: false, error: 'not-found' };
       });
     },
 
@@ -139,43 +172,28 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     },
 
     async update(id: TaskId, patch: TaskPatch): Promise<Task> {
-      // T-02 : date, heure et « Un jour » passent par les invariants de
-      // src/domain avant d'atteindre le repository (ADR 0004, règle 6 de
-      // db/repositories/common.ts : aucune règle métier côté repository).
-      // Les autres champs du patch (titre, note, icône…) sont posés par T-03 /
-      // A-08, transmis tels quels ici : `update` reste le point d'entrée unique
-      // de la fiche détail (commentaire de `TaskRepository.update`).
-      const write = async (changes: TaskPatch): Promise<Task> => {
-        // N-02 critère 5 : date ou heure changées, `fire_at` des rappels recalculé dans la même transaction.
-        const written = touchesSchedule(changes)
-          ? await deps.data.transaction(async (repos) => {
-              const task = await repos.tasks.update(id, changes);
-              await syncTaskReminders(repos, task);
-              return task;
-            })
-          : await deps.data.repos.tasks.update(id, changes);
+      // T-02 : date, heure et « Un jour » passent par les invariants de src/domain avant d'atteindre le repository (ADR 0004,
+      // règle 6 de db/repositories/common.ts). `update` reste le point d'entrée unique de la fiche détail.
+      // N-02 critère 5 : date ou heure changées, `fire_at` des rappels recalculé dans la même transaction.
+      const written = touchesSchedule(patch) ? await deps.data.transaction((repos) => applyUpdate(repos, id, patch)) : await deps.data.repos.tasks.update(id, patch);
+      deps.taskEntities.publish([written]);
+      return written;
+    },
+    async updateWithReminders(id: TaskId, patch: TaskPatch, offsets): Promise<Result<Task, SetRemindersError>> {
+      // Feuille « Modifier » (N-02) : champs et rappels en une seule transaction ; refus : rien n'est écrit.
+      try {
+        const written = await deps.data.transaction(async (repos) => {
+          const task = await applyUpdate(repos, id, patch);
+          const reminders = await writeReminders(repos, task, offsets);
+          if (!reminders.ok) throw new RemindersRefused(reminders.error);
+          return task;
+        });
         deps.taskEntities.publish([written]);
-        return written;
-      };
-      if (!touchesSchedule(patch)) {
-        return write(patch);
+        return { ok: true, value: written };
+      } catch (error) {
+        if (error instanceof RemindersRefused) return { ok: false, error: error.reason };
+        throw error;
       }
-      const current = await deps.data.repos.tasks.getById(id);
-      if (!current) return write(patch); // laisse le repository lever RepositoryError('not-found')
-
-      // `exactOptionalPropertyTypes` (tsconfig) distingue « champ absent » de
-      // « champ présent valant undefined » : on n'inclut une clé que si `patch`
-      // la fournit réellement, pour ne pas écraser l'état courant par erreur.
-      const scheduled = setTaskSchedule(scheduleOf(current), {
-        ...(patch.date !== undefined ? { date: patch.date } : {}),
-        ...(patch.time !== undefined ? { time: patch.time } : {}),
-        ...(patch.someday !== undefined ? { someday: patch.someday } : {}),
-      });
-      if (!scheduled.ok) throw new ScheduleInvariantError(scheduled.error);
-
-      // T-06 critère 4 : changer la date efface le badge « reportée ».
-      const dateChanged = scheduled.value.date !== current.date || scheduled.value.someday !== current.someday;
-      return write({ ...patch, ...scheduled.value, ...(dateChanged && current.carriedOver ? { carriedOver: false } : {}) });
     },
     async complete(id: TaskId): Promise<Task> {
       // Invariant status ⇔ doneAt posé par src/domain (T-04) ; le repository ne
@@ -260,9 +278,9 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           throw new RangeError('Date de déplacement invalide');
         }
         const diverge = current.recurrenceId !== null && current.status === 'todo' && current.seriesTemplate === null ? { seriesTemplate: divergedTemplate(current) } : {};
-        const moved2 = await repos.tasks.update(id, { ...moved.value, ...diverge });
-        await syncTaskReminders(repos, moved2);
-        return { before: current, after: moved2 };
+        const movedTask = await repos.tasks.update(id, { ...moved.value, ...diverge });
+        await syncTaskReminders(repos, movedTask);
+        return { before: current, after: movedTask };
       });
       deps.taskEntities.publish([after]);
       if (after !== before) deps.undo.push(createMoveDayUndoCommand(deps, before, after, formatDayLabel(date)));

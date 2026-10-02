@@ -59,6 +59,8 @@ export interface TaskUseCases {
    * un ensemble vide. Rend les avances enregistrées. Aucune notification n'est planifiée (ordre 5, iPhone seulement).
    */
   setReminders(id: TaskId, offsets: readonly ReminderOffsetMin[]): Promise<Result<ReminderOffsetMin[], SetRemindersError>>;
+  /** N-02 : champs et rappels de la feuille « Modifier » en une seule transaction ; 'needs-time' ou 'not-found' : rien n'est écrit. */
+  updateWithReminders(id: TaskId, patch: TaskPatch, offsets: readonly ReminderOffsetMin[]): Promise<Result<Task, SetRemindersError>>;
   /** T-09 : rend une tâche datée récurrente (règle + `recurrenceId` en une transaction) ; non annulable. */
   setRecurrence(id: TaskId, rule: RecurrenceFields): Promise<Result<Task, SetRecurrenceError>>;
   /**

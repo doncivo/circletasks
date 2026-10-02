@@ -2,7 +2,7 @@ import { newEntityId } from '../../domain/id';
 import { nowIso, todayLocal } from '../../domain/clock';
 import { addDays } from '../../domain/localDate';
 import type { NewReminder, ReminderOffsetMin, Routine, RoutineFields } from '../../domain/model';
-import { mergeReminderOffsets, normalizeReminderOffsets, routineReminderFireAt } from '../../domain/routineReminder';
+import { normalizeReminderOffsets, routineReminderFireAt } from '../../domain/routineReminder';
 import { validateRoutine, type RoutineError } from '../../domain/routineRules';
 import { canToggleDay, doneDatesOf, mondayOf, pausesByRoutine } from '../../domain/routineSchedule';
 import type { LocalDate, ReminderId, Result, RoutineId, RoutineLogId, RoutinePauseId } from '../../domain/types';
@@ -193,8 +193,7 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
         if (before && before.paused !== routine.paused) await syncPausePeriod(deps, repos, id, routine.paused);
         const existing = (await repos.reminders.listForTarget({ type: 'routine', id })).map((reminder) => reminder.offsetMin);
         // Sans heure (QB-07, N-02 critère 7) : rappels conservés tels quels mais inactifs ; avec une heure, `fire_at` recalculé.
-        const offsets = mergeReminderOffsets(existing, input.reminderOffsets);
-        if (routine.time !== null && (existing.length > 0 || offsets.length > 0)) await writeReminders(repos, routine, offsets);
+        if (routine.time !== null && (existing.length > 0 || input.reminderOffsets.length > 0)) await writeReminders(repos, routine, input.reminderOffsets);
         return routine;
       });
       emitRoutinesChanged(deps.data);

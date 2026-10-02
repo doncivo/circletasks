@@ -24,15 +24,6 @@ export function normalizeReminderOffsets(offsets: readonly number[], time: Local
 }
 
 /**
- * Avances après un enregistrement du formulaire : les cases cochées parmi celles du formulaire, plus les avances que le formulaire
- * ne montre pas (posées ailleurs, N-02) qui restent inchangées.
- */
-export function mergeReminderOffsets(existing: readonly ReminderOffsetMin[], checked: readonly ReminderOffsetMin[]): ReminderOffsetMin[] {
-  const hidden = existing.filter((offset) => !ROUTINE_FORM_OFFSETS.includes(offset));
-  return [...hidden, ...checked.filter((offset) => ROUTINE_FORM_OFFSETS.includes(offset))];
-}
-
-/**
  * Échéance (heure locale flottante) d'un rappel de routine : prochaine occurrence prévue à partir de `from` (aujourd'hui inclus),
  * à l'heure de la routine moins l'avance. Null si aucune occurrence n'est à venir (règle incohérente).
  */
