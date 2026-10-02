@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Routine } from '../../domain/model';
+import { computeStreaks } from '../../domain/routineStreaks';
 import { resolveDefaultSpaceId } from '../../domain/taskRules';
 import type { LocalDate, RoutineId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -10,6 +11,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
+import { RoutineStreakBox } from './RoutineStreakBox';
 import { onRoutinesChanged } from './routineEvents';
 import { routinesStore } from './routineStore';
 import type { RoutineInput } from './routineUseCases';
@@ -117,6 +119,7 @@ export function RoutinesScreen() {
         errorMessage={formError}
         autoFocus={editor.mode === 'create'}
         initialOffsets={editor.mode === 'edit' ? editor.offsets : []}
+        editExtras={editedRoutine ? <RoutineStreakBox streaks={computeStreaks(editedRoutine, doneByRoutine.get(editedRoutine.id as RoutineId) ?? EMPTY_DONE, today)} /> : undefined}
         defaultOffsets={defaultOffsets}
       />
     ) : null;

@@ -1,6 +1,7 @@
 import type { Routine } from '../domain/model';
+import type { StreakUnit } from '../domain/routineStreaks';
 import type { Weekday } from '../domain/types';
-import { getLocale, t } from './index';
+import { getLocale, t, tDynamic, type MessageKey } from './index';
 
 const intlLocale = (): string => (getLocale() === 'fr' ? 'fr-FR' : 'en-US');
 
@@ -75,4 +76,16 @@ export function formatNextOccurrences(dates: readonly string[]): string {
       return `${weekday.format(date)} ${String(date.getUTCDate())}${endsMonth ? ` ${month.format(date)}` : ''}`;
     })
     .join(', ');
+}
+
+const STREAK_KEYS: { readonly [U in StreakUnit]: { readonly one: MessageKey; readonly other: MessageKey } } = {
+  days: { one: 'routines.streak.daysOne', other: 'routines.streak.daysOther' },
+  weeks: { one: 'routines.streak.weeksOne', other: 'routines.streak.weeksOther' },
+  sessions: { one: 'routines.streak.sessionsOne', other: 'routines.streak.sessionsOther' },
+};
+
+/** Série accordée (R-04 critère 6) : « 1 jour », « 12 jours », « 1 séance », « 4 séances », « 1 semaine », « 5 semaines ». */
+export function formatStreak(count: number, unit: StreakUnit): string {
+  const form = new Intl.PluralRules(intlLocale()).select(count) === 'one' ? 'one' : 'other';
+  return tDynamic(STREAK_KEYS[unit][form], { count });
 }

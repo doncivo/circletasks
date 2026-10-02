@@ -2,9 +2,10 @@ import { Clock } from 'lucide-react';
 import { useMemo } from 'react';
 import type { Routine, Space } from '../../domain/model';
 import { mondayOf, weekCounter, weekRounds } from '../../domain/routineSchedule';
+import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
-import { scheduleShort, weekdayName } from '../../i18n/formatRoutine';
+import { formatStreak, scheduleShort, weekdayName } from '../../i18n/formatRoutine';
 import { IconView, resolveIconRefColor, type Layout } from '../../ui';
 import './RoutineCard.css';
 
@@ -33,8 +34,11 @@ export function RoutineCard({ routine, spaces, done, today, layout, compact, onE
   const weekStart = mondayOf(today);
   const rounds = useMemo(() => weekRounds(routine, done, weekStart, today), [routine, done, weekStart, today]);
   const counter = useMemo(() => weekCounter(routine, done, weekStart), [routine, done, weekStart]);
+  const streaks = useMemo(() => computeStreaks(routine, done, today), [routine, done, today]);
   const spaceName = spaces.find((space) => space.id === routine.spaceId)?.name ?? null;
-  const info = [routine.time, spaceName, scheduleShort(routine)].filter((part): part is string => Boolean(part));
+  // « série 12 jours » seulement si elle est en cours (R-04 critère 7).
+  const streakText = streaks.current > 0 ? t('routines.streak.info', { value: formatStreak(streaks.current, streaks.unit) }) : null;
+  const info = [routine.time, spaceName, scheduleShort(routine), streakText].filter((part): part is string => Boolean(part));
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
 
   return (

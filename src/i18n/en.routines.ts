@@ -22,6 +22,18 @@ export const routinesEn: Messages['routines'] = {
   timesPerWeek: '{count} times a week',
   everyNDays: 'every {count} days',
   everyNWeeksOn: 'every {count} weeks: {days}',
+  streak: {
+    daysOne: '{count} day',
+    daysOther: '{count} days',
+    weeksOne: '{count} week',
+    weeksOther: '{count} weeks',
+    sessionsOne: '{count} session',
+    sessionsOther: '{count} sessions',
+    info: 'streak {value}',
+    current: 'Current streak',
+    best: 'Best streak',
+    bestShort: 'Best',
+  },
   undo: {
     validated: '“{title}” done',
     reopened: '“{title}” reopened',

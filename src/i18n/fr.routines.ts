@@ -23,6 +23,18 @@ export const routinesFr = {
   timesPerWeek: '{count} fois par semaine',
   everyNDays: 'tous les {count} jours',
   everyNWeeksOn: 'toutes les {count} semaines : {days}',
+  streak: {
+    daysOne: '{count} jour',
+    daysOther: '{count} jours',
+    weeksOne: '{count} semaine',
+    weeksOther: '{count} semaines',
+    sessionsOne: '{count} séance',
+    sessionsOther: '{count} séances',
+    info: 'série {value}',
+    current: 'Série en cours',
+    best: 'Meilleure série',
+    bestShort: 'Meilleure',
+  },
   undo: {
     validated: '« {title} » validée',
     reopened: '« {title} » rouverte',
