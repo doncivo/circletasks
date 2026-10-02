@@ -37,6 +37,18 @@ describe('démarrage : sauvegarde avant migration', () => {
     expect(useAppStore.getState()).toMatchObject({ dbStatus: 'error', dbBackupFailed: true });
   });
 
+  it('D-03 échec de sauvegarde : aucune migration appliquée et base fermée', async () => {
+    const db = await openSqliteWasmDriver();
+    await migrate(db, migrations.slice(0, 1));
+    const transaction = vi.spyOn(db, 'transaction');
+    const close = vi.spyOn(db, 'close');
+    await bootstrapDatabase(() => Promise.resolve(db), {
+      backup: () => Promise.resolve({ backup: () => Promise.reject(new Error('disque plein')) }),
+    });
+    expect(transaction).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalled();
+  });
+
   it('base neuve : le port n’est jamais appelé', async () => {
     const backup = vi.fn(() => Promise.resolve());
     const db = await bootstrapDatabase(openSqliteWasmDriver, { backup: () => Promise.resolve({ backup }) });
