@@ -87,7 +87,7 @@ describe('createTaskUseCases.create (T-01)', () => {
 
   it('lève NotImplementedError pour les autres cas d’usage, non livrés par T-01', async () => {
     await expect(
-      useCases.postpone([asEntityId<TaskId>('00000000-0000-4000-8000-000000000099')], 'tomorrow'),
+      useCases.moveToDay(asEntityId<TaskId>('00000000-0000-4000-8000-000000000099'), asLocalDate('2026-10-03')),
     ).rejects.toThrow(/à implémenter/);
   });
 

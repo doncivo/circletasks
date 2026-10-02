@@ -185,6 +185,45 @@ describe('todayStore (T-01)', () => {
     expect(shown(store)).toHaveLength(1); // la liste reste affichée
   });
 
+  it('postpone retire la tâche de la liste du jour (revérification date et espace) et l’annulation la remet (T-05)', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Courses', SPACE_PRO_ID);
+    const view = () => resolveTodayTasks(store.getState().taskIds, container.taskEntities.getSnapshot(), { date: DAY, filter: 'all' });
+    const [task] = view();
+    if (!task) throw new Error('fixture manquante');
+
+    await store.getState().postpone(task.id, 'tomorrow');
+    expect(view()).toEqual([]);
+    expect(store.getState().actionErrorKey).toBeNull();
+
+    await container.undo.undoLast();
+    expect(view().map((t) => t.title)).toEqual(['Courses']);
+  });
+
+  it('resolveTodayTasks écarte une tâche d’un autre espace que le filtre', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Courses', SPACE_PERSO_ID);
+    const ids = store.getState().taskIds;
+    const entities = container.taskEntities.getSnapshot();
+    expect(resolveTodayTasks(ids, entities, { date: DAY, filter: SPACE_PRO_ID })).toEqual([]);
+    expect(resolveTodayTasks(ids, entities, { date: DAY, filter: SPACE_PERSO_ID })).toHaveLength(1);
+  });
+
+  it('postpone n’échoue jamais : erreur d’écriture -> actionErrorKey (T-05)', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Courses', SPACE_PRO_ID);
+    const [task] = shown(store);
+    if (!task) throw new Error('fixture manquante');
+    vi.spyOn(container.data, 'transaction').mockRejectedValueOnce(new Error('boom'));
+
+    await expect(store.getState().postpone(task.id, 'tomorrow')).resolves.toBeUndefined();
+    expect(store.getState().actionErrorKey).toBe('tasks.postponeError');
+    expect(shown(store)).toHaveLength(1);
+  });
+
   it('isole les instances par conteneur (ADR 0004)', async () => {
     const other = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data });
     expect(todayStore.get(container)).toBe(todayStore.get(container));

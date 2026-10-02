@@ -59,13 +59,20 @@ export function TodayScreen() {
 
   const taskIds = useFeatureStore(todayStore, (s) => s.taskIds);
   const entities = useTaskEntities();
-  const tasks = useMemo(() => resolveTodayTasks(taskIds, entities), [taskIds, entities]);
+  const viewDate = useFeatureStore(todayStore, (s) => s.date);
+  const viewFilter = useFeatureStore(todayStore, (s) => s.filter);
+  // Date et espace revérifiés à chaque rendu (selectTasks) : une tâche reportée quitte la liste aussitôt (T-05).
+  const tasks = useMemo(
+    () => resolveTodayTasks(taskIds, entities, { date: viewDate, filter: viewFilter }),
+    [taskIds, entities, viewDate, viewFilter],
+  );
   const actionErrorKey = useFeatureStore(todayStore, (s) => s.actionErrorKey);
   const status = useFeatureStore(todayStore, (s) => s.status);
   const errorKey = useFeatureStore(todayStore, (s) => s.errorKey);
   const load = useFeatureStore(todayStore, (s) => s.load);
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
+  const postpone = useFeatureStore(todayStore, (s) => s.postpone);
   const openDetail = useNavigationStore((s) => s.openDetail);
 
   // Ligne « sélectionnée » au clavier (critère 6, PC) : la dernière ligne ayant
@@ -78,6 +85,12 @@ export function TodayScreen() {
     if (!focusedTaskId) return undefined;
     return container.shortcuts.register('list.complete', () => void toggleDone(focusedTaskId));
   }, [container, focusedTaskId, toggleDone]);
+
+  // Ctrl+D (T-05, critère 5) : reporte à demain la ligne sélectionnée.
+  useEffect(() => {
+    if (!focusedTaskId) return undefined;
+    return container.shortcuts.register('list.postponeTomorrow', () => void postpone(focusedTaskId, 'tomorrow'));
+  }, [container, focusedTaskId, postpone]);
 
   const today = todayLocal(container.clock);
   const header = formatTodayHeader(today);

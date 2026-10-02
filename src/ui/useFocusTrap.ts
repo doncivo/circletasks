@@ -3,6 +3,12 @@ import { useEffect, useRef } from 'react';
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+/**
+ * Pièges actifs, du plus ancien au plus récent : seul le dernier (la surcouche du dessus,
+ * ex. un menu ouvert dans une fiche détail) réagit à Échap et Tab.
+ */
+const activeTraps: symbol[] = [];
+
 export interface UseFocusTrapOptions {
   /** Piège actif : pose les écouteurs, déplace le focus, le restaure à la désactivation. */
   readonly active: boolean;
@@ -28,6 +34,8 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
   useEffect(() => {
     if (!active) return;
     const container = containerRef.current;
+    const token = Symbol('focus-trap');
+    activeTraps.push(token);
     const previouslyFocused = document.activeElement as HTMLElement | null;
 
     const focusables = (): HTMLElement[] =>
@@ -37,6 +45,7 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
     (first ?? container)?.focus();
 
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (activeTraps[activeTraps.length - 1] !== token) return;
       if (event.key === 'Escape') {
         event.stopPropagation();
         onEscape?.();
@@ -62,6 +71,8 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
     document.addEventListener('keydown', handleKeyDown, true);
     return () => {
       document.removeEventListener('keydown', handleKeyDown, true);
+      const index = activeTraps.indexOf(token);
+      if (index >= 0) activeTraps.splice(index, 1);
       previouslyFocused?.focus();
     };
   }, [active, onEscape]);

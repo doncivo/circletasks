@@ -73,3 +73,8 @@
   color: var(--ct-color-danger);
   font-weight: var(--ct-font-weight-semibold);
 }
+
+.ct-task-detail__postpone {
+  position: relative;
+  align-self: flex-start;
+}

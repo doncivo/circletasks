@@ -1,4 +1,5 @@
 import type { IconRef, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
+import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { SortOrderEntry } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
@@ -33,8 +34,8 @@ export interface CreateTaskInput {
 
 export type CreateTaskError = 'empty-title' | 'title-too-long' | 'time-without-date';
 
-/** Cible d'un report (T-05, SD-02). */
-export type PostponeTarget = 'tomorrow' | 'next-week' | { readonly date: LocalDate };
+/** Cible d'un report (T-05, SD-02) : définie dans src/domain/taskPostpone. */
+export type { PostponeTarget };
 
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
@@ -50,7 +51,11 @@ export interface TaskUseCases {
   complete(id: TaskId): Promise<Task>;
   /** Rouvrir une tâche terminée (Espace sur une tâche faite) ; non annulable. */
   reopen(id: TaskId): Promise<Task>;
-  /** T-05, SD-02, A-05 (lot), Ctrl+D ; annulable. */
+  /**
+   * T-05, SD-02, A-05 (lot), Ctrl+D ; annulable. Les tâches terminées sont ignorées, la date
+   * se calcule depuis aujourd'hui (Q4) ; rend les tâches réellement modifiées. Lève `RangeError`
+   * si la date choisie n'existe pas.
+   */
   postpone(ids: readonly TaskId[], target: PostponeTarget): Promise<Task[]>;
   /** S-02, S-06 : glisser vers un jour ; annulable. */
   moveToDay(id: TaskId, date: LocalDate): Promise<Task>;

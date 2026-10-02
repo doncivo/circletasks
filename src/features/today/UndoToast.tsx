@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Toast } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { undoMessage } from '../app/undo';
@@ -6,11 +6,9 @@ import { undoMessage } from '../app/undo';
 /**
  * Bandeau « Annuler » (T-04, branché sur le contrat générique `UndoStack` /
  * `Toast` de T-13, ADR 0005) : affiche la commande du dessus de la pile tant
- * qu'elle n'a pas été rejouée ou que son délai n'est pas écoulé. Pour l'instant
- * seule `taskUseCases.complete` (T-04) pousse une commande ; les autres actions
- * (reporter, déplacer, dupliquer, supprimer) et Ctrl+Z arrivent avec T-13, qui
- * généralisera aussi l'emplacement de montage (ici : écran Aujourd'hui, seul
- * écran qui pousse une commande à ce jour).
+ * qu'elle n'a pas été rejouée ou que son délai n'est pas écoulé. Terminer (T-04) et reporter (T-05)
+ * poussent déjà une commande, Ctrl+Z est branché ici (T-05) ; T-13 généralisera aux autres
+ * actions (déplacer, dupliquer, supprimer) et à l'emplacement de montage (ici : écran Aujourd'hui).
  */
 export function UndoToast() {
   const container = useAppContainer();
@@ -20,6 +18,14 @@ export function UndoToast() {
   // (nouveau `pushCount`, qui relance aussi le compte à rebours du `Toast` via
   // `resetKey`).
   const [closedAt, setClosedAt] = useState(-1);
+
+  // Ctrl+Z (T-05 critère 6, hors champ de saisie) : annule la dernière commande de la pile,
+  // même après la disparition du message. Échec ou 'stale' : sans effet, jamais de rejet non géré
+  // (message d'erreur dédié : T-13).
+  useEffect(
+    () => container.shortcuts.register('app.undo', () => void container.undo.undoLast().catch(() => undefined)),
+    [container],
+  );
   if (snapshot.top === null || snapshot.pushCount === closedAt) return null;
 
   const command = snapshot.top;

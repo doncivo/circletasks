@@ -1,4 +1,5 @@
 import { createStore } from 'zustand';
+import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { IconRef } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -30,6 +31,8 @@ export interface TaskDetailState {
    * courant de la tâche affichée. Ne rejette jamais.
    */
   toggleDone(): Promise<void>;
+  /** Bouton « Reporter » / « Planifier » (T-05) : annulable, la fiche reste ouverte. Ne rejette jamais. */
+  postpone(target: PostponeTarget): Promise<void>;
 }
 
 export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: AppContainer) => {
@@ -81,6 +84,17 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
 
     updateNote: (note) => run(set, get, (id) => useCases.update(id, { note })),
     updateIcon: (icon) => run(set, get, (id) => useCases.update(id, { icon })),
+
+    postpone: async (target) => {
+      const { taskId } = get();
+      if (!taskId) return;
+      try {
+        await useCases.postpone([taskId], target);
+        set({ errorKey: null });
+      } catch {
+        set({ status: 'error', errorKey: 'tasks.postponeError' });
+      }
+    },
 
     toggleDone: () =>
       run(set, get, (id) => {

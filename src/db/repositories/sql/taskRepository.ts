@@ -11,6 +11,7 @@ import type {
   TaskId,
 } from '../../../domain/types';
 import type { WriteStamper, WriteStamp } from '../../../domain/hlc';
+import { addDays } from '../../../domain/localDate';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 import type { RecurrenceRepository, TaskRepository } from '../taskRepository';
 import type { InstantRange, ReadOptions, SortOrderEntry } from '../common';
@@ -69,14 +70,6 @@ function taskFromNew(input: NewTask, stamp: WriteStamp): Task {
     deviceId: stamp.deviceId,
     hlc: stamp.hlc,
   };
-}
-
-/** Ajoute `days` jours à une date locale (arithmétique pure, sans fuseau). */
-function addDaysToLocalDate(date: LocalDate, days: number): LocalDate {
-  const [year, month, day] = date.split('-').map(Number);
-  const d = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, (day ?? 1) + days));
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${String(d.getUTCFullYear())}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}` as LocalDate;
 }
 
 const TASK_COLUMNS =
@@ -350,7 +343,7 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
     },
 
     async listForWeek(weekStart: LocalDate, filter: SpaceFilter) {
-      const weekEnd = addDaysToLocalDate(weekStart, 6);
+      const weekEnd = addDays(weekStart, 6);
       const f = spaceFilterClause(filter);
       const rows = await db.select<TaskRow>(
         `SELECT * FROM task WHERE deleted_at IS NULL AND date BETWEEN ? AND ? ${f.sql} ORDER BY date, sort_order, id`,

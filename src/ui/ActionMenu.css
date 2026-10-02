@@ -1,0 +1,64 @@
+/* ActionMenu : menu déroulant PC / feuille d'actions iPhone (T-05, présentation à définir par ui-design-system). */
+.ct-action-menu {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--ct-font-text);
+}
+
+.ct-action-menu--popover {
+  position: absolute;
+  top: calc(100% + var(--ct-space-1));
+  left: 0;
+  z-index: 50;
+  min-width: 220px;
+  padding: var(--ct-space-1);
+  background: var(--ct-color-surface);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-lg);
+  box-sizing: border-box;
+}
+
+.ct-action-menu--popover:focus-visible {
+  outline: none;
+}
+
+.ct-action-menu--sheet {
+  gap: var(--ct-space-2);
+}
+
+.ct-action-menu__item {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  background: transparent;
+  border: 0;
+  border-radius: var(--ct-radius-md);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-action-menu__item:hover {
+  background: var(--ct-color-surface-input);
+}
+
+.ct-action-menu__item:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: -2px;
+}
+
+.ct-action-menu--sheet .ct-action-menu__item {
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  justify-content: center;
+  height: 48px;
+}
+
+.ct-action-menu__item--close {
+  color: var(--ct-color-text-secondary);
+}

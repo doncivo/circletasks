@@ -2,13 +2,14 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { todayLocal } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
-import { asEntityId, type DeviceId } from '../../domain/types';
+import { asEntityId, asLocalDate, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
+import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { TodayScreen } from './TodayScreen';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000001');
@@ -529,6 +530,178 @@ describe('TodayScreen (T-01)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de terminer ou rouvrir cette tâche.');
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: 'Terminer : Boire de l’eau' })).toBeInTheDocument(); // liste conservée
+  });
+
+  async function openDetailOf(title: string) {
+    fireEvent.click(screen.getByRole('button', { name: title }));
+    return screen.findByRole('complementary', { name: 'Détail de la tâche' });
+  }
+
+  const ctrl = (key: string) => ({ key, code: `Key${key.toUpperCase()}`, ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, editable: false });
+
+  it('Reporter > Demain : la tâche quitte la liste, message avec titre, Annuler la remet (T-05, critères 1, 2, 6)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+    const menu = await screen.findByRole('menu', { name: 'Reporter la tâche' });
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Demain', 'Semaine prochaine', 'Choisir une date']);
+    fireEvent.click(within(menu).getByRole('menuitem', { name: 'Demain' }));
+
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Terminer : Courses' })).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent('« Courses » reportée à demain');
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect(await screen.findByRole('checkbox', { name: 'Terminer : Courses' })).toBeInTheDocument();
+  });
+
+  it('Échap ferme le menu sans rien reporter ni fermer la fiche (T-05, critère 1)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+    await screen.findByRole('menu');
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(screen.getByRole('complementary', { name: 'Détail de la tâche' })).toBeInTheDocument();
+    expect(container.undo.getSnapshot().size).toBe(0);
+  });
+
+  it('Choisir une date applique la date validée ; Fermer n’applique rien (T-05, critère 4)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Choisir une date' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Choisir une date' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Fermer' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choisir une date' })).not.toBeInTheDocument());
+    expect(container.undo.getSnapshot().size).toBe(0);
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Choisir une date' }));
+    dialog = await screen.findByRole('dialog', { name: 'Choisir une date' });
+    fireEvent.change(within(dialog).getByLabelText('Choisir une date de report'), { target: { value: '2026-12-24' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Valider' }));
+
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Terminer : Courses' })).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent(/^« Courses » reportée au jeu\. 24 déc\.Annuler$/);
+    const [persisted] = await container.data.repos.tasks.listForDay(asLocalDate('2026-12-24'), 'all');
+    expect(persisted).toMatchObject({ title: 'Courses', carriedOver: false });
+  });
+
+  it('Échap sur « Choisir une date » n’applique rien (T-05, critère 4)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Choisir une date' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Choisir une date' });
+    fireEvent.change(within(dialog).getByLabelText('Choisir une date de report'), { target: { value: '2026-12-24' } });
+
+    fireEvent.keyDown(document.activeElement ?? dialog, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Choisir une date' })).not.toBeInTheDocument());
+    expect(container.undo.getSnapshot().size).toBe(0);
+    expect(screen.getByRole('checkbox', { name: 'Terminer : Courses' })).toBeInTheDocument();
+  });
+
+  it('le message de report disparaît après 5 s mais la date reste changée (T-05, critère 6)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fireEvent.click(within(panel).getByRole('button', { name: 'Reporter' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Demain' }));
+      await screen.findByRole('status');
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_001);
+      });
+
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: 'Terminer : Courses' })).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Ctrl+D sur la ligne sélectionnée reporte à demain ; Ctrl+Z rétablit (T-05, critères 5, 6)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    fireEvent.focus(screen.getByRole('button', { name: 'Courses' }));
+    await waitFor(() => expect(container.shortcuts.activeIds()).toContain('list.postponeTomorrow'));
+
+    container.shortcuts.handle(ctrl('d'));
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: 'Terminer : Courses' })).not.toBeInTheDocument());
+
+    container.shortcuts.handle(ctrl('z'));
+    expect(await screen.findByRole('checkbox', { name: 'Terminer : Courses' })).toBeInTheDocument();
+  });
+
+  it('une tâche terminée n’a pas de bouton Reporter (T-05, critère 9)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    const panel = await openDetailOf('Courses');
+    expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Marquer comme terminée' }));
+
+    await waitFor(() => expect(within(panel).queryByRole('button', { name: 'Reporter' })).not.toBeInTheDocument());
+  });
+
+  it('une tâche « Un jour » propose « Planifier » au lieu de « Reporter » (T-05, critère 8)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    const created = await createTaskUseCases(container).create({ title: 'Idée', spaceId: SPACE_PERSO_ID, date: null, someday: true });
+    if (!created.ok) throw new Error('fixture');
+    act(() => useNavigationStore.getState().openDetail({ type: 'task', id: created.value.id }));
+
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    expect(await within(panel).findByRole('button', { name: 'Planifier' })).toBeInTheDocument();
+    expect(within(panel).queryByRole('button', { name: 'Reporter' })).not.toBeInTheDocument();
+  });
+
+  it('iPhone : Reporter ouvre une feuille d’actions avec Fermer (T-05, critère 1)', async () => {
+    mockViewport(440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    fireEvent.click(screen.getByRole('button', { name: 'Courses' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Détail de la tâche' });
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Reporter' }));
+    const actions = await screen.findByRole('dialog', { name: 'Reporter la tâche' });
+    expect(within(actions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Demain', 'Semaine prochaine', 'Choisir une date', 'Fermer']);
+    fireEvent.click(within(actions).getByRole('button', { name: 'Semaine prochaine' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Reporter la tâche' })).not.toBeInTheDocument());
+    expect(screen.getByRole('dialog', { name: 'Détail de la tâche' })).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('« Courses » reportée au');
+  });
+
+  it('échec du report : message d’erreur, tâche conservée, pas de rejet non géré (T-05)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+    await addTaskInline('Courses');
+    vi.spyOn(container.data, 'transaction').mockRejectedValueOnce(new Error('boom'));
+    fireEvent.focus(screen.getByRole('button', { name: 'Courses' }));
+    await waitFor(() => expect(container.shortcuts.activeIds()).toContain('list.postponeTomorrow'));
+
+    container.shortcuts.handle(ctrl('d'));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de reporter cette tâche.');
+    expect(screen.getByRole('checkbox', { name: 'Terminer : Courses' })).toBeInTheDocument();
   });
 
   it('iPhone : la fiche détail s’ouvre en feuille plein écran et se ferme par « Fermer » (A-08, critère 2)', async () => {
