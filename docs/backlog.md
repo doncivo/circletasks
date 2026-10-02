@@ -64,7 +64,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | à faire |
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
 | D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
-| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 8-9 sauvegarde avant migration ; 10-11 publication) |
+| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 10-11 : publication, attend le workflow de release et les secrets GitHub) |
 | OB-01 | M17 | Je fixe un objectif pour la semaine | spaces-goals | à faire |
 | OB-02 | M17 | J'épingle l'objectif en haut de ma liste | spaces-goals | à faire |
 | OB-03 | M17 | Je rattache une tâche à un objectif | spaces-goals | à faire |
