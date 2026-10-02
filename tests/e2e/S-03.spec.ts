@@ -151,17 +151,17 @@ test.describe('S-03 — naviguer entre semaines', () => {
     await expect(page.getByRole('button', { name: 'Semaine précédente' })).toBeVisible();
   });
 
-  test('chaque changement de semaine s’affiche en moins de 300 ms avec 5 000 tâches (critère 6)', async ({ page }, testInfo) => {
-    test.skip(isPhone(testInfo), 'Mesure e2e sur PC (PRD 8).');
+  test('chaque changement de semaine s’affiche en moins de 300 ms avec 5 000 tâches (critère 6) @perf', async ({ page }, testInfo) => {
     await openToday(page);
     const monday = await browserMonday(page);
     await page.evaluate(([first]) => window.__ctTest?.seedTasks(5000, first ?? '', 100), [addIsoDays(monday, -50)] as const);
     await openWeek(page);
     await expect(page.locator('.ct-week-item').first()).toBeVisible();
 
-    // Du clic sur la flèche à la première carte de la nouvelle semaine (chargement, sélection, assemblage, rendu) ; meilleur de trois.
+    // Du clic sur la flèche à la première carte de la nouvelle semaine (chargement, sélection, assemblage, rendu) ; meilleur de cinq (autres tests en parallèle ; mesure sans concurrence : `npm run test:perf`).
     const timings: number[] = [];
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.waitForTimeout(400);
       const label = attempt % 2 === 0 ? 'Semaine suivante' : 'Semaine précédente';
       timings.push(
         await page.evaluate(async (name) => {

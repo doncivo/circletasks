@@ -108,6 +108,16 @@ export function WeekScreen() {
   // Balayage horizontal (iPhone) : gauche = semaine suivante, droite = précédente ; abandonné si une carte est tenue pour un glisser (S-02).
   const swipe = useSwipe({ onSwipe: (way) => shiftWeek(way === 'left' ? 1 : -1), disabled: moves.dragging || layout !== 'mobile' });
 
+  // S-04 : « + Ajouter » d'un jour. Espace par défaut (T-01) : celui du filtre actif, sinon Pro ; jour passé permis.
+  const addToDay = useCallback(
+    async (date: LocalDate, title: string): Promise<boolean> => {
+      if (!fallbackSpaceId) return false;
+      const result = await addTask({ title, spaceId: resolveDefaultSpaceId(spaceFilter, fallbackSpaceId), date });
+      return result.ok;
+    },
+    [addTask, fallbackSpaceId, spaceFilter],
+  );
+
   // Squelette si le chargement dépasse 150 ms (A-09).
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
@@ -156,6 +166,7 @@ export function WeekScreen() {
               dragProps={moves.dragProps}
               drop={moves.dropFor(day.date)}
               onFocusTask={moves.setFocusedTaskId}
+              onAddTask={addToDay}
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id, date) => void toggleRoutine(id, date)}
               onOpen={(id) => openDetail({ type: 'task', id })}

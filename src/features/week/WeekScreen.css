@@ -533,3 +533,72 @@ button.ct-week-item__title {
 .ct-week-event:active {
   cursor: not-allowed;
 }
+
+/* « + Ajouter » en bas de chaque jour (S-04) : bouton pointillé (PC 34 px, iPhone chip de 44 px de zone tactile), puis champ de saisie. */
+.ct-week__add {
+  flex-shrink: 0;
+  border: 1.5px dashed var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  cursor: pointer;
+}
+
+.ct-week__add[data-layout='pc'] {
+  height: 34px;
+}
+
+.ct-week__add[data-layout='mobile'] {
+  position: relative;
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--ct-font-size-text-sm);
+  border-color: var(--ct-color-select-ring);
+  background: var(--ct-color-surface);
+}
+
+/* Chip de 32 px (Semaine.html) dont la zone tactile atteint 44 px vers le bas, sans gonfler la section (PRD 5). */
+.ct-week__add[data-layout='mobile']::after {
+  content: '';
+  position: absolute;
+  inset: 0 -6px -12px;
+}
+
+.ct-week__add:focus-visible,
+.ct-week__addInput:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-week__addForm {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.ct-week__addInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid var(--ct-color-accent);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-medium);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-week__addForm[data-layout='mobile'] .ct-week__addInput {
+  height: 44px;
+  font-size: 1rem; /* 16 px : iOS ne zoome pas la page à la prise de focus */
+}
+
+.ct-week__addInput::placeholder {
+  color: var(--ct-color-text-secondary);
+}

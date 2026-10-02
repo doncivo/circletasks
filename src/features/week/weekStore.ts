@@ -164,7 +164,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
           ...(input.recurrence ? { recurrence: input.recurrence } : {}),
         });
       } catch {
-        set({ actionErrorKey: 'tasks.detailSaveError' });
+        set({ actionErrorKey: 'week.addError' });
         return { ok: false, error: 'unexpected' };
       }
     },

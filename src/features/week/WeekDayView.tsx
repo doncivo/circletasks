@@ -1,4 +1,4 @@
-import type { PointerEvent as ReactPointerEvent, ReactNode } from 'react';
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayRow } from '../../domain/todayList';
 import type { LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
@@ -6,6 +6,7 @@ import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
+import { WeekDayAdd } from './WeekDayAdd';
 import { WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
 
 /** Ce que le jour montre pendant un glisser : zone « Déposer ici » (autre jour) ou repère d'insertion (même jour, A-02). */
@@ -37,8 +38,8 @@ export interface WeekDayViewProps {
   readonly onToggleDone: (id: TaskId) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
   readonly onOpen: (id: TaskId) => void;
-  /** Bas du jour : « + Ajouter » (S-04). */
-  readonly footer?: ReactNode;
+  /** S-04 : ajout rapide en bas du jour ; crée la tâche de ce jour et rend true si elle l'est. */
+  readonly onAddTask?: (date: LocalDate, title: string) => Promise<boolean>;
 }
 
 /**
@@ -48,6 +49,7 @@ export interface WeekDayViewProps {
  */
 export function WeekDayView(props: WeekDayViewProps) {
   const { day, layout, isToday, skeleton, drop } = props;
+  const itemsRef = useRef<HTMLDivElement>(null);
   const header = formatWeekDayHeader(day.date);
   const full = formatDayFull(day.date);
   const label = isToday ? t('week.dayAriaToday', { day: full }) : full;
@@ -115,7 +117,7 @@ export function WeekDayView(props: WeekDayViewProps) {
         </span>
       </div>
       <div className="ct-week-day__body">
-        <div className="ct-week-day__items">
+        <div ref={itemsRef} className="ct-week-day__items">
           {skeleton ? (
             <ListSkeleton rows={layout === 'pc' ? 2 : 1} />
           ) : (
@@ -134,7 +136,19 @@ export function WeekDayView(props: WeekDayViewProps) {
             </div>
           )}
         </div>
-        {props.footer}
+        {props.onAddTask && (
+          <WeekDayAdd
+            date={day.date}
+            layout={layout}
+            onAdd={(title) => props.onAddTask?.(day.date, title) ?? Promise.resolve(false)}
+            // La colonne défile jusqu'à la nouvelle carte (PC : colonne à défilement interne).
+            onAdded={() =>
+              window.requestAnimationFrame(() => {
+                if (itemsRef.current) itemsRef.current.scrollTop = itemsRef.current.scrollHeight;
+              })
+            }
+          />
+        )}
       </div>
     </section>
   );
