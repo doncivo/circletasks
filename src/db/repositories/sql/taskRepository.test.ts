@@ -53,6 +53,23 @@ describe('TaskRepository (SQL)', () => {
     expect(updated.updatedAt > created.updatedAt).toBe(true);
   });
 
+  it('enregistre et relit la note multi-lignes et l’icône (lucide ou emoji), T-03', async () => {
+    const [task] = sampleTodayTasks(DAY);
+    if (!task) throw new Error('fixture manquante');
+    const created = await db.data.repos.tasks.create({ ...task, note: 'Ligne 1\nLigne 2', icon: { kind: 'lucide', name: 'phone' } });
+    expect(created.note).toBe('Ligne 1\nLigne 2');
+    expect(created.icon).toEqual({ kind: 'lucide', name: 'phone' });
+    const read = await db.data.repos.tasks.getById(task.id);
+    expect(read).toEqual(created);
+
+    const withEmoji = await db.data.repos.tasks.update(task.id, { icon: { kind: 'emoji', value: '📞' } });
+    expect(withEmoji.icon).toEqual({ kind: 'emoji', value: '📞' });
+
+    const withoutIcon = await db.data.repos.tasks.update(task.id, { icon: null, note: '' });
+    expect(withoutIcon.icon).toBeNull();
+    expect(withoutIcon.note).toBe('');
+  });
+
   it("lève RepositoryError('not-found') sur un id inconnu", async () => {
     await expect(db.data.repos.tasks.update(testTaskId('999'), { title: 'x' })).rejects.toMatchObject({
       code: 'not-found',

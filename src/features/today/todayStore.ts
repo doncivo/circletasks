@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import { todayLocal } from '../../domain/clock';
-import type { Task } from '../../domain/model';
+import type { IconRef, Task } from '../../domain/model';
 import { sortTasksForDay } from '../../domain/taskSchedule';
 import type { LocalDate, LocalTime, Result, SpaceFilter, SpaceId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -41,9 +41,24 @@ export interface TodayState {
    * celle du jour affiché, pas celle de la tâche créée (critère 1 : une tâche
    * créée pour un autre jour n'apparaît pas dans Aujourd'hui). Absent : le jour
    * affiché, comme avant T-02.
+   * `icon` (T-03) : choisi dans la feuille « Nouvelle tâche » (iPhone, Ajout.html) ;
+   * absent sur la saisie en ligne PC, qui ne porte pas ce champ (pas de maquette).
    * Ne rejette jamais : les échecs sont renvoyés dans le `Result`.
    */
-  addTask(title: string, spaceId: SpaceId, schedule?: NewTaskSchedule): Promise<Result<Task, TodayAddTaskError>>;
+  addTask(
+    title: string,
+    spaceId: SpaceId,
+    schedule?: NewTaskSchedule,
+    icon?: IconRef | null,
+  ): Promise<Result<Task, TodayAddTaskError>>;
+  /**
+   * Répercute dans la liste affichée une tâche modifiée ailleurs (fiche détail,
+   * T-03 : icône, note) : remplace l'entrée de même id si elle est affichée,
+   * ignore sans erreur si `task` n'appartient pas au jour courant. Synchrone
+   * (pas de lecture base) : `TaskDetail` l'appelle après chaque écriture réussie
+   * pour que la ligne reflète l'icône ou la note à jour sans recharger la liste.
+   */
+  setTaskInPlace(task: Task): void;
 }
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
@@ -77,7 +92,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       }
     },
 
-    async addTask(title, spaceId, schedule) {
+    async addTask(title, spaceId, schedule, icon) {
       const { date, filter } = get();
       const viewedDate = date ?? todayLocal(container.clock);
       // La tâche est datée sur `schedule.date` si fourni (ex. un autre jour,
@@ -85,13 +100,14 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       // rechargée reste celle du jour affiché, qu'il s'agisse ou non du même jour.
       const taskDate = schedule?.date ?? viewedDate;
       try {
-        // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `time` que si
-        // `schedule` le fournit explicitement.
+        // `exactOptionalPropertyTypes` (tsconfig) : on n'inclut `time` / `icon` que
+        // si l'appelant les fournit explicitement.
         const result = await useCases.create({
           title,
           spaceId,
           date: taskDate,
           ...(schedule?.time !== undefined ? { time: schedule.time } : {}),
+          ...(icon !== undefined ? { icon } : {}),
         });
         if (!result.ok) return result;
         const id = ++requestId;
@@ -106,6 +122,12 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         set({ status: 'error', errorKey: 'tasks.todayError' });
         return { ok: false, error: 'unexpected' };
       }
+    },
+
+    setTaskInPlace(task) {
+      const { tasks } = get();
+      if (!tasks.some((existing) => existing.id === task.id)) return; // pas dans la liste affichée (autre jour, filtre)
+      set({ tasks: sortTasksForDay(tasks.map((existing) => (existing.id === task.id ? task : existing))) });
     },
   }));
 });

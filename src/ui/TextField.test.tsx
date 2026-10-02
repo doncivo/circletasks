@@ -29,4 +29,12 @@ describe('TextField', () => {
     const label = screen.getByText('Note');
     expect(label).not.toHaveClass('ct-visually-hidden');
   });
+
+  it('appelle onBlur à la perte de focus (Note, T-03 critère 8)', () => {
+    const onBlur = vi.fn();
+    render(<TextField value="Détails" onChange={() => undefined} label="Note" multiline onBlur={onBlur} />);
+    const field = screen.getByRole('textbox', { name: 'Note' });
+    fireEvent.blur(field);
+    expect(onBlur).toHaveBeenCalledOnce();
+  });
 });

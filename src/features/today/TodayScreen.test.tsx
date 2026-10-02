@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { todayLocal } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
@@ -7,6 +8,7 @@ import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
+import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { TodayScreen } from './TodayScreen';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000001');
@@ -48,6 +50,7 @@ describe('TodayScreen (T-01)', () => {
     vi.unstubAllGlobals();
     useAppStore.getState().setSpaceFilter('all');
     useAppStore.getState().setSpaces([]);
+    useNavigationStore.setState(INITIAL_NAVIGATION);
     await db.close();
   });
 
@@ -196,5 +199,188 @@ describe('TodayScreen (T-01)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     const thursday = await container.data.repos.tasks.listForDay('2026-10-08' as never, 'all');
     expect(thursday).toMatchObject([{ title: 'Faire les courses', time: '09:00' }]);
+  });
+
+  it('choisit une icône Lucide dans la feuille « Nouvelle tâche » : affichée, décorative, à droite de la ligne (critères 1, 3, 4, 6)', async () => {
+    mockViewport(440);
+    renderToday(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Appeler le notaire' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Icône téléphone' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+
+    const row = (await screen.findByText('Appeler le notaire')).closest('.ct-list-row') as HTMLElement;
+    const icon = row.querySelector('svg');
+    expect(icon).toHaveAttribute('aria-hidden', 'true');
+
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]?.icon).toEqual({ kind: 'lucide', name: 'phone' });
+  });
+
+  it('choisir un emoji remplace l’icône Lucide choisie (un seul champ icon, critère 2)', async () => {
+    mockViewport(440);
+    renderToday(container);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle tâche' });
+    fireEvent.change(within(dialog).getByLabelText('Titre'), { target: { value: 'Boire de l’eau' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Icône téléphone' }));
+    fireEvent.click(within(dialog).getByRole('radio', { name: 'Emoji' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Emoji goutte d’eau' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Enregistrer' }));
+
+    await screen.findByText('Boire de l’eau');
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]?.icon).toEqual({ kind: 'emoji', value: '💧' });
+  });
+
+  it('une tâche sans icône ne réserve aucun emplacement à droite de la ligne (critère 4)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Sans icône' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+
+    const row = (await screen.findByText('Sans icône')).closest('.ct-list-row') as HTMLElement;
+    expect(row.querySelector('svg')).toBeNull();
+  });
+
+  it('la note d’une tâche n’apparaît pas dans la ligne Aujourd’hui, seulement dans le détail (critère 10)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Avec une note' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    const rowTitle = await screen.findByText('Avec une note');
+    const row = rowTitle.closest('.ct-list-row') as HTMLElement;
+
+    fireEvent.click(screen.getByRole('button', { name: 'Avec une note' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    const note = within(panel).getByRole('textbox', { name: 'Note' });
+    fireEvent.change(note, { target: { value: 'Secret de la note' } });
+    fireEvent.blur(note);
+    await waitFor(async () => {
+      const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+      expect(persisted[0]?.note).toBe('Secret de la note');
+    });
+
+    expect(within(row).queryByText('Secret de la note')).not.toBeInTheDocument();
+    expect(row).not.toHaveTextContent('Secret de la note');
+  });
+
+  it('ouvre la fiche détail au clic du titre, modifie puis retire l’icône depuis la pastille (critère 5)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Envoyer la facture' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    await screen.findByText('Envoyer la facture');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    const iconButton = () => panel.querySelector('.ct-task-detail__iconButton') as HTMLElement;
+
+    expect(iconButton()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(within(panel).getByRole('button', { name: 'Icône' }));
+    expect(iconButton()).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Icône document' }));
+    // Choisir referme le sélecteur aussitôt (pas de bouton supplémentaire) ; la
+    // pastille reflète l'icône une fois l'écriture terminée (critère 5).
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Changer l’icône' })).toBeInTheDocument());
+    expect(iconButton()).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Changer l’icône' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Retirer l’icône' }));
+    await waitFor(() => expect(within(panel).getByRole('button', { name: 'Icône' })).toBeInTheDocument());
+
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]?.icon).toBeNull();
+  });
+
+  it('la ligne Aujourd’hui reflète aussitôt un changement d’icône ou de note fait dans le panneau (bloquant revue T-03)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Envoyer la facture' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    const row = (await screen.findByText('Envoyer la facture')).closest('.ct-list-row') as HTMLElement;
+    expect(row.querySelector('svg')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    fireEvent.click(within(panel).getByRole('button', { name: 'Icône' }));
+    fireEvent.click(within(panel).getByRole('button', { name: 'Icône document' }));
+
+    // La ligne de la liste (pas seulement la base) affiche la nouvelle icône sans
+    // recharger ni rouvrir l'écran : todayStore.setTaskInPlace est appelé par
+    // TaskDetail après l'écriture réussie.
+    await waitFor(() => expect(row.querySelector('svg')).not.toBeNull());
+    expect(row.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('enregistre une note multi-lignes à la perte de focus, conservée au réaffichage (critères 7 à 9, 11)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Envoyer la facture' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    await screen.findByText('Envoyer la facture');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    const note = within(panel).getByRole('textbox', { name: 'Note' });
+
+    fireEvent.change(note, { target: { value: 'Ligne 1\nLigne 2' } });
+    fireEvent.blur(note);
+
+    await waitFor(async () => {
+      const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+      expect(persisted[0]?.note).toBe('Ligne 1\nLigne 2');
+    });
+
+    // Vide la note : enregistrée comme chaîne vide (critère 9).
+    fireEvent.change(note, { target: { value: '' } });
+    fireEvent.blur(note);
+    await waitFor(async () => {
+      const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+      expect(persisted[0]?.note).toBe('');
+    });
+  });
+
+  it('Échap ferme le panneau et enregistre la note en attente (critères 3, 8)', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Envoyer la facture' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    await screen.findByText('Envoyer la facture');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+    const note = within(panel).getByRole('textbox', { name: 'Note' });
+    fireEvent.change(note, { target: { value: 'À relire' } });
+    fireEvent.keyDown(panel, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Détail de la tâche' })).not.toBeInTheDocument());
+    const persisted = await container.data.repos.tasks.listForDay(todayLocal(container.clock), 'all');
+    expect(persisted[0]?.note).toBe('À relire');
+  });
+
+  it('iPhone : la fiche détail s’ouvre en feuille plein écran et se ferme par « Fermer » (A-08, critère 2)', async () => {
+    mockViewport(440);
+    renderToday(container);
+
+    fireEvent.change(screen.getByLabelText('Nouvelle tâche'), { target: { value: 'Envoyer la facture' } });
+    fireEvent.submit(screen.getByLabelText('Nouvelle tâche').closest('form') as HTMLFormElement);
+    await screen.findByText('Envoyer la facture');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Envoyer la facture' }));
+    const sheet = await screen.findByRole('dialog', { name: 'Détail de la tâche' });
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Fermer' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Détail de la tâche' })).not.toBeInTheDocument());
   });
 });

@@ -1,0 +1,75 @@
+/* Fiche détail (A-08), zones icône et note de T-03 (PC-Aujourdhui.html, Detail.html). */
+.ct-task-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-4);
+}
+
+.ct-task-detail__closeRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-task-detail__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-task-detail__header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.ct-task-detail__iconButton {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-surface);
+  border: 1.5px solid var(--ct-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+
+.ct-task-detail__iconPlaceholder {
+  width: 28px;
+  height: 28px;
+}
+
+.ct-task-detail__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-task-detail__iconEditor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding: var(--ct-space-3);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-task-detail__note .ct-text-field__control--multiline {
+  height: 110px;
+}
+
+.ct-task-detail__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}

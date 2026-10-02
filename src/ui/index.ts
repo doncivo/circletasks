@@ -1,7 +1,19 @@
 export { PC_MEDIA_QUERY, PC_MIN_WIDTH_PX, useLayout, type Layout } from './useLayout';
 export { Icon, type IconProps } from './Icon';
-export { ICON_CATALOG, resolveIconComponent } from './iconCatalog';
+export {
+  ICON_CATALOG,
+  ICON_CATALOG_ENTRIES,
+  resolveIconColor,
+  resolveIconComponent,
+  resolveIconLabelKey,
+  resolveIconRefColor,
+  type IconCatalogEntry,
+} from './iconCatalog';
 export { IconView, type IconViewProps } from './IconView';
+export { IconPicker, type IconPickerProps } from './IconPicker';
+export { EmojiPicker, type EmojiPickerProps } from './EmojiPicker';
+export { IconChooser, type IconChooserProps } from './IconChooser';
+export { EMOJI_CATALOG, type EmojiCatalogEntry } from './emojiCatalog';
 export { Kbd, type KbdProps } from './Kbd';
 export { TabRail, type TabRailItem, type TabRailProps } from './TabRail';
 export { AppShell, type AppShellProps } from './AppShell';
