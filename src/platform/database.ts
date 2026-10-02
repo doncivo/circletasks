@@ -1,3 +1,4 @@
+import type { MigrationBackup } from '../db/migrationBackup';
 import type { SqlDriver } from '../db/driver';
 import { detectRuntime, type Runtime } from './runtime';
 
@@ -19,4 +20,16 @@ export async function openDatabase(runtime: Runtime = detectRuntime()): Promise<
   }
   const { openSqliteWasmDriver } = await import('../db/drivers/sqliteWasm');
   return openSqliteWasmDriver();
+}
+
+/**
+ * Port de sauvegarde avant migration pour le driver ouvert (D-03 critères 8 et 9).
+ * - Tauri : copie cohérente dans `backups/` (commande Rust) ;
+ * - navigateur de dev (SQLite Wasm en mémoire, vide à chaque rechargement) : SAUTÉE, il n'y a
+ *   rien à protéger ; la sauvegarde réelle est couverte par `cargo test` (ADR 0002, avenant).
+ */
+export async function createMigrationBackup(db: SqlDriver): Promise<MigrationBackup | undefined> {
+  if (db.kind !== 'tauri-sqlite') return undefined;
+  const { createTauriMigrationBackup } = await import('./tauri/migrationBackup');
+  return createTauriMigrationBackup(db);
 }

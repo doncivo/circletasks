@@ -4,5 +4,5 @@
   "description": "Permissions minimales de la fenêtre principale (PC et iPhone).",
   "windows": ["main"],
   "platforms": ["windows", "iOS"],
-  "permissions": ["core:default", "sql:default", "sql:allow-execute"]
+  "permissions": ["core:default", "sql:default", "sql:allow-execute", "allow-backup-database-before-migration"]
 }

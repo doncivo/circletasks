@@ -60,4 +60,13 @@ describe('App (coquille, T-01)', () => {
     render(<App />);
     expect(screen.getByRole('alert')).toHaveTextContent(t('app.dbError'));
   });
+
+  it('D-03 échec de sauvegarde avant migration : message dédié « données non modifiées »', () => {
+    mockViewport(440);
+    useAppStore.setState({ dbStatus: 'error', dbBackupFailed: true });
+    render(<App />);
+    expect(screen.getByRole('alert')).toHaveTextContent(t('app.dbBackupError'));
+    expect(screen.getByRole('alert')).toHaveTextContent('Vos données n’ont pas été modifiées');
+    useAppStore.setState({ dbBackupFailed: false });
+  });
 });

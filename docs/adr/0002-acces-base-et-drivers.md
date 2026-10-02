@@ -80,3 +80,18 @@ Aucune table métier n'est créée à ce stade ; le registre est vide. Les 18 ta
 - Le comportement transactionnel du driver Tauri (une connexion réutilisée par sqlx) doit être vérifié dans l'app réelle par un test `tauri dev` puis sur iPhone (POC-01).
 - Emplacement exact de la base : tauri-plugin-sql la place dans le dossier de configuration de l'app ; à confirmer pour la sauvegarde quotidienne (desktop-tauri).
 - Projet Playwright « iphone » en Chromium émulé ; ajouter WebKit si un écart de rendu Safari apparaît.
+
+## Avenant D-03 (2026-10-02) : sauvegarde automatique avant migration
+
+Critères D-03 8 et 9 ; PRD section 7. Remplit le point d'accroche `beforeApply`.
+
+- **Déclenchement** : `migrate()` appelle `beforeApply(pending, { fromVersion })` une fois, avant la première migration en attente. `createBackupBeforeMigration` (src/db/migrationBackup.ts) ne sauvegarde que si `fromVersion >= 1` : base neuve ou déjà à jour = aucune sauvegarde.
+- **Échec bloquant** : toute erreur de sauvegarde devient `MigrationBackupError` ; aucune migration n'est appliquée, la base est fermée, `dbStatus = 'error'` et `dbBackupFailed = true` : l'écran affiche `app.dbBackupError` (« … Vos données n'ont pas été modifiées … »).
+- **Copie (Tauri)** : le front fait `PRAGMA wal_checkpoint(TRUNCATE)` sur l'unique connexion, (busy = 0 exigé), puis appelle la commande Rust `backup_database_before_migration` (src-tauri/src/backup.rs) qui fait `VACUUM INTO` (rusqlite, lecture seule) vers un `.tmp`, `sync_all`, puis renomme : jamais de sauvegarde partielle sous son nom final, pas de `-wal` à copier, `.tmp` orphelins supprimés au début de chaque sauvegarde. Base absente avec `fromVersion >= 1` : erreur `no-database` ; le front rejette aussi un résultat sans chemin.
+- **Emplacement** : `<dossier de configuration de l'app>/backups/` (même dossier que la base, `%APPDATA%\fr.circletasks.planner` sous Windows, hors dossier d'installation, jamais touché par l'installeur). Ce dossier est aussi celui de P-04.
+- **Nommage** : `circletasks-pre-migration-vAAAA-to-vBBBB-AAAAMMJJTHHMMSSZ.db` (versions de schéma avant et après, horodatage UTC fourni par la `Clock`). P-04 utilisera le préfixe `circletasks-daily-AAAAMMJJ.db` dans le même dossier et sa propre rétention (14 versions).
+- **Nettoyage** : après une sauvegarde réussie, on garde les 5 dernières sauvegardes de migration (`KEEP_MIGRATION_BACKUPS`, tri par horodatage) ; seuls les fichiers du préfixe de migration sont supprimés, jamais les quotidiennes. Un échec de nettoyage ne fait pas échouer la sauvegarde.
+- **Driver de dev (SQLite Wasm)** : sauvegarde sautée (base en mémoire, vide à chaque rechargement, rien à protéger). La copie réelle est couverte par `cargo test` (base WAL), l'orchestration par Vitest.
+- **iPhone** : la commande est aussi enregistrée et autorisée (capability par défaut) ; même dossier de configuration de l'app.
+- **Tests** : Vitest (orchestration, échec bloquant, bootstrap, rejeu 0001/0002/0003 -> 0004 sur base peuplée avec « copie » comparée) ; cargo test `tests/desktop/backup.rs` (WAL avec et sans checkpoint, atomicité, rétention 5, quotidiennes épargnées).
+- **Reste pour Ali (D-03 critère 8, installation réelle)** : mettre à jour un build installé N vers N+1 avec migration et vérifier la présence d'un fichier dans `%APPDATA%\fr.circletasks.planner\backups\` et des données intactes.

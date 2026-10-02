@@ -9,6 +9,7 @@ export const fr = {
     name: 'CircleTasks',
     loading: 'Chargement…',
     dbError: 'Impossible d’ouvrir la base de données.',
+    dbBackupError: 'Mise à jour des données interrompue : la sauvegarde de sécurité a échoué. Vos données n’ont pas été modifiées. Libérez de l’espace disque puis relancez CircleTasks.',
     version: 'Version {version}',
   },
   common: {

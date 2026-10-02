@@ -13,6 +13,8 @@ export interface AppState {
   readonly dbStatus: DbStatus;
   /** Message technique de la dernière erreur d'ouverture (écran de logs, jamais affiché tel quel). */
   readonly dbErrorDetail: string | null;
+  /** La sauvegarde avant migration a échoué : migrations non appliquées, message dédié (app.dbBackupError). */
+  readonly dbBackupFailed: boolean;
   /** Filtre Pro / Perso / Tout appliqué à tous les écrans (CLAUDE.md). */
   readonly spaceFilter: SpaceFilter;
   /**
@@ -34,7 +36,7 @@ export interface AppState {
   /** T-11 : fuseau IANA courant de l'appareil (détecté au démarrage et au retour au premier plan). */
   readonly timeZone: string | null;
   setTimeZone(timeZone: string): void;
-  setDbStatus(status: DbStatus, errorDetail?: string): void;
+  setDbStatus(status: DbStatus, options?: { readonly detail?: string; readonly backupFailed?: boolean }): void;
   setDay(day: LocalDate): void;
   setCarryOverFailed(failed: boolean): void;
   setRecurrenceFailed(failed: boolean): void;
@@ -45,6 +47,7 @@ export interface AppState {
 export const useAppStore = create<AppState>()((set) => ({
   dbStatus: 'idle',
   dbErrorDetail: null,
+  dbBackupFailed: false,
   spaceFilter: 'all',
   spaces: [],
   day: null,
@@ -52,7 +55,7 @@ export const useAppStore = create<AppState>()((set) => ({
   recurrenceFailed: false,
   timeZone: null,
   setTimeZone: (timeZone) => set({ timeZone }),
-  setDbStatus: (dbStatus, errorDetail) => set({ dbStatus, dbErrorDetail: errorDetail ?? null }),
+  setDbStatus: (dbStatus, options) => set({ dbStatus, dbErrorDetail: options?.detail ?? null, dbBackupFailed: options?.backupFailed ?? false }),
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
   setRecurrenceFailed: (recurrenceFailed) => set({ recurrenceFailed }),
