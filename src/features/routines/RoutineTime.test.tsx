@@ -108,7 +108,7 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     expect(await h.container.data.repos.reminders.listForTarget({ type: 'routine', id: routine?.id as RoutineId })).toEqual([]);
   });
 
-  it('effacer l’heure d’une routine qui avait des rappels : cases grisées, rappels supprimés (critère 5)', async () => {
+  it('effacer l’heure d’une routine qui avait des rappels : cases grisées, rappels conservés mais inactifs (R-02 critère 5, N-02 critère 7)', async () => {
     const routine = await seedRoutine(h, { title: 'Sport', time: '18:00' as LocalTime });
     await seedReminders(h, routine.id as RoutineId, [0, 30]);
     renderRoutines(h.container);
@@ -124,7 +124,23 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     fireEvent.click(save());
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
     expect((await h.container.data.repos.routines.getById(routine.id))?.time).toBeNull();
-    expect(await h.container.data.repos.reminders.listForTarget({ type: 'routine', id: routine.id as RoutineId })).toEqual([]);
+    expect((await h.container.data.repos.reminders.listForTarget({ type: 'routine', id: routine.id as RoutineId })).map((r) => r.offsetMin).sort((a, b) => a - b)).toEqual([0, 30]);
+  });
+
+  it('« Plus… » ouvre les six avances ; une avance rare déjà posée est visible ; enregistrer pose les avances cochées (N-02 critères 2, 4)', async () => {
+    const routine = await seedRoutine(h, { title: 'Sport', time: '18:00' as LocalTime });
+    await seedReminders(h, routine.id as RoutineId, [0, 15]);
+    renderRoutines(h.container);
+    fireEvent.click(await screen.findByRole('button', { name: 'Éditer la routine Sport' }));
+    await screen.findByRole('form', { name: 'Modifier la routine' });
+    // 15 min n'est pas un rappel rapide : la liste est dépliée d'office.
+    expect(box('15 min')).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(box('1 jour'));
+    fireEvent.click(box('À l’heure'));
+    fireEvent.click(save());
+    await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
+    const rows = await h.container.data.repos.reminders.listForTarget({ type: 'routine', id: routine.id as RoutineId });
+    expect(rows.map((r) => r.offsetMin).sort((a, b) => a - b)).toEqual([15, 1440]);
   });
 
   it('changer l’heure : les rappels gardent leur avance, l’échéance est recalculée ; les autres avances (N-02) sont conservées (critère 6)', async () => {

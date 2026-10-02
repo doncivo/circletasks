@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import { addDays } from '../../domain/localDate';
-import type { CalendarAccount, ExternalEvent, IconRef, RecurrenceFields, Task } from '../../domain/model';
+import type { CalendarAccount, ExternalEvent, IconRef, RecurrenceFields, ReminderOffsetMin, Task } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
@@ -28,6 +28,8 @@ export interface NewWeekTask {
   readonly someday?: boolean;
   readonly recurrence?: RecurrenceFields | null;
   readonly icon?: IconRef | null;
+  /** N-02 : avances des rappels choisies dans la feuille d'ajout. */
+  readonly reminderOffsets?: readonly ReminderOffsetMin[];
 }
 
 /** `addTask` peut en plus échouer pour une raison imprévue (écriture en base). */
@@ -194,6 +196,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
           ...(input.time !== undefined && !input.someday ? { time: input.time } : {}),
           ...(input.icon !== undefined ? { icon: input.icon } : {}),
           ...(input.recurrence ? { recurrence: input.recurrence } : {}),
+          ...(input.reminderOffsets && input.reminderOffsets.length > 0 ? { reminderOffsets: input.reminderOffsets } : {}),
         });
       } catch {
         set({ actionErrorKey: 'week.addError' });

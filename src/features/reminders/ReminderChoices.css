@@ -1,0 +1,68 @@
+.ct-reminder {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-medium);
+  cursor: pointer;
+}
+
+.ct-reminder[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ct-reminder--more {
+  font-weight: var(--ct-font-weight-bold);
+  text-decoration: underline;
+}
+
+.ct-reminder__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-text);
+  border-radius: var(--ct-radius-sm);
+  color: var(--ct-color-bg);
+}
+
+.ct-reminder__box[data-checked='true'] {
+  background: var(--ct-color-text);
+}
+
+.ct-reminder:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+/* Bloc « Rappel » des feuilles Nouvelle tâche / Modifier la tâche (Ajout.html). */
+.ct-reminder-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-reminder-block__label {
+  align-self: flex-start;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ct-color-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-reminder-block__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: var(--ct-space-3);
+}

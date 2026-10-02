@@ -13,10 +13,10 @@ describe('rappels de routine (R-02)', () => {
   });
 
   it('le formulaire ne touche pas aux avances qu’il ne montre pas', () => {
-    expect(ROUTINE_FORM_OFFSETS).toEqual([0, 30]);
-    expect(mergeReminderOffsets([0, 15, 1440], [30])).toEqual([15, 1440, 30]);
+    expect(ROUTINE_FORM_OFFSETS).toEqual([0, 5, 15, 30, 60, 1440]);
+    expect(mergeReminderOffsets([0, 15, 1440], [30])).toEqual([30]);
     expect(mergeReminderOffsets([], [0, 30])).toEqual([0, 30]);
-    expect(mergeReminderOffsets([5], [5 as never, 0])).toEqual([5, 0]);
+    expect(mergeReminderOffsets([5], [5, 0])).toEqual([5, 0]);
   });
 
   it('échéance = prochaine occurrence à l’heure moins l’avance, heure locale flottante', () => {

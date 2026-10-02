@@ -43,6 +43,7 @@ export function TaskDetail() {
   const setRecurrence = useFeatureStore(taskDetailStore, (s) => s.setRecurrence);
   const updateRecurrence = useFeatureStore(taskDetailStore, (s) => s.updateRecurrence);
   const stopRecurrence = useFeatureStore(taskDetailStore, (s) => s.stopRecurrence);
+  const setReminders = useFeatureStore(taskDetailStore, (s) => s.setReminders);
   const postpone = useFeatureStore(taskDetailStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(taskDetailStore, (s) => s.postponeSeries);
   const toggleDone = useFeatureStore(taskDetailStore, (s) => s.toggleDone);
@@ -68,8 +69,8 @@ export function TaskDetail() {
   }, [taskId, load]);
 
   const api: TaskDetailApi = useMemo(
-    () => ({ updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday }),
-    [updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday],
+    () => ({ updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday, setReminders }),
+    [updateNote, updateIcon, updateFields, applySeriesEdit, setRecurrence, updateRecurrence, stopRecurrence, postpone, postponeSeries, toggleDone, moveToSomeday, setReminders],
   );
 
   if (!taskId) return null;

@@ -192,9 +192,9 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
         const routine = await repos.routines.update(id, checked.value);
         if (before && before.paused !== routine.paused) await syncPausePeriod(deps, repos, id, routine.paused);
         const existing = (await repos.reminders.listForTarget({ type: 'routine', id })).map((reminder) => reminder.offsetMin);
-        // Les avances que le formulaire ne montre pas (N-02) restent ; sans heure, plus aucun rappel.
+        // Sans heure (QB-07, N-02 critère 7) : rappels conservés tels quels mais inactifs ; avec une heure, `fire_at` recalculé.
         const offsets = mergeReminderOffsets(existing, input.reminderOffsets);
-        if (existing.length > 0 || (routine.time !== null && offsets.length > 0)) await writeReminders(repos, routine, offsets);
+        if (routine.time !== null && (existing.length > 0 || offsets.length > 0)) await writeReminders(repos, routine, offsets);
         return routine;
       });
       emitRoutinesChanged(deps.data);

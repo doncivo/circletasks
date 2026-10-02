@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { IconRef, RecurrenceFields, Task, TaskPatch } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';
@@ -19,6 +19,7 @@ export interface TaskDetailApi {
   readonly postponeSeries: (target: PostponeTarget, scope: SeriesScope) => Promise<void>;
   readonly toggleDone: () => Promise<void>;
   readonly moveToSomeday: () => Promise<boolean>;
+  readonly setReminders: (offsets: readonly ReminderOffsetMin[]) => Promise<boolean>;
 }
 
 export interface TaskDetailEdits {
@@ -126,6 +127,7 @@ export function useTaskDetailEdits(
       const ok = scope ? await api.applySeriesEdit(result.patch, scope) : await api.updateFields(result.patch);
       if (!ok) return;
     }
+    if (result.reminders !== undefined) await api.setReminders(result.reminders);
     if (result.rule === undefined) return;
     if (task.recurrenceId === null) {
       if (result.rule) await api.setRecurrence(result.rule);

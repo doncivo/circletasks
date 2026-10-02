@@ -1,18 +1,22 @@
 import { X } from 'lucide-react';
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
-import type { IconRef, RecurrenceFields, Space, Task, TaskPatch } from '../../domain/model';
+import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import { ruleChanged } from '../../domain/recurrenceEdit';
+import { sortReminderOffsets, toggleReminderOffset } from '../../domain/reminders';
 import { choiceOfTask, editSheetPatch } from '../../domain/taskDetailEdit';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
+import { ReminderBlock } from '../reminders';
 import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField } from '../../ui';
 
 /** Résultat de la feuille : champs modifiés, et règle de répétition si elle a changé (`null` : « Une fois »). */
 export interface EditSheetResult {
   readonly patch: TaskPatch;
   readonly rule: RecurrenceFields | null | undefined;
+  /** Avances des rappels si elles ont changé (N-02), undefined sinon. */
+  readonly reminders?: readonly ReminderOffsetMin[] | undefined;
 }
 
 export interface TaskEditSheetProps {
@@ -21,6 +25,8 @@ export interface TaskEditSheetProps {
   readonly today: LocalDate;
   /** Règle actuelle de la série (T-09), null : « Une fois ». */
   readonly recurrence: RecurrenceFields | null;
+  /** Avances des rappels actuels de la tâche (N-02). */
+  readonly reminders: readonly ReminderOffsetMin[];
   readonly onClose: () => void;
   readonly onSave: (result: EditSheetResult) => void;
 }
@@ -28,13 +34,14 @@ export interface TaskEditSheetProps {
 /**
  * Feuille « Modifier la tâche » de la fiche iPhone (A-08 critère 9, Q15) : la feuille d'ajout pré-remplie (titre, icône,
  * date et roues, répétition, espace). Enregistrer applique les changements ; fermer sans enregistrer ne change rien.
- * Rappels et projet : à venir avec N-02 et ES-04 (aucun champ simulé).
+ * Rappels (N-02) : bloc grisé sans heure. Projet : à venir avec ES-04 (aucun champ simulé).
  */
-export function TaskEditSheet({ task, spaces, today, recurrence, onClose, onSave }: TaskEditSheetProps) {
+export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onClose, onSave }: TaskEditSheetProps) {
   const [title, setTitle] = useState(task.title);
   const [icon, setIcon] = useState<IconRef | null>(task.icon);
   const [choice, setChoice] = useState<DateChoice>(choiceOfTask(task));
   const [rule, setRule] = useState<RecurrenceFields | null>(recurrence);
+  const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>(reminders);
   const [spaceId, setSpaceId] = useState<SpaceId>(task.spaceId);
   const valid = validateTaskTitle(title);
 
@@ -43,7 +50,9 @@ export function TaskEditSheet({ task, spaces, today, recurrence, onClose, onSave
     if (!valid.ok) return;
     const patch = editSheetPatch(task, { title: valid.value, icon, choice, spaceId });
     const changed = rule === null ? recurrence !== null : recurrence === null || ruleChanged(recurrence, rule);
-    onSave({ patch, rule: changed ? rule : undefined });
+    const wanted = sortReminderOffsets(offsets);
+    const remindersChanged = wanted.join() !== sortReminderOffsets(reminders).join();
+    onSave({ patch, rule: changed ? rule : undefined, ...(remindersChanged && choice.time !== null && choice.date !== null ? { reminders: wanted } : {}) });
   }
 
   return (
@@ -59,6 +68,11 @@ export function TaskEditSheet({ task, spaces, today, recurrence, onClose, onSave
         <IconChooser value={icon} onChange={setIcon} />
         <DatePicker value={choice} today={today} onChange={(next) => setChoice(next ?? { date: today, time: null })} />
         <RecurrencePicker value={choice.date === null ? null : rule} onChange={setRule} startDate={choice.date} />
+        <ReminderBlock
+          time={choice.date === null ? null : choice.time}
+          offsets={offsets}
+          onToggle={(offset) => setOffsets((current) => toggleReminderOffset(current, offset))}
+        />
         <div className="ct-task-sheet__spaces" role="group" aria-label={t('detail.spaceChoiceLabel')}>
           {spaces.map((space) => (
             <button

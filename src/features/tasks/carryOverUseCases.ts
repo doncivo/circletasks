@@ -1,6 +1,7 @@
 import { todayLocal } from '../../domain/clock';
 import type { Task } from '../../domain/model';
 import { carryOverUndoneTasks } from '../../domain/taskCarryOver';
+import { syncTaskReminders } from './reminderSync';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
 export type CarryOverDeps = Pick<TaskUseCaseDeps, 'clock' | 'data' | 'taskEntities'>;
@@ -24,7 +25,10 @@ export function createCarryOverUseCases(deps: CarryOverDeps): CarryOverUseCases 
       const carried = await deps.data.transaction(async (repos) => {
         const undone = await repos.tasks.listUndoneBefore(today);
         const ids = carryOverUndoneTasks(undone, today).map((task) => task.id);
-        return ids.length === 0 ? [] : repos.tasks.carryOver(ids, today);
+        if (ids.length === 0) return [];
+        const moved = await repos.tasks.carryOver(ids, today);
+        for (const task of moved) await syncTaskReminders(repos, task);
+        return moved;
       });
       deps.taskEntities.publish(carried);
       return carried;

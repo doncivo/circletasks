@@ -1,4 +1,4 @@
-import { isReminderOffset, type ReminderOffsetMin } from './model';
+import { isReminderOffset, REMINDER_OFFSETS_MIN, type ReminderOffsetMin } from './model';
 import { reminderFireAt } from './recurrenceNext';
 import { nextOccurrences, type RoutineRule } from './routineSchedule';
 import type { LocalDate, LocalDateTime, LocalTime } from './types';
@@ -9,8 +9,11 @@ import type { LocalDate, LocalDateTime, LocalTime } from './types';
  * la PROCHAINE occurrence, recalculée par l'ordre 5 au fil des jours (heure locale flottante, T-11).
  */
 
-/** Avances proposées par le formulaire de routine (ModifierRoutine.html : « À l'heure » et « 30 min ») ; les autres arrivent avec N-02. */
-export const ROUTINE_FORM_OFFSETS: readonly ReminderOffsetMin[] = [0, 30];
+/** Avances montrées d'emblée par le formulaire de routine (ModifierRoutine.html : « À l'heure » et « 30 min »). */
+export const ROUTINE_QUICK_OFFSETS: readonly ReminderOffsetMin[] = [0, 30];
+
+/** Avances que le formulaire de routine peut poser (N-02) : les six, les quatre autres sous « Plus… ». */
+export const ROUTINE_FORM_OFFSETS: readonly ReminderOffsetMin[] = REMINDER_OFFSETS_MIN;
 
 /**
  * Avances à enregistrer : aucune sans heure (QB-07) ; sinon les avances valides, sans doublon, de la plus courte à la plus longue.

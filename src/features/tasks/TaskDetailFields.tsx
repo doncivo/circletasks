@@ -1,11 +1,13 @@
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { parseTimeInput } from '../../domain/dateInput';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
+import { canHaveReminders, sortReminderOffsets, toggleReminderOffset } from '../../domain/reminders';
 import { choiceOfTask, patchFromDateChoice } from '../../domain/taskDetailEdit';
 import type { LocalDate } from '../../domain/types';
 import { t, tDynamic } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { DateEditor, TextField, spaceTextColor, type Layout } from '../../ui';
+import { ReminderChoices } from '../reminders';
 import { DetailRow } from './DetailRow';
 import { TaskRepeatRow } from './TaskRepeatRow';
 import { useInlineCancel, type InlineCancelRef } from './useInlineCancel';
@@ -26,15 +28,40 @@ export function dateValueText(task: Pick<Task, 'date' | 'someday'>, today: Local
 
 const offsetLabel = (offset: ReminderOffsetMin): string => tDynamic(`detail.reminderOffset${String(offset)}` as 'detail.reminderOffset0');
 
-function ReminderChips({ reminders }: { reminders: readonly ReminderOffsetMin[] }) {
+/** Puces des rappels (N-02), de la plus proche à la plus lointaine ; grisées quand la tâche n'a plus d'heure (rappels inactifs, QB-07). */
+function ReminderChips({ reminders, active = true }: { reminders: readonly ReminderOffsetMin[]; active?: boolean }) {
   if (reminders.length === 0) return <>{t('detail.remindersNone')}</>;
   return (
-    <span className="ct-task-detail__chips">
-      {reminders.map((offset) => (
-        <span key={offset} className="ct-task-detail__chip">
+    <span className="ct-task-detail__chips" {...(active ? {} : { title: t('reminders.inactiveHint') })}>
+      {sortReminderOffsets(reminders).map((offset) => (
+        <span key={offset} className="ct-task-detail__chip" data-inactive={!active}>
           {offsetLabel(offset)}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** Rappels éditables (PC) : la valeur devient les cases d'avance ; chaque case s'applique aussitôt (lignes ajoutées / supprimées). */
+function RemindersValue({ task, reminders, setReminders, cancelInlineRef }: { task: Task; reminders: readonly ReminderOffsetMin[]; setReminders: (offsets: readonly ReminderOffsetMin[]) => Promise<boolean>; cancelInlineRef: InlineCancelRef }) {
+  const [editing, setEditing] = useState(false);
+  useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
+  const active = canHaveReminders(task);
+  // Sans heure (QB-07) : lecture seule, les rappels existants restent affichés (inactifs).
+  if (!active) return <ReminderChips reminders={reminders} active={false} />;
+  if (!editing) {
+    return (
+      <button type="button" className="ct-task-detail__valueButton" aria-label={t('reminders.editLabel')} onClick={() => setEditing(true)}>
+        <ReminderChips reminders={reminders} />
+      </button>
+    );
+  }
+  return (
+    <span role="group" aria-label={t('reminders.editTitle')} className="ct-task-detail__reminderEdit">
+      <ReminderChoices offsets={reminders} enabled onToggle={(offset) => void setReminders(toggleReminderOffset(reminders, offset))} plusLabel={t('reminders.more')} />
+      <button type="button" className="ct-task-detail__valueButton" onClick={() => setEditing(false)}>
+        {t('reminders.editDone')}
+      </button>
     </span>
   );
 }
@@ -169,6 +196,8 @@ export interface TaskDetailFieldsProps {
   readonly spaces: readonly Space[];
   readonly today: LocalDate;
   readonly reminders: readonly ReminderOffsetMin[];
+  /** N-02 : remplace les rappels (PC : édition sur place ; iPhone : via la feuille « Modifier »). */
+  readonly setReminders: (offsets: readonly ReminderOffsetMin[]) => Promise<boolean>;
   readonly goalTitle: string | null;
   readonly recurrence: RecurrenceFields | null;
   /** Applique une modification (la question « cette occurrence / toutes les suivantes » est posée par la fiche). */
@@ -180,7 +209,7 @@ export interface TaskDetailFieldsProps {
   readonly stopRecurrence: () => Promise<boolean>;
 }
 
-export function TaskDetailFields({ task, layout, spaces, today, reminders, goalTitle, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
+export function TaskDetailFields({ task, layout, spaces, today, reminders, setReminders, goalTitle, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
   const space = spaces.find((candidate) => candidate.id === task.spaceId);
   const inline: InlineProps = { task, onPatch, cancelInlineRef };
   const repeat: ReactNode = <TaskRepeatRow readOnly={layout === 'mobile'} task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
@@ -193,7 +222,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, goalT
         <DetailRow label={t('detail.dateRow')}>{task.time ? `${date} · ${task.time}` : date}</DetailRow>
         {repeat}
         <DetailRow label={t('detail.remindersRow')}>
-          <ReminderChips reminders={reminders} />
+          <ReminderChips reminders={reminders} active={canHaveReminders(task)} />
         </DetailRow>
         <DetailRow label={t('detail.spaceProjectRow')}>
           <span style={space ? { color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-bold)' } : undefined}>{space?.name}</span>
@@ -215,7 +244,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, goalT
       </DetailRow>
       {repeat}
       <DetailRow label={t('detail.remindersRow')}>
-        <ReminderChips reminders={reminders} />
+        <RemindersValue task={task} reminders={reminders} setReminders={setReminders} cancelInlineRef={cancelInlineRef} />
       </DetailRow>
       <DetailRow label={t('detail.spaceRow')}>
         <SpaceValue {...inline} spaces={spaces} />

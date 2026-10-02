@@ -44,12 +44,21 @@ export type CreateTaskError =
 /** Définir une récurrence sur une tâche existante (T-09) ; modifier / arrêter une règle : T-10. */
 export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date' | 'invalid';
 
+/** N-02 : remplacer les rappels d'une tâche (la tâche doit avoir une date et une heure, QB-07). */
+export type SetRemindersError = 'not-found' | 'needs-time';
+
 /** Cible d'un report (T-05, SD-02) : définie dans src/domain/taskPostpone. */
 export type { PostponeTarget };
 
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
   create(input: CreateTaskInput): Promise<Result<Task, CreateTaskError>>;
+  /**
+   * N-02 : remplace les rappels de la tâche par ces avances (valides, sans doublon, triées) ; les existantes sont conservées,
+   * les retirées supprimées logiquement. Refus 'needs-time' sans date ou sans heure (aucun rappel sans heure, QB-07), sauf pour
+   * un ensemble vide. Rend les avances enregistrées. Aucune notification n'est planifiée (ordre 5, iPhone seulement).
+   */
+  setReminders(id: TaskId, offsets: readonly ReminderOffsetMin[]): Promise<Result<ReminderOffsetMin[], SetRemindersError>>;
   /** T-09 : rend une tâche datée récurrente (règle + `recurrenceId` en une transaction) ; non annulable. */
   setRecurrence(id: TaskId, rule: RecurrenceFields): Promise<Result<Task, SetRecurrenceError>>;
   /**
