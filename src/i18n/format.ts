@@ -84,9 +84,11 @@ export function formatWeekdayName(isoDate: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
 }
 
-/** Date de la fiche détail (« Mer. 23 sept. 2026 »), première lettre en majuscule. */
-export function formatDetailDate(isoDate: string): string {
-  return capitalize(new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(utcDate(isoDate)));
+/** Date de la fiche détail (« Mer. 23 sept. 2026 », sans l'année si `withYear` est faux), première lettre en majuscule. */
+export function formatDetailDate(isoDate: string, withYear = true): string {
+  return capitalize(
+    new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' as const } : {}), timeZone: 'UTC' }).format(utcDate(isoDate)),
+  );
 }
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');

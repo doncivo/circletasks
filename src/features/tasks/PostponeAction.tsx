@@ -53,7 +53,6 @@ export function PostponeAction({ task, onPostpone, menuLabel, trigger, menuAbove
         trigger({ expanded: menuOpen, toggle })
       ) : (
         <Button variant="secondary" onClick={toggle} haspopup="menu" expanded={menuOpen} className="ct-task-detail__postponeButton">
-          <Icon icon={CalendarDays} size={18} />
           {t(task?.someday ? 'tasks.schedule' : 'tasks.postpone')}
         </Button>
       )}

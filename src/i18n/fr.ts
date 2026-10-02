@@ -449,6 +449,7 @@ export const fr = {
     moveError: 'Impossible de déplacer ces tâches.',
     editMode: 'Mode édition',
     compactView: 'Vue compacte',
+    hintNewTask: 'nouvelle tâche',
     select: 'Sélectionner : {title}',
     deselect: 'Désélectionner : {title}',
     remove: 'Supprimer : {title}',

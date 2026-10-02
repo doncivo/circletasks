@@ -46,7 +46,8 @@ describe('Aujourd’hui : squelettes de chargement (A-09)', () => {
 
     await act(async () => void vi.advanceTimersByTime(100));
     expect(screen.getByTestId('list-skeleton')).toHaveAttribute('aria-hidden', 'true');
-    expect(screen.getByRole('list', { name: 'Liste du jour' })).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByTestId('list-skeleton').parentElement).toHaveAttribute('aria-busy', 'true');
+    expect(screen.queryByRole('list')).toBeNull(); // le squelette n'est pas une liste annoncée
     expect(document.querySelector('[aria-live="polite"]')).toHaveTextContent('Chargement');
     expect(screen.queryByText('Chargement…')).toBeNull();
 

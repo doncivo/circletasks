@@ -1,4 +1,5 @@
 import type { HexColor, SpaceFilter, SpaceId } from '../domain/types';
+import { spaceTextColor } from './spaceColor';
 import { t } from '../i18n';
 
 import './SpacePills.css';
@@ -38,8 +39,8 @@ export function SpacePills({ items, value, onChange, className }: SpacePillsProp
             className="ct-space-pills__pill"
             style={
               active
-                ? { background: item.color, borderColor: item.color, color: 'var(--ct-color-accent-on)' }
-                : { borderColor: item.color, color: item.color }
+                ? { background: spaceTextColor(item.color), borderColor: spaceTextColor(item.color), color: 'var(--ct-color-accent-on)' }
+                : { borderColor: spaceTextColor(item.color), color: spaceTextColor(item.color) }
             }
           >
             {item.name}

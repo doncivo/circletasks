@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
@@ -38,10 +38,10 @@ export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, act
           {layout === 'pc' && onPreviousDay && onNextDay && (
             <>
               <button type="button" className="ct-today__iconButton" aria-label={t('today.dayPrevious')} onClick={onPreviousDay}>
-                <Icon icon={ChevronLeft} size={24} />
+                <Icon icon={ArrowLeft} size={24} />
               </button>
               <button type="button" className="ct-today__iconButton" aria-label={t('today.dayNext')} onClick={onNextDay}>
-                <Icon icon={ChevronRight} size={24} />
+                <Icon icon={ArrowRight} size={24} />
               </button>
             </>
           )}

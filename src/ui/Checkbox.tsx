@@ -8,10 +8,13 @@ export interface CheckboxProps {
   onChange: (checked: boolean) => void;
   /** Libellé accessible complet (ex. « Terminer : Boire de l'eau »), composé par l'appelant via t(). */
   label: string;
+  /** Vue compacte (Main-Compact.html) : case de 22 px. */
+  compact?: boolean;
   className?: string;
 }
 
 const SIZE = { pc: 26, mobile: 28 };
+const COMPACT_SIZE = 22;
 
 /**
  * Case à cocher arrondie des maquettes (Main.html) : 28 px sur iPhone, 26 px sur
@@ -20,9 +23,9 @@ const SIZE = { pc: 26, mobile: 28 };
  * @example
  * <Checkbox checked={task.done} onChange={toggle} label={t('tasks.complete', { title })} />
  */
-export function Checkbox({ checked, onChange, label, className }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, compact, className }: CheckboxProps) {
   const layout = useLayout();
-  const size = SIZE[layout];
+  const size = compact ? COMPACT_SIZE : SIZE[layout];
   return (
     <button
       type="button"

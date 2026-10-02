@@ -83,3 +83,17 @@ span.ct-list-row__title {
   color: var(--ct-color-text-secondary);
   flex-shrink: 0;
 }
+
+/* PC : sous-ligne à droite du titre (PC-Aujourdhui.html : « 09:00 · Pro »), lignes de 12 px de marge. */
+.ct-list-row__meta {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* La zone tactile de 44 px de la case déborde de la ligne : l'écart visuel reste de 14 px (Main.html). */
+.ct-list-row > .ct-checkbox,
+.ct-list-row > .ct-select-circle {
+  margin-inline: -8px;
+}

@@ -76,5 +76,5 @@
 }
 
 .ct-trash__space {
-  color: var(--ct-space-color);
+  color: color-mix(in srgb, var(--ct-space-color), #ffffff var(--ct-space-white, 0%));
 }

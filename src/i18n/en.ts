@@ -446,6 +446,7 @@ export const en: Messages = {
     moveError: 'Unable to move these tasks.',
     editMode: 'Edit mode',
     compactView: 'Compact view',
+    hintNewTask: 'new task',
     select: 'Select: {title}',
     deselect: 'Deselect: {title}',
     remove: 'Delete: {title}',

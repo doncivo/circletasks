@@ -49,8 +49,8 @@
 }
 
 .ct-today__badge {
-  border: 1.5px solid var(--ct-color-today-badge, #1f6698);
-  color: var(--ct-color-today-badge, #1f6698);
+  border: 1.5px solid var(--ct-color-today-badge);
+  color: var(--ct-color-today-badge);
   font-size: var(--ct-font-size-xs);
   font-weight: var(--ct-font-weight-bold);
   letter-spacing: 0.08em;
@@ -83,22 +83,50 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+/* Champ d'ajout pleine largeur (PC-Aujourdhui.html) ; sur PC, le champ « Date » de T-14 est dans le même cadre gris. */
 .ct-today__addRow {
   display: flex;
   gap: var(--ct-space-2);
-  align-items: flex-end;
+  align-items: center;
 }
 
-/* Champ « Date » de la saisie en ligne PC (T-14, PC-Date.html). */
+.ct-today__addRow[data-layout='pc'] {
+  padding-right: var(--ct-space-2);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-today__addRow[data-layout='pc'] .ct-today__addField {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-today__addRow[data-layout='pc'] .ct-text-field__control {
+  min-height: 48px;
+  background: transparent;
+  font-size: var(--ct-font-size-text);
+}
+
+/* Champ « Date » de la saisie en ligne PC (T-14). */
 .ct-today__dateField {
   width: 220px;
   flex-shrink: 0;
 }
 
+/* Interrupteur à gauche, aide au centre (PC), bouton « + » à droite, collés en bas de l'écran. */
 .ct-today__bottomRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-top: auto;
+}
+
+.ct-today__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
 }
 
 /* Feuille « Nouvelle tâche » (iPhone, Ajout.html) : l'ordre du DOM suit l'ordre
@@ -150,7 +178,7 @@
   border: 0;
   border-radius: var(--ct-radius-sm);
   background: transparent;
-  color: var(--ct-space-color, var(--ct-color-text));
+  color: color-mix(in srgb, var(--ct-space-color, var(--ct-color-text)), #ffffff var(--ct-space-white, 0%));
   font-family: var(--ct-font-text);
   font-weight: var(--ct-font-weight-semibold);
   font-size: var(--ct-font-size-text-sm);
@@ -176,7 +204,12 @@
 /* Icônes d'accès rapide en haut à droite (Main.html) ; T-07 : « Rapport mensuel » seul. */
 .ct-today__quickIcons {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+}
+
+.ct-today__quickSpacer {
+  flex-grow: 1;
 }
 
 .ct-today__iconButton {
@@ -389,4 +422,9 @@
   flex-grow: 1;
   height: 1px;
   background: var(--ct-color-text);
+}
+
+/* Champ « Date » intégré au cadre gris du champ d'ajout (PC) : bordure discrète, pas d'accent permanent. */
+.ct-today__addRow .ct-date-editor__field {
+  border: 1.5px solid var(--ct-color-border-strong);
 }

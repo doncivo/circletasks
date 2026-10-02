@@ -226,6 +226,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     let detail = await openDetail(page, title);
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Mensuelle, le 23');
 
+    await detail.getByRole('button', { name: 'Modifier la répétition de la tâche' }).click();
     await detail.getByRole('button', { name: 'Arrêter la répétition' }).click();
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Une fois');
     await expect(page.getByRole('status')).toContainText('Répétition de');
@@ -233,6 +234,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     detail = await clickUndo(page, info, detail, title);
     await expect(detail.getByTestId('recurrence-detail')).toHaveText('Mensuelle, le 23');
 
+    await detail.getByRole('button', { name: 'Modifier la répétition de la tâche' }).click();
     await detail.getByRole('button', { name: 'Arrêter la répétition' }).click();
     await closeDetail(page, detail);
     await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();

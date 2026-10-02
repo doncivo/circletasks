@@ -44,7 +44,7 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     renderToday(h.container);
     const facture = (await screen.findByRole('button', { name: 'Envoyer la facture' })).closest('.ct-list-row') as HTMLElement;
     expect(facture).toHaveTextContent('09:00 · Pro');
-    expect(within(facture).getByText('Pro')).toHaveStyle({ color: '#2f6b7a' });
+    expect(within(facture).getByText('Pro')).toBeInTheDocument(); // couleur de l'espace : spaceColor.test.ts (color-mix non rendu par jsdom)
     const notaire = screen.getByRole('button', { name: 'Appeler le notaire' }).closest('.ct-list-row') as HTMLElement;
     expect(notaire).toHaveTextContent('14:00 · Perso');
 

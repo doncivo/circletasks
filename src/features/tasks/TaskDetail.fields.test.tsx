@@ -64,11 +64,13 @@ describe('Fiche détail d’une tâche (A-08)', () => {
   }
 
   const stored = async (id: string): Promise<Task | null> => db.data.repos.tasks.getById(id as never);
+  const panel = (): HTMLElement => screen.getByRole('complementary', { name: 'Détail de la tâche' });
+  const titleButton = (name: string): HTMLElement => within(within(panel()).getByRole('heading', { name })).getByRole('button', { name });
 
   describe('PC : panneau et édition sur place', () => {
     beforeEach(() => mockViewport(1440));
 
-    it('affiche titre, date, heure, répétition, rappels, espace, projet, objectif, note et horodatage (critère 5)', async () => {
+    it('affiche titre, date, heure, répétition, rappels, espace, projet, objectif, note et horodatage en texte (critère 5)', async () => {
       const task = await open();
       await db.data.repos.reminders.replaceForTarget({ type: 'task', id: task.id }, [
         { id: asEntityId<ReminderId>('50000000-0000-4000-8000-0000000000a1'), targetType: 'task', targetId: task.id, offsetMin: 0, fireAt: '2026-09-23T09:00' as never },
@@ -81,37 +83,41 @@ describe('Fiche détail d’une tâche (A-08)', () => {
           <TaskDetail />
         </AppContainerProvider>,
       );
-      const panel = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
-      expect(within(panel).getByRole('heading', { name: 'Envoyer la facture' })).toBeInTheDocument();
-      await waitFor(() => expect(within(panel).getByText('À l’heure')).toBeInTheDocument());
-      expect(within(panel).getByText('30 min avant')).toBeInTheDocument();
-      expect(within(panel).getByLabelText('Date de la tâche')).toHaveValue('Aujourd’hui 09:00');
-      expect(within(panel).getByLabelText('Heure')).toHaveValue('09:00');
-      expect(within(panel).getByTestId('recurrence-detail')).toHaveTextContent('Une fois');
-      expect(within(panel).getByRole('button', { name: 'Pro' })).toHaveAttribute('aria-pressed', 'true');
-      expect(within(panel).getByText('Projet')).toBeInTheDocument();
-      expect(within(panel).getByText('Non rattachée')).toBeInTheDocument();
-      expect(within(panel).getByLabelText('Note')).toHaveValue('Joindre le relevé');
-      expect(panel).toHaveTextContent(/Créée le aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
-      // Boutons : Reporter, Un jour, Dupliquer, Supprimer ; pas de Focus tant que M10 n'existe pas.
-      expect(within(panel).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
-      expect(within(panel).getByRole('button', { name: 'Un jour' })).toBeInTheDocument();
-      expect(within(panel).getByRole('button', { name: 'Dupliquer la tâche' })).toBeInTheDocument();
-      expect(within(panel).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
-      expect(within(panel).queryByRole('button', { name: /Focus/ })).toBeNull();
+      const fiche = await screen.findByRole('complementary', { name: 'Détail de la tâche' });
+      expect(within(fiche).getByRole('heading', { name: 'Envoyer la facture' })).toBeInTheDocument();
+      await waitFor(() => expect(within(fiche).getByText('À l’heure')).toBeInTheDocument());
+      expect(within(fiche).getByText('30 min avant')).toBeInTheDocument();
+      expect(within(fiche).getByText('Mer. 23 sept. 2026')).toBeInTheDocument();
+      expect(within(fiche).getByText('09:00')).toBeInTheDocument();
+      expect(within(fiche).getByTestId('recurrence-detail')).toHaveTextContent('Une fois');
+      expect(within(fiche).getByText('Pro')).toBeInTheDocument();
+      expect(within(fiche).getByText('Projet')).toBeInTheDocument();
+      expect(within(fiche).getByText('Non rattachée')).toBeInTheDocument();
+      expect(within(fiche).getByLabelText('Note')).toHaveValue('Joindre le relevé');
+      expect(fiche).toHaveTextContent(/Créée le aujourd’hui à \d\d:\d\d · modifiée aujourd’hui à \d\d:\d\d/);
+      // Aucun champ de saisie tant qu'on n'a pas cliqué une valeur (PC-Aujourdhui.html : lignes en texte).
+      expect(within(fiche).queryByLabelText('Heure')).toBeNull();
+      expect(within(fiche).queryByRole('combobox')).toBeNull();
+      // Boutons : Reporter, Un jour, Dupliquer, Supprimer ; ni Focus (M10), ni « Marquer comme terminée » (la case de la ligne).
+      expect(within(fiche).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
+      expect(within(fiche).getByRole('button', { name: 'Un jour' })).toBeInTheDocument();
+      expect(within(fiche).getByRole('button', { name: 'Dupliquer la tâche' })).toBeInTheDocument();
+      expect(within(fiche).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
+      expect(within(fiche).queryByRole('button', { name: /Focus/ })).toBeNull();
+      expect(within(fiche).queryByRole('button', { name: 'Marquer comme terminée' })).toBeNull();
     });
 
-    it('sans heure : « Sans heure » (placeholder), et rappels « Aucun » (critère 5)', async () => {
+    it('sans heure : « Sans heure », et rappels « Aucun » (critère 5)', async () => {
       await open({ time: null as never });
-      const panel = screen.getByRole('complementary', { name: 'Détail de la tâche' });
-      expect(within(panel).getByLabelText('Heure')).toHaveValue('');
-      expect(within(panel).getByLabelText('Heure')).toHaveAttribute('placeholder', 'Sans heure');
-      expect(within(panel).getAllByText('Aucun')).toHaveLength(2); // rappels et projet
+      expect(within(panel()).getByText('Sans heure')).toBeInTheDocument();
+      expect(within(panel()).getAllByText('Aucun')).toHaveLength(2); // rappels et projet
     });
 
-    it('le titre se modifie sur place : Entrée valide et enregistre aussitôt (critère 8)', async () => {
+    it('le titre est un bouton sous le titre de niveau 2, décrit par une aide, qui s’édite sur place : Entrée valide et enregistre (critère 8)', async () => {
       const task = await open();
-      fireEvent.click(screen.getByRole('heading', { name: 'Envoyer la facture' }));
+      const button = titleButton('Envoyer la facture');
+      expect(button).toHaveAccessibleDescription('Cliquer ou appuyer sur Entrée pour modifier le titre');
+      fireEvent.click(button);
       const field = screen.getByLabelText('Titre de la tâche');
       fireEvent.change(field, { target: { value: '  Envoyer la facture client ' } });
       fireEvent.submit(field.closest('form') as HTMLFormElement);
@@ -121,7 +127,7 @@ describe('Fiche détail d’une tâche (A-08)', () => {
 
     it('un titre vidé est refusé : la valeur précédente est rétablie avec un message (critère 10)', async () => {
       const task = await open();
-      fireEvent.click(screen.getByRole('heading', { name: 'Envoyer la facture' }));
+      fireEvent.click(titleButton('Envoyer la facture'));
       const field = screen.getByLabelText('Titre de la tâche');
       fireEvent.change(field, { target: { value: '   ' } });
       fireEvent.submit(field.closest('form') as HTMLFormElement);
@@ -132,7 +138,7 @@ describe('Fiche détail d’une tâche (A-08)', () => {
 
     it('Échap annule la saisie du titre sans fermer la fiche, puis un second Échap la ferme (critère 8)', async () => {
       const task = await open();
-      fireEvent.click(screen.getByRole('heading', { name: 'Envoyer la facture' }));
+      fireEvent.click(titleButton('Envoyer la facture'));
       fireEvent.change(screen.getByLabelText('Titre de la tâche'), { target: { value: 'Autre' } });
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
       await waitFor(() => expect(screen.queryByLabelText('Titre de la tâche')).toBeNull());
@@ -142,14 +148,22 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       await waitFor(() => expect(screen.queryByRole('complementary')).toBeNull());
     });
 
-    it('l’heure se modifie sur place (« 10h30 »), se vide, et refuse une valeur invalide (critère 8)', async () => {
+    it('F2 sur le bouton du titre ouvre la saisie', async () => {
+      await open();
+      fireEvent.keyDown(titleButton('Envoyer la facture'), { key: 'F2' });
+      expect(screen.getByLabelText('Titre de la tâche')).toBeInTheDocument();
+    });
+
+    it('l’heure se modifie au clic sur sa valeur (« 10h30 »), se vide, et refuse une valeur invalide (critère 8)', async () => {
       const task = await open();
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Heure : 09:00' }));
       const field = screen.getByLabelText('Heure');
       fireEvent.change(field, { target: { value: '10h30' } });
       fireEvent.submit(field.closest('form') as HTMLFormElement);
       await waitFor(async () => expect((await stored(task.id))?.time).toBe('10:30'));
-      await waitFor(() => expect(screen.getByLabelText('Heure')).toHaveValue('10:30'));
+      await waitFor(() => expect(within(panel()).getByRole('button', { name: 'Heure : 10:30' })).toBeInTheDocument());
 
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Heure : 10:30' }));
       fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '25h' } });
       fireEvent.submit(screen.getByLabelText('Heure').closest('form') as HTMLFormElement);
       expect(await screen.findByRole('alert')).toHaveTextContent('Heure non comprise');
@@ -162,44 +176,41 @@ describe('Fiche détail d’une tâche (A-08)', () => {
 
     it('Échap annule une heure en cours de saisie sans fermer la fiche', async () => {
       await open();
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Heure : 09:00' }));
       fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '11' } });
-      fireEvent.keyDown(screen.getByLabelText('Heure'), { key: 'Escape' });
-      expect(screen.getByLabelText('Heure')).toHaveValue('09:00');
+      fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+      await waitFor(() => expect(screen.queryByLabelText('Heure')).toBeNull());
+      expect(within(panel()).getByText('09:00')).toBeInTheDocument();
       expect(screen.getByRole('complementary', { name: 'Détail de la tâche' })).toBeInTheDocument();
     });
 
-    it('la date se modifie dans le champ « Date de la tâche » (saisie libre, Entrée) (critère 8)', async () => {
+    it('la date se modifie au clic sur sa valeur : champ « Date de la tâche » à saisie libre, Entrée valide (critère 8)', async () => {
       const task = await open();
-      const field = screen.getByLabelText('Date de la tâche');
+      fireEvent.click(within(panel()).getByRole('button', { name: /^Date de la tâche/ }));
+      const field = await screen.findByLabelText('Date de la tâche');
       fireEvent.change(field, { target: { value: 'demain' } });
       fireEvent.keyDown(field, { key: 'Enter' });
       await waitFor(async () => expect((await stored(task.id))?.date).toBe('2026-09-24'));
       expect((await stored(task.id))?.time).toBeNull();
     });
 
-    it('l’espace se change d’un clic (critère 8)', async () => {
+    it('l’espace se change au clic sur son nom, puis sur une pastille (critère 8)', async () => {
       const task = await open();
+      fireEvent.click(within(panel()).getByRole('button', { name: 'Espace de la tâche : Pro' }));
       fireEvent.click(within(screen.getByRole('group', { name: 'Espace de la tâche' })).getByRole('button', { name: 'Perso' }));
       await waitFor(async () => expect((await stored(task.id))?.spaceId).toBe(SPACE_PERSO_ID));
-      expect(screen.getByRole('button', { name: 'Perso' })).toHaveAttribute('aria-pressed', 'true');
+      expect(await within(panel()).findByRole('button', { name: 'Espace de la tâche : Perso' })).toBeInTheDocument();
     });
 
-    it('« Un jour » range la tâche, annulable ; absent pour une tâche terminée ou déjà rangée (critère 6)', async () => {
+    it('« Un jour » range la tâche, annulable ; absent pour une tâche déjà rangée (critère 6)', async () => {
       const task = await open();
       fireEvent.click(screen.getByRole('button', { name: 'Un jour' }));
       await waitFor(async () => expect(await stored(task.id)).toMatchObject({ someday: true, date: null, time: null }));
       expect(await screen.findByRole('status')).toHaveTextContent('« Envoyer la facture » rangée dans « Un jour »');
       expect(screen.queryByRole('button', { name: 'Un jour' })).toBeNull();
+      expect(within(panel()).getByText('Un jour', { selector: '.ct-task-detail__rowValue button' })).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
       await waitFor(async () => expect(await stored(task.id)).toMatchObject({ someday: false, date: '2026-09-23', time: '09:00' }));
-    });
-
-    it('terminée : « Reporter » et « Un jour » disparaissent, le bouton passe à l’état « terminée » (critère 7)', async () => {
-      await open();
-      fireEvent.click(screen.getByRole('button', { name: 'Marquer comme terminée' }));
-      await waitFor(() => expect(screen.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
-      expect(screen.queryByRole('button', { name: 'Reporter' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'Un jour' })).toBeNull();
     });
 
     it('rôle complementary « Détail de la tâche » ; Échap ferme (critères 3, 11)', async () => {
@@ -215,17 +226,32 @@ describe('Fiche détail d’une tâche (A-08)', () => {
   describe('iPhone : feuille plein écran et « Modifier » (Q15)', () => {
     beforeEach(() => mockViewport(440));
 
-    it('feuille modale avec lignes en lecture seule ; la note reste modifiable (critères 2, 9, 11)', async () => {
+    it('en-tête ✕ / DÉTAIL / crayon, lignes en lecture seule (date sans l’année courante), note modifiable (critères 2, 5, 9, 11)', async () => {
       await open();
       const sheet = screen.getByRole('dialog', { name: 'Détail de la tâche' });
       expect(sheet).toHaveAttribute('aria-modal', 'true');
-      expect(within(sheet).getByText('Date · heure')).toBeInTheDocument();
-      expect(within(sheet).getByText('Mer. 23 sept. 2026 · 09:00')).toBeInTheDocument();
+      expect(within(sheet).getByRole('button', { name: 'Fermer' })).toBeInTheDocument();
+      expect(within(sheet).getByText('DÉTAIL')).toBeInTheDocument();
+      expect(within(sheet).getByRole('button', { name: 'Modifier' })).toBeInTheDocument();
+      expect(within(sheet).getByText('Date')).toBeInTheDocument();
+      expect(within(sheet).getByText('Mer. 23 sept. · 09:00')).toBeInTheDocument();
       expect(within(sheet).queryByLabelText('Date de la tâche')).toBeNull();
       expect(within(sheet).getByText('Espace · projet')).toBeInTheDocument();
       expect(within(sheet).getByLabelText('Note')).toBeEnabled();
-      expect(within(sheet).getByRole('button', { name: 'Modifier' })).toBeInTheDocument();
-      expect(within(sheet).getByRole('button', { name: 'Marquer comme terminée' })).toBeInTheDocument();
+      // « Répéter… » plein écran n'existe plus : la ligne Répétition est cliquable.
+      expect(within(sheet).queryByRole('button', { name: 'Répéter…' })).toBeNull();
+      expect(within(sheet).getByRole('button', { name: 'Rendre la tâche récurrente' })).toHaveTextContent('Une fois');
+      expect(within(sheet).getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'false');
+      expect(within(sheet).getByRole('button', { name: 'Supprimer la tâche' })).toBeInTheDocument();
+    });
+
+    it('« Marquer comme terminée » (case encadrée) termine la tâche ; « Reporter » et « Un jour » disparaissent (critère 7)', async () => {
+      const task = await open();
+      fireEvent.click(screen.getByRole('button', { name: 'Marquer comme terminée' }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true'));
+      expect((await stored(task.id))?.status).toBe('done');
+      expect(screen.queryByRole('button', { name: 'Reporter' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Un jour' })).toBeNull();
     });
 
     it('« Modifier » ouvre la feuille « Modifier la tâche » pré-remplie ; Enregistrer applique, la fiche se rafraîchit', async () => {

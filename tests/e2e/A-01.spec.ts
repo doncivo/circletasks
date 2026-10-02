@@ -39,7 +39,7 @@ test.describe('A-01 — liste du jour', () => {
     await createTask(page, testInfo, { title, time: '09:00' });
     const row = rowOf(page, title);
     await expect(row).toContainText('09:00');
-    await expect(row.locator('.ct-list-row__subtitle')).toHaveText('09:00 · Pro');
+    await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
     await expect(page.getByText('Rien de prévu aujourd’hui.')).toHaveCount(0);
   });
 
@@ -53,8 +53,8 @@ test.describe('A-01 — liste du jour', () => {
     await expect(page.getByRole('button', { name: pro, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: perso, exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Tout', exact: true }).click();
-    await expect(rowOf(page, perso).locator('.ct-list-row__subtitle')).toHaveText('Perso');
-    await expect(rowOf(page, pro).locator('.ct-list-row__subtitle')).toHaveText('Pro');
+    await expect(rowOf(page, perso).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
+    await expect(rowOf(page, pro).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Pro');
   });
 
   test('flèches de jour : PC seulement, badge absent hors du jour courant, retour par l’onglet (critère 10, Q10)', async ({ page }, testInfo) => {

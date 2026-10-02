@@ -37,7 +37,7 @@ test.describe('T-12 — dupliquer une tâche', () => {
   test('la fiche propose « Dupliquer » : sélecteur présélectionné, copie créée, Annuler la supprime (critères 2, 3, 7, 9)', async ({ page }, testInfo) => {
     const title = `Courses ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.locator('.ct-today__list').getByRole('button', { name: title, exact: true }).click();
     const detail = page.getByRole('dialog', { name: 'Détail de la tâche' }).or(page.getByRole('complementary', { name: 'Détail de la tâche' }));
     await detail.getByRole('button', { name: 'Dupliquer la tâche' }).click();
 
@@ -49,38 +49,38 @@ test.describe('T-12 — dupliquer une tâche', () => {
     await picker.getByRole('button', { name: 'Dupliquer' }).click();
 
     await expect(page.getByRole('status')).toContainText(`« ${title} » dupliquée`);
-    await expect(page.getByRole('button', { name: title })).toHaveCount(2);
+    await expect(page.locator('.ct-today__list').getByRole('button', { name: title, exact: true })).toHaveCount(2);
     // La fiche reste sur l'original ; la copie n'est pas ouverte.
     await expect(detail).toBeVisible();
 
     await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(1);
+    await expect(page.locator('.ct-today__list').getByRole('button', { name: title, exact: true })).toHaveCount(1);
   });
 
   test('« Un jour » dans le sélecteur : la copie quitte Aujourd’hui (critère 5)', async ({ page }, testInfo) => {
     const title = `Un jour ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.locator('.ct-today__list').getByRole('button', { name: title, exact: true }).click();
     const detail = page.getByRole('dialog', { name: 'Détail de la tâche' }).or(page.getByRole('complementary', { name: 'Détail de la tâche' }));
     await detail.getByRole('button', { name: 'Dupliquer la tâche' }).click();
     const picker = page.getByRole('dialog', { name: 'Choisir la date de la copie' });
     await picker.getByRole('button', { name: 'Un jour' }).click();
     await picker.getByRole('button', { name: 'Dupliquer' }).click();
     await expect(page.getByRole('status')).toContainText('dupliquée');
-    await expect(page.getByRole('button', { name: title })).toHaveCount(1);
+    await expect(page.locator('.ct-today__list').getByRole('button', { name: title, exact: true })).toHaveCount(1);
   });
 
   test('fermer le sélecteur ne crée rien (critère 6)', async ({ page }, testInfo) => {
     const title = `Rien ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.locator('.ct-today__list').getByRole('button', { name: title, exact: true }).click();
     const detail = page.getByRole('dialog', { name: 'Détail de la tâche' }).or(page.getByRole('complementary', { name: 'Détail de la tâche' }));
     await detail.getByRole('button', { name: 'Dupliquer la tâche' }).click();
     const picker = page.getByRole('dialog', { name: 'Choisir la date de la copie' });
     await picker.getByRole('button', { name: 'Fermer' }).click();
     await expect(picker).not.toBeVisible();
     await expect(page.getByRole('status')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: title })).toHaveCount(1);
+    await expect(page.locator('.ct-today__list').getByRole('button', { name: title, exact: true })).toHaveCount(1);
   });
 
   test('PC : Ctrl+Maj+D sur la ligne sélectionnée ouvre le sélecteur (critère 1)', async ({ page }, testInfo) => {
@@ -96,7 +96,7 @@ test.describe('T-12 — dupliquer une tâche', () => {
     await page.getByRole('checkbox', { name: `Terminer : ${title}` }).focus();
     await page.keyboard.press('Control+Shift+D');
     await page.getByRole('dialog', { name: 'Choisir la date de la copie' }).getByRole('button', { name: 'Dupliquer' }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(2);
+    await expect(page.locator('.ct-today__list').getByRole('button', { name: title, exact: true })).toHaveCount(2);
     await expect(page.getByRole('complementary', { name: 'Détail de la tâche' })).toHaveCount(0);
   });
 });

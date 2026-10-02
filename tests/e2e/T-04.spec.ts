@@ -101,15 +101,20 @@ test.describe('T-04 — terminer une tâche', () => {
   test('« Marquer comme terminée » dans la fiche termine la tâche (critère 1)', async ({ page }, testInfo) => {
     const title = `Fiche ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     const detail =
       testInfo.project.name === 'iphone'
         ? page.getByRole('dialog', { name: 'Détail de la tâche' })
         : page.getByRole('complementary', { name: 'Détail de la tâche' });
 
-    await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
-
-    await expect(detail.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true');
+    if (testInfo.project.name === 'iphone') {
+      await detail.getByRole('button', { name: 'Marquer comme terminée' }).click();
+      await expect(detail.getByRole('button', { name: 'Marquer comme terminée' })).toHaveAttribute('aria-pressed', 'true');
+    } else {
+      // PC (PC-Aujourdhui.html) : le panneau n'a pas ce bouton, terminer reste sur la case de la ligne.
+      await expect(detail.getByRole('button', { name: 'Marquer comme terminée' })).toHaveCount(0);
+      await page.getByRole('checkbox', { name: `Terminer : ${title}` }).click();
+    }
     await expect(page.getByRole('checkbox', { name: `Rouvrir : ${title}` })).toBeAttached();
   });
 });

@@ -92,10 +92,10 @@ test.describe('A-05 — mode édition', () => {
     await page.getByRole('alertdialog').getByRole('button', { name: 'Perso' }).click();
     await expect(status(page)).toContainText('2 tâches déplacées');
     await toggle(page).click();
-    await expect(rowOf(page, a).locator('.ct-list-row__subtitle')).toHaveText('Perso');
-    await expect(rowOf(page, b).locator('.ct-list-row__subtitle')).toHaveText('Perso');
+    await expect(rowOf(page, a).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
+    await expect(rowOf(page, b).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
     await status(page).getByRole('button', { name: 'Annuler' }).click();
-    await expect(rowOf(page, a).locator('.ct-list-row__subtitle')).toHaveText('Pro');
+    await expect(rowOf(page, a).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Pro');
   });
 
   test('glisser la poignée réordonne la liste : souris sur PC, toucher sur iPhone (critère 3)', async ({ page }, testInfo) => {

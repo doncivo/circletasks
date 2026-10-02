@@ -7,225 +7,23 @@ import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
-import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
+import { canMoveToSomeday, ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { NotImplementedError, RepositoryError } from '../../db/repositories';
 import type { UndoableCommand } from '../app/undo';
-import { createNextOccurrence, UNDONE_OCCURRENCE_INDEX, type CreatedOccurrence } from './recurrenceUseCases';
-import { createRemoveUndo } from './seriesUseCases';
+import { createNextOccurrence, type CreatedOccurrence } from './recurrenceUseCases';
+import {
+  createCompleteUndoCommand,
+  createDeleteUndoCommand,
+  createDuplicateUndoCommand,
+  createMoveUndoCommand,
+  createPostponeUndoCommand,
+  createRemoveUndo,
+  createReorderUndoCommand,
+  type PostponedEntry,
+} from './undoCommands';
 import type { CreateTaskError, SetRecurrenceError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
-
-/**
- * Commande annulable d'une complétion (T-04, T-13, ADR 0005) : annuler = rouvrir
- * la tâche, mais seulement si elle n'a pas changé depuis (hlc identique à celui
- * écrit par `complete`) ; sinon 'stale', sans rien écrire.
- *
- * T-09 : si `complete()` a créé l'occurrence suivante d'une récurrence (`next`), annuler la
- * supprime aussi, dans la même transaction, tant qu'elle n'a pas été modifiée depuis (sinon
- * 'stale', rien n'est écrit). Elle est marquée « annulée » (`UNDONE_OCCURRENCE_INDEX`) avant d'aller à
- * la corbeille : elle n'y est pas listée (pas de doublon à restaurer), son effacement reste synchronisé,
- * et terminer à nouveau la tâche recrée l'occurrence suivante (critère 12).
- */
-function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task, wasCarriedOver: boolean, next: CreatedOccurrence | null): UndoableCommand {
-  return {
-    kind: 'complete',
-    count: 1,
-    labelParams: { title: completed.title },
-    async undo() {
-      if (next) {
-        const outcome = await deps.data.transaction(async (repos) => {
-          const current = await repos.tasks.getById(completed.id);
-          if (!current || current.hlc !== completed.hlc) return null;
-          const created = await repos.tasks.getById(next.task.id);
-          if (created && created.hlc !== next.task.hlc) return null;
-          await repos.tasks.reopen(completed.id);
-          const reopened = wasCarriedOver ? await repos.tasks.update(completed.id, { carriedOver: true }) : await repos.tasks.getById(completed.id);
-          if (created) {
-            await repos.tasks.update(created.id, { seriesIndex: UNDONE_OCCURRENCE_INDEX });
-            const [removed] = await repos.tasks.softDelete([created.id]);
-            await repos.reminders.softDeleteForTarget({ type: 'task', id: created.id }, removed?.deletedAt ?? undefined);
-          }
-          return { reopened, removedId: created?.id ?? null };
-        });
-        if (!outcome?.reopened) return 'stale';
-        deps.taskEntities.publish([outcome.reopened]);
-        if (outcome.removedId) deps.taskEntities.remove([outcome.removedId]);
-        return 'undone';
-      }
-      const current = await deps.data.repos.tasks.getById(completed.id);
-      if (!current || current.hlc !== completed.hlc) return 'stale';
-      // T-06 : une tâche reportée retrouve son badge (même transaction que la réouverture).
-      const reopened = wasCarriedOver
-        ? await deps.data.transaction(async (repos) => {
-            await repos.tasks.reopen(completed.id);
-            return repos.tasks.update(completed.id, { carriedOver: true });
-          })
-        : await deps.data.repos.tasks.reopen(completed.id);
-      deps.taskEntities.publish([reopened]);
-      return 'undone';
-    },
-  };
-}
-
-/** État d'une tâche avant et après un report (commande d'annulation, T-05). */
-interface PostponedEntry {
-  readonly before: Task;
-  readonly after: Task;
-}
-
-/**
- * Commande annulable d'un report (T-05, T-13) : annuler = nouvelle écriture qui
- * remet date, heure et « Un jour » d'avant. Une tâche modifiée depuis (hlc différent
- * de celui écrit par le report) n'est pas touchée ; si aucune ne peut l'être : 'stale'.
- */
-function createPostponeUndoCommand(
-  deps: TaskUseCaseDeps,
-  entries: readonly PostponedEntry[],
-  label: Pick<UndoableCommand, 'labelKey' | 'labelParams'>,
-  kind: 'postpone' | 'someday' = 'postpone',
-): UndoableCommand {
-  return {
-    kind,
-    count: entries.length,
-    ...label,
-    async undo() {
-      const restored = await deps.data.transaction(async (repos) => {
-        const written: Task[] = [];
-        for (const { before, after } of entries) {
-          const current = await repos.tasks.getById(after.id);
-          if (!current || current.hlc !== after.hlc) continue;
-          written.push(
-            await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, carriedOver: before.carriedOver, seriesTemplate: before.seriesTemplate }),
-          );
-        }
-        return written;
-      });
-      if (restored.length === 0) return 'stale';
-      deps.taskEntities.publish(restored);
-      return 'undone';
-    },
-  };
-}
-
-/**
- * Commande annulable d'une suppression (T-08, T-13) : annuler = nouvelle écriture qui
- * sort la tâche de la corbeille (date, ordre, espace inchangés) et réactive ses rappels.
- * Une tâche modifiée depuis (hlc différent de celui écrit par la suppression, ex. déjà
- * restaurée ou purgée) n'est pas touchée ; si aucune ne peut l'être : 'stale'.
- */
-function createDeleteUndoCommand(deps: TaskUseCaseDeps, deleted: readonly Task[]): UndoableCommand {
-  const first = deleted[0];
-  return {
-    kind: 'delete',
-    count: deleted.length,
-    ...(deleted.length === 1 && first
-      ? { labelParams: { title: first.title } }
-      : { labelKey: 'undo.deleteMany' as const, labelParams: { count: deleted.length } }),
-    async undo() {
-      const restored = await deps.data.transaction(async (repos) => {
-        const written: Task[] = [];
-        for (const task of deleted) {
-          const current = await repos.tasks.getById(task.id, { includeDeleted: true });
-          if (!current || current.deletedAt === null || current.hlc !== task.hlc) continue;
-          const [back] = await repos.tasks.restore([task.id]);
-          await repos.reminders.restoreForTarget({ type: 'task', id: task.id }, { deletedAt: current.deletedAt, hlc: current.hlc });
-          if (back) written.push(back);
-        }
-        return written;
-      });
-      if (restored.length === 0) return 'stale';
-      deps.taskEntities.publish(restored);
-      return 'undone';
-    },
-  };
-}
-
-/**
- * Commande annulable d'une duplication (T-12, T-13) : annuler = supprimer la copie (et ses rappels), tant qu'elle
- * n'a pas été modifiée depuis (hlc identique à celui écrit par la duplication) ; sinon 'stale'. Comme pour l'occurrence
- * annulée de T-09, la copie est écartée (`discard`) : tombstone conservé pour la synchro, exclue de la corbeille
- * (rien à restaurer). Elle n'appartient à aucune série : aucun `series_index` n'est touché.
- */
-function createDuplicateUndoCommand(deps: TaskUseCaseDeps, copy: Task): UndoableCommand {
-  return {
-    kind: 'duplicate',
-    count: 1,
-    labelParams: { title: copy.title },
-    async undo() {
-      const removed = await deps.data.transaction(async (repos) => {
-        const current = await repos.tasks.getById(copy.id);
-        if (!current || current.hlc !== copy.hlc) return false;
-        const [gone] = await repos.tasks.discard([copy.id]);
-        await repos.reminders.softDeleteForTarget({ type: 'task', id: copy.id }, gone?.deletedAt ?? undefined);
-        return true;
-      });
-      if (!removed) return 'stale';
-      deps.taskEntities.remove([copy.id]);
-      return 'undone';
-    },
-  };
-}
-
-/**
- * Commande annulable d'un réordonnancement (A-02, T-13) : annuler = nouvelle écriture qui rétablit les `sortOrder`
- * d'avant, pour les seules tâches non modifiées depuis (hlc identique à celui écrit par le déplacement) ; si
- * aucune ne peut l'être : 'stale', rien n'est écrit.
- */
-function createReorderUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[]): UndoableCommand {
-  return {
-    kind: 'move',
-    count: 1,
-    labelKey: 'undo.move',
-    async undo() {
-      const restored = await deps.data.transaction(async (repos) => {
-        const writable = [];
-        for (const { before, after } of entries) {
-          const current = await repos.tasks.getById(after.id);
-          if (current && current.hlc === after.hlc) writable.push({ id: before.id, sortOrder: before.sortOrder });
-        }
-        if (writable.length === 0) return [];
-        await repos.tasks.setSortOrders(writable);
-        const written: Task[] = [];
-        for (const entry of writable) {
-          const back = await repos.tasks.getById(entry.id);
-          if (back) written.push(back);
-        }
-        return written;
-      });
-      if (restored.length === 0) return 'stale';
-      deps.taskEntities.publish(restored);
-      return 'undone';
-    },
-  };
-}
-
-/**
- * Commande annulable d'un changement d'espace / projet (A-05, T-13) : annuler = nouvelle écriture qui remet l'espace,
- * le projet et le gabarit de série d'avant, pour les seules tâches non modifiées depuis (hlc identique) ; sinon 'stale'.
- */
-function createMoveUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[]): UndoableCommand {
-  const first = entries[0];
-  return {
-    kind: 'move',
-    count: entries.length,
-    ...(entries.length === 1 && first ? { labelKey: 'undo.moveSpace' as const, labelParams: { title: first.before.title } } : {}),
-    async undo() {
-      const restored = await deps.data.transaction(async (repos) => {
-        const written: Task[] = [];
-        for (const { before, after } of entries) {
-          const current = await repos.tasks.getById(after.id);
-          if (!current || current.hlc !== after.hlc) continue;
-          written.push(await repos.tasks.update(before.id, { spaceId: before.spaceId, projectId: before.projectId, seriesTemplate: before.seriesTemplate }));
-        }
-        return written;
-      });
-      if (restored.length === 0) return 'stale';
-      deps.taskEntities.publish(restored);
-      return 'undone';
-    },
-  };
-}
 
 /** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
 function touchesSchedule(patch: TaskPatch): boolean {
@@ -434,13 +232,12 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       return tasks;
     },
     async moveToSomeday(ids): Promise<Task[]> {
-      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées. Une tâche terminée, déjà rangée ou récurrente
-      // (une occurrence garde une date, T-09) est ignorée.
+      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées ; règle `canMoveToSomeday` (domaine).
       const entries = await deps.data.transaction(async (repos) => {
         const done: PostponedEntry[] = [];
         for (const id of ids) {
           const before = await repos.tasks.getById(id);
-          if (!before || before.status === 'done' || before.someday || before.recurrenceId !== null) continue;
+          if (!before || !canMoveToSomeday(before)) continue;
           const [after] = await repos.tasks.moveToSomeday([id]);
           if (after) done.push({ before, after });
         }

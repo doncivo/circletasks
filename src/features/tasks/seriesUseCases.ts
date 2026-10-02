@@ -13,8 +13,8 @@ import { postponeTask, type PostponeTarget } from '../../domain/taskPostpone';
 import { setTaskSchedule } from '../../domain/taskSchedule';
 import type { RecurrenceId, Result, TaskId } from '../../domain/types';
 import type { Repositories } from '../../db/repositories';
-import type { UndoableCommand } from '../app/undo';
-import { createNextOccurrence, UNDONE_OCCURRENCE_INDEX, type CreatedOccurrence } from './recurrenceUseCases';
+import { createNextOccurrence, type CreatedOccurrence } from './recurrenceUseCases';
+import { createRemoveUndo, type RuleChange } from './undoCommands';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
 /** Erreurs métier de la modification d'une série (T-10) ; les erreurs d'écriture rejettent. */
@@ -80,10 +80,6 @@ interface Entry {
   readonly after: Task;
 }
 
-export interface RuleChange {
-  readonly before: Recurrence;
-  readonly after: Recurrence;
-}
 
 function ruleFieldsOf(rule: Recurrence): RecurrenceFields {
   const { freq, interval, weekdays, monthDay, nthWeekday, until, count } = rule;
@@ -296,56 +292,4 @@ export function createSeriesUseCases(deps: TaskUseCaseDeps): SeriesUseCases {
     },
   };
   return api;
-}
-
-/**
- * Annulation d'une suppression de série : remet les tâches supprimées (corbeille, rappels), la règle
- * si la série était arrêtée, et retire l'occurrence suivante générée par la suppression (marquée
- * « annulée » comme pour T-09, pour qu'elle ne soit ni restaurable ni dupliquée) tant qu'elle n'a pas changé.
- */
-export function createRemoveUndo(deps: TaskUseCaseDeps, deleted: readonly Task[], nexts: readonly CreatedOccurrence[], rule: RuleChange | null): UndoableCommand {
-  const first = deleted[0];
-  return {
-    kind: 'delete',
-    count: deleted.length,
-    ...(deleted.length === 1 && first
-      ? { labelParams: { title: first.title } }
-      : { labelKey: 'undo.deleteMany' as const, labelParams: { count: deleted.length } }),
-    async undo() {
-      const outcome = await deps.data.transaction(async (repos) => {
-        for (const next of nexts) {
-          const created = await repos.tasks.getById(next.task.id);
-          if (created && created.hlc !== next.task.hlc) return null;
-        }
-        const restored: Task[] = [];
-        for (const task of deleted) {
-          const current = await repos.tasks.getById(task.id, { includeDeleted: true });
-          if (!current || current.deletedAt === null || current.hlc !== task.hlc) continue;
-          const [back] = await repos.tasks.restore([task.id]);
-          await repos.reminders.restoreForTarget({ type: 'task', id: task.id }, { deletedAt: current.deletedAt, hlc: current.hlc });
-          if (back) restored.push(back);
-        }
-        if (restored.length === 0) return null;
-        if (rule) {
-          const stored = await repos.recurrences.getById(rule.after.id, { includeDeleted: true });
-          if (stored && stored.hlc === rule.after.hlc) await repos.recurrences.restore(rule.after.id);
-        }
-        const removedIds: TaskId[] = [];
-        for (const next of nexts) {
-          const created = await repos.tasks.getById(next.task.id);
-          if (created) {
-            await repos.tasks.update(created.id, { seriesIndex: UNDONE_OCCURRENCE_INDEX });
-            const [removed] = await repos.tasks.softDelete([created.id]);
-            await repos.reminders.softDeleteForTarget({ type: 'task', id: created.id }, removed?.deletedAt ?? undefined);
-            removedIds.push(created.id);
-          }
-        }
-        return { restored, removedIds };
-      });
-      if (!outcome) return 'stale';
-      deps.taskEntities.publish(outcome.restored);
-      if (outcome.removedIds.length > 0) deps.taskEntities.remove(outcome.removedIds);
-      return 'undone';
-    },
-  };
 }

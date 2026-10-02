@@ -2,7 +2,7 @@
 .ct-detail-panel {
   flex-shrink: 0;
   height: 100%;
-  background: var(--ct-color-surface-raised);
+  background: var(--ct-color-surface);
   border-left: 1px solid var(--ct-color-border);
   display: flex;
   flex-direction: column;

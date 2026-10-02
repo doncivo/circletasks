@@ -36,7 +36,7 @@ export function EditModeSwitch({ active, onChange, label, className }: EditModeS
     >
       <span className="ct-edit-switch__track">
         <span className="ct-edit-switch__knob">
-          <Icon icon={Minus} size={16} strokeWidth={3} color="var(--ct-color-nav-bg)" />
+          <Icon icon={Minus} size={16} strokeWidth={3} color="currentColor" />
         </span>
       </span>
     </button>

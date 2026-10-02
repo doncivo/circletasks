@@ -1,3 +1,10 @@
+/* Racine de l'app : pleine hauteur de la fenêtre (iOS : hauteur dynamique de la barre d'adresse). */
+.app-shell {
+  height: 100%;
+  height: 100dvh;
+  min-height: 0;
+}
+
 /* AppShell : coquille PC (onglets + centre + détail) et mobile (maquettes Main.html, PC-Aujourdhui.html). */
 .ct-app-shell {
   position: relative;
@@ -30,4 +37,15 @@
   position: absolute;
   right: calc(20px + var(--ct-safe-area-right));
   bottom: calc(28px + var(--ct-safe-area-bottom));
+}
+
+/* Emplacement du panneau de détail PC : vide, il ne prend aucune place. */
+.ct-app-shell__detail {
+  display: flex;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.ct-app-shell__detail:empty {
+  display: none;
 }

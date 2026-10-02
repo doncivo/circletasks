@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { asLocalDate, asLocalTime } from './types';
-import { scheduleOf, setTaskSchedule, sortTasksForDay, type ScheduleFields } from './taskSchedule';
+import { canMoveToSomeday, scheduleOf, setTaskSchedule, sortTasksForDay, type ScheduleFields } from './taskSchedule';
 import type { TaskStatus } from './model';
 
 const DATE = asLocalDate('2026-10-05');
@@ -125,5 +125,17 @@ describe('sortTasksForDay (T-02, Q11)', () => {
   it('ne modifie pas l’ordre relatif des tâches sans heure (tri stable)', () => {
     const tasks = [task('x', null), task('y', null), task('z', null)];
     expect(sortTasksForDay(tasks).map((t) => t.id)).toEqual(['x', 'y', 'z']);
+  });
+});
+
+describe('canMoveToSomeday (A-08, SD-03)', () => {
+  const base = { status: 'todo' as const, someday: false, recurrenceId: null };
+  it('une tâche à faire, non rangée et non récurrente peut aller dans « Un jour »', () => {
+    expect(canMoveToSomeday(base)).toBe(true);
+  });
+  it('refuse une tâche terminée, déjà rangée ou récurrente', () => {
+    expect(canMoveToSomeday({ ...base, status: 'done' })).toBe(false);
+    expect(canMoveToSomeday({ ...base, someday: true })).toBe(false);
+    expect(canMoveToSomeday({ ...base, recurrenceId: 'r' as never })).toBe(false);
   });
 });

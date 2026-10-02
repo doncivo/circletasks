@@ -62,7 +62,9 @@ describe('TaskDetail : modifier ou arrêter une récurrence (T-10)', () => {
   it('le détail affiche la règle avec « Modifier la répétition » et « Arrêter la répétition »', async () => {
     await open(MONTHLY_23);
     expect(await screen.findByTestId('recurrence-detail')).toHaveTextContent('Mensuelle, le 23');
-    expect(screen.getByRole('button', { name: 'Modifier la répétition de la tâche' })).toBeInTheDocument();
+    // La règle est du texte cliquable (Detail.html) ; « Arrêter la répétition » est dans l'éditeur qu'il ouvre.
+    expect(screen.queryByRole('button', { name: 'Arrêter la répétition' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Modifier la répétition de la tâche' }));
     expect(screen.getByRole('button', { name: 'Arrêter la répétition' })).toBeInTheDocument();
   });
 
@@ -179,7 +181,8 @@ describe('TaskDetail : modifier ou arrêter une récurrence (T-10)', () => {
 
   it('« Arrêter la répétition » : le détail affiche « Une fois » (critère 6)', async () => {
     const task = await open(MONTHLY_23);
-    fireEvent.click(await screen.findByRole('button', { name: 'Arrêter la répétition' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la répétition de la tâche' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter la répétition' }));
     await waitFor(() => expect(screen.getByTestId('recurrence-detail')).toHaveTextContent('Une fois'));
     expect((await stored(task.id)).recurrenceId).toBeNull();
     expect(screen.getByRole('button', { name: 'Rendre la tâche récurrente' })).toBeInTheDocument();
@@ -187,7 +190,8 @@ describe('TaskDetail : modifier ou arrêter une récurrence (T-10)', () => {
 
   it('annuler (Ctrl+Z / message) un arrêt rétablit la règle affichée', async () => {
     const task = await open(MONTHLY_23);
-    fireEvent.click(await screen.findByRole('button', { name: 'Arrêter la répétition' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Modifier la répétition de la tâche' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter la répétition' }));
     await waitFor(() => expect(screen.getByTestId('recurrence-detail')).toHaveTextContent('Une fois'));
     await container.undo.undoLast();
     await waitFor(() => expect(screen.getByTestId('recurrence-detail')).toHaveTextContent('Mensuelle, le 23'));

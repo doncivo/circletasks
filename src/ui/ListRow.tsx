@@ -19,6 +19,8 @@ export interface ListRowProps {
    * heure à droite ; sous-ligne et icône masquées.
    */
   compact?: boolean;
+  /** PC (PC-Aujourdhui.html) : la sous-ligne passe à droite du titre, sur une seule ligne, avant l'icône. */
+  inlineSubtitle?: boolean;
   /** Heure affichée à droite en vue compacte (format 24 h) ; rien si absente. */
   time?: string | null;
   /** Couleur de la pastille de la vue compacte (couleur de l'icône de l'élément). */
@@ -44,7 +46,7 @@ export interface ListRowProps {
  *   onActivate={() => openDetail(task.id)}
  * />
  */
-export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, onActivate, className }: ListRowProps) {
+export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, inlineSubtitle, onActivate, className }: ListRowProps) {
   return (
     <div
       className={['ct-list-row', className].filter(Boolean).join(' ')}
@@ -64,8 +66,9 @@ export function ListRow({ title, subtitle, icon, trailing, leading, done, select
             {title}
           </span>
         )}
-        {!compact && subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
+        {!compact && !inlineSubtitle && subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
       </div>
+      {!compact && inlineSubtitle && subtitle !== undefined && <span className="ct-list-row__meta">{subtitle}</span>}
       {compact && time && <span className="ct-list-row__time">{time}</span>}
       {!compact && icon}
       {trailing}

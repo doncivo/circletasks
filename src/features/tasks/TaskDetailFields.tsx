@@ -1,36 +1,27 @@
-import { useEffect, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
+import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { parseTimeInput } from '../../domain/dateInput';
-import type { ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
+import type { RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import { choiceOfTask, patchFromDateChoice } from '../../domain/taskDetailEdit';
 import type { LocalDate } from '../../domain/types';
 import { t, tDynamic } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
-import { DatePicker, TextField, type Layout } from '../../ui';
+import { DateEditor, TextField, spaceTextColor, type Layout } from '../../ui';
+import { DetailRow } from './DetailRow';
+import { TaskRepeatRow } from './TaskRepeatRow';
+import { useInlineCancel, type InlineCancelRef } from './useInlineCancel';
 
 /**
- * Lignes de la fiche détail d'une tâche (A-08, PC-Aujourdhui.html, Detail.html) : date, heure, répétition,
- * rappels, espace, projet, objectif. PC : date, heure et espace s'éditent sur place (Entrée valide, Échap annule,
- * enregistrement immédiat) ; iPhone : lecture seule, la modification passe par la feuille « Modifier la tâche »
- * (Q15). Rappels, projet et objectif : affichage seulement (N-02, ES-04, OB-03 en gèrent l'édition).
+ * Lignes de la fiche détail d'une tâche (A-08, PC-Aujourdhui.html, Detail.html) : date, heure, répétition, rappels, espace, projet,
+ * objectif. PC : texte, édité sur place au clic sur la valeur (date : champ « Date » et calendrier ; heure ; espace ; Entrée valide,
+ * Échap annule, enregistrement immédiat). iPhone : lecture seule, sauf la répétition (ligne cliquable) ; le reste passe par la feuille
+ * « Modifier la tâche » (Q15). Rappels, projet et objectif : affichage seulement (N-02, ES-04, OB-03 en gèrent l'édition).
  */
 
-function DetailRow({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="ct-task-detail__row ct-task-detail__row--field">
-      <span className="ct-task-detail__rowLabel">{label}</span>
-      <span className="ct-task-detail__rowValue">{children}</span>
-    </div>
-  );
-}
-
-/** Texte de la date de la tâche : « Mer. 23 sept. 2026 », « Un jour » ou « Sans date ». */
-export function dateValueText(task: Pick<Task, 'date' | 'someday'>): string {
+/** Texte de la date : « Mer. 23 sept. 2026 » (PC), « Mer. 23 sept. » (iPhone, année courante omise), « Un jour » ou « Sans date ». */
+export function dateValueText(task: Pick<Task, 'date' | 'someday'>, today: LocalDate, withYear: boolean): string {
   if (task.someday) return t('detail.somedayValue');
-  return task.date ? formatDetailDate(task.date) : t('detail.noDate');
-}
-
-export function timeValueText(task: Pick<Task, 'time'>): string {
-  return task.time ?? t('detail.noTime');
+  if (!task.date) return t('detail.noDate');
+  return formatDetailDate(task.date, withYear || task.date.slice(0, 4) !== today.slice(0, 4));
 }
 
 const offsetLabel = (offset: ReminderOffsetMin): string => tDynamic(`detail.reminderOffset${String(offset)}` as 'detail.reminderOffset0');
@@ -48,66 +39,127 @@ function ReminderChips({ reminders }: { reminders: readonly ReminderOffsetMin[] 
   );
 }
 
-/** Heure éditable (PC) : « 9h30 », « 09:30 », vide = sans heure ; Entrée valide, Échap rétablit. */
-function TimeEditor({ task, onPatch, cancelInlineRef }: { task: Task; onPatch: (patch: TaskPatch) => void; cancelInlineRef: MutableRefObject<(() => boolean) | null> }) {
-  const [draft, setDraft] = useState(task.time ?? '');
-  const [seen, setSeen] = useState(task.time);
+interface InlineProps {
+  readonly task: Task;
+  readonly onPatch: (patch: TaskPatch) => void;
+  readonly cancelInlineRef: InlineCancelRef;
+}
+
+/** Date éditable (PC) : la valeur devient le champ « Date » à saisie libre avec calendrier (PC-Date.html). */
+function DateValue({ task, today, onPatch, cancelInlineRef }: InlineProps & { today: LocalDate }) {
+  const [editing, setEditing] = useState(false);
+  useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
+  const choice = choiceOfTask(task);
+  if (!editing) {
+    return (
+      <button type="button" className="ct-task-detail__valueButton" aria-label={`${t('detail.dateFieldLabel')} : ${dateValueText(task, today, true)}`} onClick={() => setEditing(true)}>
+        {dateValueText(task, today, true)}
+      </button>
+    );
+  }
+  return (
+    <DateEditor
+      mode="popover"
+      value={choice}
+      today={today}
+      autoFocus
+      commitOnPick
+      label={t('detail.dateFieldLabel')}
+      onCancel={() => setEditing(false)}
+      onCommit={(next) => {
+        setEditing(false);
+        if (next !== null && (next.date !== choice.date || next.time !== choice.time)) onPatch(patchFromDateChoice(next));
+      }}
+    />
+  );
+}
+
+/** Heure éditable (PC) : « 9h30 », « 09:30 », vide = sans heure ; Entrée valide, Échap annule. */
+function TimeValue({ task, onPatch, cancelInlineRef }: InlineProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
-  if (task.time !== seen) {
-    setSeen(task.time);
-    setDraft(task.time ?? '');
-    setInvalid(false);
+  useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
+  const text = task.time ?? t('detail.noTime');
+
+  if (!editing) {
+    // Sans date, l'heure n'a pas de sens (invariant T-02) : texte seul.
+    if (task.date === null) return <>{text}</>;
+    return (
+      <button
+        type="button"
+        className="ct-task-detail__valueButton"
+        aria-label={`${t('detail.timeEditLabel')} : ${text}`}
+        onClick={() => {
+          setDraft(task.time ?? '');
+          setInvalid(false);
+          setEditing(true);
+        }}
+      >
+        {text}
+      </button>
+    );
   }
 
-  const dirty = draft !== (task.time ?? '') || invalid;
-  // Échap pendant la saisie : la fiche annule la saisie au lieu de se fermer.
-  useEffect(() => {
-    if (!dirty) return undefined;
-    const cancel = (): boolean => {
-      setDraft(task.time ?? '');
-      setInvalid(false);
-      return true;
-    };
-    cancelInlineRef.current = cancel;
-    return () => {
-      if (cancelInlineRef.current === cancel) cancelInlineRef.current = null;
-    };
-  }, [dirty, task.time, cancelInlineRef]);
-
-  function commit(): void {
+  function commit(event?: FormEvent): void {
+    event?.preventDefault();
     const parsed = parseTimeInput(draft);
     if (!parsed.ok) {
       setInvalid(true);
       return;
     }
-    setInvalid(false);
+    setEditing(false);
     if (parsed.value !== task.time) onPatch({ time: parsed.value });
-    else setDraft(task.time ?? '');
-  }
-
-  function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && dirty) {
-      event.stopPropagation(); // annule la saisie sans fermer la fiche
-      setDraft(task.time ?? '');
-      setInvalid(false);
-    }
   }
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        commit();
-      }}
-      onKeyDown={onKeyDown}
-    >
-      <TextField label={t('detail.timeEditLabel')} value={draft} onChange={setDraft} onBlur={commit} disabled={task.date === null} placeholder={t('detail.noTime')} />
+    <form onSubmit={commit} onKeyDown={(event: KeyboardEvent) => event.key === 'Escape' && event.stopPropagation()}>
+      <TextField label={t('detail.timeEditLabel')} value={draft} onChange={setDraft} onBlur={() => commit()} placeholder={t('detail.noTime')} autoFocus />
       {invalid && (
         <span role="alert" className="ct-task-detail__fieldError">
           {t('detail.timeInvalid')}
         </span>
       )}
     </form>
+  );
+}
+
+/** Espace éditable (PC) : le nom coloré devient les pastilles Pro / Perso ; un choix s'applique aussitôt. */
+function SpaceValue({ task, spaces, onPatch, cancelInlineRef }: InlineProps & { spaces: readonly Space[] }) {
+  const [editing, setEditing] = useState(false);
+  useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
+  const current = spaces.find((space) => space.id === task.spaceId);
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="ct-task-detail__valueButton ct-task-detail__spaceName"
+        style={current ? { color: spaceTextColor(current.color) } : undefined}
+        aria-label={`${t('detail.spaceChoiceLabel')} : ${current?.name ?? ''}`}
+        onClick={() => setEditing(true)}
+      >
+        {current?.name}
+      </button>
+    );
+  }
+  return (
+    <span role="group" aria-label={t('detail.spaceChoiceLabel')} className="ct-task-detail__spaces">
+      {spaces.map((candidate) => (
+        <button
+          key={candidate.id}
+          type="button"
+          aria-pressed={candidate.id === task.spaceId}
+          className="ct-task-detail__spaceButton"
+          style={{ color: spaceTextColor(candidate.color) }}
+          onClick={() => {
+            setEditing(false);
+            if (candidate.id !== task.spaceId) onPatch({ spaceId: candidate.id, projectId: null });
+          }}
+        >
+          {candidate.name}
+        </button>
+      ))}
+    </span>
   );
 }
 
@@ -118,78 +170,58 @@ export interface TaskDetailFieldsProps {
   readonly today: LocalDate;
   readonly reminders: readonly ReminderOffsetMin[];
   readonly goalTitle: string | null;
+  readonly recurrence: RecurrenceFields | null;
   /** Applique une modification (la question « cette occurrence / toutes les suivantes » est posée par la fiche). */
   readonly onPatch: (patch: TaskPatch) => void;
-  /** Saisie en place en cours (heure) : Échap l'annule avant de fermer la fiche. */
-  readonly cancelInlineRef: MutableRefObject<(() => boolean) | null>;
-  /** Section « Répétition » (T-09, T-10), insérée entre l'heure et les rappels. */
-  readonly repeat: ReactNode;
+  /** Saisie en place en cours : Échap l'annule avant de fermer la fiche. */
+  readonly cancelInlineRef: InlineCancelRef;
+  readonly setRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
+  readonly updateRecurrence: (rule: RecurrenceFields) => Promise<boolean>;
+  readonly stopRecurrence: () => Promise<boolean>;
 }
 
-export function TaskDetailFields({ task, layout, spaces, today, reminders, goalTitle, onPatch, cancelInlineRef, repeat }: TaskDetailFieldsProps) {
+export function TaskDetailFields({ task, layout, spaces, today, reminders, goalTitle, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
   const space = spaces.find((candidate) => candidate.id === task.spaceId);
-  const projectText = t('detail.projectNone');
-  const goalText = goalTitle ?? t('detail.goalNone');
+  const inline: InlineProps = { task, onPatch, cancelInlineRef };
+  const repeat: ReactNode = <TaskRepeatRow task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
+  const goal = goalTitle ?? t('detail.goalNone');
 
   if (layout === 'mobile') {
+    const date = dateValueText(task, today, false);
     return (
       <div className="ct-task-detail__fields">
-        <DetailRow label={t('detail.dateTimeRow')}>{task.time ? `${dateValueText(task)} · ${task.time}` : dateValueText(task)}</DetailRow>
+        <DetailRow label={t('detail.dateRow')}>{task.time ? `${date} · ${task.time}` : date}</DetailRow>
         {repeat}
         <DetailRow label={t('detail.remindersRow')}>
           <ReminderChips reminders={reminders} />
         </DetailRow>
         <DetailRow label={t('detail.spaceProjectRow')}>
-          <span style={space ? { color: space.color, fontWeight: 'var(--ct-font-weight-bold)' } : undefined}>{space?.name}</span>
+          <span style={space ? { color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-bold)' } : undefined}>{space?.name}</span>
           {' · '}
-          {projectText}
+          {t('detail.projectNone')}
         </DetailRow>
-        <DetailRow label={t('detail.goalRow')}>{goalText}</DetailRow>
+        <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
       </div>
     );
   }
 
-  const choice = choiceOfTask(task);
   return (
     <div className="ct-task-detail__fields">
       <DetailRow label={t('detail.dateRow')}>
-        <DatePicker
-          value={choice}
-          today={today}
-          label={t('detail.dateFieldLabel')}
-          onChange={(next) => {
-            if (next === null || (next.date === choice.date && next.time === choice.time)) return;
-            onPatch(patchFromDateChoice(next));
-          }}
-        />
+        <DateValue {...inline} today={today} />
       </DetailRow>
       <DetailRow label={t('detail.timeRow')}>
-        <TimeEditor task={task} onPatch={onPatch} cancelInlineRef={cancelInlineRef} />
+        <TimeValue {...inline} />
       </DetailRow>
       {repeat}
       <DetailRow label={t('detail.remindersRow')}>
         <ReminderChips reminders={reminders} />
       </DetailRow>
       <DetailRow label={t('detail.spaceRow')}>
-        <span role="group" aria-label={t('detail.spaceChoiceLabel')} className="ct-task-detail__spaces">
-          {spaces.map((candidate) => (
-            <button
-              key={candidate.id}
-              type="button"
-              aria-pressed={candidate.id === task.spaceId}
-              className="ct-task-detail__spaceButton"
-              style={{ color: candidate.color }}
-              onClick={() => {
-                if (candidate.id !== task.spaceId) onPatch({ spaceId: candidate.id, projectId: null });
-              }}
-            >
-              {candidate.name}
-            </button>
-          ))}
-        </span>
+        <SpaceValue {...inline} spaces={spaces} />
       </DetailRow>
-      <DetailRow label={t('detail.projectRow')}>{projectText}</DetailRow>
-      <DetailRow label={t('detail.goalRow')}>{goalText}</DetailRow>
+      <DetailRow label={t('detail.projectRow')}>{t('detail.projectNone')}</DetailRow>
+      <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
     </div>
   );
 }

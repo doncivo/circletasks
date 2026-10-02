@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { spaceTextColor } from '../../ui';
 import type { RecurrenceFields, Space, Task } from '../../domain/model';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import { taskLineSegments } from '../../domain/taskLine';
@@ -27,7 +28,7 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtit
     else if (segment.kind === 'carried') parts.push(<span key="carried" className="ct-today__carried">{t('tasks.carriedOver')}</span>);
     else if (segment.kind === 'space') {
       const space = spaces.find((s) => s.id === segment.spaceId);
-      if (space) parts.push(<span key="space" style={{ color: space.color, fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
+      if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
     } else if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
   }
   if (parts.length === 0) return undefined;

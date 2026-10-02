@@ -22,11 +22,11 @@ test.describe('A-06 — vue compacte', () => {
     await createTask(page, testInfo, { title: plain });
     const toggle = page.getByRole('button', { name: 'Vue compacte' });
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle')).toHaveText('09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle')).toHaveCount(0);
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveCount(0);
     await expect(rowOf(page, timed).locator('.ct-list-row__time')).toHaveText('09:00');
     await expect(rowOf(page, plain).locator('.ct-list-row__time')).toHaveCount(0);
     const box = await rowOf(page, timed).boundingBox();
@@ -35,7 +35,7 @@ test.describe('A-06 — vue compacte', () => {
 
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle')).toHaveText('09:00 · Pro');
+    await expect(rowOf(page, timed).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
   });
 
   test('le choix est conservé au changement d’onglet ; terminer et mode édition fonctionnent (critères 5, 6)', async ({ page }, testInfo) => {

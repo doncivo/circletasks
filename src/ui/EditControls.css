@@ -20,7 +20,7 @@
   padding: 3px;
   box-sizing: border-box;
   border-radius: 18px;
-  background: var(--ct-color-nav-bg);
+  background: var(--ct-edit-track);
 }
 
 .ct-edit-switch[data-active='true'] .ct-edit-switch__track {
@@ -34,11 +34,13 @@
   width: 30px;
   height: 30px;
   border-radius: var(--ct-radius-round);
-  background: var(--ct-color-surface);
+  background: var(--ct-edit-idle-knob);
+  color: var(--ct-edit-ink);
 }
 
 .ct-edit-switch[data-active='true'] .ct-edit-switch__knob {
   background: var(--ct-color-edit-knob);
+  color: #2e2150;
 }
 
 .ct-edit-switch:focus-visible {
