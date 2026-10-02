@@ -9,7 +9,6 @@ import { Checkbox, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, use
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
-import { UndoToast } from '../today/UndoToast';
 import { doneTasksStore, resolveDoneTasks } from './doneTasksStore';
 import { TaskDetail } from './TaskDetail';
 import './DoneTasksScreen.css';
@@ -144,8 +143,6 @@ export function DoneTasksScreen() {
               ))}
             </section>
           ))}
-
-        <UndoToast />
       </div>
 
       <TaskDetail />

@@ -6,6 +6,7 @@ import { asEntityId, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -58,6 +59,7 @@ describe('suppression depuis Aujourd’hui et la fiche détail (T-08)', () => {
     render(
       <AppContainerProvider container={container}>
         <TodayScreen />
+        <UndoToast />
       </AppContainerProvider>,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Courses' }));
@@ -119,6 +121,7 @@ describe('suppression depuis Aujourd’hui et la fiche détail (T-08)', () => {
     render(
       <AppContainerProvider container={container}>
         <TodayScreen />
+        <UndoToast />
       </AppContainerProvider>,
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Courses' }));
@@ -135,6 +138,7 @@ describe('suppression depuis Aujourd’hui et la fiche détail (T-08)', () => {
     render(
       <AppContainerProvider container={container}>
         <TodayScreen />
+        <UndoToast />
       </AppContainerProvider>,
     );
     fireEvent.focus(await screen.findByRole('button', { name: 'Courses' }));

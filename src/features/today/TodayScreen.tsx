@@ -16,7 +16,6 @@ import { DuplicatePrompt, TaskDetail } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import type { NewTaskSchedule } from './todayStore';
 import { resolveTodayTasks, todayStore } from './todayStore';
-import { UndoToast } from './UndoToast';
 import './TodayScreen.css';
 
 function formatTodayHeader(isoDate: string): { monthLine: string; dayLine: string } {
@@ -318,10 +317,6 @@ export function TodayScreen() {
             ))}
           </div>
         )}
-
-        {/* Bandeau « Annuler » (T-04) après une complétion, branché sur `UndoStack`
-            (ADR 0005) ; T-13 généralisera son emplacement aux autres actions. */}
-        <UndoToast />
 
         <form className="ct-today__addRow" onSubmit={handleInlineSubmit}>
           <TextField

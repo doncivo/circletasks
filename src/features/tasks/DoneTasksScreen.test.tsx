@@ -5,6 +5,7 @@ import { asEntityId, asLocalDate, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -49,7 +50,12 @@ describe('écrans Rapport minimal et Tâches terminées (T-07)', () => {
     db.clock.set(at('2026-09-23T12:00:00'));
   }
 
-  const wrap = (node: React.ReactNode) => <AppContainerProvider container={container}>{node}</AppContainerProvider>;
+  const wrap = (node: React.ReactNode) => (
+    <AppContainerProvider container={container}>
+      {node}
+      <UndoToast />
+    </AppContainerProvider>
+  );
 
   it('Aujourd’hui : l’icône graphique ouvre le Rapport, qui porte le lien « Tâches terminées » (critère 1)', async () => {
     const { unmount } = render(wrap(<TodayScreen />));

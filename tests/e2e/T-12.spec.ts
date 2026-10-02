@@ -51,8 +51,6 @@ test.describe('T-12 — dupliquer une tâche', () => {
     await expect(page.getByRole('button', { name: title })).toHaveCount(2);
     // La fiche reste sur l'original ; la copie n'est pas ouverte.
     await expect(detail).toBeVisible();
-    // iPhone : la feuille de détail recouvre le bandeau ; on la ferme avant de toucher « Annuler » (bandeau global : T-13).
-    if (testInfo.project.name === 'iphone') await detail.getByRole('button', { name: 'Fermer' }).click();
 
     await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
     await expect(page.getByRole('button', { name: title })).toHaveCount(1);

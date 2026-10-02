@@ -5,6 +5,7 @@ import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -48,6 +49,7 @@ describe('TodayScreen : répétition (T-09)', () => {
     return render(
       <AppContainerProvider container={container}>
         <TodayScreen />
+        <UndoToast />
       </AppContainerProvider>,
     );
   }

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Toast } from './Toast';
 
@@ -40,6 +40,53 @@ describe('Toast', () => {
     vi.advanceTimersByTime(4000);
     expect(onTimeout).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1000);
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('sans onAction : pas de bouton (message seul, ex. action impossible à annuler)', () => {
+    render(<Toast message="Action impossible à annuler" />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('le délai est suspendu pendant le survol puis reprend avec le temps restant (T-13 critère 9)', () => {
+    const onTimeout = vi.fn();
+    render(<Toast message="Tâche reportée" onAction={() => undefined} onTimeout={onTimeout} />);
+    const toast = screen.getByRole('status');
+    act(() => void vi.advanceTimersByTime(3000));
+    fireEvent.mouseEnter(toast);
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(onTimeout).not.toHaveBeenCalled();
+    fireEvent.mouseLeave(toast);
+    act(() => void vi.advanceTimersByTime(1999));
+    expect(onTimeout).not.toHaveBeenCalled();
+    act(() => void vi.advanceTimersByTime(1));
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('le délai est suspendu tant que le focus est dans le bandeau (clavier, T-13 critère 9)', () => {
+    const onTimeout = vi.fn();
+    render(<Toast message="Tâche reportée" onAction={() => undefined} onTimeout={onTimeout} />);
+    const button = screen.getByRole('button', { name: 'Annuler' });
+    fireEvent.focus(button);
+    act(() => void vi.advanceTimersByTime(30_000));
+    expect(onTimeout).not.toHaveBeenCalled();
+    fireEvent.blur(button, { relatedTarget: document.body });
+    act(() => void vi.advanceTimersByTime(5000));
+    expect(onTimeout).toHaveBeenCalledOnce();
+  });
+
+  it('survol et focus cumulés : le délai ne reprend qu’à la fin des deux', () => {
+    const onTimeout = vi.fn();
+    render(<Toast message="Tâche reportée" onAction={() => undefined} onTimeout={onTimeout} />);
+    const toast = screen.getByRole('status');
+    const button = screen.getByRole('button', { name: 'Annuler' });
+    fireEvent.mouseEnter(toast);
+    fireEvent.focus(button);
+    fireEvent.mouseLeave(toast);
+    act(() => void vi.advanceTimersByTime(10_000));
+    expect(onTimeout).not.toHaveBeenCalled();
+    fireEvent.blur(button, { relatedTarget: null });
+    act(() => void vi.advanceTimersByTime(5000));
     expect(onTimeout).toHaveBeenCalledOnce();
   });
 });

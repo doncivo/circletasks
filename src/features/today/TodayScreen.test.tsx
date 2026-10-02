@@ -6,6 +6,7 @@ import { asEntityId, asLocalDate, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { UndoToast } from '../app/UndoToast';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -27,6 +28,7 @@ function renderToday(container: AppContainer) {
   return render(
     <AppContainerProvider container={container}>
       <TodayScreen />
+      <UndoToast />
     </AppContainerProvider>,
   );
 }
