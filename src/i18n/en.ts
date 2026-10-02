@@ -230,7 +230,7 @@ export const en: Messages = {
     dateLabel: 'Date',
     timeLabel: 'Time',
     dialogLabel: 'Choose a date',
-    understood: 'Understood: {summary}',
+    understoodLabel: 'Understood:',
     understoodAt: '{day} at {time}',
     somedaySummary: 'Someday (no date)',
     notUnderstood: 'Date not understood',

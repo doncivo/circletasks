@@ -6,7 +6,7 @@ import { addDays } from '../domain/localDate';
 import { nextWeekFrom } from '../domain/taskPostpone';
 import type { LocalDate } from '../domain/types';
 import { t } from '../i18n';
-import { formatDayAria, formatDayFull, formatDayLabel, formatMonthTitle, weekdayInitials } from '../i18n/format';
+import { formatDayAria, formatDayFull, formatDayLabel, formatMonthTitle, weekdayInitials, weekdayNamesLong } from '../i18n/format';
 import { Icon } from './Icon';
 import './DateField.css';
 
@@ -269,6 +269,8 @@ export function DateEditor({
   const tomorrow = addDays(today, 1);
   const keepTime = draft?.time ?? null;
   const initials = weekdayInitials();
+  const weekdayNames = weekdayNamesLong();
+  const weeks = Array.from({ length: Math.ceil(cells.length / 7) }, (_, w) => Array.from({ length: 7 }, (_, i) => cells[w * 7 + i] ?? null));
 
   const panel = (
     <div
@@ -282,7 +284,7 @@ export function DateEditor({
         {invalid ? (
           <span>{textError ? t('datePicker.notUnderstood') : t('datePicker.timeNotUnderstood')}</span>
         ) : draft ? (
-          <span>{t('datePicker.understood', { summary: '' })}<b>{summary(draft)}</b></span>
+          <span>{t('datePicker.understoodLabel')} <b>{summary(draft)}</b></span>
         ) : null}
       </div>
       <div className="ct-date-editor__chips">
@@ -314,34 +316,41 @@ export function DateEditor({
           </button>
         </div>
       </div>
-      <div className="ct-date-editor__grid" role="group" aria-labelledby={`${ids}-month`} onKeyDown={handleGridKeyDown}>
-        {initials.map((initial, i) => (
-          <span key={`h${i}`} className="ct-date-editor__weekday" aria-hidden="true">
-            {initial}
-          </span>
+      <div className="ct-date-editor__grid" role="grid" aria-labelledby={`${ids}-month`} onKeyDown={handleGridKeyDown}>
+        <div role="row" className="ct-date-editor__row">
+          {initials.map((initial, i) => (
+            <span key={`h${i}`} role="columnheader" className="ct-date-editor__weekday" aria-label={weekdayNames[i]}>
+              {initial}
+            </span>
+          ))}
+        </div>
+        {weeks.map((week, w) => (
+          <div key={w} role="row" className="ct-date-editor__row">
+            {week.map((cell, i) => {
+              if (cell === null) return <span key={`e${i}`} role="gridcell" aria-hidden="true" />;
+              const isToday = cell === today;
+              const isChosen = cell === selectedDate;
+              const suffix = [isToday ? t('datePicker.todaySuffix') : null, isChosen ? t('datePicker.chosenSuffix') : null].filter(Boolean).join(', ');
+              return (
+                <span key={cell} role="gridcell" aria-selected={isChosen}>
+                  <button
+                    type="button"
+                    className="ct-date-editor__day"
+                    data-today={isToday ? 'true' : undefined}
+                    data-chosen={isChosen ? 'true' : undefined}
+                    data-focus-day={cell === tabbable ? 'true' : undefined}
+                    tabIndex={cell === tabbable ? 0 : -1}
+                    aria-label={suffix ? `${formatDayAria(cell)}, ${suffix}` : formatDayAria(cell)}
+                    aria-current={isToday ? 'date' : undefined}
+                    onClick={() => pick({ date: cell, time: keepTime })}
+                  >
+                    {Number(cell.slice(8))}
+                  </button>
+                </span>
+              );
+            })}
+          </div>
         ))}
-        {cells.map((cell, i) => {
-          if (cell === null) return <span key={`e${i}`} />;
-          const isToday = cell === today;
-          const isChosen = cell === selectedDate;
-          const suffix = [isToday ? t('datePicker.todaySuffix') : null, isChosen ? t('datePicker.chosenSuffix') : null].filter(Boolean).join(', ');
-          return (
-            <button
-              key={cell}
-              type="button"
-              className="ct-date-editor__day"
-              data-today={isToday ? 'true' : undefined}
-              data-chosen={isChosen ? 'true' : undefined}
-              data-focus-day={cell === tabbable ? 'true' : undefined}
-              tabIndex={cell === tabbable ? 0 : -1}
-              aria-label={suffix ? `${formatDayAria(cell)}, ${suffix}` : formatDayAria(cell)}
-              aria-pressed={isChosen}
-              onClick={() => pick({ date: cell, time: keepTime })}
-            >
-              {Number(cell.slice(8))}
-            </button>
-          );
-        })}
       </div>
       {showTime && (
         <div className="ct-date-editor__timeRow">

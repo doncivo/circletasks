@@ -60,3 +60,9 @@ export function weekdayInitials(): string[] {
 export function formatDayAria(isoDate: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
 }
+
+/** Noms complets des jours, lundi en premier (« lundi »…), pour les en-têtes de colonne du calendrier. */
+export function weekdayNamesLong(): string[] {
+  const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' });
+  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i))));
+}

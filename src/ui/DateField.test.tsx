@@ -104,7 +104,10 @@ describe('DateField (T-14, PC)', () => {
     const grid = within(dialog());
     expect(grid.getByText('Septembre 2026')).toBeInTheDocument();
     expect(grid.getByRole('button', { name: '23 septembre, aujourd’hui' })).toHaveAttribute('data-today', 'true');
-    expect(grid.getByRole('button', { name: '25 septembre, choisi' })).toHaveAttribute('aria-pressed', 'true');
+    expect(grid.getByRole('gridcell', { selected: true })).toContainElement(grid.getByRole('button', { name: '25 septembre, choisi' }));
+    expect(grid.getByRole('grid')).toBeInTheDocument();
+    expect(grid.getAllByRole('row')).toHaveLength(6);
+    expect(grid.getAllByRole('columnheader')).toHaveLength(7);
     const initials = Array.from(dialog().querySelectorAll('.ct-date-editor__weekday')).map((n) => n.textContent);
     expect(initials).toEqual(['L', 'M', 'M', 'J', 'V', 'S', 'D']);
   });

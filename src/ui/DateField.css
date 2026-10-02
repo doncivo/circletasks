@@ -257,3 +257,16 @@
 .ct-date-editor__hint--alone {
   margin: 0;
 }
+
+.ct-date-editor__row {
+  display: contents;
+}
+
+.ct-date-editor__grid [role='gridcell'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-date-editor__grid [role='gridcell'] > .ct-date-editor__day {
+  width: 100%;
+}

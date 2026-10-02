@@ -233,7 +233,7 @@ export const fr = {
     dateLabel: 'Date',
     timeLabel: 'Heure',
     dialogLabel: 'Choisir une date',
-    understood: 'Compris : {summary}',
+    understoodLabel: 'Compris :',
     understoodAt: '{day} à {time}',
     somedaySummary: 'Un jour (sans date)',
     notUnderstood: 'Date non comprise',

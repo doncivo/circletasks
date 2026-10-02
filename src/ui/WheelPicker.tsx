@@ -100,7 +100,6 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
       aria-valuenow={index}
       aria-valuetext={current?.spoken ?? current?.label ?? ''}
       aria-disabled={disabled || undefined}
-      aria-orientation="vertical"
       tabIndex={disabled ? -1 : 0}
       onKeyDown={handleKeyDown}
       className={['ct-wheel', disabled ? 'ct-wheel--disabled' : '', className].filter(Boolean).join(' ')}
