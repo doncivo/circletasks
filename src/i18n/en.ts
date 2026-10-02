@@ -59,6 +59,15 @@ export const en: Messages = {
     postponeDateLabel: 'Pick a postpone date',
     postponeConfirm: 'Confirm',
     postponeError: 'Cannot postpone this task.',
+    carriedOver: 'carried over',
+    carryOverError: 'Unable to carry over unfinished tasks.',
+  },
+  settings: {
+    title: 'Settings',
+    sectionTasks: 'TASKS',
+    carryOverUndone: 'Carry over unfinished tasks',
+    loadError: 'Unable to read settings.',
+    saveError: 'Unable to save this setting.',
   },
   icons: {
     modeIcon: 'Icon',

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
@@ -6,6 +6,8 @@ import { bootstrapApp } from './features/app/bootstrap';
 import type { AppContainer } from './features/app/container';
 import { TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { toKeyInput } from './features/app/shortcuts';
+import { startAppStartup, type AppStartup } from './features/app/startup';
+import { SettingsScreen } from './features/settings';
 import { t } from './i18n';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
@@ -40,7 +42,13 @@ function AppShellContent() {
         />
       }
     >
-      {route.tab === 'tasks' ? <TodayScreen /> : <div className="ct-app__placeholder" aria-hidden="true" />}
+      {route.tab === 'tasks' ? (
+        <TodayScreen />
+      ) : route.tab === 'settings' ? (
+        <SettingsScreen />
+      ) : (
+        <div className="ct-app__placeholder" aria-hidden="true" />
+      )}
     </AppShell>
   );
 }
@@ -49,6 +57,8 @@ export function App() {
   const layout = useLayout();
   const dbStatus = useAppStore((s) => s.dbStatus);
   const [container, setContainer] = useState<AppContainer | null>(null);
+  const mounted = useRef(true);
+  const startup = useRef<AppStartup | null>(null);
 
   useEffect(() => {
     if (useAppStore.getState().dbStatus === 'idle') {
@@ -61,9 +71,28 @@ export function App() {
         } catch {
           useAppStore.getState().setSpaces([]);
         }
+        // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
+        // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
+        const started = startAppStartup(created);
+        startup.current = started;
+        await started.ready;
+        if (!mounted.current) {
+          started.dispose();
+          return;
+        }
         setContainer(created);
       });
     }
+  }, []);
+
+  // Démontage : arrête minuterie et écouteurs du démarrage (StrictMode : le drapeau est réarmé au remontage).
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      startup.current?.dispose();
+      startup.current = null;
+    };
   }, []);
 
   useEffect(() => {

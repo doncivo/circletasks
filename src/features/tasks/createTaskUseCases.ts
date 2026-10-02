@@ -20,7 +20,7 @@ import type { CreateTaskError, TaskUseCaseDeps, TaskUseCases } from './taskUseCa
  * récurrence, cette commande devra aussi la supprimer ici (critère 7) — rien
  * n'est fait tant que T-09 n'existe pas.
  */
-function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task): UndoableCommand {
+function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task, wasCarriedOver: boolean): UndoableCommand {
   return {
     kind: 'complete',
     count: 1,
@@ -28,7 +28,14 @@ function createCompleteUndoCommand(deps: TaskUseCaseDeps, completed: Task): Undo
     async undo() {
       const current = await deps.data.repos.tasks.getById(completed.id);
       if (!current || current.hlc !== completed.hlc) return 'stale';
-      deps.taskEntities.publish([await deps.data.repos.tasks.reopen(completed.id)]);
+      // T-06 : une tâche reportée retrouve son badge (même transaction que la réouverture).
+      const reopened = wasCarriedOver
+        ? await deps.data.transaction(async (repos) => {
+            await repos.tasks.reopen(completed.id);
+            return repos.tasks.update(completed.id, { carriedOver: true });
+          })
+        : await deps.data.repos.tasks.reopen(completed.id);
+      deps.taskEntities.publish([reopened]);
       return 'undone';
     },
   };
@@ -56,7 +63,7 @@ function createPostponeUndoCommand(deps: TaskUseCaseDeps, entries: readonly Post
         for (const { before, after } of entries) {
           const current = await repos.tasks.getById(after.id);
           if (!current || current.hlc !== after.hlc) continue;
-          written.push(await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday }));
+          written.push(await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, carriedOver: before.carriedOver }));
         }
         return written;
       });
@@ -146,7 +153,9 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       });
       if (!scheduled.ok) throw new ScheduleInvariantError(scheduled.error);
 
-      return write({ ...patch, ...scheduled.value });
+      // T-06 critère 4 : changer la date efface le badge « reportée ».
+      const dateChanged = scheduled.value.date !== current.date || scheduled.value.someday !== current.someday;
+      return write({ ...patch, ...scheduled.value, ...(dateChanged && current.carriedOver ? { carriedOver: false } : {}) });
     },
     async complete(id: TaskId): Promise<Task> {
       // Invariant status ⇔ doneAt posé par src/domain (T-04) ; le repository ne
@@ -158,7 +167,13 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         return current;
       }
       const { doneAt } = completeTask(current ?? { status: 'todo', doneAt: null }, nowIso(deps.clock));
-      const updated = await deps.data.repos.tasks.complete(id, doneAt);
+      // T-06 critère 4 : terminer une tâche reportée efface son badge (même transaction).
+      const updated = current?.carriedOver
+        ? await deps.data.transaction(async (repos) => {
+            await repos.tasks.complete(id, doneAt);
+            return repos.tasks.update(id, { carriedOver: false });
+          })
+        : await deps.data.repos.tasks.complete(id, doneAt);
       deps.taskEntities.publish([updated]);
 
       // Point d'extension T-09 (récurrence) : si `updated.recurrenceId` n'est pas
@@ -166,7 +181,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       // écrire par T-09) et l'annuler avec la même commande. Non implémenté :
       // seule l'occurrence courante est terminée.
 
-      deps.undo.push(createCompleteUndoCommand(deps, updated));
+      deps.undo.push(createCompleteUndoCommand(deps, updated, current?.carriedOver ?? false));
       return updated;
     },
     async reopen(id: TaskId): Promise<Task> {
@@ -190,8 +205,8 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
           const next = postponeTask(before, today, target);
           // Terminée : ignorée (critère 9). Planification inchangée : rien à écrire ni à annuler.
           if (!next.ok || (next.value.date === before.date && next.value.time === before.time && !before.someday)) continue;
-          // `carriedOver` n'est jamais posé ici (critère 7, réservé à T-06).
-          done.push({ before, after: await repos.tasks.update(id, next.value) });
+          // Un report manuel efface le badge « reportée » (T-06 critère 4) ; il ne le pose jamais.
+          done.push({ before, after: await repos.tasks.update(id, { ...next.value, carriedOver: false }) });
         }
         return done;
       });

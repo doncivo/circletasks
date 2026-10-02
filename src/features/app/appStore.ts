@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Space } from '../../domain/model';
-import type { SpaceFilter } from '../../domain/types';
+import type { LocalDate, SpaceFilter } from '../../domain/types';
 
 /** État de démarrage de la base locale. */
 export type DbStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -22,7 +22,16 @@ export interface AppState {
    * et aux tests).
    */
   readonly spaces: readonly Space[];
+  /**
+   * Jour local courant de l'app (T-06) : posé au démarrage puis à chaque passage de minuit
+   * par le déclencheur de report (`createDayRollover`) ; les écrans datés s'y rechargent.
+   */
+  readonly day: LocalDate | null;
+  /** T-06 : le dernier report automatique a échoué (message dans Aujourd'hui). */
+  readonly carryOverFailed: boolean;
   setDbStatus(status: DbStatus, errorDetail?: string): void;
+  setDay(day: LocalDate): void;
+  setCarryOverFailed(failed: boolean): void;
   setSpaceFilter(filter: SpaceFilter): void;
   setSpaces(spaces: readonly Space[]): void;
 }
@@ -32,7 +41,11 @@ export const useAppStore = create<AppState>()((set) => ({
   dbErrorDetail: null,
   spaceFilter: 'all',
   spaces: [],
+  day: null,
+  carryOverFailed: false,
   setDbStatus: (dbStatus, errorDetail) => set({ dbStatus, dbErrorDetail: errorDetail ?? null }),
+  setDay: (day) => set({ day }),
+  setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
   setSpaceFilter: (spaceFilter) => set({ spaceFilter }),
   setSpaces: (spaces) => set({ spaces }),
 }));

@@ -8,3 +8,4 @@ export * from './taskSchedule';
 export * from './taskCompletion';
 export * from './localDate';
 export * from './taskPostpone';
+export * from './taskCarryOver';

@@ -62,6 +62,15 @@ export const fr = {
     postponeDateLabel: 'Choisir une date de report',
     postponeConfirm: 'Valider',
     postponeError: 'Impossible de reporter cette tâche.',
+    carriedOver: 'reportée',
+    carryOverError: 'Impossible de reporter les tâches non faites.',
+  },
+  settings: {
+    title: 'Réglages',
+    sectionTasks: 'TÂCHES',
+    carryOverUndone: 'Reporter les tâches non faites',
+    loadError: 'Impossible de lire les réglages.',
+    saveError: 'Impossible d’enregistrer ce réglage.',
   },
   icons: {
     modeIcon: 'Icône',
