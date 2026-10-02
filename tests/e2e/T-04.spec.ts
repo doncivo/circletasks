@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-04 — Je marque une tâche terminée.
@@ -31,7 +32,7 @@ async function createTask(page: Page, testInfo: { project: { name: string } }, t
 
 test.describe('T-04 — terminer une tâche', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

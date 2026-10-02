@@ -126,7 +126,7 @@ describe('Semaine : déplacer une tâche (S-02)', () => {
       expect(titlesOf('2026-09-30')).toEqual(['À 09h', 'B', 'A']);
     });
 
-    it('une occurrence récurrente pose la question de portée avant tout déplacement (T-10)', async () => {
+    it('une occurrence récurrente se déplace seule, sans question : la série garde son ancre (S-02 critère 8)', async () => {
       const rule: RecurrenceFields = { freq: 'daily', interval: 1, weekdays: [], monthDay: null, nthWeekday: null, until: null, count: null };
       h.db.clock.advance(1);
       const created = await createTaskUseCases(h.container).create({ title: 'Chaque jour', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-09-30'), recurrence: rule });
@@ -136,26 +136,27 @@ describe('Semaine : déplacer une tâche (S-02)', () => {
       focusTitle('Chaque jour');
 
       press(key('ArrowRight', { altKey: true }), h);
-      const question = await screen.findByRole('alertdialog');
-      expect(question).toHaveTextContent('Déplacer « Chaque jour » ?');
-      expect((await h.container.data.repos.tasks.getById(created.value.id))?.date).toBe('2026-09-30'); // rien n'a bougé
-
-      fireEvent.click(within(question).getByRole('button', { name: 'Annuler' }));
-      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      expect(titlesOf('2026-09-30')).toEqual(['Chaque jour']);
-
-      press(key('ArrowRight', { altKey: true }), h);
-      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cette occurrence' }));
       await waitFor(() => expect(titlesOf('2026-10-01')).toEqual(['Chaque jour']));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
       const stored = await h.container.data.repos.tasks.getById(created.value.id);
       expect(stored).toMatchObject({ date: '2026-10-01' });
-      expect(stored?.seriesTemplate).toMatchObject({ date: '2026-09-30' }); // la série garde son ancre
+      expect(stored?.seriesTemplate).toMatchObject({ date: '2026-09-30' });
+    });
 
+    it('Ctrl+D d’une occurrence récurrente pose la question de portée du report (T-10)', async () => {
+      const rule: RecurrenceFields = { freq: 'daily', interval: 1, weekdays: [], monthDay: null, nthWeekday: null, until: null, count: null };
+      h.db.clock.advance(1);
+      const created = await createTaskUseCases(h.container).create({ title: 'Chaque jour', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-10-02'), recurrence: rule });
+      if (!created.ok) throw new Error('création impossible');
+      renderWeek(h.container);
+      await screen.findByRole('button', { name: 'Chaque jour' });
       focusTitle('Chaque jour');
-      press(key('ArrowRight', { altKey: true }), h);
-      fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Toutes les suivantes' }));
-      await waitFor(() => expect(titlesOf('2026-10-02')).toEqual(['Chaque jour']));
-      expect((await h.container.data.repos.tasks.getById(created.value.id))?.seriesTemplate).toBeNull(); // la série repart de cette date
+      press(key('d', { ctrlKey: true }), h);
+      const question = await screen.findByRole('alertdialog');
+      expect(question).toHaveTextContent('Reporter « Chaque jour » ?');
+      expect((await h.container.data.repos.tasks.getById(created.value.id))?.date).toBe('2026-10-02');
+      fireEvent.click(within(question).getByRole('button', { name: 'Cette occurrence' }));
+      await waitFor(() => expect(titlesOf('2026-10-03')).toEqual(['Chaque jour']));
     });
   });
 

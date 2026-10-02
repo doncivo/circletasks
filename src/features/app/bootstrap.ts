@@ -5,7 +5,6 @@ import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
 import { migrate } from '../../db/migrator';
-import { installDevTestHooks } from '../../db/testHooks';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
@@ -91,7 +90,8 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
   const clock = options.clock ?? systemClock;
   const ids = options.ids ?? uuidGenerator;
   try {
-    installDevTestHooks(driver);
+    // Prises de test des e2e : chargées dynamiquement et seulement en développement (Vite retire la branche d'un build).
+    if (import.meta.env.DEV) (await import('../../db/testHooks')).installDevTestHooks(driver);
     const boot = factory(driver, readOnlyStamper);
     const storedDeviceId = await boot.settings.get('device.id');
     const deviceId = storedDeviceId ?? newEntityId<DeviceId>(ids);

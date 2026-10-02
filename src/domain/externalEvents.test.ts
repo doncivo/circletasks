@@ -30,7 +30,7 @@ describe('externalEventsByDay (S-05 critères 1, 4, 5, 6)', () => {
   it('place l’événement du 23 sept. 08:00Z le mer. 23 à « 10:00 » en Europe/Paris, avec le nom de la source (critère 1)', () => {
     const days = byDay([event('Point client')]);
     expect(days.get(asLocalDate('2026-09-23'))).toEqual([
-      { id: 'Point client', title: 'Point client', allDay: false, startTime: '10:00', spaceId: null, calendarName: 'Google Agenda', icon: null },
+      { id: 'Point client', title: 'Point client', allDay: false, startTime: '10:00', spaceId: null, calendarName: 'Google Agenda', icon: null, startInstant: '2026-09-23T08:00:00Z' },
     ]);
     expect([...days.keys()]).toEqual(['2026-09-23']);
   });
@@ -93,6 +93,19 @@ describe('externalEventsByDay (S-05 critères 1, 4, 5, 6)', () => {
     const week = buildWeek({ weekStart: WEEK, filter: 'all', tasks: [], externalEvents: byDay(events) });
     expect(week[2]?.list.events.map((e) => e.title)).toEqual(['Journée', 'Tôt', 'Tard']);
     expect(week[2]?.list.isEmpty).toBe(false);
+  });
+
+  it('au recul d’heure, deux événements à 02:30 sortent dans l’ordre chronologique (CEST puis CET), puis par id', () => {
+    // Nuit du 25 au 26 octobre 2026 à Paris : 02:30 existe deux fois (00:30Z en CEST, 01:30Z en CET).
+    const week = asLocalDate('2026-10-19');
+    const events = [
+      event('b-cet', { startUtc: '2026-10-25T01:30:00Z', endUtc: '2026-10-25T02:00:00Z' }),
+      event('a-cest', { startUtc: '2026-10-25T00:30:00Z', endUtc: '2026-10-25T01:00:00Z' }),
+      event('z-cet', { startUtc: '2026-10-25T01:10:00Z', endUtc: '2026-10-25T01:20:00Z' }),
+    ];
+    const days = externalEventsByDay({ days: weekDays(week), events, accounts: [account()], timeZone: 'Europe/Paris', filter: 'all' });
+    const list = buildWeek({ weekStart: week, filter: 'all', tasks: [], externalEvents: days })[6]?.list.events ?? [];
+    expect(list.map((e) => [e.id, e.startTime])).toEqual([['a-cest', '02:30'], ['z-cet', '02:10'], ['b-cet', '02:30']]);
   });
 
   it('un instant ou un fuseau illisible n’empêche pas l’affichage : l’événement est rangé sans heure (T-11)', () => {

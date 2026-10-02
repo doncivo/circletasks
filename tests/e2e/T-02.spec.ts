@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { setWheels, typeDate } from './helpers/schedule';
+import { openApp } from './helpers/app';
 
 /**
  * T-02 — J'affecte une date et une heure optionnelle.
@@ -50,7 +51,7 @@ async function createTask(
 
 test.describe('T-02 — date et heure optionnelle', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

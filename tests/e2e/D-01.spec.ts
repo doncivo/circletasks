@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * D-01 à D-03 — intégration PC, vue depuis le navigateur (npm run dev) et la mise en page iPhone.
@@ -13,7 +14,7 @@ test("Réglages hors app PC : ni « Démarrer avec Windows » ni « À propos »
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
 
-  await page.goto('/');
+  await openApp(page);
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Réglages' })).toBeVisible();
   await expect(page.getByRole('switch', { name: 'Reporter les tâches non faites' })).toBeEnabled();

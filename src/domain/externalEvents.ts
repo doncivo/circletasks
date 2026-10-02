@@ -101,6 +101,7 @@ export function externalEventsByDay(input: ExternalEventsByDayInput): Map<LocalD
         spaceId: null,
         calendarName: owner.account.label,
         icon: null,
+        startInstant: event.startUtc,
       };
       const list = result.get(day);
       if (list) list.push(entry);

@@ -222,23 +222,15 @@ test.describe('S-02 — déplacer une tâche d’un jour à l’autre', () => {
     await expect(dayOf(page, wed)).not.toContainText(title);
   });
 
-  test('une tâche récurrente demande la portée du déplacement : cette occurrence seulement (T-10)', async ({ page }, testInfo) => {
-    test.skip(isPhone(testInfo), 'Question de portée : scénario souris (PC).');
+  test('une occurrence récurrente se déplace seule, sans question (critère 8)', async ({ page }, testInfo) => {
+    test.skip(isPhone(testInfo), 'Scénario souris (PC).');
     const [, , wed, thu] = await days(page);
     const title = `Chaque jour ${testInfo.project.name}`;
     await insertTasks(page, [{ title, date: wed, space: 'pro', daily: true }]);
     await openWeek(page);
     await mouseDragTo(page, taskButton(page, title), dayOf(page, thu));
-    const question = page.getByRole('alertdialog');
-    await expect(question).toContainText(`Déplacer « ${title} » ?`);
-    // Rien n'a bougé tant que la question n'est pas tranchée ; « Annuler » abandonne.
-    await expect(dayOf(page, wed)).toContainText(title);
-    await question.getByRole('button', { name: 'Annuler' }).click();
-    await expect(dayOf(page, wed)).toContainText(title);
-
-    await mouseDragTo(page, taskButton(page, title), dayOf(page, thu));
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Cette occurrence' }).click();
     await expect(dayOf(page, thu)).toContainText(title);
+    await expect(page.getByRole('alertdialog')).toHaveCount(0);
     await expect(page.getByRole('status')).toContainText(title);
   });
 

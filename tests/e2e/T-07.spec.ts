@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-07 : Je consulte les tâches terminées.
@@ -43,7 +44,7 @@ async function openDoneScreen(page: Page): Promise<void> {
 test.describe('T-07 : tâches terminées', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.install({ time: new Date('2026-09-23T12:00:00+02:00') });
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

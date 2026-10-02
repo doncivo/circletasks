@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { openApp } from './app';
 import { setWheels, typeDate } from './schedule';
 
 /** Aides e2e d'Aujourd'hui (A-01 à A-09), communes aux projets `pc` et `iphone`. */
@@ -42,7 +43,6 @@ export async function listTitles(page: Page): Promise<string[]> {
 export const todayTab = (page: Page): Locator => page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true });
 
 export async function openToday(page: Page): Promise<void> {
-  await page.goto('/');
-  await expect(page.getByRole('navigation')).toBeVisible();
+  await openApp(page);
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }

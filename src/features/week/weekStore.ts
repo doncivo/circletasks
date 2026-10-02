@@ -70,11 +70,9 @@ export interface WeekState {
   addTask(input: NewWeekTask): Promise<Result<Task, WeekAddTaskError>>;
   /**
    * S-02 : déplace une tâche vers un autre jour (glisser-déposer, Alt+←/→) : la date est écrite et publiée aussitôt, annulable
-   * (T-13). Pour une occurrence récurrente, ne déplace que cette occurrence ; « toutes les suivantes » : `moveSeries`. Ne rejette jamais.
+   * (T-13). Pour une occurrence récurrente, ne déplace que cette occurrence, sans question. Ne rejette jamais.
    */
   moveToDay(id: TaskId, date: LocalDate): Promise<void>;
-  /** S-02, T-10 : déplace une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
-  moveSeries(id: TaskId, date: LocalDate, scope: SeriesScope): Promise<void>;
   /** S-02 critère 9 : Ctrl+D, reporte la tâche choisie (T-05) ; annulable. Ne rejette jamais. */
   postpone(id: TaskId, target: PostponeTarget): Promise<void>;
   /** S-02, T-10 : report d'une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
@@ -203,17 +201,6 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       try {
         await useCases.moveToDay(id, date);
         set({ actionErrorKey: null });
-      } catch {
-        set({ actionErrorKey: 'week.moveError' });
-      }
-    },
-
-    async moveSeries(id, date, scope) {
-      // « Cette occurrence » : même déplacement qu'une tâche simple (la série garde son ancre) ; « toutes les suivantes » : la série repart de la nouvelle date.
-      if (scope === 'occurrence') return get().moveToDay(id, date);
-      try {
-        const result = await series.postpone(id, { date }, scope);
-        set({ actionErrorKey: result.ok ? null : 'week.moveError' });
       } catch {
         set({ actionErrorKey: 'week.moveError' });
       }

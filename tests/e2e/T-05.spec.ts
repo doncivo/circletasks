@@ -1,5 +1,6 @@
 import { addIsoDays, browserToday, dayLabel, setWheels } from './helpers/schedule';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-05 — Je reporte une tâche.
@@ -54,9 +55,8 @@ async function closeDetailOnIphone(page: Page, testInfo: Info): Promise<void> {
 
 test.describe('T-05 — reporter une tâche', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     // Démarrage à froid (Vite optimise ses dépendances, SQLite Wasm s'initialise, 1er passage) : plus de 5 s possible.
-    await expect(page.getByRole('navigation')).toBeVisible({ timeout: 30_000 });
   });
 
   test('le menu propose exactement Demain, Semaine prochaine, Choisir une date ; Échap / Fermer n’applique rien (critère 1)', async ({ page }, testInfo) => {

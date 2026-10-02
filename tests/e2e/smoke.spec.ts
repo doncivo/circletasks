@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 test('la coquille démarre avec la base de développement et affiche l’écran Aujourd’hui', async ({ page }, testInfo) => {
-  await page.goto('/');
+  await openApp(page);
 
   const shell = page.locator('.app-shell');
   await expect(shell).toHaveAttribute('data-db-status', 'ready');

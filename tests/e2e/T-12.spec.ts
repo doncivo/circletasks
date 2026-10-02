@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-12 — Je duplique une tâche.
@@ -30,7 +31,7 @@ async function createTask(page: Page, testInfo: Info, title: string): Promise<vo
 
 test.describe('T-12 — dupliquer une tâche', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

@@ -108,3 +108,7 @@ La Semaine ne garde pas de liste d'ids : `weekStore.load` publie dans `taskEntit
 - La Semaine lit la plage de la semaine élargie d'un jour de chaque côté (tous les fuseaux), puis `externalEventsByDay` convertit, répartit par jour local et filtre par espace à chaque rendu : un changement de fuseau (`useAppStore.timeZone`, T-11) recale l'affichage sans relire la base. Les événements d'un compte supprimé disparaissent.
 - `DetailTarget` gagne `{ type: 'externalEvent', id }` : la fiche en lecture seule (`ExternalEventDetail`) est distincte de la fiche d'une tâche.
 - Le jeu de test (`src/db/seed/externalEventFixtures.ts`, `window.__ctTest` en développement) est le seul moyen de poser des lignes avant K-01.
+
+## Dette — primitive de glisser partagée (2026-10-02)
+
+`useSortable` (A-02, une liste verticale) et `useZoneDrag` (S-02, entre zones) dupliquent la gestion du pointeur : seuil de 4 px, clic ignoré après glisser, Échap, annulation. Ils devront partager une primitive commune (session de glisser) ; factorisation reportée, sans changement de comportement.

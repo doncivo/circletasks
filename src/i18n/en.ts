@@ -485,8 +485,6 @@ export const en: Messages = {
     addButton: 'Add a task, {day}',
     addLabel: 'New task for {day}',
     addPlaceholder: 'New task',
-    seriesMoveTitle: 'Move “{title}”?',
-    seriesMoveBody: 'This task repeats. What do you want to move?',
     dropHere: 'Drop here · {day}',
     hintDrag: 'Drag and drop a card to change its day',
     hintNavigate: 'Ctrl ← / Ctrl → to change week',

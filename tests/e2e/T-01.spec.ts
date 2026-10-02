@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-01 — Je crée une tâche avec un titre seul.
@@ -8,7 +9,7 @@ import { expect, test } from '@playwright/test';
  */
 test.describe('T-01 — créer une tâche avec un titre seul', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

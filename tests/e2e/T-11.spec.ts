@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { setWheels, typeDate } from './helpers/schedule';
+import { openApp } from './helpers/app';
 
 /**
  * T-11 — Mes heures restent justes quand je change de pays.
@@ -56,7 +57,7 @@ async function openTasks(page: Page): Promise<void> {
 
 test.describe('T-11 — heures flottantes et fuseau', () => {
   test('Réglages affiche le fuseau courant suivi de « (automatique) » (critère 5)', async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
     await openSettings(page);
     await expect(page.getByText('Fuseau horaire', { exact: true })).toBeVisible();
@@ -66,7 +67,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
   test.describe('appareil à Tunis', () => {
     test.use({ timezoneId: 'Africa/Tunis' });
     test('le fuseau du système est repris au démarrage (critère 6)', async ({ page }) => {
-      await page.goto('/');
+      await openApp(page);
       await expect(page.getByRole('navigation')).toBeVisible();
       await openSettings(page);
       await expect(page.getByText('Africa/Tunis (automatique)')).toBeVisible();
@@ -75,7 +76,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
 
   test('changer de fuseau : détecté au retour au premier plan, la tâche à 10:00 reste à 10:00 (critères 1, 6)', async ({ page }, testInfo) => {
     await installZoneSwitch(page);
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
     const title = `Réunion ${testInfo.project.name}`;
     await createTimedTask(page, testInfo, title, '10:00');
@@ -97,7 +98,7 @@ test.describe('T-11 — heures flottantes et fuseau', () => {
   test('« Aujourd’hui » suit la date locale de l’appareil (critère 8)', async ({ page }) => {
     // 23 sept. 2026 à 23:30 UTC : déjà le 24 à Paris (UTC+2).
     await page.clock.install({ time: new Date('2026-09-23T23:30:00Z') });
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('24');
   });
 });

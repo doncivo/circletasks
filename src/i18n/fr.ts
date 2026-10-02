@@ -488,8 +488,6 @@ export const fr = {
     addButton: 'Ajouter une tâche, {day}',
     addLabel: 'Nouvelle tâche pour {day}',
     addPlaceholder: 'Nouvelle tâche',
-    seriesMoveTitle: 'Déplacer « {title} » ?',
-    seriesMoveBody: 'Cette tâche se répète. Que voulez-vous déplacer ?',
     dropHere: 'Déposer ici · {day}',
     hintDrag: 'Glisser-déposer une carte pour la changer de jour',
     hintNavigate: 'Ctrl ← / Ctrl → pour changer de semaine',

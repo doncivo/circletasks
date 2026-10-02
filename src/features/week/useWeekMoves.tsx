@@ -11,7 +11,7 @@ import type { WeekDropState, WeekItemDragProps } from './WeekDayView';
 import { weekStore } from './weekStore';
 
 /** Choix « cette occurrence / toutes les suivantes » en attente pour une tâche récurrente (T-10). */
-type ScopeRequest = { readonly kind: 'move'; readonly id: TaskId; readonly date: LocalDate } | { readonly kind: 'postpone'; readonly id: TaskId };
+type ScopeRequest = { readonly kind: 'postpone'; readonly id: TaskId };
 
 export interface WeekMoves {
   /** Propriétés de saisie d'une carte (souris, appui long tactile). */
@@ -32,13 +32,12 @@ export interface WeekMoves {
 /**
  * Déplacements de tâches dans la Semaine (S-02) : glisser à la souris ou au toucher (appui long) d'un jour à l'autre, ou dans le
  * même jour (réordonne, A-02 / Q11) ; au clavier, sur la carte sélectionnée : Alt+← / Alt+→ (jour précédent / suivant de la
- * semaine), Ctrl+D (demain, T-05), Alt+↑ / Alt+↓ (ordre du jour). Une occurrence récurrente pose d'abord la question de portée
- * (T-10). Routines et événements ne sont jamais saisis.
+ * semaine), Ctrl+D (demain, T-05), Alt+↑ / Alt+↓ (ordre du jour). Seul Ctrl+D (report) d'une occurrence récurrente pose la question de
+ * portée (T-10) ; glisser ou Alt+←/→ ne déplace que cette occurrence, sans question (S-02 critère 8). Routines et événements ne sont jamais saisis.
  */
 export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spaces: readonly Space[], showSpace: boolean): WeekMoves {
   const container = useAppContainer();
   const moveToDay = useFeatureStore(weekStore, (s) => s.moveToDay);
-  const moveSeries = useFeatureStore(weekStore, (s) => s.moveSeries);
   const postpone = useFeatureStore(weekStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(weekStore, (s) => s.postponeSeries);
   const moveRow = useFeatureStore(weekStore, (s) => s.moveRow);
@@ -55,8 +54,8 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
     (id: TaskId, date: LocalDate): void => {
       const task = container.taskEntities.get(id);
       if (!task || task.date === date) return;
-      if (task.recurrenceId !== null && task.status === 'todo') setScope({ kind: 'move', id, date });
-      else void moveToDay(id, date);
+      // Déplacer une occurrence ne concerne qu'elle (S-02 critère 8) : aucune question, la série garde son ancre.
+      void moveToDay(id, date);
     },
     [container, moveToDay],
   );
@@ -145,16 +144,15 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
   const scopeTask = scope ? container.taskEntities.get(scope.id) : undefined;
   const dialogs = scope && scopeTask && (
     <ChoiceDialog
-      title={scope.kind === 'move' ? t('week.seriesMoveTitle', { title: scopeTask.title }) : t('tasks.seriesPostponeTitle', { title: scopeTask.title })}
-      description={scope.kind === 'move' ? t('week.seriesMoveBody') : t('tasks.seriesPostponeBody')}
+      title={t('tasks.seriesPostponeTitle', { title: scopeTask.title })}
+      description={t('tasks.seriesPostponeBody')}
       options={[
         { id: 'occurrence', label: t('tasks.seriesScopeOccurrence') },
         { id: 'following', label: t('tasks.seriesScopeFollowing') },
       ]}
       onChoose={(choice) => {
         setScope(null);
-        if (scope.kind === 'move') void moveSeries(scope.id, scope.date, choice);
-        else void postponeSeries(scope.id, 'tomorrow', choice);
+        void postponeSeries(scope.id, 'tomorrow', choice);
       }}
       onCancel={() => setScope(null)}
     />
