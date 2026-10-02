@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "e2e": "playwright test",
+    "visual": "playwright test --config playwright.visual.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
