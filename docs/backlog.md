@@ -52,8 +52,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | R-05 | M4 | Je mets une routine en pause ou l'archive | routines | fait |
 | R-06 | M4 | Je consulte le rapport de routine | routines | fait |
 | R-07 | M4 | Je planifie une routine tous les N jours ou toutes les N semaines | routines | fait |
-| N-02 | M5 | Je choisis une avance (0, 5, 15, 30, 60 min, 1 jour) | notifications | à faire |
-| N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | à faire |
+| N-02 | M5 | Je choisis une avance (0, 5, 15, 30, 60 min, 1 jour) | notifications | en cours |
+| N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | en cours |
 | ES-01 | M13 | J'ai deux espaces Pro et Perso | spaces-goals | à faire |
 | ES-02 | M13 | Chaque élément appartient à un espace | spaces-goals | à faire |
 | ES-03 | M13 | Je filtre Pro / Perso / Tout | spaces-goals | à faire |
