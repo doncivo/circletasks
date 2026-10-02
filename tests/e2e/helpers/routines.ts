@@ -123,3 +123,9 @@ export async function createRoutine(page: Page, testInfo: { project: { name: str
   await form.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(form).not.toBeVisible();
 }
+
+/** Rouvre l'onglet Routines après des insertions en base (passe par Aujourd'hui : l'écran se recharge à son ouverture). */
+export async function reopenRoutines(page: Page): Promise<void> {
+  await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+  await openRoutines(page);
+}

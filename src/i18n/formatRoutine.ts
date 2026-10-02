@@ -55,3 +55,24 @@ export function scheduleLong(rule: ScheduleFields): string {
       return '';
   }
 }
+
+/**
+ * Prochaines dates de « Tous les N » (R-07, ModifierRoutine-N.html) : « jeu. 24, dim. 27, mer. 30 sept., sam. 3 oct. » : le mois
+ * n'est écrit qu'à la dernière date de chaque mois.
+ */
+export function formatNextOccurrences(dates: readonly string[]): string {
+  const utc = (iso: string): Date => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(Date.UTC(y ?? 1970, (m ?? 1) - 1, d ?? 1));
+  };
+  const weekday = new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', timeZone: 'UTC' });
+  const month = new Intl.DateTimeFormat(intlLocale(), { month: 'short', timeZone: 'UTC' });
+  return dates
+    .map((iso, index) => {
+      const date = utc(iso);
+      const next = dates[index + 1];
+      const endsMonth = next === undefined || next.slice(0, 7) !== iso.slice(0, 7);
+      return `${weekday.format(date)} ${String(date.getUTCDate())}${endsMonth ? ` ${month.format(date)}` : ''}`;
+    })
+    .join(', ');
+}

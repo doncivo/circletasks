@@ -1,23 +1,45 @@
 import { ChevronDown, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import type { IconRef, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
-import { TIMES_PER_WEEK_MAX, TIMES_PER_WEEK_MIN, validateRoutine, ROUTINE_TITLE_MAX_LENGTH } from '../../domain/routineRules';
+import { weekdayOf } from '../../domain/localDate';
+import {
+  clampInterval,
+  intervalBounds,
+  ROUTINE_TITLE_MAX_LENGTH,
+  TIMES_PER_WEEK_MAX,
+  TIMES_PER_WEEK_MIN,
+  validateRoutine,
+} from '../../domain/routineRules';
+import { nextOccurrences } from '../../domain/routineSchedule';
 import type { LocalDate, SpaceId, Weekday } from '../../domain/types';
 import { t } from '../../i18n';
-import { weekdayName } from '../../i18n/formatRoutine';
-import { Button, Icon, IconChooser, TextField } from '../../ui';
+import { formatDetailDate } from '../../i18n/format';
+import { formatNextOccurrences, weekdayName } from '../../i18n/formatRoutine';
+import { Button, DatePicker, Icon, IconChooser, TextField, useLayout } from '../../ui';
 import './RoutineForm.css';
 
 /** Choix du sélecteur « Fréquence » : les cinq types de la base, « Tous les N jours » regroupant jours et semaines (R-07). */
-export type FrequencyChoice = 'daily' | 'weekdays' | 'x_per_week';
+export type FrequencyChoice = 'daily' | 'weekdays' | 'x_per_week' | 'every_n';
 
-const CHOICES: readonly FrequencyChoice[] = ['daily', 'weekdays', 'x_per_week'];
+const CHOICES: readonly FrequencyChoice[] = ['daily', 'weekdays', 'x_per_week', 'every_n'];
+
+/** Unité de « Tous les N » : jours ou semaines. */
+type IntervalUnit = 'days' | 'weeks';
+
+/** Nombre de prochaines dates montrées sous « Tous les N » (R-07 critère 3). */
+const PREVIEW_COUNT = 4;
+
+function choiceOf(routine: Routine | null): FrequencyChoice {
+  if (!routine) return 'daily';
+  return routine.scheduleType === 'every_n_days' || routine.scheduleType === 'every_n_weeks' ? 'every_n' : routine.scheduleType;
+}
 const WEEK: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
 const FREQUENCY_LABELS = {
   daily: 'routines.form.daily',
   weekdays: 'routines.form.weekdays',
   x_per_week: 'routines.form.xPerWeek',
+  every_n: 'routines.form.everyN',
 } as const satisfies Record<FrequencyChoice, `routines.form.${string}`>;
 
 export interface RoutineFormProps {
@@ -51,21 +73,29 @@ export function RoutineForm(props: RoutineFormProps) {
   const nameRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState(routine?.title ?? '');
   const [icon, setIcon] = useState<IconRef | null>(routine?.icon ?? null);
-  const [choice, setChoice] = useState<FrequencyChoice>(routine && CHOICES.includes(routine.scheduleType as FrequencyChoice) ? (routine.scheduleType as FrequencyChoice) : 'daily');
+  const layout = useLayout();
+  const [choice, setChoice] = useState<FrequencyChoice>(choiceOf(routine));
   const [weekdays, setWeekdays] = useState<readonly Weekday[]>(routine?.weekdays ?? []);
+  // Jours de « Toutes les N semaines » : tant que l'utilisateur n'y touche pas, ils suivent le jour de la date de départ (QB-04).
+  const [daysTouched, setDaysTouched] = useState(routine !== null);
   const [timesPerWeek, setTimesPerWeek] = useState(routine?.timesPerWeek ?? 3);
+  const [unit, setUnit] = useState<IntervalUnit>(routine?.scheduleType === 'every_n_weeks' ? 'weeks' : 'days');
+  const [interval, setIntervalValue] = useState(routine?.interval ?? 2);
+  const [startDate, setStartDate] = useState<LocalDate>(routine?.startDate ?? today);
+  const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [spaceId, setSpaceId] = useState<SpaceId>(routine?.spaceId ?? initialSpaceId);
   const [saving, setSaving] = useState(false);
 
+  const scheduleType: RoutineScheduleType = choice === 'every_n' ? (unit === 'days' ? 'every_n_days' : 'every_n_weeks') : choice;
   const fields: RoutineFields = {
     spaceId,
     title,
     icon,
-    scheduleType: choice as RoutineScheduleType,
+    scheduleType,
     weekdays,
     timesPerWeek: choice === 'x_per_week' ? timesPerWeek : null,
-    interval: null,
-    startDate: routine?.startDate ?? today,
+    interval: choice === 'every_n' ? interval : null,
+    startDate: choice === 'every_n' ? startDate : (routine?.startDate ?? today),
     time: routine?.time ?? null,
     paused: routine?.paused ?? false,
     archived: routine?.archived ?? false,
@@ -91,8 +121,34 @@ export function RoutineForm(props: RoutineFormProps) {
   }
 
   function toggleDay(day: Weekday): void {
+    setDaysTouched(true);
     setWeekdays((current) => (current.includes(day) ? current.filter((d) => d !== day) : [...current, day]));
   }
+
+  /** « Toutes les N semaines » : jours préréglés sur le jour de la date de départ (QB-04) tant qu'ils ne sont pas modifiés. */
+  function presetDays(nextUnit: IntervalUnit, date: LocalDate): void {
+    if (nextUnit === 'weeks' && !daysTouched) setWeekdays([weekdayOf(date)]);
+  }
+
+  function chooseFrequency(next: FrequencyChoice): void {
+    setChoice(next);
+    if (next === 'every_n') presetDays(unit, startDate);
+  }
+
+  function chooseUnit(next: IntervalUnit): void {
+    if (next === unit) return;
+    setUnit(next);
+    setIntervalValue((n) => clampInterval(next === 'days' ? 'every_n_days' : 'every_n_weeks', n));
+    presetDays(next, startDate);
+  }
+
+  function chooseStart(date: LocalDate): void {
+    setStartDate(date);
+    presetDays(unit, date);
+  }
+
+  const bounds = intervalBounds(unit === 'days' ? 'every_n_days' : 'every_n_weeks');
+  const nextDates = choice === 'every_n' && valid ? nextOccurrences(fields, today, PREVIEW_COUNT) : [];
 
   const heading = routine ? t('routines.form.editTitle') : t('routines.form.newTitle');
   return (
@@ -127,7 +183,7 @@ export function RoutineForm(props: RoutineFormProps) {
         <select
           aria-label={t('routines.form.frequency')}
           value={choice}
-          onChange={(event) => setChoice(event.target.value as FrequencyChoice)}
+          onChange={(event) => chooseFrequency(event.target.value as FrequencyChoice)}
           className="ct-routine-form__selectControl"
         >
           {CHOICES.map((value) => (
@@ -138,7 +194,75 @@ export function RoutineForm(props: RoutineFormProps) {
         </select>
       </label>
 
-      {choice === 'weekdays' && (
+      {choice === 'every_n' && bounds && (
+        <div className="ct-routine-form__every">
+          <div role="group" aria-label={t('routines.form.everyLabel')} className="ct-routine-form__everyRow">
+            <span className="ct-routine-form__everyText">{t('routines.form.everyPrefix')}</span>
+            <button
+              type="button"
+              className="ct-routine-form__step"
+              aria-label={t('routines.form.decrease')}
+              disabled={interval <= bounds.min}
+              onClick={() => setIntervalValue((n) => Math.max(bounds.min, n - 1))}
+            >
+              −
+            </button>
+            <span className="ct-routine-form__times" aria-live="polite" data-testid="interval-value">
+              {interval}
+            </span>
+            <button
+              type="button"
+              className="ct-routine-form__step"
+              aria-label={t('routines.form.increase')}
+              disabled={interval >= bounds.max}
+              onClick={() => setIntervalValue((n) => Math.min(bounds.max, n + 1))}
+            >
+              +
+            </button>
+            <div role="group" aria-label={t('routines.form.unitLabel')} className="ct-routine-form__unit">
+              {(['days', 'weeks'] as const).map((value) => (
+                <button key={value} type="button" aria-pressed={unit === value} className="ct-routine-form__unitButton" onClick={() => chooseUnit(value)}>
+                  {t(value === 'days' ? 'routines.form.unitDays' : 'routines.form.unitWeeks')}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="ct-routine-form__startRow">
+            <span className="ct-routine-form__startLabel">{t('routines.form.startLabel')}</span>
+            {layout === 'pc' ? (
+              <DatePicker
+                value={{ date: startDate, time: null }}
+                today={today}
+                allowSomeday={false}
+                showTime={false}
+                label={t('routines.form.startField')}
+                className="ct-routine-form__startPicker"
+                onChange={(next) => {
+                  if (next?.date) chooseStart(next.date);
+                }}
+              />
+            ) : (
+              <button type="button" className="ct-routine-form__startButton" aria-expanded={startPickerOpen} onClick={() => setStartPickerOpen((open) => !open)}>
+                {formatDetailDate(startDate, false)}
+              </button>
+            )}
+          </div>
+          {layout === 'mobile' && startPickerOpen && (
+            <DatePicker
+              value={{ date: startDate, time: null }}
+              today={today}
+              allowSomeday={false}
+              showTime={false}
+              onChange={(next) => {
+                if (next?.date) chooseStart(next.date);
+              }}
+            />
+          )}
+          {nextDates.length > 0 && <span className="ct-routine-form__preview">{t('routines.form.nextTimes', { dates: formatNextOccurrences(nextDates) })}</span>}
+        </div>
+      )}
+
+      {(choice === 'weekdays' || (choice === 'every_n' && unit === 'weeks')) && (
         <div role="group" aria-label={t('routines.form.weekdaysLabel')} className="ct-routine-form__days">
           {WEEK.map((day) => (
             <button
