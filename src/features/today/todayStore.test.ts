@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
-import { asEntityId, asLocalDate, asLocalTime, type DeviceId } from '../../domain/types';
+import { asEntityId, asLocalDate, asLocalTime, type DeviceId, type TaskId } from '../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createAppContainer, type AppContainer } from '../app/container';
@@ -116,6 +116,31 @@ describe('todayStore (T-01)', () => {
     expect(store.getState().date).toBe(DAY);
     const thursdayTasks = await container.data.repos.tasks.listForDay(thursday, 'all');
     expect(thursdayTasks.map((task) => task.title)).toEqual(['Jeudi prochain']);
+  });
+
+  it('setTaskInPlace répercute une tâche modifiée ailleurs (fiche détail, T-03) sur la ligne affichée', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Envoyer la facture', SPACE_PRO_ID);
+    const [task] = store.getState().tasks;
+    if (!task) throw new Error('fixture manquante');
+
+    store.getState().setTaskInPlace({ ...task, icon: { kind: 'lucide', name: 'phone' }, note: 'À relire' });
+
+    expect(store.getState().tasks).toMatchObject([{ icon: { kind: 'lucide', name: 'phone' }, note: 'À relire' }]);
+  });
+
+  it('setTaskInPlace ignore une tâche absente de la liste affichée (autre jour, autre filtre)', async () => {
+    const store = todayStore.get(container);
+    await store.getState().load(DAY, 'all');
+    await store.getState().addTask('Envoyer la facture', SPACE_PRO_ID);
+    const before = store.getState().tasks;
+
+    const other = before[0];
+    if (!other) throw new Error('fixture manquante');
+    store.getState().setTaskInPlace({ ...other, id: asEntityId<TaskId>('99999999-0000-4000-8000-000000000099') });
+
+    expect(store.getState().tasks).toEqual(before);
   });
 
   it('isole les instances par conteneur (ADR 0004)', async () => {

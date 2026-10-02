@@ -1,9 +1,24 @@
+/* Coquille PC : liste à gauche, fiche détail (T-03, zones icône et note) à
+   droite quand une tâche est ouverte (DetailPanel, flex-shrink: 0). Sur iPhone,
+   la fiche est une feuille plein écran (position fixed) : la rangée reste donc
+   en colonne simple, comme avant T-03. */
+.ct-today-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.ct-today-shell[data-layout='mobile'] {
+  display: block;
+}
+
 /* Écran Aujourd'hui (A-01, T-01) : en-tête, pastilles, liste, création rapide. */
 .ct-today {
   display: flex;
   flex-direction: column;
   gap: var(--ct-space-4);
   flex-grow: 1;
+  min-width: 0;
   min-height: 0;
 }
 
@@ -63,8 +78,8 @@
   margin: 0;
   padding: var(--ct-space-3) var(--ct-space-4);
   border-radius: var(--ct-radius-md);
-  background: var(--ct-color-danger-bg, #f8e4e1);
-  color: var(--ct-color-danger, #a1271c);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
   font-weight: var(--ct-font-weight-semibold);
 }
 
@@ -173,3 +188,4 @@
 .ct-task-sheet__spacer {
   flex-grow: 1;
 }
+

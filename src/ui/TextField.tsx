@@ -14,6 +14,8 @@ export interface TextFieldProps {
   multiline?: boolean;
   /** Longueur maximale (ex. 200 pour le titre d'une tâche, T-01). */
   maxLength?: number;
+  /** Enregistrement à la perte de focus, sans bouton supplémentaire (Note, T-03 critère 8). */
+  onBlur?: () => void;
   disabled?: boolean;
   className?: string;
 }
@@ -27,7 +29,7 @@ export interface TextFieldProps {
  * <TextField label={t('tasks.newTask')} placeholder={t('tasks.addPlaceholder')} value={title} onChange={setTitle} />
  */
 export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, TextFieldProps>(function TextField(
-  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, disabled, className },
+  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, onBlur, disabled, className },
   ref,
 ) {
   const id = useId();
@@ -43,6 +45,7 @@ export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Text
           disabled={disabled}
           maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           className="ct-text-field__control ct-text-field__control--multiline"
         />
       ) : (
@@ -55,6 +58,7 @@ export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Text
           disabled={disabled}
           maxLength={maxLength}
           onChange={(event) => onChange(event.target.value)}
+          onBlur={onBlur}
           className="ct-text-field__control"
         />
       )}
