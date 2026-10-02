@@ -1,0 +1,630 @@
+/* Écran Semaine (S-01) : PC-Semaine.html (7 colonnes) et Semaine.html (7 sections). */
+.ct-week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-week[data-layout='pc'] {
+  gap: 14px;
+}
+
+/* En-tête : « Semaine 39 » au-dessus de la plage en grand, outils à droite. */
+.ct-week__headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-week__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ct-week__caption {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-week__range {
+  font-size: 2.5rem;
+  line-height: 1.05;
+}
+
+.ct-week[data-layout='pc'] .ct-week__caption {
+  font-size: 1rem;
+}
+
+.ct-week[data-layout='pc'] .ct-week__range {
+  font-size: var(--ct-font-size-display-mobile);
+  line-height: 1;
+}
+
+.ct-week__tools {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+.ct-week__toolsGap {
+  width: var(--ct-space-4);
+}
+
+.ct-week__arrows {
+  display: flex;
+}
+
+.ct-week__iconButton {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-week__iconButton:focus-visible,
+.ct-week__pill:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+/* « Cette semaine » : pastille neutre ; inactive (aria-disabled) dans la semaine courante. */
+.ct-week__pill {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--ct-radius-pill);
+  border: 1.5px solid var(--ct-color-border-strong);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ct-week__pill[aria-disabled='true'] {
+  color: var(--ct-color-text-secondary);
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ct-week[data-layout='mobile'] .ct-week__pill {
+  margin-left: auto;
+}
+
+.ct-week__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-week__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-week[data-layout='pc'] .ct-week__ruleAccent {
+  width: 96px;
+}
+
+.ct-week__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-week__pillsRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+.ct-week__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Grille : 7 colonnes de largeur égale (PC), les colonnes défilent sans déformer la grille ; sections empilées (iPhone). */
+.ct-week__days {
+  display: flex;
+  flex-direction: column;
+}
+
+/* iPhone : le défilement vertical reste au navigateur, le balayage horizontal change de semaine (useSwipe). */
+.ct-week__days[data-layout='mobile'] {
+  touch-action: pan-y;
+}
+
+/* Changement de semaine : glissement bref dans le sens du geste (neutralisé par « Réduire les animations », tokens.css). */
+.ct-week__days[data-direction='next'] {
+  animation: ct-week-in-next 180ms ease-out;
+}
+
+.ct-week__days[data-direction='previous'] {
+  animation: ct-week-in-previous 180ms ease-out;
+}
+
+@keyframes ct-week-in-next {
+  from {
+    opacity: 0.4;
+    transform: translateX(24px);
+  }
+}
+
+@keyframes ct-week-in-previous {
+  from {
+    opacity: 0.4;
+    transform: translateX(-24px);
+  }
+}
+
+.ct-week__days[data-layout='pc'] {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 10px;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+/* Jour : colonne (PC, cartes) ou section (iPhone, lignes). */
+.ct-week-day {
+  min-width: 0;
+}
+
+.ct-week-day[data-layout='pc'] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  min-height: 0;
+  padding: 12px 10px;
+  border-radius: 14px;
+}
+
+.ct-week-day[data-layout='mobile'] {
+  display: flex;
+  gap: var(--ct-space-3);
+  padding: 10px var(--ct-space-2);
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-week-day[data-layout='mobile']:last-child {
+  border-bottom: 0;
+}
+
+/* Jour courant : fond #F3F1F6, libellé et numéro #1F6698 (aucun autre jour). */
+.ct-week-day[data-today] {
+  background: var(--ct-color-surface-input);
+}
+
+.ct-week-day[data-layout='mobile'][data-today] {
+  border-radius: var(--ct-radius-lg);
+  border-bottom: 0;
+}
+
+.ct-week-day[data-today] .ct-week-day__weekday,
+.ct-week-day[data-today] .ct-week-day__number {
+  color: var(--ct-color-today-badge);
+}
+
+.ct-week-day__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ct-space-2);
+  flex-shrink: 0;
+}
+
+.ct-week-day[data-layout='pc'] .ct-week-day__head {
+  padding: 0 4px 8px;
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-week-day[data-layout='pc'][data-today] .ct-week-day__head {
+  border-bottom-color: var(--ct-color-border-strong);
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__head {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  width: 48px;
+  flex-shrink: 0;
+}
+
+.ct-week-day__weekday {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__weekday {
+  font-size: var(--ct-font-size-xs);
+}
+
+.ct-week-day__number {
+  font-family: var(--ct-font-title);
+  font-size: 1.625rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Corps : éléments défilants, « + Ajouter » toujours visible en bas (PC). */
+.ct-week-day__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  min-width: 0;
+}
+
+.ct-week-day[data-layout='pc'] .ct-week-day__body {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__body {
+  flex-grow: 1;
+  justify-content: center;
+}
+
+.ct-week-day__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  min-height: 0;
+}
+
+.ct-week-day[data-layout='pc'] .ct-week-day__items {
+  overflow-y: auto;
+  flex: 0 1 auto;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week-day__items {
+  gap: 0;
+}
+
+/* Carte (PC) : case 18 px, titre 14 px gras, sous-ligne 12 px ; terminée : fond #FAF9FC, titre barré. */
+.ct-week-item[data-layout='pc'] {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ct-space-2);
+  padding: 10px;
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+}
+
+.ct-week-item[data-layout='pc'][data-done='true'] {
+  background: var(--ct-color-surface-raised);
+}
+
+.ct-week-item[data-layout='pc'][data-opened] {
+  background: var(--ct-color-row-selected);
+}
+
+.ct-week-item[data-layout='pc'] > .ct-checkbox {
+  margin: -3px -3px -3px -3px;
+}
+
+.ct-week-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-week-item__title {
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.3;
+  color: var(--ct-color-text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  overflow-wrap: anywhere;
+}
+
+button.ct-week-item__title {
+  cursor: pointer;
+}
+
+.ct-week-item__title:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-week-item__title[data-done='true'] {
+  color: var(--ct-color-text-secondary);
+  text-decoration: line-through;
+}
+
+.ct-week-item__sub {
+  font-size: var(--ct-font-size-xs);
+  color: var(--ct-color-text-secondary);
+}
+
+/* Ligne (iPhone) : case 20 px, heure puis titre sur 15 px semi-gras, zone tactile de 44 px. */
+.ct-week-item[data-layout='mobile'] {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+}
+
+.ct-week-item[data-layout='mobile'] > .ct-checkbox {
+  margin-inline: -12px -2px;
+}
+
+.ct-week-item[data-layout='mobile'] .ct-week-item__title {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-week-item[data-layout='mobile'][data-done='true'] .ct-week-item__title,
+.ct-week-item[data-layout='mobile'][data-done='true'] .ct-week-item__time {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-week-item[data-layout='mobile'][data-done='true'] .ct-week-item__title {
+  text-decoration: line-through;
+}
+
+.ct-week-item__time {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text);
+  flex-shrink: 0;
+}
+
+.ct-week-item[data-layout='mobile'] .ct-week-item__title {
+  min-width: 0;
+  flex-grow: 1;
+}
+
+/* Événements : lecture seule, sans case. Externe : fond #E3EEF5, source en #1F6698 ; local : fond #FBE7E4. */
+.ct-week-event[data-layout='pc'] {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-event-external-bg);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+
+button.ct-week-event {
+  cursor: pointer;
+}
+
+button.ct-week-event:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-week-event[data-layout='pc'][data-source='local'] {
+  background: var(--ct-color-event-local-bg);
+}
+
+.ct-week-event__source {
+  font-size: var(--ct-font-size-xs);
+  color: var(--ct-color-event-text);
+}
+
+.ct-week-event[data-source='local'] .ct-week-event__source {
+  color: var(--ct-color-event-local-text);
+}
+
+.ct-week-event[data-layout='mobile'] {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: var(--ct-color-event-text);
+}
+
+.ct-week-event[data-layout='mobile'][data-source='local'] {
+  color: var(--ct-color-event-local-text);
+}
+
+.ct-week-event[data-layout='mobile'] .ct-week-item__title,
+.ct-week-event[data-layout='mobile'] .ct-week-item__time {
+  color: inherit;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Bas de l'écran : aide (PC) à gauche, bouton « + » à droite ; collé au bas quand le contenu est court. */
+.ct-week__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  flex-shrink: 0;
+}
+
+.ct-week[data-layout='mobile'] .ct-week__footer {
+  position: sticky;
+  bottom: 0;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+
+.ct-week[data-layout='mobile'] .ct-week__footer > * {
+  pointer-events: auto;
+}
+
+.ct-week__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+/* Glisser-déposer entre jours (S-02, PC-Semaine-UnJour.html). */
+.ct-week__itemSlot {
+  position: relative;
+}
+
+.ct-week__itemSlot[data-dragging='true'] {
+  opacity: 0.4;
+}
+
+/* La carte tenue : le pointeur « saisit », la sélection de texte et le menu de l'appui long sont coupés. */
+.ct-week[data-sorting='true'] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.ct-week[data-sorting='true'] * {
+  cursor: grabbing;
+}
+
+.ct-week-day[data-layout='mobile'] .ct-week__itemSlot {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Zone cible : « Déposer ici · jeu. 24 » (pointillés violets, fond #F1EEF7). */
+.ct-week__dropHere {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  box-sizing: border-box;
+  border: 2px dashed var(--ct-color-icon-purple);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-row-selected);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-icon-purple);
+  text-align: center;
+}
+
+/* Repère d'insertion dans le même jour (A-02) : trait d'accent avant la carte visée, ou après la dernière. */
+.ct-week__itemSlot[data-insert='before']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-accent);
+  pointer-events: none;
+}
+
+.ct-week__insert {
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-accent);
+}
+
+/* Routines et événements ne se déplacent pas : curseur « interdit » quand on tente de les saisir. */
+.ct-week-item[data-kind='routine']:active,
+.ct-week-event:active {
+  cursor: not-allowed;
+}
+
+/* « + Ajouter » en bas de chaque jour (S-04) : bouton pointillé (PC 34 px, iPhone chip de 44 px de zone tactile), puis champ de saisie. */
+.ct-week__add {
+  flex-shrink: 0;
+  border: 1.5px dashed var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+  font-size: var(--ct-font-size-sm);
+  cursor: pointer;
+}
+
+.ct-week__add[data-layout='pc'] {
+  height: 34px;
+}
+
+.ct-week__add[data-layout='mobile'] {
+  position: relative;
+  align-self: flex-start;
+  height: 32px;
+  padding: 0 12px;
+  font-size: var(--ct-font-size-text-sm);
+  border-color: var(--ct-color-select-ring);
+  background: var(--ct-color-surface);
+}
+
+/* Chip de 32 px (Semaine.html) dont la zone tactile atteint 44 px vers le bas, sans gonfler la section (PRD 5). */
+.ct-week__add[data-layout='mobile']::after {
+  content: '';
+  position: absolute;
+  inset: 0 -6px -12px;
+}
+
+.ct-week__add:focus-visible,
+.ct-week__addInput:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-week__addForm {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.ct-week__addInput {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 34px;
+  padding: 0 10px;
+  border: 1.5px solid var(--ct-color-accent);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-medium);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-week__addForm[data-layout='mobile'] .ct-week__addInput {
+  height: 44px;
+  font-size: 1rem; /* 16 px : iOS ne zoome pas la page à la prise de focus */
+}
+
+.ct-week__addInput::placeholder {
+  color: var(--ct-color-text-secondary);
+}
+
+/* Fiche d'un événement externe : lecture seule (S-05). */
+.ct-week-eventDetail__note {
+  margin: 0;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+}

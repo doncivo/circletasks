@@ -15,6 +15,7 @@ import { startNetworkStatus } from './features/app/appStatus';
 import { SettingsScreen } from './features/settings';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
+import { WeekScreen } from './features/week';
 import { t } from './i18n';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
@@ -47,6 +48,8 @@ function AppShellContent() {
 
   return (
     <AppShell
+      // Semaine : la fiche détail passe par-dessus la grille (S-01), qui garde ses sept colonnes.
+      detailOverlay={route.tab === 'week'}
       tabRail={
         <TabRail
           items={TAB_ITEMS}
@@ -60,6 +63,8 @@ function AppShellContent() {
       <UpdateBanner />
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? <ReportScreen /> : route.screen === 'done' ? <DoneTasksScreen /> : <TodayScreen />
+      ) : route.tab === 'week' ? (
+        <WeekScreen />
       ) : route.tab === 'settings' ? (
         route.screen === 'trash' ? <TrashScreen /> : <SettingsScreen />
       ) : (

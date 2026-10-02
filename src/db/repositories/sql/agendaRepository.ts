@@ -1,8 +1,8 @@
-import { parseIcon, type CalendarEvent, type Checklist, type ChecklistSummary } from '../../../domain/model';
-import type { ChecklistId, EventId, LocalDate, LocalTime, SpaceFilter, SpaceId } from '../../../domain/types';
+import { parseCalendars, parseIcon, type CalendarAccount, type CalendarEvent, type CalendarProvider, type Checklist, type ChecklistSummary, type ExternalEvent } from '../../../domain/model';
+import type { CalendarAccountId, ChecklistId, EventId, ExternalEventId, IsoDateTime, LocalDate, LocalTime, SpaceFilter, SpaceId } from '../../../domain/types';
 import type { SqlExecutor, SqlRow } from '../../driver';
-import type { ChecklistRepository, EventRepository } from '../agendaRepository';
-import type { DateRange } from '../common';
+import type { CalendarAccountRepository, ChecklistRepository, EventRepository, ExternalEventRepository } from '../agendaRepository';
+import type { DateRange, InstantRange } from '../common';
 import { readSyncMeta, spaceFilterClause, type SyncRow } from './sqlHelpers';
 
 interface EventRow extends SqlRow, SyncRow {
@@ -106,6 +106,73 @@ export function createChecklistRepository(db: SqlExecutor): ChecklistRepository 
         [range.from, range.to, ...f.params],
       );
       return rows.map(rowToChecklistSummary);
+    },
+  };
+}
+
+interface ExternalEventRow extends SqlRow {
+  readonly id: string;
+  readonly account_id: string;
+  readonly calendar_id: string;
+  readonly external_id: string;
+  readonly title: string;
+  readonly start_utc: string;
+  readonly end_utc: string | null;
+  readonly all_day: number;
+  readonly synced_at: string;
+}
+
+function rowToExternalEvent(row: ExternalEventRow): ExternalEvent {
+  return {
+    id: row.id as ExternalEventId,
+    accountId: row.account_id as CalendarAccountId,
+    calendarId: row.calendar_id,
+    externalId: row.external_id,
+    title: row.title,
+    startUtc: row.start_utc,
+    endUtc: row.end_utc,
+    allDay: row.all_day === 1,
+    syncedAt: row.synced_at as IsoDateTime,
+  };
+}
+
+/** Lecture seule des événements externes (S-05) : aucune ligne tant que K-01 n'est pas livré. */
+export function createExternalEventRepository(db: SqlExecutor): ExternalEventRepository {
+  return {
+    async listBetween(range: InstantRange) {
+      const rows = await db.select<ExternalEventRow>(
+        `SELECT * FROM external_event
+         WHERE start_utc < ? AND ((end_utc IS NULL AND start_utc >= ?) OR end_utc > ?)
+         ORDER BY start_utc, id`,
+        [range.to, range.from, range.from],
+      );
+      return rows.map(rowToExternalEvent);
+    },
+  };
+}
+
+interface CalendarAccountRow extends SqlRow, SyncRow {
+  readonly provider: string;
+  readonly label: string;
+  readonly token_ref: string;
+  readonly calendars: string;
+}
+
+/** Lecture seule des comptes d'agenda (S-05) : filtre d'espace par rattachement des agendas (ES-06). */
+export function createCalendarAccountRepository(db: SqlExecutor): CalendarAccountRepository {
+  return {
+    async listAll() {
+      const rows = await db.select<CalendarAccountRow>('SELECT * FROM calendar_account WHERE deleted_at IS NULL ORDER BY label, id');
+      return rows.map(
+        (row): CalendarAccount => ({
+          id: row.id as CalendarAccountId,
+          provider: row.provider as CalendarProvider,
+          label: row.label,
+          tokenRef: row.token_ref,
+          calendars: parseCalendars(row.calendars),
+          ...readSyncMeta(row),
+        }),
+      );
     },
   };
 }

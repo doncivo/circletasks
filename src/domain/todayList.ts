@@ -28,6 +28,8 @@ export interface TodayEventEntry {
   /** Nom de l'agenda d'origine d'un événement externe (« Google Agenda »), null pour un événement interne. */
   readonly calendarName: string | null;
   readonly icon: IconRef | null;
+  /** Instant de début UTC (événement externe) : départage deux événements de même heure locale (recul d'heure : 02:30 CEST puis 02:30 CET). */
+  readonly startInstant?: string;
 }
 
 /** Objectif épinglé (OB-02) et son avancement (OB-04). */
@@ -96,6 +98,8 @@ export function compareTodayRows(a: TodayRow, b: TodayRow): number {
 
 function compareEvents(a: TodayEventEntry, b: TodayEventEntry): number {
   if (a.allDay !== b.allDay) return a.allDay ? -1 : 1;
+  // Deux événements externes à heure (non journée entière) : ordre chronologique par instant UTC, même au recul d'heure.
+  if (!a.allDay && a.startInstant !== undefined && b.startInstant !== undefined && a.startInstant !== b.startInstant) return a.startInstant < b.startInstant ? -1 : 1;
   const ta = a.startTime ?? '';
   const tb = b.startTime ?? '';
   if (ta !== tb) return ta < tb ? -1 : 1;

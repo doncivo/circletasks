@@ -8,7 +8,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
-| PREP-01 | Prérequis et comptes (PRD section 2) | Ali | à faire |
+| PREP-01 | Prérequis et comptes (PRD section 2) | Ali | en cours (reste : secrets GitHub TAURI_SIGNING_PRIVATE_KEY et _PASSWORD, demandés au moment du workflow de release) |
 | PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
 | PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | fait (v3 + Expo indisponibles) |
 | PREP-04 | Installer les polices Fraunces et DM Sans en local et la bibliothèque lucide-react | ui-design-system | fait |
@@ -39,11 +39,11 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | fait |
 | A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | fait |
 | A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours (critères 9-10 : bandeaux synchro et iCloud à l'ordre 4, alerte agenda à l'ordre 2) |
-| S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | à faire |
-| S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | à faire |
-| S-03 | M3 | Je navigue entre semaines | tasks-planning | à faire |
-| S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | à faire |
-| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | à faire |
+| S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | fait |
+| S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | fait |
+| S-03 | M3 | Je navigue entre semaines | tasks-planning | fait |
+| S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | fait |
+| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | en cours (critères 9-10 : alimentation par M8, ordre 2) |
 | S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | à faire |
 | R-01 | M4 | Je crée une routine avec icône et fréquence | routines | à faire |
 | R-02 | M4 | J'associe une heure optionnelle | routines | à faire |

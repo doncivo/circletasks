@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-10 : Je modifie ou arrête une récurrence.
@@ -110,7 +111,7 @@ async function stopRule(page: Page, info: Info, detail: Locator): Promise<void> 
 test.describe('T-10 : modifier ou arrêter une récurrence', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.install({ time: START });
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

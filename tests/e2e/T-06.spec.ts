@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-06 — Les tâches non faites passent au lendemain.
@@ -44,7 +45,7 @@ async function openTasks(page: Page): Promise<void> {
 test.describe('T-06 — report automatique à minuit', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.install({ time: BEFORE_MIDNIGHT });
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

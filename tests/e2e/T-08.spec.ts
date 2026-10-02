@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-08 : Je supprime une tâche.
@@ -46,7 +47,7 @@ async function openTrash(page: Page): Promise<void> {
 test.describe('T-08 : supprimer une tâche', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.install({ time: new Date('2026-09-23T12:00:00+02:00') });
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

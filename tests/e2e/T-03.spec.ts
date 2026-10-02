@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-03 — J'ajoute une note et une icône.
@@ -48,7 +49,7 @@ async function createPlainTask(page: Page, testInfo: { project: { name: string }
 
 test.describe('T-03 — note et icône', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

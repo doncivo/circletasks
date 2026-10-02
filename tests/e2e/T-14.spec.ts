@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-14 — Je choisis une date adaptée à mon appareil.
@@ -16,7 +17,7 @@ type Info = { project: { name: string } };
 
 async function open(page: Page): Promise<void> {
   await page.clock.install({ time: NOW });
-  await page.goto('/');
+  await openApp(page);
   await expect(page.getByRole('navigation')).toBeVisible();
 }
 

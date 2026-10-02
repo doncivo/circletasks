@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { openApp } from './helpers/app';
 
 /**
  * T-13 — J'annule ma dernière action.
@@ -49,7 +50,7 @@ const status = (page: Page): Locator => page.getByRole('status');
 
 test.describe('T-13 — annulation généralisée', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await openApp(page);
     await expect(page.getByRole('navigation')).toBeVisible();
   });
 

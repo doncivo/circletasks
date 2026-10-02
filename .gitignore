@@ -27,3 +27,7 @@ Thumbs.db
 
 # Worktrees des agents
 .claude/worktrees/
+
+# Scripts locaux d'Ali (secrets), jamais suivis
+configurer-secrets-*.ps1
+*.secrets.ps1

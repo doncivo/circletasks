@@ -36,6 +36,8 @@ export type GoalId = Brand<Id, 'GoalId'>;
 export type EventId = Brand<Id, 'EventId'>;
 export type ChecklistId = Brand<Id, 'ChecklistId'>;
 export type ChecklistItemId = Brand<Id, 'ChecklistItemId'>;
+export type CalendarAccountId = Brand<Id, 'CalendarAccountId'>;
+export type ExternalEventId = Brand<Id, 'ExternalEventId'>;
 
 /** Date civile locale sans fuseau, 'YYYY-MM-DD'. */
 export type LocalDate = Brand<string, 'LocalDate'>;

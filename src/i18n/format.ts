@@ -108,3 +108,34 @@ export function formatStamp(isoInstant: string, nowMs: number): string {
   const date = new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', ...(then.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) }).format(then);
   return t('detail.stampOn', { date, time });
 }
+
+/**
+ * Plage d'une semaine (S-01) : « 21 – 27 septembre 2026 » (PC, `long`) ou « 21 – 27 sept. » (iPhone, `short`) ; à cheval
+ * sur deux mois « 28 sept. – 4 oct. » (court) ou « 28 septembre – 4 octobre 2026 » (long) ; sur deux années, l'année
+ * suit chaque bout en format long (« 28 décembre 2026 – 3 janvier 2027 ») et n'est pas affichée en format court.
+ */
+export function formatWeekRange(from: string, to: string, style: 'long' | 'short'): string {
+  const locale = intlLocale();
+  const fmt = (options: Intl.DateTimeFormatOptions, date: string): string =>
+    new Intl.DateTimeFormat(locale, { ...options, timeZone: 'UTC' }).format(utcDate(date));
+  const month = style === 'long' ? 'long' : 'short';
+  if (from.slice(0, 7) === to.slice(0, 7)) {
+    return `${fmt({ day: 'numeric' }, from)} – ${fmt({ day: 'numeric', month, ...(style === 'long' ? { year: 'numeric' as const } : {}) }, to)}`;
+  }
+  if (style === 'short') return `${fmt({ day: 'numeric', month }, from)} – ${fmt({ day: 'numeric', month }, to)}`;
+  if (from.slice(0, 4) === to.slice(0, 4)) return `${fmt({ day: 'numeric', month }, from)} – ${fmt({ day: 'numeric', month, year: 'numeric' }, to)}`;
+  return `${fmt({ day: 'numeric', month, year: 'numeric' }, from)} – ${fmt({ day: 'numeric', month, year: 'numeric' }, to)}`;
+}
+
+/** En-tête d'un jour de la Semaine (maquettes : « LUN. » et « 21 ») : jour court en capitales et numéro. */
+export function formatWeekDayHeader(isoDate: string): { weekday: string; day: string } {
+  const date = utcDate(isoDate);
+  const weekday = new Intl.DateTimeFormat(intlLocale(), { weekday: 'short', timeZone: 'UTC' }).format(date);
+  return { weekday: weekday.toLocaleUpperCase(intlLocale()), day: String(date.getUTCDate()) };
+}
+
+/** Jour d'une zone de dépôt (« jeu. 24 ») : jour court en minuscules et numéro, sans mois (la Semaine ne montre qu'une semaine). */
+export function formatDropDayLabel(isoDate: string): string {
+  const { weekday, day } = formatWeekDayHeader(isoDate);
+  return `${weekday.toLocaleLowerCase(intlLocale())} ${day}`;
+}

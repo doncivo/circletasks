@@ -91,7 +91,7 @@ async function dumpAll(db: SqlDriver): Promise<Record<string, SqlRow[]>> {
 
 describe('migration rejouée sur une copie d’une base de la version précédente peuplée (PRD section 7)', () => {
   for (const from of [1, 2, 3]) {
-    it(`depuis la version ${String(from)} jusqu’à 0004 : aucune donnée perdue, rejouable`, async () => {
+    it(`depuis la version ${String(from)} jusqu’à la dernière migration : aucune donnée perdue, rejouable`, async () => {
       const db = await openSqliteWasmDriver();
       await migrate(db, migrations.slice(0, from));
       for (const [i, title] of ['Appeler le médecin', 'Facture électricité', 'Courses'].entries()) {

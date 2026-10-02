@@ -19,6 +19,7 @@ export default defineConfig({
     {
       name: 'pc',
       use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
+      grepInvert: /@perf/,
     },
     {
       // iPhone 16 Pro Max : 440 x 956 points CSS. Chromium en émulation mobile ;
@@ -31,6 +32,15 @@ export default defineConfig({
         isMobile: true,
         hasTouch: true,
       },
+      grepInvert: /@perf/,
+    },
+    {
+      // Mesures de temps d'affichage (PRD 8, tests marqués @perf) : lancées APRÈS les projets pc et iphone, quand la machine n'est
+      // plus occupée par les autres tests en parallèle. Les mesures sans concurrence : `npm run test:perf`.
+      name: 'perf',
+      use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
+      grep: /@perf/,
+      dependencies: ['pc', 'iphone'],
     },
   ],
   webServer: {

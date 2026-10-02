@@ -8,3 +8,4 @@ export * from './goal';
 export * from './event';
 export * from './checklist';
 export * from './settings';
+export * from './externalEvent';

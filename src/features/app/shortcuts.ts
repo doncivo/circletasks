@@ -53,6 +53,8 @@ export const SHORTCUTS = {
   'app.escape': def('Escape', 'app', true, 'shortcuts.escape'),
   'week.previous': def('Ctrl+ArrowLeft', 'week', false, 'shortcuts.weekPrevious'),
   'week.next': def('Ctrl+ArrowRight', 'week', false, 'shortcuts.weekNext'),
+  'week.moveEarlier': def('Alt+ArrowLeft', 'week', false, 'shortcuts.weekMoveEarlier'),
+  'week.moveLater': def('Alt+ArrowRight', 'week', false, 'shortcuts.weekMoveLater'),
   'list.complete': def('Space', 'list', false, 'shortcuts.complete'),
   'list.open': def('Enter', 'list', false, 'shortcuts.open'),
   'list.previous': def('ArrowUp', 'list', false, 'shortcuts.previous'),

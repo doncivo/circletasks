@@ -10,6 +10,10 @@ export interface CheckboxProps {
   label: string;
   /** Vue compacte (Main-Compact.html) : case de 22 px. */
   compact?: boolean;
+  /** Côté de la case en px (la Semaine : 18 px sur PC, 20 px sur iPhone, maquettes PC-Semaine.html et Semaine.html). */
+  size?: number;
+  /** Côté de la zone cliquable en px ; 44 par défaut (PRD 5). La Semaine PC la réduit : la souris n'a pas besoin de 44 px. */
+  hitSize?: number;
   className?: string;
 }
 
@@ -23,9 +27,10 @@ const COMPACT_SIZE = 22;
  * @example
  * <Checkbox checked={task.done} onChange={toggle} label={t('tasks.complete', { title })} />
  */
-export function Checkbox({ checked, onChange, label, compact, className }: CheckboxProps) {
+export function Checkbox({ checked, onChange, label, compact, size: sizeOverride, hitSize, className }: CheckboxProps) {
   const layout = useLayout();
-  const size = compact ? COMPACT_SIZE : SIZE[layout];
+  const size = sizeOverride ?? (compact ? COMPACT_SIZE : SIZE[layout]);
+  const hit = hitSize === undefined ? 'var(--ct-hit-target-min)' : `${String(hitSize)}px`;
   return (
     <button
       type="button"
@@ -35,7 +40,7 @@ export function Checkbox({ checked, onChange, label, compact, className }: Check
       onClick={() => onChange(!checked)}
       className={['ct-checkbox', className].filter(Boolean).join(' ')}
       data-checked={checked}
-      style={{ minWidth: 'var(--ct-hit-target-min)', minHeight: 'var(--ct-hit-target-min)' }}
+      style={{ minWidth: hit, minHeight: hit }}
     >
       <span className="ct-checkbox__box" style={{ width: size, height: size, borderRadius: size * (8 / 28) }}>
         {checked && <Icon icon={Check} size={size * (16 / 28)} color="var(--ct-color-accent-on)" strokeWidth={3} />}

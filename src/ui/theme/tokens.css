@@ -93,6 +93,10 @@
   --ct-space-white: 0%;
   --ct-color-event-bg: #eef4f7;
   --ct-color-event-text: #1f6698;
+  /* Semaine : événement externe (PC-Semaine.html, #E3EEF5) et événement local (anniversaire, #FBE7E4). */
+  --ct-color-event-external-bg: #e3eef5;
+  --ct-color-event-local-bg: #fbe7e4;
+  --ct-color-event-local-text: #9e3f33;
   --ct-color-row-selected: #f1eef7;
   --ct-color-handle: #8e87a3;
   --ct-color-select-ring: #b8b1c8;
@@ -138,6 +142,9 @@
     --ct-space-white: 55%;
   --ct-color-event-bg: #22334a;
     --ct-color-event-text: #8db8ec;
+    --ct-color-event-external-bg: #22334a;
+    --ct-color-event-local-bg: #3a2230;
+    --ct-color-event-local-text: #f0a091;
     --ct-color-row-selected: #2a2242;
     --ct-color-handle: #b7aecd;
     --ct-color-select-ring: #6a6088;
@@ -171,6 +178,9 @@
   --ct-space-white: 55%;
   --ct-color-event-bg: #22334a;
   --ct-color-event-text: #8db8ec;
+  --ct-color-event-external-bg: #22334a;
+  --ct-color-event-local-bg: #3a2230;
+  --ct-color-event-local-text: #f0a091;
   --ct-color-row-selected: #2a2242;
   --ct-color-handle: #b7aecd;
   --ct-color-select-ring: #6a6088;
@@ -202,6 +212,10 @@
   --ct-space-white: 0%;
   --ct-color-event-bg: #eef4f7;
   --ct-color-event-text: #1f6698;
+  /* Semaine : événement externe (PC-Semaine.html, #E3EEF5) et événement local (anniversaire, #FBE7E4). */
+  --ct-color-event-external-bg: #e3eef5;
+  --ct-color-event-local-bg: #fbe7e4;
+  --ct-color-event-local-text: #9e3f33;
   --ct-color-row-selected: #f1eef7;
   --ct-color-handle: #8e87a3;
   --ct-color-select-ring: #b8b1c8;

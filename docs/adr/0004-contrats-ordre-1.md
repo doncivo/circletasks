@@ -96,3 +96,19 @@ Réponse à l'écart de la fiche T-10 (où garder les valeurs de série ?). Une 
 ## Avenant T-12 — copie écartée (`discarded`, 2026-10-02)
 
 Annuler une duplication supprime la copie logiquement et pose `task.discarded = 1` (migration 0004). La copie est alors exclue de la corbeille, garde sa trace de suppression et est purgée à 30 jours comme les autres. `restore` remet `discarded` à 0. `discarded` est une colonne locale : elle ne circule pas dans les journaux de synchronisation, et l'ADR de synchro (ordre 4) devra le préciser.
+
+## Avenant S-01 — vue par plage de dates (2026-10-02)
+
+La Semaine ne garde pas de liste d'ids : `weekStore.load` publie dans `taskEntities` les tâches de la semaine, puis l'écran sélectionne dans la source unique celles dont la date tombe dans la semaine affichée et dont l'espace correspond au filtre (`selectWeekTasks`, parcours de la table des entités, 5 000 entités : quelques ms). Une tâche créée, datée ou déplacée depuis une autre vue (fiche détail, Aujourd'hui, annulation) rejoint ou quitte donc la grille aussitôt, sans le mécanisme d'adoption par rechargement d'Aujourd'hui. Les lectures de la semaine passent par `TaskRepository.listForWeek` (une requête) et les sources d'Aujourd'hui (`todaySources`) pour les routines, événements locaux et checklists de chaque jour.
+
+## Avenant S-05 — agendas externes en lecture seule (2026-10-02)
+
+- Migration 0005 : `calendar_account` (colonnes de synchro, `calendars` en JSON : id, name, space_id, shown) et `external_event` (instants UTC, sans colonnes de synchro : chaque appareil relit ses agendas, K-01 à K-03). Une journée entière garde sa date civile dans `start_utc` et sa date de fin EXCLUE dans `end_utc` (convention Google / iCal) ; `externalEventSpan` (src/domain/externalEvents.ts) en déduit les jours couverts.
+- Contrats ajoutés à `Repositories` : `externalEvents.listBetween(plage UTC)` et `calendarAccounts.listAll()`, lecture seule. Les écritures de rafraîchissement arriveront avec K-01 sans casser ces méthodes.
+- La Semaine lit la plage de la semaine élargie d'un jour de chaque côté (tous les fuseaux), puis `externalEventsByDay` convertit, répartit par jour local et filtre par espace à chaque rendu : un changement de fuseau (`useAppStore.timeZone`, T-11) recale l'affichage sans relire la base. Les événements d'un compte supprimé disparaissent.
+- `DetailTarget` gagne `{ type: 'externalEvent', id }` : la fiche en lecture seule (`ExternalEventDetail`) est distincte de la fiche d'une tâche.
+- Le jeu de test (`src/db/seed/externalEventFixtures.ts`, `window.__ctTest` en développement) est le seul moyen de poser des lignes avant K-01.
+
+## Dette — primitive de glisser partagée (2026-10-02)
+
+`useSortable` (A-02, une liste verticale) et `useZoneDrag` (S-02, entre zones) dupliquent la gestion du pointeur : seuil de 4 px, clic ignoré après glisser, Échap, annulation. Ils devront partager une primitive commune (session de glisser) ; factorisation reportée, sans changement de comportement.
