@@ -417,6 +417,14 @@ export const en: Messages = {
     arrowLeft: '←',
     arrowRight: '→',
   },
+  status: {
+    offline: 'Offline',
+    syncing: 'Syncing',
+    waitingIcloud: 'Waiting for iCloud',
+    calendarDisconnected: 'Calendar {name} disconnected',
+    reconnect: 'Reconnect',
+    loading: 'Loading',
+  },
   today: {
     dayPrevious: 'Previous day',
     dayNext: 'Next day',

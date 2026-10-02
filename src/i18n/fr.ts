@@ -420,6 +420,14 @@ export const fr = {
     arrowLeft: '←',
     arrowRight: '→',
   },
+  status: {
+    offline: 'Hors ligne',
+    syncing: 'Synchro en cours',
+    waitingIcloud: 'En attente d’iCloud',
+    calendarDisconnected: 'Agenda {name} déconnecté',
+    reconnect: 'Reconnecter',
+    loading: 'Chargement',
+  },
   today: {
     dayPrevious: 'Jour précédent',
     dayNext: 'Jour suivant',

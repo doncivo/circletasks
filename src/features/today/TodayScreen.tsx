@@ -10,7 +10,7 @@ import type { DateChoice } from '../../domain/dateInput';
 import type { LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { Button, ChoiceDialog, ConfirmDialog, DatePicker, CompactToggle, DragHandle, EditModeSwitch, Fab, Icon, IconChooser, RecurrencePicker, SelectionBar, SelectionBarButton, Sheet, SpacePills, TextField, useLayout, useSortable } from '../../ui';
+import { Button, ChoiceDialog, ConfirmDialog, DatePicker, CompactToggle, DragHandle, EditModeSwitch, Fab, Icon, IconChooser, RecurrencePicker, SelectionBar, SelectionBarButton, Sheet, SpacePills, TextField, ListSkeleton, useDelayedFlag, useLayout, useSortable } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -358,6 +358,8 @@ export function TodayScreen() {
     if (result.ok) setSheetOpen(false);
   }
 
+  // Squelette si le chargement dépasse 150 ms (A-09) ; la liste est `aria-busy` pendant le chargement.
+  const showSkeleton = useDelayedFlag(status === 'loading', 150);
   const iconSize = layout === 'pc' ? 24 : 28;
 
   /** Ctrl+clic ajoute ou retire la ligne de la sélection, Maj+clic étend jusqu'à la dernière ligne cochée (PC, critère 10). */
@@ -468,8 +470,13 @@ export function TodayScreen() {
             {status === 'ready' && list.isEmpty && (
               <TodayEmpty message={viewedDate === today ? t('tasks.emptyToday') : t('today.emptyDay', { weekday: formatWeekdayName(viewedDate) })} />
             )}
-            {(list.rows.length > 0 || list.doneRows.length > 0) && (
-              <div {...sortable.containerProps} className={`ct-today__list ${sortable.containerProps.className}`} aria-label={t('today.listLabel')} role="list">
+            {showSkeleton && (
+              <div aria-busy="true" aria-label={t('today.listLabel')} role="list">
+                <ListSkeleton />
+              </div>
+            )}
+            {!showSkeleton && (list.rows.length > 0 || list.doneRows.length > 0) && (
+              <div {...sortable.containerProps} className={`ct-today__list ${sortable.containerProps.className}`} aria-label={t('today.listLabel')} aria-busy={status === 'loading'} role="list">
                 {list.rows.map((row) => (
                   <div
                     key={row.id}
@@ -497,7 +504,7 @@ export function TodayScreen() {
             <TodayChecklists items={list.checklists} />
             {/* Annonce du déplacement aux lecteurs d'écran (A-02 critère 3) ; ni role="status" (réservé au bandeau « Annuler »). */}
             <div key={announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
-              {announcement?.text}
+              {showSkeleton ? t('status.loading') : announcement?.text}
             </div>
           </>
         )}
