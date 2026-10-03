@@ -91,10 +91,3 @@ export function scheduleOf(task: Pick<Task, 'date' | 'time' | 'someday'>): Sched
   return { date: task.date, time: task.time, someday: task.someday };
 }
 
-/**
- * « Un jour » (SD-03, bouton de la fiche A-08) : une tâche à faire, pas déjà rangée et non récurrente peut y aller
- * (une occurrence garde une date, T-09 critère 5 ; une tâche terminée n'est plus planifiée).
- */
-export function canMoveToSomeday(task: Pick<Task, 'status' | 'someday' | 'recurrenceId'>): boolean {
-  return task.status === 'todo' && !task.someday && task.recurrenceId === null;
-}

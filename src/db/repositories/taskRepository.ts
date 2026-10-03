@@ -36,8 +36,6 @@ export interface TaskRepository {
    * someday = false, carried_over = false.
    */
   reschedule(ids: readonly TaskId[], date: LocalDate, time?: LocalTime | null): Promise<Task[]>;
-  /** SD-03 : date et heure retirées, someday = true. */
-  moveToSomeday(ids: readonly TaskId[]): Promise<Task[]>;
   /** T-06 : report automatique de minuit, carried_over = true. */
   carryOver(ids: readonly TaskId[], date: LocalDate): Promise<Task[]>;
   /** ES-05 : déplacement d'espace / projet, unitaire ou par lot. */

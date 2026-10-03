@@ -102,16 +102,6 @@ describe('TaskRepository (SQL)', () => {
     expect(movedWithTime?.time).toBeNull();
   });
 
-  it('moveToSomeday retire date et heure (SD-03)', async () => {
-    const [task] = sampleTodayTasks(DAY);
-    if (!task) throw new Error('fixture manquante');
-    await db.data.repos.tasks.create(task);
-    const [moved] = await db.data.repos.tasks.moveToSomeday([task.id]);
-    expect(moved?.date).toBeNull();
-    expect(moved?.time).toBeNull();
-    expect(moved?.someday).toBe(true);
-  });
-
   it('carryOver marque la tâche reportée (T-06)', async () => {
     const [task] = sampleTodayTasks(DAY);
     if (!task) throw new Error('fixture manquante');

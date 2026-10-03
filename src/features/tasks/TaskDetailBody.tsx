@@ -1,6 +1,6 @@
 import { Check, Pencil, X } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
-import { canMoveToSomeday } from '../../domain/taskSchedule';
+import { canMoveToSomeday } from '../../domain/someday';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { LocalDate } from '../../domain/types';

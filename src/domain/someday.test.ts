@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_ITEMS } from './itemFilter';
 import type { Task } from './model';
-import { compareSomedayTasks, isInSomedayList, resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, selectSomedayTasks, sendToSomeday, somedayHeadOrder } from './someday';
+import { canMoveToSomeday, compareSomedayTasks, isInSomedayList, resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, selectSomedayTasks, sendToSomeday, somedayHeadOrder } from './someday';
 import { asEntityId, asLocalDate, asLocalTime, type LocalDate, type LocalTime, type ProjectId, type RecurrenceId, type SpaceId } from './types';
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
@@ -108,5 +108,15 @@ describe('sendToSomeday (SD-03)', () => {
     expect(sendToSomeday({ ...dated, status: 'done' }, [], 1)).toEqual({ ok: false, error: 'done' });
     expect(sendToSomeday({ ...dated, someday: true }, [], 1)).toEqual({ ok: false, error: 'already-someday' });
     expect(sendToSomeday({ ...dated, recurrenceId: asEntityId<RecurrenceId>('30000000-0000-4000-8000-000000000001') }, [], 1)).toEqual({ ok: false, error: 'recurrent' });
+  });
+});
+
+describe('canMoveToSomeday = sendToSomeday(...).ok (A-08, SD-03)', () => {
+  const base = { status: 'todo' as const, someday: false, recurrenceId: null };
+  it('suit exactement la règle de sendToSomeday', () => {
+    expect(canMoveToSomeday(base)).toBe(true);
+    expect(canMoveToSomeday({ ...base, status: 'done' })).toBe(false);
+    expect(canMoveToSomeday({ ...base, someday: true })).toBe(false);
+    expect(canMoveToSomeday({ ...base, recurrenceId: asEntityId<RecurrenceId>('30000000-0000-4000-8000-000000000001') })).toBe(false);
   });
 });

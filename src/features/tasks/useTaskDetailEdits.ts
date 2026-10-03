@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
-import { canMoveToSomeday } from '../../domain/taskSchedule';
+import { canMoveToSomeday } from '../../domain/someday';
 import { scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';

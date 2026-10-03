@@ -108,3 +108,8 @@ export function sendToSomeday(
   if (task.recurrenceId !== null) return { ok: false, error: 'recurrent' };
   return { ok: true, value: { date: null, time: null, someday: true, carriedOver: false, sortOrder: somedayHeadOrder(existingOrders, fallbackOrder) } };
 }
+
+/** Le bouton « Un jour » est-il proposé ? Une seule règle : `sendToSomeday` (SD-03, QB-11). */
+export function canMoveToSomeday(task: Pick<Task, 'status' | 'someday' | 'recurrenceId'>): boolean {
+  return sendToSomeday(task, [], 0).ok;
+}
