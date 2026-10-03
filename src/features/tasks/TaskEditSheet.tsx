@@ -68,7 +68,12 @@ export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onCl
         </div>
         <TextField label={t('tasks.titleLabel')} value={title} onChange={setTitle} maxLength={TASK_TITLE_MAX_LENGTH} />
         <IconChooser value={icon} onChange={setIcon} />
-        <DatePicker value={choice} today={today} onChange={(next) => setChoice(next ?? { date: today, time: null })} />
+        <DatePicker
+          value={choice}
+          today={today}
+          onChange={(next) => setChoice(next ?? { date: today, time: null })}
+          {...(task.recurrenceId !== null ? { somedayDisabledHint: t('someday.recurrentHint') } : {})}
+        />
         <RecurrencePicker value={choice.date === null ? null : rule} onChange={setRule} startDate={choice.date} />
         <ReminderBlock
           time={choice.date === null ? null : choice.time}

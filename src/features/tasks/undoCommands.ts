@@ -90,7 +90,7 @@ export function createPostponeUndoCommand(
         for (const { before, after } of entries) {
           const current = await repos.tasks.getById(after.id);
           if (!current || current.hlc !== after.hlc) continue;
-          const restoredTask = await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, carriedOver: before.carriedOver, seriesTemplate: before.seriesTemplate });
+          const restoredTask = await repos.tasks.update(before.id, { date: before.date, time: before.time, someday: before.someday, sortOrder: before.sortOrder, carriedOver: before.carriedOver, seriesTemplate: before.seriesTemplate });
           await syncTaskReminders(repos, restoredTask);
           written.push(restoredTask);
         }

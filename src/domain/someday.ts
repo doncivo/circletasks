@@ -81,3 +81,30 @@ export function scheduleLabelKind(today: LocalDate, date: LocalDate): 'today' | 
   if (date === today) return 'today';
   return date === addDays(today, 1) ? 'tomorrow' : 'date';
 }
+
+/** Planification d'une tâche renvoyée dans « Un jour » (SD-03) : date et heure retirées, badge « reportée » effacé, en tête de liste. */
+export interface SendToSomedayPlan {
+  readonly date: null;
+  readonly time: null;
+  readonly someday: true;
+  readonly carriedOver: false;
+  readonly sortOrder: number;
+}
+
+export type SendToSomedayError = 'done' | 'already-someday' | 'recurrent';
+
+/**
+ * Renvoie une tâche datée dans « Un jour » (SD-03, bouton de la fiche, balayage, notification). Une tâche terminée, déjà dans « Un
+ * jour » ou récurrente est refusée (QB-11 : « Arrêtez d'abord la répétition »). `existingOrders` : ordres manuels de la liste, la
+ * tâche prend la tête (`somedayHeadOrder`). Les rappels ne sont pas touchés : conservés mais inactifs sans heure (QB-10).
+ */
+export function sendToSomeday(
+  task: Pick<Task, 'status' | 'someday' | 'recurrenceId'>,
+  existingOrders: readonly number[],
+  fallbackOrder: number,
+): Result<SendToSomedayPlan, SendToSomedayError> {
+  if (task.status !== 'todo') return { ok: false, error: 'done' };
+  if (task.someday) return { ok: false, error: 'already-someday' };
+  if (task.recurrenceId !== null) return { ok: false, error: 'recurrent' };
+  return { ok: true, value: { date: null, time: null, someday: true, carriedOver: false, sortOrder: somedayHeadOrder(existingOrders, fallbackOrder) } };
+}

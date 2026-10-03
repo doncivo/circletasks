@@ -123,6 +123,17 @@
   cursor: pointer;
 }
 
+.ct-date-editor__chip[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ct-date-editor__hint {
+  margin: 0;
+  font-size: var(--ct-font-size-xs);
+  color: var(--ct-color-text-secondary);
+}
+
 .ct-date-editor__chip[aria-pressed='true'] {
   border-color: var(--ct-color-accent);
   background: var(--ct-color-accent);

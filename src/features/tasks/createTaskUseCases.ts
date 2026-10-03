@@ -2,7 +2,7 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { duplicateTask } from '../../domain/taskDuplicate';
-import { resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, somedayHeadOrder } from '../../domain/someday';
+import { resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, sendToSomeday, somedayHeadOrder } from '../../domain/someday';
 import { buildReminders, canHaveReminders, sortReminderOffsets } from '../../domain/reminders';
 import { syncTaskReminders } from './reminderSync';
 import { lastSortOrderOf, moveTaskToDate } from '../../domain/taskMove';
@@ -12,7 +12,7 @@ import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
-import { canMoveToSomeday, ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
+import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { RepositoryError } from '../../db/repositories';
@@ -328,16 +328,20 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       return tasks;
     },
     async moveToSomeday(ids): Promise<Task[]> {
-      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées ; règle `canMoveToSomeday` (domaine).
+      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées, badge « reportée » effacé, tâche en tête de la liste ;
+      // règle `sendToSomeday` du domaine (terminée, déjà rangée et récurrente refusées). Rappels conservés, inactifs sans heure (QB-10).
+      // Un lot est traité en sens inverse pour que les tâches gardent leur ordre relatif en tête de liste.
       const entries = await deps.data.transaction(async (repos) => {
         const done: PostponedEntry[] = [];
-        for (const id of ids) {
+        for (const id of [...ids].reverse()) {
           const before = await repos.tasks.getById(id);
-          if (!before || !canMoveToSomeday(before)) continue;
-          const [after] = await repos.tasks.moveToSomeday([id]);
-          if (after) done.push({ before, after });
+          if (!before) continue;
+          const orders = (await repos.tasks.listSomeday('all')).map((other) => other.sortOrder);
+          const plan = sendToSomeday(before, orders, deps.clock.nowMs());
+          if (!plan.ok) continue;
+          done.push({ before, after: await repos.tasks.update(id, plan.value) });
         }
-        return done;
+        return done.reverse();
       });
       if (entries.length === 0) return [];
       const tasks = entries.map((entry) => entry.after);

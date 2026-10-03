@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { ALL_ITEMS } from './itemFilter';
 import type { Task } from './model';
-import { compareSomedayTasks, isInSomedayList, scheduleSomeday, selectSomedayTasks, somedayHeadOrder } from './someday';
-import { asEntityId, asLocalDate, asLocalTime, type LocalDate, type LocalTime, type ProjectId, type SpaceId } from './types';
+import { compareSomedayTasks, isInSomedayList, resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, selectSomedayTasks, sendToSomeday, somedayHeadOrder } from './someday';
+import { asEntityId, asLocalDate, asLocalTime, type LocalDate, type LocalTime, type ProjectId, type RecurrenceId, type SpaceId } from './types';
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
 const PERSO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000002');
@@ -69,5 +69,44 @@ describe('scheduleSomeday (SD-02)', () => {
     expect(scheduleSomeday(task('a', { status: 'done' }), day, null, null)).toEqual({ ok: false, error: 'not-someday' });
     expect(scheduleSomeday(task('a'), '2026-02-31' as LocalDate, null, null)).toEqual({ ok: false, error: 'invalid-date' });
     expect(scheduleSomeday(task('a'), day, '25:00' as LocalTime, null)).toEqual({ ok: false, error: 'invalid-time' });
+  });
+});
+
+describe('resolveScheduleTarget et scheduleLabelKind (SD-02)', () => {
+  const today = asLocalDate('2026-10-02');
+
+  it('« Aujourd’hui » et « Demain » se calculent depuis aujourd’hui, sans heure', () => {
+    expect(resolveScheduleTarget(today, 'today')).toEqual({ date: '2026-10-02', time: null });
+    expect(resolveScheduleTarget(today, 'tomorrow')).toEqual({ date: '2026-10-03', time: null });
+    expect(resolveScheduleTarget(asLocalDate('2026-12-31'), 'tomorrow')).toEqual({ date: '2027-01-01', time: null });
+  });
+
+  it('une date choisie garde son heure facultative', () => {
+    expect(resolveScheduleTarget(today, { date: asLocalDate('2026-10-09'), time: asLocalTime('10:00') })).toEqual({ date: '2026-10-09', time: '10:00' });
+    expect(resolveScheduleTarget(today, { date: asLocalDate('2026-10-09') })).toEqual({ date: '2026-10-09', time: null });
+  });
+
+  it('le libellé suit la date réelle : aujourd’hui, demain ou une autre date', () => {
+    expect(scheduleLabelKind(today, asLocalDate('2026-10-02'))).toBe('today');
+    expect(scheduleLabelKind(today, asLocalDate('2026-10-03'))).toBe('tomorrow');
+    expect(scheduleLabelKind(today, asLocalDate('2026-10-09'))).toBe('date');
+  });
+});
+
+describe('sendToSomeday (SD-03)', () => {
+  const dated = { status: 'todo' as const, someday: false, recurrenceId: null };
+
+  it('retire date et heure, efface le badge « reportée » et place la tâche en tête (critères 1 et 4)', () => {
+    expect(sendToSomeday(dated, [5, 9], 100)).toEqual({ ok: true, value: { date: null, time: null, someday: true, carriedOver: false, sortOrder: 4 } });
+  });
+
+  it('liste vide : valeur de départ', () => {
+    expect(sendToSomeday(dated, [], 100)).toMatchObject({ ok: true, value: { sortOrder: 100 } });
+  });
+
+  it('refuse une tâche terminée (critère 7), déjà dans « Un jour », ou récurrente (QB-11)', () => {
+    expect(sendToSomeday({ ...dated, status: 'done' }, [], 1)).toEqual({ ok: false, error: 'done' });
+    expect(sendToSomeday({ ...dated, someday: true }, [], 1)).toEqual({ ok: false, error: 'already-someday' });
+    expect(sendToSomeday({ ...dated, recurrenceId: asEntityId<RecurrenceId>('30000000-0000-4000-8000-000000000001') }, [], 1)).toEqual({ ok: false, error: 'recurrent' });
   });
 });

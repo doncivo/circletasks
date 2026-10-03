@@ -39,6 +39,11 @@
   cursor: pointer;
 }
 
+.ct-date-wheels__chip[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .ct-date-wheels__chip[aria-pressed='true'] {
   border-color: var(--ct-color-text);
   background: var(--ct-color-text);

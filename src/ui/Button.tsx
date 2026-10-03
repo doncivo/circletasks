@@ -19,6 +19,13 @@ export interface ButtonProps {
   expanded?: boolean;
   /** Nom accessible quand le libellé visible ne suffit pas (ex. « Restaurer : <titre> ») : `aria-label`. */
   ariaLabel?: string;
+  /**
+   * Bouton indisponible mais focalisable, qui garde son aide (`describedBy`) lisible au clavier et à VoiceOver : `aria-disabled`,
+   * le clic est ignoré (« Un jour » d'une tâche récurrente, QB-11).
+   */
+  ariaDisabled?: boolean;
+  /** Identifiant de l'élément qui décrit le bouton (`aria-describedby`). */
+  describedBy?: string;
   className?: string;
 }
 
@@ -30,12 +37,14 @@ export interface ButtonProps {
  * <Button onClick={onSave}>{t('tasks.save')}</Button>
  * <Button variant="secondary" onClick={onPostpone}>{t('tasks.postpone')}</Button>
  */
-export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, ariaLabel, className }: ButtonProps) {
+export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, ariaLabel, ariaDisabled, describedBy, className }: ButtonProps) {
   return (
     <button
       type={type}
-      onClick={onClick}
+      onClick={ariaDisabled ? undefined : onClick}
       disabled={disabled}
+      aria-disabled={ariaDisabled}
+      aria-describedby={describedBy}
       aria-pressed={pressed}
       aria-haspopup={haspopup}
       aria-expanded={expanded}

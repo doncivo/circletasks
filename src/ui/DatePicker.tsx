@@ -12,6 +12,8 @@ export interface DatePickerProps {
   /** Nouveau choix ; sur PC, null quand le champ est vidé. */
   onChange: (choice: DateChoice | null) => void;
   allowSomeday?: boolean;
+  /** « Un jour » grisé avec cette aide (tâche récurrente, QB-11). */
+  somedayDisabledHint?: string;
   /** Heure choisie avec la date (défaut : oui). */
   showTime?: boolean;
   /** PC : ouvre la fenêtre au-dessus du champ (champ en bas d'écran). */
@@ -29,7 +31,7 @@ export interface DatePickerProps {
  * @example
  * <DatePicker value={choice} today={today} onChange={(c) => setChoice(c)} />
  */
-export function DatePicker({ value, today, onChange, allowSomeday = true, showTime = true, placement = 'auto', label, className }: DatePickerProps) {
+export function DatePicker({ value, today, onChange, allowSomeday = true, somedayDisabledHint, showTime = true, placement = 'auto', label, className }: DatePickerProps) {
   const layout = useLayout();
   if (layout === 'mobile') {
     return (
@@ -38,6 +40,7 @@ export function DatePicker({ value, today, onChange, allowSomeday = true, showTi
         today={today}
         onChange={onChange}
         allowSomeday={allowSomeday}
+        {...(somedayDisabledHint ? { somedayDisabledHint } : {})}
         showTime={showTime}
         {...(className ? { className } : {})}
       />
@@ -49,6 +52,7 @@ export function DatePicker({ value, today, onChange, allowSomeday = true, showTi
       today={today}
       onChange={onChange}
       allowSomeday={allowSomeday}
+      {...(somedayDisabledHint ? { somedayDisabledHint } : {})}
       showTime={showTime}
       placement={placement}
       {...(label ? { label } : {})}
