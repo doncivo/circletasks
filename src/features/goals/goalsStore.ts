@@ -1,9 +1,10 @@
 import { createStore } from 'zustand';
-import type { Goal, IconRef } from '../../domain/model';
+import type { Goal, IconRef, Task } from '../../domain/model';
 import type { GoalTitleError } from '../../domain/goalRules';
-import type { GoalId, LocalDate, Result, SpaceId } from '../../domain/types';
+import type { GoalId, LocalDate, Result, SpaceId, TaskId } from '../../domain/types';
 import { weekStartOf } from '../../domain/week';
 import type { PlainMessageKey } from '../../i18n';
+import { createTaskUseCases } from '../tasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { onGoalsChanged } from './goalEvents';
 import { createGoalUseCases, goalTitleErrorKey, type GoalSaveError } from './goalUseCases';
@@ -34,15 +35,24 @@ export interface GoalsState {
   /** OB-02 : épingle l'objectif en tête d'Aujourd'hui ou le retire (il reste dans l'écran Objectif). */
   setPinned(id: GoalId, pinned: boolean): Promise<void>;
   remove(id: GoalId): Promise<boolean>;
+  /** OB-03 critère 5 : termine ou rouvre une tâche rattachée (T-04, annulable) ; l'avancement suit sans rechargement. Ne rejette jamais. */
+  toggleTask(task: Pick<Task, 'id' | 'status'>): Promise<void>;
   clearActionError(): void;
 }
 
 export const goalsStore = defineFeatureStore<GoalsState>((container: AppContainer) => {
   const useCases = createGoalUseCases(container);
+  const taskUseCases = createTaskUseCases(container);
   let requestId = 0;
 
   return createStore<GoalsState>()((set, get) => {
-    const read = async (weekStart: LocalDate): Promise<readonly Goal[]> => container.data.repos.goals.listForWeek(weekStart, 'all');
+    /** Objectifs de la semaine, puis leurs tâches rattachées publiées dans la source unique (ADR 0004) : l'écran les y relit. */
+    const read = async (weekStart: LocalDate): Promise<readonly Goal[]> => {
+      const goals = await container.data.repos.goals.listForWeek(weekStart, 'all');
+      const attached = await Promise.all(goals.map((goal) => container.data.repos.tasks.listByGoal(goal.id)));
+      container.taskEntities.publish(attached.flat());
+      return goals;
+    };
 
     /** Exécute une écriture : un échec imprévu pose le message d'action et rien n'est rejeté. */
     async function guard<T>(work: () => Promise<T>, fallback: T): Promise<T> {
@@ -135,6 +145,16 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
           await get().refresh();
           return done;
         }, false);
+      },
+
+      async toggleTask(task) {
+        set({ actionErrorKey: null });
+        try {
+          if (task.status === 'done') await taskUseCases.reopen(task.id as TaskId);
+          else await taskUseCases.complete(task.id as TaskId);
+        } catch {
+          set({ actionErrorKey: 'tasks.completeError' });
+        }
       },
 
       clearActionError() {

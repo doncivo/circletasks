@@ -9,7 +9,7 @@ import type { TodayRow } from '../../domain/todayList';
 import type { WeekDayExtras } from '../../domain/week';
 import { weekDays } from '../../domain/week';
 import type { InstantRange } from '../../db/repositories';
-import type { IsoDateTime, LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { GoalId, IsoDateTime, LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
@@ -33,6 +33,8 @@ export interface NewWeekTask {
   readonly icon?: IconRef | null;
   /** N-02 : avances des rappels choisies dans la feuille d'ajout. */
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
+  /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
+  readonly goalId?: GoalId | null;
 }
 
 /** `addTask` peut en plus échouer pour une raison imprévue (écriture en base). */
@@ -201,6 +203,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
           ...(input.icon !== undefined ? { icon: input.icon } : {}),
           ...(input.recurrence ? { recurrence: input.recurrence } : {}),
           ...(input.reminderOffsets && input.reminderOffsets.length > 0 ? { reminderOffsets: input.reminderOffsets } : {}),
+          ...(input.goalId ? { goalId: input.goalId } : {}),
         });
       } catch {
         set({ actionErrorKey: 'week.addError' });

@@ -1,14 +1,16 @@
+import { Target } from 'lucide-react';
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { parseTimeInput } from '../../domain/dateInput';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import { projectChoicesFor } from '../../domain/projectRules';
 import { canHaveReminders, sortReminderOffsets, toggleReminderOffset } from '../../domain/reminders';
 import { choiceOfTask, patchFromDateChoice } from '../../domain/taskDetailEdit';
-import type { LocalDate } from '../../domain/types';
+import type { GoalId, LocalDate } from '../../domain/types';
 import { t, tDynamic } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
-import { DateEditor, TextField, spaceTextColor, type Layout } from '../../ui';
+import { DateEditor, Icon, TextField, spaceTextColor, type Layout } from '../../ui';
 import { useAppStore } from '../app/appStore';
+import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderChoices } from '../reminders';
 import { ProjectSelect } from '../spaces';
 import { DetailRow } from './DetailRow';
@@ -240,7 +242,8 @@ export interface TaskDetailFieldsProps {
   readonly reminders: readonly ReminderOffsetMin[];
   /** N-02 : remplace les rappels (PC : édition sur place ; iPhone : via la feuille « Modifier »). */
   readonly setReminders: (offsets: readonly ReminderOffsetMin[]) => Promise<boolean>;
-  readonly goalTitle: string | null;
+  /** OB-03 : rattache la tâche à un objectif (id) ou la détache (null) ; écrit aussitôt, sans question de portée. */
+  readonly onGoalChange: (goalId: GoalId | null) => void;
   readonly recurrence: RecurrenceFields | null;
   /** Applique une modification (la question « cette occurrence / toutes les suivantes » est posée par la fiche). */
   readonly onPatch: (patch: TaskPatch) => void;
@@ -251,11 +254,11 @@ export interface TaskDetailFieldsProps {
   readonly stopRecurrence: () => Promise<boolean>;
 }
 
-export function TaskDetailFields({ task, layout, spaces, today, reminders, setReminders, goalTitle, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
+export function TaskDetailFields({ task, layout, spaces, today, reminders, setReminders, onGoalChange, recurrence, onPatch, cancelInlineRef, setRecurrence, updateRecurrence, stopRecurrence }: TaskDetailFieldsProps) {
   const space = spaces.find((candidate) => candidate.id === task.spaceId);
   const inline: InlineProps = { task, onPatch, cancelInlineRef };
   const repeat: ReactNode = <TaskRepeatRow readOnly={layout === 'mobile'} task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
-  const goal = goalTitle ?? t('detail.goalNone');
+  const goal = <GoalAttachSwitch variant="detail" taskDate={task.date} attachedGoalId={task.goalId} onChange={onGoalChange} />;
   const projectName = useProjectName(task);
 
   if (layout === 'mobile') {
@@ -272,7 +275,16 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
           {' · '}
           {projectName}
         </DetailRow>
-        <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
+        <DetailRow
+          label={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icon icon={Target} size={20} color="var(--ct-color-goal)" />
+              {t('goals.open')}
+            </span>
+          }
+        >
+          {goal}
+        </DetailRow>
       </div>
     );
   }

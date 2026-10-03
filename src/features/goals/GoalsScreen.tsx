@@ -4,18 +4,29 @@ import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
 import { goalsOfWeek } from '../../domain/goalRules';
 import { addDays } from '../../domain/localDate';
-import type { Goal } from '../../domain/model';
+import type { Goal, Task } from '../../domain/model';
+import type { GoalId } from '../../domain/types';
 import { isoWeekOf } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatWeekRange } from '../../i18n/format';
 import { Button, ConfirmDialog, DetailPanel, Icon, useDetailSlot, useLayout } from '../../ui';
-import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
+import { TaskDetail } from '../tasks';
 import { GoalDraft, GoalSection } from './GoalSection';
 import { goalsStore } from './goalsStore';
 import './GoalsScreen.css';
+
+const NO_TASKS: readonly Task[] = [];
+
+/** Ordre des tâches rattachées : par date (sans date en dernier), puis ordre manuel. */
+function compareAttachedTasks(a: Task, b: Task): number {
+  if (a.date !== b.date) return a.date === null ? 1 : b.date === null ? -1 : a.date < b.date ? -1 : 1;
+  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  return a.id < b.id ? -1 : 1;
+}
 
 /**
  * Écran Objectif (M17, Objectif.html) : iPhone en écran plein avec « Retour », PC en panneau à droite (comme le détail d'une tâche).
@@ -31,6 +42,8 @@ export function GoalsScreen() {
   const appDay = useAppStore((s) => s.day);
   const navigate = useNavigationStore((s) => s.navigate);
   const detailOpen = useNavigationStore((s) => s.detail !== null);
+  const openDetail = useNavigationStore((s) => s.openDetail);
+  const entities = useTaskEntities();
   const defaultSpaceId = useDefaultSpaceId();
   const announceCreation = useAnnounceCreation();
 
@@ -46,6 +59,7 @@ export function GoalsScreen() {
   const setSpace = useFeatureStore(goalsStore, (s) => s.setSpace);
   const setPinned = useFeatureStore(goalsStore, (s) => s.setPinned);
   const remove = useFeatureStore(goalsStore, (s) => s.remove);
+  const toggleTask = useFeatureStore(goalsStore, (s) => s.toggleTask);
 
   const today = appDay ?? todayLocal(container.clock);
   useEffect(() => {
@@ -55,6 +69,19 @@ export function GoalsScreen() {
   }, [today]);
 
   const sections = useMemo(() => (weekStart ? goalsOfWeek(goals, weekStart, spaceFilter) : []), [goals, weekStart, spaceFilter]);
+
+  // Tâches rattachées de chaque objectif, lues dans la source unique : terminer, reporter ou détacher une tâche ailleurs se voit ici.
+  const tasksByGoal = useMemo(() => {
+    const grouped = new Map<GoalId, Task[]>();
+    for (const task of entities.values()) {
+      if (task.goalId === null || task.deletedAt !== null) continue;
+      const list = grouped.get(task.goalId) ?? [];
+      list.push(task);
+      grouped.set(task.goalId, list);
+    }
+    for (const list of grouped.values()) list.sort(compareAttachedTasks);
+    return grouped;
+  }, [entities]);
 
   // Brouillons : « + Ajouter un objectif » ouvre une section vide (non créée tant qu'aucun titre valide n'est saisi). Sans objectif
   // affiché, un brouillon implicite (clé 0) tient lieu de champ vide focalisé.
@@ -109,6 +136,9 @@ export function GoalsScreen() {
               onIcon={(icon) => void setIcon(goal.id, icon)}
               onSpace={(spaceId) => void setSpace(goal.id, spaceId)}
               onPin={(pinned) => void setPinned(goal.id, pinned)}
+              tasks={tasksByGoal.get(goal.id) ?? NO_TASKS}
+              onToggleTask={(task) => void toggleTask(task)}
+              onOpenTask={(task) => openDetail({ type: 'task', id: task.id })}
               onDelete={() => setToDelete(goal)}
               actions={goal.id === lastKey ? addButton : undefined}
             />
@@ -132,6 +162,7 @@ export function GoalsScreen() {
           ))}
         </div>
       )}
+      {layout === 'mobile' && <TaskDetail />}
       {toDelete && (
         <ConfirmDialog
           title={t('goals.deleteTitle', { title: toDelete.title })}

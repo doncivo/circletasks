@@ -1,10 +1,11 @@
 import { Target, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import type { Goal, IconRef, Space } from '../../domain/model';
+import type { Goal, IconRef, Space, Task } from '../../domain/model';
 import { GOAL_TITLE_MAX_LENGTH } from '../../domain/goalRules';
 import type { SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { Icon, IconChooser, IconView, resolveIconRefColor, SpaceSegmented, Switch } from '../../ui';
+import { GoalTasks } from './GoalTasks';
 import './GoalsScreen.css';
 
 /** Icône d'un objectif : celle choisie, sinon la cible bleue (#3F7FC4, PRD section 5). */
@@ -87,6 +88,10 @@ export interface GoalSectionProps {
   /** OB-02 : interrupteur « Épinglé en haut de la liste ». */
   readonly onPin: (pinned: boolean) => void;
   readonly onDelete: () => void;
+  /** OB-03 : tâches rattachées (non supprimées), dans l'ordre d'affichage. */
+  readonly tasks: readonly Task[];
+  readonly onToggleTask: (task: Task) => void;
+  readonly onOpenTask: (task: Task) => void;
   /** Contenu ajouté sous le titre (épinglage, avancement, tâches) : fourni par les stories suivantes. */
   readonly children?: ReactNode;
   /** Rangée de boutons du bas (« + Ajouter un objectif », « Marquer atteint »). */
@@ -94,7 +99,7 @@ export interface GoalSectionProps {
 }
 
 /** Section d'un objectif (OB-01 critère 6) : icône, titre, espace, suppression, puis le contenu propre à l'objectif. */
-export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onPin, onDelete, children, actions }: GoalSectionProps) {
+export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onPin, onDelete, tasks, onToggleTask, onOpenTask, children, actions }: GoalSectionProps) {
   const [chooserOpen, setChooserOpen] = useState(false);
   return (
     <section className="ct-goal" aria-label={goalLabel(index)} data-goal-id={goal.id}>
@@ -120,6 +125,10 @@ export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onP
       <div className="ct-goal__pinRow">
         <span className="ct-goal__pinLabel">{t('goals.pinned')}</span>
         <Switch checked={goal.pinned} onChange={onPin} label={t('goals.pinned')} />
+      </div>
+      <div className="ct-goal__attached">
+        <h2 className="ct-goal__attachedTitle">{t('goals.attachedTasks')}</h2>
+        <GoalTasks tasks={tasks} onToggle={onToggleTask} onOpen={onOpenTask} />
       </div>
       {children}
       {actions && <div className="ct-goal__actions">{actions}</div>}

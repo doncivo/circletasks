@@ -3,7 +3,7 @@ import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model'
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { Checkbox, IconView, ListRow, RemoveButton, SelectCircle, resolveIconRefColor } from '../../ui';
-import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Lignes de la liste d'Aujourd'hui (A-01, A-05, A-06) : présentation seule, les actions viennent de l'écran.
@@ -60,6 +60,8 @@ export function TodayTaskRow({ task, spaces, showSpace, rule, iconSize, editMode
             <RemoveButton label={t('today.remove', { title: task.title })} onRemove={onRemove} />
             {handle}
           </>
+        ) : compact && task.goalId ? (
+          <TaskGoalMark />
         ) : undefined
       }
       onActivate={onOpen}

@@ -6,7 +6,7 @@ import { sortTasksForDay } from '../../domain/taskSchedule';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
 import { matchesItemFilter } from '../../domain/itemFilter';
 import type { TodayRow } from '../../domain/todayList';
-import type { LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { GoalId, LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -26,6 +26,8 @@ export interface NewTaskSchedule {
   readonly recurrence?: RecurrenceFields | null;
   /** N-02 : avances des rappels (feuille d'ajout) ; absent avec une heure : réglage `reminders.defaultOffsets` (QB-08). */
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
+  /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
+  readonly goalId?: GoalId | null;
 }
 
 export type TodayStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -238,6 +240,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
           ...(icon !== undefined ? { icon } : {}),
           ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
           ...(reminderOffsets.length > 0 ? { reminderOffsets } : {}),
+          ...(schedule?.goalId ? { goalId: schedule.goalId } : {}),
         });
         if (!result.ok) return result;
         const id = ++requestId;

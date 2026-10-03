@@ -176,6 +176,69 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+.ct-goal__attached {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-goal__attachedTitle {
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__noTasks {
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__tasks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-goal-task {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-goal-task__title {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 10px 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  font: var(--ct-font-weight-semibold) 1rem var(--ct-font-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-goal-task__title[data-done='true'] {
+  color: var(--ct-color-text-secondary);
+  text-decoration: line-through;
+}
+
+.ct-goal-task__title:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-goal-task__day {
+  flex-shrink: 0;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
 .ct-goal__deleteButton {
   width: 44px;
   height: 44px;

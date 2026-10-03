@@ -1,10 +1,20 @@
+import { Target } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { spaceTextColor } from '../../ui';
+import { Icon, spaceTextColor } from '../../ui';
 import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import { taskLineSegments } from '../../domain/taskLine';
 import { t } from '../../i18n';
 import { formatMessageRef } from '../../i18n/formatRecurrence';
+
+/** Marque « rattachée à l'objectif » (OB-03 critère 3) : icône cible #3F7FC4, libellé accessible « Rattachée à l'objectif ». */
+export function TaskGoalMark({ size = 16 }: { size?: number }) {
+  return (
+    <span className="ct-task-goalMark" role="img" aria-label={t('goals.attachedMark')} style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
+      <Icon icon={Target} size={size} color="var(--ct-color-goal)" />
+    </span>
+  );
+}
 
 export interface TaskSubtitleOptions {
   readonly spaces: readonly Space[];
@@ -29,6 +39,12 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtit
     else if (segment.kind === 'space') {
       const space = spaces.find((s) => s.id === segment.spaceId);
       if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
+    } else if (segment.kind === 'goal') {
+      parts.push(
+        <span key="goal" className="ct-task-goalSegment" style={{ color: 'var(--ct-color-goal)', fontWeight: 'var(--ct-font-weight-semibold)' }}>
+          <TaskGoalMark size={14} /> {t('goals.attachedWord')}
+        </span>,
+      );
     } else if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
   }
   if (parts.length === 0) return undefined;

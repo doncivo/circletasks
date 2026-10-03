@@ -238,6 +238,7 @@ export function WeekScreen() {
               recurrence: input.recurrence,
               icon: input.icon,
               reminderOffsets: input.reminderOffsets,
+              goalId: input.goalId,
             });
             if (result.ok) announceCreation(input.spaceId);
             return result.ok;

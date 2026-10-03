@@ -1,0 +1,46 @@
+/* Interrupteur « Rattacher à mon objectif » (OB-03) : feuille d'ajout (Ajout.html) et fiche détail (PC-Aujourdhui.html, Detail.html). */
+.ct-goal-attach {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+  min-width: 0;
+}
+
+.ct-goal-attach[data-variant='sheet'] {
+  padding: 6px 0;
+}
+
+.ct-goal-attach__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-goal-attach__statusBlock {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ct-goal-attach__status {
+  min-width: 0;
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal-attach[data-variant='sheet'] .ct-goal-attach__help {
+  flex-basis: 100%;
+}
+
+.ct-goal-attach__help {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal-attach__help[data-visible='false'] {
+  display: none;
+}

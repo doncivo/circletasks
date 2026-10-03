@@ -24,8 +24,6 @@ export interface TaskDetailState {
   readonly recurrence: RecurrenceFields | null;
   /** Avances des rappels de la tâche (M5), lues pour la fiche ; l'édition revient à N-02. */
   readonly reminders: readonly ReminderOffsetMin[];
-  /** Titre de l'objectif rattaché (OB-03), `null` : non rattachée. */
-  readonly goalTitle: string | null;
   readonly status: TaskDetailStatus;
   /** Clé i18n du message à afficher quand `status` vaut 'error' ; `null` sinon. */
   readonly errorKey: PlainMessageKey | null;
@@ -128,13 +126,12 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
     taskId: null,
     recurrence: null,
     reminders: [],
-    goalTitle: null,
     status: 'idle',
     errorKey: null,
 
     async load(id) {
       const requestedId = ++requestId;
-      set({ taskId: id, recurrence: null, reminders: [], goalTitle: null, status: 'loading', errorKey: null });
+      set({ taskId: id, recurrence: null, reminders: [], status: 'loading', errorKey: null });
       try {
         const task = await container.data.repos.tasks.getById(id);
         if (requestedId !== requestId) return;
@@ -146,11 +143,10 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         // Règle de la série (T-09) : sa lecture ne bloque pas l'affichage de la fiche.
         const recurrence = task.recurrenceId ? await container.data.repos.recurrences.getById(task.recurrenceId).catch(() => null) : null;
         if (requestedId !== requestId) return;
-        // Rappels et objectif : affichage seulement, leur lecture ne bloque pas la fiche.
+        // Rappels : affichage seulement, leur lecture ne bloque pas la fiche (l'objectif est lu par l'interrupteur d'objectif, OB-03).
         const reminders = await container.data.repos.reminders.listForTarget({ type: 'task', id }).then((rows) => rows.map((row) => row.offsetMin), () => []);
-        const goalTitle = task.goalId ? await container.data.repos.goals.getById(task.goalId).then((goal) => goal?.title ?? null, () => null) : null;
         if (requestedId !== requestId) return;
-        set({ status: 'ready', errorKey: null, recurrence, reminders, goalTitle });
+        set({ status: 'ready', errorKey: null, recurrence, reminders });
       } catch {
         if (requestedId !== requestId) return;
         set({ status: 'error', errorKey: 'tasks.detailLoadError' });
