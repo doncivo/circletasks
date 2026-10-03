@@ -1,0 +1,57 @@
+/* Liste déroulante en forme de bouton (Ajout.html « Projet : aucun ▾ ») ; le <select> natif la recouvre, transparent. */
+.ct-dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1.5px solid var(--ct-color-border-strong, #d9d4e4);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-dropdown[data-variant='field'] {
+  flex-grow: 1;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: 12px;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-dropdown[data-variant='pill'] {
+  /* Même gabarit que les pastilles d'espace (32 px) ; le select natif transparent couvre toute la zone, dont la zone tactile. */
+  height: 32px;
+  padding: 0 var(--ct-space-3) 0 14px;
+  border-radius: var(--ct-radius-pill);
+  font-size: var(--ct-font-size-sm);
+}
+
+.ct-dropdown__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ct-dropdown__native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ct-dropdown:focus-within {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-dropdown[data-disabled='true'] {
+  opacity: 0.5;
+}

@@ -8,12 +8,12 @@ import { detectTimeZone } from '../../platform';
 import { t } from '../../i18n';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
-import { Fab, SpacePills, useDelayedFlag, useLayout, useSwipe } from '../../ui';
+import { Fab, useDelayedFlag, useLayout, useSwipe } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { isModalOpen } from '../app/tabShortcuts';
-import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
+import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
@@ -33,7 +33,8 @@ export function WeekScreen() {
   const container = useAppContainer();
   const layout = useLayout();
   const spaceFilter = useAppStore((s) => s.spaceFilter);
-  const setSpaceFilter = useAppStore((s) => s.setSpaceFilter);
+  // QB-15 : filtre par projet (menu « Projet : tous »), global, seulement sous Pro ou Perso ; il ne garde que les tâches du projet.
+  const projectFilter = useEffectiveProjectFilter();
   const spaces = useAppStore((s) => s.spaces);
   const appDay = useAppStore((s) => s.day);
   // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
@@ -97,15 +98,16 @@ export function WeekScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weekStart, spaceFilter]);
 
-  const tasks = useMemo(() => selectWeekTasks(entities, weekStart, spaceFilter), [entities, weekStart, spaceFilter]);
+  const tasks = useMemo(() => selectWeekTasks(entities, weekStart, spaceFilter, projectFilter), [entities, weekStart, spaceFilter, projectFilter]);
   // Événements des agendas externes (S-05) : convertis dans le fuseau COURANT de l'appareil à chaque rendu utile, donc recalés
   // aussitôt qu'il change (T-11) ; filtrés par l'espace de leur agenda (ES-06).
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
   const external = useMemo(
-    () => externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter }),
-    [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter],
+    () =>
+      projectFilter ? new Map() : externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter }),
+    [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter, projectFilter],
   );
-  const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external]);
+  const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras: projectFilter ? new Map() : extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external, projectFilter]);
 
   // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la carte.
   const hasUnknownRule = tasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
@@ -132,17 +134,17 @@ export function WeekScreen() {
   const addToDay = useCallback(
     async (date: LocalDate, title: string): Promise<boolean> => {
       if (!defaultSpaceId) return false;
-      const result = await addTask({ title, spaceId: defaultSpaceId, date });
+      const result = await addTask({ title, spaceId: defaultSpaceId, date, projectId: projectFilter });
       if (result.ok) announceCreation(defaultSpaceId);
       return result.ok;
     },
-    [addTask, announceCreation, defaultSpaceId],
+    [addTask, announceCreation, defaultSpaceId, projectFilter],
   );
 
   // Squelette si le chargement dépasse 150 ms (A-09).
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
-  const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
+  const pills = <SpaceFilterBar />;
   const openedTaskId = layout === 'pc' && detail?.type === 'task' ? detail.id : null;
 
   return (
@@ -217,6 +219,7 @@ export function WeekScreen() {
           today={today}
           spaces={spaces}
           initialSpaceId={defaultSpaceId}
+          initialProjectId={projectFilter}
           defaultOffsets={defaultOffsets}
           onClose={() => setSheetOpen(false)}
           onCreate={async (input) => {
@@ -224,6 +227,7 @@ export function WeekScreen() {
             const result = await addTask({
               title: input.title,
               spaceId: input.spaceId,
+              projectId: input.projectId,
               date: schedule.date ?? today,
               ...(schedule.someday ? { someday: true } : {}),
               ...(schedule.time !== undefined ? { time: schedule.time } : {}),

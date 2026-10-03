@@ -1,13 +1,16 @@
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { parseTimeInput } from '../../domain/dateInput';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
+import { projectChoicesFor } from '../../domain/projectRules';
 import { canHaveReminders, sortReminderOffsets, toggleReminderOffset } from '../../domain/reminders';
 import { choiceOfTask, patchFromDateChoice } from '../../domain/taskDetailEdit';
 import type { LocalDate } from '../../domain/types';
 import { t, tDynamic } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { DateEditor, TextField, spaceTextColor, type Layout } from '../../ui';
+import { useAppStore } from '../app/appStore';
 import { ReminderChoices } from '../reminders';
+import { ProjectSelect } from '../spaces';
 import { DetailRow } from './DetailRow';
 import { TaskRepeatRow } from './TaskRepeatRow';
 import { useInlineCancel, type InlineCancelRef } from './useInlineCancel';
@@ -190,6 +193,24 @@ function SpaceValue({ task, spaces, onPatch, cancelInlineRef }: InlineProps & { 
   );
 }
 
+/**
+ * Projet de la tâche (ES-04, ES-05) : « Aucun » (texte) tant que l'espace n'a pas de projet ; sinon liste « Aucun » + projets actifs
+ * de l'espace de la tâche (le projet porté reste affiché même archivé). Un choix s'applique aussitôt et ne touche pas à l'espace.
+ */
+function ProjectValue({ task, onPatch }: { readonly task: Task; readonly onPatch: (patch: TaskPatch) => void }) {
+  const projects = useAppStore((s) => s.projects);
+  if (projectChoicesFor(projects, task.spaceId, task.projectId).length === 0) return <>{t('detail.projectNone')}</>;
+  return <ProjectSelect variant="pill" spaceId={task.spaceId} value={task.projectId} onChange={(projectId) => onPatch({ projectId })} />;
+}
+
+/** Projet en lecture seule (iPhone) : nom du projet, archivé compris ; « Aucun » sans projet. */
+function useProjectName(task: Task): string {
+  const projects = useAppStore((s) => s.projects);
+  const project = task.projectId ? projects.find((candidate) => candidate.id === task.projectId) : undefined;
+  if (!project) return t('detail.projectNone');
+  return project.archived ? t('spaces.projectArchivedOption', { name: project.name }) : project.name;
+}
+
 export interface TaskDetailFieldsProps {
   readonly task: Task;
   readonly layout: Layout;
@@ -214,6 +235,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
   const inline: InlineProps = { task, onPatch, cancelInlineRef };
   const repeat: ReactNode = <TaskRepeatRow readOnly={layout === 'mobile'} task={task} recurrence={recurrence} setRecurrence={setRecurrence} updateRecurrence={updateRecurrence} stopRecurrence={stopRecurrence} />;
   const goal = goalTitle ?? t('detail.goalNone');
+  const projectName = useProjectName(task);
 
   if (layout === 'mobile') {
     const date = dateValueText(task, today, false);
@@ -227,7 +249,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
         <DetailRow label={t('detail.spaceProjectRow')}>
           <span style={space ? { color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-bold)' } : undefined}>{space?.name}</span>
           {' · '}
-          {t('detail.projectNone')}
+          {projectName}
         </DetailRow>
         <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
       </div>
@@ -249,7 +271,9 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
       <DetailRow label={t('detail.spaceRow')}>
         <SpaceValue {...inline} spaces={spaces} />
       </DetailRow>
-      <DetailRow label={t('detail.projectRow')}>{t('detail.projectNone')}</DetailRow>
+      <DetailRow label={t('detail.projectRow')}>
+        <ProjectValue task={task} onPatch={onPatch} />
+      </DetailRow>
       <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
     </div>
   );

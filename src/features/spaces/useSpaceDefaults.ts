@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
+import { effectiveProjectFilter } from '../../domain/projectRules';
 import { defaultSpaceFor, isCreatedOutsideFilter } from '../../domain/spaceRules';
-import type { SpaceId } from '../../domain/types';
+import type { ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { useAppStore } from '../app/appStore';
 import { useNoticeStore } from '../app/notice';
@@ -30,4 +31,15 @@ export function useAnnounceCreation(): (spaceId: SpaceId) => void {
     },
     [show],
   );
+}
+
+/**
+ * Filtre projet effectivement appliqué (QB-15, ES-04) : le projet choisi s'il est actif dans l'espace filtré, sinon null (« Tous les
+ * projets »). Lu par Aujourd'hui, la Semaine et Un jour ; masqué et sans effet sous « Tout ».
+ */
+export function useEffectiveProjectFilter(): ProjectId | null {
+  const spaceFilter = useAppStore((s) => s.spaceFilter);
+  const projectFilter = useAppStore((s) => s.projectFilter);
+  const projects = useAppStore((s) => s.projects);
+  return effectiveProjectFilter(spaceFilter, projectFilter, projects);
 }

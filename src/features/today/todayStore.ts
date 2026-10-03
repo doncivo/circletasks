@@ -4,7 +4,7 @@ import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task } from '../../d
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { sortTasksForDay } from '../../domain/taskSchedule';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
-import { matchesSpaceFilter } from '../../domain/spaceRules';
+import { matchesItemFilter } from '../../domain/itemFilter';
 import type { TodayRow } from '../../domain/todayList';
 import type { LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -81,6 +81,7 @@ export interface TodayState {
     spaceId: SpaceId,
     schedule?: NewTaskSchedule,
     icon?: IconRef | null,
+    projectId?: ProjectId | null,
   ): Promise<Result<Task, TodayAddTaskError>>;
   /**
    * Termine ou rouvre une tâche (T-04 : case de la ligne, raccourci Espace)
@@ -215,7 +216,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       }
     },
 
-    async addTask(title, spaceId, schedule, icon) {
+    async addTask(title, spaceId, schedule, icon, projectId) {
       const { date, filter } = get();
       const viewedDate = date ?? todayLocal(container.clock);
       // La tâche est datée sur `schedule.date` si fourni (ex. un autre jour,
@@ -230,6 +231,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
         const result = await useCases.create({
           title,
           spaceId,
+          ...(projectId ? { projectId } : {}),
           date: schedule?.someday ? null : taskDate,
           ...(schedule?.someday ? { someday: true } : {}),
           ...(schedule?.time !== undefined && !schedule.someday ? { time: schedule.time } : {}),
@@ -435,7 +437,12 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
 export interface TodayView {
   readonly date: LocalDate | null;
   readonly filter: SpaceFilter;
+  /** Filtre projet (QB-15, ES-04) : seules les tâches de ce projet restent ; null = tous les projets. */
+  readonly projectId?: ProjectId | null;
 }
+
+const inView = (task: Task, view: TodayView & { readonly date: LocalDate }): boolean =>
+  task.date === view.date && !task.someday && matchesItemFilter(task, { space: view.filter, project: view.projectId ?? null });
 
 /**
  * Tâches du jour affiché, non triées (entités lues dans la source unique, `selectTasks`) : date, « Un jour » et espace
@@ -443,7 +450,7 @@ export interface TodayView {
  */
 export function selectTodayTasks(taskIds: readonly TaskId[], entities: ReadonlyMap<TaskId, Task>, view: TodayView): Task[] {
   return selectTasks(taskIds, entities, (task) =>
-    view.date === null ? true : task.date === view.date && !task.someday && matchesSpaceFilter(task, view.filter),
+    view.date === null ? true : inView(task, { ...view, date: view.date }),
   );
 }
 
@@ -456,7 +463,7 @@ export function resolveTodayTasks(taskIds: readonly TaskId[], entities: Readonly
   const tasks = selectTasks(taskIds, entities, (task) =>
     !view || view.date === null
       ? true
-      : task.date === view.date && !task.someday && matchesSpaceFilter(task, view.filter),
+      : inView(task, { ...view, date: view.date }),
   );
   return sortTasksForDay(tasks);
 }

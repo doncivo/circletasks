@@ -105,6 +105,12 @@ export function App() {
         } catch {
           useAppStore.getState().setSpaces([]);
         }
+        // Projets (ES-04) : liste « Projet », menu « Projet : tous », fiche détail.
+        try {
+          useAppStore.getState().setProjects(await created.data.repos.projects.listForFilter('all', { includeArchived: true }));
+        } catch {
+          useAppStore.getState().setProjects([]);
+        }
         // Filtre Pro / Perso / Tout (ES-03) : dernier choix de cet appareil, restauré avant le premier rendu.
         await restoreSpaceFilter(created);
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;

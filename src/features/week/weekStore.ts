@@ -4,12 +4,12 @@ import type { CalendarAccount, ExternalEvent, IconRef, RecurrenceFields, Reminde
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
-import { matchesSpaceFilter } from '../../domain/spaceRules';
+import { matchesItemFilter } from '../../domain/itemFilter';
 import type { TodayRow } from '../../domain/todayList';
 import type { WeekDayExtras } from '../../domain/week';
 import { weekDays } from '../../domain/week';
 import type { InstantRange } from '../../db/repositories';
-import type { IsoDateTime, LocalDate, LocalTime, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { IsoDateTime, LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
@@ -23,6 +23,8 @@ export type WeekStatus = 'idle' | 'loading' | 'ready' | 'error';
 export interface NewWeekTask {
   readonly title: string;
   readonly spaceId: SpaceId;
+  /** ES-04 : projet de la tâche (de l'espace choisi) ; absent : aucun. */
+  readonly projectId?: ProjectId | null;
   /** Jour de la tâche ; null avec `someday` : « Un jour ». */
   readonly date: LocalDate | null;
   readonly time?: LocalTime | null;
@@ -99,12 +101,12 @@ export interface WeekState {
  * Tâches de la semaine commençant le lundi `weekStart`, lues dans la source unique : datées dans la semaine, ni « Un jour » ni
  * supprimées, dans l'espace du filtre. Le tri par jour est celui du domaine (`buildWeek`).
  */
-export function selectWeekTasks(entities: ReadonlyMap<TaskId, Task>, weekStart: LocalDate, filter: SpaceFilter): Task[] {
+export function selectWeekTasks(entities: ReadonlyMap<TaskId, Task>, weekStart: LocalDate, filter: SpaceFilter, projectId: ProjectId | null = null): Task[] {
   const end = addDays(weekStart, 6);
   const tasks: Task[] = [];
   for (const task of entities.values()) {
     if (task.deletedAt !== null || task.someday || task.date === null || task.date < weekStart || task.date > end) continue;
-    if (!matchesSpaceFilter(task, filter)) continue;
+    if (!matchesItemFilter(task, { space: filter, project: projectId })) continue;
     tasks.push(task);
   }
   return tasks;
@@ -192,6 +194,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
         return await useCases.create({
           title: input.title,
           spaceId: input.spaceId,
+          ...(input.projectId ? { projectId: input.projectId } : {}),
           date: input.someday ? null : input.date,
           ...(input.someday ? { someday: true } : {}),
           ...(input.time !== undefined && !input.someday ? { time: input.time } : {}),

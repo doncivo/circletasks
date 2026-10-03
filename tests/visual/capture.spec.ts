@@ -5,6 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { setWheels } from '../e2e/helpers/schedule';
 import { createTask, openToday } from '../e2e/helpers/today';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
+import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
 
 /**
@@ -255,6 +256,49 @@ const SCREENS: Screen[] = [
     prepare: async (page) => {
       await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
       await expect(page.getByRole('button', { name: /^Récapitulatifs :/ })).toBeVisible();
+    },
+  },
+  {
+    // Espaces et projets (ES-01, ES-04) : écran non dessiné, comparé à la carte d'espace de Bienvenue.html.
+    name: 'Espaces',
+    mockup: 'Bienvenue.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await openSpacesScreen(page);
+      await addProject(page, 'Pro', 'Mission client');
+    },
+  },
+  {
+    // Menu « Projet : tous » à droite des pastilles (QB-15), sous le filtre Pro avec un projet actif ; non dessiné dans Main.html.
+    name: 'Main-Projet',
+    mockup: 'Main.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    data: true,
+    prepare: async (page) => {
+      await openSpacesScreen(page);
+      await addProject(page, 'Pro', 'Mission client');
+      await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+      await filterPill(page, 'Pro').click();
+      await expect(page.getByRole('combobox', { name: 'Filtre de projet' })).toBeVisible();
+    },
+  },
+  {
+    // Fiche détail PC avec la ligne « Projet » (PC-Aujourdhui.html : « Mission client ») et le menu « Projet : tous » à droite des pastilles.
+    name: 'PC-Aujourdhui-Projet',
+    mockup: 'PC-Aujourdhui.html',
+    viewport: PC,
+    date: WEDNESDAY,
+    data: true,
+    prepare: async (page) => {
+      await openSpacesScreen(page);
+      await addProject(page, 'Pro', 'Mission client');
+      await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+      await setTaskProject(page, { project: { name: 'pc' } }, 'Envoyer la facture', 'Mission client');
+      await filterPill(page, 'Pro').click();
+      await page.getByRole('button', { name: 'Envoyer la facture', exact: true }).click();
+      await expect(page.getByRole('complementary')).toBeVisible();
     },
   },
 ];

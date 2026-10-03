@@ -164,6 +164,16 @@
 
 /* Champ Date / Heure minimal de la feuille « Nouvelle tâche » (T-02), remplacé
    par la feuille de roues de T-14. */
+.ct-task-sheet__spaceRow .ct-space-segmented {
+  flex: 0 0 auto;
+}
+
+.ct-task-sheet__spaceRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
 .ct-task-sheet__spacer {
   flex-grow: 1;
 }

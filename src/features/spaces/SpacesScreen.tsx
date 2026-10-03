@@ -5,6 +5,7 @@ import { Icon, useLayout } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { ProjectsSection } from './ProjectsSection';
 import { SpaceEditor } from './SpaceEditor';
 import { spacesStore } from './spacesStore';
 import './SpacesScreen.css';
@@ -21,6 +22,11 @@ export function SpacesScreen() {
   const errorKey = useFeatureStore(spacesStore, (s) => s.errorKey);
   const renameSpace = useFeatureStore(spacesStore, (s) => s.renameSpace);
   const setSpaceColor = useFeatureStore(spacesStore, (s) => s.setSpaceColor);
+  const projects = useFeatureStore(spacesStore, (s) => s.projects);
+  const createProject = useFeatureStore(spacesStore, (s) => s.createProject);
+  const updateProject = useFeatureStore(spacesStore, (s) => s.updateProject);
+  const setProjectArchived = useFeatureStore(spacesStore, (s) => s.setProjectArchived);
+  const moveProject = useFeatureStore(spacesStore, (s) => s.moveProject);
 
   useEffect(() => {
     void load();
@@ -47,7 +53,16 @@ export function SpacesScreen() {
             spaces={spaces}
             onRename={(raw) => renameSpace(space.id, raw)}
             onColor={(color) => setSpaceColor(space.id, color)}
-          />
+          >
+            <ProjectsSection
+              space={space}
+              projects={projects.filter((project) => project.spaceId === space.id)}
+              onCreate={(name, color) => createProject(space.id, name, color)}
+              onUpdate={(id, patch) => updateProject(id, patch)}
+              onArchive={setProjectArchived}
+              onMove={moveProject}
+            />
+          </SpaceEditor>
         ))}
       </div>
     </div>

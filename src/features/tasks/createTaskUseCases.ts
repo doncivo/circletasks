@@ -104,10 +104,14 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         recurrence = checked.value;
       }
 
+      // ES-04 : un projet n'est valable que dans l'espace de la tâche (et tant qu'il existe) ; sinon la tâche est créée sans projet.
+      const project = input.projectId ? await deps.data.repos.projects.getById(input.projectId) : null;
+      const projectId = project && project.spaceId === input.spaceId ? project.id : null;
+
       const newTask: NewTask = {
         id: newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
-        projectId: input.projectId ?? null,
+        projectId,
         title: titleResult.value,
         note: input.note ?? '',
         date,

@@ -43,7 +43,7 @@ export async function teardownToday(harness: TodayHarness): Promise<void> {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  useAppStore.setState({ spaceFilter: 'all', spaces: [], day: null });
+  useAppStore.setState({ spaceFilter: 'all', spaces: [], projects: [], projectFilter: null, day: null });
   useNoticeStore.setState({ notice: null });
   useNavigationStore.setState(INITIAL_NAVIGATION);
   await harness.db.close();

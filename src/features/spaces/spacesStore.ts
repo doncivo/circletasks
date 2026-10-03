@@ -1,16 +1,21 @@
 import { createStore } from 'zustand';
+import { effectiveProjectFilter, type ProjectNameError } from '../../domain/projectRules';
 import type { SpaceNameError } from '../../domain/spaceRules';
 import type { Project, Space } from '../../domain/model';
-import type { HexColor, SpaceId } from '../../domain/types';
+import type { HexColor, ProjectId, SpaceId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { useAppStore } from '../app/appStore';
-import { createSpaceUseCases } from './spaceUseCases';
+import type { Result } from '../../domain/types';
+import { createSpaceUseCases, type ProjectError } from './spaceUseCases';
 
 export type SpacesStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /** Résultat d'un enregistrement de nom : 'ok', le motif du refus de validation, ou 'error' (écriture impossible). */
 export type SpaceRenameOutcome = 'ok' | SpaceNameError | 'error';
+
+/** Résultat d'une écriture de projet : 'ok', le motif de refus de validation, ou 'error' (écriture impossible). */
+export type ProjectOutcome = 'ok' | ProjectNameError | 'error';
 
 /**
  * État de l'écran « Espaces et projets » (M13). La liste des espaces reste dans `useAppStore.spaces` (source unique lue par toutes
@@ -28,61 +33,113 @@ export interface SpacesState {
   renameSpace(id: SpaceId, raw: string): Promise<SpaceRenameOutcome>;
   /** ES-01 : choisit une couleur de la palette de l'espace. Ne rejette jamais ; renvoie vrai si c'est enregistré. */
   setSpaceColor(id: SpaceId, color: HexColor): Promise<boolean>;
+  /** ES-04 : crée un projet dans l'espace (couleur par défaut : celle de l'espace). Ne rejette jamais. */
+  createProject(spaceId: SpaceId, name: string, color?: HexColor): Promise<ProjectOutcome>;
+  /** ES-04 : renomme et / ou recolore un projet. Ne rejette jamais. */
+  updateProject(id: ProjectId, patch: { readonly name?: string; readonly color?: HexColor }): Promise<ProjectOutcome>;
+  /** ES-04 : archive ou désarchive un projet. Ne rejette jamais ; renvoie vrai si c'est enregistré. */
+  setProjectArchived(id: ProjectId, archived: boolean): Promise<boolean>;
+  /** ES-04 critère 8 : déplace un projet d'un cran ou à un index de la liste de son espace. Ne rejette jamais ; renvoie vrai si c'est enregistré. */
+  moveProject(id: ProjectId, to: { readonly direction: -1 | 1 } | { readonly toIndex: number }): Promise<boolean>;
 }
 
 const publish = (spaces: readonly Space[]): void => useAppStore.getState().setSpaces(spaces);
 
+/** Publie les projets ; le filtre projet choisi est retiré s'il n'est plus actif dans l'espace filtré (archivage, QB-15). */
+const publishProjects = (projects: readonly Project[]): void => {
+  const app = useAppStore.getState();
+  app.setProjects(projects);
+  if (app.projectFilter !== null && effectiveProjectFilter(app.spaceFilter, app.projectFilter, projects) === null) app.setProjectFilter(null);
+};
+
 export const spacesStore = defineFeatureStore<SpacesState>((container: AppContainer) => {
   const useCases = createSpaceUseCases(container);
-  return createStore<SpacesState>()((set) => ({
-    status: 'idle',
-    errorKey: null,
-    projects: [],
-
-    async load() {
-      set({ status: 'loading', errorKey: null });
+  return createStore<SpacesState>()((set) => {
+    const runProject = async (work: () => Promise<Result<Project[], ProjectError>>): Promise<Result<Project[], ProjectError | 'unexpected'>> => {
       try {
-        const [spaces, projects] = await Promise.all([useCases.list(), useCases.listProjects()]);
-        publish(spaces);
-        set({ projects, status: 'ready' });
+        return await work();
       } catch {
-        set({ status: 'error', errorKey: 'spaces.loadError' });
+        return { ok: false, error: 'unexpected' };
       }
-    },
+    };
+    /** Publie le résultat d'une écriture de projet ; un échec inattendu pose le message d'erreur de l'écran. */
+    const writeProjects = (result: Result<Project[], ProjectError | 'unexpected'>): Promise<ProjectOutcome> => {
+      if (result.ok) {
+        publishProjects(result.value);
+        set({ projects: result.value, errorKey: null });
+        return Promise.resolve('ok');
+      }
+      if (result.error === 'empty-name' || result.error === 'name-too-long' || result.error === 'name-taken') return Promise.resolve(result.error);
+      set({ errorKey: 'spaces.saveError' });
+      return Promise.resolve('error');
+    };
+    return {
+      status: 'idle',
+      errorKey: null,
+      projects: [],
 
-    async renameSpace(id, raw) {
-      try {
-        const result = await useCases.rename(id, raw);
-        if (!result.ok) {
-          if (result.error === 'space-not-found') {
-            set({ errorKey: 'spaces.saveError' });
-            return 'error';
-          }
-          return result.error;
+      async load() {
+        set({ status: 'loading', errorKey: null });
+        try {
+          const [spaces, projects] = await Promise.all([useCases.list(), useCases.listProjects()]);
+          publish(spaces);
+          publishProjects(projects);
+          set({ projects, status: 'ready' });
+        } catch {
+          set({ status: 'error', errorKey: 'spaces.loadError' });
         }
-        publish(result.value);
-        set({ errorKey: null });
-        return 'ok';
-      } catch {
-        set({ errorKey: 'spaces.saveError' });
-        return 'error';
-      }
-    },
+      },
 
-    async setSpaceColor(id, color) {
-      try {
-        const result = await useCases.setColor(id, color);
-        if (!result.ok) {
+      async renameSpace(id, raw) {
+        try {
+          const result = await useCases.rename(id, raw);
+          if (!result.ok) {
+            if (result.error === 'space-not-found') {
+              set({ errorKey: 'spaces.saveError' });
+              return 'error';
+            }
+            return result.error;
+          }
+          publish(result.value);
+          set({ errorKey: null });
+          return 'ok';
+        } catch {
+          set({ errorKey: 'spaces.saveError' });
+          return 'error';
+        }
+      },
+
+      async setSpaceColor(id, color) {
+        try {
+          const result = await useCases.setColor(id, color);
+          if (!result.ok) {
+            set({ errorKey: 'spaces.saveError' });
+            return false;
+          }
+          publish(result.value);
+          set({ errorKey: null });
+          return true;
+        } catch {
           set({ errorKey: 'spaces.saveError' });
           return false;
         }
-        publish(result.value);
-        set({ errorKey: null });
-        return true;
-      } catch {
-        set({ errorKey: 'spaces.saveError' });
-        return false;
-      }
-    },
-  }));
+      },
+
+      async createProject(spaceId, name, color) {
+        return writeProjects(await runProject(() => useCases.createProject(spaceId, name, color)));
+      },
+
+      async updateProject(id, patch) {
+        return writeProjects(await runProject(() => useCases.updateProject(id, patch)));
+      },
+
+      async setProjectArchived(id, archived) {
+        return (await writeProjects(await runProject(() => useCases.setProjectArchived(id, archived)))) === 'ok';
+      },
+
+      async moveProject(id, to) {
+        return (await writeProjects(await runProject(() => useCases.moveProject(id, to)))) === 'ok';
+      },
+    };
+  });
 });
