@@ -60,7 +60,12 @@ const GOAL_TITLE = 'Finaliser le PRD CircleTasks';
 const GOAL_TASKS = ['Relire les user stories', 'Valider les maquettes', 'Mettre à jour CLAUDE.md', 'Préparer le dépôt GitHub', 'Lancer Claude Code'];
 
 async function seedGoalWithTasks(page: Page, days: 'objectif' | 'other-days'): Promise<void> {
-  await insertGoals(page, [{ title: GOAL_TITLE, weekStart: '2026-09-21' }]);
+  await insertGoals(page, [
+    { title: GOAL_TITLE, weekStart: '2026-09-21' },
+    // « SEMAINES PRÉCÉDENTES » (Objectif.html) : S38 atteint, S37 non atteint.
+    { title: 'Trier les papiers administratifs', weekStart: '2026-09-07', status: 'closed', pinned: false },
+    { title: 'Clôturer la paie de septembre', weekStart: '2026-09-14', status: 'achieved', pinned: false },
+  ]);
   await insertTasks(page, [
     { title: GOAL_TASKS[0] as string, date: '2026-09-21', done: true },
     { title: GOAL_TASKS[1] as string, date: '2026-09-22', done: true },

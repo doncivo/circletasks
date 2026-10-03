@@ -42,6 +42,15 @@ export const goalsEn: Messages['goals'] = {
   reopenGoal: 'Reopen goal',
   attachedMark: 'Linked to the goal',
   attachedWord: 'goal',
+  history: {
+    title: 'PREVIOUS WEEKS',
+    week: 'W{number}',
+    carriedTo: 'Carried over to W{week}',
+    tasksLabel: 'Tasks linked to the goal “{title}”',
+    done: 'Done',
+    notDone: 'Not done',
+    more: 'Older weeks',
+  },
   review: {
     listLabel: 'Goals to review',
     title: 'Goal not achieved: {title}',

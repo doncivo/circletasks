@@ -42,6 +42,15 @@ export const goalsFr = {
   reopenGoal: 'Rouvrir l’objectif',
   attachedMark: 'Rattachée à l’objectif',
   attachedWord: 'objectif',
+  history: {
+    title: 'SEMAINES PRÉCÉDENTES',
+    week: 'S{number}',
+    carriedTo: 'Reconduit en S{week}',
+    tasksLabel: 'Tâches rattachées à l’objectif « {title} »',
+    done: 'Fait',
+    notDone: 'Non fait',
+    more: 'Semaines plus anciennes',
+  },
   review: {
     listLabel: 'Objectifs à réviser',
     title: 'Objectif non atteint : {title}',

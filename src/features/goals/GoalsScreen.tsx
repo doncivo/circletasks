@@ -15,6 +15,7 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
 import { TaskDetail } from '../tasks';
+import { GoalHistory } from './GoalHistory';
 import { GoalDraft, GoalSection } from './GoalSection';
 import { goalsStore } from './goalsStore';
 import './GoalsScreen.css';
@@ -164,6 +165,7 @@ export function GoalsScreen() {
           ))}
         </div>
       )}
+      <GoalHistory />
       {layout === 'mobile' && <TaskDetail />}
       {toDelete && (
         <ConfirmDialog
