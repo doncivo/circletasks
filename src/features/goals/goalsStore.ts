@@ -20,12 +20,22 @@ export interface GoalsState {
   /** Lundi de la semaine chargée ; null avant le premier chargement. */
   readonly weekStart: LocalDate | null;
   readonly goals: readonly Goal[];
+  /** OB-05 : objectifs encore ouverts d'une semaine terminée, tous espaces ; le filtre d'espace est appliqué à l'affichage. */
+  readonly reviews: readonly Goal[];
+  /** Jour pour lequel les objectifs à réviser ont été lus ; null avant le premier calcul (démarrage de l'app, `startup.ts`). */
+  readonly reviewDay: LocalDate | null;
   readonly status: GoalsStatus;
   readonly errorKey: PlainMessageKey | null;
   /** Échec d'une action (enregistrer, supprimer) : message dédié, les sections restent affichées. */
   readonly actionErrorKey: PlainMessageKey | null;
   /** (Re)charge les objectifs de la semaine de `today`. Ne rejette jamais. */
   load(today: LocalDate): Promise<void>;
+  /** OB-05 : lit les objectifs à réviser le jour `today` (démarrage et passage de minuit, `startup.ts`). Ne rejette jamais. */
+  loadReviews(today: LocalDate): Promise<void>;
+  /** OB-05 critère 3 : « Reconduire » (annulable 5 s). Ne rejette jamais. */
+  carryOver(id: GoalId): Promise<void>;
+  /** OB-05 critère 5 : « Clore » (annulable 5 s). Ne rejette jamais. */
+  close(id: GoalId): Promise<void>;
   /** Relit sans repasser par `loading` (écriture annulée ailleurs). Ne rejette jamais. */
   refresh(): Promise<void>;
   create(input: { title: string; spaceId: SpaceId; icon?: IconRef | null }): Promise<Result<Goal, GoalTitleError | 'unexpected'>>;
@@ -70,6 +80,8 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
     const store: GoalsState = {
       weekStart: null,
       goals: [],
+      reviews: [],
+      reviewDay: null,
       status: 'idle',
       errorKey: null,
       actionErrorKey: null,
@@ -86,6 +98,30 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
           if (id !== requestId) return;
           set({ status: 'error', errorKey: 'goals.loadError' });
         }
+      },
+
+      async loadReviews(today) {
+        set({ reviewDay: today });
+        try {
+          const reviews = await container.data.repos.goals.listOpenBefore(weekStartOf(today));
+          if (get().reviewDay === today) set({ reviews });
+        } catch {
+          // lecture manquée : les cartes gardent leur état, nouvel essai au prochain changement
+        }
+      },
+
+      async carryOver(id) {
+        await guard(async () => {
+          await useCases.carryOver(id);
+          await get().refresh();
+        }, undefined);
+      },
+
+      async close(id) {
+        await guard(async () => {
+          await useCases.close(id);
+          await get().refresh();
+        }, undefined);
       },
 
       async refresh() {
@@ -172,7 +208,11 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
     };
 
     // Une écriture faite ailleurs (annulation, reconduction, Aujourd'hui) : la semaine se relit.
-    onGoalsChanged(container.data, () => void get().refresh());
+    onGoalsChanged(container.data, () => {
+      void get().refresh();
+      const { reviewDay } = get();
+      if (reviewDay !== null) void get().loadReviews(reviewDay);
+    });
     return store;
   });
 });

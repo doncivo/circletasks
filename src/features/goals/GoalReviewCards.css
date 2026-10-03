@@ -1,0 +1,52 @@
+/* Propositions de fin de semaine (OB-05) : cartes à bord pointillé #3F7FC4, titre, « Reconduire » et « Clore ». */
+.ct-goal-reviews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-goal-review {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding: var(--ct-space-3) 14px;
+  border: 2px dashed var(--ct-color-goal);
+  border-radius: var(--ct-radius-lg);
+}
+
+.ct-goal-review__head {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  min-width: 0;
+}
+
+.ct-goal-review__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ct-goal-review__title {
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-goal-review__week {
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal-review__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.ct-goal-review__actions .ct-button {
+  min-height: 44px;
+  white-space: nowrap;
+}

@@ -42,7 +42,17 @@ export const goalsFr = {
   reopenGoal: 'Rouvrir l’objectif',
   attachedMark: 'Rattachée à l’objectif',
   attachedWord: 'objectif',
+  review: {
+    listLabel: 'Objectifs à réviser',
+    title: 'Objectif non atteint : {title}',
+    carryOver: 'Reconduire',
+    close: 'Clore',
+    carryOverLabel: 'Reconduire l’objectif « {title} »',
+    closeLabel: 'Clore l’objectif « {title} »',
+  },
   undo: {
     deleted: 'Objectif « {title} » supprimé',
+    carried: 'Objectif « {title} » reconduit',
+    closed: 'Objectif « {title} » clos',
   },
 } as const;

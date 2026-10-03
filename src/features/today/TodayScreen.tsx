@@ -19,6 +19,7 @@ import { TaskDetail } from '../tasks';
 import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView } from './TodayListView';
+import { GoalReviewCards } from '../goals/GoalReviewCards';
 import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
 import { canToggleRoutines, subscribeToTodaySources } from './todaySources';
@@ -226,6 +227,8 @@ export function TodayScreen() {
 
         {status === 'error' ? null : (
           <>
+            {/* OB-05 : propositions « Reconduire / Clore » des objectifs non atteints, en tête de liste. */}
+            <GoalReviewCards hidden={projectFilter !== null} />
             {(list.goals.length > 0 || list.events.length > 0) && (
               <div className="ct-today-banners" data-layout={layout}>
                 {list.goals.map((entry) => (

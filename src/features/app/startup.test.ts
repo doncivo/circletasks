@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createManualClock } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
-import { asEntityId, type DeviceId } from '../../domain/types';
+import { asEntityId, asLocalDate, type DeviceId, type GoalId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
+import { goalsStore } from '../goals/goalsStore';
 import { useAppStore } from './appStore';
 import { createAppContainer } from './container';
 import { startAppStartup, type StartupEnv } from './startup';
@@ -94,6 +95,33 @@ describe('startAppStartup (T-06)', () => {
       const rows = await db.driver.select<{ id: string }>('SELECT id FROM task ORDER BY id', []);
       expect(rows.map((r) => r.id)).toEqual([recent]);
     });
+    startup.dispose();
+  });
+
+  it('OB-05 : le lundi suivant, les objectifs ouverts de la semaine passée sont proposés au démarrage et au passage de la semaine', async () => {
+    db.clock.set(new Date(2026, 9, 2, 12).getTime()); // ven. 2 oct. : même semaine que l'objectif, rien à proposer
+    const c = container();
+    const goal = await c.data.repos.goals.create({
+      id: asEntityId<GoalId>('c0000000-0000-4000-8000-0000000000e1'),
+      spaceId: (await c.data.repos.spaces.listAll())[0]?.id as never,
+      weekStart: asLocalDate('2026-09-28'),
+      title: 'Finaliser le PRD',
+      icon: null,
+      pinned: true,
+      status: 'open',
+      carriedFromId: null,
+    });
+    const { env, handlers } = fakeEnv();
+    const startup = startAppStartup(c, env);
+    await startup.ready;
+    const store = goalsStore.get(c);
+    await vi.waitFor(() => expect(store.getState().reviewDay).toBe('2026-10-02'));
+    expect(store.getState().reviews).toEqual([]);
+    // Passage au lundi suivant (app restée ouverte, retour au premier plan) : la proposition apparaît.
+    db.clock.set(new Date(2026, 9, 5, 8).getTime());
+    handlers.get('focus')?.();
+    await vi.waitFor(() => expect(store.getState().reviews.map((g) => g.id)).toEqual([goal.id]));
+    expect(store.getState().reviewDay).toBe('2026-10-05');
     startup.dispose();
   });
 });

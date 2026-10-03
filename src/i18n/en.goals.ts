@@ -42,7 +42,17 @@ export const goalsEn: Messages['goals'] = {
   reopenGoal: 'Reopen goal',
   attachedMark: 'Linked to the goal',
   attachedWord: 'goal',
+  review: {
+    listLabel: 'Goals to review',
+    title: 'Goal not achieved: {title}',
+    carryOver: 'Carry over',
+    close: 'Close',
+    carryOverLabel: 'Carry over the goal “{title}”',
+    closeLabel: 'Close the goal “{title}”',
+  },
   undo: {
     deleted: 'Goal “{title}” deleted',
+    carried: 'Goal “{title}” carried over',
+    closed: 'Goal “{title}” closed',
   },
 };

@@ -1,5 +1,5 @@
 import { todayLocal } from '../../domain/clock';
-import { validateGoalTitle, type GoalTitleError } from '../../domain/goalRules';
+import { carryOverGoal, validateGoalTitle, type GoalTitleError } from '../../domain/goalRules';
 import { newEntityId } from '../../domain/id';
 import type { Goal, GoalPatch, GoalStatus, IconRef, Task } from '../../domain/model';
 import type { GoalId, LocalDate, Result, SpaceId } from '../../domain/types';
@@ -7,6 +7,7 @@ import { weekStartOf } from '../../domain/week';
 import type { PlainMessageKey } from '../../i18n';
 import type { UndoableCommand } from '../app/undo';
 import type { AppContainer } from '../app/container';
+import { syncTaskReminders } from '../tasks/reminderSync';
 import { emitGoalsChanged } from './goalEvents';
 
 export type GoalUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;
@@ -34,6 +35,14 @@ export interface GoalUseCases {
   update(id: GoalId, patch: Pick<GoalPatch, 'icon' | 'spaceId' | 'pinned'>): Promise<Goal | null>;
   /** OB-04 critères 5 et 6 : marque l'objectif atteint (`achieved`) ou le rouvre (`open`) ; action manuelle seulement. */
   setStatus(id: GoalId, status: Extract<GoalStatus, 'open' | 'achieved'>): Promise<Goal | null>;
+  /**
+   * OB-05 critères 3 et 4 (QB-14) : reconduit l'objectif non atteint dans la semaine en cours, en une transaction : l'ancien passe à `closed`,
+   * un nouveau (même titre, icône, espace, épinglage, `carriedFromId`) est créé, les tâches non faites s'y rattachent et celles restées dans
+   * le passé prennent la date d'aujourd'hui ; annulable 5 s. Rend le nouvel objectif, null si l'objectif n'est plus à réviser.
+   */
+  carryOver(id: GoalId): Promise<Goal | null>;
+  /** OB-05 critère 5 : clôt l'objectif (`closed`, « Non atteint ») ; ses tâches gardent date et rattachement ; annulable 5 s. */
+  close(id: GoalId): Promise<boolean>;
   /** OB-01 critère 7 : supprime l'objectif ; ses tâches perdent le rattachement mais restent ; annulable 5 s. */
   remove(id: GoalId): Promise<boolean>;
 }
@@ -98,6 +107,45 @@ export function createGoalUseCases(deps: GoalUseCaseDeps): GoalUseCases {
       return goal;
     },
 
+    async carryOver(id) {
+      const today = todayLocal(deps.clock);
+      const outcome = await data.transaction(async (repos) => {
+        const goal = await repos.goals.getById(id);
+        // Déjà répondu (autre appareil, double clic) ou pas encore échu : rien n'est écrit, aucun doublon.
+        if (!goal || goal.status !== 'open' || goal.weekStart >= weekStartOf(today)) return null;
+        const before = new Map((await repos.tasks.listByGoal(id)).map((task) => [task.id, task]));
+        const plan = carryOverGoal(goal, [...before.values()], today, newEntityId<GoalId>(deps.ids));
+        const created = await repos.goals.create(plan.goal);
+        const closed = await repos.goals.setStatus(id, 'closed');
+        const redated = new Set(plan.redatedTaskIds);
+        const moved: { readonly before: Task; readonly after: Task }[] = [];
+        for (const taskId of plan.taskIds) {
+          let after = await repos.tasks.update(taskId, { goalId: created.id });
+          if (redated.has(taskId)) {
+            const [carried] = await repos.tasks.carryOver([taskId], today);
+            after = carried ?? after;
+            await syncTaskReminders(repos, after);
+          }
+          moved.push({ before: before.get(taskId) as Task, after });
+        }
+        return { goal, created, closed, moved };
+      });
+      if (!outcome) return null;
+      deps.taskEntities.publish(outcome.moved.map((entry) => entry.after));
+      deps.undo.push(carriedCommand(deps, outcome.goal, outcome.created, outcome.closed, outcome.moved));
+      emitGoalsChanged(data);
+      return outcome.created;
+    },
+
+    async close(id) {
+      const goal = await data.repos.goals.getById(id);
+      if (!goal || goal.status !== 'open') return false;
+      const closed = await data.repos.goals.setStatus(id, 'closed');
+      deps.undo.push(closedCommand(deps, goal, closed));
+      emitGoalsChanged(data);
+      return true;
+    },
+
     async remove(id) {
       const removed = await data.transaction(async (repos) => {
         const goal = await repos.goals.getById(id);
@@ -112,6 +160,58 @@ export function createGoalUseCases(deps: GoalUseCaseDeps): GoalUseCases {
       deps.undo.push(removedCommand(deps, removed.goal, removed.deleted, removed.detached));
       emitGoalsChanged(data);
       return true;
+    },
+  };
+}
+
+/** Annulation d'une clôture : l'objectif redevient ouvert (donc de nouveau proposé), s'il n'a pas changé depuis. */
+function closedCommand(deps: GoalUseCaseDeps, goal: Goal, closed: Goal): UndoableCommand {
+  return {
+    kind: 'goal',
+    count: 1,
+    labelKey: 'goals.undo.closed',
+    labelParams: { title: goal.title },
+    async undo() {
+      const current = await deps.data.repos.goals.getById(goal.id);
+      if (!current || current.hlc !== closed.hlc) return 'stale';
+      await deps.data.repos.goals.setStatus(goal.id, 'open');
+      emitGoalsChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
+/**
+ * Annulation d'une reconduction : le nouvel objectif disparaît, l'ancien redevient ouvert, les tâches retrouvent leur objectif et leur
+ * date d'avant (seulement celles qui n'ont pas changé depuis, hlc identique) ; 'stale' si l'un des deux objectifs a changé.
+ */
+function carriedCommand(deps: GoalUseCaseDeps, goal: Goal, created: Goal, closed: Goal, moved: readonly { readonly before: Task; readonly after: Task }[]): UndoableCommand {
+  return {
+    kind: 'goal',
+    count: 1,
+    labelKey: 'goals.undo.carried',
+    labelParams: { title: goal.title },
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const oldNow = await repos.goals.getById(goal.id);
+        const newNow = await repos.goals.getById(created.id);
+        if (!oldNow || !newNow || oldNow.hlc !== closed.hlc || newNow.hlc !== created.hlc) return null;
+        const tasks: Task[] = [];
+        for (const { before, after } of moved) {
+          const now = await repos.tasks.getById(after.id);
+          if (!now || now.hlc !== after.hlc) continue;
+          const back = await repos.tasks.update(before.id, { goalId: before.goalId, date: before.date, carriedOver: before.carriedOver });
+          await syncTaskReminders(repos, back);
+          tasks.push(back);
+        }
+        await repos.goals.softDelete(created.id);
+        await repos.goals.setStatus(goal.id, 'open');
+        return tasks;
+      });
+      if (!restored) return 'stale';
+      deps.taskEntities.publish(restored);
+      emitGoalsChanged(deps.data);
+      return 'undone';
     },
   };
 }
