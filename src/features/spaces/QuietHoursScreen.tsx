@@ -5,15 +5,12 @@ import type { QuietHours, Space } from '../../domain/model';
 import { allDayRange, isAllDayRange } from '../../domain/quietHours';
 import type { LocalTime, Weekday } from '../../domain/types';
 import { t } from '../../i18n';
-import { weekdayName } from '../../i18n/formatRoutine';
-import { Button, Icon, Switch, TextField, spaceTextColor, useLayout } from '../../ui';
+import { Button, Icon, Switch, TextField, WeekdayToggles, spaceTextColor, useLayout } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { spacesStore } from './spacesStore';
 import './QuietHoursScreen.css';
-
-const WEEK: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
 interface RangeDraft {
   readonly key: number;
@@ -119,21 +116,11 @@ export function QuietHoursScreen({ space }: { readonly space: Space }) {
                   <Icon icon={Trash2} size={22} />
                 </button>
               </div>
-              <div role="group" aria-label={t('spaces.quietDaysGroup', { number })} className="ct-quiet__days">
-                {WEEK.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={range.weekdays.includes(day)}
-                    aria-label={weekdayName(day, 'long').replace(/^./, (c) => c.toUpperCase())}
-                    className="ct-quiet__day"
-                    onClick={() => change(range.key, { weekdays: range.weekdays.includes(day) ? range.weekdays.filter((d) => d !== day) : [...range.weekdays, day].sort((a, b) => a - b) })}
-                  >
-                    {weekdayName(day, 'long').charAt(0).toUpperCase()}
-                  </button>
-                ))}
-              </div>
+              <WeekdayToggles
+                label={t('spaces.quietDaysGroup', { number })}
+                value={range.weekdays}
+                onToggle={(day) => change(range.key, { weekdays: range.weekdays.includes(day) ? range.weekdays.filter((d) => d !== day) : [...range.weekdays, day].sort((a, b) => a - b) })}
+              />
               <div className="ct-quiet__row">
                 <span>{t('spaces.quietAllDayLabel')}</span>
                 <Switch checked={range.allDay} onChange={(allDay) => change(range.key, { allDay })} label={t('spaces.quietAllDaySwitch', { number })} />

@@ -127,13 +127,11 @@ describe('Projets dans Réglages (ES-04)', () => {
     await seedProject(h, SPACE_PRO_ID, 'Charlie');
     renderSpaces();
     await screen.findByText('Alpha');
-    fireEvent.click(screen.getByRole('button', { name: 'Descendre le projet Alpha' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Déplacer le projet Alpha' }), { key: 'ArrowDown' });
     await waitFor(() => expect(names('Pro')).toEqual(['Bravo', 'Alpha', 'Charlie']));
     fireEvent.keyDown(screen.getByRole('button', { name: 'Déplacer le projet Charlie' }), { key: 'ArrowUp', altKey: true });
     await waitFor(() => expect(names('Pro')).toEqual(['Bravo', 'Charlie', 'Alpha']));
     expect((await h.container.data.repos.projects.listForFilter(SPACE_PRO_ID)).map((p) => p.name)).toEqual(['Bravo', 'Charlie', 'Alpha']);
-    // Premier : « Monter » inactif.
-    expect(screen.getByRole('button', { name: 'Monter le projet Bravo' })).toBeDisabled();
   });
 
   it('les archivés suivent les actifs dans l’ordre ; réordonner ne casse rien', async () => {
@@ -142,7 +140,7 @@ describe('Projets dans Réglages (ES-04)', () => {
     await seedProject(h, SPACE_PRO_ID, 'Bravo');
     renderSpaces();
     await screen.findByText('Alpha');
-    fireEvent.click(screen.getByRole('button', { name: 'Descendre le projet Alpha' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Déplacer le projet Alpha' }), { key: 'ArrowDown' });
     await waitFor(() => expect(names('Pro')).toEqual(['Bravo', 'Alpha']));
     const all = (await h.container.data.repos.projects.listForFilter(SPACE_PRO_ID, { includeArchived: true })).map((p) => [p.name, p.sortOrder]);
     expect(all).toEqual([

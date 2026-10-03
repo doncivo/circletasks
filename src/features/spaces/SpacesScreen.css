@@ -230,7 +230,3 @@
   flex-direction: column;
 }
 
-/* iPhone : la place manque pour les flèches ; l'ordre se règle par la poignée (glisser, ou ↑ / ↓ au clavier et aux lecteurs d'écran). */
-.ct-spaces-shell[data-layout='mobile'] .ct-projects__move {
-  display: none;
-}

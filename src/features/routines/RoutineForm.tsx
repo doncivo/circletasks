@@ -16,8 +16,8 @@ import { nextOccurrences } from '../../domain/routineSchedule';
 import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
-import { formatNextOccurrences, weekdayName } from '../../i18n/formatRoutine';
-import { Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, TextField, useLayout } from '../../ui';
+import { formatNextOccurrences } from '../../i18n/formatRoutine';
+import { Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, WeekdayToggles, TextField, useLayout } from '../../ui';
 import { RoutineTimeEditor } from './RoutineTimeEditor';
 import type { RoutineInput } from './routineUseCases';
 import './RoutineForm.css';
@@ -37,7 +37,6 @@ function choiceOf(routine: Routine | null): FrequencyChoice {
   if (!routine) return 'daily';
   return routine.scheduleType === 'every_n_days' || routine.scheduleType === 'every_n_weeks' ? 'every_n' : routine.scheduleType;
 }
-const WEEK: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
 const FREQUENCY_LABELS = {
   daily: 'routines.form.daily',
@@ -287,21 +286,7 @@ export function RoutineForm(props: RoutineFormProps) {
       )}
 
       {(choice === 'weekdays' || (choice === 'every_n' && unit === 'weeks')) && (
-        <div role="group" aria-label={t('routines.form.weekdaysLabel')} className="ct-routine-form__days">
-          {WEEK.map((day) => (
-            <button
-              key={day}
-              type="button"
-              role="checkbox"
-              aria-checked={weekdays.includes(day)}
-              aria-label={weekdayName(day, 'long').replace(/^./, (c) => c.toUpperCase())}
-              className="ct-routine-form__day"
-              onClick={() => toggleDay(day)}
-            >
-              {weekdayName(day, 'long').charAt(0).toUpperCase()}
-            </button>
-          ))}
-        </div>
+        <WeekdayToggles label={t('routines.form.weekdaysLabel')} value={weekdays} onToggle={toggleDay} />
       )}
 
       {choice === 'x_per_week' && (

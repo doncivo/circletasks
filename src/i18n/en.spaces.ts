@@ -37,8 +37,6 @@ export const spacesEn: Messages['spaces'] = {
   projectUnarchive: 'Unarchive project {name}',
   projectArchivedSection: 'Archived',
   projectArchivedBadge: 'archived',
-  projectMoveUp: 'Move project {name} up',
-  projectMoveDown: 'Move project {name} down',
   projectHandle: 'Move project {name}',
   projectMoved: 'Project {name} at position {position} of {total}',
   projectNameEmpty: 'The project name cannot be empty.',

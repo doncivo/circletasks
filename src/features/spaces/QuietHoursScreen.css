@@ -90,36 +90,6 @@
   cursor: pointer;
 }
 
-.ct-quiet__days {
-  display: flex;
-  gap: var(--ct-space-1);
-}
-
-.ct-quiet__day {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--ct-hit-target-min);
-  border: 1.5px solid var(--ct-color-border-strong);
-  border-radius: var(--ct-radius-round);
-  background: var(--ct-color-surface);
-  color: var(--ct-color-text);
-  font-family: var(--ct-font-text);
-  font-size: var(--ct-font-size-text-sm);
-  font-weight: var(--ct-font-weight-semibold);
-  cursor: pointer;
-}
-
-.ct-quiet__day[aria-checked='true'] {
-  background: var(--ct-color-nav-bg);
-  border-color: var(--ct-color-nav-bg);
-  color: var(--ct-color-accent-on);
-}
-
-.ct-quiet__day:focus-visible {
-  outline: 2px solid var(--ct-color-accent);
-  outline-offset: 2px;
-}
-
 .ct-quiet__times {
   display: grid;
   grid-template-columns: 1fr 1fr;

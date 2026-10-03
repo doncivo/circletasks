@@ -137,7 +137,8 @@ describe('Déplacer un élément d’un espace ou projet à l’autre (ES-05)', 
     it('choisir un autre projet du même espace : seul le projet change (critère 2)', async () => {
       const { task } = await openDetail();
       const site = await seedProject(h, SPACE_PRO_ID, 'Refonte site');
-      fireEvent.change(await screen.findByRole('combobox', { name: 'Projet' }), { target: { value: site.id } });
+      fireEvent.click(await screen.findByRole('button', { name: 'Projet : Mission client' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Projet' }), { target: { value: site.id } });
       await waitFor(async () => expect((await h.container.data.repos.tasks.getById(task.id))?.projectId).toBe(site.id));
       expect((await h.container.data.repos.tasks.getById(task.id))?.spaceId).toBe(SPACE_PRO_ID);
       expect(await screen.findByRole('status')).toHaveTextContent('déplacée dans Pro · Refonte site');

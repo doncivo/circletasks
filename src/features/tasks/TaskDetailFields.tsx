@@ -194,13 +194,34 @@ function SpaceValue({ task, spaces, onPatch, cancelInlineRef }: InlineProps & { 
 }
 
 /**
- * Projet de la tâche (ES-04, ES-05) : « Aucun » (texte) tant que l'espace n'a pas de projet ; sinon liste « Aucun » + projets actifs
- * de l'espace de la tâche (le projet porté reste affiché même archivé). Un choix s'applique aussitôt et ne touche pas à l'espace.
+ * Projet de la tâche (ES-04, ES-05), PC : texte (nom du projet, archivé compris, ou « Aucun ») qui ouvre au clic la liste « Aucun » +
+ * projets actifs de l'espace de la tâche, comme l'espace ; un choix s'applique aussitôt (sans toucher à l'espace) et referme la
+ * liste, Échap aussi. Sans projet dans l'espace, le texte n'est pas cliquable.
  */
-function ProjectValue({ task, onPatch }: { readonly task: Task; readonly onPatch: (patch: TaskPatch) => void }) {
+function ProjectValue({ task, onPatch, cancelInlineRef }: InlineProps) {
+  const [editing, setEditing] = useState(false);
+  useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
   const projects = useAppStore((s) => s.projects);
-  if (projectChoicesFor(projects, task.spaceId, task.projectId).length === 0) return <>{t('detail.projectNone')}</>;
-  return <ProjectSelect variant="pill" spaceId={task.spaceId} value={task.projectId} onChange={(projectId) => onPatch({ projectId })} />;
+  const name = useProjectName(task);
+  if (projectChoicesFor(projects, task.spaceId, task.projectId).length === 0) return <>{name}</>;
+  if (!editing) {
+    return (
+      <button type="button" className="ct-task-detail__valueButton" aria-label={t('spaces.projectField', { name })} onClick={() => setEditing(true)}>
+        {name}
+      </button>
+    );
+  }
+  return (
+    <ProjectSelect
+      variant="pill"
+      spaceId={task.spaceId}
+      value={task.projectId}
+      onChange={(projectId) => {
+        setEditing(false);
+        if (projectId !== task.projectId) onPatch({ projectId });
+      }}
+    />
+  );
 }
 
 /** Projet en lecture seule (iPhone) : nom du projet, archivé compris ; « Aucun » sans projet. */
@@ -272,7 +293,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
         <SpaceValue {...inline} spaces={spaces} />
       </DetailRow>
       <DetailRow label={t('detail.projectRow')}>
-        <ProjectValue task={task} onPatch={onPatch} />
+        <ProjectValue {...inline} />
       </DetailRow>
       <DetailRow label={t('detail.goalRow')}>{goal}</DetailRow>
     </div>

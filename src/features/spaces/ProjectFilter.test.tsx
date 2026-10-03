@@ -206,13 +206,17 @@ describe('Projet à la création et dans la fiche (ES-04 critères 4, 5, 7)', ()
       const mission = await seedProject(h, SPACE_PRO_ID, 'Mission client');
       const site = await seedProject(h, SPACE_PRO_ID, 'Refonte site');
       const task = await openDetail(mission.id);
+      // La ligne est un texte ; un clic ouvre la liste (comme l'espace).
+      expect(screen.queryByRole('combobox', { name: 'Projet' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Projet : Mission client' }));
       const select = screen.getByRole('combobox', { name: 'Projet' });
       expect(optionTexts(select)).toEqual(['Aucun', 'Mission client', 'Refonte site']);
-      expect(screen.getByText('Projet : Mission client')).toBeInTheDocument();
       fireEvent.change(select, { target: { value: site.id } });
       await waitFor(async () => expect((await h.container.data.repos.tasks.getById(task.id))?.projectId).toBe(site.id));
       expect((await h.container.data.repos.tasks.getById(task.id))?.spaceId).toBe(SPACE_PRO_ID);
-      fireEvent.change(select, { target: { value: '' } });
+      expect(screen.queryByRole('combobox', { name: 'Projet' })).toBeNull(); // refermée après le choix
+      fireEvent.click(screen.getByRole('button', { name: 'Projet : Refonte site' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Projet' }), { target: { value: '' } });
       await waitFor(async () => expect((await h.container.data.repos.tasks.getById(task.id))?.projectId).toBeNull());
     });
 
@@ -220,7 +224,7 @@ describe('Projet à la création et dans la fiche (ES-04 critères 4, 5, 7)', ()
       const vieux = await seedProject(h, SPACE_PRO_ID, 'Vieux projet', { archived: true });
       await seedProject(h, SPACE_PRO_ID, 'Actif');
       await openDetail(vieux.id);
-      expect(screen.getByText('Projet : Vieux projet (archivé)')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Projet : Vieux projet (archivé)' }));
       expect(optionTexts(screen.getByRole('combobox', { name: 'Projet' }))).toEqual(['Aucun', 'Actif', 'Vieux projet (archivé)']);
     });
 

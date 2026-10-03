@@ -37,8 +37,6 @@ export const spacesFr = {
   projectUnarchive: 'Désarchiver le projet {name}',
   projectArchivedSection: 'Archivés',
   projectArchivedBadge: 'archivé',
-  projectMoveUp: 'Monter le projet {name}',
-  projectMoveDown: 'Descendre le projet {name}',
   projectHandle: 'Déplacer le projet {name}',
   projectMoved: 'Projet {name} en position {position} sur {total}',
   projectNameEmpty: 'Le nom du projet ne peut pas être vide.',

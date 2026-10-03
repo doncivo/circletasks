@@ -57,13 +57,9 @@ test.describe('ES-04 — projets', () => {
   test('ordre : « Descendre » ou ↓ sur la poignée, puis Alt+↑, changent l’ordre (critère 8)', async ({ page }, testInfo) => {
     await start(page);
     for (const name of ['Alpha', 'Bravo', 'Charlie']) await addProject(page, 'Pro', name);
-    // Poignée : ↓ au clavier (iPhone : les flèches ne sont pas affichées) ; sur PC, le bouton « Descendre » fait de même.
-    if (isPhone(testInfo)) {
-      await page.getByRole('button', { name: 'Déplacer le projet Alpha' }).focus();
-      await page.keyboard.press('ArrowDown');
-    } else {
-      await page.getByRole('button', { name: 'Descendre le projet Alpha' }).click();
-    }
+    // Poignée : ↓ au clavier (iPhone et PC).
+    await page.getByRole('button', { name: 'Déplacer le projet Alpha' }).focus();
+    await page.keyboard.press('ArrowDown');
     await expect.poll(() => activeProjectNames(page, 'Pro')).toEqual(['Bravo', 'Alpha', 'Charlie']);
     if (!isPhone(testInfo)) {
       await page.getByRole('button', { name: 'Déplacer le projet Charlie' }).focus();
@@ -79,6 +75,7 @@ test.describe('ES-04 — projets', () => {
       const options = await page.getByRole('dialog', { name: 'Modifier la tâche' }).getByRole('combobox', { name: 'Projet' }).locator('option').allTextContents();
       expect(options).toEqual(['Aucun', 'Bravo', 'Alpha', 'Charlie']);
     } else {
+      await detailOf(page).getByRole('button', { name: /^Projet : / }).click();
       const options = await detailOf(page).getByRole('combobox', { name: 'Projet' }).locator('option').allTextContents();
       expect(options).toEqual(['Aucun', 'Bravo', 'Charlie', 'Alpha']);
     }
@@ -100,6 +97,7 @@ test.describe('ES-04 — projets', () => {
     // La tâche affiche toujours son projet, archivé ; il n'est pas proposé aux autres.
     await expect(detailOf(page).getByText('Mission client (archivé)').first()).toBeVisible();
     if (!isPhone(testInfo)) {
+      await detailOf(page).getByRole('button', { name: /^Projet : / }).click();
       const options = await detailOf(page).getByRole('combobox', { name: 'Projet' }).locator('option').allTextContents();
       expect(options).toEqual(['Aucun', 'Refonte site', 'Mission client (archivé)']);
     }

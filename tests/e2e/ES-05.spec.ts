@@ -101,8 +101,9 @@ test.describe('ES-05 — déplacer un élément', () => {
     await backToToday(page);
     await rowOf(page, a).getByRole('button', { name: a, exact: true }).click();
     const fiche = detailOf(page);
+    await fiche.getByRole('button', { name: /^Projet : / }).click();
     await fiche.getByRole('combobox', { name: 'Projet' }).selectOption({ label: 'Refonte site' });
-    await expect(fiche.getByText('Projet : Refonte site')).toBeVisible();
+    await expect(fiche.getByRole('button', { name: 'Projet : Refonte site' })).toBeVisible();
     await expect(status(page)).toContainText(`« ${a} » déplacée dans Pro · Refonte site`);
     await expect(fiche.getByRole('button', { name: /^Espace de la tâche : Pro/ })).toBeVisible();
   });

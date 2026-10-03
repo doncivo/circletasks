@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, ChevronDown, ChevronUp, Pencil, Plus } from 'lucide-react';
+import { Archive, ArchiveRestore, Pencil, Plus } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
 import { PROJECT_NAME_MAX_LENGTH, activeProjectsOf, defaultProjectColor } from '../../domain/projectRules';
 import { PROJECT_PALETTE } from '../../domain/spaceRules';
@@ -112,7 +112,7 @@ export function ProjectsSection({ space, projects, onCreate, onUpdate, onArchive
       {active.length === 0 && archived.length === 0 && !adding && <p className="ct-projects__empty">{t('spaces.projectsEmpty')}</p>}
       {active.length > 0 && (
         <div {...sortable.containerProps} className={`ct-projects__list ${sortable.containerProps.className}`} role="list">
-          {active.map((project, index) => (
+          {active.map((project) => (
             <div key={project.id} role="listitem" className="ct-projects__item" {...sortable.itemProps(project.id)}>
               {editingId === project.id ? (
                 <ProjectForm
@@ -132,12 +132,6 @@ export function ProjectsSection({ space, projects, onCreate, onUpdate, onArchive
                   />
                   <span className="ct-projects__dot" style={{ background: project.color }} aria-hidden="true" />
                   <span className="ct-projects__name">{project.name}</span>
-                  <button type="button" className="ct-projects__iconButton ct-projects__move" aria-label={t('spaces.projectMoveUp', { name: project.name })} disabled={index === 0} onClick={() => void move(project.id, { direction: -1 })}>
-                    <Icon icon={ChevronUp} size={20} />
-                  </button>
-                  <button type="button" className="ct-projects__iconButton ct-projects__move" aria-label={t('spaces.projectMoveDown', { name: project.name })} disabled={index === active.length - 1} onClick={() => void move(project.id, { direction: 1 })}>
-                    <Icon icon={ChevronDown} size={20} />
-                  </button>
                   <button type="button" className="ct-projects__iconButton" aria-label={t('spaces.projectEdit', { name: project.name })} onClick={() => setEditingId(project.id)}>
                     <Icon icon={Pencil} size={20} />
                   </button>

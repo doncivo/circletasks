@@ -64,8 +64,9 @@ export async function setTaskProject(page: Page, testInfo: { project: { name: st
     await expect(fiche.getByText(projectName)).toBeVisible();
     await fiche.getByRole('button', { name: 'Fermer' }).click();
   } else {
+    await fiche.getByRole('button', { name: /^Projet : / }).click();
     await fiche.getByRole('combobox', { name: 'Projet' }).selectOption({ label: projectName });
-    await expect(fiche.getByText(`Projet : ${projectName}`)).toBeVisible();
+    await expect(fiche.getByRole('button', { name: `Projet : ${projectName}` })).toBeVisible();
     await fiche.getByRole('button', { name: 'Fermer' }).click();
   }
 }
