@@ -2,6 +2,7 @@ import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
+import { checklistsFr } from './fr.checklists';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -561,6 +562,7 @@ export const fr = {
     seriesStop: 'Répétition de « {title} » arrêtée',
     routine: 'Routine modifiée',
     goal: 'Objectif modifié',
+    checklist: 'Checklist modifiée',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -575,6 +577,7 @@ export const fr = {
     failed: 'Impossible d’annuler cette action.',
   },
   routines: routinesFr,
+  checklists: checklistsFr,
   goals: goalsFr,
   someday: somedayFr,
   shortcuts: {

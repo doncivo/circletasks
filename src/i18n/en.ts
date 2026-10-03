@@ -2,6 +2,7 @@ import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
+import { checklistsEn } from './en.checklists';
 import type { Messages } from './types';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
@@ -557,6 +558,7 @@ export const en: Messages = {
     seriesRule: 'Repeat of “{title}” edited',
     routine: 'Routine updated',
     goal: 'Goal updated',
+    checklist: 'Checklist updated',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',
@@ -572,6 +574,7 @@ export const en: Messages = {
     failed: 'Unable to undo this action.',
   },
   routines: routinesEn,
+  checklists: checklistsEn,
   goals: goalsEn,
   someday: somedayEn,
   shortcuts: {

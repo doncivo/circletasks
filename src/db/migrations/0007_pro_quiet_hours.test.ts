@@ -38,7 +38,7 @@ describe('migration 0007 (ES-07) : plages silencieuses par défaut de Pro', () =
       `INSERT INTO routine (id, space_id, title, schedule_type, start_date, created_at, updated_at, device_id, hlc) VALUES ('r1', ?, 'Sport', 'daily', '2026-09-01', 'z', 'z', 'd', 'h')`,
       [SPACE_PERSO_ID],
     );
-    expect((await migrate(db, migrations)).applied).toEqual([7]);
+    expect((await migrate(db, migrations)).applied).toEqual(migrations.slice(6).map((m) => m.version));
     expect((await migrate(db, migrations)).applied).toEqual([]);
     expect(JSON.parse(await quietOf(db, SPACE_PRO_ID))).toEqual(DEFAULT_PRO_QUIET_HOURS);
     expect(await quietOf(db, SPACE_PERSO_ID)).toBe('[]');

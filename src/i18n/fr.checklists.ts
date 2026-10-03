@@ -1,0 +1,41 @@
+/**
+ * Textes du module Checklists (M6, C-01 à C-05), en français : source de vérité ; `en.checklists.ts` suit la même forme.
+ */
+export const checklistsFr = {
+  title: 'Checklists',
+  listLabel: 'Mes checklists',
+  chooserLabel: 'Choisir une checklist',
+  itemsLabel: 'Éléments de la checklist',
+  empty: 'Aucune checklist pour l’instant',
+  emptyHelp: 'Créez-en une avec le bouton « + ».',
+  emptySpace: 'Aucune checklist {space}.',
+  emptyProject: 'Les checklists n’ont pas de projet : elles sont masquées sous un filtre de projet.',
+  noSelection: 'Choisissez une checklist.',
+  loadError: 'Impossible de charger les checklists.',
+  saveError: 'Impossible d’enregistrer la checklist.',
+  itemError: 'Impossible d’enregistrer cet élément.',
+  add: 'Nouvelle checklist',
+  addPc: '+ Nouvelle checklist',
+  sheet: {
+    newTitle: 'Nouvelle checklist',
+    editTitle: 'Modifier la checklist',
+    close: 'Fermer',
+    titleLabel: 'Titre de la checklist',
+    titlePlaceholder: 'Titre de la checklist',
+    spaceLabel: 'Espace de la checklist',
+    create: 'Créer',
+    save: 'Enregistrer',
+    delete: 'Supprimer la checklist',
+    deleteTitle: 'Supprimer « {title} » ?',
+    deleteBody: 'La checklist et ses éléments seront supprimés. Vous pourrez annuler pendant 5 secondes.',
+    deleteConfirm: 'Supprimer',
+  },
+  edit: 'Modifier la checklist',
+  addItemLabel: 'Nouvel élément',
+  addItemPlaceholder: 'Ajouter un élément',
+  addItemPlaceholderPc: 'Ajouter un élément, puis Entrée',
+  itemTooLong: 'Un élément fait 200 caractères au plus.',
+  undo: {
+    deleted: '« {title} » supprimée',
+  },
+} as const;

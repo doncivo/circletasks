@@ -1,5 +1,6 @@
 import type { RepositoryFactory } from '../dataAccess';
-import { createCalendarAccountRepository, createChecklistRepository, createEventRepository, createExternalEventRepository } from './agendaRepository';
+import { createCalendarAccountRepository, createEventRepository, createExternalEventRepository } from './agendaRepository';
+import { createChecklistItemRepository, createChecklistRepository } from './checklistRepository';
 import { createGoalRepository } from './goalRepository';
 import { createReminderRepository } from './reminderRepository';
 import { createRoutineLogRepository, createRoutineRepository } from './routineRepository';
@@ -23,7 +24,8 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   goals: createGoalRepository(executor, stamper),
   settings: createSettingsRepository(executor, stamper),
   events: createEventRepository(executor),
-  checklists: createChecklistRepository(executor),
+  checklists: createChecklistRepository(executor, stamper),
+  checklistItems: createChecklistItemRepository(executor, stamper),
   externalEvents: createExternalEventRepository(executor),
   calendarAccounts: createCalendarAccountRepository(executor),
   syncMeta: createSyncMetaRepository(executor),

@@ -2,7 +2,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
 
 /**
  * Actions annulables (T-13, ADR 0005) : terminer, reporter, déplacer, dupliquer,
- * supprimer (+ « Un jour », C-05 « Effacer les cochés » à l'ordre 2), valider ou rouvrir une routine (R-03), archiver, restaurer ou
+ * supprimer (+ « Un jour », checklists C-01 à C-05), valider ou rouvrir une routine (R-03), archiver, restaurer ou
  * mettre en pause une routine (R-05).
  *
  * Principe :
@@ -16,7 +16,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal' | 'checklist';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -71,6 +71,8 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   routine: 'undo.routine',
   // Les commandes d'objectif portent toujours leur propre `labelKey` (goals.undo.*) ; ce libellé générique est un repli.
   goal: 'undo.goal',
+  // Les commandes de checklist portent toujours leur propre `labelKey` (checklists.undo.*) ; ce libellé générique est un repli.
+  checklist: 'undo.checklist',
 };
 
 /** Libellé du message pour une action par lot (A-05) : « 3 tâches reportées » (pluriel via `Intl.PluralRules`). */
