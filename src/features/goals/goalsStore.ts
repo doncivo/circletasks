@@ -31,6 +31,8 @@ export interface GoalsState {
   setTitle(id: GoalId, title: string): Promise<Result<Goal, GoalSaveError | 'unexpected'>>;
   setIcon(id: GoalId, icon: IconRef | null): Promise<void>;
   setSpace(id: GoalId, spaceId: SpaceId): Promise<void>;
+  /** OB-02 : épingle l'objectif en tête d'Aujourd'hui ou le retire (il reste dans l'écran Objectif). */
+  setPinned(id: GoalId, pinned: boolean): Promise<void>;
   remove(id: GoalId): Promise<boolean>;
   clearActionError(): void;
 }
@@ -116,6 +118,13 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
       async setSpace(id, spaceId) {
         await guard(async () => {
           await useCases.update(id, { spaceId });
+          await get().refresh();
+        }, undefined);
+      },
+
+      async setPinned(id, pinned) {
+        await guard(async () => {
+          await useCases.update(id, { pinned });
           await get().refresh();
         }, undefined);
       },

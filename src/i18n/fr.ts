@@ -472,6 +472,8 @@ export const fr = {
     dayNext: 'Jour suivant',
     goalCaption: 'Objectif de la semaine',
     goalProgress: '{done} sur {total}',
+    goalCard: 'Objectif de la semaine : {title}',
+    goalCardWith: 'Objectif de la semaine : {title}, {summary}',
     eventsLabel: 'Événements du jour',
     eventAllDay: 'Toute la journée',
     checklistsTitle: 'Checklists',

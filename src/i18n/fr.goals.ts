@@ -22,6 +22,12 @@ export const goalsFr = {
   loadError: 'Impossible de charger les objectifs.',
   saveError: 'Impossible d’enregistrer cet objectif.',
   titleTooLong: 'Le titre ne doit pas dépasser 200 caractères.',
+  pinned: 'Épinglé en haut de la liste',
+  achieved: 'Atteint',
+  notAchieved: 'Non atteint',
+  bannerCaption: 'OBJECTIF',
+  bannerLabel: 'Objectif de la semaine : {title}',
+  bannersLabel: 'Objectifs de la semaine',
   undo: {
     deleted: 'Objectif « {title} » supprimé',
   },

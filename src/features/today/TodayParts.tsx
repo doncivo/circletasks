@@ -9,10 +9,26 @@ import { Icon, IconView, resolveIconRefColor } from '../../ui';
  * checklists du jour. Présentation seule : les données viennent de `todaySources`.
  */
 
-export function TodayGoalCard({ entry, compact }: { entry: TodayGoalEntry; compact: boolean }) {
+/**
+ * Encadré d'un objectif épinglé (OB-02, Main.html) : bord #3F7FC4, icône cible, « OBJECTIF DE LA SEMAINE », titre, avancement « 2/5 »
+ * (sans compteur si aucune tâche n'est rattachée, « Atteint » une fois l'objectif atteint, OB-04). Toucher l'encadré ouvre l'écran Objectif.
+ */
+export function TodayGoalCard({ entry, compact, onOpen }: { entry: TodayGoalEntry; compact: boolean; onOpen: () => void }) {
   const { goal, progress } = entry;
+  const achieved = goal.status === 'achieved';
+  const summary = achieved
+    ? t('goals.achieved')
+    : progress.total > 0
+      ? t('today.goalProgress', { done: progress.done, total: progress.total })
+      : null;
   return (
-    <section className="ct-today-goal" data-compact={compact} aria-label={t('today.goalCaption')}>
+    <button
+      type="button"
+      className="ct-today-goal"
+      data-compact={compact}
+      aria-label={summary ? t('today.goalCardWith', { title: goal.title, summary }) : t('today.goalCard', { title: goal.title })}
+      onClick={onOpen}
+    >
       {goal.icon ? (
         <IconView icon={goal.icon} size={compact ? 24 : 30} color={resolveIconRefColor(goal.icon)} />
       ) : (
@@ -24,10 +40,18 @@ export function TodayGoalCard({ entry, compact }: { entry: TodayGoalEntry; compa
         </span>
         <span className="ct-today-goal__title">{goal.title}</span>
       </div>
-      <span className="ct-today-goal__progress" aria-label={t('today.goalProgress', { done: progress.done, total: progress.total })}>
-        {progress.done}/{progress.total}
-      </span>
-    </section>
+      {achieved ? (
+        <span className="ct-today-goal__achieved" aria-hidden="true">
+          {t('goals.achieved')}
+        </span>
+      ) : (
+        progress.total > 0 && (
+          <span className="ct-today-goal__progress" aria-hidden="true">
+            {progress.done}/{progress.total}
+          </span>
+        )
+      )}
+    </button>
   );
 }
 

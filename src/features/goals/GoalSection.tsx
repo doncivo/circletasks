@@ -4,7 +4,7 @@ import type { Goal, IconRef, Space } from '../../domain/model';
 import { GOAL_TITLE_MAX_LENGTH } from '../../domain/goalRules';
 import type { SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { Icon, IconChooser, IconView, resolveIconRefColor, SpaceSegmented } from '../../ui';
+import { Icon, IconChooser, IconView, resolveIconRefColor, SpaceSegmented, Switch } from '../../ui';
 import './GoalsScreen.css';
 
 /** Icône d'un objectif : celle choisie, sinon la cible bleue (#3F7FC4, PRD section 5). */
@@ -84,6 +84,8 @@ export interface GoalSectionProps {
   readonly onTitle: (title: string) => Promise<boolean>;
   readonly onIcon: (icon: IconRef | null) => void;
   readonly onSpace: (spaceId: SpaceId) => void;
+  /** OB-02 : interrupteur « Épinglé en haut de la liste ». */
+  readonly onPin: (pinned: boolean) => void;
   readonly onDelete: () => void;
   /** Contenu ajouté sous le titre (épinglage, avancement, tâches) : fourni par les stories suivantes. */
   readonly children?: ReactNode;
@@ -92,7 +94,7 @@ export interface GoalSectionProps {
 }
 
 /** Section d'un objectif (OB-01 critère 6) : icône, titre, espace, suppression, puis le contenu propre à l'objectif. */
-export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onDelete, children, actions }: GoalSectionProps) {
+export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onPin, onDelete, children, actions }: GoalSectionProps) {
   const [chooserOpen, setChooserOpen] = useState(false);
   return (
     <section className="ct-goal" aria-label={goalLabel(index)} data-goal-id={goal.id}>
@@ -114,6 +116,10 @@ export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onD
         <button type="button" className="ct-goal__deleteButton" aria-label={t('goals.deleteGoal')} onClick={onDelete}>
           <Icon icon={Trash2} size={20} />
         </button>
+      </div>
+      <div className="ct-goal__pinRow">
+        <span className="ct-goal__pinLabel">{t('goals.pinned')}</span>
+        <Switch checked={goal.pinned} onChange={onPin} label={t('goals.pinned')} />
       </div>
       {children}
       {actions && <div className="ct-goal__actions">{actions}</div>}

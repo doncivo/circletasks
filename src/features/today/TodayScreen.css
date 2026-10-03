@@ -223,6 +223,16 @@
   border-radius: var(--ct-radius-lg);
   min-width: 0;
   flex-grow: 1;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-today-goal:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
 }
 
 .ct-today-goal[data-compact='true'] {
@@ -253,6 +263,16 @@
 
 .ct-today-goal__progress {
   font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Objectif atteint (OB-04) : mention « Atteint » à la place du compteur. */
+.ct-today-goal__achieved {
+  padding: 3px 8px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-achieved-bg);
+  color: var(--ct-color-achieved-text);
+  font-size: var(--ct-font-size-xs);
   font-weight: var(--ct-font-weight-bold);
 }
 

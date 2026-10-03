@@ -128,7 +128,7 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     it('ordre vertical : objectif, événements, routines et tâches mêlées, terminées, checklists (critère 3)', async () => {
       await seedTask(h, { title: 'Envoyer la facture', time: '09:00' });
       plug({
-        goal: { goal: { id: 'g', spaceId: SPACE_PRO_ID, title: 'Finaliser le PRD', icon: null, deletedAt: null } as unknown as Goal, progress: { done: 2, total: 5 } },
+        goals: [{ goal: { id: 'g', spaceId: SPACE_PRO_ID, title: 'Finaliser le PRD', icon: null, weekStart: '2026-09-28', pinned: true, status: 'open', createdAt: '2026-09-28T08:00:00.000Z', deletedAt: null } as unknown as Goal, progress: { done: 2, total: 5 } }],
         events: [{ id: 'e', title: 'Point client', allDay: false, startTime: asLocalTime('10:00'), spaceId: null, calendarName: 'Google Agenda', icon: null }],
         routines: [
           { routine: routine('Boire de l’eau', '08:30'), done: false },

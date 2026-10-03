@@ -469,6 +469,8 @@ export const en: Messages = {
     dayNext: 'Next day',
     goalCaption: 'Goal of the week',
     goalProgress: '{done} of {total}',
+    goalCard: 'Goal of the week: {title}',
+    goalCardWith: 'Goal of the week: {title}, {summary}',
     eventsLabel: 'Events of the day',
     eventAllDay: 'All day',
     checklistsTitle: 'Checklists',

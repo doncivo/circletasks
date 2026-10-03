@@ -154,15 +154,34 @@ describe('buildTodayList (A-01)', () => {
     expect(list.isEmpty).toBe(false);
   });
 
+  const goalEntry = (id: string, overrides: Record<string, unknown> = {}) => ({
+    goal: { id, spaceId: PRO, title: `Objectif ${id}`, weekStart: '2026-09-21', pinned: true, status: 'open', createdAt: `2026-09-21T08:00:0${id}.000Z`, deletedAt: null, ...overrides } as unknown as Goal,
+    progress: { done: 2, total: 5 },
+  });
+
   it('l’objectif épinglé suit le filtre d’espace et ne rend pas la liste « non vide »', () => {
-    const goal = { goal: { id: 'g', spaceId: PRO, title: 'Objectif', deletedAt: null } as unknown as Goal, progress: { done: 2, total: 5 } };
-    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goal }).goal).toBe(goal);
-    expect(buildTodayList({ date: DAY, filter: PERSO, tasks: [], goal }).goal).toBeNull();
-    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goal }).isEmpty).toBe(true);
+    const goal = goalEntry('1');
+    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goals: [goal] }).goals).toEqual([goal]);
+    expect(buildTodayList({ date: DAY, filter: PERSO, tasks: [], goals: [goal] }).goals).toEqual([]);
+    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goals: [goal] }).isEmpty).toBe(true);
+  });
+
+  it('un encadré par objectif épinglé, dans l’ordre de création, filtré par espace (QB-12, OB-02 critère 9)', () => {
+    const pro = goalEntry('2');
+    const perso = goalEntry('1', { spaceId: PERSO });
+    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goals: [pro, perso] }).goals.map((g) => g.goal.id)).toEqual(['1', '2']);
+    expect(buildTodayList({ date: DAY, filter: PRO, tasks: [], goals: [pro, perso] }).goals.map((g) => g.goal.id)).toEqual(['2']);
+  });
+
+  it('seuls les objectifs épinglés, non clos, de la semaine du jour sont affichés (OB-02 critères 1, 3 et 7)', () => {
+    const entries = [goalEntry('1'), goalEntry('2', { pinned: false }), goalEntry('3', { status: 'closed' }), goalEntry('4', { status: 'achieved' }), goalEntry('5', { weekStart: '2026-09-14' })];
+    expect(buildTodayList({ date: DAY, filter: 'all', tasks: [], goals: entries }).goals.map((g) => g.goal.id)).toEqual(['1', '4']);
+    expect(buildTodayList({ date: asLocalDate('2026-09-27'), filter: 'all', tasks: [], goals: entries }).goals).toHaveLength(2);
+    expect(buildTodayList({ date: asLocalDate('2026-09-28'), filter: 'all', tasks: [], goals: entries }).goals).toEqual([]);
   });
 
   it('un jour sans événement, routine ni checklist : sources absentes = rien d’inventé', () => {
     const list = buildTodayList({ date: DAY, filter: 'all', tasks: [] });
-    expect(list).toMatchObject({ goal: null, events: [], rows: [], doneRows: [], checklists: [], isEmpty: true });
+    expect(list).toMatchObject({ goals: [], events: [], rows: [], doneRows: [], checklists: [], isEmpty: true });
   });
 });

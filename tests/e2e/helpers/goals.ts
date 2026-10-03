@@ -67,7 +67,7 @@ export async function attachTasks(page: Page, goalTitle: string, taskTitles: rea
 }
 
 /** Icône cible en haut d'Aujourd'hui. */
-export const goalButton = (page: Page): Locator => page.getByRole('button', { name: 'Objectif de la semaine' });
+export const goalButton = (page: Page): Locator => page.getByRole('button', { name: 'Objectif de la semaine', exact: true });
 
 /** Écran Objectif : écran plein (iPhone) ou panneau à droite (PC). */
 export const goalScreen = (page: Page): Locator => page.getByRole('heading', { level: 1, name: 'Objectif', exact: true });

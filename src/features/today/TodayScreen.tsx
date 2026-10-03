@@ -91,7 +91,7 @@ export function TodayScreen() {
         routines: projectFilter ? [] : extras.routines,
         events: projectFilter ? [] : extras.events,
         checklists: projectFilter ? [] : extras.checklists,
-        goal: projectFilter ? null : extras.goal,
+        goals: projectFilter ? [] : extras.goals,
         hideRoutines,
       }),
     [dayTasks, extras, hideRoutines, projectFilter, viewDate, viewedDate, viewFilter],
@@ -179,17 +179,14 @@ export function TodayScreen() {
         ? t('tasks.emptyToday')
         : t('today.emptyDay', { weekday: weekdayName });
 
+  // Icône cible et encadrés d'objectif (OB-01, OB-02) : ouvrent l'écran Objectif (panneau à droite sur PC, écran plein sur iPhone).
+  const openGoals = (): void => {
+    closeDetail();
+    navigate({ tab: 'tasks', screen: 'goals' });
+  };
   const pills = <SpaceFilterBar />;
   const goalButton = (
-    <button
-      type="button"
-      className="ct-today__iconButton"
-      aria-label={t('goals.open')}
-      onClick={() => {
-        closeDetail();
-        navigate({ tab: 'tasks', screen: 'goals' });
-      }}
-    >
+    <button type="button" className="ct-today__iconButton" aria-label={t('goals.open')} onClick={openGoals}>
       <Icon icon={Target} size={layout === 'pc' ? 24 : 26} />
     </button>
   );
@@ -229,9 +226,11 @@ export function TodayScreen() {
 
         {status === 'error' ? null : (
           <>
-            {(list.goal || list.events.length > 0) && (
+            {(list.goals.length > 0 || list.events.length > 0) && (
               <div className="ct-today-banners" data-layout={layout}>
-                {list.goal && <TodayGoalCard entry={list.goal} compact={compact} />}
+                {list.goals.map((entry) => (
+                  <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
+                ))}
                 <TodayEventBands events={list.events} compact={compact} />
               </div>
             )}

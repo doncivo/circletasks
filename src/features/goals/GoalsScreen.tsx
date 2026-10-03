@@ -44,6 +44,7 @@ export function GoalsScreen() {
   const setTitle = useFeatureStore(goalsStore, (s) => s.setTitle);
   const setIcon = useFeatureStore(goalsStore, (s) => s.setIcon);
   const setSpace = useFeatureStore(goalsStore, (s) => s.setSpace);
+  const setPinned = useFeatureStore(goalsStore, (s) => s.setPinned);
   const remove = useFeatureStore(goalsStore, (s) => s.remove);
 
   const today = appDay ?? todayLocal(container.clock);
@@ -107,6 +108,7 @@ export function GoalsScreen() {
               onTitle={async (title) => (await setTitle(goal.id, title)).ok}
               onIcon={(icon) => void setIcon(goal.id, icon)}
               onSpace={(spaceId) => void setSpace(goal.id, spaceId)}
+              onPin={(pinned) => void setPinned(goal.id, pinned)}
               onDelete={() => setToDelete(goal)}
               actions={goal.id === lastKey ? addButton : undefined}
             />

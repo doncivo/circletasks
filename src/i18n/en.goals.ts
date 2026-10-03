@@ -22,6 +22,12 @@ export const goalsEn: Messages['goals'] = {
   loadError: 'Unable to load goals.',
   saveError: 'Unable to save this goal.',
   titleTooLong: 'The title must not exceed 200 characters.',
+  pinned: 'Pinned at the top of the list',
+  achieved: 'Achieved',
+  notAchieved: 'Not achieved',
+  bannerCaption: 'GOAL',
+  bannerLabel: 'Goal of the week: {title}',
+  bannersLabel: 'Goals of the week',
   undo: {
     deleted: 'Goal “{title}” deleted',
   },
