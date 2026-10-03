@@ -2,7 +2,7 @@ import { Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
-import { Fab, Icon, SomedayIcon, useDelayedFlag, useLayout } from '../../ui';
+import { CompactToggle, EditModeSwitch, Fab, Icon, SomedayIcon, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -13,6 +13,8 @@ import { useDefaultReminderOffsets } from '../reminders';
 import { SomedayAddField } from './SomedayAddField';
 import { SomedayList } from './SomedayList';
 import { SomedayPanel } from './SomedayPanel';
+import { SomedaySelectionBar, SomedaySelectionDialogs } from './SomedaySelectionBar';
+import { useSomedayListState } from './useSomedayListState';
 import { useSomedayView } from './useSomedayView';
 import './SomedayScreen.css';
 
@@ -33,6 +35,7 @@ export function SomedayScreen() {
 function SomedayMobile({ onBack }: { onBack: () => void }) {
   const container = useAppContainer();
   const view = useSomedayView();
+  const state = useSomedayListState(view);
   const appDay = useAppStore((s) => s.day);
   const today = appDay ?? todayLocal(container.clock);
   const defaultOffsets = useDefaultReminderOffsets();
@@ -59,6 +62,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
           </div>
           <span className="ct-someday__subtitle">{view.subtitle}</span>
         </div>
+        <CompactToggle active={state.compact} onChange={state.setCompact} label={t('today.compactView')} />
       </div>
       <div className="ct-someday__rule" aria-hidden="true">
         <div className="ct-someday__ruleAccent" />
@@ -68,8 +72,10 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
       {view.errorKey && view.status === 'error' && <p className="ct-someday__error" role="alert">{t(view.errorKey)}</p>}
       {view.actionErrorKey && <p className="ct-someday__error" role="alert">{t(view.actionErrorKey)}</p>}
       <SomedayAddField onAdd={view.addInline} />
-      <SomedayList view={view} compact={false} openedTaskId={null} showSkeleton={showSkeleton} />
+      <SomedayList view={view} state={state} openedTaskId={null} showSkeleton={showSkeleton} />
+      <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday__bottomRow">
+        <EditModeSwitch active={state.edit.editMode} onChange={state.edit.setEditMode} label={t('today.editMode')} />
         <Fab onClick={() => setSheetOpen(true)} label={t('common.add')} />
       </div>
       {sheetOpen && (
@@ -99,6 +105,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
           }}
         />
       )}
+      <SomedaySelectionDialogs edit={state.edit} view={view} spaces={view.spaces} />
       <TaskDetail />
     </div>
   );

@@ -2,12 +2,14 @@ import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../../i18n';
-import { Icon, SomedayIcon, useDelayedFlag, useDetailSlot } from '../../ui';
+import { CompactToggle, EditModeSwitch, Icon, SomedayIcon, useDelayedFlag, useDetailSlot } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { isModalOpen } from '../app/tabShortcuts';
 import { useNavigationStore } from '../app/navigation';
 import { SomedayAddField } from './SomedayAddField';
 import { SomedayList } from './SomedayList';
+import { SomedaySelectionBar, SomedaySelectionDialogs } from './SomedaySelectionBar';
+import { useSomedayListState } from './useSomedayListState';
 import { useSomedayView } from './useSomedayView';
 import './SomedayScreen.css';
 
@@ -25,6 +27,7 @@ export interface SomedayPanelProps {
 export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
   const container = useAppContainer();
   const view = useSomedayView();
+  const state = useSomedayListState(view);
   const detail = useNavigationStore((s) => s.detail);
   const hostSlot = useDetailSlot();
   const [adding, setAdding] = useState(false);
@@ -44,6 +47,7 @@ export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
       <div className="ct-someday-panel__header">
         <SomedayIcon size={28} color="var(--ct-color-someday)" />
         <h2 className="ct-someday-panel__title">{t('someday.title')}</h2>
+        <CompactToggle active={state.compact} onChange={state.setCompact} label={t('today.compactView')} />
         <button type="button" className="ct-someday__iconButton" aria-label={t('someday.closePanel')} onClick={onClose}>
           <Icon icon={X} size={20} />
         </button>
@@ -59,15 +63,20 @@ export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
           {t(view.actionErrorKey)}
         </p>
       )}
-      <SomedayList view={view} compact={false} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} />
+      <SomedayList view={view} state={state} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} />
+      <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday-panel__spacer" />
-      {adding ? (
-        <SomedayAddField onAdd={view.addInline} autoFocus onCollapse={() => setAdding(false)} />
-      ) : (
-        <button type="button" className="ct-someday-panel__add" onClick={() => setAdding(true)}>
-          {t('someday.addButton')}
-        </button>
-      )}
+      <div className="ct-someday-panel__footer">
+        <EditModeSwitch active={state.edit.editMode} onChange={state.edit.setEditMode} label={t('today.editMode')} />
+        {adding ? (
+          <SomedayAddField onAdd={view.addInline} autoFocus onCollapse={() => setAdding(false)} className="ct-someday-panel__field" />
+        ) : (
+          <button type="button" className="ct-someday-panel__add" onClick={() => setAdding(true)}>
+            {t('someday.addButton')}
+          </button>
+        )}
+      </div>
+      <SomedaySelectionDialogs edit={state.edit} view={view} spaces={view.spaces} />
     </aside>
   );
   return slot && hostSlot ? createPortal(panel, hostSlot) : panel;

@@ -272,3 +272,40 @@
 .ct-someday-panel .ct-someday__schedule {
   padding-left: 0;
 }
+
+/* Pied du panneau PC : interrupteur du mode édition et champ « + Ajouter à « Un jour » ». */
+.ct-someday-panel__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  flex-shrink: 0;
+}
+
+.ct-someday-panel__footer .ct-someday-panel__add,
+.ct-someday-panel__footer .ct-someday-panel__field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Poignée à gauche de la carte (PC-Semaine-UnJour.html : six points #8E87A3), plus étroite que la zone tactile de l'iPhone. */
+.ct-someday-panel .ct-drag-handle {
+  min-width: 24px;
+  min-height: 36px;
+  margin-left: -6px;
+}
+
+.ct-someday-panel .ct-selection-bar {
+  flex-wrap: wrap;
+  position: relative;
+}
+
+/* Le menu « Planifier » s'ouvre au-dessus de la barre, sur toute sa largeur : le panneau de 300 px le rognerait sinon. */
+.ct-someday-panel .ct-selection-bar .ct-task-detail__postpone {
+  position: static;
+}
+
+.ct-someday-panel .ct-selection-bar .ct-action-menu--popover {
+  left: 0;
+  right: 0;
+  min-width: 0;
+}

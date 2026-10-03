@@ -18,7 +18,7 @@ export interface SomedayRowProps {
   /** Poignée de déplacement ; absente si la ligne n'est pas déplaçable. */
   readonly handle: ReactNode;
   /** Ligne déployée (SD-02) : le titre annonce `aria-expanded`. */
-  readonly expanded?: boolean;
+  readonly expanded?: boolean | undefined;
   /** iPhone : poignée à droite, en mode édition (Main-Edition.html) ; PC : à gauche de la carte, toujours visible (PC-Semaine-UnJour.html). */
   readonly handlePlacement?: 'leading' | 'trailing';
   readonly onToggleDone: () => void;

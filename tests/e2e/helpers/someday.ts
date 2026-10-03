@@ -43,6 +43,9 @@ export const somedayButton = (page: Page): Locator => page.getByRole('button', {
 /** Liste des tâches de « Un jour » (écran iPhone ou panneau PC). */
 export const somedayList = (page: Page): Locator => page.getByRole('list', { name: 'Tâches de « Un jour »' });
 
+/** Écran « Un jour » (iPhone) ou son panneau (PC) : zone où chercher les commandes qu'Aujourd'hui affiche aussi (vue compacte, mode édition). */
+export const somedayPane = (page: Page): Locator => page.locator('.ct-someday, .ct-someday-panel');
+
 /** Titres des lignes de « Un jour », dans l'ordre affiché. */
 export async function somedayTitles(page: Page): Promise<string[]> {
   return somedayList(page).locator('.ct-list-row__title').allTextContents();
