@@ -24,8 +24,8 @@ test('parcours 3 : créer 5 tâches, en déplacer 2, naviguer à la semaine suiv
   for (const { iso, title } of plan) expect(await dayTitles(page, iso)).toEqual([title]);
 
   // Deux déplacements : la tâche du lundi va au mardi, celle du vendredi revient au jeudi.
-  const first = plan[0]!;
-  const fifth = plan[3]!;
+  const [first, , , fifth] = plan;
+  if (!first || !fifth) throw new Error('jeu de données du parcours incomplet');
   await taskButton(page, first.title).focus();
   await page.keyboard.press('Alt+ArrowRight');
   await expect(dayOf(page, addIsoDays(monday, 1))).toContainText(first.title);
