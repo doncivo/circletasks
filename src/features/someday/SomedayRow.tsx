@@ -17,6 +17,8 @@ export interface SomedayRowProps {
   readonly highlighted: boolean;
   /** Poignée de déplacement ; absente si la ligne n'est pas déplaçable. */
   readonly handle: ReactNode;
+  /** Ligne déployée (SD-02) : le titre annonce `aria-expanded`. */
+  readonly expanded?: boolean;
   /** iPhone : poignée à droite, en mode édition (Main-Edition.html) ; PC : à gauche de la carte, toujours visible (PC-Semaine-UnJour.html). */
   readonly handlePlacement?: 'leading' | 'trailing';
   readonly onToggleDone: () => void;
@@ -29,7 +31,7 @@ export interface SomedayRowProps {
  * Ligne de la liste « Un jour » (UnJour.html) : case, titre, sous-ligne « espace · projet » colorée. Même `ListRow`, mêmes commandes
  * d'édition que les lignes d'Aujourd'hui (A-05 : rond de sélection, « − », poignée ; A-06 : vue compacte).
  */
-export function SomedayRow({ task, subtitle, iconSize, compact, editMode, selected, highlighted, handle, handlePlacement = 'trailing', onToggleDone, onToggleSelect, onRemove, onActivate }: SomedayRowProps) {
+export function SomedayRow({ task, subtitle, iconSize, compact, editMode, selected, highlighted, handle, handlePlacement = 'trailing', expanded, onToggleDone, onToggleSelect, onRemove, onActivate }: SomedayRowProps) {
   const color = task.icon ? resolveIconRefColor(task.icon) : undefined;
   return (
     <ListRow
@@ -57,6 +59,7 @@ export function SomedayRow({ task, subtitle, iconSize, compact, editMode, select
         ) : undefined
       }
       onActivate={onActivate}
+      {...(expanded !== undefined ? { expanded } : {})}
     />
   );
 }

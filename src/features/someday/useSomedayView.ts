@@ -1,10 +1,12 @@
 import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { Task } from '../../domain/model';
+import { todayLocal } from '../../domain/clock';
+import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { useLayout } from '../../ui';
-import { useFeatureStore } from '../app/AppContainerContext';
+import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
@@ -17,7 +19,9 @@ import { useSomedayTasks } from './useSomedayTasks';
  * sous-ligne « espace · projet », ajout sans date, case de la ligne. Aucun état de filtre ici : il est global (`useAppStore`).
  */
 export function useSomedayView() {
+  const container = useAppContainer();
   const layout = useLayout();
+  const appDay = useAppStore((s) => s.day);
   const { tasks, count } = useSomedayTasks();
   const spaces = useAppStore((s) => s.spaces);
   const projects = useAppStore((s) => s.projects);
@@ -31,6 +35,7 @@ export function useSomedayView() {
   const actionErrorKey = useFeatureStore(somedayStore, (s) => s.actionErrorKey);
   const create = useFeatureStore(somedayStore, (s) => s.create);
   const toggleDone = useFeatureStore(somedayStore, (s) => s.toggleDone);
+  const schedule = useFeatureStore(somedayStore, (s) => s.schedule);
 
   /** Champ d'ajout (SD-01 critère 3) : tâche sans date, espace selon T-01 / ES-02, projet du filtre actif. */
   const addInline = useCallback(
@@ -54,6 +59,8 @@ export function useSomedayView() {
 
   return {
     layout,
+    /** Jour courant de l'app (suit minuit) : base des boutons « Aujourd'hui » / « Demain » et du sélecteur de date. */
+    today: appDay ?? todayLocal(container.clock),
     tasks,
     count,
     spaces,
@@ -71,6 +78,7 @@ export function useSomedayView() {
     addInline,
     subtitleOf,
     toggleDone: (id: TaskId) => void toggleDone(id),
+    schedule: (ids: readonly TaskId[], target: ScheduleSomedayTarget) => schedule(ids, target),
     openTask: (id: TaskId) => openDetail({ type: 'task', id }),
   };
 }

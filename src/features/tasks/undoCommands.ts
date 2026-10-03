@@ -313,3 +313,39 @@ export function createMoveDayUndoCommand(deps: TaskUseCaseDeps, before: Task, af
     },
   };
 }
+
+/**
+ * Commande annulable d'une planification depuis « Un jour » (SD-02, S-06, T-13) : annuler = nouvelle écriture qui remet les tâches
+ * dans « Un jour » à leur position d'avant (date et heure retirées, `sortOrder`, badge et gabarit de série d'avant), tant qu'elles
+ * n'ont pas changé depuis (hlc identique à celui écrit par la planification) ; sinon 'stale', rien n'est écrit pour elles.
+ */
+export function createScheduleSomedayUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[], label: Pick<UndoableCommand, 'labelKey' | 'labelParams'>): UndoableCommand {
+  return {
+    kind: 'schedule',
+    count: entries.length,
+    ...label,
+    async undo() {
+      const restored = await deps.data.transaction(async (repos) => {
+        const written: Task[] = [];
+        for (const { before, after } of entries) {
+          const current = await repos.tasks.getById(after.id);
+          if (!current || current.hlc !== after.hlc) continue;
+          const back = await repos.tasks.update(before.id, {
+            date: before.date,
+            time: before.time,
+            someday: before.someday,
+            sortOrder: before.sortOrder,
+            carriedOver: before.carriedOver,
+            seriesTemplate: before.seriesTemplate,
+          });
+          await syncTaskReminders(repos, back);
+          written.push(back);
+        }
+        return written;
+      });
+      if (restored.length === 0) return 'stale';
+      deps.taskEntities.publish(restored);
+      return 'undone';
+    },
+  };
+}

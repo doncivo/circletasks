@@ -1,5 +1,6 @@
 import { createStore } from 'zustand';
 import type { Task } from '../../domain/model';
+import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { LocalDate, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -34,6 +35,11 @@ export interface SomedayState {
   create(input: SomedayNewTask): Promise<Result<Task, SomedayCreateError>>;
   /** SD-01 critère 8 : termine ou rouvre une tâche ; terminée, elle quitte la liste et le compteur baisse. Ne rejette jamais. */
   toggleDone(id: TaskId): Promise<void>;
+  /**
+   * SD-02, S-06 : planifie des tâches (« Aujourd'hui », « Demain » ou une date avec heure facultative) ; elles quittent la liste, le badge
+   * baisse, un message « Annuler » de 5 s est posé (une seule annulation pour tout le lot). Ne rejette jamais.
+   */
+  schedule(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<void>;
 }
 
 /** Tâche à créer depuis « Un jour » : champ d'ajout (sans date) ou feuille « Nouvelle tâche » (`input` complet). */
@@ -85,6 +91,15 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
         set({ actionErrorKey: null });
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+      }
+    },
+
+    async schedule(ids, target) {
+      try {
+        await useCases.scheduleSomeday(ids, target);
+        set({ actionErrorKey: null });
+      } catch {
+        set({ actionErrorKey: 'someday.planError' });
       }
     },
   }));

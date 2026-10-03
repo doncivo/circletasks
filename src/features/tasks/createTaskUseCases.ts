@@ -2,10 +2,10 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { duplicateTask } from '../../domain/taskDuplicate';
-import { somedayHeadOrder } from '../../domain/someday';
+import { resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, somedayHeadOrder } from '../../domain/someday';
 import { buildReminders, canHaveReminders, sortReminderOffsets } from '../../domain/reminders';
 import { syncTaskReminders } from './reminderSync';
-import { moveTaskToDate } from '../../domain/taskMove';
+import { lastSortOrderOf, moveTaskToDate } from '../../domain/taskMove';
 import { changesPlacement, resolveMoveTarget } from '../../domain/spaceMove';
 import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
@@ -23,6 +23,7 @@ import {
   createDeleteUndoCommand,
   createDuplicateUndoCommand,
   createMoveDayUndoCommand,
+  createScheduleSomedayUndoCommand,
   createMoveUndoCommand,
   createPostponeUndoCommand,
   createRemoveUndo,
@@ -282,8 +283,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         const current = await repos.tasks.getById(id);
         if (!current) throw new RepositoryError('not-found', 'task', id);
         const siblings = await repos.tasks.listForDay(date, 'all');
-        const last = siblings.reduce<number | null>((max, other) => (other.id === id || (max !== null && other.sortOrder <= max) ? max : other.sortOrder), null);
-        const moved = moveTaskToDate(current, date, last);
+        const moved = moveTaskToDate(current, date, lastSortOrderOf(siblings, id));
         if (!moved.ok) {
           if (moved.error === 'same-day') return { before: current, after: current };
           throw new RangeError('Date de déplacement invalide');
@@ -346,6 +346,44 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(
         createPostponeUndoCommand(deps, entries, entries.length === 1 && first ? { labelParams: { title: first.before.title } } : {}, 'someday'),
       );
+      return tasks;
+    },
+    async scheduleSomeday(ids, target): Promise<Task[]> {
+      // SD-02, S-06 : règle `scheduleSomeday` du domaine ; chaque tâche prend la fin de l'ordre manuel du jour d'arrivée (relu à chaque
+      // tâche : plusieurs tâches planifiées d'un coup gardent leur ordre relatif). Annuler les remet toutes dans « Un jour », à leur place.
+      const today = todayLocal(deps.clock);
+      const { date, time } = resolveScheduleTarget(today, target);
+      const entries = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before) continue;
+          const siblings = await repos.tasks.listForDay(date, 'all');
+          const plan = scheduleSomeday(before, date, time, lastSortOrderOf(siblings, id));
+          if (!plan.ok) {
+            if (plan.error === 'not-someday') continue;
+            throw new RangeError('Date de planification invalide');
+          }
+          const after = await repos.tasks.update(id, plan.value);
+          await syncTaskReminders(repos, after);
+          done.push({ before, after });
+        }
+        return done;
+      });
+      if (entries.length === 0) return [];
+      const tasks = entries.map((entry) => entry.after);
+      deps.taskEntities.publish(tasks);
+      const first = entries[0];
+      const kind = scheduleLabelKind(today, date);
+      const label: Pick<UndoableCommand, 'labelKey' | 'labelParams'> =
+        entries.length > 1 || !first
+          ? { labelKey: 'undo.manySchedule', labelParams: { count: entries.length } }
+          : kind === 'today'
+            ? { labelKey: 'undo.scheduleToday', labelParams: { title: first.before.title } }
+            : kind === 'tomorrow'
+              ? { labelKey: 'undo.scheduleTomorrow', labelParams: { title: first.before.title } }
+              : { labelKey: 'undo.scheduleDate', labelParams: { title: first.before.title, date: formatDayLabel(date) } };
+      deps.undo.push(createScheduleSomedayUndoCommand(deps, entries, label));
       return tasks;
     },
     async duplicate(id: TaskId, date: LocalDate | null): Promise<Task> {

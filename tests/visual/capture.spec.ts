@@ -7,6 +7,7 @@ import { createTask, openToday } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
+import { insertSomeday, openSomeday } from '../e2e/helpers/someday';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
 
 /**
@@ -74,6 +75,26 @@ async function seedGoalWithTasks(page: Page, days: 'objectif' | 'other-days'): P
     { title: GOAL_TASKS[4] as string, date: '2026-09-25' },
   ]);
   await attachTasks(page, GOAL_TITLE, GOAL_TASKS);
+}
+
+/** Les six tâches de UnJour.html (iPhone) et leurs projets ; la première est dépliée dans la maquette. */
+async function prepareSomeday(page: Page, expandFirst: boolean, testInfo: { project: { name: string } }): Promise<void> {
+  await openSpacesScreen(page);
+  await addProject(page, 'Pro', 'Mission client');
+  await addProject(page, 'Perso', 'Rappels Apple');
+  await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+  await insertSomeday(page, [
+    { title: 'Renouveler le passeport', space: 'perso' },
+    { title: 'Préparer la présentation Q4', project: 'Mission client' },
+    { title: 'Lire le rapport annuel' },
+    { title: 'Trier les photos de vacances', space: 'perso' },
+    { title: "Réparer l'étagère", space: 'perso' },
+    { title: 'Changer de forfait mobile', space: 'perso', project: 'Rappels Apple' },
+  ]);
+  await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
+  await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+  await openSomeday(page, testInfo);
+  if (expandFirst) await page.getByRole('button', { name: 'Renouveler le passeport', exact: true }).click();
 }
 
 async function captureApp(page: Page, name: string): Promise<void> {
@@ -161,7 +182,7 @@ interface Screen {
   viewport: { width: number; height: number };
   date: Date;
   dark?: boolean;
-  prepare?: (page: Page) => Promise<void>;
+  prepare?: (page: Page, testInfo: { project: { name: string } }) => Promise<void>;
   data?: boolean;
 }
 
@@ -201,6 +222,14 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('heading', { level: 1, name: 'Objectif', exact: true })).toBeVisible();
       await expect(page.getByText('2 faites sur 5')).toBeVisible();
     },
+  },
+  {
+    // Écran « Un jour » (UnJour.html) : six tâches sans date, la première dépliée avec « Aujourd'hui », « Demain », « Choisir une date ».
+    name: 'UnJour',
+    mockup: 'UnJour.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: (page, testInfo) => prepareSomeday(page, true, testInfo),
   },
   { name: 'Main-Vide', mockup: 'Main-Vide.html', viewport: PHONE, date: SUNDAY },
   { name: 'Main-Sombre', mockup: 'Main-Sombre.html', viewport: PHONE, date: WEDNESDAY, dark: true, data: true },
@@ -359,7 +388,7 @@ for (const screen of SCREENS) {
     await page.clock.setFixedTime(screen.date);
     await openToday(page);
     if (screen.data) await seed(page, { project: { name: phone ? 'iphone' : 'pc' } });
-    await screen.prepare?.(page);
+    await screen.prepare?.(page, { project: { name: phone ? 'iphone' : 'pc' } });
     await captureApp(page, screen.name);
     await captureMockup(browser, screen.viewport, screen.mockup, screen.name, screen.dark);
     await context.close();

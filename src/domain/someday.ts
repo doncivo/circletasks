@@ -1,6 +1,7 @@
 import type { Task } from './model';
 import { matchesItemFilter, type ItemFilter } from './itemFilter';
 import { moveTaskToDate } from './taskMove';
+import { addDays } from './localDate';
 import { isLocalDate, isLocalTime, type LocalDate, type LocalTime, type Result } from './types';
 
 /**
@@ -63,4 +64,20 @@ export function scheduleSomeday(
   const moved = moveTaskToDate({ date: null, someday: task.someday, sortOrder: task.sortOrder }, date, lastSortOrder);
   if (!moved.ok) return { ok: false, error: 'invalid-date' };
   return { ok: true, value: { ...moved.value, time } };
+}
+
+/** Choix de planification d'une tâche « Un jour » (SD-02) : boutons « Aujourd'hui » et « Demain », ou date (heure facultative) choisie. */
+export type ScheduleSomedayTarget = 'today' | 'tomorrow' | { readonly date: LocalDate; readonly time?: LocalTime | null };
+
+/** Date et heure visées, calculées depuis aujourd'hui (comme le report, Q4) ; « Aujourd'hui » et « Demain » n'ont pas d'heure. */
+export function resolveScheduleTarget(today: LocalDate, target: ScheduleSomedayTarget): { readonly date: LocalDate; readonly time: LocalTime | null } {
+  if (target === 'today') return { date: today, time: null };
+  if (target === 'tomorrow') return { date: addDays(today, 1), time: null };
+  return { date: target.date, time: target.time ?? null };
+}
+
+/** Libellé du message « Annuler » : « pour aujourd'hui », « pour demain », ou « au jeu. 24 sept. » pour toute autre date. */
+export function scheduleLabelKind(today: LocalDate, date: LocalDate): 'today' | 'tomorrow' | 'date' {
+  if (date === today) return 'today';
+  return date === addDays(today, 1) ? 'tomorrow' : 'date';
 }

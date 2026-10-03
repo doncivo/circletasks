@@ -1,4 +1,5 @@
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
+import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { SortOrderEntry } from '../../db/repositories';
@@ -48,7 +49,7 @@ export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date
 export type SetRemindersError = 'not-found' | 'needs-time';
 
 /** Cible d'un report (T-05, SD-02) : définie dans src/domain/taskPostpone. */
-export type { PostponeTarget };
+export type { PostponeTarget, ScheduleSomedayTarget };
 
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
@@ -90,6 +91,12 @@ export interface TaskUseCases {
   moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null): Promise<Task[]>;
   /** SD-03 ; annulable. */
   moveToSomeday(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * SD-02, S-06 : planifie des tâches « Un jour » (aujourd'hui, demain ou une date avec heure facultative) ; `someday` levé, ordre en fin
+   * de jour, rappels recalculés s'il y a une heure ; annulable en une fois (elles retrouvent leur position dans « Un jour »). Les tâches
+   * qui ne sont pas dans « Un jour » sont ignorées ; rend les tâches réellement planifiées. Lève `RangeError` pour une date ou heure invalide.
+   */
+  scheduleSomeday(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<Task[]>;
   /** T-12 : copie titre, note, icône, espace, projet, rappels ; annulable. */
   duplicate(id: TaskId, date: LocalDate | null): Promise<Task>;
   /**
