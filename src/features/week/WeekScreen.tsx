@@ -14,9 +14,10 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { isModalOpen } from '../app/tabShortcuts';
 import { WeekGoalBanners } from '../goals/WeekGoalBanners';
+import { SomedayButton, SomedayPanel } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
-import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
+import { TaskCreateSheet, scheduleOf } from '../tasks/TaskCreateSheet';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
 import { WeekDayView } from './WeekDayView';
@@ -66,6 +67,10 @@ export function WeekScreen() {
   const today: LocalDate = appDay ?? todayLocal(container.clock);
   // Semaine affichée : celle de la route, ou la semaine courante (lundi premier jour).
   const weekStart: LocalDate = route.tab === 'week' && route.weekStart ? route.weekStart : weekStartOf(today);
+
+  // S-06 : panneau « Un jour » à droite de la grille (PC) ; l'état ouvert / fermé vit dans la route, donc conservé pendant la session.
+  const somedayOpen = layout === 'pc' && route.tab === 'week' && route.somedayPanel;
+  const toggleSomeday = (): void => navigate({ tab: 'week', weekStart: route.tab === 'week' ? route.weekStart : null, somedayPanel: !somedayOpen });
 
   const currentWeekStart = weekStartOf(today);
   const isCurrentWeek = weekStart === currentWeekStart;
@@ -126,7 +131,7 @@ export function WeekScreen() {
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
   // Déplacements (S-02) : glisser, clavier, question de portée des tâches récurrentes.
-  const moves = useWeekMoves(days, weekStart, spaces, spaceFilter === 'all');
+  const moves = useWeekMoves(days, weekStart, spaces, spaceFilter === 'all', somedayOpen);
 
   // Balayage horizontal (iPhone) : gauche = semaine suivante, droite = précédente ; abandonné si une carte est tenue pour un glisser (S-02).
   const swipe = useSwipe({ onSwipe: (way) => shiftWeek(way === 'left' ? 1 : -1), disabled: moves.dragging || layout !== 'mobile' });
@@ -148,7 +153,7 @@ export function WeekScreen() {
   const pills = <SpaceFilterBar />;
   const openedTaskId = layout === 'pc' && detail?.type === 'task' ? detail.id : null;
 
-  return (
+  const content = (
     <div className="ct-week" data-layout={layout} data-sorting={moves.dragging ? 'true' : undefined}>
       <WeekHeader
         weekStart={weekStart}
@@ -158,6 +163,8 @@ export function WeekScreen() {
         onPrevious={() => shiftWeek(-1)}
         onNext={() => shiftWeek(1)}
         onCurrent={() => goToWeek(currentWeekStart, weekStart < currentWeekStart ? 'next' : 'previous')}
+        shortRange={somedayOpen}
+        {...(layout === 'pc' ? { somedayToggle: <SomedayButton onToggle={toggleSomeday} pressed={somedayOpen} /> } : {})}
       />
 
       {actionErrorKey && <p className="ct-week__error" role="alert">{t(actionErrorKey)}</p>}
@@ -218,7 +225,7 @@ export function WeekScreen() {
       </div>
 
       {sheetOpen && (
-        <TodayCreateSheet
+        <TaskCreateSheet
           viewedDate={today}
           today={today}
           spaces={spaces}
@@ -250,6 +257,14 @@ export function WeekScreen() {
       {moves.dialogs}
       <TaskDetail />
       <ExternalEventDetail />
+    </div>
+  );
+  if (layout !== 'pc') return content;
+  // PC : la grille se réduit pour laisser place au panneau « Un jour » (S-06), sans masquer de jour.
+  return (
+    <div className="ct-week-shell">
+      {content}
+      {somedayOpen && <SomedayPanel onClose={toggleSomeday} zone={moves.somedayZone} />}
     </div>
   );
 }

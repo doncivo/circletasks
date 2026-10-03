@@ -36,7 +36,8 @@
   width: 100%;
 }
 
-.ct-button:disabled {
+.ct-button:disabled,
+.ct-button[aria-disabled='true'] {
   opacity: 0.5;
   cursor: not-allowed;
 }

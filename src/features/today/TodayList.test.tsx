@@ -220,12 +220,12 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
     });
   });
 
-  it('état vide : phrase du jour et aide ; pas de bouton « Un jour » tant que SD-01 n’existe pas (critère 7)', async () => {
+  it('état vide : phrase du jour et aide ; l’icône « Un jour » (SD-01) est là, sans badge à zéro (critère 7)', async () => {
     mockViewport(440);
     renderToday(h.container);
     expect(await screen.findByText('Rien de prévu aujourd’hui.')).toBeInTheDocument();
     expect(screen.getByText(/Ajoutez une tâche ci-dessous/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Un jour/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Un jour' })).toBeInTheDocument();
   });
 
   describe('flèches de jour sur PC (Q10, critère 10)', () => {

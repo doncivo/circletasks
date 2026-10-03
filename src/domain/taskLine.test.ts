@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { taskLineSegments } from './taskLine';
-import { asEntityId, asLocalTime, type SpaceId } from './types';
+import { asEntityId, asLocalTime, type ProjectId, type SpaceId } from './types';
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
 const task = (over: { time?: string | null; carriedOver?: boolean } = {}) => ({
@@ -29,5 +29,22 @@ describe('taskLineSegments (A-01 critère 5, note de revue T-02)', () => {
 
   it('ordre heure, reportée, espace, répétition', () => {
     expect(kinds(taskLineSegments(task({ time: '09:00', carriedOver: true }), { showSpace: true, hasRule: true }))).toEqual(['time', 'carried', 'space', 'repeat']);
+  });
+});
+
+describe('taskLineSegments : projet dans « Un jour » (SD-01 critère 8)', () => {
+  const PROJECT = asEntityId<ProjectId>('20000000-0000-4000-8000-000000000001');
+
+  it('le projet suit l’espace : « Pro · Mission client »', () => {
+    expect(taskLineSegments({ ...task(), projectId: PROJECT }, { showSpace: true, hasRule: false, showProject: true })).toEqual([
+      { kind: 'space', spaceId: PRO },
+      { kind: 'project', projectId: PROJECT },
+    ]);
+  });
+
+  it('sous un filtre d’espace, le projet reste affiché ; sans l’option ou sans projet, rien', () => {
+    expect(kinds(taskLineSegments({ ...task(), projectId: PROJECT }, { showSpace: false, hasRule: false, showProject: true }))).toEqual(['project']);
+    expect(kinds(taskLineSegments({ ...task(), projectId: PROJECT }, { showSpace: false, hasRule: false }))).toEqual([]);
+    expect(kinds(taskLineSegments({ ...task(), projectId: null }, { showSpace: false, hasRule: false, showProject: true }))).toEqual([]);
   });
 });

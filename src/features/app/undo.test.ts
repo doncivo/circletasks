@@ -103,7 +103,7 @@ describe('undoMessage au pluriel (T-13, critère 6)', () => {
     expect(undoMessage({ ...command(), kind: 'postpone', count: 3 })).toBe('3 tâches reportées');
     expect(undoMessage({ ...command(), kind: 'complete', count: 2 })).toBe('2 tâches terminées');
     expect(undoMessage({ ...command(), kind: 'move', count: 4 })).toBe('4 tâches déplacées');
-    expect(undoMessage({ ...command(), kind: 'someday', count: 3 })).toBe('3 tâches rangées dans « Un jour »');
+    expect(undoMessage({ ...command(), kind: 'someday', count: 3 })).toBe('3 tâches mises dans « Un jour »');
     expect(undoMessage({ ...command(), kind: 'postpone', count: 1 })).toBe('Tâche reportée');
   });
 

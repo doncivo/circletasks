@@ -29,6 +29,8 @@ export interface ListRowProps {
   trailing?: ReactNode;
   /** Ouvre le détail (A-08) ; sans cette prop, le titre n'est pas interactif. */
   onActivate?: () => void;
+  /** Ligne qui se déploie au clic (« Un jour », SD-02) : annoncée `aria-expanded` par le bouton du titre. */
+  expanded?: boolean;
   className?: string;
 }
 
@@ -46,7 +48,7 @@ export interface ListRowProps {
  *   onActivate={() => openDetail(task.id)}
  * />
  */
-export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, inlineSubtitle, onActivate, className }: ListRowProps) {
+export function ListRow({ title, subtitle, icon, trailing, leading, done, selected, compact, time, dotColor, inlineSubtitle, onActivate, expanded, className }: ListRowProps) {
   return (
     <div
       className={['ct-list-row', className].filter(Boolean).join(' ')}
@@ -58,7 +60,7 @@ export function ListRow({ title, subtitle, icon, trailing, leading, done, select
       {compact && <span className="ct-list-row__dot" style={{ background: dotColor ?? 'var(--ct-color-text-secondary)' }} aria-hidden="true" />}
       <div className="ct-list-row__body">
         {onActivate ? (
-          <button type="button" onClick={onActivate} className="ct-list-row__title" data-done={done ?? false}>
+          <button type="button" onClick={onActivate} className="ct-list-row__title" data-done={done ?? false} {...(expanded !== undefined ? { 'aria-expanded': expanded } : {})}>
             {title}
           </button>
         ) : (

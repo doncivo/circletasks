@@ -24,6 +24,8 @@ export interface DateWheelsProps {
   onChange: (choice: DateChoice) => void;
   /** Propose la puce « Un jour » (défaut : oui). */
   allowSomeday?: boolean;
+  /** « Un jour » indisponible (tâche récurrente, QB-11) : puce grisée (`aria-disabled`), sans effet, avec cette aide. */
+  somedayDisabledHint?: string;
   /** Montre les roues heures et minutes (défaut : oui) ; sans elles, seule la date est choisie (report). */
   showTime?: boolean;
   className?: string;
@@ -43,7 +45,7 @@ const plural = (n: number): Intl.LDMLPluralRule => new Intl.PluralRules(getLocal
  * @example
  * <DateWheels value={choice} today={today} onChange={setChoice} />
  */
-export function DateWheels({ value, today, onChange, allowSomeday = true, showTime = true, className }: DateWheelsProps) {
+export function DateWheels({ value, today, onChange, allowSomeday = true, somedayDisabledHint, showTime = true, className }: DateWheelsProps) {
   const days = useMemo(() => wheelDays(today), [today]);
   const dayItems = useMemo<WheelItem[]>(
     () => days.map((day) => ({ label: day === today ? t('datePicker.today') : formatWheelDay(day) })),
@@ -93,7 +95,15 @@ export function DateWheels({ value, today, onChange, allowSomeday = true, showTi
             {t('datePicker.tomorrow')}
           </button>
           {allowSomeday && (
-            <button type="button" className="ct-date-wheels__chip" aria-pressed={someday} onClick={setSomeday}>
+            <button
+              type="button"
+              className="ct-date-wheels__chip"
+              aria-pressed={someday}
+              {...(somedayDisabledHint ? { 'aria-disabled': true, 'aria-describedby': 'ct-date-wheels-somedayHint' } : {})}
+              onClick={() => {
+                if (!somedayDisabledHint) setSomeday();
+              }}
+            >
               {t('datePicker.someday')}
             </button>
           )}
@@ -139,6 +149,11 @@ export function DateWheels({ value, today, onChange, allowSomeday = true, showTi
           </>
         )}
       </div>
+      {allowSomeday && somedayDisabledHint && (
+        <p id="ct-date-wheels-somedayHint" className="ct-date-wheels__hint">
+          {somedayDisabledHint}
+        </p>
+      )}
       {someday && <p className="ct-date-wheels__hint">{t('datePicker.somedayHint')}</p>}
     </div>
   );

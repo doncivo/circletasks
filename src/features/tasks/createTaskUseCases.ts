@@ -2,16 +2,17 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { duplicateTask } from '../../domain/taskDuplicate';
+import { resolveScheduleTarget, scheduleLabelKind, scheduleSomeday, sendToSomeday, somedayHeadOrder } from '../../domain/someday';
 import { buildReminders, canHaveReminders, sortReminderOffsets } from '../../domain/reminders';
 import { syncTaskReminders } from './reminderSync';
-import { moveTaskToDate } from '../../domain/taskMove';
+import { lastSortOrderOf, moveTaskToDate } from '../../domain/taskMove';
 import { changesPlacement, resolveMoveTarget } from '../../domain/spaceMove';
 import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
-import { canMoveToSomeday, ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
+import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
 import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { RepositoryError } from '../../db/repositories';
@@ -22,6 +23,7 @@ import {
   createDeleteUndoCommand,
   createDuplicateUndoCommand,
   createMoveDayUndoCommand,
+  createScheduleSomedayUndoCommand,
   createMoveUndoCommand,
   createPostponeUndoCommand,
   createRemoveUndo,
@@ -109,6 +111,11 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       const project = input.projectId ? await deps.data.repos.projects.getById(input.projectId) : null;
       const projectId = project && project.spaceId === input.spaceId ? project.id : null;
 
+      // SD-04 critère 2 : une nouvelle tâche « Un jour » entre en tête de la liste ; les autres tâches s'ajoutent à la fin.
+      const sortOrder = someday
+        ? somedayHeadOrder((await deps.data.repos.tasks.listSomeday('all')).map((other) => other.sortOrder), deps.clock.nowMs())
+        : deps.clock.nowMs();
+
       const newTask: NewTask = {
         id: newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
@@ -121,7 +128,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         doneAt: null,
         // Ordre manuel réel posé par A-02 ; une création s'ajoute à la fin par
         // horodatage croissant, en attendant l'algorithme d'insertion par milieu.
-        sortOrder: deps.clock.nowMs(),
+        sortOrder,
         carriedOver: false,
         recurrenceId: null,
         seriesIndex: null,
@@ -276,8 +283,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         const current = await repos.tasks.getById(id);
         if (!current) throw new RepositoryError('not-found', 'task', id);
         const siblings = await repos.tasks.listForDay(date, 'all');
-        const last = siblings.reduce<number | null>((max, other) => (other.id === id || (max !== null && other.sortOrder <= max) ? max : other.sortOrder), null);
-        const moved = moveTaskToDate(current, date, last);
+        const moved = moveTaskToDate(current, date, lastSortOrderOf(siblings, id));
         if (!moved.ok) {
           if (moved.error === 'same-day') return { before: current, after: current };
           throw new RangeError('Date de déplacement invalide');
@@ -322,16 +328,20 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       return tasks;
     },
     async moveToSomeday(ids): Promise<Task[]> {
-      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées ; règle `canMoveToSomeday` (domaine).
+      // Bouton « Un jour » de la fiche (A-08), SD-03 : date et heure retirées, badge « reportée » effacé, tâche en tête de la liste ;
+      // règle `sendToSomeday` du domaine (terminée, déjà rangée et récurrente refusées). Rappels conservés, inactifs sans heure (QB-10).
+      // Un lot est traité en sens inverse pour que les tâches gardent leur ordre relatif en tête de liste.
       const entries = await deps.data.transaction(async (repos) => {
         const done: PostponedEntry[] = [];
-        for (const id of ids) {
+        for (const id of [...ids].reverse()) {
           const before = await repos.tasks.getById(id);
-          if (!before || !canMoveToSomeday(before)) continue;
-          const [after] = await repos.tasks.moveToSomeday([id]);
-          if (after) done.push({ before, after });
+          if (!before) continue;
+          const orders = (await repos.tasks.listSomeday('all')).map((other) => other.sortOrder);
+          const plan = sendToSomeday(before, orders, deps.clock.nowMs());
+          if (!plan.ok) continue;
+          done.push({ before, after: await repos.tasks.update(id, plan.value) });
         }
-        return done;
+        return done.reverse();
       });
       if (entries.length === 0) return [];
       const tasks = entries.map((entry) => entry.after);
@@ -340,6 +350,44 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       deps.undo.push(
         createPostponeUndoCommand(deps, entries, entries.length === 1 && first ? { labelParams: { title: first.before.title } } : {}, 'someday'),
       );
+      return tasks;
+    },
+    async scheduleSomeday(ids, target): Promise<Task[]> {
+      // SD-02, S-06 : règle `scheduleSomeday` du domaine ; chaque tâche prend la fin de l'ordre manuel du jour d'arrivée (relu à chaque
+      // tâche : plusieurs tâches planifiées d'un coup gardent leur ordre relatif). Annuler les remet toutes dans « Un jour », à leur place.
+      const today = todayLocal(deps.clock);
+      const { date, time } = resolveScheduleTarget(today, target);
+      const entries = await deps.data.transaction(async (repos) => {
+        const done: PostponedEntry[] = [];
+        for (const id of ids) {
+          const before = await repos.tasks.getById(id);
+          if (!before) continue;
+          const siblings = await repos.tasks.listForDay(date, 'all');
+          const plan = scheduleSomeday(before, date, time, lastSortOrderOf(siblings, id));
+          if (!plan.ok) {
+            if (plan.error === 'not-someday') continue;
+            throw new RangeError('Date de planification invalide');
+          }
+          const after = await repos.tasks.update(id, plan.value);
+          await syncTaskReminders(repos, after);
+          done.push({ before, after });
+        }
+        return done;
+      });
+      if (entries.length === 0) return [];
+      const tasks = entries.map((entry) => entry.after);
+      deps.taskEntities.publish(tasks);
+      const first = entries[0];
+      const kind = scheduleLabelKind(today, date);
+      const label: Pick<UndoableCommand, 'labelKey' | 'labelParams'> =
+        entries.length > 1 || !first
+          ? { labelKey: 'undo.manySchedule', labelParams: { count: entries.length } }
+          : kind === 'today'
+            ? { labelKey: 'undo.scheduleToday', labelParams: { title: first.before.title } }
+            : kind === 'tomorrow'
+              ? { labelKey: 'undo.scheduleTomorrow', labelParams: { title: first.before.title } }
+              : { labelKey: 'undo.scheduleDate', labelParams: { title: first.before.title, date: formatDayLabel(date) } };
+      deps.undo.push(createScheduleSomedayUndoCommand(deps, entries, label));
       return tasks;
     },
     async duplicate(id: TaskId, date: LocalDate | null): Promise<Task> {

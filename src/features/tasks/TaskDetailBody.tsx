@@ -1,6 +1,6 @@
 import { Check, Pencil, X } from 'lucide-react';
 import { useId, useState, type KeyboardEvent } from 'react';
-import { canMoveToSomeday } from '../../domain/taskSchedule';
+import { canMoveToSomeday } from '../../domain/someday';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import type { LocalDate } from '../../domain/types';
@@ -55,6 +55,7 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const title = edits.title;
   const hintId = useId();
+  const somedayHintId = useId();
 
   const onTitleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
     if (event.key === 'Enter' || event.key === 'F2') {
@@ -196,6 +197,17 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
           <Button variant="secondary" onClick={() => void api.moveToSomeday()} className="ct-task-detail__actionButton">
             {t('detail.somedayAction')}
           </Button>
+        )}
+        {/* Tâche récurrente (QB-11) : « Un jour » grisé, avec l'aide « Arrêtez d'abord la répétition » ; rien ne change au clic. */}
+        {task.status === 'todo' && !task.someday && task.recurrenceId !== null && (
+          <>
+            <Button variant="secondary" ariaDisabled describedBy={somedayHintId} className="ct-task-detail__actionButton">
+              {t('detail.somedayAction')}
+            </Button>
+            <span id={somedayHintId} className="ct-visually-hidden">
+              {t('someday.recurrentHint')}
+            </span>
+          </>
         )}
         {/* « Dupliquer » (T-12 ; absent de PC-Aujourdhui.html, exigé par A-08) : possible aussi sur une tâche terminée. */}
         <Button variant="secondary" ariaLabel={t('tasks.duplicateLabel')} onClick={() => setDuplicateOpen(true)} className="ct-task-detail__actionButton">

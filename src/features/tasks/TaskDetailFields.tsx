@@ -96,6 +96,7 @@ function DateValue({ task, today, onPatch, cancelInlineRef }: InlineProps & { to
       today={today}
       autoFocus
       commitOnPick
+      {...(task.recurrenceId !== null ? { somedayDisabledHint: t('someday.recurrentHint') } : {})}
       label={t('detail.dateFieldLabel')}
       onCancel={() => setEditing(false)}
       onCommit={(next) => {

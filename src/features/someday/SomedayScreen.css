@@ -1,0 +1,356 @@
+/* Écran « Un jour » (M18) : iPhone UnJour.html, panneau PC PC-Semaine-UnJour.html. */
+.ct-someday {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-someday__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-someday__iconButton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-someday__iconButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-someday__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-someday__heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ct-someday__titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-someday__titleIcon {
+  display: flex;
+}
+
+.ct-someday__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-someday__subtitle {
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-someday__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-someday__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-someday__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-someday__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Champ d'ajout (UnJour.html : 52 px, coins de 14 px, fond #F3F1F6). */
+.ct-someday__addForm {
+  display: flex;
+}
+
+.ct-someday__addForm .ct-text-field {
+  flex-grow: 1;
+}
+
+.ct-someday__addForm .ct-text-field__control {
+  min-height: 52px;
+}
+
+.ct-someday__empty {
+  margin: 0;
+  padding: var(--ct-space-4) var(--ct-space-1);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-someday__list {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Interrupteur à gauche, bouton « + » à droite, collés en bas de l'écran. */
+.ct-someday__bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+/* Panneau PC (PC-Semaine-UnJour.html) : 300 px, fond #FAF9FC, filet à gauche, cartes blanches de 12 px de rayon. */
+.ct-someday-panel {
+  width: 300px;
+  flex-shrink: 0;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 58px 20px 28px;
+  background: var(--ct-color-surface-raised);
+  border-left: 1px solid var(--ct-color-border);
+  overflow-y: auto;
+}
+
+.ct-someday-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-someday-panel__header svg {
+  flex-shrink: 0;
+}
+
+.ct-someday-panel__title {
+  margin: 0;
+  flex-grow: 1;
+  font-family: var(--ct-font-title);
+  font-size: 1.875rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-someday-panel__help {
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-someday-panel__spacer {
+  flex-grow: 1;
+}
+
+.ct-someday-panel__add {
+  height: 40px;
+  flex-shrink: 0;
+  border: 1.5px dashed var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  font: 600 var(--ct-font-size-sm) var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-someday-panel__add:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-someday-panel .ct-someday__list {
+  gap: 10px;
+  overflow-y: visible;
+}
+
+.ct-someday-panel .ct-someday__item {
+  padding: 4px 12px;
+  border: 1px solid var(--ct-color-border);
+  border-radius: 12px;
+  background: var(--ct-color-surface);
+}
+
+.ct-someday-panel .ct-list-row {
+  border-bottom: 0;
+  padding: 8px 0;
+  gap: 8px;
+}
+
+.ct-someday-panel .ct-list-row__title {
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-someday-panel .ct-list-row__subtitle {
+  font-size: var(--ct-font-size-xs);
+}
+
+/* Ligne déployée (SD-02, UnJour.html : fond #F3F1F6, coins de 14 px, boutons de 36 px alignés sous le titre). */
+.ct-someday__item[data-expanded='true'] {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 4px 0;
+  padding: 12px;
+  background: var(--ct-color-surface-input);
+  border-radius: var(--ct-radius-lg);
+}
+
+.ct-someday__item[data-expanded='true'] .ct-list-row {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.ct-someday__schedule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+  padding-left: 42px;
+}
+
+.ct-someday__action {
+  position: relative;
+  height: 36px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 18px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font: 600 var(--ct-font-size-sm) var(--ct-font-text);
+  cursor: pointer;
+}
+
+/* Zone tactile de 44 px (PRD 5) sous le bouton de 36 px de la maquette. */
+.ct-someday__action::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+.ct-someday__action:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-someday__action--quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-someday-panel .ct-someday__item[data-expanded='true'] {
+  margin: 0;
+  background: var(--ct-color-surface);
+  border: 1px solid var(--ct-color-someday);
+}
+
+.ct-someday-panel .ct-someday__schedule {
+  padding-left: 0;
+}
+
+/* Pied du panneau PC : interrupteur du mode édition et champ « + Ajouter à « Un jour » ». */
+.ct-someday-panel__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  flex-shrink: 0;
+}
+
+.ct-someday-panel__footer .ct-someday-panel__add,
+.ct-someday-panel__footer .ct-someday-panel__field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Poignée à gauche de la carte (PC-Semaine-UnJour.html : six points #8E87A3), plus étroite que la zone tactile de l'iPhone. */
+.ct-someday-panel .ct-drag-handle {
+  min-width: 24px;
+  min-height: 36px;
+  margin-left: -6px;
+}
+
+.ct-someday-panel .ct-selection-bar {
+  flex-wrap: wrap;
+  position: relative;
+}
+
+/* Le menu « Planifier » s'ouvre au-dessus de la barre, sur toute sa largeur : le panneau de 300 px le rognerait sinon. */
+.ct-someday-panel .ct-selection-bar .ct-task-detail__postpone {
+  position: static;
+}
+
+.ct-someday-panel .ct-selection-bar .ct-action-menu--popover {
+  left: 0;
+  right: 0;
+  min-width: 0;
+}
+
+/* Panneau de la Semaine (S-06) : à droite de la grille, jusqu'aux bords de la zone centrale (PC-Semaine-UnJour.html). */
+.ct-week-shell {
+  display: flex;
+  flex-grow: 1;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-week-shell > .ct-someday-panel {
+  height: auto;
+  align-self: stretch;
+  margin: -28px -40px -28px 0;
+}
+
+/* Emplacement vide de la carte soulevée et repère d'insertion pendant le glisser (PC-Semaine-UnJour.html : pointillé #C9C2D8). */
+.ct-someday-panel [data-dragging='true'] {
+  border: 1.5px dashed var(--ct-color-border-strong);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.ct-someday-panel [data-dragging='true'] > * {
+  visibility: hidden;
+}
+
+.ct-someday-panel [data-insert='before']::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin-bottom: 4px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-someday);
+}
+
+.ct-someday__insert {
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-someday);
+}
+
+.ct-someday-panel [data-drag-id] {
+  cursor: grab;
+}

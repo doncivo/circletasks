@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
+import { canMoveToSomeday } from '../../domain/someday';
 import { scopeChoicesForEdit, type SeriesScope } from '../../domain/recurrenceEdit';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { PlainMessageKey } from '../../i18n';
@@ -120,29 +121,43 @@ export function useTaskDetailEdits(
       setLocalErrorKey('tasks.seriesError'); // une occurrence garde une date (T-09 critère 5)
       return;
     }
+    // « Un jour » choisi dans le sélecteur de date (SD-03 critère 2) : même effet que le bouton « Un jour » (en tête de liste, annulable).
+    if (patch.someday === true && canMoveToSomeday(task)) {
+      void api.moveToSomeday();
+      return;
+    }
     if (!askScope(patch)) void api.updateFields(patch);
   }
 
-  async function applySheet(result: EditSheetResult, scope?: SeriesScope): Promise<void> {
+  async function applySheet(source: EditSheetResult, scope?: SeriesScope): Promise<void> {
+    // « Un jour » choisi dans la feuille « Modifier » : les autres champs sont écrits, puis la tâche est rangée comme par le bouton (SD-03).
+    const sendToSomeday = source.patch.someday === true && canMoveToSomeday(task);
+    const result = sendToSomeday ? { ...source, patch: withoutSchedule(source.patch) } : source;
+    if ((await writeSheet(result, scope)) && sendToSomeday) await api.moveToSomeday();
+  }
+
+  /** Écrit les champs, rappels et règle de la feuille ; rend false si un enregistrement a échoué. */
+  async function writeSheet(result: EditSheetResult, scope?: SeriesScope): Promise<boolean> {
     const hasPatch = Object.keys(result.patch).length > 0;
     if (hasPatch && !scope && result.reminders !== undefined) {
       // Champs et rappels : une seule transaction, rien d'écrit en cas d'échec (N-02). Un changement d'espace ou de projet passe
       // ensuite par le déplacement annulable (ES-05).
       const { spaceId, projectId, ...fields } = result.patch;
-      if (!(await api.updateFieldsAndReminders(fields, result.reminders))) return;
-      if ((spaceId !== undefined || projectId !== undefined) && !(await api.updateFields({ ...(spaceId !== undefined ? { spaceId } : {}), ...(projectId !== undefined ? { projectId } : {}) }))) return;
+      if (!(await api.updateFieldsAndReminders(fields, result.reminders))) return false;
+      if ((spaceId !== undefined || projectId !== undefined) && !(await api.updateFields({ ...(spaceId !== undefined ? { spaceId } : {}), ...(projectId !== undefined ? { projectId } : {}) }))) return false;
     } else {
       if (hasPatch) {
         const ok = scope ? await api.applySeriesEdit(result.patch, scope) : await api.updateFields(result.patch);
-        if (!ok) return;
+        if (!ok) return false;
       }
       if (result.reminders !== undefined) await api.setReminders(result.reminders);
     }
-    if (result.rule === undefined) return;
+    if (result.rule === undefined) return true;
     if (task.recurrenceId === null) {
       if (result.rule) await api.setRecurrence(result.rule);
     } else if (result.rule === null) await api.stopRecurrence();
     else await api.updateRecurrence(result.rule);
+    return true;
   }
 
   return {
@@ -226,4 +241,10 @@ export function useTaskDetailEdits(
       cancel: () => setPendingPostpone(null),
     },
   };
+}
+
+/** Le patch sans date, heure ni « Un jour » : la planification est confiée à `moveToSomeday`. */
+function withoutSchedule(patch: TaskPatch): TaskPatch {
+  const { date: _date, time: _time, someday: _someday, ...rest } = patch;
+  return rest;
 }

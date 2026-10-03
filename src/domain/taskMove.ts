@@ -32,3 +32,11 @@ export function moveTaskToDate(
   const sortOrder = lastSortOrder === null || task.sortOrder > lastSortOrder ? task.sortOrder : lastSortOrder + 1;
   return { ok: true, value: { date, someday: false, carriedOver: false, sortOrder } };
 }
+
+/**
+ * Plus grand ordre manuel des tâches d'un jour (hors la tâche déplacée), ou null si le jour est vide : l'argument `lastSortOrder` de
+ * `moveTaskToDate` et de `scheduleSomeday` (S-02, S-06, SD-02).
+ */
+export function lastSortOrderOf(siblings: readonly Pick<Task, 'id' | 'sortOrder'>[], excludeId: string): number | null {
+  return siblings.reduce<number | null>((max, other) => (other.id === excludeId || (max !== null && other.sortOrder <= max) ? max : other.sortOrder), null);
+}

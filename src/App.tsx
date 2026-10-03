@@ -16,6 +16,7 @@ import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
+import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
@@ -80,6 +81,16 @@ function AppShellContent() {
           <ReportScreen />
         ) : route.screen === 'done' ? (
           <DoneTasksScreen />
+        ) : route.screen === 'someday' ? (
+          // Un jour (SD-01) : écran plein sur iPhone, panneau à droite d'Aujourd'hui sur PC.
+          layout === 'pc' ? (
+            <>
+              <TodayScreen />
+              <SomedayScreen />
+            </>
+          ) : (
+            <SomedayScreen />
+          )
         ) : route.screen === 'goals' ? (
           // Objectif (OB-01) : écran plein sur iPhone, panneau à droite d'Aujourd'hui sur PC.
           layout === 'pc' ? (

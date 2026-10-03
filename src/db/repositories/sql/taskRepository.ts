@@ -297,13 +297,6 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       );
     },
 
-    async moveToSomeday(ids: readonly TaskId[]) {
-      return updateEach(ids, 'date = NULL, time = NULL, someday = 1, updated_at = ?, device_id = ?, hlc = ?', () => {
-        const stamp = stamper.next();
-        return [stamp.at, stamp.deviceId, stamp.hlc];
-      });
-    },
-
     async carryOver(ids: readonly TaskId[], date: LocalDate) {
       return updateEach(ids, 'date = ?, carried_over = 1, updated_at = ?, device_id = ?, hlc = ?', () => {
         const stamp = stamper.next();

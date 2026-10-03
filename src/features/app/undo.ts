@@ -16,7 +16,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -63,6 +63,7 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   postpone: 'undo.postpone',
   move: 'undo.move',
   someday: 'undo.someday',
+  schedule: 'undo.scheduleDate',
   duplicate: 'undo.duplicate',
   delete: 'undo.delete',
   series: 'undo.seriesOccurrence',
@@ -78,6 +79,7 @@ const UNDO_MANY_KEYS: { readonly [K in UndoKind]?: MessageKey } = {
   postpone: 'undo.manyPostpone',
   move: 'undo.manyMove',
   someday: 'undo.manySomeday',
+  schedule: 'undo.manySchedule',
   duplicate: 'undo.manyDuplicate',
   delete: 'undo.deleteMany',
 };

@@ -21,6 +21,11 @@ export interface DateEditorProps {
    */
   mode: 'popover' | 'inline';
   allowSomeday?: boolean;
+  /**
+   * « Un jour » indisponible (tâche récurrente, QB-11) : la puce reste affichée, grisée (`aria-disabled`) avec cette aide ; la choisir
+   * ou saisir « un jour » ne change rien.
+   */
+  somedayDisabledHint?: string;
   /** Ligne « Heure » du calendrier (défaut : oui) ; sans elle, seule la date est choisie. */
   showTime?: boolean;
   /**
@@ -84,6 +89,7 @@ export function DateEditor({
   today,
   mode,
   allowSomeday = true,
+  somedayDisabledHint,
   showTime = true,
   commitOnPick = false,
   onCommit,
@@ -139,7 +145,11 @@ export function DateEditor({
     setText(next);
     if (mode === 'popover') setOpen(true);
     const result = parseFrenchDate(next, today);
-    if (result.ok) {
+    if (result.ok && result.value.date === null && somedayDisabledHint) {
+      // « un jour » saisi pour une tâche récurrente : refusé, l'aide explique pourquoi (QB-11).
+      setTextError(true);
+      publish(null, true);
+    } else if (result.ok) {
       setTextError(false);
       setTimeError(false);
       setTimeText(result.value.time ?? '');
@@ -166,6 +176,7 @@ export function DateEditor({
   }
 
   function pick(choice: DateChoice): void {
+    if (choice.date === null && somedayDisabledHint) return;
     applyChoice(choice);
     if (commitOnPick) {
       onCommit(choice);
@@ -282,7 +293,7 @@ export function DateEditor({
     >
       <div className="ct-date-editor__banner" aria-live="polite" data-error={invalid ? 'true' : undefined}>
         {invalid ? (
-          <span>{textError ? t('datePicker.notUnderstood') : t('datePicker.timeNotUnderstood')}</span>
+          <span>{textError ? (somedayDisabledHint && text.trim() !== '' && parseFrenchDate(text, today).ok ? somedayDisabledHint : t('datePicker.notUnderstood')) : t('datePicker.timeNotUnderstood')}</span>
         ) : draft ? (
           <span>{t('datePicker.understoodLabel')} <b>{summary(draft)}</b></span>
         ) : null}
@@ -298,11 +309,22 @@ export function DateEditor({
           {t('datePicker.nextMonday')}
         </button>
         {allowSomeday && (
-          <button type="button" className="ct-date-editor__chip" aria-pressed={someday} onClick={() => pick({ date: null, time: null })}>
+          <button
+            type="button"
+            className="ct-date-editor__chip"
+            aria-pressed={someday}
+            {...(somedayDisabledHint ? { 'aria-disabled': true, 'aria-describedby': `${ids}-somedayHint` } : {})}
+            onClick={() => pick({ date: null, time: null })}
+          >
             {t('datePicker.someday')}
           </button>
         )}
       </div>
+      {allowSomeday && somedayDisabledHint && (
+        <p id={`${ids}-somedayHint`} className="ct-date-editor__hint">
+          {somedayDisabledHint}
+        </p>
+      )}
       <div className="ct-date-editor__monthRow">
         <span className="ct-date-editor__monthTitle" id={`${ids}-month`} aria-live="polite">
           {formatMonthTitle(month.year, month.month)}

@@ -1,4 +1,5 @@
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
+import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { PostponeTarget } from '../../domain/taskPostpone';
 import type { GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { SortOrderEntry } from '../../db/repositories';
@@ -14,6 +15,20 @@ import type { AppContainer } from '../app/container';
  * avant de rendre la main : le store n'a rien à faire pour l'annulation.
  */
 export type TaskUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;
+
+/** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
+export interface NewTaskSchedule {
+  readonly date?: LocalDate;
+  readonly time?: LocalTime | null;
+  /** T-14 : « Un jour » choisi dans le sélecteur : tâche sans date ni heure (`date` et `time` ignorés). */
+  readonly someday?: boolean;
+  /** T-09 : répétition choisie à la saisie (absent : une fois). */
+  readonly recurrence?: RecurrenceFields | null;
+  /** N-02 : avances des rappels (feuille d'ajout) ; absent avec une heure : réglage `reminders.defaultOffsets` (QB-08). */
+  readonly reminderOffsets?: readonly ReminderOffsetMin[];
+  /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
+  readonly goalId?: GoalId | null;
+}
 
 export interface CreateTaskInput {
   /** Saisie brute ; trim et validation par src/domain. */
@@ -48,7 +63,7 @@ export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date
 export type SetRemindersError = 'not-found' | 'needs-time';
 
 /** Cible d'un report (T-05, SD-02) : définie dans src/domain/taskPostpone. */
-export type { PostponeTarget };
+export type { PostponeTarget, ScheduleSomedayTarget };
 
 export interface TaskUseCases {
   /** T-01, T-02, T-03, S-04, SD-01 ; non annulable (on supprime). Tâche + rappels en une transaction. */
@@ -90,6 +105,12 @@ export interface TaskUseCases {
   moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null): Promise<Task[]>;
   /** SD-03 ; annulable. */
   moveToSomeday(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * SD-02, S-06 : planifie des tâches « Un jour » (aujourd'hui, demain ou une date avec heure facultative) ; `someday` levé, ordre en fin
+   * de jour, rappels recalculés s'il y a une heure ; annulable en une fois (elles retrouvent leur position dans « Un jour »). Les tâches
+   * qui ne sont pas dans « Un jour » sont ignorées ; rend les tâches réellement planifiées. Lève `RangeError` pour une date ou heure invalide.
+   */
+  scheduleSomeday(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<Task[]>;
   /** T-12 : copie titre, note, icône, espace, projet, rappels ; annulable. */
   duplicate(id: TaskId, date: LocalDate | null): Promise<Task>;
   /**

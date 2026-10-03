@@ -44,7 +44,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | S-03 | M3 | Je navigue entre semaines | tasks-planning | fait |
 | S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | fait |
 | S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | en cours (critères 9-10 : alimentation par M8, ordre 2) |
-| S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | à faire |
+| S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | fait |
 | R-01 | M4 | Je crée une routine avec icône et fréquence | routines | fait |
 | R-02 | M4 | J'associe une heure optionnelle | routines | fait |
 | R-03 | M4 | Je valide une routine du jour | routines | fait |
@@ -71,10 +71,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | OB-04 | M17 | Je vois l'avancement de l'objectif | spaces-goals | fait |
 | OB-05 | M17 | Je reconduis un objectif non atteint | spaces-goals | fait |
 | OB-06 | M17 | Je consulte mes objectifs passés | spaces-goals | fait |
-| SD-01 | M18 | J'ajoute une tâche sans date dans « Un jour » | spaces-goals | à faire |
-| SD-02 | M18 | Je planifie une tâche « Un jour » en un geste | spaces-goals | à faire |
-| SD-03 | M18 | Je renvoie une tâche datée vers « Un jour » | spaces-goals | à faire |
-| SD-04 | M18 | J'organise la liste « Un jour » | spaces-goals | à faire |
+| SD-01 | M18 | J'ajoute une tâche sans date dans « Un jour » | spaces-goals | fait |
+| SD-02 | M18 | Je planifie une tâche « Un jour » en un geste | spaces-goals | fait |
+| SD-03 | M18 | Je renvoie une tâche datée vers « Un jour » | spaces-goals | fait |
+| SD-04 | M18 | J'organise la liste « Un jour » | spaces-goals | fait |
 
 ## Ordre 1 bis — Vérification iPhone
 
