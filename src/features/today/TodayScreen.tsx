@@ -14,6 +14,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useQuickAddStore } from '../app/quickAdd';
+import { SomedayButton } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
@@ -201,10 +202,11 @@ export function TodayScreen() {
     <div className="ct-today-shell" data-layout={layout}>
       <div className="ct-today" data-layout={layout}>
         {/* PC (PC-Aujourdhui.html) : pastilles à gauche de la rangée du haut, icônes à droite ; iPhone (Main.html) : icônes en haut,
-            pastilles sous le filet. Les autres icônes d'accès rapide (Un jour, Objectif, Recherche) arrivent avec leurs stories. */}
+            pastilles sous le filet. L'icône « Un jour » (SD-01) est la première des icônes ; la recherche arrive avec RC-01. */}
         <div className="ct-today__quickIcons" data-layout={layout}>
           {layout === 'pc' && pills}
           <span className="ct-today__quickSpacer" />
+          <SomedayButton />
           {goalButton}
           {reportButton}
         </div>

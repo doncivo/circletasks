@@ -1,4 +1,5 @@
 import { goalsEn } from './en.goals';
+import { somedayEn } from './en.someday';
 import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import type { Messages } from './types';
@@ -561,6 +562,10 @@ export const en: Messages = {
     manyPostpone: '{count} tasks postponed',
     manyMove: '{count} tasks moved',
     manySomeday: '{count} tasks moved to “Someday”',
+    scheduleToday: '“{title}” scheduled for today',
+    scheduleTomorrow: '“{title}” scheduled for tomorrow',
+    scheduleDate: '“{title}” scheduled for {date}',
+    manySchedule: '{count} tasks scheduled',
     manyDuplicate: '{count} tasks duplicated',
     moveDate: '“{title}” moved to {date}',
     stale: 'Cannot undo: the task has changed',
@@ -568,6 +573,7 @@ export const en: Messages = {
   },
   routines: routinesEn,
   goals: goalsEn,
+  someday: somedayEn,
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',

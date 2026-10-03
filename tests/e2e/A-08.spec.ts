@@ -110,7 +110,7 @@ test.describe('A-08 — fiche détail', () => {
     await createTask(page, testInfo, { title });
     await listTitle(page, title).click();
     await detail(page).getByRole('button', { name: 'Un jour' }).click();
-    await expect(page.getByRole('status')).toContainText('rangée dans « Un jour »');
+    await expect(page.getByRole('status')).toContainText('mise dans « Un jour »');
     if (isPhone(testInfo)) await detail(page).getByRole('button', { name: 'Fermer' }).click();
     else await page.keyboard.press('Escape');
     await expect(listTitle(page, title)).toHaveCount(0);

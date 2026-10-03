@@ -2,6 +2,7 @@ import { nowIso, todayLocal } from '../../domain/clock';
 import { newEntityId } from '../../domain/id';
 import type { NewRecurrence, NewTask, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import { duplicateTask } from '../../domain/taskDuplicate';
+import { somedayHeadOrder } from '../../domain/someday';
 import { buildReminders, canHaveReminders, sortReminderOffsets } from '../../domain/reminders';
 import { syncTaskReminders } from './reminderSync';
 import { moveTaskToDate } from '../../domain/taskMove';
@@ -109,6 +110,11 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       const project = input.projectId ? await deps.data.repos.projects.getById(input.projectId) : null;
       const projectId = project && project.spaceId === input.spaceId ? project.id : null;
 
+      // SD-04 critère 2 : une nouvelle tâche « Un jour » entre en tête de la liste ; les autres tâches s'ajoutent à la fin.
+      const sortOrder = someday
+        ? somedayHeadOrder((await deps.data.repos.tasks.listSomeday('all')).map((other) => other.sortOrder), deps.clock.nowMs())
+        : deps.clock.nowMs();
+
       const newTask: NewTask = {
         id: newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
@@ -121,7 +127,7 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         doneAt: null,
         // Ordre manuel réel posé par A-02 ; une création s'ajoute à la fin par
         // horodatage croissant, en attendant l'algorithme d'insertion par milieu.
-        sortOrder: deps.clock.nowMs(),
+        sortOrder,
         carriedOver: false,
         recurrenceId: null,
         seriesIndex: null,

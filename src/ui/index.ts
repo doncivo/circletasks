@@ -44,6 +44,7 @@ export { DragHandle, type DragHandleProps } from './DragHandle';
 export { useZoneDrag, type UseZoneDragOptions, type ZoneDrag, type ZoneDragState } from './useZoneDrag';
 export { DragGhost, type DragGhostProps } from './DragGhost';
 export { useSwipe, type SwipeHandlers, type UseSwipeOptions } from './useSwipe';
+export { SomedayIcon, type SomedayIconProps } from './SomedayIcon';
 export { CompactToggle, type CompactToggleProps } from './CompactToggle';
 export {
   EditModeSwitch,

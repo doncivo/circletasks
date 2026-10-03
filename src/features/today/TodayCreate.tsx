@@ -76,6 +76,8 @@ export interface TodayCreateSheetProps {
   readonly initialProjectId?: ProjectId | null;
   /** Avances cochées d'office à la première heure donnée (`reminders.defaultOffsets`, QB-08) ; [0] par défaut. */
   readonly defaultOffsets?: readonly ReminderOffsetMin[];
+  /** « Un jour » présélectionné (SD-01 critère 5 : bouton « + » de l'écran Un jour) : roues et champ de date masqués d'office. */
+  readonly initialSomeday?: boolean;
   readonly onClose: () => void;
   readonly onCreate: (input: {
     title: string;
@@ -94,9 +96,9 @@ export interface TodayCreateSheetProps {
  * Feuille « Nouvelle tâche » (iPhone, Ajout.html) : titre, icône, roues de date (« Aujourd'hui » / jour affiché, sans heure,
  * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
  */
-export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], onClose, onCreate }: TodayCreateSheetProps) {
+export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], initialSomeday = false, onClose, onCreate }: TodayCreateSheetProps) {
   const [title, setTitle] = useState('');
-  const [choice, setChoice] = useState<DateChoice>({ date: viewedDate, time: null });
+  const [choice, setChoice] = useState<DateChoice>(initialSomeday ? { date: null, time: null } : { date: viewedDate, time: null });
   const [spaceId, setSpaceId] = useState<SpaceId | null>(initialSpaceId);
   const [projectId, setProjectId] = useState<ProjectId | null>(initialProjectId);
   const [icon, setIcon] = useState<IconRef | null>(null);

@@ -206,7 +206,7 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       const task = await open();
       fireEvent.click(screen.getByRole('button', { name: 'Un jour' }));
       await waitFor(async () => expect(await stored(task.id)).toMatchObject({ someday: true, date: null, time: null }));
-      expect(await screen.findByRole('status')).toHaveTextContent('« Envoyer la facture » rangée dans « Un jour »');
+      expect(await screen.findByRole('status')).toHaveTextContent('« Envoyer la facture » mise dans « Un jour »');
       expect(screen.queryByRole('button', { name: 'Un jour' })).toBeNull();
       expect(within(panel()).getByText('Un jour', { selector: '.ct-task-detail__rowValue button' })).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));

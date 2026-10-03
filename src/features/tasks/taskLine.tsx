@@ -1,7 +1,7 @@
 import { Target } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Icon, spaceTextColor } from '../../ui';
-import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model';
+import type { Project, RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import { taskLineSegments } from '../../domain/taskLine';
 import { t } from '../../i18n';
@@ -22,6 +22,8 @@ export interface TaskSubtitleOptions {
   readonly showSpace: boolean;
   /** Règle de la série (T-09), si connue. */
   readonly rule: RecurrenceFields | undefined;
+  /** « Un jour » : projets connus ; le nom du projet de la tâche suit l'espace, dans la couleur de l'espace (SD-01 critère 8). */
+  readonly projects?: readonly Project[];
 }
 
 /**
@@ -29,8 +31,8 @@ export interface TaskSubtitleOptions {
  * (`taskLineSegments`), rendu ici (couleur de l'espace, libellés i18n). Partagée par toutes les listes
  * de tâches (Aujourd'hui, Semaine, Un jour) ; `undefined` s'il n'y a rien à afficher.
  */
-export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtitleOptions): ReactNode {
-  const segments = taskLineSegments(task, { showSpace, hasRule: rule !== undefined });
+export function taskSubtitle(task: Task, { spaces, showSpace, rule, projects }: TaskSubtitleOptions): ReactNode {
+  const segments = taskLineSegments(task, { showSpace, hasRule: rule !== undefined, showProject: projects !== undefined });
   if (segments.length === 0) return undefined;
   const parts: ReactNode[] = [];
   for (const segment of segments) {
@@ -39,6 +41,10 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtit
     else if (segment.kind === 'space') {
       const space = spaces.find((s) => s.id === segment.spaceId);
       if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
+    } else if (segment.kind === 'project') {
+      const project = projects?.find((p) => p.id === segment.projectId);
+      const space = spaces.find((s) => s.id === task.spaceId);
+      if (project) parts.push(<span key="project" style={space ? { color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' } : undefined}>{project.name}</span>);
     } else if (segment.kind === 'goal') {
       parts.push(
         <span key="goal" className="ct-task-goalSegment">

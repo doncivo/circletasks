@@ -85,6 +85,9 @@
   --ct-color-space-pro: #2f6b7a;
   --ct-color-space-perso: #b5483b;
   --ct-color-goal: #3f7fc4;
+  /* « Un jour » (SD-01) : icône, badge et glisser, violet #5B43A8 des maquettes UnJour.html et PC-Semaine-UnJour.html. */
+  --ct-color-someday: #5b43a8;
+  --ct-color-someday-bg: #f1eef7;
   /* Badges « Atteint » / « Non atteint » de l'objectif (Objectif.html). */
   --ct-color-achieved-bg: #e7f0ea;
   --ct-color-achieved-text: #2f6b4a;
@@ -141,6 +144,8 @@
     --ct-color-space-pro: #7fc3cf;
     --ct-color-space-perso: #f0a091;
     --ct-color-goal: #8db8ec;
+    --ct-color-someday: #c9bee6;
+    --ct-color-someday-bg: #2a2242;
     --ct-color-achieved-bg: #1f3a2d;
     --ct-color-achieved-text: #9fd3b4;
     --ct-color-missed-bg: #4a2420;
@@ -181,6 +186,8 @@
   --ct-color-space-pro: #7fc3cf;
   --ct-color-space-perso: #f0a091;
   --ct-color-goal: #8db8ec;
+  --ct-color-someday: #c9bee6;
+  --ct-color-someday-bg: #2a2242;
   --ct-color-achieved-bg: #1f3a2d;
   --ct-color-achieved-text: #9fd3b4;
   --ct-color-missed-bg: #4a2420;

@@ -1,4 +1,5 @@
 import { goalsFr } from './fr.goals';
+import { somedayFr } from './fr.someday';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 /**
@@ -550,7 +551,7 @@ export const fr = {
     move: 'Tâche déplacée',
     moveSpace: '« {title} » déplacée dans {space}',
     manyMoveSpace: '{count} tâches déplacées dans {space}',
-    someday: '« {title} » rangée dans « Un jour »',
+    someday: '« {title} » mise dans « Un jour »',
     duplicate: '« {title} » dupliquée',
     delete: '« {title} » supprimée',
     deleteMany: '{count} tâches supprimées',
@@ -563,7 +564,11 @@ export const fr = {
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
-    manySomeday: '{count} tâches rangées dans « Un jour »',
+    manySomeday: '{count} tâches mises dans « Un jour »',
+    scheduleToday: '« {title} » planifiée pour aujourd’hui',
+    scheduleTomorrow: '« {title} » planifiée pour demain',
+    scheduleDate: '« {title} » planifiée au {date}',
+    manySchedule: '{count} tâches planifiées',
     manyDuplicate: '{count} tâches dupliquées',
     moveDate: '« {title} » déplacée au {date}',
     stale: 'Action impossible à annuler : la tâche a changé',
@@ -571,6 +576,7 @@ export const fr = {
   },
   routines: routinesFr,
   goals: goalsFr,
+  someday: somedayFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

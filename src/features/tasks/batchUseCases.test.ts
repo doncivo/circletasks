@@ -131,7 +131,7 @@ describe('actions par lot du mode édition (A-05)', () => {
       expect(await db.data.repos.tasks.getById(done)).toMatchObject({ someday: false });
       expect(await db.data.repos.tasks.getById(series)).toMatchObject({ someday: false });
       expect(entities.get(a)?.someday).toBe(true);
-      expect(undoMessage(undo.getSnapshot().top as never)).toBe('« A » rangée dans « Un jour »');
+      expect(undoMessage(undo.getSnapshot().top as never)).toBe('« A » mise dans « Un jour »');
       expect(await useCases.moveToSomeday([a])).toEqual([]);
 
       expect((await undo.undoLast()).status).toBe('undone');
