@@ -41,3 +41,5 @@ export * from './itemFilter';
 export * from './spaceMove';
 export * from './externalCalendars';
 export * from './quietHours';
+export * from './focusSession';
+export * from './filteredAggregates';
