@@ -5,6 +5,7 @@ import { mkdirSync } from 'node:fs';
 import { setWheels } from '../e2e/helpers/schedule';
 import { createTask, openToday } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
+import { insertChecklists, openChecklists } from '../e2e/helpers/checklists';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
 import { insertSomeday, openSomeday } from '../e2e/helpers/someday';
@@ -175,6 +176,31 @@ const STRETCH: DirectRoutine = {
   reminders: [0],
   done: ['2026-09-21'],
 };
+
+/** Checklists des maquettes (Checklists.html, PC-Checklists.html) : « Valise voyage » 3 / 6 (modèle Perso), Courses, Documents comptables, Fête de fin d'année. */
+const VALISE_ITEMS = [
+  'Adaptateur de prise',
+  'Crème solaire',
+  "Attestation d'assurance",
+  ['Passeport', true],
+  ['Chargeur', true],
+  ["Billets d'avion", true],
+] as const;
+
+async function prepareChecklists(page: Page, all: boolean): Promise<void> {
+  await insertChecklists(page, [
+    { title: 'Valise voyage', space: 'perso', icon: 'lucide:briefcase', template: true, items: VALISE_ITEMS },
+    ...(all
+      ? ([
+          { title: 'Courses', space: 'perso', icon: 'lucide:shopping-cart', items: Array.from({ length: 8 }, (_, i) => `Article ${String(i + 1)}`) },
+          { title: 'Documents comptables', space: 'pro', icon: 'lucide:file-text', items: [['Factures', true], ['Relevés', true], 'TVA', 'Notes de frais', 'Bilan'] },
+          { title: "Fête de fin d'année", space: 'perso', icon: 'lucide:gift', items: [['Salle', true], ...Array.from({ length: 11 }, (_, i) => `Invité ${String(i + 1)}`)] },
+        ] as const)
+      : []),
+  ]);
+  await openChecklists(page);
+  await expect(page.getByText('3 / 6').first()).toBeVisible();
+}
 
 interface Screen {
   name: string;
@@ -401,6 +427,25 @@ const SCREENS: Screen[] = [
       await filterPill(page, 'Pro').click();
       await page.getByRole('button', { name: 'Envoyer la facture', exact: true }).click();
       await expect(page.getByRole('complementary')).toBeVisible();
+    },
+  },
+  {
+    name: 'Checklists',
+    mockup: 'Checklists.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: (page) => prepareChecklists(page, false),
+  },
+  {
+    name: 'PC-Checklists',
+    mockup: 'PC-Checklists.html',
+    viewport: PC,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await prepareChecklists(page, true);
+      // Tri par titre (décision C-01 D3) : la maquette montre « Valise voyage » ouverte, on la choisit dans le volet.
+      await page.getByRole('list', { name: 'Mes checklists' }).getByRole('button', { name: /^Valise voyage/ }).click();
+      await expect(page.getByRole('heading', { level: 2, name: 'Valise voyage' })).toBeVisible();
     },
   },
 ];

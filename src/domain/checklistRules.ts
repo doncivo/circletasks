@@ -44,3 +44,17 @@ export function sortItems<T extends Pick<ChecklistItem, 'sortOrder' | 'id'>>(ite
 export function nextItemOrder(items: readonly Pick<ChecklistItem, 'sortOrder'>[]): number {
   return items.reduce((max, item) => Math.max(max, item.sortOrder), 0) + 1;
 }
+
+export interface ChecklistProgress {
+  readonly checked: number;
+  readonly total: number;
+  /** 0 à 1 ; 0 sans item. */
+  readonly ratio: number;
+}
+
+/** Progression « 3 / 6 » (C-02 critères 1 et 6). */
+export function checklistProgress(items: readonly Pick<ChecklistItem, 'checked'>[]): ChecklistProgress {
+  const total = items.length;
+  const checked = items.filter((item) => item.checked).length;
+  return { checked, total, ratio: total === 0 ? 0 : checked / total };
+}

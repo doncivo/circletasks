@@ -34,6 +34,13 @@ export interface ChecklistUseCases {
   remove(id: ChecklistId): Promise<boolean>;
   /** C-01 critère 3 : ajoute un item en fin de liste (texte de 1 à 200 caractères). Les ajouts d'une même base sont sérialisés. */
   addItem(checklistId: ChecklistId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError>>;
+  /**
+   * C-02 critères 2 et 3 : fixe l'état voulu d'un item (et non « basculer » : deux gestes rapides finissent sur le dernier). Écriture
+   * immédiate en base ; aucun message « Annuler » (geste réversible d'un toucher, D2). Un item supprimé entre-temps est ignoré.
+   */
+  setChecked(itemId: ChecklistItemId, checked: boolean): Promise<ChecklistItem | null>;
+  /** C-02 critère 5 : texte modifié en ligne (1 à 200 caractères) ; l'ancien texte est conservé s'il est refusé. */
+  renameItem(itemId: ChecklistItemId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError>>;
 }
 
 /** Ajouts d'items en file par base : deux Entrée rapides ne reçoivent jamais le même ordre. */
@@ -128,6 +135,25 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
         emitChecklistsChanged(data);
         return { ok: true, value: item } as const;
       });
+    },
+
+    async setChecked(itemId, checked) {
+      const [current] = await data.repos.checklistItems.getByIds([itemId]);
+      if (!current || current.deletedAt !== null) return null;
+      const written = current.checked === checked ? current : await data.repos.checklistItems.setChecked(itemId, checked);
+      if (written !== current) emitChecklistsChanged(data);
+      return written;
+    },
+
+    async renameItem(itemId, text) {
+      const valid = validateChecklistText(text);
+      if (!valid.ok) return valid;
+      const [current] = await data.repos.checklistItems.getByIds([itemId]);
+      if (!current || current.deletedAt !== null) return { ok: false, error: 'not-found' };
+      if (current.text === valid.value) return { ok: true, value: current };
+      const written = await data.repos.checklistItems.rename(itemId, valid.value);
+      emitChecklistsChanged(data);
+      return { ok: true, value: written };
     },
   };
 }

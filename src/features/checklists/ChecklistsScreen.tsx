@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog, DropdownSelect, Fab, SpacePills, useLayout } from '../../ui';
+import { checklistProgress } from '../../domain/checklistRules';
 import type { ChecklistId } from '../../domain/types';
 import { t } from '../../i18n';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -31,7 +32,8 @@ export function ChecklistsScreen() {
   const routeId = route.tab === 'checklists' ? route.checklistId : null;
 
   const summaries = useFeatureStore(checklistsStore, (s) => s.summaries);
-  const selectedId = useFeatureStore(checklistsStore, (s) => s.selectedId);
+  const itemsFor = useFeatureStore(checklistsStore, (s) => s.itemsFor);
+  const compact = useFeatureStore(checklistsStore, (s) => s.compact);
   const items = useFeatureStore(checklistsStore, (s) => s.items);
   const status = useFeatureStore(checklistsStore, (s) => s.status);
   const errorKey = useFeatureStore(checklistsStore, (s) => s.errorKey);
@@ -42,6 +44,9 @@ export function ChecklistsScreen() {
   const update = useFeatureStore(checklistsStore, (s) => s.update);
   const remove = useFeatureStore(checklistsStore, (s) => s.remove);
   const addItem = useFeatureStore(checklistsStore, (s) => s.addItem);
+  const toggleItem = useFeatureStore(checklistsStore, (s) => s.toggleItem);
+  const renameItem = useFeatureStore(checklistsStore, (s) => s.renameItem);
+  const setCompact = useFeatureStore(checklistsStore, (s) => s.setCompact);
 
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -110,13 +115,23 @@ export function ChecklistsScreen() {
   const filteredSpace = spaceFilter === 'all' ? null : spaces.find((space) => space.id === spaceFilter);
   const emptyMessage = projectFilter ? t('checklists.emptyProject') : filteredSpace ? t('checklists.emptySpace', { space: filteredSpace.name }) : t('checklists.empty');
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
-  const detailItems = selectedId === displayedId ? items : [];
+  const itemsReady = itemsFor === displayedId;
+  const detailItems = itemsReady ? items : [];
+  // Les items affichés font foi (cochage immédiat) ; le temps du chargement, la progression vient de la liste.
+  const progress = displayed && !itemsReady ? { checked: displayed.checked, total: displayed.total, ratio: displayed.total === 0 ? 0 : displayed.checked / displayed.total } : checklistProgress(detailItems);
+  // Même règle pour « 3 / 6 » du volet : la checklist affichée suit ses items sans attendre la relecture.
+  const listed = visible.map((summary) => (itemsReady && summary.checklist.id === displayedId ? { ...summary, checked: progress.checked, total: progress.total } : summary));
 
   const detail = displayed ? (
     <ChecklistDetail
       layout={layout}
       checklist={displayed.checklist}
       items={detailItems}
+      progress={progress}
+      compact={compact}
+      onCompactChange={(value) => void setCompact(value)}
+      onToggleItem={toggleItem}
+      onRenameItem={async (id, text) => (await renameItem(id, text)).ok}
       focusRequest={focusRequest}
       onFocused={clearFocusRequest}
       onEdit={() => {
@@ -186,7 +201,7 @@ export function ChecklistsScreen() {
         <aside className="ct-checklists__pane" aria-label={t('checklists.listLabel')}>
           <h1 className="ct-checklists__paneTitle">{t('checklists.title')}</h1>
           {pills}
-          <ChecklistList summaries={visible} selectedId={displayedId} spaces={spaces} showSpace={spaceFilter === 'all'} onSelect={choose} />
+          <ChecklistList summaries={listed} selectedId={displayedId} spaces={spaces} showSpace={spaceFilter === 'all'} onSelect={choose} />
           <div className="ct-checklists__spacer" />
           <button type="button" className="ct-checklists__newButton" onClick={openCreate}>
             {t('checklists.addPc')}

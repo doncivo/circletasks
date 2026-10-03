@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECKLIST_TEXT_MAX, compareChecklists, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
+import { CHECKLIST_TEXT_MAX, checklistProgress, compareChecklists, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
 import type { Checklist, ChecklistSummary } from './model';
 
 const summary = (id: string, title: string): ChecklistSummary => ({ checklist: { id, title } as unknown as Checklist, checked: 0, total: 0 });
@@ -45,5 +45,17 @@ describe('ordre des items', () => {
   it('nextItemOrder : en fin de liste, 1 pour une liste vide', () => {
     expect(nextItemOrder([])).toBe(1);
     expect(nextItemOrder([item('a', 1), item('b', 7.5)])).toBe(8.5);
+  });
+});
+
+describe('checklistProgress (C-02 critères 1 et 6)', () => {
+  it('« 3 / 6 » : 50 %', () => {
+    const items = [true, true, true, false, false, false].map((checked) => ({ checked }));
+    expect(checklistProgress(items)).toEqual({ checked: 3, total: 6, ratio: 0.5 });
+  });
+
+  it('sans item : 0 / 0 et rapport nul ; tout coché : rapport plein', () => {
+    expect(checklistProgress([])).toEqual({ checked: 0, total: 0, ratio: 0 });
+    expect(checklistProgress([{ checked: true }, { checked: true }])).toEqual({ checked: 2, total: 2, ratio: 1 });
   });
 });

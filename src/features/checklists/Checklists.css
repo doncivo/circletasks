@@ -37,6 +37,7 @@
 
 .ct-checklists__paneTitle {
   margin: 0 0 6px;
+  line-height: 1.2;
   font-family: var(--ct-font-title);
   font-size: 2.75rem;
   font-weight: var(--ct-font-weight-bold);
@@ -254,20 +255,167 @@
 .ct-checklist-item {
   display: flex;
   align-items: center;
-  gap: 14px;
-  min-height: 52px;
-  padding: 14px 16px;
+  /* Maquette : ligne de 56 px, case à 16 px du bord et texte à 14 px de la case ; la zone tactile de 44 pt déborde de la case. */
+  gap: 6px;
+  min-height: 56px;
+  padding: 6px 16px 6px 8px;
   border-radius: var(--ct-radius-lg);
   background: var(--ct-color-surface-input);
   box-sizing: border-box;
 }
 
+.ct-checklist-detail[data-layout='pc'] .ct-checklist-item {
+  gap: 5px;
+  padding-left: 7px;
+}
+
+/* Case 28 px (26 px sur PC) bordée #2E2150 ; cochée : fond #2E2150, coche blanche. Zone tactile de 44 pt. */
+.ct-checklist-item__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ct-hit-target-min);
+  min-height: var(--ct-hit-target-min);
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ct-checklist-item__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-text);
+  border-radius: 8px;
+  background: var(--ct-color-surface);
+}
+
+.ct-checklist-detail[data-layout='pc'] .ct-checklist-item__box {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+
+.ct-checklist-item__box[data-checked='true'] {
+  background: var(--ct-color-text);
+}
+
+.ct-checklist-item__check:focus-visible,
+.ct-checklist-item__text:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+  border-radius: var(--ct-radius-md);
+}
+
+/* Texte : bouton qui ouvre l'édition en ligne ; coché : barré, #5E557A, graisse 600. */
 .ct-checklist-item__text {
   flex-grow: 1;
   min-width: 0;
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
   font-size: var(--ct-font-size-text-lg);
   font-weight: var(--ct-font-weight-bold);
+  text-align: left;
   overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.ct-checklist-item__text[data-checked='true'] {
+  color: var(--ct-color-text-secondary);
+  font-weight: var(--ct-font-weight-semibold);
+  text-decoration: line-through;
+}
+
+.ct-checklist-item__edit {
+  flex-grow: 1;
+  min-width: 0;
+  height: 40px;
+  padding: 0 12px;
+  border: 1.5px solid var(--ct-color-accent);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+  box-sizing: border-box;
+}
+
+.ct-checklist-item__edit[aria-invalid='true'] {
+  border-color: var(--ct-color-danger);
+}
+
+/* Vue compacte (A-06) : lignes plus basses, texte plus petit ; la zone tactile reste de 44 pt. */
+.ct-checklist-items[data-compact] {
+  gap: 4px;
+}
+
+.ct-checklist-items[data-compact] .ct-checklist-item {
+  min-height: var(--ct-hit-target-min);
+  padding-top: 0;
+  padding-bottom: 0;
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-checklist-items[data-compact] .ct-checklist-item__text,
+.ct-checklist-items[data-compact] .ct-checklist-item__edit {
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-checklist-items[data-compact] .ct-checklist-item__box {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+}
+
+/* --- Progression --------------------------------------------------------------------------------------------------- */
+.ct-checklist-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ct-checklist-detail[data-layout='pc'] .ct-checklist-progress {
+  gap: 14px;
+}
+
+.ct-checklist-progress__bar {
+  flex-grow: 1;
+  height: 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ct-color-text) 8%, var(--ct-color-surface));
+}
+
+.ct-checklist-progress__fill {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ct-color-icon-green);
+}
+
+.ct-checklist-progress__count {
+  margin-left: auto;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  white-space: nowrap;
+}
+
+.ct-checklist-progress__bar + .ct-checklist-progress__count {
+  margin-left: 0;
+}
+
+.ct-checklist-progress__trailing {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
 }
 
 /* --- Champ « Ajouter un élément » ------------------------------------------------------------------------------------ */
@@ -433,4 +581,9 @@
   inset: -2px;
   width: calc(100% + 4px);
   height: calc(100% + 4px);
+}
+
+/* Les boutons de l'en-tête gardent leurs 44 pt : c'est le titre qui rétrécit (iPhone, titre long). */
+.ct-checklist-detail__head > button {
+  flex-shrink: 0;
 }

@@ -1,7 +1,7 @@
 import { createStore } from 'zustand';
 import { sortChecklistSummaries, sortItems, type ChecklistTextError } from '../../domain/checklistRules';
 import type { Checklist, ChecklistItem, ChecklistSummary } from '../../domain/model';
-import type { ChecklistId, Result, SpaceFilter } from '../../domain/types';
+import type { ChecklistId, ChecklistItemId, Result, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { onChecklistsChanged } from './checklistEvents';
@@ -22,10 +22,14 @@ export interface ChecklistsState {
   readonly filter: SpaceFilter;
   /** Checklists du filtre, triées par titre (accents ignorés). */
   readonly summaries: readonly ChecklistSummary[];
-  /** Checklist dont les items sont chargés. */
+  /** Checklist à afficher (ses items se chargent). */
   readonly selectedId: ChecklistId | null;
+  /** Checklist à laquelle appartiennent `items` (différente de `selectedId` le temps du chargement). */
+  readonly itemsFor: ChecklistId | null;
   /** Items vivants de la checklist affichée, dans l'ordre manuel. */
   readonly items: readonly ChecklistItem[];
+  /** A-06, C-02 critère 9 : vue compacte (`view.compact.checklists`, local à l'appareil), lue au chargement. */
+  readonly compact: boolean;
   readonly status: ChecklistsStatus;
   readonly errorKey: PlainMessageKey | null;
   /** Échec d'une action (ajout, suppression…) : message dédié, la liste reste affichée. */
@@ -36,6 +40,8 @@ export interface ChecklistsState {
   select(id: ChecklistId | null): Promise<void>;
   /** Relit checklists et items sans passer par `loading`. Ne rejette jamais. */
   refresh(): Promise<void>;
+  /** A-06 : bascule la vue compacte et la mémorise. Ne rejette jamais. */
+  setCompact(compact: boolean): Promise<void>;
   /** C-01 : crée une checklist. Ne rejette jamais. */
   create(input: NewChecklistInput): Promise<Result<Checklist, ChecklistCreateError>>;
   /** C-01 : titre, icône, espace. Ne rejette jamais. */
@@ -44,6 +50,13 @@ export interface ChecklistsState {
   remove(id: ChecklistId): Promise<boolean>;
   /** C-01 : ajoute un item à la checklist affichée. Ne rejette jamais. */
   addItem(text: string): Promise<Result<ChecklistItem, ChecklistSaveError | 'unexpected'>>;
+  /**
+   * C-02 : coche ou décoche un item. L'état voulu est lu à l'instant du geste et affiché aussitôt ; les écritures d'un même item sont
+   * mises en file, la dernière gagne (deux gestes rapides ne perdent aucune bascule). Ne rejette jamais.
+   */
+  toggleItem(id: ChecklistItemId): void;
+  /** C-02 : texte modifié en ligne. Ne rejette jamais. */
+  renameItem(id: ChecklistItemId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError | 'unexpected'>>;
 }
 
 export const checklistsStore = defineFeatureStore<ChecklistsState>((container: AppContainer) => {
@@ -51,15 +64,25 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
   // Jetons de requête : le résultat d'une lecture dépassée par une plus récente est ignoré.
   let requestId = 0;
   let selectId = 0;
+  // État coché voulu des items dont l'écriture est en cours : une relecture ne le remet jamais en cause (pas de scintillement).
+  const wanted = new Map<ChecklistItemId, boolean>();
+  const inflight = new Map<ChecklistItemId, number>();
+  const chains = new Map<ChecklistItemId, Promise<unknown>>();
 
   const readSummaries = async (filter: SpaceFilter): Promise<ChecklistSummary[]> => sortChecklistSummaries(await container.data.repos.checklists.listSummaries(filter));
-  const readItems = async (id: ChecklistId | null): Promise<ChecklistItem[]> => (id ? sortItems(await container.data.repos.checklistItems.listForChecklist(id)) : []);
+  const readItems = async (id: ChecklistId | null): Promise<ChecklistItem[]> => {
+    if (!id) return [];
+    const items = sortItems(await container.data.repos.checklistItems.listForChecklist(id));
+    return items.map((item) => (wanted.has(item.id as ChecklistItemId) ? { ...item, checked: wanted.get(item.id as ChecklistItemId) === true } : item));
+  };
 
   const store = createStore<ChecklistsState>()((set, get) => ({
     filter: 'all',
     summaries: [],
     selectedId: null,
+    itemsFor: null,
     items: [],
+    compact: false,
     status: 'idle',
     errorKey: null,
     actionErrorKey: null,
@@ -69,8 +92,10 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
       set({ status: 'loading', filter, errorKey: null, actionErrorKey: null });
       try {
         const summaries = await readSummaries(filter);
+        // Réglage illisible : vue détaillée par défaut.
+        const compact = await container.data.repos.settings.get('view.compact').then((value) => value.checklists, () => false);
         if (id !== requestId) return;
-        set({ summaries, status: 'ready' });
+        set({ summaries, compact, status: 'ready' });
       } catch {
         if (id !== requestId) return;
         set({ status: 'error', errorKey: 'checklists.loadError' });
@@ -79,10 +104,10 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
 
     async select(id) {
       const token = ++selectId;
-      if (get().selectedId !== id) set({ selectedId: id, items: [] });
+      if (get().selectedId !== id) set({ selectedId: id });
       try {
         const items = await readItems(id);
-        if (token === selectId) set({ items });
+        if (token === selectId) set({ items, itemsFor: id });
       } catch {
         if (token === selectId) set({ actionErrorKey: 'checklists.loadError' });
       }
@@ -92,11 +117,23 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
       if (get().status === 'idle') return;
       const loadToken = requestId;
       const token = ++selectId;
+      const shown = get().selectedId;
       try {
-        const [summaries, items] = await Promise.all([readSummaries(get().filter), readItems(get().selectedId)]);
-        if (loadToken === requestId && token === selectId) set({ summaries, items });
+        const [summaries, items] = await Promise.all([readSummaries(get().filter), readItems(shown)]);
+        if (loadToken === requestId && token === selectId) set({ summaries, items, itemsFor: shown });
       } catch {
         // Relecture discrète : l'affichage reste celui d'avant.
+      }
+    },
+
+    async setCompact(compact) {
+      const previous = get().compact;
+      set({ compact });
+      try {
+        const stored = await container.data.repos.settings.get('view.compact');
+        await container.data.repos.settings.set('view.compact', { ...stored, checklists: compact });
+      } catch {
+        set({ compact: previous, actionErrorKey: 'checklists.saveError' });
       }
     },
 
@@ -135,6 +172,43 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
       try {
         const result = await useCases.addItem(id, text);
         set({ actionErrorKey: result.ok || result.error !== 'not-found' ? null : 'checklists.itemError' });
+        return result;
+      } catch {
+        set({ actionErrorKey: 'checklists.itemError' });
+        return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    toggleItem(id) {
+      const item = get().items.find((candidate) => candidate.id === id);
+      if (!item) return;
+      const checked = !(wanted.get(id) ?? item.checked);
+      wanted.set(id, checked);
+      inflight.set(id, (inflight.get(id) ?? 0) + 1);
+      set({ items: get().items.map((candidate) => (candidate.id === id ? { ...candidate, checked } : candidate)) });
+      const write = (chains.get(id) ?? Promise.resolve()).then(() => useCases.setChecked(id, checked));
+      const settled = write
+        .catch(() => {
+          set({ actionErrorKey: 'checklists.itemError' });
+        })
+        .finally(() => {
+          const left = (inflight.get(id) ?? 1) - 1;
+          if (left > 0) {
+            inflight.set(id, left);
+            return;
+          }
+          inflight.delete(id);
+          wanted.delete(id);
+          chains.delete(id);
+          void get().refresh();
+        });
+      chains.set(id, settled);
+    },
+
+    async renameItem(id, text) {
+      try {
+        const result = await useCases.renameItem(id, text);
+        set({ actionErrorKey: null });
         return result;
       } catch {
         set({ actionErrorKey: 'checklists.itemError' });
