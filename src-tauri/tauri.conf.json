@@ -48,7 +48,7 @@
       "nsis": { "languages": ["French"], "installMode": "currentUser" }
     },
     "iOS": {
-      "minimumSystemVersion": "17.0"
+      "minimumSystemVersion": "18.0"
     }
   },
   "plugins": {
