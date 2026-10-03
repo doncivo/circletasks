@@ -112,6 +112,6 @@ export function isCreatedOutsideFilter(filter: SpaceFilter, spaceId: SpaceId): b
  * Règle unique, appliquée à toute donnée portant un `spaceId` (tâches, routines, objectifs ; événements et checklists à l'ordre 2).
  * Les lectures de listes filtrent aussi en requête (`spaceFilterClause`) : cette règle revérifie les éléments déjà chargés.
  */
-export function matchesSpaceFilter(item: { readonly spaceId: SpaceId | string }, filter: SpaceFilter): boolean {
+export function matchesSpaceFilter(item: { readonly spaceId: SpaceId | string | null }, filter: SpaceFilter): boolean {
   return filter === 'all' || item.spaceId === filter;
 }
