@@ -164,31 +164,14 @@
 
 /* Champ Date / Heure minimal de la feuille « Nouvelle tâche » (T-02), remplacé
    par la feuille de roues de T-14. */
-.ct-task-sheet__spaces {
+.ct-task-sheet__spaceRow .ct-space-segmented {
+  flex: 0 0 auto;
+}
+
+.ct-task-sheet__spaceRow {
   display: flex;
-  gap: 4px;
-  padding: 4px;
-  background: var(--ct-color-surface-input);
-  border-radius: var(--ct-radius-md);
-}
-
-.ct-task-sheet__spaceButton {
-  flex-grow: 1;
-  height: 38px;
-  border: 0;
-  border-radius: var(--ct-radius-sm);
-  background: transparent;
-  color: color-mix(in srgb, var(--ct-space-color, var(--ct-color-text)), #ffffff var(--ct-space-white, 0%));
-  font-family: var(--ct-font-text);
-  font-weight: var(--ct-font-weight-semibold);
-  font-size: var(--ct-font-size-text-sm);
-  cursor: pointer;
-}
-
-/* Espace sélectionné (pas de style inline par espace, voir revue). */
-.ct-task-sheet__spaceButton[aria-pressed='true'] {
-  background: var(--ct-color-surface);
-  box-shadow: 0 1px 3px rgba(46, 33, 80, 0.15);
+  gap: 10px;
+  align-items: center;
 }
 
 .ct-task-sheet__spacer {

@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import type { Space } from '../../domain/model';
+import { moveDestinations } from '../../domain/spaceMove';
 import type { TodayList } from '../../domain/todayList';
 import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { SpaceId, TaskId } from '../../domain/types';
+import type { ProjectId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { ChoiceDialog, ConfirmDialog, SelectionBar, SelectionBarButton } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { useAppStore } from '../app/appStore';
 import { isModalOpen } from '../app/tabShortcuts';
 import { PostponeAction } from '../tasks/PostponeAction';
 import { todayStore } from './todayStore';
@@ -129,11 +131,18 @@ export function TodaySelectionBar({ edit }: { edit: TodayEditMode }) {
   );
 }
 
-/** Fenêtres du mode édition : « Supprimer N tâches ? » et « Déplacer vers un espace » (Q12 : espace seulement, projet avec ES-04). */
+/** Fenêtres du mode édition : « Supprimer N tâches ? » et « Déplacer vers un espace ou un projet » (Q12, ES-05). */
 export function TodaySelectionDialogs({ edit, spaces }: { edit: TodayEditMode; spaces: readonly Space[] }) {
   const removeSelected = useFeatureStore(todayStore, (s) => s.removeSelected);
   const moveSelected = useFeatureStore(todayStore, (s) => s.moveSelected);
   const { batchDeleteOpen, setBatchDeleteOpen, moveOpen, setMoveOpen } = edit.dialogs;
+  const projects = useAppStore((s) => s.projects);
+  // Q12 : une liste d'une pression, « Perso · aucun projet » puis « Pro · Mission client »… (espace, puis projet ou aucun).
+  const destinations = moveDestinations(spaces, projects).map((target) => {
+    const space = spaces.find((s) => s.id === target.spaceId)?.name ?? '';
+    const project = target.projectId ? projects.find((p) => p.id === target.projectId)?.name : undefined;
+    return { id: `${target.spaceId}|${target.projectId ?? ''}`, label: project ? t('today.moveToProject', { space, project }) : t('today.moveNoProject', { space }) };
+  });
   return (
     <>
       {batchDeleteOpen && (
@@ -152,10 +161,11 @@ export function TodaySelectionDialogs({ edit, spaces }: { edit: TodayEditMode; s
         <ChoiceDialog
           title={t('today.moveTitle')}
           description={t('today.moveBody')}
-          options={spaces.map((space) => ({ id: space.id as SpaceId, label: space.name }))}
-          onChoose={(spaceId) => {
+          options={destinations}
+          onChoose={(id) => {
+            const [spaceId = '', projectId = ''] = id.split('|');
             setMoveOpen(false);
-            void moveSelected(spaceId);
+            void moveSelected(spaceId as SpaceId, projectId === '' ? null : (projectId as ProjectId));
           }}
           onCancel={() => setMoveOpen(false)}
         />

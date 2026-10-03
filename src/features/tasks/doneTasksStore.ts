@@ -1,6 +1,7 @@
 import { createStore } from 'zustand';
 import { donePeriodOf, isInDonePeriod, shiftDonePeriod, type DonePeriod, type DonePeriodKind } from '../../domain/donePeriod';
 import type { Task } from '../../domain/model';
+import { matchesSpaceFilter } from '../../domain/spaceRules';
 import type { LocalDate, SpaceFilter, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -103,5 +104,5 @@ export function resolveDoneTasks(
 ): Task[] {
   const { period, filter } = view;
   if (!period) return [];
-  return selectTasks(taskIds, entities, (task) => isInDonePeriod(task, period) && (filter === 'all' || task.spaceId === filter));
+  return selectTasks(taskIds, entities, (task) => isInDonePeriod(task, period) && matchesSpaceFilter(task, filter));
 }

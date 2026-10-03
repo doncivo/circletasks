@@ -1,3 +1,4 @@
+import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import type { Messages } from './types';
 
@@ -26,10 +27,7 @@ export const en: Messages = {
       settings: 'Settings',
     },
   },
-  spaces: {
-    all: 'All',
-    filterLabel: 'Space filter',
-  },
+  spaces: spacesEn,
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',
@@ -498,7 +496,9 @@ export const en: Messages = {
     barPostpone: 'Postpone',
     barDelete: 'Delete',
     postponeSelectionMenu: 'Postpone the selection',
-    moveTitle: 'Move to a space',
+    moveTitle: 'Move to a space or a project',
+    moveNoProject: '{space} · no project',
+    moveToProject: '{space} · {project}',
     moveBody: 'The date does not change: use “Postpone” to change the date.',
     deleteManyTitle: 'Delete {count} tasks?',
     deleteManyBody: 'They will be kept in the trash for 30 days.',
@@ -542,7 +542,8 @@ export const en: Messages = {
     postponeTomorrow: '“{title}” postponed to tomorrow',
     postponeDate: '“{title}” postponed to {date}',
     move: 'Task moved',
-    moveSpace: '“{title}” moved',
+    moveSpace: '“{title}” moved to {space}',
+    manyMoveSpace: '{count} tasks moved to {space}',
     someday: '“{title}” moved to “Someday”',
     duplicate: '“{title}” duplicated',
     delete: '“{title}” deleted',

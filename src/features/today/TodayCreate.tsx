@@ -1,13 +1,14 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type RefObject } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
-import type { LocalDate, SpaceId } from '../../domain/types';
+import type { LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField, type Layout } from '../../ui';
+import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField, type Layout } from '../../ui';
 import { ReminderBlock } from '../reminders';
+import { ProjectSelect } from '../spaces';
 import type { NewTaskSchedule } from './todayStore';
 
 /**
@@ -70,12 +71,15 @@ export interface TodayCreateSheetProps {
   readonly spaces: readonly Space[];
   /** Espace présélectionné (filtre actif, ES-02). */
   readonly initialSpaceId: SpaceId | null;
+  /** Projet présélectionné (filtre projet actif, QB-15) ; seulement s'il appartient à l'espace présélectionné. */
+  readonly initialProjectId?: ProjectId | null;
   /** Avances cochées d'office à la première heure donnée (`reminders.defaultOffsets`, QB-08) ; [0] par défaut. */
   readonly defaultOffsets?: readonly ReminderOffsetMin[];
   readonly onClose: () => void;
   readonly onCreate: (input: {
     title: string;
     spaceId: SpaceId;
+    projectId: ProjectId | null;
     choice: DateChoice;
     recurrence: RecurrenceFields | null;
     icon: IconRef | null;
@@ -87,10 +91,11 @@ export interface TodayCreateSheetProps {
  * Feuille « Nouvelle tâche » (iPhone, Ajout.html) : titre, icône, roues de date (« Aujourd'hui » / jour affiché, sans heure,
  * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
  */
-export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, defaultOffsets = [0], onClose, onCreate }: TodayCreateSheetProps) {
+export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], onClose, onCreate }: TodayCreateSheetProps) {
   const [title, setTitle] = useState('');
   const [choice, setChoice] = useState<DateChoice>({ date: viewedDate, time: null });
   const [spaceId, setSpaceId] = useState<SpaceId | null>(initialSpaceId);
+  const [projectId, setProjectId] = useState<ProjectId | null>(initialProjectId);
   const [icon, setIcon] = useState<IconRef | null>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceFields | null>(null);
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
@@ -115,7 +120,7 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, de
     event.preventDefault();
     if (!valid || !spaceId) return;
     const reminderOffsets = choice.date === null || choice.time === null ? [] : offsets;
-    if (await onCreate({ title, spaceId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets })) onClose();
+    if (await onCreate({ title, spaceId, projectId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets })) onClose();
   }
 
   return (
@@ -142,19 +147,19 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, de
             setOffsets((current) => toggleReminderOffset(current, offset));
           }}
         />
-        <div className="ct-task-sheet__spaces" role="group" aria-label={t('spaces.filterLabel')}>
-          {spaces.map((space) => (
-            <button
-              key={space.id}
-              type="button"
-              aria-pressed={spaceId === space.id}
-              className="ct-task-sheet__spaceButton"
-              style={{ '--ct-space-color': space.color } as CSSProperties}
-              onClick={() => setSpaceId(space.id)}
-            >
-              {space.name}
-            </button>
-          ))}
+        {/* Espace puis projet (Ajout.html) : changer d'espace remet « Projet : aucun » (ES-04 critère 4). */}
+        <div className="ct-task-sheet__spaceRow">
+          <SpaceSegmented
+            layout="compact"
+            items={spaces}
+            value={spaceId}
+            onChange={(id) => {
+              if (id !== spaceId) setProjectId(null);
+              setSpaceId(id);
+            }}
+            label={t('detail.spaceChoiceLabel')}
+          />
+          <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
         </div>
         <div className="ct-task-sheet__spacer" />
         <Button type="submit" fullWidth disabled={!valid || !spaceId}>

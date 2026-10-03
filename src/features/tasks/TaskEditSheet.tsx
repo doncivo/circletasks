@@ -1,15 +1,16 @@
 import { X } from 'lucide-react';
-import { useState, type CSSProperties, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space, Task, TaskPatch } from '../../domain/model';
 import { ruleChanged } from '../../domain/recurrenceEdit';
 import { sortReminderOffsets, toggleReminderOffset } from '../../domain/reminders';
 import { choiceOfTask, editSheetPatch } from '../../domain/taskDetailEdit';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
-import type { LocalDate, SpaceId } from '../../domain/types';
+import type { LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { ReminderBlock } from '../reminders';
-import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, TextField } from '../../ui';
+import { ProjectSelect } from '../spaces';
+import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField } from '../../ui';
 
 /** Résultat de la feuille : champs modifiés, et règle de répétition si elle a changé (`null` : « Une fois »). */
 export interface EditSheetResult {
@@ -34,7 +35,7 @@ export interface TaskEditSheetProps {
 /**
  * Feuille « Modifier la tâche » de la fiche iPhone (A-08 critère 9, Q15) : la feuille d'ajout pré-remplie (titre, icône,
  * date et roues, répétition, espace). Enregistrer applique les changements ; fermer sans enregistrer ne change rien.
- * Rappels (N-02) : bloc grisé sans heure. Projet : à venir avec ES-04 (aucun champ simulé).
+ * Rappels (N-02) : bloc grisé sans heure. Espace puis projet (ES-04, ES-05) : changer d'espace remet « Projet : aucun ».
  */
 export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onClose, onSave }: TaskEditSheetProps) {
   const [title, setTitle] = useState(task.title);
@@ -43,12 +44,13 @@ export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onCl
   const [rule, setRule] = useState<RecurrenceFields | null>(recurrence);
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>(reminders);
   const [spaceId, setSpaceId] = useState<SpaceId>(task.spaceId);
+  const [projectId, setProjectId] = useState<ProjectId | null>(task.projectId);
   const valid = validateTaskTitle(title);
 
   function submit(event: FormEvent): void {
     event.preventDefault();
     if (!valid.ok) return;
-    const patch = editSheetPatch(task, { title: valid.value, icon, choice, spaceId });
+    const patch = editSheetPatch(task, { title: valid.value, icon, choice, spaceId, projectId });
     const changed = rule === null ? recurrence !== null : recurrence === null || ruleChanged(recurrence, rule);
     const wanted = sortReminderOffsets(offsets);
     const remindersChanged = wanted.join() !== sortReminderOffsets(reminders).join();
@@ -73,19 +75,18 @@ export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onCl
           offsets={offsets}
           onToggle={(offset) => setOffsets((current) => toggleReminderOffset(current, offset))}
         />
-        <div className="ct-task-sheet__spaces" role="group" aria-label={t('detail.spaceChoiceLabel')}>
-          {spaces.map((space) => (
-            <button
-              key={space.id}
-              type="button"
-              aria-pressed={spaceId === space.id}
-              className="ct-task-sheet__spaceButton"
-              style={{ '--ct-space-color': space.color } as CSSProperties}
-              onClick={() => setSpaceId(space.id)}
-            >
-              {space.name}
-            </button>
-          ))}
+        <div className="ct-task-sheet__spaceRow">
+          <SpaceSegmented
+            layout="compact"
+            items={spaces}
+            value={spaceId}
+            onChange={(id) => {
+              if (id !== spaceId) setProjectId(null);
+              setSpaceId(id);
+            }}
+            label={t('detail.spaceChoiceLabel')}
+          />
+          <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
         </div>
         <div className="ct-task-sheet__spacer" />
         <Button type="submit" fullWidth disabled={!valid.ok}>

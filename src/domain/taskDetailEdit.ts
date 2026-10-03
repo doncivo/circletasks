@@ -1,6 +1,6 @@
 import type { DateChoice } from './dateInput';
 import type { IconRef, Task, TaskPatch } from './model';
-import type { SpaceId } from './types';
+import type { ProjectId, SpaceId } from './types';
 
 /**
  * Modification d'une tâche depuis la fiche détail (A-08) : traduction d'un choix du sélecteur de date et du
@@ -20,6 +20,8 @@ export interface EditDraft {
   readonly icon: IconRef | null;
   readonly choice: DateChoice;
   readonly spaceId: SpaceId;
+  /** Projet choisi (ES-04) ; absent : la feuille ne le propose pas. Doit appartenir à `spaceId` (aucun si l'espace change). */
+  readonly projectId?: ProjectId | null;
 }
 
 const sameIcon = (a: IconRef | null, b: IconRef | null): boolean => JSON.stringify(a) === JSON.stringify(b);
@@ -36,7 +38,9 @@ export function editSheetPatch(task: Task, draft: EditDraft): TaskPatch {
   if (!sameIcon(draft.icon, task.icon)) patch.icon = draft.icon;
   if (draft.spaceId !== task.spaceId) {
     patch.spaceId = draft.spaceId;
-    patch.projectId = null; // un projet appartient à un espace (ES-04)
+    patch.projectId = draft.projectId ?? null; // un projet appartient à un espace (ES-04) : aucun si l'espace change
+  } else if (draft.projectId !== undefined && draft.projectId !== task.projectId) {
+    patch.projectId = draft.projectId;
   }
   const current = choiceOfTask(task);
   if (draft.choice.date !== current.date || draft.choice.time !== current.time) Object.assign(patch, patchFromDateChoice(draft.choice));

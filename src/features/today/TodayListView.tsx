@@ -56,6 +56,8 @@ export function TodayListView(props: TodayListViewProps) {
           iconSize={iconSize}
           compact={compact}
           inline={inline}
+          spaces={spaces}
+          showSpace={spaceFilter === 'all'}
           checkable={props.routinesCheckable}
           disabled={props.routinesDisabled}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId)}

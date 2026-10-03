@@ -27,7 +27,7 @@ describe('migration 0006 (R-05) : routine_pause sur une base 0001→0005 peuplé
       `INSERT INTO routine_log (id, routine_id, date, done_at, created_at, updated_at, device_id, hlc) VALUES ('l1', 'r-pause', '2026-09-15', '2026-09-15T08:00:00.000Z', 'z', 'z', 'd', 'h')`,
     );
 
-    expect((await migrate(db, migrations)).applied).toEqual([6]);
+    expect((await migrate(db, migrations)).applied).toEqual([6, 7]);
     expect((await migrate(db, migrations)).applied).toEqual([]);
 
     const pauses = await db.select<{ id: string; routine_id: string; from_date: string; to_date: string | null; hlc: string }>('SELECT * FROM routine_pause');

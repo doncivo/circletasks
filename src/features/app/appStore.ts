@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import type { Space } from '../../domain/model';
-import type { LocalDate, SpaceFilter } from '../../domain/types';
+import type { Project, Space } from '../../domain/model';
+import type { LocalDate, ProjectId, SpaceFilter } from '../../domain/types';
 
 /** État de démarrage de la base locale. */
 export type DbStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -25,6 +25,16 @@ export interface AppState {
    */
   readonly spaces: readonly Space[];
   /**
+   * Projets (ES-04), archivés compris, lus au démarrage et republiés à chaque modification (Réglages) : liste « Projet » des fenêtres
+   * d'ajout, ligne Projet de la fiche, menu « Projet : tous ». Source unique, comme `spaces`.
+   */
+  readonly projects: readonly Project[];
+  /**
+   * Filtre par projet (QB-15, ES-04) : null = « Tous les projets ». Global comme le filtre d'espace, jamais mémorisé ; changer de filtre
+   * d'espace le remet à null. Il ne s'applique que sous Pro ou Perso (`effectiveProjectFilter`).
+   */
+  readonly projectFilter: ProjectId | null;
+  /**
    * Jour local courant de l'app (T-06) : posé au démarrage puis à chaque passage de minuit
    * par le déclencheur de report (`createDayRollover`) ; les écrans datés s'y rechargent.
    */
@@ -42,6 +52,8 @@ export interface AppState {
   setRecurrenceFailed(failed: boolean): void;
   setSpaceFilter(filter: SpaceFilter): void;
   setSpaces(spaces: readonly Space[]): void;
+  setProjects(projects: readonly Project[]): void;
+  setProjectFilter(projectId: ProjectId | null): void;
 }
 
 export const useAppStore = create<AppState>()((set) => ({
@@ -50,6 +62,8 @@ export const useAppStore = create<AppState>()((set) => ({
   dbBackupFailed: false,
   spaceFilter: 'all',
   spaces: [],
+  projects: [],
+  projectFilter: null,
   day: null,
   carryOverFailed: false,
   recurrenceFailed: false,
@@ -59,6 +73,9 @@ export const useAppStore = create<AppState>()((set) => ({
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
   setRecurrenceFailed: (recurrenceFailed) => set({ recurrenceFailed }),
-  setSpaceFilter: (spaceFilter) => set({ spaceFilter }),
+  // Changer de filtre d'espace remet « Projet : tous » (QB-15) ; rechoisir le même filtre ne change rien.
+  setSpaceFilter: (spaceFilter) => set((s) => (s.spaceFilter === spaceFilter ? s : { spaceFilter, projectFilter: null })),
   setSpaces: (spaces) => set({ spaces }),
+  setProjects: (projects) => set({ projects }),
+  setProjectFilter: (projectFilter) => set({ projectFilter }),
 }));

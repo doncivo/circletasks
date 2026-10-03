@@ -136,16 +136,16 @@ describe('Aujourd’hui : mode édition (A-05)', () => {
     select('B');
     fireEvent.click(screen.getByRole('button', { name: 'Déplacer' }));
     const dialog = await screen.findByRole('alertdialog');
-    expect(dialog).toHaveAccessibleName('Déplacer vers un espace');
+    expect(dialog).toHaveAccessibleName('Déplacer vers un espace ou un projet');
     expect(within(dialog).getByText(/La date ne change pas/)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Perso' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Perso · aucun projet' }));
     await waitFor(async () => {
       const stored = await h.container.data.repos.tasks.listForDay(h.today, 'all');
       expect(stored.map((task) => task.spaceId)).toEqual([SPACE_PERSO_ID, SPACE_PERSO_ID]);
     });
     const stored = await h.container.data.repos.tasks.listForDay(h.today, 'all');
     expect(stored.every((task) => task.date === h.today && task.time === '09:00')).toBe(true);
-    expect(await screen.findByRole('status')).toHaveTextContent('2 tâches déplacées');
+    expect(await screen.findByRole('status')).toHaveTextContent('2 tâches déplacées dans Perso');
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
     await waitFor(async () => {
       const back = await h.container.data.repos.tasks.listForDay(h.today, 'all');

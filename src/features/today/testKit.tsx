@@ -9,6 +9,7 @@ import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { UndoToast } from '../app/UndoToast';
 import { useAppStore } from '../app/appStore';
+import { useNoticeStore } from '../app/notice';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
@@ -42,7 +43,8 @@ export async function teardownToday(harness: TodayHarness): Promise<void> {
   cleanup();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
-  useAppStore.setState({ spaceFilter: 'all', spaces: [], day: null });
+  useAppStore.setState({ spaceFilter: 'all', spaces: [], projects: [], projectFilter: null, day: null });
+  useNoticeStore.setState({ notice: null });
   useNavigationStore.setState(INITIAL_NAVIGATION);
   await harness.db.close();
 }

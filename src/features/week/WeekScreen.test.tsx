@@ -113,14 +113,21 @@ describe('Semaine : sept jours (S-01)', () => {
 
     it('affiche un squelette si le chargement dépasse 150 ms (A-09)', async () => {
       const original = h.container.data.repos.tasks.listForWeek.bind(h.container.data.repos.tasks);
+      // Chargement tenu en attente par une promesse maîtrisée par le test : le squelette (minuterie de 150 ms) apparaît quel que
+      // soit le retard de la machine, puis le chargement n'aboutit qu'une fois le squelette constaté (aucune course entre minuteries).
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
       h.container.data.repos.tasks.listForWeek = async (...args) => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+        await gate;
         return original(...args);
       };
       renderWeek(h.container);
-      expect(await screen.findAllByTestId('list-skeleton', {}, { timeout: 1000 })).toHaveLength(7);
+      expect(await screen.findAllByTestId('list-skeleton', {}, { timeout: 10_000 })).toHaveLength(7);
       expect(document.querySelector('.ct-week__days')).toHaveAttribute('aria-busy', 'true');
-      await waitFor(() => expect(screen.queryAllByTestId('list-skeleton')).toHaveLength(0), { timeout: 2000 });
+      release();
+      await waitFor(() => expect(screen.queryAllByTestId('list-skeleton')).toHaveLength(0), { timeout: 10_000 });
     });
 
     it('un échec de chargement affiche un message et pas de grille', async () => {

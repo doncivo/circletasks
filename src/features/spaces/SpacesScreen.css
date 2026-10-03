@@ -1,0 +1,232 @@
+/* Écran « Espaces et projets » (ES-01, ES-04) : mêmes codes que Réglages ; carte d'espace de Bienvenue.html. */
+.ct-spaces-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-spaces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.ct-spaces__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-spaces__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-spaces__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-spaces__error,
+.ct-space-editor__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-space-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding: var(--ct-space-4);
+  border: 2px solid;
+  border-radius: var(--ct-radius-lg);
+}
+
+.ct-space-editor__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-space-editor__caption {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.06em;
+}
+
+.ct-space-editor__colors {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-space-editor__colorCaption {
+  flex-grow: 1;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+/* Projets d'un espace (ES-04). */
+.ct-projects {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding-top: var(--ct-space-3);
+  border-top: 1px solid var(--ct-color-border);
+}
+
+.ct-projects__title,
+.ct-projects__archivedTitle {
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ct-projects__archivedTitle {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-projects__empty {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-projects__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-projects__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-projects__row--archived {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-projects__dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--ct-radius-round);
+}
+
+.ct-projects__name {
+  flex-grow: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-projects__badge {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-projects__iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-projects__iconButton:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.ct-projects__add {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  align-self: flex-start;
+  min-height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-projects__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding: var(--ct-space-3) 0;
+}
+
+.ct-projects__formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ct-space-2);
+}
+
+.ct-projects__button {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-projects__button--primary {
+  background: var(--ct-color-nav-bg);
+  border-color: var(--ct-color-nav-bg);
+  color: var(--ct-color-accent-on);
+}
+
+.ct-projects__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-projects__archived {
+  display: flex;
+  flex-direction: column;
+}
+

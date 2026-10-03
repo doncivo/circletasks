@@ -3,7 +3,7 @@ import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model'
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { Checkbox, IconView, ListRow, RemoveButton, SelectCircle, resolveIconRefColor } from '../../ui';
-import { taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Lignes de la liste d'Aujourd'hui (A-01, A-05, A-06) : présentation seule, les actions viennent de l'écran.
@@ -74,6 +74,9 @@ export interface TodayRoutineRowProps {
   readonly iconSize: number;
   readonly compact: boolean;
   readonly inline: boolean;
+  /** Espaces et filtre « Tout » : l'espace est écrit après « Routine » (ES-03). */
+  readonly spaces: readonly Space[];
+  readonly showSpace: boolean;
   /** La routine est validable depuis la liste (une source de routines sait le faire, R-03). */
   readonly checkable: boolean;
   /** Jour futur : seuls aujourd'hui et les jours passés se valident (R-03 critère 11, QB-03) ; la case est inactive. */
@@ -82,7 +85,7 @@ export interface TodayRoutineRowProps {
 }
 
 /** Routine du jour (M4) : « HH:MM · Routine », icône à droite ; jamais sélectionnable ni déplaçable (Q13). */
-export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, checkable, disabled = false, onToggle }: TodayRoutineRowProps) {
+export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline, spaces, showSpace, checkable, disabled = false, onToggle }: TodayRoutineRowProps) {
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
   return (
     <ListRow
@@ -90,7 +93,7 @@ export function TodayRoutineRow({ routine, time, done, iconSize, compact, inline
       done={done}
       compact={compact}
       inlineSubtitle={inline}
-      {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle: time ? `${time} · ${t('today.routineLabel')}` : t('today.routineLabel') })}
+      {...(compact ? { time, dotColor: color ?? 'var(--ct-color-text-secondary)' } : { subtitle: routineSubtitle(routine, time, { spaces, showSpace }) })}
       {...(checkable
         ? { leading: <Checkbox compact={compact} checked={done} disabled={disabled} onChange={onToggle} label={t(done ? 'tasks.reopen' : 'tasks.complete', { title: routine.title })} /> }
         : {})}

@@ -1,0 +1,12 @@
+/* Pastilles d'espace + menu « Projet : tous » (QB-15) : une rangée, le menu à droite des pastilles. */
+.ct-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+  min-width: 0;
+}
+
+.ct-project-filter {
+  max-width: 220px;
+}

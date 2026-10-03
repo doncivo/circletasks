@@ -170,7 +170,18 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
         write.title = title.value;
       }
       try {
-        await useCases.update(taskId, write);
+        // ES-05 : un changement d'espace ou de projet est un déplacement (message « déplacée dans Perso », annulable, Ctrl+Z) ;
+        // les autres champs s'écrivent à part. Un projet n'est valable que dans son espace (aucun projet si l'espace change).
+        const { spaceId, projectId, ...rest } = write;
+        if (Object.keys(rest).length > 0 || (spaceId === undefined && projectId === undefined)) await useCases.update(taskId, rest);
+        if (spaceId !== undefined || projectId !== undefined) {
+          const current = await container.data.repos.tasks.getById(taskId);
+          if (current) {
+            const space = spaceId ?? current.spaceId;
+            const project = projectId !== undefined ? projectId : space === current.spaceId ? current.projectId : null;
+            await useCases.moveToSpace([taskId], space, project);
+          }
+        }
         set({ status: 'ready', errorKey: null });
         return true;
       } catch {

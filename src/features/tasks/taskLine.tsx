@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { spaceTextColor } from '../../ui';
-import type { RecurrenceFields, Space, Task } from '../../domain/model';
+import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import { recurrenceLabel } from '../../domain/recurrenceLabel';
 import { taskLineSegments } from '../../domain/taskLine';
 import { t } from '../../i18n';
@@ -32,6 +32,30 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtit
     } else if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
   }
   if (parts.length === 0) return undefined;
+  return (
+    <>
+      {parts.map((part, index) => (
+        <span key={index}>
+          {index > 0 && ' · '}
+          {part}
+        </span>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Sous-ligne d'une routine (« 08:30 · Routine », en « Tout » : « 08:30 · Routine · Perso », ES-03) ; l'espace est écrit dans sa couleur.
+ * Partagée par Aujourd'hui et la Semaine.
+ */
+export function routineSubtitle(routine: Pick<Routine, 'spaceId'>, time: string | null, { spaces, showSpace }: { readonly spaces: readonly Space[]; readonly showSpace: boolean }): ReactNode {
+  const parts: ReactNode[] = [];
+  if (time) parts.push(time);
+  parts.push(t('today.routineLabel'));
+  const space = showSpace ? spaces.find((s) => s.id === routine.spaceId) : undefined;
+  // Sans espace à écrire : texte simple (« 08:30 · Routine »).
+  if (!space) return parts.join(' · ');
+  if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
   return (
     <>
       {parts.map((part, index) => (

@@ -4,16 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
+import { matchesSpaceFilter } from '../../domain/spaceRules';
 import { buildTodayList } from '../../domain/todayList';
-import { resolveDefaultSpaceId } from '../../domain/taskRules';
-import type { LocalDate, SpaceId, TaskId } from '../../domain/types';
+import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, SpacePills, useDelayedFlag, useLayout } from '../../ui';
+import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useQuickAddStore } from '../app/quickAdd';
+import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
 import { TodayHeader } from './TodayHeader';
@@ -35,10 +36,13 @@ export function TodayScreen() {
   const container = useAppContainer();
   const layout = useLayout();
   const spaceFilter = useAppStore((s) => s.spaceFilter);
-  const setSpaceFilter = useAppStore((s) => s.setSpaceFilter);
+  // QB-15 : filtre par projet (menu « Projet : tous »), global, seulement sous Pro ou Perso ; il ne garde que les tâches du projet.
+  const projectFilter = useEffectiveProjectFilter();
   // Espaces (ES-01) : lus une fois dans useAppStore (App.tsx, via SpaceRepository), jamais importés depuis db/seed.
   const spaces = useAppStore((s) => s.spaces);
-  const fallbackSpaceId: SpaceId | null = spaces[0]?.id ?? null;
+  // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
+  const defaultSpaceId = useDefaultSpaceId();
+  const announceCreation = useAnnounceCreation();
 
   const taskIds = useFeatureStore(todayStore, (s) => s.taskIds);
   const entities = useTaskEntities();
@@ -74,7 +78,7 @@ export function TodayScreen() {
   const goToDay = (date: LocalDate): void => navigate(date === today ? { tab: 'tasks', screen: 'today' } : { tab: 'tasks', screen: 'today', date });
 
   // Date et espace revérifiés à chaque rendu (selectTasks) : une tâche reportée quitte la liste aussitôt (T-05).
-  const dayTasks = useMemo(() => selectTodayTasks(taskIds, entities, { date: viewDate, filter: viewFilter }), [taskIds, entities, viewDate, viewFilter]);
+  const dayTasks = useMemo(() => selectTodayTasks(taskIds, entities, { date: viewDate, filter: viewFilter, projectId: projectFilter }), [taskIds, entities, viewDate, viewFilter, projectFilter]);
   // Assemblage de la liste du jour (domaine) : objectif, événements, routines et tâches mêlées, terminés, checklists.
   const list = useMemo(
     () =>
@@ -82,13 +86,14 @@ export function TodayScreen() {
         date: viewDate ?? viewedDate,
         filter: viewFilter,
         tasks: dayTasks,
-        routines: extras.routines,
-        events: extras.events,
-        checklists: extras.checklists,
-        goal: extras.goal,
+        // Un filtre projet ne montre que des tâches : routines, événements, checklists et objectif n'ont pas de projet.
+        routines: projectFilter ? [] : extras.routines,
+        events: projectFilter ? [] : extras.events,
+        checklists: projectFilter ? [] : extras.checklists,
+        goal: projectFilter ? null : extras.goal,
         hideRoutines,
       }),
-    [dayTasks, extras, hideRoutines, viewDate, viewedDate, viewFilter],
+    [dayTasks, extras, hideRoutines, projectFilter, viewDate, viewedDate, viewFilter],
   );
 
   const edit = useTodayEditMode(list);
@@ -120,7 +125,7 @@ export function TodayScreen() {
     let missing = false;
     for (const task of entities.values()) {
       if (task.date !== viewDate || task.someday || known.has(task.id) || adoptTried.current.has(task.id)) continue;
-      if (viewFilter !== 'all' && task.spaceId !== viewFilter) continue;
+      if (!matchesSpaceFilter(task, viewFilter)) continue;
       adoptTried.current.add(task.id);
       missing = true;
     }
@@ -152,15 +157,28 @@ export function TodayScreen() {
   }, [openCreate]);
 
   async function submitInline(title: string, choice: DateChoice | null): Promise<boolean> {
-    if (!fallbackSpaceId) return false;
-    const result = await addTask(title, resolveDefaultSpaceId(spaceFilter, fallbackSpaceId), scheduleOf(choice));
+    if (!defaultSpaceId) return false;
+    const result = await addTask(title, defaultSpaceId, scheduleOf(choice), undefined, projectFilter);
+    if (result.ok) announceCreation(defaultSpaceId);
     return result.ok;
   }
 
   // Squelette si le chargement dépasse 150 ms (A-09) ; la liste est `aria-busy` pendant le chargement.
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
-  const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
+  // ES-03 critère 6 : sous Pro ou Perso, l'écran vide nomme l'espace (« Aucune tâche Pro aujourd'hui »).
+  const filteredSpaceName = spaceFilter === 'all' ? null : (spaces.find((space) => space.id === spaceFilter)?.name ?? null);
+  const weekdayName = formatWeekdayName(viewedDate);
+  const emptyMessage =
+    filteredSpaceName !== null
+      ? viewedDate === today
+        ? t('spaces.emptyToday', { space: filteredSpaceName })
+        : t('spaces.emptyDay', { space: filteredSpaceName, weekday: weekdayName })
+      : viewedDate === today
+        ? t('tasks.emptyToday')
+        : t('today.emptyDay', { weekday: weekdayName });
+
+  const pills = <SpaceFilterBar />;
   const reportButton = (
     <button type="button" className="ct-today__iconButton" aria-label={t('report.openFromToday')} onClick={() => navigate({ tab: 'tasks', screen: 'report' })}>
       <Icon icon={ChartColumn} size={layout === 'pc' ? 24 : 26} />
@@ -203,7 +221,7 @@ export function TodayScreen() {
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
-              <TodayEmpty message={viewedDate === today ? t('tasks.emptyToday') : t('today.emptyDay', { weekday: formatWeekdayName(viewedDate) })} />
+              <TodayEmpty message={emptyMessage} />
             )}
             <TodayListView
               list={list}
@@ -251,11 +269,13 @@ export function TodayScreen() {
             viewedDate={viewedDate}
             today={today}
             spaces={spaces}
-            initialSpaceId={fallbackSpaceId ? resolveDefaultSpaceId(spaceFilter, fallbackSpaceId) : null}
+            initialSpaceId={defaultSpaceId}
+            initialProjectId={projectFilter}
             defaultOffsets={defaultOffsets}
             onClose={() => setSheetOpen(false)}
             onCreate={async (input) => {
-              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets }, input.icon);
+              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets }, input.icon, input.projectId);
+              if (result.ok) announceCreation(input.spaceId);
               return result.ok;
             }}
           />
