@@ -5,9 +5,10 @@ import { migration0003TaskSeriesTemplate } from './0003_task_series_template';
 import { migration0004TaskDiscarded } from './0004_task_discarded';
 import { migration0005ExternalCalendar } from './0005_external_calendar';
 import { migration0006RoutinePause } from './0006_routine_pause';
+import { migration0007ProQuietHours } from './0007_pro_quiet_hours';
 
 /**
  * Registre ordonné des migrations de l'app. Ajouter chaque nouveau fichier
  * `NNNN_titre.ts` ici, à la fin, sans jamais modifier une entrée publiée.
  */
-export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause];
+export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours];

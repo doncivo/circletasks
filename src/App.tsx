@@ -15,7 +15,7 @@ import { startNetworkStatus } from './features/app/appStatus';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
-import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
+import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
 import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
@@ -78,7 +78,7 @@ function AppShellContent() {
       ) : route.tab === 'routines' ? (
         route.screen === 'report' ? <RoutinesMonthReport /> : <RoutinesScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}

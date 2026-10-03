@@ -40,3 +40,4 @@ export * from './projectRules';
 export * from './itemFilter';
 export * from './spaceMove';
 export * from './externalCalendars';
+export * from './quietHours';

@@ -4,6 +4,7 @@ import type { SqlDriver, SqlRow } from './driver';
 import { openSqliteWasmDriver } from './drivers/sqliteWasm';
 import { backupStamp, createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from './migrationBackup';
 import { migrations } from './migrations';
+import { PRO_QUIET_HOURS_JSON } from './migrations/0007_pro_quiet_hours';
 import { migrate, type Migration } from './migrator';
 import { SPACE_PRO_ID } from './seed/defaultSpaces';
 
@@ -117,8 +118,10 @@ describe('migration rejouée sur une copie d’une base de la version précéden
         if (table === 'schema_migrations') continue;
         expect(after[table]).toHaveLength(rows.length);
         rows.forEach((row, i) => {
-          // Les migrations n'ajoutent que des colonnes : toutes les valeurs d'origine sont conservées.
-          expect(after[table]?.[i]).toMatchObject(row);
+          // Les migrations n'ajoutent que des colonnes : toutes les valeurs d'origine sont conservées. Seule exception, la migration de
+          // données 0007 (ES-07) : les plages silencieuses de Pro, vides à l'origine, reçoivent leurs valeurs par défaut.
+          const expected = table === 'space' && row['id'] === SPACE_PRO_ID && row['quiet_hours'] === '[]' ? { ...row, quiet_hours: PRO_QUIET_HOURS_JSON } : row;
+          expect(after[table]?.[i]).toMatchObject(expected);
         });
       }
       expect(copy?.['task']).toHaveLength(3);

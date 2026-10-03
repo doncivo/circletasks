@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChecklistId, EventId, ExternalEventId, GoalId, LocalDate, RoutineId, TaskId } from '../../domain/types';
+import type { ChecklistId, EventId, ExternalEventId, GoalId, LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { ShortcutId } from './shortcuts';
 
@@ -47,7 +47,9 @@ export type Route =
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
   | { readonly tab: 'events' }
   | { readonly tab: 'checklists'; readonly checklistId: ChecklistId | null }
-  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'general' | 'desktop' | 'about' | 'trash' };
+  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'general' | 'desktop' | 'about' | 'trash' }
+  /** Plages silencieuses d'un espace (ES-07), ouvertes depuis la ligne « Silence Pro » de Réglages › RAPPELS. */
+  | { readonly tab: 'settings'; readonly screen: 'quiet'; readonly spaceId: SpaceId };
 
 export const DEFAULT_ROUTES: { readonly [K in TabId]: Extract<Route, { tab: K }> } = {
   tasks: { tab: 'tasks', screen: 'today' },
