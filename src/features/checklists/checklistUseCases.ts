@@ -1,7 +1,7 @@
 import { nextItemOrder, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
 import { newEntityId } from '../../domain/id';
 import type { Checklist, ChecklistItem, ChecklistPatch, IconRef } from '../../domain/model';
-import type { ChecklistId, ChecklistItemId, Result, SpaceId } from '../../domain/types';
+import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
@@ -35,6 +35,11 @@ export interface ChecklistUseCases {
   /** C-01 critère 3 : ajoute un item en fin de liste (texte de 1 à 200 caractères). Les ajouts d'une même base sont sérialisés. */
   addItem(checklistId: ChecklistId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError>>;
   /**
+   * C-03 : associe la checklist à un jour (`date`) ou retire la date (null). Retirer la date est annulable 5 s ; poser ou changer le jour
+   * ne l'est pas (geste réversible par le même sélecteur). Renvoie la checklist écrite, null si elle n'existe plus.
+   */
+  setDate(id: ChecklistId, date: LocalDate | null): Promise<Checklist | null>;
+  /**
    * C-02 critères 2 et 3 : fixe l'état voulu d'un item (et non « basculer » : deux gestes rapides finissent sur le dernier). Écriture
    * immédiate en base ; aucun message « Annuler » (geste réversible d'un toucher, D2). Un item supprimé entre-temps est ignoré.
    */
@@ -67,6 +72,26 @@ function deletedCommand(deps: ChecklistUseCaseDeps, written: Checklist): Undoabl
       const current = await deps.data.repos.checklists.getById(written.id as ChecklistId, { includeDeleted: true });
       if (!current || current.hlc !== written.hlc) return 'stale';
       await deps.data.repos.checklists.restore(written.id as ChecklistId);
+      emitChecklistsChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
+/**
+ * Annulation du retrait de la date (T-13) : remet le jour d'avant, seulement si la checklist n'a pas changé depuis (même hlc que celui
+ * écrit par l'action ; sinon 'stale', rien n'est écrit).
+ */
+function dateRemovedCommand(deps: ChecklistUseCaseDeps, written: Checklist, previous: LocalDate): UndoableCommand {
+  return {
+    kind: 'checklist',
+    count: 1,
+    labelKey: 'checklists.undo.dateRemoved',
+    labelParams: { title: written.title },
+    async undo() {
+      const current = await deps.data.repos.checklists.getById(written.id as ChecklistId);
+      if (!current || current.hlc !== written.hlc) return 'stale';
+      await deps.data.repos.checklists.setDate(written.id as ChecklistId, previous);
       emitChecklistsChanged(deps.data);
       return 'undone';
     },
@@ -108,6 +133,16 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
       });
       emitChecklistsChanged(data);
       return { ok: true, value: written };
+    },
+
+    async setDate(id, date) {
+      const current = await data.repos.checklists.getById(id);
+      if (!current) return null;
+      if (current.date === date) return current;
+      const written = await data.repos.checklists.setDate(id, date);
+      if (date === null && current.date !== null) deps.undo.push(dateRemovedCommand(deps, written, current.date));
+      emitChecklistsChanged(data);
+      return written;
     },
 
     async remove(id) {

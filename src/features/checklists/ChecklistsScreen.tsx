@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConfirmDialog, DropdownSelect, Fab, SpacePills, useLayout } from '../../ui';
+import { todayLocal } from '../../domain/clock';
+import { ConfirmDialog, DatePrompt, DropdownSelect, Fab, SpacePills, useLayout } from '../../ui';
 import { checklistProgress } from '../../domain/checklistRules';
 import type { ChecklistId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -7,6 +8,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
+import { ChecklistDateRow } from './ChecklistDateRow';
 import { ChecklistDetail } from './ChecklistDetail';
 import { ChecklistEditorHost } from './ChecklistEditorHost';
 import { ChecklistForm } from './ChecklistForm';
@@ -43,6 +45,7 @@ export function ChecklistsScreen() {
   const create = useFeatureStore(checklistsStore, (s) => s.create);
   const update = useFeatureStore(checklistsStore, (s) => s.update);
   const remove = useFeatureStore(checklistsStore, (s) => s.remove);
+  const setDate = useFeatureStore(checklistsStore, (s) => s.setDate);
   const addItem = useFeatureStore(checklistsStore, (s) => s.addItem);
   const toggleItem = useFeatureStore(checklistsStore, (s) => s.toggleItem);
   const renameItem = useFeatureStore(checklistsStore, (s) => s.renameItem);
@@ -50,6 +53,9 @@ export function ChecklistsScreen() {
 
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [datePromptOpen, setDatePromptOpen] = useState(false);
+  const appDay = useAppStore((s) => s.day);
+  const today = appDay ?? todayLocal(container.clock);
   const [deleteTarget, setDeleteTarget] = useState<ChecklistId | null>(null);
   /** Checklist qui reçoit le focus dans « Ajouter un élément » dès qu'elle est affichée (après sa création). */
   const [focusRequest, setFocusRequest] = useState<ChecklistId | null>(null);
@@ -139,6 +145,8 @@ export function ChecklistsScreen() {
         setEditor('edit');
       }}
       onAddItem={async (text) => (await addItem(text)).ok}
+      onPlan={() => setDatePromptOpen(true)}
+      onClearDate={() => void setDate(displayed.checklist.id as ChecklistId, null)}
     />
   ) : status === 'ready' || projectFilter ? (
     <div className="ct-checklists__empty">
@@ -173,10 +181,30 @@ export function ChecklistsScreen() {
           onSubmit={save}
           onClose={closeEditor}
           errorMessage={formError}
-          {...(editor === 'edit' && displayed ? { onDelete: () => setDeleteTarget(displayed.checklist.id as ChecklistId) } : {})}
+          {...(editor === 'edit' && displayed
+            ? {
+                onDelete: () => setDeleteTarget(displayed.checklist.id as ChecklistId),
+                extras: <ChecklistDateRow date={displayed.checklist.date} onPick={() => setDatePromptOpen(true)} onClear={() => void setDate(displayed.checklist.id as ChecklistId, null)} />,
+              }
+            : {})}
         />
       </ChecklistEditorHost>
     ) : null;
+
+  const datePrompt = displayed ? (
+    <DatePrompt
+      open={datePromptOpen}
+      label={t('checklists.date.pick')}
+      confirmLabel={t('checklists.date.promptConfirm')}
+      today={today}
+      initialValue={displayed.checklist.date}
+      onConfirm={(date) => {
+        setDatePromptOpen(false);
+        if (date) void setDate(displayed.checklist.id as ChecklistId, date);
+      }}
+      onClose={() => setDatePromptOpen(false)}
+    />
+  ) : null;
 
   const deleting = deleteTarget ? visible.find((summary) => summary.checklist.id === deleteTarget)?.checklist : undefined;
   const confirm = deleting ? (
@@ -212,6 +240,7 @@ export function ChecklistsScreen() {
           {detail}
         </main>
         {editorHost}
+        {datePrompt}
         {confirm}
       </div>
     );
@@ -244,6 +273,7 @@ export function ChecklistsScreen() {
         <Fab onClick={openCreate} label={t('checklists.add')} />
       </div>
       {editorHost}
+      {datePrompt}
       {confirm}
     </div>
   );

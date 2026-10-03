@@ -1,7 +1,7 @@
 import { createStore } from 'zustand';
 import { sortChecklistSummaries, sortItems, type ChecklistTextError } from '../../domain/checklistRules';
 import type { Checklist, ChecklistItem, ChecklistSummary } from '../../domain/model';
-import type { ChecklistId, ChecklistItemId, Result, SpaceFilter } from '../../domain/types';
+import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { onChecklistsChanged } from './checklistEvents';
@@ -46,6 +46,8 @@ export interface ChecklistsState {
   create(input: NewChecklistInput): Promise<Result<Checklist, ChecklistCreateError>>;
   /** C-01 : titre, icône, espace. Ne rejette jamais. */
   update(id: ChecklistId, patch: ChecklistUpdate): Promise<Result<Checklist, ChecklistSaveError | 'unexpected'>>;
+  /** C-03 : associe la checklist à un jour, ou retire la date (null, annulable 5 s). Renvoie vrai si c'est fait. Ne rejette jamais. */
+  setDate(id: ChecklistId, date: LocalDate | null): Promise<boolean>;
   /** C-01 : supprime (annulable 5 s). Renvoie vrai si c'est fait. Ne rejette jamais. */
   remove(id: ChecklistId): Promise<boolean>;
   /** C-01 : ajoute un item à la checklist affichée. Ne rejette jamais. */
@@ -152,6 +154,17 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
       } catch {
         set({ actionErrorKey: 'checklists.saveError' });
         return { ok: false, error: 'unexpected' };
+      }
+    },
+
+    async setDate(id, date) {
+      try {
+        const written = await useCases.setDate(id, date);
+        set({ actionErrorKey: null });
+        return written !== null;
+      } catch {
+        set({ actionErrorKey: 'checklists.saveError' });
+        return false;
       }
     },
 

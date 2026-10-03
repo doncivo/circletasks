@@ -3,8 +3,9 @@ import { useEffect, useRef } from 'react';
 import type { ChecklistProgress } from '../../domain/checklistRules';
 import type { Checklist, ChecklistItem } from '../../domain/model';
 import type { ChecklistId, ChecklistItemId } from '../../domain/types';
+import { formatDayLabel } from '../../i18n/format';
 import { t } from '../../i18n';
-import { CompactToggle, Fab, Icon, type Layout } from '../../ui';
+import { Button, CompactToggle, Fab, Icon, type Layout } from '../../ui';
 import { AddItemField } from './AddItemField';
 import { ChecklistIcon } from './ChecklistIcon';
 import { ChecklistItems } from './ChecklistItems';
@@ -24,16 +25,21 @@ export interface ChecklistDetailProps {
   readonly onFocused: () => void;
   readonly onEdit: () => void;
   readonly onAddItem: (text: string) => Promise<boolean>;
+  /** PC : bouton « Planifier un jour » (C-03) ; sur iPhone la date se règle dans la feuille « Modifier la checklist ». */
+  readonly onPlan: () => void;
+  readonly onClearDate: () => void;
 }
 
 /**
  * Détail de la checklist affichée (Checklists.html, PC-Checklists.html) : icône, titre Fraunces, crayon « Modifier la checklist »,
  * filet, items en cartes grises, champ pointillé « Ajouter un élément ».
  */
-export function ChecklistDetail({ layout, checklist, items, progress, compact, onCompactChange, onToggleItem, onRenameItem, focusRequest, onFocused, onEdit, onAddItem }: ChecklistDetailProps) {
+export function ChecklistDetail({ layout, checklist, items, progress, compact, onCompactChange, onToggleItem, onRenameItem, focusRequest, onFocused, onEdit, onAddItem, onPlan, onClearDate }: ChecklistDetailProps) {
   const addRef = useRef<HTMLInputElement>(null);
   const pc = layout === 'pc';
   const Heading = pc ? 'h2' : 'h1';
+  // Mentions sous la barre : jour prévu (C-03).
+  const meta = [checklist.date ? t('checklists.date.planned', { date: formatDayLabel(checklist.date) }) : null].filter((part) => part !== null).join(' · ');
 
   useEffect(() => {
     if (focusRequest !== checklist.id) return;
@@ -56,13 +62,23 @@ export function ChecklistDetail({ layout, checklist, items, progress, compact, o
         <div className="ct-checklist-detail__ruleLine" />
       </div>
 
-      <ChecklistProgressBar progress={progress} />
+      <ChecklistProgressBar progress={progress} {...(pc && meta ? { trailing: meta } : {})} />
+      {!pc && meta && <p className="ct-checklist-detail__meta">{meta}</p>}
       <ChecklistItems items={items} compact={compact} onToggle={onToggleItem} onRename={onRenameItem} />
       <AddItemField inputRef={addRef} placeholder={t(pc ? 'checklists.addItemPlaceholderPc' : 'checklists.addItemPlaceholder')} onAdd={onAddItem} />
 
       <div className="ct-checklist-detail__spacer" />
       {pc && (
         <div className="ct-checklist-detail__footer">
+          <Button variant="secondary" onClick={onPlan}>
+            {t('checklists.date.pick')}
+          </Button>
+          {checklist.date && (
+            <Button variant="secondary" onClick={onClearDate}>
+              {t('checklists.date.remove')}
+            </Button>
+          )}
+          <span className="ct-checklist-detail__footerSpacer" />
           <Fab onClick={() => addRef.current?.focus()} label={t('common.add')} />
         </div>
       )}

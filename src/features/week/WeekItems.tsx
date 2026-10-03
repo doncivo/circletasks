@@ -1,9 +1,10 @@
 import { CalendarDays } from 'lucide-react';
-import type { RecurrenceFields, Routine, Space, Task } from '../../domain/model';
+import type { ChecklistSummary, RecurrenceFields, Routine, Space, Task } from '../../domain/model';
 import type { TodayEventEntry } from '../../domain/todayList';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
-import { Checkbox, Icon, IconView, resolveIconRefColor, type Layout } from '../../ui';
+import { Checkbox, Icon, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
+import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
@@ -115,6 +116,58 @@ export function WeekRoutineItem({ routine, time, done, layout, spaces, showSpace
       <div className="ct-week-item__body">
         {title}
         <span className="ct-week-item__sub">{routineSubtitle(routine, time, { spaces, showSpace })}</span>
+      </div>
+    </div>
+  );
+}
+
+export interface WeekChecklistItemProps {
+  readonly summary: ChecklistSummary;
+  readonly layout: Layout;
+  readonly spaces: readonly Space[];
+  /** Filtre « Tout » : l'espace est écrit dans la sous-ligne, dans sa couleur (C-03 critère 7). */
+  readonly showSpace: boolean;
+  /** Ouvre l'onglet Checklists sur cette checklist (C-03 critère 3). */
+  readonly onOpen: () => void;
+}
+
+/**
+ * Checklist du jour (C-03) : icône à la place de la case (une checklist n'est pas terminée d'un geste, ses items se cochent dans
+ * l'onglet Checklists), titre, « checklist 0/8 » (PC-Semaine.html : « Perso · checklist 0/8 ») ; sur iPhone, « 0/8 » à droite du titre.
+ */
+export function WeekChecklistItem({ summary, layout, spaces, showSpace, onOpen }: WeekChecklistItemProps) {
+  const { checklist, checked, total } = summary;
+  const space = showSpace ? spaces.find((candidate) => candidate.id === checklist.spaceId) : undefined;
+  const title = (
+    <button type="button" className="ct-week-item__title" aria-label={t('checklists.openFromList', { title: checklist.title })} onClick={onOpen}>
+      {checklist.title}
+    </button>
+  );
+  if (layout === 'mobile') {
+    return (
+      <div className="ct-week-item" data-layout="mobile" data-kind="checklist">
+        <ChecklistIcon icon={checklist.icon} size={20} />
+        {title}
+        <span className="ct-week-item__time" aria-label={t('today.checklistProgress', { checked, total })}>
+          {checked}/{total}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="ct-week-item" data-layout="pc" data-kind="checklist">
+      <ChecklistIcon icon={checklist.icon} size={18} />
+      <div className="ct-week-item__body">
+        {title}
+        <span className="ct-week-item__sub">
+          {space && (
+            <>
+              <span style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>
+              {' · '}
+            </>
+          )}
+          {t('checklists.weekSubtitle', { checked, total })}
+        </span>
       </div>
     </div>
   );

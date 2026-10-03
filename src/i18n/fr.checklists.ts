@@ -43,7 +43,19 @@ export const checklistsFr = {
   addItemPlaceholder: 'Ajouter un élément',
   addItemPlaceholderPc: 'Ajouter un élément, puis Entrée',
   itemTooLong: 'Un élément fait 200 caractères au plus.',
+  date: {
+    label: 'Date',
+    none: 'Aucune date',
+    button: 'Date : {date}',
+    pick: 'Planifier un jour',
+    promptConfirm: 'Planifier',
+    remove: 'Retirer la date',
+    planned: 'Prévue le {date}',
+  },
+  weekSubtitle: 'checklist {checked}/{total}',
+  openFromList: 'Ouvrir la checklist : {title}',
   undo: {
     deleted: '« {title} » supprimée',
+    dateRemoved: 'Date retirée de « {title} »',
   },
 } as const;

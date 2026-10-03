@@ -1,13 +1,13 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayRow } from '../../domain/todayList';
-import type { ExternalEventId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
+import type { ChecklistId, ExternalEventId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
 import { WeekDayAdd } from './WeekDayAdd';
-import { WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
+import { WeekChecklistItem, WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
 
 /** Ce que le jour montre pendant un glisser : zone « Déposer ici » (autre jour) ou repère d'insertion (même jour, A-02). */
 export type WeekDropState = { readonly kind: 'move' } | { readonly kind: 'reorder'; readonly index: number; readonly draggedId: TaskId };
@@ -41,6 +41,8 @@ export interface WeekDayViewProps {
   /** Ouvre la fiche en lecture seule d'un événement externe (S-05). */
   readonly onOpenEvent?: (id: ExternalEventId) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
+  /** Ouvre l'onglet Checklists sur la checklist du jour (C-03). */
+  readonly onOpenChecklist?: (id: ChecklistId) => void;
   readonly onOpen: (id: TaskId) => void;
   /** S-04 : ajout rapide en bas du jour ; crée la tâche de ce jour et rend true si elle l'est. */
   readonly onAddTask?: (date: LocalDate, title: string) => Promise<boolean>;
@@ -139,6 +141,16 @@ export function WeekDayView(props: WeekDayViewProps) {
               ))}
               {day.list.rows.map(renderRow)}
               {day.list.doneRows.map(renderRow)}
+              {day.list.checklists.map((summary) => (
+                <WeekChecklistItem
+                  key={summary.checklist.id}
+                  summary={summary}
+                  layout={layout}
+                  spaces={props.spaces}
+                  showSpace={props.showSpace}
+                  onOpen={() => props.onOpenChecklist?.(summary.checklist.id as ChecklistId)}
+                />
+              ))}
               {drop?.kind === 'reorder' && insertBefore === null && <div className="ct-week__insert" aria-hidden="true" />}
             </>
           )}

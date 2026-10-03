@@ -587,3 +587,58 @@
 .ct-checklist-detail__head > button {
   flex-shrink: 0;
 }
+
+.ct-checklist-detail__meta {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-checklist-detail__footerSpacer {
+  flex-grow: 1;
+}
+
+/* Lignes de la feuille « Modifier la checklist » : libellé, valeur en pastille, lien d'action. */
+.ct-checklist-form__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ct-space-3);
+}
+
+.ct-checklist-form__label {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-checklist-form__pill {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-checklist-form__link {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-checklist-form__pill:focus-visible,
+.ct-checklist-form__link:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

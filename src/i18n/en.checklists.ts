@@ -43,7 +43,19 @@ export const checklistsEn: Messages['checklists'] = {
   addItemPlaceholder: 'Add an item',
   addItemPlaceholderPc: 'Add an item, then press Enter',
   itemTooLong: 'An item is 200 characters at most.',
+  date: {
+    label: 'Date',
+    none: 'No date',
+    button: 'Date: {date}',
+    pick: 'Plan a day',
+    promptConfirm: 'Plan',
+    remove: 'Remove the date',
+    planned: 'Planned for {date}',
+  },
+  weekSubtitle: 'checklist {checked}/{total}',
+  openFromList: 'Open checklist: {title}',
   undo: {
     deleted: '“{title}” deleted',
+    dateRemoved: 'Date removed from “{title}”',
   },
 };
