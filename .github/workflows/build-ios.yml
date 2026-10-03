@@ -1,0 +1,128 @@
+# Build iPhone sans Mac (PRD section 7, ADR 0007).
+# Déclenchement manuel ou sur tag v* uniquement : les minutes macOS d'un dépôt privé coûtent 10 fois plus.
+# L'IPA n'est pas signée : SideStore la signe sur l'iPhone avec l'Apple ID gratuit.
+name: Build iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publier l'IPA et source.json sur circletasks-releases (secret RELEASES_REPO_TOKEN requis)"
+        type: boolean
+        default: false
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-ios-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Rust stable et cible iOS
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-ios-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-ios-${{ runner.os }}-
+
+      - run: npm ci
+
+      # Le projet Xcode (src-tauri/gen/apple) n'est pas versionné : il est régénéré à chaque build
+      # depuis tauri.conf.json et src-tauri/Info.ios.plist.
+      - name: Initialiser le projet iOS
+        run: npx tauri ios init
+
+      # Compile le front et la bibliothèque Rust. L'archive finale peut échouer faute de signature :
+      # c'est attendu, l'étape suivante refait la compilation Xcode sans signature.
+      - name: Préparer le front et la bibliothèque Rust
+        continue-on-error: true
+        run: npx tauri ios build --ci --target aarch64
+
+      - name: Compiler avec Xcode sans signature
+        run: |
+          set -euo pipefail
+          cd src-tauri/gen/apple
+          PROJECT=$(ls -d *.xcodeproj | head -n 1)
+          SCHEME="$(basename "$PROJECT" .xcodeproj)_iOS"
+          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration release \
+            -sdk iphoneos -arch arm64 -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Créer CircleTasks.ipa
+        run: |
+          set -euo pipefail
+          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name "*.app" -path "*iphoneos*" | head -n 1)
+          test -n "$APP" || { echo "Aucun .app trouvé"; exit 1; }
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry CircleTasks.ipa Payload)
+          ls -l ipa/CircleTasks.ipa
+          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$APP/Info.plist" || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CircleTasks-ipa
+          path: ipa/CircleTasks.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Journaux de compilation en cas d'échec
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-ios-logs
+          path: src-tauri/gen/apple/build
+          if-no-files-found: ignore
+
+      # Publication : seulement sur demande explicite (input publish, faux par défaut) ou sur tag,
+      # et seulement si le secret RELEASES_REPO_TOKEN existe.
+      - name: Publier sur circletasks-releases
+        if: inputs.publish == true || startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RELEASES_REPO_TOKEN:-}" ]; then
+            echo "::warning::Secret RELEASES_REPO_TOKEN absent : publication ignorée (l'IPA reste en artefact)."
+            exit 0
+          fi
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          TAG="ios-v${VERSION}"
+          REPO="doncivo/circletasks-releases"
+          IPA_URL="https://github.com/${REPO}/releases/download/${TAG}/CircleTasks.ipa"
+          NOTES="CircleTasks ${VERSION}"
+          export GH_TOKEN="$RELEASES_REPO_TOKEN"
+          git clone "https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/${REPO}.git" releases
+          node scripts/ios/make-source-json.mjs "$VERSION" "$IPA_URL" ipa/CircleTasks.ipa "$NOTES" releases/source.json > source.new.json
+          gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" \
+            || gh release upload "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --clobber
+          cp source.new.json releases/source.json
+          cd releases
+          git config user.name "circletasks-ci"
+          git config user.email "ci@users.noreply.github.com"
+          git add source.json
+          git commit -m "source.json: iPhone ${VERSION}" || echo "Rien à valider"
+          git push
