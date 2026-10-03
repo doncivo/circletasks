@@ -1,3 +1,4 @@
+import { weekStartOf } from './week';
 import type { NewReminder, NewTask, RecurrenceFields, ReminderOffsetMin, Task } from './model';
 import { nextOccurrenceDate } from './recurrenceRules';
 import type { LocalDate, LocalDateTime, ReminderId, TaskId } from './types';
@@ -99,7 +100,8 @@ export function buildNextOccurrence(previous: Task, options: BuildNextOccurrence
     recurrenceId: previous.recurrenceId,
     seriesIndex: options.seriesIndex,
     seriesTemplate: null,
-    goalId: previous.goalId,
+    // OB-03 × T-09 : un objectif est hebdomadaire, le rattachement ne suit l'occurrence que dans la même semaine.
+    goalId: previous.date !== null && weekStartOf(options.date) === weekStartOf(previous.date) ? previous.goalId : null,
     icon: previous.icon,
     someday: false,
     source: 'local',

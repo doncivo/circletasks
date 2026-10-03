@@ -66,9 +66,7 @@ export function GoalsScreen() {
   const today = appDay ?? todayLocal(container.clock);
   useEffect(() => {
     void load(today);
-    // `load` ne rejette jamais ; rechargé à l'ouverture et au passage de minuit.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today]);
+  }, [load, today]);
 
   const sections = useMemo(() => (weekStart ? goalsOfWeek(goals, weekStart, spaceFilter) : []), [goals, weekStart, spaceFilter]);
 

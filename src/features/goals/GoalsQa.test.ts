@@ -104,8 +104,7 @@ describe('Lot OB, cas limites QA : avancement et rattachement', () => {
     expect((await loadPinnedGoalEntries(h.container, d('2026-10-02'), SPACE_PERSO_ID)).map((e) => e.goal.title)).toEqual(['Perso']);
   });
 
-  // ROUGE connu (renvoyé à spaces-goals) : la prochaine occurrence hérite du goal_id (recurrenceNext.ts:102) et gonfle le total « 1/2 ».
-  it.fails('OB-04 occurrence récurrente rattachée terminée : « 1/1 », la prochaine occurrence ne gonfle pas le total', async () => {
+  it('OB-04 occurrence récurrente rattachée terminée : « 1/1 », la prochaine occurrence ne gonfle pas le total', async () => {
     const goal = await seedGoal(h);
     const t = await attached(h, goal, 'Hebdo', '2026-10-02');
     const rule = defaultRecurrence('weekly', d('2026-10-02'));
