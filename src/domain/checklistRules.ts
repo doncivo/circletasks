@@ -60,9 +60,6 @@ export function checklistProgress(items: readonly Pick<ChecklistItem, 'checked'>
   return { checked, total, ratio: total === 0 ? 0 : checked / total };
 }
 
-/** Suffixe ajouté au titre d'une copie (C-04, D1). */
-export const COPY_SUFFIX = ' (copie)';
-
 export interface DuplicatedChecklist {
   readonly checklist: NewChecklist;
   readonly items: readonly NewChecklistItem[];
@@ -71,11 +68,17 @@ export interface DuplicatedChecklist {
 /**
  * « Dupliquer et réinitialiser » (C-04) : « <titre> (copie) », mêmes items dans le même ordre, tous décochés, sans date, même espace
  * et même icône, non modèle. Les items supprimés ne sont pas copiés (l'appelant ne fournit que les items vivants). La copie reçoit
- * de nouveaux identifiants ; l'original n'est pas modifié. Le titre reste dans la limite de 200 caractères.
+ * de nouveaux identifiants ; l'original n'est pas modifié. Le titre reste dans la limite de 200 caractères. Le suffixe « (copie) » est un
+ * texte d'interface : il vient de src/i18n (`copySuffix`).
  */
-export function duplicateAndReset(checklist: Pick<Checklist, 'title' | 'spaceId' | 'icon'>, items: readonly ChecklistItem[], ids: IdGenerator): DuplicatedChecklist {
+export function duplicateAndReset(
+  checklist: Pick<Checklist, 'title' | 'spaceId' | 'icon'>,
+  items: readonly ChecklistItem[],
+  ids: IdGenerator,
+  copySuffix: string,
+): DuplicatedChecklist {
   const id = newEntityId<ChecklistId>(ids);
-  const title = `${checklist.title.slice(0, CHECKLIST_TEXT_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
+  const title = `${checklist.title.slice(0, CHECKLIST_TEXT_MAX - copySuffix.length)}${copySuffix}`;
   return {
     checklist: { id, spaceId: checklist.spaceId, title, icon: checklist.icon, date: null, isTemplate: false },
     items: sortItems(items).map((item, index) => ({

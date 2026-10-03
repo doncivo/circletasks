@@ -72,6 +72,7 @@ export const checklistsFr = {
   moveHandle: 'Déplacer : {text}',
   removeItem: 'Supprimer : {text}',
   moved: 'Déplacé en position {position} sur {total}',
+  copySuffix: ' (copie)',
   weekSubtitle: 'checklist {checked}/{total}',
   openFromList: 'Ouvrir la checklist : {title}',
   undo: {

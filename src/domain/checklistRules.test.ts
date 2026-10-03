@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECKLIST_TEXT_MAX, checkedItemIds, checklistProgress, compareChecklists, moveItem, COPY_SUFFIX, duplicateAndReset, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
+import { CHECKLIST_TEXT_MAX, checkedItemIds, checklistProgress, compareChecklists, moveItem, duplicateAndReset, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
 import { createUuidGenerator } from './id';
 import type { Checklist, ChecklistItem, ChecklistSummary } from './model';
 
@@ -63,11 +63,12 @@ describe('checklistProgress (C-02 critères 1 et 6)', () => {
 
 describe('duplicateAndReset (C-04 critères 1, 2 et 7)', () => {
   const ids = createUuidGenerator();
+  const COPY_SUFFIX = ' (copie)';
   const source = { title: 'Valise voyage', spaceId: 'perso' as never, icon: { kind: 'lucide', name: 'briefcase' } as const };
   const item = (id: string, text: string, sortOrder: number, checked: boolean) => ({ id, text, sortOrder, checked, checklistId: 'orig' }) as unknown as ChecklistItem;
 
   it('copie « <titre> (copie) », mêmes items dans le même ordre, tous décochés, sans date, même espace et icône, non modèle', () => {
-    const copy = duplicateAndReset(source, [item('b', 'Chargeur', 2, true), item('a', 'Passeport', 1, false), item('c', 'Billets', 3, true)], ids);
+    const copy = duplicateAndReset(source, [item('b', 'Chargeur', 2, true), item('a', 'Passeport', 1, false), item('c', 'Billets', 3, true)], ids, COPY_SUFFIX);
     expect(copy.checklist).toMatchObject({ title: `Valise voyage${COPY_SUFFIX}`, spaceId: 'perso', icon: source.icon, date: null, isTemplate: false });
     expect(copy.items.map((i) => [i.text, i.checked, i.sortOrder])).toEqual([
       ['Passeport', false, 1],
@@ -79,16 +80,16 @@ describe('duplicateAndReset (C-04 critères 1, 2 et 7)', () => {
 
   it('de nouveaux identifiants : aucun ne reprend celui de l’original ; deux copies diffèrent', () => {
     const originals = [item('a', 'A', 1, false), item('b', 'B', 2, false)];
-    const first = duplicateAndReset(source, originals, ids);
-    const second = duplicateAndReset(source, originals, ids);
+    const first = duplicateAndReset(source, originals, ids, COPY_SUFFIX);
+    const second = duplicateAndReset(source, originals, ids, COPY_SUFFIX);
     const all = [first.checklist.id, ...first.items.map((i) => i.id), second.checklist.id, ...second.items.map((i) => i.id)];
     expect(new Set(all).size).toBe(all.length);
     expect(all).not.toContain('a');
   });
 
   it('une liste vide donne une copie vide ; un titre de 200 caractères reste dans la limite', () => {
-    expect(duplicateAndReset(source, [], ids).items).toEqual([]);
-    const long = duplicateAndReset({ ...source, title: 'x'.repeat(CHECKLIST_TEXT_MAX) }, [], ids);
+    expect(duplicateAndReset(source, [], ids, COPY_SUFFIX).items).toEqual([]);
+    const long = duplicateAndReset({ ...source, title: 'x'.repeat(CHECKLIST_TEXT_MAX) }, [], ids, COPY_SUFFIX);
     expect(long.checklist.title).toHaveLength(CHECKLIST_TEXT_MAX);
     expect(long.checklist.title.endsWith(COPY_SUFFIX)).toBe(true);
   });

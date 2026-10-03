@@ -72,6 +72,7 @@ export const checklistsEn: Messages['checklists'] = {
   moveHandle: 'Move: {text}',
   removeItem: 'Delete: {text}',
   moved: 'Moved to position {position} of {total}',
+  copySuffix: ' (copy)',
   weekSubtitle: 'checklist {checked}/{total}',
   openFromList: 'Open checklist: {title}',
   undo: {

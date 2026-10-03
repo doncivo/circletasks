@@ -4,7 +4,7 @@ import type { Checklist, ChecklistItem, ChecklistPatch, IconRef } from '../../do
 import type { Repositories } from '../../db/repositories';
 import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
-import { getLocale, type MessageKey } from '../../i18n';
+import { getLocale, t, type MessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
 import { emitChecklistsChanged } from './checklistEvents';
@@ -274,7 +274,7 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
       const copy = await data.transaction(async (repos) => {
         const source = await repos.checklists.getById(id);
         if (!source) return null;
-        const plan = duplicateAndReset(source, await liveItems(repos, id), deps.ids);
+        const plan = duplicateAndReset(source, await liveItems(repos, id), deps.ids, t('checklists.copySuffix'));
         return repos.checklists.createWithItems(plan.checklist, plan.items);
       });
       if (!copy) return null;
