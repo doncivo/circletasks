@@ -37,6 +37,12 @@ describe('Source des checklists : chargement par jour (C-03 critères 2, 5, 7, 8
     expect((await loadTodayExtras(h.container, day('2026-10-03'), 'all')).extras.checklists).toEqual([]);
   });
 
+  it('plusieurs checklists du jour : tri par titre sans tenir compte des accents', async () => {
+    for (const title of ['Zèbre', 'abeille', 'Éclair']) await seedChecklist(h, { title, date: day('2026-10-02') });
+    const { extras } = await loadTodayExtras(h.container, day('2026-10-02'), 'all');
+    expect(extras.checklists.map((s) => s.checklist.title)).toEqual(['abeille', 'Éclair', 'Zèbre']);
+  });
+
   it('jamais reportée : la date passée ne l’affiche plus aujourd’hui (critère 5)', async () => {
     await seedChecklist(h, { title: 'Hier', date: day('2026-10-01'), items: ['a'] });
     expect((await loadTodayExtras(h.container, day('2026-10-02'), 'all')).extras.checklists).toEqual([]);

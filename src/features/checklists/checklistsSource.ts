@@ -1,3 +1,4 @@
+import { sortChecklistSummaries } from '../../domain/checklistRules';
 import { registerTodaySource, type TodaySource } from '../today/todaySources';
 import { onChecklistsChanged } from './checklistEvents';
 
@@ -11,7 +12,7 @@ import { onChecklistsChanged } from './checklistEvents';
 export const checklistsTodaySource: TodaySource = {
   id: 'checklists',
   async load(container, date, filter) {
-    return { checklists: await container.data.repos.checklists.listSummariesForDay(date, filter) };
+    return { checklists: sortChecklistSummaries(await container.data.repos.checklists.listSummariesForDay(date, filter)) };
   },
   subscribe: (container, onChange) => onChecklistsChanged(container.data, onChange),
 };

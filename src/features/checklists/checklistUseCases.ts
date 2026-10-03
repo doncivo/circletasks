@@ -1,9 +1,8 @@
 import { checkedItemIds, duplicateAndReset, moveItem, nextItemOrder, sortItems, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
 import { newEntityId } from '../../domain/id';
 import type { Checklist, ChecklistItem, ChecklistPatch, IconRef } from '../../domain/model';
-import type { Repositories } from '../../db/repositories';
 import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceId } from '../../domain/types';
-import type { DataAccess } from '../../db/repositories';
+import type { DataAccess, Repositories } from '../../db/repositories';
 import { getLocale, t, type MessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
@@ -150,11 +149,6 @@ function itemsCommand(
   };
 }
 
-/** Items vivants d'une checklist, repris de la transaction pour comparer avant d'annuler une duplication. */
-async function liveItems(repos: Repositories, id: ChecklistId): Promise<ChecklistItem[]> {
-  return repos.checklistItems.listForChecklist(id);
-}
-
 /**
  * Annulation d'une duplication (T-13) : supprime la copie, seulement si ni elle ni ses items n'ont changé depuis (mêmes hlc que ceux
  * écrits par l'action ; sinon 'stale', rien n'est écrit).
@@ -168,7 +162,7 @@ function duplicatedCommand(deps: ChecklistUseCaseDeps, written: Checklist, items
       const id = written.id as ChecklistId;
       const current = await deps.data.repos.checklists.getById(id);
       if (!current || current.hlc !== written.hlc) return 'stale';
-      const now = await liveItems(deps.data.repos, id);
+      const now = await deps.data.repos.checklistItems.listForChecklist(id);
       const unchanged = now.length === items.length && now.every((item, index) => item.id === items[index]?.id && item.hlc === items[index]?.hlc);
       if (!unchanged) return 'stale';
       await deps.data.repos.checklists.softDelete(id);
@@ -218,7 +212,7 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
 
     async clearChecked(checklistId) {
       const cleared = await data.transaction(async (repos) => {
-        const ids = checkedItemIds(await liveItems(repos, checklistId));
+        const ids = checkedItemIds(await repos.checklistItems.listForChecklist(checklistId));
         return ids.length === 0 ? [] : repos.checklistItems.softDelete(ids);
       });
       if (cleared.length === 0) return [];
@@ -234,7 +228,7 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
 
     async uncheckAll(checklistId) {
       const unchecked = await data.transaction(async (repos) => {
-        const ids = checkedItemIds(await liveItems(repos, checklistId));
+        const ids = checkedItemIds(await repos.checklistItems.listForChecklist(checklistId));
         return ids.length === 0 ? [] : repos.checklistItems.setCheckedMany(ids, false);
       });
       if (unchecked.length === 0) return [];
@@ -246,7 +240,7 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
 
     async moveItem(checklistId, itemId, toIndex) {
       const moved = await data.transaction(async (repos) => {
-        const items = await liveItems(repos, checklistId);
+        const items = await repos.checklistItems.listForChecklist(checklistId);
         const writes = moveItem(items, itemId, toIndex);
         if (writes.length === 0) return null;
         const before = items.filter((item) => writes.some((write) => write.id === item.id)).map((item) => ({ id: item.id as ChecklistItemId, sortOrder: item.sortOrder }));
@@ -274,7 +268,7 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
       const copy = await data.transaction(async (repos) => {
         const source = await repos.checklists.getById(id);
         if (!source) return null;
-        const plan = duplicateAndReset(source, await liveItems(repos, id), deps.ids, t('checklists.copySuffix'));
+        const plan = duplicateAndReset(source, await repos.checklistItems.listForChecklist(id), deps.ids, t('checklists.copySuffix'));
         return repos.checklists.createWithItems(plan.checklist, plan.items);
       });
       if (!copy) return null;

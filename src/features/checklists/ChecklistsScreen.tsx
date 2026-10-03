@@ -78,9 +78,7 @@ export function ChecklistsScreen() {
 
   useEffect(() => {
     void load(spaceFilter);
-    // `load` ne rejette jamais ; recharge au changement de filtre d'espace.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spaceFilter]);
+  }, [spaceFilter, load]);
 
   useEffect(() => {
     void select(displayedId);
