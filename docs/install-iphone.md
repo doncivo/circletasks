@@ -62,6 +62,10 @@ Quand une nouvelle version est publiée, elle apparaît dans la source avec ses 
 - SideStore peut le faire seul en arrière-plan ; une automatisation Raccourcis qui ouvre SideStore chaque jour aide.
 - CircleTasks préviendra 24 h avant l'expiration (à l'ordre 5).
 
+## Pour publier une version (une fois, côté GitHub)
+
+La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > New environment, nom `releases`, coche « Required reviewers » et ajoute-toi. Ajoute le secret `RELEASES_REPO_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication (tag `ios-vX.Y.Z` ou lancement manuel avec « publish ») attend ton bouton « Approve ».
+
 ## Si ça se passe mal
 
 | Problème | Que faire |

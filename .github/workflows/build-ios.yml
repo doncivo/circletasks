@@ -1,20 +1,18 @@
 # Build iPhone sans Mac (PRD section 7, ADR 0007).
-# Déclenchement manuel ou sur tag v* uniquement : les minutes macOS d'un dépôt privé coûtent 10 fois plus.
+# Déclenchement manuel ou sur tag ios-v* uniquement : les minutes macOS d'un dépôt privé coûtent 10 fois plus.
 # L'IPA n'est pas signée : SideStore la signe sur l'iPhone avec l'Apple ID gratuit.
+# Le tag iOS (ios-vX.Y.Z) est distinct du tag PC (vX.Y.Z) qui déclenche build-windows.yml.
 name: Build iOS
 
 on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publier l'IPA et source.json sur circletasks-releases (secret RELEASES_REPO_TOKEN requis)"
+        description: "Publier l'IPA et source.json sur circletasks-releases (environnement releases + secret RELEASES_REPO_TOKEN)"
         type: boolean
         default: false
   push:
-    tags: ["v*"]
-
-permissions:
-  contents: read
+    tags: ["ios-v*"]
 
 concurrency:
   group: build-ios-${{ github.ref }}
@@ -24,6 +22,8 @@ jobs:
   ios:
     runs-on: macos-latest
     timeout-minutes: 60
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +31,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
+
+      # Sur tag, la version de tauri.conf.json doit correspondre au tag (ios-vX.Y.Z).
+      - name: Vérifier la version du tag
+        if: startsWith(github.ref, 'refs/tags/ios-v')
+        run: |
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          if [ "ios-v${VERSION}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Le tag ${GITHUB_REF_NAME} ne correspond pas à la version ${VERSION} de tauri.conf.json"
+            exit 1
+          fi
 
       - name: Rust stable et cible iOS
         uses: dtolnay/rust-toolchain@stable
@@ -55,10 +65,17 @@ jobs:
         run: npx tauri ios init
 
       # Compile le front et la bibliothèque Rust. L'archive finale peut échouer faute de signature :
-      # c'est attendu, l'étape suivante refait la compilation Xcode sans signature.
+      # c'est toléré, mais le projet généré et la bibliothèque .a doivent exister (vérifié ensuite).
       - name: Préparer le front et la bibliothèque Rust
         continue-on-error: true
         run: npx tauri ios build --ci --target aarch64
+
+      - name: Vérifier le projet et la bibliothèque Rust
+        run: |
+          test -d src-tauri/gen/apple || { echo "::error::src-tauri/gen/apple absent"; exit 1; }
+          LIB=$(find src-tauri/gen/apple src-tauri/target/aarch64-apple-ios -name "*.a" 2>/dev/null | head -n 1)
+          test -n "$LIB" || { echo "::error::Bibliothèque Rust (.a) absente : la compilation Rust a échoué"; exit 1; }
+          echo "Bibliothèque : $LIB"
 
       - name: Compiler avec Xcode sans signature
         run: |
@@ -97,25 +114,44 @@ jobs:
           path: src-tauri/gen/apple/build
           if-no-files-found: ignore
 
-      # Publication : seulement sur demande explicite (input publish, faux par défaut) ou sur tag,
-      # et seulement si le secret RELEASES_REPO_TOKEN existe.
+  # Publication : demandée explicitement (input publish, faux par défaut) ou sur tag ios-v*.
+  # L'environnement « releases » exige l'approbation d'Ali (réglage GitHub, voir ADR 0007).
+  publish:
+    needs: ios
+    if: inputs.publish == true || startsWith(github.ref, 'refs/tags/ios-v')
+    runs-on: ubuntu-latest
+    environment: releases
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: CircleTasks-ipa
+          path: ipa
+
       - name: Publier sur circletasks-releases
-        if: inputs.publish == true || startsWith(github.ref, 'refs/tags/v')
         env:
-          RELEASES_REPO_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
         run: |
           set -euo pipefail
-          if [ -z "${RELEASES_REPO_TOKEN:-}" ]; then
-            echo "::warning::Secret RELEASES_REPO_TOKEN absent : publication ignorée (l'IPA reste en artefact)."
-            exit 0
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Secret RELEASES_REPO_TOKEN absent : publication impossible (l'IPA reste en artefact)."
+            exit 1
           fi
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="ios-v${VERSION}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::Le tag ${GITHUB_REF_NAME} ne correspond pas à la version ${VERSION}"
+            exit 1
+          fi
           REPO="doncivo/circletasks-releases"
           IPA_URL="https://github.com/${REPO}/releases/download/${TAG}/CircleTasks.ipa"
           NOTES="CircleTasks ${VERSION}"
-          export GH_TOKEN="$RELEASES_REPO_TOKEN"
-          git clone "https://x-access-token:${RELEASES_REPO_TOKEN}@github.com/${REPO}.git" releases
+          # Le jeton passe par le credential helper de gh, jamais dans l'URL ni dans .git/config.
+          gh auth setup-git
+          git clone "https://github.com/${REPO}.git" releases
           node scripts/ios/make-source-json.mjs "$VERSION" "$IPA_URL" ipa/CircleTasks.ipa "$NOTES" releases/source.json > source.new.json
           gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" \
             || gh release upload "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --clobber
