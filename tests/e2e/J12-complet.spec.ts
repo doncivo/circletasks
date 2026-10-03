@@ -61,8 +61,13 @@ test('parcours 12 complet : objectif, tâche rattachée envoyée dans « Un jour
     await mouseDragTo(page, card, dayOf(page, target));
     await expect(dayOf(page, target)).toContainText('Déposer le dossier');
     await page.getByRole('button', { name: 'Fermer le panneau' }).click();
+    // Terminée depuis son jour de la Semaine : l'encadré de l'objectif passe à 1/1.
     await todayTab(page).click();
     await expect(goalCards(page).first()).toContainText('0/1');
+    await openWeek(page);
+    await page.getByRole('checkbox', { name: 'Terminer : Déposer le dossier' }).click();
+    await todayTab(page).click();
+    await expect(goalCards(page).first()).toContainText('1/1');
     return;
   }
   await expect(goalCards(page).first()).toContainText('0/1');
