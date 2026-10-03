@@ -59,6 +59,7 @@ export function GoalsScreen() {
   const setSpace = useFeatureStore(goalsStore, (s) => s.setSpace);
   const setPinned = useFeatureStore(goalsStore, (s) => s.setPinned);
   const remove = useFeatureStore(goalsStore, (s) => s.remove);
+  const setAchieved = useFeatureStore(goalsStore, (s) => s.setAchieved);
   const toggleTask = useFeatureStore(goalsStore, (s) => s.toggleTask);
 
   const today = appDay ?? todayLocal(container.clock);
@@ -140,7 +141,8 @@ export function GoalsScreen() {
               onToggleTask={(task) => void toggleTask(task)}
               onOpenTask={(task) => openDetail({ type: 'task', id: task.id })}
               onDelete={() => setToDelete(goal)}
-              actions={goal.id === lastKey ? addButton : undefined}
+              addButton={goal.id === lastKey ? addButton : undefined}
+              onAchieved={(achieved) => void setAchieved(goal.id, achieved)}
             />
           ))}
           {drafts.map((key, offset) => (

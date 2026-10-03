@@ -35,6 +35,11 @@ export const goalsFr = {
   chooseTitle: 'Rattacher à quel objectif ?',
   attachedTasks: 'Tâches rattachées',
   noTasks: 'Aucune tâche rattachée',
+  progressText: '{done} faites sur {total}',
+  progressTextOne: '{done} faite sur {total}',
+  progressLabel: 'Avancement de l’objectif',
+  markAchieved: 'Marquer atteint',
+  reopenGoal: 'Rouvrir l’objectif',
   attachedMark: 'Rattachée à l’objectif',
   attachedWord: 'objectif',
   undo: {

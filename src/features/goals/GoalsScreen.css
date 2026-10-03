@@ -182,6 +182,31 @@
   gap: 6px;
 }
 
+.ct-goal__attachedHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.ct-goal__progressText {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text);
+}
+
+.ct-goal__bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ct-color-surface-input);
+  overflow: hidden;
+}
+
+.ct-goal__barFill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--ct-color-goal);
+}
+
 .ct-goal__attachedTitle {
   margin: 0;
   font-family: var(--ct-font-text);
@@ -259,4 +284,12 @@
 
 .ct-goal__actions > * {
   flex: 1 1 0;
+}
+
+/* Objectif.html : deux boutons de 46 px sur une ligne, libellés sur une seule ligne. */
+.ct-goal__actions .ct-button {
+  min-height: 46px;
+  padding-inline: var(--ct-space-2);
+  font-size: var(--ct-font-size-text);
+  white-space: nowrap;
 }

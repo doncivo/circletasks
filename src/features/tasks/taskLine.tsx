@@ -41,7 +41,7 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule }: TaskSubtit
       if (space) parts.push(<span key="space" style={{ color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-semibold)' }}>{space.name}</span>);
     } else if (segment.kind === 'goal') {
       parts.push(
-        <span key="goal" className="ct-task-goalSegment" style={{ color: 'var(--ct-color-goal)', fontWeight: 'var(--ct-font-weight-semibold)' }}>
+        <span key="goal" className="ct-task-goalSegment">
           <TaskGoalMark size={14} /> {t('goals.attachedWord')}
         </span>,
       );

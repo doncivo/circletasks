@@ -1,10 +1,10 @@
 import { Target, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Goal, IconRef, Space, Task } from '../../domain/model';
-import { GOAL_TITLE_MAX_LENGTH } from '../../domain/goalRules';
+import { GOAL_TITLE_MAX_LENGTH, goalProgress, progressPercent } from '../../domain/goalRules';
 import type { SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { Icon, IconChooser, IconView, resolveIconRefColor, SpaceSegmented, Switch } from '../../ui';
+import { Button, Icon, IconChooser, IconView, resolveIconRefColor, SpaceSegmented, Switch } from '../../ui';
 import { GoalTasks } from './GoalTasks';
 import './GoalsScreen.css';
 
@@ -92,15 +92,19 @@ export interface GoalSectionProps {
   readonly tasks: readonly Task[];
   readonly onToggleTask: (task: Task) => void;
   readonly onOpenTask: (task: Task) => void;
+  /** OB-04 : « Marquer atteint » / « Rouvrir l'objectif » (action manuelle, jamais automatique). */
+  readonly onAchieved: (achieved: boolean) => void;
   /** Contenu ajouté sous le titre (épinglage, avancement, tâches) : fourni par les stories suivantes. */
   readonly children?: ReactNode;
-  /** Rangée de boutons du bas (« + Ajouter un objectif », « Marquer atteint »). */
-  readonly actions?: ReactNode;
+  /** « + Ajouter un objectif », sur la dernière section seulement ; placé avant « Marquer atteint » (Objectif.html). */
+  readonly addButton?: ReactNode;
 }
 
 /** Section d'un objectif (OB-01 critère 6) : icône, titre, espace, suppression, puis le contenu propre à l'objectif. */
-export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onPin, onDelete, tasks, onToggleTask, onOpenTask, children, actions }: GoalSectionProps) {
+export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onPin, onDelete, tasks, onToggleTask, onOpenTask, onAchieved, children, addButton }: GoalSectionProps) {
   const [chooserOpen, setChooserOpen] = useState(false);
+  const progress = goalProgress(tasks);
+  const achieved = goal.status === 'achieved';
   return (
     <section className="ct-goal" aria-label={goalLabel(index)} data-goal-id={goal.id}>
       <div className="ct-goal__titleRow">
@@ -127,11 +131,24 @@ export function GoalSection({ goal, index, spaces, onTitle, onIcon, onSpace, onP
         <Switch checked={goal.pinned} onChange={onPin} label={t('goals.pinned')} />
       </div>
       <div className="ct-goal__attached">
-        <h2 className="ct-goal__attachedTitle">{t('goals.attachedTasks')}</h2>
+        <div className="ct-goal__attachedHeader">
+          <h2 className="ct-goal__attachedTitle">{t('goals.attachedTasks')}</h2>
+          {progress.total > 0 && <span className="ct-goal__progressText">{t(progress.done > 1 ? 'goals.progressText' : 'goals.progressTextOne', { done: progress.done, total: progress.total })}</span>}
+        </div>
+        {progress.total > 0 && (
+          <div className="ct-goal__bar" role="progressbar" aria-label={t('goals.progressLabel')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progressPercent(progress)}>
+            <div className="ct-goal__barFill" style={{ width: `${String(progressPercent(progress))}%` }} />
+          </div>
+        )}
         <GoalTasks tasks={tasks} onToggle={onToggleTask} onOpen={onOpenTask} />
       </div>
       {children}
-      {actions && <div className="ct-goal__actions">{actions}</div>}
+      <div className="ct-goal__actions">
+        {addButton}
+        <Button variant={achieved ? 'secondary' : 'primary'} fullWidth onClick={() => onAchieved(!achieved)}>
+          {t(achieved ? 'goals.reopenGoal' : 'goals.markAchieved')}
+        </Button>
+      </div>
     </section>
   );
 }

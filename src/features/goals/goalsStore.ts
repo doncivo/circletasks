@@ -35,6 +35,8 @@ export interface GoalsState {
   /** OB-02 : épingle l'objectif en tête d'Aujourd'hui ou le retire (il reste dans l'écran Objectif). */
   setPinned(id: GoalId, pinned: boolean): Promise<void>;
   remove(id: GoalId): Promise<boolean>;
+  /** OB-04 critère 5 : « Marquer atteint » (achieved) ou « Rouvrir l'objectif » (open) ; jamais automatique, même si toutes les tâches sont faites. */
+  setAchieved(id: GoalId, achieved: boolean): Promise<void>;
   /** OB-03 critère 5 : termine ou rouvre une tâche rattachée (T-04, annulable) ; l'avancement suit sans rechargement. Ne rejette jamais. */
   toggleTask(task: Pick<Task, 'id' | 'status'>): Promise<void>;
   clearActionError(): void;
@@ -135,6 +137,13 @@ export const goalsStore = defineFeatureStore<GoalsState>((container: AppContaine
       async setPinned(id, pinned) {
         await guard(async () => {
           await useCases.update(id, { pinned });
+          await get().refresh();
+        }, undefined);
+      },
+
+      async setAchieved(id, achieved) {
+        await guard(async () => {
+          await useCases.setStatus(id, achieved ? 'achieved' : 'open');
           await get().refresh();
         }, undefined);
       },

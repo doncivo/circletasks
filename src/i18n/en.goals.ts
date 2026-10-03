@@ -35,6 +35,11 @@ export const goalsEn: Messages['goals'] = {
   chooseTitle: 'Link to which goal?',
   attachedTasks: 'Linked tasks',
   noTasks: 'No linked tasks',
+  progressText: '{done} done out of {total}',
+  progressTextOne: '{done} done out of {total}',
+  progressLabel: 'Goal progress',
+  markAchieved: 'Mark achieved',
+  reopenGoal: 'Reopen goal',
   attachedMark: 'Linked to the goal',
   attachedWord: 'goal',
   undo: {

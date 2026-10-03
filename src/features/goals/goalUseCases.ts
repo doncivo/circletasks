@@ -1,7 +1,7 @@
 import { todayLocal } from '../../domain/clock';
 import { validateGoalTitle, type GoalTitleError } from '../../domain/goalRules';
 import { newEntityId } from '../../domain/id';
-import type { Goal, GoalPatch, IconRef, Task } from '../../domain/model';
+import type { Goal, GoalPatch, GoalStatus, IconRef, Task } from '../../domain/model';
 import type { GoalId, LocalDate, Result, SpaceId } from '../../domain/types';
 import { weekStartOf } from '../../domain/week';
 import type { PlainMessageKey } from '../../i18n';
@@ -32,6 +32,8 @@ export interface GoalUseCases {
   setTitle(id: GoalId, title: string): Promise<Result<Goal, GoalSaveError>>;
   /** OB-01 critères 4 et 5, OB-02 : icône, espace, épinglage. */
   update(id: GoalId, patch: Pick<GoalPatch, 'icon' | 'spaceId' | 'pinned'>): Promise<Goal | null>;
+  /** OB-04 critères 5 et 6 : marque l'objectif atteint (`achieved`) ou le rouvre (`open`) ; action manuelle seulement. */
+  setStatus(id: GoalId, status: Extract<GoalStatus, 'open' | 'achieved'>): Promise<Goal | null>;
   /** OB-01 critère 7 : supprime l'objectif ; ses tâches perdent le rattachement mais restent ; annulable 5 s. */
   remove(id: GoalId): Promise<boolean>;
 }
@@ -83,6 +85,15 @@ export function createGoalUseCases(deps: GoalUseCaseDeps): GoalUseCases {
       const current = await data.repos.goals.getById(id);
       if (!current) return null;
       const goal = await data.repos.goals.update(id, patch);
+      emitGoalsChanged(data);
+      return goal;
+    },
+
+    async setStatus(id, status) {
+      const current = await data.repos.goals.getById(id);
+      if (!current || current.status === 'closed') return null;
+      if (current.status === status) return current;
+      const goal = await data.repos.goals.setStatus(id, status);
       emitGoalsChanged(data);
       return goal;
     },
