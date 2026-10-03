@@ -17,7 +17,7 @@ import { WeekGoalBanners } from '../goals/WeekGoalBanners';
 import { SomedayButton, SomedayPanel } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
-import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
+import { TaskCreateSheet, scheduleOf } from '../tasks/TaskCreateSheet';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
 import { WeekDayView } from './WeekDayView';
@@ -225,7 +225,7 @@ export function WeekScreen() {
       </div>
 
       {sheetOpen && (
-        <TodayCreateSheet
+        <TaskCreateSheet
           viewedDate={today}
           today={today}
           spaces={spaces}

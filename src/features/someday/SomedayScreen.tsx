@@ -8,7 +8,7 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { SpaceFilterBar } from '../spaces';
 import { TaskDetail } from '../tasks';
-import { TodayCreateSheet } from '../today/TodayCreate';
+import { TaskCreateSheet } from '../tasks/TaskCreateSheet';
 import { useDefaultReminderOffsets } from '../reminders';
 import { SomedayAddField } from './SomedayAddField';
 import { SomedayList } from './SomedayList';
@@ -79,7 +79,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
         <Fab onClick={() => setSheetOpen(true)} label={t('common.add')} />
       </div>
       {sheetOpen && (
-        <TodayCreateSheet
+        <TaskCreateSheet
           viewedDate={today}
           today={today}
           spaces={view.spaces}

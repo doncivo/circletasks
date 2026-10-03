@@ -17,7 +17,8 @@ import { useQuickAddStore } from '../app/quickAdd';
 import { SomedayButton } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
-import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
+import { TodayAddRow } from './TodayCreate';
+import { TaskCreateSheet, scheduleOf } from '../tasks/TaskCreateSheet';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView } from './TodayListView';
 import { GoalReviewCards } from '../goals/GoalReviewCards';
@@ -284,7 +285,7 @@ export function TodayScreen() {
         </div>
 
         {sheetOpen && (
-          <TodayCreateSheet
+          <TaskCreateSheet
             viewedDate={viewedDate}
             today={today}
             spaces={spaces}

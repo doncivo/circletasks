@@ -16,6 +16,20 @@ import type { AppContainer } from '../app/container';
  */
 export type TaskUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;
 
+/** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
+export interface NewTaskSchedule {
+  readonly date?: LocalDate;
+  readonly time?: LocalTime | null;
+  /** T-14 : « Un jour » choisi dans le sélecteur : tâche sans date ni heure (`date` et `time` ignorés). */
+  readonly someday?: boolean;
+  /** T-09 : répétition choisie à la saisie (absent : une fois). */
+  readonly recurrence?: RecurrenceFields | null;
+  /** N-02 : avances des rappels (feuille d'ajout) ; absent avec une heure : réglage `reminders.defaultOffsets` (QB-08). */
+  readonly reminderOffsets?: readonly ReminderOffsetMin[];
+  /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
+  readonly goalId?: GoalId | null;
+}
+
 export interface CreateTaskInput {
   /** Saisie brute ; trim et validation par src/domain. */
   readonly title: string;

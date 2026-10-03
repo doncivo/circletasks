@@ -6,7 +6,7 @@ import { sortTasksForDay } from '../../domain/taskSchedule';
 import { moveTaskRow, type MoveOutcome } from '../../domain/taskReorder';
 import { matchesItemFilter } from '../../domain/itemFilter';
 import type { TodayRow } from '../../domain/todayList';
-import type { GoalId, LocalDate, LocalTime, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
+import type { LocalDate, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -14,21 +14,9 @@ import type { SeriesScope } from '../../domain/recurrenceEdit';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { EMPTY_TODAY_EXTRAS, loadTodayExtras, toggleRoutineViaSources, type TodayExtras } from './todaySources';
-import type { CreateTaskError } from '../tasks/taskUseCases';
+import type { CreateTaskError, NewTaskSchedule } from '../tasks/taskUseCases';
 
-/** Date et heure optionnelles choisies dans la saisie (T-02) ; `date` absente = jour affiché. */
-export interface NewTaskSchedule {
-  readonly date?: LocalDate;
-  readonly time?: LocalTime | null;
-  /** T-14 : « Un jour » choisi dans le sélecteur : tâche sans date ni heure (`date` et `time` ignorés). */
-  readonly someday?: boolean;
-  /** T-09 : répétition choisie à la saisie (absent : une fois). */
-  readonly recurrence?: RecurrenceFields | null;
-  /** N-02 : avances des rappels (feuille d'ajout) ; absent avec une heure : réglage `reminders.defaultOffsets` (QB-08). */
-  readonly reminderOffsets?: readonly ReminderOffsetMin[];
-  /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
-  readonly goalId?: GoalId | null;
-}
+export type { NewTaskSchedule };
 
 export type TodayStatus = 'idle' | 'loading' | 'ready' | 'error';
 
