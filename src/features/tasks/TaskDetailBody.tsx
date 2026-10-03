@@ -27,7 +27,6 @@ export interface TaskDetailBodyProps {
   /** Instant courant (horodatage relatif « modifiée hier à 18:04 »). */
   readonly nowMs: number;
   readonly reminders: readonly ReminderOffsetMin[];
-  readonly goalTitle: string | null;
   /** Règle de la série (T-09), `null` : tâche non récurrente. */
   readonly recurrence: RecurrenceFields | null;
   /** Feuille iPhone (Detail.html) ; sinon panneau PC (PC-Aujourdhui.html). */
@@ -168,7 +167,7 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
         today={today}
         reminders={props.reminders}
         setReminders={api.setReminders}
-        goalTitle={props.goalTitle}
+        onGoalChange={(goalId) => void api.updateFields({ goalId })}
         recurrence={recurrence}
         onPatch={edits.commitPatch}
         cancelInlineRef={props.cancelInlineRef}

@@ -85,6 +85,11 @@
   --ct-color-space-pro: #2f6b7a;
   --ct-color-space-perso: #b5483b;
   --ct-color-goal: #3f7fc4;
+  /* Badges « Atteint » / « Non atteint » de l'objectif (Objectif.html). */
+  --ct-color-achieved-bg: #e7f0ea;
+  --ct-color-achieved-text: #2f6b4a;
+  --ct-color-missed-bg: #fbe7e4;
+  --ct-color-missed-text: #9e3f33;
   /* Message d'erreur (T-03, ex. échec d'enregistrement) : fond et texte, repris de
      --ct-color-space-perso (même famille de rouge), contraste suffisant sur blanc. */
   --ct-color-danger-bg: #f8e4e1;
@@ -136,6 +141,10 @@
     --ct-color-space-pro: #7fc3cf;
     --ct-color-space-perso: #f0a091;
     --ct-color-goal: #8db8ec;
+    --ct-color-achieved-bg: #1f3a2d;
+    --ct-color-achieved-text: #9fd3b4;
+    --ct-color-missed-bg: #4a2420;
+    --ct-color-missed-text: #f3a79a;
     --ct-color-danger-bg: #4a2420;
     --ct-color-danger: #f3a79a;
     --ct-color-today-badge: #8fc4ea;
@@ -172,6 +181,10 @@
   --ct-color-space-pro: #7fc3cf;
   --ct-color-space-perso: #f0a091;
   --ct-color-goal: #8db8ec;
+  --ct-color-achieved-bg: #1f3a2d;
+  --ct-color-achieved-text: #9fd3b4;
+  --ct-color-missed-bg: #4a2420;
+  --ct-color-missed-text: #f3a79a;
   --ct-color-danger-bg: #4a2420;
   --ct-color-danger: #f3a79a;
   --ct-color-today-badge: #8fc4ea;
@@ -206,6 +219,10 @@
   --ct-color-space-pro: #2f6b7a;
   --ct-color-space-perso: #b5483b;
   --ct-color-goal: #3f7fc4;
+  --ct-color-achieved-bg: #e7f0ea;
+  --ct-color-achieved-text: #2f6b4a;
+  --ct-color-missed-bg: #fbe7e4;
+  --ct-color-missed-text: #9e3f33;
   --ct-color-danger-bg: #f8e4e1;
   --ct-color-danger: #a1271c;
   --ct-color-today-badge: #1f6698;

@@ -13,6 +13,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { isModalOpen } from '../app/tabShortcuts';
+import { WeekGoalBanners } from '../goals/WeekGoalBanners';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayCreateSheet, scheduleOf } from '../today/TodayCreate';
@@ -163,6 +164,9 @@ export function WeekScreen() {
       {extrasFailed && <p className="ct-week__error" role="alert">{t('week.sourceError')}</p>}
       {status === 'error' && errorKey && <p className="ct-week__error" role="alert">{t(errorKey)}</p>}
 
+      {/* OB-02 critère 6 : bandeau de l'objectif épinglé de la semaine affichée (PC). */}
+      {layout === 'pc' && <WeekGoalBanners weekStart={weekStart} hidden={projectFilter !== null} />}
+
       {status === 'error' ? null : (
         <div
           key={weekStart}
@@ -234,6 +238,7 @@ export function WeekScreen() {
               recurrence: input.recurrence,
               icon: input.icon,
               reminderOffsets: input.reminderOffsets,
+              goalId: input.goalId,
             });
             if (result.ok) announceCreation(input.spaceId);
             return result.ok;

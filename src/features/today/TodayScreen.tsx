@@ -1,5 +1,5 @@
 import { useDefaultReminderOffsets } from '../reminders';
-import { ChartColumn } from 'lucide-react';
+import { ChartColumn, Target } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { DateChoice } from '../../domain/dateInput';
@@ -19,6 +19,7 @@ import { TaskDetail } from '../tasks';
 import { TodayAddRow, TodayCreateSheet, scheduleOf } from './TodayCreate';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView } from './TodayListView';
+import { GoalReviewCards } from '../goals/GoalReviewCards';
 import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
 import { canToggleRoutines, subscribeToTodaySources } from './todaySources';
@@ -64,6 +65,7 @@ export function TodayScreen() {
   const refreshExtras = useFeatureStore(todayStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
+  const closeDetail = useNavigationStore((s) => s.closeDetail);
   const detail = useNavigationStore((s) => s.detail);
   const navigate = useNavigationStore((s) => s.navigate);
   const route = useNavigationStore((s) => s.route);
@@ -90,7 +92,7 @@ export function TodayScreen() {
         routines: projectFilter ? [] : extras.routines,
         events: projectFilter ? [] : extras.events,
         checklists: projectFilter ? [] : extras.checklists,
-        goal: projectFilter ? null : extras.goal,
+        goals: projectFilter ? [] : extras.goals,
         hideRoutines,
       }),
     [dayTasks, extras, hideRoutines, projectFilter, viewDate, viewedDate, viewFilter],
@@ -178,7 +180,17 @@ export function TodayScreen() {
         ? t('tasks.emptyToday')
         : t('today.emptyDay', { weekday: weekdayName });
 
+  // Icône cible et encadrés d'objectif (OB-01, OB-02) : ouvrent l'écran Objectif (panneau à droite sur PC, écran plein sur iPhone).
+  const openGoals = (): void => {
+    closeDetail();
+    navigate({ tab: 'tasks', screen: 'goals' });
+  };
   const pills = <SpaceFilterBar />;
+  const goalButton = (
+    <button type="button" className="ct-today__iconButton" aria-label={t('goals.open')} onClick={openGoals}>
+      <Icon icon={Target} size={layout === 'pc' ? 24 : 26} />
+    </button>
+  );
   const reportButton = (
     <button type="button" className="ct-today__iconButton" aria-label={t('report.openFromToday')} onClick={() => navigate({ tab: 'tasks', screen: 'report' })}>
       <Icon icon={ChartColumn} size={layout === 'pc' ? 24 : 26} />
@@ -193,6 +205,7 @@ export function TodayScreen() {
         <div className="ct-today__quickIcons" data-layout={layout}>
           {layout === 'pc' && pills}
           <span className="ct-today__quickSpacer" />
+          {goalButton}
           {reportButton}
         </div>
 
@@ -214,9 +227,13 @@ export function TodayScreen() {
 
         {status === 'error' ? null : (
           <>
-            {(list.goal || list.events.length > 0) && (
+            {/* OB-05 : propositions « Reconduire / Clore » des objectifs non atteints, en tête de liste. */}
+            <GoalReviewCards hidden={projectFilter !== null} />
+            {(list.goals.length > 0 || list.events.length > 0) && (
               <div className="ct-today-banners" data-layout={layout}>
-                {list.goal && <TodayGoalCard entry={list.goal} compact={compact} />}
+                {list.goals.map((entry) => (
+                  <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
+                ))}
                 <TodayEventBands events={list.events} compact={compact} />
               </div>
             )}
@@ -274,7 +291,7 @@ export function TodayScreen() {
             defaultOffsets={defaultOffsets}
             onClose={() => setSheetOpen(false)}
             onCreate={async (input) => {
-              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets }, input.icon, input.projectId);
+              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId }, input.icon, input.projectId);
               if (result.ok) announceCreation(input.spaceId);
               return result.ok;
             }}

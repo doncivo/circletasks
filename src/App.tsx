@@ -12,6 +12,7 @@ import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
+import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
@@ -25,6 +26,8 @@ import { useLayout } from './ui/useLayout';
 
 // Routines (M4) : branchées sur Aujourd'hui et la Semaine avant le premier rendu des écrans (todaySources).
 registerRoutinesSource();
+// Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
+registerGoalsSource();
 
 const TAB_ITEMS = TABS.filter((tab) => tab.id !== 'settings');
 
@@ -45,6 +48,7 @@ function AppShellContent() {
   const container = useAppContainer();
   const route = useNavigationStore((s) => s.route);
   const goToTab = useNavigationStore((s) => s.goToTab);
+  const layout = useLayout();
 
   // A-09 : état du réseau (« Hors ligne »).
   useEffect(() => startNetworkStatus(), []);
@@ -72,7 +76,23 @@ function AppShellContent() {
       <AppStatusBanner />
       <UpdateBanner />
       {route.tab === 'tasks' ? (
-        route.screen === 'report' ? <ReportScreen /> : route.screen === 'done' ? <DoneTasksScreen /> : <TodayScreen />
+        route.screen === 'report' ? (
+          <ReportScreen />
+        ) : route.screen === 'done' ? (
+          <DoneTasksScreen />
+        ) : route.screen === 'goals' ? (
+          // Objectif (OB-01) : écran plein sur iPhone, panneau à droite d'Aujourd'hui sur PC.
+          layout === 'pc' ? (
+            <>
+              <TodayScreen />
+              <GoalsScreen />
+            </>
+          ) : (
+            <GoalsScreen />
+          )
+        ) : (
+          <TodayScreen />
+        )
       ) : route.tab === 'week' ? (
         <WeekScreen />
       ) : route.tab === 'routines' ? (

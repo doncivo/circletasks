@@ -10,6 +10,8 @@ export interface DetailPanelProps {
   onClose: () => void;
   /** Nom accessible du panneau (ex. « Détail de la tâche »). */
   label: string;
+  /** Légende de l'en-tête, déjà résolue par l'appelant ; « DÉTAIL » par défaut. */
+  caption?: string;
   /** Largeur en pixels ; 588 px dans PC-Aujourdhui.html. */
   width?: number;
   children: ReactNode;
@@ -25,7 +27,7 @@ export interface DetailPanelProps {
  *   <TaskDetailForm task={task} />
  * </DetailPanel>
  */
-export function DetailPanel({ onClose, label, width = 420, children, className }: DetailPanelProps) {
+export function DetailPanel({ onClose, label, caption, width = 420, children, className }: DetailPanelProps) {
   const containerRef = useFocusTrap<HTMLElement>({ active: true, onEscape: onClose });
   return (
     <aside
@@ -36,7 +38,7 @@ export function DetailPanel({ onClose, label, width = 420, children, className }
       style={{ width }}
     >
       <div className="ct-detail-panel__header">
-        <span className="ct-detail-panel__caption">{t('detail.caption')}</span>
+        <span className="ct-detail-panel__caption">{caption ?? t('detail.caption')}</span>
         <button type="button" aria-label={t('detail.closeLabel')} onClick={onClose} className="ct-detail-panel__close">
           <Icon icon={X} />
         </button>

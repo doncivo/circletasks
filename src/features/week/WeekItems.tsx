@@ -4,7 +4,7 @@ import type { TodayEventEntry } from '../../domain/todayList';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { Checkbox, Icon, IconView, resolveIconRefColor, type Layout } from '../../ui';
-import { routineSubtitle, taskSubtitle } from '../tasks/taskLine';
+import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
  * Éléments d'un jour de la Semaine (S-01) : présentation seule, les actions viennent de l'écran. PC (PC-Semaine.html) : cartes
@@ -50,6 +50,7 @@ export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, on
         {checkbox}
         {task.time && <span className="ct-week-item__time">{task.time}</span>}
         {title}
+        {task.goalId && <TaskGoalMark />}
       </div>
     );
   }

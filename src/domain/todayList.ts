@@ -1,4 +1,5 @@
 import type { Checklist, ChecklistSummary, Goal, GoalProgress, IconRef, Routine, Task } from './model';
+import { compareGoalsByCreation, pinnedGoalsForWeek } from './goalRules';
 import { matchesSpaceFilter } from './spaceRules';
 import { isPausedAt, type DateInterval } from './routineSchedule';
 import type { Id, LocalDate, LocalTime, SpaceFilter, SpaceId } from './types';
@@ -36,7 +37,7 @@ export interface TodayEventEntry {
   readonly startInstant?: string;
 }
 
-/** Objectif épinglé (OB-02) et son avancement (OB-04). */
+/** Objectif épinglé (OB-02) et son avancement (OB-04). Un encadré par objectif épinglé (QB-12). */
 export interface TodayGoalEntry {
   readonly goal: Goal;
   readonly progress: GoalProgress;
@@ -49,7 +50,8 @@ export interface TodayListInput {
   readonly routines?: readonly TodayRoutineEntry[];
   readonly events?: readonly TodayEventEntry[];
   readonly checklists?: readonly ChecklistSummary[];
-  readonly goal?: TodayGoalEntry | null;
+  /** Objectifs épinglés de la semaine du jour, avec leur avancement ; le domaine garde ceux du jour et de l'espace affichés. */
+  readonly goals?: readonly TodayGoalEntry[];
   /** A-03 : `today.hideRoutines`. Les routines masquées disparaissent de la liste du jour seulement. */
   readonly hideRoutines?: boolean;
 }
@@ -60,8 +62,8 @@ export type TodayRow =
   | { readonly kind: 'routine'; readonly id: string; readonly routine: Routine; readonly done: boolean };
 
 export interface TodayList {
-  /** Objectif épinglé de l'espace affiché, sinon null. */
-  readonly goal: TodayGoalEntry | null;
+  /** Objectifs épinglés de la semaine et de l'espace affichés, dans l'ordre de création (un encadré chacun, QB-12). */
+  readonly goals: readonly TodayGoalEntry[];
   readonly events: readonly TodayEventEntry[];
   /** Éléments à faire : à l'heure d'abord, par heure, puis sans heure (routines puis ordre manuel, Q11). */
   readonly rows: readonly TodayRow[];
@@ -157,10 +159,14 @@ export function buildTodayList(input: TodayListInput): TodayList {
     (input.checklists ?? []).filter((summary) => checklistVisible(summary.checklist, date, filter)),
     (summary) => summary.checklist.id,
   );
-  const goal = input.goal && input.goal.goal.deletedAt === null && inSpace(filter, input.goal.goal.spaceId) ? input.goal : null;
+  const entries = unique(input.goals ?? [], (entry) => entry.goal.id);
+  const shown = new Set(pinnedGoalsForWeek(entries.map((entry) => entry.goal), date, filter).map((goal) => goal.id));
+  const goals = entries
+    .filter((entry) => shown.has(entry.goal.id))
+    .sort((a, b) => compareGoalsByCreation(a.goal, b.goal));
 
   return {
-    goal,
+    goals,
     events,
     rows,
     doneRows,

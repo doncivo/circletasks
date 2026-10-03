@@ -7,22 +7,22 @@ import type { AppContainer } from '../app/container';
  * Sources des éléments d'Aujourd'hui autres que les tâches (A-01, critères 3 et 4).
  *
  * Aujourd'hui assemble ce que chaque module lui fournit : les routines (M4), événements internes et externes
- * (M7, M8), checklists du jour (M6) et l'objectif épinglé (M17) n'existent pas encore, donc aucune source
+ * (M7, M8), checklists du jour (M6) et l'objectif épinglé (M17, branché par `registerGoalsSource`) n'existent pas encore, donc aucune source
  * n'est enregistrée et la liste n'affiche que des tâches, sans aucun élément simulé. Chaque module branche la
  * sienne à son arrivée avec `registerTodaySource` (par exemple au démarrage de l'app), sans toucher à l'écran :
  *   - routines : `{ routines: [{ routine, done }] }` (occurrences calculées par le domaine, R-02) ;
  *   - événements : `{ events: [...] }` (occurrences du jour, locaux et externes) ;
- *   - checklists : `{ checklists: [...] }` ; objectif : `{ goal }` (OB-02).
+ *   - checklists : `{ checklists: [...] }` ; objectifs épinglés : `{ goals }` (OB-02, un encadré chacun).
  * L'interface (lignes, bandeaux, section, carte) est déjà prête pour chacun de ces types.
  */
 export interface TodayExtras {
   readonly routines: readonly TodayRoutineEntry[];
   readonly events: readonly TodayEventEntry[];
   readonly checklists: readonly ChecklistSummary[];
-  readonly goal: TodayGoalEntry | null;
+  readonly goals: readonly TodayGoalEntry[];
 }
 
-export const EMPTY_TODAY_EXTRAS: TodayExtras = { routines: [], events: [], checklists: [], goal: null };
+export const EMPTY_TODAY_EXTRAS: TodayExtras = { routines: [], events: [], checklists: [], goals: [] };
 
 export interface TodaySource {
   readonly id: string;
@@ -84,7 +84,7 @@ export async function loadTodayExtras(container: AppContainer, date: LocalDate, 
       routines: [...extras.routines, ...(part.routines ?? [])],
       events: [...extras.events, ...(part.events ?? [])],
       checklists: [...extras.checklists, ...(part.checklists ?? [])],
-      goal: extras.goal ?? part.goal ?? null,
+      goals: [...extras.goals, ...(part.goals ?? [])],
     };
   }
   return { extras, failed };

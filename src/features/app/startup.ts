@@ -1,5 +1,6 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
 import { createDayRollover } from '../tasks/dayRollover';
+import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
 import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
@@ -27,6 +28,8 @@ export interface StartupEnv {
  * (bornée à 60 s côté rollover, robuste à la veille du PC) et contrôles au retour au
  * premier plan (`visibilitychange`) et à la prise de focus de la fenêtre (`focus`).
  * T-11 : détection du fuseau au démarrage et au retour au premier plan (`general.timeZone`).
+ * OB-05 : à chaque changement de jour (dont le premier contrôle), les objectifs de la semaine passée restés ouverts sont proposés
+ * (reconduire ou clore) ; le jour vient de l'horloge injectable du conteneur.
  * T-08 : purge de la corbeille (tâches supprimées depuis plus de 30 jours) lancée au démarrage,
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
  */
@@ -35,7 +38,11 @@ export function startAppStartup(
   env: StartupEnv = { document, window },
 ): AppStartup {
   const rollover = createDayRollover(container, {
-    onDayChange: (day) => useAppStore.getState().setDay(day),
+    onDayChange: (day) => {
+      useAppStore.getState().setDay(day);
+      // OB-05 : au démarrage et à chaque changement de jour, les objectifs ouverts d'une semaine terminée sont (re)proposés.
+      void goalsStore.get(container).getState().loadReviews(day);
+    },
     onCarryOverResult: (failed) => useAppStore.getState().setCarryOverFailed(failed),
     onRecurrenceResult: (failed) => useAppStore.getState().setRecurrenceFailed(failed),
   });

@@ -1,0 +1,295 @@
+/* Écran Objectif (M17, Objectif.html) : iPhone plein écran, PC en panneau à droite. */
+.ct-goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-goals[data-layout='pc'] {
+  overflow-y: visible;
+}
+
+.ct-goals__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-goals__iconButton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-goals__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-goals__week {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goals__titleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ct-goals__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 3rem;
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-goals__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-goals__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-goals__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-goals__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-goals__sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-5);
+}
+
+/* Section d'un objectif : une par objectif (QB-12). */
+.ct-goal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-goal + .ct-goal {
+  padding-top: var(--ct-space-4);
+  border-top: 1px solid var(--ct-color-border);
+}
+
+.ct-goal__titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+.ct-goal__iconButton {
+  width: 44px;
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.ct-goal__iconButton:focus-visible,
+.ct-goal__deleteButton:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-goal__titleForm {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-goal__titleLabel {
+  display: flex;
+}
+
+.ct-goal__field {
+  width: 100%;
+  height: 56px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 2px solid var(--ct-color-goal);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font: var(--ct-font-weight-bold) var(--ct-font-size-text-lg) var(--ct-font-text);
+}
+
+.ct-goal__field:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-goal__help {
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__metaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+}
+
+.ct-goal__pinRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-goal__pinLabel {
+  font-size: 1rem;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-goal__attached {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-goal__attachedHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.ct-goal__progressText {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text);
+}
+
+.ct-goal__bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ct-color-surface-input);
+  overflow: hidden;
+}
+
+.ct-goal__barFill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--ct-color-goal);
+}
+
+.ct-goal__attachedTitle {
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__noTasks {
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__tasks {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-goal-task {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-goal-task__title {
+  flex-grow: 1;
+  min-width: 0;
+  padding: 10px 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  font: var(--ct-font-weight-semibold) 1rem var(--ct-font-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-goal-task__title[data-done='true'] {
+  color: var(--ct-color-text-secondary);
+  text-decoration: line-through;
+}
+
+.ct-goal-task__title:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-goal-task__day {
+  flex-shrink: 0;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-goal__deleteButton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text-secondary);
+  cursor: pointer;
+}
+
+.ct-goal__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.ct-goal__actions > * {
+  flex: 1 1 0;
+}
+
+/* Objectif.html : deux boutons de 46 px sur une ligne, libellés sur une seule ligne. */
+.ct-goal__actions .ct-button {
+  min-height: 46px;
+  padding-inline: var(--ct-space-2);
+  font-size: var(--ct-font-size-text);
+  white-space: nowrap;
+}

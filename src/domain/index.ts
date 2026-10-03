@@ -43,3 +43,4 @@ export * from './externalCalendars';
 export * from './quietHours';
 export * from './focusSession';
 export * from './filteredAggregates';
+export * from './goalRules';

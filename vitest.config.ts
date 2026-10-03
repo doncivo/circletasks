@@ -5,6 +5,8 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      // Plafond mémoire (consigne d'Ali) : 2 workers, ou CT_TEST_WORKERS=1 pour la relance de secours.
+      maxWorkers: Number(process.env['CT_TEST_WORKERS'] ?? 2),
       // Deux projets : logique pure en Node (domain, db, sync, i18n), composants React en jsdom.
       projects: [
         {

@@ -30,7 +30,6 @@ export function TaskDetail() {
   const status = useFeatureStore(taskDetailStore, (s) => s.status);
   const errorKey = useFeatureStore(taskDetailStore, (s) => s.errorKey);
   const reminders = useFeatureStore(taskDetailStore, (s) => s.reminders);
-  const goalTitle = useFeatureStore(taskDetailStore, (s) => s.goalTitle);
   const recurrence = useFeatureStore(taskDetailStore, (s) => s.recurrence);
   const load = useFeatureStore(taskDetailStore, (s) => s.load);
   const remove = useFeatureStore(taskDetailStore, (s) => s.remove);
@@ -97,7 +96,6 @@ export function TaskDetail() {
       today={appDay ?? todayLocal(clock)}
       nowMs={clock.nowMs()}
       reminders={reminders}
-      goalTitle={goalTitle}
       recurrence={recurrence}
       isMobile={layout === 'mobile'}
       onClose={handleClose}

@@ -12,6 +12,7 @@ import {
   asLocalDate,
   asLocalTime,
   asSpaceId,
+  type GoalId,
   type ProjectId,
   type RecurrenceId,
   type ReminderId,
@@ -219,5 +220,35 @@ describe('decideNextOccurrence : ignoreDue (T-10 critère 7)', () => {
   it('ignoreDue respecte la fin de série et les occurrences déjà créées', () => {
     expect(decideNextOccurrence({ task: todo, rule: { ...monthly23, count: 2 }, today: d('2026-09-23'), ignoreDue: true })).toEqual({ create: false, reason: 'series_ended' });
     expect(decideNextOccurrence({ task: todo, rule: monthly23, today: d('2026-09-23'), ignoreDue: true, existingSeriesIndexes: [2] })).toEqual({ create: false, reason: 'already_generated' });
+  });
+});
+
+describe('buildNextOccurrence : rattachement à l’objectif (OB-03 × T-09)', () => {
+  const goalId = asEntityId<GoalId>(uuid(7));
+  const base = {
+    id: asEntityId<TaskId>(uuid(2)),
+    spaceId: asSpaceId(uuid(3)),
+    projectId: null,
+    title: 'Hebdo',
+    note: '',
+    time: null,
+    status: 'done',
+    carriedOver: false,
+    recurrenceId: asEntityId<RecurrenceId>(uuid(5)),
+    seriesIndex: 0,
+    goalId,
+    icon: null,
+    someday: false,
+  } as unknown as Task;
+  const opts = { taskId: asEntityId<TaskId>(uuid(8)), seriesIndex: 1, newReminderId: () => asEntityId<ReminderId>(uuid(6)) };
+
+  it('occurrence suivante dans la même semaine : rattachement gardé', () => {
+    const { task } = buildNextOccurrence({ ...base, date: d('2026-09-28') }, { ...opts, date: d('2026-10-02') });
+    expect(task.goalId).toBe(goalId);
+  });
+
+  it('occurrence suivante dans une autre semaine, ou précédente sans date : rattachement retiré', () => {
+    expect(buildNextOccurrence({ ...base, date: d('2026-09-28') }, { ...opts, date: d('2026-10-05') }).task.goalId).toBeNull();
+    expect(buildNextOccurrence({ ...base, date: null }, { ...opts, date: d('2026-10-02') }).task.goalId).toBeNull();
   });
 });

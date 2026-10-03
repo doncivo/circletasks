@@ -49,7 +49,7 @@ export function createGoalRepository(db: SqlExecutor, stamper: WriteStamper): Go
     async listForWeek(weekStart: LocalDate, filter: SpaceFilter) {
       const f = spaceFilterClause(filter);
       const rows = await db.select<GoalRow>(
-        `SELECT * FROM goal WHERE deleted_at IS NULL AND week_start = ? ${f.sql} ORDER BY pinned DESC, title`,
+        `SELECT * FROM goal WHERE deleted_at IS NULL AND week_start = ? ${f.sql} ORDER BY created_at, id`,
         [weekStart, ...f.params],
       );
       return rows.map(rowToGoal);
@@ -60,6 +60,40 @@ export function createGoalRepository(db: SqlExecutor, stamper: WriteStamper): Go
       const rows = await db.select<GoalRow>(
         `SELECT * FROM goal WHERE deleted_at IS NULL AND week_start BETWEEN ? AND ? ${f.sql} ORDER BY week_start DESC, title`,
         [range.from, range.to, ...f.params],
+      );
+      return rows.map(rowToGoal);
+    },
+
+    async listBefore(weekStart: LocalDate, filter: SpaceFilter, weeks = 20) {
+      const f = spaceFilterClause(filter);
+      const limit = Math.max(1, Math.floor(weeks));
+      const starts = await db.select<{ week_start: string }>(
+        `SELECT DISTINCT week_start FROM goal WHERE deleted_at IS NULL AND week_start < ? ${f.sql} ORDER BY week_start DESC LIMIT ${limit}`,
+        [weekStart, ...f.params],
+      );
+      const oldest = starts.at(-1)?.week_start;
+      if (oldest === undefined) return [];
+      const rows = await db.select<GoalRow>(
+        `SELECT * FROM goal WHERE deleted_at IS NULL AND week_start >= ? AND week_start < ? ${f.sql} ORDER BY week_start DESC, created_at, id`,
+        [oldest, weekStart, ...f.params],
+      );
+      return rows.map(rowToGoal);
+    },
+
+    async listOpenBefore(weekStart: LocalDate) {
+      const rows = await db.select<GoalRow>(
+        "SELECT * FROM goal WHERE deleted_at IS NULL AND status = 'open' AND week_start < ? ORDER BY week_start, created_at, id",
+        [weekStart],
+      );
+      return rows.map(rowToGoal);
+    },
+
+    async listCarriedFrom(ids: readonly GoalId[]) {
+      if (ids.length === 0) return [];
+      const marks = ids.map(() => '?').join(', ');
+      const rows = await db.select<GoalRow>(
+        `SELECT * FROM goal WHERE deleted_at IS NULL AND carried_from_id IN (${marks}) ORDER BY week_start, created_at, id`,
+        [...ids],
       );
       return rows.map(rowToGoal);
     },

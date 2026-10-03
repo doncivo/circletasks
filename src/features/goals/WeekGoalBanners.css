@@ -1,0 +1,47 @@
+/* Bandeaux d'objectif de la Semaine PC (PC-Semaine-UnJour.html) : bord #3F7FC4, « OBJECTIF », titre, avancement. */
+.ct-week-goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+.ct-week-goal {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  padding: 10px 14px;
+  border: 2px solid var(--ct-color-goal);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.ct-week-goal__caption {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.06em;
+  color: var(--ct-color-goal);
+}
+
+.ct-week-goal__title {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ct-week-goal__progress {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-week-goal__achieved {
+  padding: 3px 8px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-achieved-bg);
+  color: var(--ct-color-achieved-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+}

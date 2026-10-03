@@ -4,9 +4,10 @@ import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
-import type { LocalDate, ProjectId, SpaceId } from '../../domain/types';
+import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField, type Layout } from '../../ui';
+import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
 import type { NewTaskSchedule } from './todayStore';
@@ -84,6 +85,8 @@ export interface TodayCreateSheetProps {
     recurrence: RecurrenceFields | null;
     icon: IconRef | null;
     reminderOffsets: readonly ReminderOffsetMin[];
+    /** OB-03 : objectif auquel la tâche est rattachée à sa création. */
+    goalId: GoalId | null;
   }) => Promise<boolean>;
 }
 
@@ -98,6 +101,7 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, in
   const [projectId, setProjectId] = useState<ProjectId | null>(initialProjectId);
   const [icon, setIcon] = useState<IconRef | null>(null);
   const [recurrence, setRecurrence] = useState<RecurrenceFields | null>(null);
+  const [goalId, setGoalId] = useState<GoalId | null>(null);
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
   const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
@@ -120,7 +124,7 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, in
     event.preventDefault();
     if (!valid || !spaceId) return;
     const reminderOffsets = choice.date === null || choice.time === null ? [] : offsets;
-    if (await onCreate({ title, spaceId, projectId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets })) onClose();
+    if (await onCreate({ title, spaceId, projectId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets, goalId })) onClose();
   }
 
   return (
@@ -161,6 +165,8 @@ export function TodayCreateSheet({ viewedDate, today, spaces, initialSpaceId, in
           />
           <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
         </div>
+        {/* Rattacher à mon objectif (OB-03, Ajout.html) : la semaine de référence est celle de la date choisie. */}
+        <GoalAttachSwitch variant="sheet" taskDate={choice.date} attachedGoalId={goalId} onChange={setGoalId} />
         <div className="ct-task-sheet__spacer" />
         <Button type="submit" fullWidth disabled={!valid || !spaceId}>
           {t('tasks.save')}

@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { setWheels } from '../e2e/helpers/schedule';
 import { createTask, openToday } from '../e2e/helpers/today';
+import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
@@ -46,10 +47,33 @@ async function seed(page: Page, testInfo: { project: { name: string } }): Promis
       ? [{ title: 'Sport', space: 'perso', time: '18:00', icon: 'lucide:dumbbell', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-06-01' } satisfies DirectRoutine]
       : []),
   ]);
+  // Objectif de la semaine épinglé « 2/5 » (Main.html, PC-Aujourdhui.html) ; ses tâches tombent un autre jour que le mercredi affiché.
+  await seedGoalWithTasks(page, 'other-days');
   // Aujourd'hui relit ses routines à l'ouverture : on repasse par la Semaine.
   await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
   await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Envoyer la facture', exact: true })).toBeVisible();
+}
+
+/** Titres de l'objectif de la maquette Objectif.html : 2 faites sur 5, jours lun. à ven. (« other-days » : la tâche du mercredi passe au samedi). */
+const GOAL_TITLE = 'Finaliser le PRD CircleTasks';
+const GOAL_TASKS = ['Relire les user stories', 'Valider les maquettes', 'Mettre à jour CLAUDE.md', 'Préparer le dépôt GitHub', 'Lancer Claude Code'];
+
+async function seedGoalWithTasks(page: Page, days: 'objectif' | 'other-days'): Promise<void> {
+  await insertGoals(page, [
+    { title: GOAL_TITLE, weekStart: '2026-09-21' },
+    // « SEMAINES PRÉCÉDENTES » (Objectif.html) : S38 atteint, S37 non atteint.
+    { title: 'Trier les papiers administratifs', weekStart: '2026-09-07', status: 'closed', pinned: false },
+    { title: 'Clôturer la paie de septembre', weekStart: '2026-09-14', status: 'achieved', pinned: false },
+  ]);
+  await insertTasks(page, [
+    { title: GOAL_TASKS[0] as string, date: '2026-09-21', done: true },
+    { title: GOAL_TASKS[1] as string, date: '2026-09-22', done: true },
+    { title: GOAL_TASKS[2] as string, date: days === 'objectif' ? '2026-09-23' : '2026-09-26' },
+    { title: GOAL_TASKS[3] as string, date: '2026-09-24' },
+    { title: GOAL_TASKS[4] as string, date: '2026-09-25' },
+  ]);
+  await attachTasks(page, GOAL_TITLE, GOAL_TASKS);
 }
 
 async function captureApp(page: Page, name: string): Promise<void> {
@@ -74,6 +98,9 @@ const WEEK_SEED: DirectTask[] = [
 async function prepareWeek(page: Page): Promise<void> {
   await insertTasks(page, WEEK_SEED);
   // « Point client » 10:00 (Google Agenda) : 08:00Z en septembre à Paris ; l'anniversaire (événement local) attend le module Événements.
+  // Objectif épinglé de la semaine (PC-Semaine.html : bandeau « OBJECTIF · … · 2/5 ») : cinq tâches de la semaine, deux faites.
+  await insertGoals(page, [{ title: GOAL_TITLE, weekStart: '2026-09-21' }]);
+  await attachTasks(page, GOAL_TITLE, ['Relire le contrat', 'Appeler la banque', 'Envoyer la facture', 'Préparer le dépôt GitHub', 'Clôture mensuelle']);
   await seedCalendarAccount(page);
   await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
   // Routines de la Semaine (PC-Semaine.html : « 07:30 · Routine », « 18:00 · Routine » les lundis, mercredis et vendredis).
@@ -158,6 +185,21 @@ const SCREENS: Screen[] = [
     data: true,
     prepare: async (page) => {
       await page.getByRole('button', { name: 'Vue compacte' }).click();
+    },
+  },
+  {
+    // Écran Objectif iPhone (Objectif.html) : objectif « Finaliser le PRD CircleTasks », 2 faites sur 5.
+    name: 'Objectif',
+    mockup: 'Objectif.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await seedGoalWithTasks(page, 'objectif');
+      await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
+      await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+      await page.getByRole('button', { name: 'Objectif de la semaine', exact: true }).click();
+      await expect(page.getByRole('heading', { level: 1, name: 'Objectif', exact: true })).toBeVisible();
+      await expect(page.getByText('2 faites sur 5')).toBeVisible();
     },
   },
   { name: 'Main-Vide', mockup: 'Main-Vide.html', viewport: PHONE, date: SUNDAY },

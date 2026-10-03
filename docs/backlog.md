@@ -65,12 +65,12 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
 | D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
 | D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 10-11 : publication, attend le workflow de release et les secrets GitHub) |
-| OB-01 | M17 | Je fixe un objectif pour la semaine | spaces-goals | à faire |
-| OB-02 | M17 | J'épingle l'objectif en haut de ma liste | spaces-goals | à faire |
-| OB-03 | M17 | Je rattache une tâche à un objectif | spaces-goals | à faire |
-| OB-04 | M17 | Je vois l'avancement de l'objectif | spaces-goals | à faire |
-| OB-05 | M17 | Je reconduis un objectif non atteint | spaces-goals | à faire |
-| OB-06 | M17 | Je consulte mes objectifs passés | spaces-goals | à faire |
+| OB-01 | M17 | Je fixe un objectif pour la semaine | spaces-goals | fait |
+| OB-02 | M17 | J'épingle l'objectif en haut de ma liste | spaces-goals | fait |
+| OB-03 | M17 | Je rattache une tâche à un objectif | spaces-goals | fait |
+| OB-04 | M17 | Je vois l'avancement de l'objectif | spaces-goals | fait |
+| OB-05 | M17 | Je reconduis un objectif non atteint | spaces-goals | fait |
+| OB-06 | M17 | Je consulte mes objectifs passés | spaces-goals | fait |
 | SD-01 | M18 | J'ajoute une tâche sans date dans « Un jour » | spaces-goals | à faire |
 | SD-02 | M18 | Je planifie une tâche « Un jour » en un geste | spaces-goals | à faire |
 | SD-03 | M18 | Je renvoie une tâche datée vers « Un jour » | spaces-goals | à faire |

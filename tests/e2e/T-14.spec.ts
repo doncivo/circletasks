@@ -73,7 +73,7 @@ test.describe('T-14 — sélecteur de date par appareil', () => {
       const minutes = dialog.getByRole('spinbutton', { name: 'Minutes' });
       await expect(hours).toHaveAttribute('aria-valuetext', 'Sans heure');
       await expect(minutes).toHaveAttribute('aria-disabled', 'true');
-      await expect(dialog.getByRole('switch')).toHaveCount(0); // pas d'interrupteur « Heure »
+      await expect(dialog.getByRole('switch', { name: /Heure/ })).toHaveCount(0); // pas d'interrupteur « Heure » (le seul interrupteur de la feuille est « Rattacher à mon objectif », OB-03)
 
       await press(page, hours, 'ArrowUp', 11);
       await expect(hours).toHaveAttribute('aria-valuetext', '10 heures');
