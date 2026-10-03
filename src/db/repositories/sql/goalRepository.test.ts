@@ -92,6 +92,67 @@ describe('GoalRepository (SQL)', () => {
     expect(history.map((g) => g.id)).toEqual([goalId, other]);
   });
 
+  let seq = 0;
+  async function seedGoal(weekStartValue: string, extra: { title?: string; spaceId?: typeof SPACE_PRO_ID; status?: 'open' | 'achieved' | 'closed'; carriedFromId?: GoalId } = {}): Promise<GoalId> {
+    seq += 1;
+    db.clock.advance(1);
+    const id = asEntityId<GoalId>(`c1000000-0000-4000-8000-${String(seq).padStart(12, '0')}`);
+    await db.data.repos.goals.create({
+      id,
+      spaceId: extra.spaceId ?? SPACE_PRO_ID,
+      weekStart: asLocalDate(weekStartValue),
+      title: extra.title ?? `Objectif ${weekStartValue}`,
+      icon: null,
+      pinned: false,
+      status: extra.status ?? 'closed',
+      carriedFromId: extra.carriedFromId ?? null,
+    });
+    return id;
+  }
+
+  it('listBefore rend une page de 20 semaines, du plus récent au plus ancien, sans la semaine donnée (OB-06 critère 7)', async () => {
+    const weeks: string[] = [];
+    let cursor = Date.UTC(2023, 9, 2);
+    for (let i = 0; i < 150; i += 1) {
+      weeks.push(new Date(cursor).toISOString().slice(0, 10));
+      cursor += 7 * 86_400_000;
+    }
+    for (const week of weeks) await seedGoal(week);
+    const current = asLocalDate(weeks[149] as string);
+    const first = await db.data.repos.goals.listBefore(current, 'all');
+    expect(first).toHaveLength(20);
+    expect(first[0]?.weekStart).toBe(weeks[148]);
+    expect(first.at(-1)?.weekStart).toBe(weeks[129]);
+    const second = await db.data.repos.goals.listBefore(first.at(-1)?.weekStart as never, 'all');
+    expect(second).toHaveLength(20);
+    expect(second[0]?.weekStart).toBe(weeks[128]);
+  });
+
+  it('listBefore regroupe plusieurs objectifs d’une semaine et applique le filtre d’espace', async () => {
+    await seedGoal('2026-09-14');
+    await seedGoal('2026-09-21');
+    await seedGoal('2026-09-21', { title: 'Perso', spaceId: SPACE_PERSO_ID });
+    const all = await db.data.repos.goals.listBefore(asLocalDate('2026-09-28'), 'all');
+    expect(all.map((g) => g.weekStart)).toEqual(['2026-09-21', '2026-09-21', '2026-09-14']);
+    expect((await db.data.repos.goals.listBefore(asLocalDate('2026-09-28'), SPACE_PERSO_ID)).map((g) => g.title)).toEqual(['Perso']);
+    expect(await db.data.repos.goals.listBefore(asLocalDate('2026-09-14'), 'all')).toEqual([]);
+  });
+
+  it('listOpenBefore ne rend que les objectifs ouverts d’une semaine antérieure', async () => {
+    await seedGoal('2026-09-14', { status: 'closed' });
+    await seedGoal('2026-09-21', { status: 'open' });
+    await seedGoal('2026-09-28', { status: 'open', title: 'Courant' });
+    const open = await db.data.repos.goals.listOpenBefore(asLocalDate('2026-09-28'));
+    expect(open.map((g) => g.title)).toEqual(['Objectif 2026-09-21']);
+  });
+
+  it('listCarriedFrom retrouve les objectifs reconduits (OB-06 critère 5)', async () => {
+    const oldId = await seedGoal('2026-09-21');
+    const next = await seedGoal('2026-09-28', { status: 'open', carriedFromId: oldId });
+    expect((await db.data.repos.goals.listCarriedFrom([oldId])).map((g) => g.id)).toEqual([next]);
+    expect(await db.data.repos.goals.listCarriedFrom([])).toEqual([]);
+  });
+
   it('softDelete puis restore', async () => {
     await db.data.repos.goals.create({
       id: goalId,

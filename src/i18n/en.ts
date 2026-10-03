@@ -1,3 +1,4 @@
+import { goalsEn } from './en.goals';
 import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import type { Messages } from './types';
@@ -552,6 +553,7 @@ export const en: Messages = {
     seriesFollowing: '“{title}” edited (all following)',
     seriesRule: 'Repeat of “{title}” edited',
     routine: 'Routine updated',
+    goal: 'Goal updated',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',
@@ -563,6 +565,7 @@ export const en: Messages = {
     failed: 'Unable to undo this action.',
   },
   routines: routinesEn,
+  goals: goalsEn,
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',

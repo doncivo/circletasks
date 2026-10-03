@@ -1,5 +1,5 @@
 import { useDefaultReminderOffsets } from '../reminders';
-import { ChartColumn } from 'lucide-react';
+import { ChartColumn, Target } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { DateChoice } from '../../domain/dateInput';
@@ -64,6 +64,7 @@ export function TodayScreen() {
   const refreshExtras = useFeatureStore(todayStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
+  const closeDetail = useNavigationStore((s) => s.closeDetail);
   const detail = useNavigationStore((s) => s.detail);
   const navigate = useNavigationStore((s) => s.navigate);
   const route = useNavigationStore((s) => s.route);
@@ -179,6 +180,19 @@ export function TodayScreen() {
         : t('today.emptyDay', { weekday: weekdayName });
 
   const pills = <SpaceFilterBar />;
+  const goalButton = (
+    <button
+      type="button"
+      className="ct-today__iconButton"
+      aria-label={t('goals.open')}
+      onClick={() => {
+        closeDetail();
+        navigate({ tab: 'tasks', screen: 'goals' });
+      }}
+    >
+      <Icon icon={Target} size={layout === 'pc' ? 24 : 26} />
+    </button>
+  );
   const reportButton = (
     <button type="button" className="ct-today__iconButton" aria-label={t('report.openFromToday')} onClick={() => navigate({ tab: 'tasks', screen: 'report' })}>
       <Icon icon={ChartColumn} size={layout === 'pc' ? 24 : 26} />
@@ -193,6 +207,7 @@ export function TodayScreen() {
         <div className="ct-today__quickIcons" data-layout={layout}>
           {layout === 'pc' && pills}
           <span className="ct-today__quickSpacer" />
+          {goalButton}
           {reportButton}
         </div>
 

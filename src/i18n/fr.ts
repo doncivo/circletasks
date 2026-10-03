@@ -1,3 +1,4 @@
+import { goalsFr } from './fr.goals';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 /**
@@ -556,6 +557,7 @@ export const fr = {
     seriesRule: 'Répétition de « {title} » modifiée',
     seriesStop: 'Répétition de « {title} » arrêtée',
     routine: 'Routine modifiée',
+    goal: 'Objectif modifié',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -566,6 +568,7 @@ export const fr = {
     failed: 'Impossible d’annuler cette action.',
   },
   routines: routinesFr,
+  goals: goalsFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',
