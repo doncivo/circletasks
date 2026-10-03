@@ -12,6 +12,7 @@ import { ChecklistDateRow } from './ChecklistDateRow';
 import { ChecklistDetail } from './ChecklistDetail';
 import { ChecklistEditorHost } from './ChecklistEditorHost';
 import { ChecklistForm } from './ChecklistForm';
+import { ChecklistTemplateRows } from './ChecklistTemplateRows';
 import { ChecklistList } from './ChecklistList';
 import { checklistsStore } from './checklistsStore';
 import type { NewChecklistInput } from './checklistUseCases';
@@ -46,6 +47,7 @@ export function ChecklistsScreen() {
   const update = useFeatureStore(checklistsStore, (s) => s.update);
   const remove = useFeatureStore(checklistsStore, (s) => s.remove);
   const setDate = useFeatureStore(checklistsStore, (s) => s.setDate);
+  const duplicate = useFeatureStore(checklistsStore, (s) => s.duplicate);
   const addItem = useFeatureStore(checklistsStore, (s) => s.addItem);
   const toggleItem = useFeatureStore(checklistsStore, (s) => s.toggleItem);
   const renameItem = useFeatureStore(checklistsStore, (s) => s.renameItem);
@@ -77,6 +79,15 @@ export function ChecklistsScreen() {
   useEffect(() => {
     void select(displayedId);
   }, [displayedId, select]);
+
+  /** C-04 : crée la copie décochée, sans date, et l'ouvre. */
+  async function duplicateDisplayed(): Promise<void> {
+    if (!displayed) return;
+    const copy = await duplicate(displayed.checklist.id as ChecklistId);
+    if (!copy) return;
+    choose(copy.id as ChecklistId);
+    closeEditor();
+  }
 
   const choose = useCallback((id: ChecklistId) => navigate({ tab: 'checklists', checklistId: id }), [navigate]);
 
@@ -147,6 +158,8 @@ export function ChecklistsScreen() {
       onAddItem={async (text) => (await addItem(text)).ok}
       onPlan={() => setDatePromptOpen(true)}
       onClearDate={() => void setDate(displayed.checklist.id as ChecklistId, null)}
+      onDuplicate={() => void duplicateDisplayed()}
+      spaceName={spaces.find((space) => space.id === displayed.checklist.spaceId)?.name ?? null}
     />
   ) : status === 'ready' || projectFilter ? (
     <div className="ct-checklists__empty">
@@ -184,7 +197,16 @@ export function ChecklistsScreen() {
           {...(editor === 'edit' && displayed
             ? {
                 onDelete: () => setDeleteTarget(displayed.checklist.id as ChecklistId),
-                extras: <ChecklistDateRow date={displayed.checklist.date} onPick={() => setDatePromptOpen(true)} onClear={() => void setDate(displayed.checklist.id as ChecklistId, null)} />,
+                extras: (
+                  <>
+                    <ChecklistDateRow date={displayed.checklist.date} onPick={() => setDatePromptOpen(true)} onClear={() => void setDate(displayed.checklist.id as ChecklistId, null)} />
+                    <ChecklistTemplateRows
+                      isTemplate={displayed.checklist.isTemplate}
+                      onTemplateChange={(isTemplate) => void update(displayed.checklist.id as ChecklistId, { isTemplate })}
+                      onDuplicate={() => void duplicateDisplayed()}
+                    />
+                  </>
+                ),
               }
             : {})}
         />

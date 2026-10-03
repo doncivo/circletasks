@@ -5,7 +5,7 @@ import type { Checklist, ChecklistItem } from '../../domain/model';
 import type { ChecklistId, ChecklistItemId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { t } from '../../i18n';
-import { Button, CompactToggle, Fab, Icon, type Layout } from '../../ui';
+import { CompactToggle, Fab, Icon, type Layout } from '../../ui';
 import { AddItemField } from './AddItemField';
 import { ChecklistIcon } from './ChecklistIcon';
 import { ChecklistItems } from './ChecklistItems';
@@ -28,18 +28,27 @@ export interface ChecklistDetailProps {
   /** PC : bouton « Planifier un jour » (C-03) ; sur iPhone la date se règle dans la feuille « Modifier la checklist ». */
   readonly onPlan: () => void;
   readonly onClearDate: () => void;
+  /** C-04 : « Dupliquer et réinitialiser » (PC : pied du détail ; iPhone : feuille Modifier). */
+  readonly onDuplicate: () => void;
+  /** Nom de l'espace, pour la mention « Perso · modèle réutilisable ». */
+  readonly spaceName: string | null;
 }
 
 /**
  * Détail de la checklist affichée (Checklists.html, PC-Checklists.html) : icône, titre Fraunces, crayon « Modifier la checklist »,
  * filet, items en cartes grises, champ pointillé « Ajouter un élément ».
  */
-export function ChecklistDetail({ layout, checklist, items, progress, compact, onCompactChange, onToggleItem, onRenameItem, focusRequest, onFocused, onEdit, onAddItem, onPlan, onClearDate }: ChecklistDetailProps) {
+export function ChecklistDetail({ layout, checklist, items, progress, compact, onCompactChange, onToggleItem, onRenameItem, focusRequest, onFocused, onEdit, onAddItem, onPlan, onClearDate, onDuplicate, spaceName }: ChecklistDetailProps) {
   const addRef = useRef<HTMLInputElement>(null);
   const pc = layout === 'pc';
   const Heading = pc ? 'h2' : 'h1';
-  // Mentions sous la barre : jour prévu (C-03).
-  const meta = [checklist.date ? t('checklists.date.planned', { date: formatDayLabel(checklist.date) }) : null].filter((part) => part !== null).join(' · ');
+  // Mentions sous la barre : « Perso · modèle réutilisable » (C-04) et jour prévu (C-03).
+  const meta = [
+    checklist.isTemplate ? [spaceName, t('checklists.template.mention')].filter((part) => part).join(' · ') : null,
+    checklist.date ? t('checklists.date.planned', { date: formatDayLabel(checklist.date) }) : null,
+  ]
+    .filter((part) => part !== null)
+    .join(' · ');
 
   useEffect(() => {
     if (focusRequest !== checklist.id) return;
@@ -70,14 +79,18 @@ export function ChecklistDetail({ layout, checklist, items, progress, compact, o
       <div className="ct-checklist-detail__spacer" />
       {pc && (
         <div className="ct-checklist-detail__footer">
-          <Button variant="secondary" onClick={onPlan}>
+          <button type="button" className="ct-checklist-action" onClick={onPlan}>
             {t('checklists.date.pick')}
-          </Button>
+          </button>
           {checklist.date && (
-            <Button variant="secondary" onClick={onClearDate}>
+            <button type="button" className="ct-checklist-action" onClick={onClearDate}>
               {t('checklists.date.remove')}
-            </Button>
+            </button>
           )}
+          {/* Un modèle met la duplication en avant (C-04 critère 4). */}
+          <button type="button" className="ct-checklist-action" data-variant={checklist.isTemplate ? 'primary' : undefined} onClick={onDuplicate}>
+            {t('checklists.template.duplicate')}
+          </button>
           <span className="ct-checklist-detail__footerSpacer" />
           <Fab onClick={() => addRef.current?.focus()} label={t('common.add')} />
         </div>

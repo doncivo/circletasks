@@ -52,10 +52,16 @@ export const checklistsEn: Messages['checklists'] = {
     remove: 'Remove the date',
     planned: 'Planned for {date}',
   },
+  template: {
+    label: 'Reusable template',
+    mention: 'reusable template',
+    duplicate: 'Duplicate and reset',
+  },
   weekSubtitle: 'checklist {checked}/{total}',
   openFromList: 'Open checklist: {title}',
   undo: {
     deleted: '“{title}” deleted',
     dateRemoved: 'Date removed from “{title}”',
+    duplicated: 'Checklist duplicated',
   },
 };

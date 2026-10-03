@@ -642,3 +642,51 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+.ct-checklist-form__switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+}
+
+.ct-checklist-form__duplicate {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+/* Boutons du pied du détail (PC-Checklists.html .bt) : 40 px, contour #D9D4E4, rayon 20 ; principal pour la duplication d'un modèle. */
+.ct-checklist-action {
+  height: 40px;
+  padding: 0 16px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: 20px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-checklist-action[data-variant='primary'] {
+  border-color: var(--ct-color-accent);
+  background: var(--ct-color-accent);
+  color: var(--ct-color-accent-on);
+}
+
+.ct-checklist-action[data-variant='danger'] {
+  border-color: var(--ct-color-missed-text);
+  color: var(--ct-color-missed-text);
+}
+
+.ct-checklist-action[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ct-checklist-action:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

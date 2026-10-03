@@ -1,5 +1,6 @@
-import type { Checklist, ChecklistItem, ChecklistSummary } from './model';
-import type { Result } from './types';
+import { newEntityId, type IdGenerator } from './id';
+import type { Checklist, ChecklistItem, ChecklistSummary, NewChecklist, NewChecklistItem } from './model';
+import type { ChecklistId, ChecklistItemId, Result } from './types';
 
 /**
  * Règles métier des checklists (M6, C-01 à C-05, complétées story par story). Aucun accès base : les cas d'usage (src/features/checklists) appellent ces fonctions
@@ -57,4 +58,32 @@ export function checklistProgress(items: readonly Pick<ChecklistItem, 'checked'>
   const total = items.length;
   const checked = items.filter((item) => item.checked).length;
   return { checked, total, ratio: total === 0 ? 0 : checked / total };
+}
+
+/** Suffixe ajouté au titre d'une copie (C-04, D1). */
+export const COPY_SUFFIX = ' (copie)';
+
+export interface DuplicatedChecklist {
+  readonly checklist: NewChecklist;
+  readonly items: readonly NewChecklistItem[];
+}
+
+/**
+ * « Dupliquer et réinitialiser » (C-04) : « <titre> (copie) », mêmes items dans le même ordre, tous décochés, sans date, même espace
+ * et même icône, non modèle. Les items supprimés ne sont pas copiés (l'appelant ne fournit que les items vivants). La copie reçoit
+ * de nouveaux identifiants ; l'original n'est pas modifié. Le titre reste dans la limite de 200 caractères.
+ */
+export function duplicateAndReset(checklist: Pick<Checklist, 'title' | 'spaceId' | 'icon'>, items: readonly ChecklistItem[], ids: IdGenerator): DuplicatedChecklist {
+  const id = newEntityId<ChecklistId>(ids);
+  const title = `${checklist.title.slice(0, CHECKLIST_TEXT_MAX - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
+  return {
+    checklist: { id, spaceId: checklist.spaceId, title, icon: checklist.icon, date: null, isTemplate: false },
+    items: sortItems(items).map((item, index) => ({
+      id: newEntityId<ChecklistItemId>(ids),
+      checklistId: id,
+      text: item.text,
+      checked: false,
+      sortOrder: index + 1,
+    })),
+  };
 }

@@ -52,10 +52,16 @@ export const checklistsFr = {
     remove: 'Retirer la date',
     planned: 'Prévue le {date}',
   },
+  template: {
+    label: 'Modèle réutilisable',
+    mention: 'modèle réutilisable',
+    duplicate: 'Dupliquer et réinitialiser',
+  },
   weekSubtitle: 'checklist {checked}/{total}',
   openFromList: 'Ouvrir la checklist : {title}',
   undo: {
     deleted: '« {title} » supprimée',
     dateRemoved: 'Date retirée de « {title} »',
+    duplicated: 'Checklist dupliquée',
   },
 } as const;

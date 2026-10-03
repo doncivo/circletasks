@@ -1,6 +1,7 @@
-import { nextItemOrder, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
+import { duplicateAndReset, nextItemOrder, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
 import { newEntityId } from '../../domain/id';
 import type { Checklist, ChecklistItem, ChecklistPatch, IconRef } from '../../domain/model';
+import type { Repositories } from '../../db/repositories';
 import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
@@ -20,20 +21,26 @@ export interface NewChecklistInput {
   readonly spaceId: SpaceId;
 }
 
-/** Champs modifiables depuis la feuille « Modifier la checklist ». */
-export type ChecklistUpdate = Pick<ChecklistPatch, 'title' | 'icon' | 'spaceId'>;
+/** Champs modifiables depuis la feuille « Modifier la checklist » (C-04 : `isTemplate`, « Modèle réutilisable »). */
+export type ChecklistUpdate = Pick<ChecklistPatch, 'title' | 'icon' | 'spaceId' | 'isTemplate'>;
 
 export type ChecklistSaveError = ChecklistTextError | 'not-found';
 
 export interface ChecklistUseCases {
   /** C-01 critère 1 : crée une checklist vide (titre de 1 à 200 caractères). */
   create(input: NewChecklistInput): Promise<Result<Checklist, ChecklistTextError>>;
-  /** C-01 critère 6 : titre, icône, espace. L'ancien titre est conservé s'il est refusé. */
+  /** C-01 critère 6 : titre, icône, espace ; C-04 : marque ou démarque le modèle. L'ancien titre est conservé s'il est refusé. */
   update(id: ChecklistId, patch: ChecklistUpdate): Promise<Result<Checklist, ChecklistSaveError>>;
   /** C-01 critère 6 : supprime la checklist (items conservés, masqués avec elle) ; annulable 5 s. Renvoie vrai si c'est fait. */
   remove(id: ChecklistId): Promise<boolean>;
   /** C-01 critère 3 : ajoute un item en fin de liste (texte de 1 à 200 caractères). Les ajouts d'une même base sont sérialisés. */
   addItem(checklistId: ChecklistId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError>>;
+  /**
+   * C-04 : « Dupliquer et réinitialiser » — crée « <titre> (copie) » avec les mêmes items décochés, sans date, non modèle, en une seule
+   * transaction (aucune copie partielle en cas d'échec) ; annulable 5 s (supprime la copie, 'stale' si elle a été modifiée). L'original
+   * n'est pas touché. Renvoie la copie, null si la checklist n'existe plus.
+   */
+  duplicate(id: ChecklistId): Promise<Checklist | null>;
   /**
    * C-03 : associe la checklist à un jour (`date`) ou retire la date (null). Retirer la date est annulable 5 s ; poser ou changer le jour
    * ne l'est pas (geste réversible par le même sélecteur). Renvoie la checklist écrite, null si elle n'existe plus.
@@ -98,6 +105,34 @@ function dateRemovedCommand(deps: ChecklistUseCaseDeps, written: Checklist, prev
   };
 }
 
+/** Items vivants d'une checklist, repris de la transaction pour comparer avant d'annuler une duplication. */
+async function liveItems(repos: Repositories, id: ChecklistId): Promise<ChecklistItem[]> {
+  return repos.checklistItems.listForChecklist(id);
+}
+
+/**
+ * Annulation d'une duplication (T-13) : supprime la copie, seulement si ni elle ni ses items n'ont changé depuis (mêmes hlc que ceux
+ * écrits par l'action ; sinon 'stale', rien n'est écrit).
+ */
+function duplicatedCommand(deps: ChecklistUseCaseDeps, written: Checklist, items: readonly ChecklistItem[]): UndoableCommand {
+  return {
+    kind: 'checklist',
+    count: 1,
+    labelKey: 'checklists.undo.duplicated',
+    async undo() {
+      const id = written.id as ChecklistId;
+      const current = await deps.data.repos.checklists.getById(id);
+      if (!current || current.hlc !== written.hlc) return 'stale';
+      const now = await liveItems(deps.data.repos, id);
+      const unchanged = now.length === items.length && now.every((item, index) => item.id === items[index]?.id && item.hlc === items[index]?.hlc);
+      if (!unchanged) return 'stale';
+      await deps.data.repos.checklists.softDelete(id);
+      emitChecklistsChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
 export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUseCases {
   const { data } = deps;
 
@@ -130,9 +165,23 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
         ...(title !== undefined ? { title } : {}),
         ...(patch.icon !== undefined ? { icon: patch.icon } : {}),
         ...(patch.spaceId !== undefined ? { spaceId: patch.spaceId } : {}),
+        ...(patch.isTemplate !== undefined ? { isTemplate: patch.isTemplate } : {}),
       });
       emitChecklistsChanged(data);
       return { ok: true, value: written };
+    },
+
+    async duplicate(id) {
+      const copy = await data.transaction(async (repos) => {
+        const source = await repos.checklists.getById(id);
+        if (!source) return null;
+        const plan = duplicateAndReset(source, await liveItems(repos, id), deps.ids);
+        return repos.checklists.createWithItems(plan.checklist, plan.items);
+      });
+      if (!copy) return null;
+      deps.undo.push(duplicatedCommand(deps, copy.checklist, copy.items));
+      emitChecklistsChanged(data);
+      return copy.checklist;
     },
 
     async setDate(id, date) {

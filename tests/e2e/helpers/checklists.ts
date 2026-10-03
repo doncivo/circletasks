@@ -92,6 +92,8 @@ export async function itemTexts(page: Page): Promise<string[]> {
   return page.locator('.ct-checklist-item__text').allTextContents();
 }
 
+const escapeRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 /** Ouvre une checklist dans la liste : volet gauche (PC) ou pastille de choix (iPhone). */
 export async function chooseChecklist(page: Page, testInfo: { project: { name: string } }, title: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
@@ -101,7 +103,11 @@ export async function chooseChecklist(page: Page, testInfo: { project: { name: s
     await expect(page.getByRole('heading', { level: 1, name: title, exact: true })).toBeVisible();
     return;
   }
-  await page.getByRole('list', { name: 'Mes checklists' }).getByRole('button', { name: new RegExp(`^${title}`) }).click();
+  await page
+    .getByRole('list', { name: 'Mes checklists' })
+    .getByRole('button')
+    .filter({ has: page.locator('.ct-checklist-list__name', { hasText: new RegExp(`^${escapeRegExp(title)}$`) }) })
+    .click();
   await expect(page.getByRole('heading', { level: 2, name: title, exact: true })).toBeVisible();
 }
 
