@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import type { Task } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -9,7 +9,23 @@ import { SomedaySchedule } from './SomedaySchedule';
 import type { SomedayListState } from './useSomedayListState';
 import type { SomedayView } from './useSomedayView';
 
+/**
+ * Glisser vers la Semaine (S-06) : les cartes se saisissent avec `useZoneDrag` (la primitive de la Semaine, S-02) au lieu de
+ * `useSortable`, pour pouvoir quitter le panneau ; une carte lâchée dans le panneau change de place.
+ */
+export interface SomedayZoneDnd {
+  readonly itemProps: (id: string) => {
+    readonly 'data-drag-id': string;
+    readonly 'data-dragging': 'true' | undefined;
+    readonly onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+  };
+  /** Carte devant laquelle la carte tenue sera insérée ; null : à la fin ; undefined : rien n'est glissé au-dessus du panneau. */
+  readonly insertBeforeId: string | null | undefined;
+}
+
 export interface SomedayListProps {
+  /** Panneau de la Semaine : saisie par la primitive de glisser entre zones (S-06). */
+  readonly zone?: SomedayZoneDnd;
   readonly view: SomedayView;
   readonly state: SomedayListState;
   /** Tâche dont la fiche est ouverte (PC) : ligne surlignée. */
@@ -24,7 +40,7 @@ export interface SomedayListProps {
  * Au clavier PC : ↑ / ↓ sélectionnent (la ligne sélectionnée est déployée), Entrée ouvre la fiche, Espace termine, Alt+↑ / Alt+↓
  * déplacent (SD-04). Mode édition (A-05) : rond de sélection, « − » et poignée ; vue compacte (A-06) : une ligne par tâche.
  */
-export function SomedayList({ view, state, openedTaskId, showSkeleton }: SomedayListProps) {
+export function SomedayList({ view, state, openedTaskId, showSkeleton, zone }: SomedayListProps) {
   const container = useAppContainer();
   const { tasks, layout } = view;
   const { edit, reorder, compact } = state;
@@ -81,8 +97,8 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton }: Someday
   return (
     <>
       <div
-        {...sortable.containerProps}
-        className={`ct-someday__list ${sortable.containerProps.className}`}
+        {...(zone ? {} : sortable.containerProps)}
+        className={zone ? 'ct-someday__list' : `ct-someday__list ${sortable.containerProps.className}`}
         role="list"
         aria-label={t('someday.listLabel')}
         aria-busy={view.status === 'loading'}
@@ -100,7 +116,7 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton }: Someday
             pc || edit.editMode ? (
               <DragHandle
                 label={t('someday.moveHandle', { title: task.title })}
-                {...sortable.dragProps(task.id, 'handle')}
+                {...(zone ? { onPointerDown: () => undefined } : sortable.dragProps(task.id, 'handle'))}
                 onMoveUp={() => void reorder.applyMove(task.id, index - 1)}
                 onMoveDown={() => void reorder.applyMove(task.id, index + 1)}
               />
@@ -114,8 +130,9 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton }: Someday
               data-expanded={open ? 'true' : undefined}
               onFocus={() => state.setFocusedTaskId(task.id)}
               {...clickCapture(task)}
-              {...sortable.itemProps(task.id)}
-              {...sortable.dragProps(task.id, 'row')}
+              {...(zone
+                ? { ...zone.itemProps(task.id), 'data-sortable-id': task.id, 'data-insert': zone.insertBeforeId === task.id ? 'before' : undefined }
+                : { ...sortable.itemProps(task.id), ...sortable.dragProps(task.id, 'row') })}
             >
               <SomedayRow
                 task={task}
@@ -144,6 +161,7 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton }: Someday
             </div>
           );
         })}
+        {zone && zone.insertBeforeId === null && <div className="ct-someday__insert" aria-hidden="true" />}
       </div>
       <div key={reorder.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
         {reorder.announcement?.text}

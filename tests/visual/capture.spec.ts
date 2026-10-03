@@ -231,6 +231,37 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: (page, testInfo) => prepareSomeday(page, true, testInfo),
   },
+  {
+    // Semaine PC avec le panneau « Un jour » (PC-Semaine-UnJour.html) : « Préparer la présentation Q4 » soulevée au-dessus du jeudi 24.
+    name: 'PC-Semaine-UnJour',
+    mockup: 'PC-Semaine-UnJour.html',
+    viewport: PC,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await openSpacesScreen(page);
+      await addProject(page, 'Pro', 'Mission client');
+      await addProject(page, 'Perso', 'Rappels Apple');
+      await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+      await insertSomeday(page, [
+        { title: 'Renouveler le passeport', space: 'perso' },
+        { title: 'Préparer la présentation Q4', project: 'Mission client' },
+        { title: 'Changer de forfait mobile', space: 'perso', project: 'Rappels Apple' },
+      ]);
+      await prepareWeek(page);
+      await page.getByRole('button', { name: /^Un jour/ }).click();
+      const panel = page.getByRole('complementary', { name: 'Un jour' });
+      await expect(panel).toBeVisible();
+      const card = panel.locator('[data-drag-id]').filter({ has: page.getByRole('button', { name: 'Préparer la présentation Q4', exact: true }) });
+      const from = await card.boundingBox();
+      const target = await page.locator('.ct-week-day[data-date="2026-09-24"]').boundingBox();
+      if (!from || !target) throw new Error('éléments introuvables');
+      await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(from.x + from.width / 2 - 12, from.y + from.height / 2 + 8, { steps: 3 });
+      await page.mouse.move(target.x + target.width / 2, target.y + 330, { steps: 12 });
+      await expect(page.getByText('Déposer ici · jeu. 24')).toBeVisible();
+    },
+  },
   { name: 'Main-Vide', mockup: 'Main-Vide.html', viewport: PHONE, date: SUNDAY },
   { name: 'Main-Sombre', mockup: 'Main-Sombre.html', viewport: PHONE, date: WEDNESDAY, dark: true, data: true },
   {

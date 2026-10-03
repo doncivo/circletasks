@@ -7,7 +7,7 @@ import { useAppContainer } from '../app/AppContainerContext';
 import { isModalOpen } from '../app/tabShortcuts';
 import { useNavigationStore } from '../app/navigation';
 import { SomedayAddField } from './SomedayAddField';
-import { SomedayList } from './SomedayList';
+import { SomedayList, type SomedayZoneDnd } from './SomedayList';
 import { SomedaySelectionBar, SomedaySelectionDialogs } from './SomedaySelectionBar';
 import { useSomedayListState } from './useSomedayListState';
 import { useSomedayView } from './useSomedayView';
@@ -18,13 +18,15 @@ export interface SomedayPanelProps {
   readonly onClose: () => void;
   /** Logé dans l'emplacement du panneau de détail de la coquille (à droite d'Aujourd'hui) ; sinon rendu sur place (Semaine, S-06). */
   readonly slot?: boolean;
+  /** Semaine (S-06) : la liste se saisit par la primitive de glisser entre zones et le panneau est une zone de dépôt « Un jour ». */
+  readonly zone?: SomedayZoneDnd;
 }
 
 /**
  * Panneau « Un jour » du PC (PC-Semaine-UnJour.html : 300 px, fond #FAF9FC, icône horloge #5B43A8, titre Fraunces, cartes, « + Ajouter à
  * « Un jour » »). À droite d'Aujourd'hui (SD-01 critère 2) ou de la Semaine (S-06). Échap ou « Fermer le panneau » le ferme.
  */
-export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
+export function SomedayPanel({ onClose, slot = false, zone }: SomedayPanelProps) {
   const container = useAppContainer();
   const view = useSomedayView();
   const state = useSomedayListState(view);
@@ -37,13 +39,14 @@ export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
   useEffect(
     () =>
       container.shortcuts.register('app.escape', () => {
-        if (!isModalOpen()) onClose();
+        // Échap appartient d'abord à la fiche ouverte par-dessus la Semaine, puis au panneau.
+        if (!isModalOpen() && useNavigationStore.getState().detail === null) onClose();
       }),
     [container, onClose],
   );
 
   const panel = (
-    <aside className="ct-someday-panel" aria-label={t('someday.panelLabel')}>
+    <aside className="ct-someday-panel" aria-label={t('someday.panelLabel')} {...(zone ? { 'data-drop-zone': 'someday' } : {})}>
       <div className="ct-someday-panel__header">
         <SomedayIcon size={28} color="var(--ct-color-someday)" />
         <h2 className="ct-someday-panel__title">{t('someday.title')}</h2>
@@ -52,7 +55,7 @@ export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
           <Icon icon={X} size={20} />
         </button>
       </div>
-      <span className="ct-someday-panel__help">{view.subtitle}</span>
+      <span className="ct-someday-panel__help">{zone ? t('someday.panelHelp') : view.subtitle}</span>
       {view.errorKey && view.status === 'error' && (
         <p className="ct-someday__error" role="alert">
           {t(view.errorKey)}
@@ -63,7 +66,7 @@ export function SomedayPanel({ onClose, slot = false }: SomedayPanelProps) {
           {t(view.actionErrorKey)}
         </p>
       )}
-      <SomedayList view={view} state={state} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} />
+      <SomedayList view={view} state={state} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} {...(zone ? { zone } : {})} />
       <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday-panel__spacer" />
       <div className="ct-someday-panel__footer">

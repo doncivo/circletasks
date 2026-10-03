@@ -309,3 +309,48 @@
   right: 0;
   min-width: 0;
 }
+
+/* Panneau de la Semaine (S-06) : à droite de la grille, jusqu'aux bords de la zone centrale (PC-Semaine-UnJour.html). */
+.ct-week-shell {
+  display: flex;
+  flex-grow: 1;
+  gap: 24px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-week-shell > .ct-someday-panel {
+  height: auto;
+  align-self: stretch;
+  margin: -28px -40px -28px 0;
+}
+
+/* Emplacement vide de la carte soulevée et repère d'insertion pendant le glisser (PC-Semaine-UnJour.html : pointillé #C9C2D8). */
+.ct-someday-panel [data-dragging='true'] {
+  border: 1.5px dashed var(--ct-color-border-strong);
+  border-radius: 12px;
+  background: transparent;
+}
+
+.ct-someday-panel [data-dragging='true'] > * {
+  visibility: hidden;
+}
+
+.ct-someday-panel [data-insert='before']::before {
+  content: '';
+  display: block;
+  height: 3px;
+  margin-bottom: 4px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-someday);
+}
+
+.ct-someday__insert {
+  height: 3px;
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-someday);
+}
+
+.ct-someday-panel [data-drag-id] {
+  cursor: grab;
+}
