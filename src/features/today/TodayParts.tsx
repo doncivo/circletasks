@@ -1,8 +1,10 @@
 import { BookOpen, CalendarDays, ShoppingCart, Sunrise, Target } from 'lucide-react';
-import type { ChecklistSummary } from '../../domain/model';
+import type { ChecklistSummary, Space } from '../../domain/model';
+import type { ChecklistId } from '../../domain/types';
 import type { TodayEventEntry, TodayGoalEntry } from '../../domain/todayList';
 import { t } from '../../i18n';
-import { Icon, IconView, resolveIconRefColor } from '../../ui';
+import { Icon, IconView, resolveIconRefColor, spaceTextColor } from '../../ui';
+import { ChecklistIcon } from '../checklists/ChecklistIcon';
 
 /**
  * Éléments d'Aujourd'hui fournis par d'autres modules (A-01) : objectif épinglé, événements (lecture seule),
@@ -78,8 +80,21 @@ export function TodayEventBands({ events, compact }: { events: readonly TodayEve
   );
 }
 
-/** Section « CHECKLISTS » (croquis PRD 5) : titre et progression « 3/5 », après les tâches. */
-export function TodayChecklists({ items }: { items: readonly ChecklistSummary[] }) {
+/**
+ * Section « CHECKLISTS » (croquis PRD 5, C-03) : une ligne par checklist prévue ce jour (icône, titre, « 3/5 »), après les tâches.
+ * Toucher la ligne ouvre l'onglet Checklists sur elle. Sous « Tout », l'espace est écrit dans sa couleur sous le titre (critère 7).
+ */
+export function TodayChecklists({
+  items,
+  spaces,
+  showSpace,
+  onOpen,
+}: {
+  items: readonly ChecklistSummary[];
+  spaces: readonly Space[];
+  showSpace: boolean;
+  onOpen: (id: ChecklistId) => void;
+}) {
   if (items.length === 0) return null;
   return (
     <section className="ct-today-checklists" aria-labelledby="ct-today-checklists-title">
@@ -87,14 +102,27 @@ export function TodayChecklists({ items }: { items: readonly ChecklistSummary[] 
         {t('today.checklistsTitle')}
       </h2>
       <ul className="ct-today-checklists__list">
-        {items.map(({ checklist, checked, total }) => (
-          <li key={checklist.id} className="ct-today-checklists__item">
-            <span className="ct-today-checklists__name">{checklist.title}</span>
-            <span aria-label={t('today.checklistProgress', { checked, total })}>
-              {checked}/{total}
-            </span>
-          </li>
-        ))}
+        {items.map(({ checklist, checked, total }) => {
+          const space = showSpace ? spaces.find((candidate) => candidate.id === checklist.spaceId) : undefined;
+          return (
+            <li key={checklist.id} className="ct-today-checklists__row">
+              <button type="button" className="ct-today-checklists__item" onClick={() => onOpen(checklist.id as ChecklistId)}>
+                <ChecklistIcon icon={checklist.icon} size={24} />
+                <span className="ct-today-checklists__text">
+                  <span className="ct-today-checklists__name">{checklist.title}</span>
+                  {space && (
+                    <span className="ct-today-checklists__space" style={{ color: spaceTextColor(space.color) }}>
+                      {space.name}
+                    </span>
+                  )}
+                </span>
+                <span className="ct-today-checklists__progress" aria-label={t('today.checklistProgress', { checked, total })}>
+                  {checked}/{total}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
     </section>
   );

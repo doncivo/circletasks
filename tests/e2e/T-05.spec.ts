@@ -95,13 +95,30 @@ test.describe('T-05 — reporter une tâche', () => {
     await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toBeVisible();
   });
 
-  test('« Semaine prochaine » : la tâche quitte Aujourd’hui avec un message daté (critère 3)', async ({ page }, testInfo) => {
+  test('« Semaine prochaine » un mercredi (horloge figée) : lundi 28 sept., message daté (critère 3)', async ({ page }, testInfo) => {
+    await page.clock.setFixedTime(new Date('2026-09-23T10:00:00+02:00'));
+    await page.reload();
+    await expect(page.getByRole('navigation')).toBeVisible({ timeout: 30_000 });
     const title = `Semaine ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
 
     await postponeVia(page, testInfo, title, 'Semaine prochaine');
 
-    await expect(page.getByRole('status')).toContainText(new RegExp(`« ${title} » reportée au lun\\. \\d{1,2} `));
+    await expect(page.getByRole('status')).toContainText(`« ${title} » reportée au lun. 28 sept.`);
+    await closeDetailOnIphone(page, testInfo);
+    await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toHaveCount(0);
+  });
+
+  test('« Semaine prochaine » un dimanche (horloge figée) : le lundi suivant est demain (Q4, critère 3)', async ({ page }, testInfo) => {
+    await page.clock.setFixedTime(new Date('2026-09-27T10:00:00+02:00'));
+    await page.reload();
+    await expect(page.getByRole('navigation')).toBeVisible({ timeout: 30_000 });
+    const title = `Dimanche ${testInfo.project.name} ${Date.now()}`;
+    await createTask(page, testInfo, title);
+
+    await postponeVia(page, testInfo, title, 'Semaine prochaine');
+
+    await expect(page.getByRole('status')).toContainText(`« ${title} » reportée à demain`);
     await closeDetailOnIphone(page, testInfo);
     await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toHaveCount(0);
   });

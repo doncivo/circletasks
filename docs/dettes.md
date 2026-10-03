@@ -11,13 +11,13 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - Commentaire « À brancher dans App.tsx » (bootstrap.ts) et conséquence associée dans l'ADR 0004.
   - Ordre de M14 erroné dans 0001_core_tables.ts:25.
 - Fichiers de plus de 400 lignes à découper : `taskRepository.ts` (597), `DateField.tsx` (472), `createTaskUseCases.ts` (466), `todayStore.ts` (460).
-- Liens tâche → checklist et tâche → événement : migration à faire (ADR 0004, point ouvert 3).
+- Liens tâche → checklist et tâche → événement : migration à faire (ADR 0004, point ouvert 3). Lien tâche → checklist : non créé par le lot C (aucune fiche C ne l'exige, C-03 D2) ; reste le lien tâche → événement (K-04).
 - Stories partielles à clore :
   - A-09, critères 9-10 (alerte d'agenda) ;
   - S-05, critères 9-10 (alimentation par M8) ;
   - ES-06, critères 5-6 (affectation des agendas).
 - Points d'extension à utiliser :
-  - M6 et M7 par `registerTodaySource` ;
+  - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 reste à brancher ;
   - K-01 vers `externalEvents` ;
   - M14 : migration `search_index` en FTS5.
 - Primitive de glisser commune à `useSortable` et `useZoneDrag` (avenant S-06 de l'ADR 0004).

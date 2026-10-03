@@ -628,3 +628,13 @@ button.ct-week-event:focus-visible {
   color: var(--ct-color-text-secondary);
   font-size: var(--ct-font-size-text-sm);
 }
+
+/* Checklist du jour (C-03) : icône à la place de la case, jamais déplaçable. */
+.ct-week-item[data-kind='checklist'] > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.ct-week-item[data-layout='mobile'][data-kind='checklist'] > svg {
+  margin-top: 0;
+}

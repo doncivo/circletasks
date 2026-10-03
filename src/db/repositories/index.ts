@@ -13,4 +13,5 @@ export type * from './reminderRepository';
 export type * from './goalRepository';
 export type * from './settingsRepository';
 export type * from './agendaRepository';
+export type * from './checklistRepository';
 export * from './sql';

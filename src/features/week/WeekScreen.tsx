@@ -202,6 +202,7 @@ export function WeekScreen() {
               drop={moves.dropFor(day.date)}
               onFocusTask={moves.setFocusedTaskId}
               onOpenEvent={(id) => openDetail({ type: 'externalEvent', id })}
+              onOpenChecklist={(id) => navigate({ tab: 'checklists', checklistId: id })}
               onAddTask={addToDay}
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id, date) => void toggleRoutine(id, date)}
