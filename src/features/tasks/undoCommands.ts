@@ -199,12 +199,15 @@ export function createReorderUndoCommand(deps: TaskUseCaseDeps, entries: readonl
  * Commande annulable d'un changement d'espace / projet (A-05, T-13) : annuler = nouvelle écriture qui remet l'espace,
  * le projet et le gabarit de série d'avant, pour les seules tâches non modifiées depuis (hlc identique) ; sinon 'stale'.
  */
-export function createMoveUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[]): UndoableCommand {
+export function createMoveUndoCommand(deps: TaskUseCaseDeps, entries: readonly PostponedEntry[], destination = ''): UndoableCommand {
   const first = entries[0];
   return {
     kind: 'move',
     count: entries.length,
-    ...(entries.length === 1 && first ? { labelKey: 'undo.moveSpace' as const, labelParams: { title: first.before.title } } : {}),
+    // « « Facture » déplacée dans Perso » ; plusieurs : « 2 tâches déplacées dans Perso » (ES-05 critère 5).
+    ...(entries.length === 1 && first
+      ? { labelKey: 'undo.moveSpace' as const, labelParams: { title: first.before.title, space: destination } }
+      : { labelKey: 'undo.manyMoveSpace' as const, labelParams: { count: entries.length, space: destination } }),
     async undo() {
       const restored = await deps.data.transaction(async (repos) => {
         const written: Task[] = [];

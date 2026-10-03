@@ -5,6 +5,7 @@ import { duplicateTask } from '../../domain/taskDuplicate';
 import { buildReminders, canHaveReminders, sortReminderOffsets } from '../../domain/reminders';
 import { syncTaskReminders } from './reminderSync';
 import { moveTaskToDate } from '../../domain/taskMove';
+import { changesPlacement, resolveMoveTarget } from '../../domain/spaceMove';
 import { divergedTemplate } from '../../domain/recurrenceEdit';
 import { validateRecurrence } from '../../domain/recurrenceRules';
 import { completeTask, isCompleted } from '../../domain/taskCompletion';
@@ -293,10 +294,13 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
     async moveToSpace(ids, spaceId, projectId): Promise<Task[]> {
       const entries = await deps.data.transaction(async (repos) => {
         const done: PostponedEntry[] = [];
+        // ES-05 : un projet n'est valable que dans son espace ; sinon la tâche passe sans projet.
+        const candidate = projectId ? await repos.projects.getById(projectId) : null;
+        const target = resolveMoveTarget(spaceId, projectId, candidate ? [candidate] : []);
         for (const id of ids) {
           const before = await repos.tasks.getById(id);
-          if (!before || (before.spaceId === spaceId && before.projectId === projectId)) continue;
-          const [moved] = await repos.tasks.moveToSpace([id], spaceId, projectId);
+          if (!before || !changesPlacement(before, target)) continue;
+          const [moved] = await repos.tasks.moveToSpace([id], target.spaceId, target.projectId);
           if (!moved) continue;
           // Occurrence récurrente : la série garde son espace d'origine (T-10), comme pour un report « cette occurrence ».
           const after =
@@ -310,7 +314,11 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       if (entries.length === 0) return [];
       const tasks = entries.map((entry) => entry.after);
       deps.taskEntities.publish(tasks);
-      deps.undo.push(createMoveUndoCommand(deps, entries));
+      // Message « 2 tâches déplacées dans Perso » (ES-05 critère 5) : espace, puis projet s'il y en a un.
+      const space = await deps.data.repos.spaces.getById(spaceId);
+      const project = tasks[0]?.projectId ? await deps.data.repos.projects.getById(tasks[0].projectId) : null;
+      const destination = space ? (project ? `${space.name} · ${project.name}` : space.name) : '';
+      deps.undo.push(createMoveUndoCommand(deps, entries, destination));
       return tasks;
     },
     async moveToSomeday(ids): Promise<Task[]> {

@@ -126,8 +126,11 @@ export function useTaskDetailEdits(
   async function applySheet(result: EditSheetResult, scope?: SeriesScope): Promise<void> {
     const hasPatch = Object.keys(result.patch).length > 0;
     if (hasPatch && !scope && result.reminders !== undefined) {
-      // Champs et rappels : une seule transaction, rien d'écrit en cas d'échec (N-02).
-      if (!(await api.updateFieldsAndReminders(result.patch, result.reminders))) return;
+      // Champs et rappels : une seule transaction, rien d'écrit en cas d'échec (N-02). Un changement d'espace ou de projet passe
+      // ensuite par le déplacement annulable (ES-05).
+      const { spaceId, projectId, ...fields } = result.patch;
+      if (!(await api.updateFieldsAndReminders(fields, result.reminders))) return;
+      if ((spaceId !== undefined || projectId !== undefined) && !(await api.updateFields({ ...(spaceId !== undefined ? { spaceId } : {}), ...(projectId !== undefined ? { projectId } : {}) }))) return;
     } else {
       if (hasPatch) {
         const ok = scope ? await api.applySeriesEdit(result.patch, scope) : await api.updateFields(result.patch);

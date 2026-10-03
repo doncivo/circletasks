@@ -41,7 +41,7 @@ describe('actions par lot du mode édition (A-05)', () => {
       expect(await db.data.repos.tasks.getById(a)).toMatchObject({ spaceId: SPACE_PERSO_ID, date: DAY, time: '09:00', projectId: null });
       expect(entities.get(b)?.spaceId).toBe(SPACE_PERSO_ID);
       expect(undo.getSnapshot().size).toBe(1);
-      expect(undoMessage(undo.getSnapshot().top as never)).toBe('2 tâches déplacées');
+      expect(undoMessage(undo.getSnapshot().top as never)).toBe('2 tâches déplacées dans Perso');
 
       expect((await undo.undoLast()).status).toBe('undone');
       expect(await db.data.repos.tasks.getById(a)).toMatchObject({ spaceId: SPACE_PRO_ID, date: DAY });
@@ -49,12 +49,12 @@ describe('actions par lot du mode édition (A-05)', () => {
       expect(entities.get(a)?.spaceId).toBe(SPACE_PRO_ID);
     });
 
-    it('une seule tâche : message « « A » déplacée » ; les tâches déjà dans l’espace sont ignorées', async () => {
+    it('une seule tâche : message « « A » déplacée dans Perso » ; les tâches déjà dans l’espace sont ignorées', async () => {
       const a = await create('A');
       const p = await create('P', { spaceId: SPACE_PERSO_ID });
       const moved = await useCases.moveToSpace([a, p], SPACE_PERSO_ID, null);
       expect(moved.map((task) => task.id)).toEqual([a]);
-      expect(undoMessage(undo.getSnapshot().top as never)).toBe('« A » déplacée');
+      expect(undoMessage(undo.getSnapshot().top as never)).toBe('« A » déplacée dans Perso');
       expect(await useCases.moveToSpace([a, p], SPACE_PERSO_ID, null)).toEqual([]);
       expect(undo.getSnapshot().size).toBe(1);
     });

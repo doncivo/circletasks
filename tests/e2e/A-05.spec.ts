@@ -89,8 +89,8 @@ test.describe('A-05 — mode édition', () => {
     await select(page, a);
     await select(page, b);
     await bar(page).getByRole('button', { name: 'Déplacer' }).click();
-    await page.getByRole('alertdialog').getByRole('button', { name: 'Perso' }).click();
-    await expect(status(page)).toContainText('2 tâches déplacées');
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Perso · aucun projet' }).click();
+    await expect(status(page)).toContainText('2 tâches déplacées dans Perso');
     await toggle(page).click();
     await expect(rowOf(page, a).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
     await expect(rowOf(page, b).locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('Perso');
