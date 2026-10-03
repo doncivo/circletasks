@@ -47,6 +47,10 @@ export function ChecklistsScreen() {
   const update = useFeatureStore(checklistsStore, (s) => s.update);
   const remove = useFeatureStore(checklistsStore, (s) => s.remove);
   const setDate = useFeatureStore(checklistsStore, (s) => s.setDate);
+  const clearChecked = useFeatureStore(checklistsStore, (s) => s.clearChecked);
+  const uncheckAll = useFeatureStore(checklistsStore, (s) => s.uncheckAll);
+  const moveItem = useFeatureStore(checklistsStore, (s) => s.moveItem);
+  const removeItem = useFeatureStore(checklistsStore, (s) => s.removeItem);
   const duplicate = useFeatureStore(checklistsStore, (s) => s.duplicate);
   const addItem = useFeatureStore(checklistsStore, (s) => s.addItem);
   const toggleItem = useFeatureStore(checklistsStore, (s) => s.toggleItem);
@@ -55,6 +59,8 @@ export function ChecklistsScreen() {
 
   const [editor, setEditor] = useState<'create' | 'edit' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  /** Checklist dont le mode « Réorganiser » est actif (C-05) ; changer de checklist le quitte. */
+  const [reorderingFor, setReorderingFor] = useState<ChecklistId | null>(null);
   const [datePromptOpen, setDatePromptOpen] = useState(false);
   const appDay = useAppStore((s) => s.day);
   const today = appDay ?? todayLocal(container.clock);
@@ -132,6 +138,7 @@ export function ChecklistsScreen() {
   const filteredSpace = spaceFilter === 'all' ? null : spaces.find((space) => space.id === spaceFilter);
   const emptyMessage = projectFilter ? t('checklists.emptyProject') : filteredSpace ? t('checklists.emptySpace', { space: filteredSpace.name }) : t('checklists.empty');
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
+  const reordering = displayedId !== null && reorderingFor === displayedId;
   const itemsReady = itemsFor === displayedId;
   const detailItems = itemsReady ? items : [];
   // Les items affichés font foi (cochage immédiat) ; le temps du chargement, la progression vient de la liste.
@@ -141,12 +148,19 @@ export function ChecklistsScreen() {
 
   const detail = displayed ? (
     <ChecklistDetail
+      key={displayed.checklist.id}
       layout={layout}
       checklist={displayed.checklist}
       items={detailItems}
       progress={progress}
       compact={compact}
       onCompactChange={(value) => void setCompact(value)}
+      reordering={reordering}
+      onReorderingChange={(value) => setReorderingFor(value ? displayedId : null)}
+      onMoveItem={moveItem}
+      onRemoveItem={(id) => void removeItem(id)}
+      onClearChecked={() => void clearChecked()}
+      onUncheckAll={() => void uncheckAll()}
       onToggleItem={toggleItem}
       onRenameItem={async (id, text) => (await renameItem(id, text)).ok}
       focusRequest={focusRequest}
@@ -286,6 +300,11 @@ export function ChecklistsScreen() {
           />
         ) : (
           <h1 className="ct-checklists__mobileTitle">{t('checklists.title')}</h1>
+        )}
+        {displayed && (
+          <button type="button" className="ct-checklist-action" data-size="sm" aria-pressed={reordering} onClick={() => setReorderingFor(reordering ? null : displayedId)}>
+            {t(reordering ? 'checklists.actions.reorderDone' : 'checklists.actions.reorder')}
+          </button>
         )}
       </div>
       {pills}

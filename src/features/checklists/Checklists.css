@@ -690,3 +690,42 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+/* « Réorganiser » de la rangée du haut (iPhone, Checklists.html) : 36 px de haut. */
+.ct-checklist-action[data-size='sm'] {
+  height: 36px;
+  border-radius: 18px;
+  padding: 0 14px;
+  font-size: var(--ct-font-size-text-sm);
+  flex-shrink: 0;
+}
+
+.ct-checklist-action[aria-pressed='true'] {
+  border-color: var(--ct-color-accent);
+  background: var(--ct-color-row-selected);
+}
+
+/* « Effacer les cochés » / « Tout décocher » sous le champ d'ajout (iPhone). */
+.ct-checklist-detail__batch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Pied du détail (PC) : les boutons se replient plutôt que de déborder. */
+.ct-checklist-detail__footer {
+  flex-wrap: wrap;
+}
+
+/* Poignée à six points (#8E87A3) : 44 pt sur iPhone, plus étroite sur PC où le pointeur est précis. */
+.ct-checklist-item .ct-drag-handle {
+  margin-block: -6px;
+}
+
+.ct-checklist-detail[data-layout='pc'] .ct-checklist-item .ct-drag-handle {
+  min-width: 32px;
+}
+
+.ct-checklist-item .ct-remove-button {
+  flex-shrink: 0;
+}

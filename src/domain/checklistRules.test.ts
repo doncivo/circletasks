@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHECKLIST_TEXT_MAX, checklistProgress, compareChecklists, COPY_SUFFIX, duplicateAndReset, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
+import { CHECKLIST_TEXT_MAX, checkedItemIds, checklistProgress, compareChecklists, moveItem, COPY_SUFFIX, duplicateAndReset, isValidChecklistTitle, nextItemOrder, sortChecklistSummaries, sortItems, validateChecklistText } from './checklistRules';
 import { createUuidGenerator } from './id';
 import type { Checklist, ChecklistItem, ChecklistSummary } from './model';
 
@@ -91,5 +91,47 @@ describe('duplicateAndReset (C-04 critères 1, 2 et 7)', () => {
     const long = duplicateAndReset({ ...source, title: 'x'.repeat(CHECKLIST_TEXT_MAX) }, [], ids);
     expect(long.checklist.title).toHaveLength(CHECKLIST_TEXT_MAX);
     expect(long.checklist.title.endsWith(COPY_SUFFIX)).toBe(true);
+  });
+});
+
+describe('checkedItemIds (C-05 critères 1 et 4)', () => {
+  it('liste les items cochés dans l’ordre donné', () => {
+    expect(checkedItemIds([{ id: 'a' as never, checked: true }, { id: 'b' as never, checked: false }, { id: 'c' as never, checked: true }])).toEqual(['a', 'c']);
+    expect(checkedItemIds([{ id: 'a' as never, checked: false }])).toEqual([]);
+  });
+});
+
+describe('moveItem (C-05 critère 6)', () => {
+  const items = [1, 2, 3, 4].map((n) => ({ id: `i${String(n)}` as never, sortOrder: n }));
+
+  it('renumérote de 1 à N et n’écrit que les items dont l’ordre change', () => {
+    expect(moveItem(items, 'i4' as never, 1)).toEqual([
+      { id: 'i4', sortOrder: 2 },
+      { id: 'i2', sortOrder: 3 },
+      { id: 'i3', sortOrder: 4 },
+    ]);
+    expect(moveItem(items, 'i1' as never, 1)).toEqual([
+      { id: 'i2', sortOrder: 1 },
+      { id: 'i1', sortOrder: 2 },
+    ]);
+  });
+
+  it('ne fait rien si la position ne change pas, hors liste ou pour un item inconnu', () => {
+    expect(moveItem(items, 'i2' as never, 1)).toEqual([]);
+    expect(moveItem(items, 'zz' as never, 1)).toEqual([]);
+  });
+
+  it('borne la destination à la liste', () => {
+    expect(moveItem(items, 'i1' as never, 99).map((move) => move.id)).toEqual(['i2', 'i3', 'i4', 'i1']);
+    expect(moveItem(items, 'i4' as never, -5).map((move) => move.id)).toEqual(['i4', 'i1', 'i2', 'i3']);
+  });
+
+  it('remet une liste à ordres fractionnaires ou irréguliers en suite 1..N', () => {
+    const irregular = [{ id: 'a' as never, sortOrder: 1.5 }, { id: 'b' as never, sortOrder: 7 }, { id: 'c' as never, sortOrder: 9 }];
+    expect(moveItem(irregular, 'c' as never, 0)).toEqual([
+      { id: 'c', sortOrder: 1 },
+      { id: 'a', sortOrder: 2 },
+      { id: 'b', sortOrder: 3 },
+    ]);
   });
 });

@@ -87,3 +87,34 @@ export function duplicateAndReset(checklist: Pick<Checklist, 'title' | 'spaceId'
     })),
   };
 }
+
+/** Id des items cochés, dans l'ordre : cible de « Effacer les cochés » (C-05 critère 1) et de « Tout décocher » (critère 4). */
+export function checkedItemIds(items: readonly Pick<ChecklistItem, 'id' | 'checked'>[]): ChecklistItemId[] {
+  return items.filter((item) => item.checked).map((item) => item.id);
+}
+
+export interface ItemMove {
+  readonly id: ChecklistItemId;
+  readonly sortOrder: number;
+}
+
+/**
+ * Déplace l'item `id` à la position `toIndex` (0 = en tête, bornée à la liste) et renvoie les ordres à écrire : seulement les items
+ * dont l'ordre change, la liste étant renumérotée de 1 à N dans le nouvel ordre. Liste vide d'écritures si rien ne bouge ou si
+ * l'item n'existe pas (C-05 critère 6).
+ */
+export function moveItem(items: readonly Pick<ChecklistItem, 'id' | 'sortOrder'>[], id: ChecklistItemId, toIndex: number): ItemMove[] {
+  const ordered = sortItems(items);
+  const from = ordered.findIndex((item) => item.id === id);
+  if (from < 0) return [];
+  const target = Math.min(Math.max(0, Math.trunc(toIndex)), ordered.length - 1);
+  const [moved] = ordered.splice(from, 1);
+  if (!moved) return [];
+  ordered.splice(target, 0, moved);
+  const writes: ItemMove[] = [];
+  ordered.forEach((item, index) => {
+    const sortOrder = index + 1;
+    if (item.sortOrder !== sortOrder) writes.push({ id: item.id, sortOrder });
+  });
+  return writes;
+}

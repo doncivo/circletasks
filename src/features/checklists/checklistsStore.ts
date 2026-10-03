@@ -59,6 +59,14 @@ export interface ChecklistsState {
    * mises en file, la dernière gagne (deux gestes rapides ne perdent aucune bascule). Ne rejette jamais.
    */
   toggleItem(id: ChecklistItemId): void;
+  /** C-05 : « Effacer les cochés » de la checklist affichée (annulable 5 s) ; renvoie le nombre d'items effacés. Ne rejette jamais. */
+  clearChecked(): Promise<number>;
+  /** C-05 : « Tout décocher » de la checklist affichée (annulable 5 s) ; renvoie le nombre d'items décochés. Ne rejette jamais. */
+  uncheckAll(): Promise<number>;
+  /** C-05 : place l'item à la position `toIndex` (annulable) ; renvoie la position finale, null si rien ne change. Ne rejette jamais. */
+  moveItem(id: ChecklistItemId, toIndex: number): Promise<{ readonly position: number; readonly total: number } | null>;
+  /** C-05 : « − » supprime un item (annulable 5 s). Renvoie vrai si c'est fait. Ne rejette jamais. */
+  removeItem(id: ChecklistItemId): Promise<boolean>;
   /** C-02 : texte modifié en ligne. Ne rejette jamais. */
   renameItem(id: ChecklistItemId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError | 'unexpected'>>;
 }
@@ -72,6 +80,11 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
   const wanted = new Map<ChecklistItemId, boolean>();
   const inflight = new Map<ChecklistItemId, number>();
   const chains = new Map<ChecklistItemId, Promise<unknown>>();
+
+  /** Attend les cochages en cours : un lot (« Effacer les cochés ») voit l'état que l'utilisateur voit. */
+  const settleToggles = async (): Promise<void> => {
+    await Promise.all([...chains.values()]);
+  };
 
   const readSummaries = async (filter: SpaceFilter): Promise<ChecklistSummary[]> => sortChecklistSummaries(await container.data.repos.checklists.listSummaries(filter));
   const readItems = async (id: ChecklistId | null): Promise<ChecklistItem[]> => {
@@ -229,6 +242,58 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
           void get().refresh();
         });
       chains.set(id, settled);
+    },
+
+    async clearChecked() {
+      const id = get().selectedId;
+      if (!id) return 0;
+      try {
+        await settleToggles();
+        const cleared = await useCases.clearChecked(id);
+        set({ actionErrorKey: null });
+        return cleared.length;
+      } catch {
+        set({ actionErrorKey: 'checklists.itemError' });
+        return 0;
+      }
+    },
+
+    async uncheckAll() {
+      const id = get().selectedId;
+      if (!id) return 0;
+      try {
+        await settleToggles();
+        const unchecked = await useCases.uncheckAll(id);
+        set({ actionErrorKey: null });
+        return unchecked.length;
+      } catch {
+        set({ actionErrorKey: 'checklists.itemError' });
+        return 0;
+      }
+    },
+
+    async moveItem(itemId, toIndex) {
+      const id = get().selectedId;
+      if (!id) return null;
+      try {
+        const moved = await useCases.moveItem(id, itemId, toIndex);
+        set({ actionErrorKey: null });
+        return moved;
+      } catch {
+        set({ actionErrorKey: 'checklists.itemError' });
+        return null;
+      }
+    },
+
+    async removeItem(itemId) {
+      try {
+        const done = await useCases.removeItem(itemId);
+        set({ actionErrorKey: null });
+        return done;
+      } catch {
+        set({ actionErrorKey: 'checklists.itemError' });
+        return false;
+      }
     },
 
     async renameItem(id, text) {

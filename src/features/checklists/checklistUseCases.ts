@@ -1,9 +1,10 @@
-import { duplicateAndReset, nextItemOrder, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
+import { checkedItemIds, duplicateAndReset, moveItem, nextItemOrder, sortItems, validateChecklistText, type ChecklistTextError } from '../../domain/checklistRules';
 import { newEntityId } from '../../domain/id';
 import type { Checklist, ChecklistItem, ChecklistPatch, IconRef } from '../../domain/model';
 import type { Repositories } from '../../db/repositories';
 import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceId } from '../../domain/types';
 import type { DataAccess } from '../../db/repositories';
+import { getLocale, type MessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
 import { emitChecklistsChanged } from './checklistEvents';
@@ -35,6 +36,20 @@ export interface ChecklistUseCases {
   remove(id: ChecklistId): Promise<boolean>;
   /** C-01 critère 3 : ajoute un item en fin de liste (texte de 1 à 200 caractères). Les ajouts d'une même base sont sérialisés. */
   addItem(checklistId: ChecklistId, text: string): Promise<Result<ChecklistItem, ChecklistSaveError>>;
+  /**
+   * C-05 : « Effacer les cochés » — suppression logique de tous les items cochés, en une transaction ; annulable 5 s (les restaure à leur
+   * place, 'stale' si l'un d'eux a changé). La confirmation est demandée par l'interface. Renvoie les items effacés (aucun : rien n'est écrit).
+   */
+  clearChecked(checklistId: ChecklistId): Promise<ChecklistItem[]>;
+  /** C-05 : « Tout décocher » — décoche tous les items cochés d'un coup, sans confirmation ; annulable 5 s. Renvoie les items décochés. */
+  uncheckAll(checklistId: ChecklistId): Promise<ChecklistItem[]>;
+  /**
+   * C-05 : « Réorganiser » — place l'item à la position `toIndex` (0 = en tête) ; les ordres sont renumérotés en une transaction ; annulable.
+   * Renvoie la position finale (à partir de 1) et le total, null si rien ne change.
+   */
+  moveItem(checklistId: ChecklistId, itemId: ChecklistItemId, toIndex: number): Promise<{ readonly position: number; readonly total: number } | null>;
+  /** C-05 critère 7 : « − » — supprime un item (suppression logique) ; annulable 5 s. Renvoie vrai si c'est fait. */
+  removeItem(itemId: ChecklistItemId): Promise<boolean>;
   /**
    * C-04 : « Dupliquer et réinitialiser » — crée « <titre> (copie) » avec les mêmes items décochés, sans date, non modèle, en une seule
    * transaction (aucune copie partielle en cas d'échec) ; annulable 5 s (supprime la copie, 'stale' si elle a été modifiée). L'original
@@ -105,6 +120,36 @@ function dateRemovedCommand(deps: ChecklistUseCaseDeps, written: Checklist, prev
   };
 }
 
+/** Message d'un lot : singulier pour un seul élément, pluriel sinon (`Intl.PluralRules`). */
+function countKey(count: number, one: MessageKey, many: MessageKey): MessageKey {
+  return new Intl.PluralRules(getLocale()).select(count) === 'one' ? one : many;
+}
+
+/**
+ * Annulation d'une action sur un lot d'items (T-13) : exécute `revert` seulement si aucun des items n'a changé depuis (mêmes hlc que
+ * ceux écrits par l'action ; sinon 'stale', rien n'est écrit). Écrit en une transaction, puis annonce le changement.
+ */
+function itemsCommand(
+  deps: ChecklistUseCaseDeps,
+  written: readonly ChecklistItem[],
+  label: { readonly key: MessageKey; readonly params?: Readonly<Record<string, string | number>> },
+  revert: (repos: Repositories) => Promise<unknown>,
+): UndoableCommand {
+  return {
+    kind: 'checklist',
+    count: written.length,
+    labelKey: label.key,
+    ...(label.params ? { labelParams: label.params } : {}),
+    async undo() {
+      const current = await deps.data.repos.checklistItems.getByIds(written.map((item) => item.id as ChecklistItemId));
+      if (current.length !== written.length || current.some((item, index) => item.hlc !== written[index]?.hlc)) return 'stale';
+      await deps.data.transaction(revert);
+      emitChecklistsChanged(deps.data);
+      return 'undone';
+    },
+  };
+}
+
 /** Items vivants d'une checklist, repris de la transaction pour comparer avant d'annuler une duplication. */
 async function liveItems(repos: Repositories, id: ChecklistId): Promise<ChecklistItem[]> {
   return repos.checklistItems.listForChecklist(id);
@@ -169,6 +214,60 @@ export function createChecklistUseCases(deps: ChecklistUseCaseDeps): ChecklistUs
       });
       emitChecklistsChanged(data);
       return { ok: true, value: written };
+    },
+
+    async clearChecked(checklistId) {
+      const cleared = await data.transaction(async (repos) => {
+        const ids = checkedItemIds(await liveItems(repos, checklistId));
+        return ids.length === 0 ? [] : repos.checklistItems.softDelete(ids);
+      });
+      if (cleared.length === 0) return [];
+      const ids = cleared.map((item) => item.id as ChecklistItemId);
+      deps.undo.push(
+        itemsCommand(deps, cleared, { key: countKey(cleared.length, 'checklists.undo.clearedOne', 'checklists.undo.clearedMany'), params: { count: cleared.length } }, (repos) =>
+          repos.checklistItems.restore(ids),
+        ),
+      );
+      emitChecklistsChanged(data);
+      return cleared;
+    },
+
+    async uncheckAll(checklistId) {
+      const unchecked = await data.transaction(async (repos) => {
+        const ids = checkedItemIds(await liveItems(repos, checklistId));
+        return ids.length === 0 ? [] : repos.checklistItems.setCheckedMany(ids, false);
+      });
+      if (unchecked.length === 0) return [];
+      const ids = unchecked.map((item) => item.id as ChecklistItemId);
+      deps.undo.push(itemsCommand(deps, unchecked, { key: 'checklists.undo.unchecked' }, (repos) => repos.checklistItems.setCheckedMany(ids, true)));
+      emitChecklistsChanged(data);
+      return unchecked;
+    },
+
+    async moveItem(checklistId, itemId, toIndex) {
+      const moved = await data.transaction(async (repos) => {
+        const items = await liveItems(repos, checklistId);
+        const writes = moveItem(items, itemId, toIndex);
+        if (writes.length === 0) return null;
+        const before = items.filter((item) => writes.some((write) => write.id === item.id)).map((item) => ({ id: item.id as ChecklistItemId, sortOrder: item.sortOrder }));
+        await repos.checklistItems.setSortOrders(writes);
+        const written = await repos.checklistItems.getByIds(writes.map((write) => write.id));
+        const order = sortItems(items.map((item) => ({ id: item.id, sortOrder: writes.find((write) => write.id === item.id)?.sortOrder ?? item.sortOrder })));
+        return { written, before, position: order.findIndex((item) => item.id === itemId) + 1, total: order.length };
+      });
+      if (!moved) return null;
+      deps.undo.push(itemsCommand(deps, moved.written, { key: 'checklists.undo.moved' }, (repos) => repos.checklistItems.setSortOrders(moved.before)));
+      emitChecklistsChanged(data);
+      return { position: moved.position, total: moved.total };
+    },
+
+    async removeItem(itemId) {
+      const [current] = await data.repos.checklistItems.getByIds([itemId]);
+      if (!current || current.deletedAt !== null) return false;
+      const removed = await data.repos.checklistItems.softDelete([itemId]);
+      deps.undo.push(itemsCommand(deps, removed, { key: 'checklists.undo.itemRemoved', params: { text: current.text } }, (repos) => repos.checklistItems.restore([itemId])));
+      emitChecklistsChanged(data);
+      return true;
     },
 
     async duplicate(id) {
