@@ -86,11 +86,11 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
-| C-01 | M6 | Je crée une checklist nommée | checklists-events | en cours |
-| C-02 | M6 | Je coche des items | checklists-events | en cours |
-| C-03 | M6 | J'associe une checklist à un jour | checklists-events | en cours |
-| C-04 | M6 | Je réutilise une checklist modèle | checklists-events | en cours |
-| C-05 | M6 | J'efface d'un coup les items cochés | checklists-events | en cours |
+| C-01 | M6 | Je crée une checklist nommée | checklists-events | fait |
+| C-02 | M6 | Je coche des items | checklists-events | fait |
+| C-03 | M6 | J'associe une checklist à un jour | checklists-events | fait |
+| C-04 | M6 | Je réutilise une checklist modèle | checklists-events | fait |
+| C-05 | M6 | J'efface d'un coup les items cochés | checklists-events | fait |
 | E-01 | M7 | Je crée un événement daté, avec ou sans heure | checklists-events | à faire |
 | E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | à faire |
 | E-03 | M7 | J'affiche les jours fériés | checklists-events | à faire |
