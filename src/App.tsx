@@ -9,6 +9,8 @@ import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
 import { TAB_IDS, TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
+import { startCaptureHost } from './features/capture';
+import { openCaptureMainBridge } from './platform/capture';
 import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
@@ -216,6 +218,13 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     return startDesktopIntegration(container).dispose;
+  }, [container]);
+
+  // Q-01 : la mini-fenêtre de capture rapide envoie ses textes ici, seule fenêtre à écrire dans la base.
+  useEffect(() => {
+    if (!container) return undefined;
+    const bridge = openCaptureMainBridge(container.platform.runtime, container.platform.os);
+    return bridge ? startCaptureHost(container, bridge).dispose : undefined;
   }, [container]);
 
   useEffect(() => {

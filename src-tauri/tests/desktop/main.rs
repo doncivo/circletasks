@@ -4,9 +4,11 @@
 //! désactivés dans Cargo.toml).
 
 mod backup;
+mod capture;
 mod calendars;
 mod config;
 mod logic;
+mod ocr;
 mod quit;
 mod shortcut;
 mod updater;

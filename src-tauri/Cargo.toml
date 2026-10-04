@@ -45,6 +45,8 @@ tokio = { version = "1", features = ["time", "net", "io-util"] }
 # Coffre système : Gestionnaire d'identification Windows, Trousseau iOS (ADR 0008 section 3).
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
+# Capture rapide (Q-01, Q-04) : OCR Windows.Media.Ocr en flux mémoire, focus de l'application précédente.
+windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging"] }
 [target.'cfg(target_os = "ios")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }
 

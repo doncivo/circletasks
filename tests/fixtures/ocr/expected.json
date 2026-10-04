@@ -1,0 +1,46 @@
+{
+  "liste-imprimee.png": {
+    "lines": [
+      "Appeler le plombier",
+      "Acheter des ampoules",
+      "Réserver le restaurant samedi",
+      "Payer la cantine",
+      "Rendez-vous au garage"
+    ],
+    "readable": true
+  },
+  "liste-puces.png": {
+    "lines": [
+      "- Appeler le notaire demain 10h",
+      "• Acheter du pain",
+      "1. Envoyer la facture",
+      "2. Réserver le dentiste",
+      "[ ] Payer le loyer"
+    ],
+    "readable": true
+  },
+  "liste-manuscrite.png": {
+    "lines": [
+      "plombier",
+      "ampoules",
+      "resto samedi",
+      "cantine",
+      "garage ?"
+    ],
+    "readable": false
+  },
+  "photo-liste.jpg": {
+    "lines": [
+      "Appeler le plombier",
+      "Acheter des ampoules",
+      "Réserver le restaurant samedi",
+      "Payer la cantine",
+      "Rendez-vous au garage"
+    ],
+    "readable": true
+  },
+  "page-vide.png": {
+    "lines": [],
+    "readable": true
+  }
+}

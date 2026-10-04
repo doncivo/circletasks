@@ -1,0 +1,53 @@
+/* Dictée (Q-03) : bouton micro 44 x 44 et aide « Win + H ». */
+.ct-dictation__button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--ct-radius-lg);
+  background: transparent;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-dictation__button:hover {
+  background: var(--ct-color-border);
+}
+
+.ct-dictation__button:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 1px;
+}
+
+.ct-dictation__help {
+  margin: var(--ct-space-1) 0 0;
+  color: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-medium);
+  line-height: 1.35;
+}
+
+.ct-dictation__help[role='alert'] {
+  color: var(--ct-color-danger);
+}
+
+.ct-dictation__sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ct-space-4);
+  padding: var(--ct-space-6) var(--ct-space-4);
+  color: var(--ct-color-text);
+}
+
+.ct-dictation__listening {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+  font-weight: var(--ct-font-weight-bold);
+}

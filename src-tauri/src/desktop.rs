@@ -156,11 +156,8 @@ pub fn show_main_window(app: &AppHandle) {
 fn run_action(app: &AppHandle, action: TrayAction) {
     match action {
         TrayAction::Open => show_main_window(app),
-        TrayAction::QuickAdd => {
-            show_main_window(app);
-            // Le front navigue vers Aujourd'hui et focalise « Nouvelle tâche » (remplacé par Q-01).
-            let _ = app.emit_to(MAIN_WINDOW, QUICK_ADD_EVENT, ());
-        }
+        // Q-01 : « Ajout rapide » ouvre la mini-fenêtre ; sans elle, repli sur Aujourd'hui (capture::trigger).
+        TrayAction::QuickAdd => crate::capture::trigger(app),
         // Grisée tant que la synchronisation n'existe pas (Y-03) : rien à faire.
         TrayAction::Sync => {}
         // Quitter : le front termine ses écritures en cours (attente bornée), puis `exit` déclenche
@@ -283,6 +280,10 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         .setup(|app| {
             app.manage(QuitGate::default());
             crate::shortcut::manage(app.handle());
+            // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).
+            if let Err(error) = crate::capture::setup(app.handle()) {
+                eprintln!("capture rapide : fenêtre non créée ({error})");
+            }
             create_tray(app.handle())?;
             if !is_minimized_launch(std::env::args()) {
                 show_main_window(app.handle());
