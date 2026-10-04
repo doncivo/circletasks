@@ -26,10 +26,10 @@ Workflow : `.github/workflows/build-windows.yml` (story D-03, critères 10 et 11
 
 ## Lancement manuel
 
-« Run workflow » construit l'installeur et l'envoie en artefact, sans publier et sans signer : le build manuel n'a jamais accès aux secrets de signature, et n'émet ni `.sig` ni `latest.json`.
+« Run workflow » (même sur une référence de tag) construit l'installeur et l'envoie en artefact, sans publier et sans signer : le build manuel n'a jamais accès aux secrets de signature, et n'émet ni `.sig` ni `latest.json`.
 
 ## Points d'attention
 
 - `requireSignedVersion` : la version annoncée dans `latest.json` doit égaler celle du commentaire signé du paquet ; ne jamais modifier `latest.json` à la main. Si le CLI Tauri n'écrit pas `version:X.Y.Z` dans le commentaire de confiance, la vérification du workflow échoue : c'est voulu (l'app refuserait le paquet de toute façon).
 - Aucun secret n'est écrit dans le dépôt ni dans les journaux. Limite inhérente : la clé privée est visible de tout le processus de compilation du build signé (build.rs, scripts npm, dépendances) ; elle n'est donnée qu'aux tags `vX.Y.Z`, et le cache est en lecture seule pour ce build. Garder les dépendances sous contrôle (audit, `npm ci`, `Cargo.lock` versionné).
-- Scripts : `scripts/release/check-version.mjs`, `make-latest-json.mjs`, `verify-signature.mjs` ; tests : `npx vitest run scripts/release`.
+- Scripts : `scripts/release/check-version.mjs`, `make-latest-json.mjs`, `verify-signature.mjs` ; tests : `npx vitest run scripts/release --coverage.enabled=false`.

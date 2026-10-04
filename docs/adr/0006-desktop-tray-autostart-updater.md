@@ -101,5 +101,5 @@ Mesure du 2026-10-02 (`npm run tauri build`, NSIS, avec updater, process, autost
 ## Avenant D-03 : publication (2026-10-04)
 
 - `build-windows.yml` : build signé sur tag `vX.Y.Z` uniquement (le lancement manuel ne reçoit pas les secrets et produit un installeur non signé) ; signature vérifiée hors ligne (`scripts/release/verify-signature.mjs`) avant publication ; publication par le job `publish` (environnement `releases`) qui contrôle version et SHA-256. Processus : `docs/release-pc.md`.
-- Limite inhérente : `TAURI_SIGNING_PRIVATE_KEY` est exposée à tout le processus de compilation du build signé (build.rs, scripts npm, dépendances). Atténuations : tags `vX.Y.Z` seulement, cache cargo en lecture seule, dossier `bundle` purgé, option d un environnement `signing` limité aux tags `v*`.
-- Les releases iPhone sont créées avec `--latest=false` : seule une release PC peut être « latest », ce qui garde valide l endpoint `releases/latest/download/latest.json`.
+- Limite inhérente : `TAURI_SIGNING_PRIVATE_KEY` est exposée à tout le processus de compilation du build signé (build.rs, scripts npm, dépendances). Atténuations : tags `vX.Y.Z` seulement, cache cargo en lecture seule, dossier `bundle` purgé, option d'un environnement `signing` limité aux tags `v*`.
+- Les releases iPhone sont créées avec `--latest=false` : seule une release PC peut être « latest », ce qui garde valide l'endpoint `releases/latest/download/latest.json`.

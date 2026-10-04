@@ -86,12 +86,12 @@ jobs:
       # Limite inhérente : la clé est visible de tout le processus de compilation (build.rs, scripts npm, dépendances).
       - name: Compiler l'installeur NSIS
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'push' && github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name == 'push' && github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: |
           set -euo pipefail
           rm -rf src-tauri/target/release/bundle
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
               echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY absent : un tag de version exige la signature."
               exit 1
@@ -112,7 +112,7 @@ jobs:
           test -f "${DIR}/${EXE}" || { echo "::error::Installeur absent : ${DIR}/${EXE}"; ls -l "${DIR}" || true; exit 1; }
           rm -rf dist-release && mkdir dist-release
           cp "${DIR}/${EXE}" dist-release/
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+          if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             test -f "${DIR}/${EXE}.sig" || { echo "::error::Signature .sig absente : createUpdaterArtifacts n'a rien produit."; exit 1; }
             cp "${DIR}/${EXE}.sig" dist-release/
             # Notes : section de CHANGELOG.md dont le titre « ## [X.Y.Z] » ou « ## X.Y.Z » correspond exactement.

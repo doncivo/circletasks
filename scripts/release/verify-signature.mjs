@@ -9,7 +9,7 @@
 // « version:<version> » dans le commentaire de confiance (champs séparés par des tabulations).
 // Non vérifié : l'horodatage et le nom de fichier du commentaire de confiance.
 import { Buffer } from 'node:buffer';
-import { createHash,createPublicKey, verify } from 'node:crypto';
+import { createHash, createPublicKey, verify } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -59,7 +59,9 @@ export function verifyMinisign({ pubkeyB64, sigB64, data, version }) {
   if (!verify(null, Buffer.concat([signature, Buffer.from(trusted, 'utf8')]), key, globalSig)) {
     throw new Error('signature globale (commentaire de confiance) invalide');
   }
-  if (version !== undefined && !trusted.split('\t').includes(`version:${version}`)) {
+  // Comme tauri-plugin-updater (signed_version) : seul le premier champ « version: » compte.
+  const signed = trusted.split('\t').find((field) => field.startsWith('version:'));
+  if (version !== undefined && signed !== `version:${version}`) {
     throw new Error(`le commentaire de confiance ne contient pas version:${version} (« ${trusted} »)`);
   }
   return trusted;
