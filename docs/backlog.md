@@ -38,12 +38,12 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | A-05 | M2 | Je passe en mode édition | tasks-planning | fait |
 | A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | fait |
 | A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | fait |
-| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours (critères 9-10 : bandeaux synchro et iCloud à l'ordre 4, alerte agenda à l'ordre 2) |
+| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en cours (critère 9 : bandeaux synchro et iCloud, ordre 4) |
 | S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | fait |
 | S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | fait |
 | S-03 | M3 | Je navigue entre semaines | tasks-planning | fait |
 | S-04 | M3 | Je crée une tâche directement dans un jour | tasks-planning | fait |
-| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | en cours (critères 9-10 : alimentation par M8, ordre 2) |
+| S-05 | M3 | Je vois les événements calendrier dans la semaine | tasks-planning | fait |
 | S-06 | M3 | Je planifie depuis « Un jour » en glissant | tasks-planning | fait |
 | R-01 | M4 | Je crée une routine avec icône et fréquence | routines | fait |
 | R-02 | M4 | J'associe une heure optionnelle | routines | fait |
@@ -59,7 +59,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ES-03 | M13 | Je filtre Pro / Perso / Tout | spaces-goals | fait |
 | ES-04 | M13 | Je crée des projets dans un espace | spaces-goals | fait |
 | ES-05 | M13 | Je déplace un élément d'un espace ou projet à l'autre | spaces-goals | fait |
-| ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | en cours (critères 5-6 : affectation des agendas avec K-01/K-02, ordre 2) |
+| ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | fait |
 | ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | fait |
 | ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | en cours (écrans Focus et Statistiques avec M10/M11, ordre 3) |
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
@@ -95,10 +95,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | fait |
 | E-03 | M7 | J'affiche les jours fériés | checklists-events | fait |
 | E-04 | M7 | Je vois un compte à rebours | checklists-events | fait |
-| K-01 | M8 | Je connecte Google Calendar | calendar-integration | en cours |
-| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | en cours |
-| K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | en cours |
-| K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | en cours |
+| K-01 | M8 | Je connecte Google Calendar | calendar-integration | en cours (vérifié sur simulateur ; connexion réelle : ID client OAuth d'Ali) |
+| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | en cours (vérifié sur simulateur ; connexion réelle : mot de passe d'application iCloud d'Ali) |
+| K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | fait |
+| K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | fait |
 | RC-01 | M14 | Je cherche n'importe quel élément | spaces-goals | fait |
 | RC-02 | M14 | Je filtre les résultats | spaces-goals | fait |
 | RC-03 | M14 | J'ouvre un résultat | spaces-goals | fait |
