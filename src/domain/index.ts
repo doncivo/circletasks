@@ -50,3 +50,4 @@ export * from './eventReminders';
 export * from './eventList';
 export * from './eventKinds';
 export * from './holidays';
+export * from './eventCountdown';

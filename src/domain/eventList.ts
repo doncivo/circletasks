@@ -210,6 +210,7 @@ export function todayEntriesForDay(events: readonly CalendarEvent[], date: Local
       calendarName: null,
       icon: event.icon,
       kind: event.kind,
+      important: event.important,
     };
   });
 }

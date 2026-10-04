@@ -507,3 +507,29 @@
 .ct-today-event[data-kind='holiday'] .ct-today-event__source {
   color: var(--ct-color-achieved-text);
 }
+
+/* Compte à rebours d'un événement important (E-04) : « J-2 » neutre (#F3F1F6), « Aujourd'hui » bleu (#E3EEF5 / #1F6698), anniversaire #FBE7E4. */
+.ct-today-event__tag {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-today-event__source + .ct-today-event__tag {
+  margin-left: var(--ct-space-2);
+}
+
+.ct-today-event__tag[data-tag='today'] {
+  background: var(--ct-color-event-external-bg);
+  color: var(--ct-color-event-text);
+}
+
+.ct-today-event[data-kind='birthday'] .ct-today-event__tag[data-tag='countdown'] {
+  background: var(--ct-color-surface);
+  color: var(--ct-color-event-local-text);
+}

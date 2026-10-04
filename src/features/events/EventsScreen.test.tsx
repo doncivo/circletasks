@@ -240,10 +240,10 @@ describe('Événements : PC (E-01 critères 8 et 9)', () => {
   beforeEach(async () => {
     h = await setupEvents('403');
     mockViewport(1440);
-    Element.prototype.scrollIntoView = vi.fn();
+    Element.prototype.scrollTo = vi.fn();
   });
   afterEach(() => {
-    Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+    Reflect.deleteProperty(Element.prototype, 'scrollTo');
     return teardownEvents(h);
   });
 
@@ -270,11 +270,11 @@ describe('Événements : PC (E-01 critères 8 et 9)', () => {
     renderEvents(h.container);
     const aside = await screen.findByRole('complementary', { name: 'Calendrier' });
     await screen.findByText('Réunion');
-    const spy = Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>;
+    const spy = Element.prototype.scrollTo as ReturnType<typeof vi.fn>;
     spy.mockClear();
     fireEvent.click(within(aside).getByRole('button', { name: '10 octobre, avec des événements' }));
     await waitFor(() => expect(spy).toHaveBeenCalled());
-    expect(spy.mock.contexts.at(-1)).toBe(rowOf('Réunion'));
+    expect(spy.mock.contexts.at(-1)).toBe(document.querySelector('.ct-events__list'));
     fireEvent.click(within(aside).getByRole('button', { name: 'Mois suivant' }));
     fireEvent.click(within(aside).getByRole('button', { name: 'Mois suivant' }));
     expect(within(aside).getByRole('heading', { name: 'Décembre 2026' })).toBeInTheDocument();

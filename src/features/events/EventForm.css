@@ -197,3 +197,33 @@
   flex-wrap: nowrap;
   gap: var(--ct-space-2);
 }
+
+/* Interrupteur « Compte à rebours (J-2) » (AjoutEvenement.html). */
+.ct-event-form__switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-event-form__switchLabel {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Compte à rebours de la fiche d'un événement important (E-04) : à droite du titre. */
+.ct-event-form__tag {
+  margin-left: auto;
+  margin-right: var(--ct-space-2);
+  padding: 3px 8px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  white-space: nowrap;
+}
+
+.ct-event-form__tag[data-tag='today'] {
+  background: var(--ct-color-event-external-bg);
+  color: var(--ct-color-event-text);
+}

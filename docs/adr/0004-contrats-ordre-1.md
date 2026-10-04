@@ -138,3 +138,8 @@ Migration 0006 : table `routine_pause` (id, routine_id, `from_date` incluse, `to
 - Réglage partagé `holidays.countries` ({ FR, TN }, deux vrais par défaut). `DetailTarget` gagne `{ type: 'holiday' }` ; `Route` gagne l'écran `settings / holidays`.
 - `ensureHolidayTable` rapproche la base de la table embarquée une fois par session : insère, suit une nouvelle version de la table, ne touche jamais `overridden`. À la synchro (ordre 4), la fusion par hlc doit conserver cette règle : une ligne `manual` ne perd que contre une ligne `manual` plus récente.
 
+
+## Avenant E-04 — compte à rebours (2026-10-04)
+
+Aucune migration : le champ `event.important` (migration 0001) porte l'interrupteur « Compte à rebours ». `src/domain/eventCountdown` (`daysUntil`, `countdownOf`, `scheduleCountdown`, `nextCountdown`) calcule en jours civils ; les écrans lui passent le jour courant de l'app. `TodayEventEntry` gagne `important` (événement local) : les bandeaux d'Aujourd'hui et de la Semaine n'affichent « J-n » que pour lui (`bandCountdownTag`). `Switch` gagne la variante `toggle` (`aria-pressed`).
+

@@ -77,6 +77,14 @@ export const eventsEn: Messages['events'] = {
     back: 'Back',
     saveError: 'Could not save this setting.',
   },
+  countdown: {
+    tag: 'D-{days}',
+    spokenOne: 'in 1 day',
+    spokenMany: 'in {days} days',
+    label: 'Countdown',
+    labelWith: 'Countdown ({tag})',
+    switchLabel: 'Show the countdown',
+  },
   segments: {
     label: 'Type of item to add',
     task: 'Task',

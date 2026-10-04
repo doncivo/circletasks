@@ -6,6 +6,7 @@ import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
+import { bandCountdownTag } from '../events/bandCountdown';
 import { WeekDayAdd } from './WeekDayAdd';
 import { WeekChecklistItem, WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
 
@@ -23,6 +24,8 @@ export interface WeekDayViewProps {
   readonly layout: Layout;
   /** Jour courant : fond #F3F1F6, libellé et numéro en #1F6698, annoncé « aujourd'hui » (S-01 critère 3). */
   readonly isToday: boolean;
+  /** Jour courant de l'app : base du compte à rebours des événements importants (E-04). */
+  readonly today: LocalDate;
   readonly spaces: readonly Space[];
   readonly showSpace: boolean;
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
@@ -136,6 +139,7 @@ export function WeekDayView(props: WeekDayViewProps) {
                   key={event.id}
                   event={event}
                   layout={layout}
+                  countdown={bandCountdownTag(event, day.date, props.today)}
                   {...(props.onOpenEvent && event.kind !== 'holiday' ? { onOpen: () => props.onOpenEvent?.(event) } : {})}
                 />
               ))}

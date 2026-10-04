@@ -77,6 +77,14 @@ export const eventsFr = {
     back: 'Retour',
     saveError: 'Impossible d’enregistrer ce réglage.',
   },
+  countdown: {
+    tag: 'J-{days}',
+    spokenOne: 'dans 1 jour',
+    spokenMany: 'dans {days} jours',
+    label: 'Compte à rebours',
+    labelWith: 'Compte à rebours ({tag})',
+    switchLabel: 'Afficher le compte à rebours',
+  },
   segments: {
     label: 'Type d’élément à ajouter',
     task: 'Tâche',

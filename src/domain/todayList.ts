@@ -37,6 +37,8 @@ export interface TodayEventEntry {
   readonly startInstant?: string;
   /** Type d'un événement local (E-02) ou jour férié (E-03) : style du bandeau (anniversaire #FBE7E4, férié vert) ; absent pour un événement externe. */
   readonly kind?: EventKind | 'holiday';
+  /** Événement local dont le compte à rebours est activé (E-04) : son bandeau affiche « J-n » ; absent pour un événement externe ou un férié. */
+  readonly important?: boolean;
 }
 
 /** Objectif épinglé (OB-02) et son avancement (OB-04). Un encadré par objectif épinglé (QB-12). */

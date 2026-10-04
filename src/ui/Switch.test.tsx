@@ -21,4 +21,14 @@ describe('Switch', () => {
     screen.getByRole('switch', { name: 'Option' }).click();
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it('variante « toggle » : bouton à état (aria-pressed), sans rôle switch (E-04 critère 7)', () => {
+    const onChange = vi.fn();
+    render(<Switch checked semantics="toggle" onChange={onChange} label="Afficher le compte à rebours" />);
+    expect(screen.queryByRole('switch')).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'Afficher le compte à rebours', pressed: true });
+    expect(toggle).not.toHaveAttribute('aria-checked');
+    toggle.click();
+    expect(onChange).toHaveBeenCalledWith(false);
+  });
 });

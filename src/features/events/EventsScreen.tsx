@@ -85,10 +85,16 @@ export function EventsScreen() {
   const groups = useMemo(() => groupByMonth(entries), [entries]);
   const dots = useMemo(() => dayDots(entries, year, gridMonth, spaces.map((space) => space.id as SpaceId)), [entries, year, gridMonth, spaces]);
 
+  // Défilement de la liste seule (jamais de la page) : la première ligne datée de ce jour ou après vient en haut de la liste.
   const scrollToDate = useCallback((date: LocalDate): void => {
-    const rows = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[data-date]') ?? []);
-    const target = rows.find((row) => (row.dataset['date'] ?? '') >= date);
-    (target as Partial<HTMLElement> | undefined)?.scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+    const list = listRef.current;
+    if (!list) return;
+    const target = Array.from(list.querySelectorAll<HTMLElement>('[data-date]')).find((row) => (row.dataset['date'] ?? '') >= date);
+    if (!target) return;
+    // Première ligne de son mois : on aligne l'en-tête du mois (« SEPTEMBRE »), comme les maquettes.
+    const anchor = target.closest('li')?.previousElementSibling === null ? (target.closest('section') ?? target) : target;
+    const top = anchor.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+    (list as Partial<HTMLElement>).scrollTo?.({ top, behavior: 'smooth' });
   }, []);
 
   // Ouverture positionnée sur aujourd'hui (E-01 critère 1) : une seule fois par année affichée.

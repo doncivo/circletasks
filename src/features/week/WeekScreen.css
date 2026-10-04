@@ -431,6 +431,36 @@ button.ct-week-event:focus-visible {
   color: var(--ct-color-event-text);
 }
 
+/* Jour férié (E-03 D5) : lecture seule, vert (#E7F0EA / #2F6B4A). */
+.ct-week-event[data-layout='pc'][data-source='holiday'] {
+  background: var(--ct-color-achieved-bg);
+}
+
+.ct-week-event[data-source='holiday'] .ct-week-event__source,
+.ct-week-event[data-layout='mobile'][data-source='holiday'] {
+  color: var(--ct-color-achieved-text);
+}
+
+/* Compte à rebours d'un événement important (E-04) : « J-2 » ; « Aujourd'hui » en bleu. */
+.ct-week-event__tag {
+  align-self: flex-start;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-week-event__tag[data-tag='today'] {
+  color: var(--ct-color-event-text);
+}
+
+.ct-week-event[data-source='local'] .ct-week-event__tag[data-tag='countdown'] {
+  color: var(--ct-color-event-local-text);
+}
+
 .ct-week-event[data-source='local'] .ct-week-event__source {
   color: var(--ct-color-event-local-text);
 }

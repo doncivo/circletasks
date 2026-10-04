@@ -192,6 +192,7 @@ export function WeekScreen() {
               day={day}
               layout={layout}
               isToday={day.date === today}
+              today={today}
               spaces={spaces}
               showSpace={spaceFilter === 'all'}
               recurrences={recurrences}

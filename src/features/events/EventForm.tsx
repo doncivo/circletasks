@@ -1,6 +1,7 @@
 import { Trash2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
+import { scheduleCountdown, nextCountdown } from '../../domain/eventCountdown';
 import { ANNUAL_DEFAULT_REMINDERS, annualStartDate, applyKind, checkBirthYear, defaultCountdown, isAnnualKind, MIN_BIRTH_YEAR, nextAnnualDate } from '../../domain/eventKinds';
 import { defaultEventEnd, endAfterStartChange, EVENT_TITLE_MAX, eventDurationMin, validateEvent, validateEventTitle } from '../../domain/eventRules';
 import { EVENT_REMINDER_CHOICES, toggleEventReminderOffset } from '../../domain/eventReminders';
@@ -9,7 +10,8 @@ import { parseLocalDate } from '../../domain/localDate';
 import type { CalendarEvent, EventFields, EventKind, EventRepeat, IconRef, ReminderOffsetMin, Space } from '../../domain/model';
 import type { LocalDate, LocalTime, SpaceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
-import { AddSegments, Button, DatePicker, Icon, IconChooser, SpaceSegmented, TextField, useLayout, type AddSegment } from '../../ui';
+import { AddSegments, Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, TextField, useLayout, type AddSegment } from '../../ui';
+import { countdownTag } from './countdownText';
 import { EventDateWheels } from './EventDateWheels';
 import type { EventInput } from './eventUseCases';
 import './EventForm.css';
@@ -227,6 +229,13 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
   }
 
   const heading = event ? t('events.sheet.editTitle') : t('events.sheet.newTitle');
+  // Compte à rebours de la fiche (E-04 critère 1) : l'événement enregistré, vers sa prochaine occurrence ; seulement s'il est important.
+  const savedDays = event?.important ? nextCountdown(event, today) : null;
+  const savedTag = savedDays === null ? null : countdownTag(savedDays);
+  // Aperçu « Compte à rebours (J-2) » de l'interrupteur : le formulaire tel qu'il est saisi, avant l'enregistrement.
+  const draft = fields();
+  const previewDays = scheduleCountdown(draft, today);
+  const previewLabel = previewDays === null ? t('events.countdown.label') : t('events.countdown.labelWith', { tag: countdownTag(previewDays).label });
   const annualDate = clampedDay(birthYear !== null && birthYear >= MIN_BIRTH_YEAR ? birthYear : WHEEL_BASE_YEAR, monthDay.month, monthDay.day);
   return (
     <form className="ct-event-form" noValidate onSubmit={(submitEvent) => void submit(submitEvent)} aria-labelledby={headingId}>
@@ -234,6 +243,12 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
         <h2 id={headingId} className="ct-event-form__heading">
           {heading}
         </h2>
+        {savedTag && (
+          <span className="ct-event-form__tag" data-tag={savedTag.kind}>
+            <span aria-hidden={savedTag.spoken ? 'true' : undefined}>{savedTag.label}</span>
+            {savedTag.spoken && <span className="ct-visually-hidden">{savedTag.spoken}</span>}
+          </span>
+        )}
         <button type="button" className="ct-event-form__close" aria-label={t('events.sheet.close')} onClick={onClose}>
           <Icon icon={X} />
         </button>
@@ -346,6 +361,11 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
             </Choice>
           ))}
         </div>
+      </div>
+
+      <div className="ct-event-form__switchRow">
+        <span className="ct-event-form__switchLabel">{previewLabel}</span>
+        <Switch semantics="toggle" checked={countdown} onChange={setCountdown} label={t('events.countdown.switchLabel')} />
       </div>
 
       <div className="ct-event-form__spaceRow">

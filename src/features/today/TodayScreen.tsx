@@ -238,7 +238,7 @@ export function TodayScreen() {
                 {list.goals.map((entry) => (
                   <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
                 ))}
-                <TodayEventBands events={list.events} compact={compact} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
+                <TodayEventBands events={list.events} compact={compact} date={viewDate ?? viewedDate} today={today} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
