@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createMemoryFiles, createTauriFiles, createUnavailableFiles, FileExportError, type TauriFileApi } from './index';
+import { createMemoryFiles, createTauriFiles, createUnavailableFiles, FileExportError, MAX_EXPORT_BYTES, type TauriFileApi } from './index';
 
 const request = { suggestedName: 'circletasks-taches-2026-10-04.csv', mime: 'text/csv', data: new Uint8Array([1, 2, 3]) };
 
@@ -47,13 +47,18 @@ describe('Contrat FileExporter (H-03 D4, critères 7, 9, 10)', () => {
     await expect(files.save(request)).rejects.toMatchObject({ name: 'FileExportError', reason: 'write-failed' });
   });
 
-  it('Tauri : « Afficher dans le dossier » passe par la commande Rust, jamais pour un chemin réseau', async () => {
+  it('Tauri : « Afficher dans le dossier » appelle la commande Rust sans aucun chemin', async () => {
     const revealExported = vi.fn(() => Promise.resolve());
     const files = createTauriFiles(api({ revealExported }));
     await files.reveal?.('C:\\Docs\\export.csv');
-    expect(revealExported).toHaveBeenCalledWith('C:\\Docs\\export.csv');
-    await expect(files.reveal?.('\\\\serveur\\partage\\export.csv')).rejects.toBeInstanceOf(FileExportError);
-    await expect(files.reveal?.('//serveur/partage/export.csv')).rejects.toBeInstanceOf(FileExportError);
-    expect(revealExported).toHaveBeenCalledTimes(1);
+    expect(revealExported).toHaveBeenCalledWith();
+  });
+
+  it('Tauri : un fichier de plus de 64 Mio est refusé avant tout envoi', async () => {
+    const saveFile = vi.fn(() => Promise.resolve('C:\\Docs\\export.csv'));
+    const files = createTauriFiles(api({ saveFile }));
+    const tooBig = { ...request, data: { length: MAX_EXPORT_BYTES + 1 } as unknown as Uint8Array };
+    await expect(files.save(tooBig)).rejects.toBeInstanceOf(FileExportError);
+    expect(saveFile).not.toHaveBeenCalled();
   });
 });

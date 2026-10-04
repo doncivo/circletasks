@@ -5,11 +5,11 @@ import type { IsoDateTime } from '../../domain/types';
 import { canShowNextMonth, canShowPreviousMonth, monthOf, sameMonth, shiftMonth, type MonthRef } from '../../domain/monthReport';
 import { t } from '../../i18n';
 import { formatMonthName, formatReportMonth } from '../../i18n/formatStats';
+import { logDesktopFailure } from '../../platform';
 import { EmptyState, Icon, useLayout } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
-import { logDesktopFailure } from '../../platform';
 import { FocusReportSection } from '../focus/FocusReportSection';
 import { RoutinesMonthMap } from '../routines/RoutinesMonthMap';
 import { SpaceFilterBar } from '../spaces';
@@ -143,6 +143,7 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
           onClose={() => setExporting(false)}
           onDone={(path) => {
             setExporting(false);
+            setRevealFailed(false);
             setExported({ path });
           }}
         />

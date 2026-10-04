@@ -4,6 +4,9 @@
  * développement et tests), mémoire (faux des tests), indisponible (iPhone avant l'ordre 5).
  */
 
+/** Taille maximale d'un fichier exporté (64 Mio), la même que `MAX_EXPORT_BYTES` de `src-tauri/src/export.rs`. */
+export const MAX_EXPORT_BYTES = 64 * 1024 * 1024;
+
 export interface SaveRequest {
   /** Nom proposé dans la boîte « Enregistrer sous ». */
   readonly suggestedName: string;
@@ -36,7 +39,7 @@ export interface FileExporter {
   canSave(): boolean;
   /** Propose l'enregistrement ; `{ saved: false }` si l'utilisateur annule ; `FileExportError` en cas d'échec. */
   save(request: SaveRequest): Promise<SaveResult>;
-  /** Ouvre le dossier du fichier enregistré (PC) ; absent ailleurs. */
+  /** Ouvre le dossier du dernier fichier enregistré (PC) ; absent ailleurs. `path` ne sert qu'aux faux : Rust ignore tout chemin venant de la WebView. */
   reveal?(path: string): Promise<void>;
 }
 

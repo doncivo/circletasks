@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { createMemoryFiles, type MemoryFiles } from '../../platform/files';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -130,33 +130,51 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
     expect(screen.queryByText('Historique exporté')).toBeNull();
   });
 
-  it('fermer pendant l’export ne rouvre pas « Enregistrer sous » et n’affiche pas « Historique exporté » (revue)', async () => {
+  /** Laisse s'exécuter les suites de promesses déjà prêtes (aucun délai réel). */
+  const flush = () =>
+    act(async () => {
+      for (let i = 0; i < 30; i += 1) await Promise.resolve();
+    });
+
+  it('fermer pendant la préparation du fichier : « Enregistrer sous » n’est jamais ouvert (revue)', async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(h.container.data.repos.stats, 'listTasksForExport').mockImplementation(async () => {
+      await gate;
+      return { tasks: [], next: null };
+    });
     renderReport();
     const dialog = await openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    release?.();
+    await flush();
     expect(files.saved).toHaveLength(0);
     expect(screen.queryByText('Historique exporté')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
-  it('fermer pendant « Enregistrer sous » n’affiche pas « Historique exporté »', async () => {
-    let release: (() => void) | undefined;
-    const slow = {
+  it('fermer pendant « Enregistrer sous » : aucun message « Historique exporté »', async () => {
+    let finish: (() => void) | undefined;
+    let saveCalled = false;
+    const controlled = {
       ...files,
-      save: (request: Parameters<MemoryFiles['save']>[0]) =>
-        new Promise<{ saved: boolean; path?: string }>((resolve) => {
-          release = () => resolve({ saved: true, path: `C:\\Export\\${request.suggestedName}` });
-        }),
+      save: (request: { suggestedName: string }) => {
+        saveCalled = true;
+        return new Promise<{ saved: boolean; path?: string }>((resolve) => {
+          finish = () => resolve({ saved: true, path: `C:\\Export\\${request.suggestedName}` });
+        });
+      },
     };
-    renderReport(slow as MemoryFiles);
+    renderReport(controlled as unknown as MemoryFiles);
     const dialog = await openDialog();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
-    await waitFor(() => expect(release).toBeDefined());
+    await waitFor(() => expect(saveCalled).toBe(true));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
-    release?.();
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    finish?.();
+    await flush();
     expect(screen.queryByText('Historique exporté')).toBeNull();
   });
 

@@ -1,11 +1,11 @@
-import { FileExportError, type FileService, type SaveRequest } from './types';
+import { FileExportError, MAX_EXPORT_BYTES, type FileService, type SaveRequest } from './types';
 
 /** Commandes Rust de l'export (`src-tauri/src/export.rs`), injectables pour les tests. */
 export interface TauriFileApi {
   /** « Enregistrer sous » système puis écriture du fichier choisi, faites par Rust ; chemin choisi, ou null si l'utilisateur annule. */
   saveFile(name: string, data: Uint8Array): Promise<string | null>;
-  /** Affiche le dernier fichier exporté dans l'explorateur (Rust refuse tout autre chemin et les chemins réseau). */
-  revealExported(path: string): Promise<void>;
+  /** Affiche le dernier fichier exporté dans l'explorateur : aucun paramètre, Rust connaît le chemin et refuse tout chemin non local. */
+  revealExported(): Promise<void>;
 }
 
 /** Nom du fichier dans l'en-tête de la requête : base64 de l'UTF-8 (un en-tête ne porte pas d'accents). */
@@ -19,15 +19,12 @@ export function loadTauriFileApi(): TauriFileApi {
       const { invoke } = await import('@tauri-apps/api/core');
       return invoke<string | null>('export_save_file', data, { headers: { 'x-file-name': encodeName(name) } });
     },
-    async revealExported(path) {
+    async revealExported() {
       const { invoke } = await import('@tauri-apps/api/core');
-      await invoke('reveal_exported_file', { path });
+      await invoke('reveal_exported_file');
     },
   };
 }
-
-/** Chemin réseau (UNC) : jamais affiché ; Rust le refuse aussi. */
-const isUnc = (path: string): boolean => path.startsWith('\\\\') || path.startsWith('//');
 
 /**
  * PC Windows (H-03 critère 7) : la boîte « Enregistrer sous » et l'écriture sont faites par Rust, qui n'écrit que le fichier choisi
@@ -38,6 +35,8 @@ export function createTauriFiles(api: TauriFileApi = loadTauriFileApi()): FileSe
   return {
     canSave: () => true,
     async save(request: SaveRequest) {
+      // Même plafond que la commande Rust (64 Mio) : refus avant tout envoi.
+      if (request.data.length > MAX_EXPORT_BYTES) throw new FileExportError('write-failed');
       let path: string | null;
       try {
         path = await api.saveFile(request.suggestedName, request.data);
@@ -46,7 +45,7 @@ export function createTauriFiles(api: TauriFileApi = loadTauriFileApi()): FileSe
       }
       return path === null ? { saved: false } : { saved: true, path };
     },
-    reveal: (path) => (isUnc(path) ? Promise.reject(new FileExportError('unsupported')) : api.revealExported(path)),
+    reveal: () => api.revealExported(),
     // Lecture d'un fichier choisi : P-07 (commande Rust dédiée, limitée au fichier choisi).
     pickText: () => Promise.reject(new FileExportError('unsupported')),
   };
