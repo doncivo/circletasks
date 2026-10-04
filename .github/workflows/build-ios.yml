@@ -62,40 +62,46 @@ jobs:
       # Le projet Xcode (src-tauri/gen/apple) n'est pas versionné : il est régénéré à chaque build
       # depuis tauri.conf.json et src-tauri/Info.ios.plist.
       - name: Initialiser le projet iOS
-        run: npx tauri ios init
+        run: npx tauri ios init --ci
 
-      # Front seul : la bibliothèque Rust est compilée par la phase « Build Rust Code » du projet Xcode
-      # généré (tauri ios xcode-script), déclenchée par xcodebuild à l'étape suivante. `tauri ios build`
-      # ne convient pas ici : il exige une équipe de signature avant même de compiler Rust.
-      - name: Compiler le front
-        run: npm run build
+      # Option officielle du CLI Tauri `--no-sign` (crates/tauri-cli/src/mobile/ios/build.rs, v2.12.1) :
+      # `xcodebuild archive` avec CODE_SIGNING_ALLOWED=NO pendant que le CLI sert ses options à la phase
+      # Xcode « Build Rust Code » (tauri ios xcode-script), puis Products/Applications/CircleTasks.app est
+      # zippé en Payload/ dans gen/apple/build/arm64/CircleTasks.ipa. beforeBuildCommand (npm run build)
+      # compile le front, embarqué dans le binaire Rust. Pourquoi ce choix : ADR 0007, avenant POC-01.
+      - name: Compiler l'IPA sans signature
+        run: npx tauri ios build --ci --no-sign --target aarch64
 
-      - name: Vérifier le projet iOS généré
-        run: |
-          test -d src-tauri/gen/apple || { echo "::error::src-tauri/gen/apple absent"; exit 1; }
-          ls src-tauri/gen/apple
-
-      - name: Compiler avec Xcode sans signature
+      - name: Vérifier et copier CircleTasks.ipa
         run: |
           set -euo pipefail
-          cd src-tauri/gen/apple
-          PROJECT=$(ls -d *.xcodeproj | head -n 1)
-          SCHEME="$(basename "$PROJECT" .xcodeproj)_iOS"
-          xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration release \
-            -sdk iphoneos -arch arm64 -derivedDataPath "$RUNNER_TEMP/dd" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
-
-      - name: Créer CircleTasks.ipa
-        run: |
-          set -euo pipefail
-          APP=$(find "$RUNNER_TEMP/dd/Build/Products" -maxdepth 2 -name "*.app" -path "*iphoneos*" | head -n 1)
-          test -n "$APP" || { echo "Aucun .app trouvé"; exit 1; }
-          rm -rf ipa && mkdir -p ipa/Payload
-          cp -R "$APP" ipa/Payload/
-          (cd ipa && zip -qry CircleTasks.ipa Payload)
+          SRC=src-tauri/gen/apple/build/arm64/CircleTasks.ipa
+          test -f "$SRC" || { echo "::error::IPA absente : $SRC"; find src-tauri/gen/apple/build -maxdepth 3 || true; exit 1; }
+          rm -rf ipa && mkdir -p ipa && cp "$SRC" ipa/CircleTasks.ipa
           ls -l ipa/CircleTasks.ipa
-          /usr/libexec/PlistBuddy -c "Print :MinimumOSVersion" "$APP/Info.plist" || true
+          CHECK="$RUNNER_TEMP/check"
+          rm -rf "$CHECK" && mkdir -p "$CHECK"
+          unzip -q ipa/CircleTasks.ipa -d "$CHECK"
+          APP="$CHECK/Payload/CircleTasks.app"
+          test -d "$APP" || { echo "::error::Payload/CircleTasks.app absent"; find "$CHECK" -maxdepth 3; exit 1; }
+          PB=/usr/libexec/PlistBuddy
+          ID=$($PB -c "Print :CFBundleIdentifier" "$APP/Info.plist")
+          MIN=$($PB -c "Print :MinimumOSVersion" "$APP/Info.plist")
+          EXE=$($PB -c "Print :CFBundleExecutable" "$APP/Info.plist")
+          VER=$($PB -c "Print :CFBundleShortVersionString" "$APP/Info.plist")
+          echo "Bundle ${ID}, version ${VER}, iOS minimum ${MIN}, exécutable ${EXE}"
+          [ "$ID" = "fr.circletasks.planner" ] || { echo "::error::Bundle id inattendu : $ID"; exit 1; }
+          case "$MIN" in 18|18.0) ;; *) echo "::error::MinimumOSVersion inattendu : $MIN"; exit 1;; esac
+          ARCHS=$(lipo -archs "$APP/$EXE")
+          echo "Architectures : $ARCHS"
+          echo "$ARCHS" | grep -qw arm64 || { echo "::error::binaire arm64 absent"; exit 1; }
+          # Le front est embarqué (compressé) dans le binaire ; ses chemins d'assets y figurent en clair.
+          ASSET=$(cd dist && ls assets/*.js | head -n 1)
+          grep -q "/index.html" "$APP/$EXE" || { echo "::error::index.html non embarqué"; exit 1; }
+          grep -q "/${ASSET}" "$APP/$EXE" || { echo "::error::${ASSET} non embarqué"; exit 1; }
+          echo "Front embarqué : /index.html et /${ASSET} présents"
+          du -sh "$APP" "$APP/$EXE"
+          ls "$APP"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -109,7 +115,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-ios-logs
-          path: src-tauri/gen/apple/build
+          path: |
+            src-tauri/gen/apple/build/**/*.log
+            src-tauri/gen/apple/project.yml
           if-no-files-found: ignore
 
   # Publication : demandée explicitement (input publish, faux par défaut) ou sur tag ios-v*.
