@@ -1,7 +1,7 @@
 import { addDays, daysInMonth, makeLocalDate, parseLocalDate } from './localDate';
 import { SEARCH_KINDS, type SearchKind } from './search';
 import type { LocalDate, ProjectId, SpaceFilter } from './types';
-import { weekStartOf } from './week';
+import { weekStartOf, type FirstWeekday } from './week';
 
 /**
  * Filtres de la recherche (RC-02) : espace, projet, type, statut, période. Règles pures ; les filtres sont appliqués dans la requête
@@ -56,13 +56,13 @@ export interface SearchDateRange {
 }
 
 /**
- * Bornes (incluses) d'une période : « Cette semaine » du lundi au dimanche, « Ce mois » du 1er au dernier jour, « 30 derniers jours »
+ * Bornes (incluses) d'une période : « Cette semaine » du premier jour réglé (P-03, lundi par défaut) au septième jour, « Ce mois » du 1er au dernier jour, « 30 derniers jours »
  * d'il y a 29 jours à aujourd'hui, dates choisies (les deux dates sont remises dans l'ordre si besoin).
  */
-export function periodRange(period: SearchPeriod, today: LocalDate): SearchDateRange {
+export function periodRange(period: SearchPeriod, today: LocalDate, firstWeekday: FirstWeekday = 'monday'): SearchDateRange {
   switch (period.kind) {
     case 'week': {
-      const from = weekStartOf(today);
+      const from = weekStartOf(today, firstWeekday);
       return { from, to: addDays(from, 6) };
     }
     case 'month': {
@@ -109,8 +109,8 @@ export interface SearchQueryFilters {
   readonly goalPeriod: SearchDateRange | null;
 }
 
-export function toQueryFilters(filters: SearchFilters, today: LocalDate): SearchQueryFilters {
-  const period = filters.period ? periodRange(filters.period, today) : null;
+export function toQueryFilters(filters: SearchFilters, today: LocalDate, firstWeekday: FirstWeekday = 'monday'): SearchQueryFilters {
+  const period = filters.period ? periodRange(filters.period, today, firstWeekday) : null;
   return {
     space: filters.space,
     projectId: filters.projectId,

@@ -452,6 +452,44 @@ const SCREENS: Screen[] = [
     },
   },
   {
+    // Apparence et formats (P-02, P-03) : écran non dessiné, comparé aux motifs de Reglages.html (titre, filet, sections, lignes).
+    name: 'Apparence',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await page.getByRole('button', { name: /^Thème · semaine · heure/ }).click();
+      await expect(page.getByRole('heading', { name: 'Apparence et formats' })).toBeVisible();
+    },
+  },
+  {
+    // Apparence en thème sombre : comparé à Main-Sombre.html (fond, texte, onglets).
+    name: 'Apparence-Sombre',
+    mockup: 'Main-Sombre.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    dark: true,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await page.getByRole('button', { name: /^Thème · semaine · heure/ }).click();
+      await page.getByRole('radio', { name: 'Sombre' }).click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    },
+  },
+  {
+    // Onglets (P-01) : écran non dessiné, comparé aux motifs de Reglages.html et à la liste des projets d'ES-04.
+    name: 'Onglets',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+      await page.getByRole('button', { name: /^Onglets : / }).click();
+      await expect(page.getByRole('heading', { name: 'Onglets' })).toBeVisible();
+    },
+  },
+  {
     // Réglages avec un compte Google connecté : la ligne « Agendas · Rappels Apple » dit « N agendas » en vert (Reglages.html : « Connectés · 2 listes »).
     name: 'Reglages-Agendas',
     mockup: 'Reglages.html',

@@ -34,6 +34,8 @@ export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export { ChoiceDialog, type ChoiceDialogProps, type ChoiceOption } from './ChoiceDialog';
 export { DatePrompt, type DatePromptProps } from './DatePrompt';
 export { WheelPicker, WHEEL_ITEM_HEIGHT, type WheelItem, type WheelPickerProps } from './WheelPicker';
+export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl';
+export { TimeWheelColumns, type TimeWheelColumnsProps } from './TimeWheelColumns';
 export { DateWheels, type DateWheelsProps } from './DateWheels';
 export { DateEditor, DateField, type DateEditorProps, type DateFieldProps } from './DateField';
 export { DatePicker, type DatePickerProps } from './DatePicker';

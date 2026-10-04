@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { DRAG_THRESHOLD_PX, createWindowListeners, pointerModeOf, swallowClickAfterDrag } from './dragPrimitive';
 import './Sortable.css';
 
 /**
@@ -49,7 +50,6 @@ export interface Sortable {
   dragProps(id: string, source: DragSource): { onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void };
 }
 
-const THRESHOLD_PX = 4;
 const INTERACTIVE_TEXT = 'input, textarea, select, [contenteditable="true"]';
 
 interface Session {
@@ -89,7 +89,7 @@ export function useSortable(options: UseSortableOptions): Sortable {
     (event: ReactPointerEvent<HTMLElement>, id: string, source: DragSource): void => {
       const { ids, isMovable, disabled } = latest.current;
       if (disabled || (isMovable && !isMovable(id)) || session.current) return;
-      const mode = event.pointerType === 'touch' || event.pointerType === 'pen' ? 'touch' : 'mouse';
+      const mode = pointerModeOf(event);
       if (mode === 'mouse' && event.button !== 0) return;
       if (source === 'row' && mode !== 'mouse') return;
       if (source === 'row' && (event.target as HTMLElement).closest(INTERACTIVE_TEXT)) return;
@@ -130,7 +130,7 @@ export function useSortable(options: UseSortableOptions): Sortable {
         if (current.pointerId !== undefined && move.pointerId !== undefined && move.pointerId !== current.pointerId) return;
         const dy = move.clientY - current.startY;
         if (!current.active) {
-          if (Math.abs(dy) < THRESHOLD_PX && Math.abs(move.clientX - current.startX) < THRESHOLD_PX) return;
+          if (Math.abs(dy) < DRAG_THRESHOLD_PX && Math.abs(move.clientX - current.startX) < DRAG_THRESHOLD_PX) return;
           current.active = true;
           measure();
         }
@@ -148,13 +148,7 @@ export function useSortable(options: UseSortableOptions): Sortable {
         const target = current.toIndex;
         stop();
         if (!wasActive) return;
-        // Le clic synthétique qui suit un glisser ne doit pas ouvrir la fiche.
-        const swallow = (click: Event): void => {
-          click.stopPropagation();
-          click.preventDefault();
-        };
-        window.addEventListener('click', swallow, { capture: true, once: true });
-        window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+        swallowClickAfterDrag();
         if (target !== current.startIndex) latest.current.onMove(id, target);
       };
 
@@ -165,16 +159,12 @@ export function useSortable(options: UseSortableOptions): Sortable {
         }
       };
 
-      window.addEventListener('pointermove', onMove);
-      window.addEventListener('pointerup', finish);
-      window.addEventListener('pointercancel', stop);
-      window.addEventListener('keydown', onKey, true);
-      cleanup.current = () => {
-        window.removeEventListener('pointermove', onMove);
-        window.removeEventListener('pointerup', finish);
-        window.removeEventListener('pointercancel', stop);
-        window.removeEventListener('keydown', onKey, true);
-      };
+      const windowListeners = createWindowListeners();
+      windowListeners.listen('pointermove', onMove);
+      windowListeners.listen('pointerup', finish);
+      windowListeners.listen('pointercancel', stop);
+      windowListeners.listen('keydown', onKey, true);
+      cleanup.current = windowListeners.removeAll;
     },
     [stop],
   );

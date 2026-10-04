@@ -6,6 +6,7 @@ import type { Space } from '../../domain/model';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatDayAria, formatMonthTitle, weekdayInitials } from '../../i18n/format';
+import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { Icon, spaceTextColor } from '../../ui';
 
 export interface EventsMonthGridProps {
@@ -32,7 +33,7 @@ function dotColor(dot: DayDot, spaces: readonly Space[]): string {
  * par espace et par jour concerné, aujourd'hui sur fond foncé. Toucher un jour le choisit : la liste défile jusqu'à lui (critère 8).
  */
 export function EventsMonthGrid({ year, month, today, spaces, dots, selected, onSelect, onMonthChange }: EventsMonthGridProps) {
-  const cells = monthGrid(year, month);
+  const cells = monthGrid(year, month, getFirstWeekday());
   const initials = weekdayInitials();
   return (
     <section className="ct-events-grid" aria-label={t('events.calendarLabel')}>

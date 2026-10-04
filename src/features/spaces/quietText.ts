@@ -2,6 +2,7 @@ import type { QuietHours } from '../../domain/model';
 import { describeQuietHours, type QuietSummaryPart } from '../../domain/quietHours';
 import type { Weekday } from '../../domain/types';
 import { t } from '../../i18n';
+import { formatTime } from '../../i18n/format';
 import { weekdayName } from '../../i18n/formatRoutine';
 
 const days = (weekdays: readonly Weekday[]): string => weekdays.map((day) => weekdayName(day, 'short')).join(', ');
@@ -9,13 +10,13 @@ const days = (weekdays: readonly Weekday[]): string => weekdays.map((day) => wee
 function partText(part: QuietSummaryPart): string {
   switch (part.kind) {
     case 'every-day':
-      return t('spaces.quietEveryDay', { from: part.from, to: part.to });
+      return t('spaces.quietEveryDay', { from: formatTime(part.from), to: formatTime(part.to) });
     case 'weekend-all-day':
       return t('spaces.quietWeekend');
     case 'all-day':
       return t('spaces.quietAllDay', { days: days(part.weekdays) });
     case 'range':
-      return t('spaces.quietRange', { days: days(part.weekdays), from: part.from, to: part.to });
+      return t('spaces.quietRange', { days: days(part.weekdays), from: formatTime(part.from), to: formatTime(part.to) });
   }
 }
 

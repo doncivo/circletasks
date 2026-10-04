@@ -7,7 +7,7 @@ import { canHaveReminders, sortReminderOffsets, toggleReminderOffset } from '../
 import { choiceOfTask, patchFromDateChoice } from '../../domain/taskDetailEdit';
 import type { GoalId, LocalDate } from '../../domain/types';
 import { t, tDynamic } from '../../i18n';
-import { formatDetailDate } from '../../i18n/format';
+import { formatDetailDate, formatTime } from '../../i18n/format';
 import { DateEditor, Icon, TextField, spaceTextColor, type Layout } from '../../ui';
 import { useAppStore } from '../app/appStore';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
@@ -113,7 +113,7 @@ function TimeValue({ task, onPatch, cancelInlineRef }: InlineProps) {
   const [draft, setDraft] = useState('');
   const [invalid, setInvalid] = useState(false);
   useInlineCancel(cancelInlineRef, editing, () => setEditing(false));
-  const text = task.time ?? t('detail.noTime');
+  const text = task.time ? formatTime(task.time) : t('detail.noTime');
 
   if (!editing) {
     // Sans date, l'heure n'a pas de sens (invariant T-02) : texte seul.
@@ -124,7 +124,7 @@ function TimeValue({ task, onPatch, cancelInlineRef }: InlineProps) {
         className="ct-task-detail__valueButton"
         aria-label={`${t('detail.timeEditLabel')} : ${text}`}
         onClick={() => {
-          setDraft(task.time ?? '');
+          setDraft(task.time ? formatTime(task.time) : '');
           setInvalid(false);
           setEditing(true);
         }}
@@ -266,7 +266,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
     const date = dateValueText(task, today, false);
     return (
       <div className="ct-task-detail__fields">
-        <DetailRow label={t('detail.dateRow')}>{task.time ? `${date} · ${task.time}` : date}</DetailRow>
+        <DetailRow label={t('detail.dateRow')}>{task.time ? `${date} · ${formatTime(task.time)}` : date}</DetailRow>
         {repeat}
         <DetailRow label={t('detail.remindersRow')}>
           <ReminderChips reminders={reminders} active={canHaveReminders(task)} />

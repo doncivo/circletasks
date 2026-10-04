@@ -6,6 +6,7 @@ import { externalEventsByDay } from '../../domain/externalEvents';
 import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
 import { detectTimeZone } from '../../platform';
 import { t } from '../../i18n';
+import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { sourceNames } from '../calendars/sourceNames';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
@@ -67,14 +68,16 @@ export function WeekScreen() {
 
   // Jour courant de l'app (T-06) : suit le passage de minuit.
   const today: LocalDate = appDay ?? todayLocal(container.clock);
-  // Semaine affichée : celle de la route, ou la semaine courante (lundi premier jour).
-  const weekStart: LocalDate = route.tab === 'week' && route.weekStart ? route.weekStart : weekStartOf(today);
+  // Semaine affichée : celle de la route, ou la semaine courante ; premier jour réglé (P-03, lundi par défaut). Une semaine mémorisée
+  // avant un changement de réglage est réalignée sur le nouveau premier jour.
+  const firstWeekday = getFirstWeekday();
+  const weekStart: LocalDate = weekStartOf(route.tab === 'week' && route.weekStart ? route.weekStart : today, firstWeekday);
 
   // S-06 : panneau « Un jour » à droite de la grille (PC) ; l'état ouvert / fermé vit dans la route, donc conservé pendant la session.
   const somedayOpen = layout === 'pc' && route.tab === 'week' && route.somedayPanel;
   const toggleSomeday = (): void => navigate({ tab: 'week', weekStart: route.tab === 'week' ? route.weekStart : null, somedayPanel: !somedayOpen });
 
-  const currentWeekStart = weekStartOf(today);
+  const currentWeekStart = weekStartOf(today, firstWeekday);
   const isCurrentWeek = weekStart === currentWeekStart;
 
   // S-03 : changer de semaine = naviguer vers la route (la dernière semaine consultée est conservée par onglet pendant la session ;
@@ -216,7 +219,7 @@ export function WeekScreen() {
       )}
       {/* Changement de semaine annoncé aux lecteurs d'écran (S-03 critère 8) : « Semaine 40, 28 sept. – 4 oct. ». */}
       <div className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
-        {t('week.announce', { number: isoWeekOf(weekStart).week, range: formatWeekRange(weekStart, addDays(weekStart, 6), 'short') })}
+        {t('week.announce', { number: isoWeekOf(addDays(weekStart, 3)).week, range: formatWeekRange(weekStart, addDays(weekStart, 6), 'short') })}
       </div>
       {/* Annonce aux lecteurs d'écran : chargement (A-09), réordonnancement (A-02) ; ni role="status" (réservé au bandeau « Annuler »). */}
       <div key={moves.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">

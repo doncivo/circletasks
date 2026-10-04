@@ -21,6 +21,7 @@ describe('bornes de période (RC-02 critère 5)', () => {
   it('Cette semaine : du lundi au dimanche', () => {
     expect(periodRange({ kind: 'week' }, friday)).toEqual({ from: '2026-09-28', to: '2026-10-04' });
     expect(periodRange({ kind: 'week' }, d('2026-10-04'))).toEqual({ from: '2026-09-28', to: '2026-10-04' });
+    expect(periodRange({ kind: 'week' }, friday, 'sunday')).toEqual({ from: '2026-09-27', to: '2026-10-03' });
     expect(periodRange({ kind: 'week' }, d('2026-10-05'))).toEqual({ from: '2026-10-05', to: '2026-10-11' });
   });
 

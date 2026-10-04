@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { displayTitle, externalEventSpan, sourceNameOf } from '../../domain/externalEvents';
 import { t } from '../../i18n';
 import { sourceNames } from '../calendars/sourceNames';
-import { formatDetailDate } from '../../i18n/format';
+import { formatDetailDate, formatTime } from '../../i18n/format';
 import { Button, DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
 import { detectTimeZone } from '../../platform';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -64,8 +64,8 @@ export function ExternalEventDetail() {
               ? formatDetailDate(span.firstDay)
               : t('week.eventDateRange', { from: formatDetailDate(span.firstDay, false), to: formatDetailDate(span.lastDay) })}
           </DetailRow>
-          <DetailRow label={t('week.eventStart')}>{span.allDay || span.startTime === null ? t('today.eventAllDay') : span.startTime}</DetailRow>
-          {!span.allDay && span.endTime !== null && <DetailRow label={t('week.eventEnd')}>{span.endTime}</DetailRow>}
+          <DetailRow label={t('week.eventStart')}>{span.allDay || span.startTime === null ? t('today.eventAllDay') : formatTime(span.startTime)}</DetailRow>
+          {!span.allDay && span.endTime !== null && <DetailRow label={t('week.eventEnd')}>{formatTime(span.endTime)}</DetailRow>}
         </>
       )}
       {source !== '' && <DetailRow label={t('week.eventCalendar')}>{source}</DetailRow>}

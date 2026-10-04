@@ -1,18 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { addDays } from '../domain/localDate';
 import type { DateChoice } from '../domain/dateInput';
-import {
-  WHEEL_DAYS_BEFORE,
-  WHEEL_HOURS,
-  WHEEL_MINUTES,
-  timeToWheel,
-  wheelDayIndex,
-  wheelDays,
-  wheelToTime,
-} from '../domain/wheelChoices';
+import { WHEEL_DAYS_BEFORE, wheelDayIndex, wheelDays } from '../domain/wheelChoices';
 import type { LocalDate } from '../domain/types';
-import { getLocale, t } from '../i18n';
+import { t } from '../i18n';
 import { formatWheelDay } from '../i18n/format';
+import { TimeWheelColumns } from './TimeWheelColumns';
 import { WheelPicker, type WheelItem } from './WheelPicker';
 import './DateWheels.css';
 
@@ -31,10 +24,6 @@ export interface DateWheelsProps {
   className?: string;
 }
 
-const pad2 = (n: number): string => String(n).padStart(2, '0');
-/** Catégorie de pluriel de la langue courante (français : 0 et 1 au singulier), pour les valeurs annoncées. */
-const plural = (n: number): Intl.LDMLPluralRule => new Intl.PluralRules(getLocale()).select(n);
-
 /**
  * Sélecteur de date iPhone (T-14, Ajout.html) : puces « Aujourd'hui » / « Demain » / « Un jour » et trois roues
  * (jours, heures, minutes par pas de 5). La roue des jours part de « Aujourd'hui » et propose jours passés et
@@ -51,26 +40,9 @@ export function DateWheels({ value, today, onChange, allowSomeday = true, someda
     () => days.map((day) => ({ label: day === today ? t('datePicker.today') : formatWheelDay(day) })),
     [days, today],
   );
-  const hourItems = useMemo<WheelItem[]>(
-    () => [
-      { label: t('datePicker.noHour'), spoken: t('datePicker.noHourSpoken') },
-      ...WHEEL_HOURS.map((hour) => ({ label: pad2(hour), spoken: t(plural(hour) === 'one' ? 'datePicker.hourSpokenOne' : 'datePicker.hourSpoken', { hour }) })),
-    ],
-    [],
-  );
-  const minuteItems = useMemo<WheelItem[]>(
-    () => WHEEL_MINUTES.map((minute) => ({ label: pad2(minute), spoken: t(plural(minute) === 'one' ? 'datePicker.minuteSpokenOne' : 'datePicker.minuteSpoken', { minute }) })),
-    [],
-  );
 
   const someday = value.date === null;
-  const wheel = timeToWheel(value.time);
-  // Minutes mémorisées quand on repasse sur « — » puis qu'on rechoisit une heure.
-  const [rememberedMinute, setRememberedMinute] = useState(wheel?.minute ?? 0);
-  const minute = wheel?.minute ?? rememberedMinute;
   const dayIndex = value.date === null ? WHEEL_DAYS_BEFORE : wheelDayIndex(today, value.date);
-  const hourIndex = wheel === null ? 0 : wheel.hour + 1;
-  const minuteIndex = Math.max(WHEEL_MINUTES.indexOf(minute), 0);
   const tomorrow = addDays(today, 1);
 
   function setDate(date: LocalDate): void {
@@ -123,30 +95,14 @@ export function DateWheels({ value, today, onChange, allowSomeday = true, someda
           className="ct-date-wheels__day"
         />
         {showTime && (
-          <>
-            <WheelPicker
-              label={t('datePicker.wheelHour')}
-              items={hourItems}
-              index={hourIndex}
-              disabled={someday}
-              pageStep={6}
-              onChange={(i) => onChange({ date: value.date, time: wheelToTime(i === 0 ? null : i - 1, minute) })}
-              className="ct-date-wheels__hour"
-            />
-            <WheelPicker
-              label={t('datePicker.wheelMinute')}
-              items={minuteItems}
-              index={minuteIndex}
-              disabled={someday || wheel === null}
-              pageStep={3}
-              onChange={(i) => {
-                const next = WHEEL_MINUTES[i] ?? 0;
-                setRememberedMinute(next);
-                onChange({ date: value.date, time: wheelToTime(wheel === null ? null : wheel.hour, next) });
-              }}
-              className="ct-date-wheels__minute"
-            />
-          </>
+          <TimeWheelColumns
+            value={value.time}
+            disabled={someday}
+            onChange={(time) => onChange({ date: value.date, time })}
+            hourClassName="ct-date-wheels__hour"
+            minuteClassName="ct-date-wheels__minute"
+            meridiemClassName="ct-date-wheels__minute"
+          />
         )}
       </div>
       {allowSomeday && somedayDisabledHint && (

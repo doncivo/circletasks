@@ -1,10 +1,16 @@
 import { createStore } from 'zustand';
-import { defaultSetting } from '../../domain/model';
+import { defaultSetting, type ThemeChoice } from '../../domain/model';
 import { validateRecapSettings, type RecapSettings, type RecapSettingsError } from '../../domain/recap';
 import type { PlainMessageKey } from '../../i18n';
+import { getFirstWeekday, getTimeFormat, setFormatPrefs } from '../../i18n/formatPrefs';
+import type { TimeFormat } from '../../domain/timeFormat';
+import type { FirstWeekday } from '../../domain/week';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { DEFAULT_TABS_CONFIG, type TabsConfig } from '../../domain/tabs';
+import { useTabsConfigStore } from '../app/tabsConfig';
 import { createSettingsUseCases } from './settingsUseCases';
+import { applyThemeEverywhere } from './theme';
 
 export type SettingsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -26,6 +32,27 @@ export interface SettingsState {
   /** N-04 : récapitulatifs du matin et du soir (`reminders.morningRecap` / `eveningRecap`, partagés ; 07:30 et 21:00 actifs par défaut, QB-09). */
   readonly recaps: RecapSettings;
   readonly errorKey: PlainMessageKey | null;
+  // --- M12 apparence et formats (P-03) ---
+  /** Premier jour de la semaine affichée (`general.firstWeekday`, partagé ; défaut : lundi). */
+  readonly firstWeekday: FirstWeekday;
+  /** Format des heures (`general.timeFormat`, partagé ; défaut : 24 h). */
+  readonly timeFormat: TimeFormat;
+  /** P-03 : applique aussitôt (affichage) puis enregistre ; en cas d'échec, revient à la valeur enregistrée. Ne rejette jamais. */
+  setFirstWeekday(value: FirstWeekday): Promise<void>;
+  setTimeFormat(value: TimeFormat): Promise<void>;
+  // --- fin M12 apparence et formats ---
+  // --- M12 thème (P-02) ---
+  /** Thème de cet appareil (`ui.theme`, local ; défaut : système). */
+  readonly theme: ThemeChoice;
+  /** P-02 : applique aussitôt (< 100 ms, sans rechargement) puis enregistre ; en cas d'échec, revient au thème enregistré. Ne rejette jamais. */
+  setTheme(value: ThemeChoice): Promise<void>;
+  // --- fin M12 thème ---
+  // --- M12 onglets (P-01) ---
+  /** P-01 : enregistre la disposition (appliquée aussitôt à la colonne) ; échec : retour à la disposition enregistrée. Ne rejette jamais. */
+  saveTabs(config: TabsConfig): Promise<void>;
+  /** P-01 critère 8 : remet l'ordre d'origine, tout affiché ; annulable 5 s (T-13). */
+  resetTabs(): Promise<void>;
+  // --- fin M12 onglets ---
   /**
    * N-04 : enregistre les récapitulatifs après validation (heures 24 h, soir après matin). Rend 'ok', l'erreur de validation (rien
    * n'est écrit) ou 'error' (écriture impossible). Aucune notification n'est planifiée (ordre 5, iPhone). Ne rejette jamais.
@@ -54,12 +81,80 @@ function createSettingsStore(container: AppContainer) {
     launchAtStartup: null,
     recaps: { morning: defaultSetting('reminders.morningRecap'), evening: defaultSetting('reminders.eveningRecap') },
     errorKey: null,
+    // --- M12 apparence et formats (P-03) ---
+    firstWeekday: getFirstWeekday(),
+    timeFormat: getTimeFormat(),
+    async setFirstWeekday(value) {
+      const previous = get().firstWeekday;
+      set({ firstWeekday: value, errorKey: null });
+      setFormatPrefs({ firstWeekday: value });
+      try {
+        await useCases.setFirstWeekday(value);
+      } catch {
+        set({ firstWeekday: previous, errorKey: 'settings.saveError' });
+        setFormatPrefs({ firstWeekday: previous });
+      }
+    },
+    async setTimeFormat(value) {
+      const previous = get().timeFormat;
+      set({ timeFormat: value, errorKey: null });
+      setFormatPrefs({ timeFormat: value });
+      try {
+        await useCases.setTimeFormat(value);
+      } catch {
+        set({ timeFormat: previous, errorKey: 'settings.saveError' });
+        setFormatPrefs({ timeFormat: previous });
+      }
+    },
+    // --- fin M12 apparence et formats ---
+    // --- M12 thème (P-02) ---
+    theme: 'system',
+    async setTheme(value) {
+      const previous = get().theme;
+      set({ theme: value, errorKey: null });
+      applyThemeEverywhere(value);
+      try {
+        await useCases.setTheme(value);
+      } catch {
+        set({ theme: previous, errorKey: 'settings.saveError' });
+        applyThemeEverywhere(previous);
+      }
+    },
+    // --- fin M12 thème ---
+    // --- M12 onglets (P-01) ---
+    async saveTabs(config) {
+      const previous = useTabsConfigStore.getState().config;
+      set({ errorKey: null });
+      useTabsConfigStore.getState().setConfig(config);
+      try {
+        await useCases.saveTabs(config);
+      } catch {
+        useTabsConfigStore.getState().setConfig(previous);
+        set({ errorKey: 'settings.saveError' });
+      }
+    },
+    async resetTabs() {
+      const previous = useTabsConfigStore.getState().config;
+      await get().saveTabs(DEFAULT_TABS_CONFIG);
+      if (useTabsConfigStore.getState().config !== DEFAULT_TABS_CONFIG) return;
+      container.undo.push({
+        kind: 'tabs',
+        count: 1,
+        async undo() {
+          useTabsConfigStore.getState().setConfig(previous);
+          await useCases.saveTabs(previous).catch(() => undefined);
+          return 'undone';
+        },
+      });
+    },
+    // --- fin M12 onglets ---
 
     async load() {
       set({ status: 'loading', errorKey: null });
       try {
-        const { carryOverUndone, hideRoutines, recaps } = await useCases.load();
-        set({ carryOverUndone, hideRoutines, recaps, status: 'ready' });
+        const [{ carryOverUndone, hideRoutines, recaps }, formats, theme] = await Promise.all([useCases.load(), useCases.loadFormats(), useCases.loadTheme()]);
+        set({ carryOverUndone, hideRoutines, recaps, ...formats, theme, status: 'ready' });
+        setFormatPrefs(formats);
       } catch {
         set({ status: 'error', errorKey: 'settings.loadError' });
         return;

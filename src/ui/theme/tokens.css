@@ -123,6 +123,8 @@
   --ct-color-icon-purple: #5b43a8;
   --ct-color-icon-skyblue: #2a7ab8;
   --ct-color-icon-amber: #b9770e;
+  /* Pastille « Tout » active (Main.html : encre ; Main-Sombre.html : lavande #C9BEE6). */
+  --ct-color-pill-all: var(--ct-color-text);
 }
 
 /* Thème sombre, dérivé de Main-Sombre.html : appliqué automatiquement si le système
@@ -146,6 +148,7 @@
     --ct-color-goal: #8db8ec;
     --ct-color-someday: #c9bee6;
     --ct-color-someday-bg: #2a2242;
+    --ct-color-pill-all: #c9bee6;
     --ct-color-achieved-bg: #1f3a2d;
     --ct-color-achieved-text: #9fd3b4;
     --ct-color-missed-bg: #4a2420;
@@ -188,6 +191,7 @@
   --ct-color-goal: #8db8ec;
   --ct-color-someday: #c9bee6;
   --ct-color-someday-bg: #2a2242;
+  --ct-color-pill-all: #c9bee6;
   --ct-color-achieved-bg: #1f3a2d;
   --ct-color-achieved-text: #9fd3b4;
   --ct-color-missed-bg: #4a2420;

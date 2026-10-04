@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefCallback } from 'react';
+import { DRAG_THRESHOLD_PX, createWindowListeners, pointerModeOf, swallowClickAfterDrag } from './dragPrimitive';
 
 /**
  * Glisser-déposer d'éléments entre zones (S-02 : cartes de la Semaine d'un jour à l'autre, S-06 : depuis « Un jour »), sans
@@ -47,7 +48,6 @@ export interface ZoneDrag {
   readonly attachGhost: RefCallback<HTMLElement>;
 }
 
-const THRESHOLD_PX = 4;
 /** Déplacement toléré pendant l'appui long avant d'y voir un défilement (et d'abandonner la saisie). */
 const LONG_PRESS_SLOP_PX = 10;
 const DEFAULT_LONG_PRESS_MS = 400;
@@ -100,7 +100,7 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
   const begin = useCallback((event: ReactPointerEvent<HTMLElement>, id: string): void => {
     const { isMovable, disabled, longPressMs } = latest.current;
     if (disabled || cleanup.current || !isMovable(id)) return;
-    const mode = event.pointerType === 'touch' || event.pointerType === 'pen' ? 'touch' : 'mouse';
+    const mode = pointerModeOf(event);
     if (mode === 'mouse' && event.button !== 0) return;
     if ((event.target as HTMLElement).closest(IGNORED_TARGETS)) return;
 
@@ -114,11 +114,8 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
     let hovered: { zone: string; index: number } | null = null;
     let frame = 0;
     let longPress = 0;
-    const listeners: (() => void)[] = [];
-    const listen = <K extends keyof WindowEventMap>(type: K, handler: (event: WindowEventMap[K]) => void, capture = false): void => {
-      window.addEventListener(type, handler, capture);
-      listeners.push(() => window.removeEventListener(type, handler, capture));
-    };
+    const windowListeners = createWindowListeners();
+    const listen = windowListeners.listen;
 
     const place = (): void => {
       if (ghost.current) ghost.current.style.transform = `translate(${String(x + 12)}px, ${String(y + 12)}px) rotate(-3deg)`;
@@ -160,7 +157,7 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
     const stop = (): void => {
       window.clearTimeout(longPress);
       cancelAnimationFrame(frame);
-      for (const off of listeners) off();
+      windowListeners.removeAll();
       cleanup.current = null;
       setDrag(null);
     };
@@ -173,7 +170,7 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
       if (started) return;
       const moved = Math.hypot(x - startX, y - startY);
       if (mode === 'mouse') {
-        if (moved >= THRESHOLD_PX) start();
+        if (moved >= DRAG_THRESHOLD_PX) start();
       } else if (moved > LONG_PRESS_SLOP_PX) {
         stop(); // le doigt a bougé avant la fin de l'appui : c'est un défilement, pas une saisie
       }
@@ -187,13 +184,7 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
       const target = wasStarted ? (hitTest(x, y, id) ?? hovered) : null;
       stop();
       if (!wasStarted) return;
-      // Le clic synthétique qui suit un glisser ne doit pas ouvrir la fiche.
-      const swallow = (click: Event): void => {
-        click.stopPropagation();
-        click.preventDefault();
-      };
-      window.addEventListener('click', swallow, { capture: true, once: true });
-      window.setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 0);
+      swallowClickAfterDrag();
       if (target) latest.current.onDrop(id, target.zone, target.index);
     };
 
@@ -220,11 +211,11 @@ export function useZoneDrag(options: UseZoneDragOptions): ZoneDrag {
         if (started && touch.cancelable) touch.preventDefault();
       };
       window.addEventListener('touchmove', block, { passive: false });
-      listeners.push(() => window.removeEventListener('touchmove', block));
+      windowListeners.onRemove(() => window.removeEventListener('touchmove', block));
       // Pas de menu contextuel ni de sélection de texte déclenchés par l'appui long.
       const noMenu = (menu: Event): void => menu.preventDefault();
       origin.addEventListener('contextmenu', noMenu);
-      listeners.push(() => origin.removeEventListener('contextmenu', noMenu));
+      windowListeners.onRemove(() => origin.removeEventListener('contextmenu', noMenu));
       longPress = window.setTimeout(start, longPressMs ?? DEFAULT_LONG_PRESS_MS);
     }
   }, []);

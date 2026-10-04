@@ -1,6 +1,7 @@
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { searchFr } from './fr.search';
+import { appearanceFr } from './fr.appearance';
 import { spacesFr } from './fr.spaces';
 import { calendarsFr } from './fr.calendars';
 import { routinesFr } from './fr.routines';
@@ -37,6 +38,7 @@ export const fr = {
     },
   },
   spaces: spacesFr,
+  appearance: appearanceFr,
   calendars: calendarsFr,
   tasks: {
     newTask: 'Nouvelle tâche',
@@ -261,6 +263,7 @@ export const fr = {
     wheelDay: 'Jour',
     wheelHour: 'Heures',
     wheelMinute: 'Minutes',
+    wheelMeridiem: 'Matin ou après-midi',
     noHour: '—',
     noHourSpoken: 'Sans heure',
     hourSpoken: '{hour} heures',

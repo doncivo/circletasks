@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { externalEventSpan } from '../../domain/externalEvents';
 import type { ExternalEvent, Task } from '../../domain/model';
 import { weekStartOf } from '../../domain/week';
+import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { t } from '../../i18n';
 import { detectTimeZone } from '../../platform';
 import { useAppContainer } from '../app/AppContainerContext';
@@ -49,7 +50,7 @@ export function LinkedEventRow({ task }: { readonly task: Pick<Task, 'externalEv
   const title = displayTitle(event.title, t('calendars.untitled'));
   const open = (): void => {
     const span = externalEventSpan(event, timeZone);
-    if (span) navigate({ tab: 'week', weekStart: weekStartOf(span.firstDay), somedayPanel: false });
+    if (span) navigate({ tab: 'week', weekStart: weekStartOf(span.firstDay, getFirstWeekday()), somedayPanel: false });
     openDetail({ type: 'externalEvent', id: event.id });
   };
   return (

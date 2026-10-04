@@ -1,5 +1,6 @@
 import { Undo2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
+import { formatTime } from '../../i18n/format';
 import { parseTimeInput } from '../../domain/dateInput';
 import type { RecapKind, RecapSetting, RecapSettings } from '../../domain/recap';
 import { t } from '../../i18n';
@@ -16,7 +17,7 @@ interface Draft {
 
 type RecapErrorKey = 'reminders.recapOrderError' | 'reminders.recapTimeInvalid' | 'reminders.recapSaveError';
 
-const draftOf = (setting: RecapSetting): Draft => ({ enabled: setting.enabled, time: setting.time });
+const draftOf = (setting: RecapSetting): Draft => ({ enabled: setting.enabled, time: formatTime(setting.time) });
 
 /**
  * Écran « Récapitulatifs » (N-04), ouvert depuis Réglages › RAPPELS : « Matin » et « Soir », chacun avec un interrupteur et une heure

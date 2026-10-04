@@ -3,6 +3,7 @@ import type { ChecklistSummary, RecurrenceFields, Routine, Space, Task } from '.
 import type { TodayEventEntry } from '../../domain/todayList';
 import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
+import { formatTime } from '../../i18n/format';
 import { Checkbox, Icon, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import type { CountdownTag } from '../events/countdownText';
@@ -50,7 +51,7 @@ export function WeekTaskItem({ task, layout, spaces, showSpace, rule, opened, on
     return (
       <div className="ct-week-item" data-layout="mobile" data-done={done} data-opened={opened || undefined}>
         {checkbox}
-        {task.time && <span className="ct-week-item__time">{task.time}</span>}
+        {task.time && <span className="ct-week-item__time">{formatTime(task.time)}</span>}
         {title}
         {task.goalId && <TaskGoalMark />}
       </div>
@@ -106,7 +107,7 @@ export function WeekRoutineItem({ routine, time, done, layout, spaces, showSpace
     return (
       <div className="ct-week-item" data-layout="mobile" data-done={done} data-kind="routine">
         {checkbox}
-        {time && <span className="ct-week-item__time">{time}</span>}
+        {time && <span className="ct-week-item__time">{formatTime(time)}</span>}
         {title}
       </div>
     );

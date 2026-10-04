@@ -54,7 +54,7 @@ export function SpacePills({ items, value, onChange, className }: SpacePillsProp
         className="ct-space-pills__pill"
         style={
           value === 'all'
-            ? { background: 'var(--ct-color-text)', borderColor: 'var(--ct-color-text)', color: 'var(--ct-color-tab-active-bg)' }
+            ? { background: 'var(--ct-color-pill-all)', borderColor: 'var(--ct-color-pill-all)', color: 'var(--ct-color-tab-active-bg)' }
             : { borderColor: 'var(--ct-color-text)', color: 'var(--ct-color-text)' }
         }
       >

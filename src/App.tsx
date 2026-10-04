@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp } from './features/app/bootstrap';
 import type { AppContainer } from './features/app/container';
-import { TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
+import { resolveTabs } from './domain/tabs';
+import { useTabsConfigStore } from './features/app/tabsConfig';
+import { TAB_IDS, TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
 import { toKeyInput } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
@@ -18,7 +20,7 @@ import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { SettingsScreen } from './features/settings';
+import { AppearanceScreen, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
@@ -26,6 +28,7 @@ import { DoneTasksScreen, ReportScreen, TaskDetail, TrashScreen } from './featur
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
 import { t } from './i18n';
+import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
 
@@ -40,9 +43,7 @@ registerExternalEventsSource();
 // Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
 registerGoalsSource();
 
-const TAB_ITEMS = TABS.filter((tab) => tab.id !== 'settings');
-
-function requireTab(id: TabId): TabDefinition {
+function requireTab(id: string): TabDefinition {
   const found = TABS.find((tab) => tab.id === id);
   if (!found) throw new Error(`Onglet manquant dans TABS : ${id}`);
   return found;
@@ -56,10 +57,15 @@ const SETTINGS_ITEM = requireTab('settings');
  * (aucun écran inventé) ; `route.tab` reste la seule source de vérité.
  */
 function AppShellContent() {
+  // P-03 : un changement de format d'heure ou de premier jour réaffiche aussitôt toute la coquille (sans redémarrage).
+  useSyncExternalStore(subscribeFormatPrefs, formatPrefsVersion);
   const container = useAppContainer();
   const route = useNavigationStore((s) => s.route);
   const goToTab = useNavigationStore((s) => s.goToTab);
   const layout = useLayout();
+  // P-01 : onglets affichés selon la disposition de l'appareil ; un onglet masqué reste affiché tant qu'il est actif.
+  const tabsConfig = useTabsConfigStore((s) => s.config);
+  const railItems = resolveTabs(tabsConfig, TAB_IDS, route.tab).rail.map(requireTab);
 
   // A-09 : état du réseau (« Hors ligne »).
   useEffect(() => startNetworkStatus(), []);
@@ -67,6 +73,9 @@ function AppShellContent() {
   // ES-03 : Ctrl+1 / Ctrl+2 / Ctrl+3 (Pro / Perso / Tout) et mémorisation du filtre de cet appareil.
   useEffect(() => registerSpaceShortcuts(container.shortcuts), [container]);
   useEffect(() => persistSpaceFilter(container), [container]);
+
+  // P-02 : barre de titre alignée sur le thème (PC) ; l'interface suit déjà le thème (data-theme / prefers-color-scheme).
+  useEffect(() => startThemeSync(container), [container]);
 
   // A-04 : Alt+1 à Alt+6 (registre de raccourcis, actifs même dans un champ de saisie).
   useEffect(() => registerTabShortcuts(container.shortcuts), [container]);
@@ -80,7 +89,7 @@ function AppShellContent() {
       detailOverlay={route.tab === 'week'}
       tabRail={
         <TabRail
-          items={TAB_ITEMS}
+          items={railItems}
           settingsItem={SETTINGS_ITEM}
           activeId={route.tab}
           onSelect={(id) => goToTab(id as TabId)}
@@ -132,7 +141,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}
@@ -167,6 +176,8 @@ export function App() {
         }
         // Filtre Pro / Perso / Tout (ES-03) : dernier choix de cet appareil, restauré avant le premier rendu.
         await restoreSpaceFilter(created);
+        // Apparence (P-03) : premier jour et format d'heure lus avant le premier rendu.
+        await restoreAppearance(created);
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
         const started = startAppStartup(created);

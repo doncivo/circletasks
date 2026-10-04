@@ -9,6 +9,8 @@ import { HolidaysSummaryRow } from '../events';
 import { formatRecapSummary } from '../reminders';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
+import { formatAppearanceParts } from './AppearanceScreen';
+import { formatTabsSummary, useVisibleTabCount } from './TabsScreen';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
@@ -32,6 +34,11 @@ export function SettingsScreen() {
   const launchAtStartup = useFeatureStore(settingsStore, (s) => s.launchAtStartup);
   const setLaunchAtStartup = useFeatureStore(settingsStore, (s) => s.setLaunchAtStartup);
   const navigate = useNavigationStore((s) => s.navigate);
+  const firstWeekday = useFeatureStore(settingsStore, (s) => s.firstWeekday);
+  const timeFormat = useFeatureStore(settingsStore, (s) => s.timeFormat);
+  const theme = useFeatureStore(settingsStore, (s) => s.theme);
+  const visibleTabs = useVisibleTabCount();
+  const appearanceSummary = formatAppearanceParts(theme, firstWeekday, timeFormat).join(t('appearance.summarySeparator'));
 
   useEffect(() => {
     void load();
@@ -50,12 +57,32 @@ export function SettingsScreen() {
         </p>
       )}
       <h2 className="ct-settings__section">{t('settings.sectionGeneral')}</h2>
+      {/* --- M12 apparence et formats --- */}
+      <button
+        type="button"
+        className="ct-settings__row ct-settings__rowButton"
+        aria-label={`${t('appearance.row')} : ${appearanceSummary}`}
+        onClick={() => navigate({ tab: 'settings', screen: 'appearance' })}
+      >
+        <span>{t('appearance.row')}</span>
+        <span className="ct-settings__value">{appearanceSummary}</span>
+      </button>
       <div className="ct-settings__row">
         <span>{t('settings.timeZone')}</span>
         <span className="ct-settings__value">
           {timeZone ? t('settings.timeZoneAuto', { zone: timeZone }) : t('settings.timeZoneUnknown')}
         </span>
       </div>
+      <button
+        type="button"
+        className="ct-settings__row ct-settings__rowButton"
+        aria-label={`${t('appearance.tabsRow')} : ${formatTabsSummary(visibleTabs)}`}
+        onClick={() => navigate({ tab: 'settings', screen: 'tabs' })}
+      >
+        <span>{t('appearance.tabsRow')}</span>
+        <span className="ct-settings__value">{formatTabsSummary(visibleTabs)}</span>
+      </button>
+      {/* --- fin M12 apparence et formats --- */}
       {launchAtStartup !== null && (
         <div className="ct-settings__row">
           <span>{t('settings.launchAtStartup')}</span>

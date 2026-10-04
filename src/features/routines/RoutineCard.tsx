@@ -5,6 +5,7 @@ import { mondayOf, weekCounter, weekRounds, type DateInterval } from '../../doma
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
+import { formatTime } from '../../i18n/format';
 import { formatStreak, scheduleShort, weekdayName } from '../../i18n/formatRoutine';
 import { IconView, resolveIconRefColor, type Layout } from '../../ui';
 import './RoutineCard.css';
@@ -44,7 +45,7 @@ export function RoutineCard({ routine, spaces, done, pauses, today, layout, comp
   const spaceName = spaces.find((space) => space.id === routine.spaceId)?.name ?? null;
   // « série 12 jours » seulement si elle est en cours (R-04 critère 7).
   const streakText = streaks.current > 0 ? t('routines.streak.info', { value: formatStreak(streaks.current, streaks.unit) }) : null;
-  const info = [routine.time, spaceName, scheduleShort(routine), routine.paused ? t('routines.paused') : null, streakText].filter((part): part is string => Boolean(part));
+  const info = [routine.time ? formatTime(routine.time) : null, spaceName, scheduleShort(routine), routine.paused ? t('routines.paused') : null, streakText].filter((part): part is string => Boolean(part));
   const color = routine.icon ? resolveIconRefColor(routine.icon) : undefined;
 
   return (

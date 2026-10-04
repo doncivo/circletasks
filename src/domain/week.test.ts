@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Task } from './model';
 import { sortTasksForDay } from './taskSchedule';
 import { asEntityId, asLocalDate, asLocalTime, type SpaceId } from './types';
-import { addWeeks, buildWeek, isoWeekOf, rowIndexForDrop, weekDays, weekStartOf } from './week';
+import { addWeeks, buildWeek, firstWeekdayIso, isoWeekOf, rowIndexForDrop, weekDays, weekdayOrder, weekStartOf } from './week';
 
 const PRO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000001');
 const PERSO = asEntityId<SpaceId>('10000000-0000-4000-8000-000000000002');
@@ -152,5 +152,44 @@ describe('rowIndexForDrop (S-02 critère 10)', () => {
   it('une position absurde est ramenée dans la liste', () => {
     expect(rowIndexForDrop(list, 'a', 99)).toBe(3);
     expect(rowIndexForDrop(list, 'a', -5)).toBe(0);
+  });
+});
+
+describe('premier jour de semaine réglable (P-03 critères 1, 2 et 10)', () => {
+  it('lundi par défaut, samedi et dimanche au choix', () => {
+    // 2026-09-23 est un mercredi.
+    expect(weekStartOf(d('2026-09-23'))).toBe('2026-09-21');
+    expect(weekStartOf(d('2026-09-23'), 'monday')).toBe('2026-09-21');
+    expect(weekStartOf(d('2026-09-23'), 'sunday')).toBe('2026-09-20');
+    expect(weekStartOf(d('2026-09-23'), 'saturday')).toBe('2026-09-19');
+  });
+
+  it('un jour de départ reste lui-même le premier jour', () => {
+    expect(weekStartOf(d('2026-09-20'), 'sunday')).toBe('2026-09-20');
+    expect(weekStartOf(d('2026-09-19'), 'saturday')).toBe('2026-09-19');
+    expect(weekStartOf(d('2026-09-21'), 'monday')).toBe('2026-09-21');
+    expect(weekStartOf(d('2026-09-27'), 'sunday')).toBe('2026-09-27');
+    expect(weekStartOf(d('2026-09-26'), 'sunday')).toBe('2026-09-20');
+  });
+
+  it('traverse un changement d’année', () => {
+    expect(weekStartOf(d('2027-01-01'), 'sunday')).toBe('2026-12-27');
+    expect(weekStartOf(d('2027-01-01'), 'saturday')).toBe('2026-12-26');
+    expect(weekDays(weekStartOf(d('2027-01-01'), 'sunday')).at(-1)).toBe('2027-01-02');
+  });
+
+  it('compte sept jours la semaine du changement d’heure (29 mars 2026), quel que soit le départ', () => {
+    for (const first of ['monday', 'saturday', 'sunday'] as const) {
+      const start = weekStartOf(d('2026-03-29'), first);
+      expect(weekDays(start)).toHaveLength(7);
+      expect(weekDays(start)).toContain('2026-03-29');
+      expect(weekdayOrder(first)[0]).toBe(firstWeekdayIso(first));
+    }
+  });
+
+  it('ordre d’affichage des jours : dimanche, 1…6 pour une semaine du dimanche', () => {
+    expect(weekdayOrder('monday')).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(weekdayOrder('sunday')).toEqual([7, 1, 2, 3, 4, 5, 6]);
+    expect(weekdayOrder('saturday')).toEqual([6, 7, 1, 2, 3, 4, 5]);
   });
 });

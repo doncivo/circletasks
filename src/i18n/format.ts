@@ -1,4 +1,17 @@
+import { formatTime as formatDomainTime, formatTimeRange as formatDomainTimeRange } from '../domain/timeFormat';
+import { weekdayOrder } from '../domain/week';
+import { getFirstWeekday, getTimeFormat } from './formatPrefs';
 import { getLocale, t } from './index';
+
+/** P-03 : heure 'HH:mm' dans le format choisi (24 h : « 09:00 » ; 12 h : « 9:00 AM »). Seul point d'affichage d'une heure. */
+export function formatTime(time: string): string {
+  return formatDomainTime(time, getTimeFormat());
+}
+
+/** P-03 : plage d'heures « 09:00 – 10:30 » dans le format choisi. */
+export function formatTimeRange(start: string, end: string | null): string {
+  return formatDomainTimeRange(start, end, getTimeFormat());
+}
 
 /** Jour court lisible (« lun. 28 sept. »), selon la langue courante ; date civile, sans effet de fuseau. */
 export function formatDayLabel(isoDate: string): string {
@@ -50,10 +63,10 @@ export function formatMonthTitle(year: number, month: number): string {
   return capitalize(new Intl.DateTimeFormat(intlLocale(), { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date));
 }
 
-/** Initiales des jours, lundi en premier (« L M M J V S D »). */
+/** Initiales des jours dans l'ordre de la semaine réglée (P-03 ; lundi : « L M M J V S D »). */
 export function weekdayInitials(): string[] {
   const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'narrow', timeZone: 'UTC' });
-  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i)))); // 1er janv. 2024 : lundi
+  return weekdayOrder(getFirstWeekday()).map((iso) => format.format(new Date(Date.UTC(2024, 0, iso)))); // 1er janv. 2024 : lundi
 }
 
 /** Nom accessible d'une case du calendrier (« 25 septembre »). */
@@ -61,10 +74,15 @@ export function formatDayAria(isoDate: string): string {
   return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(utcDate(isoDate));
 }
 
-/** Noms complets des jours, lundi en premier (« lundi »…), pour les en-têtes de colonne du calendrier. */
+/** Noms complets des jours dans l'ordre de la semaine réglée (« lundi »…), pour les en-têtes de colonne du calendrier. */
 export function weekdayNamesLong(): string[] {
   const format = new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' });
-  return Array.from({ length: 7 }, (_, i) => format.format(new Date(Date.UTC(2024, 0, 1 + i))));
+  return weekdayOrder(getFirstWeekday()).map((iso) => format.format(new Date(Date.UTC(2024, 0, iso))));
+}
+
+/** Nom du premier jour de semaine donné (« lundi », « samedi », « dimanche »), pour l'écran Apparence et formats. */
+export function weekdayNameOf(iso: 1 | 2 | 3 | 4 | 5 | 6 | 7): string {
+  return new Intl.DateTimeFormat(intlLocale(), { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2024, 0, iso)));
 }
 
 /**
@@ -102,7 +120,7 @@ export function formatStamp(isoInstant: string, nowMs: number): string {
   const now = new Date(nowMs);
   const dayStart = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((dayStart(now) - dayStart(then)) / 86_400_000);
-  const time = `${pad2(then.getHours())}:${pad2(then.getMinutes())}`;
+  const time = formatTime(`${pad2(then.getHours())}:${pad2(then.getMinutes())}`);
   if (days === 0) return t('detail.stampToday', { time });
   if (days === 1) return t('detail.stampYesterday', { time });
   const date = new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'short', ...(then.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }) }).format(then);

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { formatTime } from '../i18n/format';
 import './ListRow.css';
 
 export interface ListRowProps {
@@ -71,7 +72,7 @@ export function ListRow({ title, subtitle, icon, trailing, leading, done, select
         {!compact && !inlineSubtitle && subtitle !== undefined && <span className="ct-list-row__subtitle">{subtitle}</span>}
       </div>
       {!compact && inlineSubtitle && subtitle !== undefined && <span className="ct-list-row__meta">{subtitle}</span>}
-      {compact && time && <span className="ct-list-row__time">{time}</span>}
+      {compact && time && <span className="ct-list-row__time">{formatTime(time)}</span>}
       {!compact && icon}
       {trailing}
     </div>

@@ -10,6 +10,7 @@ import { UndoToast } from '../app/UndoToast';
 import { useAppStore } from '../app/appStore';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
+import { setFormatPrefs } from '../../i18n/formatPrefs';
 import { createTaskUseCases } from './createTaskUseCases';
 import { TaskDetail } from './TaskDetail';
 
@@ -146,6 +147,26 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       expect((await stored(task.id))?.title).toBe('Envoyer la facture');
       fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
       await waitFor(() => expect(screen.queryByRole('complementary')).toBeNull());
+    });
+
+    it('P-03 : en 12 h la fiche affiche « 9:00 AM », accepte « 15h30 » et « 12:00 am », et stocke toujours en 24 h (critères 6 et 8)', async () => {
+      setFormatPrefs({ timeFormat: '12h' });
+      try {
+        const task = await open();
+        fireEvent.click(within(panel()).getByRole('button', { name: 'Heure : 9:00 AM' }));
+        const field = screen.getByLabelText('Heure');
+        expect(field).toHaveValue('9:00 AM');
+        fireEvent.change(field, { target: { value: '15h30' } });
+        fireEvent.submit(field.closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(task.id))?.time).toBe('15:30'));
+        fireEvent.click(await within(panel()).findByRole('button', { name: 'Heure : 3:30 PM' }));
+        fireEvent.change(screen.getByLabelText('Heure'), { target: { value: '12:00 am' } });
+        fireEvent.submit(screen.getByLabelText('Heure').closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(task.id))?.time).toBe('00:00'));
+        expect(await within(panel()).findByRole('button', { name: 'Heure : 12:00 AM' })).toBeInTheDocument();
+      } finally {
+        setFormatPrefs({ timeFormat: '24h' });
+      }
     });
 
     it('F2 sur le bouton du titre ouvre la saisie', async () => {

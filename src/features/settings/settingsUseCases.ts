@@ -1,7 +1,11 @@
-import type { SettingsValues } from '../../domain/model';
+import type { SettingsValues, ThemeChoice } from '../../domain/model';
 import type { RecapSettings } from '../../domain/recap';
 import type { SpaceFilter } from '../../domain/types';
+import { DEFAULT_TABS_CONFIG, type TabsConfig } from '../../domain/tabs';
+import { DEFAULT_TIME_FORMAT, TIME_FORMATS, type TimeFormat } from '../../domain/timeFormat';
+import { DEFAULT_FIRST_WEEKDAY, FIRST_WEEKDAYS, type FirstWeekday } from '../../domain/week';
 import type { AppContainer } from '../app/container';
+import { parseThemeChoice } from './theme';
 
 /** A-06 / SD-04 : écran dont la vue compacte est mémorisée (réglage local `view.compact`). */
 export type CompactViewScreen = keyof SettingsValues['view.compact'];
@@ -35,6 +39,36 @@ export interface SettingsUseCases {
   setCompactView(screen: CompactViewScreen, compact: boolean): Promise<void>;
   /** ES-03 : filtre Pro / Perso / Tout mémorisé par appareil (`spaces.filter`, local). */
   saveSpaceFilter(filter: SpaceFilter): Promise<void>;
+  // --- M12 apparence et formats (P-03) ---
+  /** P-03 : premier jour de semaine et format d'heure (partagés). */
+  loadFormats(): Promise<FormatSettings>;
+  setFirstWeekday(value: FirstWeekday): Promise<void>;
+  setTimeFormat(value: TimeFormat): Promise<void>;
+  // --- fin M12 apparence et formats ---
+  // --- M12 thème (P-02) ---
+  /** P-02 : thème de cet appareil (`ui.theme`, local). */
+  loadTheme(): Promise<ThemeChoice>;
+  setTheme(value: ThemeChoice): Promise<void>;
+  // --- fin M12 thème ---
+  // --- M12 onglets (P-01) ---
+  /** P-01 : disposition des onglets de cet appareil (`ui.tabs`, local). */
+  loadTabs(): Promise<TabsConfig>;
+  saveTabs(config: TabsConfig): Promise<void>;
+  // --- fin M12 onglets ---
+}
+
+/** P-03 : réglages d'affichage de la date et de l'heure. */
+export interface FormatSettings {
+  readonly firstWeekday: FirstWeekday;
+  readonly timeFormat: TimeFormat;
+}
+
+/** Valeur lue en base (version future, fichier abîmé) : seuls les identifiants texte sont gardés. */
+export function sanitizeTabsConfig(value: unknown): TabsConfig {
+  if (typeof value !== 'object' || value === null) return DEFAULT_TABS_CONFIG;
+  const { order, hidden } = value as { order?: unknown; hidden?: unknown };
+  const strings = (list: unknown): string[] => (Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []);
+  return { order: strings(order), hidden: strings(hidden) };
 }
 
 export type SettingsDeps = Pick<AppContainer, 'data'>;
@@ -74,5 +108,36 @@ export function createSettingsUseCases(deps: SettingsDeps): SettingsUseCases {
     async saveSpaceFilter(filter) {
       await settings().set('spaces.filter', filter);
     },
+    // --- M12 apparence et formats (P-03) ---
+    async loadFormats() {
+      const [firstWeekday, timeFormat] = await Promise.all([settings().get('general.firstWeekday'), settings().get('general.timeFormat')]);
+      return {
+        firstWeekday: FIRST_WEEKDAYS.includes(firstWeekday) ? firstWeekday : DEFAULT_FIRST_WEEKDAY,
+        timeFormat: TIME_FORMATS.includes(timeFormat) ? timeFormat : DEFAULT_TIME_FORMAT,
+      };
+    },
+    async setFirstWeekday(value) {
+      await settings().set('general.firstWeekday', value);
+    },
+    async setTimeFormat(value) {
+      await settings().set('general.timeFormat', value);
+    },
+    // --- fin M12 apparence et formats ---
+    // --- M12 thème (P-02) ---
+    async loadTheme() {
+      return parseThemeChoice(await settings().get('ui.theme'));
+    },
+    async setTheme(value) {
+      await settings().set('ui.theme', value);
+    },
+    // --- fin M12 thème ---
+    // --- M12 onglets (P-01) ---
+    async loadTabs() {
+      return sanitizeTabsConfig(await settings().get('ui.tabs'));
+    },
+    async saveTabs(config) {
+      await settings().set('ui.tabs', sanitizeTabsConfig(config));
+    },
+    // --- fin M12 onglets ---
   };
 }

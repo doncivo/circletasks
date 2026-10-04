@@ -75,6 +75,14 @@ function validTime(hours: number, minutes: number): LocalTime | null {
 export function parseTimeInput(text: string): Result<LocalTime | null, 'invalid'> {
   const s = text.trim().toLowerCase().replace(/\s+/g, '');
   if (s === '') return { ok: true, value: null };
+  // P-03 : « 3:30 PM », « 3pm », « 9 am » (1 à 12 h) restent acceptés quel que soit le format affiché.
+  const meridiem = /^(\d{1,2})(?:[:h](\d{2}))?(am|pm|a\.m\.|p\.m\.)$/.exec(s);
+  if (meridiem) {
+    const hour12 = Number(meridiem[1]);
+    if (hour12 < 1 || hour12 > 12) return { ok: false, error: 'invalid' };
+    const time = validTime((hour12 % 12) + (meridiem[3]?.startsWith('p') ? 12 : 0), meridiem[2] === undefined ? 0 : Number(meridiem[2]));
+    return time ? { ok: true, value: time } : { ok: false, error: 'invalid' };
+  }
   let match = /^(\d{1,2})(?:h|:)?(\d{2})?$/.exec(s);
   if (match && (s.includes('h') || s.includes(':') || s.length <= 2)) {
     const time = validTime(Number(match[1]), match[2] === undefined ? 0 : Number(match[2]));
@@ -90,10 +98,15 @@ export function parseTimeInput(text: string): Result<LocalTime | null, 'invalid'
 
 /** Extrait une heure (« 10h », « 10h30 », « 14:30 », « à 10h ») du texte normalisé ; rend le reste. */
 function extractTime(text: string): { time: LocalTime | null; rest: string; invalid: boolean } {
-  const match = /(?:^|\s)(?:a\s+)?(\d{1,2})\s*(?:h\s*(\d{2})?|:\s*(\d{2}))(?=\s|$)/.exec(text);
+  const match = /(?:^|\s)(?:a\s+)?(\d{1,2})\s*(?:h\s*(\d{2})?|:\s*(\d{2}))(?:\s*(am|pm))?(?=\s|$)/.exec(text) ?? /(?:^|\s)(?:a\s+)?(\d{1,2})()()\s*(am|pm)(?=\s|$)/.exec(text);
   if (!match) return { time: null, rest: text, invalid: false };
-  const hours = Number(match[1]);
-  const minutes = match[2] !== undefined ? Number(match[2]) : match[3] !== undefined ? Number(match[3]) : 0;
+  let hours = Number(match[1]);
+  const minutes = match[2] !== undefined && match[2] !== '' ? Number(match[2]) : match[3] !== undefined && match[3] !== '' ? Number(match[3]) : 0;
+  if (match[4] !== undefined) {
+    // P-03 : « 3:30 pm » (1 à 12 h) ; hors de cette plage, l'heure est invalide.
+    if (hours < 1 || hours > 12) return { time: null, rest: text, invalid: true };
+    hours = (hours % 12) + (match[4] === 'pm' ? 12 : 0);
+  }
   const time = validTime(hours, minutes);
   const rest = (text.slice(0, match.index) + ' ' + text.slice(match.index + match[0].length)).replace(/\s+/g, ' ').trim();
   return { time, rest, invalid: time === null };
