@@ -156,3 +156,23 @@ describe('jeu d’images de test : lignes attendues -> tâches proposées (Q-04 
     expect(proposals.slice(0, 4).every((p) => p.checked)).toBe(true);
   });
 });
+
+describe('Q-04 cas limites de lignes (QA)', () => {
+  it('une ligne très longue reste une seule ligne, sans coupure ni perte', () => {
+    const long = `Organiser ${'la grande fête de famille '.repeat(60)}`.trim();
+    const out = texts(lines(`- ${long}`));
+    expect(out).toEqual([long]);
+  });
+
+  it('les accents et majuscules accentuées sont conservés', () => {
+    expect(texts(lines('1. Écrire à Hélène', '☐ Réserver l’hôtel à Cluny', '- Ça va être déjà fait'))).toEqual(['Écrire à Hélène', 'Réserver l’hôtel à Cluny', 'Ça va être déjà fait']);
+  });
+
+  it('une ligne contenant plusieurs phrases reste une seule tâche', () => {
+    expect(texts(lines('Appeler Paul. Puis Marie, puis Luc'))).toEqual(['Appeler Paul. Puis Marie, puis Luc']);
+  });
+
+  it('une page de lignes toutes vides ou réduites à des marques ne propose rien', () => {
+    expect(texts(lines('', ' ', '-', '☐', '1.', '•'))).toEqual([]);
+  });
+});

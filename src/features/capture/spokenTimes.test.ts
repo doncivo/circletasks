@@ -77,3 +77,15 @@ describe('dictée -> titre, date, heure', () => {
     expect(parse('appeler le notaire demain 10 h')).toMatchObject({ title: 'appeler le notaire', date: '2026-09-23', time: '10:00' });
   });
 });
+
+describe('Q-03 heures dictées : cas demandés par la QA', () => {
+  it('« quinze heures trente » donne 15:30', () => {
+    expect(normalizeSpokenTimes('appeler Paul quinze heures trente')).toBe('appeler Paul 15 h 30');
+    expect(parse('appeler Paul demain quinze heures trente')).toMatchObject({ title: 'appeler Paul', date: '2026-09-23', time: '15:30' });
+  });
+
+  it('« midi » dicté donne 12:00 et « minuit » ne plante pas', () => {
+    expect(parse('déjeuner demain midi')).toMatchObject({ date: '2026-09-23', time: '12:00' });
+    expect(() => parse('feu d’artifice demain minuit')).not.toThrow();
+  });
+});

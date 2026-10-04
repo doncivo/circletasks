@@ -282,6 +282,50 @@ describe('scan de tâches (Q-04)', () => {
       await screen.findByRole('button', { name: 'Importer une image' });
       await review();
     });
+
+    it('Q-04 toutes les lignes décochées : « Créer 0 tâche » est inactif, valider ne crée rien', async () => {
+      open();
+      await screen.findByRole('button', { name: 'Importer une image' });
+      await review();
+      for (const button of screen.queryAllByRole('button', { name: 'Créer cette tâche' })) fireEvent.click(button);
+      const create = screen.getByRole('button', { name: 'Créer 0 tâche' });
+      expect(create).toBeDisabled();
+      fireEvent.click(create);
+      expect(closed).toBe(0);
+      expect(screen.queryByText(/tâches? créées?/)).not.toBeInTheDocument();
+      expect(await h.container.data.repos.tasks.listForDay(h.today, 'all')).toEqual([]);
+      expect(await h.container.data.repos.tasks.listSomeday('all')).toEqual([]);
+    });
+
+    it('Q-04 l’image n’est jamais conservée, même après une erreur ou une image sans texte', async () => {
+      const blobUrl = vi.spyOn(URL, 'createObjectURL');
+      const setItem = vi.spyOn(Storage.prototype, 'setItem');
+      open();
+      await screen.findByRole('button', { name: 'Importer une image' });
+      native.failure = 'failed';
+      upload(png());
+      await screen.findByRole('heading', { name: 'La lecture a échoué' });
+      native.failure = null;
+      native.lines = [];
+      fireEvent.click(screen.getByRole('button', { name: 'Reprendre la photo' }));
+      await screen.findByRole('button', { name: 'Importer une image' });
+      upload(png());
+      await screen.findByRole('heading', { name: 'Aucune ligne reconnue' });
+      expect(blobUrl).not.toHaveBeenCalled();
+      expect(setItem).not.toHaveBeenCalled();
+    });
+
+    it('Q-04 une ligne très longue et des accents : une ligne = une tâche, texte intact', async () => {
+      const long = `Préparer l’été en Côte-d’Azur ${'très '.repeat(120)}fin`;
+      native.lines = [{ text: `- ${long}` }, { text: '• Écrire à Zoé' }];
+      open();
+      await screen.findByRole('button', { name: 'Importer une image' });
+      upload(png());
+      await screen.findByRole('heading', { name: 'Relecture' });
+      expect(screen.getByRole('button', { name: 'Créer 2 tâches' })).toBeEnabled();
+      expect(screen.getByDisplayValue('Écrire à Zoé')).toBeInTheDocument();
+      expect(screen.getByDisplayValue(long)).toBeInTheDocument();
+    });
   });
 
   describe('fermeture', () => {

@@ -136,3 +136,49 @@ fn garbage_that_looks_like_a_png_is_an_engine_error_not_a_crash() {
     fake.extend_from_slice(&[0; 64]);
     assert!(matches!(recognize_bytes(&fake), Err(OcrError::UnsupportedFormat | OcrError::Engine(_))));
 }
+
+/// Q-04 : l'image n'est jamais conservée. Aucun fichier ne doit apparaître dans le dossier temporaire
+/// pendant une lecture, qu'elle réussisse ou échoue.
+fn temp_entries() -> std::collections::BTreeSet<std::ffi::OsString> {
+    std::fs::read_dir(std::env::temp_dir())
+        .map(|dir| dir.filter_map(Result::ok).map(|e| e.file_name()).collect())
+        .unwrap_or_default()
+}
+
+#[test]
+fn q04_no_temporary_file_is_left_after_success_or_error() {
+    let before = temp_entries();
+    // Erreurs de validation (sans moteur) et, si le pack est là, lectures réelles.
+    let _ = recognize_bytes(&[]);
+    let _ = recognize_bytes(b"not an image");
+    let _ = recognize_bytes(&vec![0u8; MAX_IMAGE_BYTES + 1]);
+    let mut fake = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    fake.extend_from_slice(&[0; 64]);
+    let _ = recognize_bytes(&fake);
+    let _ = recognize_bytes(BLANK);
+    let _ = recognize_bytes(PRINTED);
+    let _ = recognize_bytes(PHOTO);
+    let after = temp_entries();
+    let created: Vec<_> = after.difference(&before).filter(|n| !n.to_string_lossy().starts_with("cargo") && !n.to_string_lossy().starts_with("rust")).collect();
+    assert!(created.is_empty(), "fichiers temporaires restants : {created:?}");
+}
+
+#[test]
+fn q04_ocr_sources_never_write_to_disk() {
+    for source in [include_str!("../../src/ocr/mod.rs"), include_str!("../../src/ocr/win.rs")] {
+        for forbidden in ["fs::write", "File::create", "OpenOptions", "temp_dir", "tempfile", "create_dir"] {
+            let code: String = source.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n");
+            assert!(!code.contains(forbidden), "{forbidden} trouvé dans le code OCR");
+        }
+    }
+}
+
+#[test]
+fn q04_missing_french_pack_is_reported_not_crashed() {
+    // Avec ou sans pack, l'état ne plante jamais ; sans pack, la lecture échoue avec un code stable.
+    let s = status();
+    if !s.available {
+        let err = recognize_bytes(PRINTED).unwrap_err();
+        assert!(matches!(err, OcrError::LanguageMissing | OcrError::Unavailable));
+    }
+}

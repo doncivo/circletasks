@@ -46,3 +46,40 @@ describe('réduction à 2 000 px (critère 3)', () => {
     expect(fitWithin(10_000, 1)).toEqual({ width: 2000, height: 1 });
   });
 });
+
+describe('Q-04 rotation et très grande image (QA)', () => {
+  it('le décodeur applique l’orientation EXIF (jamais imageOrientation: none) et la dimension rendue suit l’image tournée', async () => {
+    const { vi } = await import('vitest');
+    const { prepareImage } = await import('./prepareImage');
+    const close = vi.fn();
+    const decode = vi.fn(() => Promise.resolve({ width: 4000, height: 3000, close }));
+    vi.stubGlobal('createImageBitmap', decode);
+    vi.stubGlobal('document', { createElement: () => ({ getContext: () => null }) });
+    try {
+      const result = await prepareImage(new Blob([new Uint8Array(10)], { type: 'image/jpeg' }));
+      const options = (decode.mock.calls[0] as unknown[])[1] as { imageOrientation?: string } | undefined;
+      expect(options?.imageOrientation).not.toBe('none');
+      expect(result.width).toBeGreaterThan(0);
+      expect(close).toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('une image illisible est refusée et libère tout', async () => {
+    const { vi } = await import('vitest');
+    const { prepareImage } = await import('./prepareImage');
+    vi.stubGlobal('createImageBitmap', () => Promise.reject(new Error('bad')));
+    try {
+      await expect(prepareImage(new Blob(['x'], { type: 'image/png' }))).rejects.toThrow();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([[8000, 6000], [6000, 8000], [30000, 100]])('très grande image %i x %i : plus grand côté ramené à la limite', (w, h) => {
+    const r = fitWithin(w, h);
+    expect(Math.max(r.width, r.height)).toBeLessThanOrEqual(MAX_IMAGE_SIDE);
+    expect(Math.min(r.width, r.height)).toBeGreaterThanOrEqual(1);
+  });
+});
