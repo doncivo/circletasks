@@ -50,7 +50,7 @@ test.describe('S-01 — la semaine en 7 jours', () => {
     const tag = testInfo.project.name;
     const monday = await browserMonday(page);
     const wednesday = addIsoDays(monday, 2);
-    const names = { late: `Tard ${tag}`, early: `Tôt ${tag}`, plain: `Sans heure ${tag}`, other: `Vendredi ${tag}` };
+    const names = { late: `Tard ${tag}`, early: `Tôt ${tag}`, plain: `Sans heure ${tag}`, other: `Fin ${tag}` };
     await createTask(page, testInfo, { title: names.plain, date: wednesday });
     await createTask(page, testInfo, { title: names.late, date: wednesday, time: '14:00' });
     await createTask(page, testInfo, { title: names.early, date: wednesday, time: '09:00' });

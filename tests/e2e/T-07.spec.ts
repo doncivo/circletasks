@@ -92,7 +92,7 @@ test.describe('T-07 : tâches terminées', () => {
   });
 
   test('un jour passé : la tâche terminée hier se retrouve avec « précédent » (critères 3, 4)', async ({ page }, testInfo) => {
-    const title = `Hier ${testInfo.project.name}`;
+    const title = `Passée ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
     await completeTask(page, title);
     await page.clock.fastForward(13 * 3_600_000); // passé minuit : le 24 sept. à 01:00

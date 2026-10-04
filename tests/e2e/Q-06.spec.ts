@@ -18,7 +18,7 @@ test.describe('Q-06 / Q-02 — saisie rapide', () => {
     const title = `Appeler le notaire ${phone ? 'iphone' : 'pc'}`;
     let field;
     if (phone) {
-      await page.getByRole('button', { name: 'Ajouter' }).click();
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       field = page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByLabel('Titre');
     } else {
       field = page.getByLabel('Nouvelle tâche');
@@ -60,6 +60,6 @@ test.describe('Q-06 / Q-02 — saisie rapide', () => {
     await expect(field).toHaveValue('#Pro ');
     await field.press('Enter');
     await expect(field).toHaveValue('#Pro ');
-    await expect(page.getByText('Rien de prévu aujourd’hui.')).toBeVisible();
+    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toBeVisible();
   });
 });

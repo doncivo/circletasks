@@ -84,7 +84,7 @@ test.describe('T-02 — date et heure optionnelle', () => {
   test('une tâche datée sur un autre jour n’apparaît pas dans Aujourd’hui (critère 1)', async ({ page }, testInfo) => {
     const stamp = Date.now();
     const futureTitle = `Dans 10 jours ${testInfo.project.name} ${stamp}`;
-    const todayTitle = `Aujourd’hui ${testInfo.project.name} ${stamp}`;
+    const todayTitle = `Pour ce jour ${testInfo.project.name} ${stamp}`;
     const future = new Date();
     future.setDate(future.getDate() + 10);
     const futureIso = future.toISOString().slice(0, 10);
