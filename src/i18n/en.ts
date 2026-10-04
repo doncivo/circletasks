@@ -2,6 +2,7 @@ import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { searchEn } from './en.search';
 import { spacesEn } from './en.spaces';
+import { calendarsEn } from './en.calendars';
 import { routinesEn } from './en.routines';
 import { checklistsEn } from './en.checklists';
 import { eventsEn } from './en.events';
@@ -33,6 +34,7 @@ export const en: Messages = {
     },
   },
   spaces: spacesEn,
+  calendars: calendarsEn,
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',
@@ -566,6 +568,7 @@ export const en: Messages = {
     checklist: 'Checklist updated',
     event: 'Event updated',
     recentSearches: 'Recent searches cleared',
+    linkedTask: 'Task created from an event',
     searchFilter: '“All” filter applied',
     searchProjectFilter: '“All projects” filter applied',
     searchFilters: '“All” and “All projects” filters applied',

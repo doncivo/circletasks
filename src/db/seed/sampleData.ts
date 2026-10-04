@@ -38,6 +38,7 @@ const DEFAULT_TASK_FIELDS = {
   someday: false,
   source: 'local',
   externalId: null,
+  externalEventId: null,
 } satisfies Omit<NewTask, 'id' | 'title'>;
 
 /** Construit une tâche de test complète ; `overrides` remplace les champs par défaut. */

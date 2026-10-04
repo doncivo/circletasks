@@ -106,6 +106,7 @@ export function buildNextOccurrence(previous: Task, options: BuildNextOccurrence
     someday: false,
     source: 'local',
     externalId: null,
+    externalEventId: null,
   };
   const time = previous.time;
   const reminders: NewReminder[] =

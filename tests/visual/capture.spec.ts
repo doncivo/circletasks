@@ -12,6 +12,8 @@ import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
 import { insertSomeday, openSomeday } from '../e2e/helpers/someday';
 import { insertTasks, openWeek, seedCalendarAccount, seedExternalEvent, type DirectTask } from '../e2e/helpers/week';
+import { accountCard, openCalendarsScreen, waitUpdated } from '../e2e/helpers/calendars';
+import { GOOGLE_ACCOUNT } from '../sim';
 
 /**
  * Comparaison visuelle manuelle (npm run visual) : capture l'app et la maquette correspondante à la même
@@ -119,20 +121,33 @@ const WEEK_SEED: DirectTask[] = [
   { title: 'Courses', date: '2026-09-26', space: 'perso' },
 ];
 
-async function prepareWeek(page: Page): Promise<void> {
+/**
+ * Connecte le compte Google du simulateur par l'écran Agendas (K-01), sans compte réel : les événements viennent du rafraîchissement (K-03),
+ * pas du jeu de test. Simulateur par défaut de `globalSetup` (ports fixes) : « Point client » le mer. 23 sept. 2026 à 10:00, heure de Paris.
+ */
+async function connectGoogleSimulator(page: Page): Promise<void> {
+  await openCalendarsScreen(page);
+  await page.getByRole('button', { name: 'Google', exact: true }).click();
+  await waitUpdated(accountCard(page, 'Google Agenda', GOOGLE_ACCOUNT));
+}
+
+async function prepareWeek(page: Page, connected = false): Promise<void> {
   await insertTasks(page, WEEK_SEED);
   // « Point client » 10:00 (Google Agenda) : 08:00Z en septembre à Paris ; l'anniversaire (événement local) attend le module Événements.
   // Objectif épinglé de la semaine (PC-Semaine.html : bandeau « OBJECTIF · … · 2/5 ») : cinq tâches de la semaine, deux faites.
   await insertGoals(page, [{ title: GOAL_TITLE, weekStart: '2026-09-21' }]);
   await attachTasks(page, GOAL_TITLE, ['Relire le contrat', 'Appeler la banque', 'Envoyer la facture', 'Préparer le dépôt GitHub', 'Clôture mensuelle']);
-  await seedCalendarAccount(page);
-  await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
+  if (!connected) {
+    await seedCalendarAccount(page);
+    await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
+  }
   // Routines de la Semaine (PC-Semaine.html : « 07:30 · Routine », « 18:00 · Routine » les lundis, mercredis et vendredis).
   await insertRoutines(page, [
     // « Faire mon lit » le lundi seulement, comme la maquette.
     { title: 'Faire mon lit', space: 'perso', time: '07:30', icon: 'lucide:bed', scheduleType: 'weekdays', weekdays: [1], startDate: '2026-09-01', done: ['2026-09-21'] },
     { title: 'Sport', space: 'perso', time: '18:00', icon: 'lucide:dumbbell', scheduleType: 'weekdays', weekdays: [1, 3, 5], startDate: '2026-06-01', done: ['2026-09-21'] },
   ]);
+  if (connected) await connectGoogleSimulator(page);
   await openWeek(page);
 }
 
@@ -360,8 +375,10 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('complementary')).toBeVisible();
     },
   },
-  { name: 'Semaine', mockup: 'Semaine.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareWeek },
-  { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: prepareWeek },
+  { name: 'Semaine', mockup: 'Semaine.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareWeek(page) },
+  { name: 'PC-Semaine', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page) },
+  // Semaine PC alimentée par le rafraîchissement réel d'un compte Google simulé (K-01, K-03, S-05 critère 10), comparée à la même maquette.
+  { name: 'PC-Semaine-Agendas', mockup: 'PC-Semaine.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareWeek(page, true) },
   { name: 'Routines', mockup: 'Routines.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareRoutines(page, ROUTINE_SEED) },
   {
     name: 'PC-Routines',
@@ -433,6 +450,26 @@ const SCREENS: Screen[] = [
       await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
       await expect(page.getByRole('button', { name: /^Récapitulatifs :/ })).toBeVisible();
     },
+  },
+  {
+    // Réglages avec un compte Google connecté : la ligne « Agendas · Rappels Apple » dit « N agendas » en vert (Reglages.html : « Connectés · 2 listes »).
+    name: 'Reglages-Agendas',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await connectGoogleSimulator(page);
+      await page.getByRole('button', { name: 'Retour aux réglages' }).click();
+      await expect(page.getByRole('button', { name: 'Agendas · Rappels Apple : 2 agendas' })).toBeVisible();
+    },
+  },
+  {
+    // Écran Agendas (K-01 à K-03) : non dessiné, comparé aux motifs de Reglages.html (titre, filet, sections, lignes).
+    name: 'Agendas',
+    mockup: 'Reglages.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: connectGoogleSimulator,
   },
   {
     // Espaces et projets (ES-01, ES-04) : écran non dessiné, comparé à la carte d'espace de Bienvenue.html.

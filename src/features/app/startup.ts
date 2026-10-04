@@ -1,4 +1,5 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
+import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } from '../calendars/scheduler';
 import { createDayRollover } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
@@ -9,6 +10,8 @@ import { createTimeZoneWatcher } from './timeZoneWatcher';
 export interface AppStartup {
   /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
   readonly ready: Promise<void>;
+  /** K-03 : rafraîchissement des agendas externes (ouverture, retour au premier plan, toutes les 15 min au premier plan). */
+  readonly calendars: CalendarScheduler;
   /** Arrête minuterie et écouteurs ; sûr avant la fin de `ready` (aucun réarmement ensuite) et idempotent. */
   dispose(): void;
 }
@@ -21,6 +24,8 @@ export interface StartupEnv {
   readonly detectTimeZone?: () => string | null;
   /** Point d'extension N-06 : replanification des rappels après un changement de fuseau. */
   readonly onTimeZoneChange?: (change: TimeZoneChange) => void | Promise<void>;
+  /** Minuteur du rafraîchissement des agendas (tests : horloge simulée) ; défaut : minuteur du système. */
+  readonly timers?: Pick<SchedulerEnv, 'setInterval' | 'clearInterval'>;
 }
 
 /**
@@ -32,6 +37,7 @@ export interface StartupEnv {
  * (reconduire ou clore) ; le jour vient de l'horloge injectable du conteneur.
  * T-08 : purge de la corbeille (tâches supprimées depuis plus de 30 jours) lancée au démarrage,
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
+ * K-03 : les agendas externes sont rafraîchis dès l'ouverture puis toutes les 15 min au premier plan (`startCalendarScheduler`), sans bloquer `ready`.
  */
 export function startAppStartup(
   container: AppContainer,
@@ -52,8 +58,12 @@ export function startAppStartup(
     onCurrent: (tz) => useAppStore.getState().setTimeZone(tz),
     ...(env.onTimeZoneChange ? { onChange: env.onTimeZoneChange } : {}),
   });
+  const calendars = startCalendarScheduler(container, { document: env.document, ...(env.timers ?? {}) });
   const onCheck = (): void => {
-    if (env.document.visibilityState !== 'hidden') void timeZone.check().then(() => rollover.check());
+    if (env.document.visibilityState !== 'hidden') {
+      void timeZone.check().then(() => rollover.check());
+      void calendars.resume();
+    }
   };
   env.document.addEventListener('visibilitychange', onCheck);
   env.window.addEventListener('focus', onCheck);
@@ -62,9 +72,11 @@ export function startAppStartup(
   void ready.then(() => createTrashUseCases(container).purgeExpired()).catch(() => undefined);
   return {
     ready,
+    calendars,
     dispose: () => {
       if (disposed) return;
       disposed = true;
+      calendars.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);
       env.window.removeEventListener('focus', onCheck);
       rollover.stop();

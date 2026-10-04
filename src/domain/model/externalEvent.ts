@@ -1,6 +1,7 @@
 import type { CalendarAccountId, ExternalEventId, IsoDateTime, SpaceId, SyncMeta } from '../types';
 
-export type CalendarProvider = 'google' | 'icloud';
+/** Fournisseur d'un compte d'agenda (colonne `provider`). Le contrat d'accès au fournisseur est `CalendarProvider` (ADR 0008). */
+export type CalendarProviderKind ='google' | 'icloud';
 
 /** Un agenda d'un compte (`calendar_account.calendars`, JSON) : rattaché à un espace (ES-06) et affiché ou non. */
 export interface CalendarRef {
@@ -13,7 +14,7 @@ export interface CalendarRef {
 /** Compte d'agenda externe (M8) : Google ou iCloud. Les jetons ne sont jamais en base (`tokenRef` désigne une entrée du coffre système). */
 export interface CalendarAccount extends SyncMeta {
   readonly id: CalendarAccountId;
-  readonly provider: CalendarProvider;
+  readonly provider: CalendarProviderKind;
   /** Nom affiché de la source (« Google Agenda », « iCloud »). */
   readonly label: string;
   readonly tokenRef: string;

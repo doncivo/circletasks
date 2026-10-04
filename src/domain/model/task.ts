@@ -1,4 +1,5 @@
 import type {
+  ExternalEventId,
   GoalId,
   IsoDateTime,
   LocalDate,
@@ -46,7 +47,9 @@ export type TaskSource = 'local' | 'apple_reminders';
  * - `seriesIndex` : rang de l'occurrence dans sa récurrence (0 pour la première), sinon null ;
  * - `seriesTemplate` : non null seulement pour une occurrence modifiée « cette occurrence » (T-10) :
  *   valeurs de la série avant la modification, reprises par l'occurrence suivante ;
- * - `externalId` non null seulement si `source = 'apple_reminders'`.
+ * - `externalId` non null seulement si `source = 'apple_reminders'` ;
+ * - `externalEventId` : événement d'agenda externe dont la tâche vient (K-04), sans clé étrangère : la ligne `external_event` est
+ *   locale à l'appareil et peut disparaître ; la tâche garde alors titre et date. Une tâche par événement (règle de l'interface).
  */
 export interface Task extends SyncMeta {
   readonly id: TaskId;
@@ -69,6 +72,7 @@ export interface Task extends SyncMeta {
   readonly someday: boolean;
   readonly source: TaskSource;
   readonly externalId: string | null;
+  readonly externalEventId: ExternalEventId | null;
 }
 
 /** Champs métier d'une tâche (sans les colonnes de synchro). */
@@ -80,5 +84,5 @@ export type TaskFields = Omit<Task, keyof SyncMeta>;
  */
 export type NewTask = TaskFields & { readonly id: TaskId };
 
-/** Modification partielle d'une tâche ; `id`, `source` et `externalId` sont immuables. */
-export type TaskPatch = Partial<Omit<TaskFields, 'source' | 'externalId'>>;
+/** Modification partielle d'une tâche ; `id`, `source`, `externalId` et `externalEventId` sont immuables (le lien se pose à la création, K-04). */
+export type TaskPatch = Partial<Omit<TaskFields, 'source' | 'externalId' | 'externalEventId'>>;

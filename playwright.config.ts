@@ -1,10 +1,13 @@
 import { defineConfig } from '@playwright/test';
+import { E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
 
 const PORT = 1420;
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
   testDir: 'tests/e2e',
+  // Simulateurs d'agendas Google et CalDAV (K-01 à K-03) sur ports fixes, arrêtés à la fin de la suite.
+  globalSetup: './tests/e2e/globalSetup.ts',
   fullyParallel: true,
   // Plafond mémoire (consigne d'Ali) : 2 workers, ou CT_TEST_WORKERS=1 pour la relance de secours.
   workers: Number(process.env['CT_TEST_WORKERS'] ?? 2),
@@ -50,5 +53,6 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: !process.env['CI'],
     timeout: 120_000,
+    env: { VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google), VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav), VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com' },
   },
 });

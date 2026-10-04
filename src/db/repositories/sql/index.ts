@@ -31,6 +31,6 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   checklists: createChecklistRepository(executor, stamper),
   checklistItems: createChecklistItemRepository(executor, stamper),
   externalEvents: createExternalEventRepository(executor),
-  calendarAccounts: createCalendarAccountRepository(executor),
+  calendarAccounts: createCalendarAccountRepository(executor, stamper),
   syncMeta: createSyncMetaRepository(executor),
 });

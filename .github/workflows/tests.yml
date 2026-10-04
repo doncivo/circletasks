@@ -37,6 +37,16 @@ jobs:
         env:
           CT_TEST_WORKERS: "2"
 
+  # Audit des dépendances Rust (base RustSec) : étape séparée, un échec n'empêche pas les autres vérifications.
+  audit-rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: cargo audit
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit --file src-tauri/Cargo.lock
+
   e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.e2e
     runs-on: ubuntu-latest

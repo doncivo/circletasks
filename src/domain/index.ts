@@ -40,6 +40,8 @@ export * from './projectRules';
 export * from './itemFilter';
 export * from './spaceMove';
 export * from './externalCalendars';
+export * from './calendarProvider';
+export * from './calendarRefresh';
 export * from './quietHours';
 export * from './focusSession';
 export * from './filteredAggregates';

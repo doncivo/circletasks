@@ -147,3 +147,25 @@ export function utcToLocalIso(isoUtc: IsoDateTime | string, tz: string): string 
   return `${date}T${time}`;
 }
 
+
+/** Décalage (ms) du fuseau `tz` à l'instant `ms` : heure murale moins UTC. Sans secondes : les décalages sont des minutes entières. */
+function offsetMsAt(ms: number, tz: string): number {
+  const { date, time } = partsAt(ms, tz);
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  const [hour, minute] = time.split(':').map(Number) as [number, number];
+  return Date.UTC(year, month - 1, day, hour, minute) - Math.floor(ms / 60_000) * 60_000;
+}
+
+/**
+ * Instant UTC (ms) d'une heure murale `date` `time` ('HH:mm' ou 'HH:mm:ss') du fuseau IANA `tz` (analyse d'événements externes
+ * avec TZID, bornes de fenêtre). Lève `RangeError` si le fuseau est invalide. Heure inexistante (saut de l'heure d'été) : décalée
+ * d'une heure vers l'avant ; heure répétée (retour d'hiver) : l'une des deux occurrences.
+ */
+export function localToUtcMs(date: LocalDate, time: string, tz: string): number {
+  if (!isValidTimeZone(tz)) throw new RangeError(`Fuseau invalide : « ${tz} »`);
+  const [year, month, day] = date.split('-').map(Number) as [number, number, number];
+  const [hour = 0, minute = 0, second = 0] = time.split(':').map(Number);
+  const wall = Date.UTC(year, month - 1, day, hour, minute, second);
+  const guess = wall - offsetMsAt(wall, tz);
+  return wall - offsetMsAt(guess, tz);
+}

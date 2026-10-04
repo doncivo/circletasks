@@ -1,6 +1,8 @@
 import type { CalendarAccount, Space } from '../../domain/model';
 import type { IsoDateTime } from '../../domain/types';
+import { sourceNameOf } from '../../domain/externalEvents';
 import { t } from '../../i18n';
+import { shortSourceNames } from '../calendars/sourceNames';
 import { spaceTextColor } from '../../ui';
 
 export interface EventsAgendasCardProps {
@@ -35,7 +37,7 @@ function agendaLines(accounts: readonly CalendarAccount[], spaces: readonly Spac
       .filter((calendar) => calendar.shown)
       .map((calendar) => ({
         key: `${account.id}:${calendar.id}`,
-        name: calendar.name ? `${account.label} · ${calendar.name}` : account.label,
+        name: calendar.name ? `${sourceNameOf(account, shortSourceNames())} · ${calendar.name}` : sourceNameOf(account, shortSourceNames()),
         space: spaces.find((space) => space.id === calendar.spaceId) ?? null,
       })),
   );

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-calendar-http"
+description = "Enables the calendar_http command without any pre-configured scope."
+commands.allow = ["calendar_http"]
+
+[[permission]]
+identifier = "deny-calendar-http"
+description = "Denies the calendar_http command without any pre-configured scope."
+commands.deny = ["calendar_http"]

@@ -45,6 +45,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
           someday: false,
           source: 'local',
           externalId: null,
+          externalEventId: null,
         });
         renderWeek(h.container);
         await screen.findByRole('button', { name: 'Déjà là' });

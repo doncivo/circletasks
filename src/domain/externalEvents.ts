@@ -48,6 +48,19 @@ export function externalEventSpan(event: Pick<ExternalEvent, 'allDay' | 'startUt
   return { firstDay: startDate, lastDay: lastDay < startDate ? startDate : lastDay, allDay: display.allDay, startTime, endTime };
 }
 
+/** Noms de source par fournisseur (textes i18n fournis par l'appelant). */
+export type SourceNames = Readonly<Record<CalendarAccount['provider'], string>>;
+
+/** Nom de source d'un compte : celui de son fournisseur si `names` est donné (« Google Agenda », « iCloud »), sinon son libellé. */
+export function sourceNameOf(account: Pick<CalendarAccount, 'provider' | 'label'>, names: SourceNames | undefined): string {
+  return names ? names[account.provider] : account.label;
+}
+
+/** Titre à l'affichage : un titre vide ou blanc devient `untitled` (texte i18n fourni par l'appelant, K-02 D3). */
+export function displayTitle(title: string, untitled: string | undefined): string {
+  return untitled !== undefined && title.trim() === '' ? untitled : title;
+}
+
 /** Agenda d'un événement : le compte et l'agenda auxquels il appartient (null si le compte n'est plus connu). */
 export function calendarOf(event: ExternalEvent, accounts: readonly CalendarAccount[]): { account: CalendarAccount; calendar: CalendarRef | null } | null {
   const account = accounts.find((candidate) => candidate.id === event.accountId);
@@ -71,6 +84,10 @@ export interface ExternalEventsByDayInput {
   readonly accounts: readonly CalendarAccount[];
   readonly timeZone: string;
   readonly filter: SpaceFilter;
+  /** Titre affiché d'un événement sans titre (« (Sans titre) », K-02 D3) ; absent : le titre brut est gardé. */
+  readonly untitled?: string;
+  /** Nom de source affiché par fournisseur ; absent : le libellé du compte. */
+  readonly sources?: SourceNames;
 }
 
 /**
@@ -94,12 +111,12 @@ export function externalEventsByDay(input: ExternalEventsByDayInput): Map<LocalD
       const starting = day === span.firstDay;
       const entry: TodayEventEntry = {
         id: event.id as ExternalEventId,
-        title: event.title,
+        title: displayTitle(event.title, input.untitled),
         allDay: !starting || span.allDay,
         startTime: starting && !span.allDay ? span.startTime : null,
         // Hors filtre d'espace : le filtre est déjà appliqué par l'agenda ci-dessus.
         spaceId: null,
-        calendarName: owner.account.label,
+        calendarName: sourceNameOf(owner.account, input.sources),
         icon: null,
         startInstant: event.startUtc,
       };

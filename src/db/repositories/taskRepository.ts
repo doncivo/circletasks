@@ -1,5 +1,6 @@
 import type { GoalProgress, NewRecurrence, NewTask, Recurrence, RecurrencePatch, Task, TaskPatch } from '../../domain/model';
 import type {
+  ExternalEventId,
   GoalId,
   IsoDateTime,
   LocalDate,
@@ -19,6 +20,11 @@ import type { InstantRange, ReadOptions, SortOrderEntry } from './common';
  */
 export interface TaskRepository {
   getById(id: TaskId, options?: ReadOptions): Promise<Task | null>;
+  /**
+   * K-04 : tâche vivante liée à l'événement externe (une par événement, hors corbeille et copies écartées) ; null s'il n'y en a pas.
+   * Si plusieurs existent (deux appareils hors ligne), la plus ancienne.
+   */
+  findByExternalEvent(eventId: ExternalEventId): Promise<Task | null>;
 
   /** T-01, S-04, SD-01. */
   create(task: NewTask): Promise<Task>;

@@ -1,10 +1,14 @@
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { externalEventSpan } from '../../domain/externalEvents';
+import { displayTitle, externalEventSpan, sourceNameOf } from '../../domain/externalEvents';
 import { t } from '../../i18n';
+import { sourceNames } from '../calendars/sourceNames';
 import { formatDetailDate } from '../../i18n/format';
-import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
+import { Button, DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
 import { detectTimeZone } from '../../platform';
-import { useFeatureStore } from '../app/AppContainerContext';
+import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { createLinkedTaskUseCases } from '../calendars/linkedTaskUseCases';
+import { useLinkedTask } from '../calendars/useLinkedTask';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { DetailRow } from '../tasks/DetailRow';
@@ -16,7 +20,11 @@ import { weekStore } from './weekStore';
  * Panneau à droite sur PC (par-dessus la grille), feuille sur iPhone, comme la fiche d'une tâche (A-08).
  */
 export function ExternalEventDetail() {
+  const container = useAppContainer();
   const detail = useNavigationStore((s) => s.detail);
+  const openDetail = useNavigationStore((s) => s.openDetail);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
   const closeDetail = useNavigationStore((s) => s.closeDetail);
   const layout = useLayout();
   const slot = useDetailSlot();
@@ -26,16 +34,27 @@ export function ExternalEventDetail() {
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
 
   const event = detail?.type === 'externalEvent' ? events.find((candidate) => candidate.id === detail.id) : undefined;
+  // K-04 : une tâche par événement ; le bouton devient « Voir la tâche liée » quand elle existe.
+  const linked = useLinkedTask(event?.id);
   if (!event) return null;
   const account = accounts.find((candidate) => candidate.id === event.accountId);
   const calendar = account?.calendars.find((candidate) => candidate.id === event.calendarId);
   const span = externalEventSpan(event, timeZone);
-  const source = [calendar?.name, account?.label].filter((part): part is string => Boolean(part)).join(' · ');
+  const source = [calendar?.name, account ? sourceNameOf(account, sourceNames()) : undefined].filter((part): part is string => Boolean(part)).join(' · ');
 
+  const eventTitle = displayTitle(event.title, t('calendars.untitled'));
+  const createTask = async (): Promise<void> => {
+    if (busy) return;
+    setBusy(true);
+    setFailed(false);
+    const result = await createLinkedTaskUseCases(container).createFromEvent(event.id);
+    setBusy(false);
+    setFailed(!result.ok && result.error !== 'already-linked');
+  };
   const content = (
     <div className="ct-task-detail">
       <div className="ct-task-detail__header">
-        <h2 className="ct-task-detail__title">{event.title}</h2>
+        <h2 className="ct-task-detail__title">{eventTitle}</h2>
       </div>
       <p className="ct-week-eventDetail__note">{t('week.eventReadOnlyNote')}</p>
       {span && (
@@ -50,6 +69,25 @@ export function ExternalEventDetail() {
         </>
       )}
       {source !== '' && <DetailRow label={t('week.eventCalendar')}>{source}</DetailRow>}
+      {failed && (
+        <p role="alert" className="ct-task-detail__error">
+          {t('calendars.taskCreateError')}
+        </p>
+      )}
+      {/* K-04 : seule action de la fiche ; l'événement lui-même reste en lecture seule. */}
+      {linked !== undefined && (
+        <div className="ct-task-detail__actions">
+          {linked ? (
+            <Button variant="secondary" onClick={() => openDetail({ type: 'task', id: linked.id })}>
+              {t('calendars.viewLinkedTask')}
+            </Button>
+          ) : (
+            <Button variant="secondary" disabled={busy} ariaLabel={t('calendars.createTaskLabel', { title: eventTitle })} onClick={() => void createTask()}>
+              {t('calendars.createTask')}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 

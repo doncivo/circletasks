@@ -52,6 +52,7 @@ export function duplicateTask(source: Task, options: DuplicateTaskOptions): Dupl
     someday: !dated,
     source: 'local',
     externalId: null,
+    externalEventId: null,
   };
   const offsets = [...new Set(options.reminderOffsets)];
   const reminders: NewReminder[] =

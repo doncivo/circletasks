@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "calendars",
+  "description": "Agendas externes (K-01 à K-03, ADR 0008), PC et iPhone. Le réseau passe par la commande calendar_http, limitée en Rust aux hôtes accounts.google.com, oauth2.googleapis.com, www.googleapis.com, caldav.icloud.com et pNN-caldav.icloud.com (HTTPS). Aucune permission http:, opener: ni fs: n'est accordée à la WebView.",
+  "windows": ["main"],
+  "platforms": ["windows", "iOS"],
+  "permissions": [
+    "allow-calendar-secret-set",
+    "allow-calendar-secret-exists",
+    "allow-calendar-secret-delete",
+    "allow-calendar-oauth-google-authorize",
+    "allow-calendar-oauth-google-revoke",
+    "allow-calendar-http"
+  ]
+}

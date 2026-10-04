@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-calendar-oauth-google-authorize"
+description = "Enables the calendar_oauth_google_authorize command without any pre-configured scope."
+commands.allow = ["calendar_oauth_google_authorize"]
+
+[[permission]]
+identifier = "deny-calendar-oauth-google-authorize"
+description = "Denies the calendar_oauth_google_authorize command without any pre-configured scope."
+commands.deny = ["calendar_oauth_google_authorize"]

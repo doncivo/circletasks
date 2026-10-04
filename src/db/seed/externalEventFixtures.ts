@@ -1,4 +1,4 @@
-import { encodeCalendars, type CalendarProvider, type CalendarRef } from '../../domain/model';
+import { encodeCalendars, type CalendarProviderKind, type CalendarRef } from '../../domain/model';
 import type { SqlExecutor } from '../driver';
 
 /**
@@ -8,7 +8,7 @@ import type { SqlExecutor } from '../driver';
  */
 export interface FixtureAccount {
   readonly id: string;
-  readonly provider: CalendarProvider;
+  readonly provider: CalendarProviderKind;
   readonly label: string;
   readonly calendars: readonly CalendarRef[];
 }
