@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DateChoice } from '../domain/dateInput';
 import { asLocalDate } from '../domain/types';
 import { t } from '../i18n';
+import { setFormatPrefs } from '../i18n/formatPrefs';
 import { DateField } from './DateField';
 
 // Mercredi 23 septembre 2026 (PC-Date.html).
@@ -259,3 +260,29 @@ describe('DateField (T-14, PC)', () => {
 function dialogOrNull(): HTMLElement | null {
   return screen.queryByRole('dialog', { name: 'Choisir une date' });
 }
+
+describe('DateField : format 12 h (P-03 critère 6)', () => {
+  afterEach(() => {
+    cleanup();
+    setFormatPrefs({ timeFormat: '24h' });
+  });
+
+  it('« ven 3:30 pm » et « ven 15h30 » sont compris dans les deux formats, affichés selon le réglage', () => {
+    setFormatPrefs({ timeFormat: '12h' });
+    render(<Harness />);
+    type('ven 3:30 pm');
+    expect(dialog()).toHaveTextContent('Compris : vendredi 25 sept. à 3:30 PM');
+    type('ven 15h30');
+    expect(dialog()).toHaveTextContent('Compris : vendredi 25 sept. à 3:30 PM');
+    type('ven 12 am');
+    expect(dialog()).toHaveTextContent('Compris : vendredi 25 sept. à 12:00 AM');
+    type('ven 12:00 pm');
+    expect(dialog()).toHaveTextContent('Compris : vendredi 25 sept. à 12:00 PM');
+  });
+
+  it('24 h : « ven 3:30 pm » s’affiche « 15:30 »', () => {
+    render(<Harness />);
+    type('ven 3:30 pm');
+    expect(dialog()).toHaveTextContent('Compris : vendredi 25 sept. à 15:30');
+  });
+});
