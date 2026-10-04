@@ -36,7 +36,7 @@ async function completeTask(page: Page, title: string): Promise<void> {
 
 async function openDoneScreen(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Rapport mensuel' }).click();
-  await expect(page.getByRole('heading', { name: 'Rapport mensuel' })).toBeVisible();
+  await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Tâches terminées' }).click();
   await expect(page.getByRole('heading', { name: 'Tâches terminées', level: 1 })).toBeVisible();
 }

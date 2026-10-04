@@ -76,6 +76,8 @@ Toutes compatibles iOS : soit exécutées dans la WebView (JS pur), soit outils 
 | @fontsource-variable/dm-sans (PREP-04) | Police du texte courant, fichiers locaux | SIL OFL 1.1 | ~54 Ko woff2 (latin + latin-ext, normal) | oui (fichiers statiques) |
 | lucide-react (PREP-04) | Icônes au trait des maquettes, `src/ui/Icon.tsx` | ISC | ~0,5 Ko par icône importée nommément (tree-shaking) | oui (JS) |
 | chrono-node 2.10 (Q-02, avenant du 2026-10-04) | Date et heure dans les phrases françaises (locale `fr` seule : `chrono-node/fr`), enveloppé dans `src/domain/naturalDate.ts` | MIT | ~55 Ko minifié, ~15 Ko gzip (locale fr et noyau) ; dans le bundle principal (seuil de 100 Ko gzip, Q-02 D1) | oui (JS pur, sans API navigateur ni Node) |
+| recharts 3.10 (H-02, ADR 0009) | Graphique « taux de complétion par semaine » du rapport, `src/features/stats/CompletionChart.tsx` uniquement | MIT (transitives MIT / ISC) | ~91 Ko gzip, **bloc paresseux** (`React.lazy`), hors bundle de départ | oui (JS, SVG) |
+| crate `tauri-plugin-dialog` (H-03, ADR 0009) | « Enregistrer sous » ouvert côté Rust par la commande `export_save_file` ; aucun paquet npm, aucune permission `dialog:` pour la WebView | MIT / Apache-2.0 | 0 Ko JS | PC seulement : crate absente du build iOS, `FileService` indisponible sur iPhone jusqu'à l'ordre 5 |
 
 Total JS de la coquille : ~49 Ko gzip (hors icônes à l'usage). Polices : ~178 Ko de woff2 embarqués, non chargés depuis Internet (docs/licences.md). Le profil release Rust est optimisé taille (`lto`, `opt-level = "s"`, `strip`) pour tenir l'installeur sous 15 Mo (PRD 8).
 

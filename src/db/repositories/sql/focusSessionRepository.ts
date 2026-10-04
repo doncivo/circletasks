@@ -150,6 +150,29 @@ export function createFocusSessionRepository(db: SqlExecutor, stamper: WriteStam
       return rows.map((row): FocusTaskTotal => ({ taskId: row.task_id as TaskId, seconds: row.seconds ?? 0, sessions: row.sessions }));
     },
 
+    async listForExport({ filter, span, afterId, limit }) {
+      const params: SqlValue[] = [];
+      let where = 'f.deleted_at IS NULL';
+      if (filter.space !== 'all') {
+        where += ' AND f.space_id = ?';
+        params.push(filter.space);
+      }
+      if (filter.project !== null) {
+        where += ' AND f.project_id = ?';
+        params.push(filter.project);
+      }
+      if (span) {
+        where += ' AND f.started_at >= ? AND f.started_at < ?';
+        params.push(span.from, span.to);
+      }
+      if (afterId !== null) {
+        where += ' AND f.id > ?';
+        params.push(afterId);
+      }
+      const rows = await db.select<FocusSessionRow>(`SELECT f.* FROM focus_session f WHERE ${where} ORDER BY f.id LIMIT ?`, [...params, Math.max(1, Math.floor(limit))]);
+      return rows.map(rowToFocusSession);
+    },
+
     async totalsForTask(taskId) {
       const rows = await db.select<TotalRow>(
         `SELECT COUNT(*) AS sessions, COALESCE(SUM(${SESSION_SECONDS}), 0) AS seconds

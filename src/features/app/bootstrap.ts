@@ -8,6 +8,7 @@ import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
+import { openFileService, type FileService } from '../../platform/files';
 import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platform/focus';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
@@ -58,6 +59,8 @@ export interface BootstrapAppOptions {
   readonly calendars?: CalendarPlatform;
   /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
   readonly focusWindow?: FocusWindowPlatform | null;
+  /** Enregistrement de fichiers (H-03) ; `openFileService` par défaut. */
+  readonly files?: FileService;
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
 }
@@ -97,6 +100,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       platform: { runtime: detectRuntime(), os: detectOs() },
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
+      files: options.files ?? openFileService(detectRuntime(), detectOs()),
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
     });
   } catch (error) {

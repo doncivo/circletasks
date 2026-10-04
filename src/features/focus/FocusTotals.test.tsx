@@ -8,7 +8,7 @@ import { setFormatPrefs } from '../../i18n/formatPrefs';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
-import { ReportScreen } from '../tasks/ReportScreen';
+import { ReportScreen } from '../stats';
 import { TaskDetail } from '../tasks/TaskDetail';
 import { FocusView } from './FocusView';
 import { focusStore } from './focusStore';
@@ -206,7 +206,8 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       expect(within(section).getAllByRole('listitem')[2]?.textContent).toBe('Ce mois4 h 25');
     });
 
-    it('sans session ce mois-ci : message vide', async () => {
+    it('sans session ce mois-ci : message vide (le mois a une tâche, donc le rapport n’est pas vide, H-01)', async () => {
+      await seedFocusTask(h.container, 'Envoyer la facture');
       useAppStore.getState().setDay('2026-10-04' as never);
       renderReport();
       const section = await screen.findByRole('region', { name: 'CONCENTRATION' });

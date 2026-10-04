@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "export",
+  "description": "PC Windows : export de l'historique (H-03). Deux commandes Rust seulement : export_save_file (boîte « Enregistrer sous » et écriture du seul fichier choisi) et reveal_exported_file (affiche le dernier fichier exporté, jamais un chemin libre ni réseau). Aucune permission de plugin dialog:, fs: ni opener: n'est accordée à la WebView.",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": ["allow-export-save-file", "allow-reveal-exported-file"]
+}

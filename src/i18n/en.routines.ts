@@ -47,8 +47,6 @@ export const routinesEn: Messages['routines'] = {
   },
   monthReport: {
     open: 'Month report',
-    caption: 'Month report',
-    back: 'Back',
     section: 'ROUTINES — DAYS COMPLETED',
     cellAll: '{date}, all done: {done} of {planned}',
     cellPartial: '{date}, {done} of {planned}',

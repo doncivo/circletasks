@@ -77,6 +77,8 @@ test.describe('F-03 — temps de concentration', () => {
     await page.clock.fastForward('26:00');
     await session(page).getByRole('button', { name: 'Fermer', exact: true }).click();
     await filterPill(page, 'Perso').click();
+    // Une tâche Perso : sans aucune donnée, le mois serait un écran vide (H-01 critère 9) et la section CONCENTRATION n'y figurerait pas.
+    await createTask(page, testInfo, { title: 'Courses' });
     await page.getByRole('button', { name: 'Rapport mensuel' }).click();
     const section = page.getByRole('region', { name: 'CONCENTRATION' });
     await expect(section.getByText('Aucune session ce mois-ci.')).toBeVisible();

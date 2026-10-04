@@ -14,7 +14,7 @@ export const emptyStateScreens: readonly EmptyStateScreen[] = [
   { id: 'today', actionKey: 'empty.addTask' },
   { id: 'week', actionKey: 'empty.addTask' },
   { id: 'routines', actionKey: 'empty.createRoutine' },
-  { id: 'routinesMonth', actionKey: 'empty.openRoutines' },
+  { id: 'report', actionKey: 'empty.goToToday' },
   { id: 'events', actionKey: 'empty.addEvent' },
   { id: 'checklists', actionKey: 'empty.createChecklist' },
   { id: 'someday', actionKey: 'empty.addSomeday' },
@@ -25,6 +25,6 @@ export const emptyStateScreens: readonly EmptyStateScreen[] = [
 /**
  * Écrans à liste dont l'état vide reste celui de leur story, déjà conforme à sa maquette (P-06 critère 1) : objectif (OB-01, brouillon
  * d'objectif avec son aide), recherche (RC-01, « Aucun résultat pour … »), agendas (K-01, boutons de connexion juste dessous),
- * projets d'un espace (ES-04, bouton « + Ajouter un projet » sous la phrase). Rapport du mois : H-01 pas encore construit.
+ * projets d'un espace (ES-04, bouton « + Ajouter un projet » sous la phrase).
  */
-export const emptyStateExemptions: readonly string[] = ['goals', 'search', 'calendars', 'projects', 'report'];
+export const emptyStateExemptions: readonly string[] = ['goals', 'search', 'calendars', 'projects'];

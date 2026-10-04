@@ -35,6 +35,11 @@ export interface FocusSessionRepository {
   totals(query: FocusTotalsQuery): Promise<FocusTotal>;
   /** F-03 : les tâches les plus travaillées de la plage, du plus au moins travaillé (sessions sans tâche ignorées). */
   totalsByTask(query: FocusTotalsQuery, limit: number): Promise<FocusTaskTotal[]>;
+  /**
+   * H-03 : une page de sessions (supprimées exclues) du filtre d'espace / projet, par identifiant croissant après `afterId` ; `span`
+   * limite aux sessions dont le début tombe dans la plage (null : toutes). Lecture par blocs de `limit` lignes.
+   */
+  listForExport(query: { readonly filter: ItemFilter; readonly span: InstantSpan | null; readonly afterId: string | null; readonly limit: number }): Promise<FocusSession[]>;
   /** F-03 critère 3 : temps de concentration de toutes les sessions terminées de cette tâche, sans filtre. */
   totalsForTask(taskId: TaskId): Promise<FocusTotal>;
 }

@@ -69,3 +69,16 @@ redistribue pas les fichiers de police séparément de l'application.
   - Les fichiers sont copiés de `node_modules` dans `dist/ocr/` par le plugin Vite `vite.ocrAssets.ts` (aucun binaire versionné) et ne sont jamais téléchargés d'Internet (`cacheMethod: 'none'`, aucun cache disque).
   - Poids ajouté à l'installeur : environ 2,3 Mo compressés (PRD section 8 : installeur sous 15 Mo). Les autres variantes du noyau (sans SIMD, legacy) ne sont pas embarquées.
 - Textes complets : `node_modules/tesseract.js/LICENSE.md`, `node_modules/tesseract.js-core/LICENSE`.
+
+# Licence — Recharts (H-02 D4)
+
+- Paquet : [`recharts`](https://www.npmjs.com/package/recharts) 3.10, licence **MIT** ; dépendances transitives (`victory-vendor` d3, `@reduxjs/toolkit`, `immer`, `reselect`, `decimal.js-light`) sous licences MIT ou ISC.
+- Usage : graphique en barres « taux de complétion par semaine » du rapport du mois (`src/features/stats/CompletionChart.tsx`), chargé à la demande par import dynamique (jamais dans le paquet de départ).
+- Texte complet de la licence : `node_modules/recharts/LICENSE`.
+- `victory-vendor` (copie des modules d3 utilisés) : licence **MIT AND ISC** (d3-array, d3-scale, d3-shape, d3-time, d3-interpolate, d3-color, d3-format, d3-path, d3-timer : ISC).
+- `d3-ease` : licence **BSD-3-Clause** (Copyright 2010-2021 Mike Bostock, Copyright 2001 Robert Penner). Cette licence demande de conserver l'avis de copyright, la liste des conditions et l'avertissement dans la documentation fournie avec le logiciel : le texte complet est dans `node_modules/d3-ease/LICENSE` ; il doit rester reproduit dans les mentions de licences de l'application. Les noms des auteurs ne servent pas à promouvoir l'application.
+
+# Licences — export de fichiers (H-03)
+
+- Aucun plugin Tauri dialog ni fs côté WebView : « Enregistrer sous » est ouvert et le fichier écrit par Rust. Seule la crate `tauri-plugin-dialog` (MIT OU Apache-2.0, projet Tauri, PC Windows uniquement) sert à ouvrir la boîte depuis Rust ; `tauri-plugin-opener` (déjà présent) affiche le fichier dans le dossier.
+- Aucune dépendance pour le PDF ni le PNG (dessin canvas, PDF minimal écrit par `src/domain/pdfDocument.ts`).

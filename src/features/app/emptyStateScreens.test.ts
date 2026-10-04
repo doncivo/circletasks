@@ -23,8 +23,8 @@ describe('P-06 : registre des écrans à état vide', () => {
     expect([...used].sort()).toEqual(registered);
   });
 
-  it('les exemptions documentées (Recherche, Objectif, Agendas, Projets, Rapport) n’utilisent pas EmptyState et ne chevauchent pas le registre', () => {
-    expect([...emptyStateExemptions].sort()).toEqual(['calendars', 'goals', 'projects', 'report', 'search']);
+  it('les exemptions documentées (Recherche, Objectif, Agendas, Projets) n’utilisent pas EmptyState et ne chevauchent pas le registre', () => {
+    expect([...emptyStateExemptions].sort()).toEqual(['calendars', 'goals', 'projects', 'search']);
     for (const id of emptyStateExemptions) {
       expect(used.has(id)).toBe(false);
       expect(emptyStateScreens.some((screen) => screen.id === id)).toBe(false);

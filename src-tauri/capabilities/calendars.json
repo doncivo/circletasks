@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "calendars",
-  "description": "Agendas externes (K-01 à K-03, ADR 0008), PC et iPhone. Le réseau passe par la commande calendar_http, limitée en Rust aux hôtes accounts.google.com, oauth2.googleapis.com, www.googleapis.com, caldav.icloud.com et pNN-caldav.icloud.com (HTTPS). Aucune permission http:, opener: ni fs: n'est accordée à la WebView.",
+  "description": "Agendas externes (K-01 à K-03, ADR 0008), PC et iPhone. Le réseau passe par la commande calendar_http, limitée en Rust aux hôtes accounts.google.com, oauth2.googleapis.com, www.googleapis.com, caldav.icloud.com et pNN-caldav.icloud.com (HTTPS). Cette capability n'accorde que ces six commandes : aucune permission de plugin http:, opener:, fs: ni dialog:. (La fenêtre principale reçoit par ailleurs, sur PC seulement, les capabilities desktop, focus-launcher et export, dont l'ouverture d'adresses limitée aux versions publiées du dépôt de mise à jour ; voir ces fichiers.)",
   "windows": ["main"],
   "platforms": ["windows", "iOS"],
   "permissions": [

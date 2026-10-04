@@ -17,4 +17,5 @@ export type * from './checklistRepository';
 export type * from './holidayRepository';
 export type * from './focusSessionRepository';
 export type * from './searchRepository';
+export type * from './statsRepository';
 export * from './sql';

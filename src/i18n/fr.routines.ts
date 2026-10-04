@@ -48,8 +48,6 @@ export const routinesFr = {
   },
   monthReport: {
     open: 'Rapport du mois',
-    caption: 'Rapport du mois',
-    back: 'Retour',
     section: 'ROUTINES — JOURS COMPLÉTÉS',
     cellAll: '{date}, tout validé : {done} sur {planned}',
     cellPartial: '{date}, {done} sur {planned}',

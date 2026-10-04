@@ -2,9 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { daySpan, focusTotalMinutes, monthSpan, weekSpan, type FocusTaskTotal, type FocusTotal } from '../../domain/focusTotals';
 import type { ItemFilter } from '../../domain/itemFilter';
+import { firstDayOf, monthOf, sameMonth, type MonthRef } from '../../domain/monthReport';
 import { t } from '../../i18n';
 import { formatFocusDuration } from '../../i18n/formatFocus';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
+import { formatReportMonth } from '../../i18n/formatStats';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useEffectiveProjectFilter } from '../spaces';
@@ -27,11 +29,14 @@ interface ReportData {
  * de projet (ES-08) et se recalcule aussitôt. Totaux fournis par le repository (agrégats SQL) : stats-history (H-01) les réutilise tels
  * quels pour la tuile « FOCUS ».
  */
-export function FocusReportSection() {
+export function FocusReportSection({ month }: { readonly month?: MonthRef } = {}) {
   const container = useAppContainer();
   const space = useAppStore((s) => s.spaceFilter);
   const project = useEffectiveProjectFilter();
-  const day = useAppStore((s) => s.day) ?? todayLocal(container.clock);
+  const currentDay = useAppStore((s) => s.day) ?? todayLocal(container.clock);
+  // H-01 : le rapport d'un autre mois n'affiche que le total de ce mois (« aujourd'hui » et « cette semaine » n'y ont pas de sens).
+  const monthOnly = month !== undefined && !sameMonth(month, monthOf(currentDay));
+  const day = monthOnly ? firstDayOf(month) : currentDay;
   const revision = useFeatureStore(focusStore, (s) => s.revision);
   const firstWeekday = getFirstWeekday();
   const filter: ItemFilter = useMemo(() => ({ space, project }), [space, project]);
@@ -42,12 +47,12 @@ export function FocusReportSection() {
     const repo = container.data.repos.focusSessions;
     void (async () => {
       try {
-        const month = monthSpan(day);
+        const span = monthSpan(day);
         const [today, week, monthTotal, top] = await Promise.all([
           repo.totals({ span: daySpan(day), filter }),
           repo.totals({ span: weekSpan(day, firstWeekday), filter }),
-          repo.totals({ span: month, filter }),
-          repo.totalsByTask({ span: month, filter }, TOP_TASKS),
+          repo.totals({ span, filter }),
+          repo.totalsByTask({ span, filter }, TOP_TASKS),
         ]);
         // Titre lu même pour une tâche à la corbeille ; une tâche supprimée pour de bon garde sa ligne (la session reste comptée).
         const titled = await Promise.all(
@@ -64,11 +69,13 @@ export function FocusReportSection() {
   }, [container, day, filter, firstWeekday, revision]);
 
   if (!data) return null;
-  const rows: readonly [string, FocusTotal][] = [
-    [t('focus.reportToday'), data.today],
-    [t('focus.reportWeek'), data.week],
-    [t('focus.reportMonth'), data.month],
-  ];
+  const rows: readonly [string, FocusTotal][] = monthOnly
+    ? [[formatReportMonth(month, monthOf(currentDay).year), data.month]]
+    : [
+        [t('focus.reportToday'), data.today],
+        [t('focus.reportWeek'), data.week],
+        [t('focus.reportMonth'), data.month],
+      ];
   return (
     <section className="ct-focus-report" aria-labelledby="ct-focus-report-title">
       <h2 id="ct-focus-report-title" className="ct-focus-report__title">

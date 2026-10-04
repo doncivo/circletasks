@@ -3,6 +3,7 @@ import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { captureEn } from './en.capture';
 import { focusEn } from './en.focus';
+import { statsEn } from './en.stats';
 import { scanEn } from './en.scan';
 import { searchEn } from './en.search';
 import { appearanceEn } from './en.appearance';
@@ -41,6 +42,7 @@ export const en: Messages = {
   },
   spaces: spacesEn,
   focus: focusEn,
+  stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
   tasks: {

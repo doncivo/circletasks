@@ -39,13 +39,13 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
 
   test('Alt+1 depuis un sous-écran de Tâches revient à Aujourd’hui (critère 4)', async ({ page }) => {
     await page.getByRole('button', { name: 'Rapport mensuel' }).click();
-    await expect(page.getByRole('heading', { name: 'Rapport mensuel' })).toBeVisible();
+    await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');
-    await expect(page.getByRole('heading', { name: 'Rapport mensuel' })).toHaveCount(0);
+    await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Rapport mensuel' }).click();
     await todayTab(page).click();
-    await expect(page.getByRole('heading', { name: 'Rapport mensuel' })).toHaveCount(0);
+    await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
   });
 

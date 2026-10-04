@@ -31,6 +31,11 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - ES-08 : écrans Statistiques et Focus par espace et projet, table `focus_session`.
 - Rapport mensuel global (H-01) ; aujourd'hui, seules la partie routines et l'accès aux tâches terminées existent.
 
+- Export H-03 : `ExportDialog` a sa propre fenêtre (portail + piège de focus) en attendant un composant `ui/Dialog` commun aux fenêtres et feuilles (ChoiceDialog, ConfirmDialog, Sheet) ; à factoriser.
+- Export H-03 : la lecture par blocs de `StatsRepository.listTasksForExport` trie sur `COALESCE(date, '9999-99-99')`, expression non indexée : SQLite retrie les lignes restantes à chaque page, donc le coût est quadratique en nombre de pages (500 lignes par page). Mesuré sous 2 s pour 5 000 tâches ; à reprendre avec un index d'expression ou une clé de tri stockée avant d'exporter beaucoup plus.
+
+- Rapport du mois (H-01) : il se rafraîchit après un changement de tâche ou de session Focus, pas après une modification des routines (validations, pauses) ni des objectifs ; il faut rouvrir l'écran ou changer de mois. À brancher sur une révision des routines et des objectifs.
+
 ## Ordre 4 (synchro)
 
 - focus_session : une seule session active garantie par le code seulement ; à la fusion de synchro, clore la plus ancienne si deux sessions sont ouvertes.
@@ -95,3 +100,10 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 - Fusionner les grammaires de dates `dateInput.ts` (T-14) et `naturalDate.ts` (Q-02) ; chrono-node conservé (PRD 7).
 - Focus : si l'écriture de clôture au terme échoue toujours, `checkElapsed` (appelé chaque seconde) réaffiche le message d'erreur en boucle : afficher une seule fois par session (revue du lot F).
+- Export H-03 (troisième revue et audit, non bloquant) :
+  - nom de temporaire unique par appel (`.ct-export-<aléa>.partial`, `create_new`, sans suppression préalable) : évite le conflit de deux exports simultanés et l'échec au-delà d'environ 243 caractères de nom ;
+  - ajouter `CONIN$`, `CONOUT$`, `COM¹-³` et `LPT¹-³` aux noms réservés ; appliquer le préfixe `_` avant la coupe à 200 caractères ;
+  - lecteur réseau monté (`Z:`) ou jonction vers un partage : le contrôle porte sur la lettre de lecteur seulement (option `GetDriveTypeW` et `canonicalize`) ;
+  - repli JSON du corps : plafond vérifié après la désérialisation par Tauri (refuser ce repli ou plafond plus bas) ;
+  - motif d'erreur dédié `too-large` (texte i18n) ; signature `reveal()` sans paramètre côté TS ;
+  - tests ExportDialog : témoin positif pour `flush()`, `vi.restoreAllMocks()` en `afterEach`.

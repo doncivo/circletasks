@@ -21,14 +21,15 @@ import { ChecklistsScreen, registerChecklistsSource } from './features/checklist
 import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
 import { FocusHost } from './features/focus';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
-import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
+import { registerRoutinesSource, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
 import { AppearanceScreen, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
-import { DoneTasksScreen, ReportScreen, TaskDetail, TrashScreen } from './features/tasks';
+import { ReportScreen } from './features/stats';
+import { DoneTasksScreen, TaskDetail, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
 import { t } from './i18n';
@@ -150,7 +151,7 @@ function AppShellContent() {
       ) : route.tab === 'week' ? (
         <WeekScreen />
       ) : route.tab === 'routines' ? (
-        route.screen === 'report' ? <RoutinesMonthReport /> : <RoutinesScreen />
+        route.screen === 'report' ? <ReportScreen entry="routines" /> : <RoutinesScreen />
       ) : route.tab === 'events' ? (
         <EventsScreen />
       ) : route.tab === 'checklists' ? (
