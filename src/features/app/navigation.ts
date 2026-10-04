@@ -2,7 +2,9 @@ import { create } from 'zustand';
 import type { HolidayCountry } from '../../domain/model';
 import type { ChecklistId, EventId, ExternalEventId, GoalId, LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
+import { isTabAvailable } from '../../domain/tabs';
 import type { ShortcutId } from './shortcuts';
+import { useTabsConfigStore } from './tabsConfig';
 
 /**
  * Coquille et navigation (PRD section 5), ADR 0004.
@@ -48,7 +50,7 @@ export type Route =
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
   | { readonly tab: 'events' }
   | { readonly tab: 'checklists'; readonly checklistId: ChecklistId | null }
-  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'calendars' | 'reminders' | 'holidays' | 'general' | 'desktop' | 'about' | 'trash' | 'appearance' }
+  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'calendars' | 'reminders' | 'holidays' | 'general' | 'desktop' | 'about' | 'trash' | 'appearance' | 'tabs' }
   /** Plages silencieuses d'un espace (ES-07), ouvertes depuis la ligne « Silence Pro » de Réglages › RAPPELS. */
   | { readonly tab: 'settings'; readonly screen: 'quiet'; readonly spaceId: SpaceId };
 
@@ -118,6 +120,8 @@ export const INITIAL_NAVIGATION: NavigationData = {
 export const useNavigationStore = create<NavigationState>()((set, get) => ({
   ...INITIAL_NAVIGATION,
   goToTab: (tab) => {
+    // P-01 critère 6 : un onglet masqué ne répond plus à son raccourci (il reste atteignable par un lien, via `navigate`).
+    if (!isTabAvailable(useTabsConfigStore.getState().config, TAB_IDS, tab, get().route.tab)) return;
     if (tab === 'tasks') get().goToToday();
     else set((s) => ({ route: s.lastRoutes[tab], detail: null }));
   },

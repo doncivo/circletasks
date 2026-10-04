@@ -10,6 +10,7 @@ import { formatRecapSummary } from '../reminders';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
 import { formatAppearanceParts } from './AppearanceScreen';
+import { formatTabsSummary, useVisibleTabCount } from './TabsScreen';
 import { settingsStore } from './settingsStore';
 import './SettingsScreen.css';
 
@@ -36,6 +37,7 @@ export function SettingsScreen() {
   const firstWeekday = useFeatureStore(settingsStore, (s) => s.firstWeekday);
   const timeFormat = useFeatureStore(settingsStore, (s) => s.timeFormat);
   const theme = useFeatureStore(settingsStore, (s) => s.theme);
+  const visibleTabs = useVisibleTabCount();
   const appearanceSummary = formatAppearanceParts(theme, firstWeekday, timeFormat).join(t('appearance.summarySeparator'));
 
   useEffect(() => {
@@ -70,6 +72,15 @@ export function SettingsScreen() {
       >
         <span>{t('appearance.row')}</span>
         <span className="ct-settings__value">{appearanceSummary}</span>
+      </button>
+      <button
+        type="button"
+        className="ct-settings__row ct-settings__rowButton"
+        aria-label={`${t('appearance.tabsRow')} : ${formatTabsSummary(visibleTabs)}`}
+        onClick={() => navigate({ tab: 'settings', screen: 'tabs' })}
+      >
+        <span>{t('appearance.tabsRow')}</span>
+        <span className="ct-settings__value">{formatTabsSummary(visibleTabs)}</span>
       </button>
       {/* --- fin M12 apparence et formats --- */}
       {launchAtStartup !== null && (

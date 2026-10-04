@@ -1,0 +1,91 @@
+/* Écran « Onglets » (P-01) : liste dans le style de la liste des projets d'ES-04, lignes de Reglages.html. */
+.ct-tabs-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.ct-tabs__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-tabs__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-tabs__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-tabs__hint {
+  margin: 0;
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-tabs__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-tabs__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  border-bottom: 1px solid var(--ct-color-border);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Place de la poignée pour aligner la ligne fixe (Tâches) sur les autres. */
+.ct-tabs__handleSpace {
+  flex-shrink: 0;
+  width: var(--ct-hit-target-min);
+}
+
+.ct-tabs__dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: var(--ct-radius-round);
+}
+
+.ct-tabs__name {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.ct-tabs__always {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}

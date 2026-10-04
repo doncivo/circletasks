@@ -1,5 +1,6 @@
 import type { DeviceId, IsoDateTime, LocalTime, SpaceFilter, SpaceId } from '../types';
 import type { ReminderOffsetMin } from './reminder';
+import type { TabsConfig } from '../tabs';
 import type { TimeFormat } from '../timeFormat';
 import type { FirstWeekday } from '../week';
 
@@ -44,6 +45,8 @@ export interface SettingsValues {
   'general.timeFormat': TimeFormat;
   /** P-02 : thème de cet appareil (un PC et un iPhone peuvent différer). */
   'ui.theme': ThemeChoice;
+  /** P-01 : onglets de cet appareil : ordre (identifiants) et onglets masqués. Identifiants inconnus ignorés, nouveaux onglets ajoutés à la fin. */
+  'ui.tabs': TabsConfig;
   /** Ancien réglage partagé, remplacé par `ui.theme` (local, P-02 D1) ; non utilisé. */
   'general.theme': 'system' | 'light' | 'dark';
   /** E-03 : calendriers de jours fériés activés (France, Tunisie), tous deux par défaut ; partagé entre appareils. */
@@ -84,6 +87,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'general.firstWeekday': { scope: 'shared', defaultValue: 'monday' },
   'general.timeFormat': { scope: 'shared', defaultValue: '24h' },
   'ui.theme': { scope: 'local', defaultValue: 'system' },
+  'ui.tabs': { scope: 'local', defaultValue: { order: [], hidden: [] } },
   'general.theme': { scope: 'shared', defaultValue: 'system' },
   'holidays.countries': { scope: 'shared', defaultValue: { FR: true, TN: true } },
   'general.timeZone': { scope: 'local', defaultValue: null },

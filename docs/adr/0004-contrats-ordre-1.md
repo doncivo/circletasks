@@ -152,3 +152,10 @@ Refactor sans changement de comportement ; contrats ajoutés ou retirés :
 - `src/features/calendars/calendarUseCases.ts` (`CalendarUseCases`) : `listAccounts`, `createAccount`, `saveCalendars` (agendas + retrait des événements des agendas décochés, une transaction), `removeAccount` (compte + événements, une transaction). Le coffre et les états locaux restent dans `calendarsStore`.
 - `src/domain/externalRecurrence.ts` (ex-`providers/recurrence.ts`) : `parseRecurrenceRule`, `occurrenceDates`, `nthWeekdayDate` ; les fournisseurs iCalendar l'appellent.
 - `src/domain/goalRules.ts` : `compareAttachedTasks` et `attachedTasksByGoal(tasks, includeGoal?)`, sélecteur unique des tâches rattachées (écran Objectif et historique). Le tri de l'historique gagne le départage par id à date et ordre égaux.
+
+### Avenant P-01, P-02, P-03 (M12 personnalisation)
+
+- Réglages ajoutés à `SettingsValues` : `general.firstWeekday` (`monday | saturday | sunday`) et `general.timeFormat` (`24h | 12h`), partagés ; `ui.theme` (`system | light | dark`) et `ui.tabs` (`{ order, hidden }`), locaux. `general.theme` (partagé) reste au modèle sans usage. `SettingsUseCases` gagne `loadFormats`, `setFirstWeekday`, `setTimeFormat`, `loadTheme`, `setTheme`, `loadTabs`, `saveTabs` (sections délimitées par des commentaires `--- M12 … ---`).
+- `src/i18n/formatPrefs.ts` : premier jour et format d'heure courants (valeur de module, comme `getLocale()`), lus au démarrage par `restoreAppearance` avant le premier rendu ; `src/domain/timeFormat.ts` (`formatTime`, `spokenTime`, `TimeFormat`) est le seul producteur d'heures affichées (test d'architecture) ; `weekStartOf(date, first = 'monday')` et `monthGrid(…, first)` prennent le premier jour, les objectifs / rapport / R-07 n'en passent pas.
+- `src/domain/tabs.ts` (`resolveTabs`, `moveTab`, `setTabHidden`, `isTabAvailable`) et `src/features/app/tabsConfig.ts` (store d'interface lu par la colonne et par `goToTab`, qui ignore un onglet masqué non actif).
+- `src/ui/dragPrimitive.ts` : seuil, type de pointeur, clic avalé après un glisser et écouteurs de fenêtre partagés par `useSortable` et `useZoneDrag` (dette soldée).

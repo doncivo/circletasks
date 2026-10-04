@@ -20,7 +20,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 soldé par E-01 : `registerEventsSource`, Aujourd'hui et Semaine ;
   - K-01 vers `externalEvents` ;
   - ~~M14 : migration `search_index` en FTS5.~~ (soldé par RC-01 : migration 0011, déclencheurs, `SearchRepository`)
-- Primitive de glisser commune à `useSortable` et `useZoneDrag` (avenant S-06 de l'ADR 0004).
+- ~~Primitive de glisser commune à `useSortable` et `useZoneDrag`~~ (soldée avec P-01 : `src/ui/dragPrimitive.ts`).
 - ~~Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.~~ (soldé par E-01 : `AddSheet`, `AddSegments`, `RoutineForm` réutilisé)
 - « Date de fin » du RecurrencePicker encore native (dette T-14).
 - Jours fériés (E-03) : mettre à jour la table des fêtes religieuses tunisiennes (`src/domain/holidays/lunarTable.ts`) avant la fin de chaque année (un test échoue sinon) ; sur iPhone, la roue des jours du sélecteur de date ne remonte pas au-delà de 60 jours (corriger une fête passée plus ancienne se fait sur PC).
@@ -77,7 +77,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 **Ordre 3 :**
 - Découper les fichiers de plus de 400 lignes : taskRepository (607), DateField (472), createTaskUseCases (468), todayStore (460), calendarsStore (412), et src/i18n/fr.ts (630) par module.
-- Primitive de glisser commune à useSortable et useZoneDrag.
+- ~~Primitive de glisser commune à useSortable et useZoneDrag~~ (soldée avec P-01 : `src/ui/dragPrimitive.ts`).
 - « Date de fin » du RecurrencePicker.
 - ES-08 et H-01.
 - Interfaces src/platform pour l'OCR, l'export et les fichiers.

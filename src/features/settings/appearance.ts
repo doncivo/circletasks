@@ -1,5 +1,6 @@
 import { setFormatPrefs } from '../../i18n/formatPrefs';
 import type { AppContainer } from '../app/container';
+import { useTabsConfigStore } from '../app/tabsConfig';
 import { createSettingsUseCases } from './settingsUseCases';
 import { applyTheme, applyWindowTheme, openWindowThemePort, setWindowThemePort } from './theme';
 
@@ -19,6 +20,12 @@ export async function restoreAppearance(container: Pick<AppContainer, 'data'>): 
     applyTheme(await useCases.loadTheme());
   } catch {
     // Thème système conservé (le script de premier affichage a déjà posé le miroir local, s'il existe).
+  }
+  // P-01 : disposition des onglets, lue avant le premier rendu (défaut : ordre d'origine, tout affiché).
+  try {
+    useTabsConfigStore.getState().setConfig(await useCases.loadTabs());
+  } catch {
+    // Disposition par défaut conservée.
   }
 }
 

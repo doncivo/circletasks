@@ -7,6 +7,8 @@ import type { TimeFormat } from '../../domain/timeFormat';
 import type { FirstWeekday } from '../../domain/week';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { DEFAULT_TABS_CONFIG, type TabsConfig } from '../../domain/tabs';
+import { useTabsConfigStore } from '../app/tabsConfig';
 import { createSettingsUseCases } from './settingsUseCases';
 import { applyThemeEverywhere } from './theme';
 
@@ -45,6 +47,12 @@ export interface SettingsState {
   /** P-02 : applique aussitôt (< 100 ms, sans rechargement) puis enregistre ; en cas d'échec, revient au thème enregistré. Ne rejette jamais. */
   setTheme(value: ThemeChoice): Promise<void>;
   // --- fin M12 thème ---
+  // --- M12 onglets (P-01) ---
+  /** P-01 : enregistre la disposition (appliquée aussitôt à la colonne) ; échec : retour à la disposition enregistrée. Ne rejette jamais. */
+  saveTabs(config: TabsConfig): Promise<void>;
+  /** P-01 critère 8 : remet l'ordre d'origine, tout affiché ; annulable 5 s (T-13). */
+  resetTabs(): Promise<void>;
+  // --- fin M12 onglets ---
   /**
    * N-04 : enregistre les récapitulatifs après validation (heures 24 h, soir après matin). Rend 'ok', l'erreur de validation (rien
    * n'est écrit) ou 'error' (écriture impossible). Aucune notification n'est planifiée (ordre 5, iPhone). Ne rejette jamais.
@@ -113,6 +121,33 @@ function createSettingsStore(container: AppContainer) {
       }
     },
     // --- fin M12 thème ---
+    // --- M12 onglets (P-01) ---
+    async saveTabs(config) {
+      const previous = useTabsConfigStore.getState().config;
+      set({ errorKey: null });
+      useTabsConfigStore.getState().setConfig(config);
+      try {
+        await useCases.saveTabs(config);
+      } catch {
+        useTabsConfigStore.getState().setConfig(previous);
+        set({ errorKey: 'settings.saveError' });
+      }
+    },
+    async resetTabs() {
+      const previous = useTabsConfigStore.getState().config;
+      await get().saveTabs(DEFAULT_TABS_CONFIG);
+      if (useTabsConfigStore.getState().config !== DEFAULT_TABS_CONFIG) return;
+      container.undo.push({
+        kind: 'tabs',
+        count: 1,
+        async undo() {
+          useTabsConfigStore.getState().setConfig(previous);
+          await useCases.saveTabs(previous).catch(() => undefined);
+          return 'undone';
+        },
+      });
+    },
+    // --- fin M12 onglets ---
 
     async load() {
       set({ status: 'loading', errorKey: null });

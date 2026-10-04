@@ -1,6 +1,7 @@
 import type { SettingsValues, ThemeChoice } from '../../domain/model';
 import type { RecapSettings } from '../../domain/recap';
 import type { SpaceFilter } from '../../domain/types';
+import { DEFAULT_TABS_CONFIG, type TabsConfig } from '../../domain/tabs';
 import { DEFAULT_TIME_FORMAT, TIME_FORMATS, type TimeFormat } from '../../domain/timeFormat';
 import { DEFAULT_FIRST_WEEKDAY, FIRST_WEEKDAYS, type FirstWeekday } from '../../domain/week';
 import type { AppContainer } from '../app/container';
@@ -49,12 +50,25 @@ export interface SettingsUseCases {
   loadTheme(): Promise<ThemeChoice>;
   setTheme(value: ThemeChoice): Promise<void>;
   // --- fin M12 thème ---
+  // --- M12 onglets (P-01) ---
+  /** P-01 : disposition des onglets de cet appareil (`ui.tabs`, local). */
+  loadTabs(): Promise<TabsConfig>;
+  saveTabs(config: TabsConfig): Promise<void>;
+  // --- fin M12 onglets ---
 }
 
 /** P-03 : réglages d'affichage de la date et de l'heure. */
 export interface FormatSettings {
   readonly firstWeekday: FirstWeekday;
   readonly timeFormat: TimeFormat;
+}
+
+/** Valeur lue en base (version future, fichier abîmé) : seuls les identifiants texte sont gardés. */
+export function sanitizeTabsConfig(value: unknown): TabsConfig {
+  if (typeof value !== 'object' || value === null) return DEFAULT_TABS_CONFIG;
+  const { order, hidden } = value as { order?: unknown; hidden?: unknown };
+  const strings = (list: unknown): string[] => (Array.isArray(list) ? list.filter((item): item is string => typeof item === 'string') : []);
+  return { order: strings(order), hidden: strings(hidden) };
 }
 
 export type SettingsDeps = Pick<AppContainer, 'data'>;
@@ -117,5 +131,13 @@ export function createSettingsUseCases(deps: SettingsDeps): SettingsUseCases {
       await settings().set('ui.theme', value);
     },
     // --- fin M12 thème ---
+    // --- M12 onglets (P-01) ---
+    async loadTabs() {
+      return sanitizeTabsConfig(await settings().get('ui.tabs'));
+    },
+    async saveTabs(config) {
+      await settings().set('ui.tabs', sanitizeTabsConfig(config));
+    },
+    // --- fin M12 onglets ---
   };
 }
