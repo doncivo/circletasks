@@ -64,18 +64,16 @@ jobs:
       - name: Initialiser le projet iOS
         run: npx tauri ios init
 
-      # Compile le front et la bibliothèque Rust. L'archive finale peut échouer faute de signature :
-      # c'est toléré, mais le projet généré et la bibliothèque .a doivent exister (vérifié ensuite).
-      - name: Préparer le front et la bibliothèque Rust
-        continue-on-error: true
-        run: npx tauri ios build --ci --target aarch64
+      # Front seul : la bibliothèque Rust est compilée par la phase « Build Rust Code » du projet Xcode
+      # généré (tauri ios xcode-script), déclenchée par xcodebuild à l'étape suivante. `tauri ios build`
+      # ne convient pas ici : il exige une équipe de signature avant même de compiler Rust.
+      - name: Compiler le front
+        run: npm run build
 
-      - name: Vérifier le projet et la bibliothèque Rust
+      - name: Vérifier le projet iOS généré
         run: |
           test -d src-tauri/gen/apple || { echo "::error::src-tauri/gen/apple absent"; exit 1; }
-          LIB=$(find src-tauri/gen/apple src-tauri/target/aarch64-apple-ios -name "*.a" 2>/dev/null | head -n 1)
-          test -n "$LIB" || { echo "::error::Bibliothèque Rust (.a) absente : la compilation Rust a échoué"; exit 1; }
-          echo "Bibliothèque : $LIB"
+          ls src-tauri/gen/apple
 
       - name: Compiler avec Xcode sans signature
         run: |
