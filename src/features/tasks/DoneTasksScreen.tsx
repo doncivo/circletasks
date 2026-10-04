@@ -4,7 +4,7 @@ import { todayLocal } from '../../domain/clock';
 import { DONE_PERIOD_KINDS, groupDoneByDay, localTimeOfInstant } from '../../domain/donePeriod';
 import type { Space, Task } from '../../domain/model';
 import { t } from '../../i18n';
-import { formatDayLabel, formatDonePeriodLabel } from '../../i18n/format';
+import { formatDayLabel, formatDonePeriodLabel, formatTime } from '../../i18n/format';
 import { Checkbox, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout, spaceTextColor } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
@@ -15,7 +15,7 @@ import './DoneTasksScreen.css';
 
 function doneSubtitle(task: Task, spaces: readonly Space[]) {
   const space = spaces.find((s) => s.id === task.spaceId);
-  const time = task.doneAt ? t('done.doneAt', { time: localTimeOfInstant(task.doneAt) }) : '';
+  const time = task.doneAt ? t('done.doneAt', { time: formatTime(localTimeOfInstant(task.doneAt)) }) : '';
   return (
     <>
       {time}

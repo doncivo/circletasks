@@ -1,6 +1,8 @@
 import type { SettingsValues } from '../../domain/model';
 import type { RecapSettings } from '../../domain/recap';
 import type { SpaceFilter } from '../../domain/types';
+import { DEFAULT_TIME_FORMAT, TIME_FORMATS, type TimeFormat } from '../../domain/timeFormat';
+import { DEFAULT_FIRST_WEEKDAY, FIRST_WEEKDAYS, type FirstWeekday } from '../../domain/week';
 import type { AppContainer } from '../app/container';
 
 /** A-06 / SD-04 : écran dont la vue compacte est mémorisée (réglage local `view.compact`). */
@@ -35,6 +37,18 @@ export interface SettingsUseCases {
   setCompactView(screen: CompactViewScreen, compact: boolean): Promise<void>;
   /** ES-03 : filtre Pro / Perso / Tout mémorisé par appareil (`spaces.filter`, local). */
   saveSpaceFilter(filter: SpaceFilter): Promise<void>;
+  // --- M12 apparence et formats (P-03) ---
+  /** P-03 : premier jour de semaine et format d'heure (partagés). */
+  loadFormats(): Promise<FormatSettings>;
+  setFirstWeekday(value: FirstWeekday): Promise<void>;
+  setTimeFormat(value: TimeFormat): Promise<void>;
+  // --- fin M12 apparence et formats ---
+}
+
+/** P-03 : réglages d'affichage de la date et de l'heure. */
+export interface FormatSettings {
+  readonly firstWeekday: FirstWeekday;
+  readonly timeFormat: TimeFormat;
 }
 
 export type SettingsDeps = Pick<AppContainer, 'data'>;
@@ -74,5 +88,20 @@ export function createSettingsUseCases(deps: SettingsDeps): SettingsUseCases {
     async saveSpaceFilter(filter) {
       await settings().set('spaces.filter', filter);
     },
+    // --- M12 apparence et formats (P-03) ---
+    async loadFormats() {
+      const [firstWeekday, timeFormat] = await Promise.all([settings().get('general.firstWeekday'), settings().get('general.timeFormat')]);
+      return {
+        firstWeekday: FIRST_WEEKDAYS.includes(firstWeekday) ? firstWeekday : DEFAULT_FIRST_WEEKDAY,
+        timeFormat: TIME_FORMATS.includes(timeFormat) ? timeFormat : DEFAULT_TIME_FORMAT,
+      };
+    },
+    async setFirstWeekday(value) {
+      await settings().set('general.firstWeekday', value);
+    },
+    async setTimeFormat(value) {
+      await settings().set('general.timeFormat', value);
+    },
+    // --- fin M12 apparence et formats ---
   };
 }

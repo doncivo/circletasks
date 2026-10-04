@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { isSharedSetting } from '../../domain/model';
 import { asEntityId, type DeviceId, type LocalTime } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createSettingsUseCases } from './settingsUseCases';
@@ -24,6 +25,22 @@ describe('cas d’usage des réglages (T-06, A-03, A-06, N-04, D-02, ES-03)', ()
     const recaps = { morning: { enabled: false, time: '08:00' as LocalTime }, evening: { enabled: true, time: '22:15' as LocalTime } };
     await useCases.saveRecaps(recaps);
     expect(await useCases.load()).toEqual({ carryOverUndone: false, hideRoutines: true, recaps });
+  });
+
+  it('P-03 : premier jour et format d’heure, lundi et 24 h par défaut, écrits comme réglages partagés', async () => {
+    const useCases = createSettingsUseCases(db);
+    expect(await useCases.loadFormats()).toEqual({ firstWeekday: 'monday', timeFormat: '24h' });
+    await useCases.setFirstWeekday('sunday');
+    await useCases.setTimeFormat('12h');
+    expect(await useCases.loadFormats()).toEqual({ firstWeekday: 'sunday', timeFormat: '12h' });
+    expect(isSharedSetting('general.firstWeekday')).toBe(true);
+    expect(isSharedSetting('general.timeFormat')).toBe(true);
+  });
+
+  it('P-03 : une valeur inconnue (version future) retombe sur le défaut', async () => {
+    await db.data.repos.settings.set('general.firstWeekday', 'friday' as never);
+    await db.data.repos.settings.set('general.timeFormat', '36h' as never);
+    expect(await createSettingsUseCases(db).loadFormats()).toEqual({ firstWeekday: 'monday', timeFormat: '24h' });
   });
 
   it('vue compacte : seul l’écran visé change', async () => {

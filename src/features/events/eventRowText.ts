@@ -1,6 +1,7 @@
 import type { EventListEntry } from '../../domain/eventList';
 import { ageAtOccurrence } from '../../domain/eventKinds';
 import { getLocale, t } from '../../i18n';
+import { formatTime, formatTimeRange } from '../../i18n/format';
 
 /** « 34 ans », « 1 an » (pluriel de la langue courante : en français, 0 et 1 au singulier). */
 export function ageLabel(age: number): string {
@@ -10,7 +11,7 @@ export function ageLabel(age: number): string {
 /** Heures d'une ligne : « 10:00 – 11:00 », ou la seule heure de début quand la fin est la même ; null pour une journée entière. */
 export function entryTimeRange(entry: Pick<EventListEntry, 'allDay' | 'startTime' | 'endTime'>): string | null {
   if (entry.allDay || entry.startTime === null) return null;
-  return entry.endTime !== null && entry.endTime !== entry.startTime ? `${entry.startTime} – ${entry.endTime}` : entry.startTime;
+  return entry.endTime !== null && entry.endTime !== entry.startTime ? formatTimeRange(entry.startTime, entry.endTime) : formatTime(entry.startTime);
 }
 
 export interface SubtitleOptions {

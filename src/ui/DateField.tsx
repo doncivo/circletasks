@@ -6,7 +6,8 @@ import { addDays } from '../domain/localDate';
 import { nextWeekFrom } from '../domain/taskPostpone';
 import type { LocalDate } from '../domain/types';
 import { t } from '../i18n';
-import { formatDayAria, formatDayFull, formatDayLabel, formatMonthTitle, weekdayInitials, weekdayNamesLong } from '../i18n/format';
+import { formatDayAria, formatDayFull, formatDayLabel, formatMonthTitle, formatTime, weekdayInitials, weekdayNamesLong } from '../i18n/format';
+import { getFirstWeekday } from '../i18n/formatPrefs';
 import { Icon } from './Icon';
 import './DateField.css';
 
@@ -66,13 +67,13 @@ function fieldText(choice: DateChoice | null, today: LocalDate): string {
   else if (choice.date === addDays(today, 1)) day = t('datePicker.tomorrow');
   else if (sameYear && choice.date > today) day = formatDayLabel(choice.date);
   else day = `${formatDayLabel(choice.date).replace(/^\S+\s/, '')} ${year}`; // « 25 sept. 2030 » : l'année évite l'ambiguïté de la saisie
-  return choice.time ? `${day} ${choice.time}` : day;
+  return choice.time ? `${day} ${formatTime(choice.time)}` : day;
 }
 
 function summary(choice: DateChoice): string {
   if (choice.date === null) return t('datePicker.somedaySummary');
   return choice.time
-    ? t('datePicker.understoodAt', { day: formatDayFull(choice.date), time: choice.time })
+    ? t('datePicker.understoodAt', { day: formatDayFull(choice.date), time: formatTime(choice.time) })
     : formatDayFull(choice.date);
 }
 
@@ -108,7 +109,7 @@ export function DateEditor({
   const [text, setText] = useState(() => fieldText(value, today));
   const [draft, setDraft] = useState<DateChoice | null>(value);
   const [textError, setTextError] = useState(false);
-  const [timeText, setTimeText] = useState(value?.time ?? '');
+  const [timeText, setTimeText] = useState(value?.time ? formatTime(value.time) : '');
   const [timeError, setTimeError] = useState(false);
   const [month, setMonth] = useState<CalendarMonth>(() => monthOf(value?.date ?? today));
   const [focusDate, setFocusDate] = useState<LocalDate>(value?.date ?? today);
@@ -123,7 +124,7 @@ export function DateEditor({
     setDraft(value);
     setTextError(false);
     setTimeError(false);
-    setTimeText(value?.time ?? '');
+    setTimeText(value?.time ? formatTime(value.time) : '');
   }
 
   const invalid = textError || timeError;
@@ -152,7 +153,7 @@ export function DateEditor({
     } else if (result.ok) {
       setTextError(false);
       setTimeError(false);
-      setTimeText(result.value.time ?? '');
+      setTimeText(result.value.time ? formatTime(result.value.time) : '');
       publish(result.value, false);
       showDate(result.value.date);
     } else if (result.error === 'empty') {
@@ -168,7 +169,7 @@ export function DateEditor({
 
   function applyChoice(choice: DateChoice): void {
     setText(fieldText(choice, today));
-    setTimeText(choice.time ?? '');
+    setTimeText(choice.time ? formatTime(choice.time) : '');
     setTextError(false);
     setTimeError(false);
     publish(choice, false);
@@ -218,7 +219,7 @@ export function DateEditor({
     setDraft(value);
     setTextError(false);
     setTimeError(false);
-    setTimeText(value?.time ?? '');
+    setTimeText(value?.time ? formatTime(value.time) : '');
     onDraftChange?.(value);
     if (value?.date) showDate(value.date);
   }
@@ -263,7 +264,7 @@ export function DateEditor({
   });
 
   function handleGridKeyDown(event: KeyboardEvent): void {
-    const next = moveCalendarFocus(focusDate, event.key);
+    const next = moveCalendarFocus(focusDate, event.key, getFirstWeekday());
     if (!next) return;
     event.preventDefault();
     setFocusDate(next);
@@ -272,7 +273,7 @@ export function DateEditor({
     focusAfterRender.current = true;
   }
 
-  const cells = monthGrid(month.year, month.month);
+  const cells = monthGrid(month.year, month.month, getFirstWeekday());
   const firstOfMonth = cells.find((cell): cell is LocalDate => cell !== null);
   const focusInMonth = cells.includes(focusDate);
   const tabbable = focusInMonth ? focusDate : firstOfMonth;

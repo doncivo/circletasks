@@ -1,6 +1,7 @@
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { searchEn } from './en.search';
+import { appearanceEn } from './en.appearance';
 import { spacesEn } from './en.spaces';
 import { calendarsEn } from './en.calendars';
 import { routinesEn } from './en.routines';
@@ -34,6 +35,7 @@ export const en: Messages = {
     },
   },
   spaces: spacesEn,
+  appearance: appearanceEn,
   calendars: calendarsEn,
   tasks: {
     newTask: 'New task',
@@ -258,6 +260,7 @@ export const en: Messages = {
     wheelDay: 'Day',
     wheelHour: 'Hours',
     wheelMinute: 'Minutes',
+    wheelMeridiem: 'AM or PM',
     noHour: '—',
     noHourSpoken: 'No time',
     hourSpoken: '{hour} o’clock',

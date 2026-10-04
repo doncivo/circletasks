@@ -1,5 +1,6 @@
-import { addDays, daysInMonth, makeLocalDate, weekdayOf } from './localDate';
+import { addDays, daysInMonth, makeLocalDate } from './localDate';
 import type { LocalDate } from './types';
+import { daysSinceWeekStart, type FirstWeekday } from './week';
 
 /**
  * Mini-calendrier du sélecteur de date PC (T-14) : grille d'un mois, semaine commençant le lundi
@@ -12,9 +13,9 @@ export interface CalendarMonth {
 }
 
 /** Cases de la grille : `null` pour les cases vides avant le 1er (alignement lundi en premier). */
-export function monthGrid(year: number, month: number): readonly (LocalDate | null)[] {
+export function monthGrid(year: number, month: number, firstWeekday: FirstWeekday = 'monday'): readonly (LocalDate | null)[] {
   const first = makeLocalDate(year, month, 1);
-  const leading = weekdayOf(first) - 1;
+  const leading = daysSinceWeekStart(first, firstWeekday);
   const days = Array.from({ length: daysInMonth(year, month) }, (_, i) => makeLocalDate(year, month, i + 1));
   return [...Array.from({ length: leading }, () => null), ...days];
 }
@@ -32,7 +33,7 @@ export function monthOf(date: LocalDate): CalendarMonth {
 }
 
 /** Déplacement clavier dans la grille (flèches : ±1 jour, ±7 jours ; Début / Fin : début / fin de semaine ; PageUp / PageDown : ±1 mois). */
-export function moveCalendarFocus(date: LocalDate, key: string): LocalDate | null {
+export function moveCalendarFocus(date: LocalDate, key: string, firstWeekday: FirstWeekday = 'monday'): LocalDate | null {
   switch (key) {
     case 'ArrowLeft':
       return addDays(date, -1);
@@ -43,9 +44,9 @@ export function moveCalendarFocus(date: LocalDate, key: string): LocalDate | nul
     case 'ArrowDown':
       return addDays(date, 7);
     case 'Home':
-      return addDays(date, -(weekdayOf(date) - 1));
+      return addDays(date, -daysSinceWeekStart(date, firstWeekday));
     case 'End':
-      return addDays(date, 7 - weekdayOf(date));
+      return addDays(date, 6 - daysSinceWeekStart(date, firstWeekday));
     case 'PageUp':
     case 'PageDown': {
       const [year, month, day] = date.split('-').map(Number);

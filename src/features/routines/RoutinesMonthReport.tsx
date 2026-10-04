@@ -6,6 +6,7 @@ import { formatPercent, monthAggregate, monthRate, type AggregateState } from '.
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { formatDayAria, weekdayInitials } from '../../i18n/format';
+import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { Icon, SpacePills } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
@@ -53,9 +54,10 @@ export function RoutinesMonthReport() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceFilter]);
 
+  const firstWeekday = getFirstWeekday();
   const aggregate = useMemo(
-    () => monthAggregate([...routines, ...archived], doneByRoutine, month.year, month.month, today, pausesOf),
-    [routines, archived, doneByRoutine, pausesOf, month, today],
+    () => monthAggregate([...routines, ...archived], doneByRoutine, month.year, month.month, today, pausesOf, firstWeekday),
+    [routines, archived, doneByRoutine, pausesOf, month, today, firstWeekday],
   );
   const rates = useMemo(
     () =>

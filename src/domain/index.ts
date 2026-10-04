@@ -25,6 +25,7 @@ export * from './todayList';
 export * from './taskReorder';
 export * from './taskDetailEdit';
 export * from './week';
+export * from './timeFormat';
 export * from './externalEvents';
 export * from './taskMove';
 export * from './routineRules';

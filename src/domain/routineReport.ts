@@ -1,7 +1,8 @@
-import { addDays, daysInMonth, makeLocalDate, weekdayOf } from './localDate';
+import { addDays, daysInMonth, makeLocalDate } from './localDate';
 import type { Routine } from './model';
 import { daysOfWeek, isPlannedOn, isQuotaRule, mondayOf, type DateInterval, type RoutineRule } from './routineSchedule';
 import type { LocalDate, RoutineId } from './types';
+import { daysSinceWeekStart, type FirstWeekday } from './week';
 
 /**
  * Rapport d'une routine (R-06) : taux de complétion sur 7, 30 et 90 jours, carte de chaleur mensuelle, carte de toutes les
@@ -106,16 +107,16 @@ export interface HeatmapCell {
 export interface MonthHeatmap {
   readonly year: number;
   readonly month: number;
-  /** Cases vides avant le 1er (lundi en premier : 0 si le 1er est un lundi). */
+  /** Cases vides avant le 1er (selon le premier jour de semaine réglé, P-03 ; lundi par défaut : 0 si le 1er est un lundi). */
   readonly leadingBlanks: number;
   readonly cells: readonly HeatmapCell[];
 }
 
-function monthCells<T>(year: number, month: number, make: (date: LocalDate, day: number) => T): { leadingBlanks: number; cells: T[] } {
+function monthCells<T>(year: number, month: number, make: (date: LocalDate, day: number) => T, firstWeekday: FirstWeekday): { leadingBlanks: number; cells: T[] } {
   const total = daysInMonth(year, month);
   const first = makeLocalDate(year, month, 1);
   const cells = Array.from({ length: total }, (_, i) => make(makeLocalDate(year, month, i + 1), i + 1));
-  return { leadingBlanks: weekdayOf(first) - 1, cells };
+  return { leadingBlanks: daysSinceWeekStart(first, firstWeekday), cells };
 }
 
 /**
@@ -130,6 +131,7 @@ export function monthHeatmap(
   month: number,
   today: LocalDate,
   pauses: readonly DateInterval[] = [],
+  firstWeekday: FirstWeekday = 'monday',
 ): MonthHeatmap {
   const quota = isQuotaRule(rule);
   const { leadingBlanks, cells } = monthCells(year, month, (date, day): HeatmapCell => {
@@ -137,7 +139,7 @@ export function monthHeatmap(
     if (done.has(date)) state = 'done';
     else if (!quota && isPlannedOn(rule, date, pauses)) state = date < today ? 'missed' : 'upcoming';
     return { date, day, state, isToday: date === today };
-  });
+  }, firstWeekday);
   return { year, month, leadingBlanks, cells };
 }
 
@@ -172,6 +174,7 @@ export function monthAggregate(
   month: number,
   today: LocalDate,
   pauses: ReadonlyMap<RoutineId, readonly DateInterval[]> = new Map<RoutineId, readonly DateInterval[]>(),
+  firstWeekday: FirstWeekday = 'monday',
 ): MonthAggregate {
   const { leadingBlanks, cells } = monthCells(year, month, (date, day): AggregateCell => {
     let planned = 0;
@@ -192,6 +195,6 @@ export function monthAggregate(
       else state = date < today ? 'missed' : 'upcoming';
     }
     return { date, day, state, isToday: date === today, planned, done: doneCount };
-  });
+  }, firstWeekday);
   return { year, month, leadingBlanks, cells };
 }

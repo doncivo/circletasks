@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
@@ -18,7 +18,7 @@ import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { SettingsScreen } from './features/settings';
+import { AppearanceScreen, restoreAppearance, SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
@@ -26,6 +26,7 @@ import { DoneTasksScreen, ReportScreen, TaskDetail, TrashScreen } from './featur
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
 import { t } from './i18n';
+import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
 import { useLayout } from './ui/useLayout';
 
@@ -56,6 +57,8 @@ const SETTINGS_ITEM = requireTab('settings');
  * (aucun écran inventé) ; `route.tab` reste la seule source de vérité.
  */
 function AppShellContent() {
+  // P-03 : un changement de format d'heure ou de premier jour réaffiche aussitôt toute la coquille (sans redémarrage).
+  useSyncExternalStore(subscribeFormatPrefs, formatPrefsVersion);
   const container = useAppContainer();
   const route = useNavigationStore((s) => s.route);
   const goToTab = useNavigationStore((s) => s.goToTab);
@@ -132,7 +135,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}
@@ -167,6 +170,8 @@ export function App() {
         }
         // Filtre Pro / Perso / Tout (ES-03) : dernier choix de cet appareil, restauré avant le premier rendu.
         await restoreSpaceFilter(created);
+        // Apparence (P-03) : premier jour et format d'heure lus avant le premier rendu.
+        await restoreAppearance(created);
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
         const started = startAppStartup(created);

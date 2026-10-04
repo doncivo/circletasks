@@ -48,7 +48,7 @@ export type Route =
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
   | { readonly tab: 'events' }
   | { readonly tab: 'checklists'; readonly checklistId: ChecklistId | null }
-  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'calendars' | 'reminders' | 'holidays' | 'general' | 'desktop' | 'about' | 'trash' }
+  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'calendars' | 'reminders' | 'holidays' | 'general' | 'desktop' | 'about' | 'trash' | 'appearance' }
   /** Plages silencieuses d'un espace (ES-07), ouvertes depuis la ligne « Silence Pro » de Réglages › RAPPELS. */
   | { readonly tab: 'settings'; readonly screen: 'quiet'; readonly spaceId: SpaceId };
 

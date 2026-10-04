@@ -174,3 +174,19 @@ describe('wheelChoices (critères 2, 3, 4)', () => {
 function asTime(value: string): Parameters<typeof timeToWheel>[0] {
   return value as Parameters<typeof timeToWheel>[0];
 }
+
+describe('mini-calendrier selon le premier jour (P-03 critère 2)', () => {
+  it('la grille de septembre 2026 (1er = mardi) compte 1 case vide en lundi, 2 en dimanche, 3 en samedi', () => {
+    expect(monthGrid(2026, 9, 'monday').findIndex((cell) => cell !== null)).toBe(1);
+    expect(monthGrid(2026, 9, 'sunday').findIndex((cell) => cell !== null)).toBe(2);
+    expect(monthGrid(2026, 9, 'saturday').findIndex((cell) => cell !== null)).toBe(3);
+  });
+
+  it('Début et Fin vont au premier et au dernier jour de la semaine réglée', () => {
+    // 2026-09-23 est un mercredi.
+    expect(moveCalendarFocus(asLocalDate('2026-09-23'), 'Home', 'sunday')).toBe('2026-09-20');
+    expect(moveCalendarFocus(asLocalDate('2026-09-23'), 'End', 'sunday')).toBe('2026-09-26');
+    expect(moveCalendarFocus(asLocalDate('2026-09-23'), 'Home')).toBe('2026-09-21');
+    expect(moveCalendarFocus(asLocalDate('2026-09-23'), 'End')).toBe('2026-09-27');
+  });
+});

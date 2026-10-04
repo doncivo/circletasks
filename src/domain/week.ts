@@ -1,16 +1,42 @@
 import { addDays, parseLocalDate, weekdayOf } from './localDate';
 import type { ChecklistSummary, Task } from './model';
 import { buildTodayList, type TodayEventEntry, type TodayList, type TodayRoutineEntry } from './todayList';
-import type { LocalDate, SpaceFilter } from './types';
+import type { LocalDate, SpaceFilter, Weekday } from './types';
 
 /**
  * Semaine (M3, S-01) : du lundi au dimanche, numérotation ISO 8601. Calculs sur des dates civiles en UTC : aucun effet de
  * fuseau ni de changement d'heure (la semaine du passage à l'heure d'été compte bien 7 jours).
  */
 
-/** Le lundi de la semaine qui contient `date` (premier jour toujours lundi à l'ordre 1, réglage P-03 à l'ordre 3). */
-export function weekStartOf(date: LocalDate): LocalDate {
-  return addDays(date, 1 - weekdayOf(date));
+/** P-03 : premier jour de la semaine affichée (lundi par défaut ; samedi ou dimanche au choix). */
+export type FirstWeekday = 'monday' | 'saturday' | 'sunday';
+export const FIRST_WEEKDAYS: readonly FirstWeekday[] = ['monday', 'saturday', 'sunday'];
+export const DEFAULT_FIRST_WEEKDAY: FirstWeekday = 'monday';
+
+const FIRST_WEEKDAY_ISO: Readonly<Record<FirstWeekday, Weekday>> = { monday: 1, saturday: 6, sunday: 7 };
+
+/** Jour ISO (1 = lundi … 7 = dimanche) du premier jour de semaine. */
+export function firstWeekdayIso(first: FirstWeekday): Weekday {
+  return FIRST_WEEKDAY_ISO[first];
+}
+
+/** Nombre de jours entre le premier jour de la semaine et `date` (0 à 6). */
+export function daysSinceWeekStart(date: LocalDate, first: FirstWeekday = DEFAULT_FIRST_WEEKDAY): number {
+  return (weekdayOf(date) - FIRST_WEEKDAY_ISO[first] + 7) % 7;
+}
+
+/** Jours ISO dans l'ordre d'affichage d'une semaine commençant par `first` (lundi : 1…7 ; dimanche : 7, 1…6). */
+export function weekdayOrder(first: FirstWeekday = DEFAULT_FIRST_WEEKDAY): Weekday[] {
+  const start = FIRST_WEEKDAY_ISO[first];
+  return Array.from({ length: 7 }, (_, i) => (((start - 1 + i) % 7) + 1) as Weekday);
+}
+
+/**
+ * Premier jour (lundi par défaut) de la semaine qui contient `date`. Les objectifs, le rapport et la règle « toutes les N semaines »
+ * restent sur le lundi (P-03 D2) : ils appellent sans second argument.
+ */
+export function weekStartOf(date: LocalDate, first: FirstWeekday = DEFAULT_FIRST_WEEKDAY): LocalDate {
+  return addDays(date, -daysSinceWeekStart(date, first));
 }
 
 /** Les sept jours de la semaine commençant le lundi `weekStart`. */

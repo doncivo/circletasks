@@ -3,6 +3,7 @@ import type { ChecklistSummary, Space } from '../../domain/model';
 import type { ChecklistId, LocalDate } from '../../domain/types';
 import type { TodayEventEntry, TodayGoalEntry } from '../../domain/todayList';
 import { t } from '../../i18n';
+import { formatTime } from '../../i18n/format';
 import { Icon, IconView, resolveIconRefColor, spaceTextColor } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import { bandCountdownTag } from '../events/bandCountdown';
@@ -65,7 +66,7 @@ export function TodayEventBand({ event, compact, date, today, onOpen }: { event:
   const content = (
     <>
       {event.icon ? <IconView icon={event.icon} size={22} color="var(--ct-color-event-text)" /> : <Icon icon={CalendarDays} size={22} color="var(--ct-color-event-text)" />}
-      <span className="ct-today-event__time">{event.allDay ? t('today.eventAllDay') : event.startTime}</span>
+      <span className="ct-today-event__time">{event.allDay || event.startTime === null ? t('today.eventAllDay') : formatTime(event.startTime)}</span>
       <span className="ct-today-event__title">{event.title}</span>
       {event.calendarName && <span className="ct-today-event__source">{event.calendarName}</span>}
       {countdown && (

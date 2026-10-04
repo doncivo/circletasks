@@ -1,0 +1,91 @@
+/* Écran « Apparence et formats » (P-02, P-03) : sections et lignes de Reglages.html, contrôles segmentés de SpaceSegmented. */
+.ct-appearance-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-appearance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.ct-appearance__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-appearance__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-appearance__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-appearance__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-appearance__section {
+  margin: var(--ct-space-3) 0 0 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-appearance__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ct-appearance__label {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-appearance__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 38px;
+  border-bottom: 1px solid var(--ct-color-border);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-appearance__value {
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-appearance__hint {
+  margin: 0;
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}

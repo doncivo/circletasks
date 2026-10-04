@@ -29,7 +29,7 @@ export interface WeekHeaderProps {
  * d'espace, entre les flèches ; iPhone : flèches à droite du titre, pastille à droite des pastilles d'espace), puis le filet décoratif.
  */
 export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, onNext, onCurrent, somedayToggle, shortRange = false }: WeekHeaderProps) {
-  const { week, year } = isoWeekOf(weekStart);
+  const { week, year } = isoWeekOf(addDays(weekStart, 3));
   const caption = layout === 'pc' ? t('week.title', { number: week }) : t('week.titleYear', { number: week, year });
   const range = formatWeekRange(weekStart, addDays(weekStart, 6), layout === 'pc' && !shortRange ? 'long' : 'short');
   const size = layout === 'pc' ? 22 : 24;

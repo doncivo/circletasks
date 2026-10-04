@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { parseTimeInput } from '../../domain/dateInput';
-import { WHEEL_HOURS, WHEEL_MINUTES, timeToWheel, wheelToTime } from '../../domain/wheelChoices';
 import type { LocalTime } from '../../domain/types';
-import { getLocale, t } from '../../i18n';
-import { WheelPicker, type WheelItem, type Layout } from '../../ui';
+import { t } from '../../i18n';
+import { formatTime } from '../../i18n/format';
+import { TimeWheelColumns, type Layout } from '../../ui';
 import './RoutineTimeEditor.css';
 
 export interface RoutineTimeEditorProps {
@@ -13,8 +13,6 @@ export interface RoutineTimeEditorProps {
   readonly layout: Layout;
 }
 
-const pad2 = (n: number): string => String(n).padStart(2, '0');
-const plural = (n: number): Intl.LDMLPluralRule => new Intl.PluralRules(getLocale()).select(n);
 
 /**
  * Sélecteur d'heure d'une routine (R-02 critère 1), 24 h : roues Heures + Minutes sur iPhone (« — » = sans heure, comme les roues de
@@ -25,7 +23,7 @@ export function RoutineTimeEditor({ value, onChange, layout }: RoutineTimeEditor
 }
 
 function TimeInput({ value, onChange }: Pick<RoutineTimeEditorProps, 'value' | 'onChange'>) {
-  const [text, setText] = useState(value ?? '');
+  const [text, setText] = useState(value ? formatTime(value) : '');
   const [invalid, setInvalid] = useState(false);
 
   function handleChange(next: string): void {
@@ -45,13 +43,13 @@ function TimeInput({ value, onChange }: Pick<RoutineTimeEditorProps, 'value' | '
         aria-invalid={invalid}
         placeholder={t('routines.form.timePlaceholder')}
         value={text}
-        maxLength={5}
+        maxLength={8}
         className="ct-routine-time__input"
         onChange={(event) => handleChange(event.target.value)}
         onBlur={() => {
-          // Saisie valide : l'heure est écrite au format 24 h (« 7h30 » devient « 07:30 »).
+          // Saisie valide : l'heure est écrite dans le format choisi (« 7h30 » devient « 07:30 » ou « 7:30 AM »).
           const parsed = parseTimeInput(text);
-          if (parsed.ok) setText(parsed.value ?? '');
+          if (parsed.ok) setText(parsed.value ? formatTime(parsed.value) : '');
         }}
       />
       <button
@@ -76,45 +74,9 @@ function TimeInput({ value, onChange }: Pick<RoutineTimeEditorProps, 'value' | '
 }
 
 function TimeWheels({ value, onChange }: Pick<RoutineTimeEditorProps, 'value' | 'onChange'>) {
-  const hourItems = useMemo<WheelItem[]>(
-    () => [
-      { label: t('datePicker.noHour'), spoken: t('datePicker.noHourSpoken') },
-      ...WHEEL_HOURS.map((hour) => ({ label: pad2(hour), spoken: t(plural(hour) === 'one' ? 'datePicker.hourSpokenOne' : 'datePicker.hourSpoken', { hour }) })),
-    ],
-    [],
-  );
-  const minuteItems = useMemo<WheelItem[]>(
-    () => WHEEL_MINUTES.map((minute) => ({ label: pad2(minute), spoken: t(plural(minute) === 'one' ? 'datePicker.minuteSpokenOne' : 'datePicker.minuteSpoken', { minute }) })),
-    [],
-  );
-  const wheel = timeToWheel(value);
-  // Minutes mémorisées quand on repasse sur « — » puis qu'on rechoisit une heure.
-  const [rememberedMinute, setRememberedMinute] = useState(wheel?.minute ?? 0);
-  const minute = wheel?.minute ?? rememberedMinute;
-
   return (
     <div className="ct-routine-time ct-routine-time--wheels" role="group" aria-label={t('routines.form.timeWheelsLabel')}>
-      <WheelPicker
-        label={t('datePicker.wheelHour')}
-        items={hourItems}
-        index={wheel === null ? 0 : wheel.hour + 1}
-        pageStep={6}
-        onChange={(i) => onChange(wheelToTime(i === 0 ? null : i - 1, minute))}
-        className="ct-routine-time__wheel"
-      />
-      <WheelPicker
-        label={t('datePicker.wheelMinute')}
-        items={minuteItems}
-        index={Math.max(WHEEL_MINUTES.indexOf(minute), 0)}
-        disabled={wheel === null}
-        pageStep={3}
-        onChange={(i) => {
-          const next = WHEEL_MINUTES[i] ?? 0;
-          setRememberedMinute(next);
-          onChange(wheelToTime(wheel === null ? null : wheel.hour, next));
-        }}
-        className="ct-routine-time__wheel"
-      />
+      <TimeWheelColumns value={value} onChange={onChange} hourClassName="ct-routine-time__wheel" minuteClassName="ct-routine-time__wheel" meridiemClassName="ct-routine-time__wheel" />
     </div>
   );
 }

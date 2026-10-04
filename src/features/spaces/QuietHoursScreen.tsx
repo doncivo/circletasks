@@ -1,5 +1,6 @@
 import { Trash2, Undo2 } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { formatTime } from '../../i18n/format';
 import { parseTimeInput } from '../../domain/dateInput';
 import type { QuietHours, Space } from '../../domain/model';
 import { allDayRange, isAllDayRange } from '../../domain/quietHours';
@@ -22,7 +23,7 @@ interface RangeDraft {
 
 let nextKey = 1;
 
-const draftOf = (range: QuietHours): RangeDraft => ({ key: nextKey++, weekdays: range.weekdays, from: range.from, to: range.to, allDay: isAllDayRange(range) });
+const draftOf = (range: QuietHours): RangeDraft => ({ key: nextKey++, weekdays: range.weekdays, from: formatTime(range.from), to: formatTime(range.to), allDay: isAllDayRange(range) });
 
 /** Nouvelle plage proposée : les soirs de semaine, 19:00 → 08:00. */
 const newDraft = (): RangeDraft => ({ key: nextKey++, weekdays: [1, 2, 3, 4, 5], from: '19:00', to: '08:00', allDay: false });
