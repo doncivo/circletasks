@@ -54,12 +54,16 @@ test.describe('Q-06 / Q-02 — saisie rapide', () => {
     await field.press('Escape');
     await expect(page.getByRole('listbox')).toHaveCount(0);
     await expect(field).toHaveValue('Lire #p');
-    await field.fill('#pro');
+    await field.fill('#pr');
     // Premier Entrée : complète le mot (« #Pro ») ; le second tente de créer : le titre serait vide, rien n'est créé.
     await field.press('Enter');
     await expect(field).toHaveValue('#Pro ');
     await field.press('Enter');
     await expect(field).toHaveValue('#Pro ');
-    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toBeVisible();
+    // Mot déjà complet (« #pro ») : Entrée valide la saisie au lieu de compléter (Q-01) ; titre vide, rien n'est créé.
+    await field.fill('#pro');
+    await field.press('Enter');
+    await expect(field).toHaveValue('#pro');
+    await expect(page.getByRole('heading', { name: 'Rien de prévu aujourd’hui.' })).toBeVisible();
   });
 });

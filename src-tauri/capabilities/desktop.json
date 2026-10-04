@@ -10,6 +10,7 @@
     "allow-set-quick-capture-shortcut",
     "allow-clear-quick-capture-shortcut",
     "allow-get-quick-capture-shortcut",
+    "allow-capture-setup-error",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled",

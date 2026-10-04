@@ -17,4 +17,27 @@ export const captureEn: Messages['capture'] = {
   tomorrow: 'tomorrow',
   dateAndTime: '{date} · {time}',
   spaceAndProject: '{space} · {project}',
+  window: {
+    label: 'Quick capture',
+    heading: 'QUICK CAPTURE',
+    placeholder: 'Add a task — e.g. “Call Paul tomorrow 10am”',
+    help: 'Enter to add · Ctrl+Enter to add another · Esc to close',
+    added: 'Added: {title}',
+    titleEmpty: 'Enter a title.',
+    failed: 'Could not add the task.',
+    noSpace: 'No space available.',
+    sending: 'Adding…',
+  },
+  dictation: {
+    button: 'Dictate',
+    helpPc: 'Press Win + H to dictate, speak, then review before adding',
+    listening: 'I’m listening',
+    finish: 'Done',
+    permissionDenied: 'Allow the microphone in the iPhone Settings',
+    failed: 'Dictation did not work. Try again or use the keyboard microphone.',
+  },
+  undo: {
+    created: '“{title}” added',
+    createdMany: '{count} tasks created',
+  },
 };

@@ -17,4 +17,30 @@ export const captureFr = {
   tomorrow: 'demain',
   dateAndTime: '{date} · {time}',
   spaceAndProject: '{space} · {project}',
+  // Mini-fenêtre de capture rapide (Q-01).
+  window: {
+    label: 'Capture rapide',
+    heading: 'CAPTURE RAPIDE',
+    placeholder: 'Ajouter une tâche — ex. « Appeler Paul demain 10h »',
+    help: 'Entrée pour ajouter · Ctrl+Entrée pour enchaîner · Échap pour fermer',
+    added: 'Ajoutée : {title}',
+    titleEmpty: 'Saisissez un titre.',
+    failed: 'Impossible d’ajouter la tâche.',
+    noSpace: 'Aucun espace disponible.',
+    sending: 'Ajout en cours…',
+  },
+  // Dictée (Q-03).
+  dictation: {
+    button: 'Dicter',
+    helpPc: 'Appuyez sur Win + H pour dicter, parlez, puis relisez avant d’ajouter',
+    listening: 'Je vous écoute',
+    finish: 'Terminer',
+    permissionDenied: 'Autorisez le micro dans les Réglages de l’iPhone',
+    failed: 'La dictée n’a pas abouti. Réessayez ou utilisez le micro du clavier.',
+  },
+  // Messages « Annuler » des créations depuis la mini-fenêtre et le scan (Q-01, Q-04).
+  undo: {
+    created: '« {title} » ajoutée',
+    createdMany: '{count} tâches créées',
+  },
 } as const;

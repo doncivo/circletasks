@@ -312,6 +312,21 @@ async function prepareFocus(page: Page, testInfo: { project: { name: string } },
   else await expect(session.getByText('En pause depuis 00:12')).toBeVisible();
 }
 
+/** Écran de relecture du scan (Scan.html) : faux moteur de lecture (développement seulement), cinq lignes dont une incertaine. */
+async function prepareScan(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    (window as unknown as Record<string, unknown>)['__CT_FAKE_OCR__'] = {
+      lines: [{ text: '- Appeler le plombier' }, { text: '- Acheter des ampoules' }, { text: '- Réserver le restaurant samedi' }, { text: '- Payer la cantine' }, { text: '- Garage ?' }],
+    };
+  });
+  await page.getByRole('button', { name: 'Scan tâches' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Scan tâches' });
+  await dialog.getByLabel('Choisir une image').setInputFiles(resolve('tests/fixtures/ocr/feuille-manuscrite.png'));
+  await expect(dialog.getByRole('heading', { name: 'Relecture' })).toBeVisible();
+  // Espace « Perso » choisi, comme la maquette.
+  await dialog.getByRole('button', { name: 'Perso', exact: true }).click();
+}
+
 const SCREENS: Screen[] = [
   { name: 'Main', mockup: 'Main.html', viewport: PHONE, date: WEDNESDAY, data: true },
   {
@@ -648,6 +663,11 @@ const SCREENS: Screen[] = [
   { name: 'PC-Focus-Termine', viewport: PC, date: WEDNESDAY, data: true, element: '.ct-focus--panel', prepare: (page, testInfo) => prepareFocus(page, testInfo, 'ended') },
   // Palette Ctrl+K du PC : aucune maquette (docs/decisions.md), capture de l'app seule.
   { name: 'PC-Recherche', viewport: PC, date: WEDNESDAY, prepare: prepareSearch },
+  // Relecture du scan (Scan.html) ; la 3e ligne porte « samedi » (la maquette montre le titre déjà nettoyé) pour que « Date détectée :
+  // sam. 26 sept. » vienne de l'analyse Q-02.
+  { name: 'Scan', mockup: 'Scan.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareScan },
+  // Fenêtre de relecture du PC : aucune maquette (docs/decisions.md, Q-04 D5), capture de l'app seule.
+  { name: 'PC-Scan', viewport: PC, date: WEDNESDAY, prepare: prepareScan },
 ];
 
 for (const screen of SCREENS) {

@@ -80,6 +80,23 @@
   flex-direction: column;
 }
 
+/* Champ d'ajout et « Scan tâches » (Q-04) : à droite du champ sur PC (gap 10), sous le champ sur iPhone (rangée à part). */
+.ct-today__addLine {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.ct-today__addLine > .ct-today__addRow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-today__scanRow {
+  display: flex;
+  margin-top: var(--ct-space-2);
+}
+
 /* Champ d'ajout pleine largeur (PC-Aujourdhui.html) ; sur PC, le champ « Date » de T-14 est dans le même cadre gris. */
 .ct-today__addRow {
   display: flex;
@@ -141,6 +158,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+/* Titre et micro de dictée (Q-03, seulement si le plugin Speech existe) sur la même ligne. */
+.ct-task-sheet__titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
 }
 
 /* Feuille Ajout (Ajout.html) : titre de 32 px, comme « Nouvel événement » et « Nouvelle routine » (segments Tâche / Événement / Routine). */

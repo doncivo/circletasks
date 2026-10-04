@@ -1,0 +1,95 @@
+/**
+ * Textes du scan de tâches (M9, Q-04), en français : source de vérité ; `en.scan.ts` suit la même forme.
+ * Sources : Scan.html (relecture) ; la fenêtre PC (source, webcam, moteur indisponible) n'a pas de maquette.
+ */
+export const scanFr = {
+  button: 'Scan tâches',
+  dialogLabel: 'Scan tâches',
+  heading: 'SCAN TÂCHES',
+  cancel: 'Annuler le scan',
+  // Choix de la source (PC : fichier ou webcam ; iPhone : sélecteur du système).
+  source: {
+    title: 'Votre liste',
+    hint: 'Photographiez ou importez une liste de tâches, une par ligne. La photo n’est ni enregistrée ni envoyée.',
+    importImage: 'Importer une image',
+    pickPhoto: 'Prendre ou choisir une photo',
+    webcam: 'Utiliser la webcam',
+    drop: 'Déposez une image ici',
+    formats: 'JPEG, PNG ou WebP, 10 Mo au plus',
+    fileInput: 'Choisir une image',
+    webcamPreview: 'Aperçu de la webcam',
+    takePhoto: 'Prendre la photo',
+    stopWebcam: 'Arrêter la webcam',
+    webcamDenied: 'L’accès à la webcam est refusé. Importez plutôt une image.',
+    webcamNone: 'Aucune webcam n’a été trouvée. Importez plutôt une image.',
+    webcamFailed: 'La webcam n’a pas pu démarrer. Importez plutôt une image.',
+  },
+  refusal: {
+    heic: 'Les photos HEIC ne sont pas lues. Exportez-les en JPEG ou en PNG.',
+    unsupported: 'Format non pris en charge. Choisissez une image JPEG, PNG ou WebP.',
+    tooLarge: 'Cette image est trop lourde (10 Mo au plus).',
+    unreadable: 'Cette image est illisible. Essayez-en une autre.',
+  },
+  reading: {
+    title: 'Lecture en cours',
+    hint: 'Le texte de la photo est lu sur cet appareil.',
+  },
+  error: {
+    title: 'La lecture a échoué',
+    hint: 'La photo n’a pas pu être lue. Reprenez la photo ou choisissez une autre image.',
+  },
+  empty: {
+    title: 'Aucune ligne reconnue',
+    hint: 'Aucun texte n’a été trouvé sur cette image.',
+  },
+  // Écran de relecture (Scan.html).
+  review: {
+    title: 'Relecture',
+    thumbnail: 'Photo de la liste',
+    detected: '{count} lignes détectées',
+    detectedOne: '1 ligne détectée',
+    truncated: 'Seules les {max} premières lignes sur {count} sont gardées.',
+    instructions: 'Corrigez le texte, décochez ce qu’il ne faut pas créer, puis validez.',
+    retake: 'Reprendre la photo',
+    lineLabel: 'Tâche {n}',
+    create: 'Créer cette tâche',
+    skip: 'Ne pas créer cette tâche',
+    dateDetected: 'Date détectée : {date}',
+    placementDetected: 'Rangée dans : {placement}',
+    uncertain: 'Lecture incertaine, à vérifier',
+    space: 'Espace',
+    defaultDate: 'Date des tâches sans date',
+    createCount: 'Créer {count} tâches',
+    createCountOne: 'Créer {count} tâche',
+    createFailed: 'Les tâches n’ont pas pu être créées. Réessayez.',
+    lines: 'Lignes à créer',
+  },
+  dateChoice: {
+    today: 'Aujourd’hui',
+    tomorrow: 'Demain',
+    someday: 'Un jour',
+    pick: 'Choisir une date',
+    pickLabel: 'Date choisie',
+  },
+  confirmClose: {
+    title: 'Fermer sans créer ?',
+    message: 'Vos corrections seront perdues.',
+    confirm: 'Fermer sans créer',
+    keep: 'Continuer la relecture',
+  },
+  // Pack de langue français absent (PRD section 10, Q-04 critère 11).
+  unavailable: {
+    title: 'Reconnaissance du texte indisponible',
+    hint: 'Le pack de langue français avec reconnaissance de texte n’est pas installé sur ce PC. Pour le lire avec Windows :',
+    step1: 'Ouvrez Paramètres Windows › Heure et langue › Langue et région.',
+    step2: 'Choisissez Français › Options de langue.',
+    step3: 'Installez « Reconnaissance de texte ».',
+    step4: 'Redémarrez CircleTasks.',
+    recheck: 'Vérifier de nouveau',
+    rechecking: 'Vérification en cours',
+    stillMissing: 'Le pack n’est pas encore détecté. Redémarrez l’application après l’installation.',
+    useFallback: 'Lire quand même avec le moteur intégré',
+    steps: 'Marche à suivre',
+  },
+  checking: 'Vérification du moteur de lecture',
+} as const;

@@ -54,6 +54,7 @@ const PAIRS: readonly (readonly [string, string])[] = [
   ['--ct-color-event-text', '--ct-color-event-bg'],
   ['--ct-color-event-local-text', '--ct-color-event-local-bg'],
   ['--ct-color-today-badge', '--ct-color-bg'],
+  ['--ct-color-warning-text', '--ct-color-warning-bg'],
 ];
 /** Éléments graphiques (icône d'objectif, maquettes) : 3:1 (WCAG 1.4.11). */
 const GRAPHICS: readonly (readonly [string, string])[] = [['--ct-color-goal', '--ct-color-bg']];

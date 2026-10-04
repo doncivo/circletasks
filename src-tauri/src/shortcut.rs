@@ -8,10 +8,8 @@
 use std::sync::{Mutex, MutexGuard};
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
-
-use crate::desktop::{show_main_window, MAIN_WINDOW, QUICK_ADD_EVENT};
 
 /// Combinaison d'origine de la capture rapide (PRD section 5).
 pub const DEFAULT_QUICK_CAPTURE: &str = "Ctrl+Alt+Space";
@@ -257,14 +255,12 @@ pub fn get_quick_capture_shortcut(state: State<'_, QuickCaptureShortcut>) -> Opt
     state.lock().as_ref().map(Chord::canonical)
 }
 
-/// Plugin global-shortcut : à l'appui, la fenêtre principale revient au premier plan et le front
-/// reçoit « Ajout rapide » (remplacé par la mini-fenêtre à Q-01).
+/// Plugin global-shortcut : à l'appui, la mini-fenêtre de capture rapide s'ouvre ou se ferme (Q-01).
 pub fn plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
     tauri_plugin_global_shortcut::Builder::new()
         .with_handler(|app, _shortcut, event| {
             if event.state() == ShortcutState::Pressed {
-                show_main_window(app);
-                let _ = app.emit_to(MAIN_WINDOW, QUICK_ADD_EVENT, ());
+                crate::capture::trigger(app);
             }
         })
         .build()

@@ -1,0 +1,15 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture",
+  "description": "Mini-fenêtre de capture rapide (Q-01), PC seulement. Aucun accès à SQL, au système de fichiers ni au réseau : elle écoute des événements et n'en émet aucun : son texte part par la commande submit_quick_capture, qui ne vise que la fenêtre principale (seule à écrire) ; elle peut aussi se cacher, se redimensionner et demander un contexte.",
+  "windows": ["quick-capture"],
+  "platforms": ["windows"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-hide-quick-capture",
+    "allow-resize-quick-capture",
+    "allow-submit-quick-capture",
+    "allow-request-capture-context"
+  ]
+}

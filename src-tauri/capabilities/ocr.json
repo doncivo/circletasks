@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "ocr",
+  "description": "Lecture de texte d'une image (Q-04), PC seulement : Windows.Media.Ocr en français, image en mémoire, aucun fichier écrit, aucun accès réseau.",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": ["allow-ocr-status", "allow-ocr-recognize"]
+}

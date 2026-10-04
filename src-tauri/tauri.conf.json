@@ -19,7 +19,8 @@
         "minWidth": 1024,
         "minHeight": 700,
         "center": true,
-        "resizable": true
+        "resizable": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -29,7 +30,8 @@
         "img-src": "'self' data: asset: http://asset.localhost",
         "style-src": "'self' 'unsafe-inline'",
         "font-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval'",
+        "worker-src": "'self'",
         "object-src": "'none'",
         "base-uri": "'self'"
       }

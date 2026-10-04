@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { applySuggestion, quickSuggestions, type QuickContext, type QuickSuggestionItem } from '../domain/quickInput';
+import { applySuggestion, foldName, quickSuggestions, type QuickContext, type QuickSuggestionItem } from '../domain/quickInput';
 import { t } from '../i18n';
 import { spaceTextColor } from './spaceColor';
 
@@ -26,6 +26,8 @@ export interface QuickInputFieldProps {
   readonly inputClassName?: string;
   /** `plain` : sans le cadre des champs de formulaire (le champ du jour de la Semaine a son propre style). */
   readonly variant?: 'field' | 'plain';
+  /** Identifiant de l'aide qui décrit le champ (`aria-describedby`), ex. l'aide de la dictée (Q-03). */
+  readonly describedBy?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
   enterKeyHint,
   inputClassName,
   variant = 'field',
+  describedBy,
   },
   ref,
 ) {
@@ -97,7 +100,9 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         const item = items[activeIndex];
-        if (item) {
+        // Entrée sur un mot déjà complet (« #pro » pour l'espace Pro) n'a rien à compléter : elle valide la saisie (Q-01). Tab complète toujours.
+        const complete = event.key === 'Enter' && item !== undefined && suggestions !== null && foldName(suggestions.query) === foldName(item.label);
+        if (item && !complete) {
           event.preventDefault();
           choose(item);
           return;
@@ -129,6 +134,7 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
           maxLength={maxLength}
           autoFocus={autoFocus}
           autoComplete="off"
+          aria-describedby={describedBy}
           enterKeyHint={enterKeyHint}
           className={[variant === 'field' ? 'ct-text-field__control' : '', inputClassName].filter(Boolean).join(' ')}
           // ARIA 1.2 : combobox permanent, aria-expanded suit la liste.

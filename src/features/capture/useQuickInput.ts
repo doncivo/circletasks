@@ -1,11 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
-import { nowLocalTime, todayLocal } from '../../domain/clock';
+import { nowLocalTime, todayLocal, type Clock } from '../../domain/clock';
 import { parseQuickInput, type QuickContext, type QuickParse } from '../../domain/quickInput';
 import type { LocalDate, LocalTime, ProjectId, SpaceId } from '../../domain/types';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useDefaultSpaceId } from '../spaces';
+import { normalizeQuickText } from '../../domain/spokenTimes';
 
 export interface UseQuickInputOptions {
   /** Faux : seules les marques # et @ sont lues (écran « Un jour », date réglée à la main). Défaut : vrai. */
@@ -52,6 +53,14 @@ export function captureInputFrom(parse: QuickParse, defaultSpaceId: SpaceId | nu
  */
 export function useQuickInput(options: UseQuickInputOptions = {}) {
   const { clock } = useAppContainer();
+  return useQuickInputWithClock(clock, options);
+}
+
+/**
+ * Même champ sans conteneur : la mini-fenêtre de capture (Q-01) n'ouvre pas la base et ne reçoit que l'horloge, les espaces et les
+ * projets (`useAppStore`, alimentés par la fenêtre principale). Les heures dictées en lettres sont lues (Q-03 : « dix heures »).
+ */
+export function useQuickInputWithClock(clock: Clock, options: UseQuickInputOptions = {}) {
   const spaces = useAppStore((s) => s.spaces);
   const projects = useAppStore((s) => s.projects);
   const defaultSpaceId = useDefaultSpaceId();
@@ -74,9 +83,9 @@ export function useQuickInput(options: UseQuickInputOptions = {}) {
     [spaces, projects, defaultSpaceId, dates, clock],
   );
 
-  const parse = useMemo(() => parseQuickInput(text, buildContext(), { ignored }), [text, ignored, buildContext]);
+  const parse = useMemo(() => parseQuickInput(normalizeQuickText(text), buildContext(), { ignored }), [text, ignored, buildContext]);
   /** Relit l'analyse avec l'heure d'aujourd'hui (au moment d'envoyer). */
-  const parseNow = useCallback((raw: string = text): QuickParse => parseQuickInput(raw, buildContext(), { ignored }), [text, ignored, buildContext]);
+  const parseNow = useCallback((raw: string = text): QuickParse => parseQuickInput(normalizeQuickText(raw), buildContext(), { ignored }), [text, ignored, buildContext]);
 
   const setText = useCallback((next: string) => {
     setTextState(next);
@@ -88,5 +97,5 @@ export function useQuickInput(options: UseQuickInputOptions = {}) {
     setIgnored(new Set());
   }, []);
 
-  return { text, setText, parse, parseNow, dismiss, reset, spaces, projects, defaultSpaceId, suggestionContext, today: todayLocal(clock) };
+  return { text, setText, parse, parseNow, dismiss, reset, ignoredKeys: ignored, spaces, projects, defaultSpaceId, suggestionContext, today: todayLocal(clock) };
 }

@@ -1,0 +1,133 @@
+/* Mini-fenêtre de capture rapide (Q-01). Aucune maquette : motif minimal de la fiche (docs/decisions.md). Champ de PC-Aujourdhui.html
+   (fond gris des champs, rayon 12, 48 px, DM Sans 15) dans une carte, titre discret « CAPTURE RAPIDE » (13 px, 700, texte secondaire). Jetons seulement. */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--ct-color-surface);
+}
+
+body {
+  font-family: var(--ct-font-text);
+  color: var(--ct-color-text);
+}
+
+.ct-mini {
+  box-sizing: border-box;
+  width: 100vw;
+  height: 100vh;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  background: var(--ct-color-surface);
+  border: 1px solid var(--ct-color-border);
+  overflow: hidden;
+}
+
+/* Les suggestions (# et @) débordent de la carte : la fenêtre grandit (MiniCapture). */
+.ct-mini__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-1);
+}
+
+.ct-mini__title {
+  margin: 0 0 var(--ct-space-1);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+/* Champ gris pleine largeur (PC-Aujourdhui.html) avec le micro à droite, dans le même cadre. */
+.ct-mini__row {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+  padding-right: var(--ct-space-1);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-mini__row .ct-mini__field {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ct-mini__row .ct-text-field__control {
+  min-height: 48px;
+  background: transparent;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-mini__row[data-shake='true'] {
+  animation: ct-mini-shake 0.4s ease-in-out;
+}
+
+@keyframes ct-mini-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-mini__row[data-shake='true'] {
+    animation: none;
+    outline: 2px solid var(--ct-color-danger);
+    outline-offset: 1px;
+  }
+}
+
+.ct-mini__preview {
+  margin-top: 0;
+}
+
+.ct-mini__foot {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-mini__help,
+.ct-mini__message {
+  margin: 0;
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-mini__message[data-tone='added'] {
+  color: var(--ct-color-achieved-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-mini__message[data-tone='error'] {
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-mini__dictation {
+  margin-top: var(--ct-space-1);
+}
+
+/* Le focus entoure tout le cadre gris (champ et micro), pas seulement la zone de saisie. */
+.ct-mini__row .ct-text-field__control:focus-visible {
+  outline: none;
+}
+
+.ct-mini__row:focus-within {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 1px;
+}

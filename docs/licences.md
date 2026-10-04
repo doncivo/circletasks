@@ -58,3 +58,14 @@ redistribue pas les fichiers de police séparément de l'application.
 - Fichier : `src/features/focus/assets/focus-end.wav` (22 050 Hz, mono, 16 bits, 1,6 s, environ 70 Ko).
 - Origine : synthétisé par `scripts/generate-focus-chime.mjs` (partiels de cloche à décroissance exponentielle) ; œuvre originale du projet, sans échantillon tiers, placée dans le domaine public (CC0). Aucune attribution requise.
 - Lu par un élément `Audio` au volume du système (`src/platform/focus/sound.ts`), jamais par une API Rust ; aucune notification Windows.
+
+# Licences — lecture de texte des images (Q-04, PRD sections 7 et 10)
+
+- Windows.Media.Ocr (PC) : API du système (Windows 10 et 11), via la crate `windows` 0.62 (MIT OU Apache-2.0, déjà compilée par Tauri) ; aucune donnée embarquée. Le pack de langue français est installé par l'utilisateur (Paramètres Windows).
+- Repli hors ligne, embarqué (PC et iPhone), chargé à la demande :
+  - [`tesseract.js`](https://www.npmjs.com/package/tesseract.js) 7.0.0, licence **Apache-2.0** (worker `worker.min.js`, 111 Ko).
+  - [`tesseract.js-core`](https://www.npmjs.com/package/tesseract.js-core) 7.x, licence **Apache-2.0** : noyau WebAssembly Tesseract (LSTM seul, SIMD) `tesseract-core-simd-lstm.wasm.js`, 3,9 Mo (1,5 Mo compressé).
+  - [`@tesseract.js-data/fra`](https://www.npmjs.com/package/@tesseract.js-data/fra) 1.0.0, paquet MIT ; données `4.0.0_best_int/fra.traineddata.gz` (modèle « best » quantifié de Tesseract, Apache-2.0), 0,7 Mo.
+  - Les fichiers sont copiés de `node_modules` dans `dist/ocr/` par le plugin Vite `vite.ocrAssets.ts` (aucun binaire versionné) et ne sont jamais téléchargés d'Internet (`cacheMethod: 'none'`, aucun cache disque).
+  - Poids ajouté à l'installeur : environ 2,3 Mo compressés (PRD section 8 : installeur sous 15 Mo). Les autres variantes du noyau (sans SIMD, legacy) ne sont pas embarquées.
+- Textes complets : `node_modules/tesseract.js/LICENSE.md`, `node_modules/tesseract.js-core/LICENSE`.
