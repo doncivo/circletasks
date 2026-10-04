@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
 import './EmptyState.css';
 
@@ -33,16 +34,24 @@ export interface EmptyStateProps {
 
 /**
  * État vide unique de l'application (P-06, PRD section 5) : titre h2, texte, icônes décoratives sur pastilles, action principale.
- * Annoncé poliment à son apparition (`aria-live="polite"`). Remplace tous les « Aucun... » dispersés des écrans à liste.
+ * Annoncé poliment à son apparition (région `aria-live="polite"` masquée, remplie après le montage). Remplace tous les « Aucun... » dispersés des écrans à liste.
  *
  * @example
  * <EmptyState title={t('routines.emptyTitle')} icons={[{ icon: Repeat }]} action={{ label: t('routines.create'), onClick: openCreate }} />
  */
 export function EmptyState({ title, text, icons = [], action, screen, className }: EmptyStateProps) {
   const variant = icons.length >= 3 ? 'three' : icons.length > 0 ? 'one' : 'none';
+  // Région live présente dès le montage, remplie après coup : les lecteurs d'écran n'annoncent que le texte ajouté à une région existante.
+  const [shown, setShown] = useState('');
+  useEffect(() => {
+    const id = window.setTimeout(() => setShown(title), 0);
+    return () => window.clearTimeout(id);
+  }, [title]);
   return (
-    <div className={className ? `ct-empty ${className}` : 'ct-empty'} data-variant={variant} data-empty-screen={screen} aria-live="polite">
-      <h2 className="ct-empty__title">{title}</h2>
+    <div className={className ? `ct-empty ${className}` : 'ct-empty'} data-variant={variant} data-empty-screen={screen}>
+      <div className="ct-empty__live" aria-live="polite">
+        <h2 className="ct-empty__title">{shown}</h2>
+      </div>
       {icons.length > 0 && (
         <div className="ct-empty__icons" aria-hidden="true">
           {icons.slice(0, 3).map((item, index) => (

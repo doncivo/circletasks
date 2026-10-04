@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { t } from '../../i18n';
-import { emptyStateScreens } from './emptyStateScreens';
+import { emptyStateExemptions, emptyStateScreens } from './emptyStateScreens';
 
 function sources(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -21,6 +21,14 @@ describe('P-06 : registre des écrans à état vide', () => {
   it('chaque EmptyState du code est dans le registre, et chaque entrée du registre est utilisée', () => {
     const registered = emptyStateScreens.map((screen) => screen.id).sort();
     expect([...used].sort()).toEqual(registered);
+  });
+
+  it('les exemptions documentées (Recherche, Objectif, Agendas, Projets, Rapport) n’utilisent pas EmptyState et ne chevauchent pas le registre', () => {
+    expect([...emptyStateExemptions].sort()).toEqual(['calendars', 'goals', 'projects', 'report', 'search']);
+    for (const id of emptyStateExemptions) {
+      expect(used.has(id)).toBe(false);
+      expect(emptyStateScreens.some((screen) => screen.id === id)).toBe(false);
+    }
   });
 
   it('chaque écran du registre a une action nommée', () => {

@@ -9,10 +9,10 @@ const LABEL = 'Ajouter';
 const SCREEN = 'week';
 
 describe('EmptyState (P-06)', () => {
-  it('rend le titre en niveau 2, le texte et une action utilisable', () => {
+  it('rend le titre en niveau 2, le texte et une action utilisable', async () => {
     const onClick = vi.fn();
     render(<EmptyState title={TITLE} text={TEXT} action={{ label: LABEL, onClick }} />);
-    expect(screen.getByRole('heading', { level: 2, name: TITLE })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: TITLE })).toBeInTheDocument();
     expect(screen.getByText(TEXT)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: LABEL }));
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -30,10 +30,14 @@ describe('EmptyState (P-06)', () => {
     expect(container.querySelector('.ct-empty__pill')).toBeNull();
   });
 
-  it('annonce son apparition poliment et expose l’identifiant d’écran', () => {
+  it('annonce son apparition poliment et expose l’identifiant d’écran', async () => {
     const { container } = render(<EmptyState title={TITLE} screen={SCREEN} />);
     const root = container.querySelector('.ct-empty');
-    expect(root?.getAttribute('aria-live')).toBe('polite');
+    const live = root?.querySelector('[aria-live]');
+    expect(live?.getAttribute('aria-live')).toBe('polite');
+    expect(live).toHaveTextContent(/^$/); // région présente et vide au montage
+    expect(await screen.findByRole('heading', { level: 2, name: TITLE })).toBeInTheDocument();
+    expect(live).toContainElement(screen.getByRole('heading', { level: 2 }));
     expect(root?.getAttribute('data-empty-screen')).toBe(SCREEN);
   });
 });
