@@ -33,7 +33,7 @@ describe('Recherche (RC-01)', () => {
   it('Ctrl+K ouvre la palette depuis un champ de saisie, le champ est focalisé ; Échap ferme et rend le focus (critère 1)', async () => {
     mockViewport(1440);
     renderSearchShell(h.container);
-    const addField = await screen.findByRole('textbox', { name: /nouvelle tâche|ajouter/i });
+    const addField = await screen.findByRole('combobox', { name: /nouvelle tâche|ajouter/i });
     addField.focus();
     pressCtrlK(addField);
     const dialog = await screen.findByRole('dialog', { name: 'Recherche' });
