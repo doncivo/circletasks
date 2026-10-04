@@ -97,3 +97,8 @@ Mesure du 2026-10-02 (`npm run tauri build`, NSIS, avec updater, process, autost
 - État dans la fenêtre principale (écriture en base), vue pilotée par événements : `focus://state` (photographie de la session : horodatages, jamais un temps restant) de la principale vers `focus`, `focus://action` (ordres : durée, pause, reprise, arrêt, terminer la tâche, autre session, fermer, `elapsed`, `moved`, `ready`) dans l'autre sens. Contrats `FocusWindowPlatform` / `FocusWindowClient` dans `src/platform/focus` (faux mémoire pour les tests, `null` hors Windows installé : la vue s'affiche alors en panneau dans la fenêtre principale).
 - Capabilities séparées : `focus-launcher.json` (fenêtre principale : `core:webview:allow-create-webview-window`, afficher, focaliser, restaurer, détruire) et `focus.json` (mini-fenêtre : quatre permissions d'événements, aucune commande de l'application, aucun SQL). `desktop.json` est inchangé. Tests : `src-tauri/tests/desktop/focus.rs` (portée des capabilities, aucun plugin ni API de notification).
 - Le PC n'émet que le son de fin (élément `Audio` de la mini-fenêtre) ; aucune notification Windows (PRD section 7, F-04 D1).
+
+## Avenant H-03 : export de fichiers (2026-10-04)
+
+- Plugins PC `tauri-plugin-dialog` et `tauri-plugin-fs` (même bloc `cfg(not(any(android, ios)))`, initialisés dans `desktop::configure`) ; ponts JS chargés dynamiquement par `src/platform/files/tauriFiles.ts`, pas par `tauriDesktop.ts`.
+- Capability séparée `export.json` (fenêtre `main`, Windows) : `dialog:allow-save`, `fs:allow-write-file`, `fs:allow-remove`, `opener:allow-reveal-item-in-dir`, sans périmètre statique. `desktop.json` est inchangé. Détails, contrat `FileService` et taille : ADR 0009.
