@@ -6,6 +6,7 @@ import type { FocusSessionRepository } from './focusSessionRepository';
 import type { GoalRepository } from './goalRepository';
 import type { HolidayRepository } from './holidayRepository';
 import type { SearchRepository } from './searchRepository';
+import type { StatsRepository } from './statsRepository';
 import type { ReminderRepository } from './reminderRepository';
 import type { RoutineLogRepository, RoutineRepository } from './routineRepository';
 import type { SettingsRepository, SyncMetaRepository } from './settingsRepository';
@@ -27,6 +28,7 @@ export interface Repositories {
   readonly holidays: HolidayRepository;
   readonly focusSessions: FocusSessionRepository;
   readonly search: SearchRepository;
+  readonly stats: StatsRepository;
   readonly checklists: ChecklistRepository;
   readonly checklistItems: ChecklistItemRepository;
   readonly externalEvents: ExternalEventRepository;

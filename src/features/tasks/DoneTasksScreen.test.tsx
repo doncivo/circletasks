@@ -12,7 +12,7 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { TodayScreen } from '../today/TodayScreen';
 import { createTaskUseCases } from './createTaskUseCases';
 import { DoneTasksScreen } from './DoneTasksScreen';
-import { ReportScreen } from './ReportScreen';
+import { ReportScreen } from '../stats';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000b7');
 const at = (local: string) => new Date(local).getTime();
@@ -66,8 +66,8 @@ describe('écrans Rapport minimal et Tâches terminées (T-07)', () => {
     unmount();
 
     render(wrap(<ReportScreen />));
-    expect(screen.getByRole('heading', { name: 'Rapport mensuel' })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Tâches terminées' }));
+    expect(await screen.findByText('Rapport du mois')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Tâches terminées' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'tasks', screen: 'done' });
     fireEvent.click(screen.getByRole('button', { name: 'Retour' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'tasks', screen: 'today' });

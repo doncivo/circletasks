@@ -1,10 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import type { LocalDate, RoutineId } from '../../domain/types';
-import { AppContainerProvider } from '../app/AppContainerContext';
 import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
-import { RoutinesMonthReport } from './RoutinesMonthReport';
 import { mockViewport, renderRoutines, seedLog, seedRoutine, setupRoutines, teardownRoutines, type RoutinesHarness } from './testKit';
 
 // Aujourd'hui : ven. 2 oct. 2026 ; Sport lun., mer., ven. à 18:00 (Perso).
@@ -184,46 +182,5 @@ describe('Rapport de la routine : iPhone (R-06, QB-06)', () => {
     renderRoutines(h.container);
     fireEvent.click(await screen.findByRole('button', { name: 'Rapport du mois' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'routines', screen: 'report' });
-  });
-
-  it('vue mensuelle : carte du jour par jour de toutes les routines, taux du mois par routine, mois précédent / suivant', async () => {
-    const lit = await seedRoutine(h, { title: 'Faire mon lit' });
-    const sport = await seedSport(h);
-    for (const day of ['2026-09-28', '2026-09-29']) await seedLog(h, lit, day);
-    await seedLog(h, sport, '2026-09-28');
-    const archived = await seedRoutine(h, { title: 'Ancienne', archived: true });
-    await seedLog(h, archived, '2026-09-29');
-    render(
-      <AppContainerProvider container={h.container}>
-        <RoutinesMonthReport />
-      </AppContainerProvider>,
-    );
-    expect(await screen.findByRole('heading', { level: 1, name: 'octobre' })).toBeInTheDocument();
-    const prev = screen.getByRole('button', { name: 'Mois précédent' });
-    const next = screen.getByRole('button', { name: 'Mois suivant' });
-    expect(next).toBeDisabled();
-    fireEvent.click(prev);
-    expect(screen.getByRole('heading', { level: 1, name: 'septembre' })).toBeInTheDocument();
-    expect(next).toBeEnabled();
-    const grid = screen.getByRole('group', { name: 'ROUTINES — JOURS COMPLÉTÉS' });
-    // Lundi 28 : lit + sport validés ; mardi 29 : lit et « Ancienne » (archivée, ses validations comptent) ; mercredi 30 : sport validé, lit manqué.
-    expect(within(grid).getByRole('img', { name: '28 septembre, tout validé : 2 sur 2' })).toHaveAttribute('data-state', 'all');
-    expect(within(grid).getByRole('img', { name: '29 septembre, tout validé : 2 sur 2' })).toBeInTheDocument();
-    expect(within(grid).getByRole('img', { name: '30 septembre, 1 sur 2' })).toHaveAttribute('data-state', 'partial');
-    expect(within(grid).getByRole('img', { name: '8 septembre, rien de validé sur 1' })).toHaveAttribute('data-state', 'missed');
-    const rates = screen.getByRole('list', { name: 'Taux du mois par routine' });
-    expect(within(rates).getAllByRole('listitem').map((item) => item.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Faire mon lit'), expect.stringContaining('Sport')]));
-    expect(within(rates).queryByText('Ancienne')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Retour' }));
-    expect(useNavigationStore.getState().route).toEqual(DEFAULT_ROUTES.routines);
-  });
-
-  it('vue mensuelle sans routine : message, aucune case prévue', async () => {
-    render(
-      <AppContainerProvider container={h.container}>
-        <RoutinesMonthReport />
-      </AppContainerProvider>,
-    );
-    expect(await screen.findByText('Aucune routine à afficher pour ce mois.')).toBeInTheDocument();
   });
 });

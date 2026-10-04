@@ -6,6 +6,7 @@ import { createGoalRepository } from './goalRepository';
 import { createHolidayRepository } from './holidayRepository';
 import { createReminderRepository } from './reminderRepository';
 import { createSearchRepository } from './searchRepository';
+import { createStatsRepository } from './statsRepository';
 import { createRoutineLogRepository, createRoutineRepository } from './routineRepository';
 import { createSettingsRepository, createSyncMetaRepository } from './settingsRepository';
 import { createProjectRepository, createSpaceRepository } from './spaceRepository';
@@ -30,6 +31,7 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   holidays: createHolidayRepository(executor, stamper),
   focusSessions: createFocusSessionRepository(executor, stamper),
   search: createSearchRepository(executor),
+  stats: createStatsRepository(executor),
   checklists: createChecklistRepository(executor, stamper),
   checklistItems: createChecklistItemRepository(executor, stamper),
   externalEvents: createExternalEventRepository(executor),

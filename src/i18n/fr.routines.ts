@@ -48,8 +48,6 @@ export const routinesFr = {
   },
   monthReport: {
     open: 'Rapport du mois',
-    caption: 'Rapport du mois',
-    back: 'Retour',
     section: 'ROUTINES — JOURS COMPLÉTÉS',
     cellAll: '{date}, tout validé : {done} sur {planned}',
     cellPartial: '{date}, {done} sur {planned}',
@@ -57,7 +55,6 @@ export const routinesFr = {
     cellUpcoming: '{date}, {planned} prévues',
     cellNone: '{date}, rien de prévu',
     ratesLabel: 'Taux du mois par routine',
-    empty: 'Aucune routine à afficher pour ce mois.',
   },
   paused: 'En pause',
   archived: {

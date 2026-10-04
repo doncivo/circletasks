@@ -35,9 +35,8 @@ const openers: Record<string, (page: Page, info: Info) => Promise<void>> = {
     await weekTab(page).click();
   },
   routines: async (page) => openRoutines(page),
-  routinesMonth: async (page) => {
-    await openRoutines(page);
-    await page.getByRole('button', { name: 'Rapport du mois' }).click();
+  report: async (page) => {
+    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
   },
   events: async (page) => {
     await disableHolidays(page);
@@ -61,7 +60,6 @@ for (const scheme of ['light', 'dark'] as const) {
 
     for (const screen of emptyStateScreens) {
       test(`${screen.id} : message et action sur base vide`, async ({ page }, testInfo) => {
-        test.skip(screen.id === 'routinesMonth' && !isPhone(testInfo), 'Rapport du mois : bouton iPhone seulement');
         await openApp(page);
         await openers[screen.id]?.(page, testInfo);
         const filters = ['Tout', 'Pro', 'Perso'];

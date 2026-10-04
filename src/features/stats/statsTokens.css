@@ -1,0 +1,23 @@
+/*
+ * Jetons du module Statistiques (Rapport.html) : barres du graphique de complétion (H-02). Barre normale #C9BEE6, semaine courante
+ * #3A2A66 ; en sombre, la barre courante passe en lavande et les autres en violet doux pour garder le contraste.
+ */
+:root {
+  --ct-stats-bar: #c9bee6;
+  --ct-stats-bar-current: #3a2a66;
+  --ct-stats-bar-empty: #ddd9e4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ct-stats-bar: #4a4066;
+    --ct-stats-bar-current: #c9bee6;
+    --ct-stats-bar-empty: #4a4066;
+  }
+}
+
+:root[data-theme='dark'] {
+  --ct-stats-bar: #4a4066;
+  --ct-stats-bar-current: #c9bee6;
+  --ct-stats-bar-empty: #4a4066;
+}

@@ -1,0 +1,212 @@
+@import './statsTokens.css';
+
+/* Rapport du mois (Rapport.html) : retour en haut à droite, « Rapport du mois » + mois en Fraunces 40, filet, pastilles, tuiles 2 × 2. */
+.ct-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-stats__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-stats__iconButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-stats__iconButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ct-stats__iconButton:focus-visible,
+.ct-stats__link:focus-visible,
+.ct-stats__export:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-stats__headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-stats__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ct-stats__caption {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-stats__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+  text-transform: capitalize;
+}
+
+.ct-stats__nav {
+  display: flex;
+}
+
+.ct-stats__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-stats__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-stats__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-stats__filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+  flex-wrap: wrap;
+}
+
+.ct-stats__tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ct-space-2);
+}
+
+.ct-stats__tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--ct-space-3) 14px;
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-stats__tileLabel {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.05em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-stats__tileValue {
+  font-family: var(--ct-font-title);
+  font-size: 1.75rem;
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.1;
+}
+
+.ct-stats__tileSub {
+  font-size: 1rem;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-stats__section {
+  margin: 6px 0 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-stats__sectionRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+}
+
+.ct-stats__monthRate {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text);
+  white-space: nowrap;
+}
+
+.ct-stats__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* Lien « Tâches terminées » (T-07). */
+.ct-stats__link {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+/* PC : les quatre tuiles sur une ligne, graphique et carte de chaleur côte à côte (H-01 critère 11). */
+.ct-stats[data-layout='pc'] .ct-stats__tiles {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.ct-stats__charts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-stats[data-layout='pc'] .ct-stats__charts {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: var(--ct-space-6);
+}
+
+.ct-stats__chartBlock,
+.ct-stats__routinesBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  min-width: 0;
+}
+
+.ct-stats[data-layout='pc'] .ct-stats__chartBlock,
+.ct-stats[data-layout='pc'] .ct-stats__routinesBlock {
+  flex: 1 1 0;
+}

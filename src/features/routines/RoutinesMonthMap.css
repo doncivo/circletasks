@@ -1,90 +1,6 @@
 @import './routineTokens.css';
 
-/* Vue mensuelle de toutes les routines (Rapport.html : en-tête mois, carte « ROUTINES — JOURS COMPLÉTÉS », taux par routine). */
-.ct-routines-month {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ct-space-3);
-  flex-grow: 1;
-  min-width: 0;
-}
-
-.ct-routines-month__topRow {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.ct-routines-month__iconButton {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--ct-hit-target-min);
-  height: var(--ct-hit-target-min);
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--ct-color-text);
-  cursor: pointer;
-}
-
-.ct-routines-month__iconButton:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.ct-routines-month__iconButton:focus-visible {
-  outline: 2px solid var(--ct-color-accent);
-  outline-offset: -2px;
-}
-
-.ct-routines-month__headerRow {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-}
-
-.ct-routines-month__header {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.ct-routines-month__caption {
-  font-size: var(--ct-font-size-text);
-  font-weight: var(--ct-font-weight-semibold);
-  color: var(--ct-color-text-secondary);
-}
-
-.ct-routines-month__title {
-  margin: 0;
-  font-family: var(--ct-font-title);
-  font-size: 2.5rem;
-  line-height: 1;
-  font-weight: var(--ct-font-weight-bold);
-  text-transform: capitalize;
-}
-
-.ct-routines-month__nav {
-  display: flex;
-}
-
-.ct-routines-month__rule {
-  display: flex;
-  align-items: center;
-}
-
-.ct-routines-month__ruleAccent {
-  width: 80px;
-  height: 3px;
-  background: var(--ct-color-text);
-}
-
-.ct-routines-month__ruleLine {
-  flex-grow: 1;
-  height: 1px;
-  background: var(--ct-color-text);
-}
-
+/* Carte « ROUTINES — JOURS COMPLÉTÉS » et taux par routine (Rapport.html, R-06, H-01). */
 .ct-routines-month__section {
   margin: 6px 0 0;
   font-family: var(--ct-font-text);
@@ -174,14 +90,4 @@
   flex-grow: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-
-.ct-routines-month__error {
-  margin: 0;
-  padding: var(--ct-space-3) var(--ct-space-4);
-  border-radius: var(--ct-radius-md);
-  background: var(--ct-color-danger-bg);
-  color: var(--ct-color-danger);
-  font-weight: var(--ct-font-weight-semibold);
 }
