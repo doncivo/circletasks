@@ -8,6 +8,7 @@ import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
+import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platform/focus';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { useAppStore } from './appStore';
@@ -55,6 +56,8 @@ export interface BootstrapAppOptions {
   readonly desktop?: DesktopPlatform | null;
   /** Agendas externes ; `openCalendarPlatform` par défaut (commandes Rust, ou mémoire + simulateurs en développement). */
   readonly calendars?: CalendarPlatform;
+  /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
+  readonly focusWindow?: FocusWindowPlatform | null;
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
 }
@@ -93,6 +96,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       data,
       platform: { runtime: detectRuntime(), os: detectOs() },
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
+      focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
     });
   } catch (error) {

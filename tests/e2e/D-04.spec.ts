@@ -25,7 +25,9 @@ test.describe('D-04 / P-08 — raccourcis clavier', () => {
     await expect(dialog).toBeVisible();
     for (const group of ['Global', 'Application', 'Listes', 'Semaine']) await expect(dialog.getByText(group, { exact: true })).toBeVisible();
     await expect(dialog.getByRole('row').filter({ hasText: 'Capture rapide' })).toContainText('Ctrl+Alt+Espace');
-    await expect(dialog.getByRole('row').filter({ hasText: 'Lancer une session Focus' })).toContainText('(bientôt)');
+    // F-01 : Ctrl+Maj+F est branché (plus de « (bientôt) »).
+    await expect(dialog.getByRole('row').filter({ hasText: 'Lancer une session Focus' })).toContainText('Ctrl+Maj+F');
+    await expect(dialog.getByRole('row').filter({ hasText: 'Lancer une session Focus' })).not.toContainText('(bientôt)');
     await page.keyboard.press('Escape');
     await expect(dialog).not.toBeVisible();
     await expect(field).toBeFocused();

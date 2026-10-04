@@ -8,6 +8,8 @@ import { t, type PlainMessageKey } from '../../i18n';
 import { formatStamp } from '../../i18n/format';
 import { Button, Icon, IconChooser, IconView, TextField, resolveIconRefColor } from '../../ui';
 import { LinkedEventRow } from '../calendars/LinkedEventRow';
+import { FocusLaunchButton } from '../focus/FocusLaunchButton';
+import { FocusTaskTotalRow } from '../focus/FocusTaskTotalRow';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
 import { DuplicatePrompt } from './DuplicatePrompt';
 import { PostponeAction } from './PostponeAction';
@@ -179,6 +181,8 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
       />
       {/* K-04 : lien en lecture seule vers l'événement d'agenda externe d'où vient la tâche. */}
       <LinkedEventRow task={task} />
+      {/* M10 (F-03) : temps de concentration de la tâche, en lecture seule. */}
+      <FocusTaskTotalRow taskId={task.id} />
 
       <TextField
         label={t('tasks.noteLabel')}
@@ -193,9 +197,12 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
 
       <div className="ct-task-detail__spacer" />
 
+      {/* M10 : « Lancer un Focus » (iPhone, Detail.html) au-dessus des boutons ; « Focus 25 min » (PC) en tête de la rangée. */}
+      {isMobile && <FocusLaunchButton task={task} isMobile />}
       <div className="ct-task-detail__actions">
+        {!isMobile && <FocusLaunchButton task={task} isMobile={false} />}
         <PostponeAction task={task} onPostpone={task.recurrenceId !== null ? edits.postponeScope.ask : api.postpone} />
-        {/* « Un jour » (SD-03) ; Focus (M10) : absent tant que M10 n'existe pas. */}
+        {/* « Un jour » (SD-03). */}
         {canMoveToSomeday(task) && (
           <Button variant="secondary" onClick={() => void api.moveToSomeday()} className="ct-task-detail__actionButton">
             {t('detail.somedayAction')}

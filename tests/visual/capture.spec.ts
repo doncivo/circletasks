@@ -7,6 +7,7 @@ import { insertSearchTasks, openSearch, typeSearch } from '../e2e/helpers/search
 import { createTask, openToday } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertChecklists, openChecklists } from '../e2e/helpers/checklists';
+import { insertFocusSessions } from '../e2e/helpers/focus';
 import { insertEvents, openEvents, type DirectEvent } from '../e2e/helpers/events';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
@@ -102,10 +103,12 @@ async function prepareSomeday(page: Page, expandFirst: boolean, testInfo: { proj
   if (expandFirst) await page.getByRole('button', { name: 'Renouveler le passeport', exact: true }).click();
 }
 
-async function captureApp(page: Page, name: string): Promise<void> {
+async function captureApp(page: Page, name: string, element?: string): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(400);
-  await page.screenshot({ path: resolve(OUT, `${name}-app.png`) });
+  const path = resolve(OUT, `${name}-app.png`);
+  if (element) await page.locator(element).screenshot({ path });
+  else await page.screenshot({ path });
 }
 
 /** Semaine du 21 au 27 sept. 2026 des maquettes (tâches et « Point client » ; routines, anniversaire et objectif arrivent avec leurs modules). */
@@ -247,6 +250,8 @@ interface Screen {
   dark?: boolean;
   prepare?: (page: Page, testInfo: { project: { name: string } }) => Promise<void>;
   data?: boolean;
+  /** Sélecteur d'un élément à capturer seul (mini-fenêtre Focus 340 × 460 du PC) au lieu de la page entière. */
+  element?: string;
 }
 
 
@@ -273,6 +278,38 @@ async function prepareRecentSearches(page: Page, testInfo: { project: { name: st
   }
   await typeSearch(page, '');
   await expect(page.getByRole('heading', { name: 'Recherches récentes' })).toBeVisible();
+}
+
+/**
+ * Session Focus de Focus.html : « Envoyer la facture » (Pro, 09:00), 25 min, 9 min 26 s écoulées (15:34 restantes) ; pied « Aujourd'hui :
+ * 1 h 15 de concentration · 3 sessions » (trois sessions du jour de 45 + 20 + 10 min posées en base avant le lancement).
+ */
+async function prepareFocus(page: Page, testInfo: { project: { name: string } }, state: 'running' | 'paused' | 'ended' = 'running'): Promise<void> {
+  const phone = testInfo.project.name === 'iphone';
+  await insertFocusSessions(page, [
+    { startedAt: '2026-09-23T05:00:00.000Z', minutes: 45 },
+    { startedAt: '2026-09-23T06:30:00.000Z', minutes: 20, space: 'perso' },
+    { startedAt: '2026-09-23T07:00:00.000Z', minutes: 10 },
+  ]);
+  await page.locator('.ct-today__list').getByRole('button', { name: 'Envoyer la facture', exact: true }).click();
+  await page
+    .getByRole('complementary', { name: 'Détail de la tâche' })
+    .or(page.getByRole('dialog', { name: 'Détail de la tâche' }))
+    .getByRole('button', { name: phone ? 'Lancer un Focus' : /^Focus/ })
+    .click();
+  const session = page.getByRole('region', { name: 'Session Focus' });
+  await expect(session).toBeVisible();
+  const elapsedMs = state === 'ended' ? 26 * 60_000 : (9 * 60 + 26) * 1000;
+  await page.clock.setFixedTime(new Date(WEDNESDAY.getTime() + elapsedMs));
+  if (state === 'paused') {
+    // La pause est posée à l'instant simulé 9 min 26 s, puis 12 s s'écoulent.
+    await session.getByRole('button', { name: 'Mettre en pause' }).click();
+    await page.clock.setFixedTime(new Date(WEDNESDAY.getTime() + elapsedMs + 12_000));
+  }
+  await page.waitForTimeout(1500);
+  if (state === 'ended') await expect(session.getByRole('alert')).toBeVisible();
+  else if (state === 'running') await expect(session.getByRole('timer')).toHaveText('15:34');
+  else await expect(session.getByText('En pause depuis 00:12')).toBeVisible();
 }
 
 const SCREENS: Screen[] = [
@@ -599,6 +636,16 @@ const SCREENS: Screen[] = [
   { name: 'Recherche', mockup: 'Recherche.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareSearch },
   // Champ vide : « RECHERCHES RÉCENTES » (puces de Recherche.html ; la maquette les montre sous les résultats, la fiche RC-04 les réserve au champ vide).
   { name: 'Recherche-Recentes', viewport: PHONE, date: WEDNESDAY, prepare: prepareRecentSearches },
+  // Focus iPhone (Focus.html) : plein écran, 15:34 restantes sur 25 min.
+  { name: 'Focus', mockup: 'Focus.html', viewport: PHONE, date: WEDNESDAY, data: true, prepare: (page, testInfo) => prepareFocus(page, testInfo, 'running') },
+  // États non dessinés (décisions F-02, F-04) : capture de l'app seule.
+  { name: 'Focus-Pause', viewport: PHONE, date: WEDNESDAY, data: true, prepare: (page, testInfo) => prepareFocus(page, testInfo, 'paused') },
+  { name: 'Focus-Termine', viewport: PHONE, date: WEDNESDAY, data: true, prepare: (page, testInfo) => prepareFocus(page, testInfo, 'ended') },
+  // Mini-fenêtre PC 340 × 460 (aucune maquette, motif minimal : composition de Focus.html réduite) : capturée seule, telle qu'elle est
+  // affichée dans la fenêtre système (ici : panneau de la fenêtre principale du navigateur).
+  { name: 'PC-Focus', viewport: PC, date: WEDNESDAY, data: true, element: '.ct-focus--panel', prepare: (page, testInfo) => prepareFocus(page, testInfo, 'running') },
+  { name: 'PC-Focus-Pause', viewport: PC, date: WEDNESDAY, data: true, element: '.ct-focus--panel', prepare: (page, testInfo) => prepareFocus(page, testInfo, 'paused') },
+  { name: 'PC-Focus-Termine', viewport: PC, date: WEDNESDAY, data: true, element: '.ct-focus--panel', prepare: (page, testInfo) => prepareFocus(page, testInfo, 'ended') },
   // Palette Ctrl+K du PC : aucune maquette (docs/decisions.md), capture de l'app seule.
   { name: 'PC-Recherche', viewport: PC, date: WEDNESDAY, prepare: prepareSearch },
 ];
@@ -618,7 +665,7 @@ for (const screen of SCREENS) {
     await openToday(page);
     if (screen.data) await seed(page, { project: { name: phone ? 'iphone' : 'pc' } });
     await screen.prepare?.(page, { project: { name: phone ? 'iphone' : 'pc' } });
-    await captureApp(page, screen.name);
+    await captureApp(page, screen.name, screen.element);
     if (screen.mockup) await captureMockup(browser, screen.viewport, screen.mockup, screen.name, screen.dark);
     await context.close();
   });

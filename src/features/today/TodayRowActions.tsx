@@ -3,6 +3,7 @@ import type { RoutineId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { ChoiceDialog } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
+import { useFocusShortcut } from '../focus/useFocusShortcut';
 import { DuplicatePrompt } from '../tasks';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import { todayStore } from './todayStore';
@@ -80,6 +81,9 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
       if (container.taskEntities.get(focusedTaskId)) setDuplicateTargetId(focusedTaskId);
     });
   }, [container, focusedTaskId]);
+
+  // Ctrl+Maj+F (M10) : session Focus sur la tâche sélectionnée.
+  useFocusShortcut(focusedTaskId);
 
   const postponeSeriesTask = postponeSeriesId ? entities.get(postponeSeriesId) : undefined;
   const duplicateTarget = duplicateTargetId ? entities.get(duplicateTargetId) : undefined;

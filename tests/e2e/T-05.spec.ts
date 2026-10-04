@@ -83,7 +83,7 @@ test.describe('T-05 — reporter une tâche', () => {
   });
 
   test('« Demain » : la tâche quitte Aujourd’hui, message avec le titre, Annuler la remet (critères 2, 6)', async ({ page }, testInfo) => {
-    const title = `Demain ${testInfo.project.name} ${Date.now()}`;
+    const title = `Report ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
 
     await postponeVia(page, testInfo, title, 'Demain');
@@ -113,7 +113,7 @@ test.describe('T-05 — reporter une tâche', () => {
     await page.clock.setFixedTime(new Date('2026-09-27T10:00:00+02:00'));
     await page.reload();
     await expect(page.getByRole('navigation')).toBeVisible({ timeout: 30_000 });
-    const title = `Dimanche ${testInfo.project.name} ${Date.now()}`;
+    const title = `Report fin ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
 
     await postponeVia(page, testInfo, title, 'Semaine prochaine');

@@ -60,6 +60,7 @@ const SYNCED_TABLES = [
   'checklist',
   'checklist_item',
   'holiday',
+  'focus_session',
   'settings',
 ] as const;
 

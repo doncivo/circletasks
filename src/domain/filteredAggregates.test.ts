@@ -37,6 +37,7 @@ const session = (n: number, spaceId: SpaceId, taskId: TaskId | null, from: numbe
   startedAt: at(from),
   endedAt: to === null ? null : at(to),
   pausedSec,
+  pausedAt: null,
 });
 // 25 min (Mission), 30 min (Mission, 5 min de pause = 25), 20 min sans tâche (Pro), 15 min (Perso), 1 en cours.
 const sessions = [session(1, PRO, tid(1), 0, 25), session(2, PRO, tid(2), 30, 60, 300), session(3, PRO, null, 70, 90), session(4, PERSO, tid(6), 100, 115), session(5, PRO, tid(1), 120, null)];

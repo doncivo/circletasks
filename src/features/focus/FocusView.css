@@ -1,0 +1,380 @@
+/* Écran de session Focus (F-01, Focus.html) : iPhone plein écran (.ct-focus--screen), mini-fenêtre PC 340 × 460 (.ct-focus--window)
+   et panneau flottant de la fenêtre principale quand la mini-fenêtre système n'existe pas (.ct-focus--panel : navigateur, tests). */
+.ct-focus {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  background: var(--ct-focus-bg);
+  color: var(--ct-focus-on);
+  font-family: var(--ct-font-text);
+  /* Focus.html n'a pas d'interligne imposé (normal) : l'interligne 1,4 du corps et le 1 des titres décalent la composition. */
+  line-height: normal;
+  overflow: hidden;
+}
+
+.ct-focus--screen {
+  position: fixed;
+  inset: 0;
+  z-index: 150; /* au-dessus d'une feuille ou d'une fiche (100), sous les dialogues (200) et le bandeau « Annuler » (300) */
+  gap: 22px;
+  padding: max(56px, calc(var(--ct-safe-area-top) + 12px)) 28px max(40px, calc(var(--ct-safe-area-bottom) + 16px));
+}
+
+.ct-focus--window,
+.ct-focus--panel {
+  width: 340px;
+  height: 460px;
+  gap: 6px;
+  padding: 8px 16px 12px;
+}
+
+.ct-focus--panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 150; /* au-dessus d'une feuille ou d'une fiche (100), sous les dialogues (200) et le bandeau « Annuler » (300) */
+  border-radius: 20px;
+  box-shadow: 0 12px 40px rgb(0 0 0 / 35%);
+}
+
+.ct-focus__top {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-focus__iconButton {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  color: var(--ct-focus-on);
+  padding: 0;
+  cursor: pointer;
+}
+
+.ct-focus__heading {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--ct-focus-muted);
+}
+
+.ct-focus__spacer {
+  width: var(--ct-hit-target-min);
+}
+
+.ct-focus__meta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.ct-focus--window .ct-focus__meta,
+.ct-focus--panel .ct-focus__meta {
+  margin-top: 0;
+  gap: 2px;
+}
+
+.ct-focus__meta-line {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ct-focus-muted);
+}
+
+.ct-focus__space {
+  color: var(--ct-focus-space);
+}
+
+.ct-focus__title {
+  margin: 0;
+  max-width: 100%;
+  font-family: var(--ct-font-title);
+  font-size: 36px;
+  font-weight: 700;
+  line-height: normal;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.ct-focus--window .ct-focus__title,
+.ct-focus--panel .ct-focus__title {
+  font-size: 24px;
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ct-focus__ring {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin-top: 16px;
+  flex: none;
+}
+
+.ct-focus--window .ct-focus__ring,
+.ct-focus--panel .ct-focus__ring {
+  width: 180px;
+  height: 180px;
+  margin-top: 2px;
+}
+
+.ct-focus__ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.ct-focus__arc {
+  transition: stroke-dashoffset 1s linear;
+}
+
+.ct-focus__readout {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.ct-focus__time {
+  font-family: var(--ct-font-title);
+  font-size: 72px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-focus--window .ct-focus__time,
+.ct-focus--panel .ct-focus__time {
+  font-size: 48px;
+}
+
+.ct-focus--paused .ct-focus__time {
+  animation: ct-focus-blink 2.4s ease-in-out infinite;
+}
+
+@keyframes ct-focus-blink {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.ct-focus__caption {
+  font-size: 15px;
+  color: var(--ct-focus-muted);
+}
+
+.ct-focus--window .ct-focus__caption,
+.ct-focus--panel .ct-focus__caption {
+  font-size: 13px;
+}
+
+.ct-focus__status {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ct-focus-muted);
+}
+
+.ct-focus__pills {
+  display: flex;
+  gap: 10px;
+}
+
+.ct-focus--window .ct-focus__pills,
+.ct-focus--panel .ct-focus__pills {
+  gap: 6px;
+}
+
+.ct-focus__pill {
+  min-height: var(--ct-hit-target-min);
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
+  border: 1.5px solid var(--ct-focus-border);
+  background: transparent;
+  color: var(--ct-focus-on);
+  font: 600 14px var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-focus--window .ct-focus__pill,
+.ct-focus--panel .ct-focus__pill {
+  padding: 0 11px;
+}
+
+.ct-focus__pill[aria-pressed='true'] {
+  background: var(--ct-focus-on);
+  color: var(--ct-focus-ink);
+  border-color: var(--ct-focus-on);
+}
+
+.ct-focus__grow {
+  flex-grow: 1;
+}
+
+.ct-focus__actions {
+  align-self: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ct-focus__stack {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ct-focus__button {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--ct-hit-target-min);
+  height: 58px;
+  border: 2px solid var(--ct-focus-on);
+  border-radius: 29px;
+  background: transparent;
+  color: var(--ct-focus-on);
+  font: 700 17px var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-focus--window .ct-focus__button,
+.ct-focus--panel .ct-focus__button {
+  height: 48px;
+  border-radius: 24px;
+  font-size: 15px;
+}
+
+.ct-focus__button--finish {
+  border: 0;
+  background: var(--ct-focus-arc);
+  color: var(--ct-focus-ink);
+}
+
+.ct-focus__button--resume {
+  background: var(--ct-focus-on);
+  color: var(--ct-focus-ink);
+}
+
+.ct-focus__footer {
+  font-size: 14px;
+  color: var(--ct-focus-muted);
+  text-align: center;
+}
+
+.ct-focus--window .ct-focus__footer,
+.ct-focus--panel .ct-focus__footer {
+  font-size: 12px;
+}
+
+.ct-focus__notice {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--ct-focus-track);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ct-focus__notice-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ct-focus__link {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1.5px solid var(--ct-focus-on);
+  background: transparent;
+  color: var(--ct-focus-on);
+  font: 600 14px var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-focus__backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgb(26 18 48 / 78%);
+}
+
+.ct-focus__dialog {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 18px;
+  background: var(--ct-focus-bg);
+  border: 1.5px solid var(--ct-focus-border);
+  text-align: center;
+}
+
+.ct-focus__dialog h2 {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 22px;
+}
+
+.ct-focus__dialog p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--ct-focus-muted);
+}
+
+/* Session terminée dans la mini-fenêtre (340 × 460) : trois boutons empilés, anneau et temps réduits pour que tout reste visible. */
+.ct-focus--window.ct-focus--ended .ct-focus__ring,
+.ct-focus--panel.ct-focus--ended .ct-focus__ring {
+  width: 150px;
+  height: 150px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__time,
+.ct-focus--panel.ct-focus--ended .ct-focus__time {
+  font-size: 38px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__caption,
+.ct-focus--panel.ct-focus--ended .ct-focus__caption {
+  max-width: 110px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__stack,
+.ct-focus--panel.ct-focus--ended .ct-focus__stack {
+  gap: 8px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__button,
+.ct-focus--panel.ct-focus--ended .ct-focus__button {
+  height: 44px;
+  font-size: 14px;
+}

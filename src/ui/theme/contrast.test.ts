@@ -80,6 +80,28 @@ describe.each([
   });
 });
 
+/** Écran Focus (F-01 critère 13) : fond violet #2E2150 identique dans les deux thèmes, texte clair AA (4,5:1). */
+describe.each([
+  ['clair', light],
+  ['sombre', dark],
+] as const)('contraste AA de l’écran Focus, thème %s', (_name, theme: Theme) => {
+  it.each([
+    ['--ct-focus-on', '--ct-focus-bg'],
+    ['--ct-focus-muted', '--ct-focus-bg'],
+    ['--ct-focus-space', '--ct-focus-bg'],
+    ['--ct-focus-ink', '--ct-focus-arc'],
+    ['--ct-focus-ink', '--ct-focus-on'],
+    ['--ct-focus-on', '--ct-focus-launch-bg'],
+  ] as const)('%s sur %s ≥ 4,5:1', (fg, bg) => {
+    expect(theme[fg], fg).toBeDefined();
+    expect(contrast(theme[fg] as string, theme[bg] as string), `${fg} sur ${bg}`).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('les jetons de Focus ne changent pas avec le thème', () => {
+    for (const token of ['--ct-focus-bg', '--ct-focus-arc', '--ct-focus-muted']) expect(theme[token]).toBe(light[token]);
+  });
+});
+
 describe('thème sombre : cohérence', () => {
   it('le bloc prefers-color-scheme (Système) et data-theme="dark" (choix) portent les mêmes valeurs', () => {
     const media = block(":root:not([data-theme='light']) {");

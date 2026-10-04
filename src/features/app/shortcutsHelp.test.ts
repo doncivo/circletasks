@@ -116,12 +116,12 @@ describe('buildHelpGroups', () => {
     expect(find(inWeek, 'list.complete')).toMatchObject({ dimmed: false, note: null });
   });
 
-  it('marque « bientôt » les raccourcis réservés, sans les simuler (Focus)', () => {
-    expect(RESERVED_SHORTCUTS).toEqual(['list.focus']);
+  it('Ctrl+Maj+F (Focus) est branché depuis F-01 : plus aucun raccourci réservé, plus de mention « bientôt »', () => {
+    expect(RESERVED_SHORTCUTS).toEqual([]);
     const entry = buildHelpGroups({ quickCapture, activeIds: ['list.focus'] })
       .flatMap((g) => g.entries)
       .find((e) => e.id === 'list.focus');
-    expect(entry).toMatchObject({ keys: 'Ctrl+Maj+F', note: '(bientôt)', dimmed: true });
+    expect(entry).toMatchObject({ keys: 'Ctrl+Maj+F', note: null, dimmed: false });
   });
 
   it('la recherche instantanée restreint la liste, sans tenir compte des accents ni de la casse (critère 7)', () => {

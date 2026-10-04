@@ -2,6 +2,7 @@ import { ChevronRight, Undo2 } from 'lucide-react';
 import { t } from '../../i18n';
 import { Icon } from '../../ui';
 import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
+import { FocusReportSection } from '../focus/FocusReportSection';
 import './DoneTasksScreen.css';
 
 /**
@@ -25,6 +26,8 @@ export function ReportScreen() {
         <span>{t('report.openDone')}</span>
         <Icon icon={ChevronRight} size={20} />
       </button>
+      {/* M10 (F-03) : section CONCENTRATION ; les tuiles et graphiques du rapport arrivent avec H-01. */}
+      <FocusReportSection />
     </div>
   );
 }

@@ -46,6 +46,7 @@ export * from './calendarProvider';
 export * from './calendarRefresh';
 export * from './quietHours';
 export * from './focusSession';
+export * from './focusTotals';
 export * from './filteredAggregates';
 export * from './goalRules';
 export * from './eventRules';

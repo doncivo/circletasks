@@ -8,7 +8,7 @@ import { createTask, isPhone, openToday, rowOf } from './helpers/today';
  * écran iPhone fermée par « Fermer » (2), contenu et boutons (5, 6), édition sur place du titre, de l'heure et de
  * l'espace (PC, 8), refus d'un titre vide (10), « Modifier » = feuille pré-remplie (iPhone, 9, Q15), « Un jour »
  * (6), rôles ARIA (11). Exécuté sur `pc` et `iphone`.
- * Hors couverture : bouton Focus (M10), rappels et objectif modifiables (N-02, OB-03), appui long (A-07, ordre 5).
+ * Hors couverture : session Focus (F-01), rappels et objectif modifiables (N-02, OB-03), appui long (A-07, ordre 5).
  */
 /** Bouton-titre d'une ligne de la liste (la fiche PC porte aussi un bouton du même nom : son titre modifiable). */
 const listTitle = (page: Page, name: string) => page.locator('.ct-today__list').getByRole('button', { name, exact: true });
@@ -31,7 +31,7 @@ test.describe('A-08 — fiche détail', () => {
     await expect(fiche.getByRole('button', { name: 'Un jour' })).toBeVisible();
     await expect(fiche.getByRole('button', { name: 'Dupliquer la tâche' })).toBeVisible();
     await expect(fiche.getByRole('button', { name: /^Supprimer/ })).toBeVisible();
-    await expect(fiche.getByRole('button', { name: /Focus/ })).toHaveCount(0);
+    await expect(fiche.getByRole('button', { name: /Focus/ })).toHaveCount(1); // M10 (F-01) : « Lancer un Focus » / « Focus 25 min »
     await expect(fiche).toContainText('Créée le');
     if (isPhone(testInfo)) {
       await expect(page.getByRole('dialog', { name: 'Détail de la tâche' })).toHaveAttribute('aria-modal', 'true');

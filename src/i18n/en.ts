@@ -2,6 +2,7 @@ import { emptyEn } from './en.empty';
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { captureEn } from './en.capture';
+import { focusEn } from './en.focus';
 import { searchEn } from './en.search';
 import { appearanceEn } from './en.appearance';
 import { spacesEn } from './en.spaces';
@@ -38,6 +39,7 @@ export const en: Messages = {
     },
   },
   spaces: spacesEn,
+  focus: focusEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
   tasks: {

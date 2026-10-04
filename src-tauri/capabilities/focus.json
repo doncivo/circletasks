@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "focus",
+  "description": "Mini-fenêtre Focus du PC (M10, F-01) : vue pilotée par événements, sans accès à la base ni aux commandes de l'application. Elle reçoit l'état de la session et renvoie ses ordres à la fenêtre principale par les événements focus://state et focus://action ; le son de fin est joué par cette fenêtre (aucune notification Windows).",
+  "windows": ["focus"],
+  "platforms": ["windows"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten", "core:event:allow-emit", "core:event:allow-emit-to"]
+}

@@ -108,15 +108,15 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
-| Q-01 | M9 | J'ajoute une tâche depuis n'importe où sur PC | quick-capture | à faire |
-| Q-02 | M9 | Je saisis en langage naturel | quick-capture | en cours |
-| Q-03 | M9 | Je dicte une tâche | quick-capture | à faire |
-| Q-04 | M9 | Je photographie une liste manuscrite | quick-capture | à faire |
-| Q-06 | M9 | Je choisis espace et projet en tapant | quick-capture | en cours |
-| F-01 | M10 | Je lance une session sur une tâche | focus-time | à faire |
-| F-02 | M10 | Je fais une pause | focus-time | à faire |
-| F-03 | M10 | Je vois mon temps de concentration | focus-time | à faire |
-| F-04 | M10 | La fin de session me notifie | focus-time | à faire |
+| Q-01 | M9 | J'ajoute une tâche depuis n'importe où sur PC | quick-capture | en cours |
+| Q-02 | M9 | Je saisis en langage naturel | quick-capture | fait |
+| Q-03 | M9 | Je dicte une tâche | quick-capture | en cours |
+| Q-04 | M9 | Je photographie une liste manuscrite | quick-capture | en cours |
+| Q-06 | M9 | Je choisis espace et projet en tapant | quick-capture | fait |
+| F-01 | M10 | Je lance une session sur une tâche | focus-time | en cours |
+| F-02 | M10 | Je fais une pause | focus-time | en cours |
+| F-03 | M10 | Je vois mon temps de concentration | focus-time | en cours |
+| F-04 | M10 | La fin de session me notifie | focus-time | en cours |
 | H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | à faire |
 | H-02 | M11 | Je vois mon taux de complétion | stats-history | à faire |
 | H-03 | M11 | J'exporte mon historique | stats-history | à faire |
@@ -125,7 +125,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | fait |
 | P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | à faire |
 | P-05 | M12 | Je suis guidé au premier lancement | settings-personalization | à faire |
-| P-06 | M12 | Un écran vide m'indique quoi faire | settings-personalization | en cours |
+| P-06 | M12 | Un écran vide m'indique quoi faire | settings-personalization | fait |
 | P-07 | M12 | J'importe mes tâches existantes | settings-personalization | à faire |
 | P-08 | M12 | Je consulte les raccourcis clavier | settings-personalization | fait |
 | D-04 | M16 | J'utilise les raccourcis clavier | desktop-tauri | fait |

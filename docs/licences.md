@@ -52,3 +52,9 @@ redistribue pas les fichiers de police séparément de l'application.
 - Paquet : [`chrono-node`](https://www.npmjs.com/package/chrono-node) 2.10, licence MIT (copyright Wanasit Tanakitrungruang).
 - Usage : lecture des dates absolues et de "dans N jours" dans la saisie rapide, locale française seule (`src/domain/naturalDate.ts`).
 - Texte complet de la licence : `node_modules/chrono-node/LICENSE`.
+
+# Licence — carillon de fin de session Focus (F-04 D4)
+
+- Fichier : `src/features/focus/assets/focus-end.wav` (22 050 Hz, mono, 16 bits, 1,6 s, environ 70 Ko).
+- Origine : synthétisé par `scripts/generate-focus-chime.mjs` (partiels de cloche à décroissance exponentielle) ; œuvre originale du projet, sans échantillon tiers, placée dans le domaine public (CC0). Aucune attribution requise.
+- Lu par un élément `Audio` au volume du système (`src/platform/focus/sound.ts`), jamais par une API Rust ; aucune notification Windows.

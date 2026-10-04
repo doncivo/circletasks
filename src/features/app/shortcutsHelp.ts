@@ -8,7 +8,8 @@ import { SHORTCUTS, parseChord, type KeyChord, type ShortcutId, type ShortcutSco
  */
 
 /** Raccourcis du registre sans gestionnaire tant que leur story n'existe pas : affichés « (bientôt) », jamais simulés. */
-export const RESERVED_SHORTCUTS: readonly ShortcutId[] = ['list.focus']; // F-01 (Focus) : à retirer à sa livraison.
+/** Raccourcis réservés à une story à venir (affichés « (bientôt) », sans gestionnaire) : aucun depuis F-01 (Ctrl+Maj+F branché). */
+export const RESERVED_SHORTCUTS: readonly ShortcutId[] = [];
 
 /** Combinaison écrite en français : « Ctrl+Maj+F », « Suppr », « Échap », « ← ». */
 export function formatChord(keys: string): string {
