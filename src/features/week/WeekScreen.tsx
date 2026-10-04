@@ -6,6 +6,7 @@ import { externalEventsByDay } from '../../domain/externalEvents';
 import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
 import { detectTimeZone } from '../../platform';
 import { t } from '../../i18n';
+import { sourceNames } from '../calendars/sourceNames';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
 import { Fab, useDelayedFlag, useLayout, useSwipe } from '../../ui';
@@ -111,7 +112,7 @@ export function WeekScreen() {
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
   const external = useMemo(
     () =>
-      projectFilter ? new Map() : externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter, untitled: t('calendars.untitled') }),
+      projectFilter ? new Map() : externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter, untitled: t('calendars.untitled'), sources: sourceNames() }),
     [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter, projectFilter],
   );
   const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras: projectFilter ? new Map() : extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external, projectFilter]);

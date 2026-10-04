@@ -1,4 +1,4 @@
-import { calendarOf, displayTitle, externalEventSpan, externalEventVisible } from './externalEvents';
+import { calendarOf, displayTitle, externalEventSpan, externalEventVisible, sourceNameOf, type SourceNames } from './externalEvents';
 import { compareByStart } from './eventRules';
 import { occurrencesOfEvents } from './eventOccurrences';
 import type { HolidayEntry } from './holidays';
@@ -51,6 +51,8 @@ export interface BuildEventListInput {
   readonly filter: SpaceFilter;
   /** Titre affiché d'un événement externe sans titre (K-02 D3). */
   readonly untitled?: string;
+  /** Nom de source affiché par fournisseur (S-05, K-02 critère 8). */
+  readonly sources?: SourceNames;
   /** Entrées de jours fériés (E-03), déjà filtrées par pays activé. */
   readonly holidays?: readonly EventListEntry[];
 }
@@ -86,7 +88,7 @@ export function localEntries(events: readonly CalendarEvent[], year: number): Ev
 }
 
 /** Entrées des événements externes visibles sous le filtre, une ligne au premier jour de chaque événement (S-05 : fuseau de l'appareil). */
-export function externalEntries(input: Pick<BuildEventListInput, 'year' | 'externalEvents' | 'accounts' | 'timeZone' | 'filter' | 'untitled'>): EventListEntry[] {
+export function externalEntries(input: Pick<BuildEventListInput, 'year' | 'externalEvents' | 'accounts' | 'timeZone' | 'filter' | 'untitled' | 'sources'>): EventListEntry[] {
   const { from, to } = yearBounds(input.year);
   const entries: EventListEntry[] = [];
   for (const event of input.externalEvents) {
@@ -106,7 +108,7 @@ export function externalEntries(input: Pick<BuildEventListInput, 'year' | 'exter
       spaceId: owner.calendar?.spaceId ?? null,
       icon: null,
       event: null,
-      calendarName: owner.account.label,
+      calendarName: sourceNameOf(owner.account, input.sources),
       holiday: null,
     });
   }

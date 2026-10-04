@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
-import { displayTitle, externalEventSpan } from '../../domain/externalEvents';
+import { displayTitle, externalEventSpan, sourceNameOf } from '../../domain/externalEvents';
 import { t } from '../../i18n';
+import { sourceNames } from '../calendars/sourceNames';
 import { formatDetailDate } from '../../i18n/format';
 import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
 import { detectTimeZone } from '../../platform';
@@ -30,7 +31,7 @@ export function ExternalEventDetail() {
   const account = accounts.find((candidate) => candidate.id === event.accountId);
   const calendar = account?.calendars.find((candidate) => candidate.id === event.calendarId);
   const span = externalEventSpan(event, timeZone);
-  const source = [calendar?.name, account?.label].filter((part): part is string => Boolean(part)).join(' · ');
+  const source = [calendar?.name, account ? sourceNameOf(account, sourceNames()) : undefined].filter((part): part is string => Boolean(part)).join(' · ');
 
   const content = (
     <div className="ct-task-detail">

@@ -6,6 +6,7 @@ import { holidaysInRange, uncoveredLunarYears } from '../../domain/holidays';
 import { makeLocalDate, parseLocalDate } from '../../domain/localDate';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
+import { sourceNames } from '../calendars/sourceNames';
 import { detectTimeZone } from '../../platform';
 import { Fab, Icon, Sheet, SpacePills, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -77,7 +78,7 @@ export function EventsScreen() {
   );
   // Sous un filtre projet, aucun événement (E-01 critère 10).
   const entries = useMemo(
-    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays, untitled: t('calendars.untitled') })),
+    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays, untitled: t('calendars.untitled'), sources: sourceNames() })),
     [year, events, externalEvents, accounts, timeZone, spaceFilter, projectFilter, holidays],
   );
   const uncovered = projectFilter ? [] : uncoveredLunarYears([year], holidayCountries);

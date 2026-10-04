@@ -17,6 +17,8 @@ export const calendarsFr = {
   addIcloud: 'iCloud',
   providerGoogle: 'Google Agenda',
   providerIcloud: 'iCloud',
+  sourceGoogleShort: 'Google',
+  sourceIcloudShort: 'iCloud',
   stateConnected: 'Connecté',
   stateReconnect: 'Déconnecté',
   stateOffline: 'Hors ligne',

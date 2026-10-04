@@ -12,7 +12,7 @@ import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
-import { CalendarsScreen } from './features/calendars';
+import { CalendarsScreen, registerExternalEventsSource } from './features/calendars';
 import { ChecklistsScreen, registerChecklistsSource } from './features/checklists';
 import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
@@ -35,6 +35,8 @@ registerRoutinesSource();
 registerChecklistsSource();
 // Événements locaux (M7) : bandeaux d'Aujourd'hui et éléments de la Semaine (E-01).
 registerEventsSource();
+// Agendas externes (M8) : bandeaux d'Aujourd'hui, lus par la Semaine par son propre store (K-03).
+registerExternalEventsSource();
 // Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
 registerGoalsSource();
 

@@ -16,6 +16,8 @@ export const calendarsEn: Messages['calendars'] = {
   addIcloud: 'iCloud',
   providerGoogle: 'Google Calendar',
   providerIcloud: 'iCloud',
+  sourceGoogleShort: 'Google',
+  sourceIcloudShort: 'iCloud',
   stateConnected: 'Connected',
   stateReconnect: 'Disconnected',
   stateOffline: 'Offline',

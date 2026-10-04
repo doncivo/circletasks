@@ -42,6 +42,19 @@ describe('startAppStartup (T-06)', () => {
     expect(handlers.size).toBe(0);
   });
 
+  it('K-03 : les agendas sont lus à l’ouverture, sondés par le minuteur injecté, relancés au retour au premier plan, arrêtés à dispose', async () => {
+    const timers = { setInterval: vi.fn(() => 7), clearInterval: vi.fn() };
+    const { env, handlers } = fakeEnv({ timers });
+    const startup = startAppStartup(container(), env);
+    await startup.calendars.ready;
+    expect(timers.setInterval).toHaveBeenCalledWith(expect.any(Function), 30_000);
+    const resume = vi.spyOn(startup.calendars, 'resume');
+    handlers.get('visibilitychange')?.();
+    expect(resume).toHaveBeenCalledTimes(1);
+    startup.dispose();
+    expect(timers.clearInterval).toHaveBeenCalledWith(7);
+  });
+
   it('focus et retour au premier plan relancent un contrôle (veille sans visibilitychange)', async () => {
     const { env, handlers } = fakeEnv();
     const startup = startAppStartup(container(), env);
