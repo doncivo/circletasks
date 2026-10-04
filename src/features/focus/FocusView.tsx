@@ -1,7 +1,7 @@
 import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import type { Clock } from '../../domain/clock';
-import { FOCUS_DURATIONS_MIN, activeMinutes, displayClock, elapsedActiveMs, isElapsed, remainingFraction } from '../../domain/focusSession';
+import { FOCUS_DURATIONS_MIN, activeMinutes, currentPauseMs, displayClock, elapsedActiveMs, formatClock, isElapsed, isLongPause, remainingFraction } from '../../domain/focusSession';
 import { t } from '../../i18n';
 import type { FocusWindowAction, FocusWindowState } from '../../platform/focus';
 import { Icon } from '../../ui';
@@ -54,6 +54,27 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0 }
     setConfirming(true);
   }, [closeRequests]);
 
+  const paused = state.phase === 'paused';
+  // Annonce de l'état (critère 9) : « Session en pause » à la pause, « Session reprise » après une reprise, rien au lancement.
+  const [seenPaused, setSeenPaused] = useState(paused);
+  if (paused && !seenPaused) setSeenPaused(true);
+  const stateAnnouncement = paused ? t('focus.pausedState') : seenPaused ? t('focus.runningState') : '';
+  const longPause = paused && isLongPause(record, now);
+
+  // Barre d'espace : pause / reprise quand la mini-fenêtre a le focus (critère 6) ; sur un bouton, l'espace garde son rôle natif.
+  useEffect(() => {
+    if (variant !== 'window' || state.phase === 'ended') return undefined;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== ' ' || event.repeat || event.defaultPrevented) return;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (target?.closest('button, a, input, textarea, [role="alertdialog"]')) return;
+      event.preventDefault();
+      onAction({ type: state.phase === 'paused' ? 'resume' : 'pause' });
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [variant, state.phase, onAction]);
+
   const free = session.plannedMin === null;
   const fraction = remainingFraction(record, now);
   const minutes = activeMinutes(record, now);
@@ -72,7 +93,7 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0 }
     : t('focus.announceRemaining', { min: Math.ceil(Math.max(0, session.plannedMin * 60_000 - elapsedActiveMs(record, now)) / 60_000) });
 
   return (
-    <section className={`ct-focus ct-focus--${variant}`} aria-label={t('focus.screenLabel')} data-phase={state.phase}>
+    <section className={`ct-focus ct-focus--${variant}${paused ? ' ct-focus--paused' : ''}`} aria-label={t('focus.screenLabel')} data-phase={state.phase}>
       <div className="ct-focus__top">
         <button type="button" className="ct-focus__iconButton" aria-label={t('focus.closeLabel')} onClick={() => setConfirming(true)}>
           <Icon icon={X} size={24} strokeWidth={1.8} />
@@ -95,7 +116,7 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0 }
             cy="150"
             r="130"
             fill="none"
-            stroke="var(--ct-focus-arc)"
+            stroke={paused ? 'var(--ct-focus-arc-paused)' : 'var(--ct-focus-arc)'}
             strokeWidth="14"
             strokeLinecap="round"
             strokeDasharray={RING_LENGTH}
@@ -108,6 +129,7 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0 }
             {clockText}
           </span>
           <span className="ct-focus__caption">{free ? t('focus.elapsed') : t('focus.remainingOn', { min: session.plannedMin })}</span>
+          {paused && <span className="ct-focus__status">{t('focus.pausedSince', { time: formatClock(currentPauseMs(record, now) / 1000) })}</span>}
         </div>
         <span className="ct-visually-hidden" aria-live="polite" key={announce}>
           {announce}
@@ -126,8 +148,33 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0 }
       </div>
 
       <div className="ct-focus__grow" />
+      <span className="ct-visually-hidden" aria-live="polite">
+        {stateAnnouncement}
+      </span>
+
+      {longPause && (
+        <div className="ct-focus__notice" role="group" aria-label={t('focus.stillPausedTitle')}>
+          <span>{t('focus.stillPausedTitle')}</span>
+          <div className="ct-focus__notice-actions">
+            <button type="button" className="ct-focus__link" onClick={() => onAction({ type: 'resume' })}>
+              {t('focus.resume')}
+            </button>
+            <button type="button" className="ct-focus__link" onClick={() => setConfirming(true)}>
+              {t('focus.stillPausedStop')}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="ct-focus__actions">
+        <button
+          type="button"
+          className={`ct-focus__button${paused ? ' ct-focus__button--resume' : ''}`}
+          aria-label={paused ? t('focus.resumeLabel') : t('focus.pauseLabel')}
+          onClick={() => onAction({ type: paused ? 'resume' : 'pause' })}
+        >
+          {paused ? t('focus.resume') : t('focus.pause')}
+        </button>
         {state.canFinishTask && (
           <button type="button" className="ct-focus__button ct-focus__button--finish" onClick={() => onAction({ type: 'finishTask' })}>
             {t('focus.finishTask')}

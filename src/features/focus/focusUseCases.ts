@@ -5,6 +5,8 @@ import {
   focusPlacementAtLaunch,
   isElapsed,
   isTooShortToKeep,
+  pauseValues,
+  resumeValues,
   overdueMs,
   sanitizeFocusDuration,
   stopValues,
@@ -53,6 +55,10 @@ export interface FocusUseCases {
   start(taskId: TaskId, durationMin: FocusDuration): Promise<StartOutcome>;
   /** F-01 critère 4 : change la durée prévue de la session ouverte. */
   setDuration(session: FocusSession, durationMin: FocusDuration): Promise<FocusSession>;
+  /** F-02 critère 1 : met en pause à l'instant courant (écrit `paused_at`) ; la session inchangée si elle l'est déjà. */
+  pause(session: FocusSession): Promise<FocusSession>;
+  /** F-02 critère 2 : reprend (la pause s'ajoute à `paused_sec`, `paused_at` est vidé) ; la session inchangée si elle court. */
+  resume(session: FocusSession): Promise<FocusSession>;
   /** F-01 critère 7 : arrêt volontaire à l'instant courant. */
   stop(session: FocusSession): Promise<StopOutcome>;
   /** F-04 critère 1 : clôture à son terme prévu, sans temps supplémentaire. */
@@ -133,6 +139,16 @@ export function createFocusUseCases(deps: FocusUseCaseDeps): FocusUseCases {
     },
 
     completeTask: (taskId) => taskUseCases.complete(taskId),
+    async pause(session) {
+      const values = pauseValues(session, nowIso(clock));
+      return values ? data.repos.focusSessions.update(session.id, values) : session;
+    },
+
+    async resume(session) {
+      const values = resumeValues(session, nowIso(clock));
+      return values ? data.repos.focusSessions.update(session.id, values) : session;
+    },
+
     stop: stopSession,
     closeAtTerm: closeSessionAtTerm,
 

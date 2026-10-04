@@ -167,3 +167,80 @@ describe('Écran de session Focus (F-01, Focus.html)', () => {
     vi.restoreAllMocks();
   });
 });
+
+describe('Pause et reprise à l’écran (F-02)', () => {
+  const pausedState = (pausedAt = '2026-10-04T08:09:26.000Z'): FocusWindowState => stateOf({ pausedAt }, { phase: 'paused' });
+
+  it('critères 1 et 9 : « Pause » (nom accessible « Mettre en pause ») envoie l’ordre', () => {
+    const { actions } = setup(stateOf());
+    const button = screen.getByRole('button', { name: 'Mettre en pause' });
+    expect(button).toHaveTextContent('Pause');
+    fireEvent.click(button);
+    expect(actions).toEqual([{ type: 'pause' }]);
+  });
+
+  it('critères 1 et 9 : en pause, « Reprendre », temps figé, « En pause depuis 00:12 », anneau grisé, état annoncé', () => {
+    const { container, advance } = setup(pausedState(), 'screen', Date.parse(START) + 9 * MIN + 38_000);
+    expect(screen.getByRole('timer')).toHaveTextContent('15:34');
+    expect(screen.getByText('En pause depuis 00:12')).toBeInTheDocument();
+    const resume = screen.getByRole('button', { name: 'Reprendre la session' });
+    expect(resume).toHaveTextContent('Reprendre');
+    expect(screen.getByRole('region', { name: 'Session Focus' })).toHaveClass('ct-focus--paused');
+    expect(container.querySelector('.ct-focus__arc')).toHaveAttribute('stroke', 'var(--ct-focus-arc-paused)');
+    expect(container.querySelector('[aria-live="polite"]')).toBeInTheDocument();
+    expect(screen.getByText('Session en pause')).toBeInTheDocument();
+    advance(30 * MIN);
+    // Le temps reste figé, la mention continue de compter la pause (par horodatage).
+    expect(screen.getByRole('timer')).toHaveTextContent('15:34');
+    expect(screen.getByText('En pause depuis 30:12')).toBeInTheDocument();
+    fireEvent.click(resume);
+  });
+
+  it('critère 4 : au redémarrage l’état « En pause » est restauré tel quel', () => {
+    setup(pausedState('2026-10-04T08:09:26.000Z'), 'screen', Date.parse(START) + 5 * 3_600_000 + 9 * MIN + 26_000);
+    expect(screen.getByRole('timer')).toHaveTextContent('15:34');
+    expect(screen.getByRole('button', { name: 'Reprendre la session' })).toBeInTheDocument();
+  });
+
+  it('critère 6 : la barre d’espace bascule pause / reprise dans la mini-fenêtre, et seulement là', () => {
+    const { actions, rerender, clock } = setup(stateOf(), 'window');
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(actions).toEqual([{ type: 'pause' }]);
+    rerender(<FocusView state={pausedState()} variant="window" clock={clock} onAction={(a) => actions.push(a)} />);
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(actions).toEqual([{ type: 'pause' }, { type: 'resume' }]);
+    // Sur un bouton, l’espace garde son rôle natif (pas de double bascule) ; les autres variantes ne l’écoutent pas.
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Reprendre la session' }), { key: ' ' });
+    expect(actions).toHaveLength(2);
+    cleanup();
+    const other = setup(stateOf(), 'screen');
+    fireEvent.keyDown(document.body, { key: ' ' });
+    expect(other.actions).toEqual([]);
+  });
+
+  it('critère 7 : après 2 h de pause, « Toujours en pause ? » avec Reprendre et Arrêter', () => {
+    const { actions } = setup(pausedState(), 'screen', Date.parse(START) + 9 * MIN + 26_000 + 2 * 3_600_000 + 1000);
+    const group = screen.getByRole('group', { name: 'Toujours en pause ?' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Reprendre' }));
+    expect(actions).toEqual([{ type: 'resume' }]);
+    fireEvent.click(within(group).getByRole('button', { name: 'Arrêter' }));
+    expect(screen.getByRole('alertdialog', { name: 'Arrêter la session ?' })).toBeInTheDocument();
+  });
+
+  it('critère 7 : sous 2 h de pause, la question n’est pas posée', () => {
+    setup(pausedState(), 'screen', Date.parse(START) + 9 * MIN + 26_000 + 3_600_000);
+    expect(screen.queryByRole('group', { name: 'Toujours en pause ?' })).not.toBeInTheDocument();
+  });
+
+  it('critère 5 : arrêter en pause envoie l’arrêt avec le temps actif seul (9 min)', () => {
+    const { actions } = setup(pausedState(), 'screen', Date.parse(START) + 40 * MIN);
+    fireEvent.click(screen.getByRole('button', { name: 'Fermer Focus' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Arrêter et enregistrer 9 min' }));
+    expect(actions).toEqual([{ type: 'stop' }]);
+  });
+
+  it('un terme atteint n’est pas signalé pendant une pause', () => {
+    const { actions } = setup(pausedState('2026-10-04T08:09:26.000Z'), 'window', Date.parse(START) + 3 * 3_600_000);
+    expect(actions.filter((a) => a.type === 'elapsed')).toEqual([]);
+  });
+});

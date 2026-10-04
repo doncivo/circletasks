@@ -41,6 +41,10 @@ export interface FocusState {
   start(taskId: TaskId): Promise<FocusStartResult>;
   /** F-01 critère 4 : change la durée prévue (mémorisée pour le prochain lancement). */
   setDuration(duration: FocusDuration): Promise<void>;
+  /** F-02 critère 1 : met la session en pause (le minuteur s'arrête, `paused_at` est écrit). */
+  pause(): Promise<void>;
+  /** F-02 critère 2 : reprend la session (la pause s'ajoute à `paused_sec`). */
+  resume(): Promise<void>;
   /** F-01 critère 7 : arrêt volontaire (la vue a déjà demandé confirmation). */
   stop(): Promise<void>;
   /** F-01 critère 8 : arrête la session et termine la tâche. */
@@ -169,6 +173,23 @@ function createFocusStore(container: AppContainer) {
           armEndTimer();
           // Temps restant ≤ 0 avec la nouvelle durée : la session se termine (F-01 critère 4, F-04).
           if (isElapsed(updated, clock.nowMs())) await closeIfElapsed();
+        }),
+
+      pause: () =>
+        serial(async () => {
+          const { session } = get();
+          if (!session || session.pausedAt !== null) return;
+          set({ session: await useCases.pause(session) });
+          // En pause, aucune fin n'est attendue : le réveil est annulé, il est recalculé à la reprise (critère 8).
+          armEndTimer();
+        }),
+
+      resume: () =>
+        serial(async () => {
+          const { session } = get();
+          if (!session || session.pausedAt === null) return;
+          set({ session: await useCases.resume(session) });
+          armEndTimer();
         }),
 
       stop: () =>

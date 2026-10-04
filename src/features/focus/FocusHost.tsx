@@ -68,7 +68,7 @@ export function FocusHost() {
   const viewState: FocusWindowState | null = useMemo(() => {
     if (!openSession) return null;
     return buildWindowState({
-      phase: 'running',
+      phase: ended ? 'ended' : openSession.pausedAt !== null ? 'paused' : 'running',
       session: openSession,
       title: live?.title ?? null,
       time: live?.time ? formatTime(live.time) : null,
@@ -89,6 +89,12 @@ export function FocusHost() {
       switch (action.type) {
         case 'duration':
           void state.setDuration(action.minutes === null ? null : action.minutes === 25 || action.minutes === 50 || action.minutes === 90 ? action.minutes : 25);
+          break;
+        case 'pause':
+          void state.pause();
+          break;
+        case 'resume':
+          void state.resume();
           break;
         case 'stop':
           void state.stop();

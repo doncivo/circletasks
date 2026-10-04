@@ -181,3 +181,44 @@ export function displayClock(session: Timing, nowMs: number): string {
 export function activeMinutes(session: Pick<FocusSessionRecord, 'startedAt' | 'endedAt' | 'pausedSec' | 'pausedAt'>, nowMs: number): number {
   return Math.floor(elapsedActiveMs(session, nowMs) / MS_PER_MIN);
 }
+
+// --- F-02 : pause et reprise ---------------------------------------------------------------------------------------------------
+
+/** Au-delà de cette durée de pause, « Toujours en pause ? » est proposé (pas d'arrêt automatique, F-02 critère 7). */
+export const FOCUS_LONG_PAUSE_MS = 2 * 60 * 60 * 1000;
+
+/** La session est en pause (pause ouverte, non terminée). */
+export function isPaused(session: Pick<FocusSessionRecord, 'pausedAt' | 'endedAt'>): boolean {
+  return session.pausedAt !== null && session.endedAt === null;
+}
+
+/** Durée de la pause en cours (ms) ; 0 si la session court. Calculée depuis `paused_at` : elle continue en veille ou app fermée. */
+export function currentPauseMs(session: Pick<FocusSessionRecord, 'pausedAt' | 'endedAt'>, nowMs: number): number {
+  if (!isPaused(session) || session.pausedAt === null) return 0;
+  const since = Date.parse(session.pausedAt);
+  return Number.isFinite(since) ? Math.max(0, nowMs - since) : 0;
+}
+
+/** Pause de plus de 2 h : proposer de reprendre ou d'arrêter (F-02 critère 7). */
+export function isLongPause(session: Pick<FocusSessionRecord, 'pausedAt' | 'endedAt'>, nowMs: number): boolean {
+  return currentPauseMs(session, nowMs) > FOCUS_LONG_PAUSE_MS;
+}
+
+/** Valeurs à écrire pour mettre en pause à `atIso` (F-02 critère 1). Une seule pause ouverte à la fois : null si déjà en pause. */
+export function pauseValues(session: Pick<FocusSessionRecord, 'pausedAt'>, atIso: IsoDateTime): { readonly pausedAt: IsoDateTime } | null {
+  return session.pausedAt === null ? { pausedAt: atIso } : null;
+}
+
+/**
+ * Valeurs à écrire pour reprendre à `atIso` (F-02 critère 2) : la durée de la pause s'ajoute à `paused_sec` (arrondie à la seconde),
+ * `paused_at` est vidé. Null si la session n'est pas en pause. Le terme prévu se recalcule (début + durée + pauses) : la pause ne
+ * prolonge pas le temps actif restant.
+ */
+export function resumeValues(
+  session: Pick<FocusSessionRecord, 'pausedAt' | 'pausedSec'>,
+  atIso: IsoDateTime,
+): { readonly pausedAt: null; readonly pausedSec: number } | null {
+  if (session.pausedAt === null) return null;
+  const seconds = Math.max(0, Math.round((Date.parse(atIso) - Date.parse(session.pausedAt)) / 1000));
+  return { pausedAt: null, pausedSec: session.pausedSec + seconds };
+}

@@ -223,4 +223,18 @@ describe('FocusHost : où la session s’affiche (F-01 critères 2, 3, 6, 9)', (
     const key = { key: 'F', code: 'KeyF', ctrlKey: true, altKey: false, shiftKey: true, metaKey: false, editable: false };
     expect(h.container.shortcuts.handle(key)).toBeNull();
   });
+
+  it('F-02 : la pause et la reprise de la mini-fenêtre sont écrites et republiées (phase paused puis running)', async () => {
+    const { task } = await boot(1440, true);
+    await act(async () => {
+      await launchFocus(h.container, task.id);
+    });
+    await waitFor(() => expect(win?.isOpen()).toBe(true));
+    h.db.clock.advance(4 * MIN);
+    act(() => win?.emitAction({ type: 'pause' }));
+    await waitFor(() => expect(win?.states.at(-1)).toMatchObject({ phase: 'paused', session: { pausedAt: '2026-10-04T08:04:00.000Z' } }));
+    h.db.clock.advance(6 * MIN);
+    act(() => win?.emitAction({ type: 'resume' }));
+    await waitFor(() => expect(win?.states.at(-1)).toMatchObject({ phase: 'running', session: { pausedAt: null, pausedSec: 360 } }));
+  });
 });
