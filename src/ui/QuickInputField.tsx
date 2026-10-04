@@ -131,16 +131,12 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
           autoComplete="off"
           enterKeyHint={enterKeyHint}
           className={[variant === 'field' ? 'ct-text-field__control' : '', inputClassName].filter(Boolean).join(' ')}
-          // Le rôle ne change que liste ouverte : champ de texte ordinaire le reste du temps.
-          {...(open
-            ? {
-                role: 'combobox',
-                'aria-expanded': true,
-                'aria-controls': listId,
-                'aria-autocomplete': 'list' as const,
-                'aria-activedescendant': items[activeIndex] ? optionId(items[activeIndex]) : undefined,
-              }
-            : {})}
+          // ARIA 1.2 : combobox permanent, aria-expanded suit la liste.
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={open && items[activeIndex] ? optionId(items[activeIndex]) : undefined}
           onChange={(event) => {
             setCaret(event.target.selectionStart ?? event.target.value.length);
             onChange(event.target.value);

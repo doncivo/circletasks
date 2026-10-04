@@ -26,8 +26,6 @@ export interface CaptureInput {
   readonly time: LocalTime | null;
   /** La date est écrite dans le texte ; faux : déduite d'une heure seule, un écran qui a son propre jour le garde. */
   readonly dateWritten: boolean;
-  /** Une marque « # » est écrite : « Ajouté dans <espace> » reste annoncé si l'espace diffère du filtre. */
-  readonly spaceWritten: boolean;
 }
 
 /**
@@ -45,7 +43,6 @@ export function captureInputFrom(parse: QuickParse, defaultSpaceId: SpaceId | nu
     date: parse.date,
     time: parse.time,
     dateWritten: parse.dateWritten,
-    spaceWritten: parse.spaceWritten,
   };
 }
 

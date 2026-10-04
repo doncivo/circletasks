@@ -114,7 +114,7 @@ describe('Capture rapide : champ d’ajout d’Aujourd’hui (Q-06, Q-02)', () =
   describe('suggestions (combobox ARIA)', () => {
     it('« # » liste les espaces, « #pe » filtre, Entrée complète le mot (critère 2)', async () => {
       await screen.findByRole('heading', { level: 1 });
-      expect(field()).not.toHaveAttribute('aria-expanded');
+      expect(field()).toHaveAttribute('aria-expanded', 'false');
       type('Appeler #');
       const list = await screen.findByRole('listbox', { name: 'Suggestions' });
       expect(within(list).getAllByRole('option').map((o) => o.textContent)).toEqual(['#Pro', '#Perso']);

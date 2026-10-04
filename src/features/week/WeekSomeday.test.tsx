@@ -226,7 +226,7 @@ describe('Semaine : panneau « Un jour » (S-06, PC)', () => {
       await screen.findByRole('button', { name: 'Un jour' });
       openPanel();
       fireEvent.click(within(panel()).getByRole('button', { name: '+ Ajouter à « Un jour »' }));
-      const field = within(panel()).getByRole('textbox', { name: 'Nouvelle tâche sans date' });
+      const field = within(panel()).getByRole('combobox', { name: 'Nouvelle tâche sans date' });
       fireEvent.change(field, { target: { value: 'Renouveler le passeport' } });
       fireEvent.submit(field.closest('form') as HTMLFormElement);
       await waitFor(() => expect(panelTitles()).toEqual(['Renouveler le passeport']));

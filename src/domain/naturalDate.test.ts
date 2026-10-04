@@ -45,7 +45,7 @@ const PHRASES: ReadonlyArray<readonly [string, string, string | null, string | n
   ['Dîner demain 8h du soir', 'Dîner', '2026-09-23', '20:00'],
   ['Pharmacie aujourd’hui', 'Pharmacie', '2026-09-22', null],
   ["Pharmacie aujourd'hui 6h", 'Pharmacie', '2026-09-22', '06:00'],
-  ['Mardi 15h dentiste', 'dentiste', '2026-09-22', '15:00'],
+  ['Mardi 15h dentiste', 'dentiste', '2026-09-29', '15:00'],
   ['Mardi 7h dentiste', 'dentiste', '2026-09-29', '07:00'],
   ['Appel samedi 26 sept.', 'Appel', '2026-09-26', null],
   ['Fête le 1er octobre', 'Fête', '2026-10-01', null],
@@ -118,14 +118,12 @@ describe('naturalDate : règles de date', () => {
     }
   });
 
-  it('un jour de semaine seul est aujourd’hui s’il est ce jour-là', () => {
-    expect(parse('Payer mardi').date).toBe('2026-09-22');
-  });
-
-  it('un jour de semaine avec une heure déjà passée : semaine suivante (critère 3)', () => {
+  it('un jour de semaine seul est la prochaine occurrence STRICTEMENT après aujourd’hui (comme T-14)', () => {
+    expect(parse('Payer mardi').date).toBe('2026-09-29');
     const afternoon: NaturalNow = { date: asLocalDate('2026-09-22'), time: asLocalTime('16:00') };
     expect(parse('Dentiste mardi 10h', afternoon).date).toBe('2026-09-29');
-    expect(parse('Dentiste mardi 17h', afternoon).date).toBe('2026-09-22');
+    expect(parse('Dentiste mardi 17h', afternoon).date).toBe('2026-09-29');
+    expect(parse('Dentiste mercredi', afternoon).date).toBe('2026-09-23');
   });
 
   it('une heure égale à l’heure actuelle passe à demain', () => {

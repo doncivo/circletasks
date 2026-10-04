@@ -12,7 +12,7 @@ import { browserMonday, dayOf, dayTitles, openWeek, taskButton, weekTab } from '
  */
 
 const addButton = (page: Page, iso: string) => dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche/ });
-const field = (page: Page, iso: string) => dayOf(page, iso).getByRole('textbox');
+const field = (page: Page, iso: string) => dayOf(page, iso).getByRole('combobox');
 
 async function typeAndEnter(page: Page, iso: string, title: string): Promise<void> {
   await field(page, iso).fill(title);
@@ -82,10 +82,13 @@ test.describe('S-04 — ajout rapide dans un jour', () => {
 
   test('la tâche est créée dans l’espace du filtre actif (critère 3) et l’ajout est permis sur un jour passé (critère 6)', async ({ page }, testInfo) => {
     const monday = await browserMonday(page);
-    const title = `Perso semaine ${testInfo.project.name}`;
+    const title = `Perso lundi ${testInfo.project.name}`;
     await page.getByRole('button', { name: 'Perso', exact: true }).click();
     await addButton(page, monday).click();
-    await typeAndEnter(page, monday, title);
+    await field(page, monday).fill(title);
+    // « lundi » est lu comme une date (Q-02) : on retire la pastille pour garder le titre.
+    await page.getByRole('button', { name: /^Retirer/ }).click();
+    await field(page, monday).press('Enter');
     await expect(taskButton(page, title)).toBeVisible();
     await page.getByRole('button', { name: 'Pro', exact: true }).click();
     await expect(taskButton(page, title)).toHaveCount(0);

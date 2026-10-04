@@ -16,8 +16,8 @@ import { DEFAULT_FIRST_WEEKDAY, daysSinceWeekStart, firstWeekdayIso, type FirstW
  *
  * Décisions : une date n'est retenue que si elle est certaine au niveau du jour ou accompagnée d'une heure (« mai », « mardi gras »,
  * « Sam 10h » n'en sont pas) ; matin 09:00, midi 12:00, après-midi 14:00, soir 19:00 ; une heure seule passe à demain si elle est
- * passée ; « aujourd'hui » explicite reste aujourd'hui ; un jour de semaine seul est le prochain, aujourd'hui compris, et passe à
- * la semaine suivante si l'heure donnée est passée ; « lundi prochain » est le lundi de la semaine suivante (comme T-14) ; les
+ * passée ; « aujourd'hui » explicite reste aujourd'hui ; un jour de semaine seul est la prochaine occurrence
+ * STRICTEMENT après aujourd'hui (comme le champ Date de T-14, décision du 2026-10-04) ; « lundi prochain » est le lundi de la semaine suivante (comme T-14) ; les
  * abréviations (« lun. ») exigent le point ; « chaque lundi » (récurrence) n'est pas une date.
  * Pur : « maintenant » est fourni (horloge injectable, heure locale de l'appareil).
  */
@@ -211,9 +211,9 @@ function nextWeekStart(today: LocalDate, first: FirstWeekday): LocalDate {
   return addDays(today, 7 - daysSinceWeekStart(today, first));
 }
 
-/** Prochaine occurrence du jour de semaine, aujourd'hui compris. */
+/** Prochaine occurrence du jour de semaine, STRICTEMENT après `from` (comme le champ Date de T-14). */
 function upcoming(from: LocalDate, weekday: Weekday): LocalDate {
-  return addDays(from, (weekday - weekdayOf(from) + 7) % 7);
+  return addDays(from, ((weekday - weekdayOf(from) + 6) % 7) + 1);
 }
 
 function chronoDates(masked: string, now: NaturalNow): DateHit[] {
@@ -287,8 +287,6 @@ export function naturalDate(text: string, now: NaturalNow, options: NaturalDateO
       date = addDays(nextWeekStart(now.date, first), (weekday - firstWeekdayIso(first) + 7) % 7);
     } else {
       date = upcoming(now.date, weekday);
-      // Aujourd'hui avec une heure déjà passée : la semaine prochaine (critère 3).
-      if (date === now.date && time !== null && time <= now.time) date = addDays(date, 7);
     }
     if (dateHit.endWeekday !== undefined) {
       const end = upcoming(date, dateHit.endWeekday);

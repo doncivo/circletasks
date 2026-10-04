@@ -190,8 +190,12 @@ export function TodayScreen() {
   async function submitInline(capture: CaptureInput, choice: DateChoice | null): Promise<boolean> {
     const spaceId = capture.spaceId ?? defaultSpaceId;
     if (!spaceId) return false;
-    // Date réglée à la main (champ Date PC) d'abord, sinon celle du texte (Q-02), sinon le jour affiché.
-    const schedule = choice !== null ? scheduleOf(choice) : capture.date !== null ? { date: capture.date, ...(capture.time !== null ? { time: capture.time } : {}) } : {};
+    // Date réglée à la main (champ Date PC) d'abord, sinon celle écrite dans le texte (Q-02), sinon le jour affiché (une heure seule ne change pas le jour).
+    const schedule = choice !== null ? scheduleOf(choice) : capture.dateWritten && capture.date !== null
+        ? { date: capture.date, ...(capture.time !== null ? { time: capture.time } : {}) }
+        : capture.time !== null
+          ? { time: capture.time }
+          : {};
     const result = await addTask(capture.title, spaceId, schedule, undefined, capture.projectId ?? undefined);
     if (result.ok) announceCreation(spaceId);
     return result.ok;

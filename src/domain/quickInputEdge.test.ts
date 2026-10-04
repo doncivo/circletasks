@@ -18,13 +18,13 @@ const ctx = (extra: Partial<QuickContext> = {}): QuickContext => ({ spaces: SPAC
 const p = (text: string, extra: Partial<QuickContext> = {}, ignored: string[] = []) => parseQuickInput(text, ctx(extra), { ignored: new Set(ignored) });
 
 describe('Q-02 cas limites de date', () => {
-  it('Q-02 « lundi » : prochain lundi ; un lundi sans heure, le jour même', () => {
+  it('Q-02 « lundi » : prochain lundi, strictement après aujourd’hui (comme T-14)', () => {
     expect(p('Sport lundi').date).toBe('2026-09-28');
-    expect(p('Sport lundi', { now: MONDAY }).date).toBe('2026-09-28');
+    expect(p('Sport lundi', { now: MONDAY }).date).toBe('2026-10-05');
   });
-  it('Q-02 « lundi » un lundi avec heure passée : lundi suivant', () => {
+  it('Q-02 « lundi » un lundi avec heure : toujours le lundi suivant', () => {
     expect(p('Sport lundi 7h', { now: MONDAY }).date).toBe('2026-10-05');
-    expect(p('Sport lundi 9h', { now: MONDAY }).date).toBe('2026-09-28');
+    expect(p('Sport lundi 9h', { now: MONDAY }).date).toBe('2026-10-05');
   });
   it('Q-02 « lun. 14 h » et « 9h30 »', () => {
     const a = p('Dentiste lun. 14 h');
@@ -77,19 +77,21 @@ describe('Q-02 faux positifs : le texte peut rester tel quel', () => {
     const r = p(text);
     expect(r.date).toBe('2026-09-28');
     const date = r.tokens.find((t) => t.kind === 'date');
-    expect(date).toBeDefined();
-    const off = p(text, {}, [date!.key]);
+    if (!date) throw new Error('date attendue');
+    const off = p(text, {}, [date.key]);
     expect(off.date).toBeNull();
     expect(off.time).toBeNull();
     expect(off.title).toBe(text);
   });
   it('Q-02 annuler la détection garde les marques # @', () => {
     const r = p('Appeler Paul demain #perso');
-    const off = p('Appeler Paul demain #perso', {}, [r.tokens.find((t) => t.kind === 'date')!.key]);
+    const dateToken = r.tokens.find((t) => t.kind === 'date');
+    if (!dateToken) throw new Error('date attendue');
+    const off = p('Appeler Paul demain #perso', {}, [dateToken.key]);
     expect([off.title, off.spaceId, off.date]).toEqual(['Appeler Paul demain', PERSO, null]);
   });
   it('Q-02 « Mars » seul ne devient pas date (naturalDate)', () => {
-    expect(naturalDate('Mars', NOW, 'monday')?.date ?? null).toBeNull();
+    expect(naturalDate('Mars', NOW, { firstWeekday: 'monday' })?.date ?? null).toBeNull();
   });
 });
 

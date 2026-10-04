@@ -23,7 +23,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
   test('Entrée crée la tâche sans date, vide le champ ; le badge compte, la tâche reste hors d’Aujourd’hui (critères 3, 6, 7)', async ({ page }, testInfo) => {
     await openSomeday(page, testInfo);
     await addToSomeday(page, 'Renouveler le passeport');
-    await expect(page.getByRole('textbox', { name: 'Nouvelle tâche sans date' })).toBeFocused();
+    await expect(page.getByRole('combobox', { name: 'Nouvelle tâche sans date' })).toBeFocused();
     await addToSomeday(page, 'Lire le rapport annuel');
     // En tête de liste : la plus récente d'abord (SD-04 critère 2).
     expect(await somedayTitles(page)).toEqual(['Lire le rapport annuel', 'Renouveler le passeport']);
@@ -42,7 +42,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
   test('un titre vide ne crée rien (critère 4)', async ({ page }, testInfo) => {
     await openSomeday(page, testInfo);
     if (!isPhone(testInfo)) await page.getByRole('button', { name: '+ Ajouter à « Un jour »' }).click();
-    const field = page.getByRole('textbox', { name: 'Nouvelle tâche sans date' });
+    const field = page.getByRole('combobox', { name: 'Nouvelle tâche sans date' });
     await field.fill('   ');
     await field.press('Enter');
     await expect(somedayList(page)).toHaveCount(0);

@@ -270,17 +270,34 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       expect(screen.queryByRole('button', { name: 'Jour précédent' })).toBeNull();
     });
 
+    it('une heure seule écrite dans le titre ne change pas le jour affiché (Q-02)', async () => {
+      mockViewport(1440);
+      renderToday(h.container);
+      fireEvent.click(await screen.findByRole('button', { name: 'Jour suivant' }));
+      await screen.findByText('Rien de prévu ce samedi.');
+      const field = screen.getByLabelText('Nouvelle tâche');
+      fireEvent.change(field, { target: { value: 'Yoga 18h' } });
+      fireEvent.submit(field.closest('form') as HTMLFormElement);
+      expect(await screen.findByRole('button', { name: 'Yoga' })).toBeInTheDocument();
+      const [created] = await h.container.data.repos.tasks.listForDay(addDays(h.today, 1), 'all');
+      expect(created).toMatchObject({ title: 'Yoga', time: '18:00' });
+    });
+
     it('une tâche créée depuis un autre jour est datée de ce jour', async () => {
       mockViewport(1440);
       renderToday(h.container);
       fireEvent.click(await screen.findByRole('button', { name: 'Jour suivant' }));
       await screen.findByText('Rien de prévu ce samedi.');
       const field = screen.getByLabelText('Nouvelle tâche');
-      fireEvent.change(field, { target: { value: 'Ajoutée là' } });
+      fireEvent.change(field, { target: { value: 'Ajoutée samedi' } });
+      // « samedi » est lu comme une date (Q-02) : la pastille apparaît, on la retire pour garder le titre et le jour affiché.
+      const preview = await screen.findByRole('group', { name: 'Ce qui sera appliqué' });
+      fireEvent.click(within(preview).getByRole('button', { name: /^Retirer/ }));
+      expect(screen.queryByRole('group', { name: 'Ce qui sera appliqué' })).toBeNull();
       fireEvent.submit(field.closest('form') as HTMLFormElement);
-      expect(await screen.findByRole('button', { name: 'Ajoutée là' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Ajoutée samedi' })).toBeInTheDocument();
       const [created] = await h.container.data.repos.tasks.listForDay(addDays(h.today, 1), 'all');
-      expect(created?.title).toBe('Ajoutée là');
+      expect(created?.title).toBe('Ajoutée samedi');
     });
   });
 });

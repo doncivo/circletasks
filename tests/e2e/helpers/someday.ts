@@ -71,7 +71,7 @@ export async function closeSomeday(page: Page, testInfo: { project: { name: stri
 
 /** Champ d'ajout sans date : sur PC, le bouton « + Ajouter à « Un jour » » le déplie d'abord. */
 export async function addToSomeday(page: Page, title: string): Promise<void> {
-  const field = page.getByRole('textbox', { name: 'Nouvelle tâche sans date' });
+  const field = page.getByRole('combobox', { name: 'Nouvelle tâche sans date' });
   if (!(await field.isVisible())) await page.getByRole('button', { name: '+ Ajouter à « Un jour »' }).click();
   await field.fill(title);
   await field.press('Enter');

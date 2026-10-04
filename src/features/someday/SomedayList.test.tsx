@@ -22,7 +22,7 @@ describe.each([
   afterEach(() => teardownSomeday(h));
 
   const somedayTasks = () => h.container.data.repos.tasks.listSomeday('all');
-  const addField = () => screen.getByRole('textbox', { name: 'Nouvelle tâche sans date' });
+  const addField = () => screen.getByRole('combobox', { name: 'Nouvelle tâche sans date' });
   /** PC : le champ remplace le bouton « + Ajouter à « Un jour » ». */
   async function openAddField() {
     if (width >= 1024) fireEvent.click(await screen.findByRole('button', { name: '+ Ajouter à « Un jour »' }));
