@@ -122,7 +122,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'Abandonnée' } });
         fireEvent.keyDown(field, { key: 'Escape' });
-        expect(within(day('2026-10-01')).queryByRole('textbox')).not.toBeInTheDocument();
+        expect(within(day('2026-10-01')).queryByRole('combobox')).not.toBeInTheDocument();
         await waitFor(() => expect(addButton('2026-10-01')).toHaveFocus());
         expect(await stored(h, '2026-10-01')).toEqual([]);
         // Rouvert, le champ repart vide.
@@ -135,7 +135,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
         fireEvent.blur(within(day('2026-10-01')).getByRole('combobox'));
-        expect(within(day('2026-10-01')).queryByRole('textbox')).not.toBeInTheDocument();
+        expect(within(day('2026-10-01')).queryByRole('combobox')).not.toBeInTheDocument();
 
         fireEvent.click(addButton('2026-10-01'));
         const field = within(day('2026-10-01')).getByRole('combobox');
