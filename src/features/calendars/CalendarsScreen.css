@@ -183,3 +183,20 @@
   font-weight: var(--ct-font-weight-semibold);
   overflow-wrap: anywhere;
 }
+
+/* Boutons d'action compacts, comme « Ouvrir » de Réglages (.lk de Reglages.html : 30 px, texte 14 px). */
+.ct-calendars__actions .ct-button,
+.ct-calendars__add .ct-button {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+/* iPhone : zone tactile de 44 pt au moins (PRD section 5). */
+.ct-calendars-shell[data-layout='mobile'] .ct-calendars__actions .ct-button,
+.ct-calendars-shell[data-layout='mobile'] .ct-calendars__add .ct-button {
+  height: 44px;
+  min-height: 44px;
+}

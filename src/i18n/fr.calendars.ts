@@ -12,7 +12,7 @@ export const calendarsFr = {
   sectionAccounts: 'COMPTES',
   noAccount: 'Aucun compte connecté.',
   add: 'Ajouter un compte',
-  addGroup: 'Ajouter un compte',
+  addGroup: 'AJOUTER UN COMPTE',
   addGoogle: 'Google',
   addIcloud: 'iCloud',
   providerGoogle: 'Google Agenda',

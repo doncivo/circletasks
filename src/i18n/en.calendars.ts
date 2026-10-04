@@ -11,7 +11,7 @@ export const calendarsEn: Messages['calendars'] = {
   sectionAccounts: 'ACCOUNTS',
   noAccount: 'No account connected.',
   add: 'Add an account',
-  addGroup: 'Add an account',
+  addGroup: 'ADD AN ACCOUNT',
   addGoogle: 'Google',
   addIcloud: 'iCloud',
   providerGoogle: 'Google Calendar',
