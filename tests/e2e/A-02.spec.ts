@@ -26,7 +26,7 @@ test.describe('A-02 — réordonner la liste', () => {
     await page.keyboard.press('Alt+ArrowDown');
     await expect.poll(() => listTitles(page)).toEqual([b, a, c]);
     await expect(title(page, a)).toBeFocused();
-    await expect(page.locator('[aria-live="polite"]')).toContainText('Déplacée en position 2 sur 3');
+    await expect(page.getByTestId('reorder-announcer')).toContainText('Déplacée en position 2 sur 3');
     await page.keyboard.press('Alt+ArrowDown');
     await expect.poll(() => listTitles(page)).toEqual([b, c, a]);
     await page.keyboard.press('Alt+ArrowUp');
@@ -46,7 +46,7 @@ test.describe('A-02 — réordonner la liste', () => {
     await expect.poll(() => listTitles(page)).toEqual([names.nine, names.two, names.d, names.c]);
     // D est la première tâche sans heure : elle ne passe pas devant celles à l'heure.
     await page.keyboard.press('Alt+ArrowUp');
-    await expect(page.locator('[aria-live="polite"]')).toContainText('Position inchangée');
+    await expect(page.getByTestId('reorder-announcer')).toContainText('Position inchangée');
     await expect.poll(() => listTitles(page)).toEqual([names.nine, names.two, names.d, names.c]);
   });
 
