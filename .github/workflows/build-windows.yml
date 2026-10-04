@@ -1,6 +1,7 @@
 # Build et publication de l'app PC (PRD section 7, ADR 0006, story D-03 critères 10 et 11).
-# Tag vX.Y.Z : build NSIS signé (clé updater), latest.json, publication sur circletasks-releases.
-# Lancement manuel : build seul (artefact), jamais de publication.
+# Tag vX.Y.Z : build NSIS signé (clé updater), vérification de la signature, latest.json, publication sur circletasks-releases.
+# Lancement manuel : build seul, installeur NON signé en artefact, jamais de publication.
+# Le job publish ne tourne que sur un push de tag vX.Y.Z.
 # Le tag iOS (ios-vX.Y.Z) est distinct et ne déclenche pas ce workflow.
 name: Build Windows
 
@@ -11,6 +12,10 @@ on:
 
 permissions:
   contents: read
+
+env:
+  # Dépôt public des versions : déclaré une seule fois (doit rester aligné sur plugins.updater.endpoints).
+  RELEASES_REPO: doncivo/circletasks-releases
 
 concurrency:
   group: build-windows-${{ github.ref }}
@@ -23,6 +28,8 @@ jobs:
     defaults:
       run:
         shell: bash
+    outputs:
+      sha256: ${{ steps.collect.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,40 +51,59 @@ jobs:
           fi
 
       - name: Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
+      # Hors tag : cache lecture/écriture. Le dossier bundle est exclu (aucun .sig ni installeur résiduel).
       - name: Cache cargo
+        if: github.ref_type != 'tag'
         uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             src-tauri/target
+            !src-tauri/target/release/bundle
           key: cargo-windows-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: cargo-windows-${{ runner.os }}-
 
+      # Sur tag (build signé) : cache en lecture seule, clé exacte, sans restore-keys, jamais réécrit par ce build.
+      - name: Cache cargo (lecture seule)
+        if: github.ref_type == 'tag'
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+            !src-tauri/target/release/bundle
+          key: cargo-windows-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+
       - run: npm ci
 
+      # Signature uniquement sur tag ET clé présente ; un lancement manuel produit toujours un installeur non signé.
+      # createUpdaterArtifacts n'est pas dans tauri.conf.json (il exigerait la clé pour tout build local) : activé ici.
       # Les secrets ne sont exposés qu'à cette étape, par variables d'environnement (jamais affichées).
-      # createUpdaterArtifacts n'est pas dans tauri.conf.json (il exigerait la clé pour tout build local) :
-      # il est activé ici. Sans clé (lancement manuel d'un dépôt sans secret), on construit l'installeur non signé.
+      # Limite inhérente : la clé est visible de tout le processus de compilation (build.rs, scripts npm, dépendances).
       - name: Compiler l'installeur NSIS
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
         run: |
           set -euo pipefail
-          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+          rm -rf src-tauri/target/release/bundle
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+              echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY absent : un tag de version exige la signature."
+              exit 1
+            fi
             npx tauri build --ci --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true}}'
-          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY absent : un tag de version exige la signature."
-            exit 1
           else
-            echo "::warning::Clé de signature absente : installeur non signé, pas de latest.json."
+            echo "::warning::Lancement manuel : installeur non signé, pas de latest.json."
             npx tauri build --ci --bundles nsis
           fi
 
       - name: Rassembler installeur, signature et latest.json
+        id: collect
         run: |
           set -euo pipefail
           VERSION=$(node scripts/release/check-version.mjs)
@@ -86,22 +112,27 @@ jobs:
           test -f "${DIR}/${EXE}" || { echo "::error::Installeur absent : ${DIR}/${EXE}"; ls -l "${DIR}" || true; exit 1; }
           rm -rf dist-release && mkdir dist-release
           cp "${DIR}/${EXE}" dist-release/
-          if [ -f "${DIR}/${EXE}.sig" ]; then
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            test -f "${DIR}/${EXE}.sig" || { echo "::error::Signature .sig absente : createUpdaterArtifacts n'a rien produit."; exit 1; }
             cp "${DIR}/${EXE}.sig" dist-release/
-            # Notes : section de CHANGELOG.md correspondant à la version, sinon texte par défaut.
+            # Notes : section de CHANGELOG.md dont le titre « ## [X.Y.Z] » ou « ## X.Y.Z » correspond exactement.
             NOTES=""
             if [ -f CHANGELOG.md ]; then
               NOTES=$(awk -v v="${VERSION}" '
-                /^## / { if (found) exit; if (index($0, v)) { found=1; next } }
+                /^## / {
+                  if (found) exit
+                  t = $0; sub(/^## +/, "", t); sub(/^\[/, "", t)
+                  if (t == v || index(t, v "]") == 1 || index(t, v " ") == 1) { found = 1; next }
+                }
                 found { print }' CHANGELOG.md)
             fi
             [ -n "${NOTES}" ] || NOTES="CircleTasks ${VERSION}"
-            BASE="https://github.com/doncivo/circletasks-releases/releases/download/v${VERSION}"
+            BASE="https://github.com/${RELEASES_REPO}/releases/download/v${VERSION}"
             node scripts/release/make-latest-json.mjs "${VERSION}" "dist-release/${EXE}" "dist-release/${EXE}.sig" "${BASE}" "${NOTES}" > dist-release/latest.json
             cat dist-release/latest.json
-          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            echo "::error::Signature .sig absente : createUpdaterArtifacts n'a rien produit."
-            exit 1
+            # Vérification hors ligne avec la clé publique de tauri.conf.json avant toute publication.
+            node scripts/release/verify-signature.mjs "dist-release/${EXE}" "dist-release/${EXE}.sig" "${VERSION}"
+            echo "sha256=$(sha256sum "dist-release/${EXE}" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           fi
           ls -l dist-release
 
@@ -111,12 +142,13 @@ jobs:
           path: dist-release/*
           if-no-files-found: error
           retention-days: 30
+          overwrite: true
 
-  # Publication : uniquement sur tag vX.Y.Z. L'environnement « releases » exige l'approbation d'Ali
+  # Publication : uniquement sur push de tag vX.Y.Z. L'environnement « releases » exige l'approbation d'Ali
   # (réglage GitHub, voir docs/release-pc.md). Le secret RELEASES_TOKEN n'existe que dans cet environnement.
   publish:
     needs: windows
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: releases
     permissions:
@@ -133,21 +165,26 @@ jobs:
       - name: Publier sur circletasks-releases
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          EXPECTED_SHA256: ${{ needs.windows.outputs.sha256 }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::error::Secret RELEASES_TOKEN absent : publication impossible (les fichiers restent en artefact)."
             exit 1
           fi
-          REPO="doncivo/circletasks-releases"
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
           EXE="dist-release/CircleTasks_${VERSION}_x64-setup.exe"
           for f in "$EXE" "$EXE.sig" dist-release/latest.json; do
             test -f "$f" || { echo "::error::Fichier absent : $f"; ls -l dist-release; exit 1; }
           done
+          # latest.json doit annoncer la version du tag, et l'installeur doit être celui vérifié par le job windows.
+          ANNOUNCED=$(node -p "require('./dist-release/latest.json').version")
+          [ "$ANNOUNCED" = "$VERSION" ] || { echo "::error::latest.json annonce ${ANNOUNCED}, le tag vaut ${VERSION}"; exit 1; }
+          ACTUAL=$(sha256sum "$EXE" | cut -d' ' -f1)
+          [ -n "${EXPECTED_SHA256:-}" ] && [ "$ACTUAL" = "$EXPECTED_SHA256" ] || { echo "::error::SHA-256 de l'installeur différent de celui vérifié"; exit 1; }
           NOTES=$(node -p "require('./dist-release/latest.json').notes")
           gh release create "$TAG" "$EXE" "$EXE.sig" dist-release/latest.json \
-            --repo "$REPO" --title "CircleTasks ${VERSION}" --notes "$NOTES" --latest \
-            || { gh release upload "$TAG" "$EXE" "$EXE.sig" dist-release/latest.json --repo "$REPO" --clobber \
-                 && gh release edit "$TAG" --repo "$REPO" --latest; }
+            --repo "$RELEASES_REPO" --title "CircleTasks ${VERSION}" --notes "$NOTES" --latest \
+            || { gh release upload "$TAG" "$EXE" "$EXE.sig" dist-release/latest.json --repo "$RELEASES_REPO" --clobber \
+                 && gh release edit "$TAG" --repo "$RELEASES_REPO" --latest; }
