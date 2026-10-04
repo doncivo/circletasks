@@ -68,23 +68,45 @@ fn system_vault() -> vault::SystemVault {
     vault::SystemVault
 }
 
+/// Contrôle d'une référence venue de la WebView : format exact et espace de noms attendu (`vault-unavailable` sinon, sans écho).
+pub fn checked_ref(token_ref: &str, expected: Option<vault::RefNamespace>) -> Result<(), String> {
+    match (vault::parse_token_ref(token_ref), expected) {
+        (None, _) => Err("vault-unavailable".to_owned()),
+        (Some(found), Some(wanted)) if found != wanted => Err("vault-unavailable".to_owned()),
+        _ => Ok(()),
+    }
+}
+
+/// Contrôle des références d'une requête : l'authentification Google lit un jeton Google, Basic un mot de passe iCloud.
+pub fn checked_auth(auth: &HttpAuth) -> Result<(), String> {
+    match auth {
+        HttpAuth::GoogleOauth { token_ref } => checked_ref(token_ref, Some(vault::RefNamespace::Google)),
+        HttpAuth::Basic { token_ref, .. } => checked_ref(token_ref, Some(vault::RefNamespace::Icloud)),
+    }
+}
+
 #[tauri::command]
+/// La WebView n'écrit que des mots de passe iCloud : une référence Google (jeton OAuth) est refusée, seul le flux de Rust l'écrit.
 pub fn calendar_secret_set(token_ref: String, secret: String) -> Result<(), String> {
+    checked_ref(&token_ref, Some(vault::RefNamespace::Icloud))?;
     vault::SecretVault::set(&system_vault(), &token_ref, &secret).map_err(|_| "vault-unavailable".to_owned())
 }
 
 #[tauri::command]
 pub fn calendar_secret_exists(token_ref: String) -> Result<bool, String> {
+    checked_ref(&token_ref, None)?;
     vault::SecretVault::get(&system_vault(), &token_ref).map(|secret| secret.is_some()).map_err(|_| "vault-unavailable".to_owned())
 }
 
 #[tauri::command]
 pub fn calendar_secret_delete(token_ref: String) -> Result<(), String> {
+    checked_ref(&token_ref, None)?;
     vault::SecretVault::delete(&system_vault(), &token_ref).map_err(|_| "vault-unavailable".to_owned())
 }
 
 #[tauri::command]
 pub async fn calendar_http(request: HttpRequest) -> Result<HttpResponse, String> {
+    checked_auth(&request.auth)?;
     let vault = system_vault();
     let endpoints = google::GoogleEndpoints::from_environment();
     let client = google::ClientConfig::from_environment();
@@ -95,6 +117,7 @@ pub async fn calendar_http(request: HttpRequest) -> Result<HttpResponse, String>
 #[tauri::command]
 pub async fn calendar_oauth_google_authorize(app: tauri::AppHandle, token_ref: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
+    checked_ref(&token_ref, Some(vault::RefNamespace::Google))?;
     let vault = system_vault();
     let endpoints = google::GoogleEndpoints::from_environment();
     let client = google::ClientConfig::from_environment();
@@ -111,6 +134,7 @@ pub async fn calendar_oauth_google_authorize(_token_ref: String) -> Result<(), S
 
 #[tauri::command]
 pub async fn calendar_oauth_google_revoke(token_ref: String) -> Result<(), String> {
+    checked_ref(&token_ref, Some(vault::RefNamespace::Google))?;
     let vault = system_vault();
     let endpoints = google::GoogleEndpoints::from_environment();
     let client = google::ClientConfig::from_environment();

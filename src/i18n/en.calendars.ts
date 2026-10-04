@@ -64,6 +64,7 @@ export const calendarsEn: Messages['calendars'] = {
   errorSave: 'Unable to save.',
   errorLoad: 'Unable to read the accounts.',
   errorRemove: 'Unable to remove the account.',
+  errorRemoveSecret: 'This account’s token could not be erased from the vault: the account is kept, try again.',
   errorSpaceRequired: 'Choose a space for this calendar.',
   createTask: 'Create a task',
   createTaskLabel: 'Create a task from: {title}',

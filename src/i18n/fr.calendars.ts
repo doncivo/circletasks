@@ -65,6 +65,7 @@ export const calendarsFr = {
   errorSave: 'Enregistrement impossible.',
   errorLoad: 'Impossible de lire les comptes.',
   errorRemove: 'Suppression impossible.',
+  errorRemoveSecret: 'Le jeton de ce compte n’a pas pu être effacé du coffre : le compte est conservé, réessayez.',
   errorSpaceRequired: 'Choisissez un espace pour cet agenda.',
   createTask: 'Créer une tâche',
   createTaskLabel: 'Créer une tâche depuis : {title}',

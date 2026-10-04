@@ -54,3 +54,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 - D-03, critères 10-11 : workflow de release et secrets GitHub (PREP-01).
 - Test d'installation réelle N → N+1 sur le PC, à faire par Ali.
+
+## Sécurité
+
+- Audit des dépendances Rust (RustSec) : l'étape `audit-rust` de `.github/workflows/tests.yml` lance `cargo audit` ; l'audit LOCAL reste à lancer (`cargo install cargo-audit --locked` puis `cargo audit --file src-tauri/Cargo.lock`) dès que l'outil est installé sur le poste, l'outil ne l'étant pas encore (lot K, revue sécurité).

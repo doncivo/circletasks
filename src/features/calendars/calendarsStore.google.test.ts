@@ -37,7 +37,7 @@ describe('connexion Google (K-01)', () => {
   it('crée le compte (adresse = label), range les jetons au coffre, charge les agendas en Pro et les événements', async () => {
     const accountId = await connected();
     const [account] = await h.container.data.repos.calendarAccounts.listAll();
-    expect(account).toMatchObject({ id: accountId, provider: 'google', label: GOOGLE_ACCOUNT, tokenRef: `circletasks.calendar.${accountId}` });
+    expect(account).toMatchObject({ id: accountId, provider: 'google', label: GOOGLE_ACCOUNT, tokenRef: `circletasks.calendar.google.${accountId}` });
     expect(account?.calendars).toEqual([
       { id: GOOGLE_ACCOUNT, name: 'Travail', spaceId: SPACE_PRO_ID, shown: true },
       { id: 'famille@group.calendar.google.com', name: 'Famille', spaceId: SPACE_PRO_ID, shown: true },
@@ -48,7 +48,7 @@ describe('connexion Google (K-01)', () => {
 
   it('aucun jeton ni identifiant client dans la base, l’état de l’interface ni les messages', async () => {
     await connected();
-    const secret = h.vault.read(`circletasks.calendar.${state().accounts[0]?.id ?? ''}`) ?? '';
+    const secret = h.vault.read(`circletasks.calendar.google.${state().accounts[0]?.id ?? ''}`) ?? '';
     expect(secret).toContain('sim-refresh-');
     const dump = await dumpDatabaseText(h.db);
     for (const fragment of ['sim-refresh-', 'sim-access-', h.google.clientId]) {
@@ -156,7 +156,7 @@ describe('jeton refusé ou révoqué (K-01 critère 7, A-09 critère 10)', () =>
   });
 
   it('un appareil sans secret (compte venu de la synchro) apparaît « à reconnecter » dès le chargement (D1)', async () => {
-    await h.container.data.repos.calendarAccounts.create({ id: 'a0000000-0000-4000-8000-000000000001' as CalendarAccountId, provider: 'google', label: 'autre@example.com', tokenRef: 'circletasks.calendar.autre', calendars: [] });
+    await h.container.data.repos.calendarAccounts.create({ id: 'a0000000-0000-4000-8000-000000000001' as CalendarAccountId, provider: 'google', label: 'autre@example.com', tokenRef: 'circletasks.calendar.google.a0000000-0000-4000-8000-000000000009', calendars: [] });
     await state().load();
     expect(state().states['a0000000-0000-4000-8000-000000000001']).toMatchObject({ kind: 'reconnect-required' });
     expect(useAppStatusStore.getState().sources.calendarDisconnected?.detail).toBe('autre@example.com');

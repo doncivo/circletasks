@@ -158,7 +158,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
     /** Crée le compte (agendas tous affichés, espace par défaut) puis lance son premier rafraîchissement (K-01 critère 6). */
     const createAccount = async (provider: CalendarProviderKind, accountId: CalendarAccountId, label: string, calendars: readonly ProviderCalendar[]): Promise<ConnectOutcome> => {
       try {
-        await container.data.repos.calendarAccounts.create({ id: accountId, provider, label, tokenRef: tokenRefFor(accountId), calendars: toCalendarRefs(calendars) });
+        await container.data.repos.calendarAccounts.create({ id: accountId, provider, label, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
         await reload();
       } catch {
         return { ok: false, failure: 'failed' };
@@ -168,10 +168,21 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       return { ok: true, accountId };
     };
 
-    /** Oublie le secret d'un compte : jeton Google révoqué au mieux puis effacé, mot de passe iCloud effacé. */
-    const discard = async (provider: CalendarProviderKind, tokenRef: string): Promise<void> => {
-      if (provider === 'google') await platform.oauth.revokeGoogle(tokenRef).catch(() => undefined);
-      else await platform.vault.delete(tokenRef).catch(() => undefined);
+    /**
+     * Oublie le secret d'un compte : jeton Google révoqué au mieux puis effacé, mot de passe iCloud effacé. Deux tentatives ; rend
+     * false si le secret est encore là (coffre indisponible) : l'appelant le signale au lieu de le perdre de vue.
+     */
+    const discard = async (provider: CalendarProviderKind, tokenRef: string): Promise<boolean> => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          if (provider === 'google') await platform.oauth.revokeGoogle(tokenRef);
+          else await platform.vault.delete(tokenRef);
+          return true;
+        } catch {
+          // Nouvelle tentative, puis échec signalé.
+        }
+      }
+      return false;
     };
 
     const markConnected = (accountId: CalendarAccountId): void => {
@@ -206,7 +217,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       async connectGoogle() {
         if (get().connecting) return { ok: false, failure: 'failed' };
         const accountId = newEntityId<CalendarAccountId>(container.ids);
-        const tokenRef = tokenRefFor(accountId);
+        const tokenRef = tokenRefFor('google', accountId);
         set({ connecting: true, messageKey: null });
         try {
           try {
@@ -234,7 +245,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
 
       async connectIcloud(username, password) {
         const accountId = newEntityId<CalendarAccountId>(container.ids);
-        const tokenRef = tokenRefFor(accountId);
+        const tokenRef = tokenRefFor('icloud', accountId);
         const label = username.trim();
         if (label === '' || password === '') return { ok: false, failure: 'icloud-invalid' };
         if (get().accounts.some((account) => account.provider === 'icloud' && account.label.toLowerCase() === label.toLowerCase())) return { ok: false, failure: 'duplicate' };
@@ -319,8 +330,12 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       async removeAccount(accountId) {
         const account = get().accounts.find((candidate) => candidate.id === accountId);
         if (!account) return false;
-        // Le secret d'abord (révoqué au mieux pour Google) : même si l'écriture échoue ensuite, plus aucun jeton ne traîne.
-        await discard(account.provider, account.tokenRef);
+        // Le secret d'abord (révoqué au mieux pour Google) : même si l'écriture échoue ensuite, plus aucun jeton ne traîne. S'il ne peut
+        // pas être effacé, le compte reste (et sa suppression est à refaire) plutôt que de laisser un secret orphelin.
+        if (!(await discard(account.provider, account.tokenRef))) {
+          set({ messageKey: 'calendars.errorRemoveSecret' });
+          return false;
+        }
         try {
           await container.data.transaction(async (repos) => {
             await repos.calendarAccounts.softDelete(accountId);
@@ -340,20 +355,25 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       async refresh(accountId, trigger, foreground = true) {
         const account = get().accounts.find((candidate) => candidate.id === accountId);
         if (!account) return 'skipped';
-        const state = get().states[accountId] ?? (await vaultState(account, undefined));
-        if (!shouldRefresh({ state, trigger, now: isoAt(nowMs()), foreground, inFlight: inFlight.has(accountId) })) return 'skipped';
+        // Verrou par compte posé AVANT toute attente : deux appels simultanés ne peuvent pas passer ensemble (K-03 critère 7).
+        if (inFlight.has(accountId)) return 'skipped';
         inFlight.add(accountId);
-        set({ refreshing: [...inFlight] });
+        let started = false;
         try {
-          const outcome = await refreshAccount(deps, accountId);
-          setStates({ [accountId]: nextAccountState(state, outcome) });
+          const state = get().states[accountId] ?? (await vaultState(account, undefined));
+          if (!shouldRefresh({ state, trigger, now: isoAt(nowMs()), foreground, inFlight: false })) return 'skipped';
+          started = true;
+          set({ refreshing: [...inFlight] });
+          const result = await refreshAccount(deps, accountId);
+          // Compte supprimé pendant la lecture : aucun état à (re)créer pour lui.
+          if (!('gone' in result) && get().accounts.some((candidate) => candidate.id === accountId)) setStates({ [accountId]: nextAccountState(state, result) });
         } catch {
           // Une exception inattendue ne change pas l'état du compte : les données précédentes restent.
         } finally {
           inFlight.delete(accountId);
-          set({ refreshing: [...inFlight] });
+          if (started) set({ refreshing: [...inFlight] });
         }
-        return 'done';
+        return started ? 'done' : 'skipped';
       },
 
       async refreshAll(trigger, foreground = true) {

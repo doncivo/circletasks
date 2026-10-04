@@ -125,3 +125,18 @@ describe('transport HTTP en mémoire', () => {
     expect(response.headers['retry-after']).toBe('30');
   });
 });
+
+describe('durcissement miroir de Rust', () => {
+  it('la WebView ne peut pas écrire une référence Google ; le flux OAuth le peut', async () => {
+    await expect(platform.vault.set('circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e', 'faux')).rejects.toMatchObject({ code: 'vault-unavailable' });
+    await platform.vault.set('circletasks.calendar.icloud.0f8fad5b-d9cb-469f-a165-70867728950e', 'pw');
+    await platform.oauth.authorizeGoogle('circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e');
+    expect(await platform.vault.has('circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e')).toBe(true);
+  });
+
+  it('seuls les en-têtes de la liste blanche passent', async () => {
+    await platform.oauth.authorizeGoogle('ref-google');
+    for (const name of ['Cookie', 'X-Autre', 'Host']) expect(await codeOf(platform.http.request({ ...calendarList(), headers: { [name]: 'x' } }))).toBe('unsupported');
+    expect((await platform.http.request({ ...calendarList(), headers: { Accept: 'application/json' } })).status).toBe(200);
+  });
+});

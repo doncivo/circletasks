@@ -28,7 +28,7 @@ Lecture seule de Google Calendar (OAuth) et d'Apple Calendar (iCloud CalDAV, mot
 | `calendar_oauth_google_revoke` | `tokenRef` | `null` (au mieux, puis effacement) | `vault-unavailable` |
 | `calendar_http` | `CalendarHttpRequest` | `CalendarHttpResponse` (4xx/5xx = réponse) | `host-not-allowed`, `secret-missing`, `reauth-required`, `network`, `timeout` |
 
-`token_ref` = `circletasks.calendar.<accountId>`, service `fr.circletasks.planner`. Le jeton Google est un JSON `{ refresh, access, expires_at }`. Un `token_ref` est **propre à l'appareil** (K-01 D1) : `calendar_account` se synchronise, le secret non ; sans entrée locale, le compte est « à reconnecter ».
+`token_ref` = `circletasks.calendar.<fournisseur>.<uuid>` (fournisseur `google` ou `icloud` ; format imposé par Rust, refus sinon ; la WebView ne peut pas écrire une référence `google`, seul le flux OAuth de Rust le fait), service `fr.circletasks.planner`. Le jeton Google est un JSON `{ refresh, access, expires_at }`. Un `token_ref` est **propre à l'appareil** (K-01 D1) : `calendar_account` se synchronise, le secret non ; sans entrée locale, le compte est « à reconnecter ».
 
 ### 3. Coffre : crate `keyring` 3
 
@@ -69,3 +69,8 @@ Basic (identifiant Apple + mot de passe d'application), découverte depuis `cald
 1. Google Cloud : API Calendar activée, écran de consentement « Externe » en **Production**, IDs client « Application de bureau » et « iOS », remis par variables de build et secrets GitHub (`CT_GOOGLE_CLIENT_ID`, `CT_GOOGLE_IOS_CLIENT_ID`, éventuellement `CT_GOOGLE_CLIENT_SECRET`).
 2. Identifiant Apple + mot de passe d'application (appleid.apple.com), saisis dans l'app uniquement.
 3. Vérification réelle sur PC puis iPhone (parcours clé 8).
+
+## Avenant (revue sécurité du lot K)
+
+- `Authorization` lié à l'hôte : Bearer Google seulement vers `www.googleapis.com`, Basic seulement vers `caldav.icloud.com` et `pNN-caldav.icloud.com` ; contrôle refait à chaque redirection, en-tête retiré si la redirection change de fournisseur.
+- En-têtes de la WebView : liste blanche (Depth, Content-Type, Accept, Prefer, If-None-Match, If-Match). Délai plafonné à 30 s, réponse à 10 Mo. Écoute OAuth : 5 connexions au plus en plus des 5 minutes.

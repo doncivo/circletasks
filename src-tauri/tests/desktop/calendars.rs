@@ -543,3 +543,119 @@ async fn k02_basic_401_et_reseau_coupe_ne_fuient_pas_le_mot_de_passe() {
     let shown = format!("{down:?}");
     assert!(!shown.contains("mot-de-passe-app-secret"), "{shown}");
 }
+
+// ---- Durcissement (revue sécurité du lot K) ----
+
+const GOOGLE_REF: &str = "circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e";
+const ICLOUD_REF: &str = "circletasks.calendar.icloud.0f8fad5b-d9cb-469f-a165-70867728950e";
+
+#[test]
+fn l_authentification_est_liee_a_l_hote_de_son_fournisseur() {
+    use circletasks_lib::calendars::hosts::{auth_allowed, AuthScope};
+    let url = |text: &str| url::Url::parse(text).unwrap();
+    assert!(auth_allowed(AuthScope::Google, &url("https://www.googleapis.com/calendar/v3/x")));
+    assert!(!auth_allowed(AuthScope::Google, &url("https://oauth2.googleapis.com/token")));
+    assert!(!auth_allowed(AuthScope::Google, &url("https://caldav.icloud.com/")));
+    assert!(!auth_allowed(AuthScope::Google, &url("https://p12-caldav.icloud.com/")));
+    assert!(auth_allowed(AuthScope::Basic, &url("https://caldav.icloud.com/")));
+    assert!(auth_allowed(AuthScope::Basic, &url("https://p12-caldav.icloud.com/x")));
+    assert!(!auth_allowed(AuthScope::Basic, &url("https://www.googleapis.com/")));
+    assert!(!auth_allowed(AuthScope::Basic, &url("https://accounts.google.com/")));
+    assert!(!auth_allowed(AuthScope::Basic, &url("https://evil.example/")));
+    assert!(!auth_allowed(AuthScope::Basic, &url("http://caldav.icloud.com/")));
+}
+
+#[tokio::test]
+async fn un_type_d_authentification_n_est_jamais_envoye_a_l_hote_d_un_autre_fournisseur() {
+    let vault = MemoryVault::default();
+    vault.set("ic", "mot-de-passe").unwrap();
+    put_tokens(&vault, "r", "access-1", 3000);
+    let endpoints = GoogleEndpoints::production();
+    let cfg = config();
+    let env = HttpEnv { vault: &vault, google: &endpoints, client: Some(&cfg) };
+    let basic = HttpAuth::Basic { token_ref: "ic".to_owned(), username: "u".to_owned() };
+    assert_eq!(execute(&env, request("GET", "https://www.googleapis.com/calendar/v3/x", basic.clone())).await.unwrap_err(), "host-not-allowed");
+    assert_eq!(execute(&env, request("GET", "https://accounts.google.com/", basic)).await.unwrap_err(), "host-not-allowed");
+    assert_eq!(execute(&env, request("GET", "https://caldav.icloud.com/", google_auth("r"))).await.unwrap_err(), "host-not-allowed");
+    assert_eq!(execute(&env, request("GET", "https://oauth2.googleapis.com/token", google_auth("r"))).await.unwrap_err(), "host-not-allowed");
+}
+
+#[tokio::test]
+async fn seuls_les_en_tetes_de_la_liste_blanche_passent() {
+    let mock = start_mock(|_| reply(207, "ok"));
+    let vault = MemoryVault::default();
+    vault.set("ic", "pw").unwrap();
+    let endpoints = GoogleEndpoints::production();
+    let env = HttpEnv { vault: &vault, google: &endpoints, client: None };
+    let basic = HttpAuth::Basic { token_ref: "ic".to_owned(), username: "u".to_owned() };
+    for name in ["Cookie", "X-Forwarded-For", "Host", "Proxy-Authorization", "AUTHORIZATION"] {
+        let mut req = request("PROPFIND", &format!("{}/", mock.base), basic.clone());
+        req.headers.insert(name.to_owned(), "x".to_owned());
+        assert_eq!(execute(&env, req).await.unwrap_err(), "unsupported", "{name}");
+    }
+    assert!(mock.requests().is_empty());
+    let mut req = request("PROPFIND", &format!("{}/", mock.base), basic);
+    for name in ["depth", "Content-Type", "Accept", "Prefer", "If-Match", "If-None-Match"] {
+        req.headers.insert(name.to_owned(), "1".to_owned());
+    }
+    assert_eq!(execute(&env, req).await.unwrap().status, 207);
+}
+
+#[tokio::test]
+async fn une_reponse_trop_grosse_est_refusee() {
+    use circletasks_lib::calendars::http::MAX_RESPONSE_BYTES;
+    let big = "x".repeat(MAX_RESPONSE_BYTES + 1);
+    let mock = start_mock(move |_| reply(200, &big));
+    let vault = MemoryVault::default();
+    vault.set("ic", "pw").unwrap();
+    let endpoints = GoogleEndpoints::production();
+    let env = HttpEnv { vault: &vault, google: &endpoints, client: None };
+    let basic = HttpAuth::Basic { token_ref: "ic".to_owned(), username: "u".to_owned() };
+    assert_eq!(execute(&env, request("GET", &format!("{}/", mock.base), basic.clone())).await.unwrap_err(), "network");
+    let ok = start_mock(|_| reply(200, &"y".repeat(1000)));
+    assert_eq!(execute(&env, request("GET", &format!("{}/", ok.base), basic)).await.unwrap().body.len(), 1000);
+}
+
+#[test]
+fn le_delai_est_plafonne() {
+    assert_eq!(circletasks_lib::calendars::http::MAX_TIMEOUT_MS, 30_000);
+}
+
+#[test]
+fn format_et_espaces_de_noms_des_references_du_coffre() {
+    use circletasks_lib::calendars::vault::{parse_token_ref, RefNamespace};
+    assert_eq!(parse_token_ref(GOOGLE_REF), Some(RefNamespace::Google));
+    assert_eq!(parse_token_ref(ICLOUD_REF), Some(RefNamespace::Icloud));
+    for bad in ["", "r", "circletasks.calendar.0f8fad5b-d9cb-469f-a165-70867728950e", "circletasks.calendar.autre.0f8fad5b-d9cb-469f-a165-70867728950e", "circletasks.calendar.google.pas-un-uuid", "circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e.x", "circletasks.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950g", "autre.calendar.google.0f8fad5b-d9cb-469f-a165-70867728950e"] {
+        assert_eq!(parse_token_ref(bad), None, "{bad}");
+    }
+}
+
+#[test]
+fn la_webview_ne_peut_pas_ecrire_une_reference_google_ni_une_reference_mal_formee() {
+    use circletasks_lib::calendars::{calendar_secret_delete, calendar_secret_exists, calendar_secret_set, checked_auth};
+    assert_eq!(calendar_secret_set(GOOGLE_REF.to_owned(), "faux-jeton".to_owned()).unwrap_err(), "vault-unavailable");
+    assert_eq!(calendar_secret_set("n-importe-quoi".to_owned(), "x".to_owned()).unwrap_err(), "vault-unavailable");
+    assert_eq!(calendar_secret_exists("n-importe-quoi".to_owned()).unwrap_err(), "vault-unavailable");
+    assert_eq!(calendar_secret_delete("n-importe-quoi".to_owned()).unwrap_err(), "vault-unavailable");
+    assert!(checked_auth(&HttpAuth::GoogleOauth { token_ref: GOOGLE_REF.to_owned() }).is_ok());
+    assert!(checked_auth(&HttpAuth::Basic { token_ref: ICLOUD_REF.to_owned(), username: "u".to_owned() }).is_ok());
+    assert!(checked_auth(&HttpAuth::GoogleOauth { token_ref: ICLOUD_REF.to_owned() }).is_err());
+    assert!(checked_auth(&HttpAuth::Basic { token_ref: GOOGLE_REF.to_owned(), username: "u".to_owned() }).is_err());
+    assert!(checked_auth(&HttpAuth::Basic { token_ref: "ref".to_owned(), username: "u".to_owned() }).is_err());
+}
+
+#[tokio::test]
+async fn l_ecoute_oauth_abandonne_apres_cinq_connexions_parasites() {
+    use circletasks_lib::calendars::google::{wait_for_callback, MAX_CALLBACK_ATTEMPTS};
+    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        for _ in 0..(MAX_CALLBACK_ATTEMPTS + 2) {
+            let _ = raw_get(&format!("http://127.0.0.1:{port}/favicon.ico"));
+        }
+    });
+    let started = std::time::Instant::now();
+    assert_eq!(wait_for_callback(&listener, "s", Duration::from_secs(60)).await.unwrap_err(), "timeout");
+    assert!(started.elapsed() < Duration::from_secs(20));
+}

@@ -41,6 +41,10 @@ interface StoredTokens {
 
 const EXPIRY_MARGIN_SECONDS = 60;
 const METHODS: readonly CalendarHttpMethod[] = ['GET', 'POST', 'PROPFIND', 'REPORT'];
+/** En-têtes que la WebView peut poser (miroir de la liste blanche de Rust, `ALLOWED_REQUEST_HEADERS`). */
+const ALLOWED_HEADERS = new Set(['depth', 'content-type', 'accept', 'prefer', 'if-none-match', 'if-match']);
+/** Les jetons Google ne sont écrits que par le flux OAuth (Rust) : la WebView ne peut pas les poser. */
+const GOOGLE_REF = /^circletasks\.calendar\.google\./;
 
 export interface MemoryPlatformOptions {
   /** ID client OAuth du simulateur ; absent : `config-missing` (miroir de « non configuré »). */
@@ -134,7 +138,7 @@ export function createMemoryCalendarHttp(vault: MemorySecretVault, allowedOrigin
   return {
     async request(request) {
       if (!METHODS.includes(request.method)) throw new CalendarPlatformError('unsupported');
-      if (Object.keys(request.headers).some((name) => name.toLowerCase() === 'authorization')) throw new CalendarPlatformError('unsupported');
+      if (Object.keys(request.headers).some((name) => !ALLOWED_HEADERS.has(name.toLowerCase()))) throw new CalendarPlatformError('unsupported');
       let origin: string;
       try {
         origin = new URL(request.url).origin;
@@ -216,5 +220,14 @@ export function createMemoryOAuthFlow(vault: MemorySecretVault, endpoints: Calen
 export function createMemoryCalendarPlatform(endpoints: CalendarEndpoints, options: MemoryPlatformOptions = {}): CalendarPlatform & { readonly memoryVault: MemorySecretVault } {
   const vault = new MemorySecretVault();
   const allowed = [endpoints.googleAuthUrl, endpoints.googleApiBase, endpoints.googleTokenUrl, endpoints.caldavBase].map((base) => new URL(base).origin);
-  return { vault, memoryVault: vault, http: createMemoryCalendarHttp(vault, allowed, endpoints, options), oauth: createMemoryOAuthFlow(vault, endpoints, options), endpoints };
+  // Miroir de `calendar_secret_set` : une référence Google est refusée à l'écriture depuis la WebView.
+  const webViewVault: SecretVault = {
+    set: async (ref, secret) => {
+      if (GOOGLE_REF.test(ref)) throw new CalendarPlatformError('vault-unavailable');
+      await vault.set(ref, secret);
+    },
+    has: (ref) => vault.has(ref),
+    delete: (ref) => vault.delete(ref),
+  };
+  return { vault: webViewVault, memoryVault: vault, http: createMemoryCalendarHttp(vault, allowed, endpoints, options), oauth: createMemoryOAuthFlow(vault, endpoints, options), endpoints };
 }

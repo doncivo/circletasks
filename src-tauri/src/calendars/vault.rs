@@ -88,3 +88,28 @@ impl SecretVault for SystemVault {
         Err(VaultError::Unavailable)
     }
 }
+
+/// Espace de noms d'une référence du coffre : `circletasks.calendar.<fournisseur>.<uuid>`. Les jetons Google (écrits par le seul
+/// flux OAuth de Rust) et les mots de passe iCloud (écrits par la WebView) ne se mélangent jamais.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RefNamespace {
+    Google,
+    Icloud,
+}
+
+/// Fournisseur d'une référence au format exact (`circletasks.calendar.google.<uuid>` ou `.icloud.`), sinon `None`.
+pub fn parse_token_ref(token_ref: &str) -> Option<RefNamespace> {
+    let rest = token_ref.strip_prefix("circletasks.calendar.")?;
+    let (namespace, uuid) = rest.split_once('.')?;
+    let groups: Vec<&str> = uuid.split('-').collect();
+    let shape = [8usize, 4, 4, 4, 12];
+    let well_formed = groups.len() == 5 && groups.iter().zip(shape).all(|(group, len)| group.len() == len && group.bytes().all(|b| b.is_ascii_hexdigit()));
+    if !well_formed {
+        return None;
+    }
+    match namespace {
+        "google" => Some(RefNamespace::Google),
+        "icloud" => Some(RefNamespace::Icloud),
+        _ => None,
+    }
+}

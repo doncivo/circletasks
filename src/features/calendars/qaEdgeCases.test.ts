@@ -44,7 +44,7 @@ afterEach(async () => {
 describe('K-01 critère 7 : jeton expiré puis révoqué', () => {
   it('K-01 c.7 jeton expiré : rafraîchi sans reconnexion, le compte reste « Connecté » et les événements sont relus', async () => {
     const accountId = await connectGoogle();
-    const ref = `circletasks.calendar.${accountId}`;
+    const ref = `circletasks.calendar.google.${accountId}`;
     const before = h.vault.read(ref);
     h.google.expireAccessTokens();
     h.db.clock.advance(20 * MIN);
@@ -112,9 +112,7 @@ describe('K-03 critère 5 : réseau coupé', () => {
 describe('K-02 / K-03 : réponse ICS malformée', () => {
   const garbageObject = { href: 'x.ics', etag: 'z', startUtc: '2026-09-24T08:00:00Z', endUtc: '2026-09-24T09:00:00Z', ics: 'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:x\r\nDTSTART:ceci-nest-pas-une-date\r\nEND:VCALENDAR' };
 
-  // DEFAUT RENVOYE a calendar-integration : caldav.fetchEvents rend « full » avec 0 evenement quand tout calendar-data est illisible,
-  // donc refreshUseCase efface les evenements locaux. Attendu : erreur « malformed », ancien etat conserve. Retirer .fails apres correction.
-  it.fails('K-03 c.3 un REPORT dont tous les objets sont illisibles ne vide pas les événements déjà en base', async () => {
+  it('K-03 c.3 un REPORT dont tous les objets sont illisibles ne vide pas les événements déjà en base', async () => {
     const accountId = await connectIcloud();
     const expected = await titles();
     expect(expected.length).toBeGreaterThan(0);
@@ -149,7 +147,7 @@ describe('K-01 c.3, K-02 c.7 : aucun secret dans la base, l’état ni les sorti
 
     const google = await connectGoogle();
     const icloud = await connectIcloud();
-    const secrets = [h.vault.read(`circletasks.calendar.${google}`) ?? '', CALDAV_APP_PASSWORD, h.google.clientId];
+    const secrets = [h.vault.read(`circletasks.calendar.google.${google}`) ?? '', CALDAV_APP_PASSWORD, h.google.clientId];
     const refreshToken = /"refresh":"([^"]+)"/.exec(secrets[0] ?? '')?.[1] ?? '';
     const accessToken = /"access":"([^"]+)"/.exec(secrets[0] ?? '')?.[1] ?? '';
     expect(refreshToken).not.toBe('');
@@ -172,7 +170,7 @@ describe('K-01 c.3, K-02 c.7 : aucun secret dans la base, l’état ni les sorti
     await state().removeAccount(icloud);
     text = await snapshot();
     for (const fragment of fragments) expect(text).not.toContain(fragment);
-    expect(h.vault.read(`circletasks.calendar.${google}`)).toBeNull();
-    expect(h.vault.read(`circletasks.calendar.${icloud}`)).toBeNull();
+    expect(h.vault.read(`circletasks.calendar.google.${google}`)).toBeNull();
+    expect(h.vault.read(`circletasks.calendar.icloud.${icloud}`)).toBeNull();
   });
 });

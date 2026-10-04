@@ -26,6 +26,31 @@ pub fn url_allowed(url: &url::Url) -> bool {
     url.host_str().is_some_and(|host| is_allowed(url.scheme(), host, cfg!(debug_assertions)))
 }
 
+/// Fournisseur auquel une authentification est liée (le secret ne part que vers SES hôtes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthScope {
+    /// `Authorization: Bearer` Google : seulement `www.googleapis.com`.
+    Google,
+    /// `Authorization: Basic` iCloud : seulement `caldav.icloud.com` et `pNN-caldav.icloud.com`.
+    Basic,
+}
+
+/// L'authentification `scope` peut-elle être envoyée à cette URL ? (HTTPS, hôte du fournisseur ; le build de debug accepte
+/// `127.0.0.1` pour les simulateurs.)
+pub fn auth_allowed(scope: AuthScope, url: &url::Url) -> bool {
+    if !url_allowed(url) {
+        return false;
+    }
+    let host = url.host_str().unwrap_or("");
+    if cfg!(debug_assertions) && url.scheme() == "http" && host == "127.0.0.1" {
+        return true;
+    }
+    match scope {
+        AuthScope::Google => host == "www.googleapis.com",
+        AuthScope::Basic => host == "caldav.icloud.com" || is_icloud_partition(host),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_allowed;

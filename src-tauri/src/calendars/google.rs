@@ -212,10 +212,13 @@ async fn read_request_line(stream: &mut TcpStream) -> Option<String> {
     text.lines().next().map(str::to_owned)
 }
 
-/// Attend la redirection sur `listener` (délai `timeout`) et rend le code d'autorisation.
+/// Connexions traitées au plus avant d'abandonner : un programme local qui inonde le port ne tient pas l'écoute jusqu'au délai.
+pub const MAX_CALLBACK_ATTEMPTS: usize = 5;
+
+/// Attend la redirection sur `listener` (délai `timeout`, `MAX_CALLBACK_ATTEMPTS` connexions) et rend le code d'autorisation.
 pub async fn wait_for_callback(listener: &TcpListener, expected_state: &str, timeout: Duration) -> Result<String, String> {
     let deadline = tokio::time::Instant::now() + timeout;
-    loop {
+    for _ in 0..MAX_CALLBACK_ATTEMPTS {
         let (mut stream, _) = tokio::time::timeout_at(deadline, listener.accept()).await.map_err(|_| "timeout".to_owned())?.map_err(|_| "network".to_owned())?;
         let Some(line) = read_request_line(&mut stream).await else { continue };
         match parse_callback(&line, expected_state) {
@@ -230,6 +233,7 @@ pub async fn wait_for_callback(listener: &TcpListener, expected_state: &str, tim
             }
         }
     }
+    Err("timeout".to_owned())
 }
 
 #[derive(Deserialize)]
