@@ -69,3 +69,9 @@ redistribue pas les fichiers de police séparément de l'application.
   - Les fichiers sont copiés de `node_modules` dans `dist/ocr/` par le plugin Vite `vite.ocrAssets.ts` (aucun binaire versionné) et ne sont jamais téléchargés d'Internet (`cacheMethod: 'none'`, aucun cache disque).
   - Poids ajouté à l'installeur : environ 2,3 Mo compressés (PRD section 8 : installeur sous 15 Mo). Les autres variantes du noyau (sans SIMD, legacy) ne sont pas embarquées.
 - Textes complets : `node_modules/tesseract.js/LICENSE.md`, `node_modules/tesseract.js-core/LICENSE`.
+
+# Licence — Recharts (H-02 D4)
+
+- Paquet : [`recharts`](https://www.npmjs.com/package/recharts) 3.10, licence **MIT** ; dépendances transitives (`victory-vendor` d3, `@reduxjs/toolkit`, `immer`, `reselect`, `decimal.js-light`) sous licences MIT ou ISC.
+- Usage : graphique en barres « taux de complétion par semaine » du rapport du mois (`src/features/stats/CompletionChart.tsx`), chargé à la demande par import dynamique (jamais dans le paquet de départ).
+- Texte complet de la licence : `node_modules/recharts/LICENSE`.

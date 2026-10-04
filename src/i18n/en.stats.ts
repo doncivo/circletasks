@@ -32,6 +32,7 @@ export const statsEn: Messages['stats'] = {
   chartTooltipNone: 'W{week} · {range} · no tasks',
   chartTableLabel: 'Completion rate by week, as a table',
   chartTableRow: 'Week {week}: {percent}%, {done} of {total} tasks',
+  chartTableRowFew: 'Week {week}: {percent}%, {done} of {total} tasks',
   chartTableRowNone: 'Week {week}: no tasks',
   chartLoading: 'Loading the chart',
   chartError: 'Unable to display the chart.',

@@ -35,6 +35,7 @@ export const statsFr = {
   chartTooltipNone: 'S{week} · {range} · aucune tâche',
   chartTableLabel: 'Taux de complétion par semaine, en tableau',
   chartTableRow: 'Semaine {week} : {percent} %, {done} tâches sur {total}',
+  chartTableRowFew: 'Semaine {week} : {percent} %, {done} tâche sur {total}',
   chartTableRowNone: 'Semaine {week} : aucune tâche',
   chartLoading: 'Chargement du graphique',
   chartError: 'Impossible d’afficher le graphique.',

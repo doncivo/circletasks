@@ -210,3 +210,78 @@
 .ct-stats[data-layout='pc'] .ct-stats__routinesBlock {
   flex: 1 1 0;
 }
+
+/* Graphique de complétion (Rapport.html) : barres #C9BEE6 arrondies en haut, semaine courante #3A2A66, étiquettes 12 px. */
+.ct-stats__chart {
+  position: relative;
+  min-width: 0;
+}
+
+.ct-stats__chartLoading {
+  height: 166px;
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-stats__bar {
+  cursor: pointer;
+  outline: none;
+}
+
+.ct-stats__barHit {
+  fill: transparent;
+}
+
+.ct-stats__barFill {
+  fill: var(--ct-stats-bar);
+}
+
+.ct-stats__bar[data-current='true'] .ct-stats__barFill {
+  fill: var(--ct-stats-bar-current);
+}
+
+.ct-stats__barEmpty {
+  fill: none;
+  stroke: var(--ct-stats-bar-empty);
+  stroke-width: 1.5;
+  stroke-dasharray: 3 3;
+}
+
+.ct-stats__bar:focus-visible .ct-stats__barHit {
+  stroke: var(--ct-color-accent);
+  stroke-width: 2;
+  rx: 6;
+}
+
+.ct-stats__barValue {
+  fill: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: 12px;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-stats__barWeek {
+  fill: var(--ct-color-text-secondary);
+  font-family: var(--ct-font-text);
+  font-size: 12px;
+}
+
+.ct-stats__barWeek[data-current='true'] {
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Bulle « S37 · 31 août – 6 sept. · 21 sur 25 », au-dessus de la barre survolée, touchée ou focalisée. */
+.ct-stats__bubble {
+  position: absolute;
+  top: -2px;
+  z-index: 1;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-text);
+  color: var(--ct-color-bg);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-semibold);
+  white-space: nowrap;
+  pointer-events: none;
+}

@@ -11,6 +11,7 @@ import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
 import { FocusReportSection } from '../focus/FocusReportSection';
 import { RoutinesMonthMap } from '../routines/RoutinesMonthMap';
 import { SpaceFilterBar } from '../spaces';
+import { CompletionSection } from './CompletionSection';
 import { MonthTiles } from './MonthTiles';
 import { useMonthReport } from './useMonthReport';
 import './ReportScreen.css';
@@ -113,11 +114,14 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
         <>
           <MonthTiles report={shown} />
           <FocusReportSection month={month} />
-          {shown.heatmap !== null && (
-            <div className="ct-stats__routinesBlock">
-              <RoutinesMonthMap aggregate={shown.heatmap} rates={shown.routineRates} headingRef={routinesHeading} />
-            </div>
-          )}
+          <div className="ct-stats__charts">
+            <CompletionSection report={shown} />
+            {shown.heatmap !== null && (
+              <div className="ct-stats__routinesBlock">
+                <RoutinesMonthMap aggregate={shown.heatmap} rates={shown.routineRates} headingRef={routinesHeading} />
+              </div>
+            )}
+          </div>
         </>
       )}
       {shown !== null && (
