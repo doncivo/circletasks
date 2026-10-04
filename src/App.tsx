@@ -16,11 +16,12 @@ import { ChecklistsScreen, registerChecklistsSource } from './features/checklist
 import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
+import { SearchOverlay, registerSearchShortcut } from './features/search';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
-import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
+import { DoneTasksScreen, ReportScreen, TaskDetail, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
 import { t } from './i18n';
@@ -67,6 +68,9 @@ function AppShellContent() {
   // A-04 : Alt+1 à Alt+6 (registre de raccourcis, actifs même dans un champ de saisie).
   useEffect(() => registerTabShortcuts(container.shortcuts), [container]);
 
+  // RC-01 : Ctrl+K ouvre la recherche depuis n'importe quel écran, y compris dans un champ de saisie.
+  useEffect(() => registerSearchShortcut(container), [container]);
+
   return (
     <AppShell
       // Semaine : la fiche détail passe par-dessus la grille (S-01), qui garde ses sept colonnes.
@@ -84,6 +88,10 @@ function AppShellContent() {
       <UpdateBanner />
       <EventEditorHost />
       <HolidayDetailHost />
+      <SearchOverlay />
+      {/* RC-03 : une tâche ouverte depuis la recherche passe par-dessus l'onglet courant. Aujourd'hui, la Semaine, Un jour, Terminées et
+          Objectif rendent leur propre fiche ; les autres écrans (Routines, Événements, Checklists, Réglages, Rapport) en reçoivent une ici. */}
+      {(route.tab === 'routines' || route.tab === 'events' || route.tab === 'checklists' || route.tab === 'settings' || (route.tab === 'tasks' && route.screen === 'report')) && <TaskDetail />}
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? (
           <ReportScreen />

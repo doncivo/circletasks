@@ -1,5 +1,6 @@
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
+import { searchEn } from './en.search';
 import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import { checklistsEn } from './en.checklists';
@@ -564,6 +565,10 @@ export const en: Messages = {
     goal: 'Goal updated',
     checklist: 'Checklist updated',
     event: 'Event updated',
+    recentSearches: 'Recent searches cleared',
+    searchFilter: '“All” filter applied',
+    searchProjectFilter: '“All projects” filter applied',
+    searchFilters: '“All” and “All projects” filters applied',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',
@@ -583,6 +588,7 @@ export const en: Messages = {
   events: eventsEn,
   goals: goalsEn,
   someday: somedayEn,
+  search: searchEn,
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',

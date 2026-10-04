@@ -3,6 +3,7 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 import { mkdirSync } from 'node:fs';
 import { setWheels } from '../e2e/helpers/schedule';
+import { insertSearchTasks, openSearch, typeSearch } from '../e2e/helpers/search';
 import { createTask, openToday } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertChecklists, openChecklists } from '../e2e/helpers/checklists';
@@ -224,12 +225,39 @@ async function prepareEvents(page: Page, pc: boolean): Promise<void> {
 
 interface Screen {
   name: string;
-  mockup: string;
+  /** Absent : écran sans maquette (palette Ctrl+K PC), seule la capture de l'app est écrite. */
+  mockup?: string;
   viewport: { width: number; height: number };
   date: Date;
   dark?: boolean;
   prepare?: (page: Page, testInfo: { project: { name: string } }) => Promise<void>;
   data?: boolean;
+}
+
+
+/** Recherche « facture » (Recherche.html) : trois tâches, une checklist, un événement mensuel. */
+async function prepareSearch(page: Page, testInfo: { project: { name: string } }): Promise<void> {
+  await insertSearchTasks(page, [
+    { title: 'Envoyer la facture', space: 'pro', date: '2026-09-23' },
+    { title: "Relancer la facture d'août", space: 'pro', date: '2026-09-03', done: true },
+    { title: "Appeler le fournisseur d'énergie", note: 'contester la facture', space: 'perso', date: null, someday: true },
+  ]);
+  await insertChecklists(page, [{ title: 'Factures fournisseurs', space: 'pro', items: [['Relevé bancaire', true], 'TVA', 'Notes de frais'] }]);
+  await insertEvents(page, [{ title: 'Échéance facture électricité', date: '2026-10-10', repeat: 'monthly', space: 'perso' }]);
+  await openSearch(page, testInfo);
+  await typeSearch(page, 'facture');
+  await expect(page.getByText('5 résultats')).toBeVisible();
+}
+
+async function prepareRecentSearches(page: Page, testInfo: { project: { name: string } }): Promise<void> {
+  await openSearch(page, testInfo);
+  for (const text of ['passeport', 'sport', 'notaire', 'clôture']) {
+    await typeSearch(page, text);
+    await expect(page.getByText(`Aucun résultat pour « ${text} »`)).toBeVisible();
+    await page.getByRole('searchbox', { name: 'Rechercher' }).press('Enter');
+  }
+  await typeSearch(page, '');
+  await expect(page.getByRole('heading', { name: 'Recherches récentes' })).toBeVisible();
 }
 
 const SCREENS: Screen[] = [
@@ -493,6 +521,11 @@ const SCREENS: Screen[] = [
       await expect(page.getByRole('heading', { level: 2, name: 'Valise voyage' })).toBeVisible();
     },
   },
+  { name: 'Recherche', mockup: 'Recherche.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareSearch },
+  // Champ vide : « RECHERCHES RÉCENTES » (puces de Recherche.html ; la maquette les montre sous les résultats, la fiche RC-04 les réserve au champ vide).
+  { name: 'Recherche-Recentes', viewport: PHONE, date: WEDNESDAY, prepare: prepareRecentSearches },
+  // Palette Ctrl+K du PC : aucune maquette (docs/decisions.md), capture de l'app seule.
+  { name: 'PC-Recherche', viewport: PC, date: WEDNESDAY, prepare: prepareSearch },
 ];
 
 for (const screen of SCREENS) {
@@ -511,7 +544,7 @@ for (const screen of SCREENS) {
     if (screen.data) await seed(page, { project: { name: phone ? 'iphone' : 'pc' } });
     await screen.prepare?.(page, { project: { name: phone ? 'iphone' : 'pc' } });
     await captureApp(page, screen.name);
-    await captureMockup(browser, screen.viewport, screen.mockup, screen.name, screen.dark);
+    if (screen.mockup) await captureMockup(browser, screen.viewport, screen.mockup, screen.name, screen.dark);
     await context.close();
   });
 }

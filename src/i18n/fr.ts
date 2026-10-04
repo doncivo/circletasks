@@ -1,5 +1,6 @@
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
+import { searchFr } from './fr.search';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
@@ -568,6 +569,10 @@ export const fr = {
     goal: 'Objectif modifié',
     checklist: 'Checklist modifiée',
     event: 'Événement modifié',
+    recentSearches: 'Recherches récentes effacées',
+    searchFilter: 'Filtre « Tout » appliqué',
+    searchProjectFilter: 'Filtre « Tous les projets » appliqué',
+    searchFilters: 'Filtres « Tout » et « Tous les projets » appliqués',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -586,6 +591,7 @@ export const fr = {
   events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
+  search: searchFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

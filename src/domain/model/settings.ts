@@ -19,6 +19,8 @@ export interface SettingsValues {
   'today.hideRoutines': boolean;
   /** A-06 / SD-04 : vue compacte mémorisée par écran. */
   'view.compact': { readonly today: boolean; readonly routines: boolean; readonly checklists: boolean; readonly someday: boolean };
+  /** RC-04 : dix dernières recherches validées (la plus récente en premier) ; propre à l'appareil, jamais synchronisée ni partagée. */
+  'search.recent': readonly string[];
   /** ES-03 : dernier filtre choisi (mémorisé par appareil). */
   'spaces.filter': SpaceFilter;
   /** ES-02 : espace des nouveaux éléments quand le filtre vaut « Tout ». */
@@ -61,6 +63,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'tasks.carryOverUndone': { scope: 'shared', defaultValue: true },
   'today.hideRoutines': { scope: 'shared', defaultValue: false },
   'view.compact': { scope: 'local', defaultValue: { today: false, routines: false, checklists: false, someday: false } },
+  'search.recent': { scope: 'local', defaultValue: [] },
   'spaces.filter': { scope: 'local', defaultValue: 'all' },
   'spaces.defaultSpaceId': { scope: 'shared', defaultValue: null },
   'reminders.defaultOffsets': { scope: 'shared', defaultValue: [0] },
