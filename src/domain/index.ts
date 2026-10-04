@@ -48,3 +48,4 @@ export * from './eventRules';
 export * from './eventOccurrences';
 export * from './eventReminders';
 export * from './eventList';
+export * from './eventKinds';

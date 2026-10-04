@@ -191,3 +191,9 @@
   font-weight: var(--ct-font-weight-semibold);
   cursor: pointer;
 }
+
+/* Type (Événement / Anniversaire / Date importante) : une seule ligne, comme AjoutEvenement.html. */
+.ct-event-form__row--kind {
+  flex-wrap: nowrap;
+  gap: var(--ct-space-2);
+}

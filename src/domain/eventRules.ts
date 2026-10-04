@@ -1,5 +1,6 @@
+import { checkBirthYear, isAnnualKind, type BirthYearError } from './eventKinds';
 import type { EventFields } from './model';
-import { addDays } from './localDate';
+import { addDays, parseLocalDate } from './localDate';
 import type { LocalDate, LocalTime, Result } from './types';
 
 /**
@@ -16,7 +17,7 @@ export const EVENT_DEFAULT_DURATION_MIN = 60;
 /** Heure locale d'un rappel d'événement « journée entière » (E-01 critère 5, D3). */
 export const EVENT_ALL_DAY_REMINDER_TIME = '09:00' as LocalTime;
 
-export type EventError = 'empty-title' | 'title-too-long' | 'missing-time' | 'end-before-start';
+export type EventError = 'empty-title' | 'title-too-long' | 'missing-time' | 'end-before-start' | BirthYearError;
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 
@@ -66,15 +67,28 @@ export function validateEventTitle(raw: string): Result<string, 'empty-title' | 
   return { ok: true, value: title };
 }
 
+export interface ValidateEventOptions {
+  /** Aujourd'hui : l'année de naissance ne peut pas être future (E-02 critère 4) ; absent : cette règle n'est pas vérifiée. */
+  readonly today?: LocalDate;
+}
+
 /**
- * Valide et normalise les champs d'un événement local (E-01 critères 3 et 6, D1) :
+ * Valide et normalise les champs d'un événement local (E-01 critères 3 et 6, D1 ; E-02) :
  * - titre de 1 à 200 caractères ;
+ * - anniversaire et date importante : annuel, journée entière, année de naissance facultative (1900 à aujourd'hui) ;
  * - « journée entière » : un seul jour, sans heure (la fin vaut le début) ;
  * - sinon début et fin avec heure, fin >= début (une plage peut passer minuit).
+ * Un événement ordinaire n'a pas d'année de naissance.
  */
-export function validateEvent(fields: EventFields): Result<EventFields, EventError> {
+export function validateEvent(fields: EventFields, options: ValidateEventOptions = {}): Result<EventFields, EventError> {
   const title = validateEventTitle(fields.title);
   if (!title.ok) return title;
+  if (isAnnualKind(fields.kind)) {
+    const birth = checkBirthYear(fields.birthYear, options.today ? parseLocalDate(options.today).year : null);
+    if (birth !== null) return { ok: false, error: birth };
+    return { ok: true, value: { ...fields, title: title.value, repeat: 'yearly', allDay: true, startTime: null, endDate: fields.startDate, endTime: null } };
+  }
+  if (fields.birthYear !== null) return validateEvent({ ...fields, birthYear: null }, options);
   if (fields.allDay) {
     return { ok: true, value: { ...fields, title: title.value, endDate: fields.startDate, startTime: null, endTime: null } };
   }

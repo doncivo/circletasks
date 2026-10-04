@@ -1,10 +1,12 @@
 import { Trash2, X } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
+import { ANNUAL_DEFAULT_REMINDERS, annualStartDate, applyKind, checkBirthYear, defaultCountdown, isAnnualKind, MIN_BIRTH_YEAR, nextAnnualDate } from '../../domain/eventKinds';
 import { defaultEventEnd, endAfterStartChange, EVENT_TITLE_MAX, eventDurationMin, validateEvent, validateEventTitle } from '../../domain/eventRules';
 import { EVENT_REMINDER_CHOICES, toggleEventReminderOffset } from '../../domain/eventReminders';
+import { clampedDay } from '../../domain/eventOccurrences';
 import { parseLocalDate } from '../../domain/localDate';
-import type { CalendarEvent, EventFields, EventRepeat, IconRef, ReminderOffsetMin, Space } from '../../domain/model';
+import type { CalendarEvent, EventFields, EventKind, EventRepeat, IconRef, ReminderOffsetMin, Space } from '../../domain/model';
 import type { LocalDate, LocalTime, SpaceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import { AddSegments, Button, DatePicker, Icon, IconChooser, SpaceSegmented, TextField, useLayout, type AddSegment } from '../../ui';
@@ -38,6 +40,14 @@ export interface EventFormProps {
 }
 
 const DEFAULT_START_TIME = '09:00' as LocalTime;
+/** Année bissextile de repli des roues d'un événement annuel : le 29 févr. reste choisissable. */
+const WHEEL_BASE_YEAR = 2024;
+
+const KINDS: readonly { readonly value: EventKind; readonly labelKey: PlainMessageKey }[] = [
+  { value: 'event', labelKey: 'events.sheet.kindEvent' },
+  { value: 'birthday', labelKey: 'events.sheet.kindBirthday' },
+  { value: 'important', labelKey: 'events.sheet.kindImportant' },
+];
 
 const REPEATS: readonly { readonly value: EventRepeat; readonly labelKey: PlainMessageKey }[] = [
   { value: 'once', labelKey: 'events.sheet.repeatOnce' },
@@ -52,27 +62,31 @@ const REMINDER_LABELS: Readonly<Record<number, PlainMessageKey>> = {
 };
 
 /** Case ou bouton radio natif, dessiné comme AjoutEvenement.html (.dot rond, .box carré). */
-function Choice({ type, name, checked, onChange, children }: { type: 'radio' | 'checkbox'; name?: string; checked: boolean; onChange: () => void; children: ReactNode }) {
+function Choice({ type, name, checked, disabled, onChange, children }: { type: 'radio' | 'checkbox'; name?: string; checked: boolean; disabled?: boolean; onChange: () => void; children: ReactNode }) {
   return (
-    <label className="ct-event-form__choice" data-checked={checked}>
-      <input type={type} name={name} className="ct-event-form__input" data-type={type} checked={checked} onChange={onChange} />
+    <label className="ct-event-form__choice" data-checked={checked} data-disabled={disabled || undefined}>
+      <input type={type} name={name} className="ct-event-form__input" data-type={type} checked={checked} disabled={disabled} onChange={onChange} />
       {children}
     </label>
   );
 }
 
 /**
- * Feuille « Nouvel événement » / « Modifier l'événement » (E-01, AjoutEvenement.html) : titre (1 à 200 caractères), icône, date ou
- * plage horaire, répétition (Une fois / Mensuel / Annuel), rappels (1 semaine avant / La veille / Le jour même) et espace
- * (défaut ES-02). « Journée entière (commence et finit le même jour) » : un seul jour, sans heure ; décochée, Début et Fin
- * (date + heure) apparaissent, fin >= début, durée par défaut 1 h. Une modification s'applique à toute la série.
+ * Feuille « Nouvel événement » / « Modifier l'événement » (E-01, E-02, AjoutEvenement.html) : titre (1 à 200 caractères), type
+ * (Événement / Anniversaire / Date importante), icône, date ou plage horaire, répétition (Une fois / Mensuel / Annuel), rappels
+ * (1 semaine avant / La veille / Le jour même) et espace (défaut ES-02). « Journée entière (commence et finit le même jour) » : un seul
+ * jour, sans heure ; décochée, Début et Fin (date + heure) apparaissent, fin >= début, durée par défaut 1 h. Un anniversaire ou une
+ * date importante est annuel (imposé), sur une journée entière, avec une année de naissance facultative (« Sans année » en tête de la
+ * roue) ; la création les propose avec « La veille » et « Le jour même » cochés. Une modification s'applique à toute la série.
  */
 export function EventForm({ event, spaces, initialSpaceId, today, initialDate, initialTitle = '', initialOffsets = [], onSubmit, onClose, onDelete, onSegmentChange, errorMessage, autoFocus }: EventFormProps) {
   const headingId = useId();
   const layout = useLayout();
   const titleRef = useRef<HTMLInputElement>(null);
   const radioName = useId();
+  const kindName = useId();
   const [title, setTitle] = useState(event?.title ?? initialTitle);
+  const [kind, setKind] = useState<EventKind>(event?.kind ?? 'event');
   const [icon, setIcon] = useState<IconRef | null>(event?.icon ?? null);
   const [allDay, setAllDay] = useState(event?.allDay ?? true);
   const firstDay = event?.startDate ?? initialDate ?? today;
@@ -82,12 +96,24 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
   const [endDate, setEndDate] = useState<LocalDate>(initialEnd.date);
   const [endTime, setEndTime] = useState<LocalTime>(initialEnd.time);
   const [repeat, setRepeat] = useState<EventRepeat>(event?.repeat ?? 'once');
+  // Événement annuel (E-02) : jour et mois, et année de naissance facultative.
+  const [monthDay, setMonthDay] = useState(() => {
+    const { month, day } = parseLocalDate(firstDay);
+    return { month, day };
+  });
+  const [birthYear, setBirthYear] = useState<number | null>(event?.birthYear ?? null);
+  const [birthYearText, setBirthYearText] = useState(event?.birthYear != null ? String(event.birthYear) : '');
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>(initialOffsets);
+  const [offsetsTouched, setOffsetsTouched] = useState(false);
+  const [countdown, setCountdown] = useState(event?.important ?? false);
   const [spaceId, setSpaceId] = useState<SpaceId>(event?.spaceId ?? initialSpaceId);
   const [saving, setSaving] = useState(false);
 
-  const valid = validateEventTitle(title).ok;
+  const annual = isAnnualKind(kind);
   const todayYear = parseLocalDate(today).year;
+  const birthYearError = annual ? checkBirthYear(birthYear, todayYear) : null;
+  const typedYearInvalid = annual && birthYearText.trim() !== '' && birthYear === null;
+  const valid = validateEventTitle(title).ok && birthYearError === null && !typedYearInvalid;
 
   // Focus dans le titre à l'ouverture : après le piège de focus de la feuille ou du panneau, qui prend le premier élément.
   useEffect(() => {
@@ -129,7 +155,50 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
     setEndTime(next.time);
   }
 
+  /** Jour et mois choisis pour un événement annuel (l'année éventuelle de la date reçue est ignorée). */
+  function changeMonthDay(date: LocalDate): void {
+    const { month, day } = parseLocalDate(date);
+    setMonthDay({ month, day });
+  }
+
+  function changeBirthYear(value: number | null): void {
+    setBirthYear(value);
+    setBirthYearText(value === null ? '' : String(value));
+  }
+
+  function typeBirthYear(text: string): void {
+    setBirthYearText(text);
+    const trimmed = text.trim();
+    setBirthYear(/^\d{1,4}$/.test(trimmed) ? Number(trimmed) : null);
+  }
+
+  /** Changement de type (critère 7) : titre, espace et icône conservés ; répétition annuelle imposée ; défauts de création (critère 6). */
+  function changeKind(next: EventKind): void {
+    if (next === kind) return;
+    const applied = applyKind(fields(), next);
+    setKind(next);
+    setIcon(applied.icon);
+    if (isAnnualKind(next) && !annual) {
+      const { month, day } = parseLocalDate(startDate);
+      setMonthDay({ month, day });
+      setRepeat('yearly');
+      setAllDay(true);
+    } else if (!isAnnualKind(next) && annual) {
+      setStartDate(nextAnnualDate(monthDay.month, monthDay.day, today));
+      setBirthYear(null);
+      setBirthYearText('');
+      setRepeat('once');
+    }
+    // Rappels et compte à rebours par défaut : seulement à la création, tant qu'on n'y a pas touché.
+    if (!event && !offsetsTouched) setOffsets(isAnnualKind(next) ? ANNUAL_DEFAULT_REMINDERS : []);
+    if (!event) setCountdown(defaultCountdown(next));
+  }
+
   function fields(): EventFields {
+    if (annual) {
+      const start = annualStartDate(monthDay.month, monthDay.day, birthYear, todayYear);
+      return { spaceId, title, startDate: start, startTime: null, endDate: start, endTime: null, allDay: true, kind, repeat: 'yearly', important: countdown, icon, birthYear };
+    }
     return {
       spaceId,
       title,
@@ -138,17 +207,17 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
       endDate: allDay ? startDate : endDate,
       endTime: allDay ? null : endTime,
       allDay,
-      kind: event?.kind ?? 'event',
+      kind,
       repeat,
-      important: event?.important ?? false,
+      important: countdown,
       icon,
-      birthYear: event?.birthYear ?? null,
+      birthYear: null,
     };
   }
 
   async function submit(submitEvent: FormEvent): Promise<void> {
     submitEvent.preventDefault();
-    if (!valid || saving || !validateEvent(fields()).ok) return;
+    if (!valid || saving || !validateEvent(fields(), { today }).ok) return;
     setSaving(true);
     try {
       await onSubmit({ fields: fields(), reminderOffsets: offsets });
@@ -158,6 +227,7 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
   }
 
   const heading = event ? t('events.sheet.editTitle') : t('events.sheet.newTitle');
+  const annualDate = clampedDay(birthYear !== null && birthYear >= MIN_BIRTH_YEAR ? birthYear : WHEEL_BASE_YEAR, monthDay.month, monthDay.day);
   return (
     <form className="ct-event-form" noValidate onSubmit={(submitEvent) => void submit(submitEvent)} aria-labelledby={headingId}>
       <div className="ct-event-form__header">
@@ -171,9 +241,56 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
       {onSegmentChange && <AddSegments value="event" onChange={(segment) => onSegmentChange(segment, title)} />}
 
       <TextField ref={titleRef} label={t('events.sheet.titleLabel')} placeholder={t('events.sheet.titleLabel')} value={title} onChange={setTitle} maxLength={EVENT_TITLE_MAX} className="ct-event-form__title" />
+
+      <div role="radiogroup" aria-label={t('events.sheet.kind')} className="ct-event-form__row ct-event-form__row--kind">
+        {KINDS.map((option) => (
+          <Choice key={option.value} type="radio" name={kindName} checked={kind === option.value} onChange={() => changeKind(option.value)}>
+            {t(option.labelKey)}
+          </Choice>
+        ))}
+      </div>
       <IconChooser value={icon} onChange={setIcon} />
 
-      {allDay ? (
+      {annual ? (
+        <section className="ct-event-form__section" aria-label={t('events.sheet.date')}>
+          <span className="ct-event-form__label">{t('events.sheet.date')}</span>
+          {layout === 'mobile' ? (
+            <EventDateWheels
+              value={annualDate}
+              onChange={changeMonthDay}
+              years={{ from: MIN_BIRTH_YEAR, to: todayYear }}
+              yearValue={birthYear}
+              onYearChange={changeBirthYear}
+              noYearLabel={t('events.sheet.noYear')}
+            />
+          ) : (
+            <>
+              <DatePicker
+                value={{ date: nextAnnualDate(monthDay.month, monthDay.day, today), time: null }}
+                today={today}
+                onChange={(choice) => choice?.date && changeMonthDay(choice.date)}
+                allowSomeday={false}
+                showTime={false}
+                label={t('events.sheet.date')}
+              />
+              <TextField
+                label={t('events.sheet.birthYear')}
+                visibleLabel
+                placeholder={t('events.sheet.noYear')}
+                value={birthYearText}
+                onChange={typeBirthYear}
+                maxLength={4}
+                className="ct-event-form__year"
+              />
+            </>
+          )}
+          {(birthYearError !== null || typedYearInvalid) && (
+            <p className="ct-event-form__error" role="alert">
+              {birthYearError === 'birth-year-future' ? t('events.sheet.birthYearFuture') : t('events.sheet.birthYearInvalid', { min: MIN_BIRTH_YEAR, max: todayYear })}
+            </p>
+          )}
+        </section>
+      ) : allDay ? (
         <section className="ct-event-form__section" aria-label={t('events.sheet.date')}>
           <span className="ct-event-form__label">{t('events.sheet.date')}</span>
           {layout === 'mobile' ? (
@@ -194,15 +311,17 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
           </section>
         </>
       )}
-      <Choice type="checkbox" checked={allDay} onChange={toggleAllDay}>
-        {t('events.sheet.allDay')}
-      </Choice>
+      {!annual && (
+        <Choice type="checkbox" checked={allDay} onChange={toggleAllDay}>
+          {t('events.sheet.allDay')}
+        </Choice>
+      )}
 
       <div role="radiogroup" aria-label={t('events.sheet.repeat')} className="ct-event-form__section">
         <span className="ct-event-form__label">{t('events.sheet.repeat')}</span>
         <div className="ct-event-form__row ct-event-form__row--repeat">
           {REPEATS.map((option) => (
-            <Choice key={option.value} type="radio" name={radioName} checked={repeat === option.value} onChange={() => setRepeat(option.value)}>
+            <Choice key={option.value} type="radio" name={radioName} checked={(annual ? 'yearly' : repeat) === option.value} disabled={annual} onChange={() => setRepeat(option.value)}>
               {t(option.labelKey)}
             </Choice>
           ))}
@@ -214,7 +333,15 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
         <span className="ct-event-form__label">{t('events.sheet.reminder')}</span>
         <div className="ct-event-form__row">
           {EVENT_REMINDER_CHOICES.map((offset) => (
-            <Choice key={offset} type="checkbox" checked={offsets.includes(offset)} onChange={() => setOffsets((current) => toggleEventReminderOffset(current, offset))}>
+            <Choice
+              key={offset}
+              type="checkbox"
+              checked={offsets.includes(offset)}
+              onChange={() => {
+                setOffsetsTouched(true);
+                setOffsets((current) => toggleEventReminderOffset(current, offset));
+              }}
+            >
               {t(REMINDER_LABELS[offset] ?? 'events.sheet.reminder0')}
             </Choice>
           ))}

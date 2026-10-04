@@ -18,6 +18,8 @@ export const eventsEn: Messages['events'] = {
   allDay: 'All day',
   repeatMonthly: 'Monthly',
   repeatYearly: 'Yearly',
+  ageOne: '{count} year old',
+  ageMany: '{count} years old',
   external: 'External calendar',
   segments: {
     label: 'Type of item to add',
@@ -53,6 +55,14 @@ export const eventsEn: Messages['events'] = {
     wheelDay: 'Day',
     wheelMonth: 'Month',
     wheelYear: 'Year',
+    kind: 'Event type',
+    kindEvent: 'Event',
+    kindBirthday: 'Birthday',
+    kindImportant: 'Important date',
+    noYear: 'No year',
+    birthYear: 'Year of birth (optional)',
+    birthYearFuture: 'The year of birth cannot be in the future.',
+    birthYearInvalid: 'Year of birth: between {min} and {max}.',
   },
   undo: {
     deleted: '“{title}” deleted',

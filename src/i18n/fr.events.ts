@@ -18,6 +18,8 @@ export const eventsFr = {
   allDay: 'Journée entière',
   repeatMonthly: 'Mensuel',
   repeatYearly: 'Annuel',
+  ageOne: '{count} an',
+  ageMany: '{count} ans',
   external: 'Agenda externe',
   segments: {
     label: 'Type d’élément à ajouter',
@@ -53,6 +55,14 @@ export const eventsFr = {
     wheelDay: 'Jour',
     wheelMonth: 'Mois',
     wheelYear: 'Année',
+    kind: 'Type d’événement',
+    kindEvent: 'Événement',
+    kindBirthday: 'Anniversaire',
+    kindImportant: 'Date importante',
+    noYear: 'Sans année',
+    birthYear: 'Année de naissance (facultatif)',
+    birthYearFuture: 'L’année de naissance ne peut pas être dans le futur.',
+    birthYearInvalid: 'Année de naissance : entre {min} et {max}.',
   },
   undo: {
     deleted: '« {title} » supprimé',

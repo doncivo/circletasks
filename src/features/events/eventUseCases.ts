@@ -69,7 +69,7 @@ export function createEventUseCases(deps: EventUseCaseDeps): EventUseCases {
 
   return {
     async create(input) {
-      const valid = validateEvent(input.fields);
+      const valid = validateEvent(input.fields, { today: todayLocal(deps.clock) });
       if (!valid.ok) return valid;
       const event = await data.transaction(async (repos) => {
         const created = await repos.events.create({ id: newEntityId<EventId>(deps.ids), ...valid.value });
@@ -81,7 +81,7 @@ export function createEventUseCases(deps: EventUseCaseDeps): EventUseCases {
     },
 
     async update(id, input) {
-      const valid = validateEvent(input.fields);
+      const valid = validateEvent(input.fields, { today: todayLocal(deps.clock) });
       if (!valid.ok) return valid;
       const event = await data.transaction(async (repos) => {
         if (!(await repos.events.getById(id))) return null;

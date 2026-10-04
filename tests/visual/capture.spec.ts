@@ -462,8 +462,14 @@ const SCREENS: Screen[] = [
       await page.getByRole('button', { name: 'Ajouter un événement' }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvel événement' });
       await dialog.getByLabel('Titre', { exact: true }).fill('Anniversaire de Karim');
-      await dialog.getByRole('radio', { name: 'Annuel' }).check();
-      await dialog.getByRole('checkbox', { name: 'Le jour même' }).check();
+      // Type « Anniversaire » : Annuel imposé, « La veille » et « Le jour même » cochés, gâteau ; roues 25 sept. 1992 (mer. 23 sept. 2026 figé).
+      await dialog.getByRole('radio', { name: 'Anniversaire' }).check();
+      const wheel = async (name: string, key: string, times: number): Promise<void> => {
+        await dialog.getByRole('spinbutton', { name }).focus();
+        for (let i = 0; i < times; i += 1) await page.keyboard.press(key);
+      };
+      await wheel('Jour', 'ArrowUp', 2);
+      await wheel('Année', 'ArrowUp', 93);
       await dialog.getByRole('button', { name: 'Perso', exact: true }).click();
       await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeEnabled();
     },
