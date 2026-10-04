@@ -25,31 +25,79 @@ interface HitRow extends SqlRow {
 /** Colonnes communes de chaque branche (même ordre, pour `UNION ALL`). */
 const COLUMNS = 'kind, id, title, note, date, time, status, space_id, project_id, someday, icon, items, items_checked, repeat, score';
 
-/** Une branche par type : jointure de l'index sur la table d'origine (lignes vivantes) et filtre d'espace dans la requête. */
-function branches(spaceClause: string): string {
-  return [
-    `SELECT 'task' AS kind, t.id AS id, t.title AS title, t.note AS note, t.date AS date, t.time AS time, t.status AS status,
+interface Branch {
+  readonly sql: string;
+  readonly params: readonly SqlValue[];
+}
+
+type Condition = readonly [sql: string, params: readonly SqlValue[]];
+
+const dateIn = (column: string, range: { readonly from: string; readonly to: string } | null): Condition[] =>
+  range ? [[`${column} BETWEEN ? AND ?`, [range.from, range.to]]] : [];
+
+/**
+ * Une branche par type cherché : jointure de l'index sur la table d'origine (lignes vivantes), puis les filtres dans la requête
+ * (espace, projet, statut, période). Chaque filtre ajoute sa condition ET ses paramètres, dans l'ordre d'apparition.
+ */
+function buildBranch(kind: SearchKind, input: SearchQueryInput): Branch {
+  const params: SqlValue[] = [];
+  const where = (alias: string, extra: readonly Condition[] = []): string => {
+    const conditions = [`${alias}.deleted_at IS NULL`];
+    if (input.space !== 'all') {
+      conditions.push(`${alias}.space_id = ?`);
+      params.push(input.space);
+    }
+    for (const [condition, values] of extra) {
+      conditions.push(condition);
+      params.push(...values);
+    }
+    return conditions.join(' AND ');
+  };
+
+  switch (kind) {
+    case 'task': {
+      const extra: Condition[] = [
+        ...(input.projectId ? ([['t.project_id = ?', [input.projectId]]] as Condition[]) : []),
+        ...(input.statuses ? ([['t.status = ?', [input.statuses.task]]] as Condition[]) : []),
+        ...dateIn('t.date', input.period),
+      ];
+      const sql = `SELECT 'task' AS kind, t.id AS id, t.title AS title, t.note AS note, t.date AS date, t.time AS time, t.status AS status,
             t.space_id AS space_id, t.project_id AS project_id, t.someday AS someday, t.icon AS icon, NULL AS items, 0 AS items_checked,
             NULL AS repeat, h.score AS score
        FROM hits h JOIN task t ON h.type = 'task' AND t.id = h.ref_id
-      WHERE t.deleted_at IS NULL ${spaceClause.replaceAll('{col}', 't.space_id')}`,
-    `SELECT 'checklist', c.id, c.title, '', c.date, NULL, NULL, c.space_id, NULL, 0, c.icon,
+      WHERE ${where('t', extra)}`;
+      return { sql, params };
+    }
+    case 'checklist': {
+      const sql = `SELECT 'checklist', c.id, c.title, '', c.date, NULL, NULL, c.space_id, NULL, 0, c.icon,
             (SELECT group_concat(i.text, char(10)) FROM checklist_item i WHERE i.checklist_id = c.id AND i.deleted_at IS NULL),
             (SELECT COUNT(*) FROM checklist_item i WHERE i.checklist_id = c.id AND i.deleted_at IS NULL AND i.checked = 1),
             NULL, h.score
        FROM hits h JOIN checklist c ON h.type = 'checklist' AND c.id = h.ref_id
-      WHERE c.deleted_at IS NULL ${spaceClause.replaceAll('{col}', 'c.space_id')}`,
-    `SELECT 'event', e.id, e.title, '', e.start_date, e.start_time, NULL, e.space_id, NULL, 0, e.icon, NULL, 0, e.repeat, h.score
+      WHERE ${where('c', dateIn('c.date', input.period))}`;
+      return { sql, params };
+    }
+    case 'event': {
+      const sql = `SELECT 'event', e.id, e.title, '', e.start_date, e.start_time, NULL, e.space_id, NULL, 0, e.icon, NULL, 0, e.repeat, h.score
        FROM hits h JOIN event e ON h.type = 'event' AND e.id = h.ref_id
-      WHERE e.deleted_at IS NULL ${spaceClause.replaceAll('{col}', 'e.space_id')}`,
-    `SELECT 'routine', r.id, r.title, '', NULL, r.time, CASE WHEN r.archived = 1 THEN 'archived' WHEN r.paused = 1 THEN 'paused' ELSE NULL END,
+      WHERE ${where('e', dateIn('e.start_date', input.period))}`;
+      return { sql, params };
+    }
+    case 'routine': {
+      const sql = `SELECT 'routine', r.id, r.title, '', NULL, r.time, CASE WHEN r.archived = 1 THEN 'archived' WHEN r.paused = 1 THEN 'paused' ELSE NULL END,
             r.space_id, NULL, 0, r.icon, NULL, 0, NULL, h.score
        FROM hits h JOIN routine r ON h.type = 'routine' AND r.id = h.ref_id
-      WHERE r.deleted_at IS NULL ${spaceClause.replaceAll('{col}', 'r.space_id')}`,
-    `SELECT 'goal', g.id, g.title, '', g.week_start, NULL, g.status, g.space_id, NULL, 0, g.icon, NULL, 0, NULL, h.score
+      WHERE ${where('r')}`;
+      return { sql, params };
+    }
+    case 'goal': {
+      const extra: Condition[] = [...(input.statuses ? ([['g.status = ?', [input.statuses.goal]]] as Condition[]) : []), ...dateIn('g.week_start', input.goalPeriod)];
+      const sql = `SELECT 'goal', g.id, g.title, '', g.week_start, NULL, g.status, g.space_id, NULL, 0, g.icon, NULL, 0, NULL, h.score
        FROM hits h JOIN goal g ON h.type = 'goal' AND g.id = h.ref_id
-      WHERE g.deleted_at IS NULL ${spaceClause.replaceAll('{col}', 'g.space_id')}`,
-  ].join('\nUNION ALL\n');
+      WHERE ${where('g', extra)}`;
+      return { sql, params };
+    }
+  }
 }
 
 function rowToHit(row: HitRow): SearchHit {
@@ -81,17 +129,14 @@ const STALE_SQL = `
 export function createSearchRepository(db: SqlExecutor): SearchRepository {
   return {
     async query(input: SearchQueryInput): Promise<readonly SearchHit[]> {
-      const params: SqlValue[] = [input.match];
-      const spaceClause = input.space === 'all' ? '' : 'AND {col} = ?';
-      // Le filtre d'espace est répété dans chacune des cinq branches : un paramètre par branche.
-      if (input.space !== 'all') for (let i = 0; i < 5; i += 1) params.push(input.space);
-      params.push(input.limit);
+      if (input.kinds.length === 0) return [];
+      const branches = input.kinds.map((kind) => buildBranch(kind, input));
       const rows = await db.select<HitRow>(
         `WITH hits AS MATERIALIZED (
            SELECT type, ref_id, bm25(search_index, 0.0, 0.0, 5.0, 1.0) AS score FROM search_index WHERE search_index MATCH ?
-         )
-         SELECT ${COLUMNS} FROM (${branches(spaceClause)}) ORDER BY score, kind, id LIMIT ?`,
-        params,
+         ), merged(${COLUMNS}) AS (${branches.map((branch) => branch.sql).join('\nUNION ALL\n')})
+         SELECT ${COLUMNS} FROM merged ORDER BY score, kind, id LIMIT ?`,
+        [input.match, ...branches.flatMap((branch) => branch.params), input.limit],
       );
       return rows.map(rowToHit);
     },

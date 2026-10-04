@@ -246,3 +246,48 @@
 .ct-search-field-button__kbd {
   margin-left: auto;
 }
+
+/* Puces de filtre (Recherche.html : « Espace : Tout ∨ », « Type : Tous ∨ »…) : 34 px, active en #2E2150 / blanc. */
+.ct-search__filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-2);
+}
+
+.ct-search__chip .ct-dropdown[data-variant='pill'] {
+  height: 34px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 17px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Zone tactile de 44 pt : le select natif déborde de la pastille au-dessus et au-dessous. */
+.ct-search__chip .ct-dropdown__native {
+  top: -5px;
+  height: calc(100% + 10px);
+}
+
+.ct-search__chip[data-active='true'] .ct-dropdown {
+  background: var(--ct-color-text);
+  border-color: var(--ct-color-text);
+  color: var(--ct-color-bg);
+}
+
+.ct-search__reset {
+  height: 34px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font: 600 13px var(--ct-font-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-search__reset:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

@@ -6,13 +6,9 @@ import {
   type SearchQueryError,
   type SearchResult,
 } from '../../domain/search';
-import type { Result, SpaceFilter } from '../../domain/types';
+import { toQueryFilters, type SearchFilters } from '../../domain/searchFilters';
+import type { LocalDate, Result } from '../../domain/types';
 import type { AppContainer } from '../app/container';
-
-/** Filtres d'une recherche (RC-01 : espace ; RC-02 en ajoute). */
-export interface SearchFilters {
-  readonly space: SpaceFilter;
-}
 
 /** Résultats d'une recherche, prêts à afficher. */
 export interface SearchOutcome {
@@ -29,7 +25,7 @@ export type SearchError = SearchQueryError | 'failed';
 
 export interface SearchUseCases {
   /** Valide la saisie puis interroge l'index avec les filtres. Ne rejette jamais. */
-  run(rawQuery: string, filters: SearchFilters): Promise<Result<SearchOutcome, SearchError>>;
+  run(rawQuery: string, filters: SearchFilters, today: LocalDate): Promise<Result<SearchOutcome, SearchError>>;
   /** Reconstruit l'index s'il est absent ou périmé (RC-01 critère 9) ; faux si rien à faire ou en cas d'échec. Ne rejette jamais. */
   ensureIndex(): Promise<boolean>;
 }
@@ -38,13 +34,13 @@ export type SearchUseCaseDeps = Pick<AppContainer, 'data'>;
 
 export function createSearchUseCases(deps: SearchUseCaseDeps): SearchUseCases {
   return {
-    async run(rawQuery, filters) {
+    async run(rawQuery, filters, today) {
       const valid = validateSearchQuery(rawQuery);
       if (!valid.ok) return valid;
       try {
         const hits = await deps.data.repos.search.query({
           match: buildMatchExpression(valid.value.tokens),
-          space: filters.space,
+          ...toQueryFilters(filters, today),
           // Une ligne de plus que la limite : sert à savoir si la liste est tronquée.
           limit: SEARCH_LIMIT + 1,
         });

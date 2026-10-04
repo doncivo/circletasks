@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildMatchExpression, searchTokens } from '../../../domain/search';
-import { asEntityId, type DeviceId } from '../../../domain/types';
+import { initialSearchFilters, toQueryFilters, type SearchFilters } from '../../../domain/searchFilters';
+import { asEntityId, asLocalDate, type DeviceId } from '../../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../seed/defaultSpaces';
 import { openTestDb } from './testSetup';
 
@@ -39,13 +40,27 @@ describe('SearchRepository (SQL) : performance (RC-01)', () => {
         }
       });
 
+      // RC-01 : espace seul ; RC-02 critère 8 : chaque changement de filtre (type, statut, période, combinaisons) reste sous 200 ms.
+      const today = asLocalDate('2026-10-05');
+      const filterSets: Partial<SearchFilters>[] = [
+        {},
+        { space: SPACE_PRO_ID },
+        { kind: 'task' },
+        { kind: 'checklist' },
+        { status: 'todo' },
+        { status: 'done', space: SPACE_PERSO_ID },
+        { period: { kind: 'week' } },
+        { period: { kind: 'month' } },
+        { period: { kind: 'custom', from: asLocalDate('2026-08-01'), to: asLocalDate('2026-09-15') }, status: 'todo' },
+        { space: SPACE_PRO_ID, kind: 'task', period: { kind: 'last30' } },
+      ];
       const worst: number[] = [];
       for (const query of ['facture', 'fact', 'notaire', 'réunion budget', 'tâche 42', 'pass']) {
-        for (const space of ['all', SPACE_PRO_ID] as const) {
+        for (const [index, filters] of filterSets.entries()) {
           const start = performance.now();
-          const hits = await db.data.repos.search.query({ match: buildMatchExpression(searchTokens(query)), space, limit: 101 });
+          const hits = await db.data.repos.search.query({ match: buildMatchExpression(searchTokens(query)), ...toQueryFilters({ ...initialSearchFilters('all'), ...filters }, today), limit: 101 });
           worst.push(performance.now() - start);
-          expect(hits.length, query).toBeGreaterThan(0);
+          if (index <= 1) expect(hits.length, query).toBeGreaterThan(0);
         }
       }
       expect(Math.max(...worst), `temps de chaque requête (ms) : ${worst.map((ms) => ms.toFixed(1)).join(" / ")}`).toBeLessThan(200);

@@ -5,6 +5,7 @@ import { Icon, Kbd, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { SearchFilterBar } from './SearchFilterBar';
 import { SearchGroups } from './SearchResults';
 import { SEARCH_INPUT_ID } from './searchShortcut';
 import { searchStore } from './searchStore';
@@ -68,6 +69,8 @@ function SearchSurface() {
           </button>
         )}
       </div>
+
+      <SearchFilterBar />
 
       <div className="ct-search__body">
         {/* Zone annoncée aux lecteurs d'écran (« 5 résultats ») : ni role="status", réservé au bandeau « Annuler ». */}

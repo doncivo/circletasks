@@ -1,8 +1,11 @@
 import { createStore } from 'zustand';
+import { todayLocal } from '../../domain/clock';
+import { initialSearchFilters, NO_SEARCH_FILTERS, withSpace, type SearchFilters } from '../../domain/searchFilters';
 import type { SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
+import { useAppStore } from '../app/appStore';
 import { defineFeatureStore, type AppContainer } from '../app/container';
-import { createSearchUseCases, type SearchFilters, type SearchOutcome } from './searchUseCases';
+import { createSearchUseCases, type SearchOutcome } from './searchUseCases';
 
 /**
  * - `idle` : champ vide ; `too-short` : moins de 2 caractères ;
@@ -28,8 +31,10 @@ export interface SearchState {
   reset(): void;
   /** Nouvelle saisie : lance la requête (la réponse d'une requête dépassée est ignorée). Ne rejette jamais. */
   setQuery(text: string): Promise<void>;
-  /** Change les filtres de la recherche et relance la requête. Ne rejette jamais. */
+  /** Change des filtres de la recherche et relance la requête ; un nouvel espace remet « Projet : tous ». Ne rejette jamais. */
   setFilters(patch: Partial<SearchFilters>): Promise<void>;
+  /** « Réinitialiser » : aucun filtre (espace « Tout » compris) ; relance la requête. Ne rejette jamais. */
+  resetFilters(): Promise<void>;
 }
 
 const INITIAL = { query: '', status: 'idle', outcome: null, errorKey: null } as const;
@@ -48,7 +53,9 @@ export const searchStore = defineFeatureStore<SearchState>((container: AppContai
         set({ status: 'idle', outcome: null, errorKey: null });
         return;
       }
-      const result = await useCases.run(query, filters);
+      // Jour courant de l'app (suit minuit, T-06) ; horloge du conteneur avant le premier contrôle.
+      const today = useAppStore.getState().day ?? todayLocal(container.clock);
+      const result = await useCases.run(query, filters, today);
       if (mine !== sequence) return;
       if (result.ok) set({ status: 'ready', outcome: result.value, errorKey: null });
       else if (result.error === 'too-short') set({ status: 'too-short', outcome: null, errorKey: null });
@@ -57,22 +64,29 @@ export const searchStore = defineFeatureStore<SearchState>((container: AppContai
 
     return {
       ...INITIAL,
-      filters: { space: 'all' },
+      filters: NO_SEARCH_FILTERS,
       async open(space) {
         sequence += 1;
-        set({ ...INITIAL, filters: { space } });
+        set({ ...INITIAL, filters: initialSearchFilters(space) });
         await useCases.ensureIndex();
       },
       reset: () => {
         sequence += 1;
-        set({ ...INITIAL, filters: { space: 'all' } });
+        set({ ...INITIAL, filters: NO_SEARCH_FILTERS });
       },
       setQuery: async (text) => {
         set({ query: text });
         await run();
       },
       setFilters: async (patch) => {
-        set((s) => ({ filters: { ...s.filters, ...patch } }));
+        set((s) => {
+          const base = patch.space !== undefined ? withSpace(s.filters, patch.space) : s.filters;
+          return { filters: { ...base, ...patch } };
+        });
+        await run();
+      },
+      resetFilters: async () => {
+        set({ filters: NO_SEARCH_FILTERS });
         await run();
       },
     };

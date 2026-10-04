@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { buildMatchExpression, searchTokens } from '../../../domain/search';
-import { asEntityId, asLocalDate, type DeviceId, type TaskId } from '../../../domain/types';
+import { initialSearchFilters, toQueryFilters, type SearchFilters } from '../../../domain/searchFilters';
+import { asEntityId, asLocalDate, type DeviceId, type SpaceFilter, type TaskId } from '../../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../seed/defaultSpaces';
 import { sampleTask } from '../../seed/sampleData';
 import { openTestDb, type TestDb } from './testSetup';
@@ -17,7 +18,9 @@ describe('SearchRepository (SQL, RC-01)', () => {
   });
   afterEach(() => db.close());
 
-  const search = (text: string, space: 'all' | typeof SPACE_PRO_ID | typeof SPACE_PERSO_ID = 'all', limit = 101) => db.data.repos.search.query({ match: match(text), space, limit });
+  const TODAY = asLocalDate('2026-10-02');
+  const search = (text: string, space: SpaceFilter = 'all', limit = 101, filters: Partial<SearchFilters> = {}) =>
+    db.data.repos.search.query({ match: match(text), ...toQueryFilters({ ...initialSearchFilters(space), ...filters }, TODAY), limit });
 
   it('trouve une tâche par titre ou par note, sans casse ni accents, et par préfixe du dernier mot (critère 3)', async () => {
     await db.data.repos.tasks.create(sampleTask({ id: taskId(1), title: 'Envoyer la facture', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-09-23') }));

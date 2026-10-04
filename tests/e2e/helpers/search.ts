@@ -77,3 +77,23 @@ export async function insertSearchTasks(page: Page, tasks: readonly SearchTask[]
     [tasks, offset] as const,
   );
 }
+
+/** Puce de filtre de la recherche, par son nom accessible (« Filtre Type : Tous »). */
+export const chipOf = (page: Page, name: string): Locator => searchDialog(page).getByRole('combobox', { name, exact: true });
+
+/** Choisit une valeur dans une puce (liste native : roue sur iPhone, menu au clavier sur PC). */
+export async function chooseChip(page: Page, name: string, option: string): Promise<void> {
+  await chipOf(page, name).selectOption({ label: option });
+}
+
+/** Rattache une tâche (par son titre) à un projet existant (par son nom), directement en base. */
+export async function assignProject(page: Page, taskTitle: string, projectName: string): Promise<void> {
+  await page.evaluate(
+    async ([title, project]) => {
+      const hooks = window.__ctTest;
+      if (!hooks) throw new Error('prise de test absente (navigateur de développement uniquement)');
+      await hooks.execute('UPDATE task SET project_id = (SELECT id FROM project WHERE name = ?) WHERE title = ?', [project ?? '', title ?? '']);
+    },
+    [taskTitle, projectName] as const,
+  );
+}
