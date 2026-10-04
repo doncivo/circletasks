@@ -15,6 +15,7 @@ import { registerEscapeFallback, registerShellShortcuts } from './registerShellS
 import { quickCaptureStore } from './quickCaptureStore';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000d5');
+const FIELD_LABEL = 'Champ de saisie';
 
 /** Coquille minimale : Ctrl+/ et Échap branchés comme dans App.tsx. */
 function Shell({ children }: { readonly children: React.ReactNode }) {
@@ -30,7 +31,7 @@ function Shell({ children }: { readonly children: React.ReactNode }) {
   }, [container]);
   return (
     <>
-      <input aria-label="Champ de saisie" />
+      <input aria-label={FIELD_LABEL} />
       {children}
       <ShortcutsHelp />
     </>
