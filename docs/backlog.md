@@ -120,15 +120,15 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | à faire |
 | H-02 | M11 | Je vois mon taux de complétion | stats-history | à faire |
 | H-03 | M11 | J'exporte mon historique | stats-history | à faire |
-| P-01 | M12 | Je réordonne et masque les onglets | settings-personalization | à faire |
-| P-02 | M12 | Je choisis clair, sombre ou système | settings-personalization | à faire |
-| P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | à faire |
+| P-01 | M12 | Je réordonne et masque les onglets | settings-personalization | en cours |
+| P-02 | M12 | Je choisis clair, sombre ou système | settings-personalization | en cours |
+| P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | en cours |
 | P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | à faire |
 | P-05 | M12 | Je suis guidé au premier lancement | settings-personalization | à faire |
 | P-06 | M12 | Un écran vide m'indique quoi faire | settings-personalization | à faire |
 | P-07 | M12 | J'importe mes tâches existantes | settings-personalization | à faire |
-| P-08 | M12 | Je consulte les raccourcis clavier | settings-personalization | à faire |
-| D-04 | M16 | J'utilise les raccourcis clavier | desktop-tauri | à faire |
+| P-08 | M12 | Je consulte les raccourcis clavier | settings-personalization | en cours |
+| D-04 | M16 | J'utilise les raccourcis clavier | desktop-tauri | en cours |
 
 ## Ordre 4 — Synchro
 
