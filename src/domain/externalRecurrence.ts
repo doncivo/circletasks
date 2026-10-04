@@ -67,7 +67,7 @@ export function parseRecurrenceRule(value: string): RecurrenceRule | null {
   return { frequency, interval, count, until: parts.get('UNTIL') ?? null, byDay, byMonthDay, byMonth, bySetPos, weekStart: WEEKDAYS[parts.get('WKST') ?? 'MO'] ?? 1 };
 }
 
-/** n-ième jour de semaine ISO (1 = lundi) du mois ; rang négatif depuis la fin (-1 = dernier) ; null s'il n'existe pas (5ᵉ lundi absent). */
+/** Variante de `nthWeekdayOfMonth` (recurrenceRules.ts) pour les RRULE externes : renvoie une LocalDate et accepte un rang négatif. n-ième jour de semaine ISO (1 = lundi) du mois ; rang négatif depuis la fin (-1 = dernier) ; null s'il n'existe pas (5ᵉ lundi absent). */
 export function nthWeekdayDate(year: number, month: number, weekday: number, ordinal: number): LocalDate | null {
   const last = daysInMonth(year, month);
   const days: number[] = [];
