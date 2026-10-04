@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseQuickInput } from '../../domain/quickInput';
-import { asLocalDate, asLocalTime } from '../../domain/types';
+import { parseQuickInput } from './quickInput';
+import { asLocalDate, asLocalTime } from './types';
 import { normalizeQuickText, normalizeSpokenTimes } from './spokenTimes';
 
 // Mardi 22 septembre 2026, 08:00 (comme Q-02).

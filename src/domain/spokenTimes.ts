@@ -1,10 +1,10 @@
-import { foldKeepLength } from '../../domain/naturalDate';
+import { foldKeepLength } from './naturalDate';
 
 /**
  * Heures dictées (Q-03 critère 4, décision D3) : la dictée Windows écrit « appeler le notaire demain dix heures trente » ;
  * l'analyseur de dates (Q-02) lit « 10 h 30 ». Ce passage réécrit seulement les heures dites en lettres (« dix heures »,
  * « neuf heures trente », « huit heures et demie », « onze heures moins le quart ») avant l'analyse ; le reste du texte est
- * inchangé. « midi » et « minuit » sont déjà lus par l'analyseur. Vit dans src/features/capture (src/domain n'est pas touché).
+ * inchangé. « midi » et « minuit » sont déjà lus par l'analyseur. Règle pure, branchée par src/features/capture avant chaque analyse de saisie.
  *
  * Une durée n'est pas une heure : « pendant deux heures », « dans une heure », « en trois heures » restent du texte.
  */

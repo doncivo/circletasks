@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { systemClock } from '../../domain/clock';
-import type { Project, Space } from '../../domain/model';
 import { TASK_TITLE_MAX_LENGTH } from '../../domain/taskRules';
 import { t } from '../../i18n';
 import { setFormatPrefs } from '../../i18n/formatPrefs';
@@ -82,9 +81,8 @@ export function MiniCapture({ bridge }: MiniCaptureProps) {
       if (signature === applied) return;
       applied = signature;
       const store = useAppStore.getState();
-      // Les seuls champs lus par l'analyse et les suggestions sont transmis (id, nom, ordre, couleur, projet actif).
-      store.setSpaces(context.spaces as unknown as readonly Space[]);
-      store.setProjects(context.projects as unknown as readonly Project[]);
+      store.setSpaces(context.spaces);
+      store.setProjects(context.projects);
       store.setSpaceFilter(context.spaceFilter);
       setFormatPrefs({ firstWeekday: context.firstWeekday });
     };

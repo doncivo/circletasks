@@ -14,8 +14,8 @@ export interface CaptureHost {
 export function contextSnapshot(): CaptureContextSnapshot {
   const { spaces, projects, spaceFilter } = useAppStore.getState();
   return {
-    spaces: spaces.map(({ id, name, sortOrder, color }) => ({ id, name, sortOrder, color })),
-    projects: projects.map(({ id, spaceId, name, archived, sortOrder, deletedAt, color }) => ({ id, spaceId, name, archived, sortOrder, deletedAt, color })),
+    spaces,
+    projects,
     spaceFilter,
     firstWeekday: getFirstWeekday(),
   };
@@ -53,6 +53,10 @@ export function startCaptureHost(container: AppContainer, bridge: CaptureMainBri
     'capture-submit',
   );
   keep(bridge.onContextRequest(() => publish(true)), 'capture-context-request');
+  // La mini-fenêtre n'a pas pu être créée (Rust) : l'échec est consigné dans le journal, le raccourci retombe sur Aujourd'hui.
+  void bridge.setupError().then((error) => {
+    if (error !== null) logDesktopFailure('capture-window', error);
+  });
 
   // Le contexte part au démarrage puis à chaque changement d'espaces, de projets ou de filtre.
   publish(true);

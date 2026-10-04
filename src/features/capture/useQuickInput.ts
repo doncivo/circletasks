@@ -6,7 +6,7 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useDefaultSpaceId } from '../spaces';
-import { normalizeQuickText } from './spokenTimes';
+import { normalizeQuickText } from '../../domain/spokenTimes';
 
 export interface UseQuickInputOptions {
   /** Faux : seules les marques # et @ sont lues (écran « Un jour », date réglée à la main). Défaut : vrai. */

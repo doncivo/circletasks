@@ -3,4 +3,4 @@ export { startCaptureHost, contextSnapshot, type CaptureHost } from './captureHo
 export { createTaskFromCaptureText, createCaptureUndoCommand, batchUndoLabel, type CaptureTextResult } from './captureUseCases';
 export { MiniCapture, ADDED_MESSAGE_MS, type MiniCaptureProps } from './MiniCapture';
 export { DictationButton, DictationHelp, ListeningSheet, useDictation, type Dictation, type UseDictationOptions } from './Dictation';
-export { normalizeQuickText, normalizeSpokenTimes } from './spokenTimes';
+export { normalizeQuickText, normalizeSpokenTimes } from '../../domain/spokenTimes';

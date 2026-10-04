@@ -11,7 +11,7 @@ import { useAppStore } from '../app/appStore';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
-import { normalizeQuickText } from './spokenTimes';
+import { normalizeQuickText } from '../../domain/spokenTimes';
 import { captureInputFrom } from './useQuickInput';
 
 type Deps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;

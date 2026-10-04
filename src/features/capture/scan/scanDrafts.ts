@@ -1,7 +1,7 @@
 import { parseQuickInput, type QuickContext, type QuickParse } from '../../../domain/quickInput';
 import { addDays } from '../../../domain/localDate';
 import type { LocalDate, LocalTime, ProjectId, SpaceId } from '../../../domain/types';
-import { normalizeQuickText } from '../spokenTimes';
+import { normalizeQuickText } from '../../../domain/spokenTimes';
 import type { ScanProposal } from './scanLines';
 
 /** « Date des tâches sans date » (Scan.html) : Aujourd'hui (défaut, D6), Demain, Un jour, ou une date choisie. */
