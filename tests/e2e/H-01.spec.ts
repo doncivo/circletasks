@@ -89,6 +89,25 @@ test.describe('H-01 — rapport du mois', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Routines' })).toBeVisible();
   });
 
+  test('critère 11 : PC à 1 280 px, les quatre tuiles sont sur une ligne, le graphique et la carte des routines côte à côte', async ({ page }, testInfo) => {
+    test.skip(isPhone(testInfo), 'mise en page PC');
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await openReport(page, 'septembre');
+    const tiles = page.locator('[data-tile]');
+    await expect(tiles).toHaveCount(4);
+    const boxes = [];
+    for (let i = 0; i < 4; i += 1) boxes.push(await tiles.nth(i).boundingBox());
+    const tops = boxes.map((box) => Math.round(box?.y ?? -1));
+    expect(new Set(tops).size).toBe(1);
+    const lefts = boxes.map((box) => box?.x ?? 0);
+    expect([...lefts].sort((a, b) => a - b)).toEqual(lefts);
+    const chart = await page.locator('.ct-stats__chartBlock').boundingBox();
+    const routines = await page.locator('.ct-stats__routinesBlock').boundingBox();
+    expect(chart && routines).toBeTruthy();
+    expect((chart?.x ?? 0) + (chart?.width ?? 0)).toBeLessThanOrEqual((routines?.x ?? 0) + 1);
+    expect(Math.abs((chart?.y ?? 0) - (routines?.y ?? 1000))).toBeLessThan(4);
+  });
+
   test('critère 9 : un mois sans donnée affiche « Rien à compter » et « Aller à Aujourd’hui »', async ({ page }) => {
     await openReport(page, 'septembre');
     await page.getByRole('button', { name: 'Mois précédent' }).click();

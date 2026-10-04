@@ -1,5 +1,21 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { createElement, type ComponentProps } from 'react';
+import type * as Recharts from 'recharts';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Espion sur la propriété d'animation de la série (H-02 critère 7 : pas d'animation sous « Réduire les animations »).
+const animationFlags = vi.hoisted(() => [] as unknown[]);
+vi.mock('recharts', async (importOriginal) => {
+  const mod = await importOriginal<typeof Recharts>();
+  const Original = mod.Bar;
+  return {
+    ...mod,
+    Bar: (props: ComponentProps<typeof Original>) => {
+      animationFlags.push(props.isAnimationActive);
+      return createElement(Original, props);
+    },
+  };
+});
 import { ALL_ITEMS } from '../../domain/itemFilter';
 import { buildMonthReport, type MonthReport } from '../../domain/monthReport';
 import type { LocalDate, RoutineId } from '../../domain/types';
@@ -89,5 +105,32 @@ describe('Graphique de complétion (H-02)', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
     fireEvent.pointerEnter(bars[0] as Element, { pointerType: 'mouse' });
     expect(screen.getByRole('tooltip')).toHaveTextContent('S36 · 31 août – 6 sept. · 5 sur 7');
+  });
+
+  describe('animation (critère 7)', () => {
+    beforeEach(() => {
+      animationFlags.length = 0;
+    });
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      animationFlags.length = 0;
+    });
+    const stubMotion = (reduce: boolean) =>
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: reduce && query.includes('prefers-reduced-motion: reduce'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+
+    it('« Réduire les animations » coupe l’animation des barres', async () => {
+      stubMotion(true);
+      render(<CompletionSection report={report(COUNTS)} />);
+      await screen.findAllByRole('img', { name: /^S3\d/ });
+      expect(animationFlags.length).toBeGreaterThan(0);
+      expect(animationFlags.every((flag) => flag === false)).toBe(true);
+    });
+
+    it('sans préférence, les barres s’animent', async () => {
+      stubMotion(false);
+      render(<CompletionSection report={report(COUNTS)} />);
+      await screen.findAllByRole('img', { name: /^S3\d/ });
+      expect(animationFlags.every((flag) => flag === true)).toBe(true);
+    });
   });
 });

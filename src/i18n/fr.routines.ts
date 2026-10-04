@@ -55,6 +55,7 @@ export const routinesFr = {
     cellUpcoming: '{date}, {planned} prévues',
     cellNone: '{date}, rien de prévu',
     ratesLabel: 'Taux du mois par routine',
+    empty: 'Aucune routine à afficher pour ce mois.',
   },
   paused: 'En pause',
   archived: {

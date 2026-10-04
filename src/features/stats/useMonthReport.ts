@@ -4,8 +4,10 @@ import type { ItemFilter } from '../../domain/itemFilter';
 import type { MonthRef, MonthReport } from '../../domain/monthReport';
 import type { LocalDate } from '../../domain/types';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
-import { useAppContainer } from '../app/AppContainerContext';
+import { logDesktopFailure } from '../../platform';
+import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import { focusStore } from '../focus/focusStore';
 import { useEffectiveProjectFilter } from '../spaces';
 import { loadMonthReport } from './monthReportLoader';
 
@@ -30,6 +32,9 @@ export function useMonthReport(month: MonthRef): MonthReportState {
   const project = useEffectiveProjectFilter();
   const today = useAppStore((s) => s.day) ?? todayLocal(container.clock);
   const firstWeekday = getFirstWeekday();
+  // Le rapport se recalcule quand les données changent (tâche cochée, session Focus terminée) : mêmes sources que FocusReportSection.
+  const entities = useTaskEntities();
+  const focusRevision = useFeatureStore(focusStore, (state) => state.revision);
   const filter: ItemFilter = useMemo(() => ({ space, project }), [space, project]);
   const [result, setResult] = useState<{ report: MonthReport | null; status: 'loading' | 'ready' | 'error' }>({ report: null, status: 'loading' });
   const [oldest, setOldest] = useState<LocalDate | null>(null);
@@ -41,7 +46,7 @@ export function useMonthReport(month: MonthRef): MonthReportState {
       .then((value) => {
         if (alive) setOldest(value);
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => logDesktopFailure('stats-oldest', error));
     return () => {
       alive = false;
     };
@@ -59,7 +64,7 @@ export function useMonthReport(month: MonthRef): MonthReportState {
     return () => {
       alive = false;
     };
-  }, [container, month, today, filter, firstWeekday]);
+  }, [container, month, today, filter, firstWeekday, entities, focusRevision]);
 
   return { report: result.report, status: result.status, today, filter, oldest };
 }

@@ -91,3 +91,9 @@
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.ct-routines-month__empty {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}

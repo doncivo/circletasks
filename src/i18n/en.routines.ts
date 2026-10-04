@@ -54,6 +54,7 @@ export const routinesEn: Messages['routines'] = {
     cellUpcoming: '{date}, {planned} planned',
     cellNone: '{date}, nothing planned',
     ratesLabel: 'Month rate per routine',
+    empty: 'No routine to show for this month.',
   },
   paused: 'Paused',
   archived: {

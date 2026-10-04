@@ -2,6 +2,7 @@ import { focusTotalMinutes } from '../../domain/focusTotals';
 import type { MonthReport } from '../../domain/monthReport';
 import { t } from '../../i18n';
 import { formatFocusDuration } from '../../i18n/formatFocus';
+import { formatPercentLabel } from '../../i18n/formatStats';
 
 /**
  * Les quatre tuiles du rapport (Rapport.html, H-01 critères 3 à 7) : tâches faites, routines, Focus, objectifs. Chaque tuile est un
@@ -37,7 +38,7 @@ export function MonthTiles({ report }: { report: MonthReport }) {
           {t('stats.routinesLabel')}
         </span>
         <span className="ct-stats__tileValue" aria-hidden="true">
-          {routinesPercent !== null ? `${String(routinesPercent)} %` : noValue}
+          {formatPercentLabel(routinesPercent)}
         </span>
       </div>
       <div className="ct-stats__tile" role="group" aria-label={t('stats.focusAria', { duration: formatFocusDuration(focusTotalMinutes(focus)) })} data-tile="focus">

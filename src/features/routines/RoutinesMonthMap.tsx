@@ -60,6 +60,7 @@ export function RoutinesMonthMap({ aggregate, rates, headingRef }: RoutinesMonth
           </div>
         ))}
       </div>
+      {rates.length === 0 && <p className="ct-routines-month__empty">{t('routines.monthReport.empty')}</p>}
       {rates.length > 0 && (
         <ul className="ct-routines-month__rates" aria-label={t('routines.monthReport.ratesLabel')}>
           {rates.map((rate) => (

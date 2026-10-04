@@ -474,7 +474,9 @@ const SCREENS: Screen[] = [
     date: WEDNESDAY,
     prepare: async (page) => {
       await prepareRoutines(page, ROUTINE_SEED);
-      await page.getByRole('button', { name: 'Rapport du mois' }).click();
+      // Ouvert depuis l'icône graphique d'Aujourd'hui : l'en-tête du rapport est visible (depuis les Routines, l'écran défile aux routines).
+      await page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true }).click();
+      await page.getByRole('button', { name: 'Rapport mensuel' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'septembre' })).toBeVisible();
     },
   },
