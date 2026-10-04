@@ -195,6 +195,15 @@ fn to_shortcut(chord: &Chord) -> Result<Shortcut, ShortcutError> {
     chord.plugin_string().parse::<Shortcut>().map_err(|_| ShortcutError::Syntax)
 }
 
+/// Cause d'un échec d'enregistrement : `InUse` seulement si le système dit la combinaison déjà enregistrée, sinon `Unavailable`.
+pub fn classify_register_error(message: &str) -> ShortcutError {
+    if message.to_lowercase().contains("already registered") {
+        ShortcutError::InUse
+    } else {
+        ShortcutError::Unavailable
+    }
+}
+
 /// Enregistre `chord` puis retire l'ancienne : en cas d'échec, l'ancienne reste active.
 fn replace(app: &AppHandle, state: &QuickCaptureShortcut, chord: Chord) -> Result<(), ShortcutError> {
     let mut current = state.lock();
@@ -204,7 +213,7 @@ fn replace(app: &AppHandle, state: &QuickCaptureShortcut, chord: Chord) -> Resul
         return Ok(());
     }
     // La nouvelle est enregistrée avant de libérer l'ancienne : jamais sans raccourci en cas d'échec.
-    manager.register(new).map_err(|_| ShortcutError::InUse)?;
+    manager.register(new).map_err(|e| classify_register_error(&e.to_string()))?;
     if let Some(old) = current.as_ref().and_then(|c| to_shortcut(c).ok()) {
         let _ = manager.unregister(old);
     }

@@ -67,3 +67,10 @@ fn error_codes_are_stable() {
         ["shortcut-syntax", "shortcut-no-modifier", "shortcut-windows-key", "shortcut-reserved", "shortcut-in-use", "shortcut-unavailable"]
     );
 }
+
+#[test]
+fn register_failure_is_in_use_only_when_already_registered() {
+    use circletasks_lib::shortcut::classify_register_error;
+    assert_eq!(classify_register_error("HotKey already registered: HotKey { id: 1 }"), ShortcutError::InUse);
+    assert_eq!(classify_register_error("os error 5: access denied"), ShortcutError::Unavailable);
+}

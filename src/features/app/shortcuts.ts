@@ -118,7 +118,8 @@ export function matchesChord(chord: KeyChord, input: KeyInput): boolean {
  * Gestionnaire d'un raccourci. Il peut renvoyer `false` pour décliner (le focus n'est pas dans sa liste, rien à
  * faire) : l'événement n'est alors pas consommé et le comportement natif du navigateur (défilement…) reste.
  */
-export type ShortcutHandler = () => void;
+// eslint-disable-next-line @typescript-eslint/no-invalid-void-type -- les gestionnaires existants renvoient void ; false = décline
+export type ShortcutHandler = () => boolean | void;
 
 export interface ShortcutRegistry {
   /** Enregistre un gestionnaire ; renvoie la fonction de désenregistrement. */
@@ -151,7 +152,7 @@ export function createShortcutRegistry(): ShortcutRegistry {
         if (!matchesChord(chord, input)) continue;
         // Du plus récent au plus ancien : un gestionnaire qui décline (`false`) laisse la main au précédent.
         for (const handler of [...(handlers.get(id) ?? [])].reverse()) {
-          if ((handler() as unknown) !== false) return id;
+          if (handler() !== false) return id;
         }
       }
       return null;
