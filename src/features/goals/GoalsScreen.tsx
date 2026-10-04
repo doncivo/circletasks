@@ -2,10 +2,9 @@ import { Target, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { todayLocal } from '../../domain/clock';
-import { goalsOfWeek } from '../../domain/goalRules';
+import { attachedTasksByGoal, goalsOfWeek } from '../../domain/goalRules';
 import { addDays } from '../../domain/localDate';
 import type { Goal, Task } from '../../domain/model';
-import type { GoalId } from '../../domain/types';
 import { isoWeekOf } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatWeekRange } from '../../i18n/format';
@@ -21,13 +20,6 @@ import { goalsStore } from './goalsStore';
 import './GoalsScreen.css';
 
 const NO_TASKS: readonly Task[] = [];
-
-/** Ordre des tâches rattachées : par date (sans date en dernier), puis ordre manuel. */
-function compareAttachedTasks(a: Task, b: Task): number {
-  if (a.date !== b.date) return a.date === null ? 1 : b.date === null ? -1 : a.date < b.date ? -1 : 1;
-  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-  return a.id < b.id ? -1 : 1;
-}
 
 /**
  * Écran Objectif (M17, Objectif.html) : iPhone en écran plein avec « Retour », PC en panneau à droite (comme le détail d'une tâche).
@@ -71,17 +63,7 @@ export function GoalsScreen() {
   const sections = useMemo(() => (weekStart ? goalsOfWeek(goals, weekStart, spaceFilter) : []), [goals, weekStart, spaceFilter]);
 
   // Tâches rattachées de chaque objectif, lues dans la source unique : terminer, reporter ou détacher une tâche ailleurs se voit ici.
-  const tasksByGoal = useMemo(() => {
-    const grouped = new Map<GoalId, Task[]>();
-    for (const task of entities.values()) {
-      if (task.goalId === null || task.deletedAt !== null) continue;
-      const list = grouped.get(task.goalId) ?? [];
-      list.push(task);
-      grouped.set(task.goalId, list);
-    }
-    for (const list of grouped.values()) list.sort(compareAttachedTasks);
-    return grouped;
-  }, [entities]);
+  const tasksByGoal = useMemo(() => attachedTasksByGoal(entities.values()), [entities]);
 
   // Brouillons : « + Ajouter un objectif » ouvre une section vide (non créée tant qu'aucun titre valide n'est saisi). Sans objectif
   // affiché, un brouillon implicite (clé 0) tient lieu de champ vide focalisé.
