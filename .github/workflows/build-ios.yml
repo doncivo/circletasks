@@ -161,7 +161,7 @@ jobs:
           gh auth setup-git
           git clone "https://github.com/${REPO}.git" releases
           node scripts/ios/make-source-json.mjs "$VERSION" "$IPA_URL" ipa/CircleTasks.ipa "$NOTES" releases/source.json > source.new.json
-          gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" \
+          gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" --latest=false \
             || gh release upload "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --clobber
           cp source.new.json releases/source.json
           cd releases
