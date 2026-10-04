@@ -103,7 +103,8 @@ export function createWindowBridge(transport: CaptureTransport, timeoutMs: numbe
 
 /** Pont de la fenêtre principale au-dessus d'un transport. */
 export function createMainBridge(transport: CaptureTransport): CaptureMainBridge {
-  // Requêtes déjà reçues (en cours ou terminées) : un renvoi du même identifiant ne crée jamais une seconde tâche, il reçoit la même réponse.
+  // Requêtes en cours ou réussies : un renvoi du même identifiant ne crée jamais une seconde tâche, il reçoit la même
+  // réponse. Une requête en échec est oubliée dès sa réponse : un renvoi après une vraie erreur est un nouvel essai.
   const seen = new Map<string, Promise<CaptureReply>>();
   return {
     onSubmit: (handler) =>
@@ -112,9 +113,13 @@ export function createMainBridge(transport: CaptureTransport): CaptureMainBridge
         if (!request) return;
         let reply = seen.get(request.requestId);
         if (!reply) {
-          reply = handler(request).catch((): CaptureReply => ({ ok: false, error: 'failed' }));
-          seen.set(request.requestId, reply);
+          const pending = handler(request).catch((): CaptureReply => ({ ok: false, error: 'failed' }));
+          reply = pending;
+          seen.set(request.requestId, pending);
           if (seen.size > SEEN_LIMIT) seen.delete(seen.keys().next().value as string);
+          void pending.then((done) => {
+            if (!done.ok && seen.get(request.requestId) === pending) seen.delete(request.requestId);
+          });
         }
         void reply
           .then((done) => transport.emit(CAPTURE_WINDOW_LABEL, DONE_EVENT, { requestId: request.requestId, ...done }))

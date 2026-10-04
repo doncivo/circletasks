@@ -103,6 +103,24 @@ describe('pont de la capture rapide (Q-01)', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('un identifiant en échec rejoué est un nouvel essai : le gestionnaire est rappelé', async () => {
+    const { bus, main } = pair();
+    let attempt = 0;
+    const handler = vi.fn(async () => {
+      attempt += 1;
+      return attempt === 1 ? { ok: false as const, error: 'failed' as const } : { ok: true as const, title: 't' };
+    });
+    await main.onSubmit(handler);
+    const replies: unknown[] = [];
+    await bus.window.listen('capture:done', (payload) => replies.push(payload));
+    await bus.window.emit('main', 'capture:submit', { requestId: 'r2', text: 'x', ignored: [] });
+    await vi.waitFor(() => expect(replies).toHaveLength(1));
+    await bus.window.emit('main', 'capture:submit', { requestId: 'r2', text: 'x', ignored: [] });
+    await vi.waitFor(() => expect(replies).toHaveLength(2));
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(replies[1]).toMatchObject({ requestId: 'r2', ok: true });
+  });
+
   it('l’échec de création de la mini-fenêtre est lisible par la fenêtre principale', async () => {
     expect(await createMainBridge(createMemoryBus('WebView2 absent').main).setupError()).toBe('WebView2 absent');
     expect(await createMainBridge(createMemoryBus().main).setupError()).toBeNull();
