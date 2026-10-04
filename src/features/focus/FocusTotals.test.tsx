@@ -172,6 +172,7 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       expect(rows).toEqual(['Aujourd’hui3 h 25', 'Cette semaine3 h 25', 'Ce mois3 h 25', 'Envoyer la facture2 h 30', 'Appeler le notaire35 min', 'Courses20 min']);
     });
 
+    // Le délai (< 300 ms) est mesuré par monthReportLoader.perf.test.ts ; ici seul le résultat compte (suite chargée).
     it('critère 5 : le filtre Pro puis le projet « Mission client » recalculent aussitôt les totaux', async () => {
       await seed();
       useAppStore.getState().setDay('2026-10-04' as never);
@@ -179,10 +180,10 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       const section = await screen.findByRole('region', { name: 'CONCENTRATION' });
       await within(section).findByText('Courses');
       act(() => useAppStore.getState().setSpaceFilter(SPACE_PRO_ID));
-      await waitFor(() => expect(within(section).queryByText('Courses')).not.toBeInTheDocument(), { timeout: 300 });
+      await waitFor(() => expect(within(section).queryByText('Courses')).not.toBeInTheDocument(), { timeout: 2_000 });
       expect(within(section).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['Aujourd’hui3 h 05', 'Cette semaine3 h 05', 'Ce mois3 h 05', 'Envoyer la facture2 h 30', 'Appeler le notaire35 min']);
       act(() => useAppStore.getState().setProjectFilter('10000000-0000-4000-8000-0000000000b1' as never));
-      await waitFor(() => expect(within(section).queryByText('Appeler le notaire')).not.toBeInTheDocument(), { timeout: 300 });
+      await waitFor(() => expect(within(section).queryByText('Appeler le notaire')).not.toBeInTheDocument(), { timeout: 2_000 });
       expect(within(section).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['Aujourd’hui2 h 30', 'Cette semaine2 h 30', 'Ce mois2 h 30', 'Envoyer la facture2 h 30']);
     });
 
