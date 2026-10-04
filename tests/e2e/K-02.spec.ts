@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { CALDAV_APP_PASSWORD, CALDAV_USER } from '../sim';
 import { accountCard, attachSims, openCalendarsScreen, startTestSims, waitUpdated, type TestSims } from './helpers/calendars';
 import { addIsoDays } from './helpers/schedule';
-import { openToday } from './helpers/today';
+import { isPhone, openToday } from './helpers/today';
 import { browserMonday, dayOf, openWeek } from './helpers/week';
 
 /**
@@ -61,7 +61,7 @@ test.describe('K-02 — Apple Calendar', () => {
     await page.getByRole('button', { name: 'Se connecter' }).click();
   }
 
-  test('le formulaire explique le mot de passe d’application ; la connexion charge les événements en UTC dans la Semaine (critères 1, 2, 4, 5, 7)', async ({ page }) => {
+  test('le formulaire explique le mot de passe d’application ; la connexion charge les événements en UTC dans la Semaine (critères 1, 2, 4, 5, 7)', async ({ page }, testInfo) => {
     const wednesday = await seedWeek(page);
     await openCalendarsScreen(page);
     await page.getByRole('button', { name: 'iCloud', exact: true }).click();
@@ -82,7 +82,14 @@ test.describe('K-02 — Apple Calendar', () => {
     await openWeek(page);
     const events = dayOf(page, wednesday).locator('.ct-week-event');
     await expect(events.filter({ hasText: 'Dîner chez Leïla' })).toHaveCount(1);
-    await expect(events.filter({ hasText: 'iCloud' })).toHaveCount(1);
+    // Source « iCloud » (critère 8) : dans la bande sur PC, dans la fiche sur iPhone (la bande n'y montre qu'une icône, S-05).
+    if (isPhone(testInfo)) {
+      await events.filter({ hasText: 'Dîner chez Leïla' }).click();
+      await expect(page.getByRole('dialog', { name: 'Détail de l’événement' })).toContainText('iCloud');
+      await page.keyboard.press('Escape');
+    } else {
+      await expect(events.filter({ hasText: 'iCloud' })).toHaveCount(1);
+    }
     await expect(events.filter({ hasText: 'annulé' })).toHaveCount(0);
     await expect(dayOf(page, addIsoDays(wednesday, 1)).locator('.ct-week-event').filter({ hasText: '(Sans titre)' })).toHaveCount(1);
   });
