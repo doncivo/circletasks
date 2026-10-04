@@ -1,8 +1,10 @@
 // Génère le carillon de fin de session Focus (F-04 D4) : trois partiels d'une cloche (440, 880 et 1320 Hz) à décroissance
 // exponentielle, 1,6 s, mono 16 bits, 22 050 Hz. Œuvre originale du projet, placée dans le domaine public (CC0) : aucun échantillon tiers.
 // Usage : node scripts/generate-focus-chime.mjs
+import { Buffer } from 'node:buffer';
 import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const RATE = 22_050;
@@ -42,4 +44,5 @@ header.write('data', 36);
 header.writeUInt32LE(pcm.length, 40);
 const target = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'features', 'focus', 'assets', 'focus-end.wav');
 writeFileSync(target, Buffer.concat([header, pcm]));
-console.log(`${target} : ${String(header.length + pcm.length)} octets, ${SECONDS} s`);
+process.stdout.write(`${target} : ${String(header.length + pcm.length)} octets, ${String(SECONDS)} s
+`);

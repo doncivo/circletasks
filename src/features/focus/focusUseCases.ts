@@ -1,4 +1,4 @@
-import { nowIso } from '../../domain/clock';
+import { nowIso, todayLocal } from '../../domain/clock';
 import {
   FOCUS_OVERDUE_GRACE_MS,
   closeAtTerm,
@@ -12,6 +12,8 @@ import {
   stopValues,
   type FocusDuration,
 } from '../../domain/focusSession';
+import { daySpan, type FocusTotal } from '../../domain/focusTotals';
+import { ALL_ITEMS } from '../../domain/itemFilter';
 import type { FocusSession, Task } from '../../domain/model';
 import { newEntityId } from '../../domain/id';
 import type { FocusSessionId, IsoDateTime, TaskId } from '../../domain/types';
@@ -48,6 +50,8 @@ export interface FocusUseCases {
   getOpen(): Promise<FocusSession | null>;
   /** Tâche (vivante) d'une session, null si elle a disparu. */
   getTask(taskId: TaskId): Promise<Task | null>;
+  /** F-03 critères 1 et 2 : concentration du jour (toutes les sessions terminées, tous espaces : le pied ignore le filtre). */
+  todayTotals(): Promise<FocusTotal>;
   /** F-04 critère 3 : réglage « Son de fin de session » (activé par défaut). */
   endSoundEnabled(): Promise<boolean>;
   setEndSound(enabled: boolean): Promise<void>;
@@ -115,6 +119,7 @@ export function createFocusUseCases(deps: FocusUseCaseDeps): FocusUseCases {
       return sanitizeFocusDuration(await data.repos.settings.get('focus.lastDuration'));
     },
 
+    todayTotals: () => data.repos.focusSessions.totals({ span: daySpan(todayLocal(clock)), filter: ALL_ITEMS }),
     endSoundEnabled: () => data.repos.settings.get('focus.endSound'),
     setEndSound: (enabled) => data.repos.settings.set('focus.endSound', enabled),
 

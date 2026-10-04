@@ -9,6 +9,7 @@ import { formatStamp } from '../../i18n/format';
 import { Button, Icon, IconChooser, IconView, TextField, resolveIconRefColor } from '../../ui';
 import { LinkedEventRow } from '../calendars/LinkedEventRow';
 import { FocusLaunchButton } from '../focus/FocusLaunchButton';
+import { FocusTaskTotalRow } from '../focus/FocusTaskTotalRow';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
 import { DuplicatePrompt } from './DuplicatePrompt';
 import { PostponeAction } from './PostponeAction';
@@ -180,6 +181,8 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
       />
       {/* K-04 : lien en lecture seule vers l'événement d'agenda externe d'où vient la tâche. */}
       <LinkedEventRow task={task} />
+      {/* M10 (F-03) : temps de concentration de la tâche, en lecture seule. */}
+      <FocusTaskTotalRow taskId={task.id} />
 
       <TextField
         label={t('tasks.noteLabel')}

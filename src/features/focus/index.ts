@@ -1,6 +1,8 @@
 export { FocusHost } from './FocusHost';
 export { FocusLaunchButton } from './FocusLaunchButton';
 export { FocusMiniWindow } from './FocusMiniWindow';
+export { FocusReportSection } from './FocusReportSection';
+export { FocusTaskTotalRow } from './FocusTaskTotalRow';
 export { FocusSoundSetting } from './FocusSoundSetting';
 export { FocusView, type FocusVariant, type FocusViewProps } from './FocusView';
 export { FocusWindowRoot } from './FocusWindowRoot';

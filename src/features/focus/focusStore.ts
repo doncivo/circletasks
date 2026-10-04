@@ -1,5 +1,6 @@
 import { createStore } from 'zustand';
 import { endAtMs, isElapsed, notificationFireAtMs, type FocusDuration } from '../../domain/focusSession';
+import { focusTotalMinutes } from '../../domain/focusTotals';
 import type { FocusSession, Task } from '../../domain/model';
 import type { LocalTime, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -32,6 +33,8 @@ export interface FocusState {
   readonly task: FocusTaskInfo | null;
   /** Dernière durée choisie (F-01 critère 12). */
   readonly duration: FocusDuration;
+  /** Pied de l'écran (F-03) : concentration d'aujourd'hui, sessions terminées de tous les espaces. */
+  readonly today: { readonly minutes: number; readonly sessions: number };
   /** Son de fin de session activé (Réglages › TÂCHES, local, activé par défaut, F-04 critère 3). */
   readonly endSound: boolean;
   /** Incrémenté à chaque fin à signaler par un son (F-04) ; reste inchangé pour une fin silencieuse (retour après fermeture). */
@@ -113,6 +116,16 @@ function createFocusStore(container: AppContainer) {
       void scheduler.cancel(sessionId).catch(() => undefined);
     }
 
+    /** Relit le total du jour (F-03) ; une erreur de lecture laisse la valeur précédente. */
+    async function refreshToday(): Promise<void> {
+      try {
+        const total = await useCases.todayTotals();
+        set({ today: { minutes: focusTotalMinutes(total), sessions: total.sessions } });
+      } catch {
+        // Pied d'écran indicatif : on garde la valeur précédente.
+      }
+    }
+
     function closed(session: FocusSession, minutes: number, silent: boolean): void {
       cancelSchedule(session.id);
       set((s) => ({
@@ -130,6 +143,7 @@ function createFocusStore(container: AppContainer) {
       if (!session || !isElapsed(session, clock.nowMs())) return;
       const result = await useCases.closeAtTerm(session);
       closed(result.session, result.minutes, false);
+      await refreshToday();
     }
 
     async function loadTask(session: FocusSession): Promise<FocusTaskInfo | null> {
@@ -148,6 +162,7 @@ function createFocusStore(container: AppContainer) {
       ended: null,
       task: null,
       duration: 25,
+      today: { minutes: 0, sessions: 0 },
       endSound: true,
       soundNonce: 0,
       revision: 0,
@@ -169,6 +184,7 @@ function createFocusStore(container: AppContainer) {
           } else {
             set({ ready: true, duration, endSound });
           }
+          await refreshToday();
         }),
 
       start: (taskId) =>
@@ -184,6 +200,7 @@ function createFocusStore(container: AppContainer) {
             set({ session: outcome.session, ended: null, task: taskInfoOf(outcome.task), duration });
             armEndTimer();
             syncSchedule();
+            await refreshToday();
             return 'started';
           } catch {
             return 'error';
@@ -231,6 +248,7 @@ function createFocusStore(container: AppContainer) {
           cancelSchedule(session.id);
           set((s) => ({ session: null, ended: null, task: null, revision: s.revision + 1 }));
           armEndTimer();
+          await refreshToday();
         }),
 
       finishTask: () =>
@@ -248,6 +266,7 @@ function createFocusStore(container: AppContainer) {
           }
           set((s) => ({ session: null, ended: null, task: null, revision: s.revision + 1 }));
           armEndTimer();
+          await refreshToday();
         }),
 
       checkElapsed: () => serial(closeIfElapsed),
@@ -274,6 +293,7 @@ function createFocusStore(container: AppContainer) {
               set({ session: outcome.session, ended: null, task: taskInfoOf(outcome.task) });
               armEndTimer();
               syncSchedule();
+              await refreshToday();
             } else {
               // Tâche supprimée ou terminée entre-temps : il n'y a plus de session à relancer, l'écran se ferme.
               set({ ended: null, task: null });

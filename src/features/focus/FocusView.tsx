@@ -13,7 +13,7 @@ import {
   remainingFraction,
 } from '../../domain/focusSession';
 import { t } from '../../i18n';
-import { formatFocusDuration } from '../../i18n/formatFocus';
+import { formatFocusDuration, formatFocusToday } from '../../i18n/formatFocus';
 import type { FocusWindowAction, FocusWindowState, SoundPlayer } from '../../platform/focus';
 import { Icon } from '../../ui';
 import { useFocusTrap } from '../../ui/useFocusTrap';
@@ -252,6 +252,8 @@ export function FocusView({ state, variant, clock, onAction, closeRequests = 0, 
           )}
         </div>
       )}
+
+      <span className="ct-focus__footer">{formatFocusToday(state.today.minutes, state.today.sessions)}</span>
 
       {confirming && (
         <StopConfirm

@@ -32,6 +32,7 @@ export function FocusHost() {
   const task = useFeatureStore(focusStore, (s) => s.task);
   const soundNonce = useFeatureStore(focusStore, (s) => s.soundNonce);
   const endSound = useFeatureStore(focusStore, (s) => s.endSound);
+  const today = useFeatureStore(focusStore, (s) => s.today);
   const spaces = useAppStore((s) => s.spaces);
   const entities = useTaskEntities();
   const { focusWindow } = container;
@@ -77,13 +78,13 @@ export function FocusHost() {
       time: live?.time ? formatTime(live.time) : null,
       spaceName: space?.name ?? '',
       canFinishTask: live !== null && live.status === 'todo',
-      today: { minutes: 0, sessions: 0 },
+      today,
       soundEnabled: endSound,
       soundNonce,
       endedMinutes: ended?.minutes ?? 0,
       locale: getLocale(),
     });
-  }, [openSession, live, space, soundNonce, endSound, ended]);
+  }, [openSession, live, space, soundNonce, endSound, ended, today]);
 
   // Carillon embarqué (F-04 D4) : celui du conteneur en test, sinon un élément Audio créé à la première fin.
   const player: SoundPlayer = useMemo(() => container.soundPlayer ?? createHtmlAudioPlayer(focusChimeUrl), [container]);
