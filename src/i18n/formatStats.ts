@@ -24,6 +24,13 @@ export function formatWeekRange(from: string, to: string): string {
   return `${format.format(utc(from))} – ${format.format(utc(to))}`;
 }
 
+/** Date en toutes lettres selon la langue courante (« 23 septembre 2026 »), pour le pied du rapport exporté. */
+export function formatLongDate(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
+  return new Intl.DateTimeFormat(intlLocale(), { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+}
+
 /** « 71 % » ; « — » sans valeur. */
 export function formatPercentLabel(percent: number | null): string {
   return percent === null ? t('stats.noValue') : `${String(percent)} %`;

@@ -9,6 +9,7 @@ import { EmptyState, Icon, useLayout } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
+import { logDesktopFailure } from '../../platform';
 import { FocusReportSection } from '../focus/FocusReportSection';
 import { RoutinesMonthMap } from '../routines/RoutinesMonthMap';
 import { SpaceFilterBar } from '../spaces';
@@ -42,6 +43,7 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
   const spaces = useAppStore((state) => state.spaces);
   const projects = useAppStore((state) => state.projects);
   const [exporting, setExporting] = useState(false);
+  const [revealFailed, setRevealFailed] = useState(false);
   const [exported, setExported] = useState<{ readonly path: string | undefined } | null>(null);
   const routinesHeading = useRef<HTMLHeadingElement>(null);
   const scrolled = useRef(false);
@@ -112,10 +114,26 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
         <p className="ct-stats__exported" role="status">
           <span>{t('stats.exportDone')}</span>
           {exported.path !== undefined && container.files.reveal && (
-            <button type="button" className="ct-stats__exportedAction" onClick={() => void container.files.reveal?.(exported.path ?? '')}>
+            <button
+              type="button"
+              className="ct-stats__exportedAction"
+              onClick={() => {
+                setRevealFailed(false);
+                container.files.reveal?.(exported.path ?? '').catch((error: unknown) => {
+                  // Journal sans le chemin (nom de fichier et dossiers de l'utilisateur).
+                  logDesktopFailure('export-reveal', new Error(error instanceof Error ? error.name : 'erreur'));
+                  setRevealFailed(true);
+                });
+              }}
+            >
               {t('stats.exportReveal')}
             </button>
           )}
+        </p>
+      )}
+      {revealFailed && (
+        <p className="ct-stats__error" role="alert">
+          {t('stats.exportRevealError')}
         </p>
       )}
       {exporting && shown !== null && (
@@ -153,6 +171,11 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
               <div className="ct-stats__routinesBlock">
                 <RoutinesMonthMap aggregate={shown.heatmap} rates={shown.routineRates} headingRef={routinesHeading} />
               </div>
+            )}
+            {shown.heatmap === null && entry === 'routines' && (
+              <p className="ct-stats__note" data-testid="routines-no-project">
+                {t('stats.routinesNoProject')}
+              </p>
             )}
           </div>
         </>

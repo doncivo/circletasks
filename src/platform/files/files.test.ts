@@ -3,20 +3,10 @@ import { createMemoryFiles, createTauriFiles, createUnavailableFiles, FileExport
 
 const request = { suggestedName: 'circletasks-taches-2026-10-04.csv', mime: 'text/csv', data: new Uint8Array([1, 2, 3]) };
 
-function api(overrides: Partial<TauriFileApi> = {}): TauriFileApi & { written: Map<string, Uint8Array> } {
-  const written = new Map<string, Uint8Array>();
+function api(overrides: Partial<TauriFileApi> = {}): TauriFileApi {
   return {
-    written,
-    saveDialog: () => Promise.resolve('C:\\Docs\\export.csv'),
-    writeFile: (path, data) => {
-      written.set(path, data);
-      return Promise.resolve();
-    },
-    remove: (path) => {
-      written.delete(path);
-      return Promise.resolve();
-    },
-    revealItemInDir: () => Promise.resolve(),
+    saveFile: () => Promise.resolve('C:\\Docs\\export.csv'),
+    revealExported: () => Promise.resolve(),
     ...overrides,
   };
 }
@@ -40,33 +30,30 @@ describe('Contrat FileExporter (H-03 D4, critères 7, 9, 10)', () => {
     await expect(files.save(request)).rejects.toMatchObject({ reason: 'unavailable' });
   });
 
-  it('Tauri : boîte système puis écriture du fichier choisi, extension proposée au filtre', async () => {
-    const saveDialog = vi.fn(() => Promise.resolve('C:\\Docs\\export.csv'));
-    const fake = api({ saveDialog });
-    const files = createTauriFiles(fake);
+  it('Tauri : la commande Rust reçoit le nom proposé et les octets, et renvoie le chemin choisi', async () => {
+    const saveFile = vi.fn(() => Promise.resolve('C:\\Docs\\export.csv'));
+    const files = createTauriFiles(api({ saveFile }));
     await expect(files.save(request)).resolves.toEqual({ saved: true, path: 'C:\\Docs\\export.csv' });
-    expect(saveDialog).toHaveBeenCalledWith({ defaultPath: request.suggestedName, extension: 'csv' });
-    expect(fake.written.get('C:\\Docs\\export.csv')).toEqual(request.data);
+    expect(saveFile).toHaveBeenCalledWith(request.suggestedName, request.data);
   });
 
-  it('Tauri : annuler la boîte n’écrit rien et ne lève aucune erreur', async () => {
-    const writeFile = vi.fn(() => Promise.resolve());
-    const files = createTauriFiles(api({ saveDialog: () => Promise.resolve(null), writeFile }));
+  it('Tauri : annuler la boîte ne lève aucune erreur', async () => {
+    const files = createTauriFiles(api({ saveFile: () => Promise.resolve(null) }));
     await expect(files.save(request)).resolves.toEqual({ saved: false });
-    expect(writeFile).not.toHaveBeenCalled();
   });
 
-  it('Tauri : échec d’écriture (disque plein) supprime le fichier partiel et lève FileExportError', async () => {
-    const remove = vi.fn(() => Promise.resolve());
-    const files = createTauriFiles(api({ writeFile: () => Promise.reject(new Error('disque plein')), remove }));
+  it('Tauri : un échec d’écriture (disque plein) lève FileExportError', async () => {
+    const files = createTauriFiles(api({ saveFile: () => Promise.reject(new Error('disque plein')) }));
     await expect(files.save(request)).rejects.toMatchObject({ name: 'FileExportError', reason: 'write-failed' });
-    expect(remove).toHaveBeenCalledWith('C:\\Docs\\export.csv');
   });
 
-  it('Tauri : « Afficher dans le dossier »', async () => {
-    const revealItemInDir = vi.fn(() => Promise.resolve());
-    const files = createTauriFiles(api({ revealItemInDir }));
+  it('Tauri : « Afficher dans le dossier » passe par la commande Rust, jamais pour un chemin réseau', async () => {
+    const revealExported = vi.fn(() => Promise.resolve());
+    const files = createTauriFiles(api({ revealExported }));
     await files.reveal?.('C:\\Docs\\export.csv');
-    expect(revealItemInDir).toHaveBeenCalledWith('C:\\Docs\\export.csv');
+    expect(revealExported).toHaveBeenCalledWith('C:\\Docs\\export.csv');
+    await expect(files.reveal?.('\\\\serveur\\partage\\export.csv')).rejects.toBeInstanceOf(FileExportError);
+    await expect(files.reveal?.('//serveur/partage/export.csv')).rejects.toBeInstanceOf(FileExportError);
+    expect(revealExported).toHaveBeenCalledTimes(1);
   });
 });

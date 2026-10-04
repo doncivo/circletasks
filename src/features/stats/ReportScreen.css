@@ -310,3 +310,10 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* Précision sous un filtre de projet (les routines n'ont pas de projet). */
+.ct-stats__note {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}

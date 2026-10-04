@@ -3,7 +3,7 @@ import type { MonthReport } from '../../domain/monthReport';
 import type { ReportTexts } from '../../domain/reportLayout';
 import { t } from '../../i18n';
 import { formatFocusDuration } from '../../i18n/formatFocus';
-import { formatPercentLabel, formatReportMonth } from '../../i18n/formatStats';
+import { formatLongDate, formatPercentLabel, formatReportMonth } from '../../i18n/formatStats';
 import { weekdayInitials } from '../../i18n/format';
 import { chartBarsOf } from './CompletionSection';
 
@@ -24,7 +24,7 @@ export function reportTextsOf(report: MonthReport, options: { readonly currentYe
     filterLabel: t('stats.reportFilter', { filter: options.filterLabel }),
     tiles: [
       tasks.total > 0 ? { label: t('stats.tasksLabel'), value: String(tasks.done), sub: t('stats.tasksOf', { total: tasks.total }) } : { label: t('stats.tasksLabel'), value: noValue },
-      { label: t('stats.routinesLabel'), value: routinesPercent !== null ? `${String(routinesPercent)} %` : noValue },
+      { label: t('stats.routinesLabel'), value: formatPercentLabel(routinesPercent) },
       { label: t('stats.focusLabel'), value: formatFocusDuration(focusTotalMinutes(focus)) },
       goals ? { label: t('stats.goalsLabel'), value: String(goals.achieved), sub: t('stats.goalsOf', { total: goals.total }) } : { label: t('stats.goalsLabel'), value: noValue },
     ],
@@ -35,6 +35,6 @@ export function reportTextsOf(report: MonthReport, options: { readonly currentYe
     weekdays: weekdayInitials(),
     heatmap: report.heatmap ? { leadingBlanks: report.heatmap.leadingBlanks, cells: report.heatmap.cells.map((cell) => ({ day: cell.day, state: cell.state })) } : null,
     rates: report.routineRates.map((rate) => ({ title: rate.title, value: formatPercentLabel(rate.percent) })),
-    footer: t('stats.reportFooter', { date: options.today }),
+    footer: t('stats.reportFooter', { date: formatLongDate(options.today) }),
   };
 }

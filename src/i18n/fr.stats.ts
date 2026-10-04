@@ -58,6 +58,8 @@ export const statsFr = {
   exportReveal: 'Afficher dans le dossier',
   exportError: 'L’export a échoué (disque plein ou droits insuffisants). Aucun fichier n’a été laissé.',
   exportClose: 'Fermer',
+  exportRevealError: 'Impossible d’afficher le fichier dans le dossier.',
+  routinesNoProject: 'Les routines n’ont pas de projet : elles ne sont pas comptées sous un filtre de projet.',
   reportFilter: 'Espace : {filter}',
   reportFooter: 'CircleTasks · {date}',
 } as const;

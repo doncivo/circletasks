@@ -31,6 +31,9 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - ES-08 : écrans Statistiques et Focus par espace et projet, table `focus_session`.
 - Rapport mensuel global (H-01) ; aujourd'hui, seules la partie routines et l'accès aux tâches terminées existent.
 
+- Export H-03 : `ExportDialog` a sa propre fenêtre (portail + piège de focus) en attendant un composant `ui/Dialog` commun aux fenêtres et feuilles (ChoiceDialog, ConfirmDialog, Sheet) ; à factoriser.
+- Export H-03 : la lecture par blocs de `StatsRepository.listTasksForExport` trie sur `COALESCE(date, '9999-99-99')`, expression non indexée : SQLite retrie les lignes restantes à chaque page, donc le coût est quadratique en nombre de pages (500 lignes par page). Mesuré sous 2 s pour 5 000 tâches ; à reprendre avec un index d'expression ou une clé de tri stockée avant d'exporter beaucoup plus.
+
 ## Ordre 4 (synchro)
 
 - focus_session : une seule session active garantie par le code seulement ; à la fusion de synchro, clore la plus ancienne si deux sessions sont ouvertes.

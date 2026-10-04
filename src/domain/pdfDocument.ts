@@ -23,7 +23,7 @@ export function buildPdfWithJpeg(jpeg: Uint8Array, imageWidth: number, imageHeig
   // Titre en ASCII (sans accents ni parenthèses) : les chaînes d'un PDF sont en PDFDocEncoding, pas en UTF-8.
   const safeTitle = title
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^\x20-\x7e]/g, ' ')
     .replace(/[()\\]/g, '')
     .trim();

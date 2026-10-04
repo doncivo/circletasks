@@ -68,7 +68,20 @@ describe('CSV (H-03 critère 2)', () => {
     expect(csvCell('=SOMME(A1:A2)')).toBe("'=SOMME(A1:A2)");
     expect(csvCell('@mention')).toBe("'@mention");
     expect(csvCell('+33 6 00')).toBe("'+33 6 00");
-    expect(csvCell('-5 degrés')).toBe('-5 degrés');
+    expect(csvCell('-1+1')).toBe("'-1+1");
+    expect(csvCell("-2+3+cmd|' /C calc'!A0")).toBe("'-2+3+cmd|' /C calc'!A0");
+    expect(csvCell('＝1+1')).toBe("'＝1+1");
+    expect(csvCell('－1+1')).toBe("'－1+1");
+    expect(csvCell('\n=1')).toBe('"\'\n=1"');
+    expect(csvCell('-5 degrés')).toBe("'-5 degrés");
+    expect(csvCell('- point')).toBe("'- point");
+  });
+
+  it('un nombre négatif pur reste lisible', () => {
+    expect(csvCell('-5')).toBe('-5');
+    expect(csvCell('-2,5')).toBe('-2,5');
+    expect(csvCell('-2.5')).toBe('-2.5');
+    expect(csvCell('-5-')).toBe("'-5-");
   });
 
   it('objectif et répétition', () => {

@@ -54,6 +54,8 @@ export const statsEn: Messages['stats'] = {
   exportReveal: 'Show in folder',
   exportError: 'The export failed (disk full or missing permissions). No file was left behind.',
   exportClose: 'Close',
+  exportRevealError: 'Unable to show the file in its folder.',
+  routinesNoProject: 'Routines have no project: they are not counted under a project filter.',
   reportFilter: 'Space: {filter}',
   reportFooter: 'CircleTasks · {date}',
 };

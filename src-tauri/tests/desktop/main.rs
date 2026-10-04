@@ -7,6 +7,7 @@ mod backup;
 mod capture;
 mod calendars;
 mod config;
+mod export;
 mod focus;
 mod logic;
 mod ocr;

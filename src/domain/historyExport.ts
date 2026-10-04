@@ -11,7 +11,7 @@ import type { IsoDateTime, LocalDate } from './types';
 export const EXPORT_SCHEMA_VERSION = 1;
 
 /** Marque d'ordre des octets UTF-8 : Excel ouvre ainsi le CSV avec les accents corrects. */
-export const CSV_BOM = '﻿';
+export const CSV_BOM = '\uFEFF';
 export const CSV_SEPARATOR = ';';
 
 /** En-têtes du CSV : les six premières colonnes sont le format d'import de P-07. Identifiants de format, jamais traduits. */
@@ -80,12 +80,20 @@ export function recurrenceCode(rule: ExportRecurrence | null): string {
 }
 
 /**
- * Une cellule dont le début serait lu comme une formule par un tableur (« = », « + », « @ », tabulation, retour chariot) est précédée d'une
- * apostrophe (injection de formule CSV). Le signe « - » seul n'est pas touché (« -5 degrés », « - point » restent tels quels).
+ * Une cellule dont le début serait lu comme une formule par un tableur (« = », « + », « @ », « - », tabulation, retour chariot ou à la
+ * ligne, variantes pleine chasse) est précédée d'une apostrophe (injection de formule CSV). Seul un nombre négatif pur (« -5 », « -2,5 »)
+ * reste tel quel ; « -5 degrés » reçoit l'apostrophe. L'import (P-07) devra retirer cette apostrophe.
  */
 function neutralizeFormula(value: string): string {
-  return /^[=+@\t\r]/.test(value) ? `'${value}` : value;
+  if (FORMULA_START.test(value)) return `'${value}`;
+  return DASH_START.test(value) && !PURE_NEGATIVE_NUMBER.test(value) ? `'${value}` : value;
 }
+
+/** Début de formule : = + @, tabulation, retours à la ligne, et leurs variantes pleine chasse (＝ ＋ ＠) que certains tableurs normalisent. */
+const FORMULA_START = /^[=+@\t\r\n＝＋＠]/;
+/** Le signe moins (- ou －) lance aussi une formule (« -2+3+cmd|… »), sauf si la cellule entière est un nombre négatif. */
+const DASH_START = /^[-－]/;
+const PURE_NEGATIVE_NUMBER = /^-\d+([.,]\d+)?$/;
 
 /** Cellule CSV : guillemets doublés, entourée de guillemets si elle contient « ; », un guillemet ou un retour à la ligne (conservé). */
 export function csvCell(value: string): string {
@@ -133,7 +141,7 @@ export function filterFileSuffix(spaceName: string | null): string {
   if (spaceName === null) return '';
   const slug = spaceName
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');

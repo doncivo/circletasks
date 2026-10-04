@@ -1,5 +1,5 @@
 import { Download } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ExportKind } from '../../domain/historyExport';
 import { t } from '../../i18n';
@@ -58,19 +58,27 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
   const [period, setPeriod] = useState<ExportPeriod>('all');
   const [status, setStatus] = useState<'idle' | 'busy' | 'error'>('idle');
   const history = kind === 'csv' || kind === 'json';
+  // Fermer pendant l'export abandonne la suite : ni « Enregistrer sous », ni message de réussite.
+  const abandoned = useRef(false);
+  const close = (): void => {
+    abandoned.current = true;
+    onClose();
+  };
 
   async function run(): Promise<void> {
     setStatus('busy');
     try {
       const request = await createExportFile(kind, period, context);
+      if (abandoned.current) return;
       const result = await files.save(request);
+      if (abandoned.current) return;
       if (!result.saved) {
         setStatus('idle');
         return;
       }
       onDone(result.path);
     } catch {
-      setStatus('error');
+      if (!abandoned.current) setStatus('error');
     }
   }
 
@@ -121,7 +129,7 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
         <Button type="submit" disabled={status === 'busy'}>
           {t('stats.exportRun')}
         </Button>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={close}>
           {t('common.cancel')}
         </Button>
       </div>
@@ -129,9 +137,9 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
   );
 
   return layout === 'pc' ? (
-    <Window onClose={onClose}>{body}</Window>
+    <Window onClose={close}>{body}</Window>
   ) : (
-    <Sheet open onClose={onClose} label={t('stats.exportTitle')}>
+    <Sheet open onClose={close} label={t('stats.exportTitle')}>
       {body}
     </Sheet>
   );

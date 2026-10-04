@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { newEntityId } from '../../domain/id';
@@ -196,6 +196,32 @@ describe('Rapport du mois (H-01)', () => {
     const rates = screen.getByRole('list', { name: 'Taux du mois par routine' });
     expect(within(rates).getByText('Faire mon lit')).toBeInTheDocument();
     expect(within(rates).queryByText('Ancienne')).toBeNull();
+  });
+
+  it('le rapport se rafraîchit quand une tâche change (révision des données)', async () => {
+    await task(h, '2026-09-02', true);
+    renderReport(h);
+    await tile('Tâches faites : 1 sur 1');
+    await task(h, '2026-09-03', false);
+    const added = await h.container.data.repos.tasks.getById('70000000-0000-4000-8000-000000000002' as never);
+    act(() => h.container.taskEntities.publish(added ? [added] : []));
+    await tile('Tâches faites : 1 sur 2');
+  });
+
+  it('sans routine, la section indique « Aucune routine à afficher pour ce mois. »', async () => {
+    await task(h, '2026-09-02', true);
+    renderReport(h);
+    expect(await screen.findByText('Aucune routine à afficher pour ce mois.')).toBeInTheDocument();
+  });
+
+  it('entrée Routines sous un filtre de projet : une ligne explique que les routines n’ont pas de projet', async () => {
+    await h.db.driver.execute("INSERT INTO project (id, space_id, name, color, sort_order, created_at, updated_at, device_id, hlc) VALUES ('10000000-0000-4000-8000-0000000000f1', ?, 'Mission client', '#2f6b7a', 1, 'z', 'z', 'd', 'h')", [SPACE_PRO_ID]);
+    useAppStore.getState().setProjects(await h.container.data.repos.projects.listForFilter('all', { includeArchived: true }));
+    useAppStore.setState({ spaceFilter: SPACE_PRO_ID, projectFilter: '10000000-0000-4000-8000-0000000000f1' as never });
+    await task(h, '2026-09-02', true, SPACE_PRO_ID, '10000000-0000-4000-8000-0000000000f1');
+    renderReport(h, { entry: 'routines' });
+    expect(await screen.findByTestId('routines-no-project')).toHaveTextContent('Les routines n’ont pas de projet');
+    expect(screen.queryByRole('group', { name: 'ROUTINES — JOURS COMPLÉTÉS' })).toBeNull();
   });
 
   it('critère 10 : ouvert depuis les Routines, le rapport défile jusqu’à la section routines et « Retour » ramène aux Routines', async () => {

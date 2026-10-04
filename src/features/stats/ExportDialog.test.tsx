@@ -130,6 +130,45 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
     expect(screen.queryByText('Historique exporté')).toBeNull();
   });
 
+  it('fermer pendant l’export ne rouvre pas « Enregistrer sous » et n’affiche pas « Historique exporté » (revue)', async () => {
+    renderReport();
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(files.saved).toHaveLength(0);
+    expect(screen.queryByText('Historique exporté')).toBeNull();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('fermer pendant « Enregistrer sous » n’affiche pas « Historique exporté »', async () => {
+    let release: (() => void) | undefined;
+    const slow = {
+      ...files,
+      save: (request: Parameters<MemoryFiles['save']>[0]) =>
+        new Promise<{ saved: boolean; path?: string }>((resolve) => {
+          release = () => resolve({ saved: true, path: `C:\\Export\\${request.suggestedName}` });
+        }),
+    };
+    renderReport(slow as MemoryFiles);
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+    await waitFor(() => expect(release).toBeDefined());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+    release?.();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(screen.queryByText('Historique exporté')).toBeNull();
+  });
+
+  it('« Afficher dans le dossier » refusé : message clair, sans planter', async () => {
+    const failing = { ...files, reveal: () => Promise.reject(new Error('refusé')) };
+    renderReport(failing as MemoryFiles);
+    const dialog = await openDialog();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Afficher dans le dossier' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’afficher le fichier dans le dossier.');
+  });
+
   it('critère 10 : sans enregistrement de fichier possible (iPhone), le bouton « Exporter » n’apparaît pas', async () => {
     renderReport(createMemoryFiles({ canSave: false }));
     await screen.findByRole('heading', { level: 1, name: 'septembre' });

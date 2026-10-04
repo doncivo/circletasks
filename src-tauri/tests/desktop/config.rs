@@ -129,14 +129,41 @@ fn d02_2_autostart_uses_minimized_argument() {
     assert!(DESKTOP_SOURCE.contains("Some(vec![MINIMIZED_ARG])"));
 }
 
-#[test]
-fn export_capability_has_no_static_file_scope() {
-    // H-03 critère 7 : l'app n'écrit que le fichier choisi dans « Enregistrer sous » (le plugin dialog l'ajoute au périmètre à l'exécution).
-    let capability: Value = serde_json::from_str(include_str!("../../capabilities/export.json")).expect("capability valide");
-    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
-    let permissions = capability["permissions"].as_array().expect("permissions");
-    assert!(permissions.iter().all(|p| p.is_string()), "aucune permission à périmètre (allow/deny) : {permissions:?}");
-    let names: Vec<&str> = permissions.iter().filter_map(Value::as_str).collect();
-    assert!(names.contains(&"dialog:allow-save") && names.contains(&"fs:allow-write-file"));
-    assert!(!names.iter().any(|n| n.contains("read") || n.contains("scope") || *n == "fs:default"), "{names:?}");
+fn permissions_of(capability: &str) -> Vec<String> {
+    let value: Value = serde_json::from_str(capability).expect("capability valide");
+    value["permissions"]
+        .as_array()
+        .expect("permissions")
+        .iter()
+        .map(|p| p.as_str().map(str::to_owned).unwrap_or_else(|| p["identifier"].as_str().unwrap_or_default().to_owned()))
+        .collect()
 }
+
+/// H-03 critère 7 : l'export passe par deux commandes Rust ; la WebView n'a aucune permission de plugin dialog, fs ni opener pour écrire.
+#[test]
+fn export_capability_grants_only_the_two_export_commands_to_the_main_window_on_windows() {
+    let capability: Value = serde_json::from_str(include_str!("../../capabilities/export.json")).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
+    let mut names = permissions_of(include_str!("../../capabilities/export.json"));
+    names.sort();
+    assert_eq!(names, ["allow-export-save-file", "allow-reveal-exported-file"]);
+}
+
+/// Les fenêtres secondaires (capture rapide, Focus) n'ont aucun accès aux fichiers, aux boîtes système ni à l'ouverture d'adresses.
+#[test]
+fn secondary_window_capabilities_have_no_fs_dialog_or_opener_permission() {
+    for (name, text) in [("capture", include_str!("../../capabilities/capture.json")), ("focus", include_str!("../../capabilities/focus.json"))] {
+        for permission in permissions_of(text) {
+            assert!(!["fs:", "dialog:", "opener:"].iter().any(|prefix| permission.starts_with(prefix)), "{name} : {permission}");
+        }
+    }
+}
+
+/// Pas de plugin fs côté WebView : ni crate fs, ni enregistrement du plugin.
+#[test]
+fn no_fs_plugin_is_registered_for_the_webview() {
+    assert!(!CARGO.contains("tauri-plugin-fs"));
+    assert!(!DESKTOP_SOURCE.contains("tauri_plugin_fs"));
+}
+
