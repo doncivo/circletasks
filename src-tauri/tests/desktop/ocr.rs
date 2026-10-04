@@ -199,18 +199,43 @@ fn a_tiny_image_declaring_huge_dimensions_is_refused() {
     if !french_pack_installed() {
         return;
     }
-    let mut bmp = vec![0u8; 54];
-    bmp[0] = b'B';
-    bmp[1] = b'M';
-    bmp[2..6].copy_from_slice(&54u32.to_le_bytes());
-    bmp[10..14].copy_from_slice(&54u32.to_le_bytes());
-    bmp[14..18].copy_from_slice(&40u32.to_le_bytes());
-    bmp[18..22].copy_from_slice(&30_000i32.to_le_bytes());
-    bmp[22..26].copy_from_slice(&30_000i32.to_le_bytes());
-    bmp[26..28].copy_from_slice(&1u16.to_le_bytes());
-    bmp[28..30].copy_from_slice(&24u16.to_le_bytes());
+    // PNG valide de quelques dizaines d'octets dont l'en-tête IHDR déclare 30 000 × 30 000 pixels :
+    // le décodeur Windows le lit, le contrôle des dimensions doit le refuser avant toute conversion.
+    // (Un BMP tronqué serait rejeté plus tôt comme format non pris en charge, sans exercer ce contrôle.)
+    let png = png_declaring(30_000, 30_000);
     let started = std::time::Instant::now();
-    let result = recognize_bytes(&bmp);
-    assert!(matches!(result, Err(OcrError::DimensionsTooLarge | OcrError::Engine(_) | OcrError::UnsupportedFormat)), "{result:?}");
+    let result = recognize_bytes(&png);
+    assert!(matches!(result, Err(OcrError::DimensionsTooLarge)), "{result:?}");
     assert!(started.elapsed().as_secs() < 5);
+}
+
+/// PNG minimal (signature, IHDR, IDAT d'un zlib vide, IEND) aux CRC corrects, déclarant `width` × `height`.
+fn png_declaring(width: u32, height: u32) -> Vec<u8> {
+    fn crc32(bytes: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFFu32;
+        for &b in bytes {
+            crc ^= u32::from(b);
+            for _ in 0..8 {
+                crc = if crc & 1 == 1 { (crc >> 1) ^ 0xEDB8_8320 } else { crc >> 1 };
+            }
+        }
+        !crc
+    }
+    fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+        let len = u32::try_from(data.len()).expect("bloc PNG trop grand");
+        out.extend_from_slice(&len.to_be_bytes());
+        let mut typed = kind.to_vec();
+        typed.extend_from_slice(data);
+        out.extend_from_slice(&typed);
+        out.extend_from_slice(&crc32(&typed).to_be_bytes());
+    }
+    let mut out = vec![0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+    let mut ihdr = Vec::with_capacity(13);
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]); // 8 bits, RGBA, compression, filtre, sans entrelacement
+    chunk(&mut out, b"IHDR", &ihdr);
+    chunk(&mut out, b"IDAT", &[0x78, 0x9C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01]);
+    chunk(&mut out, b"IEND", &[]);
+    out
 }
