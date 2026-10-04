@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import { ConfirmDialog, DatePrompt, DropdownSelect, Fab, SpacePills, useLayout } from '../../ui';
+import { ConfirmDialog, DatePrompt, DropdownSelect, EmptyState, Fab, SpacePills, useLayout } from '../../ui';
 import { checklistProgress } from '../../domain/checklistRules';
 import type { ChecklistId } from '../../domain/types';
 import { t } from '../../i18n';
@@ -174,10 +174,8 @@ export function ChecklistsScreen() {
       spaceName={spaces.find((space) => space.id === displayed.checklist.spaceId)?.name ?? null}
     />
   ) : status === 'ready' || projectFilter ? (
-    <div className="ct-checklists__empty">
-      <p className="ct-checklists__emptyText">{emptyMessage}</p>
-      {!projectFilter && layout === 'mobile' && <p className="ct-checklists__emptyHelp">{t('checklists.emptyHelp')}</p>}
-    </div>
+    // Sous un filtre de projet, aucune action : une checklist créée serait masquée par le filtre (P-06 critère 3).
+    <EmptyState screen="checklists" title={emptyMessage} {...(projectFilter ? {} : { action: { label: t('empty.createChecklist'), onClick: openCreate } })} />
   ) : null;
 
   const errors = (

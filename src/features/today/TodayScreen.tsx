@@ -17,7 +17,7 @@ import { useNavigationStore } from '../app/navigation';
 import { isListFocus, registerListNavigation } from '../app/listKeyboard';
 import { useQuickAddStore } from '../app/quickAdd';
 import { SearchButton } from '../search';
-import { SomedayButton } from '../someday';
+import { SomedayButton, useSomedayTasks } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayAddRow } from './TodayCreate';
@@ -167,6 +167,7 @@ export function TodayScreen() {
   const inlineInputRef = useRef<HTMLInputElement>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const defaultOffsets = useDefaultReminderOffsets();
+  const { count: somedayCount } = useSomedayTasks();
   const openCreate = useCallback((): void => {
     if (layout === 'pc') inlineInputRef.current?.focus();
     else setSheetOpen(true);
@@ -277,7 +278,15 @@ export function TodayScreen() {
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
-              <TodayEmpty message={emptyMessage} />
+              <TodayEmpty
+                message={emptyMessage}
+                somedayCount={somedayCount}
+                onOpenSomeday={() => {
+                  closeDetail();
+                  navigate({ tab: 'tasks', screen: 'someday' });
+                }}
+                onAdd={openCreate}
+              />
             )}
             <TodayListView
               list={list}

@@ -4,7 +4,7 @@ import type { ChecklistId, LocalDate } from '../../domain/types';
 import type { TodayEventEntry, TodayGoalEntry } from '../../domain/todayList';
 import { t } from '../../i18n';
 import { formatTime } from '../../i18n/format';
-import { Icon, IconView, resolveIconRefColor, spaceTextColor } from '../../ui';
+import { EmptyState, Icon, IconView, resolveIconRefColor, spaceTextColor } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
 import { bandCountdownTag } from '../events/bandCountdown';
 
@@ -151,23 +151,36 @@ export function TodayChecklists({
   );
 }
 
-/** État vide (Main-Vide.html) : phrase, trois pastilles décoratives, phrase d'aide. */
-export function TodayEmpty({ message }: { message: string }) {
+export interface TodayEmptyProps {
+  message: string;
+  /** Tâches « Un jour » du filtre actif : > 0, l'action ouvre « Un jour » ; sinon elle ouvre la saisie. */
+  somedayCount: number;
+  onOpenSomeday: () => void;
+  onAdd: () => void;
+}
+
+/**
+ * État vide d'Aujourd'hui (Main-Vide.html, P-06) : phrase, trois pastilles décoratives, phrase d'aide, action
+ * (« Ouvrir « Un jour » · N tâches » si N > 0, sinon « Ajouter une tâche »).
+ */
+export function TodayEmpty({ message, somedayCount, onOpenSomeday, onAdd }: TodayEmptyProps) {
+  const action =
+    somedayCount > 0
+      ? { label: somedayCount === 1 ? t('empty.openSomedayOne') : t('empty.openSomeday', { count: somedayCount }), onClick: onOpenSomeday }
+      : { label: t('empty.addTask'), onClick: onAdd };
   return (
-    <div className="ct-today-empty">
-      <p className="ct-today__empty">{message}</p>
-      <div className="ct-today-empty__icons" aria-hidden="true">
-        <span className="ct-today-empty__pill">
-          <Icon icon={BookOpen} size={30} color="var(--ct-color-icon-green)" />
-        </span>
-        <span className="ct-today-empty__pill">
-          <Icon icon={Sunrise} size={30} color="var(--ct-color-icon-amber)" />
-        </span>
-        <span className="ct-today-empty__pill">
-          <Icon icon={ShoppingCart} size={30} color="var(--ct-color-icon-amber)" />
-        </span>
-      </div>
-      <p className="ct-today-empty__help">{t('today.emptyHelp')}</p>
-    </div>
+    <EmptyState
+      className="ct-today-empty"
+      screen="today"
+      title={message}
+      icons={[
+        { icon: BookOpen, color: 'var(--ct-color-icon-green)' },
+        { icon: Sunrise, color: 'var(--ct-color-icon-amber)' },
+        { icon: ShoppingCart, color: 'var(--ct-color-icon-amber)' },
+      ]}
+      text={t('today.emptyHelp')}
+      action={action}
+    />
   );
 }
+

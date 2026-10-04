@@ -17,7 +17,7 @@ test.describe('N-02 — avances de rappel', () => {
 
   async function createTimed(page: Page, testInfo: { project: { name: string } }): Promise<void> {
     if (isPhone(testInfo)) {
-      await page.getByRole('button', { name: 'Ajouter' }).click();
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await dialog.getByLabel('Titre').fill('Appeler le notaire');
       const atTime = dialog.getByRole('checkbox', { name: 'À l’heure' });
@@ -63,7 +63,7 @@ test.describe('N-02 — avances de rappel', () => {
 
   test('sans heure, le bloc Rappel est grisé (critère 7)', async ({ page }, testInfo) => {
     test.skip(!isPhone(testInfo), 'Bloc Rappel de la feuille d’ajout : iPhone ; sur PC, la fiche n’édite pas les rappels sans heure.');
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     for (const name of ['À l’heure', '30 min', '1 heure']) {
       await expect(dialog.getByRole('checkbox', { name })).toHaveAttribute('aria-disabled', 'true');

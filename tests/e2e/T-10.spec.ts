@@ -31,7 +31,7 @@ const isIphone = (info: Info) => info.project.name === 'iphone';
 /** Crée une tâche mensuelle (le 23) : feuille « Nouvelle tâche » sur iPhone, « Répéter… » dans la fiche sur PC. */
 async function createMonthly(page: Page, info: Info, title: string): Promise<void> {
   if (isIphone(info)) {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('radio', { name: 'Mensuel' }).click();

@@ -74,12 +74,6 @@
   min-width: 0;
 }
 
-.ct-routines__empty {
-  margin: 0;
-  padding: var(--ct-space-4) var(--ct-space-1);
-  font-size: var(--ct-font-size-text-lg);
-  font-weight: var(--ct-font-weight-bold);
-}
 
 .ct-routines__error {
   margin: 0;

@@ -77,7 +77,7 @@ test.describe('OB-03 — rattacher une tâche à un objectif', () => {
     test.skip(!isPhone(testInfo), 'La feuille d’ajout est propre à l’iPhone ; sur PC, rattachement par la fiche');
     await openApp(page);
     await insertGoals(page, [{ title: 'Finaliser le PRD CircleTasks', weekStart: await browserWeek(page) }]);
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill('Écrire le plan');
     await attachSwitch(dialog).click();

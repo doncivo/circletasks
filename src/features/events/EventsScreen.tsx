@@ -8,7 +8,7 @@ import type { LocalDate, SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { sourceNames } from '../calendars/sourceNames';
 import { detectTimeZone } from '../../platform';
-import { Fab, Icon, Sheet, SpacePills, useLayout } from '../../ui';
+import { EmptyState, Fab, Icon, Sheet, SpacePills, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -139,7 +139,14 @@ export function EventsScreen() {
 
   const list = (
     <div ref={listRef} className="ct-events__list" role="region" aria-label={t('events.listLabel')} tabIndex={-1}>
-      {status === 'ready' && entries.length === 0 && <p className="ct-events__empty">{projectFilter ? t('events.emptyProject') : t('events.empty', { year })}</p>}
+      {status === 'ready' && entries.length === 0 && (
+        // Sous un filtre de projet, aucune action : un événement créé serait masqué par le filtre (P-06 critère 3).
+        <EmptyState
+          screen="events"
+          title={projectFilter ? t('events.emptyProject') : t('events.empty', { year })}
+          {...(projectFilter ? {} : { action: { label: t('empty.addEvent'), onClick: openAdd } })}
+        />
+      )}
       {groups.map((group) => (
         <section key={group.month} aria-labelledby={`ct-events-month-${group.month}`}>
           <h2 id={`ct-events-month-${group.month}`} className="ct-events__month">

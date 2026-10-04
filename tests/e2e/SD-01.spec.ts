@@ -78,7 +78,7 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
   test('iPhone : le bouton « + » ouvre la feuille avec « Un jour » présélectionné (critère 5)', async ({ page }, testInfo) => {
     test.skip(!isPhone(testInfo), 'Le bouton « + » de l’écran Un jour est propre à l’iPhone (PC : champ du panneau).');
     await openSomeday(page, testInfo);
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await expect(dialog.getByRole('button', { name: 'Un jour' })).toHaveAttribute('aria-pressed', 'true');
     await dialog.getByLabel('Titre').fill('Sans date depuis la feuille');

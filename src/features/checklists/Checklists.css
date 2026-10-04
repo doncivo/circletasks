@@ -455,24 +455,6 @@
 }
 
 /* --- États vide et erreur ------------------------------------------------------------------------------------------ */
-.ct-checklists__empty {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ct-space-2);
-  padding: var(--ct-space-4) var(--ct-space-1);
-}
-
-.ct-checklists__emptyText {
-  margin: 0;
-  font-size: var(--ct-font-size-text-lg);
-  font-weight: var(--ct-font-weight-bold);
-}
-
-.ct-checklists__emptyHelp {
-  margin: 0;
-  color: var(--ct-color-text-secondary);
-}
-
 .ct-checklists__error {
   margin: 0;
   padding: var(--ct-space-3) var(--ct-space-4);

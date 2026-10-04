@@ -1,3 +1,4 @@
+import { emptyEn } from './en.empty';
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { captureEn } from './en.capture';
@@ -597,6 +598,7 @@ export const en: Messages = {
   goals: goalsEn,
   someday: somedayEn,
   capture: captureEn,
+  empty: emptyEn,
   search: searchEn,
   shortcutsUi: shortcutsUiEn,
   shortcuts: {

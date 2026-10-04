@@ -80,7 +80,7 @@ describe('Recherche (RC-01)', () => {
     for (const text of ['facture', 'FACTURE', 'factüre', 'fact']) {
       await typeQuery(text);
       expect(await screen.findByText('Envoyer la', { exact: false }), text).toBeInTheDocument();
-      expect(screen.getAllByRole('heading', { level: 2 })[0], text).toHaveTextContent('Tâches · 3');
+      expect(within(screen.getByRole('dialog')).getAllByRole('heading', { level: 2 })[0], text).toHaveTextContent('Tâches · 3');
     }
   });
 
@@ -90,7 +90,7 @@ describe('Recherche (RC-01)', () => {
     await h.db.driver.execute(`INSERT INTO checklist_item (id, checklist_id, text, sort_order, created_at, updated_at, device_id, hlc) VALUES ('i2', 'c1', 'Facture de mars', 2, ${STAMP})`);
     await openSearch();
     await typeQuery('facture');
-    const headings = screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
+    const headings = within(screen.getByRole('dialog')).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toEqual(['Tâches · 3', 'Checklists · 1', 'Événements · 1']);
     expect(screen.getByText('5 résultats')).toBeInTheDocument();
     expect(document.querySelector('.ct-search__count')).toHaveAttribute('aria-live', 'polite');
@@ -121,7 +121,7 @@ describe('Recherche (RC-01)', () => {
     await openSearch();
     await typeQuery('f');
     expect(screen.getByText('Tapez au moins 2 caractères')).toBeInTheDocument();
-    expect(screen.queryAllByRole('heading', { level: 2 })).toHaveLength(0);
+    expect(within(screen.getByRole('dialog')).queryAllByRole('heading', { level: 2 })).toHaveLength(0);
     await typeQuery('xyz');
     expect(await screen.findByText('Aucun résultat pour « xyz »')).toBeInTheDocument();
     await typeQuery('');
@@ -190,6 +190,6 @@ describe('Recherche (RC-01)', () => {
     pressCtrlK();
     await screen.findByRole('dialog', { name: 'Recherche' });
     expect(searchField()).toHaveValue('');
-    expect(screen.queryAllByRole('heading', { level: 2 })).toHaveLength(0);
+    expect(within(screen.getByRole('dialog')).queryAllByRole('heading', { level: 2 })).toHaveLength(0);
   });
 });

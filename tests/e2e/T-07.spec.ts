@@ -16,7 +16,7 @@ type Info = { project: { name: string } };
 
 async function createTask(page: Page, testInfo: Info, title: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
@@ -80,7 +80,7 @@ test.describe('T-07 : tâches terminées', () => {
 
     await page.getByRole('button', { name: 'Période suivante' }).click();
     await expect(page.getByText('octobre 2026', { exact: true })).toBeVisible();
-    await expect(page.getByText('Aucune tâche terminée sur cette période')).toBeVisible();
+    await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: title })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Période précédente' }).click();
@@ -88,7 +88,7 @@ test.describe('T-07 : tâches terminées', () => {
 
     await page.getByRole('group', { name: 'Période' }).getByRole('button', { name: 'Jour', exact: true }).click();
     await page.getByRole('button', { name: 'Période précédente' }).click();
-    await expect(page.getByText('Aucune tâche terminée sur cette période')).toBeVisible();
+    await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
   });
 
   test('un jour passé : la tâche terminée hier se retrouve avec « précédent » (critères 3, 4)', async ({ page }, testInfo) => {
@@ -98,7 +98,7 @@ test.describe('T-07 : tâches terminées', () => {
     await page.clock.fastForward(13 * 3_600_000); // passé minuit : le 24 sept. à 01:00
     await openDoneScreen(page);
     await expect(page.getByText('24 sept.', { exact: true })).toBeVisible();
-    await expect(page.getByText('Aucune tâche terminée sur cette période')).toBeVisible();
+    await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Période précédente' }).click();
     await expect(page.getByText('23 sept.', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: title })).toBeVisible();
@@ -114,7 +114,7 @@ test.describe('T-07 : tâches terminées', () => {
     await expect(page.getByRole('button', { name: title })).toBeVisible();
     await page.getByRole('button', { name: 'Pro', exact: true }).click();
     await expect(page.getByRole('button', { name: title })).toHaveCount(0);
-    await expect(page.getByText('Aucune tâche terminée sur cette période')).toBeVisible();
+    await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Tout', exact: true }).click();
     await expect(page.getByRole('button', { name: title })).toBeVisible();
   });
@@ -127,7 +127,7 @@ test.describe('T-07 : tâches terminées', () => {
 
     await page.getByRole('checkbox', { name: `Rouvrir : ${title}` }).click();
     await expect(page.getByRole('button', { name: title })).toHaveCount(0);
-    await expect(page.getByText('Aucune tâche terminée sur cette période')).toBeVisible();
+    await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await expect(page.getByText(`« ${title} » rouverte`)).toBeVisible();
 
     await page.getByRole('button', { name: 'Annuler' }).click();

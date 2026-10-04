@@ -47,11 +47,6 @@
   color: var(--ct-color-text-secondary);
 }
 
-.ct-trash__empty {
-  margin: 0;
-  color: var(--ct-color-text-secondary);
-  font-size: var(--ct-font-size-text);
-}
 
 .ct-trash__error {
   margin: 0;

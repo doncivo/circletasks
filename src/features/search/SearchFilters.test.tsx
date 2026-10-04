@@ -82,7 +82,7 @@ describe('Filtres de la recherche (RC-02)', () => {
     await openAndSearch();
     await choose('Filtre Type : Tous', 'Checklists');
     expect(await screen.findByText('1 résultat')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Checklists · 1']);
+    expect(within(screen.getByRole('dialog')).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Checklists · 1']);
     expect(chip('Filtre Type : Checklists')).toBeInTheDocument();
   });
 
@@ -91,7 +91,7 @@ describe('Filtres de la recherche (RC-02)', () => {
     await openAndSearch();
     await choose('Filtre Statut : Tous', 'À faire');
     expect(await screen.findByText('3 résultats')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Tâches · 2', 'Objectifs · 1']);
+    expect(within(screen.getByRole('dialog')).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(['Tâches · 2', 'Objectifs · 1']);
     await choose('Filtre Statut : À faire', 'Fait');
     expect(await screen.findByText('1 résultat')).toBeInTheDocument();
     expect(screen.getByText('B', { exact: false, selector: 'span' })).toBeInTheDocument();

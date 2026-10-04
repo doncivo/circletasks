@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent as Reac
 import type { Task } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { DatePrompt, DragHandle, ListSkeleton } from '../../ui';
+import { DatePrompt, DragHandle, EmptyState, ListSkeleton } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { SomedayRow } from './SomedayRow';
 import { SomedaySchedule } from './SomedaySchedule';
@@ -32,6 +32,8 @@ export interface SomedayListProps {
   readonly openedTaskId: string | null;
   /** Squelette affiché (chargement de plus de 150 ms, A-09). */
   readonly showSkeleton: boolean;
+  /** Action de l'état vide (P-06) : amène à la saisie « Ajouter à « Un jour » » (focus du champ ou ouverture du champ du panneau). */
+  readonly onAddRequest: () => void;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface SomedayListProps {
  * Au clavier PC : ↑ / ↓ sélectionnent (la ligne sélectionnée est déployée), Entrée ouvre la fiche, Espace termine, Alt+↑ / Alt+↓
  * déplacent (SD-04). Mode édition (A-05) : rond de sélection, « − » et poignée ; vue compacte (A-06) : une ligne par tâche.
  */
-export function SomedayList({ view, state, openedTaskId, showSkeleton, zone }: SomedayListProps) {
+export function SomedayList({ view, state, openedTaskId, showSkeleton, zone, onAddRequest }: SomedayListProps) {
   const container = useAppContainer();
   const { tasks, layout } = view;
   const { edit, reorder, compact } = state;
@@ -91,7 +93,9 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton, zone }: S
       </div>
     );
   }
-  if (tasks.length === 0) return view.status === 'ready' ? <p className="ct-someday__empty">{view.emptyMessage}</p> : null;
+  if (tasks.length === 0) {
+    return view.status === 'ready' ? <EmptyState screen="someday" title={view.emptyMessage} action={{ label: t('empty.addSomeday'), onClick: onAddRequest }} /> : null;
+  }
 
   const pc = layout === 'pc';
   return (

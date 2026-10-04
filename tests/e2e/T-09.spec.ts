@@ -31,7 +31,7 @@ const isIphone = (info: Info) => info.project.name === 'iphone';
 /** Crée la tâche (saisie rapide) avec la répétition donnée par son libellé de radio (« Une fois » : aucune). */
 async function createTask(page: Page, info: Info, title: string, repeat: 'Une fois' | 'Hebdo' | 'Mensuel' | 'Annuel' = 'Une fois'): Promise<void> {
   if (isIphone(info)) {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await expect(dialog.getByRole('radio', { name: 'Une fois' })).toHaveAttribute('aria-checked', 'true');
@@ -76,7 +76,7 @@ test.describe('T-09 : récurrence des tâches', () => {
   test('Hebdo : le mercredi est proposé, on coche d’autres jours, la fiche résume la règle (critères 1, 6)', async ({ page }, info) => {
     const title = `Hebdo ${info.project.name}`;
     if (isIphone(info)) {
-      await page.getByRole('button', { name: 'Ajouter' }).click();
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await dialog.getByLabel('Titre').fill(title);
       await dialog.getByRole('radio', { name: 'Hebdo' }).click();
@@ -117,7 +117,7 @@ test.describe('T-09 : récurrence des tâches', () => {
     const custom = `Tous les 3 jours ${info.project.name}`;
     let scope: Locator;
     if (isIphone(info)) {
-      await page.getByRole('button', { name: 'Ajouter' }).click();
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       scope = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await scope.getByLabel('Titre').fill(custom);
     } else {

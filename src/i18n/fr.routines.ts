@@ -9,7 +9,7 @@ export const routinesFr = {
   helper: 'Gérez vos routines ici et cochez-les dans la liste du jour.',
   hintCheck: 'Cochez les routines dans la liste du jour ·',
   hintNew: 'nouvelle routine',
-  empty: 'Aucune routine pour l’instant. Créez-en une avec le bouton « + ».',
+  empty: 'Aucune routine pour l’instant.',
   loadError: 'Impossible de charger les routines.',
   saveError: 'Impossible d’enregistrer la routine.',
   listLabel: 'Liste des routines',

@@ -30,7 +30,7 @@ async function createTask(
   input: { title: string; date?: string; time?: string },
 ): Promise<void> {
   if (projectName === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(input.title);
     await setWheels(page, dialog, { ...(input.date ? { date: input.date } : {}), ...(input.time ? { time: input.time } : {}) });

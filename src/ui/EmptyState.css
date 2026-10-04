@@ -1,0 +1,59 @@
+/* EmptyState (P-06) : Main-Vide.html — titre 24 px 700, pastilles 64 px, texte 16 px secondaire, bouton contour 44 px. */
+.ct-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ct-space-4);
+  padding: var(--ct-space-6) var(--ct-space-1) var(--ct-space-2);
+}
+
+.ct-empty__title {
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: 1.5rem;
+  line-height: 1.3;
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text);
+}
+
+.ct-empty__icons {
+  display: flex;
+  gap: var(--ct-space-3);
+}
+
+.ct-empty__pill {
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-surface-input);
+}
+
+.ct-empty__text {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-empty__action {
+  min-height: 44px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  border: 2px solid var(--ct-color-text);
+  border-radius: 22px;
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: 0.9375rem;
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+.ct-empty__action:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

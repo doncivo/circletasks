@@ -30,7 +30,7 @@ test.describe('A-01 — liste du jour', () => {
   });
 
   test('l’état vide propose d’ajouter une tâche (critère 7)', async ({ page }) => {
-    await expect(page.getByText('Rien de prévu aujourd’hui.')).toBeVisible();
+    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toBeVisible();
     await expect(page.getByText(/Ajoutez une tâche ci-dessous/)).toBeVisible();
   });
 
@@ -40,7 +40,7 @@ test.describe('A-01 — liste du jour', () => {
     const row = rowOf(page, title);
     await expect(row).toContainText('09:00');
     await expect(row.locator('.ct-list-row__subtitle, .ct-list-row__meta')).toHaveText('09:00 · Pro');
-    await expect(page.getByText('Rien de prévu aujourd’hui.')).toHaveCount(0);
+    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toHaveCount(0);
   });
 
   test('le filtre d’espace limite la liste (critère 6)', async ({ page }, testInfo) => {

@@ -20,7 +20,7 @@ const AFTER_MIDNIGHT_MS = 20 * 60_000;
 
 async function createTask(page: Page, testInfo: Info, title: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();

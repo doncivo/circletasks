@@ -78,9 +78,9 @@ export async function insertEvents(page: Page, events: readonly DirectEvent[]): 
 /** Ligne de la liste Événements portant ce titre. */
 export const eventRow = (page: Page, title: string): Locator => page.locator('.ct-event-row').filter({ has: page.locator('.ct-event-row__title', { hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`) }) });
 
-/** Bouton « + » de l'onglet Événements. */
+/** Bouton « + » de l'onglet Événements (le bouton flottant ; l'état vide P-06 porte un autre bouton « Ajouter un événement »). */
 export const addEventButton = (page: Page, testInfo: { project: { name: string } }): Locator =>
-  page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true });
+  page.locator('.ct-fab').and(page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true }));
 
 /**
  * Désactive les deux calendriers de jours fériés (réglage `holidays.countries`, E-03) : les listes et la grille d'un test d'événements

@@ -78,11 +78,11 @@ test.describe('ES-03 — filtre Pro / Perso / Tout', () => {
   test('un filtre sans tâche l’indique (critère 6)', async ({ page }) => {
     await openApp(page);
     await pill(page, 'Pro').click();
-    await expect(page.getByText('Aucune tâche Pro aujourd’hui')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Aucune tâche Pro aujourd’hui' })).toBeVisible();
     await pill(page, 'Perso').click();
-    await expect(page.getByText('Aucune tâche Perso aujourd’hui')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Aucune tâche Perso aujourd’hui' })).toBeVisible();
     await pill(page, 'Tout').click();
-    await expect(page.getByText('Rien de prévu aujourd’hui.')).toBeVisible();
+    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toBeVisible();
   });
 
   test('PC : Ctrl+1 / Ctrl+2 / Ctrl+3 changent le filtre, liste focalisée comprise (critère 4)', async ({ page }, testInfo) => {

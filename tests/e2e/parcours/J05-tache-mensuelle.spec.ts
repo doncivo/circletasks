@@ -21,7 +21,7 @@ test('parcours 5 : créer une tâche mensuelle, la terminer, vérifier l’occur
   await openApp(page);
 
   if (isPhone(testInfo)) {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('radio', { name: 'Mensuel' }).click();

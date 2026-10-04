@@ -109,14 +109,6 @@
   color: var(--ct-color-text-secondary);
 }
 
-.ct-done__empty {
-  margin: 0;
-  padding: var(--ct-space-4) var(--ct-space-1);
-  font-family: var(--ct-font-text);
-  font-size: var(--ct-font-size-text-lg);
-  font-weight: var(--ct-font-weight-bold);
-  color: var(--ct-color-text);
-}
 
 .ct-done__error {
   margin: 0;

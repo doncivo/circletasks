@@ -7,7 +7,7 @@ import type { LocalDate, RoutineId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { formatDayAria, weekdayInitials } from '../../i18n/format';
 import { getFirstWeekday } from '../../i18n/formatPrefs';
-import { Icon, SpacePills } from '../../ui';
+import { EmptyState, Icon, SpacePills } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { DEFAULT_ROUTES, useNavigationStore } from '../app/navigation';
@@ -138,7 +138,9 @@ export function RoutinesMonthReport() {
         ))}
       </div>
 
-      {status === 'ready' && rates.length === 0 && <p className="ct-routines-month__empty">{t('routines.monthReport.empty')}</p>}
+      {status === 'ready' && rates.length === 0 && (
+        <EmptyState screen="routinesMonth" title={t('routines.monthReport.empty')} action={{ label: t('empty.openRoutines'), onClick: () => navigate(DEFAULT_ROUTES.routines) }} />
+      )}
       {rates.length > 0 && (
         <ul className="ct-routines-month__rates" aria-label={t('routines.monthReport.ratesLabel')}>
           {rates.map(({ routine, rate }) => (

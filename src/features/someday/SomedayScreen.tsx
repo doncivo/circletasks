@@ -1,5 +1,5 @@
 import { Undo2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
 import { CompactToggle, EditModeSwitch, Fab, Icon, SomedayIcon, useDelayedFlag, useLayout } from '../../ui';
@@ -41,12 +41,13 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
   const defaultOffsets = useDefaultReminderOffsets();
   const [sheetOpen, setSheetOpen] = useState(false);
   const showSkeleton = useDelayedFlag(view.status === 'loading', 150);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   // Ctrl+N : même feuille « Nouvelle tâche » que le bouton « + » (présélectionnée sur « Un jour »).
   useEffect(() => container.shortcuts.register('app.newTask', () => setSheetOpen(true)), [container]);
 
   return (
-    <div className="ct-someday" data-layout="mobile">
+    <div ref={rootRef} className="ct-someday" data-layout="mobile">
       <div className="ct-someday__topRow">
         <button type="button" className="ct-someday__iconButton" aria-label={t('someday.back')} onClick={onBack}>
           <Icon icon={Undo2} size={26} />
@@ -72,7 +73,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
       {view.errorKey && view.status === 'error' && <p className="ct-someday__error" role="alert">{t(view.errorKey)}</p>}
       {view.actionErrorKey && <p className="ct-someday__error" role="alert">{t(view.actionErrorKey)}</p>}
       <SomedayAddField onAdd={view.addInline} />
-      <SomedayList view={view} state={state} openedTaskId={null} showSkeleton={showSkeleton} />
+      <SomedayList view={view} state={state} openedTaskId={null} showSkeleton={showSkeleton} onAddRequest={() => rootRef.current?.querySelector<HTMLInputElement>('.ct-someday__addForm input')?.focus()} />
       <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday__bottomRow">
         <EditModeSwitch active={state.edit.editMode} onChange={state.edit.setEditMode} label={t('today.editMode')} />
