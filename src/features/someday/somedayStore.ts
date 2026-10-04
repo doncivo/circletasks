@@ -6,6 +6,7 @@ import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { LocalDate, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { CreateTaskError, CreateTaskInput } from '../tasks/taskUseCases';
 
@@ -80,6 +81,7 @@ function without(selection: ReadonlySet<TaskId>, ids: readonly TaskId[]): Readon
 
 export const somedayStore = defineFeatureStore<SomedayState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
+  const settingsUseCases = createSettingsUseCases(container);
   // Jeton de requête : le résultat d'un chargement dépassé par un plus récent est ignoré.
   let requestId = 0;
 
@@ -145,8 +147,7 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
       const previous = get().compact;
       set({ compact });
       try {
-        const stored = await container.data.repos.settings.get('view.compact');
-        await container.data.repos.settings.set('view.compact', { ...stored, someday: compact });
+        await settingsUseCases.setCompactView('someday', compact);
       } catch {
         set({ compact: previous, actionErrorKey: 'tasks.detailSaveError' });
       }

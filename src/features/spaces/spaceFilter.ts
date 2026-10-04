@@ -3,6 +3,7 @@ import { logDesktopFailure } from '../../platform';
 import { useAppStore } from '../app/appStore';
 import type { AppContainer } from '../app/container';
 import type { ShortcutRegistry } from '../app/shortcuts';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 
 /**
  * Filtre Pro / Perso / Tout (ES-03). Source de vérité unique : `useAppStore.spaceFilter`, lu par tous les écrans (jamais recopié dans
@@ -26,11 +27,12 @@ export async function restoreSpaceFilter(container: Pick<AppContainer, 'data'>):
 
 /** Mémorise chaque changement de filtre. Renvoie la fonction qui arrête l'écoute. Un échec d'écriture n'interrompt rien (filtre gardé en mémoire). */
 export function persistSpaceFilter(container: Pick<AppContainer, 'data'>): () => void {
+  const settings = createSettingsUseCases(container);
   let previous = useAppStore.getState().spaceFilter;
   return useAppStore.subscribe((state) => {
     if (state.spaceFilter === previous) return;
     previous = state.spaceFilter;
-    container.data.repos.settings.set('spaces.filter', state.spaceFilter).catch((error: unknown) => logDesktopFailure('space-filter-save', error));
+    settings.saveSpaceFilter(state.spaceFilter).catch((error: unknown) => logDesktopFailure('space-filter-save', error));
   });
 }
 

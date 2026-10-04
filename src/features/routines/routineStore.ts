@@ -5,6 +5,7 @@ import { groupDoneDates, pausesByRoutine, type DateInterval } from '../../domain
 import type { LocalDate, Result, RoutineId, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 import { createRoutineUseCases, type RoutineInput } from './routineUseCases';
 
 export type RoutinesStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -63,6 +64,7 @@ export interface RoutinesState {
 
 export const routinesStore = defineFeatureStore<RoutinesState>((container: AppContainer) => {
   const useCases = createRoutineUseCases(container);
+  const settingsUseCases = createSettingsUseCases(container);
   // Jeton de requête : le résultat d'un chargement dépassé par un plus récent est ignoré.
   let requestId = 0;
   let refreshId = 0;
@@ -113,8 +115,7 @@ export const routinesStore = defineFeatureStore<RoutinesState>((container: AppCo
       const previous = get().compact;
       set({ compact });
       try {
-        const stored = await container.data.repos.settings.get('view.compact');
-        await container.data.repos.settings.set('view.compact', { ...stored, routines: compact });
+        await settingsUseCases.setCompactView('routines', compact);
       } catch {
         set({ compact: previous, actionErrorKey: 'routines.saveError' });
       }
