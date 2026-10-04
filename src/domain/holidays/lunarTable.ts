@@ -10,7 +10,7 @@ import type { LocalDate } from '../types';
  * que l'utilisateur ne les a pas confirmées en saisissant la date officielle (saisie manuelle, `overridden`).
  * Seul le premier jour de chaque fête est inscrit (l'Aïd est chômé deux jours en Tunisie : le second jour n'est pas listé).
  *
- * MISE À JOUR ANNUELLE — ajouter l'année suivante AVANT la fin de l'année en cours ; un test (`lunarTable.test.ts`) échoue si l'année
+ * MISE À JOUR ANNUELLE — ajouter l'année suivante AVANT la fin de l'année en cours ; Réglages › Jours fériés avertit (sans bloquer) quand l'année
  * suivante n'est pas couverte. Au démarrage, la table de la base est rapprochée de celle-ci (`ensureHolidayTable`) : les dates
  * saisies à la main ne sont jamais écrasées.
  */

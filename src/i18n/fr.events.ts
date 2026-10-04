@@ -33,7 +33,7 @@ export const eventsFr = {
     allSaints: 'Toussaint',
     armistice: 'Armistice',
     christmas: 'Noël',
-    revolutionYouth: 'Fête de la Révolution et de la Jeunesse',
+    revolution: 'Fête de la Révolution',
     independence: 'Fête de l’Indépendance',
     martyrs: 'Fête des Martyrs',
     republic: 'Fête de la République',

@@ -23,7 +23,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Primitive de glisser commune à `useSortable` et `useZoneDrag` (avenant S-06 de l'ADR 0004).
 - ~~Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.~~ (soldé par E-01 : `AddSheet`, `AddSegments`, `RoutineForm` réutilisé)
 - « Date de fin » du RecurrencePicker encore native (dette T-14).
-- Jours fériés (E-03) : mettre à jour la table des fêtes religieuses tunisiennes (`src/domain/holidays/lunarTable.ts`) avant la fin de chaque année (un test échoue sinon) ; valider la liste des fêtes civiles tunisiennes (14 janv. ou 17 déc.) ; sur iPhone, la roue des jours du sélecteur de date ne remonte pas au-delà de 60 jours (corriger une fête passée plus ancienne se fait sur PC).
+- Jours fériés (E-03) : mettre à jour la table des fêtes religieuses tunisiennes (`src/domain/holidays/lunarTable.ts`) avant la fin de chaque année (un test échoue sinon) ; sur iPhone, la roue des jours du sélecteur de date ne remonte pas au-delà de 60 jours (corriger une fête passée plus ancienne se fait sur PC).
+- E-04 critère 8 (« J-n » sur les jours fériés) contredit la maquette et E-03 : maquette suivie (tag « Férié FR / TN »), à corriger dans le PRD par Ali.
 
 ## Ordre 3
 

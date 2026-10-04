@@ -10,9 +10,9 @@ import { easterSunday } from './easter';
  * France : fixes (1er janv., 1er mai, 8 mai, 14 juil., 15 août, 1er nov., 11 nov., 25 déc.) et calculés depuis Pâques (lundi de Pâques,
  * Ascension, lundi de Pentecôte). Métropole : ni Alsace-Moselle ni ponts (hors périmètre).
  *
- * Tunisie : fêtes civiles à date fixe — 1er janv., 14 janv. (Révolution et Jeunesse), 20 mars (Indépendance), 9 avr. (Martyrs),
- * 1er mai (Travail), 25 juil. (République), 13 août (Femme), 15 oct. (Évacuation). Liste à valider par Ali (le 14 janv. était la date de
- * la Révolution avant le décret de décembre 2021 qui célèbre le 17 déc. ; les fêtes religieuses sont lues dans la table annuelle).
+ * Tunisie : fêtes civiles à date fixe — 1er janv., 20 mars (Indépendance), 9 avr. (Martyrs), 1er mai (Travail), 25 juil. (République),
+ * 13 août (Femme), 15 oct. (Évacuation), 17 déc. (Révolution, seule date depuis le décret de 2021 qui a remplacé le 14 janv.) ; les fêtes
+ * religieuses sont lues dans la table annuelle.
  */
 export interface CalculatedHoliday {
   readonly country: HolidayCountry;
@@ -51,12 +51,12 @@ export function frenchHolidays(year: number): CalculatedHoliday[] {
 export function tunisianFixedHolidays(year: number): CalculatedHoliday[] {
   return [
     fixed('TN', year, 'newYear', 1, 1),
-    fixed('TN', year, 'revolutionYouth', 1, 14),
     fixed('TN', year, 'independence', 3, 20),
     fixed('TN', year, 'martyrs', 4, 9),
     fixed('TN', year, 'labourDay', 5, 1),
     fixed('TN', year, 'republic', 7, 25),
     fixed('TN', year, 'womenDay', 8, 13),
     fixed('TN', year, 'evacuation', 10, 15),
+    fixed('TN', year, 'revolution', 12, 17),
   ];
 }

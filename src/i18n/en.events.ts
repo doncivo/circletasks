@@ -33,7 +33,7 @@ export const eventsEn: Messages['events'] = {
     allSaints: 'All Saints’ Day',
     armistice: 'Armistice Day',
     christmas: 'Christmas Day',
-    revolutionYouth: 'Revolution and Youth Day',
+    revolution: 'Revolution Day',
     independence: 'Independence Day',
     martyrs: 'Martyrs’ Day',
     republic: 'Republic Day',
