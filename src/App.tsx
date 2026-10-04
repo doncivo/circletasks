@@ -18,7 +18,7 @@ import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
+import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
@@ -101,6 +101,7 @@ function AppShellContent() {
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />
+      {layout === 'pc' && <ShortcutsHelp />}
       {/* RC-03 : une tâche ouverte depuis la recherche passe par-dessus l'onglet courant. Aujourd'hui, la Semaine, Un jour, Terminées et
           Objectif rendent leur propre fiche ; les autres écrans (Routines, Événements, Checklists, Réglages, Rapport) en reçoivent une ici. */}
       {(route.tab === 'routines' || route.tab === 'events' || route.tab === 'checklists' || route.tab === 'settings' || (route.tab === 'tasks' && route.screen === 'report')) && <TaskDetail />}

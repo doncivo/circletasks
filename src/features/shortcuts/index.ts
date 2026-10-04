@@ -1,3 +1,4 @@
+export { ShortcutsHelp } from './ShortcutsHelp';
 export { ShortcutsSettingsSection } from './ShortcutsSettingsSection';
 export { registerEscapeFallback, registerShellShortcuts } from './registerShellShortcuts';
 export { quickCaptureStore, type QuickCaptureState, type QuickCaptureStatus } from './quickCaptureStore';

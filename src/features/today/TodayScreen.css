@@ -533,3 +533,16 @@
   background: var(--ct-color-surface);
   color: var(--ct-color-event-local-text);
 }
+
+/* P-08 : « Ctrl / raccourcis » cliquable, même aspect que le texte du pied. */
+.ct-today__hintButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}

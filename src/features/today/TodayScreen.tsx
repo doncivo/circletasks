@@ -312,6 +312,15 @@ export function TodayScreen() {
           {layout === 'pc' && (
             <span className="ct-today__hint">
               <Kbd keys="Ctrl+N" separator=" " /> {t('today.hintNewTask')}
+              {' · '}
+              <button
+                type="button"
+                className="ct-today__hintButton"
+                aria-label={t('shortcutsUi.openHelpLabel')}
+                onClick={() => useNavigationStore.getState().openOverlay({ kind: 'shortcutsHelp' })}
+              >
+                <Kbd keys="Ctrl+/" separator=" " /> {t('shortcutsUi.hintHelp')}
+              </button>
             </span>
           )}
           <Fab onClick={openCreate} label={t('common.add')} />
