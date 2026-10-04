@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Clock } from '../../domain/clock';
 import { setLocale } from '../../i18n';
-import type { FocusWindowClient, FocusWindowState } from '../../platform/focus';
+import { createHtmlAudioPlayer, type FocusWindowClient, type FocusWindowState, type SoundPlayer } from '../../platform/focus';
 import { FocusView } from './FocusView';
+import { focusChimeUrl } from './sounds';
 
 /**
  * Contenu de la mini-fenêtre PC (F-01 critère 3, D4) : une vue pilotée par événements, sans accès à la base. Elle reçoit la
  * photographie de la session de la fenêtre principale, recalcule le temps affiché depuis les horodatages avec sa propre horloge, et
  * renvoie ses ordres (pause, durée, arrêt, terminer la tâche) à la fenêtre principale, qui écrit.
  */
-export function FocusMiniWindow({ client, clock }: { readonly client: FocusWindowClient; readonly clock: Clock }) {
+export function FocusMiniWindow({ client, clock, player: injected }: { readonly client: FocusWindowClient; readonly clock: Clock; readonly player?: SoundPlayer }) {
+  // F-04 critère 2 : le son de fin est joué par la mini-fenêtre (élément Audio, volume du système) ; aucune notification Windows.
+  const player = useMemo(() => injected ?? createHtmlAudioPlayer(focusChimeUrl), [injected]);
   const [state, setState] = useState<FocusWindowState | null>(null);
   const [closeRequests, setCloseRequests] = useState(0);
 
@@ -40,5 +43,5 @@ export function FocusMiniWindow({ client, clock }: { readonly client: FocusWindo
   }, [client]);
 
   if (!state) return null;
-  return <FocusView state={state} variant="window" clock={clock} closeRequests={closeRequests} onAction={(action) => void client.send(action)} />;
+  return <FocusView state={state} variant="window" clock={clock} closeRequests={closeRequests} player={player} onAction={(action) => void client.send(action)} />;
 }

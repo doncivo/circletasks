@@ -48,6 +48,9 @@ export interface FocusUseCases {
   getOpen(): Promise<FocusSession | null>;
   /** Tâche (vivante) d'une session, null si elle a disparu. */
   getTask(taskId: TaskId): Promise<Task | null>;
+  /** F-04 critère 3 : réglage « Son de fin de session » (activé par défaut). */
+  endSoundEnabled(): Promise<boolean>;
+  setEndSound(enabled: boolean): Promise<void>;
   /** F-01 critère 12 : dernière durée choisie (25 min au départ). */
   lastDuration(): Promise<FocusDuration>;
   rememberDuration(duration: FocusDuration): Promise<void>;
@@ -111,6 +114,9 @@ export function createFocusUseCases(deps: FocusUseCaseDeps): FocusUseCases {
     async lastDuration() {
       return sanitizeFocusDuration(await data.repos.settings.get('focus.lastDuration'));
     },
+
+    endSoundEnabled: () => data.repos.settings.get('focus.endSound'),
+    setEndSound: (enabled) => data.repos.settings.set('focus.endSound', enabled),
 
     async rememberDuration(duration) {
       await data.repos.settings.set('focus.lastDuration', duration);

@@ -1,7 +1,8 @@
 import { createStore } from 'zustand';
-import { endAtMs, isElapsed, type FocusDuration } from '../../domain/focusSession';
+import { endAtMs, isElapsed, notificationFireAtMs, type FocusDuration } from '../../domain/focusSession';
 import type { FocusSession, Task } from '../../domain/model';
 import type { LocalTime, TaskId } from '../../domain/types';
+import { t } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createFocusUseCases, type FocusUseCases, type StartOutcome } from './focusUseCases';
 
@@ -31,6 +32,8 @@ export interface FocusState {
   readonly task: FocusTaskInfo | null;
   /** Dernière durée choisie (F-01 critère 12). */
   readonly duration: FocusDuration;
+  /** Son de fin de session activé (Réglages › TÂCHES, local, activé par défaut, F-04 critère 3). */
+  readonly endSound: boolean;
   /** Incrémenté à chaque fin à signaler par un son (F-04) ; reste inchangé pour une fin silencieuse (retour après fermeture). */
   readonly soundNonce: number;
   /** Incrémenté à chaque session close ou supprimée : relance les totaux affichés (F-03). */
@@ -53,8 +56,12 @@ export interface FocusState {
   checkElapsed(): Promise<void>;
   /** La tâche a pu être supprimée ou terminée ailleurs : relit sa fiche (la session continue, F-01 critère 10). */
   refreshTask(): Promise<void>;
-  /** Ferme l'écran de session terminée (F-04). */
+  /** Ferme l'écran de session terminée (F-04), la tâche reste inchangée. */
   dismissEnded(): void;
+  /** F-04 critère 4 : « Une autre session » : même durée, nouvelle session sur la même tâche. */
+  another(): Promise<void>;
+  /** F-04 critère 3 : interrupteur « Son de fin de session » (réglage local). */
+  setEndSound(enabled: boolean): void;
 }
 
 const MAX_TIMEOUT_MS = 2 ** 31 - 1;
@@ -67,7 +74,7 @@ function taskInfoOf(task: Task): FocusTaskInfo {
 
 function createFocusStore(container: AppContainer) {
   const useCases: FocusUseCases = createFocusUseCases(container);
-  const { clock } = container;
+  const { clock, focusEndScheduler: scheduler } = container;
 
   // Les actions s'exécutent l'une après l'autre : un tic de fin, un arrêt et une pause simultanés ne se marchent pas dessus.
   let chain: Promise<unknown> = Promise.resolve();
@@ -90,7 +97,24 @@ function createFocusStore(container: AppContainer) {
       endTimer = setTimeout(() => void get().checkElapsed(), delay);
     }
 
+    /**
+     * Notification de fin (iPhone, F-04 critères 8 et 9) : planifiée au lancement et à la reprise, annulée à la pause, à l'arrêt et à
+     * la fin ; recalculée à chaque changement de durée. Meilleur effort : un échec n'interrompt jamais la session.
+     */
+    function syncSchedule(): void {
+      const { session, task } = get();
+      if (!session) return;
+      const fireAt = notificationFireAtMs(session);
+      const work = fireAt === null ? scheduler.cancel(session.id) : scheduler.schedule(session.id, new Date(fireAt), task?.title ?? t('focus.windowTitle'));
+      void work.catch(() => undefined);
+    }
+
+    function cancelSchedule(sessionId: string): void {
+      void scheduler.cancel(sessionId).catch(() => undefined);
+    }
+
     function closed(session: FocusSession, minutes: number, silent: boolean): void {
+      cancelSchedule(session.id);
       set((s) => ({
         session: null,
         ended: { session, minutes },
@@ -124,23 +148,26 @@ function createFocusStore(container: AppContainer) {
       ended: null,
       task: null,
       duration: 25,
+      endSound: true,
       soundNonce: 0,
       revision: 0,
 
       restore: () =>
         serial(async () => {
           const duration = await useCases.lastDuration().catch((): FocusDuration => 25);
+          const endSound = await useCases.endSoundEnabled().catch(() => true);
           const outcome = await useCases.restore().catch(() => ({ status: 'none' as const }));
           if (outcome.status === 'open') {
-            set({ ready: true, duration, session: outcome.session, ended: null, task: await loadTask(outcome.session) });
+            set({ ready: true, duration, endSound, session: outcome.session, ended: null, task: await loadTask(outcome.session) });
             armEndTimer();
+            syncSchedule();
             // Terme dépassé depuis moins d'une minute : la fin se déroule normalement, avec son.
             if (isElapsed(outcome.session, clock.nowMs())) await closeIfElapsed();
           } else if (outcome.status === 'closed') {
-            set({ ready: true, duration, task: await loadTask(outcome.session) });
+            set({ ready: true, duration, endSound, task: await loadTask(outcome.session) });
             closed(outcome.session, outcome.minutes, true);
           } else {
-            set({ ready: true, duration });
+            set({ ready: true, duration, endSound });
           }
         }),
 
@@ -156,6 +183,7 @@ function createFocusStore(container: AppContainer) {
             if (outcome.status === 'unavailable') return 'unavailable';
             set({ session: outcome.session, ended: null, task: taskInfoOf(outcome.task), duration });
             armEndTimer();
+            syncSchedule();
             return 'started';
           } catch {
             return 'error';
@@ -171,6 +199,7 @@ function createFocusStore(container: AppContainer) {
           const updated = await useCases.setDuration(session, duration);
           set({ session: updated });
           armEndTimer();
+          syncSchedule();
           // Temps restant ≤ 0 avec la nouvelle durée : la session se termine (F-01 critère 4, F-04).
           if (isElapsed(updated, clock.nowMs())) await closeIfElapsed();
         }),
@@ -180,8 +209,9 @@ function createFocusStore(container: AppContainer) {
           const { session } = get();
           if (!session || session.pausedAt !== null) return;
           set({ session: await useCases.pause(session) });
-          // En pause, aucune fin n'est attendue : le réveil est annulé, il est recalculé à la reprise (critère 8).
+          // En pause, aucune fin n'est attendue : le réveil et la notification sont annulés, recalculés à la reprise (F-02 critère 8).
           armEndTimer();
+          syncSchedule();
         }),
 
       resume: () =>
@@ -190,6 +220,7 @@ function createFocusStore(container: AppContainer) {
           if (!session || session.pausedAt === null) return;
           set({ session: await useCases.resume(session) });
           armEndTimer();
+          syncSchedule();
         }),
 
       stop: () =>
@@ -197,6 +228,7 @@ function createFocusStore(container: AppContainer) {
           const { session } = get();
           if (!session) return;
           await useCases.stop(session);
+          cancelSchedule(session.id);
           set((s) => ({ session: null, ended: null, task: null, revision: s.revision + 1 }));
           armEndTimer();
         }),
@@ -206,6 +238,7 @@ function createFocusStore(container: AppContainer) {
           const { session, ended } = get();
           if (session) {
             await useCases.finishWithTask(session);
+            cancelSchedule(session.id);
           } else if (ended?.session.taskId) {
             // État « Session terminée » (F-04) : la session est déjà enregistrée, seule la tâche reste à terminer.
             const task = await useCases.getTask(ended.session.taskId);
@@ -229,6 +262,31 @@ function createFocusStore(container: AppContainer) {
       },
 
       dismissEnded: () => set({ ended: null, task: null }),
+
+      another: () =>
+        serial(async () => {
+          const { ended } = get();
+          if (!ended?.session.taskId) return;
+          try {
+            // Même durée que la session qui vient de se terminer (critère 4), sans changer la durée mémorisée.
+            const outcome = await useCases.start(ended.session.taskId, ended.session.plannedMin === 25 || ended.session.plannedMin === 50 || ended.session.plannedMin === 90 ? ended.session.plannedMin : null);
+            if (outcome.status === 'started') {
+              set({ session: outcome.session, ended: null, task: taskInfoOf(outcome.task) });
+              armEndTimer();
+              syncSchedule();
+            } else {
+              // Tâche supprimée ou terminée entre-temps : il n'y a plus de session à relancer, l'écran se ferme.
+              set({ ended: null, task: null });
+            }
+          } catch {
+            set({ ended: null, task: null });
+          }
+        }),
+
+      setEndSound: (enabled) => {
+        set({ endSound: enabled });
+        void useCases.setEndSound(enabled).catch(() => undefined);
+      },
     };
   });
 }

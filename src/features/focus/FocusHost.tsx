@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { createHtmlAudioPlayer, type SoundPlayer } from '../../platform/focus';
 import { formatTime } from '../../i18n/format';
 import { getLocale } from '../../i18n';
 import type { FocusWindowAction, FocusWindowState } from '../../platform/focus';
@@ -9,6 +10,7 @@ import { useNavigationStore } from '../app/navigation';
 import { FocusView } from './FocusView';
 import { focusStore } from './focusStore';
 import { buildWindowState } from './focusViewModel';
+import { focusChimeUrl } from './sounds';
 
 /** Délai avant d'écrire la position de la mini-fenêtre après un déplacement (un déplacement émet de nombreux événements). */
 const POSITION_SAVE_DELAY_MS = 400;
@@ -29,6 +31,7 @@ export function FocusHost() {
   const ended = useFeatureStore(focusStore, (s) => s.ended);
   const task = useFeatureStore(focusStore, (s) => s.task);
   const soundNonce = useFeatureStore(focusStore, (s) => s.soundNonce);
+  const endSound = useFeatureStore(focusStore, (s) => s.endSound);
   const spaces = useAppStore((s) => s.spaces);
   const entities = useTaskEntities();
   const { focusWindow } = container;
@@ -75,12 +78,15 @@ export function FocusHost() {
       spaceName: space?.name ?? '',
       canFinishTask: live !== null && live.status === 'todo',
       today: { minutes: 0, sessions: 0 },
-      soundEnabled: false,
+      soundEnabled: endSound,
       soundNonce,
       endedMinutes: ended?.minutes ?? 0,
       locale: getLocale(),
     });
-  }, [openSession, live, space, soundNonce, ended]);
+  }, [openSession, live, space, soundNonce, endSound, ended]);
+
+  // Carillon embarqué (F-04 D4) : celui du conteneur en test, sinon un élément Audio créé à la première fin.
+  const player: SoundPlayer = useMemo(() => container.soundPlayer ?? createHtmlAudioPlayer(focusChimeUrl), [container]);
 
   const positionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleAction = useCallback(
@@ -104,6 +110,12 @@ export function FocusHost() {
           break;
         case 'elapsed':
           void state.checkElapsed();
+          break;
+        case 'another':
+          void state.another();
+          break;
+        case 'dismiss':
+          state.dismissEnded();
           break;
         case 'moved':
           // Position mémorisée (F-01 critère 3), écrite une fois le déplacement terminé.
@@ -159,5 +171,5 @@ export function FocusHost() {
 
   if (!viewState) return null;
   if (focusWindow) return null;
-  return <FocusView state={viewState} variant={layout === 'mobile' ? 'screen' : 'panel'} clock={container.clock} onAction={handleAction} />;
+  return <FocusView state={viewState} variant={layout === 'mobile' ? 'screen' : 'panel'} clock={container.clock} onAction={handleAction} player={player} />;
 }

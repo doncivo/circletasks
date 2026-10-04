@@ -1,6 +1,7 @@
 export { FocusHost } from './FocusHost';
 export { FocusLaunchButton } from './FocusLaunchButton';
 export { FocusMiniWindow } from './FocusMiniWindow';
+export { FocusSoundSetting } from './FocusSoundSetting';
 export { FocusView, type FocusVariant, type FocusViewProps } from './FocusView';
 export { FocusWindowRoot } from './FocusWindowRoot';
 export { launchFocus } from './focusActions';

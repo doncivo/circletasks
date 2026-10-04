@@ -6,6 +6,7 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { CalendarsSummaryRow } from '../calendars';
 import { HolidaysSummaryRow } from '../events';
+import { FocusSoundSetting } from '../focus/FocusSoundSetting';
 import { formatRecapSummary } from '../reminders';
 import { ShortcutsSettingsSection } from '../shortcuts';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
@@ -109,6 +110,8 @@ export function SettingsScreen() {
           disabled={status !== 'ready' && status !== 'error'}
         />
       </div>
+      {/* M10 (F-04) : son de fin de session, local à l'appareil. */}
+      <FocusSoundSetting />
       <HolidaysSummaryRow />
       <h2 className="ct-settings__section">{t('reminders.sectionTitle')}</h2>
       <button

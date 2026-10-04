@@ -3,6 +3,8 @@ import type { FocusWindowClient, FocusWindowPlatform } from './types';
 
 export * from './constants';
 export { createMemoryFocusWindow, type MemoryFocusWindow } from './memory';
+export { createFakeFocusEndScheduler, createNoopFocusEndScheduler, type FakeFocusEndScheduler, type FakeSchedulerCall } from './endScheduler';
+export { createFakeSoundPlayer, createHtmlAudioPlayer, type FakeSoundPlayer } from './sound';
 export type {
   FocusPhase,
   FocusEndScheduler,

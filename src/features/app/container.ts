@@ -5,7 +5,7 @@ import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
-import type { FocusWindowPlatform } from '../../platform/focus';
+import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
@@ -36,6 +36,10 @@ export interface AppContainer {
   readonly calendars: CalendarPlatform;
   /** Mini-fenêtre Focus du PC (F-01, toujours au premier plan) ; null hors PC : la session s'affiche alors dans la fenêtre principale. */
   readonly focusWindow: FocusWindowPlatform | null;
+  /** Notification locale de fin de session (iPhone, F-04) : contrat seul à l'ordre 3, implémentation vide ; l'envoi réel est de l'ordre 5. */
+  readonly focusEndScheduler: FocusEndScheduler;
+  /** Son de fin de session (F-04) ; null : carillon embarqué par défaut (élément Audio). */
+  readonly soundPlayer: SoundPlayer | null;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -53,6 +57,8 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     desktop: parts.desktop ?? null,
     calendars: parts.calendars ?? createMemoryCalendarPlatform(PRODUCTION_ENDPOINTS),
     focusWindow: parts.focusWindow ?? null,
+    focusEndScheduler: parts.focusEndScheduler ?? createNoopFocusEndScheduler(),
+    soundPlayer: parts.soundPlayer ?? null,
   };
 }
 
