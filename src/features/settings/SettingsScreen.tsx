@@ -13,6 +13,7 @@ import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
 import { BackupRow } from './BackupRow';
 import { ImportRow } from './ImportRow';
+import { SampleDataRow } from './SampleDataRow';
 import { formatAppearanceParts } from './AppearanceScreen';
 import { formatTabsSummary, useVisibleTabCount } from './TabsScreen';
 import { settingsStore } from './settingsStore';
@@ -134,6 +135,7 @@ export function SettingsScreen() {
       {/* M12 (P-04) : sauvegarde automatique quotidienne et restauration. */}
       <BackupRow />
       <ImportRow />
+      <SampleDataRow />
       <div className="ct-settings__row">
         <span>{t('settings.trash')}</span>
         <Button

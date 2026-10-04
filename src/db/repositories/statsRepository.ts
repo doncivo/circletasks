@@ -27,6 +27,11 @@ export interface StatsRepository {
    */
   goalCounts(query: StatsQuery): Promise<GoalsCount>;
   /**
+   * P-05 critère 1 : la base contient-elle déjà une tâche, une routine, un événement ou une checklist (supprimés compris : l'utilisateur
+   * s'en est servi) ? Faux sur une base neuve : le premier lancement ouvre l'assistant.
+   */
+  hasAnyContent(): Promise<boolean>;
+  /**
    * H-01 critère 2 : date de la plus ancienne donnée (tâche datée hors « Un jour », validation de routine, objectif, session Focus
    * terminée), tous espaces confondus ; null si la base est vide.
    */

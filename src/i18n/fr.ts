@@ -15,6 +15,7 @@ import { eventsFr } from './fr.events';
 import { shortcutsUiFr } from './fr.shortcuts';
 import { backupFr } from './fr.backup';
 import { importCsvFr } from './fr.importCsv';
+import { onboardingFr } from './fr.onboarding';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -614,6 +615,7 @@ export const fr = {
   shortcutsUi: shortcutsUiFr,
   backup: backupFr,
   importCsv: importCsvFr,
+  onboarding: onboardingFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

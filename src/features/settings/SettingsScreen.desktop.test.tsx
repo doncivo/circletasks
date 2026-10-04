@@ -40,11 +40,12 @@ describe('SettingsScreen PC (D-02, D-03)', () => {
   });
 
   describe('démarrage avec Windows (D-02)', () => {
-    it('hors PC : pas de ligne « Démarrer avec Windows » ni de section À PROPOS (critère 1 ; GÉNÉRAL porte le fuseau de T-11)', async () => {
+    it('hors PC : pas de ligne « Démarrer avec Windows » ni de ligne de mise à jour (critère 1 ; GÉNÉRAL porte le fuseau de T-11 ; À PROPOS ne porte que le guide, P-05)', async () => {
       renderScreen(containerWith(null));
       await waitFor(() => expect(screen.getByRole('switch', { name: 'Reporter les tâches non faites' })).not.toBeDisabled());
       expect(screen.queryByRole('switch', { name: 'Démarrer avec Windows' })).not.toBeInTheDocument();
-      expect(screen.queryByText('À PROPOS')).not.toBeInTheDocument();
+      expect(screen.getByText('À PROPOS')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Rechercher une mise à jour' })).not.toBeInTheDocument();
     });
 
     it('sur PC : section GÉNÉRAL, interrupteur désactivé par défaut (critère 1)', async () => {

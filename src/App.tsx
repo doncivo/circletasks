@@ -23,7 +23,7 @@ import { FocusHost } from './features/focus';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { AppearanceScreen, ImportScreen, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
+import { AppearanceScreen, ImportScreen, OnboardingHost, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
@@ -111,6 +111,8 @@ function AppShellContent() {
     >
       <AppStatusBanner />
       <UpdateBanner />
+      {/* P-05 : assistant de premier lancement (base neuve, app installée). */}
+      <OnboardingHost />
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />

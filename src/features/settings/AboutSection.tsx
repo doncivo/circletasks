@@ -4,18 +4,20 @@ import { logDesktopFailure } from '../../platform';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { updaterStore } from '../updater';
+import { onboardingStore } from './onboardingStore';
 
 /**
- * Section « À PROPOS » du PC (Reglages.html, D-03 critères 6 et 7) : version installée,
- * « Rechercher une mise à jour » (résultat : « CircleTasks est à jour », « Impossible de
- * vérifier les mises à jour » ou le bandeau de mise à jour) et lien vers la dernière version.
- * Absente hors PC : l'iPhone se met à jour par SideStore (I-06).
+ * Section « À PROPOS » (Reglages.html, D-03 critères 6 et 7, P-05 critère 8). Sur PC : version installée, « Rechercher une mise à jour »
+ * (résultat : « CircleTasks est à jour », « Impossible de vérifier les mises à jour » ou le bandeau de mise à jour) et lien vers la dernière
+ * version. Partout (PC et iPhone) : « Revoir le guide de bienvenue », qui relance l'assistant sans toucher aux données. L'iPhone se met à
+ * jour par SideStore (I-06) : il n'y a pas de ligne de mise à jour.
  */
 export function AboutSection() {
   const container = useAppContainer();
   const desktop = container.desktop;
   const status = useFeatureStore(updaterStore, (s) => s.status);
   const check = useFeatureStore(updaterStore, (s) => s.check);
+  const relaunchGuide = useFeatureStore(onboardingStore, (s) => s.relaunch);
   const [version, setVersion] = useState<string | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
 
@@ -32,8 +34,6 @@ export function AboutSection() {
       active = false;
     };
   }, [desktop]);
-
-  if (!desktop) return null;
 
   const checking = status === 'checking';
   const hint =
@@ -56,30 +56,40 @@ export function AboutSection() {
   return (
     <>
       <h2 className="ct-settings__section">{t('settings.sectionAbout')}</h2>
-      <div className="ct-settings__row">
-        <span className="ct-settings__stack">
-          {version ? t('app.version', { version }) : t('app.name')}
-          {hint && (
-            <span className={status === 'checkFailed' ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
-              {hint}
+      {desktop && (
+        <>
+          <div className="ct-settings__row">
+            <span className="ct-settings__stack">
+              {version ? t('app.version', { version }) : t('app.name')}
+              {hint && (
+                <span className={status === 'checkFailed' ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
+                  {hint}
+                </span>
+              )}
             </span>
-          )}
-        </span>
-        <Button variant="secondary" onClick={() => void check()} disabled={checking} className="ct-settings__link">
-          {t('settings.checkUpdates')}
-        </Button>
-      </div>
-      <div className="ct-settings__row">
-        <span className="ct-settings__stack">
-          {t('settings.latestRelease')}
-          {openFailed && (
-            <span className="ct-settings__hint ct-settings__hint--danger" role="alert">
-              {t('settings.openReleaseError')}
+            <Button variant="secondary" onClick={() => void check()} disabled={checking} className="ct-settings__link">
+              {t('settings.checkUpdates')}
+            </Button>
+          </div>
+          <div className="ct-settings__row">
+            <span className="ct-settings__stack">
+              {t('settings.latestRelease')}
+              {openFailed && (
+                <span className="ct-settings__hint ct-settings__hint--danger" role="alert">
+                  {t('settings.openReleaseError')}
+                </span>
+              )}
             </span>
-          )}
-        </span>
-        <Button variant="secondary" ariaLabel={t('settings.latestReleaseOpenLabel')} onClick={openLatest} className="ct-settings__link">
-          {t('settings.latestReleaseOpen')}
+            <Button variant="secondary" ariaLabel={t('settings.latestReleaseOpenLabel')} onClick={openLatest} className="ct-settings__link">
+              {t('settings.latestReleaseOpen')}
+            </Button>
+          </div>
+        </>
+      )}
+      <div className="ct-settings__row">
+        <span>{t('onboarding.guideRow')}</span>
+        <Button variant="secondary" ariaLabel={t('onboarding.guideOpenLabel')} onClick={() => void relaunchGuide()} className="ct-settings__link">
+          {t('onboarding.guideOpen')}
         </Button>
       </div>
     </>
