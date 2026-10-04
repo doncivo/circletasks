@@ -31,3 +31,7 @@ Thumbs.db
 # Scripts locaux d'Ali (secrets), jamais suivis
 configurer-secrets-*.ps1
 *.secrets.ps1
+
+# Jetons et identifiants locaux, jamais suivis
+token.txt
+*.token
