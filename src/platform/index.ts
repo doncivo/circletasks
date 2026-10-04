@@ -1,6 +1,7 @@
 export { detectOs, detectRuntime, type OsFamily, type Runtime } from './runtime';
 export { openDatabase } from './database';
 export { detectTimeZone } from './timeZone';
+export * from './calendars';
 export {
   logDesktopFailure,
   openDesktopPlatform,

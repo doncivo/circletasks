@@ -7,6 +7,7 @@
 //! aucune migration n'est déclarée dans tauri-plugin-sql.
 
 pub mod backup;
+pub mod calendars;
 #[cfg(desktop)]
 pub mod desktop;
 

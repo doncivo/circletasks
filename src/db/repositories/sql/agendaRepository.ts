@@ -1,5 +1,5 @@
 import type { WriteStamper } from '../../../domain/hlc';
-import { encodeIcon, parseCalendars, parseIcon, type CalendarAccount, type CalendarEvent, type CalendarProvider, type EventPatch, type ExternalEvent, type NewEvent } from '../../../domain/model';
+import { encodeIcon, parseCalendars, parseIcon, type CalendarAccount, type CalendarEvent, type CalendarProviderKind, type EventPatch, type ExternalEvent, type NewEvent } from '../../../domain/model';
 import type { CalendarAccountId, EventId, ExternalEventId, IsoDateTime, LocalDate, LocalTime, SpaceFilter, SpaceId } from '../../../domain/types';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 import type { CalendarAccountRepository, EventRepository, ExternalEventRepository } from '../agendaRepository';
@@ -192,7 +192,7 @@ export function createCalendarAccountRepository(db: SqlExecutor): CalendarAccoun
       return rows.map(
         (row): CalendarAccount => ({
           id: row.id as CalendarAccountId,
-          provider: row.provider as CalendarProvider,
+          provider: row.provider as CalendarProviderKind,
           label: row.label,
           tokenRef: row.token_ref,
           calendars: parseCalendars(row.calendars),
