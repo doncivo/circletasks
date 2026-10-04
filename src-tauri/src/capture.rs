@@ -110,6 +110,13 @@ mod foreground {
     pub fn restore(_handle: isize) {}
 }
 
+/// Fenêtre au premier plan ET focus dans la page web : sans le second, le champ ne reçoit pas les frappes (WebView2).
+fn focus(window: &WebviewWindow) {
+    let _ = window.set_focus();
+    let webview: &tauri::Webview = window.as_ref();
+    let _ = webview.set_focus();
+}
+
 fn capture_window(app: &AppHandle) -> Option<WebviewWindow> {
     app.get_webview_window(CAPTURE_WINDOW)
 }
@@ -141,7 +148,7 @@ pub fn show(app: &AppHandle) {
     }
     center_on_active_monitor(app, &window);
     let _ = window.show();
-    let _ = window.set_focus();
+    focus(&window);
     let _ = app.emit_to(CAPTURE_WINDOW, SHOWN_EVENT, ());
 }
 
@@ -170,9 +177,7 @@ pub fn trigger(app: &AppHandle) {
     let focused = window.is_focused().unwrap_or(false);
     match toggle_action(visible, focused) {
         ToggleAction::Show => show(app),
-        ToggleAction::Focus => {
-            let _ = window.set_focus();
-        }
+        ToggleAction::Focus => focus(&window),
         ToggleAction::Hide => hide(app),
     }
 }
