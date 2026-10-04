@@ -103,7 +103,8 @@ describe('liste des raccourcis et réglage de la capture rapide (P-08, D-04)', (
       const focus = dialog.querySelector('[data-shortcut="list.focus"]');
       expect(focus?.textContent).toContain('Ctrl+Maj+F');
       expect(focus?.textContent).toContain('Contrôle plus Maj plus F');
-      expect(focus?.textContent).toContain('(bientôt)');
+      // F-01 : Ctrl+Maj+F est branché, plus de mention « (bientôt) » (il reste grisé hors d'une liste, comme les autres raccourcis de liste).
+      expect(focus?.textContent).not.toContain('(bientôt)');
     });
 
     it('affiche la combinaison de capture rapide réellement configurée (critère 3)', async () => {

@@ -224,6 +224,23 @@ describe('FocusHost : où la session s’affiche (F-01 critères 2, 3, 6, 9)', (
     expect(h.container.shortcuts.handle(key)).toBeNull();
   });
 
+  it('arrière-plan (iPhone) : la fin passée pendant que l’app dormait est constatée au retour au premier plan, sans aucun tic', async () => {
+    const { task } = await boot(390, false);
+    await act(async () => {
+      await launchFocus(h.container, task.id);
+    });
+    await screen.findByRole('timer');
+    // L'app part en arrière-plan : 40 minutes passent sans le moindre tic (ni intervalle ni minuterie ne s'exécute).
+    h.db.clock.advance(40 * MIN);
+    expect(screen.getByRole('timer')).toHaveTextContent('25:00'); // rien n'a été relu
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Session terminée · 25 min');
+    expect(screen.getByRole('timer')).toHaveTextContent('00:00');
+    expect((await h.db.driver.select<{ ended_at: string }>('SELECT ended_at FROM focus_session', []))[0]?.ended_at).toBe('2026-10-04T08:25:00.000Z');
+  });
+
   it('F-02 : la pause et la reprise de la mini-fenêtre sont écrites et republiées (phase paused puis running)', async () => {
     const { task } = await boot(1440, true);
     await act(async () => {

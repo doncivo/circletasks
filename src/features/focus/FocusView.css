@@ -9,6 +9,8 @@
   background: var(--ct-focus-bg);
   color: var(--ct-focus-on);
   font-family: var(--ct-font-text);
+  /* Focus.html n'a pas d'interligne imposé (normal) : l'interligne 1,4 du corps et le 1 des titres décalent la composition. */
+  line-height: normal;
   overflow: hidden;
 }
 
@@ -24,8 +26,8 @@
 .ct-focus--panel {
   width: 340px;
   height: 460px;
-  gap: 8px;
-  padding: 10px 16px 14px;
+  gap: 6px;
+  padding: 8px 16px 12px;
 }
 
 .ct-focus--panel {
@@ -98,6 +100,7 @@
   font-family: var(--ct-font-title);
   font-size: 36px;
   font-weight: 700;
+  line-height: normal;
   text-align: center;
   overflow-wrap: anywhere;
 }
@@ -122,9 +125,9 @@
 
 .ct-focus--window .ct-focus__ring,
 .ct-focus--panel .ct-focus__ring {
-  width: 200px;
-  height: 200px;
-  margin-top: 4px;
+  width: 180px;
+  height: 180px;
+  margin-top: 2px;
 }
 
 .ct-focus__ring svg {
@@ -239,7 +242,7 @@
 }
 
 .ct-focus__button {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: var(--ct-hit-target-min);
   height: 58px;
@@ -343,4 +346,35 @@
   margin: 0;
   font-size: 14px;
   color: var(--ct-focus-muted);
+}
+
+/* Session terminée dans la mini-fenêtre (340 × 460) : trois boutons empilés, anneau et temps réduits pour que tout reste visible. */
+.ct-focus--window.ct-focus--ended .ct-focus__ring,
+.ct-focus--panel.ct-focus--ended .ct-focus__ring {
+  width: 150px;
+  height: 150px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__time,
+.ct-focus--panel.ct-focus--ended .ct-focus__time {
+  font-size: 38px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__caption,
+.ct-focus--panel.ct-focus--ended .ct-focus__caption {
+  max-width: 110px;
+  font-size: 12px;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__stack,
+.ct-focus--panel.ct-focus--ended .ct-focus__stack {
+  gap: 8px;
+}
+
+.ct-focus--window.ct-focus--ended .ct-focus__button,
+.ct-focus--panel.ct-focus--ended .ct-focus__button {
+  height: 44px;
+  font-size: 14px;
 }

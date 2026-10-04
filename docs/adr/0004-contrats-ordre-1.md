@@ -159,3 +159,10 @@ Refactor sans changement de comportement ; contrats ajoutés ou retirés :
 - `src/i18n/formatPrefs.ts` : premier jour et format d'heure courants (valeur de module, comme `getLocale()`), lus au démarrage par `restoreAppearance` avant le premier rendu ; `src/domain/timeFormat.ts` (`formatTime`, `spokenTime`, `TimeFormat`) est le seul producteur d'heures affichées (test d'architecture) ; `weekStartOf(date, first = 'monday')` et `monthGrid(…, first)` prennent le premier jour, les objectifs / rapport / R-07 n'en passent pas.
 - `src/domain/tabs.ts` (`resolveTabs`, `moveTab`, `setTabHidden`, `isTabAvailable`) et `src/features/app/tabsConfig.ts` (store d'interface lu par la colonne et par `goToTab`, qui ignore un onglet masqué non actif).
 - `src/ui/dragPrimitive.ts` : seuil, type de pointeur, clic avalé après un glisser et écouteurs de fenêtre partagés par `useSortable` et `useZoneDrag` (dette soldée).
+
+## Avenant F-01 à F-04 : session Focus (2026-10-04)
+
+- Table `focus_session` (migration 0013) et `FocusSessionRepository` (`create`, `update`, `getOpen`, `getById`, `discard` ; agrégats F-03 `totals`, `totalsByTask`, `totalsForTask`). `paused_at` s'ajoute au schéma du PRD section 6 ; pas de `project_id` (ES-08).
+- Règle d'or : tout temps se calcule depuis `started_at`, `paused_sec`, `paused_at` et l'instant fourni par `Clock` (`src/domain/focusSession.ts`) ; jamais de compteur de tics. Les minuteries ne sont que des réveils (fin de session) et sont recalculées à chaque changement.
+- Conteneur : `focusWindow` (mini-fenêtre PC, `null` ailleurs), `focusEndScheduler` (contrat `schedule(sessionId, fireAt, title)` / `cancel(sessionId)`, implémentation vide, faux pour les tests ; envoi réel : ordre 5) et `soundPlayer` (carillon embarqué par défaut).
+- Réglages locaux : `focus.lastDuration`, `focus.endSound`, `focus.windowPosition`.

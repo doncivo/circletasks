@@ -58,7 +58,7 @@ test.describe('F-02 — pause et reprise', () => {
     const [am, as] = after.split(':').map(Number);
     const afterSeconds = (am ?? 0) * 60 + (as ?? 0);
     expect(left - afterSeconds).toBeLessThanOrEqual(3);
-    expect(afterSeconds).toBeLessThanOrEqual(left);
+    expect(afterSeconds).toBeLessThanOrEqual(left + 1); // la pause est arrondie à la seconde (F-02 critère 3)
   });
 
   test('arrêter une session en pause enregistre le temps actif seul : 9 min (critère 5)', async ({ page }) => {
