@@ -97,6 +97,10 @@
      --ct-color-space-perso (même famille de rouge), contraste suffisant sur blanc. */
   --ct-color-danger-bg: #f8e4e1;
   --ct-color-danger: #a1271c;
+  /* Lecture incertaine du scan (Scan.html : fond #FFF8E6, bordure #D9A441, texte #8A5A00). */
+  --ct-color-warning-bg: #fff8e6;
+  --ct-color-warning-border: #d9a441;
+  --ct-color-warning-text: #8a5a00;
   --ct-color-today-badge: #1f6698;
   --ct-space-white: 0%;
   --ct-color-event-bg: #eef4f7;
@@ -155,6 +159,9 @@
     --ct-color-missed-text: #f3a79a;
     --ct-color-danger-bg: #4a2420;
     --ct-color-danger: #f3a79a;
+    --ct-color-warning-bg: #3a2f14;
+    --ct-color-warning-border: #b8892f;
+    --ct-color-warning-text: #f0c674;
     --ct-color-today-badge: #8fc4ea;
     --ct-space-white: 55%;
   --ct-color-event-bg: #22334a;
@@ -174,6 +181,9 @@
 
 /* Réglages (ordre 1) : choix explicite du thème, prioritaire sur le système. */
 :root[data-theme='dark'] {
+  --ct-color-warning-bg: #3a2f14;
+  --ct-color-warning-border: #b8892f;
+  --ct-color-warning-text: #f0c674;
   --ct-color-bg: #1c1630;
   --ct-color-surface: #1c1630;
   --ct-color-surface-raised: #22334a;
@@ -215,6 +225,9 @@
 }
 
 :root[data-theme='light'] {
+  --ct-color-warning-bg: #fff8e6;
+  --ct-color-warning-border: #d9a441;
+  --ct-color-warning-text: #8a5a00;
   --ct-color-bg: #ffffff;
   --ct-color-surface: #ffffff;
   --ct-color-surface-raised: #faf9fc;

@@ -13,6 +13,7 @@ mkdirSync(OUT, { recursive: true });
 const PRINTED = ['Appeler le plombier', 'Acheter des ampoules', 'Réserver le restaurant samedi', 'Payer la cantine', 'Rendez-vous au garage'];
 const BULLETS = ['- Appeler le notaire demain 10h', '• Acheter du pain', '1. Envoyer la facture', '2. Réserver le dentiste', '[ ] Payer le loyer'];
 const HANDWRITTEN = ['plombier', 'ampoules', 'resto samedi', 'cantine', 'garage ?'];
+const SHEET = HANDWRITTEN.map((line) => `– ${line}`);
 
 function page({ lines, font, size = 44, rotate = 0, background = '#ffffff', color = '#111111', width = 900, extra = '' }) {
   const rows = lines.map((line) => `<div class="l">${line.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</div>`).join('');
@@ -31,6 +32,14 @@ const FILES = [
     name: 'liste-manuscrite.png',
     html: page({ lines: HANDWRITTEN, font: "'Ink Free', 'Segoe Script', cursive", size: 54, rotate: -2, background: '#fbf7ec', color: '#33406b' }),
     lines: HANDWRITTEN,
+    readable: false,
+  },
+  {
+    // Feuille portrait de Scan.html (vignette de la relecture) : 300 x 380, tirets et écriture script.
+    name: 'feuille-manuscrite.png',
+    viewport: { width: 300, height: 380 },
+    html: page({ lines: SHEET, font: "'Ink Free', 'Segoe Script', cursive", size: 30, background: '#fbf7ec', color: '#33406b', width: 300, extra: 'body{padding:28px 24px;line-height:1.75}' }),
+    lines: SHEET,
     readable: false,
   },
   {
@@ -55,6 +64,7 @@ const context = await browser.newContext({ viewport: { width: 900, height: 520 }
 const expected = {};
 for (const file of FILES) {
   const tab = await context.newPage();
+  await tab.setViewportSize(file.viewport ?? { width: 900, height: 520 });
   await tab.setContent(file.html);
   await tab.evaluate(() => document.fonts.ready);
   await tab.screenshot({ path: resolve(OUT, file.name), type: file.type ?? 'png', ...(file.type === 'jpeg' ? { quality: 82 } : {}) });

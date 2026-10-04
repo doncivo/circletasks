@@ -2,6 +2,7 @@ import { emptyEn } from './en.empty';
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { captureEn } from './en.capture';
+import { scanEn } from './en.scan';
 import { searchEn } from './en.search';
 import { appearanceEn } from './en.appearance';
 import { spacesEn } from './en.spaces';
@@ -598,6 +599,7 @@ export const en: Messages = {
   goals: goalsEn,
   someday: somedayEn,
   capture: captureEn,
+  scan: scanEn,
   empty: emptyEn,
   search: searchEn,
   shortcutsUi: shortcutsUiEn,

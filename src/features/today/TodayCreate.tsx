@@ -5,6 +5,7 @@ import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
 import { DatePicker, QuickInputField, QuickPreview, type Layout } from '../../ui';
 import { captureInputFrom, useQuickInput, type CaptureInput } from '../capture';
+import { ScanButton } from '../capture/scan/ScanButton';
 import { useEffectiveProjectFilter } from '../spaces';
 
 export interface TodayAddRowProps {
@@ -38,6 +39,8 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
 
   return (
     <div className="ct-today__addBlock">
+      {/* PC-Aujourdhui.html : « Scan tâches » à droite du champ ; Main.html : sous le champ (Q-04). */}
+      <div className="ct-today__addLine" data-layout={layout}>
       <form className="ct-today__addRow" data-layout={layout} onSubmit={submit}>
         <QuickInputField
           ref={inputRef}
@@ -54,7 +57,14 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
         {/* Bouton d'envoi masqué : avec deux champs texte (titre, date), Entrée ne soumet le formulaire que par lui. */}
         <button type="submit" className="ct-visually-hidden" tabIndex={-1} aria-hidden="true" />
       </form>
+      {layout === 'pc' && <ScanButton layout={layout} />}
+      </div>
       <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
+      {layout === 'mobile' && (
+        <div className="ct-today__scanRow">
+          <ScanButton layout={layout} />
+        </div>
+      )}
     </div>
   );
 }
