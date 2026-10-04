@@ -99,10 +99,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | K-02 | M8 | Je connecte Apple Calendar | calendar-integration | à faire |
 | K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | à faire |
 | K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | à faire |
-| RC-01 | M14 | Je cherche n'importe quel élément | spaces-goals | à faire |
-| RC-02 | M14 | Je filtre les résultats | spaces-goals | à faire |
-| RC-03 | M14 | J'ouvre un résultat | spaces-goals | à faire |
-| RC-04 | M14 | Je retrouve mes recherches récentes | spaces-goals | à faire |
+| RC-01 | M14 | Je cherche n'importe quel élément | spaces-goals | en cours |
+| RC-02 | M14 | Je filtre les résultats | spaces-goals | en cours |
+| RC-03 | M14 | J'ouvre un résultat | spaces-goals | en cours |
+| RC-04 | M14 | Je retrouve mes recherches récentes | spaces-goals | en cours |
 
 ## Ordre 3 — Fonctions avancées
 
