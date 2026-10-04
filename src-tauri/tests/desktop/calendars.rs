@@ -472,3 +472,74 @@ fn le_coffre_systeme_range_lit_et_efface() {
     vault.delete(&token_ref).unwrap();
     assert_eq!(vault.get(&token_ref).unwrap(), None);
 }
+
+// ---- QA du lot K : jetons expirés, réseau coupé, réponses malformées, aucun secret dans les erreurs ----
+
+fn assert_no_secret(text: &str) {
+    for secret in ["access-1", "access-2", "refresh-1", "client-test"] {
+        assert!(!text.contains(secret), "secret « {secret} » dans : {text}");
+    }
+}
+
+#[tokio::test]
+async fn k01_jeton_expire_reponse_de_rafraichissement_malformee_garde_le_coffre_et_ne_fuit_rien() {
+    let mock = start_mock(|request| if request.target == "/token" { reply(200, "<html>pas du json {access-2") } else { reply(200, "{}") });
+    let vault = MemoryVault::default();
+    put_tokens(&vault, "r", "access-1", -10);
+    let endpoints = GoogleEndpoints::from_sim_base(&mock.base);
+    let cfg = config();
+    let env = HttpEnv { vault: &vault, google: &endpoints, client: Some(&cfg) };
+    let error = execute(&env, request("GET", &format!("{}/calendar/v3/x", mock.base), google_auth("r"))).await.unwrap_err();
+    assert_no_secret(&error);
+    assert_eq!(mock.requests().len(), 1, "une seule tentative de rafraîchissement, pas de boucle");
+    let stored = google::load_tokens(&vault, "r").unwrap();
+    assert_eq!((stored.access.as_str(), stored.refresh.as_str()), ("access-1", "refresh-1"));
+}
+
+#[tokio::test]
+async fn k03_rafraichissement_en_429_ou_5xx_n_efface_pas_les_jetons_et_ne_boucle_pas() {
+    for status in [429u16, 500, 503] {
+        let mock = start_mock(move |request| if request.target == "/token" { reply(status, "{}") } else { reply(200, "{}") });
+        let vault = MemoryVault::default();
+        put_tokens(&vault, "r", "access-1", -10);
+        let endpoints = GoogleEndpoints::from_sim_base(&mock.base);
+        let cfg = config();
+        let env = HttpEnv { vault: &vault, google: &endpoints, client: Some(&cfg) };
+        let result = execute(&env, request("GET", &format!("{}/calendar/v3/x", mock.base), google_auth("r"))).await;
+        if let Err(error) = &result {
+            assert_no_secret(error);
+            assert_ne!(error, "reauth-required", "statut {status} : le jeton n'est pas révoqué");
+        }
+        assert_eq!(mock.requests().len(), 1, "statut {status} : une seule tentative");
+        assert_eq!(google::load_tokens(&vault, "r").unwrap().refresh, "refresh-1");
+    }
+}
+
+#[tokio::test]
+async fn k03_reseau_coupe_pendant_le_rafraichissement_garde_les_jetons_et_ne_fuit_rien() {
+    let vault = MemoryVault::default();
+    put_tokens(&vault, "r", "access-1", -10);
+    let down = GoogleEndpoints::from_sim_base("http://127.0.0.1:9");
+    let cfg = config();
+    let env = HttpEnv { vault: &vault, google: &down, client: Some(&cfg) };
+    let error = execute(&env, request("GET", "http://127.0.0.1:9/calendar/v3/x", google_auth("r"))).await.unwrap_err();
+    assert_no_secret(&error);
+    assert_ne!(error, "reauth-required");
+    assert_eq!(google::load_tokens(&vault, "r").unwrap().refresh, "refresh-1");
+}
+
+#[tokio::test]
+async fn k02_basic_401_et_reseau_coupe_ne_fuient_pas_le_mot_de_passe() {
+    let mock = start_mock(|_| reply(401, "{}"));
+    let vault = MemoryVault::default();
+    vault.set("ic", "mot-de-passe-app-secret").unwrap();
+    let endpoints = GoogleEndpoints::from_sim_base(&mock.base);
+    let env = HttpEnv { vault: &vault, google: &endpoints, client: None };
+    let basic = HttpAuth::Basic { token_ref: "ic".to_owned(), username: "ali@icloud.com".to_owned() };
+    let outcome = execute(&env, request("GET", &format!("{}/x", mock.base), basic.clone())).await;
+    let shown = format!("{outcome:?}");
+    assert!(!shown.contains("mot-de-passe-app-secret"), "{shown}");
+    let down = execute(&env, request("GET", "http://127.0.0.1:9/x", basic)).await;
+    let shown = format!("{down:?}");
+    assert!(!shown.contains("mot-de-passe-app-secret"), "{shown}");
+}
