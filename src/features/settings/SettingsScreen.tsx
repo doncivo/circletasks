@@ -57,12 +57,6 @@ export function SettingsScreen() {
         </p>
       )}
       <h2 className="ct-settings__section">{t('settings.sectionGeneral')}</h2>
-      <div className="ct-settings__row">
-        <span>{t('settings.timeZone')}</span>
-        <span className="ct-settings__value">
-          {timeZone ? t('settings.timeZoneAuto', { zone: timeZone }) : t('settings.timeZoneUnknown')}
-        </span>
-      </div>
       {/* --- M12 apparence et formats --- */}
       <button
         type="button"
@@ -73,6 +67,12 @@ export function SettingsScreen() {
         <span>{t('appearance.row')}</span>
         <span className="ct-settings__value">{appearanceSummary}</span>
       </button>
+      <div className="ct-settings__row">
+        <span>{t('settings.timeZone')}</span>
+        <span className="ct-settings__value">
+          {timeZone ? t('settings.timeZoneAuto', { zone: timeZone }) : t('settings.timeZoneUnknown')}
+        </span>
+      </div>
       <button
         type="button"
         className="ct-settings__row ct-settings__rowButton"
