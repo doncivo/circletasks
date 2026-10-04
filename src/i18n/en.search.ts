@@ -48,6 +48,13 @@ export const searchEn: Messages['search'] = {
     archived: 'archived',
   },
   rowLabel: '{kind}, {title}',
+  recent: {
+    title: 'Recent searches',
+    clear: 'Clear',
+    clearLabel: 'Clear recent searches',
+    chip: 'Recent search: {query}',
+    remove: 'Recent search: {query}, remove',
+  },
   filters: {
     group: 'Search filters',
     chipLabel: 'Filter {chip}',

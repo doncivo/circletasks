@@ -6,6 +6,7 @@ import { Icon, Kbd, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { RecentSearches } from './RecentSearches';
 import { SearchFilterBar } from './SearchFilterBar';
 import { SearchGroups, rowDomId } from './SearchResults';
 import { openSearchResult, type OpenOutcome } from './searchOpen';
@@ -33,6 +34,7 @@ function SearchSurface() {
   const status = useFeatureStore(searchStore, (s) => s.status);
   const outcome = useFeatureStore(searchStore, (s) => s.outcome);
   const errorKey = useFeatureStore(searchStore, (s) => s.errorKey);
+  const recent = useFeatureStore(searchStore, (s) => s.recent);
   const ref = useFocusTrap<HTMLElement>({ active: true, onEscape: closeOverlay });
   const selection = useSearchSelection(outcome?.results ?? []);
   /** Échec de l'ouverture du dernier résultat touché : élément supprimé entre-temps, ou base muette. */
@@ -57,6 +59,8 @@ function SearchSurface() {
     if (opening.current) return;
     opening.current = true;
     try {
+      // RC-04 critère 3 : ouvrir un résultat mémorise la recherche.
+      void searchStore.get(container).getState().recordQuery();
       const outcomeOfOpen = await openSearchResult(container, result, { inTab });
       if (outcomeOfOpen === 'opened') closeOverlay();
       else setOpenProblem(outcomeOfOpen);
@@ -73,9 +77,11 @@ function SearchSurface() {
       // Dans le champ, Début / Fin déplacent le curseur : Ctrl+Début / Ctrl+Fin vont au premier / dernier résultat.
       event.preventDefault();
       selection.move(event.key === 'Home' ? 'first' : 'last');
-    } else if (event.key === 'Enter' && selection.selected) {
+    } else if (event.key === 'Enter') {
       event.preventDefault();
-      void open(selection.selected, event.ctrlKey);
+      if (selection.selected) void open(selection.selected, event.ctrlKey);
+      // RC-04 critère 3 : Entrée avec 2 caractères au moins mémorise la recherche (même sans résultat).
+      else void searchStore.get(container).getState().recordQuery();
     }
   }
 
@@ -150,6 +156,17 @@ function SearchSurface() {
           />
         )}
         {showResults && outcome.truncated && <p className="ct-search__hint">{t('search.tooMany')}</p>}
+        {status === 'idle' && (
+          <RecentSearches
+            recent={recent}
+            onPick={(text) => {
+              void searchStore.get(container).getState().setQuery(text);
+              document.getElementById(SEARCH_INPUT_ID)?.focus();
+            }}
+            onRemove={(text) => void searchStore.get(container).getState().removeRecent(text)}
+            onClear={() => void searchStore.get(container).getState().clearRecent()}
+          />
+        )}
       </div>
     </section>
   );

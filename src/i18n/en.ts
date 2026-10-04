@@ -565,6 +565,7 @@ export const en: Messages = {
     goal: 'Goal updated',
     checklist: 'Checklist updated',
     event: 'Event updated',
+    recentSearches: 'Recent searches cleared',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',

@@ -569,6 +569,7 @@ export const fr = {
     goal: 'Objectif modifié',
     checklist: 'Checklist modifiée',
     event: 'Événement modifié',
+    recentSearches: 'Recherches récentes effacées',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',

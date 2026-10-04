@@ -306,3 +306,91 @@
   outline-offset: -2px;
   background: var(--ct-color-row-selected);
 }
+
+/* Recherches récentes (Recherche.html : puces #F3F1F6 de 32 px) ; la croix et « Effacer » sont des ajouts à la maquette (RC-04). */
+.ct-search__recent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  margin-top: var(--ct-space-3);
+}
+
+.ct-search__recentHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-search__recentHeader .ct-search__groupTitle {
+  margin: 0;
+}
+
+.ct-search__recentClear {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-text);
+  font: 600 13px var(--ct-font-text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-search__recentList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+}
+
+.ct-search__recentChip {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  border-radius: 16px;
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+}
+
+.ct-search__recentPick,
+.ct-search__recentRemove {
+  position: relative;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: 500 13px var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-search__recentPick {
+  padding: 0 4px 0 12px;
+  border-radius: 16px 0 0 16px;
+}
+
+.ct-search__recentRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  padding: 0;
+  border-radius: 0 16px 16px 0;
+  color: var(--ct-color-text-secondary);
+}
+
+/* Zone tactile de 44 pt : chaque bouton déborde de la puce au-dessus et au-dessous. */
+.ct-search__recentPick::after,
+.ct-search__recentRemove::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+
+.ct-search__recentPick:focus-visible,
+.ct-search__recentRemove:focus-visible,
+.ct-search__recentClear:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 1px;
+}

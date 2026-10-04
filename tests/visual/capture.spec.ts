@@ -249,6 +249,17 @@ async function prepareSearch(page: Page, testInfo: { project: { name: string } }
   await expect(page.getByText('5 résultats')).toBeVisible();
 }
 
+async function prepareRecentSearches(page: Page, testInfo: { project: { name: string } }): Promise<void> {
+  await openSearch(page, testInfo);
+  for (const text of ['passeport', 'sport', 'notaire', 'clôture']) {
+    await typeSearch(page, text);
+    await expect(page.getByText(`Aucun résultat pour « ${text} »`)).toBeVisible();
+    await page.getByRole('searchbox', { name: 'Rechercher' }).press('Enter');
+  }
+  await typeSearch(page, '');
+  await expect(page.getByRole('heading', { name: 'Recherches récentes' })).toBeVisible();
+}
+
 const SCREENS: Screen[] = [
   { name: 'Main', mockup: 'Main.html', viewport: PHONE, date: WEDNESDAY, data: true },
   {
@@ -511,6 +522,8 @@ const SCREENS: Screen[] = [
     },
   },
   { name: 'Recherche', mockup: 'Recherche.html', viewport: PHONE, date: WEDNESDAY, prepare: prepareSearch },
+  // Champ vide : « RECHERCHES RÉCENTES » (puces de Recherche.html ; la maquette les montre sous les résultats, la fiche RC-04 les réserve au champ vide).
+  { name: 'Recherche-Recentes', viewport: PHONE, date: WEDNESDAY, prepare: prepareRecentSearches },
   // Palette Ctrl+K du PC : aucune maquette (docs/decisions.md), capture de l'app seule.
   { name: 'PC-Recherche', viewport: PC, date: WEDNESDAY, prepare: prepareSearch },
 ];

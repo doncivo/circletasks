@@ -48,6 +48,13 @@ export const searchFr = {
     archived: 'archivée',
   },
   rowLabel: '{kind}, {title}',
+  recent: {
+    title: 'Recherches récentes',
+    clear: 'Effacer',
+    clearLabel: 'Effacer les recherches récentes',
+    chip: 'Recherche récente : {query}',
+    remove: 'Recherche récente : {query}, supprimer',
+  },
   filters: {
     group: 'Filtres de la recherche',
     chipLabel: 'Filtre {chip}',
