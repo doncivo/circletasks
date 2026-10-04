@@ -13,6 +13,7 @@ import { useAppStore } from '../app/appStore';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { emitEventsChanged } from '../events/eventEvents';
+import { createCalendarUseCases } from './calendarUseCases';
 import { createProviderFor, tokenRefFor } from './providerFactory';
 import { refreshAccount } from './refreshUseCase';
 
@@ -108,6 +109,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
   const nowMs = (): number => container.clock.nowMs();
   const providerFor = (account: Pick<CalendarAccount, 'provider' | 'tokenRef' | 'label'>) => createProviderFor(account, platform, nowMs, systemTimeZone);
   const deps = { container, providerFor, timeZone: systemTimeZone, cursors };
+  const useCases = createCalendarUseCases(container);
 
   return createStore<CalendarsState>()((set, get) => {
     /** A-09 : « Agenda <nom> déconnecté » + « Reconnecter », et « Hors ligne » quand un compte échoue côté réseau ou serveur. */
@@ -138,7 +140,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
     };
 
     const reload = async (): Promise<readonly CalendarAccount[]> => {
-      const accounts = await container.data.repos.calendarAccounts.listAll();
+      const accounts = await useCases.listAccounts();
       set({ accounts });
       return accounts;
     };
@@ -158,7 +160,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
     /** Crée le compte (agendas tous affichés, espace par défaut) puis lance son premier rafraîchissement (K-01 critère 6). */
     const createAccount = async (provider: CalendarProviderKind, accountId: CalendarAccountId, label: string, calendars: readonly ProviderCalendar[]): Promise<ConnectOutcome> => {
       try {
-        await container.data.repos.calendarAccounts.create({ id: accountId, provider, label, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
+        await useCases.createAccount({ id: accountId, provider, label, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
         await reload();
       } catch {
         return { ok: false, failure: 'failed' };
@@ -310,11 +312,8 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           if (!previous) return 'error';
           const newlyShown = calendars.some((calendar) => calendar.shown && !previous.calendars.some((old) => old.id === calendar.id && old.shown));
           try {
-            await container.data.transaction(async (repos) => {
-              await repos.calendarAccounts.updateCalendars(accountId, calendars);
-              // K-01 critère 5 : un agenda décoché disparaît de toutes les vues.
-              for (const calendar of calendars) if (!calendar.shown) await repos.externalEvents.deleteForCalendar(accountId, calendar.id);
-            });
+            // K-01 critère 5 : un agenda décoché disparaît de toutes les vues.
+            await useCases.saveCalendars(accountId, calendars);
             await reload();
           } catch {
             return 'error';
@@ -337,10 +336,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           return false;
         }
         try {
-          await container.data.transaction(async (repos) => {
-            await repos.calendarAccounts.softDelete(accountId);
-            await repos.externalEvents.deleteForAccount(accountId);
-          });
+          await useCases.removeAccount(accountId);
         } catch {
           set({ messageKey: 'calendars.errorRemove' });
           return false;
