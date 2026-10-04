@@ -95,10 +95,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | fait |
 | E-03 | M7 | J'affiche les jours fériés | checklists-events | fait |
 | E-04 | M7 | Je vois un compte à rebours | checklists-events | fait |
-| K-01 | M8 | Je connecte Google Calendar | calendar-integration | à faire |
-| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | à faire |
-| K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | à faire |
-| K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | à faire |
+| K-01 | M8 | Je connecte Google Calendar | calendar-integration | en cours |
+| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | en cours |
+| K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | en cours |
+| K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | en cours |
 | RC-01 | M14 | Je cherche n'importe quel élément | spaces-goals | fait |
 | RC-02 | M14 | Je filtre les résultats | spaces-goals | fait |
 | RC-03 | M14 | J'ouvre un résultat | spaces-goals | fait |
