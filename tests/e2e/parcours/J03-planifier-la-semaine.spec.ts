@@ -16,7 +16,7 @@ test('parcours 3 : créer 5 tâches, en déplacer 2, naviguer à la semaine suiv
 
   for (const { iso, title } of plan) {
     await dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche/ }).click();
-    const field = dayOf(page, iso).getByRole('textbox');
+    const field = dayOf(page, iso).getByRole('combobox');
     await field.fill(title);
     await field.press('Enter');
     await expect(taskButton(page, title)).toBeVisible();

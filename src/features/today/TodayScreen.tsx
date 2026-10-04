@@ -314,7 +314,7 @@ export function TodayScreen() {
               onOpen={(id) => navigate({ tab: 'checklists', checklistId: id })}
             />
             {/* Annonce aux lecteurs d'écran : déplacement (A-02), chargement (A-09) ; ni role="status" (réservé au bandeau « Annuler »). */}
-            <div key={reorder.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true">
+            <div key={reorder.announcement?.n ?? 0} className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="reorder-announcer">
               {showSkeleton ? t('status.loading') : reorder.announcement?.text}
             </div>
           </>

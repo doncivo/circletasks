@@ -115,6 +115,6 @@ test.describe('P-06 — actions', () => {
   test('« Un jour » : « Ajouter à « Un jour » » met le champ en saisie', async ({ page }, testInfo) => {
     await openSomeday(page, testInfo);
     await page.locator('[data-empty-screen="someday"]').getByRole('button', { name: 'Ajouter à « Un jour »' }).click();
-    await expect(page.getByRole('textbox', { name: 'Nouvelle tâche sans date' })).toBeFocused();
+    await expect(page.getByRole('combobox', { name: 'Nouvelle tâche sans date' })).toBeFocused();
   });
 });
