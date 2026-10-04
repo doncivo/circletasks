@@ -83,3 +83,10 @@ Mesure du 2026-10-02 (`npm run tauri build`, NSIS, avec updater, process, autost
 - Ajouter une commande Rust : `build.rs` (liste), `desktop.json` (permission), cette table.
 - La clé publique réelle se pose dans `tauri.conf.json` (une seule ligne) ; aucun autre changement de code.
 - Q-01 (capture rapide) remplacera la cible de « Ajout rapide » et enregistrera Ctrl+Alt+Espace via `tauri-plugin-global-shortcut` ; D-04 ajoutera les autres fenêtres.
+
+## Avenant D-04 : raccourci global
+
+- `tauri-plugin-global-shortcut` (Rust seul : aucune permission de plugin dans les capabilities, le front passe par trois commandes applicatives). `src-tauri/src/shortcut.rs` : `parse_chord` (validation pure, testée), `set_quick_capture_shortcut`, `clear_quick_capture_shortcut`, `get_quick_capture_shortcut`. Erreurs `{ code, message }` : `shortcut-syntax`, `shortcut-no-modifier`, `shortcut-windows-key`, `shortcut-reserved`, `shortcut-in-use`, `shortcut-unavailable`.
+- Notation unique de la combinaison (registre `SHORTCUTS`, réglage local `shortcut.quickCapture` `{ enabled, keys }`, Rust) : `Ctrl+Alt+Space`. Remplacement atomique : la nouvelle combinaison est enregistrée avant de libérer l’ancienne.
+- Port TypeScript `GlobalShortcuts` (`register`, `unregister`, `isRegistered`) dans `DesktopPlatform.globalShortcuts`, avec faux pour les tests. Capabilities `desktop.json` : `allow-set-quick-capture-shortcut`, `allow-clear-quick-capture-shortcut`, `allow-get-quick-capture-shortcut`.
+- À l’appui : fenêtre principale au premier plan et événement `desktop://quick-add` (remplacé par la mini-fenêtre à Q-01). Démarrage : `quickCaptureStore.init()` lit le réglage et enregistre ; un refus donne l’état « indisponible ».

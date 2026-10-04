@@ -86,6 +86,11 @@ export interface KeyInput {
   readonly metaKey: boolean;
   /** Vrai si le focus est dans un champ de saisie (input, textarea, contenteditable). */
   readonly editable: boolean;
+  /**
+   * Vrai si la touche AltGr est enfoncée (clavier AZERTY : Windows la rapporte comme Ctrl+Alt). AltGr produit
+   * un caractère, jamais un raccourci : aucune combinaison ne correspond (D-04 critère 3).
+   */
+  readonly altGraph?: boolean;
 }
 
 export function parseChord(keys: string): KeyChord {
@@ -100,7 +105,7 @@ export function parseChord(keys: string): KeyChord {
 }
 
 export function matchesChord(chord: KeyChord, input: KeyInput): boolean {
-  if (input.metaKey || chord.ctrl !== input.ctrlKey || chord.alt !== input.altKey) return false;
+  if (input.metaKey || input.altGraph === true || chord.ctrl !== input.ctrlKey || chord.alt !== input.altKey) return false;
   const k = chord.key;
   if (/^[0-9]$/.test(k)) return chord.shift === input.shiftKey && (input.code === `Digit${k}` || input.code === `Numpad${k}`);
   if (/^[A-Z]$/.test(k)) return chord.shift === input.shiftKey && input.key.toUpperCase() === k;
@@ -109,13 +114,17 @@ export function matchesChord(chord: KeyChord, input: KeyInput): boolean {
   return chord.shift === input.shiftKey && input.key === k;
 }
 
+/**
+ * Gestionnaire d'un raccourci. Il peut renvoyer `false` pour décliner (le focus n'est pas dans sa liste, rien à
+ * faire) : l'événement n'est alors pas consommé et le comportement natif du navigateur (défilement…) reste.
+ */
 export type ShortcutHandler = () => void;
 
 export interface ShortcutRegistry {
   /** Enregistre un gestionnaire ; renvoie la fonction de désenregistrement. */
   register(id: ShortcutId, handler: ShortcutHandler): () => void;
-  /** Déclenche le gestionnaire correspondant ; renvoie l'identifiant traité ou null. */
-  handle(input: KeyInput): ShortcutId | null;
+  /** Déclenche le gestionnaire correspondant ; renvoie l'identifiant traité ou null. `only` restreint aux identifiants cités (fenêtre modale). */
+  handle(input: KeyInput, only?: readonly ShortcutId[]): ShortcutId | null;
   /** Raccourcis ayant un gestionnaire actif (aide contextuelle). */
   activeIds(): ShortcutId[];
 }
@@ -135,14 +144,15 @@ export function createShortcutRegistry(): ShortcutRegistry {
         else handlers.delete(id);
       };
     },
-    handle: (input) => {
+    handle: (input, only) => {
       for (const { id, chord, inEditable } of chords) {
         if (input.editable && !inEditable) continue;
+        if (only && !only.includes(id)) continue;
         if (!matchesChord(chord, input)) continue;
-        const handler = handlers.get(id)?.at(-1);
-        if (!handler) continue;
-        handler();
-        return id;
+        // Du plus récent au plus ancien : un gestionnaire qui décline (`false`) laisse la main au précédent.
+        for (const handler of [...(handlers.get(id) ?? [])].reverse()) {
+          if ((handler() as unknown) !== false) return id;
+        }
       }
       return null;
     },
@@ -165,5 +175,6 @@ export function toKeyInput(event: KeyboardEvent): KeyInput {
     shiftKey: event.shiftKey,
     metaKey: event.metaKey,
     editable,
+    altGraph: typeof event.getModifierState === 'function' && event.getModifierState('AltGraph'),
   };
 }

@@ -8,6 +8,7 @@ import { fr } from '../../i18n/fr';
 import { createAppContainer, type AppContainer } from './container';
 import { startDesktopIntegration, trayLabels } from './desktop';
 import { INITIAL_NAVIGATION, useNavigationStore } from './navigation';
+import { quickCaptureStore } from '../shortcuts';
 import { useQuickAddStore } from './quickAdd';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000d1');
@@ -48,6 +49,17 @@ describe('intégration PC de la coquille (D-01)', () => {
       syncEnabled: false,
     });
     expect(trayLabels().open).toBe(fr.desktop.tray.open);
+    integration.dispose();
+  });
+
+  it('D-04 : le raccourci global est enregistré au démarrage et sa combinaison s’affiche dans le menu, puis suit les changements', async () => {
+    const integration = startDesktopIntegration(container);
+    await vi.waitFor(() => expect(desktop.trayLabels?.quickAdd).toBe('Ajout rapide\tCtrl+Alt+Espace'));
+    expect(desktop.globalChord).toBe('Ctrl+Alt+Space');
+    await quickCaptureStore.get(container).getState().applyChord('Ctrl+Shift+Space');
+    await vi.waitFor(() => expect(desktop.trayLabels?.quickAdd).toBe('Ajout rapide\tCtrl+Maj+Espace'));
+    await quickCaptureStore.get(container).getState().setEnabled(false);
+    await vi.waitFor(() => expect(desktop.trayLabels?.quickAdd).toBe('Ajout rapide'));
     integration.dispose();
   });
 

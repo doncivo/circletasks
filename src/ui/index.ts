@@ -15,7 +15,7 @@ export { IconPicker, type IconPickerProps } from './IconPicker';
 export { EmojiPicker, type EmojiPickerProps } from './EmojiPicker';
 export { IconChooser, type IconChooserProps } from './IconChooser';
 export { EMOJI_CATALOG, type EmojiCatalogEntry } from './emojiCatalog';
-export { Kbd, type KbdProps } from './Kbd';
+export { Kbd, tokenLabel, type KbdProps } from './Kbd';
 export { TabRail, type TabRailItem, type TabRailProps } from './TabRail';
 export { AppShell, useDetailSlot, type AppShellProps } from './AppShell';
 export { Fab, type FabProps } from './Fab';

@@ -1,4 +1,4 @@
-import type { DesktopPlatform, PendingUpdate, TrayLabels, UpdateProgress } from './types';
+import { GlobalShortcutError, type DesktopPlatform, type GlobalShortcutFailure, type PendingUpdate, type TrayLabels, type UpdateProgress } from './types';
 
 /** Faux `PendingUpdate` pour les tests. */
 export interface FakePendingUpdate extends PendingUpdate {
@@ -45,6 +45,16 @@ export interface FakeDesktop extends DesktopPlatform {
   quitConfirmed: boolean;
   quittingHandler: (() => Promise<void>) | null;
   failAutostart: boolean;
+  /** Combinaison enregistrée auprès du faux système (D-04), null si aucune. */
+  globalChord: string | null;
+  /** Combinaisons « prises par une autre application » : `register` les refuse (`in-use`). */
+  takenChords: Set<string>;
+  /** Journal des appels de `globalShortcuts` (« register:Ctrl+Alt+Space », « unregister »). */
+  shortcutCalls: string[];
+  /** Force un refus à la prochaine inscription. */
+  nextRegisterFailure: GlobalShortcutFailure | null;
+  /** Déclenche la combinaison globale comme le fait le système (équivaut à « Ajout rapide »). */
+  pressGlobalShortcut(): void;
 }
 
 export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart' | 'version' | 'nextCheck'>> = {}): FakeDesktop {
@@ -70,6 +80,29 @@ export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart'
       });
     },
     failAutostart: false,
+    globalChord: null,
+    takenChords: new Set<string>(),
+    shortcutCalls: [],
+    nextRegisterFailure: null,
+    pressGlobalShortcut: () => {
+      if (fake.globalChord !== null) handlers.forEach((handler) => handler());
+    },
+    globalShortcuts: {
+      register: (chord) => {
+        fake.shortcutCalls.push(`register:${chord}`);
+        const failure = fake.nextRegisterFailure ?? (fake.takenChords.has(chord) && fake.globalChord !== chord ? 'in-use' : null);
+        fake.nextRegisterFailure = null;
+        if (failure) return Promise.reject(new GlobalShortcutError(failure));
+        fake.globalChord = chord;
+        return Promise.resolve();
+      },
+      unregister: () => {
+        fake.shortcutCalls.push('unregister');
+        fake.globalChord = null;
+        return Promise.resolve();
+      },
+      isRegistered: (chord) => Promise.resolve(fake.globalChord === chord),
+    },
     emitQuickAdd: () => handlers.forEach((handler) => handler()),
     setTrayLabels: (labels) => {
       fake.trayLabels = labels;

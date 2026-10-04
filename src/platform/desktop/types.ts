@@ -46,7 +46,37 @@ export interface PendingUpdate {
   dispose(): Promise<void>;
 }
 
+/** Cause d'un refus d'enregistrement d'un raccourci global (codes `shortcut-*` de src-tauri/src/shortcut.rs). */
+export type GlobalShortcutFailure = 'syntax' | 'no-modifier' | 'windows-key' | 'reserved' | 'in-use' | 'unavailable';
+
+export class GlobalShortcutError extends Error {
+  readonly reason: GlobalShortcutFailure;
+  constructor(reason: GlobalShortcutFailure, cause?: unknown) {
+    super(`Raccourci global refusé (${reason})`, { cause });
+    this.name = 'GlobalShortcutError';
+    this.reason = reason;
+  }
+}
+
+/**
+ * Raccourci clavier global, actif même fenêtre réduite (D-04). Combinaison en notation du registre
+ * (`Ctrl+Alt+Space`, src/features/app/shortcuts.ts). Une seule combinaison est enregistrée à la fois.
+ */
+export interface GlobalShortcuts {
+  /**
+   * Enregistre la combinaison auprès du système et remplace l'ancienne sans redémarrage. Rejette avec
+   * `GlobalShortcutError` ; l'ancienne combinaison reste alors active.
+   */
+  register(chord: string): Promise<void>;
+  /** Retire la combinaison enregistrée ; sans effet si aucune. */
+  unregister(): Promise<void>;
+  /** Vrai si cette combinaison est celle enregistrée auprès du système. */
+  isRegistered(chord: string): Promise<boolean>;
+}
+
 export interface DesktopPlatform {
+  /** Raccourci global de la capture rapide (D-04). */
+  readonly globalShortcuts: GlobalShortcuts;
   /** Remplace le menu de la zone de notification par ces textes (D-01). */
   setTrayLabels(labels: TrayLabels): Promise<void>;
   /** Entrée « Ajout rapide » du menu (D-01, critère 5). Renvoie la fonction de désabonnement. */

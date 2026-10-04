@@ -10,6 +10,8 @@ import type { ItemFilter } from '../../domain/itemFilter';
 import { selectSomedayTasks } from '../../domain/someday';
 import type { TodayRow } from '../../domain/todayList';
 import { useAppStore } from '../app/appStore';
+import { isListFocus, registerListNavigation } from '../app/listKeyboard';
+import { useNavigationStore } from '../app/navigation';
 import { somedayStore, useItemFilter, type SomedayZoneDnd } from '../someday';
 import { taskSubtitle } from '../tasks/taskLine';
 import type { WeekDropState, WeekItemDragProps } from './WeekDayView';
@@ -36,6 +38,9 @@ export interface WeekMoves {
   readonly somedayZone: SomedayZoneDnd;
 }
 
+/** Grille des jours (D-04) : cible de ↑ / ↓, Espace et Entrée. */
+const weekGridRoot = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-week__days');
+
 /** Zone de dépôt du panneau « Un jour » (`data-drop-zone`) : réordonne ses cartes ; les autres zones sont des dates ISO. */
 export const SOMEDAY_ZONE = 'someday';
 
@@ -48,6 +53,7 @@ export const SOMEDAY_ZONE = 'someday';
 export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spaces: readonly Space[], showSpace: boolean, somedayOpen = false): WeekMoves {
   const container = useAppContainer();
   const moveToDay = useFeatureStore(weekStore, (s) => s.moveToDay);
+  const toggleDone = useFeatureStore(weekStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(weekStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(weekStore, (s) => s.postponeSeries);
   const moveRow = useFeatureStore(weekStore, (s) => s.moveRow);
@@ -157,11 +163,28 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
       container.shortcuts.register('list.postponeTomorrow', () => requestPostpone(focusedTaskId)),
       container.shortcuts.register('list.moveUp', reorderBy(-1)),
       container.shortcuts.register('list.moveDown', reorderBy(1)),
+      // Espace (terminer / rouvrir) et Entrée (détail) : seulement si le focus est dans la grille, pas sur un autre bouton de l'écran.
+      container.shortcuts.register('list.complete', (): boolean => {
+        if (!isListFocus(weekGridRoot())) return false;
+        void toggleDone(focusedTaskId);
+        return true;
+      }),
+      container.shortcuts.register('list.open', (): boolean => {
+        if (!isListFocus(weekGridRoot())) return false;
+        useNavigationStore.getState().openDetail({ type: 'task', id: focusedTaskId });
+        return true;
+      }),
     ];
     return () => {
       for (const off of offs) off();
     };
-  }, [container, focusedTaskId, weekStart, requestMove, requestPostpone, reorder]);
+  }, [container, focusedTaskId, weekStart, requestMove, requestPostpone, reorder, toggleDone]);
+
+  // ↑ / ↓ : carte précédente / suivante dans l'ordre de la grille (D-04).
+  useEffect(
+    () => registerListNavigation(container.shortcuts, { root: weekGridRoot, itemSelector: '[data-task-id]', focusSelector: '.ct-week-item__title' }),
+    [container],
+  );
 
   const { drag } = zoneDrag;
   const dragged = drag ? container.taskEntities.get(drag.id as TaskId) : undefined;

@@ -47,6 +47,8 @@ export interface SettingsValues {
   'desktop.launchAtStartup': boolean;
   /** D-03 : dernière vérification de mise à jour (toutes les 24 h). Pas d'« ignorer cette version » (QB-16). */
   'desktop.updater': { readonly lastCheckAt: IsoDateTime | null };
+  /** D-04 : capture rapide globale (PC), combinaison en notation du registre ; local à l'appareil. */
+  'shortcut.quickCapture': { readonly enabled: boolean; readonly keys: string };
   /** ADR 0005 : identifiant de cet appareil, créé au premier lancement. */
   'device.id': DeviceId | null;
 }
@@ -77,6 +79,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'desktop.closeToTray': { scope: 'local', defaultValue: true },
   'desktop.launchAtStartup': { scope: 'local', defaultValue: false },
   'desktop.updater': { scope: 'local', defaultValue: { lastCheckAt: null } },
+  'shortcut.quickCapture': { scope: 'local', defaultValue: { enabled: true, keys: 'Ctrl+Alt+Space' } },
   'device.id': { scope: 'local', defaultValue: null },
 };
 

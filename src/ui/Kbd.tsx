@@ -16,7 +16,8 @@ const TOKEN_KEYS: Readonly<Record<string, PlainMessageKey>> = {
   ArrowRight: 'keyboard.arrowRight',
 };
 
-function tokenLabel(token: string): string {
+/** Libellé d'un jeton du registre (Maj, Suppr, ←…) ; les lettres, chiffres et symboles restent tels quels. */
+export function tokenLabel(token: string): string {
   const key = TOKEN_KEYS[token];
   return key ? t(key) : token;
 }

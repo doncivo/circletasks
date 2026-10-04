@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
@@ -7,7 +7,7 @@ import { bootstrapApp } from './features/app/bootstrap';
 import type { AppContainer } from './features/app/container';
 import { TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
-import { toKeyInput } from './features/app/shortcuts';
+import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
@@ -18,6 +18,7 @@ import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
+import { registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
@@ -39,6 +40,9 @@ registerEventsSource();
 registerExternalEventsSource();
 // Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
 registerGoalsSource();
+
+/** Raccourcis encore actifs pendant que la liste des raccourcis est ouverte (P-08). */
+const HELP_KEYS: readonly ShortcutId[] = ['app.shortcutsHelp', 'app.escape'];
 
 const TAB_ITEMS = TABS.filter((tab) => tab.id !== 'settings');
 
@@ -73,6 +77,11 @@ function AppShellContent() {
 
   // RC-01 : Ctrl+K ouvre la recherche depuis n'importe quel écran, y compris dans un champ de saisie.
   useEffect(() => registerSearchShortcut(container), [container]);
+
+  // D-04 : Échap (dernier recours, priorité la plus basse : posé avant les effets des écrans), Ctrl+, (Réglages).
+  // P-08 : Ctrl+/ (liste des raccourcis), PC seulement : l'iPhone n'a pas de clavier.
+  useLayoutEffect(() => registerEscapeFallback(container), [container]);
+  useEffect(() => registerShellShortcuts(container, { help: layout === 'pc' }), [container, layout]);
 
   return (
     <AppShell
@@ -200,7 +209,9 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (container.shortcuts.handle(toKeyInput(event))) event.preventDefault();
+      // Sous la liste des raccourcis (fenêtre modale), seuls Ctrl+/ et Échap agissent : Espace, Entrée ou Suppr ne touchent pas l'écran dessous.
+      const underHelp = useNavigationStore.getState().overlays.at(-1)?.kind === 'shortcutsHelp';
+      if (container.shortcuts.handle(toKeyInput(event), underHelp ? HELP_KEYS : undefined)) event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

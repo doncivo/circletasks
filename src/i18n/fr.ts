@@ -6,6 +6,7 @@ import { calendarsFr } from './fr.calendars';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
 import { eventsFr } from './fr.events';
+import { shortcutsUiFr } from './fr.shortcuts';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -595,6 +596,7 @@ export const fr = {
   goals: goalsFr,
   someday: somedayFr,
   search: searchFr,
+  shortcutsUi: shortcutsUiFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',
