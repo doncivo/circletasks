@@ -17,7 +17,7 @@ import type { LocalDate, LocalTime, SpaceId, Weekday } from '../../domain/types'
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { formatNextOccurrences } from '../../i18n/formatRoutine';
-import { Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, WeekdayToggles, TextField, useLayout } from '../../ui';
+import { AddSegments, Button, DatePicker, Icon, IconChooser, SpaceSegmented, Switch, WeekdayToggles, TextField, useLayout, type AddSegment } from '../../ui';
 import { RoutineTimeEditor } from './RoutineTimeEditor';
 import type { RoutineInput } from './routineUseCases';
 import './RoutineForm.css';
@@ -67,6 +67,10 @@ export interface RoutineFormProps {
   readonly archiveAction?: ReactNode;
   /** Focus dans le champ nom à l'ouverture (PC : création). */
   readonly autoFocus?: boolean;
+  /** Titre déjà saisi dans un autre segment de la feuille Ajout (E-01 critère 2). */
+  readonly initialTitle?: string;
+  /** Affiche les segments Tâche / Événement / Routine (feuille Ajout) ; appelé avec le segment choisi et le titre saisi. */
+  readonly onSegmentChange?: (segment: AddSegment, title: string) => void;
 }
 
 /**
@@ -75,10 +79,10 @@ export interface RoutineFormProps {
  * nom est vide ou qu'aucun jour n'est choisi.
  */
 export function RoutineForm(props: RoutineFormProps) {
-  const { routine, spaces, initialSpaceId, today, onSubmit, onClose, errorMessage, editExtras, archiveAction, autoFocus, initialOffsets = [], defaultOffsets = [0] } = props;
+  const { routine, spaces, initialSpaceId, today, onSubmit, onClose, errorMessage, editExtras, archiveAction, autoFocus, initialOffsets = [], defaultOffsets = [0], initialTitle = '', onSegmentChange } = props;
   const headingId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
-  const [title, setTitle] = useState(routine?.title ?? '');
+  const [title, setTitle] = useState(routine?.title ?? initialTitle);
   const [icon, setIcon] = useState<IconRef | null>(routine?.icon ?? null);
   const layout = useLayout();
   const [choice, setChoice] = useState<FrequencyChoice>(choiceOf(routine));
@@ -184,6 +188,7 @@ export function RoutineForm(props: RoutineFormProps) {
           <Icon icon={X} />
         </button>
       </div>
+      {onSegmentChange && <AddSegments value="routine" onChange={(segment) => onSegmentChange(segment, title)} />}
 
       <TextField
         ref={nameRef}

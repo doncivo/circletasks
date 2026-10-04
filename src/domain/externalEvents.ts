@@ -49,7 +49,7 @@ export function externalEventSpan(event: Pick<ExternalEvent, 'allDay' | 'startUt
 }
 
 /** Agenda d'un événement : le compte et l'agenda auxquels il appartient (null si le compte n'est plus connu). */
-function calendarOf(event: ExternalEvent, accounts: readonly CalendarAccount[]): { account: CalendarAccount; calendar: CalendarRef | null } | null {
+export function calendarOf(event: ExternalEvent, accounts: readonly CalendarAccount[]): { account: CalendarAccount; calendar: CalendarRef | null } | null {
   const account = accounts.find((candidate) => candidate.id === event.accountId);
   if (!account) return null;
   return { account, calendar: account.calendars.find((candidate) => candidate.id === event.calendarId) ?? null };

@@ -17,11 +17,11 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - S-05, critères 9-10 (alimentation par M8) ;
   - ES-06, critères 5-6 (affectation des agendas).
 - Points d'extension à utiliser :
-  - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 reste à brancher ;
+  - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 soldé par E-01 : `registerEventsSource`, Aujourd'hui et Semaine ;
   - K-01 vers `externalEvents` ;
   - M14 : migration `search_index` en FTS5.
 - Primitive de glisser commune à `useSortable` et `useZoneDrag` (avenant S-06 de l'ADR 0004).
-- Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.
+- ~~Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.~~ (soldé par E-01 : `AddSheet`, `AddSegments`, `RoutineForm` réutilisé)
 - « Date de fin » du RecurrencePicker encore native (dette T-14).
 
 ## Ordre 3

@@ -6,7 +6,7 @@ import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/remin
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField } from '../../ui';
+import { AddSegments, Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField, type AddSegment } from '../../ui';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
@@ -35,6 +35,10 @@ export interface TaskCreateSheetProps {
   readonly defaultOffsets?: readonly ReminderOffsetMin[];
   /** « Un jour » présélectionné (SD-01 critère 5 : bouton « + » de l'écran Un jour) : roues et champ de date masqués d'office. */
   readonly initialSomeday?: boolean;
+  /** Titre déjà saisi dans un autre segment de la feuille Ajout (E-01 critère 2 : changer de segment conserve le titre). */
+  readonly initialTitle?: string;
+  /** Affiche les segments Tâche / Événement / Routine ; appelé avec le segment choisi et le titre saisi. */
+  readonly onSegmentChange?: (segment: AddSegment, title: string) => void;
   readonly onClose: () => void;
   readonly onCreate: (input: {
     title: string;
@@ -53,8 +57,8 @@ export interface TaskCreateSheetProps {
  * Feuille « Nouvelle tâche » (iPhone, Ajout.html) : titre, icône, roues de date (« Aujourd'hui » / jour affiché, sans heure,
  * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
  */
-export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], initialSomeday = false, onClose, onCreate }: TaskCreateSheetProps) {
-  const [title, setTitle] = useState('');
+export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], initialSomeday = false, initialTitle = '', onSegmentChange, onClose, onCreate }: TaskCreateSheetProps) {
+  const [title, setTitle] = useState(initialTitle);
   const [choice, setChoice] = useState<DateChoice>(initialSomeday ? { date: null, time: null } : { date: viewedDate, time: null });
   const [spaceId, setSpaceId] = useState<SpaceId | null>(initialSpaceId);
   const [projectId, setProjectId] = useState<ProjectId | null>(initialProjectId);
@@ -95,6 +99,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             <Icon icon={X} />
           </button>
         </div>
+        {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
         <TextField ref={titleRef} label={t('tasks.titleLabel')} value={title} onChange={setTitle} maxLength={TASK_TITLE_MAX_LENGTH} />
         {/* Choix Icône / Emoji (T-03, Ajout.html). */}
         <IconChooser value={icon} onChange={setIcon} />

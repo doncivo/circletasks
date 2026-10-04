@@ -1,0 +1,11 @@
+/* Roues jour / mois / année (AjoutEvenement.html : trois colonnes centrées, écart de 44 px). */
+.ct-event-wheels {
+  display: flex;
+  justify-content: center;
+  gap: 44px;
+  padding: 0 12px;
+}
+
+.ct-event-wheels > .ct-wheel {
+  max-width: 120px;
+}

@@ -2,10 +2,25 @@ import type { Id, LocalDateTime, ReminderId, RoutineId, SyncMeta, TaskId, EventI
 
 /** Avances proposées (N-02), en minutes : à l'heure, 5, 15, 30, 60 min, 1 jour. */
 export const REMINDER_OFFSETS_MIN = [0, 5, 15, 30, 60, 1440] as const;
-export type ReminderOffsetMin = (typeof REMINDER_OFFSETS_MIN)[number];
 
+/**
+ * Avances propres aux événements (E-01, AjoutEvenement.html), de la plus lointaine à la plus proche : « 1 semaine avant » (10080 min),
+ * « La veille » (1440), « Le jour même » (0). 10080 n'est pas dans la liste de N-02 : écart de maquette suivi (migration 0009) ; il
+ * n'est jamais proposé ni accepté pour une tâche ou une routine (`isReminderOffset` reste limité à REMINDER_OFFSETS_MIN).
+ */
+export const EVENT_REMINDER_OFFSETS_MIN = [10080, 1440, 0] as const;
+
+/** Toute avance que la base accepte (`reminder.offset_min`). */
+export type ReminderOffsetMin = (typeof REMINDER_OFFSETS_MIN)[number] | (typeof EVENT_REMINDER_OFFSETS_MIN)[number];
+
+/** Avance de la liste de N-02 (tâches et routines) ; exclut « 1 semaine avant ». */
 export function isReminderOffset(value: number): value is ReminderOffsetMin {
   return (REMINDER_OFFSETS_MIN as readonly number[]).includes(value);
+}
+
+/** Avance d'un événement (E-01) : 10080, 1440 ou 0 minute. */
+export function isEventReminderOffset(value: number): value is ReminderOffsetMin {
+  return (EVENT_REMINDER_OFFSETS_MIN as readonly number[]).includes(value);
 }
 
 /** Élément ciblé par un rappel. */

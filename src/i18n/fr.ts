@@ -3,6 +3,7 @@ import { somedayFr } from './fr.someday';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
+import { eventsFr } from './fr.events';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -563,6 +564,7 @@ export const fr = {
     routine: 'Routine modifiée',
     goal: 'Objectif modifié',
     checklist: 'Checklist modifiée',
+    event: 'Événement modifié',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -578,6 +580,7 @@ export const fr = {
   },
   routines: routinesFr,
   checklists: checklistsFr,
+  events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
   shortcuts: {

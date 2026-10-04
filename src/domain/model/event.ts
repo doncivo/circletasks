@@ -28,3 +28,9 @@ export interface CalendarEvent extends SyncMeta {
   readonly icon: IconRef | null;
   readonly birthYear: number | null;
 }
+
+/** Champs d'un événement local sans les colonnes de synchro. */
+export type EventFields = Omit<CalendarEvent, keyof SyncMeta>;
+export type NewEvent = EventFields & { readonly id: EventId };
+/** Champs modifiables d'un événement local : toute la série change à la fois (E-01 D5). */
+export type EventPatch = Partial<EventFields>;

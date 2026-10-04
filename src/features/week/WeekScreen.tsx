@@ -1,7 +1,7 @@
 import { useDefaultReminderOffsets } from '../reminders';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import type { LocalDate } from '../../domain/types';
+import type { EventId, ExternalEventId, LocalDate } from '../../domain/types';
 import { externalEventsByDay } from '../../domain/externalEvents';
 import { addWeeks, buildWeek, isoWeekOf, weekDays, weekStartOf } from '../../domain/week';
 import { detectTimeZone } from '../../platform';
@@ -17,7 +17,8 @@ import { WeekGoalBanners } from '../goals/WeekGoalBanners';
 import { SomedayButton, SomedayPanel } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
-import { TaskCreateSheet, scheduleOf } from '../tasks/TaskCreateSheet';
+import { scheduleOf } from '../tasks/TaskCreateSheet';
+import { AddSheet } from '../events';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
 import { WeekDayView } from './WeekDayView';
@@ -201,7 +202,7 @@ export function WeekScreen() {
               dragProps={moves.dragProps}
               drop={moves.dropFor(day.date)}
               onFocusTask={moves.setFocusedTaskId}
-              onOpenEvent={(id) => openDetail({ type: 'externalEvent', id })}
+              onOpenEvent={(entry) => openDetail(entry.calendarName !== null ? { type: 'externalEvent', id: entry.id as ExternalEventId } : { type: 'event', id: entry.id as EventId })}
               onOpenChecklist={(id) => navigate({ tab: 'checklists', checklistId: id })}
               onAddTask={addToDay}
               onToggleDone={(id) => void toggleDone(id)}
@@ -226,30 +227,31 @@ export function WeekScreen() {
       </div>
 
       {sheetOpen && (
-        <TaskCreateSheet
-          viewedDate={today}
-          today={today}
-          spaces={spaces}
-          initialSpaceId={defaultSpaceId}
-          initialProjectId={projectFilter}
-          defaultOffsets={defaultOffsets}
+        <AddSheet
+          initialSegment="task"
+          date={today}
           onClose={() => setSheetOpen(false)}
-          onCreate={async (input) => {
-            const schedule = scheduleOf(input.choice);
-            const result = await addTask({
-              title: input.title,
-              spaceId: input.spaceId,
-              projectId: input.projectId,
-              date: schedule.date ?? today,
-              ...(schedule.someday ? { someday: true } : {}),
-              ...(schedule.time !== undefined ? { time: schedule.time } : {}),
-              recurrence: input.recurrence,
-              icon: input.icon,
-              reminderOffsets: input.reminderOffsets,
-              goalId: input.goalId,
-            });
-            if (result.ok) announceCreation(input.spaceId);
-            return result.ok;
+          taskSheet={{
+            viewedDate: today,
+            initialProjectId: projectFilter,
+            defaultOffsets,
+            onCreate: async (input) => {
+              const schedule = scheduleOf(input.choice);
+              const result = await addTask({
+                title: input.title,
+                spaceId: input.spaceId,
+                projectId: input.projectId,
+                date: schedule.date ?? today,
+                ...(schedule.someday ? { someday: true } : {}),
+                ...(schedule.time !== undefined ? { time: schedule.time } : {}),
+                recurrence: input.recurrence,
+                icon: input.icon,
+                reminderOffsets: input.reminderOffsets,
+                goalId: input.goalId,
+              });
+              if (result.ok) announceCreation(input.spaceId);
+              return result.ok;
+            },
           }}
         />
       )}

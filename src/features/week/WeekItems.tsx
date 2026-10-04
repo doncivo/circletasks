@@ -191,7 +191,7 @@ export function WeekEventItem({ event, layout, onOpen }: WeekEventItemProps) {
   const icon = event.icon ? <IconView icon={event.icon} size={18} color="currentColor" /> : <Icon icon={CalendarDays} size={18} />;
   const source = external ? 'external' : 'local';
   const readOnly = external ? <span className="ct-visually-hidden">{`, ${t('week.eventReadOnly')}`}</span> : null;
-  const interactive = external && onOpen !== undefined;
+  const interactive = onOpen !== undefined;
   const props = { className: 'ct-week-event', 'data-layout': layout, 'data-source': source };
   const content =
     layout === 'mobile' ? (

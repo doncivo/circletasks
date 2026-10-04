@@ -23,7 +23,7 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   reminders: createReminderRepository(executor, stamper),
   goals: createGoalRepository(executor, stamper),
   settings: createSettingsRepository(executor, stamper),
-  events: createEventRepository(executor),
+  events: createEventRepository(executor, stamper),
   checklists: createChecklistRepository(executor, stamper),
   checklistItems: createChecklistItemRepository(executor, stamper),
   externalEvents: createExternalEventRepository(executor),

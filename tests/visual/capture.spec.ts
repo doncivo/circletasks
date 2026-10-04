@@ -6,6 +6,7 @@ import { setWheels } from '../e2e/helpers/schedule';
 import { createTask, openToday } from '../e2e/helpers/today';
 import { attachTasks, insertGoals } from '../e2e/helpers/goals';
 import { insertChecklists, openChecklists } from '../e2e/helpers/checklists';
+import { insertEvents, openEvents, type DirectEvent } from '../e2e/helpers/events';
 import { insertRoutines, openRoutines, type DirectRoutine } from '../e2e/helpers/routines';
 import { addProject, filterPill, openSpacesScreen, setTaskProject } from '../e2e/helpers/spaces';
 import { insertSomeday, openSomeday } from '../e2e/helpers/someday';
@@ -200,6 +201,25 @@ async function prepareChecklists(page: Page, all: boolean): Promise<void> {
   ]);
   await openChecklists(page);
   await expect(page.getByText('3 / 6').first()).toBeVisible();
+}
+
+/**
+ * Événements des maquettes (Evenements.html, PC-Evenements.html), jour figé au mer. 23 sept. 2026 : « Point client » (Google Agenda,
+ * externe), anniversaire de Karim, comité mensuel, point trimestriel ; « Clôture du trimestre » seulement sur PC. Les jours fériés
+ * (Fête de l'Évacuation, Toussaint, Armistice) viennent des calendriers FR et TN activés par défaut (E-03).
+ */
+const EVENTS_SEED: DirectEvent[] = [
+  { title: 'Anniversaire de Karim', date: '1992-09-25', kind: 'birthday', repeat: 'yearly', birthYear: 1992, space: 'perso', important: true, icon: 'lucide:gift' },
+  { title: 'Comité de direction', date: '2026-10-05', repeat: 'monthly', important: true },
+  { title: 'Point trimestriel', date: '2026-10-20', start: '09:30', end: '09:30', important: true },
+];
+
+async function prepareEvents(page: Page, pc: boolean): Promise<void> {
+  await insertEvents(page, [...EVENTS_SEED, ...(pc ? [{ title: 'Clôture du trimestre', date: '2026-09-30', important: true } satisfies DirectEvent] : [])]);
+  await seedCalendarAccount(page);
+  await seedExternalEvent(page, { id: 'visual-1', title: 'Point client', startUtc: '2026-09-23T08:00:00Z', endUtc: '2026-09-23T09:00:00Z' });
+  await openEvents(page);
+  await expect(page.getByText('Point client').first()).toBeVisible();
 }
 
 interface Screen {
@@ -427,6 +447,25 @@ const SCREENS: Screen[] = [
       await filterPill(page, 'Pro').click();
       await page.getByRole('button', { name: 'Envoyer la facture', exact: true }).click();
       await expect(page.getByRole('complementary')).toBeVisible();
+    },
+  },
+  { name: 'Evenements', mockup: 'Evenements.html', viewport: PHONE, date: WEDNESDAY, prepare: (page) => prepareEvents(page, false) },
+  { name: 'PC-Evenements', mockup: 'PC-Evenements.html', viewport: PC, date: WEDNESDAY, prepare: (page) => prepareEvents(page, true) },
+  {
+    // Feuille « Nouvel événement » (AjoutEvenement.html) : titre saisi, journée entière, répétition annuelle, rappel « La veille ».
+    name: 'AjoutEvenement',
+    mockup: 'AjoutEvenement.html',
+    viewport: PHONE,
+    date: WEDNESDAY,
+    prepare: async (page) => {
+      await openEvents(page);
+      await page.getByRole('button', { name: 'Ajouter un événement' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Nouvel événement' });
+      await dialog.getByLabel('Titre', { exact: true }).fill('Anniversaire de Karim');
+      await dialog.getByRole('radio', { name: 'Annuel' }).check();
+      await dialog.getByRole('checkbox', { name: 'Le jour même' }).check();
+      await dialog.getByRole('button', { name: 'Perso', exact: true }).click();
+      await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeEnabled();
     },
   },
   {

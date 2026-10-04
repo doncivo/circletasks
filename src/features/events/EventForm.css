@@ -1,0 +1,193 @@
+/* Feuille « Nouvel événement » (AjoutEvenement.html). */
+.ct-event-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+.ct-event-form > * {
+  flex-shrink: 0;
+}
+
+.ct-event-form__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-event-form__heading {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2rem;
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.1;
+}
+
+.ct-event-form__close {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-event-form__close:focus-visible,
+.ct-event-form__delete:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-event-form__title .ct-text-field__control {
+  height: 54px;
+  font-size: 1.125rem;
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-event-form__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+/* Intitulé souligné (.lbl des maquettes). */
+.ct-event-form__label {
+  align-self: flex-start;
+  padding-bottom: 4px;
+  border-bottom: 2px solid var(--ct-color-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-event-form__row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--ct-space-3) var(--ct-space-4);
+}
+
+.ct-event-form__row--repeat {
+  justify-content: flex-start;
+  gap: var(--ct-space-3) 24px;
+}
+
+/* Choix : radio rond (.dot) ou case carrée (.box) de 22 px, trait #2E2150. */
+.ct-event-form__choice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-medium);
+  cursor: pointer;
+}
+
+.ct-event-form__choice[data-checked='true'] {
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-event-form__input {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  box-sizing: border-box;
+  border: 2px solid var(--ct-color-text);
+  background: transparent;
+  cursor: pointer;
+}
+
+.ct-event-form__input[data-type='radio'] {
+  border-radius: 50%;
+}
+
+.ct-event-form__input[data-type='checkbox'] {
+  border-radius: var(--ct-radius-sm);
+}
+
+.ct-event-form__input[data-type='radio']:checked::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  background: var(--ct-color-text);
+}
+
+.ct-event-form__input[data-type='checkbox']:checked {
+  background: var(--ct-color-text);
+}
+
+.ct-event-form__input[data-type='checkbox']:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid var(--ct-color-bg);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.ct-event-form__input:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-event-form__note {
+  margin: 0;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-event-form__spaceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-event-form__spaceLabel {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-event-form__error {
+  margin: 0;
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-event-form__spacer {
+  flex-grow: 1;
+}
+
+.ct-event-form__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+}
+
+.ct-event-form__delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  border: 1.5px solid var(--ct-color-danger);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface);
+  color: var(--ct-color-danger);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}

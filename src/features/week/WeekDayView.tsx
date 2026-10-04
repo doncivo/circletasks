@@ -1,7 +1,7 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
-import { rowTime, type TodayRow } from '../../domain/todayList';
-import type { ChecklistId, ExternalEventId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
+import { rowTime, type TodayEventEntry, type TodayRow } from '../../domain/todayList';
+import type { ChecklistId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
@@ -38,8 +38,8 @@ export interface WeekDayViewProps {
   readonly drop?: WeekDropState | null;
   readonly onFocusTask?: (id: TaskId) => void;
   readonly onToggleDone: (id: TaskId) => void;
-  /** Ouvre la fiche en lecture seule d'un événement externe (S-05). */
-  readonly onOpenEvent?: (id: ExternalEventId) => void;
+  /** Ouvre la fiche de l'événement : lecture seule pour un agenda externe (S-05), modifiable pour un événement local (E-01). */
+  readonly onOpenEvent?: (event: TodayEventEntry) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
   /** Ouvre l'onglet Checklists sur la checklist du jour (C-03). */
   readonly onOpenChecklist?: (id: ChecklistId) => void;
@@ -136,7 +136,7 @@ export function WeekDayView(props: WeekDayViewProps) {
                   key={event.id}
                   event={event}
                   layout={layout}
-                  {...(props.onOpenEvent ? { onOpen: () => props.onOpenEvent?.(event.id as ExternalEventId) } : {})}
+                  {...(props.onOpenEvent ? { onOpen: () => props.onOpenEvent?.(event) } : {})}
                 />
               ))}
               {day.list.rows.map(renderRow)}

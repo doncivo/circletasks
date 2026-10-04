@@ -58,23 +58,36 @@ export function TodayGoalCard({ entry, compact, onOpen }: { entry: TodayGoalEntr
 }
 
 /** Bandeau d'un événement du jour (Main.html : « 10:00 Point client · Google Agenda »), lecture seule. */
-export function TodayEventBand({ event, compact }: { event: TodayEventEntry; compact: boolean }) {
-  return (
-    <li className="ct-today-event" data-compact={compact}>
+export function TodayEventBand({ event, compact, onOpen }: { event: TodayEventEntry; compact: boolean; onOpen?: (event: TodayEventEntry) => void }) {
+  const content = (
+    <>
       {event.icon ? <IconView icon={event.icon} size={22} color="var(--ct-color-event-text)" /> : <Icon icon={CalendarDays} size={22} color="var(--ct-color-event-text)" />}
       <span className="ct-today-event__time">{event.allDay ? t('today.eventAllDay') : event.startTime}</span>
       <span className="ct-today-event__title">{event.title}</span>
       {event.calendarName && <span className="ct-today-event__source">{event.calendarName}</span>}
+    </>
+  );
+  // Un événement local (M7) s'ouvre en modification (E-01 critère 7) ; un événement d'agenda externe reste en lecture seule.
+  const interactive = onOpen !== undefined && event.calendarName === null;
+  return (
+    <li className="ct-today-event" data-compact={compact} data-kind={event.kind}>
+      {interactive ? (
+        <button type="button" className="ct-today-event__button" onClick={() => onOpen(event)}>
+          {content}
+        </button>
+      ) : (
+        content
+      )}
     </li>
   );
 }
 
-export function TodayEventBands({ events, compact }: { events: readonly TodayEventEntry[]; compact: boolean }) {
+export function TodayEventBands({ events, compact, onOpen }: { events: readonly TodayEventEntry[]; compact: boolean; onOpen?: (event: TodayEventEntry) => void }) {
   if (events.length === 0) return null;
   return (
     <ul className="ct-today-events" aria-label={t('today.eventsLabel')}>
       {events.map((event) => (
-        <TodayEventBand key={event.id} event={event} compact={compact} />
+        <TodayEventBand key={event.id} event={event} compact={compact} {...(onOpen ? { onOpen } : {})} />
       ))}
     </ul>
   );

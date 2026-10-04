@@ -44,3 +44,7 @@ export * from './quietHours';
 export * from './focusSession';
 export * from './filteredAggregates';
 export * from './goalRules';
+export * from './eventRules';
+export * from './eventOccurrences';
+export * from './eventReminders';
+export * from './eventList';

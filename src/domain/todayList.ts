@@ -1,4 +1,4 @@
-import type { Checklist, ChecklistSummary, Goal, GoalProgress, IconRef, Routine, Task } from './model';
+import type { Checklist, ChecklistSummary, EventKind, Goal, GoalProgress, IconRef, Routine, Task } from './model';
 import { compareGoalsByCreation, pinnedGoalsForWeek } from './goalRules';
 import { matchesSpaceFilter } from './spaceRules';
 import { isPausedAt, type DateInterval } from './routineSchedule';
@@ -35,6 +35,8 @@ export interface TodayEventEntry {
   readonly icon: IconRef | null;
   /** Instant de début UTC (événement externe) : départage deux événements de même heure locale (recul d'heure : 02:30 CEST puis 02:30 CET). */
   readonly startInstant?: string;
+  /** Type d'un événement local (E-02) ou jour férié (E-03) : style du bandeau (anniversaire #FBE7E4, férié vert) ; absent pour un événement externe. */
+  readonly kind?: EventKind | 'holiday';
 }
 
 /** Objectif épinglé (OB-02) et son avancement (OB-04). Un encadré par objectif épinglé (QB-12). */

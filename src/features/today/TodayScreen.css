@@ -146,8 +146,10 @@
   justify-content: space-between;
 }
 
+/* Feuille Ajout (Ajout.html) : titre de 32 px, comme « Nouvel événement » et « Nouvelle routine » (segments Tâche / Événement / Routine). */
 .ct-task-sheet__heading {
-  font-size: var(--ct-font-size-heading-sm);
+  font-size: 2rem;
+  line-height: 1.1;
 }
 
 .ct-task-sheet__close {
@@ -464,4 +466,44 @@
 /* Champ « Date » intégré au cadre gris du champ d'ajout (PC) : bordure discrète, pas d'accent permanent. */
 .ct-today__addRow .ct-date-editor__field {
   border: 1.5px solid var(--ct-color-border-strong);
+}
+
+/* Événement local (M7) : bouton qui ouvre la fiche, même mise en page que la ligne en lecture seule. */
+.ct-today-event__button {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-today-event__button:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 4px;
+}
+
+/* Anniversaire et date importante (E-02) : style local #FBE7E4 ; jour férié (E-03) : lecture seule verte. */
+.ct-today-event[data-kind='birthday'],
+.ct-today-event[data-kind='important'] {
+  background: var(--ct-color-event-local-bg);
+}
+
+.ct-today-event[data-kind='birthday'] .ct-today-event__source,
+.ct-today-event[data-kind='important'] .ct-today-event__source {
+  color: var(--ct-color-event-local-text);
+}
+
+.ct-today-event[data-kind='holiday'] {
+  background: var(--ct-color-achieved-bg);
+}
+
+.ct-today-event[data-kind='holiday'] .ct-today-event__source {
+  color: var(--ct-color-achieved-text);
 }
