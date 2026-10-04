@@ -8,7 +8,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
-| PREP-01 | Prérequis et comptes (PRD section 2) | Ali | en cours (reste : secrets GitHub TAURI_SIGNING_PRIVATE_KEY et _PASSWORD, demandés au moment du workflow de release) |
+| PREP-01 | Prérequis et comptes (PRD section 2) | Ali | fait (secrets GitHub créés le 2026-10-04 : TAURI_SIGNING_PRIVATE_KEY, _PASSWORD, RELEASES_TOKEN ; environnement « releases ») |
 | PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
 | PREP-03 | Archiver le PRD v3 et le scaffold Expo dans docs/archive/, comparer les 45 anciennes stories (v3 + Expo manquants) | product-owner | fait (v3 + Expo indisponibles) |
 | PREP-04 | Installer les polices Fraunces et DM Sans en local et la bibliothèque lucide-react | ui-design-system | fait |
@@ -61,10 +61,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ES-05 | M13 | Je déplace un élément d'un espace ou projet à l'autre | spaces-goals | fait |
 | ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | fait |
 | ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | fait |
-| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | en cours (écrans Focus et Statistiques avec M10/M11, ordre 3) |
+| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | en cours (partie Focus faite avec F-03 ; partie Statistiques avec M11, ordre 3) |
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
 | D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
-| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 10-11 : publication, attend le workflow de release et les secrets GitHub) |
+| D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (critères 10-11 : publication, secrets en place, reste le workflow build-windows.yml) |
 | OB-01 | M17 | Je fixe un objectif pour la semaine | spaces-goals | fait |
 | OB-02 | M17 | J'épingle l'objectif en haut de ma liste | spaces-goals | fait |
 | OB-03 | M17 | Je rattache une tâche à un objectif | spaces-goals | fait |
@@ -108,15 +108,15 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
-| Q-01 | M9 | J'ajoute une tâche depuis n'importe où sur PC | quick-capture | en cours |
+| Q-01 | M9 | J'ajoute une tâche depuis n'importe où sur PC | quick-capture | fait |
 | Q-02 | M9 | Je saisis en langage naturel | quick-capture | fait |
-| Q-03 | M9 | Je dicte une tâche | quick-capture | en cours |
-| Q-04 | M9 | Je photographie une liste manuscrite | quick-capture | en cours |
+| Q-03 | M9 | Je dicte une tâche | quick-capture | fait |
+| Q-04 | M9 | Je photographie une liste manuscrite | quick-capture | fait |
 | Q-06 | M9 | Je choisis espace et projet en tapant | quick-capture | fait |
-| F-01 | M10 | Je lance une session sur une tâche | focus-time | en cours |
-| F-02 | M10 | Je fais une pause | focus-time | en cours |
-| F-03 | M10 | Je vois mon temps de concentration | focus-time | en cours |
-| F-04 | M10 | La fin de session me notifie | focus-time | en cours |
+| F-01 | M10 | Je lance une session sur une tâche | focus-time | fait |
+| F-02 | M10 | Je fais une pause | focus-time | fait |
+| F-03 | M10 | Je vois mon temps de concentration | focus-time | fait |
+| F-04 | M10 | La fin de session me notifie | focus-time | fait |
 | H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | à faire |
 | H-02 | M11 | Je vois mon taux de complétion | stats-history | à faire |
 | H-03 | M11 | J'exporte mon historique | stats-history | à faire |
