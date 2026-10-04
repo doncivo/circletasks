@@ -34,6 +34,7 @@ export const focusFr = {
   stopDiscardHint: 'Moins d’une minute de concentration : la session ne sera pas enregistrée.',
   stopContinue: 'Continuer',
   alreadyRunning: 'Une session est déjà en cours',
+  actionError: 'Action impossible sur la session Focus.',
   startError: 'Impossible de lancer la session Focus.',
   // --- fin de session (F-04) ---
   ended: 'Session terminée',

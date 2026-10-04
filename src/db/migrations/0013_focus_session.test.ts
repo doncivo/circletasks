@@ -12,7 +12,7 @@ describe('migration 0013 (F-01) : table focus_session', () => {
     expect((await migrate(db, migrations)).applied).toEqual(migrations.map((m) => m.version));
     expect((await migrate(db, migrations)).applied).toEqual([]);
     const columns = await db.select<{ name: string; notnull: number; dflt_value: string | null }>("SELECT name, \"notnull\", dflt_value FROM pragma_table_info('focus_session')", []);
-    expect(columns.map((c) => c.name)).toEqual(['id', 'task_id', 'space_id', 'planned_min', 'started_at', 'ended_at', 'paused_sec', 'paused_at', 'created_at', 'updated_at', 'deleted_at', 'device_id', 'hlc']);
+    expect(columns.map((c) => c.name)).toEqual(['id', 'task_id', 'space_id', 'planned_min', 'started_at', 'ended_at', 'paused_sec', 'paused_at', 'created_at', 'updated_at', 'deleted_at', 'device_id', 'hlc', 'project_id']);
     const byName = Object.fromEntries(columns.map((c) => [c.name, c]));
     expect(byName['task_id']?.notnull).toBe(0);
     expect(byName['planned_min']?.notnull).toBe(0);

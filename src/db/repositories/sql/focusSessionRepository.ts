@@ -1,7 +1,7 @@
 import type { FocusTaskTotal, FocusTotal } from '../../../domain/focusTotals';
 import type { WriteStamper } from '../../../domain/hlc';
 import type { FocusSession, FocusSessionPatch, NewFocusSession } from '../../../domain/model';
-import type { FocusSessionId, IsoDateTime, SpaceId, TaskId } from '../../../domain/types';
+import type { FocusSessionId, IsoDateTime, ProjectId, SpaceId, TaskId } from '../../../domain/types';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 
 import type { FocusSessionRepository, FocusTotalsQuery } from '../focusSessionRepository';
@@ -10,6 +10,7 @@ import { readSyncMeta, requireMapped, requireRow, type SyncRow } from './sqlHelp
 interface FocusSessionRow extends SqlRow, SyncRow {
   readonly task_id: string | null;
   readonly space_id: string;
+  readonly project_id: string | null;
   readonly planned_min: number | null;
   readonly started_at: string;
   readonly ended_at: string | null;
@@ -22,6 +23,7 @@ function rowToFocusSession(row: FocusSessionRow): FocusSession {
     id: row.id as FocusSessionId,
     taskId: row.task_id === null ? null : (row.task_id as TaskId),
     spaceId: row.space_id as SpaceId,
+    projectId: row.project_id === null ? null : (row.project_id as ProjectId),
     plannedMin: row.planned_min,
     startedAt: row.started_at as IsoDateTime,
     endedAt: row.ended_at === null ? null : (row.ended_at as IsoDateTime),
@@ -49,7 +51,7 @@ function totalsWhere(query: FocusTotalsQuery): { readonly sql: string; readonly 
     params.push(query.filter.space);
   }
   if (query.filter.project !== null) {
-    sql += ' AND t.project_id = ?';
+    sql += ' AND f.project_id = ?';
     params.push(query.filter.project);
   }
   return { sql, params };
@@ -88,9 +90,9 @@ export function createFocusSessionRepository(db: SqlExecutor, stamper: WriteStam
     async create(input: NewFocusSession) {
       const stamp = stamper.next();
       await db.execute(
-        `INSERT INTO focus_session (id, task_id, space_id, planned_min, started_at, ended_at, paused_sec, paused_at, created_at, updated_at, deleted_at, device_id, hlc)
-         VALUES (?, ?, ?, ?, ?, NULL, 0, NULL, ?, ?, NULL, ?, ?)`,
-        [input.id, input.taskId, input.spaceId, input.plannedMin, input.startedAt, stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
+        `INSERT INTO focus_session (id, task_id, space_id, project_id, planned_min, started_at, ended_at, paused_sec, paused_at, created_at, updated_at, deleted_at, device_id, hlc)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, 0, NULL, ?, ?, NULL, ?, ?)`,
+        [input.id, input.taskId, input.spaceId, input.projectId ?? null, input.plannedMin, input.startedAt, stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
       );
       return requireMapped(await fetch(input.id), 'focus_session', input.id, rowToFocusSession);
     },
@@ -130,7 +132,7 @@ export function createFocusSessionRepository(db: SqlExecutor, stamper: WriteStam
       const where = totalsWhere(query);
       const rows = await db.select<TotalRow>(
         `SELECT COUNT(*) AS sessions, COALESCE(SUM(${SESSION_SECONDS}), 0) AS seconds
-         FROM focus_session f LEFT JOIN task t ON t.id = f.task_id WHERE ${where.sql}`,
+         FROM focus_session f WHERE ${where.sql}`,
         where.params,
       );
       return { seconds: rows[0]?.seconds ?? 0, sessions: rows[0]?.sessions ?? 0 } satisfies FocusTotal;
@@ -140,7 +142,7 @@ export function createFocusSessionRepository(db: SqlExecutor, stamper: WriteStam
       const where = totalsWhere(query);
       const rows = await db.select<TaskTotalRow>(
         `SELECT f.task_id AS task_id, COUNT(*) AS sessions, COALESCE(SUM(${SESSION_SECONDS}), 0) AS seconds
-         FROM focus_session f LEFT JOIN task t ON t.id = f.task_id
+         FROM focus_session f
          WHERE ${where.sql} AND f.task_id IS NOT NULL
          GROUP BY f.task_id ORDER BY seconds DESC, f.task_id LIMIT ?`,
         [...where.params, Math.max(0, Math.floor(limit))],

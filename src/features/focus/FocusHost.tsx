@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { createHtmlAudioPlayer, type SoundPlayer } from '../../platform/focus';
+import { sanitizeFocusDuration } from '../../domain/focusSession';
 import { formatTime } from '../../i18n/format';
 import { getLocale } from '../../i18n';
 import type { FocusWindowAction, FocusWindowState } from '../../platform/focus';
@@ -95,7 +96,7 @@ export function FocusHost() {
       const state = store.getState();
       switch (action.type) {
         case 'duration':
-          void state.setDuration(action.minutes === null ? null : action.minutes === 25 || action.minutes === 50 || action.minutes === 90 ? action.minutes : 25);
+          void state.setDuration(sanitizeFocusDuration(action.minutes));
           break;
         case 'pause':
           void state.pause();

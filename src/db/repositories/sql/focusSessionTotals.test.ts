@@ -37,7 +37,8 @@ describe('Totaux de concentration (SQL, F-03)', () => {
   async function add(taskId: TaskId | null, space: SpaceId, startedAt: IsoDateTime, minutes: number | null, pausedSec = 0): Promise<FocusSessionId> {
     counter += 1;
     const id = sid(counter);
-    await db.data.repos.focusSessions.create({ id, taskId, spaceId: space, plannedMin: 25, startedAt });
+    const owner = taskId ? (await db.driver.select<{ project_id: string | null }>('SELECT project_id FROM task WHERE id = ?', [taskId]))[0] : undefined;
+    await db.data.repos.focusSessions.create({ id, taskId, spaceId: space, projectId: (owner?.project_id ?? null) as ProjectId | null, plannedMin: 25, startedAt });
     if (minutes !== null) await db.data.repos.focusSessions.update(id, { endedAt: new Date(Date.parse(startedAt) + minutes * 60_000 + pausedSec * 1000).toISOString() as IsoDateTime, pausedSec });
     return id;
   }

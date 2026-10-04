@@ -139,6 +139,7 @@ export function createFocusUseCases(deps: FocusUseCaseDeps): FocusUseCases {
         id: newEntityId<FocusSessionId>(deps.ids),
         taskId,
         spaceId: placement.spaceId,
+        projectId: placement.projectId,
         plannedMin: durationMin,
         startedAt: nowIso(clock),
       });

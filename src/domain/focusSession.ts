@@ -14,6 +14,8 @@ export interface FocusSessionRecord {
   readonly id: Id;
   readonly taskId: TaskId | null;
   readonly spaceId: SpaceId;
+  /** Projet de la tâche figé au lancement (ES-08) ; absent des enregistrements anciens : on lit alors la tâche. */
+  readonly projectId?: ProjectId | null;
   /** Durée prévue en minutes ; null : session « Libre » (aucune limite, compte le temps écoulé). */
   readonly plannedMin: number | null;
   readonly startedAt: IsoDateTime;
@@ -47,7 +49,8 @@ export function focusPlacementAtLaunch(
 }
 
 /** Projet d'une session : celui de sa tâche (aucun sans tâche ou si la tâche est inconnue). */
-export function projectOfFocusSession(session: Pick<FocusSessionRecord, 'taskId'>, tasks: ReadonlyMap<TaskId, Pick<Task, 'projectId'>>): ProjectId | null {
+export function projectOfFocusSession(session: Pick<FocusSessionRecord, 'taskId' | 'projectId'>, tasks: ReadonlyMap<TaskId, Pick<Task, 'projectId'>>): ProjectId | null {
+  if (session.projectId !== undefined) return session.projectId;
   return session.taskId ? (tasks.get(session.taskId)?.projectId ?? null) : null;
 }
 

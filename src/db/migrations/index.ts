@@ -12,9 +12,10 @@ import { migration0010Holiday } from './0010_holiday';
 import { migration0011SearchIndex } from './0011_search_index';
 import { migration0012TaskExternalEvent } from './0012_task_external_event';
 import { migration0013FocusSession } from './0013_focus_session';
+import { migration0014FocusSessionProject } from './0014_focus_session_project';
 
 /**
  * Registre ordonné des migrations de l'app. Ajouter chaque nouveau fichier
  * `NNNN_titre.ts` ici, à la fin, sans jamais modifier une entrée publiée.
  */
-export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets, migration0010Holiday, migration0011SearchIndex, migration0012TaskExternalEvent, migration0013FocusSession];
+export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets, migration0010Holiday, migration0011SearchIndex, migration0012TaskExternalEvent, migration0013FocusSession, migration0014FocusSessionProject];

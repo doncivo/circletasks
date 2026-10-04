@@ -31,6 +31,7 @@ export const focusEn: Messages['focus'] = {
   stopDiscardHint: 'Less than a minute of focus: the session will not be saved.',
   stopContinue: 'Continue',
   alreadyRunning: 'A session is already running',
+  actionError: 'Unable to complete this Focus action.',
   startError: 'Unable to start the Focus session.',
   ended: 'Session finished',
   endedWith: 'Session finished · {duration}',

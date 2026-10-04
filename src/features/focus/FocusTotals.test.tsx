@@ -146,7 +146,7 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       await h.db.driver.execute("INSERT INTO project (id, space_id, name, color, sort_order, created_at, updated_at, device_id, hlc) VALUES ('10000000-0000-4000-8000-0000000000b1', ?, 'Mission client', '#2f6b7a', 1, 'z', 'z', 'd', 'h')", [SPACE_PRO_ID]);
       useAppStore.getState().setProjects(await h.container.data.repos.projects.listForFilter('all', { includeArchived: true }));
       const facture = await seedFocusTask(h.container, 'Envoyer la facture');
-      await h.container.data.repos.tasks.update(facture.id, { projectId: '10000000-0000-4000-8000-0000000000b1' as never });
+      h.container.taskEntities.publish([await h.container.data.repos.tasks.update(facture.id, { projectId: '10000000-0000-4000-8000-0000000000b1' as never })]);
       const courses = await seedFocusTask(h.container, 'Courses', { spaceId: SPACE_PERSO_ID });
       const notaire = await seedFocusTask(h.container, 'Appeler le notaire');
       await session(facture.id, 90);

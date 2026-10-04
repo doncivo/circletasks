@@ -33,6 +33,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 ## Ordre 4 (synchro)
 
+- focus_session : une seule session active garantie par le code seulement ; à la fusion de synchro, clore la plus ancienne si deux sessions sont ouvertes.
 - Exclure `search_index` et `search_index_doc` des journaux de synchro (RC-01 : index local reconstruit sur chaque appareil).
 - Lister dans l'ADR de synchro les colonnes locales, non synchronisées : `task.discarded`, `external_event` (sans colonnes de synchro) et les réglages de portée locale.
 - Documenter le marqueur `series_index = -1`.

@@ -1,9 +1,10 @@
 import { createStore } from 'zustand';
-import { endAtMs, isElapsed, notificationFireAtMs, type FocusDuration } from '../../domain/focusSession';
+import { endAtMs, isElapsed, notificationFireAtMs, sanitizeFocusDuration, type FocusDuration } from '../../domain/focusSession';
 import { focusTotalMinutes } from '../../domain/focusTotals';
 import type { FocusSession, Task } from '../../domain/model';
 import type { LocalTime, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
+import { useNoticeStore } from '../app/notice';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createFocusUseCases, type FocusUseCases, type StartOutcome } from './focusUseCases';
 
@@ -81,9 +82,18 @@ function createFocusStore(container: AppContainer) {
 
   // Les actions s'exécutent l'une après l'autre : un tic de fin, un arrêt et une pause simultanés ne se marchent pas dessus.
   let chain: Promise<unknown> = Promise.resolve();
-  const serial = <T>(work: () => Promise<T>): Promise<T> => {
-    const run = chain.then(work, work);
-    chain = run.catch(() => undefined);
+  // Une erreur d'écriture ne fuit jamais en rejet non géré : le message « Action impossible » s'affiche et l'état reste celui d'avant.
+  const serial = <T>(work: () => Promise<T>, fallback?: T): Promise<T> => {
+    const guarded = async (): Promise<T> => {
+      try {
+        return await work();
+      } catch {
+        useNoticeStore.getState().show(t('focus.actionError'));
+        return fallback as T;
+      }
+    };
+    const run = chain.then(guarded, guarded);
+    chain = run;
     return run;
   };
 
@@ -288,7 +298,7 @@ function createFocusStore(container: AppContainer) {
           if (!ended?.session.taskId) return;
           try {
             // Même durée que la session qui vient de se terminer (critère 4), sans changer la durée mémorisée.
-            const outcome = await useCases.start(ended.session.taskId, ended.session.plannedMin === 25 || ended.session.plannedMin === 50 || ended.session.plannedMin === 90 ? ended.session.plannedMin : null);
+            const outcome = await useCases.start(ended.session.taskId, sanitizeFocusDuration(ended.session.plannedMin));
             if (outcome.status === 'started') {
               set({ session: outcome.session, ended: null, task: taskInfoOf(outcome.task) });
               armEndTimer();
