@@ -99,6 +99,18 @@ test.describe('D-04 / P-08 — raccourcis clavier', () => {
     }
   });
 
+  test('dans un champ de saisie, Espace, Suppr et Ctrl+D ne touchent ni la saisie ni la tâche (critère 4)', async ({ page }, testInfo) => {
+    const title = `Saisie ${testInfo.project.name}`;
+    await createTask(page, testInfo, { title });
+    const field = page.getByLabel('Nouvelle tâche');
+    await field.focus();
+    await page.keyboard.type('a b');
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('Control+d');
+    await expect(field).toHaveValue('a b');
+    await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).not.toBeChecked();
+  });
+
   test('Alt+1 à Alt+6 et Ctrl+← / Ctrl+→ dans la Semaine', async ({ page }) => {
     await page.keyboard.press('Alt+2');
     await expect(page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true })).toHaveAttribute('aria-current', 'page');
