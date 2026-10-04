@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
+import { isSharedSetting } from '../../domain/model';
 import { asEntityId, type DeviceId } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { setFormatPrefs, getFirstWeekday, getTimeFormat } from '../../i18n/formatPrefs';
@@ -28,6 +29,8 @@ describe('Apparence et formats (P-03)', () => {
     cleanup();
     useNavigationStore.setState(INITIAL_NAVIGATION);
     setFormatPrefs({ firstWeekday: 'monday', timeFormat: '24h' });
+    document.documentElement.removeAttribute('data-theme');
+    window.localStorage.removeItem('ct.theme');
     await db.close();
   });
 
@@ -80,6 +83,48 @@ describe('Apparence et formats (P-03)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
   });
 
+  it('P-02 : trois choix Clair, Sombre, Système (Système par défaut) en radiogroup, changement immédiat et annoncé (critères 1, 2, 9)', async () => {
+    renderIn(<AppearanceScreen />);
+    const group = await screen.findByRole('radiogroup', { name: 'Thème de l’application' });
+    expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Clair', 'Sombre', 'Système']);
+    expect(within(group).getByRole('radio', { name: 'Système' })).toBeChecked();
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    const started = performance.now();
+    fireEvent.click(within(group).getByRole('radio', { name: 'Sombre' }));
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+    expect(performance.now() - started).toBeLessThan(100);
+    expect(within(group).getByRole('radio', { name: 'Sombre' })).toBeChecked();
+    expect(screen.getByRole('status')).toHaveTextContent('Thème sombre activé');
+    fireEvent.click(within(group).getByRole('radio', { name: 'Système' }));
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+    await waitFor(async () => expect(await db.data.repos.settings.get('ui.theme')).toBe('system'));
+  });
+
+  it('P-02 : le thème est un réglage local, écrit par le cas d’usage', async () => {
+    renderIn(<AppearanceScreen />);
+    fireEvent.click(await screen.findByRole('radio', { name: 'Clair' }));
+    await waitFor(async () => expect(await db.data.repos.settings.get('ui.theme')).toBe('light'));
+    expect(isSharedSetting('ui.theme')).toBe(false);
+  });
+
+  it('P-02 : une écriture qui échoue rétablit le thème enregistré', async () => {
+    container = createAppContainer({
+      clock: db.clock,
+      hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }),
+      data: { ...db.data, repos: { ...db.data.repos, settings: { ...db.data.repos.settings, set: () => Promise.reject(new Error('boom')) } } } as never,
+    });
+    renderIn(<AppearanceScreen />);
+    fireEvent.click(await screen.findByRole('radio', { name: 'Sombre' }));
+    await waitFor(() => expect(document.documentElement.hasAttribute('data-theme')).toBe(false));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’enregistrer ce réglage.');
+  });
+
+  it('P-02 : restoreAppearance applique le thème enregistré avant le premier rendu (critère 4)', async () => {
+    await db.data.repos.settings.set('ui.theme', 'dark');
+    await restoreAppearance(container);
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+  });
+
   it('restoreAppearance applique les réglages enregistrés avant le premier rendu (critère 8)', async () => {
     await db.data.repos.settings.set('general.firstWeekday', 'saturday');
     await db.data.repos.settings.set('general.timeFormat', '12h');
@@ -90,7 +135,7 @@ describe('Apparence et formats (P-03)', () => {
 
   it('la ligne de Réglages affiche « lundi · 24 h » puis « dimanche · 12 h » (critère 9)', async () => {
     renderIn(<SettingsScreen />);
-    expect(await screen.findByRole('button', { name: 'Thème · semaine · heure : lundi · 24 h' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Thème · semaine · heure : Système · lundi · 24 h' })).toBeInTheDocument();
     await container.data.repos.settings.set('general.firstWeekday', 'sunday');
     await container.data.repos.settings.set('general.timeFormat', '12h');
     cleanup();
@@ -98,6 +143,6 @@ describe('Apparence et formats (P-03)', () => {
     fireEvent.click(await screen.findByRole('radio', { name: 'Dimanche' }));
     cleanup();
     renderIn(<SettingsScreen />);
-    expect(await screen.findByRole('button', { name: /dimanche · 12 h/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Système · dimanche · 12 h/ })).toBeInTheDocument();
   });
 });

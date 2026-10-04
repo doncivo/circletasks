@@ -1,5 +1,6 @@
 import { Undo2 } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import type { ThemeChoice } from '../../domain/model';
 import { FIRST_WEEKDAYS, firstWeekdayIso, type FirstWeekday } from '../../domain/week';
 import { TIME_FORMATS, type TimeFormat } from '../../domain/timeFormat';
 import { t } from '../../i18n';
@@ -10,12 +11,15 @@ import { useNavigationStore } from '../app/navigation';
 import { settingsStore } from './settingsStore';
 import './AppearanceScreen.css';
 
+const THEME_CHOICES: readonly ThemeChoice[] = ['light', 'dark', 'system'];
+const THEME_KEY = { light: 'appearance.themeLight', dark: 'appearance.themeDark', system: 'appearance.themeSystem' } as const satisfies Record<ThemeChoice, string>;
+const ANNOUNCE_KEY = { light: 'appearance.announceLight', dark: 'appearance.announceDark', system: 'appearance.announceSystem' } as const satisfies Record<ThemeChoice, string>;
 const WEEKDAY_KEY = { monday: 'appearance.monday', saturday: 'appearance.saturday', sunday: 'appearance.sunday' } as const satisfies Record<FirstWeekday, string>;
 const FORMAT_KEY = { '24h': 'appearance.format24', '12h': 'appearance.format12' } as const satisfies Record<TimeFormat, string>;
 
-/** Valeur de la ligne Réglages › GÉNÉRAL « Thème · semaine · heure » : « lundi · 24 h » (le thème s'y ajoute avec P-02). */
-export function formatAppearanceParts(firstWeekday: FirstWeekday, timeFormat: TimeFormat): string[] {
-  return [weekdayNameOf(firstWeekdayIso(firstWeekday)), t(FORMAT_KEY[timeFormat])];
+/** Valeur de la ligne Réglages › GÉNÉRAL « Thème · semaine · heure » : « Système · lundi · 24 h ». */
+export function formatAppearanceParts(theme: ThemeChoice, firstWeekday: FirstWeekday, timeFormat: TimeFormat): string[] {
+  return [t(THEME_KEY[theme]), weekdayNameOf(firstWeekdayIso(firstWeekday)), t(FORMAT_KEY[timeFormat])];
 }
 
 /**
@@ -31,6 +35,10 @@ export function AppearanceScreen() {
   const timeFormat = useFeatureStore(settingsStore, (s) => s.timeFormat);
   const setFirstWeekday = useFeatureStore(settingsStore, (s) => s.setFirstWeekday);
   const setTimeFormat = useFeatureStore(settingsStore, (s) => s.setTimeFormat);
+  const theme = useFeatureStore(settingsStore, (s) => s.theme);
+  const setTheme = useFeatureStore(settingsStore, (s) => s.setTheme);
+  // Annonce vocale du changement (« Thème sombre activé ») : seulement après un choix, pas à l'ouverture de l'écran.
+  const [announced, setAnnounced] = useState(false);
 
   useEffect(() => {
     void load();
@@ -51,6 +59,23 @@ export function AppearanceScreen() {
           </p>
         )}
         {/* --- Section THÈME (P-02) --- */}
+        <h2 className="ct-appearance__section">{t('appearance.sectionTheme')}</h2>
+        <div className="ct-appearance__field">
+          <span className="ct-appearance__label">{t('appearance.theme')}</span>
+          <SegmentedControl
+            label={t('appearance.themeLabel')}
+            value={theme}
+            onChange={(value) => {
+              setAnnounced(true);
+              void setTheme(value);
+            }}
+            options={THEME_CHOICES.map((value) => ({ value, label: t(THEME_KEY[value]) }))}
+          />
+        </div>
+        <p className="ct-appearance__hint">{t('appearance.themeHint')}</p>
+        <p className="ct-appearance__announce" role="status" aria-live="polite">
+          {announced ? t(ANNOUNCE_KEY[theme]) : ''}
+        </p>
         {/* --- fin section THÈME --- */}
         <h2 className="ct-appearance__section">{t('appearance.sectionWeek')}</h2>
         <div className="ct-appearance__field">

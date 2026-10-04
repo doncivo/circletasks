@@ -3,6 +3,9 @@ import type { ReminderOffsetMin } from './reminder';
 import type { TimeFormat } from '../timeFormat';
 import type { FirstWeekday } from '../week';
 
+/** P-02 : choix de thème. */
+export type ThemeChoice = 'system' | 'light' | 'dark';
+
 /**
  * Réglages typés (table `settings` : key TEXT unique, value JSON).
  *
@@ -39,7 +42,9 @@ export interface SettingsValues {
   'general.firstWeekday': FirstWeekday;
   /** P-03 : format d'affichage des heures (les valeurs stockées restent 'HH:mm', 24 h). */
   'general.timeFormat': TimeFormat;
-  /** P-02. */
+  /** P-02 : thème de cet appareil (un PC et un iPhone peuvent différer). */
+  'ui.theme': ThemeChoice;
+  /** Ancien réglage partagé, remplacé par `ui.theme` (local, P-02 D1) ; non utilisé. */
   'general.theme': 'system' | 'light' | 'dark';
   /** E-03 : calendriers de jours fériés activés (France, Tunisie), tous deux par défaut ; partagé entre appareils. */
   'holidays.countries': { readonly FR: boolean; readonly TN: boolean };
@@ -78,6 +83,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'general.locale': { scope: 'shared', defaultValue: 'fr' },
   'general.firstWeekday': { scope: 'shared', defaultValue: 'monday' },
   'general.timeFormat': { scope: 'shared', defaultValue: '24h' },
+  'ui.theme': { scope: 'local', defaultValue: 'system' },
   'general.theme': { scope: 'shared', defaultValue: 'system' },
   'holidays.countries': { scope: 'shared', defaultValue: { FR: true, TN: true } },
   'general.timeZone': { scope: 'local', defaultValue: null },

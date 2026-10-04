@@ -1,9 +1,10 @@
-import type { SettingsValues } from '../../domain/model';
+import type { SettingsValues, ThemeChoice } from '../../domain/model';
 import type { RecapSettings } from '../../domain/recap';
 import type { SpaceFilter } from '../../domain/types';
 import { DEFAULT_TIME_FORMAT, TIME_FORMATS, type TimeFormat } from '../../domain/timeFormat';
 import { DEFAULT_FIRST_WEEKDAY, FIRST_WEEKDAYS, type FirstWeekday } from '../../domain/week';
 import type { AppContainer } from '../app/container';
+import { parseThemeChoice } from './theme';
 
 /** A-06 / SD-04 : écran dont la vue compacte est mémorisée (réglage local `view.compact`). */
 export type CompactViewScreen = keyof SettingsValues['view.compact'];
@@ -43,6 +44,11 @@ export interface SettingsUseCases {
   setFirstWeekday(value: FirstWeekday): Promise<void>;
   setTimeFormat(value: TimeFormat): Promise<void>;
   // --- fin M12 apparence et formats ---
+  // --- M12 thème (P-02) ---
+  /** P-02 : thème de cet appareil (`ui.theme`, local). */
+  loadTheme(): Promise<ThemeChoice>;
+  setTheme(value: ThemeChoice): Promise<void>;
+  // --- fin M12 thème ---
 }
 
 /** P-03 : réglages d'affichage de la date et de l'heure. */
@@ -103,5 +109,13 @@ export function createSettingsUseCases(deps: SettingsDeps): SettingsUseCases {
       await settings().set('general.timeFormat', value);
     },
     // --- fin M12 apparence et formats ---
+    // --- M12 thème (P-02) ---
+    async loadTheme() {
+      return parseThemeChoice(await settings().get('ui.theme'));
+    },
+    async setTheme(value) {
+      await settings().set('ui.theme', value);
+    },
+    // --- fin M12 thème ---
   };
 }

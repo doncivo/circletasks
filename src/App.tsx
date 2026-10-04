@@ -18,7 +18,7 @@ import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { AppearanceScreen, restoreAppearance, SettingsScreen } from './features/settings';
+import { AppearanceScreen, restoreAppearance, SettingsScreen, startThemeSync } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
@@ -70,6 +70,9 @@ function AppShellContent() {
   // ES-03 : Ctrl+1 / Ctrl+2 / Ctrl+3 (Pro / Perso / Tout) et mémorisation du filtre de cet appareil.
   useEffect(() => registerSpaceShortcuts(container.shortcuts), [container]);
   useEffect(() => persistSpaceFilter(container), [container]);
+
+  // P-02 : barre de titre alignée sur le thème (PC) ; l'interface suit déjà le thème (data-theme / prefers-color-scheme).
+  useEffect(() => startThemeSync(container), [container]);
 
   // A-04 : Alt+1 à Alt+6 (registre de raccourcis, actifs même dans un champ de saisie).
   useEffect(() => registerTabShortcuts(container.shortcuts), [container]);

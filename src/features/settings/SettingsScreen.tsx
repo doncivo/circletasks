@@ -35,7 +35,8 @@ export function SettingsScreen() {
   const navigate = useNavigationStore((s) => s.navigate);
   const firstWeekday = useFeatureStore(settingsStore, (s) => s.firstWeekday);
   const timeFormat = useFeatureStore(settingsStore, (s) => s.timeFormat);
-  const appearanceSummary = formatAppearanceParts(firstWeekday, timeFormat).join(t('appearance.summarySeparator'));
+  const theme = useFeatureStore(settingsStore, (s) => s.theme);
+  const appearanceSummary = formatAppearanceParts(theme, firstWeekday, timeFormat).join(t('appearance.summarySeparator'));
 
   useEffect(() => {
     void load();

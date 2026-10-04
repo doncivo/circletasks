@@ -89,3 +89,16 @@
   font-weight: var(--ct-font-weight-medium);
   color: var(--ct-color-text-secondary);
 }
+
+/* Annonce vocale du thème : présente pour les lecteurs d'écran, sans place à l'écran. */
+.ct-appearance__announce {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

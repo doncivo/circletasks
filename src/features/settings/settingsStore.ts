@@ -1,5 +1,5 @@
 import { createStore } from 'zustand';
-import { defaultSetting } from '../../domain/model';
+import { defaultSetting, type ThemeChoice } from '../../domain/model';
 import { validateRecapSettings, type RecapSettings, type RecapSettingsError } from '../../domain/recap';
 import type { PlainMessageKey } from '../../i18n';
 import { getFirstWeekday, getTimeFormat, setFormatPrefs } from '../../i18n/formatPrefs';
@@ -8,6 +8,7 @@ import type { FirstWeekday } from '../../domain/week';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { createSettingsUseCases } from './settingsUseCases';
+import { applyThemeEverywhere } from './theme';
 
 export type SettingsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -38,6 +39,12 @@ export interface SettingsState {
   setFirstWeekday(value: FirstWeekday): Promise<void>;
   setTimeFormat(value: TimeFormat): Promise<void>;
   // --- fin M12 apparence et formats ---
+  // --- M12 thème (P-02) ---
+  /** Thème de cet appareil (`ui.theme`, local ; défaut : système). */
+  readonly theme: ThemeChoice;
+  /** P-02 : applique aussitôt (< 100 ms, sans rechargement) puis enregistre ; en cas d'échec, revient au thème enregistré. Ne rejette jamais. */
+  setTheme(value: ThemeChoice): Promise<void>;
+  // --- fin M12 thème ---
   /**
    * N-04 : enregistre les récapitulatifs après validation (heures 24 h, soir après matin). Rend 'ok', l'erreur de validation (rien
    * n'est écrit) ou 'error' (écriture impossible). Aucune notification n'est planifiée (ordre 5, iPhone). Ne rejette jamais.
@@ -92,12 +99,26 @@ function createSettingsStore(container: AppContainer) {
       }
     },
     // --- fin M12 apparence et formats ---
+    // --- M12 thème (P-02) ---
+    theme: 'system',
+    async setTheme(value) {
+      const previous = get().theme;
+      set({ theme: value, errorKey: null });
+      applyThemeEverywhere(value);
+      try {
+        await useCases.setTheme(value);
+      } catch {
+        set({ theme: previous, errorKey: 'settings.saveError' });
+        applyThemeEverywhere(previous);
+      }
+    },
+    // --- fin M12 thème ---
 
     async load() {
       set({ status: 'loading', errorKey: null });
       try {
-        const [{ carryOverUndone, hideRoutines, recaps }, formats] = await Promise.all([useCases.load(), useCases.loadFormats()]);
-        set({ carryOverUndone, hideRoutines, recaps, ...formats, status: 'ready' });
+        const [{ carryOverUndone, hideRoutines, recaps }, formats, theme] = await Promise.all([useCases.load(), useCases.loadFormats(), useCases.loadTheme()]);
+        set({ carryOverUndone, hideRoutines, recaps, ...formats, theme, status: 'ready' });
         setFormatPrefs(formats);
       } catch {
         set({ status: 'error', errorKey: 'settings.loadError' });

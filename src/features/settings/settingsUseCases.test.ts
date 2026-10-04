@@ -37,6 +37,16 @@ describe('cas d’usage des réglages (T-06, A-03, A-06, N-04, D-02, ES-03)', ()
     expect(isSharedSetting('general.timeFormat')).toBe(true);
   });
 
+  it('P-02 : thème local, système par défaut, valeur inconnue retombant sur système', async () => {
+    const useCases = createSettingsUseCases(db);
+    expect(await useCases.loadTheme()).toBe('system');
+    await useCases.setTheme('dark');
+    expect(await useCases.loadTheme()).toBe('dark');
+    expect(isSharedSetting('ui.theme')).toBe(false);
+    await db.data.repos.settings.set('ui.theme', 'sepia' as never);
+    expect(await useCases.loadTheme()).toBe('system');
+  });
+
   it('P-03 : une valeur inconnue (version future) retombe sur le défaut', async () => {
     await db.data.repos.settings.set('general.firstWeekday', 'friday' as never);
     await db.data.repos.settings.set('general.timeFormat', '36h' as never);
