@@ -1,6 +1,5 @@
-import { addDays, daysInMonth, makeLocalDate, parseLocalDate, weekdayOf } from '../../../domain/localDate';
-import type { LocalDate } from '../../../domain/types';
-import { nthWeekdayOfMonth } from './ics';
+import { addDays, daysInMonth, makeLocalDate, parseLocalDate, weekdayOf } from './localDate';
+import type { LocalDate } from './types';
 
 /**
  * Développement des récurrences RRULE d'un événement externe sur la plage demandée (K-02 critère 5, ADR 0008 : iCloud développe
@@ -10,6 +9,8 @@ import { nthWeekdayOfMonth } from './ics';
  * Gérés : FREQ DAILY / WEEKLY / MONTHLY / YEARLY, INTERVAL, COUNT, UNTIL, BYDAY (avec rang en mensuel et annuel), BYMONTHDAY (négatif
  * accepté), BYMONTH, BYSETPOS, WKST. Non gérés (la série est alors réduite à son premier événement) : FREQ de moins d'un jour,
  * BYWEEKNO, BYYEARDAY.
+ *
+ * Module pur du domaine : les fournisseurs (src/features/calendars/providers) l'appellent sans rien développer eux-mêmes.
  */
 
 export type Frequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
@@ -66,6 +67,15 @@ export function parseRecurrenceRule(value: string): RecurrenceRule | null {
   return { frequency, interval, count, until: parts.get('UNTIL') ?? null, byDay, byMonthDay, byMonth, bySetPos, weekStart: WEEKDAYS[parts.get('WKST') ?? 'MO'] ?? 1 };
 }
 
+/** n-ième jour de semaine ISO (1 = lundi) du mois ; rang négatif depuis la fin (-1 = dernier) ; null s'il n'existe pas (5ᵉ lundi absent). */
+export function nthWeekdayDate(year: number, month: number, weekday: number, ordinal: number): LocalDate | null {
+  const last = daysInMonth(year, month);
+  const days: number[] = [];
+  for (let day = 1; day <= last; day += 1) if (weekdayOf(makeLocalDate(year, month, day)) === weekday) days.push(day);
+  const day = ordinal > 0 ? days[ordinal - 1] : days[days.length + ordinal];
+  return day === undefined ? null : makeLocalDate(year, month, day);
+}
+
 const compareDates = (a: LocalDate, b: LocalDate): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Jours d'un mois répondant à BYMONTHDAY et BYDAY (avec rangs) ; sans l'un ni l'autre : `defaultDay`. */
@@ -81,7 +91,7 @@ function monthDays(rule: RecurrenceRule, year: number, month: number, defaultDay
   } else if (rule.byDay.length > 0) {
     days = rule.byDay.flatMap((entry) => {
       if (entry.ordinal !== null && entry.ordinal !== 0) {
-        const date = nthWeekdayOfMonth(year, month, entry.weekday, entry.ordinal);
+        const date = nthWeekdayDate(year, month, entry.weekday, entry.ordinal);
         return date ? [date] : [];
       }
       const all: LocalDate[] = [];

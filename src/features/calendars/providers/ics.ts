@@ -1,4 +1,5 @@
-import { addDays, daysInMonth, makeLocalDate, parseLocalDate, weekdayOf } from '../../../domain/localDate';
+import { nthWeekdayDate } from '../../../domain/externalRecurrence';
+import { addDays, daysInMonth, makeLocalDate, parseLocalDate } from '../../../domain/localDate';
 import { isValidTimeZone, localToUtcMs } from '../../../domain/timeZone';
 import type { LocalDate } from '../../../domain/types';
 
@@ -168,15 +169,6 @@ const naive = (date: LocalDate, time: string): number => {
   return Date.UTC(year, month - 1, day, hour, minute, second);
 };
 
-/** n-ième jour de semaine (ISO 1-7) d'un mois : `ordinal` négatif = depuis la fin ; null s'il n'existe pas. */
-export function nthWeekdayOfMonth(year: number, month: number, weekday: number, ordinal: number): LocalDate | null {
-  const last = daysInMonth(year, month);
-  const days: number[] = [];
-  for (let day = 1; day <= last; day += 1) if (weekdayOf(makeLocalDate(year, month, day)) === weekday) days.push(day);
-  const day = ordinal > 0 ? days[ordinal - 1] : days[days.length + ordinal];
-  return day === undefined ? null : makeLocalDate(year, month, day);
-}
-
 const BYDAY_CODES: Readonly<Record<string, number>> = { MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6, SU: 7 };
 
 function observanceFrom(component: IcsComponent): Observance | null {
@@ -194,7 +186,7 @@ function observanceFrom(component: IcsComponent): Observance | null {
     onset(year) {
       if (!rule || !month || !byDay) return year >= parseLocalDate(dtstart.date).year ? [startNaive] : [];
       if (year < parseLocalDate(dtstart.date).year) return [];
-      const day = nthWeekdayOfMonth(year, month, BYDAY_CODES[byDay[2] ?? ''] ?? 1, Number(byDay[1] ?? 1));
+      const day = nthWeekdayDate(year, month, BYDAY_CODES[byDay[2] ?? ''] ?? 1, Number(byDay[1] ?? 1));
       return day ? [naive(day, dtstart.time)] : [];
     },
   };
