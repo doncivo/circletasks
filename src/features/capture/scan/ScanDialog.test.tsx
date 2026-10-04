@@ -459,6 +459,37 @@ describe('scan de tâches (Q-04)', () => {
       expect(track.stop).toHaveBeenCalled();
     });
 
+    it('écran fermé pendant la demande d’accès : le flux obtenu après coup est coupé aussitôt', async () => {
+      let grant: (value: MediaStream) => void = () => undefined;
+      const getUserMedia = vi.fn(() => new Promise<MediaStream>((resolve) => (grant = resolve)));
+      vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } });
+      const view = open();
+      fireEvent.click(await screen.findByRole('button', { name: 'Utiliser la webcam' }));
+      view.unmount();
+      expect(track.stop).not.toHaveBeenCalled();
+      await act(async () => grant(stream));
+      expect(track.stop).toHaveBeenCalledTimes(1);
+    });
+
+    it('double clic : le flux précédent est coupé avant d’en garder un autre', async () => {
+      const firstTrack = { stop: vi.fn() };
+      const secondTrack = { stop: vi.fn() };
+      const first = { getTracks: () => [firstTrack] } as unknown as MediaStream;
+      const second = { getTracks: () => [secondTrack] } as unknown as MediaStream;
+      const grants: Array<(value: MediaStream) => void> = [];
+      const getUserMedia = vi.fn(() => new Promise<MediaStream>((resolve) => grants.push(resolve)));
+      vi.stubGlobal('navigator', { ...navigator, mediaDevices: { getUserMedia } });
+      open();
+      const button = await screen.findByRole('button', { name: 'Utiliser la webcam' });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      await act(async () => grants[0]?.(first));
+      await screen.findByLabelText('Aperçu de la webcam');
+      await act(async () => grants[1]?.(second));
+      expect(firstTrack.stop).toHaveBeenCalledTimes(1);
+      expect(secondTrack.stop).not.toHaveBeenCalled();
+    });
+
     it('pas de webcam : message', async () => {
       vi.stubGlobal('navigator', { ...navigator, mediaDevices: undefined });
       open();

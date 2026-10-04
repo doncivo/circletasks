@@ -1,4 +1,4 @@
-import type { QuickProject, QuickSpace } from '../../domain/quickInput';
+import type { Project, Space } from '../../domain/model';
 import type { SpaceFilter } from '../../domain/types';
 import type { FirstWeekday } from '../../domain/week';
 
@@ -9,8 +9,8 @@ import type { FirstWeekday } from '../../domain/week';
 
 /** Ce que la mini-fenêtre sait de l'application, pour les suggestions et l'aperçu (elle n'ouvre jamais la base). */
 export interface CaptureContextSnapshot {
-  readonly spaces: readonly QuickSpace[];
-  readonly projects: readonly QuickProject[];
+  readonly spaces: readonly Space[];
+  readonly projects: readonly Project[];
   /** Filtre Pro / Perso / Tout de la fenêtre principale : sert à l'espace par défaut (ES-02). */
   readonly spaceFilter: SpaceFilter;
   readonly firstWeekday: FirstWeekday;
@@ -60,6 +60,8 @@ export interface CaptureMainBridge {
   publishContext(context: CaptureContextSnapshot): Promise<void>;
   /** La mini-fenêtre demande un contexte à jour. */
   onContextRequest(handler: () => void): Promise<Unlisten>;
+  /** Pourquoi la mini-fenêtre n'a pas pu être créée au démarrage, `null` si elle existe (pour le journal). */
+  setupError(): Promise<string | null>;
 }
 
 /** Transport de messages entre les deux fenêtres (Tauri : événements ; navigateur de développement : BroadcastChannel). */
@@ -67,5 +69,5 @@ export interface CaptureTransport {
   emit(target: string, event: string, payload: unknown): Promise<void>;
   listen(event: string, handler: (payload: unknown) => void): Promise<Unlisten>;
   /** Commande de la mini-fenêtre (cacher, redimensionner). */
-  invoke(command: string, args?: Record<string, unknown>): Promise<void>;
+  invoke(command: string, args?: Record<string, unknown>): Promise<unknown>;
 }

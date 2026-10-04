@@ -282,7 +282,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             crate::shortcut::manage(app.handle());
             // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).
             if let Err(error) = crate::capture::setup(app.handle()) {
-                eprintln!("capture rapide : fenêtre non créée ({error})");
+                crate::capture::record_setup_failure(app.handle(), error.to_string());
             }
             create_tray(app.handle())?;
             if !is_minimized_launch(std::env::args()) {

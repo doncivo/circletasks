@@ -1,7 +1,7 @@
 //! OCR Windows (Q-04) : contrôle des entrées, nettoyage des lignes, et lecture réelle d'images de test
 //! (tests/fixtures/ocr) avec Windows.Media.Ocr si le pack de langue français est installé.
 
-use circletasks_lib::ocr::{clean_lines, pick_french, recognize_bytes, sniff_image, status, validate_image, ImageKind, OcrError, MAX_IMAGE_BYTES, MAX_LINES};
+use circletasks_lib::ocr::{check_dimensions, clean_lines, pick_french, recognize_bytes, sniff_image, status, validate_image, ImageKind, OcrError, MAX_IMAGE_BYTES, MAX_LINES};
 
 const PRINTED: &[u8] = include_bytes!("../../../tests/fixtures/ocr/liste-imprimee.png");
 const PHOTO: &[u8] = include_bytes!("../../../tests/fixtures/ocr/photo-liste.jpg");
@@ -181,4 +181,36 @@ fn q04_missing_french_pack_is_reported_not_crashed() {
         let err = recognize_bytes(PRINTED).unwrap_err();
         assert!(matches!(err, OcrError::LanguageMissing | OcrError::Unavailable));
     }
+}
+
+#[test]
+fn declared_dimensions_are_checked_before_any_allocation() {
+    assert_eq!(check_dimensions(2000, 1500, 4096), Ok(()));
+    assert_eq!(check_dimensions(4096, 4096, 4096), Ok(()));
+    assert_eq!(check_dimensions(4097, 10, 4096), Err(OcrError::DimensionsTooLarge));
+    assert_eq!(check_dimensions(100_000, 100_000, 200_000), Err(OcrError::DimensionsTooLarge));
+    assert_eq!(check_dimensions(0, 10, 4096), Err(OcrError::DimensionsTooLarge));
+}
+
+/// BMP de 54 octets qui déclare 30 000 x 30 000 pixels : refusé sans allouer les 3,6 Go d'un bitmap.
+#[cfg(windows)]
+#[test]
+fn a_tiny_image_declaring_huge_dimensions_is_refused() {
+    if !french_pack_installed() {
+        return;
+    }
+    let mut bmp = vec![0u8; 54];
+    bmp[0] = b'B';
+    bmp[1] = b'M';
+    bmp[2..6].copy_from_slice(&54u32.to_le_bytes());
+    bmp[10..14].copy_from_slice(&54u32.to_le_bytes());
+    bmp[14..18].copy_from_slice(&40u32.to_le_bytes());
+    bmp[18..22].copy_from_slice(&30_000i32.to_le_bytes());
+    bmp[22..26].copy_from_slice(&30_000i32.to_le_bytes());
+    bmp[26..28].copy_from_slice(&1u16.to_le_bytes());
+    bmp[28..30].copy_from_slice(&24u16.to_le_bytes());
+    let started = std::time::Instant::now();
+    let result = recognize_bytes(&bmp);
+    assert!(matches!(result, Err(OcrError::DimensionsTooLarge | OcrError::Engine(_) | OcrError::UnsupportedFormat)), "{result:?}");
+    assert!(started.elapsed().as_secs() < 5);
 }

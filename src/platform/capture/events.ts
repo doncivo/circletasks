@@ -23,6 +23,11 @@ export const CONTEXT_REQUEST_EVENT = 'capture:context-request';
 /** Commandes Rust de la mini-fenêtre. */
 export const HIDE_COMMAND = 'hide_quick_capture';
 export const RESIZE_COMMAND = 'resize_quick_capture';
+/** Canal sortant de la mini-fenêtre : elle n'émet aucun événement libre (capability), ces commandes visent la fenêtre principale. */
+export const SUBMIT_COMMAND = 'submit_quick_capture';
+export const CONTEXT_REQUEST_COMMAND = 'request_capture_context';
+/** Échec de création de la mini-fenêtre, lu par la fenêtre principale pour le journal. */
+export const SETUP_ERROR_COMMAND = 'capture_setup_error';
 
 /** Délai d'attente de la réponse de la fenêtre principale avant d'annoncer un échec. */
 export const SUBMIT_TIMEOUT_MS = 8_000;

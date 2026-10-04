@@ -37,7 +37,15 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
     streamRef.current = stream;
     if (video.current) video.current.srcObject = stream;
   }, [stream]);
-  useEffect(() => () => stopWebcam(streamRef.current), []);
+  // Écran démonté pendant la demande d'accès : le flux obtenu après coup est coupé aussitôt (voyant éteint).
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      stopWebcam(streamRef.current);
+    };
+  }, []);
 
   function onFile(event: ChangeEvent<HTMLInputElement>): void {
     const file = event.target.files?.[0];
@@ -48,8 +56,17 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
   async function openWebcam(): Promise<void> {
     setWebcamError(null);
     try {
-      setStream(await startWebcam());
+      const opened = await startWebcam();
+      if (!mounted.current) {
+        stopWebcam(opened);
+        return;
+      }
+      // Double clic : le flux précédent est coupé avant d'en garder un autre (jamais deux caméras ouvertes).
+      stopWebcam(streamRef.current);
+      streamRef.current = opened;
+      setStream(opened);
     } catch (error) {
+      if (!mounted.current) return;
       setWebcamError(error instanceof WebcamError ? error.reason : 'failed');
     }
   }

@@ -1,6 +1,7 @@
 //! Mini-fenêtre de capture rapide (Q-01) : bascule, placement, bornes, capability minimale.
 
 use circletasks_lib::capture::{
+    is_valid_submit, SubmitRequest, CONTEXT_REQUEST_EVENT, SUBMIT_EVENT,
     centered_origin, clamp_height, physical_size, toggle_action, ToggleAction, CAPTURE_PAGE, CAPTURE_WINDOW, DEFAULT_HEIGHT, MAX_HEIGHT, WINDOW_WIDTH,
 };
 use serde_json::Value;
@@ -54,6 +55,9 @@ fn capture_capability_is_minimal() {
     for forbidden in ["sql", "fs:", "http", "opener", "shell", "core:default", "core:window", "autostart", "updater", "process"] {
         assert!(!permissions.iter().any(|p| p.contains(forbidden)), "permission interdite : {forbidden}");
     }
+    // Aucun événement libre : la mini-fenêtre ne peut pas imiter desktop://quitting. Son seul canal sortant : deux commandes qui visent la fenêtre principale.
+    assert!(!permissions.iter().any(|p| p.contains("emit")), "émission d'événement libre interdite");
+    assert!(permissions.contains(&"allow-submit-quick-capture") && permissions.contains(&"allow-request-capture-context"));
     assert!(permissions.contains(&"allow-hide-quick-capture") && permissions.contains(&"allow-resize-quick-capture"));
 }
 
@@ -91,4 +95,35 @@ fn csp_allows_the_local_ocr_fallback_without_opening_the_network() {
     assert!(!script.contains("'unsafe-eval'") && !script.contains("http"), "{script}");
     let connect = csp["connect-src"].as_str().expect("connect-src");
     assert!(!connect.contains("https:") && !connect.contains("*"), "{connect}");
+}
+
+fn request(text: &str) -> SubmitRequest {
+    SubmitRequest { request_id: "capture-1".into(), text: text.into(), ignored: vec!["date:demain".into()] }
+}
+
+#[test]
+fn submit_is_bounded() {
+    assert!(is_valid_submit(&request("Appeler le notaire demain 10h #pro")));
+    assert!(is_valid_submit(&request(&"x".repeat(2_000))));
+    assert!(!is_valid_submit(&request(&"x".repeat(2_001))));
+    assert!(!is_valid_submit(&SubmitRequest { request_id: String::new(), ..request("a") }));
+    assert!(!is_valid_submit(&SubmitRequest { request_id: "i".repeat(65), ..request("a") }));
+    assert!(!is_valid_submit(&SubmitRequest { ignored: vec!["k".into(); 51], ..request("a") }));
+    assert!(!is_valid_submit(&SubmitRequest { ignored: vec!["k".repeat(201)], ..request("a") }));
+}
+
+#[test]
+fn submit_events_match_the_front_and_the_request_shape_is_camel_case() {
+    for event in [SUBMIT_EVENT, CONTEXT_REQUEST_EVENT] {
+        assert!(FRONT_EVENTS.contains(&format!("'{event}'")), "{event}");
+    }
+    let json = serde_json::to_value(request("a")).expect("json");
+    assert_eq!(json["requestId"], "capture-1");
+    assert!(json.get("request_id").is_none());
+}
+
+#[test]
+fn desktop_capability_lets_the_main_window_read_the_setup_error() {
+    let capability: Value = serde_json::from_str(include_str!("../../capabilities/desktop.json")).expect("capability valide");
+    assert!(capability["permissions"].as_array().expect("permissions").iter().any(|p| p == "allow-capture-setup-error"));
 }

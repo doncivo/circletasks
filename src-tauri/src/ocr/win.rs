@@ -9,7 +9,7 @@ use windows::{
     Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED},
 };
 
-use super::{pick_french, OcrError, OcrStatus};
+use super::{check_dimensions, pick_french, OcrError, OcrStatus};
 
 fn engine_error(error: windows::core::Error) -> OcrError {
     OcrError::Engine(error.to_string())
@@ -52,19 +52,18 @@ pub fn recognize(bytes: &[u8]) -> Result<Vec<String>, OcrError> {
     stream.Seek(0).map_err(engine_error)?;
 
     let decoder = BitmapDecoder::CreateAsync(&stream).map_err(engine_error)?.join().map_err(|_| OcrError::UnsupportedFormat)?;
+    // Dimensions déclarées lues AVANT toute conversion : une image minuscule qui déclare des milliards de pixels (bombe de
+    // décompression) est refusée sans jamais allouer le bitmap.
+    let max = OcrEngine::MaxImageDimension().map_err(engine_error)?;
+    let declared_width = decoder.PixelWidth().map_err(engine_error)?;
+    let declared_height = decoder.PixelHeight().map_err(engine_error)?;
+    check_dimensions(declared_width, declared_height, max)?;
     // Le moteur lit Bgra8 ou Gray8 ; la conversion se fait en mémoire.
     let bitmap = decoder
         .GetSoftwareBitmapConvertedAsync(BitmapPixelFormat::Bgra8, BitmapAlphaMode::Premultiplied)
         .map_err(engine_error)?
         .join()
         .map_err(engine_error)?;
-
-    let max = OcrEngine::MaxImageDimension().map_err(engine_error)?;
-    let width = u32::try_from(bitmap.PixelWidth().map_err(engine_error)?).unwrap_or(u32::MAX);
-    let height = u32::try_from(bitmap.PixelHeight().map_err(engine_error)?).unwrap_or(u32::MAX);
-    if width > max || height > max {
-        return Err(OcrError::DimensionsTooLarge);
-    }
 
     let result = engine.RecognizeAsync(&bitmap).map_err(engine_error)?.join().map_err(engine_error)?;
     let lines = result.Lines().map_err(engine_error)?;

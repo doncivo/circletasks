@@ -6,6 +6,8 @@
 
 use std::sync::{Mutex, MutexGuard};
 
+use serde::{Deserialize, Serialize};
+
 use tauri::{
     AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent,
 };
@@ -20,6 +22,10 @@ pub const CAPTURE_PAGE: &str = "capture.html";
 pub const SHOWN_EVENT: &str = "capture://shown";
 /// Événement envoyé à la mini-fenêtre quand elle perd le focus : le front la ferme si le champ est vide.
 pub const BLURRED_EVENT: &str = "capture://blurred";
+/// Événement envoyé à la fenêtre principale avec le texte à créer (`capture:submit`, Q-01 décision D1).
+pub const SUBMIT_EVENT: &str = "capture:submit";
+/// Événement envoyé à la fenêtre principale pour demander un contexte à jour.
+pub const CONTEXT_REQUEST_EVENT: &str = "capture:context-request";
 /// Largeur logique (Q-01 critère 1).
 pub const WINDOW_WIDTH: f64 = 520.0;
 /// Hauteur logique par défaut.
@@ -70,6 +76,8 @@ pub fn physical_size(logical: (f64, f64), scale: f64) -> (u32, u32) {
 #[derive(Default)]
 pub struct CaptureState {
     previous: Mutex<isize>,
+    /// Échec de création de la mini-fenêtre, lu une fois par la fenêtre principale pour le journal.
+    setup_error: Mutex<Option<String>>,
 }
 
 impl CaptureState {
@@ -225,4 +233,51 @@ pub fn resize_quick_capture(app: AppHandle, height: f64) {
     if let Some(window) = capture_window(&app) {
         let _ = window.set_size(LogicalSize::new(WINDOW_WIDTH, clamp_height(height)));
     }
+}
+
+/// Garde l'échec de création de la mini-fenêtre pour le journal du front (`logDesktopFailure`).
+pub fn record_setup_failure(app: &AppHandle, message: String) {
+    if let Some(state) = app.try_state::<CaptureState>() {
+        *state.setup_error.lock().unwrap_or_else(|e| e.into_inner()) = Some(message);
+    }
+}
+
+/// Échec de création de la mini-fenêtre, `None` si elle existe. Lu par la fenêtre principale au démarrage.
+#[tauri::command]
+pub fn capture_setup_error(state: tauri::State<'_, CaptureState>) -> Option<String> {
+    state.setup_error.lock().unwrap_or_else(|e| e.into_inner()).clone()
+}
+
+/// Texte envoyé par la mini-fenêtre (`capture:submit`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubmitRequest {
+    pub request_id: String,
+    pub text: String,
+    pub ignored: Vec<String>,
+}
+
+/// Bornes d'un envoi : la mini-fenêtre ne peut transmettre que du texte court.
+pub fn is_valid_submit(request: &SubmitRequest) -> bool {
+    !request.request_id.is_empty()
+        && request.request_id.chars().count() <= 64
+        && request.text.chars().count() <= 2_000
+        && request.ignored.len() <= 50
+        && request.ignored.iter().all(|key| key.chars().count() <= 200)
+}
+
+/// Envoie le texte de la mini-fenêtre à la fenêtre principale, seule destinataire. La mini-fenêtre n'a aucun droit d'émettre un
+/// événement libre (elle pourrait imiter `desktop://quitting`) : cette commande est son seul canal sortant avec `request_capture_context`.
+#[tauri::command]
+pub fn submit_quick_capture(app: AppHandle, request: SubmitRequest) -> Result<(), String> {
+    if !is_valid_submit(&request) {
+        return Err("capture-invalid".to_owned());
+    }
+    app.emit_to(MAIN_WINDOW, SUBMIT_EVENT, request).map_err(|e| e.to_string())
+}
+
+/// Demande à la fenêtre principale un contexte (espaces, projets) à jour.
+#[tauri::command]
+pub fn request_capture_context(app: AppHandle) -> Result<(), String> {
+    app.emit_to(MAIN_WINDOW, CONTEXT_REQUEST_EVENT, ()).map_err(|e| e.to_string())
 }

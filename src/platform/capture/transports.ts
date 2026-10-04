@@ -1,16 +1,23 @@
 import { invoke } from '@tauri-apps/api/core';
 import { emitTo, listen } from '@tauri-apps/api/event';
-import { SHOWN_EVENT } from './events';
+import { CONTEXT_REQUEST_COMMAND, CONTEXT_REQUEST_EVENT, SHOWN_EVENT, SUBMIT_COMMAND, SUBMIT_EVENT } from './events';
 import type { CaptureTransport, Unlisten } from './types';
 
-/** Transport de l'app installée : événements Tauri ciblés par libellé de fenêtre, commandes Rust pour cacher / redimensionner. */
-export function createTauriTransport(): CaptureTransport {
+/**
+ * Transport de l'app installée : événements Tauri ciblés par libellé de fenêtre, commandes Rust pour cacher / redimensionner.
+ * Rôle `window` (mini-fenêtre) : aucune permission d'émettre un événement libre ; ses deux seuls envois passent par des commandes
+ * Rust qui ne visent que la fenêtre principale (elle ne peut donc pas imiter `desktop://quitting`).
+ */
+export function createTauriTransport(role: 'main' | 'window' = 'main'): CaptureTransport {
   return {
-    emit: (target, event, payload) => emitTo(target, event, payload),
-    listen: (event, handler) => listen(event, (message) => handler(message.payload)),
-    invoke: async (command, args) => {
-      await invoke(command, args);
+    emit: (target, event, payload) => {
+      if (role === 'main') return emitTo(target, event, payload);
+      if (event === SUBMIT_EVENT) return invoke(SUBMIT_COMMAND, { request: payload });
+      if (event === CONTEXT_REQUEST_EVENT) return invoke(CONTEXT_REQUEST_COMMAND);
+      return Promise.reject(new Error(`Événement non autorisé depuis la mini-fenêtre : ${event}`));
     },
+    listen: (event, handler) => listen(event, (message) => handler(message.payload)),
+    invoke: (command, args) => invoke(command, args),
   };
 }
 
@@ -57,13 +64,13 @@ export function createChannelTransport(self: string, doc: Document = document): 
     },
     invoke: (command) => {
       if (command === 'hide_quick_capture') doc.documentElement.dataset['windowState'] = 'hidden';
-      return Promise.resolve();
+      return Promise.resolve(null);
     },
   };
 }
 
 /** Sans canal ni Tauri (tests) : un transport relié à rien. */
-export function createMemoryBus(): { readonly main: CaptureTransport; readonly window: CaptureTransport; readonly invoked: string[] } {
+export function createMemoryBus(setupError: string | null = null): { readonly main: CaptureTransport; readonly window: CaptureTransport; readonly invoked: string[] } {
   const handlers = new Map<string, Set<{ readonly side: string; readonly handler: (payload: unknown) => void }>>();
   const invoked: string[] = [];
   const side = (self: string): CaptureTransport => ({
@@ -80,7 +87,7 @@ export function createMemoryBus(): { readonly main: CaptureTransport; readonly w
     },
     invoke: (command, args) => {
       invoked.push(args ? `${command}:${JSON.stringify(args)}` : command);
-      return Promise.resolve();
+      return Promise.resolve(setupError);
     },
   });
   return { main: side('main'), window: side('quick-capture'), invoked };

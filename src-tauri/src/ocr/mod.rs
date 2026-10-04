@@ -17,6 +17,8 @@ pub const PREFERRED_LANGUAGE: &str = "fr-FR";
 /// Taille maximale acceptée par la commande : l'image est réduite à 2 000 px par le front,
 /// 12 Mo laissent de la marge à un PNG de page photographiée tout en bornant la mémoire.
 pub const MAX_IMAGE_BYTES: usize = 12 * 1024 * 1024;
+/// Pixels au plus (largeur x hauteur) : 2 000 px de côté côté front, 4 096 x 4 096 au pire pour le moteur ; au-delà, refus avant conversion.
+pub const MAX_PIXELS: u64 = 16 * 1024 * 1024;
 /// Nombre de lignes renvoyées au plus (le front en garde 100, Q-04 critère 5).
 pub const MAX_LINES: usize = 500;
 
@@ -108,6 +110,14 @@ pub fn sniff_image(bytes: &[u8]) -> Option<ImageKind> {
     } else {
         None
     }
+}
+
+/// Dimensions déclarées par l'en-tête de l'image : refus si un côté dépasse `max_side` (limite du moteur) ou si le total dépasse `MAX_PIXELS`.
+pub fn check_dimensions(width: u32, height: u32, max_side: u32) -> Result<(), OcrError> {
+    if width == 0 || height == 0 || width > max_side || height > max_side || u64::from(width) * u64::from(height) > MAX_PIXELS {
+        return Err(OcrError::DimensionsTooLarge);
+    }
+    Ok(())
 }
 
 /// Contrôle des entrées de `ocr_recognize` (Q-04 sous-tâche 2).

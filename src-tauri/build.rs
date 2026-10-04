@@ -38,7 +38,7 @@ fn main() {
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&["set_tray_labels", "confirm_quit", "set_quick_capture_shortcut", "clear_quick_capture_shortcut", "get_quick_capture_shortcut", "backup_database_before_migration",
             // Capture rapide (Q-01) et OCR (Q-04) : PC uniquement.
-            "hide_quick_capture", "resize_quick_capture", "ocr_status", "ocr_recognize",
+            "hide_quick_capture", "resize_quick_capture", "submit_quick_capture", "request_capture_context", "capture_setup_error", "ocr_status", "ocr_recognize",
             // Agendas externes (ADR 0008) : PC et iPhone.
             "calendar_secret_set", "calendar_secret_exists", "calendar_secret_delete",
             "calendar_oauth_google_authorize", "calendar_oauth_google_revoke", "calendar_http",

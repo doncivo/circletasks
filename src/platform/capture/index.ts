@@ -37,5 +37,5 @@ export function openCaptureMainBridge(runtime: Runtime = detectRuntime(), os: Os
 
 /** Pont de la mini-fenêtre (point d'entrée `capture.html`) : toujours disponible, le transport dépend de l'environnement. */
 export function openCaptureWindowBridge(runtime: Runtime = detectRuntime()): CaptureWindowBridge {
-  return createWindowBridge(runtime === 'tauri' ? createTauriTransport() : createChannelTransport(CAPTURE_WINDOW_LABEL));
+  return createWindowBridge(runtime === 'tauri' ? createTauriTransport('window') : createChannelTransport(CAPTURE_WINDOW_LABEL));
 }
