@@ -7,7 +7,7 @@ import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules
 import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { AddSegments, Button, DatePicker, Icon, IconChooser, QuickInputField, QuickPreview, RecurrencePicker, Sheet, SpaceSegmented, type AddSegment } from '../../ui';
-import { useQuickInput } from '../capture';
+import { DictationButton, DictationHelp, ListeningSheet, useDictation, useQuickInput } from '../capture';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
@@ -73,6 +73,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
   const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  // Q-03 : le micro de l'app n'apparaît que si le plugin Speech existe (ordre 5) ; le micro du clavier iOS dicte dans le champ sans code.
+  const dictation = useDictation({ layout: 'mobile', inputRef: titleRef, onText: (spoken) => setTitle(title === '' ? spoken : `${title} ${spoken}`) });
   const valid = validateTaskTitle(quick.parse.title).ok;
 
   // Le piège de focus de `Sheet` pose d'abord le focus sur « Fermer » (premier élément focusable) ; le `setTimeout` s'exécute
@@ -125,15 +127,21 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
           </button>
         </div>
         {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
-        <QuickInputField
-          ref={titleRef}
-          label={t('tasks.titleLabel')}
-          placeholder={t('tasks.addPlaceholderPc')}
-          value={title}
-          onChange={setTitle}
-          maxLength={TASK_TITLE_MAX_LENGTH}
-          context={quick.suggestionContext}
-        />
+        <div className="ct-task-sheet__titleRow">
+          <QuickInputField
+            ref={titleRef}
+            label={t('tasks.titleLabel')}
+            placeholder={t('tasks.addPlaceholderPc')}
+            value={title}
+            onChange={setTitle}
+            maxLength={TASK_TITLE_MAX_LENGTH}
+            context={quick.suggestionContext}
+            {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
+          />
+          <DictationButton dictation={dictation} />
+        </div>
+        <DictationHelp dictation={dictation} />
+        <ListeningSheet dictation={dictation} />
         <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
         {/* Choix Icône / Emoji (T-03, Ajout.html). */}
         <IconChooser value={icon} onChange={setIcon} />

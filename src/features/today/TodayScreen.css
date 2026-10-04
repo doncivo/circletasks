@@ -160,6 +160,13 @@
   justify-content: space-between;
 }
 
+/* Titre et micro de dictée (Q-03, seulement si le plugin Speech existe) sur la même ligne. */
+.ct-task-sheet__titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+}
+
 /* Feuille Ajout (Ajout.html) : titre de 32 px, comme « Nouvel événement » et « Nouvelle routine » (segments Tâche / Événement / Routine). */
 .ct-task-sheet__heading {
   font-size: 2rem;

@@ -4,7 +4,7 @@ import { TASK_TITLE_MAX_LENGTH } from '../../domain/taskRules';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
 import { DatePicker, QuickInputField, QuickPreview, type Layout } from '../../ui';
-import { captureInputFrom, useQuickInput, type CaptureInput } from '../capture';
+import { captureInputFrom, DictationButton, DictationHelp, ListeningSheet, useDictation, useQuickInput, type CaptureInput } from '../capture';
 import { ScanButton } from '../capture/scan/ScanButton';
 import { useEffectiveProjectFilter } from '../spaces';
 
@@ -26,6 +26,8 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
   const projectFilter = useEffectiveProjectFilter();
   // Une date réglée à la main l'emporte : le texte n'est plus lu pour la date.
   const quick = useQuickInput({ dates: choice === null });
+  // Q-03 : micro à droite du champ (PC : aide « Win + H », le texte dicté arrive dans le champ pour relecture ; iPhone : seulement si le plugin Speech existe).
+  const dictation = useDictation({ layout, inputRef, onText: (spoken) => quick.setText(quick.text === '' ? spoken : `${quick.text} ${spoken}`) });
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
@@ -52,7 +54,9 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
           context={quick.suggestionContext}
           placement={layout === 'pc' ? 'below' : 'above'}
           className="ct-today__addField"
+          {...(dictation.showButton ? { describedBy: dictation.helpId } : {})}
         />
+        <DictationButton dictation={dictation} />
         {layout === 'pc' && <DatePicker value={choice} today={today} onChange={setChoice} className="ct-today__dateField" />}
         {/* Bouton d'envoi masqué : avec deux champs texte (titre, date), Entrée ne soumet le formulaire que par lui. */}
         <button type="submit" className="ct-visually-hidden" tabIndex={-1} aria-hidden="true" />
@@ -60,6 +64,8 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
       {layout === 'pc' && <ScanButton layout={layout} />}
       </div>
       <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
+      <DictationHelp dictation={dictation} />
+      <ListeningSheet dictation={dictation} />
       {layout === 'mobile' && (
         <div className="ct-today__scanRow">
           <ScanButton layout={layout} />
