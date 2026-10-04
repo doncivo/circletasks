@@ -94,3 +94,4 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 ## Ordre 3
 
 - Fusionner les grammaires de dates `dateInput.ts` (T-14) et `naturalDate.ts` (Q-02) ; chrono-node conservé (PRD 7).
+- Focus : si l'écriture de clôture au terme échoue toujours, `checkElapsed` (appelé chaque seconde) réaffiche le message d'erreur en boucle : afficher une seule fois par session (revue du lot F).

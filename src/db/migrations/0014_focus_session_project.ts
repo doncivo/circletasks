@@ -3,8 +3,8 @@ import type { Migration } from '../migrator';
 /**
  * Revue F-01 à F-04 : `focus_session.project_id`, projet de la tâche FIGÉ au lancement (ES-08 critère 2). Les totaux par projet lisent
  * cette colonne : ils ne dépendent plus de la ligne `task` (corbeille purgée, tâche déplacée ensuite). Sans clé étrangère (comme
- * `task_id`). Les sessions existantes reprennent le projet actuel de leur tâche. Rejouable : l'ajout de colonne est ignoré si elle existe
- * déjà (le migrateur rejoue le journal, voir migrator.ts) ; le remplissage ne touche que les lignes encore nulles.
+ * `task_id`). Les sessions existantes reprennent le projet actuel de leur tâche. Rejouable : le migrateur n'applique qu'une fois chaque version
+ * (journal schema_migrations, voir migrator.ts) ; le remplissage ne touche que les lignes encore nulles.
  */
 export const migration0014FocusSessionProject: Migration = {
   version: 14,
