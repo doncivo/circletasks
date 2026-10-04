@@ -57,25 +57,3 @@ export function createDataAccess(driver: SqlDriver, stamper: WriteStamper, facto
     transaction: (work) => driver.transaction((tx) => work(factory(tx, stamper))),
   };
 }
-
-/** Méthode de contrat non encore implémentée (squelette d'architecture). */
-export class NotImplementedError extends Error {
-  override readonly name = 'NotImplementedError';
-}
-
-/**
- * Repositories de remplacement tant que data-model n'a pas livré `createSqlRepositories` :
- * tout appel de méthode lève `NotImplementedError` en nommant la méthode.
- * À ne plus utiliser dès que les implémentations SQL existent.
- */
-export const createPendingRepositories: RepositoryFactory = () =>
-  new Proxy({} as Repositories, {
-    get: (_target, repoName) =>
-      new Proxy(
-        {},
-        {
-          get: (_repo, method) => () =>
-            Promise.reject(new NotImplementedError(`${String(repoName)}.${String(method)} : à implémenter (data-model)`)),
-        },
-      ),
-  });

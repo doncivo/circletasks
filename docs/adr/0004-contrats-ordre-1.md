@@ -143,3 +143,12 @@ Migration 0006 : table `routine_pause` (id, routine_id, `from_date` incluse, `to
 
 Aucune migration : le champ `event.important` (migration 0001) porte l'interrupteur « Compte à rebours ». `src/domain/eventCountdown` (`daysUntil`, `countdownOf`, `scheduleCountdown`, `nextCountdown`) calcule en jours civils ; les écrans lui passent le jour courant de l'app. `TodayEventEntry` gagne `important` (événement local) : les bandeaux d'Aujourd'hui et de la Semaine n'affichent « J-n » que pour lui (`bandCountdownTag`). `Switch` gagne la variante `toggle` (`aria-pressed`).
 
+
+## Avenant — remboursement des dettes avant l'ordre 3 (2026-10-04)
+
+Refactor sans changement de comportement ; contrats ajoutés ou retirés :
+- `createPendingRepositories` et `NotImplementedError` quittent `src/db/repositories` (le point de la section Décision est caduc) : ils vivent dans `tests/fixtures/pendingRepositories.ts`, pour les seuls tests. `getDatabase()` est supprimé : la base n'est joignable que par `AppContainer.data`.
+- `src/features/settings/settingsUseCases.ts` (`SettingsUseCases`, deps `Pick<AppContainer, 'data'>`) : seul point d'écriture des réglages pour les stores d'écran et le filtre d'espace (`setCarryOverUndone`, `setHideRoutines`, `saveRecaps`, `setLaunchAtStartupMirror`, `syncLaunchAtStartupMirror`, `setCompactView(screen, value)`, `saveSpaceFilter`, plus `load`). Les méthodes rejettent en cas d'échec ; le store garde l'optimisme et le retour arrière.
+- `src/features/calendars/calendarUseCases.ts` (`CalendarUseCases`) : `listAccounts`, `createAccount`, `saveCalendars` (agendas + retrait des événements des agendas décochés, une transaction), `removeAccount` (compte + événements, une transaction). Le coffre et les états locaux restent dans `calendarsStore`.
+- `src/domain/externalRecurrence.ts` (ex-`providers/recurrence.ts`) : `parseRecurrenceRule`, `occurrenceDates`, `nthWeekdayDate` ; les fournisseurs iCalendar l'appellent.
+- `src/domain/goalRules.ts` : `compareAttachedTasks` et `attachedTasksByGoal(tasks, includeGoal?)`, sélecteur unique des tâches rattachées (écran Objectif et historique). Le tri de l'historique gagne le départage par id à date et ordre égaux.

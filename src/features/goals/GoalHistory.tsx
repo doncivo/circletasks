@@ -1,8 +1,7 @@
 import { Check } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import { goalWeekNumber, historyStatusOf } from '../../domain/goalRules';
-import type { Task } from '../../domain/model';
+import { attachedTasksByGoal, goalWeekNumber, historyStatusOf } from '../../domain/goalRules';
 import type { GoalId } from '../../domain/types';
 import { t } from '../../i18n';
 import { Button, Icon } from '../../ui';
@@ -36,17 +35,7 @@ export function GoalHistory() {
   }, [loadHistory, today, filter]);
 
   // Tâches rattachées des lignes dépliées, lues dans la source unique (une tâche rouverte ou détachée ailleurs s'y voit).
-  const tasksByGoal = useMemo(() => {
-    const grouped = new Map<GoalId, Task[]>();
-    for (const task of entities.values()) {
-      if (task.goalId === null || task.deletedAt !== null || !open.has(task.goalId)) continue;
-      const list = grouped.get(task.goalId) ?? [];
-      list.push(task);
-      grouped.set(task.goalId, list);
-    }
-    for (const list of grouped.values()) list.sort((a, b) => (a.date ?? '9999') < (b.date ?? '9999') ? -1 : (a.date ?? '9999') > (b.date ?? '9999') ? 1 : a.sortOrder - b.sortOrder);
-    return grouped;
-  }, [entities, open]);
+  const tasksByGoal = useMemo(() => attachedTasksByGoal(entities.values(), (goalId) => open.has(goalId)), [entities, open]);
 
   if (history.length === 0) return null;
 

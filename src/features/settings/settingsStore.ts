@@ -4,6 +4,7 @@ import { validateRecapSettings, type RecapSettings, type RecapSettingsError } fr
 import type { PlainMessageKey } from '../../i18n';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from './settingsUseCases';
 
 export type SettingsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -41,7 +42,12 @@ export interface SettingsState {
 }
 
 export const settingsStore = defineFeatureStore<SettingsState>((container: AppContainer) =>
-  createStore<SettingsState>()((set, get) => ({
+  createSettingsStore(container),
+);
+
+function createSettingsStore(container: AppContainer) {
+  const useCases = createSettingsUseCases(container);
+  return createStore<SettingsState>()((set, get) => ({
     status: 'idle',
     carryOverUndone: true,
     hideRoutines: false,
@@ -52,13 +58,8 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
     async load() {
       set({ status: 'loading', errorKey: null });
       try {
-        const [carryOverUndone, hideRoutines, morning, evening] = await Promise.all([
-          container.data.repos.settings.get('tasks.carryOverUndone'),
-          container.data.repos.settings.get('today.hideRoutines'),
-          container.data.repos.settings.get('reminders.morningRecap'),
-          container.data.repos.settings.get('reminders.eveningRecap'),
-        ]);
-        set({ carryOverUndone, hideRoutines, recaps: { morning, evening }, status: 'ready' });
+        const { carryOverUndone, hideRoutines, recaps } = await useCases.load();
+        set({ carryOverUndone, hideRoutines, recaps, status: 'ready' });
       } catch {
         set({ status: 'error', errorKey: 'settings.loadError' });
         return;
@@ -70,9 +71,7 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
       try {
         const actual = await desktop.getAutostart();
         set({ launchAtStartup: actual });
-        if (actual !== (await container.data.repos.settings.get('desktop.launchAtStartup'))) {
-          await container.data.repos.settings.set('desktop.launchAtStartup', actual);
-        }
+        await useCases.syncLaunchAtStartupMirror(actual);
       } catch (error) {
         logDesktopFailure('autostart-read', error);
         set({ errorKey: 'settings.loadError' });
@@ -85,8 +84,7 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
       const previous = get().recaps;
       set({ recaps: checked.value, errorKey: null });
       try {
-        await container.data.repos.settings.set('reminders.morningRecap', checked.value.morning);
-        await container.data.repos.settings.set('reminders.eveningRecap', checked.value.evening);
+        await useCases.saveRecaps(checked.value);
         return 'ok';
       } catch {
         set({ recaps: previous, errorKey: 'reminders.recapSaveError' });
@@ -98,7 +96,7 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
       const previous = get().carryOverUndone;
       set({ carryOverUndone: value, errorKey: null });
       try {
-        await container.data.repos.settings.set('tasks.carryOverUndone', value);
+        await useCases.setCarryOverUndone(value);
       } catch {
         set({ carryOverUndone: previous, errorKey: 'settings.saveError' });
       }
@@ -108,7 +106,7 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
       const previous = get().hideRoutines;
       set({ hideRoutines: value, errorKey: null });
       try {
-        await container.data.repos.settings.set('today.hideRoutines', value);
+        await useCases.setHideRoutines(value);
       } catch {
         set({ hideRoutines: previous, errorKey: 'settings.saveError' });
       }
@@ -127,11 +125,11 @@ export const settingsStore = defineFeatureStore<SettingsState>((container: AppCo
         return;
       }
       try {
-        await container.data.repos.settings.set('desktop.launchAtStartup', value);
+        await useCases.setLaunchAtStartupMirror(value);
       } catch {
         // L'entrée système est à jour (source de vérité, relue à l'ouverture) : seul le miroir local manque.
         set({ errorKey: 'settings.saveError' });
       }
     },
-  })),
-);
+  }));
+}

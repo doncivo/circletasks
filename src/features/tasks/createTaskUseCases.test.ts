@@ -13,9 +13,8 @@ import type { TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
 const DEVICE = asEntityId<DeviceId>('40000000-0000-4000-8000-000000000001');
 
 /**
- * Intégration avec de vrais repositories (SQLite Wasm) : `createTaskUseCases.create`
- * est le seul cas d'usage livré par T-01 (les autres lèvent `NotImplementedError`,
- * couverts ailleurs quand leur story arrive).
+ * Intégration avec de vrais repositories (SQLite Wasm) : création de tâche (T-01) ; les autres
+ * cas d'usage des tâches sont couverts par leurs propres fichiers de test.
  */
 describe('createTaskUseCases.create (T-01)', () => {
   let db: TestDb;

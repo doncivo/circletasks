@@ -16,7 +16,7 @@ import { createUndoStack, type UndoStack } from './undo';
  *
  * Les cas d'usage des features reçoivent un sous-ensemble explicite :
  *   `type TaskUseCaseDeps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo'>`.
- * Ils ne lisent jamais un singleton de module (pas de `getDatabase()` dans une feature).
+ * Ils ne lisent jamais un singleton de module (aucune base globale dans une feature).
  */
 export interface AppContainer {
   readonly clock: Clock;

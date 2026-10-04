@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  attachedTasksByGoal,
   carryOverGoal,
+  compareAttachedTasks,
   goalProgress,
   goalsAvailableFor,
   goalsOfWeek,
@@ -205,5 +207,43 @@ describe('historique (OB-06)', () => {
     expect(goalWeekNumber(date('2026-09-21'))).toBe(39);
     expect(goalWeekNumber(date('2026-09-14'))).toBe(38);
     expect(goalWeekNumber(date('2025-12-29'))).toBe(1);
+  });
+});
+
+describe('attachedTasksByGoal / compareAttachedTasks (M17, OB-06)', () => {
+  const g1 = asEntityId<GoalId>('c1000000-0000-4000-8000-000000000001');
+  const g2 = asEntityId<GoalId>('c1000000-0000-4000-8000-000000000002');
+
+  it('groupe par objectif, écarte les tâches supprimées ou sans objectif', () => {
+    const a = task({ goalId: g1, sortOrder: 1 });
+    const b = task({ goalId: g2, sortOrder: 1 });
+    const removed = task({ goalId: g1, sortOrder: 2, deletedAt: '2026-09-29T08:00:00.000Z' as Task['deletedAt'] });
+    const free = task({ goalId: null, sortOrder: 3 });
+    const grouped = attachedTasksByGoal([a, b, removed, free]);
+    expect([...grouped.keys()]).toEqual([g1, g2]);
+    expect(grouped.get(g1)).toEqual([a]);
+    expect(grouped.get(g2)).toEqual([b]);
+  });
+
+  it('restreint aux objectifs retenus par le filtre', () => {
+    const a = task({ goalId: g1, sortOrder: 1 });
+    const b = task({ goalId: g2, sortOrder: 1 });
+    const grouped = attachedTasksByGoal([a, b], (id) => id === g2);
+    expect(grouped.has(g1)).toBe(false);
+    expect(grouped.get(g2)).toEqual([b]);
+  });
+
+  it('trie par date (sans date en dernier), puis ordre manuel, puis id', () => {
+    const noDate = task({ goalId: g1, date: null, sortOrder: 0 });
+    const late = task({ goalId: g1, date: date('2026-10-02'), sortOrder: 0 });
+    const earlySecond = task({ goalId: g1, date: date('2026-09-30'), sortOrder: 2 });
+    const earlyFirst = task({ goalId: g1, date: date('2026-09-30'), sortOrder: 1 });
+    const grouped = attachedTasksByGoal([noDate, late, earlySecond, earlyFirst]);
+    expect(grouped.get(g1)).toEqual([earlyFirst, earlySecond, late, noDate]);
+    const x = task({ goalId: g1, sortOrder: 5 });
+    const y = task({ goalId: g1, sortOrder: 5 });
+    expect(compareAttachedTasks(x, y)).toBeLessThan(0);
+    expect(compareAttachedTasks(y, x)).toBeGreaterThan(0);
+    expect(compareAttachedTasks(x, x)).toBe(0);
   });
 });

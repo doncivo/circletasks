@@ -122,3 +122,29 @@ export function historyStatusOf(goal: Pick<Goal, 'status'>): 'achieved' | 'notAc
 export function goalWeekNumber(weekStart: LocalDate): number {
   return isoWeekOf(weekStart).week;
 }
+
+/** M17 / OB-06 : ordre des tâches rattachées à un objectif : par date (sans date en dernier), puis ordre manuel, puis id. */
+export function compareAttachedTasks(a: Pick<Task, 'id' | 'date' | 'sortOrder'>, b: Pick<Task, 'id' | 'date' | 'sortOrder'>): number {
+  if (a.date !== b.date) return a.date === null ? 1 : b.date === null ? -1 : a.date < b.date ? -1 : 1;
+  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/**
+ * M17 / OB-06 : sélecteur unique des tâches rattachées, groupées par objectif et triées (`compareAttachedTasks`). Les tâches
+ * supprimées et sans objectif sont écartées ; `includeGoal` restreint aux objectifs voulus (lignes dépliées de l'historique).
+ */
+export function attachedTasksByGoal<T extends Pick<Task, 'id' | 'goalId' | 'deletedAt' | 'date' | 'sortOrder'>>(
+  tasks: Iterable<T>,
+  includeGoal: (goalId: GoalId) => boolean = () => true,
+): Map<GoalId, T[]> {
+  const grouped = new Map<GoalId, T[]>();
+  for (const task of tasks) {
+    if (task.goalId === null || task.deletedAt !== null || !includeGoal(task.goalId)) continue;
+    const list = grouped.get(task.goalId) ?? [];
+    list.push(task);
+    grouped.set(task.goalId, list);
+  }
+  for (const list of grouped.values()) list.sort(compareAttachedTasks);
+  return grouped;
+}

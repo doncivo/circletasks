@@ -3,7 +3,7 @@ import { toStoredInstant } from '../../../domain/calendarProvider';
 import { addDays } from '../../../domain/localDate';
 import type { LocalDate } from '../../../domain/types';
 import { parseIcs, parseDuration, parseIcsTime, propOf, propsOf, resolveIcsTime, timeContextOf, unescapeText, type IcsComponent, type IcsTime, type TimeContext } from './ics';
-import { occurrenceDates, parseRecurrenceRule } from './recurrence';
+import { occurrenceDates, parseRecurrenceRule } from '../../../domain/externalRecurrence';
 
 /**
  * Événements d'un objet iCalendar (une réponse `calendar-data`) en instances UTC, sur une plage (K-02 critère 5) :

@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import type { WriteStamper } from '../../domain/hlc';
 import type { SqlExecutor } from '../driver';
 import { openSqliteWasmDriver } from '../drivers/sqliteWasm';
-import { NotImplementedError, createDataAccess, createPendingRepositories, type Repositories } from './dataAccess';
+import { NotImplementedError, createPendingRepositories } from '../../../tests/fixtures/pendingRepositories';
+import { createDataAccess, type Repositories } from './dataAccess';
 import { RepositoryError } from './common';
 
 const stamper: WriteStamper = { next: () => ({ at: '' as never, deviceId: '' as never, hlc: '' as never }) };

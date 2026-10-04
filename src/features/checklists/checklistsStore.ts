@@ -4,6 +4,7 @@ import type { Checklist, ChecklistItem, ChecklistSummary } from '../../domain/mo
 import type { ChecklistId, ChecklistItemId, LocalDate, Result, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 import { onChecklistsChanged } from './checklistEvents';
 import { createChecklistUseCases, type ChecklistSaveError, type ChecklistUpdate, type NewChecklistInput } from './checklistUseCases';
 
@@ -73,6 +74,7 @@ export interface ChecklistsState {
 
 export const checklistsStore = defineFeatureStore<ChecklistsState>((container: AppContainer) => {
   const useCases = createChecklistUseCases(container);
+  const settingsUseCases = createSettingsUseCases(container);
   // Jetons de requête : le résultat d'une lecture dépassée par une plus récente est ignoré.
   let requestId = 0;
   let selectId = 0;
@@ -147,8 +149,7 @@ export const checklistsStore = defineFeatureStore<ChecklistsState>((container: A
       const previous = get().compact;
       set({ compact });
       try {
-        const stored = await container.data.repos.settings.get('view.compact');
-        await container.data.repos.settings.set('view.compact', { ...stored, checklists: compact });
+        await settingsUseCases.setCompactView('checklists', compact);
       } catch {
         set({ compact: previous, actionErrorKey: 'checklists.saveError' });
       }

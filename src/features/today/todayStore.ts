@@ -10,6 +10,7 @@ import type { LocalDate, ProjectId, RecurrenceId, Result, RoutineId, SpaceFilter
 import type { PlainMessageKey } from '../../i18n';
 import { selectTasks } from '../app/selectTasks';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { createSettingsUseCases } from '../settings/settingsUseCases';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
 import { createSeriesUseCases } from '../tasks/seriesUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
@@ -132,6 +133,7 @@ export interface TodayState {
 
 export const todayStore = defineFeatureStore<TodayState>((container: AppContainer) => {
   const useCases = createTaskUseCases(container);
+  const settingsUseCases = createSettingsUseCases(container);
   const series = createSeriesUseCases(container);
   // Jeton de requête : si un appel plus récent a démarré entre-temps, le résultat
   // d'un appel plus ancien qui se termine après lui est ignoré (pas d'état périmé).
@@ -311,8 +313,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
       const previous = get().compact;
       set({ compact });
       try {
-        const stored = await container.data.repos.settings.get('view.compact');
-        await container.data.repos.settings.set('view.compact', { ...stored, today: compact });
+        await settingsUseCases.setCompactView('today', compact);
       } catch {
         set({ compact: previous, actionErrorKey: 'tasks.detailSaveError' });
       }

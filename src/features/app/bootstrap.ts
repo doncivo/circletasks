@@ -13,8 +13,6 @@ import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { useAppStore } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
 
-let database: SqlDriver | undefined;
-
 /**
  * Ouvre la base du runtime courant et applique les migrations. Appelé une fois au
  * démarrage ; l'état est publié dans le store (dbStatus).
@@ -38,7 +36,6 @@ export async function bootstrapDatabase(
     db = await open();
     const port = await (options.backup ?? createMigrationBackup)(db);
     await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock) });
-    database = db;
     setDbStatus('ready');
     return db;
   } catch (error) {
@@ -46,15 +43,6 @@ export async function bootstrapDatabase(
     setDbStatus('error', { detail: error instanceof Error ? error.message : String(error), backupFailed: error instanceof MigrationBackupError });
     return undefined;
   }
-}
-
-/**
- * Base ouverte au démarrage. Réservé au démarrage et aux outils (sauvegarde) :
- * les features passent par `AppContainer.data`, jamais par cette fonction.
- */
-export function getDatabase(): SqlDriver {
-  if (!database) throw new Error('Base non initialisée : appeler bootstrapDatabase() au démarrage');
-  return database;
 }
 
 export interface BootstrapAppOptions {
@@ -81,10 +69,7 @@ const readOnlyStamper: WriteStamper = {
 /**
  * Démarrage complet (ADR 0004, 0005) : base + migrations, identité de l'appareil,
  * graine HLC, accès aux données, conteneur. Renvoie undefined en cas d'échec
- * (dbStatus = 'error').
- *
- * À brancher dans App.tsx (à la place de bootstrapDatabase) dès que
- * `createSqlRepositories` existe ; le conteneur est alors fourni par AppContainerProvider.
+ * (dbStatus = 'error'). Appelé par App.tsx ; le conteneur est fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
   const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });

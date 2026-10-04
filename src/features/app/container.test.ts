@@ -4,12 +4,8 @@ import { createManualClock } from '../../domain/clock';
 import { createHlcClock, createWriteStamper, parseHlc } from '../../domain/hlc';
 import type { DeviceId, Hlc } from '../../domain/types';
 import { openSqliteWasmDriver } from '../../db/drivers/sqliteWasm';
-import {
-  createDataAccess,
-  createPendingRepositories,
-  type RepositoryFactory,
-  type Repositories,
-} from '../../db/repositories';
+import { createDataAccess, type RepositoryFactory, type Repositories } from '../../db/repositories';
+import { createPendingRepositories } from '../../../tests/fixtures/pendingRepositories';
 import { useAppStore } from './appStore';
 import { bootstrapApp } from './bootstrap';
 import { createAppContainer, defineFeatureStore, type AppContainer } from './container';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LocalDate } from '../../../domain/types';
-import { occurrenceDates, parseRecurrenceRule } from './recurrence';
+import { nthWeekdayDate, occurrenceDates, parseRecurrenceRule } from './externalRecurrence';
+import type { LocalDate } from './types';
 
 const day = (value: string): LocalDate => value as LocalDate;
 
@@ -86,5 +86,15 @@ describe('occurrenceDates', () => {
     expect(got.filter((date) => date >= '2026-09-20' || date === '1900-01-01')).toEqual(['1900-01-01', '2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24']);
     const monthly = parseRecurrenceRule('FREQ=MONTHLY;INTERVAL=3');
     expect(occurrenceDates(monthly as never, { start: day('1950-01-15'), first: day('2026-09-01'), last: day('2026-12-31'), pastUntil: () => false })).toContain('2026-10-15');
+  });
+});
+
+describe('nthWeekdayDate (K-02 critère 5)', () => {
+  it('rend le n-ième jour de semaine, depuis le début ou la fin du mois, ou null s’il n’existe pas', () => {
+    expect(nthWeekdayDate(2026, 9, 1, 1)).toBe('2026-09-07');
+    expect(nthWeekdayDate(2026, 9, 1, -1)).toBe('2026-09-28');
+    expect(nthWeekdayDate(2026, 9, 1, 5)).toBeNull();
+    expect(nthWeekdayDate(2026, 3, 1, 5)).toBe('2026-03-30');
+    expect(nthWeekdayDate(2026, 2, 7, -1)).toBe('2026-02-22');
   });
 });

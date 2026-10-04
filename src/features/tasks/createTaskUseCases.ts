@@ -49,9 +49,7 @@ class RemindersRefused extends Error {
 /**
  * Implémentation des cas d'usage « tâches » (contrat : `./taskUseCases.ts`, ADR 0004).
  *
- * T-01 livre `create` seul : les autres méthodes sont posées par leur story
- * (commentaires du contrat) et lèvent `NotImplementedError` d'ici là, sur le même
- * modèle que `createPendingRepositories` (ADR 0004).
+ * Chaque méthode est posée par sa story (commentaires du contrat).
  */
 export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
 
