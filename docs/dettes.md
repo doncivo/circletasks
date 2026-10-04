@@ -58,3 +58,31 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 ## Sécurité
 
 - Audit des dépendances Rust (RustSec) : l'étape `audit-rust` de `.github/workflows/tests.yml` lance `cargo audit` ; l'audit LOCAL reste à lancer (`cargo install cargo-audit --locked` puis `cargo audit --file src-tauri/Cargo.lock`) dès que l'outil est installé sur le poste, l'outil ne l'étant pas encore (lot K, revue sécurité).
+
+## Mise à jour de fin d'ordre 2 (2026-10-04)
+
+**Soldées pendant l'ordre 2 :**
+- sources M6 et M7 branchées sur registerTodaySource ;
+- index FTS5 (migration 0011) ;
+- segments Tâche / Événement / Routine de la feuille Ajout ;
+- lien tâche → événement (0012) ;
+- ES-06 et S-05 clôturées ; A-09 reste ouverte pour le seul critère 9 (ordre 4).
+
+**À solder AVANT l'ordre 3 (lot de remboursement) :**
+- Sélecteur d'objectifs unique dans src/domain (tri en double : GoalHistory.tsx:47, GoalsScreen.tsx:28 et 82).
+- Cas d'usage pour les réglages, à la place des écritures directes de settingsStore.ts:74-101, routineStore, somedayStore et spaceFilter.
+- Cas d'usage pour calendarsStore.ts : écritures directes dans les repositories aux lignes 161 et 314-341.
+- Développement des RRULE déplacé de features/calendars/providers/recurrence.ts vers src/domain/externalRecurrence.ts.
+- Code mort : bootstrap.ts:55 (getDatabase), bootstrap.ts:86 (« À brancher »), dataAccess.ts:71 ; commentaire faux dans 0001_core_tables.ts:25.
+
+**Ordre 3 :**
+- Découper les fichiers de plus de 400 lignes : taskRepository (607), DateField (472), createTaskUseCases (468), todayStore (460), calendarsStore (412), et src/i18n/fr.ts (630) par module.
+- Primitive de glisser commune à useSortable et useZoneDrag.
+- « Date de fin » du RecurrencePicker.
+- ES-08 et H-01.
+- Interfaces src/platform pour l'OCR, l'export et les fichiers.
+
+**Ajouts pour l'ordre 4 (inventaire des données locales et des risques) :**
+- Historique des recherches : réglage local (RC-04).
+- task.external_event_id : pointe vers external_event, une table locale.
+- holiday : les fêtes lunaires semées reçoivent un id aléatoire sur chaque appareil (holidayUseCases.ts:29), alors que la table est unique par pays, année et fête. Il faut un id déterministe ou une fusion sur la clé naturelle.
