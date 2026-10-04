@@ -470,6 +470,25 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return rows.map(rowToTask);
     },
 
+    async existingTitleDates(keys) {
+      const wanted = new Set(keys.map((key) => `${key.title}\u0000${key.date ?? ''}`));
+      const titles = [...new Set(keys.map((key) => key.title))];
+      const found = new Set<string>();
+      // Titres par paquets de 200 : bien sous la limite de paramètres, une seule lecture de la table par paquet.
+      for (let index = 0; index < titles.length; index += 200) {
+        const chunk = titles.slice(index, index + 200);
+        const rows = await db.select<{ title: string; date: string | null }>(
+          `SELECT DISTINCT title, date FROM task WHERE deleted_at IS NULL AND title IN (${chunk.map(() => '?').join(', ')})`,
+          chunk,
+        );
+        for (const row of rows) {
+          const key = `${row.title}\u0000${row.date ?? ''}`;
+          if (wanted.has(key)) found.add(key);
+        }
+      }
+      return found;
+    },
+
     async purgeDeletedBefore(before: IsoDateTime) {
       const expired = await db.select<{ id: string }>('SELECT id FROM task WHERE deleted_at IS NOT NULL AND deleted_at < ?', [before]);
       if (expired.length === 0) return 0;

@@ -77,6 +77,11 @@ export interface TaskRepository {
   progressByGoal(goalIds: readonly GoalId[]): Promise<ReadonlyMap<GoalId, GoalProgress>>;
   /** T-09, T-10 : occurrences d'une récurrence ; `includeDeleted` : corbeille comprise (pas de doublon de série, T-09). */
   listByRecurrence(recurrenceId: RecurrenceId, options?: ReadOptions): Promise<Task[]>;
+  /**
+   * P-07 critère 10 : parmi ces couples (titre exact, date ; null = sans date), ceux qu'une tâche vivante (hors corbeille et copies
+   * écartées, faites ou non, tous espaces) porte déjà. Clé rendue : `titre` + U+0000 + `date` ('' sans date).
+   */
+  existingTitleDates(keys: readonly { readonly title: string; readonly date: LocalDate | null }[]): Promise<ReadonlySet<string>>;
   /** T-08 : corbeille, tâches supprimées depuis `since` (30 jours) ; hors occurrences retirées par l'annulation d'une complétion (T-09, `series_index` < 0). */
   listTrash(since: IsoDateTime, filter: SpaceFilter): Promise<Task[]>;
   /**

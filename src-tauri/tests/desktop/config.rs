@@ -150,6 +150,19 @@ fn export_capability_grants_only_the_two_export_commands_to_the_main_window_on_w
     assert_eq!(names, ["allow-export-save-file", "allow-reveal-exported-file"]);
 }
 
+/// P-07 : l'import passe par une seule commande Rust ; fenêtre principale et Windows seulement, aucune permission de plugin.
+#[test]
+fn import_capability_grants_only_the_open_file_command_to_the_main_window_on_windows() {
+    let text = include_str!("../../capabilities/import.json");
+    let capability: Value = serde_json::from_str(text).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
+    assert_eq!(permissions_of(text), ["allow-import-open-file"]);
+    for other in [include_str!("../../capabilities/default.json"), include_str!("../../capabilities/capture.json"), include_str!("../../capabilities/focus.json")] {
+        assert!(!permissions_of(other).iter().any(|p| p.contains("import-open-file")));
+    }
+}
+
 /// P-04 : sauvegarde et restauration par cinq commandes Rust, fenêtre principale et Windows seulement, aucune permission de plugin.
 #[test]
 fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on_windows() {

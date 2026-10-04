@@ -1,0 +1,208 @@
+/* Écran « Importer des tâches » (P-07) : sections et lignes de Reglages.html, aperçu dans le style de la relecture de Scan.html. */
+.ct-import-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-import {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 720px;
+}
+
+.ct-import__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-import__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-import__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-import__title:focus {
+  outline: none;
+}
+
+.ct-import__section {
+  margin: var(--ct-space-2) 0 0 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-import__text {
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-import__note {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-import__code {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: var(--ct-font-size-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.ct-import__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-import__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-1);
+}
+
+.ct-import__label {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-import__counters {
+  margin: 0;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-import__done {
+  margin: 0;
+  font-size: var(--ct-font-size-heading-sm);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* Avertissement ambre (Scan.html : fond #FFF8E6, bordure #D9A441) : l'icône et le texte portent le sens, pas la couleur seule. */
+.ct-import__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ct-space-2);
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border: 1px solid var(--ct-color-warning-border);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-warning-bg);
+  color: var(--ct-color-warning-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-import__tableWrap {
+  max-height: 340px;
+  overflow: auto;
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-import__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-import__caption {
+  padding: var(--ct-space-2) var(--ct-space-3);
+  text-align: left;
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-import__table th,
+.ct-import__table td {
+  padding: var(--ct-space-2) var(--ct-space-3);
+  text-align: left;
+  border-top: 1px solid var(--ct-color-border);
+  white-space: nowrap;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ct-import__table th {
+  position: sticky;
+  top: 0;
+  background: var(--ct-color-surface);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-import__block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding: var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  border: 1px solid;
+}
+
+.ct-import__block--danger {
+  border-color: var(--ct-color-danger);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+}
+
+.ct-import__block--warning {
+  border-color: var(--ct-color-warning-border);
+  background: var(--ct-color-warning-bg);
+  color: var(--ct-color-warning-text);
+}
+
+.ct-import__blockTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-import__list {
+  margin: 0;
+  padding-left: var(--ct-space-4);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-import__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+/* Bouton principal de 56 px (Scan.html). */
+.ct-import__primary {
+  min-height: 56px;
+  gap: var(--ct-space-2);
+}

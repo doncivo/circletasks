@@ -40,7 +40,7 @@ interface FileService extends FileExporter, FilePicker {}
 - Implémentations : Tauri PC (`createTauriFiles`, commandes Rust d'export), navigateur de développement (téléchargement `<a download>`), mémoire (faux des tests), indisponible (iPhone).
 - Sélection : `web` → navigateur ; `tauri` + `windows` → Tauri ; `tauri` + `ios` → indisponible, `canSave()` faux, le bouton « Exporter » n'est pas affiché.
 - Crochet de test `globalThis.__ctFiles`, lu seulement sous `import.meta.env.DEV` (absent du build de production).
-- `pickText` n'est pas implémenté côté Tauri (`unsupported`) : P-07 l'ajoutera de la même façon, par une commande Rust qui lit le seul fichier choisi (avenant à prévoir alors).
+- `pickText` n'était pas implémenté côté Tauri (`unsupported`) : P-07 l'a ajouté de la même façon, par une commande Rust qui lit le seul fichier choisi (voir l'avenant P-07 plus bas).
 
 ### Plugins Tauri et permissions (révisé après revue et audit, 2026-10-04)
 
@@ -80,4 +80,17 @@ Nouvelle architecture : le module `src-tauri/src/backup.rs` de D-03 (dossier `ba
 
 Limites connues : une restauration depuis l'app ne peut pas annuler une opération déjà publiée dans les journaux de synchro (ordre 4, Y-02 et Y-09 des dettes) ; un lecteur ou une sauvegarde sur disque réseau n'est pas concerné (le dossier est celui de l'app) ; sous Windows, si un antivirus garde le fichier ouvert, le renommage échoue et le retour arrière rétablit l'ancienne base (message « Redémarrez CircleTasks »).
 
-iPhone : le code Rust de copie est partagé, mais les cinq commandes ne sont inscrites que dans le gestionnaire PC et la capability est limitée à Windows (consigne du lot P) ; sur iPhone `container.backups` est indisponible et la ligne « Sauvegarde automatique » n'est pas affichée. L'ouverture de ces commandes à iOS (capability `platforms: ["iOS"]` + gestionnaire mobile + `relaunch` impossible sur iOS) est à décider avec l'ordre 5.
+iPhone (P-04) : le code Rust de copie est partagé, mais les cinq commandes ne sont inscrites que dans le gestionnaire PC et la capability est limitée à Windows (consigne du lot P) ; sur iPhone `container.backups` est indisponible et la ligne « Sauvegarde automatique » n'est pas affichée. L'ouverture de ces commandes à iOS (capability `platforms: ["iOS"]` + gestionnaire mobile + `relaunch` impossible sur iOS) est à décider avec l'ordre 5.
+
+## Avenant P-07 — import CSV, lecture du fichier choisi (2026-10-05)
+
+`FilePicker.pickText` (contrat de l'ADR, jusqu'ici `unsupported` côté Tauri) est implémenté. Nouveau module `src-tauri/src/import.rs` et nouvelle capability dédiée `capabilities/import.json` (fenêtre `main`, Windows seulement, **une seule** permission : `allow-import-open-file`).
+
+| Élément | Décision |
+| --- | --- |
+| Commande Rust | `import_open_file` (sans paramètre) : ouvre la boîte « Ouvrir » modale de la fenêtre principale (filtre csv / txt / tsv) via la crate `tauri-plugin-dialog` déjà présente (initialisée côté Rust seulement, aucune permission `dialog:` pour la WebView) ; `None` si l'utilisateur annule |
+| Contrôles de lecture | chemin à lettre de lecteur seulement (`is_local_disk_path` de `export.rs`) ; extension csv / txt / tsv (insensible à la casse) ; fichier ouvert puis contrôlé SUR LE DESCRIPTEUR (`metadata().is_file()` : ni dossier, ni périphérique, ni tube) ; taille annoncée <= 2 Mo ; lecture bornée à 2 Mo + 1 octet (un fichier qui grossit pendant la lecture est refusé). Codes d'erreur : `not-local`, `bad-type`, `not-a-file`, `too-large`, `unreadable` |
+| Retour | `{ name, data }` : nom sans dossier, octets en base64 (2 Mo au plus, soit 2,8 Mo de JSON) ; aucun chemin n'est renvoyé à la WebView |
+| Côté TypeScript | `createTauriFiles().pickText` décode les octets par `decodeImportBytes` (domaine, pur) : UTF-8 avec ou sans BOM, repli Windows-1252 ; `FileExportError('too-large' \| 'unreadable')`. `FileFailureReason` reçoit ces deux raisons |
+| iPhone installé | `openFileService('tauri', 'ios')` garde `canSave() = false` (pas d'export avant l'ordre 5) mais utilise le sélecteur de fichiers du système (`<input type="file">`, `pickTextFromInput`, plafond de 2 Mo vérifié avant lecture) pour `pickText` : le critère 13 de P-07 ne dépend pas du plugin Fichiers |
+| Tests | `tests/desktop/import.rs` (plafond, types, dossiers, chemins réseau et relatifs), `config.rs` (capability exacte, absente des autres fenêtres), `files.test.ts` |

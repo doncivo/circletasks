@@ -9,6 +9,7 @@ mod calendars;
 mod config;
 mod export;
 mod focus;
+mod import;
 mod logic;
 mod ocr;
 mod quit;

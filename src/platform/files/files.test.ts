@@ -7,6 +7,7 @@ function api(overrides: Partial<TauriFileApi> = {}): TauriFileApi {
   return {
     saveFile: () => Promise.resolve('C:\\Docs\\export.csv'),
     revealExported: () => Promise.resolve(),
+    pickFile: () => Promise.resolve(null),
     ...overrides,
   };
 }
@@ -60,5 +61,42 @@ describe('Contrat FileExporter (H-03 D4, critères 7, 9, 10)', () => {
     const tooBig = { ...request, data: { length: MAX_EXPORT_BYTES + 1 } as unknown as Uint8Array };
     await expect(files.save(tooBig)).rejects.toBeInstanceOf(FileExportError);
     expect(saveFile).not.toHaveBeenCalled();
+  });
+});
+
+describe('Lecture d’un fichier choisi (P-07)', () => {
+  const base64 = (bytes: number[]): string => btoa(String.fromCharCode(...bytes));
+
+  it('Tauri : la commande Rust ne reçoit aucun paramètre ; le texte est décodé en UTF-8 (BOM retiré)', async () => {
+    const pickFile = vi.fn(() => Promise.resolve({ name: 'taches.csv', data: base64([0xef, 0xbb, 0xbf, ...new TextEncoder().encode('titre;date\nÉcole;')]) }));
+    const files = createTauriFiles(api({ pickFile }));
+    await expect(files.pickText({ accept: ['.csv'] })).resolves.toEqual({ name: 'taches.csv', text: 'titre;date\nÉcole;' });
+    expect(pickFile).toHaveBeenCalledWith();
+  });
+
+  it('Tauri : repli Windows-1252 quand l’UTF-8 est invalide', async () => {
+    const files = createTauriFiles(api({ pickFile: () => Promise.resolve({ name: 'x.csv', data: base64([0x74, 0x69, 0x74, 0x72, 0x65, 0x0a, 0x52, 0xe9, 0x75]) }) }));
+    await expect(files.pickText({ accept: ['.csv'] })).resolves.toEqual({ name: 'x.csv', text: 'titre\nRéu' });
+  });
+
+  it('Tauri : annuler la boîte renvoie null, sans erreur', async () => {
+    const files = createTauriFiles(api());
+    await expect(files.pickText({ accept: ['.csv'] })).resolves.toBeNull();
+  });
+
+  it('Tauri : fichier trop gros ou illisible : FileExportError à raison stable', async () => {
+    const tooLarge = createTauriFiles(api({ pickFile: () => Promise.reject({ code: 'too-large', message: 'x' }) }));
+    await expect(tooLarge.pickText({ accept: ['.csv'] })).rejects.toMatchObject({ name: 'FileExportError', reason: 'too-large' });
+    const unreadable = createTauriFiles(api({ pickFile: () => Promise.reject({ code: 'not-local', message: 'x' }) }));
+    await expect(unreadable.pickText({ accept: ['.csv'] })).rejects.toMatchObject({ reason: 'unreadable' });
+  });
+
+  it('faux en mémoire : fichier choisi, annulation, échec programmé', async () => {
+    const files = createMemoryFiles();
+    await expect(files.pickText({ accept: ['.csv'] })).resolves.toBeNull();
+    files.setPick({ name: 'a.csv', text: 'titre\nA' });
+    await expect(files.pickText({ accept: ['.csv'] })).resolves.toEqual({ name: 'a.csv', text: 'titre\nA' });
+    files.failNextPick('too-large');
+    await expect(files.pickText({ accept: ['.csv'] })).rejects.toMatchObject({ reason: 'too-large' });
   });
 });

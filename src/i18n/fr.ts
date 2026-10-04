@@ -14,6 +14,7 @@ import { checklistsFr } from './fr.checklists';
 import { eventsFr } from './fr.events';
 import { shortcutsUiFr } from './fr.shortcuts';
 import { backupFr } from './fr.backup';
+import { importCsvFr } from './fr.importCsv';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -612,6 +613,7 @@ export const fr = {
   search: searchFr,
   shortcutsUi: shortcutsUiFr,
   backup: backupFr,
+  importCsv: importCsvFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

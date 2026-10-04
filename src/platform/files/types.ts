@@ -21,7 +21,7 @@ export interface SaveResult {
   readonly path?: string;
 }
 
-export type FileFailureReason = 'write-failed' | 'unavailable' | 'unsupported';
+export type FileFailureReason = 'write-failed' | 'unavailable' | 'unsupported' | 'too-large' | 'unreadable';
 
 /** Échec d'enregistrement (disque plein, droits…) : aucun fichier partiel n'est laissé. */
 export class FileExportError extends Error {
@@ -50,7 +50,7 @@ export interface PickedText {
 
 export interface FilePicker {
   /** Fichier texte choisi par l'utilisateur (P-07) ; null s'il annule. */
-  pickText(options: { readonly accept: readonly string[] }): Promise<PickedText | null>;
+  pickText(options: { readonly accept: readonly string[]; readonly maxBytes?: number }): Promise<PickedText | null>;
 }
 
 export interface FileService extends FileExporter, FilePicker {}
