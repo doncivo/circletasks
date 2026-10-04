@@ -21,7 +21,7 @@ import { SettingsScreen } from './features/settings';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
-import { DoneTasksScreen, ReportScreen, TrashScreen } from './features/tasks';
+import { DoneTasksScreen, ReportScreen, TaskDetail, TrashScreen } from './features/tasks';
 import { UpdateBanner } from './features/updater';
 import { WeekScreen } from './features/week';
 import { t } from './i18n';
@@ -89,6 +89,9 @@ function AppShellContent() {
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />
+      {/* RC-03 : une tâche ouverte depuis la recherche passe par-dessus l'onglet courant. Aujourd'hui, la Semaine, Un jour, Terminées et
+          Objectif rendent leur propre fiche ; les autres écrans (Routines, Événements, Checklists, Réglages, Rapport) en reçoivent une ici. */}
+      {(route.tab === 'routines' || route.tab === 'events' || route.tab === 'checklists' || route.tab === 'settings' || (route.tab === 'tasks' && route.screen === 'report')) && <TaskDetail />}
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? (
           <ReportScreen />

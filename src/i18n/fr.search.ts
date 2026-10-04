@@ -13,6 +13,8 @@ export const searchFr = {
   countOne: '1 résultat',
   tooMany: 'Affinez la recherche',
   error: 'La recherche a échoué. Réessayez.',
+  missing: 'Cet élément n’existe plus',
+  openError: 'Impossible d’ouvrir cet élément. Réessayez.',
   listLabel: 'Résultats de la recherche',
   group: '{type} · {count}',
   groups: {

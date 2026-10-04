@@ -13,6 +13,8 @@ export const searchEn: Messages['search'] = {
   countOne: '1 result',
   tooMany: 'Refine your search',
   error: 'The search failed. Try again.',
+  missing: 'This item no longer exists',
+  openError: 'Unable to open this item. Try again.',
   listLabel: 'Search results',
   group: '{type} · {count}',
   groups: {

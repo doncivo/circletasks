@@ -1,16 +1,18 @@
 import { Search } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import type { SearchResult } from '../../domain/search';
 import { t } from '../../i18n';
 import { Icon, Kbd, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { SearchFilterBar } from './SearchFilterBar';
-import { SearchGroups } from './SearchResults';
+import { SearchGroups, rowDomId } from './SearchResults';
+import { openSearchResult, type OpenOutcome } from './searchOpen';
 import { SEARCH_INPUT_ID } from './searchShortcut';
 import { searchStore } from './searchStore';
+import { useSearchSelection } from './useSearchSelection';
 import './SearchOverlay.css';
-
 
 /**
  * Surcouche de recherche (M14) : écran plein sur iPhone (Recherche.html), palette centrée sur PC. Montée par la coquille quand la
@@ -32,6 +34,11 @@ function SearchSurface() {
   const outcome = useFeatureStore(searchStore, (s) => s.outcome);
   const errorKey = useFeatureStore(searchStore, (s) => s.errorKey);
   const ref = useFocusTrap<HTMLElement>({ active: true, onEscape: closeOverlay });
+  const selection = useSearchSelection(outcome?.results ?? []);
+  /** Échec de l'ouverture du dernier résultat touché : élément supprimé entre-temps, ou base muette. */
+  const [openProblem, setOpenProblem] = useState<Exclude<OpenOutcome, 'opened'> | null>(null);
+  /** Ouverture en cours : un second Entrée ou clic est ignoré. */
+  const opening = useRef(false);
 
   // Ouverture : champ vide, espace du filtre global (RC-01 critère 10) ; fermeture : état remis à zéro.
   useEffect(() => {
@@ -39,6 +46,38 @@ function SearchSurface() {
     void store.open(useAppStore.getState().spaceFilter);
     return () => store.reset();
   }, [container]);
+
+  // La ligne sélectionnée reste visible quand la sélection bouge (critère 1).
+  const selectedKey = selection.selected?.key ?? null;
+  useEffect(() => {
+    if (selection.selected) document.getElementById(rowDomId(selection.selected))?.scrollIntoView?.({ block: 'nearest' });
+  }, [selection.selected]);
+
+  async function open(result: SearchResult, inTab: boolean): Promise<void> {
+    if (opening.current) return;
+    opening.current = true;
+    try {
+      const outcomeOfOpen = await openSearchResult(container, result, { inTab });
+      if (outcomeOfOpen === 'opened') closeOverlay();
+      else setOpenProblem(outcomeOfOpen);
+    } finally {
+      opening.current = false;
+    }
+  }
+
+  function handleInputKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      selection.move(event.key === 'ArrowDown' ? 'next' : 'previous');
+    } else if ((event.key === 'Home' || event.key === 'End') && event.ctrlKey) {
+      // Dans le champ, Début / Fin déplacent le curseur : Ctrl+Début / Ctrl+Fin vont au premier / dernier résultat.
+      event.preventDefault();
+      selection.move(event.key === 'Home' ? 'first' : 'last');
+    } else if (event.key === 'Enter' && selection.selected) {
+      event.preventDefault();
+      void open(selection.selected, event.ctrlKey);
+    }
+  }
 
   const count = outcome?.results.length ?? 0;
   const showResults = status === 'ready' && outcome !== null;
@@ -53,13 +92,18 @@ function SearchSurface() {
             className="ct-search__input"
             type="search"
             aria-label={t('search.fieldLabel')}
+            {...(showResults && count > 0 && selection.selected ? { 'aria-activedescendant': rowDomId(selection.selected) } : {})}
             value={query}
             placeholder={t('search.placeholder')}
             autoComplete="off"
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="search"
-            onChange={(event) => void searchStore.get(container).getState().setQuery(event.target.value)}
+            onChange={(event) => {
+              setOpenProblem(null);
+              void searchStore.get(container).getState().setQuery(event.target.value);
+            }}
+            onKeyDown={handleInputKeyDown}
           />
           {layout === 'pc' && <Kbd keys="Escape" />}
         </div>
@@ -90,7 +134,21 @@ function SearchSurface() {
             {t(errorKey)}
           </p>
         )}
-        {showResults && count > 0 && <SearchGroups results={outcome.results} spaces={spaces} />}
+        {openProblem && (
+          <p className="ct-search__error" role="alert">
+            {t(openProblem === 'missing' ? 'search.missing' : 'search.openError')}
+          </p>
+        )}
+        {showResults && count > 0 && (
+          <SearchGroups
+            results={outcome.results}
+            spaces={spaces}
+            selectedKey={selectedKey}
+            onSelect={selection.select}
+            onOpen={(result, inTab) => void open(result, inTab)}
+            onMove={selection.move}
+          />
+        )}
         {showResults && outcome.truncated && <p className="ct-search__hint">{t('search.tooMany')}</p>}
       </div>
     </section>

@@ -88,6 +88,25 @@ export function RoutinesScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spaceFilter]);
 
+  // RC-03 : une routine ouverte depuis la recherche (cible `detail` de type routine) affiche sa fiche, comme un toucher sur la carte ;
+  // la cible est consommée dès que la routine est dans la liste chargée ; une routine archivée n'a pas de fiche (seulement « Restaurer » dans
+  // la section des routines archivées) : l'onglet s'ouvre sans fiche ; quitter l'onglet abandonne la cible (`navigate` vide la fiche).
+  const detail = useNavigationStore((s) => s.detail);
+  const closeDetail = useNavigationStore((s) => s.closeDetail);
+  const requestedId = detail?.type === 'routine' ? (detail.id as RoutineId) : null;
+  /** Cible déjà reportée dans `reportId` : évite de la rouvrir tant que la navigation ne l'a pas consommée (réglage d'état pendant le rendu). */
+  const [handledId, setHandledId] = useState<RoutineId | null>(null);
+  const requestReady = requestedId !== null && status === 'ready';
+  if (requestedId === null && handledId !== null) setHandledId(null);
+  else if (requestReady && handledId !== requestedId && routines.some((routine) => routine.id === requestedId)) {
+    setHandledId(requestedId);
+    setReportId(requestedId);
+  }
+  const requestDone = requestReady && (handledId === requestedId || archived.some((routine) => routine.id === requestedId));
+  useEffect(() => {
+    if (requestDone) closeDetail();
+  }, [requestDone, closeDetail]);
+
   // Validation annulée ailleurs (message « Annuler », Ctrl+Z) : les ronds et compteurs se relisent.
   useEffect(() => onRoutinesChanged(container.data, () => void refresh()), [container, refresh]);
 
