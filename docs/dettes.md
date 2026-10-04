@@ -107,3 +107,4 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - repli JSON du corps : plafond vérifié après la désérialisation par Tauri (refuser ce repli ou plafond plus bas) ;
   - motif d'erreur dédié `too-large` (texte i18n) ; signature `reveal()` sans paramètre côté TS ;
   - tests ExportDialog : témoin positif pour `flush()`, `vi.restoreAllMocks()` en `afterEach`.
+- e2e K-03 (critères 2-3, iPhone) : `browserMonday` lit la date réelle alors que l'horloge du test avance ; un run qui franchit minuit du dimanche au lundi change de semaine et échoue (1 échec le 2026-10-05 vers 0 h, 5/5 verts ensuite). Figer la date du test (`page.clock.install` avec une date fixe).

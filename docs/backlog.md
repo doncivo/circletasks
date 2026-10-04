@@ -61,7 +61,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | ES-05 | M13 | Je déplace un élément d'un espace ou projet à l'autre | spaces-goals | fait |
 | ES-06 | M13 | Je rattache un agenda externe à un espace | spaces-goals | fait |
 | ES-07 | M13 | Je définis des plages silencieuses par espace | spaces-goals | fait |
-| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | en cours (partie Focus faite avec F-03 ; partie Statistiques avec M11, ordre 3) |
+| ES-08 | M13 | Je vois statistiques et Focus par espace et projet | spaces-goals | fait |
 | D-01 | M16 | L'app PC reste active en zone de notification | desktop-tauri | fait |
 | D-02 | M16 | L'app PC démarre avec Windows | desktop-tauri | fait |
 | D-03 | M16 | Je mets à jour l'app PC | desktop-tauri | en cours (workflow build-windows.yml fait et revu ; critère 11 vérifiable à la première release, tag vX.Y.Z, soumise à l’accord d’Ali) |
@@ -117,9 +117,9 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | F-02 | M10 | Je fais une pause | focus-time | fait |
 | F-03 | M10 | Je vois mon temps de concentration | focus-time | fait |
 | F-04 | M10 | La fin de session me notifie | focus-time | fait |
-| H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | à faire |
-| H-02 | M11 | Je vois mon taux de complétion | stats-history | à faire |
-| H-03 | M11 | J'exporte mon historique | stats-history | à faire |
+| H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | fait |
+| H-02 | M11 | Je vois mon taux de complétion | stats-history | fait |
+| H-03 | M11 | J'exporte mon historique | stats-history | fait |
 | P-01 | M12 | Je réordonne et masque les onglets | settings-personalization | fait |
 | P-02 | M12 | Je choisis clair, sombre ou système | settings-personalization | fait |
 | P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | fait |
