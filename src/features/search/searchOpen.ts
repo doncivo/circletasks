@@ -54,7 +54,7 @@ function routeOf(target: ResultTarget, today: LocalDate): Route | null {
  * serait masqué par le filtre d'espace ou de projet global, ce filtre repasse sur « Tout » / « Tous les projets » (sinon l'écran
  * s'ouvrirait sans l'élément). Ne rejette jamais.
  */
-export async function openSearchResult(container: Pick<AppContainer, 'data' | 'clock'>, result: SearchResult, options: { readonly inTab: boolean }): Promise<OpenOutcome> {
+export async function openSearchResult(container: Pick<AppContainer, 'data' | 'clock' | 'undo'>, result: SearchResult, options: { readonly inTab: boolean }): Promise<OpenOutcome> {
   try {
     if (!(await stillExists(container, result))) return 'missing';
   } catch {
@@ -65,8 +65,23 @@ export async function openSearchResult(container: Pick<AppContainer, 'data' | 'c
   const navigation = useNavigationStore.getState();
   const route = routeOf(target, app.day ?? todayLocal(container.clock));
   if (route) {
-    if (app.spaceFilter !== 'all' && app.spaceFilter !== result.hit.spaceId) app.setSpaceFilter('all');
-    else if (app.projectFilter !== null && (result.hit.kind !== 'task' || result.hit.projectId !== app.projectFilter)) app.setProjectFilter(null);
+    if (app.spaceFilter !== 'all' && app.spaceFilter !== result.hit.spaceId) {
+      // Message « Filtre « Tout » appliqué » avec « Annuler » : rétablit le filtre (et le projet) d'avant.
+      const previousSpace = app.spaceFilter;
+      const previousProject = app.projectFilter;
+      app.setSpaceFilter('all');
+      container.undo.push({
+        kind: 'search',
+        count: 1,
+        labelKey: 'undo.searchFilter',
+        undo: async () => {
+          const state = useAppStore.getState();
+          state.setSpaceFilter(previousSpace);
+          state.setProjectFilter(previousProject);
+          return 'undone';
+        },
+      });
+    } else if (app.projectFilter !== null && (result.hit.kind !== 'task' || result.hit.projectId !== app.projectFilter)) app.setProjectFilter(null);
     navigation.closeDetail();
     navigation.navigate(route);
   }

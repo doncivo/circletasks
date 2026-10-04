@@ -198,5 +198,11 @@ describe('Ouverture d’un résultat (RC-03)', () => {
     fireEvent.click(document.querySelector('.ct-search__result[aria-label^="Routine, Classer"]') as HTMLElement);
     await waitFor(() => expect(useNavigationStore.getState().route).toEqual({ tab: 'routines', screen: 'list' }));
     expect(useAppStore.getState().spaceFilter).toBe('all');
+    expect(await screen.findByText('Filtre « Tout » appliqué')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(useAppStore.getState().spaceFilter).toBe(SPACE_PRO_ID);
   });
 });

@@ -566,6 +566,7 @@ export const en: Messages = {
     checklist: 'Checklist updated',
     event: 'Event updated',
     recentSearches: 'Recent searches cleared',
+    searchFilter: '“All” filter applied',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',

@@ -570,6 +570,7 @@ export const fr = {
     checklist: 'Checklist modifiée',
     event: 'Événement modifié',
     recentSearches: 'Recherches récentes effacées',
+    searchFilter: 'Filtre « Tout » appliqué',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',

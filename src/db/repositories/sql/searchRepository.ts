@@ -145,6 +145,7 @@ export function createSearchRepository(db: SqlExecutor): SearchRepository {
       for (const statement of SEARCH_REBUILD_STATEMENTS) await db.execute(statement);
     },
 
+    // Comparaison par nombre de lignes seulement : une divergence de contenu n'est pas détectée, acceptable car les déclencheurs maintiennent l'index.
     async isStale(): Promise<boolean> {
       const row = (await db.select<{ indexed: number; alive: number }>(STALE_SQL))[0];
       return row === undefined || row.indexed !== row.alive;

@@ -95,3 +95,8 @@ Critères D-03 8 et 9 ; PRD section 7. Remplit le point d'accroche `beforeApply`
 - **iPhone** : la commande est aussi enregistrée et autorisée (capability par défaut) ; même dossier de configuration de l'app.
 - **Tests** : Vitest (orchestration, échec bloquant, bootstrap, rejeu 0001/0002/0003 -> 0004 sur base peuplée avec « copie » comparée) ; cargo test `tests/desktop/backup.rs` (WAL avec et sans checkpoint, atomicité, rétention 5, quotidiennes épargnées).
 - **Reste pour Ali (D-03 critère 8, installation réelle)** : mettre à jour un build installé N vers N+1 avec migration et vérifier la présence d'un fichier dans `%APPDATA%\fr.circletasks.planner\backups\` et des données intactes.
+
+## Avenant RC-01 (2026-10-04) : index de recherche
+
+- `search_index` (FTS5) et `search_index_doc` (liaison élément → rowid) sont locaux : exclus des journaux de synchro, reconstruits sur chaque appareil (`SearchRepository.rebuild`, `isStale`).
+- Mise à jour par déclencheurs SQL (migration 0011), donc aussi pour les écritures de la synchro ; suppression logique = retrait de l'index, restauration = retour.
