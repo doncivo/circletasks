@@ -1,5 +1,6 @@
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
+import { searchFr } from './fr.search';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
@@ -586,6 +587,7 @@ export const fr = {
   events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
+  search: searchFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

@@ -4,6 +4,7 @@ import type { CalendarAccountRepository, EventRepository, ExternalEventRepositor
 import type { ChecklistItemRepository, ChecklistRepository } from './checklistRepository';
 import type { GoalRepository } from './goalRepository';
 import type { HolidayRepository } from './holidayRepository';
+import type { SearchRepository } from './searchRepository';
 import type { ReminderRepository } from './reminderRepository';
 import type { RoutineLogRepository, RoutineRepository } from './routineRepository';
 import type { SettingsRepository, SyncMetaRepository } from './settingsRepository';
@@ -23,6 +24,7 @@ export interface Repositories {
   readonly settings: SettingsRepository;
   readonly events: EventRepository;
   readonly holidays: HolidayRepository;
+  readonly search: SearchRepository;
   readonly checklists: ChecklistRepository;
   readonly checklistItems: ChecklistItemRepository;
   readonly externalEvents: ExternalEventRepository;
