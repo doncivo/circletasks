@@ -126,7 +126,7 @@ test.describe('S-06 — planifier depuis « Un jour » en glissant', () => {
     await openWeek(page);
     await page.getByRole('button', { name: /^Un jour/ }).click();
     await panel(page).getByRole('button', { name: '+ Ajouter à « Un jour »' }).click();
-    const field = panel(page).getByRole('textbox', { name: 'Nouvelle tâche sans date' });
+    const field = panel(page).getByRole('combobox', { name: 'Nouvelle tâche sans date' });
     await field.fill('Renouveler le passeport');
     await field.press('Enter');
     await expect.poll(() => panelTitles(page)).toEqual(['Renouveler le passeport']);

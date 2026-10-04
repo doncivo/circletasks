@@ -89,3 +89,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 - Supprimer le réglage inutilisé `general.theme` (remplacé par `ui.theme`).
 - PRD 6 : thème classé comme préférence partagée, alors que `ui.theme` est local (décision D1) — à corriger par Ali.
+
+## Ordre 3
+
+- Fusionner les grammaires de dates `dateInput.ts` (T-14) et `naturalDate.ts` (Q-02) ; chrono-node conservé (PRD 7).

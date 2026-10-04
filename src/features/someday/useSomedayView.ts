@@ -13,6 +13,7 @@ import { useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } fro
 import { taskSubtitle } from '../tasks/taskLine';
 import { somedayStore } from './somedayStore';
 import { useSomedayTasks } from './useSomedayTasks';
+import type { CaptureInput } from '../capture';
 
 /**
  * Données et actions communes à l'écran iPhone et au panneau PC « Un jour » : tâches du filtre global, compteur et sous-titre,
@@ -39,13 +40,14 @@ export function useSomedayView() {
 
   /** Champ d'ajout (SD-01 critère 3) : tâche sans date, espace selon T-01 / ES-02, projet du filtre actif. */
   const addInline = useCallback(
-    async (title: string): Promise<boolean> => {
-      if (!defaultSpaceId) return false;
-      const result = await create({ title, spaceId: defaultSpaceId, projectId: projectFilter });
-      if (result.ok) announceCreation(defaultSpaceId);
+    async (capture: CaptureInput): Promise<boolean> => {
+      const spaceId = capture.spaceId ?? defaultSpaceId;
+      if (!spaceId) return false;
+      const result = await create({ title: capture.title, spaceId, projectId: capture.projectId });
+      if (result.ok) announceCreation(spaceId);
       return result.ok;
     },
-    [create, defaultSpaceId, projectFilter, announceCreation],
+    [create, defaultSpaceId, announceCreation],
   );
 
   const subtitleOf = useCallback(

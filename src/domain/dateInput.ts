@@ -38,7 +38,7 @@ function normalize(text: string): string {
     .trim();
 }
 
-const WEEKDAYS: Readonly<Record<string, Weekday>> = {
+export const WEEKDAYS: Readonly<Record<string, Weekday>> = {
   lun: 1, lundi: 1,
   mar: 2, mardi: 2,
   mer: 3, mercredi: 3,

@@ -83,6 +83,12 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+/* Champ d'ajout et aperçu Q-06 / Q-02 sous le champ. */
+.ct-today__addBlock {
+  display: flex;
+  flex-direction: column;
+}
+
 /* Champ d'ajout pleine largeur (PC-Aujourdhui.html) ; sur PC, le champ « Date » de T-14 est dans le même cadre gris. */
 .ct-today__addRow {
   display: flex;

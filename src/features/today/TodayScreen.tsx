@@ -2,6 +2,7 @@ import { useDefaultReminderOffsets } from '../reminders';
 import { ChartColumn, Target } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
+import type { CaptureInput } from '../capture';
 import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
 import { matchesSpaceFilter } from '../../domain/spaceRules';
@@ -186,10 +187,17 @@ export function TodayScreen() {
     };
   }, [openCreate]);
 
-  async function submitInline(title: string, choice: DateChoice | null): Promise<boolean> {
-    if (!defaultSpaceId) return false;
-    const result = await addTask(title, defaultSpaceId, scheduleOf(choice), undefined, projectFilter);
-    if (result.ok) announceCreation(defaultSpaceId);
+  async function submitInline(capture: CaptureInput, choice: DateChoice | null): Promise<boolean> {
+    const spaceId = capture.spaceId ?? defaultSpaceId;
+    if (!spaceId) return false;
+    // Date réglée à la main (champ Date PC) d'abord, sinon celle écrite dans le texte (Q-02), sinon le jour affiché (une heure seule ne change pas le jour).
+    const schedule = choice !== null ? scheduleOf(choice) : capture.dateWritten && capture.date !== null
+        ? { date: capture.date, ...(capture.time !== null ? { time: capture.time } : {}) }
+        : capture.time !== null
+          ? { time: capture.time }
+          : {};
+    const result = await addTask(capture.title, spaceId, schedule, undefined, capture.projectId ?? undefined);
+    if (result.ok) announceCreation(spaceId);
     return result.ok;
   }
 

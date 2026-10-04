@@ -1,5 +1,6 @@
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
+import { captureFr } from './fr.capture';
 import { searchFr } from './fr.search';
 import { appearanceFr } from './fr.appearance';
 import { spacesFr } from './fr.spaces';
@@ -598,6 +599,7 @@ export const fr = {
   events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
+  capture: captureFr,
   search: searchFr,
   shortcutsUi: shortcutsUiFr,
   shortcuts: {

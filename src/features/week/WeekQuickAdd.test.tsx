@@ -62,7 +62,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox', { name: 'Nouvelle tâche pour jeu. 1' });
+        const field = within(day('2026-10-01')).getByRole('combobox', { name: 'Nouvelle tâche pour jeu. 1' });
         expect(field).toHaveFocus();
         expect(screen.queryByRole('button', { name: 'Ajouter une tâche, jeu. 1' })).not.toBeInTheDocument();
         expect(screen.getAllByRole('button', { name: /^Ajouter une tâche/ })).toHaveLength(6);
@@ -72,15 +72,15 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox');
+        const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.change(field, { target: { value: '  Réunion d’équipe  ' } });
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         expect(await screen.findByRole('button', { name: 'Réunion d’équipe' })).toBeInTheDocument();
         expect(titlesOf('2026-10-01')).toEqual(['Réunion d’équipe']);
         const [task] = await stored(h, '2026-10-01');
         expect(task).toMatchObject({ title: 'Réunion d’équipe', date: '2026-10-01', time: null, spaceId: SPACE_PRO_ID, status: 'todo' });
-        await waitFor(() => expect(within(day('2026-10-01')).getByRole('textbox')).toHaveValue(''));
-        expect(within(day('2026-10-01')).getByRole('textbox')).toHaveFocus();
+        await waitFor(() => expect(within(day('2026-10-01')).getByRole('combobox')).toHaveValue(''));
+        expect(within(day('2026-10-01')).getByRole('combobox')).toHaveFocus();
       });
 
       it('l’espace est celui du filtre actif (T-01 / ES-02)', async () => {
@@ -88,18 +88,38 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(screen.getByRole('button', { name: 'Perso' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Ajouter une tâche, mar. 29' }));
-        const field = within(day('2026-09-29')).getByRole('textbox');
+        const field = within(day('2026-09-29')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'Perso mardi' } });
+        // « mardi » est lu comme une date (Q-02) : la pastille apparaît, on la retire pour garder le titre.
+        const preview = await screen.findByRole('group', { name: 'Ce qui sera appliqué' });
+        fireEvent.click(within(preview).getByRole('button', { name: /^Retirer/ }));
+        expect(screen.queryByRole('group', { name: 'Ce qui sera appliqué' })).toBeNull();
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         await screen.findByRole('button', { name: 'Perso mardi' });
         expect((await stored(h, '2026-09-29'))[0]?.spaceId).toBe(SPACE_PERSO_ID);
+      });
+
+      it('Q-06, Q-02 : « #perso », une heure et une date écrites sont lues ; la date du texte l’emporte sur la colonne', async () => {
+        renderWeek(h.container);
+        await screen.findByRole('heading', { level: 1 });
+        fireEvent.click(addButton('2026-10-01'));
+        const field = within(day('2026-10-01')).getByRole('combobox');
+        fireEvent.change(field, { target: { value: 'Courses 14h #perso' } });
+        expect(await screen.findByRole('group', { name: 'Ce qui sera appliqué' })).toHaveTextContent('Perso');
+        fireEvent.submit(field.closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(h, '2026-10-01')).length).toBe(1));
+        expect((await stored(h, '2026-10-01'))[0]).toMatchObject({ title: 'Courses', spaceId: SPACE_PERSO_ID, time: '14:00' });
+        fireEvent.change(field, { target: { value: 'Rapport le 5 octobre' } });
+        fireEvent.submit(field.closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(h, '2026-10-05')).length).toBe(1));
+        expect((await stored(h, '2026-10-05'))[0]).toMatchObject({ title: 'Rapport', time: null });
       });
 
       it('Échap referme le champ sans rien créer, le focus revient au bouton (critère 4)', async () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox');
+        const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'Abandonnée' } });
         fireEvent.keyDown(field, { key: 'Escape' });
         expect(within(day('2026-10-01')).queryByRole('textbox')).not.toBeInTheDocument();
@@ -107,48 +127,48 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         expect(await stored(h, '2026-10-01')).toEqual([]);
         // Rouvert, le champ repart vide.
         fireEvent.click(addButton('2026-10-01'));
-        expect(within(day('2026-10-01')).getByRole('textbox')).toHaveValue('');
+        expect(within(day('2026-10-01')).getByRole('combobox')).toHaveValue('');
       });
 
       it('quitter un champ vide le referme ; un titre commencé reste ouvert (critère 4)', async () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        fireEvent.blur(within(day('2026-10-01')).getByRole('textbox'));
+        fireEvent.blur(within(day('2026-10-01')).getByRole('combobox'));
         expect(within(day('2026-10-01')).queryByRole('textbox')).not.toBeInTheDocument();
 
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox');
+        const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'En cours' } });
         fireEvent.blur(field);
-        expect(within(day('2026-10-01')).getByRole('textbox')).toHaveValue('En cours');
+        expect(within(day('2026-10-01')).getByRole('combobox')).toHaveValue('En cours');
       });
 
       it('un champ vide ou d’espaces ne crée rien et reste ouvert (critères 4 et 5)', async () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox');
+        const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         fireEvent.change(field, { target: { value: '     ' } });
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         await new Promise((resolve) => setTimeout(resolve, 30));
         expect(await stored(h, '2026-10-01')).toEqual([]);
-        expect(within(day('2026-10-01')).getByRole('textbox')).toBeInTheDocument();
+        expect(within(day('2026-10-01')).getByRole('combobox')).toBeInTheDocument();
       });
 
       it('la longueur du titre est limitée à 200 caractères (critère 5, T-01)', async () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        expect(within(day('2026-10-01')).getByRole('textbox')).toHaveAttribute('maxlength', '200');
+        expect(within(day('2026-10-01')).getByRole('combobox')).toHaveAttribute('maxlength', '200');
       });
 
       it('l’ajout est possible sur un jour passé (critère 6)', async () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-09-28'));
-        const field = within(day('2026-09-28')).getByRole('textbox');
+        const field = within(day('2026-09-28')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'Rétroactive' } });
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         expect(await screen.findByRole('button', { name: 'Rétroactive' })).toBeInTheDocument();
@@ -167,7 +187,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         ];
         for (const [iso, title] of plan) {
           fireEvent.click(addButton(iso));
-          const field = within(day(iso)).getByRole('textbox');
+          const field = within(day(iso)).getByRole('combobox');
           fireEvent.change(field, { target: { value: title } });
           fireEvent.submit(field.closest('form') as HTMLFormElement);
           const started = performance.now();
@@ -183,11 +203,11 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         renderWeek(h.container);
         await screen.findByRole('heading', { level: 1 });
         fireEvent.click(addButton('2026-10-01'));
-        const field = within(day('2026-10-01')).getByRole('textbox');
+        const field = within(day('2026-10-01')).getByRole('combobox');
         fireEvent.change(field, { target: { value: 'Perdue ?' } });
         fireEvent.submit(field.closest('form') as HTMLFormElement);
         expect(await screen.findByRole('alert')).toHaveTextContent('Impossible de créer cette tâche.');
-        expect(within(day('2026-10-01')).getByRole('textbox')).toHaveValue('Perdue ?');
+        expect(within(day('2026-10-01')).getByRole('combobox')).toHaveValue('Perdue ?');
       });
     });
   }

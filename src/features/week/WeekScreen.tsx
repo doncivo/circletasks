@@ -1,4 +1,5 @@
 import { useDefaultReminderOffsets } from '../reminders';
+import type { CaptureInput } from '../capture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { EventId, ExternalEventId, LocalDate } from '../../domain/types';
@@ -143,13 +144,21 @@ export function WeekScreen() {
 
   // S-04 : « + Ajouter » d'un jour. Espace par défaut (T-01) : celui du filtre actif, sinon Pro ; jour passé permis.
   const addToDay = useCallback(
-    async (date: LocalDate, title: string): Promise<boolean> => {
-      if (!defaultSpaceId) return false;
-      const result = await addTask({ title, spaceId: defaultSpaceId, date, projectId: projectFilter });
-      if (result.ok) announceCreation(defaultSpaceId);
+    async (date: LocalDate, capture: CaptureInput): Promise<boolean> => {
+      const spaceId = capture.spaceId ?? defaultSpaceId;
+      if (!spaceId) return false;
+      // Q-02 : la date écrite dans le texte l'emporte sur le jour de la colonne ; une heure écrite reçoit les rappels par défaut (QB-08).
+      const result = await addTask({
+        title: capture.title,
+        spaceId,
+        date: capture.dateWritten && capture.date ? capture.date : date,
+        projectId: capture.projectId,
+        ...(capture.time !== null ? { time: capture.time, reminderOffsets: defaultOffsets } : {}),
+      });
+      if (result.ok) announceCreation(spaceId);
       return result.ok;
     },
-    [addTask, announceCreation, defaultSpaceId, projectFilter],
+    [addTask, announceCreation, defaultSpaceId, defaultOffsets],
   );
 
   // Squelette si le chargement dépasse 150 ms (A-09).

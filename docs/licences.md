@@ -46,3 +46,9 @@ redistribue pas les fichiers de police séparément de l'application.
 - `keyring` 3 (coffre système : Gestionnaire d'identification Windows, Trousseau iOS) : MIT OU Apache-2.0.
 - `reqwest` 0.13 avec `rustls` (HTTP des agendas, déjà compilé par l'updater) : MIT OU Apache-2.0.
 - `url`, `sha2`, `rand`, `base64` (analyse d'URL, PKCE) : MIT OU Apache-2.0.
+
+# Licence — chrono-node (Q-02, ADR 0001 avenant)
+
+- Paquet : [`chrono-node`](https://www.npmjs.com/package/chrono-node) 2.10, licence MIT (copyright Wanasit Tanakitrungruang).
+- Usage : lecture des dates absolues et de "dans N jours" dans la saisie rapide, locale française seule (`src/domain/naturalDate.ts`).
+- Texte complet de la licence : `node_modules/chrono-node/LICENSE`.
