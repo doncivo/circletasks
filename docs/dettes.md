@@ -69,11 +69,11 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - ES-06 et S-05 clôturées ; A-09 reste ouverte pour le seul critère 9 (ordre 4).
 
 **À solder AVANT l'ordre 3 (lot de remboursement) :**
-- Sélecteur d'objectifs unique dans src/domain (tri en double : GoalHistory.tsx:47, GoalsScreen.tsx:28 et 82).
-- Cas d'usage pour les réglages, à la place des écritures directes de settingsStore.ts:74-101, routineStore, somedayStore et spaceFilter.
-- Cas d'usage pour calendarsStore.ts : écritures directes dans les repositories aux lignes 161 et 314-341.
-- Développement des RRULE déplacé de features/calendars/providers/recurrence.ts vers src/domain/externalRecurrence.ts.
-- Code mort : bootstrap.ts:55 (getDatabase), bootstrap.ts:86 (« À brancher »), dataAccess.ts:71 ; commentaire faux dans 0001_core_tables.ts:25.
+- ~~Sélecteur d'objectifs unique dans src/domain (tri en double : GoalHistory.tsx:47, GoalsScreen.tsx:28 et 82)~~ (soldée : b0b1725).
+- ~~Cas d'usage pour les réglages, à la place des écritures directes de settingsStore.ts:74-101, routineStore, somedayStore et spaceFilter~~ (soldée : e3d5ac4).
+- ~~Cas d'usage pour calendarsStore.ts : écritures directes dans les repositories aux lignes 161 et 314-341~~ (soldée : af431a4).
+- ~~Développement des RRULE déplacé de features/calendars/providers/recurrence.ts vers src/domain/externalRecurrence.ts~~ (soldée : 0b0b316).
+- ~~Code mort : bootstrap.ts:55 (getDatabase), bootstrap.ts:86 (« À brancher »), dataAccess.ts:71 ; commentaire faux dans 0001_core_tables.ts:25~~ (soldée : 54a9181).
 
 **Ordre 3 :**
 - Découper les fichiers de plus de 400 lignes : taskRepository (607), DateField (472), createTaskUseCases (468), todayStore (460), calendarsStore (412), et src/i18n/fr.ts (630) par module.
