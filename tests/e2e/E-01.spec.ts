@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { addEventButton, eventRow, insertEvents, openEvents, reopenEvents } from './helpers/events';
+import { addEventButton, disableHolidays, eventRow, insertEvents, openEvents, reopenEvents } from './helpers/events';
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { isPhone } from './helpers/today';
 import { dayOf, openWeek } from './helpers/week';
@@ -16,6 +16,8 @@ import { dayOf, openWeek } from './helpers/week';
 test.describe('E-01 — événements datés', () => {
   test.beforeEach(async ({ page }) => {
     await openApp(page);
+    // Les listes et la grille de ces tests ne portent que leurs propres événements (les fériés sont couverts par E-03).
+    await disableHolidays(page);
   });
 
   test('état vide « Aucun événement en {année} » et flèches d’année (critère 1)', async ({ page }) => {

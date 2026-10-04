@@ -81,3 +81,19 @@ export const eventRow = (page: Page, title: string): Locator => page.locator('.c
 /** Bouton « + » de l'onglet Événements. */
 export const addEventButton = (page: Page, testInfo: { project: { name: string } }): Locator =>
   page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true });
+
+/**
+ * Désactive les deux calendriers de jours fériés (réglage `holidays.countries`, E-03) : les listes et la grille d'un test d'événements
+ * ne portent alors que ses propres lignes. À appeler après `openApp`, avant d'ouvrir l'onglet Événements.
+ */
+export async function disableHolidays(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const hooks = window.__ctTest;
+    if (!hooks) throw new Error('prise de test absente (navigateur de développement uniquement)');
+    await hooks.execute(
+      `INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES ('holidays.countries', '{"FR":false,"TN":false}', '2026-01-01T08:00:00.000Z', 'e2e', '0000000000001-0000-e2e')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      [],
+    );
+  });
+}
