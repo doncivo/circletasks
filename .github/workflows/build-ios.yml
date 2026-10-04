@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publier l'IPA et source.json sur circletasks-releases (environnement releases + secret RELEASES_REPO_TOKEN)"
+        description: "Publier l'IPA et source.json sur circletasks-releases (environnement releases + secret RELEASES_TOKEN)"
         type: boolean
         default: false
   push:
@@ -135,11 +135,11 @@ jobs:
 
       - name: Publier sur circletasks-releases
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           set -euo pipefail
           if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::error::Secret RELEASES_REPO_TOKEN absent : publication impossible (l'IPA reste en artefact)."
+            echo "::error::Secret RELEASES_TOKEN absent : publication impossible (l'IPA reste en artefact)."
             exit 1
           fi
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
