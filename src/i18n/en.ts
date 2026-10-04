@@ -3,6 +3,7 @@ import { somedayEn } from './en.someday';
 import { spacesEn } from './en.spaces';
 import { routinesEn } from './en.routines';
 import { checklistsEn } from './en.checklists';
+import { eventsEn } from './en.events';
 import type { Messages } from './types';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
@@ -325,6 +326,7 @@ export const en: Messages = {
     trashOpenLabel: 'Open the trash',
     carryOverUndone: 'Carry over unfinished tasks',
     hideRoutines: 'Hide routines from the list',
+    holidays: 'Public holidays',
     loadError: 'Unable to read settings.',
     saveError: 'Unable to save this setting.',
   },
@@ -359,6 +361,7 @@ export const en: Messages = {
     bed: 'Bed icon',
     bookOpen: 'Book icon',
     briefcase: 'Briefcase icon',
+    cake: 'Cake icon',
     calendar: 'Calendar icon',
     car: 'Car icon',
     cat: 'Cat icon',
@@ -379,6 +382,7 @@ export const en: Messages = {
     plane: 'Plane icon',
     shoppingBasket: 'Basket icon',
     shoppingCart: 'Cart icon',
+    star: 'Star icon',
     target: 'Target icon',
     trash: 'Trash icon',
     triangleAlert: 'Warning icon',
@@ -559,6 +563,7 @@ export const en: Messages = {
     routine: 'Routine updated',
     goal: 'Goal updated',
     checklist: 'Checklist updated',
+    event: 'Event updated',
     seriesStop: 'Repeat of “{title}” stopped',
     manyComplete: '{count} tasks completed',
     manyPostpone: '{count} tasks postponed',
@@ -575,6 +580,7 @@ export const en: Messages = {
   },
   routines: routinesEn,
   checklists: checklistsEn,
+  events: eventsEn,
   goals: goalsEn,
   someday: somedayEn,
   shortcuts: {

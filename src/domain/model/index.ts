@@ -9,3 +9,4 @@ export * from './event';
 export * from './checklist';
 export * from './settings';
 export * from './externalEvent';
+export * from './holiday';

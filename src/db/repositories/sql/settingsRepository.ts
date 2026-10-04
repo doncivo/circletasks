@@ -59,6 +59,7 @@ const SYNCED_TABLES = [
   'event',
   'checklist',
   'checklist_item',
+  'holiday',
   'settings',
 ] as const;
 

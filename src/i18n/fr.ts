@@ -3,6 +3,7 @@ import { somedayFr } from './fr.someday';
 import { spacesFr } from './fr.spaces';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
+import { eventsFr } from './fr.events';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -328,6 +329,7 @@ export const fr = {
     trashOpenLabel: 'Ouvrir la corbeille',
     carryOverUndone: 'Reporter les tâches non faites',
     hideRoutines: 'Masquer les routines de la liste',
+    holidays: 'Jours fériés',
     loadError: 'Impossible de lire les réglages.',
     saveError: 'Impossible d’enregistrer ce réglage.',
   },
@@ -362,6 +364,7 @@ export const fr = {
     bed: 'Icône lit',
     bookOpen: 'Icône livre',
     briefcase: 'Icône mallette',
+    cake: 'Icône gâteau',
     calendar: 'Icône calendrier',
     car: 'Icône voiture',
     cat: 'Icône chat',
@@ -382,6 +385,7 @@ export const fr = {
     plane: 'Icône avion',
     shoppingBasket: 'Icône panier',
     shoppingCart: 'Icône chariot',
+    star: 'Icône étoile',
     target: 'Icône cible',
     trash: 'Icône corbeille',
     triangleAlert: 'Icône alerte',
@@ -563,6 +567,7 @@ export const fr = {
     routine: 'Routine modifiée',
     goal: 'Objectif modifié',
     checklist: 'Checklist modifiée',
+    event: 'Événement modifié',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',
@@ -578,6 +583,7 @@ export const fr = {
   },
   routines: routinesFr,
   checklists: checklistsFr,
+  events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
   shortcuts: {

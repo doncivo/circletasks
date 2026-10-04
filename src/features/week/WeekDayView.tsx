@@ -1,11 +1,12 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
-import { rowTime, type TodayRow } from '../../domain/todayList';
-import type { ChecklistId, ExternalEventId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
+import { rowTime, type TodayEventEntry, type TodayRow } from '../../domain/todayList';
+import type { ChecklistId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
+import { bandCountdownTag } from '../events/bandCountdown';
 import { WeekDayAdd } from './WeekDayAdd';
 import { WeekChecklistItem, WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
 
@@ -23,6 +24,8 @@ export interface WeekDayViewProps {
   readonly layout: Layout;
   /** Jour courant : fond #F3F1F6, libellé et numéro en #1F6698, annoncé « aujourd'hui » (S-01 critère 3). */
   readonly isToday: boolean;
+  /** Jour courant de l'app : base du compte à rebours des événements importants (E-04). */
+  readonly today: LocalDate;
   readonly spaces: readonly Space[];
   readonly showSpace: boolean;
   readonly recurrences: ReadonlyMap<RecurrenceId, RecurrenceFields>;
@@ -38,8 +41,8 @@ export interface WeekDayViewProps {
   readonly drop?: WeekDropState | null;
   readonly onFocusTask?: (id: TaskId) => void;
   readonly onToggleDone: (id: TaskId) => void;
-  /** Ouvre la fiche en lecture seule d'un événement externe (S-05). */
-  readonly onOpenEvent?: (id: ExternalEventId) => void;
+  /** Ouvre la fiche de l'événement : lecture seule pour un agenda externe (S-05), modifiable pour un événement local (E-01). */
+  readonly onOpenEvent?: (event: TodayEventEntry) => void;
   readonly onToggleRoutine: (id: RoutineId, date: LocalDate) => void;
   /** Ouvre l'onglet Checklists sur la checklist du jour (C-03). */
   readonly onOpenChecklist?: (id: ChecklistId) => void;
@@ -136,7 +139,8 @@ export function WeekDayView(props: WeekDayViewProps) {
                   key={event.id}
                   event={event}
                   layout={layout}
-                  {...(props.onOpenEvent ? { onOpen: () => props.onOpenEvent?.(event.id as ExternalEventId) } : {})}
+                  countdown={bandCountdownTag(event, day.date, props.today)}
+                  {...(props.onOpenEvent && event.kind !== 'holiday' ? { onOpen: () => props.onOpenEvent?.(event) } : {})}
                 />
               ))}
               {day.list.rows.map(renderRow)}

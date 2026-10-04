@@ -17,12 +17,14 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - S-05, critères 9-10 (alimentation par M8) ;
   - ES-06, critères 5-6 (affectation des agendas).
 - Points d'extension à utiliser :
-  - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 reste à brancher ;
+  - ~~M6 par `registerTodaySource`~~ (soldé par C-03 : `registerChecklistsSource`, Aujourd'hui et Semaine) ; M7 soldé par E-01 : `registerEventsSource`, Aujourd'hui et Semaine ;
   - K-01 vers `externalEvents` ;
   - M14 : migration `search_index` en FTS5.
 - Primitive de glisser commune à `useSortable` et `useZoneDrag` (avenant S-06 de l'ADR 0004).
-- Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.
+- ~~Segments Tâche / Événement / Routine de la feuille Ajout, à construire avec E-01.~~ (soldé par E-01 : `AddSheet`, `AddSegments`, `RoutineForm` réutilisé)
 - « Date de fin » du RecurrencePicker encore native (dette T-14).
+- Jours fériés (E-03) : mettre à jour la table des fêtes religieuses tunisiennes (`src/domain/holidays/lunarTable.ts`) avant la fin de chaque année (un test échoue sinon) ; sur iPhone, la roue des jours du sélecteur de date ne remonte pas au-delà de 60 jours (corriger une fête passée plus ancienne se fait sur PC).
+- E-04 critère 8 (« J-n » sur les jours fériés) contredit la maquette et E-03 : maquette suivie (tag « Férié FR / TN »), à corriger dans le PRD par Ali.
 
 ## Ordre 3
 
@@ -41,6 +43,7 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 ## Ordre 5 (iPhone)
 
+- Rappels d'événements (E-01) : une ligne `reminder` par avance, calculée sur la prochaine occurrence ; l'ordre 5 doit recalculer l'échéance de chaque occurrence d'une série (mensuelle, annuelle) et ne planifier que les rappels à venir.
 - Planifier les rappels sur `effectiveFireAt` (domain/quietHours.ts:100) et recalculer chaque jour le `fire_at` des routines.
 - Ignorer les routines en pause ou archivées.
 - Brancher le balayage (A-07) et la notification sur `sendToSomeday`.

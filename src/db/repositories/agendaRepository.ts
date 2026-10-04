@@ -1,11 +1,11 @@
-import type { CalendarAccount, CalendarEvent, ExternalEvent } from '../../domain/model';
-import type { SpaceFilter } from '../../domain/types';
-import type { DateRange, InstantRange } from './common';
+import type { CalendarAccount, CalendarEvent, EventPatch, ExternalEvent, NewEvent } from '../../domain/model';
+import type { EventId, SpaceFilter } from '../../domain/types';
+import type { DateRange, InstantRange, ReadOptions } from './common';
 
 /**
- * Lectures minimales posées à l'ordre 1 pour Aujourd'hui et Semaine (A-01, S-01).
- * Écritures et jours fériés : checklists-events, ordre 2 (contrat étendu
- * par ajout de méthodes, sans casser celles-ci). Les checklists ont leur propre contrat (checklistRepository.ts, C-01).
+ * Événements locaux (M7). Lecture posée à l'ordre 1 pour Aujourd'hui et Semaine (A-01, S-01) ; écritures de E-01 (création,
+ * modification de toute la série, suppression logique et restauration pour « Annuler »). Aucune règle métier ici (titre, plage,
+ * occurrences) : `src/domain/eventRules.ts` et `eventOccurrences.ts`. Les jours fériés ont leur propre contrat (holidayRepository.ts, E-03).
  */
 export interface EventRepository {
   /**
@@ -14,6 +14,14 @@ export interface EventRepository {
    * occurrences est fait par src/domain.
    */
   listCandidatesForRange(range: DateRange, filter: SpaceFilter): Promise<CalendarEvent[]>;
+  getById(id: EventId, options?: ReadOptions): Promise<CalendarEvent | null>;
+  /** E-01 : crée un événement (champs déjà validés par le domaine). */
+  create(event: NewEvent): Promise<CalendarEvent>;
+  /** E-01 critère 7 : une modification s'applique à toute la série. */
+  update(id: EventId, patch: EventPatch): Promise<CalendarEvent>;
+  /** E-01 critère 7 : suppression logique (annulable 5 s). */
+  softDelete(id: EventId): Promise<CalendarEvent>;
+  restore(id: EventId): Promise<CalendarEvent>;
 }
 
 /**

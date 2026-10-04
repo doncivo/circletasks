@@ -9,7 +9,8 @@ import { CompactToggle, ConfirmDialog, Fab, Kbd, Sheet, SpacePills, useDetailSlo
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
-import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
+import { AddSheet, useStandaloneTaskSheet } from '../events';
+import { useDefaultSpaceId } from '../spaces';
 import { RoutineCard } from './RoutineCard';
 import { RoutineForm } from './RoutineForm';
 import { RoutineReport } from './RoutineReport';
@@ -77,9 +78,9 @@ export function RoutinesScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   /** Routine dont l'archivage attend la confirmation. */
   const [archiveTarget, setArchiveTarget] = useState<Routine | null>(null);
-  // ES-02 : espace proposé à la création (filtre actif, sinon Pro) et message « Ajouté dans … » hors filtre.
+  // ES-02 : espace proposé à la modification (celui de la routine) ; la création passe par la feuille Ajout (E-01 : segment Routine).
   const defaultSpaceId = useDefaultSpaceId();
-  const announceCreation = useAnnounceCreation();
+  const taskSheet = useStandaloneTaskSheet(today);
 
   useEffect(() => {
     void load(spaceFilter);
@@ -112,12 +113,12 @@ export function RoutinesScreen() {
   }
 
   async function save(input: RoutineInput): Promise<boolean> {
-    const result = editor?.mode === 'edit' ? await update(editor.id, input) : await create(input);
+    if (editor?.mode !== 'edit') return false;
+    const result = await update(editor.id, input);
     if (!result.ok) {
       setFormError(t('routines.saveError'));
       return false;
     }
-    if (editor?.mode !== 'edit') announceCreation(result.value.spaceId);
     closeEditor();
     return true;
   }
@@ -126,9 +127,9 @@ export function RoutinesScreen() {
   const emptyMessage = filteredSpace ? t('spaces.emptyRoutines', { space: filteredSpace.name }) : t('routines.empty');
   const pills = <SpacePills items={spaces} value={spaceFilter} onChange={setSpaceFilter} />;
   const form =
-    editor && defaultSpaceId && (editor.mode === 'create' || editedRoutine) ? (
+    editor?.mode === 'edit' && defaultSpaceId && editedRoutine ? (
       <RoutineForm
-        key={editor.mode === 'edit' ? editor.id : 'new'}
+        key={editor.id}
         routine={editedRoutine}
         spaces={spaces}
         initialSpaceId={defaultSpaceId}
@@ -136,7 +137,6 @@ export function RoutinesScreen() {
         onSubmit={save}
         onClose={closeEditor}
         errorMessage={formError}
-        autoFocus={editor.mode === 'create'}
         archiveAction={
           editedRoutine ? (
             <button type="button" className="ct-routine-form__archive" onClick={() => setArchiveTarget(editedRoutine)}>
@@ -144,7 +144,7 @@ export function RoutinesScreen() {
             </button>
           ) : undefined
         }
-        initialOffsets={editor.mode === 'edit' ? editor.offsets : []}
+        initialOffsets={editor.offsets}
         editExtras={editedRoutine ? <RoutineStreakBox streaks={computeStreaks(editedRoutine, doneByRoutine.get(editedRoutine.id as RoutineId) ?? EMPTY_DONE, today, pausesOf.get(editedRoutine.id as RoutineId) ?? [])} /> : undefined}
         defaultOffsets={defaultOffsets}
       />
@@ -260,6 +260,15 @@ export function RoutinesScreen() {
         <PanelPortal slot={slot} label={reportLabel} onClose={() => setReportId(null)}>
           {report}
         </PanelPortal>
+      )}
+      {editor?.mode === 'create' && (
+        <AddSheet
+          initialSegment="routine"
+          date={today}
+          taskSheet={taskSheet}
+          createRoutine={async (input) => (await create(input)).ok}
+          onClose={closeEditor}
+        />
       )}
       {form && layout === 'mobile' && (
         <Sheet open onClose={closeEditor} label={formLabel} className="ct-sheet--tall">

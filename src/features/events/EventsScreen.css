@@ -1,0 +1,516 @@
+/* Onglet Événements (Evenements.html : iPhone ; PC-Evenements.html : liste de 820 px et volet calendrier). */
+.ct-events {
+  display: flex;
+  flex-grow: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-events[data-layout='mobile'] {
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  padding-top: 44px;
+}
+
+/* PC : la liste et le volet occupent toute la zone centrale, sans la marge de la coquille (28 px 40 px). */
+.ct-events[data-layout='pc'] {
+  flex-direction: row;
+  margin: -28px -40px;
+}
+
+.ct-events__pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ct-events[data-layout='mobile'] .ct-events__pane {
+  flex-grow: 1;
+  gap: var(--ct-space-3);
+}
+
+.ct-events[data-layout='pc'] .ct-events__pane {
+  flex: 0 0 820px;
+  box-sizing: border-box;
+  padding: 28px 40px;
+}
+
+.ct-events__headerRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+.ct-events[data-layout='pc'] .ct-events__headerRow {
+  margin-top: 30px;
+}
+
+.ct-events__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2.25rem;
+  line-height: 1;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-events[data-layout='pc'] .ct-events__title {
+  font-size: 3.75rem;
+}
+
+.ct-events__years {
+  display: flex;
+  align-items: center;
+}
+
+.ct-events[data-layout='pc'] .ct-events__arrow {
+  width: var(--ct-hit-target-min);
+}
+
+.ct-events__year {
+  font-size: 1.25rem;
+  font-weight: var(--ct-font-weight-bold);
+  min-width: 3.4ch;
+  text-align: center;
+}
+
+.ct-events__arrow {
+  width: 36px;
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-events__arrow:focus-visible,
+.ct-events__calendarButton:focus-visible,
+.ct-event-row:focus-visible,
+.ct-events-grid__arrow:focus-visible,
+.ct-events-grid__day:focus-visible,
+.ct-events-agendas__link:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-events__rule {
+  display: flex;
+  align-items: center;
+}
+
+.ct-events__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-events__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-events__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-events__notice {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-events__empty {
+  margin: 0;
+  padding: var(--ct-space-4) var(--ct-space-1);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+/* --- Liste par mois ------------------------------------------------------------------------------------------------- */
+.ct-events__list {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-events__month {
+  margin: 10px 0 2px;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-events[data-layout='pc'] .ct-events__month {
+  margin: 14px 0 4px;
+}
+
+.ct-events__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-event-row__item {
+  margin: 0;
+}
+
+.ct-event-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  text-align: left;
+}
+
+button.ct-event-row {
+  cursor: pointer;
+}
+
+.ct-events[data-layout='pc'] .ct-event-row {
+  gap: 16px;
+  padding: 12px;
+  border-radius: 10px;
+}
+
+/* PC seulement (PC-Evenements.html : ligne du jour sur fond #F1EEF7) ; iPhone : pas de fond. */
+.ct-events[data-layout='pc'] .ct-event-row[data-today='true'] {
+  background: var(--ct-color-row-selected);
+  border-bottom-color: var(--ct-color-row-selected);
+}
+
+.ct-event-row[data-selected='true'] {
+  background: var(--ct-color-row-selected);
+}
+
+/* Passé grisé (E-01 critère 1). */
+.ct-event-row[data-past='true'] {
+  opacity: 0.55;
+}
+
+.ct-event-row__date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 46px;
+}
+
+.ct-events[data-layout='pc'] .ct-event-row__date {
+  width: 52px;
+}
+
+.ct-event-row__day {
+  font-family: var(--ct-font-title);
+  font-size: 1.625rem;
+  font-weight: var(--ct-font-weight-bold);
+  line-height: 1.2;
+}
+
+.ct-events[data-layout='pc'] .ct-event-row__day {
+  font-size: 1.75rem;
+}
+
+.ct-event-row__weekday {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  text-transform: uppercase;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-event-row__text {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ct-event-row__title {
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-event-row__subtitle {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-event-row__tag {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-events[data-layout='pc'] .ct-event-row__tag {
+  padding: 4px 9px;
+}
+
+.ct-event-row__tag[data-tag='today'],
+.ct-event-row__tag[data-tag='holidayFr'] {
+  background: var(--ct-color-event-external-bg);
+  color: var(--ct-color-event-text);
+}
+
+.ct-event-row__tag[data-tag='birthday'] {
+  background: var(--ct-color-event-local-bg);
+  color: var(--ct-color-event-local-text);
+}
+
+.ct-event-row__tag[data-tag='holidayTn'] {
+  background: var(--ct-color-achieved-bg);
+  color: var(--ct-color-achieved-text);
+}
+
+/* --- Bas d'écran ---------------------------------------------------------------------------------------------------- */
+.ct-events__bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.ct-events[data-layout='pc'] .ct-events__bottomRow {
+  justify-content: flex-end;
+}
+
+.ct-events__calendarButton {
+  height: var(--ct-hit-target-min);
+  padding: 0 20px;
+  border: 2px solid var(--ct-color-text);
+  border-radius: 22px;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  cursor: pointer;
+}
+
+/* --- Volet droit PC : grille du mois et carte des agendas ------------------------------------------------------------ */
+.ct-events__aside {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  gap: 16px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 58px 36px 28px;
+  overflow-y: auto;
+  background: var(--ct-color-surface-raised);
+  border-left: 1px solid var(--ct-color-border);
+}
+
+.ct-events-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ct-events-grid__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-events-grid__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 1.875rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-events-grid__nav {
+  display: flex;
+}
+
+.ct-events-grid__arrow {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-events-grid__days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.ct-events-grid__initial {
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  color: var(--ct-color-text-secondary);
+  text-align: center;
+}
+
+.ct-events-grid__cell {
+  height: var(--ct-hit-target-min);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ct-radius-md);
+  background: transparent;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+button.ct-events-grid__cell {
+  cursor: pointer;
+}
+
+.ct-events-grid__day[data-selected='true'] {
+  background: var(--ct-color-row-selected);
+}
+
+.ct-events-grid__day[data-today='true'] {
+  background: var(--ct-color-text);
+  color: var(--ct-color-bg);
+}
+
+.ct-events-grid__dots {
+  display: flex;
+  gap: 2px;
+  height: 6px;
+}
+
+.ct-events-grid__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+
+.ct-events-agendas {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding: var(--ct-space-4);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface);
+}
+
+.ct-events-agendas__title {
+  margin: 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-events-agendas__line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-events-agendas__dot {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+  border-radius: 5px;
+}
+
+.ct-events-agendas__name {
+  flex-grow: 1;
+}
+
+.ct-events-agendas__space {
+  font-size: var(--ct-font-size-sm);
+}
+
+.ct-events-agendas__updated,
+.ct-events-agendas__empty {
+  margin: 0;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-events-agendas__link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-someday);
+  font: inherit;
+  font-weight: var(--ct-font-weight-semibold);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* --- Feuille « Calendrier » (iPhone) -------------------------------------------------------------------------------- */
+.ct-events__sheetHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ct-events__sheetTitle {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 2rem;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-events__sheetClose {
+  width: var(--ct-hit-target-min);
+  height: var(--ct-hit-target-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-events__sheetClose:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}

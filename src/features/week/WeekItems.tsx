@@ -5,6 +5,7 @@ import type { LocalTime } from '../../domain/types';
 import { t } from '../../i18n';
 import { Checkbox, Icon, IconView, resolveIconRefColor, spaceTextColor, type Layout } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
+import type { CountdownTag } from '../events/countdownText';
 import { routineSubtitle, TaskGoalMark, taskSubtitle } from '../tasks/taskLine';
 
 /**
@@ -176,8 +177,10 @@ export function WeekChecklistItem({ summary, layout, spaces, showSpace, onOpen }
 export interface WeekEventItemProps {
   readonly event: TodayEventEntry;
   readonly layout: Layout;
-  /** Ouvre la fiche en lecture seule d'un événement externe (S-05) ; absent : l'événement n'est pas interactif. */
+  /** Ouvre la fiche de l'événement (lecture seule pour un agenda externe, S-05 ; modifiable pour un événement local) ; absent : non interactif. */
   readonly onOpen?: () => void;
+  /** Compte à rebours d'un événement important (E-04 critère 4) : « J-2 » ou « Aujourd'hui » ; null : aucun. */
+  readonly countdown?: CountdownTag | null;
 }
 
 /**
@@ -185,20 +188,28 @@ export interface WeekEventItemProps {
  * l'agenda, bouton qui ouvre la fiche en lecture seule, annoncé « Événement, lecture seule » ; interne (M7) : style distinct
  * (anniversaire, #FBE7E4).
  */
-export function WeekEventItem({ event, layout, onOpen }: WeekEventItemProps) {
-  const external = event.calendarName !== null;
+export function WeekEventItem({ event, layout, onOpen, countdown = null }: WeekEventItemProps) {
+  const holiday = event.kind === 'holiday';
+  const external = event.calendarName !== null && !holiday;
   const when = event.allDay ? null : event.startTime;
   const icon = event.icon ? <IconView icon={event.icon} size={18} color="currentColor" /> : <Icon icon={CalendarDays} size={18} />;
-  const source = external ? 'external' : 'local';
-  const readOnly = external ? <span className="ct-visually-hidden">{`, ${t('week.eventReadOnly')}`}</span> : null;
-  const interactive = external && onOpen !== undefined;
+  const source = holiday ? 'holiday' : external ? 'external' : 'local';
+  const readOnly = external || holiday ? <span className="ct-visually-hidden">{`, ${t('week.eventReadOnly')}`}</span> : null;
+  const interactive = onOpen !== undefined;
   const props = { className: 'ct-week-event', 'data-layout': layout, 'data-source': source };
+  const tag = countdown && (
+    <span className="ct-week-event__tag" data-tag={countdown.kind}>
+      <span aria-hidden={countdown.spoken ? 'true' : undefined}>{countdown.label}</span>
+      {countdown.spoken && <span className="ct-visually-hidden">{countdown.spoken}</span>}
+    </span>
+  );
   const content =
     layout === 'mobile' ? (
       <>
         {icon}
         {when && <span className="ct-week-item__time">{when}</span>}
         <span className="ct-week-item__title">{event.title}</span>
+        {tag}
         {readOnly}
       </>
     ) : (
@@ -207,6 +218,7 @@ export function WeekEventItem({ event, layout, onOpen }: WeekEventItemProps) {
         {(event.allDay || event.calendarName) && (
           <span className="ct-week-event__source">{[event.allDay ? t('today.eventAllDay') : null, event.calendarName].filter(Boolean).join(' · ')}</span>
         )}
+        {tag}
         {readOnly}
       </>
     );

@@ -1,0 +1,77 @@
+/* Écran « Jours fériés » (E-03) : mêmes codes que Réglages et « Récapitulatifs » ; non dessiné dans les maquettes. */
+.ct-holiday-settings-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+}
+
+.ct-holiday-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 560px;
+}
+
+.ct-holiday-settings__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-holiday-settings__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-holiday-settings__back:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-holiday-settings__title {
+  margin: 0;
+  font-size: var(--ct-font-size-heading);
+}
+
+.ct-holiday-settings__hint {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-holiday-settings__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+  min-height: var(--ct-hit-target-min);
+  padding-bottom: var(--ct-space-2);
+  border-bottom: 1px solid var(--ct-color-border);
+  font-size: var(--ct-font-size-text-lg);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-holiday-settings__notice {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-holiday-settings__error {
+  margin: 0;
+  color: var(--ct-color-danger);
+  font-weight: var(--ct-font-weight-semibold);
+}

@@ -4,6 +4,7 @@ import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { HolidaysSummaryRow } from '../events';
 import { formatRecapSummary } from '../reminders';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
@@ -79,6 +80,7 @@ export function SettingsScreen() {
           disabled={status !== 'ready' && status !== 'error'}
         />
       </div>
+      <HolidaysSummaryRow />
       <h2 className="ct-settings__section">{t('reminders.sectionTitle')}</h2>
       <button
         type="button"

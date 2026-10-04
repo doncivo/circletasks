@@ -6,7 +6,7 @@ import type { DateChoice } from '../../domain/dateInput';
 import { addDays } from '../../domain/localDate';
 import { matchesSpaceFilter } from '../../domain/spaceRules';
 import { buildTodayList } from '../../domain/todayList';
-import type { LocalDate, TaskId } from '../../domain/types';
+import type { EventId, LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
 import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, useDelayedFlag, useLayout } from '../../ui';
@@ -18,7 +18,8 @@ import { SomedayButton } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
 import { TaskDetail } from '../tasks';
 import { TodayAddRow } from './TodayCreate';
-import { TaskCreateSheet, scheduleOf } from '../tasks/TaskCreateSheet';
+import { scheduleOf } from '../tasks/TaskCreateSheet';
+import { AddSheet } from '../events';
 import { TodayHeader } from './TodayHeader';
 import { TodayListView } from './TodayListView';
 import { GoalReviewCards } from '../goals/GoalReviewCards';
@@ -237,7 +238,7 @@ export function TodayScreen() {
                 {list.goals.map((entry) => (
                   <TodayGoalCard key={entry.goal.id} entry={entry} compact={compact} onOpen={openGoals} />
                 ))}
-                <TodayEventBands events={list.events} compact={compact} />
+                <TodayEventBands events={list.events} compact={compact} date={viewDate ?? viewedDate} today={today} onOpen={(entry) => entry.calendarName === null && openDetail({ type: 'event', id: entry.id as EventId })} />
               </div>
             )}
             {status === 'ready' && list.isEmpty && (
@@ -290,18 +291,19 @@ export function TodayScreen() {
         </div>
 
         {sheetOpen && (
-          <TaskCreateSheet
-            viewedDate={viewedDate}
-            today={today}
-            spaces={spaces}
-            initialSpaceId={defaultSpaceId}
-            initialProjectId={projectFilter}
-            defaultOffsets={defaultOffsets}
+          <AddSheet
+            initialSegment="task"
+            date={viewedDate}
             onClose={() => setSheetOpen(false)}
-            onCreate={async (input) => {
-              const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId }, input.icon, input.projectId);
-              if (result.ok) announceCreation(input.spaceId);
-              return result.ok;
+            taskSheet={{
+              viewedDate,
+              initialProjectId: projectFilter,
+              defaultOffsets,
+              onCreate: async (input) => {
+                const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId }, input.icon, input.projectId);
+                if (result.ok) announceCreation(input.spaceId);
+                return result.ok;
+              },
             }}
           />
         )}

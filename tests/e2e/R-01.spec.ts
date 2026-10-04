@@ -8,7 +8,7 @@ import { mondayOf } from './helpers/week';
 /**
  * R-01 — Je crée une routine avec icône et fréquence.
  *
- * Couverture : « + » ouvre « Nouvelle routine » (iPhone : feuille, PC : panneau de droite, Ctrl+N) ; Enregistrer grisé sans nom ou
+ * Couverture : « + » ouvre la feuille Ajout au segment Routine « Nouvelle routine » (iPhone et PC, Ctrl+N ; la modification reste dans le panneau de droite) ; Enregistrer grisé sans nom ou
  * sans jour choisi ; fréquences tous les jours / jours choisis / X fois par semaine ; icône ; carte (ronds, compteur, ligne
  * d'informations) ; routine du jour dans Aujourd'hui ; filtre d'espace ; « 3 fois par semaine » (QB-01). Exécuté sur `pc` et `iphone`.
  * Persistance au redémarrage : couverte par les tests d'intégration (la base du navigateur de développement est en mémoire).
@@ -24,8 +24,9 @@ test.describe('R-01 — créer une routine', () => {
     await page.getByRole('button', { name: isPhone(testInfo) ? 'Ajouter une routine' : 'Ajouter', exact: true }).click();
     const form = routineForm(page, 'Nouvelle routine');
     await expect(form).toBeVisible();
-    if (isPhone(testInfo)) await expect(page.getByRole('dialog', { name: 'Nouvelle routine' })).toBeVisible();
-    else await expect(page.getByRole('complementary', { name: 'Nouvelle routine' })).toBeVisible();
+    // E-01 D2 : « + » de Routines ouvre la feuille Ajout (segment Routine) sur iPhone comme sur PC.
+    await expect(page.getByRole('dialog', { name: 'Nouvelle routine' })).toBeVisible();
+    await expect(form.getByRole('button', { name: 'Routine', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(form.getByRole('button', { name: 'Enregistrer' })).toBeDisabled();
     await expect(form.getByRole('button', { name: 'Archiver' })).toHaveCount(0);
 

@@ -13,6 +13,7 @@ import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
 import { ChecklistsScreen, registerChecklistsSource } from './features/checklists';
+import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
@@ -30,6 +31,8 @@ import { useLayout } from './ui/useLayout';
 registerRoutinesSource();
 // Checklists (M6) : datées, elles apparaissent dans Aujourd'hui et la Semaine (C-03).
 registerChecklistsSource();
+// Événements locaux (M7) : bandeaux d'Aujourd'hui et éléments de la Semaine (E-01).
+registerEventsSource();
 // Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
 registerGoalsSource();
 
@@ -79,6 +82,8 @@ function AppShellContent() {
     >
       <AppStatusBanner />
       <UpdateBanner />
+      <EventEditorHost />
+      <HolidayDetailHost />
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? (
           <ReportScreen />
@@ -111,10 +116,12 @@ function AppShellContent() {
         <WeekScreen />
       ) : route.tab === 'routines' ? (
         route.screen === 'report' ? <RoutinesMonthReport /> : <RoutinesScreen />
+      ) : route.tab === 'events' ? (
+        <EventsScreen />
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}

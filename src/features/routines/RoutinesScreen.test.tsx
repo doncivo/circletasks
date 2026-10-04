@@ -152,21 +152,21 @@ describe('Routines : PC', () => {
   });
   afterEach(() => teardownRoutines(h));
 
-  it('Ctrl+N ouvre le formulaire dans le panneau de droite, nom focalisé (critère 2)', async () => {
+  it('Ctrl+N ouvre la feuille Ajout au segment Routine, nom focalisé (critère 2, E-01 critère 2)', async () => {
     renderRoutines(h.container);
     await screen.findByText(/Aucune routine/);
     expect(h.container.shortcuts.handle({ key: 'n', code: 'KeyN', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, editable: false })).toBe('app.newTask');
-    const panel = await screen.findByRole('complementary', { name: 'Nouvelle routine' });
-    await waitFor(() => expect(within(panel).getByLabelText('Nom de la routine')).toHaveFocus());
-    expect(screen.queryByRole('dialog')).toBeNull();
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle routine' });
+    await waitFor(() => expect(within(dialog).getByLabelText('Nom de la routine')).toHaveFocus());
+    expect(within(dialog).getByRole('button', { name: 'Routine', pressed: true })).toBeInTheDocument();
   });
 
-  it('le bouton « Ajouter » ouvre le même formulaire ; Échap le ferme sans rien créer', async () => {
+  it('le bouton « Ajouter » ouvre la même feuille ; Échap la ferme sans rien créer', async () => {
     renderRoutines(h.container);
     fireEvent.click(await screen.findByRole('button', { name: 'Ajouter' }));
-    const panel = await screen.findByRole('complementary', { name: 'Nouvelle routine' });
-    fireEvent.keyDown(panel, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('complementary')).toBeNull());
+    const dialog = await screen.findByRole('dialog', { name: 'Nouvelle routine' });
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(await h.container.data.repos.routines.listForFilter('all')).toEqual([]);
   });
 

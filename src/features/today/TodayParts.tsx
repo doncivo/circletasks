@@ -1,10 +1,11 @@
 import { BookOpen, CalendarDays, ShoppingCart, Sunrise, Target } from 'lucide-react';
 import type { ChecklistSummary, Space } from '../../domain/model';
-import type { ChecklistId } from '../../domain/types';
+import type { ChecklistId, LocalDate } from '../../domain/types';
 import type { TodayEventEntry, TodayGoalEntry } from '../../domain/todayList';
 import { t } from '../../i18n';
 import { Icon, IconView, resolveIconRefColor, spaceTextColor } from '../../ui';
 import { ChecklistIcon } from '../checklists/ChecklistIcon';
+import { bandCountdownTag } from '../events/bandCountdown';
 
 /**
  * Éléments d'Aujourd'hui fournis par d'autres modules (A-01) : objectif épinglé, événements (lecture seule),
@@ -58,23 +59,44 @@ export function TodayGoalCard({ entry, compact, onOpen }: { entry: TodayGoalEntr
 }
 
 /** Bandeau d'un événement du jour (Main.html : « 10:00 Point client · Google Agenda »), lecture seule. */
-export function TodayEventBand({ event, compact }: { event: TodayEventEntry; compact: boolean }) {
-  return (
-    <li className="ct-today-event" data-compact={compact}>
+export function TodayEventBand({ event, compact, date, today, onOpen }: { event: TodayEventEntry; compact: boolean; date: LocalDate; today: LocalDate; onOpen?: (event: TodayEventEntry) => void }) {
+  // Compte à rebours d'un événement important (E-04 critère 4) : « J-2 », « Aujourd'hui », sinon rien.
+  const countdown = bandCountdownTag(event, date, today);
+  const content = (
+    <>
       {event.icon ? <IconView icon={event.icon} size={22} color="var(--ct-color-event-text)" /> : <Icon icon={CalendarDays} size={22} color="var(--ct-color-event-text)" />}
       <span className="ct-today-event__time">{event.allDay ? t('today.eventAllDay') : event.startTime}</span>
       <span className="ct-today-event__title">{event.title}</span>
       {event.calendarName && <span className="ct-today-event__source">{event.calendarName}</span>}
+      {countdown && (
+        <span className="ct-today-event__tag" data-tag={countdown.kind}>
+          <span aria-hidden={countdown.spoken ? 'true' : undefined}>{countdown.label}</span>
+          {countdown.spoken && <span className="ct-visually-hidden">{countdown.spoken}</span>}
+        </span>
+      )}
+    </>
+  );
+  // Un événement local (M7) s'ouvre en modification (E-01 critère 7) ; un événement d'agenda externe reste en lecture seule.
+  const interactive = onOpen !== undefined && event.calendarName === null && event.kind !== 'holiday';
+  return (
+    <li className="ct-today-event" data-compact={compact} data-kind={event.kind}>
+      {interactive ? (
+        <button type="button" className="ct-today-event__button" onClick={() => onOpen(event)}>
+          {content}
+        </button>
+      ) : (
+        content
+      )}
     </li>
   );
 }
 
-export function TodayEventBands({ events, compact }: { events: readonly TodayEventEntry[]; compact: boolean }) {
+export function TodayEventBands({ events, compact, date, today, onOpen }: { events: readonly TodayEventEntry[]; compact: boolean; date: LocalDate; today: LocalDate; onOpen?: (event: TodayEventEntry) => void }) {
   if (events.length === 0) return null;
   return (
     <ul className="ct-today-events" aria-label={t('today.eventsLabel')}>
       {events.map((event) => (
-        <TodayEventBand key={event.id} event={event} compact={compact} />
+        <TodayEventBand key={event.id} event={event} compact={compact} date={date} today={today} {...(onOpen ? { onOpen } : {})} />
       ))}
     </ul>
   );

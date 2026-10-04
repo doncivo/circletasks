@@ -3,6 +3,7 @@ import type { SqlDriver, SqlExecutor } from '../driver';
 import type { CalendarAccountRepository, EventRepository, ExternalEventRepository } from './agendaRepository';
 import type { ChecklistItemRepository, ChecklistRepository } from './checklistRepository';
 import type { GoalRepository } from './goalRepository';
+import type { HolidayRepository } from './holidayRepository';
 import type { ReminderRepository } from './reminderRepository';
 import type { RoutineLogRepository, RoutineRepository } from './routineRepository';
 import type { SettingsRepository, SyncMetaRepository } from './settingsRepository';
@@ -21,6 +22,7 @@ export interface Repositories {
   readonly goals: GoalRepository;
   readonly settings: SettingsRepository;
   readonly events: EventRepository;
+  readonly holidays: HolidayRepository;
   readonly checklists: ChecklistRepository;
   readonly checklistItems: ChecklistItemRepository;
   readonly externalEvents: ExternalEventRepository;

@@ -38,6 +38,7 @@ export { DateWheels, type DateWheelsProps } from './DateWheels';
 export { DateEditor, DateField, type DateEditorProps, type DateFieldProps } from './DateField';
 export { DatePicker, type DatePickerProps } from './DatePicker';
 export { Switch, type SwitchProps } from './Switch';
+export { AddSegments, type AddSegment, type AddSegmentsProps } from './AddSegments';
 export { RecurrencePicker, type RecurrencePickerProps } from './RecurrencePicker';
 export { useSortable, type DragSource, type Sortable, type SortableDrag, type UseSortableOptions } from './useSortable';
 export { DragHandle, type DragHandleProps } from './DragHandle';

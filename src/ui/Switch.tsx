@@ -6,6 +6,11 @@ export interface SwitchProps {
   /** Libellé accessible (le même que le texte de la ligne, comme dans Reglages.html). */
   label: string;
   disabled?: boolean;
+  /**
+   * `switch` (défaut) : `role="switch"` et `aria-checked`, comme Reglages.html ; `toggle` : bouton à état (`aria-pressed`), comme
+   * l'interrupteur « Compte à rebours » d'AjoutEvenement.html (E-04 critère 7).
+   */
+  semantics?: 'switch' | 'toggle';
   className?: string;
 }
 
@@ -17,12 +22,11 @@ export interface SwitchProps {
  * @example
  * <Switch checked={on} onChange={setOn} label={t('settings.carryOverUndone')} />
  */
-export function Switch({ checked, onChange, label, disabled, className }: SwitchProps) {
+export function Switch({ checked, onChange, label, disabled, semantics = 'switch', className }: SwitchProps) {
   return (
     <button
       type="button"
-      role="switch"
-      aria-checked={checked}
+      {...(semantics === 'toggle' ? { 'aria-pressed': checked } : { role: 'switch', 'aria-checked': checked })}
       aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}

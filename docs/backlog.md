@@ -91,10 +91,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | C-03 | M6 | J'associe une checklist à un jour | checklists-events | fait |
 | C-04 | M6 | Je réutilise une checklist modèle | checklists-events | fait |
 | C-05 | M6 | J'efface d'un coup les items cochés | checklists-events | fait |
-| E-01 | M7 | Je crée un événement daté, avec ou sans heure | checklists-events | à faire |
-| E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | à faire |
-| E-03 | M7 | J'affiche les jours fériés | checklists-events | à faire |
-| E-04 | M7 | Je vois un compte à rebours | checklists-events | à faire |
+| E-01 | M7 | Je crée un événement daté, avec ou sans heure | checklists-events | fait |
+| E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | fait |
+| E-03 | M7 | J'affiche les jours fériés | checklists-events | fait |
+| E-04 | M7 | Je vois un compte à rebours | checklists-events | fait |
 | K-01 | M8 | Je connecte Google Calendar | calendar-integration | à faire |
 | K-02 | M8 | Je connecte Apple Calendar | calendar-integration | à faire |
 | K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | à faire |
