@@ -80,7 +80,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
-| POC-01 | Workflow build-ios.yml, IPA non signée, installation par SideStore, affichage de la liste du jour | ci-release + ios-mobile | en cours (IPA publiée ; test sur l'iPhone par Ali) |
+| POC-01 | Workflow build-ios.yml, IPA non signée, installation par SideStore, affichage de la liste du jour | ci-release + ios-mobile | fait |
 
 ## Ordre 2 — Organisation
 
