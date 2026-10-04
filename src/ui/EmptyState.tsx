@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { t } from '../i18n';
 import { Icon } from './Icon';
 import './EmptyState.css';
 
@@ -41,17 +42,19 @@ export interface EmptyStateProps {
  */
 export function EmptyState({ title, text, icons = [], action, screen, className }: EmptyStateProps) {
   const variant = icons.length >= 3 ? 'three' : icons.length > 0 ? 'one' : 'none';
-  // Région live présente dès le montage, remplie après coup : les lecteurs d'écran n'annoncent que le texte ajouté à une région existante.
-  const [shown, setShown] = useState('');
+  // Titre rendu dès le premier passage (pas de saut de mise en page) ; l'annonce passe par une région live masquée, toujours montée et
+  // remplie après coup (les lecteurs d'écran n'annoncent que le texte ajouté à une région existante).
+  const [announcement, setAnnouncement] = useState('');
   useEffect(() => {
-    const id = window.setTimeout(() => setShown(title), 0);
+    const id = window.setTimeout(() => setAnnouncement(t('empty.announcement', { title })), 0);
     return () => window.clearTimeout(id);
   }, [title]);
   return (
     <div className={className ? `ct-empty ${className}` : 'ct-empty'} data-variant={variant} data-empty-screen={screen}>
-      <div className="ct-empty__live" aria-live="polite">
-        <h2 className="ct-empty__title">{shown}</h2>
-      </div>
+      <h2 className="ct-empty__title">{title}</h2>
+      <span className="ct-visually-hidden" aria-live="polite" data-empty-announcement="">
+        {announcement}
+      </span>
       {icons.length > 0 && (
         <div className="ct-empty__icons" aria-hidden="true">
           {icons.slice(0, 3).map((item, index) => (

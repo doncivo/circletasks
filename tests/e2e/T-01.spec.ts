@@ -40,7 +40,7 @@ test.describe('T-01 — créer une tâche avec un titre seul', () => {
     const field = page.getByLabel('Nouvelle tâche');
     await field.fill('   ');
     await field.press('Enter');
-    await expect(page.getByText('Rien de prévu aujourd’hui.')).toBeVisible();
+    await expect(page.getByText('Rien de prévu aujourd’hui.', { exact: true })).toBeVisible();
     await expect(field).toHaveValue('   ');
   });
 

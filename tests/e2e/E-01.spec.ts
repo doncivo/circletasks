@@ -23,12 +23,12 @@ test.describe('E-01 — événements datés', () => {
   test('état vide « Aucun événement en {année} » et flèches d’année (critère 1)', async ({ page }) => {
     const year = Number((await browserToday(page)).slice(0, 4));
     await openEvents(page);
-    await expect(page.getByText(`Aucun événement en ${year}`)).toBeVisible();
+    await expect(page.getByText(`Aucun événement en ${year}`, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Année suivante' }).click();
-    await expect(page.getByText(`Aucun événement en ${year + 1}`)).toBeVisible();
+    await expect(page.getByText(`Aucun événement en ${year + 1}`, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Année précédente' }).click();
     await page.getByRole('button', { name: 'Année précédente' }).click();
-    await expect(page.getByText(`Aucun événement en ${year - 1}`)).toBeVisible();
+    await expect(page.getByText(`Aucun événement en ${year - 1}`, { exact: true })).toBeVisible();
   });
 
   test('liste par mois : passé grisé, « Aujourd’hui », série mensuelle, filtre d’espace (critères 1, 4, 10)', async ({ page }) => {

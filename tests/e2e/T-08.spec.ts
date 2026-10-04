@@ -126,7 +126,7 @@ test.describe('T-08 : supprimer une tâche', () => {
     await expect(row).toContainText('Perso');
 
     await page.getByRole('button', { name: `Restaurer : ${title}` }).click();
-    await expect(page.getByText('La corbeille est vide')).toBeVisible();
+    await expect(page.getByText('La corbeille est vide', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Retour' }).click();
     await page.getByRole('navigation').getByText('Tâches', { exact: true }).click();
@@ -148,7 +148,7 @@ test.describe('T-08 : supprimer une tâche', () => {
     await page.clock.fastForward(16 * 24 * 3_600_000);
     await page.clock.fastForward(16 * 24 * 3_600_000);
     await openTrash(page);
-    await expect(page.getByText('La corbeille est vide')).toBeVisible();
+    await expect(page.getByText('La corbeille est vide', { exact: true })).toBeVisible();
     await expect(page.getByText(title)).toHaveCount(0);
   });
 });

@@ -18,7 +18,7 @@ test.describe('C-01 — créer une checklist', () => {
 
   test('état vide, puis feuille « Nouvelle checklist » : Créer inactif sans titre (critères 1, 7)', async ({ page }, testInfo) => {
     await openChecklists(page);
-    await expect(page.getByText('Aucune checklist pour l’instant')).toBeVisible();
+    await expect(page.getByText('Aucune checklist pour l’instant', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: isPhone(testInfo) ? 'Nouvelle checklist' : '+ Nouvelle checklist', exact: true }).click();
     const form = page.getByRole('form', { name: 'Nouvelle checklist' });
     await expect(form).toBeVisible();
@@ -110,7 +110,7 @@ test.describe('C-01 — créer une checklist', () => {
     await expect(confirm).not.toBeVisible();
     await form.getByRole('button', { name: 'Supprimer la checklist' }).click();
     await confirm.getByRole('button', { name: 'Supprimer' }).click();
-    await expect(page.getByText('Aucune checklist pour l’instant')).toBeVisible();
+    await expect(page.getByText('Aucune checklist pour l’instant', { exact: true })).toBeVisible();
     await expect(page.getByText('« Valise voyage » supprimée')).toBeVisible();
     await page.getByRole('button', { name: 'Annuler', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Valise voyage', exact: true })).toBeVisible();

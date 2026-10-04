@@ -3,6 +3,7 @@
  * (tasks.emptyToday, routines.empty, events.empty, checklists.empty, someday.empty, done.empty, trash.empty) restent dans leur module.
  */
 export const emptyFr = {
+  announcement: 'Écran vide : {title}',
   addTask: 'Ajouter une tâche',
   openSomeday: 'Ouvrir « Un jour » · {count} tâches',
   openSomedayOne: 'Ouvrir « Un jour » · 1 tâche',

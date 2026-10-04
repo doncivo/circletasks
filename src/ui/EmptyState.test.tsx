@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BookOpen, Sunrise, ShoppingCart } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
 import { EmptyState } from './EmptyState';
@@ -36,8 +36,8 @@ describe('EmptyState (P-06)', () => {
     const live = root?.querySelector('[aria-live]');
     expect(live?.getAttribute('aria-live')).toBe('polite');
     expect(live).toHaveTextContent(/^$/); // région présente et vide au montage
-    expect(await screen.findByRole('heading', { level: 2, name: TITLE })).toBeInTheDocument();
-    expect(live).toContainElement(screen.getByRole('heading', { level: 2 }));
+    expect(screen.getByRole('heading', { level: 2, name: TITLE })).toBeInTheDocument(); // titre visible dès le premier rendu
+    await waitFor(() => expect(live).toHaveTextContent(TITLE));
     expect(root?.getAttribute('data-empty-screen')).toBe(SCREEN);
   });
 });

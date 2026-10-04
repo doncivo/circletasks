@@ -7,11 +7,6 @@
   padding: var(--ct-space-6) var(--ct-space-1) var(--ct-space-2);
 }
 
-/* Région live (annonce à l'apparition) : sans effet sur la mise en page. */
-.ct-empty__live {
-  display: contents;
-}
-
 .ct-empty__title {
   margin: 0;
   font-family: var(--ct-font-text);
