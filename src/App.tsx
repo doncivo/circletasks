@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
@@ -9,7 +9,7 @@ import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
 import { TAB_IDS, TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
-import { toKeyInput } from './features/app/shortcuts';
+import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
@@ -21,6 +21,7 @@ import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
 import { AppearanceScreen, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
+import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
 import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
@@ -42,6 +43,9 @@ registerEventsSource();
 registerExternalEventsSource();
 // Objectifs de la semaine (M17) : encadrés épinglés d'Aujourd'hui (OB-02).
 registerGoalsSource();
+
+/** Raccourcis encore actifs pendant que la liste des raccourcis est ouverte (P-08). */
+const HELP_KEYS: readonly ShortcutId[] = ['app.shortcutsHelp', 'app.escape'];
 
 function requireTab(id: string): TabDefinition {
   const found = TABS.find((tab) => tab.id === id);
@@ -83,6 +87,11 @@ function AppShellContent() {
   // RC-01 : Ctrl+K ouvre la recherche depuis n'importe quel écran, y compris dans un champ de saisie.
   useEffect(() => registerSearchShortcut(container), [container]);
 
+  // D-04 : Échap (dernier recours, priorité la plus basse : posé avant les effets des écrans), Ctrl+, (Réglages).
+  // P-08 : Ctrl+/ (liste des raccourcis), PC seulement : l'iPhone n'a pas de clavier.
+  useLayoutEffect(() => registerEscapeFallback(container), [container]);
+  useEffect(() => registerShellShortcuts(container, { help: layout === 'pc' }), [container, layout]);
+
   return (
     <AppShell
       // Semaine : la fiche détail passe par-dessus la grille (S-01), qui garde ses sept colonnes.
@@ -101,6 +110,7 @@ function AppShellContent() {
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />
+      {layout === 'pc' && <ShortcutsHelp />}
       {/* RC-03 : une tâche ouverte depuis la recherche passe par-dessus l'onglet courant. Aujourd'hui, la Semaine, Un jour, Terminées et
           Objectif rendent leur propre fiche ; les autres écrans (Routines, Événements, Checklists, Réglages, Rapport) en reçoivent une ici. */}
       {(route.tab === 'routines' || route.tab === 'events' || route.tab === 'checklists' || route.tab === 'settings' || (route.tab === 'tasks' && route.screen === 'report')) && <TaskDetail />}
@@ -211,7 +221,9 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (container.shortcuts.handle(toKeyInput(event))) event.preventDefault();
+      // Sous la liste des raccourcis (fenêtre modale), seuls Ctrl+/ et Échap agissent : Espace, Entrée ou Suppr ne touchent pas l'écran dessous.
+      const underHelp = useNavigationStore.getState().overlays.at(-1)?.kind === 'shortcutsHelp';
+      if (container.shortcuts.handle(toKeyInput(event), underHelp ? HELP_KEYS : undefined)) event.preventDefault();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

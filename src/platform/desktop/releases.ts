@@ -20,3 +20,8 @@ export const QUITTING_EVENT = 'desktop://quitting';
 
 /** Commande Rust de confirmation de sortie (src-tauri/src/desktop.rs, confirm_quit). */
 export const CONFIRM_QUIT_COMMAND = 'confirm_quit';
+
+/** Commandes Rust du raccourci global (src-tauri/src/shortcut.rs, D-04). */
+export const SET_QUICK_CAPTURE_COMMAND = 'set_quick_capture_shortcut';
+export const CLEAR_QUICK_CAPTURE_COMMAND = 'clear_quick_capture_shortcut';
+export const GET_QUICK_CAPTURE_COMMAND = 'get_quick_capture_shortcut';

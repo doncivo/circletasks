@@ -1,14 +1,17 @@
 import { t } from '../../i18n';
 import { logDesktopFailure, type TrayLabels } from '../../platform';
+import { quickCaptureStore } from '../shortcuts';
 import { startUpdateChecks } from '../updater/updateChecks';
 import type { AppContainer } from './container';
 import { useQuickAddStore } from './quickAdd';
+import { formatChord } from './shortcutsHelp';
 
 /** Textes du menu de la zone de notification (D-01) : seule source, src/i18n. */
-export function trayLabels(): TrayLabels {
+export function trayLabels(quickCaptureKeys: string | null = null): TrayLabels {
   return {
     open: t('desktop.tray.open'),
-    quickAdd: t('desktop.tray.quickAdd'),
+    // D-04 : la combinaison de la capture rapide s'affiche à droite de l'entrée (tabulation = colonne des raccourcis du menu Windows).
+    quickAdd: quickCaptureKeys ? `${t('desktop.tray.quickAdd')}\t${formatChord(quickCaptureKeys)}` : t('desktop.tray.quickAdd'),
     sync: t('desktop.tray.sync'),
     quit: t('desktop.tray.quit'),
     // « Synchroniser » reste grisé tant que M15 n'existe pas (Y-03, ordre 4) : à passer à vrai avec Y-03.
@@ -35,7 +38,18 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   let unlisten: (() => void) | null = null;
   let unlistenQuit: (() => void) | null = null;
 
-  desktop.setTrayLabels(trayLabels()).catch((error: unknown) => logDesktopFailure('tray-labels', error));
+  // D-04 : menu de la zone de notification (avec la combinaison de la capture rapide quand elle est active), puis
+  // enregistrement du raccourci global ; le menu est réécrit à chaque changement de combinaison ou d'état.
+  const quickCapture = quickCaptureStore.get(container);
+  const pushLabels = (): void => {
+    const { keys, status } = quickCapture.getState();
+    desktop.setTrayLabels(trayLabels(status === 'active' ? keys : null)).catch((error: unknown) => logDesktopFailure('tray-labels', error));
+  };
+  pushLabels();
+  const stopQuickCapture = quickCapture.subscribe((state, previous) => {
+    if (state.keys !== previous.keys || state.status !== previous.status) pushLabels();
+  });
+  void quickCapture.getState().init();
   desktop
     .onQuickAdd(() => useQuickAddStore.getState().request())
     .then((stop) => {
@@ -62,6 +76,7 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
       disposed = true;
       unlisten?.();
       unlistenQuit?.();
+      stopQuickCapture();
       checks.dispose();
     },
   };

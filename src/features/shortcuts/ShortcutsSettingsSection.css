@@ -1,0 +1,49 @@
+/* Ligne « Capture rapide » de Réglages (D-04). Aucune maquette : style des lignes de Reglages.html (.r). */
+.ct-quickcapture {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-space-3);
+}
+
+.ct-quickcapture__key {
+  font: inherit;
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  padding: 4px 10px;
+  border: 1px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-sm);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-quickcapture__key[data-capturing] {
+  border-color: var(--ct-color-text);
+  background: var(--ct-color-surface);
+}
+
+.ct-quickcapture__key[data-state='unavailable'] {
+  color: var(--ct-color-text-secondary);
+  text-decoration: line-through;
+}
+
+.ct-quickcapture__key:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.ct-quickcapture__note {
+  margin: var(--ct-space-1) 0 0;
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-quickcapture__live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

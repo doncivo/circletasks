@@ -7,6 +7,7 @@ import { useNavigationStore } from '../app/navigation';
 import { CalendarsSummaryRow } from '../calendars';
 import { HolidaysSummaryRow } from '../events';
 import { formatRecapSummary } from '../reminders';
+import { ShortcutsSettingsSection } from '../shortcuts';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
 import { AboutSection } from './AboutSection';
 import { formatAppearanceParts } from './AppearanceScreen';
@@ -123,6 +124,7 @@ export function SettingsScreen() {
       <h2 className="ct-settings__section">{t('spaces.sectionTitle')}</h2>
       <SpacesSummaryRow />
       <CalendarsSummaryRow />
+      <ShortcutsSettingsSection />
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
       <div className="ct-settings__row">
         <span>{t('settings.trash')}</span>

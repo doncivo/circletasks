@@ -4,8 +4,11 @@ import type { DesktopPlatform } from './types';
 export { logDesktopFailure } from './log';
 export { LATEST_RELEASE_URL, RELEASES_REPOSITORY_URL } from './releases';
 export {
+  GlobalShortcutError,
   UpdateInstallError,
   type DesktopPlatform,
+  type GlobalShortcutFailure,
+  type GlobalShortcuts,
   type PendingUpdate,
   type TrayLabels,
   type UpdateFailureKind,

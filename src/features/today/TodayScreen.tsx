@@ -13,6 +13,7 @@ import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, useDelayedFlag, useLayou
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { isListFocus, registerListNavigation } from '../app/listKeyboard';
 import { useQuickAddStore } from '../app/quickAdd';
 import { SearchButton } from '../search';
 import { SomedayButton } from '../someday';
@@ -37,6 +38,9 @@ import './TodayScreen.css';
  * routines + tâches, terminés, checklists, création rapide, mode édition (A-05), vue compacte (A-06) et fiche détail (A-08).
  * Rien n'est simulé pour les modules absents (`todaySources`).
  */
+/** Liste du jour (D-04) : cible de ↑ / ↓ et d'Entrée. */
+const todayListRoot = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-today__list');
+
 export function TodayScreen() {
   const container = useAppContainer();
   const layout = useLayout();
@@ -105,6 +109,26 @@ export function TodayScreen() {
   const edit = useTodayEditMode(list);
   const rowActions = useTodayRowActions(edit);
   const reorder = useTodayReorder(list, rowActions.focusedTaskId);
+
+  // D-04 : ↑ / ↓ passent à la ligne précédente / suivante ; Entrée ouvre le détail de la ligne sélectionnée (si le focus est dans la liste).
+  useEffect(
+    () =>
+      registerListNavigation(container.shortcuts, {
+        root: todayListRoot,
+        itemSelector: '[role="listitem"]',
+        focusSelector: '.ct-list-row__title',
+      }),
+    [container],
+  );
+  const selectedTaskId = rowActions.focusedTaskId;
+  useEffect(() => {
+    if (!selectedTaskId) return undefined;
+    return container.shortcuts.register('list.open', (): boolean => {
+      if (!isListFocus(todayListRoot())) return false;
+      openDetail({ type: 'task', id: selectedTaskId });
+      return true;
+    });
+  }, [container, selectedTaskId, openDetail]);
 
   // T-09 : une règle posée depuis la fiche apparaît aussitôt sur la ligne (lecture des règles inconnues).
   const hasUnknownRule = dayTasks.some((task) => task.recurrenceId !== null && !recurrences.has(task.recurrenceId));
@@ -288,6 +312,15 @@ export function TodayScreen() {
           {layout === 'pc' && (
             <span className="ct-today__hint">
               <Kbd keys="Ctrl+N" separator=" " /> {t('today.hintNewTask')}
+              {' · '}
+              <button
+                type="button"
+                className="ct-today__hintButton"
+                aria-label={t('shortcutsUi.openHelpLabel')}
+                onClick={() => useNavigationStore.getState().openOverlay({ kind: 'shortcutsHelp' })}
+              >
+                <Kbd keys="Ctrl+/" separator=" " /> {t('shortcutsUi.hintHelp')}
+              </button>
             </span>
           )}
           <Fab onClick={openCreate} label={t('common.add')} />

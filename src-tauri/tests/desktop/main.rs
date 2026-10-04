@@ -8,4 +8,5 @@ mod calendars;
 mod config;
 mod logic;
 mod quit;
+mod shortcut;
 mod updater;

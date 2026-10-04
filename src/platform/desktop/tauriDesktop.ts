@@ -5,8 +5,33 @@ import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { check } from '@tauri-apps/plugin-updater';
-import { CONFIRM_QUIT_COMMAND, LATEST_RELEASE_URL, QUICK_ADD_EVENT, QUITTING_EVENT, SET_TRAY_LABELS_COMMAND } from './releases';
-import { UpdateInstallError, type DesktopPlatform, type PendingUpdate, type UpdateFailureKind } from './types';
+import {
+  CLEAR_QUICK_CAPTURE_COMMAND,
+  CONFIRM_QUIT_COMMAND,
+  GET_QUICK_CAPTURE_COMMAND,
+  LATEST_RELEASE_URL,
+  QUICK_ADD_EVENT,
+  QUITTING_EVENT,
+  SET_QUICK_CAPTURE_COMMAND,
+  SET_TRAY_LABELS_COMMAND,
+} from './releases';
+import {
+  GlobalShortcutError,
+  UpdateInstallError,
+  type DesktopPlatform,
+  type GlobalShortcutFailure,
+  type PendingUpdate,
+  type UpdateFailureKind,
+} from './types';
+
+const SHORTCUT_FAILURES: readonly GlobalShortcutFailure[] = ['syntax', 'no-modifier', 'windows-key', 'reserved', 'in-use', 'unavailable'];
+
+/** Transforme l'erreur `{ code: 'shortcut-in-use', message }` d'une commande Rust en `GlobalShortcutError`. */
+export function toGlobalShortcutError(error: unknown): GlobalShortcutError {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code: unknown }).code) : '';
+  const reason = SHORTCUT_FAILURES.find((candidate) => `shortcut-${candidate}` === code);
+  return new GlobalShortcutError(reason ?? 'unavailable', error);
+}
 
 /**
  * Classe une erreur du plugin updater. Les erreurs de signature viennent de minisign
@@ -21,6 +46,24 @@ export function classifyUpdateError(error: unknown): UpdateFailureKind {
 /** Implémentation Tauri (Windows). Ne s'importe que via `openDesktopPlatform`. */
 export function createTauriDesktop(): DesktopPlatform {
   return {
+    globalShortcuts: {
+      register: async (chord) => {
+        try {
+          await invoke(SET_QUICK_CAPTURE_COMMAND, { accelerator: chord });
+        } catch (error) {
+          throw toGlobalShortcutError(error);
+        }
+      },
+      unregister: async () => {
+        try {
+          await invoke(CLEAR_QUICK_CAPTURE_COMMAND);
+        } catch (error) {
+          throw toGlobalShortcutError(error);
+        }
+      },
+      isRegistered: async (chord) => (await invoke<string | null>(GET_QUICK_CAPTURE_COMMAND)) === chord,
+    },
+
     setTrayLabels: async (labels) => {
       await invoke(SET_TRAY_LABELS_COMMAND, { labels });
     },

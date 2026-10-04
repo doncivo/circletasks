@@ -78,6 +78,70 @@ describe('registre', () => {
     expect(registry.activeIds()).toEqual(['global.quickCapture']);
   });
 
+  it('AltGr n’est jamais pris pour Ctrl+Alt ni pour Alt (D-04 critère 3, clavier AZERTY)', () => {
+    const registry = createShortcutRegistry();
+    const tab = vi.fn();
+    const help = vi.fn();
+    registry.register('app.tab.tasks', tab);
+    registry.register('app.shortcutsHelp', help);
+    // AltGr + & = « ~ » en AZERTY : Windows rapporte Ctrl+Alt, le navigateur AltGraph.
+    expect(registry.handle(key({ key: '~', code: 'Digit2', ctrlKey: true, altKey: true, altGraph: true }))).toBeNull();
+    // AltGr + : donne « / » sur certaines dispositions : ne doit pas ouvrir l’aide (Ctrl+/).
+    expect(registry.handle(key({ key: '/', code: 'Slash', ctrlKey: true, altKey: true, altGraph: true }))).toBeNull();
+    // Alt seul (sans AltGr) reste Alt+1, que le caractère soit « & » (AZERTY) ou « 1 » (QWERTY).
+    expect(registry.handle(key({ key: '&', code: 'Digit1', altKey: true }))).toBe('app.tab.tasks');
+    expect(registry.handle(key({ key: '1', code: 'Digit1', altKey: true }))).toBe('app.tab.tasks');
+    expect(registry.handle(key({ key: '/', ctrlKey: true }))).toBe('app.shortcutsHelp');
+    expect(help).toHaveBeenCalledOnce();
+  });
+
+  it('lit AltGr dans l’événement du navigateur', () => {
+    const event = { key: 'é', code: 'Digit2', ctrlKey: true, altKey: true, shiftKey: false, metaKey: false, target: null, getModifierState: (m: string) => m === 'AltGraph' };
+    expect(toKeyInput(event as unknown as KeyboardEvent).altGraph).toBe(true);
+    expect(toKeyInput({ ...event, getModifierState: () => false } as unknown as KeyboardEvent).altGraph).toBe(false);
+  });
+
+  it('même effet en AZERTY et en QWERTY : chiffres par `code`, lettres par `key`', () => {
+    const registry = createShortcutRegistry();
+    const space = vi.fn();
+    const duplicate = vi.fn();
+    registry.register('app.space.pro', space);
+    registry.register('list.duplicate', duplicate);
+    // Ctrl+1 : « & » (AZERTY) ou « 1 » (QWERTY), même touche physique.
+    expect(registry.handle(key({ key: '&', code: 'Digit1', ctrlKey: true }))).toBe('app.space.pro');
+    expect(registry.handle(key({ key: '1', code: 'Digit1', ctrlKey: true }))).toBe('app.space.pro');
+    // Ctrl+Maj+D : la lettre produite, quelle que soit la position de la touche.
+    expect(registry.handle(key({ key: 'D', code: 'KeyD', ctrlKey: true, shiftKey: true }))).toBe('list.duplicate');
+    expect(registry.handle(key({ key: 'D', code: 'KeyE', ctrlKey: true, shiftKey: true }))).toBe('list.duplicate');
+    expect(space).toHaveBeenCalledTimes(2);
+    expect(duplicate).toHaveBeenCalledTimes(2);
+  });
+
+  it('un gestionnaire qui décline (false) laisse la main au précédent, puis à l’événement natif', () => {
+    const registry = createShortcutRegistry();
+    const first = vi.fn();
+    const declining = vi.fn(() => false);
+    registry.register('list.next', first);
+    registry.register('list.next', declining);
+    expect(registry.handle(key({ key: 'ArrowDown' }))).toBe('list.next');
+    expect(declining).toHaveBeenCalledOnce();
+    expect(first).toHaveBeenCalledOnce();
+    const alone = createShortcutRegistry();
+    alone.register('list.next', declining);
+    expect(alone.handle(key({ key: 'ArrowDown' }))).toBeNull();
+  });
+
+  it('`only` restreint aux raccourcis cités (fenêtre modale)', () => {
+    const registry = createShortcutRegistry();
+    const complete = vi.fn();
+    const help = vi.fn();
+    registry.register('list.complete', complete);
+    registry.register('app.shortcutsHelp', help);
+    expect(registry.handle(key({ key: ' ' }), ['app.shortcutsHelp'])).toBeNull();
+    expect(registry.handle(key({ key: '/', ctrlKey: true }), ['app.shortcutsHelp'])).toBe('app.shortcutsHelp');
+    expect(complete).not.toHaveBeenCalled();
+  });
+
   it('convertit un événement hors DOM (Node) sans champ éditable', () => {
     const input = toKeyInput({ key: 'k', code: 'KeyK', ctrlKey: true, altKey: false, shiftKey: false, metaKey: false, target: null } as unknown as KeyboardEvent);
     expect(input).toMatchObject({ key: 'k', code: 'KeyK', ctrlKey: true, editable: false });

@@ -7,6 +7,7 @@ import { calendarsEn } from './en.calendars';
 import { routinesEn } from './en.routines';
 import { checklistsEn } from './en.checklists';
 import { eventsEn } from './en.events';
+import { shortcutsUiEn } from './en.shortcuts';
 import type { Messages } from './types';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
@@ -595,6 +596,7 @@ export const en: Messages = {
   goals: goalsEn,
   someday: somedayEn,
   search: searchEn,
+  shortcutsUi: shortcutsUiEn,
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',
