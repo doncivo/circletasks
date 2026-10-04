@@ -1,0 +1,153 @@
+# Build et publication de l'app PC (PRD section 7, ADR 0006, story D-03 critères 10 et 11).
+# Tag vX.Y.Z : build NSIS signé (clé updater), latest.json, publication sur circletasks-releases.
+# Lancement manuel : build seul (artefact), jamais de publication.
+# Le tag iOS (ios-vX.Y.Z) est distinct et ne déclenche pas ce workflow.
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # La version du tag, de tauri.conf.json, de package.json et de Cargo.toml doit être identique.
+      # Hors tag (lancement manuel), seule la cohérence des trois fichiers est vérifiée.
+      - name: Vérifier les versions
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            node scripts/release/check-version.mjs "${GITHUB_REF_NAME}"
+          else
+            node scripts/release/check-version.mjs
+          fi
+
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-windows-${{ runner.os }}-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: cargo-windows-${{ runner.os }}-
+
+      - run: npm ci
+
+      # Les secrets ne sont exposés qu'à cette étape, par variables d'environnement (jamais affichées).
+      # createUpdaterArtifacts n'est pas dans tauri.conf.json (il exigerait la clé pour tout build local) :
+      # il est activé ici. Sans clé (lancement manuel d'un dépôt sans secret), on construit l'installeur non signé.
+      - name: Compiler l'installeur NSIS
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            npx tauri build --ci --bundles nsis --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "::error::Secret TAURI_SIGNING_PRIVATE_KEY absent : un tag de version exige la signature."
+            exit 1
+          else
+            echo "::warning::Clé de signature absente : installeur non signé, pas de latest.json."
+            npx tauri build --ci --bundles nsis
+          fi
+
+      - name: Rassembler installeur, signature et latest.json
+        run: |
+          set -euo pipefail
+          VERSION=$(node scripts/release/check-version.mjs)
+          DIR=src-tauri/target/release/bundle/nsis
+          EXE="CircleTasks_${VERSION}_x64-setup.exe"
+          test -f "${DIR}/${EXE}" || { echo "::error::Installeur absent : ${DIR}/${EXE}"; ls -l "${DIR}" || true; exit 1; }
+          rm -rf dist-release && mkdir dist-release
+          cp "${DIR}/${EXE}" dist-release/
+          if [ -f "${DIR}/${EXE}.sig" ]; then
+            cp "${DIR}/${EXE}.sig" dist-release/
+            # Notes : section de CHANGELOG.md correspondant à la version, sinon texte par défaut.
+            NOTES=""
+            if [ -f CHANGELOG.md ]; then
+              NOTES=$(awk -v v="${VERSION}" '
+                /^## / { if (found) exit; if (index($0, v)) { found=1; next } }
+                found { print }' CHANGELOG.md)
+            fi
+            [ -n "${NOTES}" ] || NOTES="CircleTasks ${VERSION}"
+            BASE="https://github.com/doncivo/circletasks-releases/releases/download/v${VERSION}"
+            node scripts/release/make-latest-json.mjs "${VERSION}" "dist-release/${EXE}" "dist-release/${EXE}.sig" "${BASE}" "${NOTES}" > dist-release/latest.json
+            cat dist-release/latest.json
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            echo "::error::Signature .sig absente : createUpdaterArtifacts n'a rien produit."
+            exit 1
+          fi
+          ls -l dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CircleTasks-windows
+          path: dist-release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  # Publication : uniquement sur tag vX.Y.Z. L'environnement « releases » exige l'approbation d'Ali
+  # (réglage GitHub, voir docs/release-pc.md). Le secret RELEASES_TOKEN n'existe que dans cet environnement.
+  publish:
+    needs: windows
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment: releases
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: CircleTasks-windows
+          path: dist-release
+
+      # L'endpoint de l'updater (tauri.conf.json, plugins.updater.endpoints) est
+      # https://github.com/doncivo/circletasks-releases/releases/latest/download/latest.json :
+      # latest.json est donc joint à chaque release, et la release la plus récente est marquée « latest ».
+      - name: Publier sur circletasks-releases
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::error::Secret RELEASES_TOKEN absent : publication impossible (les fichiers restent en artefact)."
+            exit 1
+          fi
+          REPO="doncivo/circletasks-releases"
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          EXE="dist-release/CircleTasks_${VERSION}_x64-setup.exe"
+          for f in "$EXE" "$EXE.sig" dist-release/latest.json; do
+            test -f "$f" || { echo "::error::Fichier absent : $f"; ls -l dist-release; exit 1; }
+          done
+          NOTES=$(node -p "require('./dist-release/latest.json').notes")
+          gh release create "$TAG" "$EXE" "$EXE.sig" dist-release/latest.json \
+            --repo "$REPO" --title "CircleTasks ${VERSION}" --notes "$NOTES" --latest \
+            || { gh release upload "$TAG" "$EXE" "$EXE.sig" dist-release/latest.json --repo "$REPO" --clobber \
+                 && gh release edit "$TAG" --repo "$REPO" --latest; }
