@@ -8,6 +8,7 @@ import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
+import { openBackupService, type BackupService } from '../../platform/backup';
 import { openFileService, type FileService } from '../../platform/files';
 import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platform/focus';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
@@ -61,6 +62,8 @@ export interface BootstrapAppOptions {
   readonly focusWindow?: FocusWindowPlatform | null;
   /** Enregistrement de fichiers (H-03) ; `openFileService` par défaut. */
   readonly files?: FileService;
+  /** Sauvegardes locales (P-04) ; `openBackupService` par défaut. */
+  readonly backups?: BackupService;
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
 }
@@ -101,6 +104,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
+      backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver, appSchemaVersion: migrations.at(-1)?.version ?? 0 }),
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
     });
   } catch (error) {

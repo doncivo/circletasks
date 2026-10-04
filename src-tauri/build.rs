@@ -37,6 +37,8 @@ fn main() {
 
     tauri_build::try_build(
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&["set_tray_labels", "confirm_quit", "set_quick_capture_shortcut", "clear_quick_capture_shortcut", "get_quick_capture_shortcut", "backup_database_before_migration",
+            // Sauvegarde quotidienne et restauration (P-04) : PC uniquement.
+            "daily_backup", "list_backups", "check_backup", "restore_backup", "reveal_backups_folder",
             // Capture rapide (Q-01) et OCR (Q-04) : PC uniquement.
             "export_save_file", "reveal_exported_file", "hide_quick_capture", "resize_quick_capture", "submit_quick_capture", "request_capture_context", "capture_setup_error", "ocr_status", "ocr_recognize",
             // Agendas externes (ADR 0008) : PC et iPhone.

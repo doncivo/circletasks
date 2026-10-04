@@ -150,6 +150,22 @@ fn export_capability_grants_only_the_two_export_commands_to_the_main_window_on_w
     assert_eq!(names, ["allow-export-save-file", "allow-reveal-exported-file"]);
 }
 
+/// P-04 : sauvegarde et restauration par cinq commandes Rust, fenêtre principale et Windows seulement, aucune permission de plugin.
+#[test]
+fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on_windows() {
+    let text = include_str!("../../capabilities/backups.json");
+    let capability: Value = serde_json::from_str(text).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
+    let mut names = permissions_of(text);
+    names.sort();
+    assert_eq!(names, ["allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
+    // Aucune autre capability n'accorde ces commandes (la restauration n'est jamais appelable depuis une fenêtre secondaire).
+    for other in [include_str!("../../capabilities/default.json"), include_str!("../../capabilities/capture.json"), include_str!("../../capabilities/focus.json")] {
+        assert!(!permissions_of(other).iter().any(|p| p.contains("restore-backup") || p.contains("daily-backup")));
+    }
+}
+
 /// Les fenêtres secondaires (capture rapide, Focus) n'ont aucun accès aux fichiers, aux boîtes système ni à l'ouverture d'adresses.
 #[test]
 fn secondary_window_capabilities_have_no_fs_dialog_or_opener_permission() {

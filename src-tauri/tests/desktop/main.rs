@@ -12,5 +12,6 @@ mod focus;
 mod logic;
 mod ocr;
 mod quit;
+mod restore;
 mod shortcut;
 mod updater;

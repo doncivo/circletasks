@@ -1,5 +1,6 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
 import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } from '../calendars/scheduler';
+import { startBackupScheduler } from '../settings/backupScheduler';
 import { createDayRollover } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
@@ -59,6 +60,8 @@ export function startAppStartup(
     ...(env.onTimeZoneChange ? { onChange: env.onTimeZoneChange } : {}),
   });
   const calendars = startCalendarScheduler(container, { document: env.document, ...(env.timers ?? {}) });
+  // P-04 : sauvegarde quotidienne à l'ouverture, au retour au premier plan et après minuit (sans bloquer le démarrage).
+  const backups = startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') {
       void timeZone.check().then(() => rollover.check());
@@ -77,6 +80,7 @@ export function startAppStartup(
       if (disposed) return;
       disposed = true;
       calendars.dispose();
+      backups.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);
       env.window.removeEventListener('focus', onCheck);
       rollover.stop();

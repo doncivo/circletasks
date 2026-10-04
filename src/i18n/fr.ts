@@ -13,6 +13,7 @@ import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
 import { eventsFr } from './fr.events';
 import { shortcutsUiFr } from './fr.shortcuts';
+import { backupFr } from './fr.backup';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -610,6 +611,7 @@ export const fr = {
   empty: emptyFr,
   search: searchFr,
   shortcutsUi: shortcutsUiFr,
+  backup: backupFr,
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',
