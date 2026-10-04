@@ -119,6 +119,8 @@ fn manifest(server: &Server, version: &str, signature: &str) -> Vec<u8> {
 
 fn build_app(pubkey: &str, endpoint: &str) -> tauri::App<MockRuntime> {
     let mut context = mock_context(noop_assets());
+    // mock_context fixe la version à 0.1.0 : on prend celle du paquet, comme l'app réelle.
+    context.package_info_mut().version = CURRENT_VERSION.parse().expect("version du paquet");
     context.config_mut().plugins.0.insert(
         "updater".to_owned(),
         json!({
