@@ -38,6 +38,21 @@ pub const KEEP_DAILY_BACKUPS: usize = 14;
 pub const PRE_RESTORE_PREFIX: &str = "circletasks-pre-restore-";
 /// Nombre de copies de sécurité de restauration conservées (P-04 critère 6).
 pub const KEEP_PRE_RESTORE_BACKUPS: usize = 3;
+/// Version de schéma de cette app (plus haute migration de `src/db/migrations`). Une sauvegarde plus récente est refusée. Constante côté Rust :
+/// la WebView ne fournit jamais cette valeur ; un test (`restore.rs`) la compare aux fichiers de migration.
+pub const APP_SCHEMA_VERSION: u32 = 14;
+/// Plafond de taille d'une base à vérifier ou à restaurer (512 Mo) : au-delà, la sauvegarde est refusée (`corrupt`).
+pub const MAX_BACKUP_BYTES: u64 = 512 * 1024 * 1024;
+/// Déclencheurs créés par les migrations de l'app (index de recherche, migration 0011). Toute autre définition (déclencheur ou vue) dans une
+/// base à restaurer est refusée : une base piégée pourrait exécuter du SQL à l'ouverture.
+pub const EXPECTED_TRIGGERS: [&str; 18] = [
+    "search_task_ai", "search_task_au", "search_task_ad",
+    "search_routine_ai", "search_routine_au", "search_routine_ad",
+    "search_event_ai", "search_event_au", "search_event_ad",
+    "search_goal_ai", "search_goal_au", "search_goal_ad",
+    "search_checklist_ai", "search_checklist_au", "search_checklist_ad",
+    "search_checklist_item_ai", "search_checklist_item_au", "search_checklist_item_ad",
+];
 /// Attente maximale d'un verrou pendant une sauvegarde quotidienne : la base n'est jamais bloquée plus de 2 s (P-04 critère 1).
 const DAILY_BUSY_MS: u64 = 2_000;
 /// Attente maximale d'un verrou pour les autres copies.
@@ -126,9 +141,18 @@ pub fn is_valid_day(day: &str) -> bool {
     if b.len() != 8 || !b.iter().all(u8::is_ascii_digit) {
         return false;
     }
+    let year: u32 = day[0..4].parse().unwrap_or(0);
     let month: u32 = day[4..6].parse().unwrap_or(0);
     let d: u32 = day[6..8].parse().unwrap_or(0);
-    (1..=12).contains(&month) && (1..=31).contains(&d)
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let last = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    (1..=last).contains(&d)
 }
 
 /// Nom de fichier d'une sauvegarde de migration.
@@ -205,8 +229,42 @@ pub fn prune_family(dir: &Path, family: Family, keep: usize) -> io::Result<usize
     for (_, path) in found.into_iter().take(excess) {
         fs::remove_file(&path)?;
         let _ = fs::remove_file(sidecar(&path, "-wal"));
+        let _ = fs::remove_file(sidecar(&path, "-shm"));
     }
     Ok(excess)
+}
+
+/// Vrai pour un fichier ordinaire, jamais pour un lien symbolique, une jonction ou tout autre point d'analyse (`FILE_ATTRIBUTE_REPARSE_POINT`).
+/// `symlink_metadata` ne suit pas les liens : un fichier du dossier des sauvegardes qui pointerait ailleurs n'est ni lu ni restauré.
+pub fn is_plain_file(path: &Path) -> bool {
+    let Ok(meta) = fs::symlink_metadata(path) else { return false };
+    if meta.file_type().is_symlink() || !meta.is_file() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if meta.file_attributes() & 0x400 != 0 {
+            return false;
+        }
+    }
+    true
+}
+
+/// Vrai pour un dossier ordinaire (ni lien ni jonction).
+fn is_plain_dir(path: &Path) -> bool {
+    let Ok(meta) = fs::symlink_metadata(path) else { return false };
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return false;
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if meta.file_attributes() & 0x400 != 0 {
+            return false;
+        }
+    }
+    true
 }
 
 /// Supprime les plus anciennes sauvegardes de migration au-delà de `keep`. Renvoie le nombre supprimé.
@@ -234,8 +292,7 @@ fn copy_database(source: &Path, target: &Path, busy_ms: u64) -> Result<(), Backu
     let tmp = sidecar(target, ".tmp");
     let _ = fs::remove_file(&tmp);
     let result = (|| {
-        let conn = rusqlite::Connection::open_with_flags(source, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).map_err(sql_err)?;
-        conn.busy_timeout(std::time::Duration::from_millis(busy_ms)).map_err(sql_err)?;
+        let conn = open_read_only_with(source, busy_ms).map_err(sql_err)?;
         conn.execute("VACUUM INTO ?1", [tmp.to_string_lossy().as_ref()]).map_err(sql_err)?;
         drop(conn);
         fs::File::options().write(true).open(&tmp).and_then(|f| f.sync_all()).map_err(io_err)?;
@@ -263,7 +320,7 @@ pub fn create_migration_backup(
     }
     if !db_path.is_file() {
         if from_version >= 1 {
-            return Err(BackupError::new("no-database", format!("base introuvable : {}", db_path.display())));
+            return Err(BackupError::new("no-database", "base introuvable"));
         }
         return Ok(BackupOutcome { path: None, removed: 0 });
     }
@@ -293,7 +350,7 @@ pub fn create_daily_backup(db_path: &Path, backups_dir: &Path, day: &str, replac
         return Err(BackupError::new("bad-day", format!("jour invalide : {day}")));
     }
     if !db_path.is_file() {
-        return Err(BackupError::new("no-database", format!("base introuvable : {}", db_path.display())));
+        return Err(BackupError::new("no-database", "base introuvable"));
     }
     fs::create_dir_all(backups_dir).map_err(io_err)?;
     remove_orphan_tmp(backups_dir);
@@ -339,7 +396,7 @@ pub fn list_backups_in(dir: &Path) -> Result<Vec<BackupEntry>, BackupError> {
         let Some(name) = path.file_name().and_then(|n| n.to_str()).map(str::to_owned) else { continue };
         let Some((family, stamp)) = parse_backup_name(&name) else { continue };
         let Ok(meta) = entry.metadata() else { continue };
-        if !meta.is_file() {
+        if !is_plain_file(&path) {
             continue;
         }
         let modified_ms = meta
@@ -347,23 +404,34 @@ pub fn list_backups_in(dir: &Path) -> Result<Vec<BackupEntry>, BackupError> {
             .ok()
             .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
-        let (tasks, schema_version) = read_summary(&path);
+        let (tasks, schema_version) = if meta.len() > MAX_BACKUP_BYTES { (None, None) } else { read_summary(&path) };
         entries.push(BackupEntry { name, kind: family.kind(), stamp, size: meta.len(), modified_ms, tasks, schema_version });
     }
     entries.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| b.stamp.cmp(&a.stamp)).then_with(|| b.name.cmp(&a.name)));
     Ok(entries)
 }
 
-fn open_read_only(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> {
+/// Ouvre un fichier de sauvegarde en lecture seule avec `trusted_schema = OFF` : les fonctions SQL « non fiables » des déclencheurs et des vues
+/// d'une base venue de l'extérieur ne sont pas exécutées.
+fn open_read_only_with(path: &Path, busy_ms: u64) -> Result<rusqlite::Connection, rusqlite::Error> {
     let conn = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-    conn.busy_timeout(std::time::Duration::from_millis(DEFAULT_BUSY_MS))?;
+    conn.busy_timeout(std::time::Duration::from_millis(busy_ms))?;
+    conn.pragma_update(None, "trusted_schema", "OFF")?;
     Ok(conn)
 }
 
-/// Tâches et version de schéma d'une sauvegarde, sans jamais échouer (`None` si illisible).
+fn open_read_only(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> {
+    open_read_only_with(path, DEFAULT_BUSY_MS)
+}
+
+/// Tâches et version de schéma d'une sauvegarde, sans jamais échouer (`None` si illisible). `task` doit être une vraie table (pas une vue
+/// qui exécuterait autre chose) avant tout `COUNT`.
 fn read_summary(path: &Path) -> (Option<u64>, Option<u32>) {
     let Ok(conn) = open_read_only(path) else { return (None, None) };
-    let tasks = conn.query_row("SELECT COUNT(*) FROM task WHERE deleted_at IS NULL", [], |r| r.get::<_, u64>(0)).ok();
+    let is_table = conn
+        .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'task'", [], |r| r.get::<_, u64>(0))
+        .is_ok_and(|n| n == 1);
+    let tasks = if is_table { conn.query_row("SELECT COUNT(*) FROM task WHERE deleted_at IS NULL", [], |r| r.get::<_, u64>(0)).ok() } else { None };
     let version = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0)).ok().flatten();
     (tasks, version)
 }
@@ -372,6 +440,12 @@ fn read_summary(path: &Path) -> (Option<u64>, Option<u32>) {
 /// `schema_migrations` non vide, version <= `app_version`. Renvoie la version de schéma. Codes : `corrupt`, `newer-schema`.
 pub fn check_backup_file(path: &Path, app_version: u32) -> Result<u32, BackupError> {
     let corrupt = |why: String| BackupError::new("corrupt", why);
+    if !is_plain_file(path) {
+        return Err(corrupt("ce n'est pas un fichier ordinaire".into()));
+    }
+    if fs::metadata(path).map_err(io_err)?.len() > MAX_BACKUP_BYTES {
+        return Err(corrupt("sauvegarde de plus de 512 Mo".into()));
+    }
     let conn = open_read_only(path).map_err(|e| corrupt(e.to_string()))?;
     let mut statement = conn.prepare("PRAGMA integrity_check").map_err(|e| corrupt(e.to_string()))?;
     let rows: Vec<String> = statement
@@ -382,6 +456,19 @@ pub fn check_backup_file(path: &Path, app_version: u32) -> Result<u32, BackupErr
     drop(statement);
     if rows.as_slice() != ["ok"] {
         return Err(corrupt(rows.join("; ")));
+    }
+    // Seuls les déclencheurs de l'app sont admis, et aucune vue : une base piégée ne doit rien exécuter à l'ouverture.
+    let mut definitions = conn
+        .prepare("SELECT type, name FROM sqlite_master WHERE type IN ('trigger', 'view')")
+        .map_err(|e| corrupt(e.to_string()))?;
+    let found: Vec<(String, String)> = definitions
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| corrupt(e.to_string()))?
+        .collect::<Result<_, _>>()
+        .map_err(|e| corrupt(e.to_string()))?;
+    drop(definitions);
+    if let Some((kind, name)) = found.iter().find(|(kind, name)| kind != "trigger" || !EXPECTED_TRIGGERS.contains(&name.as_str())) {
+        return Err(corrupt(format!("définition inattendue : {kind} {name}")));
     }
     let version = conn
         .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0))
@@ -412,18 +499,55 @@ pub struct RestoreOutcome {
     pub schema_version: u32,
 }
 
+/// Des fichiers `.restore-old` existent-ils ? (restauration interrompue, ou retour arrière incomplet `rollback-failed`)
+pub fn has_pending_restore(db_path: &Path) -> bool {
+    ["", "-wal", "-shm"].iter().any(|suffix| sidecar(&sidecar(db_path, suffix), OLD_SUFFIX).exists())
+}
+
+/// Récupération au démarrage, AVANT l'ouverture de la base : si `circletasks.db` est absent et qu'un `.restore-old` existe, l'échange a été
+/// interrompu (arrêt brutal, `rollback-failed`) : l'ancienne base revient avec son `-wal` et son `-shm`. Si la base est présente, l'échange a
+/// abouti et les `.restore-old` ne sont que des restes, supprimés. Un `.restoring` orphelin est toujours supprimé. Renvoie vrai si une
+/// ancienne base a été remise en place.
+pub fn recover_interrupted_restore(db_path: &Path) -> bool {
+    let _ = fs::remove_file(sidecar(db_path, STAGING_SUFFIX));
+    let _ = fs::remove_file(sidecar(&sidecar(db_path, STAGING_SUFFIX), ".tmp"));
+    if !has_pending_restore(db_path) {
+        return false;
+    }
+    if db_path.exists() {
+        for suffix in ["", "-wal", "-shm"] {
+            let _ = fs::remove_file(sidecar(&sidecar(db_path, suffix), OLD_SUFFIX));
+        }
+        return false;
+    }
+    let mut restored = false;
+    // Base d'abord, puis son journal.
+    for suffix in ["", "-wal", "-shm"] {
+        let target = sidecar(db_path, suffix);
+        let old = sidecar(&target, OLD_SUFFIX);
+        if old.exists() && fs::rename(&old, &target).is_ok() && suffix.is_empty() {
+            restored = true;
+        }
+    }
+    restored
+}
+
 /// Échange la base par le fichier préparé. Tout ce qui est déplacé est remis en place si une étape échoue : l'ancienne base (et son
 /// `-wal`) revient, le fichier préparé est supprimé par l'appelant.
 fn swap_database(db_path: &Path, staged: &Path, hook: &dyn Fn(RestoreStep) -> io::Result<()>) -> Result<(), BackupError> {
+    // Une restauration interrompue a laissé des `.restore-old` : ils portent peut-être la seule copie de la base. On ne les écrase jamais ;
+    // `recover_interrupted_restore` (au démarrage, avant l'ouverture de la base) les remet en place.
+    if has_pending_restore(db_path) {
+        return Err(BackupError::new("restore-pending", "une restauration interrompue doit d'abord être récupérée (redémarrage)"));
+    }
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     let result = (|| -> io::Result<()> {
-        for suffix in ["", "-wal", "-shm"] {
+        // `-shm` et `-wal` d'abord, la base en dernier : si l'échange s'arrête ici, la base seule (sans son journal) n'est jamais présente
+        // avec le fichier d'un autre état ; `circletasks.db` absent + `.restore-old` présent = restauration à récupérer.
+        for suffix in ["-shm", "-wal", ""] {
             let from = sidecar(db_path, suffix);
             if from.exists() {
                 let to = sidecar(&from, OLD_SUFFIX);
-                if to.exists() {
-                    fs::remove_file(&to)?;
-                }
                 fs::rename(&from, &to)?;
                 moved.push((from, to));
             }
@@ -470,8 +594,11 @@ pub fn restore_backup_file(
         return Err(BackupError::new("bad-name", "nom de sauvegarde inconnu"));
     }
     let source = backups_dir.join(name);
-    if !source.is_file() {
+    if !is_plain_dir(backups_dir) || !is_plain_file(&source) {
         return Err(BackupError::new("not-found", format!("sauvegarde introuvable : {name}")));
+    }
+    if has_pending_restore(db_path) {
+        return Err(BackupError::new("restore-pending", "une restauration interrompue doit d'abord être récupérée (redémarrage)"));
     }
     let schema_version = check_backup_file(&source, app_version)?;
 
@@ -538,12 +665,18 @@ pub struct BackupListing {
     pub entries: Vec<BackupEntry>,
 }
 
+/// Libellé neutre du dossier des sauvegardes, montré à l'utilisateur : jamais le chemin absolu (nom de session Windows) vers la WebView.
+pub fn neutral_directory_label(identifier: &str) -> String {
+    format!("%APPDATA%\\{identifier}\\{BACKUP_DIR}")
+}
+
 #[tauri::command]
 pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
+    let label = neutral_directory_label(&app.config().identifier);
     tauri::async_runtime::spawn_blocking(move || {
         let entries = list_backups_in(&dir)?;
-        Ok(BackupListing { directory: dir.to_string_lossy().into_owned(), entries })
+        Ok(BackupListing { directory: label, entries })
     })
     .await
     .map_err(|e| join_error(e.into()))?
@@ -551,7 +684,7 @@ pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> 
 
 /// Vérifie une sauvegarde avant que l'app ne ferme sa base (un fichier refusé ne coûte rien).
 #[tauri::command]
-pub async fn check_backup(app: AppHandle, name: String, app_schema_version: u32) -> Result<u32, BackupError> {
+pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
     tauri::async_runtime::spawn_blocking(move || {
         if parse_backup_name(&name).is_none() {
@@ -561,7 +694,7 @@ pub async fn check_backup(app: AppHandle, name: String, app_schema_version: u32)
         if !path.is_file() {
             return Err(BackupError::new("not-found", format!("sauvegarde introuvable : {name}")));
         }
-        check_backup_file(&path, app_schema_version)
+        check_backup_file(&path, APP_SCHEMA_VERSION)
     })
     .await
     .map_err(|e| join_error(e.into()))?
@@ -569,10 +702,10 @@ pub async fn check_backup(app: AppHandle, name: String, app_schema_version: u32)
 
 /// Restaure une sauvegarde (la base a été fermée par le front, qui relance ensuite l'app).
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, name: String, stamp: String, app_schema_version: u32) -> Result<RestoreOutcome, BackupError> {
+pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Result<RestoreOutcome, BackupError> {
     let dir = data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, app_schema_version, &stamp, &|_| Ok(()))
+        restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))
     })
     .await
     .map_err(|e| join_error(e.into()))?

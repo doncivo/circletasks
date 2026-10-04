@@ -150,6 +150,17 @@ fn export_capability_grants_only_the_two_export_commands_to_the_main_window_on_w
     assert_eq!(names, ["allow-export-save-file", "allow-reveal-exported-file"]);
 }
 
+/// Texte de toutes les capabilities du dossier, sauf `except` (aucune capability ne doit accorder les commandes d'une autre).
+fn other_capabilities(except: &str) -> Vec<String> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities");
+    std::fs::read_dir(dir)
+        .expect("dossier capabilities")
+        .map(|e| e.expect("entrée").path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json") && p.file_name().is_some_and(|n| n != except))
+        .map(|p| std::fs::read_to_string(p).expect("capability"))
+        .collect()
+}
+
 /// P-07 : l'import passe par une seule commande Rust ; fenêtre principale et Windows seulement, aucune permission de plugin.
 #[test]
 fn import_capability_grants_only_the_open_file_command_to_the_main_window_on_windows() {
@@ -158,8 +169,8 @@ fn import_capability_grants_only_the_open_file_command_to_the_main_window_on_win
     assert_eq!(capability["windows"], serde_json::json!(["main"]));
     assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
     assert_eq!(permissions_of(text), ["allow-import-open-file"]);
-    for other in [include_str!("../../capabilities/default.json"), include_str!("../../capabilities/capture.json"), include_str!("../../capabilities/focus.json")] {
-        assert!(!permissions_of(other).iter().any(|p| p.contains("import-open-file")));
+    for other in other_capabilities("import.json") {
+        assert!(!permissions_of(&other).iter().any(|p| p.contains("import-open-file")));
     }
 }
 
@@ -174,8 +185,8 @@ fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on
     names.sort();
     assert_eq!(names, ["allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
     // Aucune autre capability n'accorde ces commandes (la restauration n'est jamais appelable depuis une fenêtre secondaire).
-    for other in [include_str!("../../capabilities/default.json"), include_str!("../../capabilities/capture.json"), include_str!("../../capabilities/focus.json")] {
-        assert!(!permissions_of(other).iter().any(|p| p.contains("restore-backup") || p.contains("daily-backup")));
+    for other in other_capabilities("backups.json") {
+        assert!(!permissions_of(&other).iter().any(|p| p.contains("restore-backup") || p.contains("daily-backup") || p.contains("list-backups") || p.contains("check-backup") || p.contains("reveal-backups")));
     }
 }
 

@@ -1,11 +1,12 @@
+import { relaunchApp } from '../relaunch';
 import { BackupError, type BackupFailureReason, type BackupKind, type BackupListing, type BackupService } from './types';
 
 /** Commandes Rust (`src-tauri/src/backup.rs`, capability `backups.json`), injectables pour les tests. */
 export interface TauriBackupApi {
   list(): Promise<{ directory: string; entries: readonly RawBackupEntry[] }>;
   daily(day: string, replace: boolean): Promise<{ created: boolean }>;
-  check(name: string, appSchemaVersion: number): Promise<number>;
-  restore(name: string, stamp: string, appSchemaVersion: number): Promise<unknown>;
+  check(name: string): Promise<number>;
+  restore(name: string, stamp: string): Promise<unknown>;
   reveal(): Promise<void>;
   relaunch(): Promise<void>;
 }
@@ -20,6 +21,7 @@ export interface RawBackupEntry {
   readonly schemaVersion: number | null;
 }
 
+/** Aucun paramètre venant de l'interface sauf le jour, le remplacement, un NOM de sauvegarde et l'horodatage ; la version de schéma est une constante de Rust. */
 export function loadTauriBackupApi(): TauriBackupApi {
   return {
     async list() {
@@ -30,22 +32,19 @@ export function loadTauriBackupApi(): TauriBackupApi {
       const { invoke } = await import('@tauri-apps/api/core');
       return invoke('daily_backup', { day, replace });
     },
-    async check(name, appSchemaVersion) {
+    async check(name) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return invoke('check_backup', { name, appSchemaVersion });
+      return invoke('check_backup', { name });
     },
-    async restore(name, stamp, appSchemaVersion) {
+    async restore(name, stamp) {
       const { invoke } = await import('@tauri-apps/api/core');
-      return invoke('restore_backup', { name, stamp, appSchemaVersion });
+      return invoke('restore_backup', { name, stamp });
     },
     async reveal() {
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke('reveal_backups_folder');
     },
-    async relaunch() {
-      const { relaunch } = await import('@tauri-apps/plugin-process');
-      await relaunch();
-    },
+    relaunch: relaunchApp,
   };
 }
 
@@ -60,8 +59,6 @@ export function reasonOf(error: unknown): BackupFailureReason {
 export interface TauriBackupOptions {
   /** Connexion unique de l'app : point de contrôle WAL avant une copie, fermée avant une restauration. */
   readonly db: { select(sql: string): Promise<unknown>; close(): Promise<void> };
-  /** Plus haute version de schéma connue de cette app : une sauvegarde plus récente est refusée. */
-  readonly appSchemaVersion: number;
   readonly api?: TauriBackupApi;
 }
 
@@ -70,9 +67,14 @@ export interface TauriBackupOptions {
  * Restauration : la version est vérifiée AVANT de fermer la base (un fichier refusé ne coûte rien), puis la base est fermée, Rust fait la
  * copie de sécurité et l'échange atomique, et l'app redémarre. Si l'échange échoue après la fermeture, Rust a remis l'ancien fichier en
  * place ; `databaseClosed` signale qu'il faut redémarrer pour rouvrir la base.
+ *
+ * Le point de contrôle WAL (`wal_checkpoint(TRUNCATE)`) est au mieux : son résultat (`busy`) n'est pas exigé, car `VACUUM INTO` lit le WAL et la
+ * copie reste cohérente même si la base est occupée ; il ne sert qu'à garder le fichier principal à jour. (La sauvegarde AVANT migration, elle,
+ * exige `busy = 0` : voir `platform/tauri/migrationBackup.ts`.)
  */
 export function createTauriBackup(options: TauriBackupOptions): BackupService {
   const api = options.api ?? loadTauriBackupApi();
+  const checkpoint = (): Promise<unknown> => options.db.select('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined);
   return {
     available: () => true,
     async list(): Promise<BackupListing> {
@@ -85,8 +87,7 @@ export function createTauriBackup(options: TauriBackupOptions): BackupService {
     },
     async createDaily({ day, replace }) {
       try {
-        // Point de contrôle : le fichier principal est à jour ; la copie reste correcte même si la base est occupée (VACUUM INTO lit le WAL).
-        await options.db.select('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined);
+        await checkpoint();
         const result = await api.daily(day, replace);
         return { created: result.created };
       } catch (error) {
@@ -95,18 +96,18 @@ export function createTauriBackup(options: TauriBackupOptions): BackupService {
     },
     async restore({ name, stamp }) {
       try {
-        await api.check(name, options.appSchemaVersion);
+        await api.check(name);
       } catch (error) {
         throw new BackupError(reasonOf(error), { cause: error });
       }
       try {
-        await options.db.select('PRAGMA wal_checkpoint(TRUNCATE)').catch(() => undefined);
+        await checkpoint();
         await options.db.close();
       } catch (error) {
         throw new BackupError('io', { cause: error });
       }
       try {
-        await api.restore(name, stamp, options.appSchemaVersion);
+        await api.restore(name, stamp);
       } catch (error) {
         throw new BackupError(reasonOf(error), { cause: error, databaseClosed: true });
       }

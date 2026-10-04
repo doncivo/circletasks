@@ -14,5 +14,6 @@ mod logic;
 mod ocr;
 mod quit;
 mod restore;
+mod restore_hardening;
 mod shortcut;
 mod updater;

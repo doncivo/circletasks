@@ -137,9 +137,49 @@ describe('Sauvegarde et restauration (P-04)', () => {
       expect(backupStore.get(container).getState().failed).toBe(true);
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('[desktop:backup-daily]'));
       await scheduler.tick();
+      expect(backupStore.get(container).getState().failed).toBe(true); // délai de reprise : pas de nouvelle tentative tout de suite
+      clock.advance(61_000);
+      await scheduler.tick();
       expect(backupStore.get(container).getState().failed).toBe(false);
       expect(backups.dailyCalls).toHaveLength(1);
       scheduler.dispose();
+    });
+
+    it('échec persistant : journalisé une seule fois par jour, avec un délai croissant entre les tentatives', async () => {
+      make();
+      const attempts = vi.spyOn(backups, 'list');
+      for (let i = 0; i < 4; i += 1) backups.failNext('list', 'io');
+      const store = backupStore.get(container);
+      await store.getState().runDaily();
+      expect(attempts).toHaveBeenCalledTimes(1);
+      await store.getState().runDaily(); // dans la minute : rien
+      expect(attempts).toHaveBeenCalledTimes(1);
+      clock.advance(61_000);
+      backups.failNext('list', 'io');
+      await store.getState().runDaily();
+      expect(attempts).toHaveBeenCalledTimes(2);
+      clock.advance(61_000); // le délai a doublé (2 min) : encore trop tôt
+      await store.getState().runDaily();
+      expect(attempts).toHaveBeenCalledTimes(2);
+      clock.advance(61_000);
+      backups.failNext('list', 'io');
+      await store.getState().runDaily();
+      expect(attempts).toHaveBeenCalledTimes(3);
+      expect(warn.mock.calls.filter((call: unknown[]) => String(call[0]).includes('backup-daily'))).toHaveLength(1);
+    });
+
+    it('pendant une restauration (en cours ou terminée), ni sauvegarde automatique ni « Sauvegarder maintenant »', async () => {
+      make({ versions: [daily('20261003', '2026-10-03T03:12:00')] });
+      const store = backupStore.get(container);
+      for (const phase of ['running', 'done'] as const) {
+        backupStore.get(container).setState({ restorePhase: phase });
+        await store.getState().runDaily();
+        await store.getState().backupNow();
+        expect(backups.dailyCalls).toEqual([]);
+      }
+      backupStore.get(container).setState({ restorePhase: 'idle' });
+      await store.getState().runDaily();
+      expect(backups.dailyCalls).toHaveLength(1);
     });
   });
 

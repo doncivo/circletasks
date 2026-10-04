@@ -48,8 +48,13 @@ function createBackupStore(container: AppContainer) {
   // Dernier jour pour lequel la sauvegarde quotidienne est assurée : évite de relire la liste à chaque sondage.
   let coveredDay: string | null = null;
   let dailyInFlight: Promise<void> | null = null;
+  let failures = 0;
+  let nextRetryAt = 0;
+  let failureLoggedDay: string | null = null;
 
   return createStore<BackupState>()((set, get) => {
+    const isRestoring = (): boolean => get().restorePhase === 'running' || get().restorePhase === 'done';
+
     async function refresh(): Promise<void> {
       const listing = await service.list();
       set({ versions: sortBackupVersions(listing.versions), directory: listing.directory, status: 'ready' });
@@ -76,9 +81,12 @@ function createBackupStore(container: AppContainer) {
         }
       },
       runDaily() {
-        if (!service.available()) return Promise.resolve();
+        // Jamais pendant une restauration (base fermée ou fichier remplacé) : ni sauvegarde, ni lecture de la liste.
+        if (!service.available() || isRestoring()) return Promise.resolve();
         const today = backupDay(container.clock);
         if (coveredDay === today) return Promise.resolve();
+        // Échec persistant : nouvelle tentative après un délai croissant (1 min, 2 min… 1 h au plus), pas à chaque sondage.
+        if (container.clock.nowMs() < nextRetryAt) return Promise.resolve();
         // Un seul passage à la fois : l'ouverture, le retour au premier plan et le minuteur peuvent se chevaucher.
         dailyInFlight ??= (async () => {
           try {
@@ -87,11 +95,18 @@ function createBackupStore(container: AppContainer) {
               await service.createDaily({ day: today, replace: false });
             }
             coveredDay = today;
+            failures = 0;
+            nextRetryAt = 0;
             set({ failed: false });
             await refresh();
           } catch (error) {
-            // Consignée (journal technique) et affichée en rouge dans Réglages ; nouvelle tentative à la prochaine occasion.
-            logDesktopFailure('backup-daily', error);
+            // Affichée en rouge dans Réglages ; consignée au premier échec du jour seulement (pas un message par minute).
+            failures += 1;
+            nextRetryAt = container.clock.nowMs() + Math.min(60_000 * 2 ** (failures - 1), 3_600_000);
+            if (failureLoggedDay !== today) {
+              failureLoggedDay = today;
+              logDesktopFailure('backup-daily', error);
+            }
             set({ failed: true });
           } finally {
             dailyInFlight = null;
@@ -100,7 +115,7 @@ function createBackupStore(container: AppContainer) {
         return dailyInFlight;
       },
       async backupNow() {
-        if (!service.available() || get().backingUp) return;
+        if (!service.available() || get().backingUp || isRestoring()) return;
         set({ backingUp: true, justBackedUp: false });
         try {
           await service.createDaily({ day: backupDay(container.clock), replace: true });
@@ -117,6 +132,8 @@ function createBackupStore(container: AppContainer) {
       async restore(version) {
         if (!service.available() || get().restorePhase === 'running') return;
         set({ restorePhase: 'running', restoreError: null, restartNeeded: false });
+        // Une sauvegarde automatique déjà en cours se termine avant que la base ne soit fermée.
+        await dailyInFlight;
         try {
           await service.restore({ name: version.name, stamp: backupStamp(container.clock) });
         } catch (error) {

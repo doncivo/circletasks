@@ -279,6 +279,10 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             }
         })
         .setup(|app| {
+            // P-04 : une restauration interrompue (arrêt brutal pendant l'échange des fichiers) est récupérée AVANT que la WebView n'ouvre la base.
+            if let Ok(dir) = tauri::Manager::path(app).app_config_dir() {
+                crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE));
+            }
             app.manage(QuitGate::default());
             crate::shortcut::manage(app.handle());
             // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).

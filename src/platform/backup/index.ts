@@ -25,7 +25,7 @@ export {
 export function openBackupService(
   runtime: 'tauri' | 'web',
   os: 'windows' | 'ios' | 'other',
-  tauri: { readonly db: SqlDriver; readonly appSchemaVersion: number },
+  tauri: { readonly db: SqlDriver },
 ): BackupService {
   if (import.meta.env.DEV) {
     const override = (globalThis as { __ctBackups?: BackupService }).__ctBackups;

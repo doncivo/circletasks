@@ -104,7 +104,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
-      backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver, appSchemaVersion: migrations.at(-1)?.version ?? 0 }),
+      backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
     });
   } catch (error) {

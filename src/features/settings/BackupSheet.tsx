@@ -17,7 +17,7 @@ const ERROR_KEYS: Record<BackupFailureReason, PlainMessageKey> = {
   unavailable: 'backup.errorIo',
 };
 
-function Window({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+function BackupWindow({ onClose, children }: { onClose: () => void; children: ReactNode }) {
   const ref = useFocusTrap<HTMLDivElement>({ active: true, onEscape: onClose });
   return createPortal(
     <div className="ct-backup__backdrop">
@@ -177,7 +177,7 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
   );
 
   return layout === 'pc' ? (
-    <Window onClose={close}>{body}</Window>
+    <BackupWindow onClose={close}>{body}</BackupWindow>
   ) : (
     <Sheet open onClose={close} label={t('backup.sheetTitle')}>
       {body}

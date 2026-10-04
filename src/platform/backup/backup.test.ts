@@ -35,7 +35,7 @@ function makeDb() {
 describe('Service de sauvegarde Tauri (P-04)', () => {
   it('liste : dossier et versions de Rust', async () => {
     const { db } = makeDb();
-    const listing = await createTauriBackup({ db, appSchemaVersion: 14, api: makeApi() }).list();
+    const listing = await createTauriBackup({ db, api: makeApi() }).list();
     expect(listing.directory).toContain('backups');
     expect(listing.versions.map((v) => v.name)).toEqual(['circletasks-daily-20261003.db']);
   });
@@ -46,7 +46,7 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
       calls.push('daily');
       return Promise.resolve({ created: true });
     });
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi({ daily }) });
+    const service = createTauriBackup({ db, api: makeApi({ daily }) });
     await expect(service.createDaily({ day: '20261005', replace: true })).resolves.toEqual({ created: true });
     expect(calls).toEqual(['PRAGMA wal_checkpoint(TRUNCATE)', 'daily']);
     expect(daily).toHaveBeenCalledWith('20261005', true);
@@ -55,13 +55,13 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
   it('un point de contrôle impossible (base occupée) n’empêche pas la copie', async () => {
     const { db } = makeDb();
     db.select.mockRejectedValueOnce(new Error('database is locked'));
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi() });
+    const service = createTauriBackup({ db, api: makeApi() });
     await expect(service.createDaily({ day: '20261005', replace: false })).resolves.toEqual({ created: true });
   });
 
   it('une erreur de Rust devient une BackupError à raison stable', async () => {
     const { db } = makeDb();
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi({ daily: () => Promise.reject({ code: 'io', message: 'disque plein' }) }) });
+    const service = createTauriBackup({ db, api: makeApi({ daily: () => Promise.reject({ code: 'io', message: 'disque plein' }) }) });
     await expect(service.createDaily({ day: '20261005', replace: false })).rejects.toMatchObject({ name: 'BackupError', reason: 'io' });
     expect(reasonOf({ code: 'newer-schema' })).toBe('newer-schema');
     expect(reasonOf({ code: 'inconnu' })).toBe('io');
@@ -71,22 +71,22 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
   it('restauration : vérification AVANT la fermeture de la base, puis fermeture, puis remplacement', async () => {
     const { db, calls } = makeDb();
     const api = makeApi({
-      check: (name, appSchemaVersion) => {
-        calls.push(`check:${name}:${String(appSchemaVersion)}`);
+      check: (name) => {
+        calls.push(`check:${name}`);
         return Promise.resolve(14);
       },
-      restore: (name, stamp, appSchemaVersion) => {
-        calls.push(`restore:${name}:${stamp}:${String(appSchemaVersion)}`);
+      restore: (name, stamp) => {
+        calls.push(`restore:${name}:${stamp}`);
         return Promise.resolve({});
       },
     });
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api });
+    const service = createTauriBackup({ db, api });
     await service.restore({ name: 'circletasks-daily-20261003.db', stamp: '20261005T101500Z' });
     expect(calls).toEqual([
-      'check:circletasks-daily-20261003.db:14',
+      'check:circletasks-daily-20261003.db',
       'PRAGMA wal_checkpoint(TRUNCATE)',
       'close',
-      'restore:circletasks-daily-20261003.db:20261005T101500Z:14',
+      'restore:circletasks-daily-20261003.db:20261005T101500Z',
     ]);
   });
 
@@ -94,7 +94,7 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
     for (const code of ['newer-schema', 'corrupt'] as const) {
       const { db } = makeDb();
       const restore = vi.fn(() => Promise.resolve({}));
-      const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi({ check: () => Promise.reject({ code, message: 'x' }), restore }) });
+      const service = createTauriBackup({ db, api: makeApi({ check: () => Promise.reject({ code, message: 'x' }), restore }) });
       const error = await service.restore({ name: 'circletasks-daily-20261003.db', stamp: '20261005T101500Z' }).catch((e: unknown) => e);
       expect(error).toBeInstanceOf(BackupError);
       expect(error).toMatchObject({ reason: code, databaseClosed: false });
@@ -105,7 +105,7 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
 
   it('critère 8 : un échec de Rust après la fermeture signale qu’un redémarrage est nécessaire', async () => {
     const { db } = makeDb();
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi({ restore: () => Promise.reject({ code: 'io', message: 'échec' }) }) });
+    const service = createTauriBackup({ db, api: makeApi({ restore: () => Promise.reject({ code: 'io', message: 'échec' }) }) });
     await expect(service.restore({ name: 'circletasks-daily-20261003.db', stamp: '20261005T101500Z' })).rejects.toMatchObject({ reason: 'io', databaseClosed: true });
   });
 
@@ -113,7 +113,7 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
     const { db } = makeDb();
     const relaunch = vi.fn(() => Promise.resolve());
     const reveal = vi.fn(() => Promise.resolve());
-    const service = createTauriBackup({ db, appSchemaVersion: 14, api: makeApi({ relaunch, reveal }) });
+    const service = createTauriBackup({ db, api: makeApi({ relaunch, reveal }) });
     await service.restart();
     await service.reveal?.();
     expect(relaunch).toHaveBeenCalledWith();
