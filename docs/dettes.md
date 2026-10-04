@@ -86,3 +86,6 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Historique des recherches : réglage local (RC-04).
 - task.external_event_id : pointe vers external_event, une table locale.
 - holiday : les fêtes lunaires semées reçoivent un id aléatoire sur chaque appareil (holidayUseCases.ts:29), alors que la table est unique par pays, année et fête. Il faut un id déterministe ou une fusion sur la clé naturelle.
+
+- Supprimer le réglage inutilisé `general.theme` (remplacé par `ui.theme`).
+- PRD 6 : thème classé comme préférence partagée, alors que `ui.theme` est local (décision D1) — à corriger par Ali.

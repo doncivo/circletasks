@@ -16,7 +16,7 @@ describe('P-03 QA : carte de chaleur et agrégat selon le premier jour (critère
     expect(monthHeatmap(daily, doneSet(), 2026, 9, today, [], first).leadingBlanks).toBe(sept);
     expect(monthHeatmap(daily, doneSet(), 2026, 11, today, [], first).leadingBlanks).toBe(nov);
     expect(monthHeatmap(daily, doneSet(), 2027, 5, today, [], first).leadingBlanks).toBe(may);
-    expect(monthAggregate([daily], new Map(), 2026, 9, today, undefined, first).leadingBlanks).toBe(sept);
+    expect(monthAggregate([daily], new Map() as never, 2026, 9, today, undefined, first).leadingBlanks).toBe(sept);
   });
 
   it('lundi par défaut quand le premier jour n’est pas fourni, et les états des cases ne changent pas', () => {

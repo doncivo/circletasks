@@ -9,6 +9,7 @@ import {
 import { toQueryFilters, type SearchFilters } from '../../domain/searchFilters';
 import type { LocalDate, Result } from '../../domain/types';
 import type { AppContainer } from '../app/container';
+import { getFirstWeekday } from '../../i18n/formatPrefs';
 
 /** Résultats d'une recherche, prêts à afficher. */
 export interface SearchOutcome {
@@ -40,7 +41,7 @@ export function createSearchUseCases(deps: SearchUseCaseDeps): SearchUseCases {
       try {
         const hits = await deps.data.repos.search.query({
           match: buildMatchExpression(valid.value.tokens),
-          ...toQueryFilters(filters, today),
+          ...toQueryFilters(filters, today, getFirstWeekday()),
           // Une ligne de plus que la limite : sert à savoir si la liste est tronquée.
           limit: SEARCH_LIMIT + 1,
         });
