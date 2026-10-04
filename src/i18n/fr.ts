@@ -1,3 +1,4 @@
+import { emptyFr } from './fr.empty';
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { searchFr } from './fr.search';
@@ -598,6 +599,7 @@ export const fr = {
   events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
+  empty: emptyFr,
   search: searchFr,
   shortcutsUi: shortcutsUiFr,
   shortcuts: {

@@ -176,10 +176,6 @@
   overflow-wrap: anywhere;
 }
 
-.ct-routines-month__empty {
-  margin: 0;
-  color: var(--ct-color-text-secondary);
-}
 
 .ct-routines-month__error {
   margin: 0;

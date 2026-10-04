@@ -24,7 +24,7 @@ async function open(page: Page): Promise<void> {
 const dialogOf = (page: Page) => page.getByRole('dialog', { name: 'Nouvelle tâche' });
 
 async function openSheet(page: Page) {
-  await page.getByRole('button', { name: 'Ajouter' }).click();
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
   const dialog = dialogOf(page);
   await expect(dialog).toBeVisible();
   return dialog;

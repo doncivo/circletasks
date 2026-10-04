@@ -7,7 +7,6 @@ export const checklistsFr = {
   chooserLabel: 'Choisir une checklist',
   itemsLabel: 'Éléments de la checklist',
   empty: 'Aucune checklist pour l’instant',
-  emptyHelp: 'Créez-en une avec le bouton « + ».',
   emptySpace: 'Aucune checklist {space}.',
   emptyProject: 'Les checklists n’ont pas de projet : elles sont masquées sous un filtre de projet.',
   noSelection: 'Choisissez une checklist.',

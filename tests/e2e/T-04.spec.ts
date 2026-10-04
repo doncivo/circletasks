@@ -17,7 +17,7 @@ import { openApp } from './helpers/app';
 
 async function createTask(page: Page, testInfo: { project: { name: string } }, title: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();

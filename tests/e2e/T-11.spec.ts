@@ -31,7 +31,7 @@ async function installZoneSwitch(page: Page): Promise<void> {
 
 async function createTimedTask(page: Page, testInfo: Info, title: string, time: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await setWheels(page, dialog, { time });

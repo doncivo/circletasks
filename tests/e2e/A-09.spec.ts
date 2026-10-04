@@ -28,9 +28,9 @@ test.describe('A-09 — état de l’app', () => {
     await createTask(page, testInfo, { title });
     await expect(rowOf(page, title)).toBeVisible();
     await expect(page.getByLabel('Nouvelle tâche')).toBeAttached();
-    await expect(page.getByRole('button', { name: 'Ajouter' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ajouter', exact: true })).toBeVisible();
     const bannerBox = await banner.boundingBox();
-    const addBox = await page.getByRole('button', { name: 'Ajouter' }).boundingBox();
+    const addBox = await page.getByRole('button', { name: 'Ajouter', exact: true }).boundingBox();
     expect(bannerBox && addBox && (bannerBox.y + bannerBox.height <= addBox.y || bannerBox.x + bannerBox.width <= addBox.x)).toBe(true);
 
     await context.setOffline(false);

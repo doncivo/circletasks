@@ -4,7 +4,7 @@ import { localDateOfInstant } from '../../domain/donePeriod';
 import type { Space, Task } from '../../domain/model';
 import { t } from '../../i18n';
 import { formatDayLabel } from '../../i18n/format';
-import { Button, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout } from '../../ui';
+import { Button, EmptyState, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -72,7 +72,9 @@ export function TrashScreen() {
         {actionErrorKey && <p className="ct-trash__error" role="alert">{t(actionErrorKey)}</p>}
         {status === 'error' && errorKey && <p className="ct-trash__error" role="alert">{t(errorKey)}</p>}
 
-        {status === 'ready' && tasks.length === 0 && <p className="ct-trash__empty">{t('trash.empty')}</p>}
+        {status === 'ready' && tasks.length === 0 && (
+          <EmptyState screen="trash" title={t('trash.empty')} action={{ label: t('empty.goToToday'), onClick: () => navigate({ tab: 'tasks', screen: 'today' }) }} />
+        )}
         {status !== 'error' && (
           <ul className="ct-trash__list">
             {tasks.map((task) => (

@@ -83,6 +83,15 @@ describe('TodayScreen (T-01)', () => {
     expect(screen.queryByText('Rien de prévu aujourd’hui.')).not.toBeInTheDocument();
   });
 
+  it('P-06 : l’état vide propose « Ajouter une tâche », qui met le focus sur le champ', async () => {
+    mockViewport(1440);
+    renderToday(container);
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Rien de prévu aujourd’hui.' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ajouter une tâche' }));
+    expect(screen.getByLabelText('Nouvelle tâche')).toHaveFocus();
+  });
+
   it('un titre vide ou composé d’espaces ne crée rien (critère 2)', async () => {
     mockViewport(1440);
     renderToday(container);

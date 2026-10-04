@@ -49,7 +49,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         });
         renderWeek(h.container);
         await screen.findByRole('button', { name: 'Déjà là' });
-        const buttons = screen.getAllByRole('button', { name: /^Ajouter une tâche/ });
+        const buttons = screen.getAllByRole('button', { name: /^Ajouter une tâche,/ });
         expect(buttons).toHaveLength(7);
         for (const button of buttons) expect(button).toHaveTextContent('+ Ajouter');
         // En bas de chaque jour : après les éléments.
@@ -65,7 +65,7 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         const field = within(day('2026-10-01')).getByRole('textbox', { name: 'Nouvelle tâche pour jeu. 1' });
         expect(field).toHaveFocus();
         expect(screen.queryByRole('button', { name: 'Ajouter une tâche, jeu. 1' })).not.toBeInTheDocument();
-        expect(screen.getAllByRole('button', { name: /^Ajouter une tâche/ })).toHaveLength(6);
+        expect(screen.getAllByRole('button', { name: /^Ajouter une tâche,/ })).toHaveLength(6);
       });
 
       it('Entrée crée la tâche du jour, sans heure, en Pro sous « Tout » ; le champ reste ouvert, vide et focalisé (critères 3, 5)', async () => {

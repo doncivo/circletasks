@@ -66,7 +66,7 @@ export function SomedayPanel({ onClose, slot = false, zone }: SomedayPanelProps)
           {t(view.actionErrorKey)}
         </p>
       )}
-      <SomedayList view={view} state={state} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} {...(zone ? { zone } : {})} />
+      <SomedayList view={view} state={state} openedTaskId={detail?.type === 'task' ? detail.id : null} showSkeleton={showSkeleton} onAddRequest={() => setAdding(true)} {...(zone ? { zone } : {})} />
       <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday-panel__spacer" />
       <div className="ct-someday-panel__footer">

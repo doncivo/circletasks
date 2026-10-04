@@ -47,7 +47,7 @@ test.describe('T-01 — créer une tâche avec un titre seul', () => {
   test('le bouton + s’adapte à l’appareil : feuille sur iPhone, focus du champ sur PC (critères 4 à 8)', async ({
     page,
   }, testInfo) => {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
 
     if (testInfo.project.name === 'iphone') {
       const sheet = page.getByRole('dialog', { name: 'Nouvelle tâche' });

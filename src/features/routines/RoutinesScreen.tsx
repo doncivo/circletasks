@@ -5,7 +5,7 @@ import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { t } from '../../i18n';
-import { CompactToggle, ConfirmDialog, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
+import { CompactToggle, ConfirmDialog, EmptyState, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -211,7 +211,9 @@ export function RoutinesScreen() {
         </p>
       )}
 
-      {status === 'ready' && routines.length === 0 && <p className="ct-routines__empty">{emptyMessage}</p>}
+      {status === 'ready' && routines.length === 0 && (
+        <EmptyState screen="routines" title={emptyMessage} action={{ label: t('empty.createRoutine'), onClick: openCreate }} />
+      )}
       {routines.length > 0 && (
         <div className="ct-routines__list" role="list" aria-label={t('routines.listLabel')}>
           {routines.map((routine) => (

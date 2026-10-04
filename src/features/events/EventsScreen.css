@@ -134,13 +134,6 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
-.ct-events__empty {
-  margin: 0;
-  padding: var(--ct-space-4) var(--ct-space-1);
-  font-size: var(--ct-font-size-text-lg);
-  font-weight: var(--ct-font-weight-bold);
-}
-
 /* --- Liste par mois ------------------------------------------------------------------------------------------------- */
 .ct-events__list {
   display: flex;

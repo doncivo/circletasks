@@ -7,7 +7,6 @@ export const checklistsEn: Messages['checklists'] = {
   chooserLabel: 'Choose a checklist',
   itemsLabel: 'Checklist items',
   empty: 'No checklists yet',
-  emptyHelp: 'Create one with the “+” button.',
   emptySpace: 'No {space} checklists.',
   emptyProject: 'Checklists have no project: they are hidden under a project filter.',
   noSelection: 'Choose a checklist.',

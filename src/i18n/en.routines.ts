@@ -8,7 +8,7 @@ export const routinesEn: Messages['routines'] = {
   helper: 'Manage your routines here and check them off in the day list.',
   hintCheck: 'Check routines off in the day list ·',
   hintNew: 'new routine',
-  empty: 'No routines yet. Create one with the “+” button.',
+  empty: 'No routines yet.',
   loadError: 'Unable to load routines.',
   saveError: 'Unable to save the routine.',
   listLabel: 'Routine list',

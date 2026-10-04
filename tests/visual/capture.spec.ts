@@ -433,7 +433,7 @@ const SCREENS: Screen[] = [
     viewport: PHONE,
     date: WEDNESDAY,
     prepare: async (page) => {
-      await page.getByRole('button', { name: 'Ajouter' }).click();
+      await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
       await dialog.getByLabel('Titre').fill('Appeler le notaire');
       await setWheels(page, dialog, { time: '14:00' });

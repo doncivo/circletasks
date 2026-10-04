@@ -80,7 +80,8 @@ export const eventRow = (page: Page, title: string): Locator => page.locator('.c
 
 /** Bouton « + » de l'onglet Événements. */
 export const addEventButton = (page: Page, testInfo: { project: { name: string } }): Locator =>
-  page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true });
+  // iPhone : l'état vide (P-06) porte aussi un bouton « Ajouter un événement » ; le « + » est le dernier du DOM.
+  page.getByRole('button', { name: testInfo.project.name === 'iphone' ? 'Ajouter un événement' : 'Ajouter', exact: true }).last();
 
 /**
  * Désactive les deux calendriers de jours fériés (réglage `holidays.countries`, E-03) : les listes et la grille d'un test d'événements

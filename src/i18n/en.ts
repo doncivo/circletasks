@@ -1,3 +1,4 @@
+import { emptyEn } from './en.empty';
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { searchEn } from './en.search';
@@ -595,6 +596,7 @@ export const en: Messages = {
   events: eventsEn,
   goals: goalsEn,
   someday: somedayEn,
+  empty: emptyEn,
   search: searchEn,
   shortcutsUi: shortcutsUiEn,
   shortcuts: {

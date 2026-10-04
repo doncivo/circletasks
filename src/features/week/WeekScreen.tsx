@@ -10,7 +10,7 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { sourceNames } from '../calendars/sourceNames';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
-import { Fab, useDelayedFlag, useLayout, useSwipe } from '../../ui';
+import { EmptyState, Fab, useDelayedFlag, useLayout, useSwipe } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -155,6 +155,7 @@ export function WeekScreen() {
   // Squelette si le chargement dépasse 150 ms (A-09).
   const showSkeleton = useDelayedFlag(status === 'loading', 150);
 
+  const weekSpaceName = spaceFilter === 'all' ? null : (spaces.find((space) => space.id === spaceFilter)?.name ?? null);
   const pills = <SpaceFilterBar />;
   const openedTaskId = layout === 'pc' && detail?.type === 'task' ? detail.id : null;
 
@@ -178,6 +179,16 @@ export function WeekScreen() {
 
       {/* OB-02 critère 6 : bandeau de l'objectif épinglé de la semaine affichée (PC). */}
       {layout === 'pc' && <WeekGoalBanners weekStart={weekStart} hidden={projectFilter !== null} />}
+
+      {/* P-06 : semaine entièrement vide ; un jour vide seul est déjà couvert par « + Ajouter » (S-04). */}
+      {status === 'ready' && days.every((day) => day.list.isEmpty) && (
+        <EmptyState
+          className="ct-week__empty"
+          screen="week"
+          title={weekSpaceName ? t('empty.weekTitleSpace', { space: weekSpaceName }) : t('empty.weekTitle')}
+          action={{ label: t('empty.addTask'), onClick: openCreate }}
+        />
+      )}
 
       {status === 'error' ? null : (
         <div

@@ -11,7 +11,7 @@ import { browserMonday, dayOf, dayTitles, openWeek, taskButton, weekTab } from '
  * sur iPhone (7), cinq tâches sans quitter l'écran, chacune visible en moins de 500 ms (8). Exécuté sur `pc` et `iphone`.
  */
 
-const addButton = (page: Page, iso: string) => dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche/ });
+const addButton = (page: Page, iso: string) => dayOf(page, iso).getByRole('button', { name: /^Ajouter une tâche,/ });
 const field = (page: Page, iso: string) => dayOf(page, iso).getByRole('textbox');
 
 async function typeAndEnter(page: Page, iso: string, title: string): Promise<void> {
@@ -27,7 +27,7 @@ test.describe('S-04 — ajout rapide dans un jour', () => {
 
   test('chaque jour présente « + Ajouter » en bas, vide ou non (critère 1)', async ({ page }) => {
     const monday = await browserMonday(page);
-    await expect(page.getByRole('button', { name: /^Ajouter une tâche/ })).toHaveCount(7);
+    await expect(page.locator('.ct-week__days').getByRole('button', { name: /^Ajouter une tâche,/ })).toHaveCount(7);
     for (let i = 0; i < 7; i += 1) {
       await expect(addButton(page, addIsoDays(monday, i))).toHaveText('+ Ajouter');
     }

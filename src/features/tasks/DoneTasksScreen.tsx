@@ -5,7 +5,7 @@ import { DONE_PERIOD_KINDS, groupDoneByDay, localTimeOfInstant } from '../../dom
 import type { Space, Task } from '../../domain/model';
 import { t } from '../../i18n';
 import { formatDayLabel, formatDonePeriodLabel, formatTime } from '../../i18n/format';
-import { Checkbox, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout, spaceTextColor } from '../../ui';
+import { Checkbox, EmptyState, Icon, IconView, ListRow, SpacePills, resolveIconRefColor, useLayout, spaceTextColor } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -123,7 +123,9 @@ export function DoneTasksScreen() {
         {actionErrorKey && <p className="ct-done__error" role="alert">{t(actionErrorKey)}</p>}
         {status === 'error' && errorKey && <p className="ct-done__error" role="alert">{t(errorKey)}</p>}
 
-        {status === 'ready' && groups.length === 0 && <p className="ct-done__empty">{t('done.empty')}</p>}
+        {status === 'ready' && groups.length === 0 && (
+          <EmptyState screen="done" title={t('done.empty')} action={{ label: t('empty.goToToday'), onClick: () => navigate({ tab: 'tasks', screen: 'today' }) }} />
+        )}
         {status !== 'error' &&
           groups.map((group) => (
             <section key={group.date} className="ct-done__group" aria-label={formatDayLabel(group.date)}>

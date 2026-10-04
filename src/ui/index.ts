@@ -68,3 +68,4 @@ export { ColorSwatches, type ColorSwatchChoice, type ColorSwatchesProps } from '
 export { SpaceSegmented, type SpaceSegmentedProps } from './SpaceSegmented';
 export { DropdownSelect, type DropdownOption, type DropdownSelectProps } from './DropdownSelect';
 export { WeekdayToggles, type WeekdayTogglesProps } from './WeekdayToggles';
+export { EmptyState, type EmptyStateAction, type EmptyStateIcon, type EmptyStateProps } from './EmptyState';

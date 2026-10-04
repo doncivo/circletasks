@@ -77,7 +77,7 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
 
   test('une feuille ouverte avec une saisie reste ouverte : Alt+2 est ignoré (critère 5)', async ({ page }, testInfo) => {
     test.skip(!isPhone(testInfo), 'La feuille « Nouvelle tâche » n’existe que sur iPhone.');
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill('Saisie en cours');
     await page.keyboard.press('Alt+2');

@@ -34,7 +34,7 @@ function detailLocator(page: Page, testInfo: { project: { name: string } }) {
 
 async function createPlainTask(page: Page, testInfo: { project: { name: string } }, title: string): Promise<void> {
   if (testInfo.project.name === 'iphone') {
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
@@ -59,7 +59,7 @@ test.describe('T-03 — note et icône', () => {
     test.skip(testInfo.project.name !== 'iphone', 'Pas de champ icône dans la saisie en ligne PC (pas de maquette, fiche T-03)');
     const title = `Appeler le notaire ${Date.now()}`;
 
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     const phoneButton = dialog.getByRole('button', { name: 'Icône téléphone' });
@@ -78,7 +78,7 @@ test.describe('T-03 — note et icône', () => {
     test.skip(testInfo.project.name !== 'iphone', 'Pas de champ icône dans la saisie en ligne PC');
     const title = `Boire de l’eau ${Date.now()}`;
 
-    await page.getByRole('button', { name: 'Ajouter' }).click();
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
     await dialog.getByLabel('Titre').fill(title);
     await dialog.getByRole('button', { name: 'Icône téléphone' }).click();
