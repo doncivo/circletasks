@@ -101,6 +101,13 @@
   flex-grow: 1;
 }
 
+.ct-someday__addBlock {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .ct-someday__addForm .ct-text-field__control {
   min-height: 52px;
 }

@@ -7,6 +7,7 @@ import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
 import { ListSkeleton, type Layout } from '../../ui';
 import { bandCountdownTag } from '../events/bandCountdown';
+import type { CaptureInput } from '../capture';
 import { WeekDayAdd } from './WeekDayAdd';
 import { WeekChecklistItem, WeekEventItem, WeekRoutineItem, WeekTaskItem } from './WeekItems';
 
@@ -48,7 +49,7 @@ export interface WeekDayViewProps {
   readonly onOpenChecklist?: (id: ChecklistId) => void;
   readonly onOpen: (id: TaskId) => void;
   /** S-04 : ajout rapide en bas du jour ; crée la tâche de ce jour et rend true si elle l'est. */
-  readonly onAddTask?: (date: LocalDate, title: string) => Promise<boolean>;
+  readonly onAddTask?: (date: LocalDate, capture: CaptureInput) => Promise<boolean>;
 }
 
 /**
@@ -168,7 +169,7 @@ export function WeekDayView(props: WeekDayViewProps) {
           <WeekDayAdd
             date={day.date}
             layout={layout}
-            onAdd={(title) => props.onAddTask?.(day.date, title) ?? Promise.resolve(false)}
+            onAdd={(capture) => props.onAddTask?.(day.date, capture) ?? Promise.resolve(false)}
             // La colonne défile jusqu'à la nouvelle carte (PC : colonne à défilement interne).
             onAdded={() =>
               window.requestAnimationFrame(() => {

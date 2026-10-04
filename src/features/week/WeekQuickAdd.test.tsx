@@ -89,10 +89,26 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Perso' }));
         fireEvent.click(await screen.findByRole('button', { name: 'Ajouter une tâche, mar. 29' }));
         const field = within(day('2026-09-29')).getByRole('textbox');
-        fireEvent.change(field, { target: { value: 'Perso mardi' } });
+        fireEvent.change(field, { target: { value: 'Perso courses' } });
         fireEvent.submit(field.closest('form') as HTMLFormElement);
-        await screen.findByRole('button', { name: 'Perso mardi' });
+        await screen.findByRole('button', { name: 'Perso courses' });
         expect((await stored(h, '2026-09-29'))[0]?.spaceId).toBe(SPACE_PERSO_ID);
+      });
+
+      it('Q-06, Q-02 : « #perso », une heure et une date écrites sont lues ; la date du texte l’emporte sur la colonne', async () => {
+        renderWeek(h.container);
+        await screen.findByRole('heading', { level: 1 });
+        fireEvent.click(addButton('2026-10-01'));
+        const field = within(day('2026-10-01')).getByRole('textbox');
+        fireEvent.change(field, { target: { value: 'Courses 14h #perso' } });
+        expect(await screen.findByRole('group', { name: 'Ce qui sera appliqué' })).toHaveTextContent('Perso');
+        fireEvent.submit(field.closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(h, '2026-10-01')).length).toBe(1));
+        expect((await stored(h, '2026-10-01'))[0]).toMatchObject({ title: 'Courses', spaceId: SPACE_PERSO_ID, time: '14:00' });
+        fireEvent.change(field, { target: { value: 'Rapport le 5 octobre' } });
+        fireEvent.submit(field.closest('form') as HTMLFormElement);
+        await waitFor(async () => expect((await stored(h, '2026-10-05')).length).toBe(1));
+        expect((await stored(h, '2026-10-05'))[0]).toMatchObject({ title: 'Rapport', time: null });
       });
 
       it('Échap referme le champ sans rien créer, le focus revient au bouton (critère 4)', async () => {

@@ -1,0 +1,135 @@
+/* QuickInputField : champ d'ajout rapide avec suggestions # et @ (Q-06) ; aperçu sous le champ (QuickPreview). */
+.ct-quick {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ct-quick__plain {
+  display: flex;
+  flex: 1 1 auto;
+}
+
+.ct-quick__list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  margin: var(--ct-space-1) 0 0;
+  padding: var(--ct-space-1);
+  list-style: none;
+  max-height: calc(var(--ct-hit-target-min) * 5.5);
+  overflow-y: auto;
+  background: var(--ct-color-surface);
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-lg);
+  box-sizing: border-box;
+}
+
+.ct-quick__list[data-placement='below'] {
+  top: 100%;
+}
+
+.ct-quick__list[data-placement='above'] {
+  bottom: 100%;
+  margin: 0 0 var(--ct-space-1);
+}
+
+.ct-quick__option {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-quick__option[aria-selected='true'],
+.ct-quick__option:hover {
+  background: var(--ct-color-surface-input);
+}
+
+.ct-quick__dot {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ct-color-text-secondary);
+}
+
+.ct-quick__optionSpace {
+  margin-left: auto;
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+}
+
+.ct-quick-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-2);
+  margin-top: var(--ct-space-1);
+  font-family: var(--ct-font-text);
+}
+
+.ct-quick-preview--empty {
+  display: none;
+}
+
+.ct-quick-preview__group {
+  display: contents;
+}
+
+.ct-quick-preview__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ct-space-1);
+  height: 28px;
+  padding: 0 var(--ct-space-1) 0 var(--ct-space-3);
+  border-radius: var(--ct-radius-pill);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-quick-preview__pill--date {
+  color: var(--ct-color-accent);
+}
+
+.ct-quick-preview__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ct-color-text-secondary);
+  cursor: pointer;
+}
+
+.ct-quick-preview__remove:hover {
+  background: var(--ct-color-border-strong);
+}
+
+.ct-quick-preview__remove:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 1px;
+}
+
+.ct-quick-preview__note {
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+}

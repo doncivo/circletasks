@@ -82,7 +82,7 @@ test.describe('S-04 — ajout rapide dans un jour', () => {
 
   test('la tâche est créée dans l’espace du filtre actif (critère 3) et l’ajout est permis sur un jour passé (critère 6)', async ({ page }, testInfo) => {
     const monday = await browserMonday(page);
-    const title = `Perso lundi ${testInfo.project.name}`;
+    const title = `Perso semaine ${testInfo.project.name}`;
     await page.getByRole('button', { name: 'Perso', exact: true }).click();
     await addButton(page, monday).click();
     await typeAndEnter(page, monday, title);

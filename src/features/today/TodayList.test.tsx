@@ -276,11 +276,11 @@ describe('Aujourd’hui : liste du jour (A-01)', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Jour suivant' }));
       await screen.findByText('Rien de prévu ce samedi.');
       const field = screen.getByLabelText('Nouvelle tâche');
-      fireEvent.change(field, { target: { value: 'Ajoutée samedi' } });
+      fireEvent.change(field, { target: { value: 'Ajoutée là' } });
       fireEvent.submit(field.closest('form') as HTMLFormElement);
-      expect(await screen.findByRole('button', { name: 'Ajoutée samedi' })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: 'Ajoutée là' })).toBeInTheDocument();
       const [created] = await h.container.data.repos.tasks.listForDay(addDays(h.today, 1), 'all');
-      expect(created?.title).toBe('Ajoutée samedi');
+      expect(created?.title).toBe('Ajoutée là');
     });
   });
 });

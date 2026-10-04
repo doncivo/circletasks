@@ -6,7 +6,8 @@ import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/remin
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
 import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
-import { AddSegments, Button, DatePicker, Icon, IconChooser, RecurrencePicker, Sheet, SpaceSegmented, TextField, type AddSegment } from '../../ui';
+import { AddSegments, Button, DatePicker, Icon, IconChooser, QuickInputField, QuickPreview, RecurrencePicker, Sheet, SpaceSegmented, type AddSegment } from '../../ui';
+import { useQuickInput } from '../capture';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
@@ -58,7 +59,11 @@ export interface TaskCreateSheetProps {
  * Q9), répétition, espace. Montée à l'ouverture seulement : son état part de zéro à chaque fois.
  */
 export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, initialProjectId = null, defaultOffsets = [0], initialSomeday = false, initialTitle = '', onSegmentChange, onClose, onCreate }: TaskCreateSheetProps) {
-  const [title, setTitle] = useState(initialTitle);
+  const [choiceTouched, setChoiceTouched] = useState(false);
+  // Q-06, Q-02 : marques # et @ et date écrites dans le titre ; la date choisie à la main (roues, puces) l'emporte sur celle du texte.
+  const quick = useQuickInput({ dates: !choiceTouched && !initialSomeday, initialText: initialTitle });
+  const { setText: setTitle } = quick;
+  const title = quick.text;
   const [choice, setChoice] = useState<DateChoice>(initialSomeday ? { date: null, time: null } : { date: viewedDate, time: null });
   const [spaceId, setSpaceId] = useState<SpaceId | null>(initialSpaceId);
   const [projectId, setProjectId] = useState<ProjectId | null>(initialProjectId);
@@ -68,7 +73,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
   const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
-  const valid = validateTaskTitle(title).ok;
+  const valid = validateTaskTitle(quick.parse.title).ok;
 
   // Le piège de focus de `Sheet` pose d'abord le focus sur « Fermer » (premier élément focusable) ; le `setTimeout` s'exécute
   // après ses effets pour poser le focus dans le champ Titre sans dépendre de l'ordre du DOM.
@@ -79,15 +84,35 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
 
   function changeChoice(next: DateChoice | null): void {
     const value = next ?? { date: today, time: null };
+    setChoiceTouched(true);
     setOffsets((current) => offsetsAfterTimeChange(current, choice.date === null ? null : choice.time, value.date === null ? null : value.time, offsetsTouched, defaultOffsets));
     setChoice(value);
   }
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    if (!valid || !spaceId) return;
-    const reminderOffsets = choice.date === null || choice.time === null ? [] : offsets;
-    if (await onCreate({ title, spaceId, projectId, choice, recurrence: choice.date === null ? null : recurrence, icon, reminderOffsets, goalId })) onClose();
+    const parsed = quick.parseNow();
+    if (!validateTaskTitle(parsed.title).ok) return;
+    // Marques explicites d'abord (Q-06 D3) ; un projet réglé à la main ne suit pas dans un autre espace.
+    const finalSpaceId = parsed.spaceId ?? spaceId;
+    if (!finalSpaceId) return;
+    const finalProjectId = parsed.projectId ?? (parsed.spaceId !== null && parsed.spaceId !== spaceId ? null : projectId);
+    // Date écrite dans le titre (Q-02), seulement si rien n'a été choisi à la main.
+    const written = parsed.date !== null && !choiceTouched && !initialSomeday;
+    const finalChoice: DateChoice = written ? { date: parsed.date, time: parsed.time } : choice;
+    const finalOffsets = written ? offsetsAfterTimeChange(offsets, null, parsed.time, offsetsTouched, defaultOffsets) : offsets;
+    const reminderOffsets = finalChoice.date === null || finalChoice.time === null ? [] : finalOffsets;
+    const created = await onCreate({
+      title: parsed.title,
+      spaceId: finalSpaceId,
+      projectId: finalProjectId,
+      choice: finalChoice,
+      recurrence: finalChoice.date === null ? null : recurrence,
+      icon,
+      reminderOffsets,
+      goalId,
+    });
+    if (created) onClose();
   }
 
   return (
@@ -100,7 +125,16 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
           </button>
         </div>
         {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
-        <TextField ref={titleRef} label={t('tasks.titleLabel')} value={title} onChange={setTitle} maxLength={TASK_TITLE_MAX_LENGTH} />
+        <QuickInputField
+          ref={titleRef}
+          label={t('tasks.titleLabel')}
+          placeholder={t('tasks.addPlaceholderPc')}
+          value={title}
+          onChange={setTitle}
+          maxLength={TASK_TITLE_MAX_LENGTH}
+          context={quick.suggestionContext}
+        />
+        <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
         {/* Choix Icône / Emoji (T-03, Ajout.html). */}
         <IconChooser value={icon} onChange={setIcon} />
         {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}

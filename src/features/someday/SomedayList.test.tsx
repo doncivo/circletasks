@@ -29,6 +29,15 @@ describe.each([
     return addField();
   }
 
+  it('Q-06 : « #perso » range la tâche dans Perso ; aucune date n’est lue dans le titre (la tâche reste sans date)', async () => {
+    renderSomeday(h.container);
+    const field = await openAddField();
+    fireEvent.change(field, { target: { value: 'Apprendre le piano demain #perso' } });
+    fireEvent.submit(field.closest('form') as HTMLFormElement);
+    await waitFor(async () => expect(await somedayTasks()).toHaveLength(1));
+    expect((await somedayTasks())[0]).toMatchObject({ title: 'Apprendre le piano demain', spaceId: SPACE_PERSO_ID, date: null, someday: true });
+  });
+
   it('affiche le titre et le sous-titre au pluriel (critère 6)', async () => {
     await seedSomeday(h, { title: 'Renouveler le passeport' });
     await seedSomeday(h, { title: 'Lire le rapport annuel' });

@@ -623,6 +623,12 @@ button.ct-week-event:focus-visible {
   outline-offset: 2px;
 }
 
+.ct-week__addBlock {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
 .ct-week__addForm {
   display: flex;
   flex-shrink: 0;
