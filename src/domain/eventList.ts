@@ -1,6 +1,7 @@
 import { calendarOf, externalEventSpan, externalEventVisible } from './externalEvents';
 import { compareByStart } from './eventRules';
 import { occurrencesOfEvents } from './eventOccurrences';
+import type { HolidayEntry } from './holidays';
 import { addDays, makeLocalDate, parseLocalDate } from './localDate';
 import type { CalendarAccount, CalendarEvent, ExternalEvent, IconRef } from './model';
 import type { TodayEventEntry } from './todayList';
@@ -31,6 +32,8 @@ export interface EventListEntry {
   readonly event: CalendarEvent | null;
   /** Source d'un événement externe (« Google Agenda »). */
   readonly calendarName: string | null;
+  /** Jour férié (E-03) : pays, date estimée ou saisie à la main, modifiable ou non ; null pour les autres lignes. */
+  readonly holiday: HolidayEntry | null;
 }
 
 export interface MonthGroup {
@@ -75,6 +78,7 @@ export function localEntries(events: readonly CalendarEvent[], year: number): Ev
         icon: occurrence.event.icon,
         event: occurrence.event,
         calendarName: null,
+        holiday: null,
       }),
     );
 }
@@ -101,9 +105,36 @@ export function externalEntries(input: Pick<BuildEventListInput, 'year' | 'exter
       icon: null,
       event: null,
       calendarName: owner.account.label,
+      holiday: null,
     });
   }
   return entries;
+}
+
+/**
+ * Entrées des jours fériés de l'année (E-03) : lecture seule, sans espace propre (visibles sous Pro, Perso et Tout, D3). `nameOf`
+ * donne le nom affiché d'une fête (texte de src/i18n, jamais dans le domaine).
+ */
+export function holidayEntries(holidays: readonly HolidayEntry[], year: number, nameOf: (key: string) => string): EventListEntry[] {
+  return holidays
+    .filter((holiday) => parseLocalDate(holiday.date).year === year)
+    .map(
+      (holiday): EventListEntry => ({
+        key: `holiday:${holiday.country}:${holiday.key}:${holiday.date}`,
+        source: 'holiday',
+        date: holiday.date,
+        endDate: holiday.date,
+        title: nameOf(holiday.key),
+        allDay: true,
+        startTime: null,
+        endTime: null,
+        spaceId: null,
+        icon: null,
+        event: null,
+        calendarName: null,
+        holiday,
+      }),
+    );
 }
 
 /** Liste complète de l'année, triée : jour, journée entière d'abord, heure de début. */
@@ -181,4 +212,21 @@ export function todayEntriesForDay(events: readonly CalendarEvent[], date: Local
       kind: event.kind,
     };
   });
+}
+
+/**
+ * Bandeaux des jours fériés d'un jour pour Aujourd'hui et la Semaine (E-03 D5) : lecture seule, journée entière, sans espace.
+ * `tagOf` donne l'étiquette (« Férié FR ») écrite à droite du bandeau, à la place du nom d'agenda.
+ */
+export function holidayBands(holidays: readonly HolidayEntry[], nameOf: (key: string) => string, tagOf: (holiday: HolidayEntry) => string): TodayEventEntry[] {
+  return holidays.map((holiday) => ({
+    id: `holiday:${holiday.country}:${holiday.key}:${holiday.date}`,
+    title: nameOf(holiday.key),
+    allDay: true,
+    startTime: null,
+    spaceId: null,
+    calendarName: tagOf(holiday),
+    icon: null,
+    kind: 'holiday' as const,
+  }));
 }

@@ -1,10 +1,12 @@
 import { createStore } from 'zustand';
+import { DEFAULT_HOLIDAY_COUNTRIES, type HolidayCountries } from '../../domain/holidays';
 import { addDays, makeLocalDate } from '../../domain/localDate';
-import type { CalendarAccount, CalendarEvent, ExternalEvent } from '../../domain/model';
+import type { CalendarAccount, CalendarEvent, ExternalEvent, Holiday } from '../../domain/model';
 import type { IsoDateTime, SpaceFilter } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 import { onEventsChanged } from './eventEvents';
+import { loadHolidayData } from './holidayUseCases';
 
 export type EventsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -20,6 +22,9 @@ export interface EventsState {
   readonly events: readonly CalendarEvent[];
   readonly externalEvents: readonly ExternalEvent[];
   readonly accounts: readonly CalendarAccount[];
+  /** Calendriers de jours fériés activés (E-03, réglage `holidays.countries`) et lignes `holiday` des années lues (fêtes lunaires, saisies). */
+  readonly holidayCountries: HolidayCountries;
+  readonly holidayRows: readonly Holiday[];
   /** Dernière actualisation d'un agenda externe (la plus récente des lignes lues) ; null sans événement externe. */
   readonly syncedAt: IsoDateTime | null;
   readonly status: EventsStatus;
@@ -44,8 +49,9 @@ export const eventsStore = defineFeatureStore<EventsState>((container: AppContai
       container.data.repos.externalEvents.listBetween({ from: `${addDays(from, -1)}T00:00:00Z` as IsoDateTime, to: `${addDays(to, 2)}T00:00:00Z` as IsoDateTime }),
       container.data.repos.calendarAccounts.listAll(),
     ]).catch((): [readonly ExternalEvent[], readonly CalendarAccount[]] => [[], []]);
+    const holidays = await loadHolidayData(container, from, to);
     const syncedAt = externalEvents.reduce<IsoDateTime | null>((latest, event) => (latest === null || event.syncedAt > latest ? event.syncedAt : latest), null);
-    return { events, externalEvents, accounts, syncedAt };
+    return { events, externalEvents, accounts, syncedAt, holidayCountries: holidays.countries, holidayRows: holidays.rows };
   };
 
   const store = createStore<EventsState>()((set, get) => ({
@@ -54,6 +60,8 @@ export const eventsStore = defineFeatureStore<EventsState>((container: AppContai
     events: [],
     externalEvents: [],
     accounts: [],
+    holidayCountries: DEFAULT_HOLIDAY_COUNTRIES,
+    holidayRows: [],
     syncedAt: null,
     status: 'idle',
     errorKey: null,

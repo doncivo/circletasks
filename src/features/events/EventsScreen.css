@@ -124,6 +124,16 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+.ct-events__notice {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text-secondary);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
 .ct-events__empty {
   margin: 0;
   padding: var(--ct-space-4) var(--ct-space-1);

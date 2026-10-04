@@ -11,8 +11,18 @@ import { EventsScreen } from './EventsScreen';
 import { createEventUseCases } from './eventUseCases';
 
 /** Aides des tests d'écran Événements : mêmes briques que l'écran Aujourd'hui (base en mémoire, conteneur), données posées par le cas d'usage. */
-export { mockViewport, setupToday as setupEvents, teardownToday as teardownEvents };
+export { mockViewport, teardownToday as teardownEvents };
 export type { TodayHarness as EventsHarness };
+
+/**
+ * Base et conteneur de test. Les calendriers de jours fériés sont désactivés d'office pour que les listes d'événements des tests de
+ * E-01 et E-02 ne portent que leurs propres lignes ; `{ holidays: true }` garde les deux calendriers activés (défaut de l'app, E-03).
+ */
+export async function setupEvents(deviceSuffix: string, startAt = '2026-10-02T10:00:00.000Z', options: { readonly holidays?: boolean } = {}): Promise<TodayHarness> {
+  const harness = await setupToday(deviceSuffix, startAt);
+  if (!options.holidays) await harness.container.data.repos.settings.set('holidays.countries', { FR: false, TN: false });
+  return harness;
+}
 
 export function renderEvents(container: AppContainer) {
   return render(

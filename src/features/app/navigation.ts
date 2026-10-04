@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { HolidayCountry } from '../../domain/model';
 import type { ChecklistId, EventId, ExternalEventId, GoalId, LocalDate, RoutineId, SpaceId, TaskId } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { ShortcutId } from './shortcuts';
@@ -47,7 +48,7 @@ export type Route =
   | { readonly tab: 'routines'; readonly screen: 'list' | 'report' }
   | { readonly tab: 'events' }
   | { readonly tab: 'checklists'; readonly checklistId: ChecklistId | null }
-  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'general' | 'desktop' | 'about' | 'trash' }
+  | { readonly tab: 'settings'; readonly screen: 'home' | 'spaces' | 'reminders' | 'holidays' | 'general' | 'desktop' | 'about' | 'trash' }
   /** Plages silencieuses d'un espace (ES-07), ouvertes depuis la ligne « Silence Pro » de Réglages › RAPPELS. */
   | { readonly tab: 'settings'; readonly screen: 'quiet'; readonly spaceId: SpaceId };
 
@@ -68,6 +69,8 @@ export type DetailTarget =
   | { readonly type: 'event'; readonly id: EventId }
   /** Événement d'un agenda externe (S-05) : fiche en lecture seule. */
   | { readonly type: 'externalEvent'; readonly id: ExternalEventId }
+  /** Jour férié (E-03) : fiche en lecture seule, date modifiable à la main pour une fête religieuse tunisienne. */
+  | { readonly type: 'holiday'; readonly country: HolidayCountry; readonly key: string; readonly year: number }
   | { readonly type: 'checklist'; readonly id: ChecklistId };
 
 /**

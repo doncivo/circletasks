@@ -68,7 +68,7 @@ export function TodayEventBand({ event, compact, onOpen }: { event: TodayEventEn
     </>
   );
   // Un événement local (M7) s'ouvre en modification (E-01 critère 7) ; un événement d'agenda externe reste en lecture seule.
-  const interactive = onOpen !== undefined && event.calendarName === null;
+  const interactive = onOpen !== undefined && event.calendarName === null && event.kind !== 'holiday';
   return (
     <li className="ct-today-event" data-compact={compact} data-kind={event.kind}>
       {interactive ? (

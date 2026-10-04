@@ -1,8 +1,9 @@
 import { ArrowLeft, ArrowRight, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
-import { buildEventList, dayDots, firstUpcomingEntry, groupByMonth, isPastEntry } from '../../domain/eventList';
-import { parseLocalDate } from '../../domain/localDate';
+import { buildEventList, dayDots, firstUpcomingEntry, groupByMonth, holidayEntries, isPastEntry } from '../../domain/eventList';
+import { holidaysInRange, uncoveredLunarYears } from '../../domain/holidays';
+import { makeLocalDate, parseLocalDate } from '../../domain/localDate';
 import type { LocalDate, SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { detectTimeZone } from '../../platform';
@@ -17,6 +18,7 @@ import { EventsAgendasCard } from './EventsAgendasCard';
 import { EventsMonthGrid } from './EventsMonthGrid';
 import { entryTag } from './eventTags';
 import { eventsStore } from './eventsStore';
+import { enabledCountriesLabel, holidayName, holidaySubtitle } from './holidayText';
 import { useStandaloneTaskSheet } from './useStandaloneTaskSheet';
 import './EventsScreen.css';
 
@@ -45,6 +47,8 @@ export function EventsScreen() {
   const externalEvents = useFeatureStore(eventsStore, (s) => s.externalEvents);
   const accounts = useFeatureStore(eventsStore, (s) => s.accounts);
   const syncedAt = useFeatureStore(eventsStore, (s) => s.syncedAt);
+  const holidayCountries = useFeatureStore(eventsStore, (s) => s.holidayCountries);
+  const holidayRows = useFeatureStore(eventsStore, (s) => s.holidayRows);
   const status = useFeatureStore(eventsStore, (s) => s.status);
   const errorKey = useFeatureStore(eventsStore, (s) => s.errorKey);
   const load = useFeatureStore(eventsStore, (s) => s.load);
@@ -66,11 +70,18 @@ export function EventsScreen() {
   const openAdd = useCallback((): void => setAddOpen(true), []);
   useEffect(() => container.shortcuts.register('app.newTask', openAdd), [container, openAdd]);
 
+  // Jours fériés des calendriers activés (E-03) : sans espace propre, donc visibles sous Pro, Perso et Tout.
+  const holidays = useMemo(
+    () => holidayEntries(holidaysInRange({ from: makeLocalDate(year, 1, 1), to: makeLocalDate(year, 12, 31), countries: holidayCountries, rows: holidayRows }), year, holidayName),
+    [year, holidayCountries, holidayRows],
+  );
   // Sous un filtre projet, aucun événement (E-01 critère 10).
   const entries = useMemo(
-    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter })),
-    [year, events, externalEvents, accounts, timeZone, spaceFilter, projectFilter],
+    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays })),
+    [year, events, externalEvents, accounts, timeZone, spaceFilter, projectFilter, holidays],
   );
+  const uncovered = projectFilter ? [] : uncoveredLunarYears([year], holidayCountries);
+  const holidayCountriesText = enabledCountriesLabel(holidayCountries);
   const groups = useMemo(() => groupByMonth(entries), [entries]);
   const dots = useMemo(() => dayDots(entries, year, gridMonth, spaces.map((space) => space.id as SpaceId)), [entries, year, gridMonth, spaces]);
 
@@ -130,6 +141,7 @@ export function EventsScreen() {
           <ul className="ct-events__rows">
             {group.entries.map((entry) => {
               const local = entry.event;
+              const holiday = entry.holiday;
               return (
                 <EventRow
                   key={entry.key}
@@ -139,7 +151,9 @@ export function EventsScreen() {
                   spaceName={entry.source === 'local' || (entry.source === 'external' && layout === 'pc') ? spaceNameOf(entry.spaceId) : null}
                   tag={entryTag(entry, today)}
                   selected={selected !== null && entry.date === selected}
+                  {...(entry.holiday ? { subtitle: holidaySubtitle(entry.holiday) } : {})}
                   {...(local ? { onOpen: () => openDetail({ type: 'event', id: local.id }) } : {})}
+                  {...(holiday ? { onOpen: () => openDetail({ type: 'holiday', country: holiday.country, key: holiday.key, year: holiday.year }) } : {})}
                 />
               );
             })}
@@ -175,6 +189,11 @@ export function EventsScreen() {
           {t(errorKey)}
         </p>
       )}
+      {uncovered.map((missing) => (
+        <p key={missing} className="ct-events__notice" role="status">
+          {t('events.holidaySettings.uncovered', { year: missing })}
+        </p>
+      ))}
       {list}
       <div className="ct-events__bottomRow">
         {layout === 'mobile' && (
@@ -198,7 +217,7 @@ export function EventsScreen() {
             spaces={spaces}
             syncedAt={syncedAt}
             nowMs={container.clock.nowMs()}
-            holidaysLine={null}
+            holidaysLine={holidayCountriesText ? t('events.holidaysLine', { countries: holidayCountriesText }) : null}
             onOpenSettings={() => navigate({ tab: 'settings', screen: 'home' })}
           />
         </aside>

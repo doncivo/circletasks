@@ -136,7 +136,7 @@ export function WeekDayView(props: WeekDayViewProps) {
                   key={event.id}
                   event={event}
                   layout={layout}
-                  {...(props.onOpenEvent ? { onOpen: () => props.onOpenEvent?.(event) } : {})}
+                  {...(props.onOpenEvent && event.kind !== 'holiday' ? { onOpen: () => props.onOpenEvent?.(event) } : {})}
                 />
               ))}
               {day.list.rows.map(renderRow)}

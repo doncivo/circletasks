@@ -13,7 +13,7 @@ import { registerTabShortcuts } from './features/app/tabShortcuts';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
 import { ChecklistsScreen, registerChecklistsSource } from './features/checklists';
-import { EventEditorHost, EventsScreen, registerEventsSource } from './features/events';
+import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SettingsScreen } from './features/settings';
@@ -83,6 +83,7 @@ function AppShellContent() {
       <AppStatusBanner />
       <UpdateBanner />
       <EventEditorHost />
+      <HolidayDetailHost />
       {route.tab === 'tasks' ? (
         route.screen === 'report' ? (
           <ReportScreen />
@@ -120,7 +121,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}

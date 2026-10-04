@@ -33,6 +33,8 @@ export interface SettingsValues {
   'general.locale': 'fr' | 'en';
   /** P-02. */
   'general.theme': 'system' | 'light' | 'dark';
+  /** E-03 : calendriers de jours fériés activés (France, Tunisie), tous deux par défaut ; partagé entre appareils. */
+  'holidays.countries': { readonly FR: boolean; readonly TN: boolean };
   /** T-11 : dernier fuseau IANA détecté sur cet appareil (affiché dans Réglages). */
   'general.timeZone': string | null;
   /** P-05. */
@@ -66,6 +68,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'reminders.eveningRecap': { scope: 'shared', defaultValue: { enabled: true, time: '21:00' as LocalTime } },
   'general.locale': { scope: 'shared', defaultValue: 'fr' },
   'general.theme': { scope: 'shared', defaultValue: 'system' },
+  'holidays.countries': { scope: 'shared', defaultValue: { FR: true, TN: true } },
   'general.timeZone': { scope: 'local', defaultValue: null },
   'onboarding.completed': { scope: 'local', defaultValue: false },
   'desktop.closeToTray': { scope: 'local', defaultValue: true },

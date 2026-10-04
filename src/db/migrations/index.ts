@@ -8,9 +8,10 @@ import { migration0006RoutinePause } from './0006_routine_pause';
 import { migration0007ProQuietHours } from './0007_pro_quiet_hours';
 import { migration0008ChecklistIcon } from './0008_checklist_icon';
 import { migration0009EventReminderOffsets } from './0009_event_reminder_offsets';
+import { migration0010Holiday } from './0010_holiday';
 
 /**
  * Registre ordonné des migrations de l'app. Ajouter chaque nouveau fichier
  * `NNNN_titre.ts` ici, à la fin, sans jamais modifier une entrée publiée.
  */
-export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets];
+export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets, migration0010Holiday];
