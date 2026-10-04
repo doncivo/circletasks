@@ -2,6 +2,7 @@ import type { WriteStamper } from '../../domain/hlc';
 import type { SqlDriver, SqlExecutor } from '../driver';
 import type { CalendarAccountRepository, EventRepository, ExternalEventRepository } from './agendaRepository';
 import type { ChecklistItemRepository, ChecklistRepository } from './checklistRepository';
+import type { FocusSessionRepository } from './focusSessionRepository';
 import type { GoalRepository } from './goalRepository';
 import type { HolidayRepository } from './holidayRepository';
 import type { SearchRepository } from './searchRepository';
@@ -24,6 +25,7 @@ export interface Repositories {
   readonly settings: SettingsRepository;
   readonly events: EventRepository;
   readonly holidays: HolidayRepository;
+  readonly focusSessions: FocusSessionRepository;
   readonly search: SearchRepository;
   readonly checklists: ChecklistRepository;
   readonly checklistItems: ChecklistItemRepository;

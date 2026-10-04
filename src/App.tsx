@@ -17,6 +17,7 @@ import { startNetworkStatus } from './features/app/appStatus';
 import { CalendarsScreen, registerExternalEventsSource } from './features/calendars';
 import { ChecklistsScreen, registerChecklistsSource } from './features/checklists';
 import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
+import { FocusHost } from './features/focus';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesMonthReport, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
@@ -110,6 +111,8 @@ function AppShellContent() {
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />
+      {/* M10 : session Focus (écran plein sur iPhone, mini-fenêtre ou panneau sur PC). */}
+      <FocusHost />
       {layout === 'pc' && <ShortcutsHelp />}
       {/* RC-03 : une tâche ouverte depuis la recherche passe par-dessus l'onglet courant. Aujourd'hui, la Semaine, Un jour, Terminées et
           Objectif rendent leur propre fiche ; les autres écrans (Routines, Événements, Checklists, Réglages, Rapport) en reçoivent une ici. */}

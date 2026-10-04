@@ -2,6 +2,7 @@ import { emptyFr } from './fr.empty';
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { captureFr } from './fr.capture';
+import { focusFr } from './fr.focus';
 import { searchFr } from './fr.search';
 import { appearanceFr } from './fr.appearance';
 import { spacesFr } from './fr.spaces';
@@ -41,6 +42,7 @@ export const fr = {
     },
   },
   spaces: spacesFr,
+  focus: focusFr,
   appearance: appearanceFr,
   calendars: calendarsFr,
   tasks: {

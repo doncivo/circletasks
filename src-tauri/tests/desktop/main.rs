@@ -6,6 +6,7 @@
 mod backup;
 mod calendars;
 mod config;
+mod focus;
 mod logic;
 mod quit;
 mod shortcut;

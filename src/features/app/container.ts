@@ -5,6 +5,7 @@ import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
+import type { FocusWindowPlatform } from '../../platform/focus';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
@@ -33,6 +34,8 @@ export interface AppContainer {
   readonly desktop: DesktopPlatform | null;
   /** Agendas externes (K-01 à K-03, ADR 0008) : coffre, transport HTTP et OAuth ; commandes Rust dans l'app, mémoire ailleurs. */
   readonly calendars: CalendarPlatform;
+  /** Mini-fenêtre Focus du PC (F-01, toujours au premier plan) ; null hors PC : la session s'affiche alors dans la fenêtre principale. */
+  readonly focusWindow: FocusWindowPlatform | null;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -49,6 +52,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     platform: parts.platform ?? { runtime: 'web', os: 'other' },
     desktop: parts.desktop ?? null,
     calendars: parts.calendars ?? createMemoryCalendarPlatform(PRODUCTION_ENDPOINTS),
+    focusWindow: parts.focusWindow ?? null,
   };
 }
 

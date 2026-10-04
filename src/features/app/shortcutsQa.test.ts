@@ -45,7 +45,7 @@ describe('registre complet (D-04 critères 1 et 4)', () => {
     }
   });
 
-  it('seul Focus (réservé, « bientôt ») n’a pas de gestionnaire dans l’application', () => {
-    expect(RESERVED_SHORTCUTS).toEqual(['list.focus']);
+  it('aucun raccourci n’est plus réservé : Focus (F-01) a son gestionnaire', () => {
+    expect(RESERVED_SHORTCUTS).toEqual([]);
   });
 });

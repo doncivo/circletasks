@@ -30,8 +30,8 @@ describe('appartenance à un espace (ES-02)', () => {
 
   it('toutes les tables portant un space_id : colonne NOT NULL et clé étrangère vers space', async () => {
     const tables = await tablesWithSpace();
-    // Tâches, routines, objectifs, événements, checklists et projets (le projet appartient lui aussi à un espace).
-    expect(tables.sort()).toEqual(['checklist', 'event', 'goal', 'project', 'routine', 'task']);
+    // Tâches, routines, objectifs, événements, checklists, sessions Focus (ES-08) et projets (le projet appartient lui aussi à un espace).
+    expect(tables.sort()).toEqual(['checklist', 'event', 'focus_session', 'goal', 'project', 'routine', 'task']);
     for (const table of tables) {
       const columns = await driver.select<{ name: string; notnull: number }>(`PRAGMA table_info(${table})`);
       expect(columns.find((c) => c.name === 'space_id')?.notnull, `${table}.space_id NOT NULL`).toBe(1);
@@ -47,6 +47,7 @@ describe('appartenance à un espace (ES-02)', () => {
       goal: "INSERT INTO goal (id, space_id, week_start, title, created_at, updated_at, device_id, hlc) VALUES ('g', ?, '2026-09-21', 'x', 'z', 'z', 'd', 'h')",
       event: "INSERT INTO event (id, space_id, title, start_date, end_date, created_at, updated_at, device_id, hlc) VALUES ('e', ?, 'x', '2026-09-21', '2026-09-21', 'z', 'z', 'd', 'h')",
       checklist: "INSERT INTO checklist (id, space_id, title, created_at, updated_at, device_id, hlc) VALUES ('c', ?, 'x', 'z', 'z', 'd', 'h')",
+      focus_session: "INSERT INTO focus_session (id, space_id, started_at, created_at, updated_at, device_id, hlc) VALUES ('f', ?, 'z', 'z', 'z', 'd', 'h')",
       project: "INSERT INTO project (id, space_id, name, color, sort_order, created_at, updated_at, device_id, hlc) VALUES ('p', ?, 'x', '#2f6b7a', 1, 'z', 'z', 'd', 'h')",
     };
     for (const table of await tablesWithSpace()) {

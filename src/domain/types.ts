@@ -36,6 +36,7 @@ export type ReminderId = Brand<Id, 'ReminderId'>;
 export type GoalId = Brand<Id, 'GoalId'>;
 export type EventId = Brand<Id, 'EventId'>;
 export type HolidayId = Brand<Id, 'HolidayId'>;
+export type FocusSessionId = Brand<Id, 'FocusSessionId'>;
 export type ChecklistId = Brand<Id, 'ChecklistId'>;
 export type ChecklistItemId = Brand<Id, 'ChecklistItemId'>;
 export type CalendarAccountId = Brand<Id, 'CalendarAccountId'>;

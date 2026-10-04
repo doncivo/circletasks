@@ -28,7 +28,7 @@ describe('chaque raccourci du registre est branché (D-04 critère 1)', () => {
     expect(registered(id), `aucun gestionnaire pour ${id}`).not.toEqual([]);
   });
 
-  it('les raccourcis sans gestionnaire sont exactement le global (système) et Focus (F-01, réservé)', () => {
+  it('le seul raccourci sans gestionnaire dans l’application est le global (système) ; Focus (F-01) est branché', () => {
     const missing = ids.filter((id) => registered(id).length === 0);
     expect(missing.sort()).toEqual([...NOT_IN_APP].sort());
   });

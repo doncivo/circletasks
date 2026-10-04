@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "focus-launcher",
+  "description": "PC : la fenêtre principale ouvre, ramène au premier plan et ferme la mini-fenêtre Focus (M10, F-01). Création de fenêtre limitée à ce rôle ; aucune permission de plus pour la mini-fenêtre.",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": ["core:webview:allow-create-webview-window", "core:window:allow-show", "core:window:allow-set-focus", "core:window:allow-unminimize", "core:window:allow-destroy"]
+}

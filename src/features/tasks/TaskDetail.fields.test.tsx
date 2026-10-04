@@ -99,12 +99,12 @@ describe('Fiche détail d’une tâche (A-08)', () => {
       // Aucun champ de saisie tant qu'on n'a pas cliqué une valeur (PC-Aujourdhui.html : lignes en texte).
       expect(within(fiche).queryByLabelText('Heure')).toBeNull();
       expect(within(fiche).queryByRole('combobox')).toBeNull();
-      // Boutons : Reporter, Un jour, Dupliquer, Supprimer ; ni Focus (M10), ni « Marquer comme terminée » (la case de la ligne).
+      // Boutons : Focus 25 min (M10, F-01), Reporter, Un jour, Dupliquer, Supprimer ; pas de « Marquer comme terminée » (la case de la ligne).
       expect(within(fiche).getByRole('button', { name: 'Reporter' })).toBeInTheDocument();
       expect(within(fiche).getByRole('button', { name: 'Un jour' })).toBeInTheDocument();
       expect(within(fiche).getByRole('button', { name: 'Dupliquer la tâche' })).toBeInTheDocument();
       expect(within(fiche).getByRole('button', { name: 'Supprimer' })).toBeInTheDocument();
-      expect(within(fiche).queryByRole('button', { name: /Focus/ })).toBeNull();
+      expect(within(fiche).getByRole('button', { name: 'Focus 25 min' })).toBeInTheDocument();
       expect(within(fiche).queryByRole('button', { name: 'Marquer comme terminée' })).toBeNull();
     });
 

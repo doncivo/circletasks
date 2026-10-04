@@ -125,6 +125,18 @@
   --ct-color-icon-amber: #b9770e;
   /* Pastille « Tout » active (Main.html : encre ; Main-Sombre.html : lavande #C9BEE6). */
   --ct-color-pill-all: var(--ct-color-text);
+
+  /* Focus (F-01, Focus.html) : l'écran de session garde son fond violet dans les deux thèmes (P-02). */
+  --ct-focus-bg: #2e2150;
+  --ct-focus-track: #45386b;
+  --ct-focus-arc: #f2a7a0;
+  --ct-focus-arc-paused: #6e6396;
+  --ct-focus-muted: #c9bee6;
+  --ct-focus-space: #9fd0dc;
+  --ct-focus-border: #6e6396;
+  --ct-focus-on: #ffffff;
+  --ct-focus-ink: #2e2150;
+  --ct-focus-launch-bg: #3a2a66;
 }
 
 /* Thème sombre, dérivé de Main-Sombre.html : appliqué automatiquement si le système

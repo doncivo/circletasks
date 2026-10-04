@@ -6,6 +6,7 @@ import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { useFocusShortcut } from '../focus/useFocusShortcut';
 import { TaskDetailBody } from './TaskDetailBody';
 import { taskDetailStore } from './taskDetailStore';
 import type { TaskDetailApi } from './useTaskDetailEdits';
@@ -27,6 +28,8 @@ export function TaskDetail() {
   // Tâche lue dans la source unique (ADR 0004, avenant) : toute écriture, d'où qu'elle vienne (liste, annulation), est reflétée ici.
   const entities = useTaskEntities();
   const task = taskId ? entities.get(taskId) : undefined;
+  // Ctrl+Maj+F (M10) : lance une session sur la tâche ouverte.
+  useFocusShortcut(taskId);
   const status = useFeatureStore(taskDetailStore, (s) => s.status);
   const errorKey = useFeatureStore(taskDetailStore, (s) => s.errorKey);
   const reminders = useFeatureStore(taskDetailStore, (s) => s.reminders);

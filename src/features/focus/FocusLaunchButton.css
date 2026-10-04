@@ -1,0 +1,30 @@
+/* Bouton « Focus » de la fiche : Detail.html (iPhone, 56 px) et PC-Aujourdhui.html (46 px), fond #3A2A66. */
+.ct-focus-launch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 0;
+  background: var(--ct-focus-launch-bg);
+  color: var(--ct-focus-on);
+  font: 700 17px var(--ct-font-text);
+  cursor: pointer;
+}
+
+.ct-focus-launch--mobile {
+  height: 56px;
+  min-height: var(--ct-hit-target-min);
+  border-radius: 28px;
+}
+
+.ct-focus-launch--pc {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 23px;
+  font-size: 15px;
+}
+
+.ct-focus-launch:focus-visible {
+  outline: 2px solid var(--ct-color-text);
+  outline-offset: 2px;
+}

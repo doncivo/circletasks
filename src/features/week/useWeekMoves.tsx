@@ -12,6 +12,7 @@ import type { TodayRow } from '../../domain/todayList';
 import { useAppStore } from '../app/appStore';
 import { isListFocus, registerListNavigation } from '../app/listKeyboard';
 import { useNavigationStore } from '../app/navigation';
+import { useFocusShortcut } from '../focus/useFocusShortcut';
 import { somedayStore, useItemFilter, type SomedayZoneDnd } from '../someday';
 import { taskSubtitle } from '../tasks/taskLine';
 import type { WeekDropState, WeekItemDragProps } from './WeekDayView';
@@ -179,6 +180,8 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
       for (const off of offs) off();
     };
   }, [container, focusedTaskId, weekStart, requestMove, requestPostpone, reorder, toggleDone]);
+  // Ctrl+Maj+F (M10) : session Focus sur la tâche sélectionnée.
+  useFocusShortcut(focusedTaskId);
 
   // ↑ / ↓ : carte précédente / suivante dans l'ordre de la grille (D-04).
   useEffect(
