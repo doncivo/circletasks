@@ -47,6 +47,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Fixer une limite de dérive du hlc.
 - Bandeaux « Synchro en cours » et « En attente d'iCloud » (A-09).
 - Corbeille : `trashStore.ts:18` garde des copies hors de `taskEntities`, ce qui est documenté ; à revoir avec la synchro.
+- Restauration P-04 et synchro : appliquer l'ADR 0010 (état publié qui fait foi, marqueur `restore-marker.json`, synchro suspendue et choix explicite, époque et instantané, âge de la version face aux traces de suppression).
+- `sample.ids` (P-05) est un réglage local : après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; à revoir dans l'ADR de synchro.
 
 ## Ordre 5 (iPhone)
 
@@ -55,6 +57,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Ignorer les routines en pause ou archivées.
 - Brancher le balayage (A-07) et la notification sur `sendToSomeday`.
 - Créer l'interface de planification des notifications dans `src/platform`, qui n'existe pas encore.
+- P-04 critère 11 (sauvegarde et restauration sur iPhone) : commandes limitées à Windows, `container.backups` indisponible sur iOS ; à ouvrir par un avenant à l'ADR 0009 (capability iOS, gestionnaire mobile, réouverture de la base sans `relaunch`) en respectant l'ADR 0010.
+- P-07 sur iPhone : « Télécharger un modèle » et le rapport des lignes rejetées sont masqués tant que le plugin Fichiers (`FileService.save`) n'existe pas.
 
 ## Livraison
 
