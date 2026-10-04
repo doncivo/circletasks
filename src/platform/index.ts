@@ -3,6 +3,7 @@ export { openDatabase } from './database';
 export { detectTimeZone } from './timeZone';
 export * from './calendars';
 export * from './focus';
+export * from './files';
 export {
   logDesktopFailure,
   openDesktopPlatform,

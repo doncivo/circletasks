@@ -1,3 +1,4 @@
+import type { ExportTask } from '../../domain/historyExport';
 import type { ItemFilter } from '../../domain/itemFilter';
 import type { GoalsCount, WeekCount } from '../../domain/monthReport';
 import type { LocalDate } from '../../domain/types';
@@ -30,4 +31,28 @@ export interface StatsRepository {
    * terminée), tous espaces confondus ; null si la base est vide.
    */
   oldestActivity(): Promise<LocalDate | null>;
+  /**
+   * H-03 : une page de tâches à exporter (supprimées exclues, « Un jour » et terminées comprises), triées par date (sans date en dernier)
+   * puis identifiant, avec les noms d'espace, de projet et d'objectif et la règle de répétition. Lecture par blocs : `after` est le
+   * curseur de la page précédente (`next`), `next` est null à la dernière page. Période : tâches datées dans `range`, ou toutes si null.
+   */
+  listTasksForExport(query: ExportTasksQuery): Promise<ExportTasksPage>;
+}
+
+/** Position dans le tri de l'export (date de tri, identifiant). */
+export interface ExportCursor {
+  readonly key: string;
+  readonly id: string;
+}
+
+export interface ExportTasksQuery {
+  readonly filter: ItemFilter;
+  readonly range: DateRange | null;
+  readonly after: ExportCursor | null;
+  readonly limit: number;
+}
+
+export interface ExportTasksPage {
+  readonly tasks: ExportTask[];
+  readonly next: ExportCursor | null;
 }

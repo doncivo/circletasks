@@ -5,6 +5,7 @@ import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
+import { createUnavailableFiles, type FileService } from '../../platform/files';
 import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
@@ -40,6 +41,8 @@ export interface AppContainer {
   readonly focusEndScheduler: FocusEndScheduler;
   /** Son de fin de session (F-04) ; null : carillon embarqué par défaut (élément Audio). */
   readonly soundPlayer: SoundPlayer | null;
+  /** Enregistrement de fichiers (export H-03, P-04, P-07) : boîte « Enregistrer sous » sur PC, téléchargement en développement, indisponible sur iPhone avant l'ordre 5. */
+  readonly files: FileService;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -59,6 +62,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     focusWindow: parts.focusWindow ?? null,
     focusEndScheduler: parts.focusEndScheduler ?? createNoopFocusEndScheduler(),
     soundPlayer: parts.soundPlayer ?? null,
+    files: parts.files ?? createUnavailableFiles(),
   };
 }
 

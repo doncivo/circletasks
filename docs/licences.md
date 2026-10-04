@@ -75,3 +75,8 @@ redistribue pas les fichiers de police séparément de l'application.
 - Paquet : [`recharts`](https://www.npmjs.com/package/recharts) 3.10, licence **MIT** ; dépendances transitives (`victory-vendor` d3, `@reduxjs/toolkit`, `immer`, `reselect`, `decimal.js-light`) sous licences MIT ou ISC.
 - Usage : graphique en barres « taux de complétion par semaine » du rapport du mois (`src/features/stats/CompletionChart.tsx`), chargé à la demande par import dynamique (jamais dans le paquet de départ).
 - Texte complet de la licence : `node_modules/recharts/LICENSE`.
+
+# Licences — export de fichiers (H-03, plugins Tauri officiels)
+
+- `tauri-plugin-dialog` et `tauri-plugin-fs` (crates, PC Windows uniquement) et `@tauri-apps/plugin-dialog`, `@tauri-apps/plugin-fs` (paquets npm) : MIT OU Apache-2.0 (projet Tauri).
+- Usage : boîte « Enregistrer sous » système et écriture du seul fichier choisi (`src-tauri/capabilities/export.json`, aucun périmètre de fichiers statique). Aucune dépendance pour le PDF ni le PNG (dessin canvas, PDF minimal écrit par `src/domain/pdfDocument.ts`).

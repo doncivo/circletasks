@@ -1,6 +1,7 @@
 import { ArrowLeft, ArrowRight, ChevronRight, Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
+import type { IsoDateTime } from '../../domain/types';
 import { canShowNextMonth, canShowPreviousMonth, monthOf, sameMonth, shiftMonth, type MonthRef } from '../../domain/monthReport';
 import { t } from '../../i18n';
 import { formatMonthName, formatReportMonth } from '../../i18n/formatStats';
@@ -12,6 +13,7 @@ import { FocusReportSection } from '../focus/FocusReportSection';
 import { RoutinesMonthMap } from '../routines/RoutinesMonthMap';
 import { SpaceFilterBar } from '../spaces';
 import { CompletionSection } from './CompletionSection';
+import { ExportButton, ExportDialog } from './ExportDialog';
 import { MonthTiles } from './MonthTiles';
 import { useMonthReport } from './useMonthReport';
 import './ReportScreen.css';
@@ -36,7 +38,11 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
   const appDay = useAppStore((s) => s.day);
   const currentDay = appDay ?? todayLocal(container.clock);
   const [month, setMonth] = useState<MonthRef>(() => monthOf(currentDay));
-  const { report, status, today, oldest } = useMonthReport(month);
+  const { report, status, today, oldest, filter } = useMonthReport(month);
+  const spaces = useAppStore((state) => state.spaces);
+  const projects = useAppStore((state) => state.projects);
+  const [exporting, setExporting] = useState(false);
+  const [exported, setExported] = useState<{ readonly path: string | undefined } | null>(null);
   const routinesHeading = useRef<HTMLHeadingElement>(null);
   const scrolled = useRef(false);
 
@@ -50,6 +56,10 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
     scrolled.current = true;
     routinesHeading.current?.scrollIntoView?.({ block: 'start' });
   }, [entry, shown]);
+
+  const spaceName = filter.space === 'all' ? null : (spaces.find((space) => space.id === filter.space)?.name ?? null);
+  const projectName = filter.project === null ? null : (projects.find((project) => project.id === filter.project)?.name ?? null);
+  const filterLabel = [spaceName ?? t('spaces.all'), projectName].filter((part): part is string => part !== null).join(' · ');
 
   const back = entry === 'routines' ? DEFAULT_ROUTES.routines : DEFAULT_ROUTES.tasks;
 
@@ -95,7 +105,30 @@ export function ReportScreen({ entry = 'tasks' }: ReportScreenProps) {
       </div>
       <div className="ct-stats__filters">
         <SpaceFilterBar />
+        {shown !== null && <ExportButton files={container.files} onClick={() => setExporting(true)} />}
       </div>
+
+      {exported !== null && (
+        <p className="ct-stats__exported" role="status">
+          <span>{t('stats.exportDone')}</span>
+          {exported.path !== undefined && container.files.reveal && (
+            <button type="button" className="ct-stats__exportedAction" onClick={() => void container.files.reveal?.(exported.path ?? '')}>
+              {t('stats.exportReveal')}
+            </button>
+          )}
+        </p>
+      )}
+      {exporting && shown !== null && (
+        <ExportDialog
+          files={container.files}
+          context={{ data: container.data, filter, month, today, now: new Date(container.clock.nowMs()).toISOString() as IsoDateTime, report: shown, spaceName, projectName, filterLabel }}
+          onClose={() => setExporting(false)}
+          onDone={(path) => {
+            setExporting(false);
+            setExported({ path });
+          }}
+        />
+      )}
 
       {status === 'error' && (
         <p className="ct-stats__error" role="alert">

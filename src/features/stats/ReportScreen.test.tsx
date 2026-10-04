@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { newEntityId } from '../../domain/id';
 import type { GoalId, LocalDate, SpaceId } from '../../domain/types';
@@ -34,6 +34,10 @@ function renderReport(h: TodayHarness, props: ReportScreenProps = {}) {
 const tile = (name: RegExp | string) => screen.findByRole('group', { name });
 
 describe('Rapport du mois (H-01)', () => {
+  beforeAll(async () => {
+    await import('./CompletionChart');
+  }, 60_000);
+
   let h: TodayHarness;
 
   beforeEach(async () => {

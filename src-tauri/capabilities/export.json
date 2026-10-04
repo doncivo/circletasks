@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "export",
+  "description": "PC Windows : export de l'historique (H-03). « Enregistrer sous » système ; le fichier choisi par l'utilisateur est le seul que l'app peut écrire (aucun périmètre de fichiers statique), plus « Afficher dans le dossier ».",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": ["dialog:allow-save", "fs:allow-write-file", "fs:allow-remove", "opener:allow-reveal-item-in-dir"]
+}

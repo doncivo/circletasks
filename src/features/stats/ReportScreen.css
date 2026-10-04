@@ -211,6 +211,31 @@
   flex: 1 1 0;
 }
 
+/* Confirmation d'export (H-03 critère 7) : « Historique exporté » et « Afficher dans le dossier » (PC). */
+.ct-stats__exported {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-achieved-bg);
+  color: var(--ct-color-achieved-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-stats__exportedAction {
+  min-height: var(--ct-hit-target-min);
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Graphique de complétion (Rapport.html) : barres #C9BEE6 arrondies en haut, semaine courante #3A2A66, étiquettes 12 px. */
 .ct-stats__chart {
   position: relative;
