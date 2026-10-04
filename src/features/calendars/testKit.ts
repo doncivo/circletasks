@@ -55,7 +55,7 @@ export async function setupCalendarHarness(deviceSuffix: string, options: Calend
       useAppStore.setState({ spaceFilter: 'all', spaces: [], projects: [], projectFilter: null, day: null, timeZone: null });
       useAppStatusStore.setState({ sources: {} });
       useNavigationStore.setState(INITIAL_NAVIGATION);
-      await Promise.all([google.close(), caldav.close()]);
+      await Promise.all([google.close(), caldav.close()].map((closing) => closing.catch(() => undefined)));
       await db.close();
     },
   };

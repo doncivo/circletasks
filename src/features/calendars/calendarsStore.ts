@@ -106,7 +106,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
   let ownsOffline = false;
   const platform = container.calendars;
   const nowMs = (): number => container.clock.nowMs();
-  const providerFor = (account: Pick<CalendarAccount, 'provider' | 'tokenRef' | 'label'>) => createProviderFor(account, platform, nowMs);
+  const providerFor = (account: Pick<CalendarAccount, 'provider' | 'tokenRef' | 'label'>) => createProviderFor(account, platform, nowMs, systemTimeZone);
   const deps = { container, providerFor, timeZone: systemTimeZone, cursors };
 
   return createStore<CalendarsState>()((set, get) => {

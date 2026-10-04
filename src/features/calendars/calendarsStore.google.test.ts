@@ -62,7 +62,7 @@ describe('connexion Google (K-01)', () => {
     expect(await state().connectGoogle()).toEqual({ ok: false, failure: 'cancelled' });
     expect(state().accounts).toEqual([]);
     expect(await h.container.data.repos.calendarAccounts.listAll()).toEqual([]);
-    expect(h.vault.read('x')).toBeNull();
+    expect(h.vault.refs()).toEqual([]);
     expect(state().connecting).toBe(false);
   });
 

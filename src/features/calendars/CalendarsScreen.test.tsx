@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { GOOGLE_ACCOUNT } from '../../../tests/sim';
+import { CALDAV_APP_PASSWORD, CALDAV_USER, GOOGLE_ACCOUNT } from '../../../tests/sim';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { AppStatusBanner } from '../app/AppStatusBanner';
@@ -127,5 +127,81 @@ describe('écran Agendas (K-01 à K-03)', () => {
     useNavigationStore.getState().navigate({ tab: 'settings', screen: 'calendars' });
     fireEvent.click(screen.getByRole('button', { name: 'Retour aux réglages' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'home' });
+  });
+});
+
+describe('formulaire iCloud (K-02)', () => {
+  const field = (name: string): HTMLInputElement => screen.getByLabelText(name) as HTMLInputElement;
+
+  async function openForm(): Promise<void> {
+    fireEvent.click(screen.getByRole('button', { name: 'iCloud' }));
+    await screen.findByRole('form', { name: 'Compte iCloud' });
+  }
+
+  it('demande l’identifiant Apple et le mot de passe d’application, avec la consigne et le chemin pour le créer (critère 1)', async () => {
+    renderScreen();
+    await openForm();
+    expect(screen.getByText('Utilisez un mot de passe d’application, pas votre mot de passe Apple.')).toBeInTheDocument();
+    expect(screen.getByText(/appleid\.apple\.com/)).toBeInTheDocument();
+    expect(field('Mot de passe d’application')).toHaveAttribute('type', 'password');
+    expect(field('Mot de passe d’application')).toHaveAttribute('autocomplete', 'off');
+    expect(screen.getByRole('button', { name: 'Se connecter' })).toBeDisabled();
+  });
+
+  it('succès : le compte apparaît avec ses agendas, le champ est vidé, le formulaire se ferme, aucun mot de passe dans la page (critères 2 et 7)', async () => {
+    renderScreen();
+    await openForm();
+    fireEvent.change(field('Identifiant Apple'), { target: { value: CALDAV_USER } });
+    fireEvent.change(field('Mot de passe d’application'), { target: { value: CALDAV_APP_PASSWORD } });
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    const card = await screen.findByRole('region', { name: `iCloud · ${CALDAV_USER}` });
+    expect(within(card).getByRole('checkbox', { name: 'Afficher Famille' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('form', { name: 'Compte iCloud' })).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain(CALDAV_APP_PASSWORD);
+    expect([...document.querySelectorAll('input')].every((input) => !input.value.includes(CALDAV_APP_PASSWORD))).toBe(true);
+    await waitFor(() => expect(within(card).getByText(/^Mis à jour/)).toBeInTheDocument());
+  });
+
+  it('401 : « Identifiant ou mot de passe d’application incorrect », mot de passe vidé, aucun compte (critère 3)', async () => {
+    renderScreen();
+    await openForm();
+    fireEvent.change(field('Identifiant Apple'), { target: { value: CALDAV_USER } });
+    fireEvent.change(field('Mot de passe d’application'), { target: { value: 'mauvais-mot-de-passe' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    expect(await screen.findByText('Identifiant ou mot de passe d’application incorrect')).toBeInTheDocument();
+    expect(field('Mot de passe d’application').value).toBe('');
+    expect(field('Identifiant Apple').value).toBe(CALDAV_USER);
+    expect(screen.getByText('Aucun compte connecté.')).toBeInTheDocument();
+  });
+
+  it('serveur injoignable : « Impossible de joindre iCloud » (critère 3)', async () => {
+    renderScreen();
+    await openForm();
+    await h.caldav.close();
+    fireEvent.change(field('Identifiant Apple'), { target: { value: CALDAV_USER } });
+    fireEvent.change(field('Mot de passe d’application'), { target: { value: CALDAV_APP_PASSWORD } });
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    expect(await screen.findByText('Impossible de joindre iCloud')).toBeInTheDocument();
+  });
+
+  it('« Reconnecter » d’un compte iCloud déconnecté rouvre le formulaire avec l’identifiant pré-rempli et verrouillé (critère 6)', async () => {
+    renderScreen();
+    await openForm();
+    fireEvent.change(field('Identifiant Apple'), { target: { value: CALDAV_USER } });
+    fireEvent.change(field('Mot de passe d’application'), { target: { value: CALDAV_APP_PASSWORD } });
+    fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }));
+    const card = await screen.findByRole('region', { name: `iCloud · ${CALDAV_USER}` });
+    const store = calendarsStore.get(h.container);
+    await waitFor(() => expect(store.getState().refreshing).toEqual([]));
+    h.caldav.setPassword('autre-mot-de-passe');
+    h.db.clock.advance(60_000);
+    fireEvent.click(within(card).getByRole('button', { name: `Actualiser ${CALDAV_USER}` }));
+    fireEvent.click(await within(card).findByRole('button', { name: `Reconnecter ${CALDAV_USER}` }));
+    const form = await screen.findByRole('form', { name: 'Compte iCloud' });
+    expect(within(form).getByLabelText('Identifiant Apple')).toHaveValue(CALDAV_USER);
+    expect(within(form).getByLabelText('Identifiant Apple')).toBeDisabled();
+    fireEvent.change(within(form).getByLabelText('Mot de passe d’application'), { target: { value: 'autre-mot-de-passe' } });
+    fireEvent.click(within(form).getByRole('button', { name: 'Se connecter' }));
+    await waitFor(() => expect(within(card).getByText('Connecté')).toBeInTheDocument());
   });
 });

@@ -21,6 +21,11 @@ export class MemorySecretVault implements SecretVault {
     this.entries.delete(ref);
   }
 
+  /** Références présentes (tests : vérifier qu'un échec n'a rien rangé) ; jamais exposée par `SecretVault`. */
+  refs(): string[] {
+    return [...this.entries.keys()];
+  }
+
   /** Lecture réservée au transport mémoire (équivalent du côté Rust) ; jamais exposée par `SecretVault`. */
   read(ref: TokenRef): string | null {
     return this.entries.get(ref) ?? null;

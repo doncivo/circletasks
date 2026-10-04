@@ -79,7 +79,12 @@ export async function startSim(handler: (request: SimRequest, baseUrl: string) =
     baseUrl,
     log,
     failNext: (failure) => void failures.push(failure),
-    close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve()))),
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+        // Connexions persistantes du navigateur : sans cela, la fermeture attendrait leur délai d'inactivité.
+        server.closeAllConnections();
+      }),
   };
 }
 
