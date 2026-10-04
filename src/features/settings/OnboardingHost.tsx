@@ -19,6 +19,8 @@ import './OnboardingHost.css';
 
 const WEEKDAY_KEY = { monday: 'appearance.monday', saturday: 'appearance.saturday', sunday: 'appearance.sunday' } as const satisfies Record<FirstWeekday, PlainMessageKey>;
 
+// `pairing` (association PC / iPhone, ordre 4) et `notifications` (iPhone, ordre 5) ne sont jamais affichées à l'ordre 3 (`onboardingSteps` ne les
+// liste pas) : leurs titres et leur contenu arrivent avec leurs stories ; le titre ci-dessous n'est qu'un repli pour garder la table exhaustive.
 const TITLE_KEY: Record<OnboardingStepId, PlainMessageKey> = {
   language: 'onboarding.languageTitle',
   spaces: 'onboarding.spacesTitle',

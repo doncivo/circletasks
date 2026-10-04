@@ -22,11 +22,16 @@ export interface OnboardingState {
   readonly sampleExists: boolean;
   readonly busy: boolean;
   readonly errorKey: PlainMessageKey | null;
+  /** La création des données d'exemple a échoué à « Commencer » : message affiché hors de l'assistant (Réglages › DONNÉES ET SÉCURITÉ). */
+  readonly sampleError: boolean;
   /** Premier contrôle au lancement. Ne rejette jamais ; une erreur de lecture n'ouvre rien. */
   start(capabilities?: OnboardingCapabilities): Promise<void>;
   next(): Promise<void>;
   back(): Promise<void>;
   setSampleEnabled(value: boolean): void;
+  /** Relit si des données d'exemple existent (la ligne « Supprimer les données d'exemple » de Réglages suit le store). Ne rejette jamais. */
+  refreshSample(): Promise<void>;
+  dismissSampleError(): void;
   /** « Passer », croix ou Échap. Ne rejette jamais ; en cas d'échec d'écriture l'assistant se ferme quand même pour cette session. */
   skip(): Promise<void>;
   /** « Commencer ». Ne rejette jamais ; l'assistant se ferme même si les données d'exemple n'ont pas pu être créées (message dans Réglages). */
@@ -69,6 +74,7 @@ function createOnboardingStore(container: AppContainer) {
       stepIndex: 0,
       sampleEnabled: false,
       sampleExists: false,
+      sampleError: false,
       busy: false,
       errorKey: null,
       async start(capabilities = ORDER3_CAPABILITIES) {
@@ -92,6 +98,10 @@ function createOnboardingStore(container: AppContainer) {
         await remember(stepIndex - 1);
       },
       setSampleEnabled: (value) => set({ sampleEnabled: value }),
+      async refreshSample() {
+        set({ sampleExists: await useCases.sampleExists().catch(() => false) });
+      },
+      dismissSampleError: () => set({ sampleError: false }),
       async skip() {
         set({ open: false, errorKey: null });
         try {
@@ -105,12 +115,12 @@ function createOnboardingStore(container: AppContainer) {
         set({ busy: true, errorKey: null });
         try {
           await useCases.finish({ withSamples: get().sampleEnabled });
-          set({ open: false, busy: false });
+          set({ open: false, busy: false, sampleError: false, sampleExists: await useCases.sampleExists().catch(() => false) });
         } catch (error) {
           logDesktopFailure('onboarding-finish', error);
           // Les éléments déjà créés sont mémorisés ; on marque l'assistant terminé pour ne pas le rouvrir en boucle.
           await useCases.skip().catch(() => undefined);
-          set({ open: false, busy: false, errorKey: 'onboarding.sampleError' });
+          set({ open: false, busy: false, errorKey: 'onboarding.sampleError', sampleError: true, sampleExists: await useCases.sampleExists().catch(() => false) });
         }
       },
       async relaunch(capabilities = ORDER3_CAPABILITIES) {

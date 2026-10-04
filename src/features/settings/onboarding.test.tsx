@@ -352,6 +352,47 @@ describe('Premier lancement (P-05)', () => {
       expect(await countOf('task')).toBe(6);
     });
 
+    it('relance depuis Réglages avec les exemples : à la fermeture de l’assistant, la ligne « Supprimer les données d’exemple » apparaît sans rouvrir Réglages', async () => {
+      render(
+        <AppContainerProvider container={container}>
+          <AboutSection />
+          <SampleDataRow />
+          <OnboardingHost />
+        </AppContainerProvider>,
+      );
+      await waitFor(() => expect(onboardingStore.get(container).getState().ready).toBe(true));
+      await click(await screen.findByRole('button', { name: 'Revoir le guide de bienvenue' }));
+      const dialog = await screen.findByRole('dialog');
+      expect(screen.queryByRole('button', { name: 'Supprimer les données d’exemple' })).not.toBeInTheDocument();
+      await click(within(dialog).getByRole('button', { name: 'Continuer' }));
+      await click(await within(dialog).findByRole('button', { name: 'Continuer' }));
+      await click(await within(dialog).findByRole('switch', { name: 'Ajouter des données d’exemple' }));
+      await click(within(dialog).getByRole('button', { name: 'Commencer' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(await screen.findByRole('button', { name: 'Supprimer les données d’exemple' })).toBeInTheDocument();
+    });
+
+    it('échec de création des exemples : le message est affiché hors de l’assistant (alerte dans la section DONNÉES)', async () => {
+      render(
+        <AppContainerProvider container={container}>
+          <SampleDataRow />
+          <OnboardingHost />
+        </AppContainerProvider>,
+      );
+      const dialog = await screen.findByRole('dialog');
+      await click(within(dialog).getByRole('button', { name: 'Continuer' }));
+      await click(await within(dialog).findByRole('button', { name: 'Continuer' }));
+      await click(await within(dialog).findByRole('switch', { name: 'Ajouter des données d’exemple' }));
+      vi.spyOn(container.data.repos.spaces, 'listAll').mockRejectedValue(new Error('disque plein'));
+      await click(within(dialog).getByRole('button', { name: 'Commencer' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Les données d’exemple n’ont pas pu être créées');
+      expect(await db.data.repos.settings.get('onboarding.completed')).toBe(true);
+      await click(screen.getByRole('button', { name: 'Fermer' }));
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
     it('« Supprimer les données d’exemple » : visible tant qu’elles existent, confirmation, puis plus visible', async () => {
       render(
         <AppContainerProvider container={container}>
