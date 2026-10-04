@@ -13,7 +13,7 @@ import { createRecurrenceRepository, createTaskRepository } from './taskReposito
 /**
  * Fabrique SQL des repositories (data-model, ADR 0004) : une implémentation par
  * agrégat, branchée sur l'exécuteur et le tampon d'écriture reçus (driver ou
- * transaction). Remplace `createPendingRepositories` dans `bootstrapApp`.
+ * transaction). Fabrique par défaut de `bootstrapApp`.
  */
 export const createSqlRepositories: RepositoryFactory = (executor, stamper) => ({
   spaces: createSpaceRepository(executor, stamper),

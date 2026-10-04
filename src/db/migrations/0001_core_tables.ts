@@ -22,7 +22,7 @@ import {
  * Aujourd'hui / Semaine) : elles seront complétées par une migration ultérieure
  * (checklists-events, ordre 2) sans modifier celle-ci.
  *
- * Pas de FTS5 ici (M14, ordre 3) : `search_index` arrivera par une migration dédiée.
+ * Pas de FTS5 ici (M14, ordre 2) : `search_index` arrive par la migration 0011.
  *
  * Pas de suppression physique dans ce code : les clés étrangères n'ont donc pas
  * besoin de `ON DELETE CASCADE` (la purge à 30 jours est un traitement de
