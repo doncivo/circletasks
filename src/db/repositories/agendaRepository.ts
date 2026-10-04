@@ -1,5 +1,5 @@
-import type { CalendarAccount, CalendarEvent, EventPatch, ExternalEvent, NewEvent } from '../../domain/model';
-import type { EventId, SpaceFilter } from '../../domain/types';
+import type { CalendarAccount, CalendarEvent, CalendarProviderKind, CalendarRef, EventPatch, ExternalEvent, NewEvent } from '../../domain/model';
+import type { CalendarAccountId, EventId, ExternalEventId, SpaceFilter } from '../../domain/types';
 import type { DateRange, InstantRange, ReadOptions } from './common';
 
 /**
@@ -25,8 +25,9 @@ export interface EventRepository {
 }
 
 /**
- * Événements des agendas externes (M8) : lecture seule à l'ordre 1 (S-05) ; les écritures de rafraîchissement (K-01 à K-03,
- * ordre 2) s'ajouteront à ce contrat sans casser cette méthode. Aucune ligne n'existe tant qu'aucun agenda n'est connecté.
+ * Événements des agendas externes (M8) : lecture (S-05) et écritures de rafraîchissement (K-01 à K-03). La table est locale, sans
+ * colonnes de synchro (ADR 0004 avenant S-05) : chaque appareil relit ses agendas. L'identifiant de ligne est déterministe
+ * (`externalEventRowId`) : un upsert le conserve, le lien d'une tâche (K-04) survit aux rafraîchissements.
  */
 export interface ExternalEventRepository {
   /**
@@ -35,10 +36,36 @@ export interface ExternalEventRepository {
    * le calcul exact par jour local est fait par src/domain.
    */
   listBetween(range: InstantRange): Promise<ExternalEvent[]>;
+  /** K-04 : une ligne par identifiant ; null si elle a disparu (rafraîchissement, compte supprimé). */
+  getById(id: ExternalEventId): Promise<ExternalEvent | null>;
+  /**
+   * K-03 critère 3 : remplace la fenêtre d'un agenda. Les lignes de `events` sont insérées ou mises à jour (même identifiant), celles
+   * de l'agenda qui recoupent `range` et ne sont plus dans `events` sont supprimées. À appeler dans une transaction.
+   */
+  replaceWindow(accountId: CalendarAccountId, calendarId: string, events: readonly ExternalEvent[], range: InstantRange): Promise<void>;
+  /** Agenda masqué (K-03 critère 4) : retire toutes ses lignes. */
+  deleteForCalendar(accountId: CalendarAccountId, calendarId: string): Promise<void>;
+  /** Compte supprimé (K-01 critère 8) : retire toutes ses lignes. */
+  deleteForAccount(accountId: CalendarAccountId): Promise<void>;
 }
 
-/** Comptes d'agenda externes (M8) : lecture seule à l'ordre 1 (S-05, rattachement des agendas à un espace). */
+/** Nouveau compte d'agenda (K-01, K-02) : `tokenRef` seul, jamais un secret. */
+export interface NewCalendarAccount {
+  readonly id: CalendarAccountId;
+  readonly provider: CalendarProviderKind;
+  readonly label: string;
+  readonly tokenRef: string;
+  readonly calendars: readonly CalendarRef[];
+}
+
+/** Comptes d'agenda externes (M8) : lecture (S-05, rattachement des agendas à un espace) et écritures de K-01 / K-02. */
 export interface CalendarAccountRepository {
   /** Comptes non supprimés, avec leurs agendas (rattachement à un espace, affiché ou non), triés par libellé. */
   listAll(): Promise<CalendarAccount[]>;
+  getById(id: CalendarAccountId): Promise<CalendarAccount | null>;
+  create(account: NewCalendarAccount): Promise<CalendarAccount>;
+  /** Agendas affichés et leur espace (ES-06) ; remplace la liste entière. */
+  updateCalendars(id: CalendarAccountId, calendars: readonly CalendarRef[]): Promise<CalendarAccount>;
+  /** Suppression logique (K-01 critère 8) : le compte disparaît de la liste, ses lignes d'événements sont retirées à part. */
+  softDelete(id: CalendarAccountId): Promise<CalendarAccount>;
 }

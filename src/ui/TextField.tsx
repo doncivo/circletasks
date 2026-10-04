@@ -17,6 +17,8 @@ export interface TextFieldProps {
   /** Enregistrement à la perte de focus, sans bouton supplémentaire (Note, T-03 critère 8). */
   onBlur?: () => void;
   disabled?: boolean;
+  /** Champ de saisie d'un secret (mot de passe d'application, K-02) : texte masqué, sans complétion ni correction du navigateur. */
+  secret?: boolean;
   /** Focus dans le champ au montage (édition en place, fiche détail). */
   autoFocus?: boolean;
   className?: string;
@@ -31,7 +33,7 @@ export interface TextFieldProps {
  * <TextField label={t('tasks.newTask')} placeholder={t('tasks.addPlaceholder')} value={title} onChange={setTitle} />
  */
 export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, TextFieldProps>(function TextField(
-  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, onBlur, disabled, autoFocus, className },
+  { value, onChange, label, placeholder, visibleLabel, multiline, maxLength, onBlur, disabled, secret, autoFocus, className },
   ref,
 ) {
   const id = useId();
@@ -55,7 +57,8 @@ export const TextField = forwardRef<HTMLInputElement | HTMLTextAreaElement, Text
         <input
           ref={ref as React.Ref<HTMLInputElement>}
           id={id}
-          type="text"
+          type={secret ? 'password' : 'text'}
+          {...(secret ? { autoComplete: 'off', autoCorrect: 'off', autoCapitalize: 'off', spellCheck: false } : {})}
           value={value}
           placeholder={placeholder}
           disabled={disabled}

@@ -40,3 +40,51 @@ impl SecretVault for MemoryVault {
         Ok(())
     }
 }
+
+/// Coffre système : Gestionnaire d'identification Windows (`windows-native`), Trousseau iOS (`apple-native`). Service
+/// `fr.circletasks.planner`, compte = `token_ref`. Sur une autre cible (aucune n'est livrée), tout accès rend `Unavailable`.
+pub struct SystemVault;
+
+#[cfg(any(windows, target_os = "ios"))]
+impl SystemVault {
+    fn entry(token_ref: &str) -> Result<keyring::Entry, VaultError> {
+        keyring::Entry::new(super::VAULT_SERVICE, token_ref).map_err(|_| VaultError::Unavailable)
+    }
+}
+
+#[cfg(any(windows, target_os = "ios"))]
+impl SecretVault for SystemVault {
+    fn set(&self, token_ref: &str, secret: &str) -> Result<(), VaultError> {
+        Self::entry(token_ref)?.set_password(secret).map_err(|_| VaultError::Unavailable)
+    }
+
+    fn get(&self, token_ref: &str) -> Result<Option<String>, VaultError> {
+        match Self::entry(token_ref)?.get_password() {
+            Ok(secret) => Ok(Some(secret)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(_) => Err(VaultError::Unavailable),
+        }
+    }
+
+    fn delete(&self, token_ref: &str) -> Result<(), VaultError> {
+        match Self::entry(token_ref)?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(_) => Err(VaultError::Unavailable),
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "ios")))]
+impl SecretVault for SystemVault {
+    fn set(&self, _token_ref: &str, _secret: &str) -> Result<(), VaultError> {
+        Err(VaultError::Unavailable)
+    }
+
+    fn get(&self, _token_ref: &str) -> Result<Option<String>, VaultError> {
+        Err(VaultError::Unavailable)
+    }
+
+    fn delete(&self, _token_ref: &str) -> Result<(), VaultError> {
+        Err(VaultError::Unavailable)
+    }
+}

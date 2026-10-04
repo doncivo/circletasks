@@ -1,0 +1,185 @@
+/* Écran « Agendas » (K-01 à K-03) : mêmes codes que Réglages.html (titre, filet, sections, lignes) et que « Espaces et projets ». */
+.ct-calendars-shell {
+  display: flex;
+  flex-grow: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.ct-calendars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  flex-grow: 1;
+  min-width: 0;
+  max-width: 640px;
+}
+
+.ct-calendars__topRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-calendars__back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: var(--ct-color-text);
+  cursor: pointer;
+}
+
+.ct-calendars__title {
+  margin: 0 0 var(--ct-space-2) 0;
+  font-size: var(--ct-font-size-display-mobile);
+  line-height: 1;
+}
+
+.ct-calendars__rule {
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--ct-space-1);
+}
+
+.ct-calendars__ruleAccent {
+  width: 80px;
+  height: 3px;
+  background: var(--ct-color-text);
+}
+
+.ct-calendars__ruleLine {
+  flex-grow: 1;
+  height: 1px;
+  background: var(--ct-color-text);
+}
+
+.ct-calendars__section,
+.ct-calendars__caption {
+  margin: 6px 0 0 0;
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-xs);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-calendars__error {
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
+
+.ct-calendars__empty,
+.ct-calendars__hint,
+.ct-calendars__connecting {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-calendars__card,
+.ct-calendars__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-surface-raised);
+}
+
+.ct-calendars__cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+}
+
+.ct-calendars__identity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ct-calendars__provider {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-calendars__label {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.ct-calendars__state {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-achieved-text);
+  white-space: nowrap;
+}
+
+.ct-calendars__state[data-state='reconnect-required'] {
+  color: var(--ct-color-danger);
+}
+
+.ct-calendars__state[data-state='error'] {
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-calendars__updated {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-medium);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-calendars__actions,
+.ct-calendars__add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+}
+
+.ct-calendars__list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ct-calendars__calendar {
+  display: flex;
+  align-items: center;
+  gap: var(--ct-space-2);
+  min-height: 44px;
+  border-bottom: 1px solid var(--ct-color-border);
+}
+
+.ct-calendars__calendar:last-child {
+  border-bottom: 0;
+}
+
+.ct-calendars__dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--ct-radius-round);
+}
+
+.ct-calendars__name {
+  flex-grow: 1;
+  min-width: 0;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+  overflow-wrap: anywhere;
+}

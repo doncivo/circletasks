@@ -34,6 +34,19 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = "0.32"
+# Agendas externes (ADR 0008) : HTTP limité aux hôtes autorisés, PKCE, analyse d'URL.
+reqwest = { version = "0.13", default-features = false, features = ["rustls"] }
+url = "2"
+sha2 = "0.10"
+rand = "0.9"
+base64 = "0.22"
+tokio = { version = "1", features = ["time", "net", "io-util"] }
+
+# Coffre système : Gestionnaire d'identification Windows, Trousseau iOS (ADR 0008 section 3).
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", default-features = false, features = ["windows-native"] }
+[target.'cfg(target_os = "ios")'.dependencies]
+keyring = { version = "3", default-features = false, features = ["apple-native"] }
 
 # Plugins PC uniquement (absents du build iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
@@ -49,7 +62,6 @@ tempfile = "3"
 # Banc de test de la mise à jour (D-03) : clé jetable générée en mémoire, jamais écrite dans le dépôt.
 tauri = { version = "2", features = ["test"] }
 minisign = "0.7"
-base64 = "0.22"
 tokio = { version = "1", features = ["rt", "macros"] }
 
 [profile.release]

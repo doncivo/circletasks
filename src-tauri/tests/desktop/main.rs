@@ -4,6 +4,7 @@
 //! désactivés dans Cargo.toml).
 
 mod backup;
+mod calendars;
 mod config;
 mod logic;
 mod quit;

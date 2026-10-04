@@ -24,8 +24,13 @@ export interface TodayExtras {
 
 export const EMPTY_TODAY_EXTRAS: TodayExtras = { routines: [], events: [], checklists: [], goals: [] };
 
+/** Écran qui consomme les sources : Aujourd'hui, ou la Semaine (qui lit certains éléments par son propre store). */
+export type TodayScreenKind = 'today' | 'week';
+
 export interface TodaySource {
   readonly id: string;
+  /** Écrans qui chargent cette source (défaut : les deux). Les événements des agendas externes ne sont chargés que par Aujourd'hui : la Semaine les lit elle-même (S-05). */
+  readonly screens?: readonly TodayScreenKind[];
   /** Éléments du jour `date` pour le filtre d'espace ; peut rejeter (l'écran affiche alors un message et garde le reste). */
   load(container: AppContainer, date: LocalDate, filter: SpaceFilter): Promise<Partial<TodayExtras>>;
   /**
@@ -70,8 +75,8 @@ export async function toggleRoutineViaSources(container: AppContainer, routineId
 }
 
 /** Fusionne les sources enregistrées ; `failed` : au moins une a échoué (les autres restent affichées). */
-export async function loadTodayExtras(container: AppContainer, date: LocalDate, filter: SpaceFilter): Promise<{ extras: TodayExtras; failed: boolean }> {
-  const results = await Promise.allSettled([...sources].map((source) => source.load(container, date, filter)));
+export async function loadTodayExtras(container: AppContainer, date: LocalDate, filter: SpaceFilter, screen: TodayScreenKind = 'today'): Promise<{ extras: TodayExtras; failed: boolean }> {
+  const results = await Promise.allSettled(sources.filter((source) => source.screens === undefined || source.screens.includes(screen)).map((source) => source.load(container, date, filter)));
   let extras = EMPTY_TODAY_EXTRAS;
   let failed = false;
   for (const result of results) {

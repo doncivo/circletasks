@@ -168,7 +168,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
         container.taskEntities.publish(tasks);
         const recurrences = await loadRecurrences(tasks, get().recurrences);
         // Un jour à la fois via les sources d'Aujourd'hui (routines, événements locaux, checklists) : aucune tant que leurs modules n'existent pas.
-        const loaded = await Promise.all(weekDays(weekStart).map(async (date) => ({ date, ...(await loadTodayExtras(container, date, filter)) })));
+        const loaded = await Promise.all(weekDays(weekStart).map(async (date) => ({ date, ...(await loadTodayExtras(container, date, filter, 'week')) })));
         // Agendas externes (S-05) : lecture seule, une requête pour la semaine ; un échec ne masque pas les tâches.
         let externalEvents: readonly ExternalEvent[] = [];
         let calendarAccounts: readonly CalendarAccount[] = [];
@@ -274,7 +274,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       try {
         await toggleRoutineViaSources(container, routineId, date, !entry.done);
         // Toute la semaine est relue : valider peut atteindre le quota d'une routine « X fois par semaine » (QB-01) et la retirer des autres jours.
-        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter)) })));
+        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter, 'week')) })));
         if (get().weekStart !== weekStart) return;
         const extras = new Map<LocalDate, WeekDayExtras>();
         for (const { day, extras: dayExtras } of loaded) if (dayExtras !== EMPTY_TODAY_EXTRAS) extras.set(day, dayExtras);
@@ -290,11 +290,20 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       const { weekStart, filter } = get();
       if (weekStart === null) return;
       try {
-        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter)) })));
+        const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter, 'week')) })));
         if (get().weekStart !== weekStart) return;
         const extras = new Map<LocalDate, WeekDayExtras>();
         for (const { day, extras: dayExtras } of loaded) if (dayExtras !== EMPTY_TODAY_EXTRAS) extras.set(day, dayExtras);
-        set({ extras, extrasFailed: loaded.some((day) => day.failed) });
+        // Agendas externes (K-03) : une actualisation ou un changement d'espace d'agenda met la grille à jour sans recharger la semaine.
+        let external: { externalEvents: readonly ExternalEvent[]; calendarAccounts: readonly CalendarAccount[] } | null = null;
+        try {
+          const [externalEvents, calendarAccounts] = await Promise.all([container.data.repos.externalEvents.listBetween(externalEventRange(weekStart)), container.data.repos.calendarAccounts.listAll()]);
+          external = { externalEvents, calendarAccounts };
+        } catch {
+          // Relecture discrète : l'affichage reste celui d'avant.
+        }
+        if (get().weekStart !== weekStart) return;
+        set({ extras, ...(external ?? {}), extrasFailed: loaded.some((day) => day.failed) });
       } catch {
         set({ extrasFailed: true });
       }

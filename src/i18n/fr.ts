@@ -2,6 +2,7 @@ import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { searchFr } from './fr.search';
 import { spacesFr } from './fr.spaces';
+import { calendarsFr } from './fr.calendars';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
 import { eventsFr } from './fr.events';
@@ -36,6 +37,7 @@ export const fr = {
     },
   },
   spaces: spacesFr,
+  calendars: calendarsFr,
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',

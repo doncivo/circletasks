@@ -1,4 +1,5 @@
 import { addDays } from './localDate';
+import { localToUtcMs } from './timeZone';
 import type { CalendarProviderKind, ExternalEvent } from './model';
 import type { CalendarAccountId, ExternalEventId, IsoDateTime, LocalDate, Result } from './types';
 
@@ -99,14 +100,43 @@ export function externalEventRowId(accountId: CalendarAccountId, calendarId: str
   return [accountId, calendarId, externalId].map(encodeURIComponent).join('|') as ExternalEventId;
 }
 
+/** Instant UTC au format stocké : secondes, sans millisecondes (tri et comparaisons de chaînes cohérents avec les bornes de plage). */
+export function toStoredInstant(ms: number): string {
+  return new Date(ms).toISOString().replace('.000Z', 'Z');
+}
+
 /**
- * Normalisation vers `external_event` (K-03, partagée Google / iCloud) : id déterministe, `syncedAt`, titre conservé brut.
- * À implémenter par calendar-integration (domain-logic) avec ses tests.
+ * Plage UTC lue à chaque rafraîchissement (K-01 D3) : de minuit local du premier jour à minuit local suivant le dernier jour, élargie
+ * d'un jour de chaque côté (marge de fuseau, journées entières stockées en UTC).
  */
-export function toExternalEvents(
-  _accountId: CalendarAccountId,
-  _events: readonly ProviderEvent[],
-  _syncedAt: IsoDateTime,
-): ExternalEvent[] {
-  throw new Error('K-03 : toExternalEvents à implémenter');
+export function externalFetchRange(today: LocalDate, timeZone: string): FetchRange {
+  const { first, last } = externalWindowDays(today);
+  const day = 86_400_000;
+  return {
+    fromUtc: toStoredInstant(localToUtcMs(first, '00:00', timeZone) - day) as IsoDateTime,
+    toUtc: toStoredInstant(localToUtcMs(addDays(last, 1), '00:00', timeZone) + day) as IsoDateTime,
+  };
+}
+
+/**
+ * Normalisation vers `external_event` (K-03, partagée Google / iCloud) : id déterministe, `syncedAt`, titre conservé brut (vide
+ * accepté : « (Sans titre) » est un texte d'affichage). Deux instances de même identifiant : la dernière gagne.
+ */
+export function toExternalEvents(accountId: CalendarAccountId, events: readonly ProviderEvent[], syncedAt: IsoDateTime): ExternalEvent[] {
+  const byId = new Map<ExternalEventId, ExternalEvent>();
+  for (const event of events) {
+    const id = externalEventRowId(accountId, event.calendarId, event.externalId);
+    byId.set(id, {
+      id,
+      accountId,
+      calendarId: event.calendarId,
+      externalId: event.externalId,
+      title: event.title,
+      startUtc: event.startUtc,
+      endUtc: event.endUtc,
+      allDay: event.allDay,
+      syncedAt,
+    });
+  }
+  return [...byId.values()];
 }

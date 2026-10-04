@@ -4,6 +4,7 @@ import type { HlcClock } from '../../domain/hlc';
 import { uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
+import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
@@ -30,6 +31,8 @@ export interface AppContainer {
   readonly platform: { readonly runtime: Runtime; readonly os: OsFamily };
   /** Intégration système du PC Windows (D-01 à D-03, ADR 0006) ; null hors PC (navigateur, iPhone, tests). */
   readonly desktop: DesktopPlatform | null;
+  /** Agendas externes (K-01 à K-03, ADR 0008) : coffre, transport HTTP et OAuth ; commandes Rust dans l'app, mémoire ailleurs. */
+  readonly calendars: CalendarPlatform;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -45,6 +48,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     shortcuts: parts.shortcuts ?? createShortcutRegistry(),
     platform: parts.platform ?? { runtime: 'web', os: 'other' },
     desktop: parts.desktop ?? null,
+    calendars: parts.calendars ?? createMemoryCalendarPlatform(PRODUCTION_ENDPOINTS),
   };
 }
 

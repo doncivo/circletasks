@@ -15,9 +15,9 @@ pub mod desktop;
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
-    let builder = desktop::configure(builder).invoke_handler(tauri::generate_handler![desktop::set_tray_labels, desktop::confirm_quit, backup::backup_database_before_migration]);
+    let builder = desktop::configure(builder).invoke_handler(tauri::generate_handler![desktop::set_tray_labels, desktop::confirm_quit, backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
     #[cfg(mobile)]
-    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration]);
+    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

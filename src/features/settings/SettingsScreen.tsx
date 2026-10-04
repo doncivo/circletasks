@@ -4,6 +4,7 @@ import { Button, Switch } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { CalendarsSummaryRow } from '../calendars';
 import { HolidaysSummaryRow } from '../events';
 import { formatRecapSummary } from '../reminders';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
@@ -94,6 +95,7 @@ export function SettingsScreen() {
       <QuietHoursRows />
       <h2 className="ct-settings__section">{t('spaces.sectionTitle')}</h2>
       <SpacesSummaryRow />
+      <CalendarsSummaryRow />
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
       <div className="ct-settings__row">
         <span>{t('settings.trash')}</span>

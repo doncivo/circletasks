@@ -40,3 +40,9 @@ La licence SIL OFL autorise l'intégration et la redistribution des polices avec
 logiciel, à condition de conserver la mention de copyright et le texte de la licence
 (ce que fait ce document) et de ne pas vendre les polices seules. CircleTasks ne
 redistribue pas les fichiers de police séparément de l'application.
+
+# Licences — dépendances Rust des agendas externes (K-01, ADR 0008)
+
+- `keyring` 3 (coffre système : Gestionnaire d'identification Windows, Trousseau iOS) : MIT OU Apache-2.0.
+- `reqwest` 0.13 avec `rustls` (HTTP des agendas, déjà compilé par l'updater) : MIT OU Apache-2.0.
+- `url`, `sha2`, `rand`, `base64` (analyse d'URL, PKCE) : MIT OU Apache-2.0.

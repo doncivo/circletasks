@@ -77,7 +77,7 @@ export function EventsScreen() {
   );
   // Sous un filtre projet, aucun événement (E-01 critère 10).
   const entries = useMemo(
-    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays })),
+    () => (projectFilter ? [] : buildEventList({ year, events, externalEvents, accounts, timeZone, filter: spaceFilter, holidays, untitled: t('calendars.untitled') })),
     [year, events, externalEvents, accounts, timeZone, spaceFilter, projectFilter, holidays],
   );
   const uncovered = projectFilter ? [] : uncoveredLunarYears([year], holidayCountries);

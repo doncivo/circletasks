@@ -47,29 +47,66 @@ export interface RefreshDecisionInput {
   readonly inFlight: boolean;
 }
 
-/** Faut-il rafraîchir ce compte maintenant ? À implémenter (K-03, domain-logic) avec horloge simulée. */
-export function shouldRefresh(_input: RefreshDecisionInput): boolean {
-  throw new Error('K-03 : shouldRefresh à implémenter');
+/**
+ * Faut-il rafraîchir ce compte maintenant ? (K-03 critères 1, 2, 5, 6, 7, D3)
+ * - un rafraîchissement du compte est en cours : jamais, manuel compris (critère 7) ;
+ * - « à reconnecter » : aucune tentative automatique (critère 6) ; « Actualiser » et la reconnexion réessaient ;
+ * - 429 : le délai du serveur est respecté pour tous les déclencheurs ; autre erreur : la prochaine échéance (`retryAt`) est
+ *   attendue par l'échéance du minuteur et le retour au premier plan ;
+ * - ouverture, connexion, « Actualiser » : toujours ; retour au premier plan et échéance : au premier plan seulement, 15 min après la
+ *   dernière réussite (D3).
+ */
+export function shouldRefresh(input: RefreshDecisionInput): boolean {
+  const { state, trigger, now, foreground, inFlight } = input;
+  if (inFlight) return false;
+  if (state.kind === 'reconnect-required') return trigger === 'manual' || trigger === 'connected';
+  const nowMs = Date.parse(now);
+  if (state.kind === 'error' && state.retryAt !== null && nowMs < Date.parse(state.retryAt)) {
+    if (state.error === 'rate-limited' || trigger === 'tick' || trigger === 'resume') return false;
+  }
+  if (trigger === 'open' || trigger === 'manual' || trigger === 'connected') return true;
+  if (!foreground) return false;
+  if (state.lastSuccessAt === null) return true;
+  return nowMs - Date.parse(state.lastSuccessAt) >= CALENDAR_REFRESH_INTERVAL_MS;
 }
 
 export type RefreshOutcome = { readonly ok: true; readonly at: IsoDateTime } | { readonly ok: false; readonly at: IsoDateTime; readonly error: ProviderError };
 
 /**
- * Nouvel état après une tentative : réussite → connecté ; `unauthorized` → à reconnecter ; `rate-limited` → erreur avec `retryAt` ;
- * `network` / `server` → erreur ; `forbidden` / `not-found` / `malformed` ne concernent qu'un agenda (compte inchangé).
- * À implémenter (K-03).
+ * Nouvel état après une tentative : réussite → connecté ; `unauthorized` → à reconnecter ; `rate-limited` → erreur avec `retryAt`
+ * (délai du serveur, sinon 15 min) ; `network` / `server` → erreur, prochaine tentative 15 min plus tard ; `forbidden` /
+ * `not-found` / `malformed` ne concernent qu'un agenda (compte inchangé).
  */
-export function nextAccountState(_previous: CalendarAccountState, _outcome: RefreshOutcome): CalendarAccountState {
-  throw new Error('K-03 : nextAccountState à implémenter');
+export function nextAccountState(previous: CalendarAccountState, outcome: RefreshOutcome): CalendarAccountState {
+  if (outcome.ok) return { kind: 'connected', lastSuccessAt: outcome.at };
+  const { error, at } = outcome;
+  const lastSuccessAt = previous.lastSuccessAt;
+  const after = (ms: number): IsoDateTime => new Date(Date.parse(at) + ms).toISOString() as IsoDateTime;
+  switch (error.kind) {
+    case 'unauthorized':
+      return { kind: 'reconnect-required', lastSuccessAt };
+    case 'rate-limited':
+      return { kind: 'error', lastSuccessAt, error: 'rate-limited', retryAt: after(error.retryAfterMs ?? CALENDAR_REFRESH_INTERVAL_MS) };
+    case 'network':
+      return { kind: 'error', lastSuccessAt, error: 'network', retryAt: after(CALENDAR_REFRESH_INTERVAL_MS) };
+    case 'server':
+      return { kind: 'error', lastSuccessAt, error: 'server', retryAt: after(CALENDAR_REFRESH_INTERVAL_MS) };
+    case 'forbidden':
+    case 'not-found':
+    case 'malformed':
+      return previous;
+  }
 }
 
 /**
- * États A-09 émis par les agendas : `calendarDisconnected` (detail = label du premier compte à reconnecter), `offline` si un compte
- * est en erreur réseau. À implémenter (K-01 critère 7, A-09 critère 10).
+ * États A-09 émis par les agendas : `calendarDisconnected` (detail = label du premier compte à reconnecter, dans l'ordre donné),
+ * `offline` si un compte est en erreur réseau ou serveur (K-03 critère 5). Un compte sans état (pas encore tenté) n'émet rien.
  */
-export function calendarAppStatuses(
-  _accounts: readonly Pick<CalendarAccount, 'id' | 'label'>[],
-  _states: ReadonlyMap<CalendarAccountId, CalendarAccountState>,
-): ActiveStatuses {
-  throw new Error('A-09 : calendarAppStatuses à implémenter');
+export function calendarAppStatuses(accounts: readonly Pick<CalendarAccount, 'id' | 'label'>[], states: ReadonlyMap<CalendarAccountId, CalendarAccountState>): ActiveStatuses {
+  const disconnected = accounts.find((account) => states.get(account.id)?.kind === 'reconnect-required');
+  const offline = accounts.some((account) => {
+    const state = states.get(account.id);
+    return state?.kind === 'error' && state.error !== 'rate-limited';
+  });
+  return { ...(disconnected ? { calendarDisconnected: { detail: disconnected.label } } : {}), ...(offline ? { offline: {} } : {}) };
 }

@@ -21,6 +21,11 @@ pub fn is_allowed(scheme: &str, host: &str, allow_loopback: bool) -> bool {
     }
 }
 
+/// Autorisation d'une URL complète (requête initiale et chaque redirection). Le build de debug accepte `127.0.0.1` (simulateurs).
+pub fn url_allowed(url: &url::Url) -> bool {
+    url.host_str().is_some_and(|host| is_allowed(url.scheme(), host, cfg!(debug_assertions)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::is_allowed;

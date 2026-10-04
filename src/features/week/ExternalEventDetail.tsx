@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { externalEventSpan } from '../../domain/externalEvents';
+import { displayTitle, externalEventSpan } from '../../domain/externalEvents';
 import { t } from '../../i18n';
 import { formatDetailDate } from '../../i18n/format';
 import { DetailPanel, Sheet, useDetailSlot, useLayout } from '../../ui';
@@ -35,7 +35,7 @@ export function ExternalEventDetail() {
   const content = (
     <div className="ct-task-detail">
       <div className="ct-task-detail__header">
-        <h2 className="ct-task-detail__title">{event.title}</h2>
+        <h2 className="ct-task-detail__title">{displayTitle(event.title, t('calendars.untitled'))}</h2>
       </div>
       <p className="ct-week-eventDetail__note">{t('week.eventReadOnlyNote')}</p>
       {span && (

@@ -111,7 +111,7 @@ export function WeekScreen() {
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
   const external = useMemo(
     () =>
-      projectFilter ? new Map() : externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter }),
+      projectFilter ? new Map() : externalEventsByDay({ days: weekDays(weekStart), events: externalEvents, accounts: calendarAccounts, timeZone, filter: spaceFilter, untitled: t('calendars.untitled') }),
     [weekStart, externalEvents, calendarAccounts, timeZone, spaceFilter, projectFilter],
   );
   const days = useMemo(() => buildWeek({ weekStart, filter: spaceFilter, tasks, extras: projectFilter ? new Map() : extras, externalEvents: external }), [weekStart, spaceFilter, tasks, extras, external, projectFilter]);

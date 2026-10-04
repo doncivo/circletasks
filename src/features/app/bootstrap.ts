@@ -8,6 +8,7 @@ import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
+import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { useAppStore } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
@@ -64,6 +65,8 @@ export interface BootstrapAppOptions {
   readonly ids?: IdGenerator;
   /** Intégration PC ; `openDesktopPlatform` par défaut (null hors Windows installé). */
   readonly desktop?: DesktopPlatform | null;
+  /** Agendas externes ; `openCalendarPlatform` par défaut (commandes Rust, ou mémoire + simulateurs en développement). */
+  readonly calendars?: CalendarPlatform;
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
 }
@@ -105,9 +108,26 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       data,
       platform: { runtime: detectRuntime(), os: detectOs() },
       desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
+      calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
     });
   } catch (error) {
     useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });
     return undefined;
   }
 }
+
+/**
+ * Points d'accès et ID client des simulateurs d'agendas, en développement seulement (variables VITE_CT_GOOGLE_SIM, VITE_CT_CALDAV_SIM,
+ * VITE_CT_GOOGLE_SIM_CLIENT_ID posées par Playwright) : un build de production n'en lit jamais.
+ */
+function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, { googleClientId?: string }] {
+  const env = import.meta.env;
+  if (!env.DEV) return [PRODUCTION_ENDPOINTS, undefined, {}];
+  // Playwright : un test qui modifie l'état d'un simulateur en démarre un à lui et l'annonce avant le chargement de la page.
+  const override = (globalThis as { __ctCalendarSims?: { google: string; caldav: string; clientId?: string } }).__ctCalendarSims;
+  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, override.clientId ? { googleClientId: override.clientId } : {}];
+  if (!env.VITE_CT_GOOGLE_SIM || !env.VITE_CT_CALDAV_SIM) return [PRODUCTION_ENDPOINTS, undefined, {}];
+  return [simulatorEndpoints(env.VITE_CT_GOOGLE_SIM, env.VITE_CT_CALDAV_SIM), undefined, env.VITE_CT_GOOGLE_SIM_CLIENT_ID ? { googleClientId: env.VITE_CT_GOOGLE_SIM_CLIENT_ID } : {}];
+}
+
+type CalendarEndpointsArg = Parameters<typeof openCalendarPlatform>[0];
