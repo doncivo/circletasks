@@ -72,12 +72,13 @@ describe('écritures des agendas externes (K-01, K-03, K-04)', () => {
     expect(await repo.getById(externalEventRowId(ACCOUNT, 'cal', 'b'))).toBeNull();
   });
 
-  it('replaceWindow ne touche ni les autres agendas ni les lignes hors de la plage', async () => {
+  it('replaceWindow ne touche pas les autres agendas et purge les lignes terminées avant la fenêtre (elle glisse chaque jour)', async () => {
     const repo = db.data.repos.externalEvents;
     await repo.replaceWindow(ACCOUNT, 'other', [event('x', 'Autre agenda', '2026-09-23T08:00:00Z', 'other')], range);
     await repo.replaceWindow(ACCOUNT, 'cal', [event('old', 'Hors plage', '2025-01-01T08:00:00Z'), event('in', 'Dans la plage', '2026-09-23T08:00:00Z')], { from: '2024-12-01T00:00:00Z' as IsoDateTime, to: '2026-12-01T00:00:00Z' as IsoDateTime });
     await repo.replaceWindow(ACCOUNT, 'cal', [event('in', 'Dans la plage', '2026-09-23T08:00:00Z')], range);
-    expect(await repo.getById(externalEventRowId(ACCOUNT, 'cal', 'old'))).not.toBeNull();
+    expect(await repo.getById(externalEventRowId(ACCOUNT, 'cal', 'old'))).toBeNull();
+    expect(await repo.getById(externalEventRowId(ACCOUNT, 'cal', 'in'))).not.toBeNull();
     expect(await repo.getById(externalEventRowId(ACCOUNT, 'other', 'x'))).not.toBeNull();
   });
 

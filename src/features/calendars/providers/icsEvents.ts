@@ -14,6 +14,11 @@ import { occurrenceDates, parseRecurrenceRule } from './recurrence';
  * Identifiant d'une instance : `UID#clé` (clé = début de l'instance : `AAAAMMJJ` ou `AAAAMMJJTHHMMSSZ`) ; d'un événement simple : l'UID.
  */
 
+/** Le texte est-il un iCalendar lisible (VCALENDAR bien formé) ? */
+export function isReadableIcs(text: string): boolean {
+  return parseIcs(text) !== null;
+}
+
 export interface IcsRange {
   readonly fromMs: number;
   readonly toMs: number;
@@ -122,6 +127,7 @@ function seriesStarts(master: RawEvent, range: IcsRange, context: TimeContext): 
     starts = occurrenceDates(rule, {
       start: master.start.date,
       last: lastDate,
+      first: new Date(range.fromMs - 400 * 86_400_000).toISOString().slice(0, 10) as LocalDate,
       pastUntil: (date) => untilMs !== null && resolveIcsTime(withDate(date), context) >= untilMs,
     }).map(withDate);
   }

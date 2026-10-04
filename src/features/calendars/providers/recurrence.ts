@@ -155,6 +155,11 @@ export interface OccurrenceOptions {
   readonly start: LocalDate;
   /** Dernier jour utile : l'itération s'arrête dès que les dates le dépassent. */
   readonly last: LocalDate;
+  /**
+   * Premier jour utile (début de plage, marge comprise) : sans COUNT, l'itération saute les périodes qui le précèdent au lieu de les
+   * parcourir depuis DTSTART (une série vieille de 50 ans reste lue sur la plage). Avec COUNT, la série est comptée depuis DTSTART.
+   */
+  readonly first?: LocalDate;
   /** `UNTIL` : vrai si la date (avant heure) est au-delà de la fin de la série ; fourni par l'appelant (heure et fuseau). */
   readonly pastUntil: (date: LocalDate) => boolean;
 }
@@ -165,11 +170,16 @@ export interface OccurrenceOptions {
  */
 export function occurrenceDates(rule: RecurrenceRule, options: OccurrenceOptions): LocalDate[] {
   const result: LocalDate[] = [];
-  let produced = 0;
-  for (let index = 0; index < MAX_PERIODS; index += 1) {
+  // RFC 5545 : DTSTART est toujours la première occurrence, même s'il ne correspond pas à la règle ; elle compte dans COUNT.
+  if (options.pastUntil(options.start)) return result;
+  let produced = 1;
+  if (compareDates(options.start, options.last) <= 0) result.push(options.start);
+  if (rule.count !== null && produced >= rule.count) return result;
+  const firstIndex = rule.count === null && options.first !== undefined ? Math.max(0, skippablePeriods(rule, options.start, options.first)) : 0;
+  for (let index = firstIndex; index < firstIndex + MAX_PERIODS; index += 1) {
     const dates = periodDates(rule, options.start, index);
     for (const date of dates) {
-      if (compareDates(date, options.start) < 0) continue;
+      if (compareDates(date, options.start) <= 0) continue;
       if (options.pastUntil(date)) return result;
       produced += 1;
       if (compareDates(date, options.last) <= 0) result.push(date);
@@ -181,6 +191,24 @@ export function occurrenceDates(rule: RecurrenceRule, options: OccurrenceOptions
     if (compareDates(periodStart, options.last) > 0) return result;
   }
   return result;
+}
+
+/** Nombre de périodes entières de la règle à sauter pour atteindre `first` (moins une, par prudence). */
+function skippablePeriods(rule: RecurrenceRule, start: LocalDate, first: LocalDate): number {
+  if (compareDates(first, start) <= 0) return 0;
+  const a = parseLocalDate(start);
+  const b = parseLocalDate(first);
+  const days = Math.floor((Date.UTC(b.year, b.month - 1, b.day) - Date.UTC(a.year, a.month - 1, a.day)) / 86_400_000);
+  switch (rule.frequency) {
+    case 'DAILY':
+      return Math.floor(days / rule.interval) - 1;
+    case 'WEEKLY':
+      return Math.floor(days / (7 * rule.interval)) - 1;
+    case 'MONTHLY':
+      return Math.floor(((b.year - a.year) * 12 + (b.month - a.month)) / rule.interval) - 1;
+    case 'YEARLY':
+      return Math.floor((b.year - a.year) / rule.interval) - 1;
+  }
 }
 
 /** Début approximatif d'une période sans candidat (jour, semaine, mois, année) : sert seulement à arrêter l'itération. */

@@ -67,10 +67,24 @@ describe('occurrenceDates', () => {
   it('UNTIL arrête la série ; la plage la borne ; avant DTSTART rien', () => {
     expect(dates('FREQ=DAILY', '2026-09-22', '2026-12-31', '2026-09-24')).toEqual(['2026-09-22', '2026-09-23', '2026-09-24']);
     expect(dates('FREQ=DAILY', '2026-09-22', '2026-09-23')).toEqual(['2026-09-22', '2026-09-23']);
-    expect(dates('FREQ=WEEKLY;BYDAY=MO,SU', '2026-09-23', '2026-09-30')).toEqual(['2026-09-27', '2026-09-28']);
+    // RFC 5545 : DTSTART (un mercredi) est toujours la première occurrence, même hors règle.
+    expect(dates('FREQ=WEEKLY;BYDAY=MO,SU', '2026-09-23', '2026-09-30')).toEqual(['2026-09-23', '2026-09-27', '2026-09-28']);
   });
 
-  it('une règle sans aucune date possible ne boucle pas', () => {
-    expect(dates('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30', '2026-02-10', '2040-01-01')).toEqual([]);
+  it('une règle sans aucune date possible ne boucle pas (seul DTSTART reste)', () => {
+    expect(dates('FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=30', '2026-02-10', '2040-01-01')).toEqual(['2026-02-10']);
+  });
+
+  it('DTSTART hors règle compte dans COUNT', () => {
+    expect(dates('FREQ=WEEKLY;BYDAY=MO;COUNT=2', '2026-09-23', '2026-12-31')).toEqual(['2026-09-23', '2026-09-28']);
+  });
+
+  it('une série très ancienne est lue sur la plage sans parcourir tout son passé (au-delà du plafond de périodes)', () => {
+    const rule = parseRecurrenceRule('FREQ=DAILY');
+    if (!rule) throw new Error('règle');
+    const got = occurrenceDates(rule, { start: day('1900-01-01'), first: day('2026-09-20'), last: day('2026-09-24'), pastUntil: () => false });
+    expect(got.filter((date) => date >= '2026-09-20' || date === '1900-01-01')).toEqual(['1900-01-01', '2026-09-20', '2026-09-21', '2026-09-22', '2026-09-23', '2026-09-24']);
+    const monthly = parseRecurrenceRule('FREQ=MONTHLY;INTERVAL=3');
+    expect(occurrenceDates(monthly as never, { start: day('1950-01-15'), first: day('2026-09-01'), last: day('2026-12-31'), pastUntil: () => false })).toContain('2026-10-15');
   });
 });

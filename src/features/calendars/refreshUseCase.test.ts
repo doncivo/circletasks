@@ -69,9 +69,13 @@ describe('refreshAccount (K-01 critère 6, K-03)', () => {
     }
   });
 
-  it('un agenda refusé, introuvable ou illisible est ignoré : les autres sont écrits, l’ancien contenu du refusé reste', async () => {
+  it('un agenda refusé ou illisible est ignoré : les autres sont écrits, l’ancien contenu du refusé reste ; un agenda introuvable est vidé', async () => {
     await h.container.data.repos.externalEvents.replaceWindow(ACCOUNT, 'b', [await baseRow('b', 'garde')], wide);
-    for (const kind of ['forbidden', 'not-found', 'malformed'] as const) {
+    results = { a: full(event('a', 'a1', 'Lu not-found')), b: { ok: false, error: { kind: 'not-found' } } };
+    expect((await refreshAccount(deps(), ACCOUNT)).ok).toBe(true);
+    expect(await titles()).toEqual(['Lu not-found']);
+    await h.container.data.repos.externalEvents.replaceWindow(ACCOUNT, 'b', [await baseRow('b', 'garde')], wide);
+    for (const kind of ['forbidden', 'malformed'] as const) {
       results = { a: full(event('a', 'a1', `Lu ${kind}`)), b: { ok: false, error: { kind } } };
       expect((await refreshAccount(deps(), ACCOUNT)).ok).toBe(true);
       expect(await titles()).toEqual([`Lu ${kind}`, 'garde']);

@@ -1,7 +1,7 @@
 import type { CalendarProvider, FetchRange, ProviderCalendar, ProviderError, ProviderEvent } from '../../../domain/calendarProvider';
 import type { Result } from '../../../domain/types';
 import type { CalendarEndpoints, CalendarHttp, CalendarHttpResponse, TokenRef } from '../../../platform/calendars';
-import { eventsFromIcs } from './icsEvents';
+import { eventsFromIcs, isReadableIcs } from './icsEvents';
 import { callProvider } from './transport';
 import { findNode, findNodes, parseXml, textOf, type XmlNode } from './xml';
 
@@ -153,10 +153,14 @@ export function createCaldavProvider(http: CalendarHttp, endpoints: CalendarEndp
       if (!root) return { ok: false, error: { kind: 'malformed' } };
       const window = { fromMs: Date.parse(range.fromUtc), toMs: Date.parse(range.toUtc) };
       const events: ProviderEvent[] = [];
-      for (const { prop } of okResponses(root)) {
+      const objects = okResponses(root).flatMap(({ prop }) => {
         const data = textOf(prop, 'calendar-data');
-        if (data) events.push(...eventsFromIcs(calendarId, data, window, options.timeZone()));
-      }
+        return data ? [data] : [];
+      });
+      // Tous les objets illisibles : réponse inutilisable, pas un agenda vide (l'ancien état est conservé). Un objet illisible parmi
+      // d'autres lisibles est simplement ignoré.
+      if (objects.length > 0 && !objects.some(isReadableIcs)) return { ok: false, error: { kind: 'malformed' } };
+      for (const data of objects) events.push(...eventsFromIcs(calendarId, data, window, options.timeZone()));
       return { ok: true, value: { kind: 'full', events, cursor: nextCursor } };
     },
   };

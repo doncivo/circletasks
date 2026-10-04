@@ -213,6 +213,11 @@ export function createExternalEventRepository(db: SqlExecutor): ExternalEventRep
       );
       const keep = new Set<string>(events.map((event) => event.id));
       await deleteIds(existing.map((row) => row.id).filter((id) => !keep.has(id)));
+      // Lignes dont la fin précède la fenêtre (la fenêtre glisse chaque jour) : purgées, sinon la table ne ferait que grossir.
+      await db.execute(
+        `DELETE FROM external_event WHERE account_id = ? AND calendar_id = ? AND ((end_utc IS NOT NULL AND end_utc <= ?) OR (end_utc IS NULL AND start_utc < ?))`,
+        [accountId, calendarId, range.from, range.from],
+      );
       await upsert(events);
     },
 

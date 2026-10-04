@@ -15,6 +15,9 @@ interface GoogleOptions {
 
 type Json = Record<string, unknown>;
 
+/** Plafond de pages d'une liste (50 x 250 événements) : un serveur qui boucle ne fait pas boucler l'application. */
+const MAX_PAGES = 50;
+
 const isObject = (value: unknown): value is Json => typeof value === 'object' && value !== null && !Array.isArray(value);
 const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
@@ -60,7 +63,9 @@ export function createGoogleProvider(http: CalendarHttp, endpoints: CalendarEndp
     async listCalendars() {
       const calendars: ProviderCalendar[] = [];
       let pageToken: string | null = null;
+      const seen = new Set<string>();
       do {
+        if (seen.size >= MAX_PAGES) return { ok: false, error: { kind: 'malformed' } };
         const url = new URL(`${endpoints.googleApiBase}/users/me/calendarList`);
         url.searchParams.set('minAccessRole', 'reader');
         if (pageToken !== null) url.searchParams.set('pageToken', pageToken);
@@ -81,6 +86,9 @@ export function createGoogleProvider(http: CalendarHttp, endpoints: CalendarEndp
           });
         }
         pageToken = text(body['nextPageToken']);
+        // Jeton de page déjà vu : le serveur boucle.
+        if (pageToken !== null && seen.has(pageToken)) return { ok: false, error: { kind: 'malformed' } };
+        if (pageToken !== null) seen.add(pageToken);
       } while (pageToken !== null);
       return { ok: true, value: calendars };
     },
@@ -88,7 +96,9 @@ export function createGoogleProvider(http: CalendarHttp, endpoints: CalendarEndp
     async fetchEvents(calendarId, range: FetchRange) {
       const events: ProviderEvent[] = [];
       let pageToken: string | null = null;
+      const seen = new Set<string>();
       do {
+        if (seen.size >= MAX_PAGES) return { ok: false, error: { kind: 'malformed' } };
         const url = new URL(`${endpoints.googleApiBase}/calendars/${encodeURIComponent(calendarId)}/events`);
         url.searchParams.set('singleEvents', 'true');
         url.searchParams.set('orderBy', 'startTime');
@@ -106,6 +116,8 @@ export function createGoogleProvider(http: CalendarHttp, endpoints: CalendarEndp
           if (event) events.push(event);
         }
         pageToken = text(body['nextPageToken']);
+        if (pageToken !== null && seen.has(pageToken)) return { ok: false, error: { kind: 'malformed' } };
+        if (pageToken !== null) seen.add(pageToken);
       } while (pageToken !== null);
       // Google n'a pas de curseur ici (K-03 D1) : la fenêtre est relue en entier à chaque fois.
       return { ok: true, value: { kind: 'full', events, cursor: null } };
