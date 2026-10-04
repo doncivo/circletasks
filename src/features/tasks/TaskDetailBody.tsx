@@ -7,6 +7,7 @@ import type { LocalDate } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import { formatStamp } from '../../i18n/format';
 import { Button, Icon, IconChooser, IconView, TextField, resolveIconRefColor } from '../../ui';
+import { LinkedEventRow } from '../calendars/LinkedEventRow';
 import { DeleteTaskConfirm } from './DeleteTaskConfirm';
 import { DuplicatePrompt } from './DuplicatePrompt';
 import { PostponeAction } from './PostponeAction';
@@ -176,6 +177,8 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
         updateRecurrence={api.updateRecurrence}
         stopRecurrence={api.stopRecurrence}
       />
+      {/* K-04 : lien en lecture seule vers l'événement d'agenda externe d'où vient la tâche. */}
+      <LinkedEventRow task={task} />
 
       <TextField
         label={t('tasks.noteLabel')}

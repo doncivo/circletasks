@@ -159,6 +159,7 @@ describe('buildNextOccurrence', () => {
     someday: false,
     source: 'local',
     externalId: null,
+    externalEventId: null,
   };
   let n = 100;
   const opts = {
@@ -188,6 +189,7 @@ describe('buildNextOccurrence', () => {
       someday: false,
       source: 'local',
       externalId: null,
+      externalEventId: null,
     });
     expect(reminders).toEqual([]);
     expect(buildNextOccurrence(previous, { ...opts, sortOrder: 9 }).task.sortOrder).toBe(9);

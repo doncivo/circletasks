@@ -568,6 +568,7 @@ export const en: Messages = {
     checklist: 'Checklist updated',
     event: 'Event updated',
     recentSearches: 'Recent searches cleared',
+    linkedTask: 'Task created from an event',
     searchFilter: '“All” filter applied',
     searchProjectFilter: '“All projects” filter applied',
     searchFilters: '“All” and “All projects” filters applied',

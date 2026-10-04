@@ -572,6 +572,7 @@ export const fr = {
     checklist: 'Checklist modifiée',
     event: 'Événement modifié',
     recentSearches: 'Recherches récentes effacées',
+    linkedTask: 'Tâche créée depuis un événement',
     searchFilter: 'Filtre « Tout » appliqué',
     searchProjectFilter: 'Filtre « Tous les projets » appliqué',
     searchFilters: 'Filtres « Tout » et « Tous les projets » appliqués',

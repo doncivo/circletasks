@@ -139,3 +139,11 @@ export function formatDropDayLabel(isoDate: string): string {
   const { weekday, day } = formatWeekDayHeader(isoDate);
   return `${weekday.toLocaleLowerCase(intlLocale())} ${day}`;
 }
+
+/** Jour et mois courts sans jour de semaine (« 23 sept. »), selon la langue courante ; date civile, sans effet de fuseau. */
+export function formatDayMonth(isoDate: string): string {
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const date = new Date(Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1));
+  const locale = getLocale() === 'fr' ? 'fr-FR' : 'en-US';
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(date);
+}

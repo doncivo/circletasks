@@ -42,6 +42,7 @@ const occurrence: Task = {
   someday: false,
   source: 'local',
   externalId: null,
+  externalEventId: null,
 };
 
 const rule: RecurrenceFields = { freq: 'monthly', interval: 1, weekdays: [], monthDay: 23, nthWeekday: null, until: null, count: null };

@@ -1,7 +1,7 @@
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Task, TaskPatch } from '../../domain/model';
 import type { ScheduleSomedayTarget } from '../../domain/someday';
 import type { PostponeTarget } from '../../domain/taskPostpone';
-import type { GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
+import type { ExternalEventId, GoalId, LocalDate, LocalTime, ProjectId, Result, SpaceId, TaskId } from '../../domain/types';
 import type { SortOrderEntry } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
 
@@ -47,6 +47,8 @@ export interface CreateTaskInput {
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
   /** T-09 : règle de récurrence ; exige une date (pas de « Un jour »). Règle et tâche créées en une transaction. */
   readonly recurrence?: RecurrenceFields;
+  /** K-04 : événement d'agenda externe d'où vient la tâche (lien posé à la création, jamais modifié ensuite). */
+  readonly externalEventId?: ExternalEventId;
 }
 
 export type CreateTaskError =

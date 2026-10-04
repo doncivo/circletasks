@@ -16,7 +16,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal' | 'checklist' | 'event' | 'search';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal' | 'checklist' | 'event' | 'search' | 'linkedTask';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -77,6 +77,8 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   event: 'undo.event',
   // « Effacer » des recherches récentes (RC-04) : libellé unique.
   search: 'undo.recentSearches',
+  // Tâche créée depuis un événement externe (K-04) : la commande porte son propre libellé avec la date ; ce libellé est un repli.
+  linkedTask: 'undo.linkedTask',
 };
 
 /** Libellé du message pour une action par lot (A-05) : « 3 tâches reportées » (pluriel via `Intl.PluralRules`). */

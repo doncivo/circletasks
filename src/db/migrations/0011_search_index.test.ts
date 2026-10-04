@@ -100,7 +100,8 @@ describe('migration 0011 (RC-01) : index de recherche FTS5', () => {
     await db.execute("UPDATE task SET deleted_at = '2026-10-02T08:00:00.000Z' WHERE id = 't3'");
     await db.execute(`INSERT INTO checklist (id, space_id, title, created_at, updated_at, device_id, hlc) VALUES ('c1', ?, 'Valise', ?, ?, ?, ?)`, [SPACE_PERSO_ID, ...STAMP]);
     await db.execute(`INSERT INTO checklist_item (id, checklist_id, text, created_at, updated_at, device_id, hlc) VALUES ('i1', 'c1', 'Brosse à dents', ?, ?, ?, ?)`, [...STAMP]);
-    expect((await migrate(db, migrations)).applied).toEqual([11]);
+    expect((await migrate(db, migrations.slice(0, 11))).applied).toEqual([11]);
+    expect((await migrate(db, migrations)).applied).toEqual(migrations.slice(11).map((m) => m.version));
     expect((await migrate(db, migrations)).applied).toEqual([]);
     expect(await hits(db, 'facture')).toEqual(['task:t1']);
     expect(await hits(db, 'cafe')).toEqual(['task:t2']);
