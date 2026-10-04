@@ -205,4 +205,29 @@ describe('Ouverture d’un résultat (RC-03)', () => {
     });
     expect(useAppStore.getState().spaceFilter).toBe(SPACE_PRO_ID);
   });
+
+  it('un filtre projet qui masquerait l’élément est élargi avec un message « Annuler » qui rétablit les deux filtres', async () => {
+    await seed();
+    await h.db.driver.execute(`INSERT INTO project (id, space_id, name, color, sort_order, created_at, updated_at, device_id, hlc) VALUES ('p1', '${SPACE_PRO_ID}', 'Mission', '#2f6b7a', 1, ${STAMP})`);
+    useAppStore.getState().setProjects(await h.container.data.repos.projects.listForFilter('all', { includeArchived: true }));
+    useAppStore.getState().setSpaceFilter(SPACE_PRO_ID);
+    useAppStore.getState().setProjectFilter('p1' as never);
+    mockViewport(1440);
+    renderSearchShell(h.container);
+    await screen.findByRole('heading', { level: 1 });
+    pressCtrlK();
+    await screen.findByRole('dialog', { name: 'Recherche' });
+    await typeQuery('facture');
+    await screen.findByText('Checklists · 1');
+    fireEvent.click(document.querySelector('.ct-search__result[aria-label^="Checklist, Valise"]') as HTMLElement);
+    await waitFor(() => expect(useNavigationStore.getState().route).toEqual({ tab: 'checklists', checklistId: 'c1' }));
+    expect(useAppStore.getState().projectFilter).toBeNull();
+    expect(useAppStore.getState().spaceFilter).toBe(SPACE_PRO_ID);
+    expect(await screen.findByText('Filtre « Tous les projets » appliqué')).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(useAppStore.getState().projectFilter).toBe('p1');
+  });
 });

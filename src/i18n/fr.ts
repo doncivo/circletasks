@@ -571,6 +571,8 @@ export const fr = {
     event: 'Événement modifié',
     recentSearches: 'Recherches récentes effacées',
     searchFilter: 'Filtre « Tout » appliqué',
+    searchProjectFilter: 'Filtre « Tous les projets » appliqué',
+    searchFilters: 'Filtres « Tout » et « Tous les projets » appliqués',
     manyComplete: '{count} tâches terminées',
     manyPostpone: '{count} tâches reportées',
     manyMove: '{count} tâches déplacées',

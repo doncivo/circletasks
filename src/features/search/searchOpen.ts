@@ -65,15 +65,19 @@ export async function openSearchResult(container: Pick<AppContainer, 'data' | 'c
   const navigation = useNavigationStore.getState();
   const route = routeOf(target, app.day ?? todayLocal(container.clock));
   if (route) {
-    if (app.spaceFilter !== 'all' && app.spaceFilter !== result.hit.spaceId) {
-      // Message « Filtre « Tout » appliqué » avec « Annuler » : rétablit le filtre (et le projet) d'avant.
+    const widenSpace = app.spaceFilter !== 'all' && app.spaceFilter !== result.hit.spaceId;
+    // Un filtre projet masquerait l'élément (autre type, ou tâche d'un autre projet) ; élargir l'espace le remet déjà à zéro.
+    const widenProject = app.projectFilter !== null && (widenSpace || result.hit.kind !== 'task' || result.hit.projectId !== app.projectFilter);
+    if (widenSpace || widenProject) {
+      // Un seul message « Annuler » qui annonce ce qui a été élargi et rétablit les deux filtres d'avant.
       const previousSpace = app.spaceFilter;
       const previousProject = app.projectFilter;
-      app.setSpaceFilter('all');
+      if (widenSpace) app.setSpaceFilter('all');
+      else app.setProjectFilter(null);
       container.undo.push({
         kind: 'search',
         count: 1,
-        labelKey: 'undo.searchFilter',
+        labelKey: widenSpace && widenProject ? 'undo.searchFilters' : widenSpace ? 'undo.searchFilter' : 'undo.searchProjectFilter',
         undo: async () => {
           const state = useAppStore.getState();
           state.setSpaceFilter(previousSpace);
@@ -81,7 +85,7 @@ export async function openSearchResult(container: Pick<AppContainer, 'data' | 'c
           return 'undone';
         },
       });
-    } else if (app.projectFilter !== null && (result.hit.kind !== 'task' || result.hit.projectId !== app.projectFilter)) app.setProjectFilter(null);
+    }
     navigation.closeDetail();
     navigation.navigate(route);
   }
