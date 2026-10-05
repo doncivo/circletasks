@@ -7,6 +7,12 @@ import tseslint from 'typescript-eslint';
 /** Motifs d'import d'une couche, en chemin relatif ou absolu. */
 const layer = (name) => [`**/${name}`, `**/${name}/**`];
 
+/** Blocs chargés à la demande (PERF-02, ADR 0001 avenant) : jamais d'import statique, seulement `import()` depuis leur chargeur. */
+const ON_DEMAND_PATTERN = {
+  group: ['**/domain/chronoAbsolute', '**/i18n/en'],
+  message: 'Bloc chargé à la demande (PERF-02) : import() depuis src/features/capture/absoluteDatesLoader.ts ou src/i18n/index.ts seulement.',
+};
+
 /** Interdit l'import des couches listées depuis les fichiers ciblés. */
 const forbidLayers = (files, layers, message) => ({
   files,
@@ -18,6 +24,7 @@ const forbidLayers = (files, layers, message) => ({
         patterns: [
           { group: layers.flatMap(layer), message },
           { group: ['@tauri-apps/*'], message: 'Les API Tauri ne s’importent que dans src/platform (ADR 0001).' },
+          ON_DEMAND_PATTERN,
         ],
       },
     ],
@@ -79,7 +86,32 @@ export default tseslint.config(
   ),
   {
     files: ['src/platform/**'],
-    rules: { 'no-restricted-imports': ['error', { patterns: [{ group: [...layer('features'), ...layer('ui')] }] }] },
+    rules: { 'no-restricted-imports': ['error', { patterns: [{ group: [...layer('features'), ...layer('ui')] }, ON_DEMAND_PATTERN] }] },
+  },
+  // Reste de src/ (captureMain.tsx, etc.) : mêmes blocs à la demande.
+  {
+    files: ['src/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: { 'no-restricted-imports': ['error', { patterns: [ON_DEMAND_PATTERN] }] },
+  },
+  // sideEffects: ["**/*.css"] (package.json) : un import nu d'un module TS/JS serait élagué par le bundler (ADR 0001, avenant PERF-02).
+  {
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        { selector: 'JSXText[value=/\\p{L}/u]', message: 'Texte d’interface en dur : utiliser t() de src/i18n.' },
+        {
+          selector: 'JSXAttribute[name.name=/^(aria-label|aria-description|title|placeholder|alt)$/] > Literal',
+          message: 'Texte d’interface en dur : utiliser t() de src/i18n.',
+        },
+        {
+          selector: 'ImportDeclaration[specifiers.length=0]:not([source.value=/\\.css$/])',
+          message: 'Import nu interdit : sideEffects (package.json) l’élaguerait ; appeler une fonction d’initialisation explicite.',
+        },
+      ],
+    },
   },
   {
     files: ['*.config.{ts,js}', 'tests/**/*.ts'],
