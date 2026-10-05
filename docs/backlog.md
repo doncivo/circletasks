@@ -143,6 +143,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | à faire |
 | Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | à faire |
 | Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | à faire |
+| Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | proposée : attend l'ajout à PRD M15 par Ali |
+| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | proposée : attend l'ajout à PRD M15 par Ali |
 
 ## Ordre 5 — iPhone
 
