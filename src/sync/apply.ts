@@ -108,7 +108,12 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
   }
   for (const [pt, ids] of parentIds) for (const id of await sync.existingIds(pt, [...ids])) presentParents.add(`${pt.name}\u0000${id}`);
 
-  /** Cible d'un rappel restaurée ici par une restauration fondée sur une trace au moins aussi récente que celle du rappel ? */
+  /**
+   * Cible d'un rappel restaurée ici (horloge `deleted_at` fondée sur une suppression : base non nulle), et trace du rappel couverte :
+   * soit par cette base (rappel purgé avec sa cible : trace = hlc de suppression de la cible), soit par le rappel lui-même (rappel
+   * modifié après la suppression de sa cible : trace = son propre hlc, que l'opération porte). Une suppression du rappel plus récente
+   * que les deux l'emporte (refus).
+   */
   const reminderTargetRestored = async (fields: ReadonlyMap<string, SyncField>, tomb: Hlc): Promise<'restored' | 'pending' | 'no'> => {
     const type = fields.get('target_type')?.[0];
     const targetId = fields.get('target_id')?.[0];
@@ -118,9 +123,21 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     if (target) {
       if (target.values.get('deleted_at') !== null) return 'no';
       const base = (await sync.readClocks(tt, [targetId])).get(targetId)?.get('deleted_at')?.base ?? null;
-      return base !== null && base >= tomb ? 'restored' : 'no';
+      let opMax: Hlc | null = null;
+      for (const field of fields.values()) if (opMax === null || field[1] > opMax) opMax = field[1];
+      return base !== null && (base >= tomb || (opMax !== null && opMax >= tomb)) ? 'restored' : 'no';
     }
     return (await sync.tombstones(tt.name, [targetId])).has(targetId) ? 'pending' : 'no';
+  };
+
+  /** Cache d'une ligne relu après une écriture locale faite ici (rattachement) : les opérations suivantes du lot fusionnent contre elle. */
+  const refreshRow = async (t: SyncTable, id: string, row: CachedRow): Promise<void> => {
+    const fresh = (await sync.readRowsWithClocks(t, [id])).get(id);
+    if (!fresh) return;
+    row.values = new Map(fresh.values);
+    row.hlc = fresh.hlc;
+    row.clocks = new Map(fresh.clocks);
+    row.pending = new Set([...row.pending, '+']);
   };
 
   const reject = (op: SyncOp, reason: string, field?: string): void => {
@@ -330,6 +347,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       row.values = values;
       row.hlc = rowHlc;
       row.clocks = new Map(clocks.map((c) => [c.field, { hlc: c.hlc, base: c.base }]));
+      if (detached.length > 0) await refreshRow(t, op.id, row);
       addTouched(touched, t.name, op.id);
       outcomes.push('applied');
       continue;
@@ -379,9 +397,31 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     }
     const nextValues = new Map(row.values);
     for (const [name, field] of applied) nextValues.set(name, field[0]);
-    if ((await parentsPresent(t, new Map([...applied].map(([n, f]) => [n, f[0]])))) !== 'ok') {
+    // Décision (c), ligne existante : un parent d'une colonne facultative purgé ici n'est pas appliqué ; la ligne est rattachée à
+    // « Sans projet » après la mise à jour (écriture locale publiée « + »), comme à l'insertion.
+    const detachedOnUpdate: string[] = [];
+    let updateParents = await parentsPresent(t, new Map([...applied].map(([n, f]) => [n, f[0]])));
+    while (updateParents === 'purged' && purgedColumn !== null && syncColumn(t.name, purgedColumn)?.nullable && applied.has(purgedColumn)) {
+      const column: string = purgedColumn;
+      applied.delete(column);
+      detachedOnUpdate.push(column);
+      updateParents = await parentsPresent(t, new Map([...applied].map(([n, f]) => [n, f[0]])));
+    }
+    if (updateParents !== 'ok') {
       if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...applied.values()].map((f) => f[1])), opText({ ...op, f: applied }), ctx.now);
       outcomes.push('parked');
+      continue;
+    }
+    if (applied.size === 0) {
+      for (const column of detachedOnUpdate) {
+        await sync.detachField(t, op.id, column);
+        ctx.logger.log('children-reattached', { table: t.name, parent: column, count: 1 });
+      }
+      outcomes.push(detachedOnUpdate.length > 0 ? 'applied' : 'unchanged');
+      if (detachedOnUpdate.length > 0) {
+        await refreshRow(t, op.id, row);
+        addTouched(touched, t.name, op.id);
+      }
       continue;
     }
     const appliedMax = maxOf([...applied.values()].map((f) => f[1]));
@@ -396,6 +436,10 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     await sync.updateRow(t, op.id, new Map([...applied].map(([n, f]) => [n, f[0]])), meta);
     await sync.writeClocks(t, op.id, clocks);
     for (const c of clocks) row.clocks.set(c.field, { hlc: c.hlc, base: c.base });
+    for (const column of detachedOnUpdate) {
+      await sync.detachField(t, op.id, column);
+      ctx.logger.log('children-reattached', { table: t.name, parent: column, count: 1 });
+    }
     // Une écriture locale en attente écrasée par une valeur plus récente ne sera pas publiée.
     const superseded = [...applied.keys()].filter((name) => row.pending.has(name));
     if (superseded.length > 0) {
@@ -404,6 +448,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     }
     row.values = nextValues;
     if (meta) row.hlc = meta.hlc;
+    if (detachedOnUpdate.length > 0) await refreshRow(t, op.id, row);
     addTouched(touched, t.name, op.id);
     outcomes.push('applied');
   }

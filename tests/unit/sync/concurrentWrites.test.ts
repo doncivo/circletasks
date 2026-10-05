@@ -428,6 +428,32 @@ describe('restauration hors ligne contre purge : cas limites (seconde revue Y2, 
     expect(await b.driver.select('SELECT * FROM sync_tombstone')).toEqual([]);
   });
 
+  it('rappel modifié après la suppression de sa tâche (sa trace vaut son propre hlc) : revient avec la tâche restaurée (revue finale, point 2)', async () => {
+    const [a, b] = await twoDevices();
+    const t = await a.createTask('Rappel modifié');
+    const rid = '90000000-0000-4000-8000-000000000004';
+    await a.data.repos.reminders.createMany([{ id: rid as never, targetType: 'task', targetId: t.id, offsetMin: 15, fireAt: '2026-10-05T09:00' as never }]);
+    await settle();
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    a.clock.advance(1_000);
+    await a.data.repos.reminders.replaceForTarget({ type: 'task', id: t.id }, [{ id: rid as never, targetType: 'task', targetId: t.id, offsetMin: 15, fireAt: '2026-10-05T10:00' as never }]);
+    await settle();
+    expect(await b.driver.select('SELECT fire_at FROM reminder')).toEqual([{ fire_at: '2026-10-05T10:00' }]);
+    a.clock.advance(29 * DAY);
+    await a.data.repos.tasks.restore([t.id]);
+    a.clock.advance(2 * DAY);
+    await b.cycle();
+    expect(await b.driver.select('SELECT id FROM reminder')).toEqual([]);
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await settle();
+    expect((await b.task(t.id))?.deletedAt).toBeNull();
+    expect(await b.driver.select('SELECT id, fire_at, deleted_at FROM reminder')).toEqual([{ id: rid, fire_at: '2026-10-05T10:00', deleted_at: null }]);
+    expect(await b.driver.select('SELECT * FROM sync_tombstone')).toEqual([]);
+  });
+
   it('tâche restaurée hors ligne par B sous un projet que A a purgé avec elle : A la rattache à « Sans projet », convergence', async () => {
     const [a, b] = await twoDevices();
     const projectId = '70000000-0000-4000-8000-000000000002' as never;

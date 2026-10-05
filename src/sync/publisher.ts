@@ -39,8 +39,13 @@ export interface Materialized {
   readonly stale: readonly OutboxEntry[];
 }
 
-/** Lit la file et la transforme en opérations (valeurs courantes de la base). */
-export async function materializeOutbox(repos: Repositories, self: DeviceId, publishedMax: Hlc | null, limit?: number): Promise<Materialized> {
+/**
+ * Lit la file et la transforme en opérations (valeurs courantes de la base). `fresh` : hlc local neuf, donné à chaque ligne entière
+ * (« + ») comme rang de publication : ses horloges peuvent toutes être sous la tête déjà publiée (rappel vivant d'une cible restaurée,
+ * ligne recréée par le report d'époque) ; classée à leur maximum, un appel fait seulement de telles lignes serait refusé (`hlc-order`)
+ * à chaque cycle. Les champs gardent leurs propres horloges (la fusion à la réception n'en dépend pas).
+ */
+export async function materializeOutbox(repos: Repositories, self: DeviceId, publishedMax: Hlc | null, limit?: number, fresh?: () => Hlc): Promise<Materialized> {
   const outbox = await repos.sync.readOutbox(limit);
   const byTable = new Map<SyncTable, Map<string, OutboxEntry[]>>();
   const stale: OutboxEntry[] = [];
@@ -81,8 +86,10 @@ export async function materializeOutbox(repos: Repositories, self: DeviceId, pub
           stale.push(...rowEntries);
           continue;
         }
-        for (const entry of rowEntries) entries.push({ entry, hlc: max });
-        ops.push({ op: { t: t.name, id, at: row.updatedAt, f }, hlc: max, rank: tableRank(t.name) });
+        const rank = fresh ? fresh() : max;
+        const key = rank > max ? rank : max;
+        for (const entry of rowEntries) entries.push({ entry, hlc: key });
+        ops.push({ op: { t: t.name, id, at: row.updatedAt, f }, hlc: key, rank: tableRank(t.name) });
         continue;
       }
       const byHlc = new Map<Hlc, Map<string, SyncField>>();
@@ -165,12 +172,18 @@ export function buildRecords(ops: readonly PendingOp[], sv: number, onTooLarge: 
 
 function splitOp(op: SyncOp, envelope: number, onTooLarge: (op: SyncOp) => void): SyncOp[] {
   const out: SyncOp[] = [];
-  // Chaque partie porte aussi `deleted_at` (quelques octets) : une ligne entière restaurée et découpée reste reconnaissable à la
-  // réception comme une restauration fondée sur la trace, et ses parties y sont recomposées avant la règle (apply.ts).
+  // Chaque partie porte aussi `deleted_at` et le champ au plus grand hlc (quelques octets) : une ligne entière restaurée et découpée
+  // reste reconnaissable à la réception comme une restauration fondée sur la trace (apply.ts), et toutes ses parties ont le même hlc
+  // maximal, ce qui les garde dans un même groupe à la lecture (reader.ts ne coupe jamais un groupe de même hlc).
+  let top: string | null = null;
+  for (const [name, field] of op.f) if (top === null || field[1] > (op.f.get(top) as SyncField)[1]) top = name;
+  const shared = new Map<string, SyncField>();
   const deletedAt = op.f.get('deleted_at');
+  if (deletedAt) shared.set('deleted_at', deletedAt);
+  if (top !== null) shared.set(top, op.f.get(top) as SyncField);
   for (const [name, field] of op.f) {
-    if (name === 'deleted_at' && op.f.size > 1) continue;
-    const single: SyncOp = { ...op, f: new Map<string, SyncField>(deletedAt && name !== 'deleted_at' ? [[name, field], ['deleted_at', deletedAt]] : [[name, field]]) };
+    if (shared.has(name) && op.f.size > shared.size) continue;
+    const single: SyncOp = { ...op, f: new Map<string, SyncField>([[name, field], ...[...shared].filter(([n]) => n !== name)]) };
     if (opTextBytes(single) + envelope > MAX_RECORD_PLAINTEXT_BYTES) onTooLarge(single);
     else out.push(single);
   }
@@ -235,7 +248,7 @@ export interface PublishResult {
  */
 export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: DeviceAck, maxSegment: number): Promise<PublishResult> {
   const { data, platform, deviceId, sv, logger } = deps;
-  const material = await materializeOutbox(data.repos, deviceId, head.epoch === epoch ? head.hlc : null);
+  const material = await materializeOutbox(data.repos, deviceId, head.epoch === epoch ? head.hlc : null, undefined, () => deps.hlc.now());
   // Entrées lues sans rien à publier : retirées par numéro (une écriture faite depuis la lecture a un nouveau numéro et reste).
   if (material.stale.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(material.stale));
   if (material.ops.length === 0) return { published: 0, head, error: null };

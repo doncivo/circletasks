@@ -222,3 +222,23 @@ describe('ordre du cycle : lecture puis publication (ADR 0011 §10.2 ; revue Y2,
     expect(calls.lastIndexOf('read')).toBeLessThan(calls.indexOf('append'));
   });
 });
+
+describe('ligne entière republiée (« + ») avec ses horloges anciennes (revue finale Y2, point 1)', () => {
+  it('un appel fait seulement de telles lignes, après une publication plus récente, passe (jamais hlc-order en boucle)', async () => {
+    const [a, b] = await twoDevices();
+    const t = await a.createTask('Ancienne');
+    await a.data.repos.reminders.createMany([{ id: '90000000-0000-4000-8000-000000000009' as never, targetType: 'task', targetId: t.id, offsetMin: 15, fireAt: '2026-10-05T09:00' as never }]);
+    await a.cycle();
+    a.clock.advance(1_000);
+    await a.createTask('Plus récente');
+    await a.cycle();
+    // Rappel vivant republié en ligne entière (comme à la restauration de sa cible) : toutes ses horloges sont sous la tête publiée.
+    await a.driver.execute("INSERT INTO sync_outbox (table_name, row_id, field) VALUES ('reminder', '90000000-0000-4000-8000-000000000009', '+')");
+    for (let i = 0; i < 2; i += 1) expect((await a.cycle()).phase).toBe('idle');
+    expect(a.logger.entries.some((e) => e.event === 'publish-failed')).toBe(false);
+    expect(await a.data.repos.sync.outboxCount()).toBe(0);
+    syncFolders(devices);
+    await b.cycle();
+    expect(await b.driver.select('SELECT id FROM reminder')).toEqual([{ id: '90000000-0000-4000-8000-000000000009' }]);
+  });
+});

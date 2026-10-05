@@ -10,6 +10,7 @@ import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
 import { createMemorySyncLogger } from '../../../src/sync/log';
 import { purgeDeleted } from '../../../src/sync/maintenance';
 import { guarded } from '../../../src/sync/guarded';
+import { applyOps } from '../../../src/sync/apply';
 import { purgeRows } from '../../../src/sync/purge';
 import { syncTable, type SyncTable } from '../../../src/domain/sync/syncTables';
 import { STATE_FILE } from '../../../src/domain/sync/format';
@@ -222,5 +223,29 @@ describe('purge commune : enfants (revue Y2, point 11 ; décision (c))', () => {
     expect((await db.data.repos.tasks.getById((task as { id: TaskId }).id))?.projectId).toBeNull();
     expect(await db.driver.select("SELECT field FROM sync_outbox WHERE row_id = ? AND field = '+'", [(task as { id: string }).id])).toEqual([{ field: '+' }]);
     expect(await db.driver.select("SELECT field FROM sync_field_clock WHERE row_id = ? ORDER BY field", [(task as { id: string }).id])).toEqual([{ field: '*' }, { field: 'project_id' }]);
+  });
+});
+
+describe('ligne existante qui reçoit un parent purgé (revue finale Y2, point 3 ; décision (c))', () => {
+  it('projet purgé ici : la tâche existante est rattachée à « Sans projet » et republiée entière, rien n’est mis de côté', async () => {
+    db = await openTestDb(SELF, '2026-10-05T08:00:00.000Z');
+    const [task] = await db.data.repos.tasks.createMany([newTask(1)]);
+    const id = (task as { id: TaskId }).id;
+    await db.driver.execute('DELETE FROM sync_outbox');
+    const purgedProject = '70000000-0000-4000-8000-000000000009';
+    await db.data.repos.sync.insertTombstones([{ table: 'project', rowId: purgedProject, deletedHlc: `001791187000000-0000-${READER}` as Hlc }], '2026-10-05T08:00:00.000Z' as IsoDateTime);
+    const logger = createMemorySyncLogger();
+    // Hlc reçu déjà intégré par l’horloge locale (la lecture appelle hlc.receive avant d’appliquer) : plus ancien que l’heure locale.
+    db.clock.advance(10_000);
+    const remote = `001791187205000-0000-${READER}` as Hlc;
+    const op = { t: 'task', id, at: '2026-10-05T08:00:00.000Z' as IsoDateTime, f: new Map([['project_id', [purgedProject, remote, null] as const]]) } as never;
+    const result = await guarded(db.data, (repos) => applyOps(repos, [op], { localSv: 17, remoteSv: 17, now: '2026-10-05T08:00:00.000Z' as IsoDateTime, knows: () => false, logger }));
+    expect(result.outcomes).toEqual(['applied']);
+    expect((await db.data.repos.tasks.getById(id))?.projectId).toBeNull();
+    expect(await db.driver.select('SELECT reason FROM sync_parked')).toEqual([]);
+    expect(await db.driver.select("SELECT field FROM sync_outbox WHERE row_id = ?", [id])).toEqual([{ field: '+' }]);
+    expect(logger.entries.some((e) => e.event === 'children-reattached')).toBe(true);
+    const clock = (await db.driver.select<{ hlc: string }>("SELECT hlc FROM sync_field_clock WHERE row_id = ? AND field = 'project_id'", [id]))[0]?.hlc ?? '';
+    expect(clock > remote).toBe(true);
   });
 });
