@@ -1,4 +1,4 @@
-à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |# Backlog CircleTasks
+# Backlog CircleTasks
 
 121 user stories, triées par ordre de construction (PRD section 9). Critères d'acceptation : docs/PRD.md section 4.
 
@@ -134,17 +134,19 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
-| Y-01 | M15 | Je choisis le dossier de synchro | sync-icloud | à faire |
-| Y-02 | M15 | Mes données se synchronisent seules | sync-icloud | à faire |
-| Y-03 | M15 | Je lance une synchro manuelle | sync-icloud | à faire |
-| Y-04 | M15 | Je consulte les conflits | sync-icloud | à faire |
-| Y-05 | M15 | Je travaille hors ligne | sync-icloud | à faire |
-| Y-06 | M15 | Je raccorde un nouvel appareil | sync-icloud | à faire |
-| Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | à faire |
-| Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | à faire |
-| Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | à faire |
-| Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | proposée : attend l'ajout à PRD M15 par Ali |
-| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | proposée : attend l'ajout à PRD M15 par Ali |
+| Y-01 | M15 | Je choisis le dossier de synchro | sync-icloud | en cours (lot Y1) ; fiche docs/stories/Y-01.md |
+| Y-02 | M15 | Mes données se synchronisent seules | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-02.md |
+| Y-03 | M15 | Je lance une synchro manuelle | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-03.md |
+| Y-04 | M15 | Je consulte les conflits | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
+| Y-05 | M15 | Je travaille hors ligne | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-05.md |
+| Y-06 | M15 | Je raccorde un nouvel appareil | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
+| Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
+| Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | en cours (lot Y1) ; fiche docs/stories/Y-08.md |
+| Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-09.md |
+| Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
+| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
+
+Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lot Y1 (Y-08 puis Y-01) en parallèle du lot Y2 (Y-02, Y-09, Y-05, Y-03), deux worktrees ; lot Y3 (Y-04, Y-07, Y-06, en parallèle) après la fusion de Y2 ; lot Y4 (Y-10, Y-11) ensuite. Écrans sans maquette relus par Ali en fin d'ordre 4.
 
 ## Ordre 5 — iPhone
 
