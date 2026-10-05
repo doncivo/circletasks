@@ -6,7 +6,7 @@ import { createWriteStamper, createHlcClock } from '../../../src/domain/hlc';
 import { MAX_APPEND_CALL_BYTES } from '../../../src/domain/sync/format';
 import { syncTable, type SyncTable } from '../../../src/domain/sync/syncTables';
 import type { DeviceId, Hlc, LocalDate, SpaceId, TaskId } from '../../../src/domain/types';
-import { batchRecords, materializeOutbox, type BuiltRecord } from '../../../src/sync/publisher';
+import { batchRecords, buildRecords, materializeOutbox, type BuiltRecord } from '../../../src/sync/publisher';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -240,5 +240,110 @@ describe('ligne entière republiée (« + ») avec ses horloges anciennes (revue
     syncFolders(devices);
     await b.cycle();
     expect(await b.driver.select('SELECT id FROM reminder')).toEqual([{ id: '90000000-0000-4000-8000-000000000009' }]);
+  });
+});
+
+describe('parties d’une ligne découpée : champ partagé (contrôle de 3ac718a, point 2)', () => {
+  it('le champ copié dans chaque partie est le plus petit des champs au hlc maximal : une longue note n’est jamais recopiée', () => {
+    const h = (n: number): Hlc => `${String(1_791_187_200_000 + n).padStart(15, '0')}-0000-${SELF}` as Hlc;
+    const note = '€'.repeat(85_000);
+    const op = {
+      t: 'task',
+      id: '11111111-1111-4111-8111-111111111111',
+      at: '2026-10-05T08:00:00.000Z' as never,
+      f: new Map<string, [string | null, Hlc, Hlc | null]>([
+        ['note', [note, h(5), null]],
+        ['title', ['€'.repeat(4_000), h(5), null]],
+        ['date', ['2026-10-05', h(1), null]],
+        ['deleted_at', [null, h(1), null]],
+      ]),
+    };
+    const refused: unknown[] = [];
+    const records = buildRecords([{ op: op as never, hlc: h(5), rank: 0 }], 17, (o) => refused.push(o));
+    expect(refused).toEqual([]);
+    expect(records.length).toBeGreaterThan(1);
+    expect(records.every((r) => r.maxHlc === h(5))).toBe(true);
+    expect(records.filter((r) => r.text.includes('€'.repeat(5_000))).length).toBe(1);
+  });
+});
+
+describe('écritures pendant la matérialisation de la file (contrôle de 3ac718a, point 1)', () => {
+  /** A : une tâche X publiée (absente de la file), une tâche Y dans la file, et une ligne entière « + » en attente (rappel ancien). */
+  async function prepared(): Promise<{ a: SimDevice; b: SimDevice; x: string; y: string }> {
+    const [a, b] = await twoDevices();
+    const x = await a.createTask('X');
+    const y = await a.createTask('Y');
+    await a.data.repos.reminders.createMany([{ id: '90000000-0000-4000-8000-00000000000a' as never, targetType: 'task', targetId: y.id, offsetMin: 15, fireAt: '2026-10-05T09:00' as never }]);
+    await a.cycle();
+    a.clock.advance(1_000);
+    await a.updateTask(y.id, { title: 'Y2' });
+    await a.driver.execute("INSERT INTO sync_outbox (table_name, row_id, field) VALUES ('reminder', '90000000-0000-4000-8000-00000000000a', '+')");
+    return { a, b, x: x.id, y: y.id };
+  }
+
+  /** Écriture locale validée par le pilote avec son propre tampon (ce que fait un repository), sans attendre. */
+  const write = (d: SimDevice, id: string, title: string, hlc: string): void => {
+    void d.driver.execute('UPDATE task SET title = ?, hlc = ?, updated_at = ?, device_id = ? WHERE id = ?', [title, hlc, new Date(d.clock.nowMs()).toISOString(), d.id, id]);
+  };
+
+  it('écriture validée juste quand la publication prend son hlc neuf : publiée au cycle suivant', async () => {
+    const { a, b, x } = await prepared();
+    const hlc = a.hlc as { now: () => string };
+    const original = hlc.now.bind(a.hlc);
+    let fired = false;
+    hlc.now = () => {
+      if (!fired) {
+        fired = true;
+        write(a, x, 'W', original());
+      }
+      return original();
+    };
+    await a.cycle();
+    hlc.now = original;
+    expect(fired).toBe(true);
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    expect((await b.task(x as never))?.title).toBe('W');
+  });
+
+  it('W (ligne hors de la file) puis W2 (ligne dans la file) validées pendant la lecture de la file : W n’est pas écartée', async () => {
+    const { a, b, x, y } = await prepared();
+    const driver = a.driver as unknown as { select: SqlExecutor['select']; transaction: (fn: (tx: SqlExecutor) => Promise<unknown>) => Promise<unknown> };
+    const select = driver.select.bind(a.driver);
+    const transaction = driver.transaction.bind(a.driver);
+    let fired = false;
+    const hook = (sql: string): void => {
+      if (fired || !sql.includes('FROM sync_outbox WHERE seq > ?')) return;
+      fired = true;
+      write(a, x, 'W', a.hlc.now());
+      write(a, y, 'W2', a.hlc.now());
+    };
+    driver.select = (async (sql: string, params?: SqlParams) => {
+      const rows = await select(sql, params);
+      hook(sql);
+      return rows;
+    }) as typeof select;
+    driver.transaction = (fn) =>
+      transaction((tx) =>
+        fn({
+          execute: (sql, params) => tx.execute(sql, params),
+          select: (async (sql: string, params?: SqlParams) => {
+            const rows = await tx.select(sql, params);
+            hook(sql);
+            return rows;
+          }) as SqlExecutor['select'],
+        }),
+      );
+    await a.cycle();
+    driver.select = select;
+    driver.transaction = transaction;
+    expect(fired).toBe(true);
+    await a.cycle();
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    expect((await b.task(x as never))?.title).toBe('W');
+    expect((await b.task(y as never))?.title).toBe('W2');
   });
 });
