@@ -106,3 +106,40 @@ Total JS de la coquille : ~49 Ko gzip (hors icônes à l'usage). Polices : ~178 
 - Les règles métier n'appellent jamais `Date.now()` ni `crypto.randomUUID()` directement : elles reçoivent une `Clock` et un `IdGenerator` (`src/domain/clock.ts`, `src/domain/id.ts`), ce qui les rend déterministes en test.
 - Le store global (`src/features/app/appStore.ts`) ne contient que l'état transverse (statut de la base, filtre d'espace) ; chaque feature gère son propre store.
 - `useLayout()` (`src/ui/useLayout.ts`) distingue PC (≥ 1024 px, largeur minimale de la fenêtre Tauri) et mobile ; c'est la seule source de vérité de la mise en page.
+
+## Avenant : tailles mesurées du démarrage (2026-10-05)
+
+### Contexte
+
+L'audit de performance de fin d'ordre 3 (`vite build` sur `main`, 2026-10-05) contredit deux affirmations de cet ADR : « Total JS de la coquille : ~49 Ko gzip » et le seuil de 100 Ko gzip pour le bundle principal (cité dans la ligne chrono-node, d'après Q-02 D1). La coquille a grossi avec les ordres 1 à 3 (écrans, stores, contrats de plateforme, chrono-node) et aucun test ne vérifiait ce seuil, ce qui a laissé passer l'écart.
+
+### Mesures (gzip)
+
+| Élément chargé au démarrage | Taille |
+| --- | --- |
+| Bloc `main` (code de l'app, chrono-node compris) | 141,65 Ko |
+| Bloc « tokens » (react-dom, lucide-react) | 176,08 Ko |
+| Blocs core, types, runtime | < 2 Ko |
+| **Total JS de départ** | **~320 Ko** |
+| CSS | 26,8 Ko |
+| Polices woff2 (Fraunces, DM Sans) | ~182 Ko |
+
+Hors démarrage : recharts en bloc paresseux (90,79 Ko gzip, conforme à l'ADR 0009) ; tesseract.js hors graphe de modules, servi comme fichiers statiques sous `/ocr/` (Q-04).
+
+### Décision
+
+- Le seuil de 100 Ko gzip pour le bloc principal est **retiré** : il n'est plus tenable sans un découpage que l'ordre 3 ne justifie pas.
+- Nouveau seuil : **350 Ko gzip pour la somme des blocs JS chargés au démarrage** (blocs d'entrée et leurs imports statiques ; blocs paresseux et `/ocr/` exclus). Il est **vérifié** par le script npm `test:bundle` (ajouté par qa-test) : dépasser le seuil fait échouer le script. Marge actuelle : ~30 Ko (~9 %).
+- Toute nouvelle dépendance embarquée indique désormais si elle entre dans le démarrage ; si elle fait dépasser 350 Ko, elle passe en import dynamique (règle de Q-02 D1, appliquée au total et non plus au seul bloc `main`).
+- La phrase « Total JS de la coquille : ~49 Ko gzip » et la mention « seuil de 100 Ko gzip, Q-02 D1 » de la ligne chrono-node sont remplacées par cet avenant.
+
+### Conséquences pour l'iPhone (démarrage à froid < 1 s, PRD 8)
+
+- Les fichiers sont lus depuis le paquet de l'app, sans réseau : le coût ne vient pas du transfert mais de l'analyse et de la compilation du JS par WKWebView. 320 Ko gzip représentent environ trois à quatre fois plus de JS minifié à analyser ; sur l'A18 Pro, c'est de l'ordre de quelques dizaines à une centaine de millisecondes (estimation, non mesurée), à ajouter à l'initialisation de WKWebView, à l'ouverture de SQLite et au premier rendu.
+- Le seuil de 350 Ko est donc compatible avec le budget de 1 s, mais il n'en est pas la preuve : il garantit seulement que le JS ne dérive pas. Faute de Mac, la mesure réelle se fera sur l'iPhone à l'ordre 5 (build `build-ios.yml`, installation SideStore). Si le démarrage dépasse 1 s, le premier levier est le découpage décrit ci-dessous, avant toute baisse du seuil.
+- Les fichiers `/ocr/` (~4,7 Mo non compressés) sont copiés dans `dist/` et donc présents dans le paquet iOS, mais ne sont jamais chargés au démarrage.
+
+### Recommandations (non appliquées)
+
+- Nommer explicitement le bloc des bibliothèques « vendor » au lieu de « tokens ». Constat : `vite.config.ts` ne définit pas aujourd'hui de `manualChunks` ; le nom « tokens » est choisi automatiquement par Rollup pour le bloc partagé entre les deux entrées (`index.html` et `capture.html`), d'après l'un des modules qu'il contient. Le renommage suppose donc d'ajouter `build.rollupOptions.output.manualChunks` (ou une règle `chunkFileNames`) ; le script `test:bundle` doit identifier les blocs de départ par le graphe (manifeste Vite), pas par leur nom, pour rester valable après ce changement.
+- Étudier un découpage du démarrage, par ordre de gain attendu : écrans secondaires (Réglages, Statistiques, Calendriers, Focus) en `React.lazy` hors de l'écran d'accueil ; chrono-node chargé à la première frappe dans un champ de saisie naturelle ; vérifier que lucide-react n'importe que les icônes nommées (tree-shaking) ; s'assurer que la fenêtre de capture (`capture.html`) ne tire pas le bloc entier. Chaque découpage se mesure avec `test:bundle` avant et après.

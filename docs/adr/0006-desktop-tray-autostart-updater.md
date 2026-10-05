@@ -108,3 +108,30 @@ Mesure du 2026-10-02 (`npm run tauri build`, NSIS, avec updater, process, autost
 
 - Export par deux commandes Rust (`src-tauri/src/export.rs`) : `export_save_file` ouvre « Enregistrer sous » côté Rust (`tauri-plugin-dialog`, même bloc `cfg(not(any(android, ios)))`, aucune permission `dialog:` pour la WebView), écrit de façon atomique (temporaire puis renommage), refuse au-delà de 64 Mio et hors chemin à lettre de lecteur ; `reveal_exported_file` n'affiche que le dernier fichier écrit. `tauri-plugin-fs` n'est pas utilisé.
 - Capability séparée `export.json` (fenêtre `main`, Windows) : uniquement `allow-export-save-file` et `allow-reveal-exported-file`. `desktop.json` est inchangé. Détails, contrat `FileService` et taille : ADR 0009 et docs/decisions.md (H-03, « Permissions Tauri »).
+
+## Avenant : taille mesurée de l'installeur v0.1.0 (2026-10-05)
+
+- Mesure (audit de fin d'ordre 3) : l'installeur de la release v0.1.0 fait **5 491 442 octets (5,24 Mo)**, contre 2,70 Mo mesurés le 2026-10-02 (section « Taille de l'installeur »). Il reste sous le budget de 15 Mo (PRD 8), avec une marge de ~9,8 Mo.
+- La mesure du 2026-10-02 date d'avant les ordres 2 et 3 ; elle n'est plus représentative et est remplacée par celle-ci.
+
+### Causes probables de l'écart (hypothèses, non vérifiées)
+
+L'écart (+2,54 Mo) n'a pas été décomposé. Les pistes ci-dessous sont des hypothèses à confirmer par une mesure ; aucune n'est établie.
+
+1. **Ressources OCR sous `/ocr/` (hypothèse principale).** `vite.ocrAssets.ts` (Q-04) copie dans `dist/ocr/` le worker tesseract.js (~111 Ko), le noyau WebAssembly `tesseract-core-simd-lstm.wasm.js` (~3,9 Mo) et `lang/fra.traineddata.gz` (~707 Ko). `tauri.conf.json` ne déclare aucun `bundle.resources` : ces fichiers entrent dans l'exécutable par `build.frontendDist` (`../dist`), comme tout le front. Le noyau se compresse (compression des ressources du front par Tauri, puis compression NSIS) ; les données françaises, déjà en gzip, presque pas. Ordre de grandeur plausible : 1,5 à 2,5 Mo. Commit Q-04 (72cec4f) antérieur au tag v0.1.0.
+2. **Polices.** Les quatre fichiers woff2 (~182 Ko) étaient déjà présents dans le build du 2026-10-02 et le woff2 ne se recompresse pas : contribution à l'écart probablement nulle ou faible. À confirmer seulement si les autres pistes n'expliquent pas tout.
+3. **Artefacts de l'updater.** La release est produite par `build-windows.yml` avec `createUpdaterArtifacts: true`, alors que la mesure du 2026-10-02 venait d'un `npm run tauri build` local sans cette option. Pour NSIS, l'artefact de mise à jour est l'installeur lui-même accompagné d'un `.sig` séparé : effet attendu faible sur la taille de l'`.exe`. Il faut toutefois vérifier que les 5 491 442 octets sont bien ceux de `CircleTasks_0.1.0_x64-setup.exe` et non d'une archive ou d'un autre fichier de la release.
+4. **Code Rust ajouté après le 2026-10-02** (piste complémentaire) : `reqwest` et `rustls` (K-01), `rusqlite`, `keyring`, la crate `windows` avec `Media_Ocr` (Q-04), `tauri-plugin-dialog` (H-03), `tauri-plugin-global-shortcut` (D-04), `tokio`. Malgré le profil release optimisé pour la taille, quelques centaines de Ko sont plausibles.
+
+Vérification proposée (agent performance ou desktop-tauri) : comparer la taille de `dist/` avec et sans `dist/ocr/`, puis celle de l'installeur produit par un build local sans le plugin `ocrAssets` ; `cargo bloat --release` pour la part Rust.
+
+### Suivi
+
+- La taille de l'installeur sera **mesurée à chaque release** (octets et Mo, version, date) et consignée dans cet ADR à la suite de cet avenant ; un écart de plus de 1 Mo d'une release à l'autre doit être expliqué dans les notes de la release.
+- Seuil d'alerte : au-delà de 10 Mo, une revue de taille est obligatoire avant publication (budget de 15 Mo, PRD 8).
+- Si l'OCR est confirmé comme cause principale, les options (alléger le noyau ou les données, ou ne pas embarquer le repli tesseract.js dans l'installeur PC si Windows.Media.Ocr couvre les cas visés par Q-04) seront étudiées dans un ADR séparé ; rien n'est décidé ici.
+
+| Version | Date | Installeur NSIS | Source |
+| --- | --- | --- | --- |
+| 0.1.0 (build local) | 2026-10-02 | 2,70 Mo | `npm run tauri build` |
+| 0.1.0 (release) | 2026-10-05 | 5 491 442 octets (5,24 Mo) | release GitHub v0.1.0 |
