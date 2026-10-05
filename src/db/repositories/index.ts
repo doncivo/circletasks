@@ -20,6 +20,7 @@ export type * from './searchRepository';
 export type * from './statsRepository';
 export type * from './syncRepository';
 // Y-04 (début)
+export type * from './syncConflictRepository';
 // Y-04 (fin)
 export * from './sql';
 // Y-07 (début)

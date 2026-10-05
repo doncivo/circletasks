@@ -11,6 +11,7 @@ import { createRoutineLogRepository, createRoutineRepository } from './routineRe
 import { createSettingsRepository, createSyncMetaRepository } from './settingsRepository';
 import { createProjectRepository, createSpaceRepository } from './spaceRepository';
 // Y-04 (début)
+import { createSyncConflictRepository } from './syncConflicts';
 // Y-04 (fin)
 import { createSyncRepository } from './syncRepository';
 // Y-07 (début)
@@ -44,6 +45,7 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   calendarAccounts: createCalendarAccountRepository(executor, stamper),
   syncMeta: createSyncMetaRepository(executor),
   // Y-04 (début)
+  syncConflicts: createSyncConflictRepository(executor, stamper),
   // Y-04 (fin)
   sync: createSyncRepository(executor, stamper),
   // Y-07 (début)
