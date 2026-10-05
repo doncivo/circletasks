@@ -42,7 +42,7 @@ export async function bootstrapDatabase(
   try {
     db = await open();
     const port = await (options.backup ?? createMigrationBackup)(db);
-    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock), afterApply: (migrated) => reintegrateAfterMigration(migrated, options.clock).then(() => undefined) });
+    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock), afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined) });
     setDbStatus('ready');
     return db;
   } catch (error) {

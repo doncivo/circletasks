@@ -96,6 +96,20 @@ describe('réintégration (Y-07 critère 6)', () => {
     ]);
   });
 
+  it('migration de test : une écriture locale non gardée de x pose son horloge propre (hlc de la ligne, base = repli) et entre dans la file, comme le générateur de 0015', async () => {
+    await createTask(T1);
+    await db.driver.execute('DELETE FROM sync_outbox');
+    const before = (await db.driver.select<{ hlc: string }>('SELECT hlc FROM task WHERE id = ?', [T1]))[0]?.hlc as Hlc;
+    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'locale', hlc = ? WHERE id = ?`, [h(9_000, SELF), T1]);
+    expect(await clockOf(T1, TEST_COLUMN)).toEqual({ hlc: h(9_000, SELF), base_hlc: before });
+    expect(await db.driver.select('SELECT field FROM sync_outbox WHERE row_id = ? ORDER BY field', [T1])).toEqual([{ field: TEST_COLUMN }]);
+    // Sous garde : rien.
+    await db.driver.execute('INSERT INTO sync_guard (id) VALUES (1)');
+    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'gardée', hlc = ? WHERE id = ?`, [h(9_500, SELF), T1]);
+    await db.driver.execute('DELETE FROM sync_guard');
+    expect(await clockOf(T1, TEST_COLUMN)).toEqual({ hlc: h(9_000, SELF), base_hlc: before });
+  });
+
   it('rejouable : un second appel ne change rien', async () => {
     await createTask(T1);
     await keep('task', T1, TEST_COLUMN, 'v', h(3_600_000));
@@ -111,8 +125,7 @@ describe('réintégration (Y-07 critère 6)', () => {
     await createTask(T1);
     await db.driver.execute('DELETE FROM sync_outbox');
     // Écriture locale de x après la mise à jour (déclencheur de la migration de test : entrée de file).
-    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'locale' WHERE id = ?`, [T1]);
-    await db.driver.execute("INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES ('task', ?, ?, ?, NULL)", [T1, TEST_COLUMN, h(7_200_000, SELF)]);
+    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'locale', hlc = ? WHERE id = ?`, [h(7_200_000, SELF), T1]);
     await keep('task', T1, TEST_COLUMN, 'ancienne de A', h(3_600_000));
     expect(await run()).toEqual({ reintegrated: 0, superseded: 1, remaining: 0 });
     expect(await db.driver.select(`SELECT ${TEST_COLUMN} AS x FROM task WHERE id = ?`, [T1])).toEqual([{ x: 'locale' }]);
@@ -123,8 +136,7 @@ describe('réintégration (Y-07 critère 6)', () => {
 
   it('valeur reçue plus récente qu’une écriture locale en attente : écrite, l’écriture locale ne sera pas publiée', async () => {
     await createTask(T1);
-    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'locale' WHERE id = ?`, [T1]);
-    await db.driver.execute("INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES ('task', ?, ?, ?, NULL)", [T1, TEST_COLUMN, h(1_000, SELF)]);
+    await db.driver.execute(`UPDATE task SET ${TEST_COLUMN} = 'locale', hlc = ? WHERE id = ?`, [h(1_000, SELF), T1]);
     await keep('task', T1, TEST_COLUMN, 'récente de A', h(3_600_000));
     expect((await run()).reintegrated).toBe(1);
     expect(await db.driver.select(`SELECT ${TEST_COLUMN} AS x FROM task WHERE id = ?`, [T1])).toEqual([{ x: 'récente de A' }]);

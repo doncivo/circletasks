@@ -36,8 +36,10 @@ export function extendedCatalogue(): UnknownCatalogue {
 }
 
 /**
- * Migration additive de la version suivante : colonne `task.x` et déclencheur de capture de cette colonne (hors garde, comme ceux de la
- * migration 0015) ; une écriture non gardée de `x` entre donc dans `sync_outbox`.
+ * Migration additive de la version suivante : colonne `task.x` et son déclencheur de capture, écrit comme ceux que génère la migration
+ * 0015 (`captureTriggers`, partie par colonne) : hors garde, une écriture de `x` pose l'horloge propre du champ (hlc de la ligne ; base =
+ * horloge précédente du champ, sinon repli « * », sinon ancien hlc ; base gardée si le champ attend déjà sa publication) et entre dans
+ * `sync_outbox`. Une vraie migration additive doit régénérer ces déclencheurs (docs/dettes.md).
  */
 export const NEXT_MIGRATION: Migration = {
   version: NEXT_SV,
@@ -47,6 +49,13 @@ export const NEXT_MIGRATION: Migration = {
     `CREATE TRIGGER test_capture_task_x AFTER UPDATE OF ${TEST_COLUMN} ON task
      WHEN NOT EXISTS (SELECT 1 FROM sync_guard) AND OLD.${TEST_COLUMN} IS NOT NEW.${TEST_COLUMN}
      BEGIN
+       INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc)
+         SELECT 'task', NEW.id, '${TEST_COLUMN}', NEW.hlc,
+           CASE WHEN EXISTS (SELECT 1 FROM sync_outbox WHERE table_name = 'task' AND row_id = NEW.id AND field IN ('${TEST_COLUMN}', '*'))
+             THEN (SELECT base_hlc FROM sync_field_clock WHERE table_name = 'task' AND row_id = NEW.id AND field = '${TEST_COLUMN}')
+             ELSE COALESCE((SELECT hlc FROM sync_field_clock WHERE table_name = 'task' AND row_id = NEW.id AND field = '${TEST_COLUMN}'),
+                           (SELECT hlc FROM sync_field_clock WHERE table_name = 'task' AND row_id = NEW.id AND field = '*'), OLD.hlc) END
+         ON CONFLICT (table_name, row_id, field) DO UPDATE SET hlc = excluded.hlc, base_hlc = excluded.base_hlc;
        DELETE FROM sync_outbox WHERE table_name = 'task' AND row_id = NEW.id AND field = '${TEST_COLUMN}';
        INSERT INTO sync_outbox (table_name, row_id, field) VALUES ('task', NEW.id, '${TEST_COLUMN}');
      END`,
