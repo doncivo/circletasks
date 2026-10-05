@@ -128,6 +128,43 @@ describe('« Associer l’iPhone » (critère 4)', () => {
   });
 });
 
+describe('aucun échec silencieux (revue, faibles)', () => {
+  it('lecture de sync_meta impossible : message visible, effacé quand la lecture réussit', async () => {
+    const getMeta = vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
+    const container = await make();
+    renderIn(container, <SyncDetailsPairing />);
+    expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('L’état de l’association n’a pas pu être lu ou enregistré : réessayez');
+    getMeta.mockRestore();
+    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    await waitFor(() => expect(screen.queryByTestId('sync-pairing-notice')).toBeNull());
+  });
+
+  it('écriture de sync_meta impossible après un échec d’ouverture : le message le dit', async () => {
+    vi.spyOn(db.data.repos.sync, 'setMeta').mockRejectedValue(new Error('disque plein'));
+    const failing: SyncPlatform = { ...platform, key: { ...platform.key, openPairing: () => Promise.reject(new SyncPlatformError('io')) } };
+    const container = await make(failing);
+    renderIn(container, <SyncDetailsPairing />);
+    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    await waitFor(() => expect(screen.getAllByRole('status').map((n) => n.textContent).join(' | ')).toContain('n’a pas pu être lu ou enregistré'));
+  });
+
+  it('appareil associé mais premier cycle en échec : « iPhone associé » ne masque pas l’échec', async () => {
+    const container = await make();
+    startDesktopIntegration(container);
+    renderIn(container, <SyncDetailsPairing />);
+    sync.syncNow = (reason) => {
+      sync.calls.push(reason);
+      sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
+      return Promise.resolve();
+    };
+    await act(async () => {
+      desktop.emitSyncPaired();
+      await Promise.resolve();
+    });
+    expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('iPhone associé, mais la synchronisation qui suit a échoué : voir l’état ci-dessus');
+  });
+});
+
 describe('arrivée de l’appareil associé (critère 9)', () => {
   it('relance un cycle toutes les 10 s pendant l’affichage, puis sync-paired : « iPhone associé », cycle, relance arrêtée', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });

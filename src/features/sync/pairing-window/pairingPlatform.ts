@@ -12,7 +12,11 @@ import type { KeyImportResult, PairingPayload, SyncPlatform } from '../../../pla
  * Aucune valeur n'est gardée ici : la clé, le texte du QR et la saisie ne vivent que dans l'état local des composants.
  */
 export interface PairingPlatform {
-  /** Instance `show` seulement ; `wrong-mode` dans une instance `import`. */
+  /**
+   * Instance `show` seulement ; `wrong-mode` dans une instance `import`. La fenêtre ne connaît pas son mode (l'URL est fixe, sans
+   * paramètre) : son premier appel sert aussi de sonde. Dans une instance `import`, Rust refuse en `wrong-mode` **avant** de consommer un
+   * jeton ou d'ouvrir une boîte, et ne renvoie rien de sensible ; la fenêtre affiche alors la saisie de la clé de secours.
+   */
   pairingPayload(o?: { readonly renew: true }): Promise<PairingPayload>;
   /** Détruit la fenêtre appelante (Rust). */
   closePairing(): Promise<void>;

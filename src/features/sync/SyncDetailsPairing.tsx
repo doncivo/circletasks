@@ -3,7 +3,7 @@ import { t, type PlainMessageKey } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { JoinProgress } from './JoinProgress';
-import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFailure, type PairingFailure } from './pairingStatus';
+import { onPairingChange, openPairingWindow, pairingOpenErrorKey, pairingStorageFailed, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { syncStore } from './syncStore';
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
@@ -21,6 +21,7 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const [failure, setFailure] = useState<PairingFailure | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
+  const [storageFailed, setStorageFailed] = useState(false);
   const lastMode = useRef<'show' | 'import' | null>(null);
 
   useEffect(() => {
@@ -33,6 +34,8 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
     refresh();
     const stop = onPairingChange(container, (event) => {
       if (event === 'paired') setNotice({ key: lastMode.current === 'import' ? 'sync.pairing.thisDevicePaired' : 'sync.pairing.paired', tone: 'ok' });
+      if (event === 'paired-sync-failed') setNotice({ key: lastMode.current === 'import' ? 'sync.pairing.thisDevicePairedSyncFailed' : 'sync.pairing.pairedSyncFailed', tone: 'danger' });
+      setStorageFailed(pairingStorageFailed(container));
       refresh();
     });
     return () => {
@@ -59,15 +62,24 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   };
 
   // Échec gardé du même mode seulement (un échec de l'instance import ne s'affiche pas sous « Associer l'iPhone »).
-  const shownFailure = notice === null && failure !== null && failure.mode === mode ? pairingOpenErrorKey(failure.code, mode) : null;
+  const shownFailure: PlainMessageKey | null = storageFailed
+    ? 'sync.pairing.stateUnavailable'
+    : notice === null && failure !== null && failure.mode === mode
+      ? pairingOpenErrorKey(failure.code, mode)
+      : null;
   return (
     <>
       <div className="ct-settings__row ct-sync__pairing">
         <span className="ct-settings__stack">
           {t('sync.pairing.rowLabel')}
-          {(notice || shownFailure) && (
-            <span className={notice?.tone === 'ok' ? 'ct-settings__hint ct-sync__ok' : 'ct-settings__hint ct-settings__hint--danger'} role="status" data-testid="sync-pairing-notice">
-              {t(notice?.key ?? (shownFailure as PlainMessageKey))}
+          {notice && (
+            <span className={notice.tone === 'ok' ? 'ct-settings__hint ct-sync__ok' : 'ct-settings__hint ct-settings__hint--danger'} role="status" data-testid="sync-pairing-notice">
+              {t(notice.key)}
+            </span>
+          )}
+          {shownFailure && (notice === null || storageFailed) && (
+            <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid={notice ? 'sync-pairing-storage' : 'sync-pairing-notice'}>
+              {t(shownFailure)}
             </span>
           )}
         </span>

@@ -52,11 +52,32 @@ export interface JoinView {
   readonly failure: string | null;
 }
 
+/** Lecture ou écriture de `sync_meta` en échec (aucun échec silencieux) : vrai jusqu'au prochain accès réussi. */
+function storageResult(container: AppContainer, failed: boolean): void {
+  const hub = hubOf(container);
+  if (hub.storageFailed === failed) return;
+  hub.storageFailed = failed;
+  notify(container);
+}
+
+export function pairingStorageFailed(container: AppContainer): boolean {
+  return hubOf(container).storageFailed;
+}
+
 async function readMeta(container: AppContainer, key: string): Promise<unknown> {
+  let raw: string | null;
   try {
-    const raw = await container.data.repos.sync.getMeta(key);
-    return raw === null ? null : (JSON.parse(raw) as unknown);
+    raw = await container.data.repos.sync.getMeta(key);
   } catch {
+    storageResult(container, true);
+    return null;
+  }
+  storageResult(container, false);
+  if (raw === null) return null;
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    // Valeur illisible (écrite par une version plus ancienne ?) : traitée comme absente, jamais comme une panne de la base.
     return null;
   }
 }
@@ -64,8 +85,9 @@ async function readMeta(container: AppContainer, key: string): Promise<unknown> 
 async function writeMeta(container: AppContainer, key: string, value: unknown): Promise<void> {
   try {
     await container.data.repos.sync.setMeta(key, value === null ? null : JSON.stringify(value));
+    storageResult(container, false);
   } catch {
-    // base indisponible : l'échec reste affiché pour cette session
+    storageResult(container, true);
   }
 }
 
@@ -90,6 +112,7 @@ export async function readJoinView(container: AppContainer): Promise<JoinView | 
 interface PairingHub {
   readonly listeners: Set<(event: PairingEvent) => void>;
   stopWatch: (() => void) | null;
+  storageFailed: boolean;
 }
 
 const hubs = new WeakMap<AppContainer, PairingHub>();
@@ -97,14 +120,14 @@ const hubs = new WeakMap<AppContainer, PairingHub>();
 function hubOf(container: AppContainer): PairingHub {
   let hub = hubs.get(container);
   if (!hub) {
-    hub = { listeners: new Set(), stopWatch: null };
+    hub = { listeners: new Set(), stopWatch: null, storageFailed: false };
     hubs.set(container, hub);
   }
   return hub;
 }
 
-/** `changed` : échec gardé ou effacé ; `paired` : appareil associé (`sync-paired`). */
-export type PairingEvent = 'changed' | 'paired';
+/** `changed` : échec gardé ou effacé ; `paired` : appareil associé (`sync-paired`) ; `paired-sync-failed` : associé, mais le cycle qui suit a échoué. */
+export type PairingEvent = 'changed' | 'paired' | 'paired-sync-failed';
 
 /** Changement de l'état d'association ; renvoie le désabonnement. */
 export function onPairingChange(container: AppContainer, listener: (event: PairingEvent) => void): () => void {
@@ -169,6 +192,10 @@ export async function handleSyncPaired(container: AppContainer): Promise<void> {
   hub.stopWatch = null;
   await writeMeta(container, PAIRING_FAILURE_META, null);
   notify(container, 'paired');
-  await container.sync?.syncNow('manual');
-  notify(container);
+  const sync = container.sync;
+  if (!sync) return;
+  await sync.syncNow('manual');
+  // `syncNow` ne rejette jamais : son résultat se lit dans l'état (revue, faible).
+  const phase = sync.status().phase;
+  notify(container, phase === 'error' || phase === 'key-mismatch' || phase === 'needs-pairing' ? 'paired-sync-failed' : 'changed');
 }

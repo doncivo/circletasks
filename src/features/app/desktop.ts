@@ -79,7 +79,12 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
     .catch((error: unknown) => logDesktopFailure('tray-sync', error));
   // Y-06 : appareil associé (`sync-paired`, sans clé) : la fenêtre `pairing` est déjà détruite par Rust ; cycle et lignes rafraîchies.
   desktop
-    .onSyncPaired(() => void import('../sync/pairingStatus').then(({ handleSyncPaired }) => handleSyncPaired(container)))
+    .onSyncPaired(
+      () =>
+        void import('../sync/pairingStatus')
+          .then(({ handleSyncPaired }) => handleSyncPaired(container))
+          .catch((error: unknown) => logDesktopFailure('sync-paired', error)),
+    )
     .then((stop) => {
       if (disposed) stop();
       else unlistenPaired = stop;
