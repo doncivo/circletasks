@@ -52,7 +52,7 @@ Réponses de l'architecte : ADR 0011, section 8 (données exclues et cas particu
 - Restauration P-04 et synchro : appliquer l'ADR 0010 (état publié qui fait foi, marqueur `restore-marker.json`, synchro suspendue et choix explicite, époque et instantané, âge de la version face aux traces de suppression).
 - `sample.ids` (P-05) est un réglage local : après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; à revoir dans l'ADR de synchro.
 
-Audits de sécurité de l'ADR 0011 (trois passes le 2026-10-05). L'ADR est révisé après chacune, et son annexe A donne la correspondance point par section pour les trois audits. Ces points sont soldés par les lots Y1 à Y3, qui doivent tous les couvrir :
+Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, le 2026-10-05). L'ADR est révisé après chacune, et son annexe A donne la correspondance point par section pour les trois audits. Ces points sont soldés par les lots Y1 à Y3, qui doivent tous les couvrir :
 - Premier audit (24 points, validés par le second) :
   - H1 : clé visible par une WebView en deux points ; confirmation native, limite d'appels, rien dans Zustand ni dans les journaux.
   - H2 : manifeste de `build.rs` et test `config.rs`.
@@ -80,7 +80,17 @@ Audits de sécurité de l'ADR 0011 (trois passes le 2026-10-05). L'ADR est révi
     - B5 : un script de `main` peut ouvrir la boîte de confirmation alors que l'utilisateur est présent ; un refus bloque l'affichage 10 min. Déni de service local accepté.
     - B7 : la mini-fenêtre `quick-capture` pouvait être imitée comme `pairing` ; impact faible, réglé par le même correctif H1 (plus de création de fenêtre depuis `main`).
     - B9 : un tiers sans clé peut déposer un en-tête `ct-*` en clair dans le dossier, ce qui provoque `folder-has-data` et bloque la création de clé. Déni de service de la menace (a), accepté ; l'utilisateur peut choisir un autre dossier ou supprimer le fichier étranger.
-- Commandes : **20 commandes `sync_*`** dans `src-tauri/build.rs`, dont 18 pour `main` (`sync.json`) et 2 pour `pairing` (`sync-pairing.json` : `sync_pairing_payload`, `sync_key_import`, plus `core:window:allow-close`). S'y ajoutent les 3 commandes `focus_window_*` du correctif F-01.
+- Quatrième vérification (ciblée) : H1, M1, B2, B3, B4 et B6 du troisième audit sont validés. Corrections portées dans l'ADR :
+  - publication par ligne et par horloge de champ, triée par hlc ; invariant « hlc strictement croissants à l'intérieur d'une époque » ;
+  - republication des opérations reportées par hlc croissant, avant toute nouvelle écriture ;
+  - `maxHlc` cumulé par époque ;
+  - `sync_pairing_close` ;
+  - URL Vite seulement en debug ;
+  - résolution des jokers dans le test (5) ;
+  - mode lié à l'instance `pairing` ;
+  - `own.json` indexé par dossier et par clé ;
+  - limite connue sur les écritures d'un appareil tiers inactif.
+- Commandes : **21 commandes `sync_*`** dans `src-tauri/build.rs`, dont 18 pour `main` (`sync.json`) et 3 pour `pairing` (`sync-pairing.json` : `sync_pairing_payload`, `sync_key_import`, `sync_pairing_close`, sans aucune permission `core:`). S'y ajoutent les 3 commandes `focus_window_*` du correctif F-01.
 - Limites acceptées tant que Y-10 et Y-11 ne sont pas au PRD (ADR 0011, section 14.1) : un appareil perdu garde une copie complète ; la purge reste bloquée jusqu'à 180 jours ; iCloud garde 30 jours de « Supprimés récemment » ; une clé unique lit et forge tout. À solder par le lot Y4 si Ali ajoute Y-10 et Y-11 au PRD M15.
 - Risques acceptés :
   - le Gestionnaire d'identification Windows est lisible par toute la session, et la désinstallation n'efface pas la clé du coffre ;
