@@ -307,6 +307,7 @@ describe('instance import : clé de secours (critères 10, 11, 12 et 16)', () =>
       ['cloud-pending', T.errors.cloudPending],
       ['pairing-expired', T.errors.pairingExpired],
       ['consent-denied', T.errors.consentDenied],
+      ['not-foreground', T.errors.notForeground],
       ['rate-limited', T.errors.rateLimited],
       ['not-configured', T.errors.notConfigured],
       ['wrong-window', T.errors.wrongWindow],

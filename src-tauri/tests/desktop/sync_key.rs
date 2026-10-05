@@ -252,7 +252,7 @@ fn y08_14_import_is_limited_to_five_calls_per_ten_minutes_and_needs_the_foregrou
     let b = second(&fs);
     b.core.choose_folder(Path::new(FOLDER)).unwrap();
     b.ui.ready(false);
-    assert_eq!(code(b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new("x".into())), 1)), SyncCode::ConsentDenied);
+    assert_eq!(code(b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new("x".into())), 1)), SyncCode::NotForeground);
     b.ui.ready(true);
     for _ in 0..5 {
         assert_eq!(code(b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new("x".into())), 1)), SyncCode::InvalidPairing);

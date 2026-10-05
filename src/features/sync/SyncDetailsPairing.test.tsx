@@ -36,7 +36,6 @@ beforeEach(async () => {
   await platform.bindDevice(SELF);
   await platform.key.create();
   desktop = createFakeDesktop();
-  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
 });
 
 afterEach(async () => {
@@ -61,11 +60,10 @@ describe('« Associer l’iPhone » (critère 4)', () => {
   });
 
   it.each([
-    ['refus de la boîte', true, 'Affichage annulé'],
-    ['app pas au premier plan', false, 'Revenez dans l’application et réessayez'],
-  ])('consent-denied (%s) : « %s », aucune fenêtre, rien de gardé', async (_case, focused, text) => {
-    vi.mocked(document.hasFocus).mockReturnValue(focused);
-    platform.testing.setConsent(false);
+    ['refus de la boîte (consent-denied)', (p: MemorySyncPlatform) => p.testing.setConsent(false), 'Affichage annulé'],
+    ['app pas au premier plan (not-foreground)', (p: MemorySyncPlatform) => p.testing.setForeground(false), 'Revenez dans l’application et réessayez'],
+  ])('%s : « %s », aucune fenêtre, rien de gardé', async (_case, arrange, text) => {
+    arrange(platform);
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
     fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
@@ -94,6 +92,24 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     renderIn(await make(limited), <SyncDetailsPairing />);
     fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('Trop de demandes : réessayez dans 10 minutes');
+  });
+
+  it('fenêtre déjà ouverte (already-open) : « La fenêtre d’association est déjà ouverte », rien de gardé, l’instance reste', async () => {
+    await platform.key.openPairing('show');
+    const container = await make();
+    renderIn(container, <SyncDetailsPairing />);
+    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('La fenêtre d’association est déjà ouverte');
+    expect(platform.testing.pairing()).toEqual({ mode: 'show', generation: 1 });
+    expect(await db.data.repos.sync.getMeta(PAIRING_FAILURE_META)).toBeNull();
+  });
+
+  it('mode import : texte neutre pour un refus, jamais « Affichage annulé »', async () => {
+    const { pairingOpenErrorKey } = await import('./pairingStatus');
+    expect(pairingOpenErrorKey('consent-denied', 'import')).toBe('sync.pairing.importCancelled');
+    expect(pairingOpenErrorKey('consent-denied', 'show')).toBe('sync.pairing.openDenied');
+    expect(pairingOpenErrorKey('not-foreground', 'import')).toBe('sync.pairing.openBackground');
+    expect(pairingOpenErrorKey('already-open', 'import')).toBe('sync.pairing.openAlreadyOpen');
   });
 
   it('dossier lié sans clé : « Associer cet appareil » ouvre l’instance import, sans confirmation', async () => {

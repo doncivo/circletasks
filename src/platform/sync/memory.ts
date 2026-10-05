@@ -609,7 +609,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const prune = (list: number[]): number[] => list.filter((at) => now() - at < CONSENT_WINDOW_MS);
 
   const gate = (): void => {
-    if (!foreground) fail('consent-denied');
+    if (!foreground) fail('not-foreground');
     if (now() < blockedUntil) fail('rate-limited');
   };
 
@@ -1234,7 +1234,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
           requireBound();
         }
         // Libellé `pairing` déjà pris (avant ou pendant la boîte) : refus, rien n'est créé.
-        if (livePairing()) return fail('consent-denied');
+        if (livePairing()) return fail('already-open');
         if (mode === 'show') openShowConsent();
         else gate();
         pairing = { mode, generation: 1, openedAt: now(), payloadTaken: false };

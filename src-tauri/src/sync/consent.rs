@@ -153,7 +153,7 @@ impl ConsentGate {
             return fail(SyncCode::RateLimited);
         }
         if !self.ui.owner_ready(owner) {
-            return fail(SyncCode::ConsentDenied);
+            return fail(SyncCode::NotForeground);
         }
         if now < counters.blocked_until {
             return fail(SyncCode::RateLimited);

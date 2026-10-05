@@ -49,6 +49,10 @@ pub enum SyncCode {
     KeyExhausted,
     ConsentDenied,
     RateLimited,
+    /// Fenêtre propriétaire pas visible ou pas au premier plan (aucune boîte ouverte) ; Y-06, distinct de `ConsentDenied`.
+    NotForeground,
+    /// Fenêtre `pairing` déjà ouverte (ou en cours d'ouverture) ; Y-06, distinct de `ConsentDenied`.
+    AlreadyOpen,
     DecryptFailed,
     Truncated,
     BadName,
@@ -72,7 +76,7 @@ pub enum SyncCode {
 }
 
 impl SyncCode {
-    pub const ALL: [SyncCode; 35] = [
+    pub const ALL: [SyncCode; 37] = [
         SyncCode::NotConfigured,
         SyncCode::FolderUnreachable,
         SyncCode::UnsafeFolder,
@@ -88,6 +92,8 @@ impl SyncCode {
         SyncCode::KeyExhausted,
         SyncCode::ConsentDenied,
         SyncCode::RateLimited,
+        SyncCode::NotForeground,
+        SyncCode::AlreadyOpen,
         SyncCode::DecryptFailed,
         SyncCode::Truncated,
         SyncCode::BadName,
@@ -127,6 +133,8 @@ impl SyncCode {
             SyncCode::KeyExhausted => "key-exhausted",
             SyncCode::ConsentDenied => "consent-denied",
             SyncCode::RateLimited => "rate-limited",
+            SyncCode::NotForeground => "not-foreground",
+            SyncCode::AlreadyOpen => "already-open",
             SyncCode::DecryptFailed => "decrypt-failed",
             SyncCode::Truncated => "truncated",
             SyncCode::BadName => "bad-name",

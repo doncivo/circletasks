@@ -69,8 +69,8 @@ fn y08_11_preconditions_without_dialog() {
     let clock = TestClock::new(NOW);
     let consent = gate(dir.path(), &ui, &clock);
     ui.ready(false);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::ConsentDenied);
-    assert_eq!(code(consent.confirm(ConsentKind::EraseKey, OWNER)), SyncCode::ConsentDenied);
+    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::NotForeground);
+    assert_eq!(code(consent.confirm(ConsentKind::EraseKey, OWNER)), SyncCode::NotForeground);
     assert_eq!(ui.prompts(), 0, "aucune boîte si la fenêtre n'est pas au premier plan");
 }
 
@@ -180,13 +180,13 @@ fn y08_12_exact_url_and_vite_only_in_debug() {
 fn y08_12_never_reuses_a_window_and_checks_label_url_hwnd() {
     let registry = PairingRegistry::default();
     // Libellé déjà pris (fenêtre créée par un tiers) avant la boîte : refus, rien n'est créé.
-    assert_eq!(code(registry.begin_open(true)), SyncCode::ConsentDenied);
+    assert_eq!(code(registry.begin_open(true)), SyncCode::AlreadyOpen);
     assert!(registry.current().is_none());
     registry.begin_open(false).unwrap();
     // Une seconde ouverture pendant la boîte : refus.
-    assert_eq!(code(registry.begin_open(false)), SyncCode::ConsentDenied);
+    assert_eq!(code(registry.begin_open(false)), SyncCode::AlreadyOpen);
     let instance = registry.register(42, PairingMode::Show, NOW);
-    assert_eq!(code(registry.begin_open(false)), SyncCode::ConsentDenied, "instance existante jamais réutilisée");
+    assert_eq!(code(registry.begin_open(false)), SyncCode::AlreadyOpen, "instance existante jamais réutilisée");
     // Fenêtres de test : même libellé, autre URL ou autre HWND ; ou `main`.
     for fake in [Caller { label: PAIRING_WINDOW, url: "http://tauri.localhost/index.html", hwnd: 42 }, caller(43), Caller { label: "main", url: URL, hwnd: 42 }, caller(0)] {
         assert_eq!(code(registry.verify(&fake, NOW)), SyncCode::WrongWindow);

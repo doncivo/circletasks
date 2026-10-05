@@ -31,6 +31,8 @@ export function pairingErrorText(texts: PairingTexts, error: unknown): string {
       return texts.errors.pairingExpired;
     case 'consent-denied':
       return texts.errors.consentDenied;
+    case 'not-foreground':
+      return texts.errors.notForeground;
     case 'rate-limited':
       return texts.errors.rateLimited;
     case 'not-configured':

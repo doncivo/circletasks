@@ -219,3 +219,23 @@ describe('appareil qui rejoint avec des données locales (critère 14)', () => {
     expect((await a.data.repos.settings.get('sample.ids')).tasks).toEqual([]);
   });
 });
+
+describe('codes distincts de l’ouverture (revue 2, audit 4)', () => {
+  it('fenêtre déjà ouverte : already-open ; application pas au premier plan : not-foreground ; refus : consent-denied', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    devices.push(a);
+    await setupFirst(a);
+    expect((await a.cycle()).phase).toBe('idle');
+    const code = async (p: Promise<unknown>): Promise<string> => p.then(() => 'resolved', (e: { code?: string }) => e.code ?? 'autre');
+    await a.platform.key.openPairing('show');
+    expect(await code(a.platform.key.openPairing('show'))).toBe('already-open');
+    expect(await code(a.platform.key.openPairing('import'))).toBe('already-open');
+    await a.platform.key.closePairing();
+    a.platform.testing.setForeground(false);
+    expect(await code(a.platform.key.openPairing('show'))).toBe('not-foreground');
+    expect(await code(a.platform.key.openPairing('import'))).toBe('not-foreground');
+    a.platform.testing.setForeground(true);
+    a.platform.testing.setConsent(false);
+    expect(await code(a.platform.key.openPairing('show'))).toBe('consent-denied');
+  });
+});

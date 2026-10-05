@@ -308,6 +308,8 @@ export const SYNC_ERROR_CODES = [
   'key-exhausted',
   'consent-denied',
   'rate-limited',
+  'not-foreground',
+  'already-open',
   'decrypt-failed',
   'truncated',
   'bad-name',

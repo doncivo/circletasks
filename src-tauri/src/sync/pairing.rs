@@ -224,7 +224,7 @@ impl PairingRegistry {
         let mut state = self.lock();
         if label_taken || state.instance.is_some() || state.opening {
             super::log::event("pairing-refused", "label-taken");
-            return fail(SyncCode::ConsentDenied);
+            return fail(SyncCode::AlreadyOpen);
         }
         state.opening = true;
         Ok(())

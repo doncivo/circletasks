@@ -37,7 +37,6 @@ beforeEach(async () => {
   await platform.bindDevice(SELF);
   await platform.key.create();
   desktop = createFakeDesktop();
-  vi.spyOn(document, 'hasFocus').mockReturnValue(true);
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
 });
 

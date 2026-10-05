@@ -1,6 +1,29 @@
 import { PAIRING_RESCAN_MS, PAIRING_VALIDITY_MS } from '../../domain/sync/limits';
 import { syncErrorCodeOf, type SyncErrorCode, type SyncPlatform } from '../../platform/sync/types';
+import type { PlainMessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
+
+/**
+ * Texte d'un échec d'ouverture de la fenêtre `pairing` (jamais une boîte bloquante, Y-06 critère 4). Codes distincts (revue 2) :
+ * `not-foreground` (application pas au premier plan, aucune boîte), `already-open`, `consent-denied` (refus de la boîte, mode `show`
+ * seulement ; texte neutre en mode `import`, qui n'ouvre pas de boîte).
+ */
+export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'): PlainMessageKey {
+  switch (code) {
+    case 'consent-denied':
+      return mode === 'show' ? 'sync.pairing.openDenied' : 'sync.pairing.importCancelled';
+    case 'not-foreground':
+      return 'sync.pairing.openBackground';
+    case 'already-open':
+      return 'sync.pairing.openAlreadyOpen';
+    case 'rate-limited':
+      return 'sync.pairing.openRateLimited';
+    case 'io':
+      return 'sync.pairing.openIncomplete';
+    default:
+      return 'sync.pairing.openFailed';
+  }
+}
 
 /**
  * État de l'association vu par la fenêtre principale (Y-06 ; exigence d'Ali : tout échec qui peut bloquer est visible, persiste après
@@ -104,7 +127,8 @@ export async function openPairingWindow(container: AppContainer, mode: 'show' | 
     await platform.key.openPairing(mode);
   } catch (error) {
     const code = syncErrorCodeOf(error);
-    if (code !== 'consent-denied') await writeMeta(container, PAIRING_FAILURE_META, { mode, code } satisfies PairingFailure);
+    // Un refus de la boîte, une application pas au premier plan ou une fenêtre déjà ouverte ne sont pas des pannes : jamais gardés.
+    if (code !== 'consent-denied' && code !== 'not-foreground' && code !== 'already-open') await writeMeta(container, PAIRING_FAILURE_META, { mode, code } satisfies PairingFailure);
     notify(container);
     return code;
   }

@@ -376,7 +376,7 @@ describe('appairage (Y-06, sections 2.1 et 10.3)', () => {
     expect(await codeOf(a.key.pairingPayload())).toBe('wrong-window');
     expect(await codeOf(a.key.closePairing())).toBe('wrong-window');
     await a.key.openPairing('show');
-    expect(await codeOf(a.key.openPairing('show'))).toBe('consent-denied');
+    expect(await codeOf(a.key.openPairing('show'))).toBe('already-open');
     expect(await codeOf(a.key.import({ recoveryKey: 'CT1-x' }))).toBe('wrong-mode');
     await a.key.pairingPayload();
     expect(await codeOf(a.key.pairingPayload())).toBe('wrong-window'); // jeton à usage unique
@@ -408,7 +408,7 @@ describe('appairage (Y-06, sections 2.1 et 10.3)', () => {
     expect(await codeOf(a.key.openPairing('show'))).toBe('rate-limited');
     nowMs += CONSENT_BLOCK_MS;
     a.testing.setForeground(false);
-    expect(await codeOf(a.key.openPairing('show'))).toBe('consent-denied');
+    expect(await codeOf(a.key.openPairing('show'))).toBe('not-foreground');
     expect(a.testing.consentPrompts()).toBe(1);
     a.testing.setForeground(true);
     await a.key.openPairing('show');

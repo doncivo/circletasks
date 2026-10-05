@@ -255,7 +255,7 @@ async fn open_pairing_window(app: &AppHandle, main: &WebviewWindow, core: &Arc<S
     // Libellé pris pendant la boîte : refus, rien n'est créé.
     if app.get_webview_window(PAIRING_WINDOW).is_some() {
         log::event("pairing-refused", "label-taken");
-        return fail(SyncCode::ConsentDenied);
+        return fail(SyncCode::AlreadyOpen);
     }
     let window = WebviewWindowBuilder::new(app, PAIRING_WINDOW, WebviewUrl::App(PAIRING_PAGE.into()))
         .title("CircleTasks")

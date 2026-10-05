@@ -1,27 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { t, type PlainMessageKey } from '../../i18n';
-import type { SyncErrorCode } from '../../platform/sync/types';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { JoinProgress } from './JoinProgress';
-import { onPairingChange, openPairingWindow, readPairingFailure, type PairingFailure } from './pairingStatus';
+import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { syncStore } from './syncStore';
-
-/** Texte d'un échec d'ouverture de la fenêtre `pairing` (jamais une boîte bloquante, Y-06 critère 4). */
-export function pairingOpenErrorKey(code: SyncErrorCode, appFocused: boolean): PlainMessageKey {
-  switch (code) {
-    case 'consent-denied':
-      // Même code pour un refus de la boîte et pour une app qui n'était pas au premier plan : l'état du focus au moment de l'appel
-      // départage (une app sans le focus voit sa demande refusée sans boîte).
-      return appFocused ? 'sync.pairing.openDenied' : 'sync.pairing.openBackground';
-    case 'rate-limited':
-      return 'sync.pairing.openRateLimited';
-    case 'io':
-      return 'sync.pairing.openIncomplete';
-    default:
-      return 'sync.pairing.openFailed';
-  }
-}
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 
@@ -64,19 +47,19 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   if (showOnly && mode === 'import') return null;
 
   const open = async (): Promise<void> => {
-    const focused = typeof document === 'undefined' || document.hasFocus();
     setBusy(true);
     setNotice(null);
     lastMode.current = mode;
     try {
       const code = await openPairingWindow(container, mode);
-      if (code) setNotice({ key: pairingOpenErrorKey(code, focused), tone: 'danger' });
+      if (code) setNotice({ key: pairingOpenErrorKey(code, mode), tone: 'danger' });
     } finally {
       setBusy(false);
     }
   };
 
-  const shownFailure = notice === null && failure !== null ? pairingOpenErrorKey(failure.code, true) : null;
+  // Échec gardé du même mode seulement (un échec de l'instance import ne s'affiche pas sous « Associer l'iPhone »).
+  const shownFailure = notice === null && failure !== null && failure.mode === mode ? pairingOpenErrorKey(failure.code, mode) : null;
   return (
     <>
       <div className="ct-settings__row ct-sync__pairing">

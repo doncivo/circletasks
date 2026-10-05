@@ -322,3 +322,32 @@ fn y06_9_paired_by_is_completed_by_rust_when_the_engine_omits_it() {
     let scan = a.core.scan(&[]).unwrap();
     assert_eq!(scan.devices.iter().find(|d| d.device_id == DEV_C).and_then(|d| d.state.as_ref()).map(|s| s.paired_by.clone()), Some(None));
 }
+
+/// Codes distincts (revue 2, audit 4) : fenêtre `pairing` déjà ouverte → `already-open` ; fenêtre propriétaire pas au premier plan →
+/// `not-foreground`, sans boîte ; `consent-denied` ne signifie plus qu'un refus de la boîte.
+#[test]
+fn y06_4_already_open_and_not_foreground_have_their_own_codes() {
+    let registry = PairingRegistry::default();
+    assert_eq!(code(registry.begin_open(true)), SyncCode::AlreadyOpen, "libellé déjà pris");
+    registry.begin_open(false).unwrap();
+    assert_eq!(code(registry.begin_open(false)), SyncCode::AlreadyOpen, "ouverture en cours");
+    registry.register(42, PairingMode::Show, NOW);
+    assert_eq!(code(registry.begin_open(false)), SyncCode::AlreadyOpen, "instance existante");
+    let source = include_str!("../../src/sync/commands.rs");
+    assert!(!source.contains("fail(SyncCode::ConsentDenied)"), "libellé pris pendant la boîte : already-open");
+
+    let dir = tempfile::tempdir().unwrap();
+    let ui = crate::sync_support::FakeUi::new();
+    let clock = crate::sync_support::TestClock::new(NOW);
+    let consent = circletasks_lib::sync::consent::ConsentGate::new(dir.path().to_path_buf(), ui.clone(), clock.clock());
+    ui.ready(false);
+    assert_eq!(code(consent.confirm_show(1)), SyncCode::NotForeground);
+    assert_eq!(code(consent.count_import(1)), SyncCode::NotForeground);
+    assert_eq!(code(consent.precheck(1)), SyncCode::NotForeground);
+    assert_eq!(ui.prompts(), 0);
+    ui.ready(true);
+    ui.answer(false);
+    assert_eq!(code(consent.confirm_show(1)), SyncCode::ConsentDenied, "refus de la boîte");
+    assert_eq!(SyncCode::AlreadyOpen.as_str(), "already-open");
+    assert_eq!(SyncCode::NotForeground.as_str(), "not-foreground");
+}

@@ -5,8 +5,7 @@ import { Button, ChoiceDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
 import { JoinProgress } from './JoinProgress';
-import { pairingOpenErrorKey } from './SyncDetailsPairing';
-import { onPairingChange, openPairingWindow, readPairingFailure, type PairingFailure } from './pairingStatus';
+import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
@@ -185,17 +184,16 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   };
 
   const associate = async (): Promise<void> => {
-    const focused = typeof document === 'undefined' || document.hasFocus();
     setPairingBusy(true);
     setPairingNotice(null);
     try {
       const code = await openPairingWindow(container, 'import', platform);
-      if (code) setPairingNotice(pairingOpenErrorKey(code, focused));
+      if (code) setPairingNotice(pairingOpenErrorKey(code, 'import'));
     } finally {
       setPairingBusy(false);
     }
   };
-  const pairingMessage = pairingNotice ?? (pairingFailure && pairingFailure.mode === 'import' ? pairingOpenErrorKey(pairingFailure.code, true) : null);
+  const pairingMessage = pairingNotice ?? (pairingFailure && pairingFailure.mode === 'import' ? pairingOpenErrorKey(pairingFailure.code, 'import') : null);
 
   const chooseButton = (
     <Button variant="secondary" ariaLabel={t('sync.folder.chooseLabel')} onClick={() => void choose()} className="ct-settings__link" disabled={busy}>
