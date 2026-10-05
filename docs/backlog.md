@@ -1,4 +1,12 @@
-en revue (lot Y1 fusionné ; « fait » après le parcours 11, Y-06) ||||||| ID | Tâche | Responsable | Statut |
+# Backlog CircleTasks
+
+121 user stories, triées par ordre de construction (PRD section 9). Critères d'acceptation : docs/PRD.md section 4.
+
+Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fichier à jour.
+
+## Ordre 0 — Préparation
+
+| ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
 | PREP-01 | Prérequis et comptes (PRD section 2) | Ali | fait (secrets GitHub créés le 2026-10-04 : TAURI_SIGNING_PRIVATE_KEY, _PASSWORD, RELEASES_TOKEN ; environnement « releases ») |
 | PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
@@ -126,15 +134,15 @@ en revue (lot Y1 fusionné ; « fait » après le parcours 11, Y-06) ||||||| ID 
 
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
-| Y-01 | M15 | Je choisis le dossier de synchro | sync-icloud | en cours (lot Y1) ; fiche docs/stories/Y-01.md |
-| Y-02 | M15 | Mes données se synchronisent seules | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-02.md |
-| Y-03 | M15 | Je lance une synchro manuelle | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-03.md |
+| Y-01 | M15 | Je choisis le dossier de synchro | sync-icloud | fait (lot Y1, critère 16 branché au lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
+| Y-02 | M15 | Mes données se synchronisent seules | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
+| Y-03 | M15 | Je lance une synchro manuelle | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
 | Y-04 | M15 | Je consulte les conflits | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
-| Y-05 | M15 | Je travaille hors ligne | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-05.md |
+| Y-05 | M15 | Je travaille hors ligne | sync-icloud | en revue (lot Y2 fusionné ; parcours 10 à deux pages au lot Y3) |
 | Y-06 | M15 | Je raccorde un nouvel appareil | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
 | Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | à faire (lot Y3, après la fusion de Y2) |
-| Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | en cours (lot Y1) ; fiche docs/stories/Y-08.md |
-| Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | en cours (lot Y2) ; fiche docs/stories/Y-09.md |
+| Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | en revue (lot Y1 fusionné ; « fait » après le parcours 11, Y-06) |
+| Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
 | Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
 | Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
 
