@@ -9,7 +9,8 @@ const layer = (name) => [`**/${name}`, `**/${name}/**`];
 
 /** Blocs chargés à la demande (PERF-02, ADR 0001 avenant) : jamais d'import statique, seulement `import()` depuis leur chargeur. */
 const ON_DEMAND_PATTERN = {
-  group: ['**/domain/chronoAbsolute', '**/i18n/en'],
+  // Chemins relatifs courts compris : './en' dans src/i18n, './chronoAbsolute' dans src/domain (import() n'est pas une ImportDeclaration).
+  group: ['**/domain/chronoAbsolute', '**/i18n/en', './en', './chronoAbsolute'],
   message: 'Bloc chargé à la demande (PERF-02) : import() depuis src/features/capture/absoluteDatesLoader.ts ou src/i18n/index.ts seulement.',
 };
 
@@ -88,10 +89,11 @@ export default tseslint.config(
     files: ['src/platform/**'],
     rules: { 'no-restricted-imports': ['error', { patterns: [{ group: [...layer('features'), ...layer('ui')] }, ON_DEMAND_PATTERN] }] },
   },
-  // Reste de src/ (captureMain.tsx, etc.) : mêmes blocs à la demande.
+  // Reste de src/ (captureMain.tsx, etc.) : mêmes blocs à la demande. App.tsx et main.tsx sont exclus : leur bloc forbidLayers (plus haut)
+  // porte déjà ces motifs, et ce bloc, placé après, écraserait ses interdictions (db/drivers, platform/tauri, @tauri-apps/*).
   {
     files: ['src/*.{ts,tsx}'],
-    ignores: ['**/*.test.{ts,tsx}'],
+    ignores: ['**/*.test.{ts,tsx}', 'src/App.tsx', 'src/main.tsx'],
     rules: { 'no-restricted-imports': ['error', { patterns: [ON_DEMAND_PATTERN] }] },
   },
   // sideEffects: ["**/*.css"] (package.json) : un import nu d'un module TS/JS serait élagué par le bundler (ADR 0001, avenant PERF-02).
