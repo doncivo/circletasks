@@ -124,3 +124,4 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - `src/platform/relaunch.ts` importe `@tauri-apps/plugin-process` de façon statique (import dynamique pour alléger le bloc de départ) ;
   - renommer `FileExportError` en `FileError` (il sert aussi à la lecture) ;
   - restauration : points d'analyse de la couche de bureau (`app_config_dir` lui-même par jonction) non contrôlés au-delà du dossier `backups/`.
+- `cargo clippy --all-targets` : avertissements existants dans `src-tauri/src/backup.rs` (vers les lignes 757 à 904) et `src-tauri/tests/desktop/export.rs` (lignes 35 et 47), relevés pendant Q-01 critère 10 ; à corriger, puis ajouter clippy au job CI `tests.yml`.
