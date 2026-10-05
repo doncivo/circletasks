@@ -17,6 +17,10 @@ export const syncConflictsFr = {
   restoring: 'Restauration…',
   restoredOn: 'Restaurée le {date}',
   showMore: 'Afficher plus',
+  /** Valeur texte entre guillemets (Synchro.html) ; `{text}` déjà tronqué. */
+  quoted: '« {text} »',
+  unreadableOne: '1 conflit du journal est illisible et n’est pas affiché',
+  unreadableMany: '{count} conflits du journal sont illisibles et ne sont pas affichés',
   loadFailed: 'Le journal des conflits n’a pas pu être lu. Rouvrez cet écran pour réessayer.',
   /** Message « Annuler » (T-13, 5 s). */
   undoLabel: 'Valeur restaurée',

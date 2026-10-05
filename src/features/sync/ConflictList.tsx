@@ -23,8 +23,10 @@ interface RowMessage {
 /**
  * Bloc « JOURNAL DES CONFLITS » sous la ligne « N conflits cette semaine » de Y-02, qui porte le titre de section (Y-04 critères 1 à 4 et 14 ; Synchro.html) : une ligne par conflit, du plus récent au plus ancien, 50 par
  * page ; valeur gardée et valeur écartée, appareil et heure de chacune, « Restaurer » ou « Restaurée le <date> ». Absent sans conflit.
- * Résultat ou refus annoncé dans la ligne (`role="status"`), le focus reste sur la ligne ; un refus certain (élément ou parent disparu,
- * valeur invalide) reste affiché tant que l'état est bloqué ; une lecture impossible est dite (exigence d'Ali : aucun échec silencieux).
+ * Résultat annoncé dans la ligne (`role="status"`), le focus reste sur la ligne (ou sur « Restaurer » si rien n'a changé) ; un refus
+ * certain (élément ou parent disparu, valeur invalide) est **recalculé à chaque lecture** et affiché tant que l'état est bloqué ; un
+ * échec de la base reste affiché jusqu'à la prochaine action ; « Annuler » retire le message de succès ; une lecture impossible ou des
+ * lignes illisibles sont dites (exigence d'Ali : aucun échec silencieux).
  */
 export function ConflictList() {
   const container = useAppContainer();
@@ -41,7 +43,21 @@ export function ConflictList() {
   const rows = useRef(new Map<number, HTMLLIElement>());
   const focusAfter = useRef<number | null>(null);
 
-  useEffect(() => subscribeConflictChanges(container.data, () => setVersion((v) => v + 1)), [container]);
+  useEffect(
+    () =>
+      subscribeConflictChanges(container.data, (change) => {
+        // Restauration annulée : le message de succès de la ligne n'est plus vrai.
+        if (change.kind === 'undone') {
+          setMessages((current) => {
+            const next = new Map(current);
+            next.delete(change.conflictId);
+            return next;
+          });
+        }
+        setVersion((v) => v + 1);
+      }),
+    [container],
+  );
 
   useEffect(() => {
     let alive = true;
@@ -60,24 +76,24 @@ export function ConflictList() {
     };
   }, [useCases, pages, version, lastSyncAt, conflictsThisWeek]);
 
-  // Le bouton « Restaurer » disparaît (« Restaurée le … ») : le focus reste sur la ligne (critère 14).
+  // Après « Restaurer », le focus reste sur la ligne (critère 14) : sur la ligne si le bouton a disparu (« Restaurée le … »), sinon sur
+  // le bouton, désactivé le temps de l'action. Appliqué à la relecture qui suit l'action (avis de changement).
   useEffect(() => {
     if (focusAfter.current === null) return;
     const row = rows.current.get(focusAfter.current);
-    if (row && !row.contains(document.activeElement)) row.focus();
+    const button = row?.querySelector('button');
+    if (row && !row.contains(document.activeElement)) (button ?? row).focus();
     focusAfter.current = null;
   }, [page]);
 
   if (loadFailed) {
     return (
-      <>
-        <p className="ct-settings__error" role="status">
-          {t('sync.conflicts.loadFailed')}
-        </p>
-      </>
+      <p className="ct-settings__error" role="status">
+        {t('sync.conflicts.loadFailed')}
+      </p>
     );
   }
-  if (!page || page.items.length === 0) return null;
+  if (!page || (page.items.length === 0 && page.unreadable === 0)) return null;
 
   const nowMs = container.clock.nowMs();
 
@@ -91,14 +107,22 @@ export function ConflictList() {
       setBusy(null);
     }
     focusAfter.current = view.id;
-    const trouble = result.status === 'refused' || result.status === 'failed';
-    setMessages((current) => new Map(current).set(view.id, { text: restoreResultText(result, names), trouble }));
-    // La relecture (avis de changement) remplace le bouton ; sans changement (refus), le focus reste déjà sur le bouton.
-    if (result.status === 'refused' || result.status === 'failed') focusAfter.current = null;
+    // Un refus n'est pas gardé : la relecture qui suit (avis de changement) recalcule le blocage, seul affiché.
+    setMessages((current) => {
+      const next = new Map(current);
+      if (result.status === 'refused') next.delete(view.id);
+      else next.set(view.id, { text: restoreResultText(result, names), trouble: result.status === 'failed' });
+      return next;
+    });
   };
 
   return (
     <>
+      {page.unreadable > 0 && (
+        <p className="ct-settings__error" role="status">
+          {page.unreadable === 1 ? t('sync.conflicts.unreadableOne') : t('sync.conflicts.unreadableMany', { count: page.unreadable })}
+        </p>
+      )}
       <ul className="ct-conflicts" aria-label={t('sync.conflicts.listLabel')}>
         {page.items.map((view) => {
           const title = conflictTitle(view);
@@ -106,7 +130,8 @@ export function ConflictList() {
           const names = { title, field };
           const [keptBefore, keptAfter] = aroundValue((value) => t('sync.conflicts.kept', { value }));
           const [discardedBefore, discardedAfter] = aroundValue((value) => t('sync.conflicts.discarded', { value }));
-          const message = messages.get(view.id) ?? (view.blocked && !view.restored ? { text: refusalText(view.blocked), trouble: true } : null);
+          // Blocage recalculé à la lecture : il prime sur tout message gardé (critère 8, exigence d'Ali).
+          const message = !view.restored && view.blocked ? { text: refusalText(view.blocked), trouble: true } : (messages.get(view.id) ?? null);
           const statusId = `ct-conflict-status-${String(view.id)}`;
           return (
             <li
@@ -143,15 +168,17 @@ export function ConflictList() {
                   {view.restored ? (
                     <span className="ct-conflicts__restored">{view.restoredAt ? restoredOnText(view.restoredAt) : null}</span>
                   ) : (
-                    <Button
-                      variant="secondary"
-                      className="ct-settings__link"
-                      ariaLabel={t('sync.conflicts.restoreLabel', names)}
-                      {...(message ? { describedBy: statusId } : {})}
+                    <button
+                      type="button"
+                      className="ct-button ct-button--secondary ct-settings__link"
+                      aria-label={t('sync.conflicts.restoreLabel', names)}
+                      aria-describedby={message ? statusId : undefined}
+                      aria-busy={busy === view.id}
+                      disabled={busy !== null}
                       onClick={() => void restore(view, names)}
                     >
                       {busy === view.id ? t('sync.conflicts.restoring') : t('sync.conflicts.restore')}
-                    </Button>
+                    </button>
                   )}
                 </span>
               </div>

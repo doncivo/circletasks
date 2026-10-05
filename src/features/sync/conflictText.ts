@@ -24,11 +24,11 @@ export function fieldLabel(table: Pick<SyncTable, 'name'>, column: Pick<SyncColu
   return tDynamic(fieldKey(table, column) as MessageKey);
 }
 
-/** Texte entre guillemets français, tronqué à 80 caractères (points de code, jamais une moitié d'emoji). */
+/** Texte entre les guillemets de la langue (`sync.conflicts.quoted`), tronqué à 80 caractères (points de code, jamais une moitié d'emoji). */
 export function quoted(text: string): string {
   const chars = Array.from(text);
   const shown = chars.length > CONFLICT_TEXT_MAX ? `${chars.slice(0, CONFLICT_TEXT_MAX).join('')}…` : text;
-  return `« ${shown} »`;
+  return t('sync.conflicts.quoted', { text: shown });
 }
 
 /** Libellés d'énumération déjà présents dans `src/i18n` ; sinon la valeur brute (D1). */

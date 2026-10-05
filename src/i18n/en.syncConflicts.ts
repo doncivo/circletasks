@@ -17,6 +17,9 @@ export const syncConflictsEn: Shape<typeof syncConflictsFr> = {
   restoring: 'Restoring…',
   restoredOn: 'Restored on {date}',
   showMore: 'Show more',
+  quoted: '“{text}”',
+  unreadableOne: '1 conflict in the log is unreadable and is not shown',
+  unreadableMany: '{count} conflicts in the log are unreadable and are not shown',
   loadFailed: 'The conflict log could not be read. Reopen this screen to try again.',
   undoLabel: 'Value restored',
   result: {
