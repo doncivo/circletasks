@@ -177,3 +177,33 @@ describe('bandeau A-09 « Mettez à jour l’app » (Y-07 critère 9)', () => {
     integration.dispose();
   });
 });
+
+describe('bandeau A-09 (Y-07 critère 9, QA)', () => {
+  const start = () => startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined });
+
+  it('jamais pour un appareil d’une autre clé (foreign), expiré ou oublié, même s’il garde un sv supérieur ; un second appareil plus récent actif le maintient', () => {
+    const integration = start();
+    const pc2 = (extra: Partial<SyncDeviceStatus>): SyncDeviceStatus => ({ ...iphone({}), deviceId: PC2, platform: 'windows', ...extra });
+    for (const status of ['foreign', 'expired', 'forgotten'] as const) {
+      sync.setStatus({ devices: [self, iphone({ status, newer: 'schema' })] });
+      expect(banner()).toBeUndefined();
+      sync.setStatus({ devices: [self, iphone({ status, newer: 'major' })] });
+      expect(banner()).toBeUndefined();
+    }
+    sync.setStatus({ devices: [self, iphone({ status: 'expired', newer: 'schema' }), pc2({ newer: 'schema' })] });
+    expect(banner()).toBeDefined();
+    sync.setStatus({ devices: [self, iphone({ status: 'expired', newer: 'schema' }), pc2({ status: 'forgotten', newer: 'schema' })] });
+    expect(banner()).toBeUndefined();
+    integration.dispose();
+  });
+
+  it('l’arrêt de l’intégration retire le bandeau sans toucher « Hors ligne »', () => {
+    const integration = start();
+    useAppStatusStore.getState().setStatus('offline', {});
+    sync.setStatus({ devices: [self, iphone({ newer: 'schema' })] });
+    expect(banner()).toBeDefined();
+    integration.dispose();
+    expect(banner()).toBeUndefined();
+    expect(useAppStatusStore.getState().sources.offline).toBeDefined();
+  });
+});
