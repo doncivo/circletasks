@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { acceptsUnknownFrom, canRead, compareVersions, keepsUnknownFields, newerDevices, newerKind, type VersionRelation } from './compat';
+import type { DeviceSyncStatus } from '../../platform/sync/types';
+import { acceptsUnknownFrom, canRead, compareVersions, keepsUnknownFields, newerDevices, newerKind, type DeviceState, type VersionRelation } from './compat';
 import { SYNC_FORMAT_MAJOR } from './format';
 
 /** Y-07 critère 1 : classement d'un appareil distant (ADR 0011 §7.2). */
@@ -78,6 +79,7 @@ describe('règles tirées du classement', () => {
     expect(acceptsUnknownFrom(17, 17)).toBe(false);
     expect(acceptsUnknownFrom(17, 16)).toBe(false);
     expect(acceptsUnknownFrom(17, 0)).toBe(false);
+    expect(acceptsUnknownFrom.length).toBe(2);
   });
 
   it('newerKind : schema, major ou null', () => {
@@ -86,8 +88,8 @@ describe('règles tirées du classement', () => {
     for (const r of ['older', 'same', 'invalid'] as const) expect(newerKind(r)).toBeNull();
   });
 
-  it('newerDevices : autres appareils actifs plus récents seulement (ni soi, ni absent, ni oublié, ni autre clé, ni plus ancien)', () => {
-    const d = (id: string, extra: { self?: boolean; status?: string; newer?: 'schema' | 'major' | null }) => ({ id, self: false, status: 'active', ...extra });
+  it('newerDevices : autres appareils actifs plus récents seulement (ni soi, ni absent, ni oublié, ni autre clé, ni état non fiable, ni plus ancien)', () => {
+    const d = (id: string, extra: { self?: boolean; status?: DeviceState; newer?: 'schema' | 'major' | null }) => ({ id, self: false, status: 'active' as DeviceState, ...extra });
     const devices = [
       d('self', { self: true, newer: 'schema' }),
       d('schema', { newer: 'schema' }),
@@ -98,9 +100,20 @@ describe('règles tirées du classement', () => {
       d('older', { newer: null }),
       d('unknown', {}),
       d('clock', { status: 'clock-ahead', newer: 'schema' }),
+      // Décision de revue : un état corrompu ou relivré ancien n'est pas fiable, il ne déclenche pas le bandeau.
+      d('corrupt', { status: 'corrupt', newer: 'schema' }),
+      d('rollback', { status: 'rollback', newer: 'major' }),
     ];
     expect(newerDevices(devices).map((x) => x.id)).toEqual(['schema', 'major', 'clock']);
     expect(newerDevices([])).toEqual([]);
+  });
+
+  it('DeviceState et DeviceSyncStatus de la plateforme sont la même union', () => {
+    const all: readonly DeviceSyncStatus[] = ['active', 'expired', 'newer-major', 'clock-ahead', 'corrupt', 'foreign', 'rollback', 'forgotten'] satisfies readonly DeviceState[];
+    const back: readonly DeviceState[] = all;
+    const forth: readonly DeviceSyncStatus[] = back as readonly DeviceState[];
+    expect(forth).toBe(all);
+    expect(back).toHaveLength(8);
   });
 
   it('Y-07 critère 12 : la story ne change pas la majeure du format', () => {

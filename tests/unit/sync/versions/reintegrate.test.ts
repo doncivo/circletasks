@@ -258,6 +258,30 @@ describe('réintégration (Y-07 critère 6)', () => {
     expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
   });
 
+  it('parent et enfant tous deux en attente (ordre alphabétique inverse : project avant space) : réintégrés au même démarrage', async () => {
+    const SPACE = '99999999-0000-4000-8000-000000000001';
+    const PROJECT = '88888888-0000-4000-8000-000000000001';
+    const at = '2026-10-05T08:00:00.000Z';
+    for (const [field, value] of Object.entries({ name: 'Nouvel espace', color: '#112233', sort_order: 3, quiet_hours: '[]', created_at: at, deleted_at: null })) await keep('space', SPACE, field, value, h(1_000));
+    for (const [field, value] of Object.entries({ space_id: SPACE, name: 'Projet', color: '#445566', archived: 0, sort_order: 1, created_at: at, deleted_at: null })) await keep('project', PROJECT, field, value, h(2_000));
+    expect((await run(db.driver, { ...catalogue })).remaining).toBe(0);
+    expect(await db.driver.select('SELECT id, space_id FROM project WHERE id = ?', [PROJECT])).toEqual([{ id: PROJECT, space_id: SPACE }]);
+    expect(await db.driver.select('SELECT name FROM space WHERE id = ?', [SPACE])).toEqual([{ name: 'Nouvel espace' }]);
+  });
+
+  it('parent dans la même table (objectif reporté d’un objectif plus loin dans l’ordre) : nouveau passage tant qu’il y a du progrès', async () => {
+    const G1 = 'ffffffff-0000-4000-8000-000000000001';
+    const G2 = '00000001-0000-4000-8000-000000000002';
+    const goal = (carried: string | null) => ({ space_id: PRO, week_start: '2026-10-05', title: 'Objectif', icon: null, pinned: 0, status: 'open', carried_from_id: carried, created_at: '2026-10-05T08:00:00.000Z', deleted_at: null });
+    for (const [field, value] of Object.entries(goal(null))) await keep('goal', G1, field, value, h(1_000));
+    for (const [field, value] of Object.entries(goal(G1))) await keep('goal', G2, field, value, h(2_000));
+    expect(await reintegrateUnknownFields(db.driver, { now: NOW, catalogue, pageSize: 1 })).toMatchObject({ remaining: 0 });
+    expect(await db.driver.select('SELECT id, carried_from_id FROM goal WHERE id IN (?, ?) ORDER BY id', [G1, G2])).toEqual([
+      { id: G2, carried_from_id: G1 },
+      { id: G1, carried_from_id: null },
+    ]);
+  });
+
   it('par pages : plus de lignes que la taille de page, toutes traitées', async () => {
     const ids: string[] = [];
     for (let i = 0; i < 7; i += 1) {
