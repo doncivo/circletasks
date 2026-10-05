@@ -108,6 +108,32 @@ describe('avant l’arrivée de l’analyseur des dates écrites', () => {
       expect(captures[0]?.date).toMatch(/-10-12$/);
     });
 
+    it('Aujourd’hui : deux « Entrée » pendant l’attente ne créent qu’une tâche (TodayCreate)', async () => {
+      const captures: CaptureInput[] = [];
+      render(
+        <AppContainerProvider container={h.container}>
+          <TodayAddRow
+            layout="pc"
+            today={h.today}
+            inputRef={createRef<HTMLInputElement>() as React.RefObject<HTMLInputElement>}
+            onSubmit={(capture) => {
+              captures.push(capture);
+              return Promise.resolve(true);
+            }}
+          />
+        </AppContainerProvider>,
+      );
+      const field = screen.getByLabelText('Nouvelle tâche');
+      fireEvent.change(field, { target: { value: 'Dentiste le 12 octobre' } });
+      const form = field.closest('form') as HTMLFormElement;
+      fireEvent.submit(form);
+      fireEvent.submit(form);
+      gate.release();
+      await waitFor(() => expect(captures).toHaveLength(1));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(captures).toHaveLength(1);
+    });
+
     it('appelée avant le chargement, elle attend et crée une seule tâche datée du 12 octobre', async () => {
       expect(loader.getAbsoluteDateParser()).toBeNull();
       let settled = false;

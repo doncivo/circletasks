@@ -73,6 +73,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const [offsets, setOffsets] = useState<readonly ReminderOffsetMin[]>([]);
   const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
+  const busy = useRef(false);
   // Q-03 : le micro de l'app n'apparaît que si le plugin Speech existe (ordre 5) ; le micro du clavier iOS dicte dans le champ sans code.
   const dictation = useDictation({ layout: 'mobile', inputRef: titleRef, onText: (spoken) => setTitle(title === '' ? spoken : `${title} ${spoken}`) });
   const valid = validateTaskTitle(quick.parse.title).ok;
@@ -93,6 +94,17 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
+    // Un second Entrée pendant l'attente (chargement des dates, écriture) ne crée pas une seconde tâche.
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      await create();
+    } finally {
+      busy.current = false;
+    }
+  }
+
+  async function create(): Promise<void> {
     const parsed = await quick.parseNowLoaded();
     if (!validateTaskTitle(parsed.title).ok) return;
     // Marques explicites d'abord (Q-06 D3) ; un projet réglé à la main ne suit pas dans un autre espace.
