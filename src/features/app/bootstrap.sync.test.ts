@@ -18,9 +18,19 @@ describe('démarrage et synchro (Y-02 critère 19)', () => {
     useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null });
   });
 
-  it('sans plateforme de synchro : aucun service (aucun coût ni écran)', async () => {
+  it('sans plateforme de synchro (null) ou plateforme indisponible (iPhone avant l’ordre 5) : aucun service (aucun coût ni écran)', async () => {
+    const none = await bootstrapApp({ ...common, open: openSqliteWasmDriver, backups: createUnavailableBackup(), syncPlatform: null });
+    expect(none?.sync).toBeNull();
+    expect(none?.syncPlatform).toBeNull();
+    const unavailable = { ...createMemorySyncPlatform(), available: () => false };
+    const ios = await bootstrapApp({ ...common, open: openSqliteWasmDriver, backups: createUnavailableBackup(), syncPlatform: unavailable });
+    expect(ios?.sync).toBeNull();
+  });
+
+  it('par défaut : openSyncPlatform (navigateur : plateforme mémoire), service construit et plateforme partagée avec Réglages', async () => {
     const container = await bootstrapApp({ ...common, open: openSqliteWasmDriver, backups: createUnavailableBackup() });
-    expect(container?.sync).toBeNull();
+    expect(container?.sync?.status().phase).toBe('not-configured');
+    expect(container?.syncPlatform?.available()).toBe(true);
   });
 
   it('avec plateforme : service construit ; sync_guard trouvée au démarrage supprimée', async () => {

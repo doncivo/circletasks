@@ -14,6 +14,7 @@ import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platfor
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
+import { openSyncPlatform } from '../../platform/sync';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
@@ -70,8 +71,8 @@ export interface BootstrapAppOptions {
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
   /**
-   * Plateforme de synchro (ADR 0011, lot Y2) ; null : pas de synchro, aucun coût ni écran. Par défaut null tant que le lot Y1 n'a pas
-   * livré `openSyncPlatform` (commandes Rust `sync_*`) : point de branchement à la fusion des lots Y1 et Y2.
+   * Plateforme de synchro (ADR 0011) ; `openSyncPlatform` par défaut (commandes Rust `sync_*` du lot Y1 dans l'app, mémoire dans le
+   * navigateur de développement) ; null, ou une plateforme indisponible (iPhone jusqu'à l'ordre 5) : pas de synchro, aucun coût.
    */
   readonly syncPlatform?: SyncPlatform | null;
 }
@@ -110,7 +111,8 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       .catch(() => 0);
     if (strayGuards > 0) logFailure('sync', `garde trouvée au démarrage : ${String(strayGuards)}`);
     const desktop = options.desktop === undefined ? await openDesktopPlatform() : options.desktop;
-    const syncPlatform = options.syncPlatform ?? null;
+    const opened = options.syncPlatform === undefined ? openSyncPlatform(detectRuntime(), detectOs()) : options.syncPlatform;
+    const syncPlatform = opened?.available() ? opened : null;
     const sync = syncPlatform
       ? createSyncService({
           data,
@@ -131,6 +133,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       platform: { runtime: detectRuntime(), os: detectOs() },
       desktop,
       sync,
+      syncPlatform,
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
       backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),

@@ -3,13 +3,14 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it } from 'vitest';
 import { createManualClock } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
-import { asEntityId, type DeviceId, type Hlc } from '../../domain/types';
+import { asEntityId, type DeviceId, type Hlc, type IsoDateTime } from '../../domain/types';
 import type { EpochId } from '../../domain/sync/format';
 import type { DataAccess } from '../../db/repositories';
 import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type SyncPlatform } from '../../platform/sync';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer } from '../app/container';
 import { SyncSettingsSection } from './SyncSettingsSection';
+import { createFakeSyncService } from './testKit';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000007');
 const OTHER = '70000000-0000-4000-8000-000000000008' as DeviceId;
@@ -148,5 +149,41 @@ describe('SyncSettingsSection (Y-01)', () => {
   it('absente quand la plateforme ne synchronise pas (iPhone avant l’ordre 5, critère 18)', () => {
     const { container } = renderSection(createMemorySyncPlatform({ available: false }));
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('SyncSettingsSection branchée sur le service (Y-02 critère 16, branchement sur Y1)', () => {
+  afterEach(() => cleanup());
+
+  it('dossier et clé choisis : premier cycle demandé tout de suite ; la ligne d’état (« Détails », « Synchroniser ») remplace « Dossier choisi »', async () => {
+    const platform = createMemorySyncPlatform();
+    const sync = createFakeSyncService({ phase: 'idle', lastSyncAt: '2026-10-05T08:00:00.000Z' as IsoDateTime, folderLabel: 'CircleTasks', folderKind: 'icloud' });
+    const container = createAppContainer({ clock, hlc: createHlcClock({ clock, deviceId: DEVICE }), data: {} as DataAccess, sync, syncPlatform: platform });
+    render(
+      <AppContainerProvider container={container}>
+        <SyncSettingsSection />
+      </AppContainerProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
+    await waitFor(() => expect(sync.calls).toEqual(['open']));
+    expect((await platform.folder.info()).configured).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Détails' })).toBeInTheDocument();
+    expect(screen.getByText('iCloud Drive / CircleTasks')).toBeInTheDocument();
+    expect(screen.queryByText('Dossier choisi')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Oublier le dossier de synchronisation' })).toBeInTheDocument();
+  });
+
+  it('dossier qui contient déjà des données : aucun cycle (association d’abord), « associez cet appareil »', async () => {
+    const platform = createMemorySyncPlatform({ folder: await folderWithData() });
+    const sync = createFakeSyncService({ phase: 'needs-pairing' });
+    const container = createAppContainer({ clock, hlc: createHlcClock({ clock, deviceId: DEVICE }), data: {} as DataAccess, sync, syncPlatform: platform });
+    render(
+      <AppContainerProvider container={container}>
+        <SyncSettingsSection />
+      </AppContainerProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
+    expect(await screen.findByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeInTheDocument();
+    expect(sync.calls).toEqual([]);
   });
 });

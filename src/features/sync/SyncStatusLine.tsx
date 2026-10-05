@@ -3,9 +3,8 @@ import { t } from '../../i18n';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncNowButton } from './SyncNowButton';
-import { folderLabel } from './SyncSettingsSection';
 import { syncStore } from './syncStore';
-import { isTroublePhase, statusLine } from './syncText';
+import { folderLabel, isTroublePhase, statusLine } from './syncText';
 import './SyncDetailsScreen.css';
 
 /**

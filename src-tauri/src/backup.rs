@@ -815,51 +815,23 @@ pub fn restore_backup_file(
     Ok(RestoreOutcome { safety_copy, schema_version })
 }
 
-/// Marqueur de restauration de la synchro (ADR 0010 règle 2, ADR 0011 section 9) : `<dossier de configuration>/restore-marker.json`.
-pub const RESTORE_MARKER_FILE: &str = "restore-marker.json";
-/// Dossier de configuration de la synchro et fichier du dossier choisi (lot Y1, `sync/folder.json`) : sa présence = synchro configurée.
-pub const SYNC_CONFIG_DIR: &str = "sync";
-pub const SYNC_FOLDER_FILE: &str = "folder.json";
-
 /// Instant ISO 8601 UTC à la milliseconde (`2026-10-05T08:00:00.000Z`), forme de `IsoDateTime` côté TypeScript.
 pub fn iso_instant(secs: u64) -> String {
     let stamp = utc_stamp(secs);
     format!("{}-{}-{}T{}:{}:{}.000Z", &stamp[0..4], &stamp[4..6], &stamp[6..8], &stamp[9..11], &stamp[11..13], &stamp[13..15])
 }
 
-/// Texte du marqueur : `{ "v": 1, "backup", "backupTakenAt", "restoredAt", "schemaVersion" }` (ADR 0011 section 9, règle 2).
-pub fn restore_marker_json(backup: &str, taken_at_secs: u64, restored_at_secs: u64, schema_version: u32) -> String {
-    serde_json::json!({
-        "v": 1,
-        "backup": backup,
-        "backupTakenAt": iso_instant(taken_at_secs),
-        "restoredAt": iso_instant(restored_at_secs),
-        "schemaVersion": schema_version,
-    })
-    .to_string()
-}
-
-/// Un dossier de synchro est-il configuré (fichier `sync/folder.json` ordinaire présent) ?
-pub fn sync_configured(config_dir: &Path) -> bool {
-    is_plain_file(&config_dir.join(SYNC_CONFIG_DIR).join(SYNC_FOLDER_FILE))
-}
-
-/// Écrit le marqueur après un échange abouti, **seulement si un dossier de synchro est configuré** (ADR 0010 règle 2) : `.tmp` puis
-/// renommage. Renvoie vrai s'il a été écrit. L'heure de la sauvegarde est celle de son fichier (sinon l'heure de restauration).
-pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32) -> io::Result<bool> {
-    if !sync_configured(config_dir) {
-        return Ok(false);
-    }
+/// Marqueur de restauration de la synchro après un échange abouti (ADR 0010 règle 2, ADR 0011 section 9 ; Y-01 critère 16) : écrit par
+/// `sync::marker::write_after_restore` du lot Y1 (`restore-marker.json`, `.tmp` + renommage), **seulement si un dossier de synchro est
+/// configuré**. L'heure de la sauvegarde est celle de son fichier (sinon l'heure de restauration). Renvoie vrai s'il a été écrit. Jamais
+/// appelé par la récupération au démarrage (`recover_interrupted_restore`) : une restauration interrompue puis récupérée n'a pas de marqueur.
+pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32) -> Result<bool, crate::sync::SyncError> {
     let taken = fs::metadata(backups_dir.join(backup))
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(restored_at_secs, |d| d.as_secs());
-    let target = config_dir.join(RESTORE_MARKER_FILE);
-    let tmp = config_dir.join(format!("{RESTORE_MARKER_FILE}.tmp"));
-    fs::write(&tmp, restore_marker_json(backup, taken, restored_at_secs, schema_version))?;
-    fs::rename(&tmp, &target)?;
-    Ok(true)
+    crate::sync::marker::write_after_restore(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version))
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {
@@ -956,7 +928,7 @@ pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Resu
         // d'écriture est journalisé sans bloquer la restauration déjà faite.
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
         if let Err(error) = write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version) {
-            eprintln!("[backup] marqueur de restauration non écrit : {}", error.kind());
+            eprintln!("[backup] marqueur de restauration non écrit : {}", error.code.as_str());
         }
         Ok(outcome)
     })

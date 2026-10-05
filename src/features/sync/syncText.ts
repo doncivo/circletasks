@@ -1,7 +1,7 @@
 import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatStamp, formatTime } from '../../i18n/format';
-import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import type { SyncDeviceStatus, SyncFolderInfo, SyncStatus } from '../../platform/sync/types';
 import { syncAge } from '../../sync';
 
 /**
@@ -118,3 +118,10 @@ export function deviceStatusText(status: SyncDeviceStatus['status']): string {
 export function isTroublePhase(status: SyncStatus): boolean {
   return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required';
 }
+
+/** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */
+export function folderLabel(info: Pick<SyncFolderInfo, 'label' | 'kind'> | null): string {
+  if (!info?.label) return t('sync.folder.rowLabel');
+  return info.kind === 'icloud' ? t('sync.folder.icloudLabel', { name: info.label }) : info.label;
+}
+
