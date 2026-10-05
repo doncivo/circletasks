@@ -20,8 +20,9 @@ import type { ReintegrateUnknownFields, UnknownCatalogue } from '../syncUnknownR
  *   ici : la valeur la complète ; un champ de clé étrangère dont le parent manque reste (comme une opération mise de côté) ;
  * - ligne absente : insérée seulement si tous les champs de la table sont là et ses parents présents (table devenue connue, réglage
  *   devenu partagé) ; sinon le champ reste jusqu'au démarrage suivant ; une trace de purge plus récente retire les champs plus anciens.
- * Une transaction gardée par page de lignes : la garde est posée en tête et retirée avant le COMMIT ; un échec annule la page, garde
- * comprise. Rejouable : un second appel ne trouve plus rien à faire.
+ * Une transaction gardée par page de lignes, chaque ligne dans un point de sauvegarde : une ligne en échec est annulée seule (ses champs
+ * restent, `onRowError` reçoit le nom de l'erreur) ; la garde est posée en tête et retirée avant le COMMIT ; un échec hors d'une ligne
+ * annule la page, garde comprise. Rejouable : un second appel ne trouve plus rien à faire.
  */
 
 const DEFAULT_CATALOGUE: UnknownCatalogue = { table: syncTable, column: syncColumn, settingScope: settingKeyScope };
@@ -199,9 +200,18 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
       let r = 0;
       let s = 0;
       for (const pair of pairs) {
-        const outcome = await reintegrateRow(tx, catalogue, pair.table_name, pair.row_id, options.now);
-        r += outcome.reintegrated;
-        s += outcome.superseded;
+        // Chaque ligne dans son point de sauvegarde : un échec n'annule qu'elle (ses champs restent), jamais la page ni les suivantes.
+        await tx.execute('SAVEPOINT reintegrate_row');
+        try {
+          const outcome = await reintegrateRow(tx, catalogue, pair.table_name, pair.row_id, options.now);
+          await tx.execute('RELEASE reintegrate_row');
+          r += outcome.reintegrated;
+          s += outcome.superseded;
+        } catch (error) {
+          await tx.execute('ROLLBACK TO reintegrate_row');
+          await tx.execute('RELEASE reintegrate_row');
+          options.onRowError?.(error instanceof Error ? error.name : 'Error');
+        }
       }
       await tx.execute('DELETE FROM sync_guard');
       return { r, s };

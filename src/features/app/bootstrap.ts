@@ -59,7 +59,10 @@ export async function bootstrapDatabase(
  */
 export async function reintegrateAfterMigration(db: SqlDriver, clock: Clock = systemClock): Promise<ReintegrationReport | null> {
   try {
-    return await reintegrateUnknownFields(db, { now: nowIso(clock) });
+    return await reintegrateUnknownFields(db, {
+      now: nowIso(clock),
+      onRowError: (name) => logFailure('sync', `réintégration d'une ligne impossible, elle reste pour le démarrage suivant (${name})`),
+    });
   } catch (error) {
     logFailure('sync', `réintégration des champs inconnus impossible (${error instanceof Error ? error.name : 'erreur'})`);
     return null;

@@ -135,7 +135,7 @@ describe('règle « même écriture » (Y-07 critère 6, QA)', () => {
 });
 
 describe('réintégration interrompue puis rejouée (Y-07 critère 6, QA)', () => {
-  it('échec au retrait de sync_unknown (après l’écriture de x) : tout est annulé, état identique à l’avant ; le rejeu réussit une seule fois', async () => {
+  it('échec au retrait de sync_unknown (après l’écriture de x) : la ligne est annulée seule, état identique à l’avant ; le rejeu réussit une seule fois', async () => {
     await taskFromA(T1, h(1_000));
     await keep(T1, 'de A', h(1_000));
     const before = await dump();
@@ -149,7 +149,8 @@ describe('réintégration interrompue puis rejouée (Y-07 critère 6, QA)', () =
           }),
         ),
     };
-    await expect(run(failing)).rejects.toThrow('interruption');
+    // Point 1 de la revue : la ligne en échec est isolée (point de sauvegarde), l'appel aboutit et la compte dans remaining.
+    expect(await run(failing)).toEqual({ reintegrated: 0, superseded: 0, remaining: 1 });
     expect(await dump()).toEqual(before);
     expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
     const done = await dump();
@@ -159,7 +160,7 @@ describe('réintégration interrompue puis rejouée (Y-07 critère 6, QA)', () =
     expect(done.outbox).toEqual([]);
   });
 
-  it('interruption à la deuxième page : la première reste réintégrée, la suite intacte, garde vide ; le rejeu termine sans doubler la première', async () => {
+  it('échec à la deuxième page : la ligne en échec reste intacte, les pages avant et après passent, garde vide ; le rejeu termine sans rien doubler', async () => {
     const ids = ['11111111-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000002', '33333333-0000-4000-8000-000000000003'] as [TaskId, TaskId, TaskId];
     for (const [i, id] of ids.entries()) {
       await taskFromA(id, h(1_000 + i));
@@ -182,13 +183,14 @@ describe('réintégration interrompue puis rejouée (Y-07 critère 6, QA)', () =
           }),
         ),
     };
-    await expect(run(failing, 1)).rejects.toThrow('coupure');
+    expect(await run(failing, 1)).toEqual({ reintegrated: 2, superseded: 0, remaining: 1 });
     expect(await xOf(ids[0])).toBe('v0');
     expect(await xOf(ids[1])).toBeNull();
-    expect(await db.driver.select('SELECT row_id FROM sync_unknown ORDER BY row_id')).toEqual([{ row_id: ids[1] }, { row_id: ids[2] }]);
+    expect(await xOf(ids[2])).toBe('v2');
+    expect(await db.driver.select('SELECT row_id FROM sync_unknown ORDER BY row_id')).toEqual([{ row_id: ids[1] }]);
     expect(await db.driver.select('SELECT * FROM sync_guard')).toEqual([]);
     expect(await db.driver.select('SELECT * FROM sync_outbox WHERE field = ?', [TEST_COLUMN])).toEqual([]);
-    expect(await run(db.driver, 1)).toEqual({ reintegrated: 2, superseded: 0, remaining: 0 });
+    expect(await run(db.driver, 1)).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
     expect(await Promise.all(ids.map(xOf))).toEqual(['v0', 'v1', 'v2']);
   });
 

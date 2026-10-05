@@ -22,6 +22,12 @@ export interface ReintegrateOptions {
   /** Heure de détection des conflits éventuels (`conflict_log.detected_at`). */
   readonly now: IsoDateTime;
   readonly catalogue?: UnknownCatalogue;
+  /**
+   * Ligne (table, identifiant) en échec (contrainte d'une migration future, valeur refusée par la base) : isolée, ses champs restent et
+   * comptent dans `remaining`, les autres lignes et pages continuent. Reçoit le **nom** de l'erreur seulement, jamais son message (qui
+   * peut citer une valeur).
+   */
+  readonly onRowError?: (errorName: string) => void;
   /** Lignes (table, identifiant) traitées par transaction ; 200 par défaut. */
   readonly pageSize?: number;
 }

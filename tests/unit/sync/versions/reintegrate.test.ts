@@ -233,24 +233,29 @@ describe('réintégration (Y-07 critère 6)', () => {
     expect(sqls.some((sql) => sql.includes('evil'))).toBe(false);
   });
 
-  it('échec au milieu : la page est annulée, garde vide, champs intacts ; un nouvel appel réussit', async () => {
-    await createTask(T1);
-    await keep('task', T1, TEST_COLUMN, 'v', h(3_600_000));
-    const failing: SqlDriver = {
-      ...db.driver,
-      transaction: (fn) =>
-        db.driver.transaction((tx) =>
-          fn({
-            select: (sql, params) => tx.select(sql, params),
-            execute: (sql, params) => (sql.startsWith('UPDATE task') ? Promise.reject(new Error('disque plein')) : tx.execute(sql, params)),
-          }),
-        ),
-    };
-    await expect(run(failing)).rejects.toThrow('disque plein');
+  it('une ligne en échec (contrainte d’une migration future) est isolée : comptée dans remaining, nom de l’erreur seul signalé, les autres lignes et pages passent', async () => {
+    const ids = ['11111111-0000-4000-8000-000000000001', '22222222-0000-4000-8000-000000000002', '33333333-0000-4000-8000-000000000003'] as [TaskId, TaskId, TaskId];
+    for (const [i, id] of ids.entries()) {
+      await createTask(id);
+      await keep('task', id, TEST_COLUMN, i === 1 ? 'interdite' : `v${String(i)}`, h(3_600_000 + i));
+    }
+    await db.driver.execute(`CREATE TRIGGER test_refuse_x BEFORE UPDATE OF ${TEST_COLUMN} ON task WHEN NEW.${TEST_COLUMN} = 'interdite' BEGIN SELECT RAISE(ABORT, 'interdite'); END`);
+    const errors: string[] = [];
+    for (const pageSize of [1, 200]) {
+      errors.length = 0;
+      const report = await reintegrateUnknownFields(db.driver, { now: NOW, catalogue, pageSize, onRowError: (name) => errors.push(name) });
+      expect(report.remaining, `page de ${String(pageSize)}`).toBe(1);
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).not.toContain('interdite');
+    }
     expect(await db.driver.select('SELECT * FROM sync_guard')).toEqual([]);
-    expect(await unknownRows()).toEqual([{ table_name: 'task', row_id: T1, field: TEST_COLUMN }]);
-    expect(await db.driver.select(`SELECT ${TEST_COLUMN} AS x FROM task`)).toEqual([{ x: null }]);
-    expect((await run()).reintegrated).toBe(1);
+    expect((await db.driver.select<{ x: string | null }>(`SELECT ${TEST_COLUMN} AS x FROM task ORDER BY id`)).map((r) => r.x)).toEqual(['v0', null, 'v2']);
+    expect(await unknownRows()).toEqual([{ table_name: 'task', row_id: ids[1], field: TEST_COLUMN }]);
+    // La ligne en échec ne laisse rien d'écrit à moitié (horloge, file).
+    expect(await clockOf(ids[1], TEST_COLUMN)).toBeNull();
+    expect(await db.driver.select('SELECT * FROM sync_outbox WHERE field = ?', [TEST_COLUMN])).toEqual([]);
+    await db.driver.execute('DROP TRIGGER test_refuse_x');
+    expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
   });
 
   it('par pages : plus de lignes que la taille de page, toutes traitées', async () => {
