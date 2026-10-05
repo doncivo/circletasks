@@ -9,13 +9,14 @@
  */
 
 import { SETTINGS_DEFINITIONS, type SettingKey } from '../model/settings';
-import { isId, isIsoDateTime, isLocalDate, isLocalTime } from '../types';
+import { isId, isIsoDateTime, isLocalDate, isLocalDateTime, isLocalTime } from '../types';
 import { MAX_SYNC_ID_LENGTH } from './limits';
 import { isNaturalId, type NaturalIdTable } from './naturalIds';
 import { SYNC_TABLE_ORDER } from './format';
 
 /** Types déclarés des colonnes publiées (section 3.3). */
-export type SyncColumnType = 'text' | 'int' | 'real' | 'bool' | 'json' | 'date' | 'time' | 'datetime' | 'id' | 'enum';
+/** `datetime` : instant ISO 8601 UTC (`IsoDateTime`) ; `localdatetime` : date et heure locales flottantes (`LocalDateTime`, échéance d'un rappel). */
+export type SyncColumnType = 'text' | 'int' | 'real' | 'bool' | 'json' | 'date' | 'time' | 'datetime' | 'localdatetime' | 'id' | 'enum';
 
 export interface SyncColumn {
   readonly name: string;
@@ -186,7 +187,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
     c('target_type', 'enum', false, { values: ['task', 'routine', 'event'] }),
     c('target_id', 'id', false),
     c('offset_min', 'int', false, { values: [0, 5, 15, 30, 60, 1440, 10080] }),
-    c('fire_at', 'datetime', false, hidden),
+    c('fire_at', 'localdatetime', false, hidden),
     c('delivered', 'bool', false, hidden),
     createdAt,
     deletedAt,
@@ -357,6 +358,8 @@ export function isValidValue(col: SyncColumn, value: unknown): boolean {
       return typeof value === 'string' && isLocalTime(value);
     case 'datetime':
       return typeof value === 'string' && isIsoDateTime(value);
+    case 'localdatetime':
+      return typeof value === 'string' && isLocalDateTime(value);
     case 'id':
       return typeof value === 'string' && value.length <= MAX_SYNC_ID_LENGTH && (isId(value) || isNaturalId('routine_log', value) || isNaturalId('holiday', value));
     case 'enum':

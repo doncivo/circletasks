@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { TaskId } from '../../../src/domain/types';
-import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
+import { createAppContainer } from '../../../src/features/app/container';
+import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
+import { PRO, createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
 
 /**
  * Écritures locales pendant un cycle, mêmes champs modifiés au même instant, suppression contre modification dans les deux ordres
@@ -328,6 +330,43 @@ describe('restauration depuis la corbeille et purge de l’autre appareil (Y-09 
   });
 });
 
+describe('restauration hors ligne contre purge : rappels (seconde revue Y2, point 2)', () => {
+  it('tâche et rappels restaurés par A à J+29 (corbeille T-08), purgés par B à J+31 : tâche ET rappels reviennent sur B', async () => {
+    const [a, b] = await twoDevices();
+    const t = await a.createTask('Avec rappels');
+    await a.data.repos.reminders.createMany([
+      { id: '90000000-0000-4000-8000-000000000001' as never, targetType: 'task', targetId: t.id, offsetMin: 15, fireAt: '2026-10-05T09:00' as never },
+      { id: '90000000-0000-4000-8000-000000000002' as never, targetType: 'task', targetId: t.id, offsetMin: 60, fireAt: '2026-10-05T08:00' as never },
+    ]);
+    await settle();
+    a.clock.advance(1_000);
+    // Suppression comme l'écran (tâche puis rappels, même deleted_at).
+    await a.data.transaction(async (repos) => {
+      const [deleted] = await repos.tasks.softDelete([t.id]);
+      await repos.reminders.softDeleteForTarget({ type: 'task', id: t.id }, deleted?.deletedAt ?? undefined);
+    });
+    await settle();
+    // Horloge partagée par A et B (twoDevices).
+    a.clock.advance(29 * DAY);
+    const container = createAppContainer({ clock: a.clock, hlc: a.hlc, data: a.data, sync: a.service });
+    expect((await createTrashUseCases(container).restore(t.id))?.deletedAt).toBeNull();
+    expect(await a.driver.select('SELECT id FROM reminder WHERE deleted_at IS NULL ORDER BY id')).toHaveLength(2);
+    a.clock.advance(2 * DAY);
+    await b.cycle();
+    expect(await b.task(t.id), 'B a purgé').toBeNull();
+    expect(await b.driver.select('SELECT id FROM reminder')).toEqual([]);
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await settle();
+    expect((await b.task(t.id))?.deletedAt).toBeNull();
+    const reminders = (d: SimDevice) => d.driver.select('SELECT id, target_id, offset_min, deleted_at FROM reminder ORDER BY id');
+    expect(await reminders(b)).toHaveLength(2);
+    expect(await reminders(b)).toEqual(await reminders(a));
+    expect(await b.driver.select('SELECT * FROM sync_tombstone')).toEqual([]);
+  });
+});
+
 describe('trois appareils (Y-02 critère 2, section 4)', () => {
   it('trois appareils modifient trois champs et un champ commun hors ligne : convergence, aucune perte, valeur du plus grand hlc', async () => {
     const [a, b] = await twoDevices();
@@ -364,3 +403,87 @@ describe('trois appareils (Y-02 critère 2, section 4)', () => {
   });
 });
 
+
+describe('restauration hors ligne contre purge : cas limites (seconde revue Y2, points 2 à 4)', () => {
+  it('rappel resté vivant pendant la suppression de sa tâche : republié avec la tâche restaurée, accepté sur la trace de la cible', async () => {
+    const [a, b] = await twoDevices();
+    const t = await a.createTask('Rappel vivant');
+    await a.data.repos.reminders.createMany([{ id: '90000000-0000-4000-8000-000000000003' as never, targetType: 'task', targetId: t.id, offsetMin: 15, fireAt: '2026-10-05T09:00' as never }]);
+    await settle();
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    await settle();
+    a.clock.advance(29 * DAY);
+    await a.data.repos.tasks.restore([t.id]);
+    a.clock.advance(2 * DAY);
+    await b.cycle();
+    expect(await b.driver.select('SELECT id FROM reminder')).toEqual([]);
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await settle();
+    expect((await b.task(t.id))?.deletedAt).toBeNull();
+    expect(await b.driver.select('SELECT id, deleted_at FROM reminder')).toEqual([{ id: '90000000-0000-4000-8000-000000000003', deleted_at: null }]);
+    expect(b.logger.entries.some((e) => e.event === 'apply-restored-with-target')).toBe(true);
+    expect(await b.driver.select('SELECT * FROM sync_tombstone')).toEqual([]);
+  });
+
+  it('tâche restaurée hors ligne par B sous un projet que A a purgé avec elle : A la rattache à « Sans projet », convergence', async () => {
+    const [a, b] = await twoDevices();
+    const projectId = '70000000-0000-4000-8000-000000000002' as never;
+    await a.data.repos.projects.create({ id: projectId, spaceId: PRO, name: 'P', color: '#123456' as never, archived: false, sortOrder: 1 });
+    const t = await a.createTask('Sous P', { projectId });
+    await settle();
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    await a.data.repos.projects.softDelete(projectId);
+    await settle();
+    // B restaure la tâche hors ligne à J+29 ; A purge la tâche puis le projet à J+31.
+    a.clock.advance(29 * DAY);
+    await b.data.repos.tasks.restore([t.id]);
+    a.clock.advance(2 * DAY);
+    await a.cycle();
+    expect(await a.task(t.id)).toBeNull();
+    expect(await a.data.repos.projects.getById(projectId, { includeDeleted: true })).toBeNull();
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    expect(a.logger.entries.some((e) => e.event === 'children-reattached')).toBe(true);
+    await settle();
+    await settle();
+    for (const d of devices) {
+      const row = await d.task(t.id);
+      expect(row?.deletedAt, d.name).toBeNull();
+      expect(row?.projectId, d.name).toBeNull();
+    }
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+
+  it('grosse tâche (ligne de plus de 256 Kio) restaurée hors ligne contre une purge : recomposée puis recréée, convergence', async () => {
+    const [a, b] = await twoDevices();
+    // Ligne de plus de 256 Kio (texte clair) dont chaque champ tient dans un enregistrement : la ligne entière part en plusieurs parties.
+    const note = '€'.repeat(85_000);
+    const title = '€'.repeat(4_000);
+    const t = await a.createTask(title, { note });
+    await settle();
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    await settle();
+    a.clock.advance(29 * DAY);
+    await a.data.repos.tasks.restore([t.id]);
+    a.clock.advance(2 * DAY);
+    await b.cycle();
+    expect(await b.task(t.id)).toBeNull();
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await settle();
+    const onB = await b.task(t.id);
+    expect(onB?.deletedAt).toBeNull();
+    expect(onB?.note).toBe(note);
+    expect(onB?.title).toBe(title);
+    expect(a.logger.entries.some((e) => e.event === 'publish-too-large')).toBe(false);
+    expect(await b.driver.select("SELECT reason FROM sync_parked WHERE row_id = ?", [t.id])).toEqual([]);
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+});

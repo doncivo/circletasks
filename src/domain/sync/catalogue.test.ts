@@ -173,3 +173,14 @@ describe('réparations (Y-02 critère 8)', () => {
     expect(focusSessionsToClose([...open].reverse())).toEqual(focusSessionsToClose(open));
   });
 });
+
+describe('échéance d’un rappel (seconde revue Y2, rappels)', () => {
+  it('fire_at est une date et heure locales flottantes (LocalDateTime), pas un instant UTC : la forme écrite par l’app est acceptée', () => {
+    const col = syncColumn('reminder', 'fire_at');
+    expect(col?.type).toBe('localdatetime');
+    expect(col && isValidValue(col, '2026-10-05T09:00')).toBe(true);
+    expect(col && isValidValue(col, '2026-10-05T09:00:00.000Z')).toBe(false);
+    expect(col && isValidValue(col, '2026-13-05T09:00')).toBe(false);
+    expect(col && isValidValue(col, 42)).toBe(false);
+  });
+});

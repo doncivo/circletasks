@@ -410,6 +410,7 @@ pub const REFERENCE_TRIGGERS: [(&str, &str, &str); 50] = [
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'event', NEW.id, 'deleted_at' WHERE OLD.deleted_at IS NOT NEW.deleted_at;
        DELETE FROM sync_outbox WHERE table_name = 'event' AND row_id = NEW.id AND field = '+' AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'event', NEW.id, '+' WHERE OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
+       INSERT OR IGNORE INTO sync_outbox (table_name, row_id, field) SELECT 'reminder', r.id, '+' FROM reminder r WHERE r.target_type = 'event' AND r.target_id = NEW.id AND r.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
      END"##),
     ("sync_focus_session_ai", "focus_session", r##"CREATE TRIGGER sync_focus_session_ai AFTER INSERT ON focus_session WHEN NOT EXISTS (SELECT 1 FROM sync_guard) BEGIN
        DELETE FROM sync_tombstone WHERE table_name = 'focus_session' AND row_id = NEW.id;
@@ -1070,6 +1071,7 @@ pub const REFERENCE_TRIGGERS: [(&str, &str, &str); 50] = [
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'routine', NEW.id, 'deleted_at' WHERE OLD.deleted_at IS NOT NEW.deleted_at;
        DELETE FROM sync_outbox WHERE table_name = 'routine' AND row_id = NEW.id AND field = '+' AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'routine', NEW.id, '+' WHERE OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
+       INSERT OR IGNORE INTO sync_outbox (table_name, row_id, field) SELECT 'reminder', r.id, '+' FROM reminder r WHERE r.target_type = 'routine' AND r.target_id = NEW.id AND r.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
      END"##),
     ("sync_routine_log_ai", "routine_log", r##"CREATE TRIGGER sync_routine_log_ai AFTER INSERT ON routine_log WHEN NOT EXISTS (SELECT 1 FROM sync_guard) BEGIN
        DELETE FROM sync_tombstone WHERE table_name = 'routine_log' AND row_id = NEW.id;
@@ -1470,5 +1472,6 @@ pub const REFERENCE_TRIGGERS: [(&str, &str, &str); 50] = [
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'task', NEW.id, 'deleted_at' WHERE OLD.deleted_at IS NOT NEW.deleted_at;
        DELETE FROM sync_outbox WHERE table_name = 'task' AND row_id = NEW.id AND field = '+' AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
        INSERT INTO sync_outbox (table_name, row_id, field) SELECT 'task', NEW.id, '+' WHERE OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
+       INSERT OR IGNORE INTO sync_outbox (table_name, row_id, field) SELECT 'reminder', r.id, '+' FROM reminder r WHERE r.target_type = 'task' AND r.target_id = NEW.id AND r.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;
      END"##),
 ];

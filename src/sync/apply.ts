@@ -108,6 +108,21 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
   }
   for (const [pt, ids] of parentIds) for (const id of await sync.existingIds(pt, [...ids])) presentParents.add(`${pt.name}\u0000${id}`);
 
+  /** Cible d'un rappel restaurée ici par une restauration fondée sur une trace au moins aussi récente que celle du rappel ? */
+  const reminderTargetRestored = async (fields: ReadonlyMap<string, SyncField>, tomb: Hlc): Promise<'restored' | 'pending' | 'no'> => {
+    const type = fields.get('target_type')?.[0];
+    const targetId = fields.get('target_id')?.[0];
+    const tt = typeof type === 'string' ? syncTable(type) : undefined;
+    if (!tt || typeof targetId !== 'string') return 'no';
+    const target = (await sync.readRows(tt, [targetId])).get(targetId);
+    if (target) {
+      if (target.values.get('deleted_at') !== null) return 'no';
+      const base = (await sync.readClocks(tt, [targetId])).get(targetId)?.get('deleted_at')?.base ?? null;
+      return base !== null && base >= tomb ? 'restored' : 'no';
+    }
+    return (await sync.tombstones(tt.name, [targetId])).has(targetId) ? 'pending' : 'no';
+  };
+
   const reject = (op: SyncOp, reason: string, field?: string): void => {
     ctx.logger.log('apply-rejected', { table: syncTable(op.t)?.name ?? 'unknown-table', reason, ...(field && syncColumn(op.t, field) ? { field } : {}) });
   };
@@ -118,7 +133,10 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     return true;
   };
 
+  /** Premier parent purgé (trace) d'une ligne : sa colonne, pour le rattachement de la décision (c). */
+  let purgedColumn: string | null = null;
   const parentsPresent = async (t: SyncTable, values: ReadonlyMap<string, SyncValue>): Promise<'ok' | 'missing' | 'purged'> => {
+    purgedColumn = null;
     for (const parent of t.parents) {
       const value = values.get(parent.column);
       if (typeof value !== 'string') continue;
@@ -132,7 +150,11 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         presentParents.add(`${pt.name}\u0000${value}`);
         continue;
       }
-      return (await sync.tombstones(pt.name, [value])).has(value) ? 'purged' : 'missing';
+      if ((await sync.tombstones(pt.name, [value])).has(value)) {
+        purgedColumn = parent.column;
+        return 'purged';
+      }
+      return 'missing';
     }
     return 'ok';
   };
@@ -196,16 +218,36 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     // Traces (section 5.4) : seule une écriture plus récente que la suppression purgée passe.
     const tomb = tombstoneCache.get(t.name)?.get(op.id);
     let clearTomb = false;
+    /** Restauration fondée sur la trace, éventuellement en plusieurs parties (grosse ligne découpée champ par champ). */
+    let restoring = false;
     if (tomb !== undefined) {
       const restoreField = fields.get('deleted_at');
-      // Restauration de la suppression purgée (Y-09, restauration hors ligne contre purge) : ligne entière, `deleted_at` remis à nul
-      // par une écriture plus récente que la trace et **fondée sur elle** (base au moins égale au hlc purgé). Elle l'emporte : la ligne
-      // est recréée avec toutes ses colonnes, identifiant UUID compris, et la trace retirée. Une opération ancienne ou sans cette base
-      // ne ressuscite jamais rien.
-      const restoration =
-        !row.exists && restoreField !== undefined && restoreField[0] === null && restoreField[1] > tomb && restoreField[2] !== null && restoreField[2] >= tomb && t.columns.every((col) => fields.has(col.name));
-      if (restoration) {
-        ctx.logger.log('apply-restored-purged', { table: t.name });
+      const complete = t.columns.every((col) => fields.has(col.name));
+      // Restauration de la suppression purgée (Y-09, restauration hors ligne contre purge) : `deleted_at` remis à nul par une écriture
+      // plus récente que la trace et **fondée sur elle** (base au moins égale au hlc purgé). Elle l'emporte : la ligne est recréée avec
+      // toutes ses colonnes, identifiant UUID compris, et la trace retirée. Une ligne trop grosse pour un enregistrement arrive en
+      // plusieurs parties qui portent chacune ce `deleted_at` : elles sont mises de côté (missing-row) et recomposées avant la règle.
+      // Une opération ancienne ou sans cette base ne ressuscite jamais rien.
+      const restoreShaped = !row.exists && restoreField !== undefined && restoreField[0] === null && restoreField[1] > tomb && restoreField[2] !== null && restoreField[2] >= tomb;
+      if (restoreShaped) {
+        restoring = true;
+        clearTomb = true;
+        if (complete) ctx.logger.log('apply-restored-purged', { table: t.name });
+      } else if (t.name === 'reminder' && !row.exists && complete && restoreField !== undefined && restoreField[0] === null) {
+        // Rappel vivant republié avec sa cible restaurée : accepté si la cible est revenue ici par une restauration fondée sur une
+        // trace au moins aussi récente que celle du rappel (purgé avec elle) ; mis de côté tant que la cible est encore une trace.
+        const verdict = await reminderTargetRestored(fields, tomb);
+        if (verdict === 'pending') {
+          if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }), ctx.now);
+          outcomes.push('parked');
+          continue;
+        }
+        if (verdict === 'no') {
+          ctx.logger.log('apply-abandoned', { table: t.name, reason: 'purged' });
+          outcomes.push('rejected');
+          continue;
+        }
+        ctx.logger.log('apply-restored-with-target', { table: t.name });
         clearTomb = true;
       } else {
         fields = new Map([...fields].filter(([, field]) => field[1] > tomb));
@@ -232,18 +274,28 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
           const raw = JSON.parse(parked.op) as { f: Record<string, SyncField> };
           for (const [name, field] of Object.entries(raw.f)) {
             const current = union.get(name);
-            if (tomb !== undefined && field[1] <= tomb) continue;
+            if (tomb !== undefined && !restoring && field[1] <= tomb) continue;
             if (syncColumn(t.name, name) && (!current || field[1] > current[1])) union.set(name, field);
           }
         }
         if (t.columns.every((col) => union.has(col.name))) {
           fields = union;
           combined = prior.map((p) => p.id);
+          if (restoring) ctx.logger.log('apply-restored-purged', { table: t.name });
         }
       }
       const full = t.columns.every((col) => fields.has(col.name));
-      const values = new Map([...fields].map(([name, field]) => [name, field[0]]));
-      const parents = full ? await parentsPresent(t, values) : 'ok';
+      let values = new Map([...fields].map(([name, field]) => [name, field[0]]));
+      let parents = full ? await parentsPresent(t, values) : 'ok';
+      // Décision (c) : parent d'une colonne facultative purgé ici (projet) : la ligne reçue est rattachée à « Sans projet » par une
+      // écriture locale publiée entière (« + ») au lieu d'être abandonnée ; un événement est journalisé.
+      const detached: string[] = [];
+      while (full && parents === 'purged' && purgedColumn !== null && syncColumn(t.name, purgedColumn)?.nullable) {
+        const column: string = purgedColumn;
+        detached.push(column);
+        values = new Map(values).set(column, null);
+        parents = await parentsPresent(t, values);
+      }
       if (!full || parents !== 'ok') {
         if (parents === 'purged') {
           ctx.logger.log('apply-abandoned', { table: t.name, reason: 'parent-purged' });
@@ -270,6 +322,10 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       ];
       await sync.writeClocks(t, op.id, clocks);
       if (combined.length > 0) await sync.removeParked(combined);
+      for (const column of detached) {
+        await sync.detachField(t, op.id, column);
+        ctx.logger.log('children-reattached', { table: t.name, parent: column, count: 1 });
+      }
       row.exists = true;
       row.values = values;
       row.hlc = rowHlc;

@@ -199,6 +199,8 @@ export interface SyncRepository {
    * en ligne entière (`'+'`). À appeler sous garde ; renvoie les identifiants rattachés.
    */
   detachLiveChildren(table: SyncTable, column: string, parentIds: readonly string[]): Promise<string[]>;
+  /** Même écriture locale pour une ligne donnée (ligne reçue dont le parent de `column` est purgé ici, décision (c)). Sous garde. */
+  detachField(table: SyncTable, id: string, column: string): Promise<void>;
   /** Y-09 (T-08) : rappels qui visent les lignes données (`target_type`, `target_id`), avec leur hlc ; purgés avec elles. */
   targetReminders(targetType: string, targetIds: readonly string[]): Promise<{ readonly id: string; readonly targetId: string; readonly hlc: Hlc }[]>;
   /** Plus grand hlc présent (tables publiées), pour l'horloge locale. */

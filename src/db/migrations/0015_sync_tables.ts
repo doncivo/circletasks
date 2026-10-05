@@ -108,6 +108,13 @@ function captureTriggers(table: string, key: string, columns: readonly string[])
     ? [
         `DELETE FROM sync_outbox WHERE ${row} AND field = '+' AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;`,
         `INSERT INTO sync_outbox (table_name, row_id, field) SELECT '${table}', NEW.${key}, '+' WHERE OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;`,
+        // Cible de rappels (tâche, routine, événement) : ses rappels vivants repartent aussi entiers, car un appareil qui a purgé la
+        // cible les a purgés avec elle (T-08) ; ceux restaurés avec elle reçoivent leur propre « + » par le déclencheur de `reminder`.
+        ...(['task', 'routine', 'event'].includes(table)
+          ? [
+              `INSERT OR IGNORE INTO sync_outbox (table_name, row_id, field) SELECT 'reminder', r.id, '+' FROM reminder r WHERE r.target_type = '${table}' AND r.target_id = NEW.${key} AND r.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;`,
+            ]
+          : []),
       ]
     : [];
   return [

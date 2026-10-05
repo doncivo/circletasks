@@ -165,8 +165,12 @@ export function buildRecords(ops: readonly PendingOp[], sv: number, onTooLarge: 
 
 function splitOp(op: SyncOp, envelope: number, onTooLarge: (op: SyncOp) => void): SyncOp[] {
   const out: SyncOp[] = [];
+  // Chaque partie porte aussi `deleted_at` (quelques octets) : une ligne entière restaurée et découpée reste reconnaissable à la
+  // réception comme une restauration fondée sur la trace, et ses parties y sont recomposées avant la règle (apply.ts).
+  const deletedAt = op.f.get('deleted_at');
   for (const [name, field] of op.f) {
-    const single: SyncOp = { ...op, f: new Map([[name, field]]) };
+    if (name === 'deleted_at' && op.f.size > 1) continue;
+    const single: SyncOp = { ...op, f: new Map<string, SyncField>(deletedAt && name !== 'deleted_at' ? [[name, field], ['deleted_at', deletedAt]] : [[name, field]]) };
     if (opTextBytes(single) + envelope > MAX_RECORD_PLAINTEXT_BYTES) onTooLarge(single);
     else out.push(single);
   }
