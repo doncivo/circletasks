@@ -88,14 +88,14 @@ fn y01_7_root_replaced_by_a_junction_between_two_operations_is_refused() {
     let folder = root.join("CircleTasks");
     std::fs::create_dir(&folder).unwrap();
     let fs = StdFs::new(check_sync_path(&folder).unwrap().path);
-    fs.revalidate().unwrap();
+    fs.start_cycle().unwrap();
     fs.create_dir(&["devices"]).unwrap();
     std::fs::remove_dir_all(&folder).unwrap();
-    assert_eq!(fs.revalidate(), Err(FsError::Unreachable), "dossier déplacé ou démonté");
+    assert_eq!(fs.start_cycle(), Err(FsError::Unreachable), "dossier déplacé ou démonté");
     let elsewhere = root.join("ailleurs");
     std::fs::create_dir(&elsewhere).unwrap();
     assert!(junction(&folder, &elsewhere));
-    assert_eq!(fs.revalidate(), Err(FsError::Unsafe), "dossier devenu jonction");
+    assert_eq!(fs.start_cycle(), Err(FsError::Unsafe), "dossier devenu jonction");
     assert_eq!(fs.list(&["devices"], 10), Err(FsError::Unsafe));
     assert_eq!(fs.append(&["x.ctj"], b"x", AppendMode::CreateNew), Err(FsError::Unsafe), "aucune écriture");
     assert!(std::fs::read_dir(&elsewhere).unwrap().next().is_none());
@@ -184,7 +184,7 @@ fn y01_14_real_icloud_placeholder_is_hydrated_on_the_checked_handle() {
     let checked = check_sync_path(&dir).expect("dossier accepté (balises cloud)");
     println!("nature du dossier : {:?}", checked.kind);
     let fs = StdFs::new(checked.path.clone());
-    fs.revalidate().unwrap();
+    fs.start_cycle().unwrap();
     let listing = fs.list(&[], 10_000).unwrap();
     let cloud = listing.entries.iter().find(|e| !e.is_dir && e.availability == Availability::Cloud).expect("un fichier « en ligne seulement »");
     println!("fichier dans le nuage : {} ({} octets annoncés)", cloud.name, cloud.size);

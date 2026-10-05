@@ -265,7 +265,7 @@ impl SyncCore {
         }
         let bound = self.require_folder(&mut inner)?;
         // Racine recontrôlée à chaque lecture (revue 1) : un dossier devenu jonction ou démonté est signalé aussitôt.
-        bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
+        bound.fs.check_root().map_err(|e| SyncError::new(e.code()))?;
         Ok(Self::info_of(bound))
     }
 
@@ -274,6 +274,8 @@ impl SyncCore {
     pub fn choose_folder(&self, path: &Path) -> SyncResult<FolderInfo> {
         let checked = self.backend.check(path)?;
         let mut inner = self.lock();
+        // Autre dossier, ou le même rechoisi : aucun instantané en cache (revue B3).
+        inner.snapshot_cache = None;
         self.ensure_loaded(&mut inner);
         let folder_id = checked.folder_id();
         let previous_id = inner.record.as_ref().map(|r| CheckedFolder { path: PathBuf::from(&r.path), kind: FolderKind::Unknown, pinned: false }.folder_id());
@@ -388,7 +390,7 @@ impl SyncCore {
         }
         let bound = self.require_folder(&mut inner)?;
         // Nouveau cycle d'hydratation (budget de 3 minutes) et racine recontrôlée (revue 2).
-        bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
+        bound.fs.start_cycle().map_err(|e| SyncError::new(e.code()))?;
         if Store::folder_has_data(bound.fs.as_ref())? {
             log::event("key-create-refused", "folder-has-data");
             return fail(SyncCode::FolderHasData);
@@ -481,6 +483,8 @@ impl SyncCore {
             return fail(SyncCode::BadName);
         }
         let mut inner = self.lock();
+        // Début de cycle : le cache de lecture d'instantané est vidé (revue B3).
+        inner.snapshot_cache = None;
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
         let self_id = Self::bound_device(&inner);
@@ -668,7 +672,7 @@ impl SyncCore {
             let mut inner = self.lock();
             let bound = self.require_folder(&mut inner)?;
             // Nouveau cycle d'hydratation et racine recontrôlée (revue 2).
-            bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
+            bound.fs.start_cycle().map_err(|e| SyncError::new(e.code()))?;
             let (key, paired_by, epoch) = match &input {
                 KeyInput::QrText(text) => {
                     let qr = parse_qr_text(text).ok_or(SyncError::new(SyncCode::InvalidPairing))?;
@@ -699,6 +703,8 @@ impl SyncCore {
             self.consent.confirm(ConsentKind::ReplaceKey, owner)?;
         }
         let mut inner = self.lock();
+        // Nouvelle clé : aucun instantané lu avec l'ancienne ne reste en cache (revue B3).
+        inner.snapshot_cache = None;
         // Clé existante relue sous le verrou (revue 17) : une autre clé apparue pendant la boîte n'est jamais remplacée sans accord.
         let existing = self.read_vault_key()?;
         if replace != Some(true) && existing.as_ref().is_some_and(|e| !e.same_as(&key)) {

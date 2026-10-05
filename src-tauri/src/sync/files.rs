@@ -99,8 +99,13 @@ pub enum AppendMode {
 
 /// Porte vers le dossier lié. `dir` / `file` : composants relatifs à la racine, déjà validés.
 pub trait SyncFs: Send + Sync {
-    /// Recontrôle la racine et ouvre un nouveau cycle d'hydratation (début de chaque `sync_scan`).
-    fn revalidate(&self) -> Result<(), FsError>;
+    /// Recontrôle la racine seulement (`sync_folder_info`) : le budget d'hydratation n'est pas touché (revue B4).
+    fn check_root(&self) -> Result<(), FsError>;
+    /// Recontrôle la racine et ouvre un nouveau cycle d'hydratation de 3 minutes (début de `sync_scan`, création et import de clé).
+    fn start_cycle(&self) -> Result<(), FsError>;
+    /// Premiers octets d'un fichier présent sur le disque (`max` au plus, en-tête) : jamais d'hydratation, `CloudPending` pour un
+    /// fichier dans le nuage. Sert aux pré-filtres sur l'en-tête en clair (audit A3, A4).
+    fn read_head(&self, file: &[&str], max: usize) -> Result<Vec<u8>, FsError>;
     /// Liste un dossier (`NotFound` s'il n'existe pas).
     fn list(&self, dir: &[&str], max: usize) -> Result<Listing, FsError>;
     /// Lit un fichier entier, `limit` octets au plus (taille annoncée contrôlée avant toute lecture ou hydratation). Un placeholder
@@ -471,10 +476,26 @@ mod imp {
     }
 
     impl SyncFs for StdFs {
-        fn revalidate(&self) -> Result<(), FsError> {
+        fn check_root(&self) -> Result<(), FsError> {
+            self.open_root().map(|_| ())
+        }
+
+        fn start_cycle(&self) -> Result<(), FsError> {
             self.open_root()?;
             *self.cycle_started.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
             Ok(())
+        }
+
+        fn read_head(&self, file: &[&str], max: usize) -> Result<Vec<u8>, FsError> {
+            let (dir, name) = Self::split(file)?;
+            let parent = self.open_dir(dir, false)?;
+            let handle = open_relative(&parent, name, FILE_GENERIC_READ, FILE_OPEN, FILE_NON_DIRECTORY_FILE)?;
+            if is_cloud(check_tag(&handle)?) {
+                return Err(FsError::CloudPending);
+            }
+            let mut out = Vec::with_capacity(max);
+            File::from(handle).take(max as u64).read_to_end(&mut out).map_err(|e| cloud_windows::io_error(&e))?;
+            Ok(out)
         }
 
         fn list(&self, dir: &[&str], max: usize) -> Result<Listing, FsError> {
@@ -650,12 +671,22 @@ mod imp {
     }
 
     impl SyncFs for StdFs {
-        fn revalidate(&self) -> Result<(), FsError> {
+        fn check_root(&self) -> Result<(), FsError> {
             match fs::symlink_metadata(&self.root) {
                 Ok(m) if m.is_dir() => Ok(()),
                 Ok(_) => Err(FsError::Unsafe),
                 Err(_) => Err(FsError::Unreachable),
             }
+        }
+
+        fn start_cycle(&self) -> Result<(), FsError> {
+            self.check_root()
+        }
+
+        fn read_head(&self, file: &[&str], max: usize) -> Result<Vec<u8>, FsError> {
+            let mut out = Vec::new();
+            File::open(self.path(file)?).map_err(|e| io(&e))?.take(max as u64).read_to_end(&mut out).map_err(|e| io(&e))?;
+            Ok(out)
         }
 
         fn list(&self, dir: &[&str], max: usize) -> Result<Listing, FsError> {

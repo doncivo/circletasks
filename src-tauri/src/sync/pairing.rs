@@ -36,15 +36,11 @@ pub fn is_pairing_url(url: &str) -> bool {
     false
 }
 
-/// La page `pairing.html` embarquée est-elle présente ? Le résolveur d'actifs de Tauri sert `index.html` quand une page manque :
-/// absente (`None`) ou identique à `index.html` = absente (audit S1). Sans elle, `sync_pairing_open` refuse (`io`) avant toute boîte
-/// et toute fenêtre : jamais l'application entière dans la fenêtre qui reçoit la clé.
-pub fn pairing_page_present(page: Option<&[u8]>, index: Option<&[u8]>) -> bool {
-    match (page, index) {
-        (None, _) => false,
-        (Some(page), Some(index)) => page != index && !page.is_empty(),
-        (Some(page), None) => !page.is_empty(),
-    }
+/// La page `pairing.html` est-elle dans les actifs embarqués, sous ce nom exact ? On parcourt les clés des actifs, sans passer par le
+/// résolveur (qui se replie sur `index.html`) ni comparer des octets (audit A2). Sans elle, `sync_pairing_open` refuse (`io`) avant
+/// toute boîte et toute fenêtre : jamais l'application entière dans la fenêtre qui reçoit la clé.
+pub fn pairing_page_listed<'a>(mut keys: impl Iterator<Item = &'a str>) -> bool {
+    keys.any(|key| key.strip_prefix('/').unwrap_or(key) == PAIRING_PAGE)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

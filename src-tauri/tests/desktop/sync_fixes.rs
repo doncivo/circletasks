@@ -7,7 +7,7 @@ use circletasks_lib::sync::crypto::{aad_bytes, qr_text_of, MasterKey, Place};
 use circletasks_lib::sync::files::{is_safe_component, Availability, FsError};
 use circletasks_lib::sync::folder::{chosen_target, FolderKind};
 use circletasks_lib::sync::limits::{MAX_STATE_CANDIDATES, PAIRING_VALIDITY_MS};
-use circletasks_lib::sync::pairing::pairing_page_present;
+use circletasks_lib::sync::pairing::pairing_page_listed;
 use circletasks_lib::sync::service::{AppendRequest, KeyInput, SYNC_KEY_ACCOUNT};
 use circletasks_lib::sync::store::RecordCursor;
 use circletasks_lib::sync::{SyncCode, SyncError};
@@ -43,10 +43,17 @@ fn second(fs: &std::sync::Arc<MemFs>) -> Device {
 /// S1 : la page `pairing.html` absente (Tauri servirait `index.html`) : refus avant toute boîte et toute fenêtre.
 #[test]
 fn s1_missing_pairing_page_is_refused_before_any_dialog_or_window() {
-    assert!(!pairing_page_present(None, Some(b"<html>index</html>")));
-    assert!(!pairing_page_present(Some(b"<html>index</html>"), Some(b"<html>index</html>")), "repli sur index.html");
-    assert!(!pairing_page_present(Some(b""), None));
-    assert!(pairing_page_present(Some(b"<html>pairing</html>"), Some(b"<html>index</html>")));
+    // Audit A2 : présence lue dans les clés des actifs embarqués, jamais par le résolveur (repli sur index.html).
+    assert!(!pairing_page_listed(["/index.html", "/capture.html", "/assets/x.js"].into_iter()));
+    assert!(!pairing_page_listed(["/pairing.html.map", "/x/pairing.html", "/Pairing.html"].into_iter()));
+    assert!(pairing_page_listed(["/index.html", "/pairing.html"].into_iter()));
+    assert!(pairing_page_listed(["pairing.html"].into_iter()));
+    let commands = include_str!("../../src/sync/commands.rs");
+    let available = &commands[commands.find("fn pairing_page_available").unwrap()..];
+    let available = &available[..available.find("
+}
+").unwrap()];
+    assert!(available.contains("resolver.iter()") && !available.contains(".get("), "aucun repli, aucune comparaison d'octets");
     let source = include_str!("../../src/sync/commands.rs");
     let check = source.find("if !pairing_page_available(&app)").expect("contrôle de la page");
     let open = source.find("registry.begin_open(").expect("ouverture");
@@ -397,4 +404,155 @@ fn r20_aad_fields_are_never_truncated() {
     let key = MasterKey::generate().unwrap();
     let place = Place::Journal { dev: &long, epoch: "e0001-3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60", segment: 1, index: 0 };
     assert!(key.seal(&place, b"{}", 1, 1).is_err());
+}
+
+/// Revue B1 (jumeau de `memory.fixes.test.ts`) : propre `state.ctx` remplacé (corrompu) : reconstruction avec le `stateSeq` lu en
+/// clair dans l'en-tête du fichier remplacé, puis réécriture possible ; seul un état en transfert fait attendre.
+#[test]
+fn b1_replaced_own_state_is_rebuilt_from_its_clear_header_and_can_be_rewritten() {
+    let (mut a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 100).unwrap();
+    a.core.write_state(14, state(DEV_A, &ep, 5, 1, 1, Some(hlc(100, DEV_A)))).unwrap();
+    std::fs::remove_file(a.base.path().join("sync").join("own.json")).unwrap();
+    a.restart();
+    let path = ["devices", DEV_A, "state.ctx"];
+    let mut bytes = fs.get(&path).unwrap();
+    let pos = bytes.len() - 20;
+    bytes[pos] = if bytes[pos] == b'A' { b'B' } else { b'A' };
+    fs.put(&path, &bytes);
+    append(&a, &ep, 1, 1, 200).unwrap();
+    let head = Some(hlc(200, DEV_A));
+    assert_eq!(code(a.core.write_state(14, state(DEV_A, &ep, 5, 1, 2, head.clone()))), SyncCode::StateMismatch);
+    a.core.write_state(14, state(DEV_A, &ep, 6, 1, 2, head)).unwrap();
+}
+
+/// Audit A1 : le budget d'entrées est d'abord pour soi et `keep` ; cinq dossiers hostiles de 10 000 entrées, nommés pour passer en
+/// premier, ne les rendent pas incomplets.
+#[test]
+fn a1_self_and_keep_are_listed_before_hostile_folders() {
+    let (d, fs) = device();
+    d.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&d, &ep, 1, 0, 10).unwrap();
+    d.core.write_state(14, state(DEV_A, &ep, 1, 1, 1, Some(hlc(10, DEV_A)))).unwrap();
+    fs.put(&["devices", DEV_B, &epoch(1, DEV_B), "j-00000001.ctj"], b"x");
+    for i in 0..5 {
+        let id = format!("00000000-0000-4000-8000-{i:012}");
+        for j in 0..10_000 {
+            fs.put(&["devices", &id, &format!("junk-{j}")], b"");
+        }
+    }
+    let scan = d.core.scan(&[DEV_B.to_owned()]).unwrap();
+    assert!(scan.incomplete, "les hostiles épuisent le reste du budget");
+    let me = scan.devices.iter().find(|x| x.device_id == DEV_A).unwrap();
+    assert_eq!((me.state_status, me.epochs.len(), me.epochs[0].segments.len()), ("ok", 1, 1));
+    let keep = scan.devices.iter().find(|x| x.device_id == DEV_B).unwrap();
+    assert_eq!(keep.epochs.len(), 1, "keep listé avant les dossiers hostiles");
+}
+
+/// Audit A3 : 65 dossiers factices ne font pas écarter un appareil en cours d'association (`pairedBy` = soi).
+#[test]
+fn a3_a_pairing_device_is_never_crowded_out_by_fake_folders() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    a.core.write_state(14, state(DEV_A, &epoch(1, DEV_A), 1, 0, 0, None)).unwrap();
+    for i in 0..65 {
+        fs.put(&["devices", &format!("00000000-0000-4000-8000-{i:012}"), "state.ctx"], b"{\"f\":\"ct-state\"}\nfaux\n");
+    }
+    // Appareil réel, nommé pour passer en dernier, qui s'associe à A.
+    let joiner = "ffffffff-0000-4000-8000-000000000001";
+    let qr = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap().qr_text.clone();
+    let b = second(&fs);
+    b.core.choose_folder(Path::new(FOLDER)).unwrap();
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(qr)), 1).unwrap();
+    b.core.bind_device(joiner).unwrap();
+    let mut s = state(joiner, &epoch(1, DEV_A), 1, 0, 0, None);
+    s["pairedBy"] = json!(DEV_A);
+    b.core.write_state(14, s).unwrap();
+    let scan = a.core.scan(&[]).unwrap();
+    let found = scan.devices.iter().find(|x| x.device_id == joiner).expect("appareil en cours d'association gardé");
+    assert_eq!(found.state_status, "ok");
+    assert_eq!(scan.devices.len(), 16);
+}
+
+/// Audit A4 : 16 faux segments élevés (en-tête d'une autre clé) n'épuisent pas les essais : le segment authentifié est retrouvé.
+#[test]
+fn a4_fake_high_segments_are_filtered_on_their_header_only() {
+    let (mut a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 10).unwrap();
+    append(&a, &ep, 2, 0, 20).unwrap();
+    let real = fs.get(&["devices", DEV_A, &ep, "j-00000002.ctj"]).unwrap();
+    let header = String::from_utf8(real[..real.iter().position(|&b| b == b'\n').unwrap()].to_vec()).unwrap();
+    let kid = a.core.key_status().unwrap().kid.unwrap();
+    for i in 0..16u32 {
+        let n = 99_999_999 - i;
+        let fake = header.replace("\"n\":2", &format!("\"n\":{n}")).replace(&kid, "0000000000000000");
+        fs.put(&["devices", DEV_A, &ep, &format!("j-{n:08}.ctj")], format!("{fake}\n1.14.{}\n", "A".repeat(5499)).as_bytes());
+    }
+    std::fs::remove_file(a.base.path().join("sync").join("own.json")).unwrap();
+    a.restart();
+    let reads = fs.reads.load(Ordering::SeqCst);
+    assert_eq!(code(append(&a, &ep, 2, 0, 30)), SyncCode::SegmentMismatch, "tête reconstruite au segment 2");
+    append(&a, &ep, 2, 1, 30).unwrap();
+    assert!(fs.reads.load(Ordering::SeqCst) - reads < 16, "les faux segments ne sont jamais lus en entier");
+}
+
+/// Revue B4 : `sync_folder_info` recontrôle la racine sans ouvrir de cycle d'hydratation ; scan, création et import de clé en ouvrent un.
+#[test]
+fn b4_folder_info_checks_the_root_without_starting_a_cycle() {
+    let (d, fs) = device();
+    d.core.choose_folder(Path::new(FOLDER)).unwrap();
+    let cycles = || fs.cycles.load(Ordering::SeqCst);
+    let before = cycles();
+    d.core.folder_info().unwrap();
+    d.core.folder_info().unwrap();
+    assert_eq!(cycles(), before, "folder_info : racine seulement");
+    d.core.key_create().unwrap();
+    d.core.bind_device(DEV_A).unwrap();
+    d.core.scan(&[]).unwrap();
+    assert_eq!(cycles(), before + 2, "création de clé et scan ouvrent chacun un cycle");
+}
+
+/// Revue B3 : le cache d'instantané est vidé au début d'un scan (puis au choix du dossier et à l'import de clé).
+#[test]
+fn b3_snapshot_cache_is_dropped_at_the_start_of_a_scan() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 10).unwrap();
+    let handle = a.core.snapshot_begin(&ep, 1, 14).unwrap();
+    a.core.snapshot_append(handle, &vec![format!("\"{}\"", "s".repeat(3_000)); 3]).unwrap();
+    a.core.snapshot_commit(handle).unwrap();
+    let mut s = state(DEV_A, &ep, 1, 1, 1, Some(hlc(10, DEV_A)));
+    s["snapshot"] = json!({ "seq": 1, "endHlc": hlc(10, DEV_A) });
+    a.core.write_state(14, s).unwrap();
+    let snapshot_reads = || fs.reads.load(Ordering::SeqCst);
+    let first = a.core.read_snapshot(DEV_A, &ep, 1, 0, Some(4_000)).unwrap();
+    assert_eq!(first.status, "more");
+    let before = snapshot_reads();
+    a.core.read_snapshot(DEV_A, &ep, 1, first.next.record, Some(4_000)).unwrap();
+    assert_eq!(snapshot_reads() - before, 1, "page suivante : seul state.ctx est relu");
+    a.core.scan(&[]).unwrap();
+    let before = snapshot_reads();
+    a.core.read_snapshot(DEV_A, &ep, 1, 2, Some(4_000)).unwrap();
+    assert_eq!(snapshot_reads() - before, 2, "après un scan : state.ctx et l'instantané relus");
+    let service = include_str!("../../src/sync/service.rs");
+    assert_eq!(service.matches("inner.snapshot_cache = None;").count(), 3, "choose_folder, scan, key_import");
+}
+
+/// Revue B5 : en production, aucun tampon de journal (événement vide) ; la capture n'existe qu'en développement et voit tous les fils
+/// (test des secrets : `sync_key.rs`, import fait depuis un fil annexe).
+#[test]
+fn b5_no_log_buffer_in_production() {
+    let source = include_str!("../../src/sync/mod.rs");
+    let log = &source[source.find("pub mod log {").unwrap()..];
+    assert!(log.contains("#[cfg(not(debug_assertions))]\n    #[inline]\n    pub fn event(_event: &'static str, _detail: &str) {}"));
+    for item in ["static SINKS", "pub fn capture()", "pub struct Capture"] {
+        let at = log.find(item).unwrap();
+        assert!(log[..at].trim_end().ends_with("#[cfg(debug_assertions)]"), "{item} réservé au développement");
+    }
 }

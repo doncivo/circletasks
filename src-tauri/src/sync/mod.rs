@@ -192,30 +192,65 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
 /// Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3). Écrit sur la sortie d'erreur
 /// en développement seulement ; les tests le capturent par `take_log`.
 pub mod log {
-    use std::cell::RefCell;
+    //! En production, aucun journal n'est gardé : un événement n'est ni écrit ni conservé (pas de tampon inutilisé, revue B5). En
+    //! développement et dans les tests (`debug_assertions`), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par
+    //! `capture()` : une capture voit les événements de **tous** les fils (fils de `spawn_blocking`, hydratation), sans plafond, et
+    //! seulement pendant sa durée de vie ; deux tests parallèles ont chacun la leur.
 
-    // Journal par fil d'exécution : les tests tournent en parallèle (un fil par test) et ne voient que leurs propres lignes ; un
-    // tampon global partagé laissait un test voisin évincer (plafond de 1 000 lignes) ou mêler ses lignes à celles du test observé.
-    thread_local! {
-        static LINES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
-    }
+    #[cfg(debug_assertions)]
+    use std::sync::{Arc, Mutex};
+
+    #[cfg(debug_assertions)]
+    type Sink = Arc<Mutex<Vec<String>>>;
+
+    #[cfg(debug_assertions)]
+    static SINKS: Mutex<Vec<Sink>> = Mutex::new(Vec::new());
 
     /// `event` : identifiant fixe (`folder-ignored`, `pin-failed`…) ; `detail` : nom strict, code, compteur ou identifiant d'appareil.
+    #[cfg(debug_assertions)]
     pub fn event(event: &'static str, detail: &str) {
         let line = format!("sync:{event} {detail}");
-        #[cfg(debug_assertions)]
         eprintln!("{line}");
-        LINES.with(|lines| {
-            let mut lines = lines.borrow_mut();
-            if lines.len() >= 1_000 {
-                lines.remove(0);
+        let sinks: Vec<Sink> = SINKS.lock().map(|s| s.clone()).unwrap_or_default();
+        for sink in sinks {
+            if let Ok(mut lines) = sink.lock() {
+                lines.push(line.clone());
             }
-            lines.push(line);
-        });
+        }
     }
 
-    /// Lignes journalisées par ce fil depuis le dernier appel (tests : aucune ne doit contenir de secret).
-    pub fn take_log() -> Vec<String> {
-        LINES.with(|lines| std::mem::take(&mut *lines.borrow_mut()))
+    #[cfg(not(debug_assertions))]
+    #[inline]
+    pub fn event(_event: &'static str, _detail: &str) {}
+
+    /// Capture des événements de tous les fils jusqu'à sa destruction (tests de développement seulement).
+    #[cfg(debug_assertions)]
+    pub struct Capture(Sink);
+
+    #[cfg(debug_assertions)]
+    impl Capture {
+        /// Lignes reçues depuis l'ouverture de la capture.
+        pub fn lines(&self) -> Vec<String> {
+            self.0.lock().map(|l| l.clone()).unwrap_or_default()
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    impl Drop for Capture {
+        fn drop(&mut self) {
+            if let Ok(mut sinks) = SINKS.lock() {
+                sinks.retain(|s| !Arc::ptr_eq(s, &self.0));
+            }
+        }
+    }
+
+    /// Ouvre une capture (voir le module).
+    #[cfg(debug_assertions)]
+    pub fn capture() -> Capture {
+        let sink: Sink = Arc::new(Mutex::new(Vec::new()));
+        if let Ok(mut sinks) = SINKS.lock() {
+            sinks.push(sink.clone());
+        }
+        Capture(sink)
     }
 }

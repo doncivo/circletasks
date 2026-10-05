@@ -17,7 +17,7 @@ use zeroize::Zeroizing;
 use super::consent::{ConsentGate, WindowsConsentUi};
 use super::folder::{chosen_target, config_dir, DEFAULT_FOLDER_NAME, ICLOUD_DRIVE_DIR};
 use super::marker::RestoreMarker;
-use super::pairing::{pairing_page_present, Caller, PairingMode, PairingRegistry, PAIRING_PAGE, PAIRING_WINDOW};
+use super::pairing::{pairing_page_listed, Caller, PairingMode, PairingRegistry, PAIRING_PAGE, PAIRING_WINDOW};
 use super::service::{system_clock, AppendRequest, FolderInfo, KeyImportResult, KeyInput, KeyStatus, PairingPayload, SyncCore, SyncOptions, SystemBackend};
 use super::store::{AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
@@ -151,16 +151,15 @@ pub async fn sync_key_create(app: AppHandle, window: WebviewWindow, state: State
 // Fenêtre `pairing`
 // ------------------------------------------------------------------------------------------------------------------------------
 
-/// `pairing.html` est-elle embarquée sous ce nom ? Le résolveur de Tauri se replie sur `index.html` : la page n'est présente que si
-/// elle diffère d'`index.html`. En développement avec le serveur Vite, la page est servie par Vite (non vérifiable ici).
+/// `pairing.html` est-elle embarquée sous ce nom exact (clés des actifs, audit A2) ? En développement avec le serveur Vite, la page
+/// est servie par Vite et n'est pas vérifiable ici : contrôle sauté (dette jusqu'à Y-06, docs/dettes.md).
 fn pairing_page_available(app: &AppHandle) -> bool {
     if cfg!(debug_assertions) && app.config().build.dev_url.is_some() {
         return true;
     }
     let resolver = app.asset_resolver();
-    let page = resolver.get(PAIRING_PAGE.to_owned()).map(|a| a.bytes);
-    let index = resolver.get("index.html".to_owned()).map(|a| a.bytes);
-    pairing_page_present(page.as_deref(), index.as_deref())
+    let keys: Vec<String> = resolver.iter().map(|(key, _)| key.into_owned()).collect();
+    pairing_page_listed(keys.iter().map(String::as_str))
 }
 
 fn caller_url(window: &WebviewWindow) -> String {

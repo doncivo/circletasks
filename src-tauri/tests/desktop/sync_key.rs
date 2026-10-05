@@ -81,9 +81,11 @@ fn y08_6_create_refused_on_a_folder_with_data_even_in_the_cloud() {
     assert!(c.core.key_create().is_ok());
 }
 
+/// Journal capturé sur tous les fils pendant le test (la capture n'existe qu'en développement : `cargo test --release` ne la compile pas).
+#[cfg(debug_assertions)]
 #[test]
 fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
-    let _ = log::take_log();
+    let capture = log::capture();
     let (a, fs) = device();
     a.setup(DEV_A);
     publish_state(&a, DEV_A, 1);
@@ -101,7 +103,14 @@ fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
     b.core.choose_folder(Path::new(FOLDER)).unwrap();
     b.core.bind_device(DEV_B).unwrap();
     b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
-    b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new(payload.recovery_key.clone())), 1).unwrap();
+    // Import depuis un fil annexe (comme `spawn_blocking` dans la commande) : ses lignes sont capturées aussi.
+    let recovery = payload.recovery_key.clone();
+    let b = std::thread::spawn(move || {
+        b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new(recovery)), 1).unwrap();
+        b
+    })
+    .join()
+    .unwrap();
     let secrets = [k_b64.as_str(), k_url.as_str(), payload.qr_text.as_str(), payload.recovery_key.as_str()];
     // Dossier iCloud : ni la clé, ni sa forme base64, ni le QR.
     for (name, bytes) in fs.all_files() {
@@ -124,8 +133,8 @@ fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
         }
     }
     // Journal technique : aucun secret, aucun chemin complet.
-    let lines = log::take_log();
-    assert!(lines.iter().any(|l| l.starts_with("sync:key-imported")), "lignes de CE test (journal par fil) : {lines:?}");
+    let lines = capture.lines();
+    assert!(lines.iter().filter(|l| l.starts_with("sync:key-imported")).count() >= 2, "fil principal et fil annexe : {lines:?}");
     for line in lines {
         for secret in secrets {
             assert!(!line.contains(secret), "{line}");

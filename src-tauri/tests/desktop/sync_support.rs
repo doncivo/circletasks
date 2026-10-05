@@ -51,6 +51,9 @@ pub struct MemFs {
     pub writes: AtomicUsize,
     /// Lectures de fichiers (revue 15 : un instantané lu par pages n'est relu qu'une fois).
     pub reads: AtomicUsize,
+    /// Lectures d'en-tête (`read_head`) et cycles d'hydratation ouverts (`start_cycle`).
+    pub head_reads: AtomicUsize,
+    pub cycles: AtomicUsize,
 }
 
 fn key(parts: &[&str]) -> String {
@@ -133,10 +136,25 @@ impl MemFs {
 pub struct SharedFs(pub Arc<MemFs>);
 
 impl SyncFs for SharedFs {
-    fn revalidate(&self) -> Result<(), FsError> {
+    fn check_root(&self) -> Result<(), FsError> {
         match *self.0.revalidate_error.lock().unwrap() {
             Some(error) => Err(error),
             None => Ok(()),
+        }
+    }
+
+    fn start_cycle(&self) -> Result<(), FsError> {
+        self.0.cycles.fetch_add(1, Ordering::SeqCst);
+        self.check_root()
+    }
+
+    fn read_head(&self, file: &[&str], max: usize) -> Result<Vec<u8>, FsError> {
+        self.0.head_reads.fetch_add(1, Ordering::SeqCst);
+        let nodes = self.0.nodes.lock().unwrap();
+        match nodes.get(&key(file)) {
+            Some(Node::File { availability: Availability::Cloud, .. }) => Err(FsError::CloudPending),
+            Some(Node::File { bytes, .. }) => Ok(bytes[..bytes.len().min(max)].to_vec()),
+            _ => Err(FsError::NotFound),
         }
     }
 
