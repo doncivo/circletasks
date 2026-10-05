@@ -1,12 +1,4 @@
-# Backlog CircleTasks
-
-121 user stories, triées par ordre de construction (PRD section 9). Critères d'acceptation : docs/PRD.md section 4.
-
-Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fichier à jour.
-
-## Ordre 0 — Préparation
-
-| ID | Tâche | Responsable | Statut |
+en revue (lot Y1 fusionné ; « fait » après le parcours 11, Y-06) ||||||| ID | Tâche | Responsable | Statut |
 | --- | --- | --- | --- |
 | PREP-01 | Prérequis et comptes (PRD section 2) | Ali | fait (secrets GitHub créés le 2026-10-04 : TAURI_SIGNING_PRIVATE_KEY, _PASSWORD, RELEASES_TOKEN ; environnement « releases ») |
 | PREP-02 | Initialiser le dépôt, installer CLAUDE.md, .claude/agents et docs/ | Ali + architect | fait |
