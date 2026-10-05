@@ -55,14 +55,15 @@ export interface JoinState {
 }
 
 /**
- * Appareil en train de rejoindre : jamais d'époque suivie avant ce cycle, arrivée commencée et pas terminée, ou appareil qui n'a encore
- * terminé aucun cycle (revue 1 : un arrêt entre la transaction qui pose l'époque et la première écriture de `join` ne fait pas basculer
- * vers la reprise ordinaire).
+ * Appareil en train de rejoindre : jamais d'époque suivie avant ce cycle, arrivée commencée et pas terminée, ou ligne de l'appareil sans
+ * époque suivie (revue 1 : un arrêt entre la transaction qui pose l'époque et la première écriture de `join` ne fait pas basculer vers la
+ * reprise ordinaire). L'époque de la ligne n'est posée que par la fin de l'arrivée (curseurs) ou par la publication ; `lastSyncAt` ne
+ * convient pas : il reste nul tant que des fichiers attendent iCloud, même pour un appareil arrivé depuis longtemps.
  */
 export async function isJoining(repos: Repositories, localEpoch: EpochId | null): Promise<boolean> {
   if (localEpoch === null || (await readJson<JoinState>(repos, JOIN_META)) !== null) return true;
   const self = (await repos.sync.getStates()).find((row) => row.isSelf);
-  return !self?.lastSyncAt;
+  return !self?.epoch;
 }
 
 const isRowRecord = (record: SnapshotRecord): boolean => record.k === 'snap-rows' || record.k === 'snap-row';

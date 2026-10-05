@@ -117,8 +117,8 @@ fn y06_18_window_decisions_destroy_and_never_hide() {
     assert_eq!(pairing_window_action(PairingWindowEvent::Destroyed), PairingWindowAction::Clear);
     assert_eq!(pairing_window_action(PairingWindowEvent::Other), PairingWindowAction::Ignore);
     // Échec de SetWindowDisplayAffinity (ou HWND inconnu) : `io`, la fenêtre est détruite avant tout affichage.
-    assert_eq!(code(affinity_outcome(42, false)), SyncCode::Io);
-    assert_eq!(code(affinity_outcome(0, true)), SyncCode::Io);
+    assert_eq!(code(affinity_outcome(42, false)), SyncCode::WindowUnprotected);
+    assert_eq!(code(affinity_outcome(0, true)), SyncCode::WindowUnprotected);
     assert!(affinity_outcome(42, true).is_ok());
     // Surveillance : `main` réduite, masquée ou fermée → destruction ; échéance → destruction ; sinon rien.
     assert_eq!(watch_decision(WatchInput { main_shown: false, expired: false }), Some("main-hidden"));
@@ -408,7 +408,9 @@ fn y06_9_association_before_the_first_scan_is_an_arrival() {
 #[test]
 fn y06_18_webview_is_hardened_before_it_is_shown() {
     use circletasks_lib::sync::pairing::hardening_outcome;
-    assert_eq!(code(hardening_outcome(false)), SyncCode::Io);
+    assert_eq!(code(hardening_outcome(false)), SyncCode::WindowUnprotected);
+    // Remarque finale 4 : distinct de `io` (page absente, « Installation incomplète ») ; texte générique côté interface.
+    assert_eq!(SyncCode::WindowUnprotected.as_str(), "window-unprotected");
     assert!(hardening_outcome(true).is_ok());
     let source = include_str!("../../src/sync/commands.rs");
     for call in ["SetAreDefaultContextMenusEnabled(false)", "SetAreBrowserAcceleratorKeysEnabled(false)", "SetIsGeneralAutofillEnabled(false)", "SetIsPasswordAutosaveEnabled(false)"] {

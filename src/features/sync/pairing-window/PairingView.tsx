@@ -197,7 +197,15 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
     } catch (error) {
       // D7 : l'ancien code reste affiché (il est toujours valable) jusqu'à son échéance.
       const code = syncErrorCodeOf(error);
-      setMessage(code === 'consent-denied' ? texts.window.renewDenied : code === 'rate-limited' ? texts.window.renewRateLimited : texts.window.renewFailed);
+      setMessage(
+        code === 'consent-denied'
+          ? texts.window.renewDenied
+          : code === 'rate-limited'
+            ? texts.window.renewRateLimited
+            : code === 'not-foreground'
+              ? texts.errors.notForeground
+              : texts.window.renewFailed,
+      );
     } finally {
       setRenewing(false);
     }

@@ -20,6 +20,9 @@ export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'
       return 'sync.pairing.openRateLimited';
     case 'io':
       return 'sync.pairing.openIncomplete';
+    case 'window-unprotected':
+      // Fenêtre impossible à protéger : texte générique, jamais « Installation incomplète » (remarque finale 4).
+      return 'sync.pairing.openFailed';
     default:
       return 'sync.pairing.openFailed';
   }

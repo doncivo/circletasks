@@ -208,9 +208,9 @@ describe('ligne chiffrée (section 1.2, Y-07)', () => {
 });
 
 describe('codes d’erreur (section 11.1)', () => {
-  it('37 codes (35, plus not-foreground et already-open de Y-06), sans doublon, reconnus par isSyncErrorCode', () => {
-    expect(SYNC_ERROR_CODES).toHaveLength(37);
-    expect(new Set(SYNC_ERROR_CODES).size).toBe(37);
+  it('38 codes (35, plus not-foreground, already-open et window-unprotected de Y-06), sans doublon, reconnus par isSyncErrorCode', () => {
+    expect(SYNC_ERROR_CODES).toHaveLength(38);
+    expect(new Set(SYNC_ERROR_CODES).size).toBe(38);
     expect(isSyncErrorCode('segment-full')).toBe(true);
     expect(isSyncErrorCode('SEGMENT-FULL')).toBe(false);
     expect(isSyncErrorCode(undefined)).toBe(false);

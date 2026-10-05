@@ -310,6 +310,7 @@ export const SYNC_ERROR_CODES = [
   'rate-limited',
   'not-foreground',
   'already-open',
+  'window-unprotected',
   'decrypt-failed',
   'truncated',
   'bad-name',

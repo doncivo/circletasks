@@ -52,6 +52,8 @@ export function syncErrorMessageKey(code: SyncErrorCode): PlainMessageKey {
       return 'sync.folder.errorDenied';
     case 'rate-limited':
       return 'sync.folder.errorRateLimited';
+    case 'not-foreground':
+      return 'sync.pairing.openBackground';
     case 'key-mismatch':
       return 'sync.key.mismatch';
     case 'folder-has-data':

@@ -132,21 +132,21 @@ pub fn pairing_window_action(event: PairingWindowEvent) -> PairingWindowAction {
 }
 
 /// Après la création masquée : la fenêtre n'est affichée que si son HWND est connu et si `SetWindowDisplayAffinity` a réussi ; sinon
-/// elle est détruite et rien n'est renvoyé (`io`).
+/// elle est détruite et rien n'est renvoyé (`window-unprotected`, distinct de la page absente).
 pub fn affinity_outcome(hwnd: isize, excluded: bool) -> SyncResult<()> {
     if hwnd == 0 || !excluded {
-        return fail(SyncCode::Io);
+        return fail(SyncCode::WindowUnprotected);
     }
     Ok(())
 }
 
 /// Durcissement de la WebView avant l'affichage (audit 1 : menu contextuel, raccourcis du navigateur, remplissage automatique,
-/// enregistrement des mots de passe désactivés) : en cas d'échec, la fenêtre est détruite et rien n'est renvoyé (`io`).
+/// enregistrement des mots de passe désactivés) : en cas d'échec, la fenêtre est détruite et rien n'est renvoyé (`window-unprotected`).
 pub fn hardening_outcome(hardened: bool) -> SyncResult<()> {
     if hardened {
         Ok(())
     } else {
-        fail(SyncCode::Io)
+        fail(SyncCode::WindowUnprotected)
     }
 }
 
