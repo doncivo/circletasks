@@ -164,6 +164,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | I-04 | M16 | Je consulte et exporte les logs | ios-mobile | à faire |
 | I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile | à faire |
 | I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile | à faire |
+| P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire |
 
 ## Livraison unique
 
