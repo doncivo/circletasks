@@ -4,8 +4,6 @@ import { parseJournalRecord } from '../../../src/domain/sync/parse';
 import type { TaskId } from '../../../src/domain/types';
 import { hydrate, propagate, segmentPath } from '../../sim/syncCloudSim';
 import { SCHEMA_VERSION, createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
-// Simulation à deux bases SQLite Wasm : marge pour une machine chargée (plusieurs lots en parallèle).
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Publication et lecture (ADR 0011, sections 1.2 à 1.4, 3.3, 10.2 ; Y-02 critères 5 et 6, Y-05 critères 1, 5, 6 et 7). */
 

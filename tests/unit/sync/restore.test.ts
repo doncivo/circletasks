@@ -1,9 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { setEpochSwitchTestHooks } from '../../../src/sync/epochSwitch';
 import type { RestoreMarker } from '../../../src/platform/sync/types';
 import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
-// Simulation à deux bases SQLite Wasm : marge pour une machine chargée (plusieurs lots en parallèle).
-vi.setConfig({ testTimeout: 30_000 });
 
 /**
  * Restauration P-04 et changements d'époque (ADR 0010, ADR 0011 sections 9 et 9.1 ; Y-02 critères 13 à 15, Y-09 critères 8 et 9).

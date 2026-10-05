@@ -1,10 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createManualClock } from '../../../src/domain/clock';
 import { createAppContainer } from '../../../src/features/app/container';
 import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
-// Simulation à deux bases SQLite Wasm : marge pour une machine chargée (plusieurs lots en parallèle).
-vi.setConfig({ testTimeout: 30_000 });
 
 /** Un élément supprimé ne réapparaît jamais (ADR 0011, sections 3.4, 4.2, 4.4, 5.4, 5.5 ; Y-09 critères 1 à 4, 6, 7, 10, 11). */
 
