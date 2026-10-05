@@ -24,7 +24,8 @@ import {
  *
  * Y-05 critère 6 (points non prouvés par la QA du lot Y2, critère 13 de Y-04) : pendant la publication de 5 000 opérations, aucune
  * tâche longue de plus de 250 ms (D4, `PerformanceObserver` `longtask`) ; un cycle interrompu à mi-publication reprend où il s'est
- * arrêté (aucune perte, aucun doublon).
+ * arrêté (aucune perte, aucun doublon). Mesure marquée @perf : projet `perf`, sans concurrence
+ * (`npx playwright test tests/e2e/parcours/J10 --project=perf --no-deps`), avec un budget de durée des cycles.
  */
 
 
@@ -38,14 +39,23 @@ const listTitle = (page: Page, name: string) => page.locator('.ct-today__list').
 let opened: SyncedPage[] = [];
 let room = '';
 
-/** Deux pages dans un même test : lancé une fois, depuis le projet pc ; espace propre au test dans le simulateur. */
-function start(): void {
+/**
+ * Projet qui lance le test (une seule fois) et budget explicite de sa durée ; espace propre au test dans le simulateur. Le parcours
+ * ouvre lui-même ses deux pages depuis le projet `pc` ; la mesure des 5 000 opérations est `@perf` (projet `perf`, sans concurrence).
+ */
+function start(project: 'pc' | 'perf', budgetMs: number): void {
   const info = test.info();
-  test.skip(info.project.name !== 'pc', 'Deux pages (PC et iPhone) dans un même test : lancé une fois, depuis le projet pc.');
-  // Deux apps démarrées (bases neuves) et une dizaine de cycles de synchro dans un même test : durée de parcours, pas d'attente fixe.
-  test.slow();
+  test.skip(info.project.name !== project, `lancé une fois, depuis le projet ${project}`);
+  test.setTimeout(budgetMs);
   room = `j10-${String(info.workerIndex)}-${info.testId}-${String(info.retry)}`;
 }
+
+/**
+ * Budget du parcours 10 : deux apps démarrées (bases neuves) et onze cycles de synchro dans un même test. Durée mesurée le 2026-10-06 :
+ * 12 à 18 s (projet pc, 2 workers, serveur de dev déjà compilé) ; budget 40 s, un peu plus du double du pire mesuré, au lieu du
+ * triplement implicite de `test.slow()`.
+ */
+const PARCOURS_BUDGET_MS = 40_000;
 
 test.afterEach(async () => {
   await Promise.all(opened.map((p) => p.context.close()));
@@ -55,7 +65,7 @@ test.afterEach(async () => {
 });
 
 test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit dans le journal des deux côtés, « Restaurer », même valeur partout', async ({ browser }) => {
-  start();
+  start('pc', PARCOURS_BUDGET_MS);
   // PC : premier appareil (dossier et clé), synchronisé une fois.
   const pc = await openSyncedPage(browser, room, 'pc', 'first');
   opened.push(pc);
@@ -146,6 +156,15 @@ test('parcours 10 : même tâche modifiée hors ligne sur PC et iPhone, conflit 
   await expect(taskRow(pc.page, TITLE)).toContainText('10:00');
 });
 
+/**
+ * Budget des deux cycles de publication des 5 000 opérations (interrompu puis repris), sans concurrence (projet perf). Mesuré le
+ * 2026-10-06 : 4,1 à 5,0 s au total (interrompu ≈ 1,0 s, repris 3,1 à 3,9 s ; dev, SQLite Wasm dans la page) ; budget 10 s, le double du
+ * pire mesuré : une régression (mise en forme redevenue quadratique, pauses trop fréquentes) le fait échouer.
+ */
+const PUBLISH_CYCLE_BUDGET_MS = 10_000;
+/** Budget du test entier (démarrage de l'app, insertion des 5 000 tâches, deux cycles) : mesuré 9 à 16 s, budget 40 s. */
+const PERF_TEST_BUDGET_MS = 40_000;
+
 /** Insère `count` tâches (identifiants `30000000-…`), datées loin dans le futur, écrites par cet appareil (hlc valides) : file d'envoi. */
 async function seedOfflineTasks(page: Page, deviceId: string, count: number): Promise<void> {
   await page.evaluate(
@@ -166,8 +185,8 @@ async function seedOfflineTasks(page: Page, deviceId: string, count: number): Pr
   );
 }
 
-test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; cycle interrompu à mi-publication repris sans perte ni doublon', async ({ browser }) => {
-  start();
+test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; cycle interrompu à mi-publication repris sans perte ni doublon @perf', async ({ browser }) => {
+  start('perf', PERF_TEST_BUDGET_MS);
   const pc = await openSyncedPage(browser, room, 'pc', 'first');
   opened.push(pc);
   const { page } = pc;
@@ -191,7 +210,9 @@ test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; 
   // Arrêt à mi-publication : le troisième ajout au journal échoue (« io »), avant toute écriture.
   const before = await inspect(room, 'pc');
   await failAfter(room, 'pc', 'appendJournal', 2, 'io');
+  const interruptedStart = Date.now();
   await syncNow(page, /^La synchronisation a échoué/);
+  const interruptedMs = Date.now() - interruptedStart;
   const partial = await inspect(room, 'pc');
   const seeded = (tasks: Readonly<Record<string, number>>) => Object.entries(tasks).filter(([id]) => id.startsWith('30000000-'));
   // Au moins un ajout a abouti avant la panne (un segment plein ouvre le suivant : un appel de plus, sans ajout).
@@ -200,7 +221,10 @@ test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; 
   expect(seeded(partial.tasks).length).toBeLessThan(5_000);
 
   // Cycle suivant : reprise où il s'est arrêté, chaque tâche publiée une seule fois.
+  const resumedStart = Date.now();
   await syncNow(page);
+  const resumedMs = Date.now() - resumedStart;
+  test.info().annotations.push({ type: 'cycles de publication', description: `interrompu ${String(interruptedMs)} ms, repris ${String(resumedMs)} ms` });
   const done = await inspect(room, 'pc');
   expect(seeded(done.tasks)).toHaveLength(5_000);
   expect(seeded(done.tasks).filter(([, times]) => times !== 1)).toEqual([]);
@@ -208,4 +232,6 @@ test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; 
 
   const longTasks = await page.evaluate(() => (window as unknown as { __ctLongTasks: number[] }).__ctLongTasks);
   expect(longTasks.filter((duration) => duration > 250), `tâches longues : ${JSON.stringify(longTasks.map(Math.round))}`).toEqual([]);
+  // Budget de durée des cycles de publication (clic sur « Synchroniser » jusqu'à la fin du cycle), voir PUBLISH_CYCLE_BUDGET_MS.
+  expect(interruptedMs + resumedMs, `cycles : ${String(interruptedMs)} + ${String(resumedMs)} ms`).toBeLessThan(PUBLISH_CYCLE_BUDGET_MS);
 });
