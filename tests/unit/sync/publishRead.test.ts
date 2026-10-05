@@ -91,15 +91,16 @@ describe('publication (Y-02 critère 5)', () => {
     const [a, b] = await twoDevices();
     const t = await a.createTask('Avant l’arrêt');
     const real = a.platform.appendJournal.bind(a.platform);
-    let appended = false;
+    let signalAppended: () => void = () => undefined;
+    const appended = new Promise<void>((resolve) => (signalAppended = resolve));
     vi.spyOn(a.platform, 'appendJournal').mockImplementation(async (r) => {
       await real(r);
-      appended = true;
+      signalAppended();
       // Le processus s'arrête ici : la promesse ne se termine jamais, la transaction de retrait n'a pas lieu.
       return new Promise<Awaited<ReturnType<typeof real>>>(() => undefined);
     });
     void a.service.syncNow('manual');
-    await vi.waitFor(() => expect(appended).toBe(true));
+    await appended;
     vi.restoreAllMocks();
     expect(await a.data.repos.sync.outboxCount()).toBeGreaterThan(0);
     await a.restart();

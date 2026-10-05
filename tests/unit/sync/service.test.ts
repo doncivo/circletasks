@@ -76,15 +76,22 @@ describe('service (Y-02 critère 1, Y-03 critère 3)', () => {
     await setupFirst(a);
     let scans = 0;
     let release: () => void = () => undefined;
+    let signalFirstScan: () => void = () => undefined;
+    const firstScan = new Promise<void>((resolve) => (signalFirstScan = resolve));
     const real = a.platform.scan.bind(a.platform);
     vi.spyOn(a.platform, 'scan').mockImplementation(async (r) => {
       scans += 1;
-      if (scans === 1) await new Promise<void>((resolve) => (release = resolve));
+      if (scans === 1) {
+        const held = new Promise<void>((resolve) => (release = resolve));
+        signalFirstScan();
+        await held;
+      }
       return real(r);
     });
     const first = a.service.syncNow('open');
     const extra = Array.from({ length: 5 }, () => a.service.syncNow('manual'));
-    await vi.waitFor(() => expect(scans).toBe(1));
+    await firstScan;
+    expect(scans).toBe(1);
     release();
     await Promise.all([first, ...extra]);
     expect(scans).toBe(2);
