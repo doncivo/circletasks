@@ -17,7 +17,10 @@ use zeroize::Zeroizing;
 use super::consent::{ConsentGate, WindowsConsentUi};
 use super::folder::{chosen_target, config_dir, DEFAULT_FOLDER_NAME, ICLOUD_DRIVE_DIR};
 use super::marker::RestoreMarker;
-use super::pairing::{pairing_page_listed, Caller, PairingMode, PairingRegistry, PAIRING_PAGE, PAIRING_WINDOW};
+use super::pairing::{
+    affinity_outcome, pairing_page_listed, pairing_window_action, watch_decision, Caller, PairingMode, PairingRegistry, PairingWindowAction, PairingWindowEvent,
+    WatchInput, PAIRING_PAGE, PAIRING_WINDOW,
+};
 use super::service::{system_clock, AppendRequest, FolderInfo, KeyImportResult, KeyInput, KeyStatus, PairingPayload, SyncCore, SyncOptions, SystemBackend};
 use super::store::{AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
@@ -25,9 +28,9 @@ use crate::desktop::MAIN_WINDOW;
 
 /// Événement émis vers `main` à la réussite d'un appairage (sans clé).
 pub const PAIRED_EVENT: &str = "sync-paired";
-/// Taille logique de la fenêtre `pairing` (PC-Appairage.html).
-const PAIRING_WIDTH: f64 = 440.0;
-const PAIRING_HEIGHT: f64 = 640.0;
+/// Taille logique de la fenêtre `pairing` : la carte de PC-Appairage.html (780 × 720, deux colonnes).
+const PAIRING_WIDTH: f64 = 780.0;
+const PAIRING_HEIGHT: f64 = 720.0;
 
 /// État géré par Tauri : service créé au premier appel (dossier de configuration connu), registre de la fenêtre `pairing`.
 #[derive(Default)]
@@ -151,15 +154,24 @@ pub async fn sync_key_create(app: AppHandle, window: WebviewWindow, state: State
 // Fenêtre `pairing`
 // ------------------------------------------------------------------------------------------------------------------------------
 
-/// `pairing.html` est-elle embarquée sous ce nom exact (clés des actifs, audit A2) ? En développement avec le serveur Vite, la page
-/// est servie par Vite et n'est pas vérifiable ici : contrôle sauté (dette jusqu'à Y-06, docs/dettes.md).
+/// `pairing.html` est-elle embarquée sous ce nom exact (clés des actifs, audit A2) ? En développement avec le serveur Vite (page non
+/// embarquée), Rust demande la page au serveur et exige son marqueur `data-ct-page="pairing"` (Y-06 critère 3, dette soldée) : ce
+/// code n'existe pas en production.
 fn pairing_page_available(app: &AppHandle) -> bool {
-    if cfg!(debug_assertions) && app.config().build.dev_url.is_some() {
-        return true;
-    }
     let resolver = app.asset_resolver();
     let keys: Vec<String> = resolver.iter().map(|(key, _)| key.into_owned()).collect();
-    pairing_page_listed(keys.iter().map(String::as_str))
+    if pairing_page_listed(keys.iter().map(String::as_str)) {
+        return true;
+    }
+    #[cfg(debug_assertions)]
+    if let Some(url) = app.config().build.dev_url.as_ref() {
+        if url.scheme() == "http" {
+            if let (Some(host), Some(port)) = (url.host_str(), url.port_or_known_default()) {
+                return super::pairing::dev_page_has_marker(host, port);
+            }
+        }
+    }
+    false
 }
 
 fn caller_url(window: &WebviewWindow) -> String {
@@ -193,11 +205,12 @@ fn watch_pairing(app: AppHandle, registry: Arc<PairingRegistry>, core: Arc<SyncC
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(500));
         let Some(instance) = registry.current().filter(|i| i.hwnd == hwnd) else { return };
-        let main_hidden = app
+        let main_shown = app
             .get_webview_window(MAIN_WINDOW)
-            .map_or(true, |main| !main.is_visible().unwrap_or(false) || main.is_minimized().unwrap_or(true));
-        if registry.expire_if_due(hwnd, instance.generation, core.now()) || main_hidden {
-            log::event("pairing-destroyed", if main_hidden { "main-hidden" } else { "expired" });
+            .is_some_and(|main| main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(true));
+        let expired = registry.expire_if_due(hwnd, instance.generation, core.now());
+        if let Some(reason) = watch_decision(WatchInput { main_shown, expired }) {
+            log::event("pairing-destroyed", reason);
             let handle = app.clone();
             let registry = registry.clone();
             let _ = app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd));
@@ -261,22 +274,31 @@ async fn open_pairing_window(app: &AppHandle, main: &WebviewWindow, core: &Arc<S
         let _ = sender.send(exclude_from_capture(hwnd));
     });
     let excluded = applied.is_ok() && tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(5)).unwrap_or(false)).await.unwrap_or(false);
-    if hwnd == 0 || !excluded {
+    if let Err(error) = affinity_outcome(hwnd, excluded) {
         let _ = window.destroy();
         log::event("pairing-refused", "display-affinity");
-        return fail(SyncCode::Io);
+        return Err(error);
     }
     registry.register(hwnd, mode, core.now());
     let events_app = app.clone();
     let events_registry = registry.clone();
-    window.on_window_event(move |event| match event {
-        // Croix native : la fenêtre est détruite, jamais seulement masquée.
-        WindowEvent::CloseRequested { api, .. } => {
-            api.prevent_close();
-            destroy_pairing(&events_app, &events_registry, hwnd);
+    window.on_window_event(move |event| {
+        let seen = match event {
+            WindowEvent::CloseRequested { .. } => PairingWindowEvent::CloseRequested,
+            WindowEvent::Destroyed => PairingWindowEvent::Destroyed,
+            _ => PairingWindowEvent::Other,
+        };
+        match pairing_window_action(seen) {
+            // Croix native : la fenêtre est détruite, jamais seulement masquée.
+            PairingWindowAction::PreventAndDestroy => {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                }
+                destroy_pairing(&events_app, &events_registry, hwnd);
+            }
+            PairingWindowAction::Clear => events_registry.clear(hwnd),
+            PairingWindowAction::Ignore => {}
         }
-        WindowEvent::Destroyed => events_registry.clear(hwnd),
-        _ => {}
     });
     // Affichage impossible : fenêtre détruite et instance effacée (revue 7), jamais une instance masquée qui garderait un jeton.
     if window.show().is_err() {
@@ -367,7 +389,16 @@ pub async fn sync_pairing_close(app: AppHandle, window: WebviewWindow, state: St
 pub async fn sync_scan(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, keep: Vec<String>) -> SyncResult<FolderScan> {
     require_main(&window)?;
     let core = state.core(&app)?;
-    blocking(move || core.scan(&keep)).await
+    let scan_core = core.clone();
+    let scan = blocking(move || scan_core.scan(&keep)).await?;
+    // Arrivée de l'appareil associé pendant l'affichage du QR (Y-06 critère 9) : fenêtre détruite, `sync-paired` vers `main`, sans clé.
+    if let Some(hwnd) = state.pairing.observe_paired(&core.paired_with_self(&scan)) {
+        let handle = app.clone();
+        let registry = state.pairing.clone();
+        let _ = app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd));
+        let _ = app.emit_to(MAIN_WINDOW, PAIRED_EVENT, ());
+    }
+    Ok(scan)
 }
 
 #[tauri::command]

@@ -494,6 +494,23 @@ impl SyncCore {
         store.scan(self_id.as_deref(), keep, accepted)
     }
 
+    /// Appareils du scan dont l'état **authentifié** (`stateStatus` `ok`, déchiffré avec la clé locale) porte `pairedBy` = cet appareil
+    /// (Y-06 critère 9 : arrivée de l'appareil associé). Aucun si cet appareil n'est pas lié.
+    pub fn paired_with_self(&self, scan: &FolderScan) -> Vec<String> {
+        let self_id = {
+            let mut inner = self.lock();
+            self.ensure_loaded(&mut inner);
+            Self::bound_device(&inner)
+        };
+        let Some(self_id) = self_id else { return Vec::new() };
+        scan.devices
+            .iter()
+            .filter(|d| d.device_id != self_id && d.state_status == "ok")
+            .filter(|d| d.state.as_ref().is_some_and(|s| s.device_id == d.device_id && s.paired_by.as_deref() == Some(self_id.as_str())))
+            .map(|d| d.device_id.clone())
+            .collect()
+    }
+
     /// `sync_read_journal`.
     pub fn read_journal(&self, device_id: &str, epoch: &str, from: RecordCursor, max_bytes: Option<u64>) -> SyncResult<ReadPage> {
         let mut inner = self.lock();
