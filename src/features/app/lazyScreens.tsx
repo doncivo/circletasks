@@ -1,4 +1,9 @@
-import { createElement, lazy, Suspense, type ComponentType, type ReactElement } from 'react';
+import { Component, createElement, lazy, Suspense, useState, type ComponentType, type ErrorInfo, type ReactElement, type ReactNode } from 'react';
+import { t } from '../../i18n';
+import { logDesktopFailure } from '../../platform';
+import { Button } from '../../ui';
+import { whenIdle } from './idle';
+import './lazyScreens.css';
 
 /**
  * Écrans chargés à la demande (PERF-02, avenant à l'ADR 0001) : seul Aujourd'hui, l'écran du premier rendu, est dans le bloc de
@@ -15,54 +20,94 @@ function Fallback(): ReactElement {
   return <div className="ct-app__placeholder" aria-hidden="true" />;
 }
 
-/** Chaque écran porte sa propre frontière Suspense : un écran voisin déjà affiché (Aujourd'hui à côté d'Un jour) ne se masque pas. */
-function screen<P extends object>(load: Loader<P>): ComponentType<P> {
-  loaders.push(load);
-  const Lazy = lazy(load);
+/** Frontière d'erreur d'un écran : bloc illisible -> message et « Réessayer » (le parent recrée le composant paresseux). */
+class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; readonly children: ReactNode }, { readonly failed: boolean }> {
+  override state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  override componentDidCatch(error: Error, _info: ErrorInfo): void {
+    logDesktopFailure('screen-load', error);
+  }
+
+  override render(): ReactNode {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="ct-app__screen-error" role="alert">
+        <p>{t('app.screenError')}</p>
+        <Button variant="secondary" onClick={this.props.onRetry}>
+          {t('app.screenRetry')}
+        </Button>
+      </div>
+    );
+  }
+}
+
+/**
+ * Chaque écran porte sa propre frontière Suspense et d'erreur : un écran voisin déjà affiché (Aujourd'hui à côté d'Un jour) ne se
+ * masque pas. Module déjà arrivé (préchargement ou affichage précédent) : rendu direct à la création de l'instance, sans repli ni
+ * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état).
+ */
+export function lazyScreen<P extends object>(load: Loader<P>): ComponentType<P> {
+  let loaded: ComponentType<P> | null = null;
+  const remember = (): Promise<{ default: ComponentType<P> }> =>
+    load().then((module) => {
+      loaded = module.default;
+      return module;
+    });
+  loaders.push(remember);
+  let Lazy = lazy<ComponentType<P>>(remember);
   return function LazyScreen(props: P): ReactElement {
-    return <Suspense fallback={<Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
+    const [direct] = useState(() => loaded);
+    const [attempt, setAttempt] = useState(0);
+    if (direct) return createElement(direct, props);
+    return (
+      <ScreenErrorBoundary
+        key={attempt}
+        onRetry={() => {
+          Lazy = lazy<ComponentType<P>>(remember);
+          setAttempt((n) => n + 1);
+        }}
+      >
+        <Suspense fallback={<Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>
+      </ScreenErrorBoundary>
+    );
   };
 }
 
-export const ReportScreen = screen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })));
-export const DoneTasksScreen = screen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })));
-export const TrashScreen = screen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })));
-export const TaskDetail = screen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })));
-export const SomedayScreen = screen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })));
-export const GoalsScreen = screen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })));
-export const WeekScreen = screen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })));
-export const RoutinesScreen = screen<object>(() => import('../routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen })));
-export const EventsScreen = screen<object>(() => import('../events/EventsScreen').then((m) => ({ default: m.EventsScreen })));
-export const ChecklistsScreen = screen<object>(() => import('../checklists/ChecklistsScreen').then((m) => ({ default: m.ChecklistsScreen })));
-export const SettingsScreen = screen<object>(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
-export const AppearanceScreen = screen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })));
-export const TabsScreen = screen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })));
-export const ImportScreen = screen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })));
-export const RecapSettingsScreen = screen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })));
-export const HolidaySettingsScreen = screen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })));
-export const SpacesScreen = screen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })));
-export const CalendarsScreen = screen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })));
-export const QuietHoursRoute = screen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })));
+export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })));
+export const DoneTasksScreen = lazyScreen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })));
+export const TrashScreen = lazyScreen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })));
+export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })));
+export const SomedayScreen = lazyScreen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })));
+export const GoalsScreen = lazyScreen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })));
+export const WeekScreen = lazyScreen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })));
+export const RoutinesScreen = lazyScreen<object>(() => import('../routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen })));
+export const EventsScreen = lazyScreen<object>(() => import('../events/EventsScreen').then((m) => ({ default: m.EventsScreen })));
+export const ChecklistsScreen = lazyScreen<object>(() => import('../checklists/ChecklistsScreen').then((m) => ({ default: m.ChecklistsScreen })));
+export const SettingsScreen = lazyScreen<object>(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
+export const AppearanceScreen = lazyScreen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })));
+export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })));
+export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })));
+export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })));
+export const HolidaySettingsScreen = lazyScreen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })));
+export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })));
+export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })));
+export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })));
 
-/** Charge tous les écrans à la demande, un par un, aux moments d'inactivité du navigateur (après le premier rendu). Rend l'arrêt. */
+/** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {
-  let cancelled = false;
-  let handle: number | undefined;
+  let cancel: () => void = () => undefined;
   let index = 0;
-  const idle = (cb: () => void): number =>
-    typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(cb, { timeout: 2000 }) : window.setTimeout(cb, 200);
-  const cancel = (id: number): void => (typeof window.cancelIdleCallback === 'function' ? window.cancelIdleCallback(id) : window.clearTimeout(id));
   const step = (): void => {
-    if (cancelled) return;
     const load = loaders[index];
     index += 1;
     if (!load) return;
-    void load().catch(() => undefined);
-    handle = idle(step);
+    void load().catch((error: unknown) => logDesktopFailure('screen-preload', error));
+    cancel = whenIdle(step, 200);
   };
-  handle = idle(step);
-  return () => {
-    cancelled = true;
-    if (handle !== undefined) cancel(handle);
-  };
+  cancel = whenIdle(step, 200);
+  return () => cancel();
 }
