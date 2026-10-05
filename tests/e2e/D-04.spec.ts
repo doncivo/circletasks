@@ -116,7 +116,8 @@ test.describe('D-04 / P-08 — raccourcis clavier', () => {
   test('Alt+1 à Alt+6 et Ctrl+← / Ctrl+→ dans la Semaine', async ({ page }) => {
     await page.keyboard.press('Alt+2');
     await expect(page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true })).toHaveAttribute('aria-current', 'page');
-    const heading = page.locator('.ct-week__header, .ct-week').first();
+    // Titre de la plage seulement : le texte de tout l'écran inclut la région d'annonce, remplie après un délai.
+    const heading = page.locator('.ct-week__range');
     const before = await heading.textContent();
     await page.keyboard.press('Control+ArrowRight');
     await expect.poll(async () => heading.textContent()).not.toBe(before);
