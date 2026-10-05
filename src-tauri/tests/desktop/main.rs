@@ -21,6 +21,7 @@ mod sync_crypto;
 mod sync_folder;
 mod sync_key;
 mod sync_pairing;
+mod sync_qa_crypto;
 mod sync_store;
 mod sync_support;
 mod updater;
