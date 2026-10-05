@@ -30,3 +30,27 @@ Garde-fous automatiques :
 - `t()` lit la langue courante au moment du rendu : un changement de langue à chaud devra déclencher un nouveau rendu (langue stockée dans le store de réglages, ordre 1, agent settings-personalization).
 - Les messages d'erreur techniques (exceptions, journaux) ne sont pas des textes d'interface : ils restent en dur et ne s'affichent jamais tels quels à l'utilisateur.
 - Si un besoin ICU complexe apparaît (genres, pluriels imbriqués), un nouvel ADR réévaluera une bibliothèque.
+
+## Avenant : catalogues chargés à la demande (PERF-02, 2026-10-05)
+
+### Contexte
+
+La décision initiale écartait le chargement dynamique (« deux langues embarquées »). PERF-02 mesure le catalogue anglais à ~16 Ko gzip du bloc de départ, pour une langue que l'utilisateur n'emploie pas par défaut.
+
+### Décision
+
+- Les deux langues restent **embarquées dans l'app** (aucun téléchargement réseau, fonctionne hors ligne) ; seul `fr.ts` est dans le bloc de départ, `en.ts` est un bloc séparé chargé par `import()` dans `src/i18n/index.ts`, seul endroit autorisé (garde-fou ESLint, ADR 0001, avenant PERF-02). Toujours aucune dépendance.
+- Contrat de `src/i18n` :
+  ```ts
+  export function ensureLocale(locale: Locale): Promise<void>; // se résout toujours ; échec = repli français
+  export function registerCatalog(locale: Locale, messages: Messages): void; // tests, ou catalogue obtenu autrement
+  export function setLocale(locale: Locale): void; // lance ensureLocale en arrière-plan si le catalogue manque
+  ```
+- Règle d'appel pour tout changement de langue (réglage « Langue », fenêtres secondaires) : **`await ensureLocale(l)` puis `setLocale(l)`**, puis nouveau rendu. Appeler `setLocale` seul avant l'arrivée du catalogue donne une interface mixte (textes en français par repli, mais `getLocale()` vaut `en`, donc dates et pluriels `Intl` en anglais) ; toléré dans `FocusMiniWindow`, qui réaffiche à l'arrivée, à éviter ailleurs.
+- `src/i18n` garde son état de module (`current`, `catalogs`) : c'est la couche des textes, pas le domaine ; l'exception ne s'étend pas à `src/domain`.
+- Le test de parité des clés `fr` / `en` importe `en.ts` statiquement et reste valable.
+
+### Conséquences
+
+- iOS : bloc local servi par le protocole de l'app, chargé en quelques millisecondes ; aucune différence avec WebView2.
+- Le futur réglage de langue (settings-personalization) applique la règle d'appel ci-dessus ; une troisième langue s'ajoute par une entrée de `loaders`.
