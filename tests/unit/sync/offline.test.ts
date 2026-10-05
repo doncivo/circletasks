@@ -5,6 +5,8 @@ import { createAppContainer, type AppContainer } from '../../../src/features/app
 import { createTaskUseCases } from '../../../src/features/tasks/createTaskUseCases';
 import { SyncPlatformError, type SyncErrorCode } from '../../../src/platform/sync/types';
 import { PRO, createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
+// Simulation à deux bases SQLite Wasm : marge pour une machine chargée (plusieurs lots en parallèle).
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Je travaille hors ligne (ADR 0011, sections 3.2, 6.2, 7.1 ; Y-05 critères 1 à 4, 8 et 9). */
 

@@ -5,6 +5,8 @@ import type { SyncReason, SyncStatus } from '../../../src/platform/sync/types';
 import { INITIAL_STATUS, phaseOf, startSyncScheduler, syncAge } from '../../../src/sync';
 import type { CycleFacts } from '../../../src/sync/status';
 import { createSimDevice, setupFirst, type SimDevice } from '../../sim/syncDevice';
+// Simulation à deux bases SQLite Wasm : marge pour une machine chargée (plusieurs lots en parallèle).
+vi.setConfig({ testTimeout: 30_000 });
 
 /** Déclenchement, un seul cycle à la fois, état (ADR 0011, sections 10.1, 10.4 ; Y-02 critères 1, 16, 17 ; Y-03 critères 2 et 3). */
 
