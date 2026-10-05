@@ -171,6 +171,23 @@ describe('suppression contre modification (critère 7)', () => {
     expect((await outbox('routine', id)).map((e) => e.field)).toEqual(expect.arrayContaining(['+', 'deleted_at']));
   });
 
+  it('valeur écartée = une suppression (restauration ici, suppression ailleurs) : l’élément est supprimé de nouveau, annulable', async () => {
+    const task = await bench.createTask('Restaurée ici');
+    await published();
+    const conflictId = await bench.conflict({ table: 'task', rowId: task.id, field: 'deleted_at', kept: null, discarded: '2026-10-05T07:00:00.000Z' });
+    expect(await bench.useCases.restore(conflictId)).toEqual({ status: 'restored' });
+    expect((await bench.data.repos.tasks.getById(task.id, { includeDeleted: true }))?.deletedAt).not.toBeNull();
+    expect(bench.taskEntities.get(task.id)).toBeUndefined();
+    expect((await bench.undo.undoLast()).status).toBe('undone');
+    expect((await bench.data.repos.tasks.getById(task.id))?.deletedAt).toBeNull();
+    // Deux suppressions concurrentes : l'élément est déjà supprimé, rien à écrire.
+    await bench.data.repos.tasks.softDelete([task.id]);
+    await published();
+    const both = await bench.conflict({ table: 'task', rowId: task.id, field: 'deleted_at', kept: '2026-10-05T09:00:00.000Z', discarded: '2026-10-05T07:00:00.000Z', keptHlc: otherHlc(7) });
+    expect(await bench.useCases.restore(both)).toEqual({ status: 'already' });
+    expect(await outbox('task', task.id)).toEqual([]);
+  });
+
   it('élément déjà restauré (par l’autre appareil) : aucune écriture, conflit résolu', async () => {
     const task = await bench.createTask('Déjà là');
     await published();

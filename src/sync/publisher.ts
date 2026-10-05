@@ -1,4 +1,4 @@
-import type { OutboxEntry, PublishedEntry, Repositories } from '../db/repositories';
+import type { ExportedRow, OutboxEntry, PublishedEntry, Repositories } from '../db/repositories';
 import { MAX_APPEND_CALL_BYTES, MAX_RECORD_PLAINTEXT_BYTES, SYNC_FORMAT_MAJOR, encryptedLineBytes, utf8Bytes, type DeviceAck, type EpochId, type SyncField, type SyncOp } from '../domain/sync/format';
 import { hlcDevice, journalEnvelopeBytes, journalRecordToText, opTextBytes } from '../domain/sync/parse';
 import { syncTable, tableRank, type SyncTable } from '../domain/sync/syncTables';
@@ -25,6 +25,69 @@ import { META, readJson, writeJson } from './meta';
  */
 export const ROW_REPUBLISH_FIELD = '+';
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Tâches courtes (Y-05 critère 6 « sans bloquer l'interface » ; décision D4 de Y-04 : aucune tâche longue de plus de 250 ms pendant
+// un cycle de 5 000 opérations). La mise en forme d'une grosse file (lecture des lignes, enregistrements) rend la main à la boucle
+// d'événements dès qu'elle a travaillé `SLICE_MS` ms d'affilée ; le résultat est identique (mêmes opérations, mêmes enregistrements).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** Durée de travail continu avant de rendre la main (ms). */
+export const SLICE_MS = 50;
+/** Lignes lues par instruction pendant la mise en forme (même découpage que le repository). */
+const READ_CHUNK = 400;
+/** Entrées de file lues par instruction (la file entière d'une grosse file hors ligne ne tient pas dans une tâche courte). */
+const OUTBOX_PAGE = 500;
+
+/** Lit la file par pages, dans l'ordre (`limit` : au plus ce nombre d'entrées), avec une pause possible entre deux pages. */
+async function readOutboxPaged(repos: Repositories, limit: number | undefined, slicer: Slicer): Promise<OutboxEntry[]> {
+  const out: OutboxEntry[] = [];
+  let after = 0;
+  for (;;) {
+    const want = limit === undefined ? OUTBOX_PAGE : Math.min(OUTBOX_PAGE, limit - out.length);
+    if (want <= 0) return out;
+    const page = await repos.sync.readOutbox(want, after);
+    out.push(...page);
+    const last = page.at(-1);
+    if (page.length < want || !last) return out;
+    after = last.seq;
+    await slicer.pause();
+  }
+}
+
+export interface Slicer {
+  /** Rend la main à la boucle d'événements si la tranche de temps est écoulée. */
+  pause(): Promise<void>;
+}
+
+/** Aucun découpage (appels directs et tests de règles). */
+export const NO_SLICING: Slicer = { pause: () => Promise.resolve() };
+
+/** Une tâche de la boucle d'événements : `scheduler.yield` (Chromium, WebView2), sinon un message (jamais une minuterie : aucune horloge factice ne la retient). */
+function yieldToEventLoop(): Promise<void> {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (typeof scheduler?.yield === 'function') return scheduler.yield();
+  return new Promise<void>((resolve) => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => {
+      channel.port1.close();
+      channel.port2.close();
+      resolve();
+    };
+    channel.port2.postMessage(null);
+  });
+}
+
+export function createSlicer(now: () => number = () => performance.now(), budgetMs: number = SLICE_MS): Slicer {
+  let start = now();
+  return {
+    async pause() {
+      if (now() - start < budgetMs) return;
+      await yieldToEventLoop();
+      start = now();
+    },
+  };
+}
+
 export interface PendingOp {
   readonly op: SyncOp;
   readonly hlc: Hlc;
@@ -48,9 +111,16 @@ export interface Materialized {
  * inférieurs à toute écriture validée après elle : la tête publiée ne dépasse jamais une écriture que la lecture n'a pas vue (elle
  * serait sinon écartée comme déjà publiée). Les champs gardent leurs propres horloges.
  */
-export async function materializeOutbox(repos: Repositories, self: DeviceId, publishedMax: Hlc | null, limit?: number, reserved: readonly Hlc[] = []): Promise<Materialized> {
+export async function materializeOutbox(
+  repos: Repositories,
+  self: DeviceId,
+  publishedMax: Hlc | null,
+  limit?: number,
+  reserved: readonly Hlc[] = [],
+  slicer: Slicer = NO_SLICING,
+): Promise<Materialized> {
   let nextReserved = 0;
-  const outbox = await repos.sync.readOutbox(limit);
+  const outbox = await readOutboxPaged(repos, limit, slicer);
   const byTable = new Map<SyncTable, Map<string, OutboxEntry[]>>();
   const stale: OutboxEntry[] = [];
   for (const entry of outbox) {
@@ -67,9 +137,15 @@ export async function materializeOutbox(repos: Repositories, self: DeviceId, pub
   const entries: { entry: OutboxEntry; hlc: Hlc }[] = [];
   for (const [t, rowsEntries] of byTable) {
     const ids = [...rowsEntries.keys()];
-    // Valeurs et horloges lues par une seule instruction : une écriture ne peut pas tomber entre les deux.
-    const rows = await repos.sync.readRowsWithClocks(t, ids);
+    // Valeurs et horloges d'une ligne lues par une seule instruction : une écriture ne peut pas tomber entre les deux (et la lecture
+    // entière est dans la transaction de l'appelant). Par paquets, avec une pause possible entre deux (tâches courtes).
+    const rows = new Map<string, ExportedRow>();
+    for (let i = 0; i < ids.length; i += READ_CHUNK) {
+      for (const [id, row] of await repos.sync.readRowsWithClocks(t, ids.slice(i, i + READ_CHUNK))) rows.set(id, row);
+      await slicer.pause();
+    }
     for (const [id, rowEntries] of rowsEntries) {
+      await slicer.pause();
       const row = rows.get(id);
       if (!row) {
         stale.push(...rowEntries);
@@ -138,8 +214,23 @@ export interface BuiltRecord {
  * seule trop grande est découpée champ par champ (même hlc, enregistrements successifs) ; un champ seul trop grand est écarté et journalisé.
  */
 export function buildRecords(ops: readonly PendingOp[], sv: number, onTooLarge: (op: SyncOp) => void): BuiltRecord[] {
-  const envelope = journalEnvelopeBytes(sv);
   const records: BuiltRecord[] = [];
+  for (const _step of recordSteps(ops, sv, onTooLarge, records)) {
+    // Chaque pas est un groupe de même hlc : sans découpage en tâches, on enchaîne.
+  }
+  return records;
+}
+
+/** Même résultat que `buildRecords`, avec une pause possible après chaque groupe de même hlc (tâches courtes). */
+export async function buildRecordsSliced(ops: readonly PendingOp[], sv: number, onTooLarge: (op: SyncOp) => void, slicer: Slicer): Promise<BuiltRecord[]> {
+  const records: BuiltRecord[] = [];
+  for (const _step of recordSteps(ops, sv, onTooLarge, records)) await slicer.pause();
+  return records;
+}
+
+/** Construit les enregistrements dans `records`, un pas par groupe de même hlc. */
+function* recordSteps(ops: readonly PendingOp[], sv: number, onTooLarge: (op: SyncOp) => void, records: BuiltRecord[]): Generator<void> {
+  const envelope = journalEnvelopeBytes(sv);
   let current: SyncOp[] = [];
   let currentBytes = envelope;
   let currentMax: Hlc | null = null;
@@ -161,18 +252,19 @@ export function buildRecords(ops: readonly PendingOp[], sv: number, onTooLarge: 
     }
     // Opérations trop grandes pour un enregistrement : découpées par champ.
     const parts = group.flatMap((op) => (opTextBytes(op) + envelope > MAX_RECORD_PLAINTEXT_BYTES ? splitOp(op, envelope, onTooLarge) : [op]));
-    const groupBytes = parts.reduce((sum, op) => sum + opTextBytes(op), 0);
+    const sizes = parts.map((op) => opTextBytes(op));
+    const groupBytes = sizes.reduce((sum, size) => sum + size, 0);
     if (current.length > 0 && currentBytes + groupBytes > MAX_RECORD_PLAINTEXT_BYTES) flush();
-    for (const op of parts) {
-      const size = opTextBytes(op);
+    parts.forEach((op, index) => {
+      const size = sizes[index] as number;
       if (current.length > 0 && currentBytes + size > MAX_RECORD_PLAINTEXT_BYTES) flush();
       current.push(op);
       currentBytes += size;
       currentMax = hlc;
-    }
+    });
+    yield;
   }
   flush();
-  return records;
 }
 
 function splitOp(op: SyncOp, envelope: number, onTooLarge: (op: SyncOp) => void): SyncOp[] {
@@ -268,13 +360,15 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
   const { data, platform, deviceId, sv, logger } = deps;
   // Rangs des lignes entières réservés avant la lecture (le pilote est sérialisé : toute écriture tamponnée avant est déjà en file et
   // sera vue ; toute écriture tamponnée après a un hlc plus grand), puis file et lignes lues dans une seule transaction.
-  const wholeRows = (await data.repos.sync.readOutbox()).filter((e) => e.field === ROW_REPUBLISH_FIELD).length;
+  // Tâches courtes (Y-05 critère 6) : une grosse file est lue et mise en forme par tranches, la boucle d'événements reprend la main entre deux.
+  const slicer = createSlicer();
+  const wholeRows = (await readOutboxPaged(data.repos, undefined, slicer)).filter((e) => e.field === ROW_REPUBLISH_FIELD).length;
   const reserved = Array.from({ length: wholeRows + 1 }, () => deps.hlc.now());
-  const material = await data.transaction((repos) => materializeOutbox(repos, deviceId, head.epoch === epoch ? head.hlc : null, undefined, reserved));
+  const material = await data.transaction((repos) => materializeOutbox(repos, deviceId, head.epoch === epoch ? head.hlc : null, undefined, reserved, slicer));
   // Entrées lues sans rien à publier : retirées par numéro (une écriture faite depuis la lecture a un nouveau numéro et reste).
   if (material.stale.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(material.stale));
   if (material.ops.length === 0) return { published: 0, head, error: null };
-  const records = buildRecords(material.ops, sv, (op) => logger.log('publish-too-large', { table: op.t }));
+  const records = await buildRecordsSliced(material.ops, sv, (op) => logger.log('publish-too-large', { table: op.t }), slicer);
   const refused = new Set<Hlc>();
   const batches = batchRecords(records, (hlc) => {
     refused.add(hlc);
