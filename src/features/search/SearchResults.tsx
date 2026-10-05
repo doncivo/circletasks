@@ -1,10 +1,11 @@
 import { Calendar, ClipboardList, FileText, Repeat, Target, type LucideIcon } from 'lucide-react';
-import type { KeyboardEvent } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type KeyboardEvent } from 'react';
 import type { Space } from '../../domain/model';
-import { groupSearchResults, type SearchKind, type SearchResult, type TextSegment } from '../../domain/search';
-import { t } from '../../i18n';
+import type { SearchGroup, SearchKind, SearchResult, TextSegment } from '../../domain/search';
+import { getLocale, t } from '../../i18n';
+import { formatPrefsVersion, subscribeFormatPrefs } from '../../i18n/formatPrefs';
 import { Icon, IconView, spaceTextColor } from '../../ui';
-import { resultLabel, subtitleParts } from './searchRowText';
+import { resultLabel, subtitleParts, type SubtitlePart } from './searchRowText';
 import type { SelectionMove } from './useSearchSelection';
 
 /** Icône et couleur par défaut de chaque type (Recherche.html : fiche rouge, liste ochre, calendrier bleu). */
@@ -49,10 +50,10 @@ function CitationText({ result }: { readonly result: SearchResult }) {
 }
 
 /** Contenu d'une ligne : icône, titre surligné, sous-ligne (citation, date, espace coloré, état). */
-export function SearchResultContent({ result, spaces }: { readonly result: SearchResult; readonly spaces: RowSpaces }) {
+export function SearchResultContent({ result, spaces, parts: given }: { readonly result: SearchResult; readonly spaces: RowSpaces; readonly parts?: readonly SubtitlePart[] }) {
   const { hit } = result;
   const kind = KIND_ICON[hit.kind];
-  const parts = subtitleParts(result, spaces);
+  const parts = given ?? subtitleParts(result, spaces);
   return (
     <>
       <span className="ct-search__resultIcon" aria-hidden="true">
@@ -89,7 +90,8 @@ export function SearchResultContent({ result, spaces }: { readonly result: Searc
 export const rowDomId = (result: SearchResult): string => `ct-search-row-${result.hit.kind}-${result.hit.id}`;
 
 export interface SearchGroupsProps {
-  readonly results: readonly SearchResult[];
+  /** Résultats groupés par type, dans l'ordre d'affichage (calculés une seule fois par `useSearchSelection`). */
+  readonly groups: readonly SearchGroup[];
   readonly spaces: RowSpaces;
   /** Clé de la ligne sélectionnée (surlignée, seule dans l'ordre de tabulation). */
   readonly selectedKey: string | null;
@@ -102,29 +104,79 @@ export interface SearchGroupsProps {
 
 const MOVE_OF_KEY: Readonly<Record<string, SelectionMove>> = { ArrowDown: 'next', ArrowUp: 'previous', Home: 'first', End: 'last' };
 
+interface SearchRowProps {
+  readonly result: SearchResult;
+  readonly spaces: RowSpaces;
+  /** Langue et préférences de format : la date et l'heure affichées (sous-ligne, nom accessible) en dépendent. */
+  readonly formatKey: string;
+  readonly selected: boolean;
+  readonly onSelect: (key: string) => void;
+  readonly onOpen: (result: SearchResult, inTab: boolean) => void;
+  readonly onKeyDown: (event: KeyboardEvent<HTMLButtonElement>, result: SearchResult) => void;
+}
+
+/**
+ * Une ligne de résultat, mémoïsée : elle ne se redessine que si son résultat, les espaces, la langue ou les préférences de format, ou
+ * sa sélection changent. Sous-ligne et nom accessible sont calculés une fois par résultat, pas à chaque rendu de la liste
+ * (RC-02 critère 8, budget 200 ms).
+ */
+const SearchRow = memo(function SearchRow({ result, spaces, formatKey, selected, onSelect, onOpen, onKeyDown }: SearchRowProps) {
+  // `formatKey` n'est pas lue : sa seule présence dans les dépendances invalide le calcul quand la langue ou le format d'heure changent.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const parts = useMemo(() => subtitleParts(result, spaces), [result, spaces, formatKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const label = useMemo(() => resultLabel(result, spaces, parts), [result, spaces, parts, formatKey]);
+  return (
+    <li>
+      <button
+        type="button"
+        id={rowDomId(result)}
+        className="ct-search__result"
+        data-kind={result.hit.kind}
+        data-selected={selected ? 'true' : 'false'}
+        tabIndex={selected ? 0 : -1}
+        aria-label={label}
+        onFocus={() => onSelect(result.key)}
+        onClick={() => onOpen(result, false)}
+        onKeyDown={(event) => onKeyDown(event, result)}
+      >
+        <SearchResultContent result={result} spaces={spaces} parts={parts} />
+      </button>
+    </li>
+  );
+});
+
 /**
  * Résultats groupés par type, chaque en-tête avec son nombre (« TÂCHES · 3 »). Chaque ligne est un bouton d'au moins 44 pt au nom
  * complet (« Tâche, Envoyer la facture, mer. 23 sept., Pro, à faire »). La ligne sélectionnée est la seule dans l'ordre de tabulation
  * (Tab : champ, puces, liste) ; ↑ / ↓ / Début / Fin y déplacent le focus, Entrée ouvre, Ctrl+Entrée ouvre dans l'onglet.
  */
-export function SearchGroups({ results, spaces, selectedKey, onSelect, onOpen, onMove }: SearchGroupsProps) {
-  function handleKeyDown(event: KeyboardEvent<HTMLButtonElement>, result: SearchResult): void {
+export function SearchGroups({ groups, spaces, selectedKey, onSelect, onOpen, onMove }: SearchGroupsProps) {
+  // Les rappels du parent changent à chaque rendu : les lignes mémoïsées reçoivent des fonctions stables qui appellent la dernière version.
+  const latest = useRef({ onOpen, onMove });
+  useLayoutEffect(() => {
+    latest.current = { onOpen, onMove };
+  });
+  const stableOpen = useCallback((result: SearchResult, inTab: boolean) => latest.current.onOpen(result, inTab), []);
+  const handleKeyDown = useCallback((event: KeyboardEvent<HTMLButtonElement>, result: SearchResult): void => {
     const move = MOVE_OF_KEY[event.key];
     if (move) {
       event.preventDefault();
-      const target = onMove(move);
+      const target = latest.current.onMove(move);
       if (target) document.getElementById(rowDomId(target))?.focus();
       return;
     }
     if (event.key === 'Enter' && event.ctrlKey) {
       event.preventDefault();
-      onOpen(result, true);
+      latest.current.onOpen(result, true);
     }
-  }
+  }, []);
+  // Se réaffiche (et invalide les lignes mémoïsées) quand la langue ou une préférence de format change (P-03).
+  const formatKey = `${getLocale()}|${String(useSyncExternalStore(subscribeFormatPrefs, formatPrefsVersion))}`;
 
   return (
     <div role="region" aria-label={t('search.listLabel')}>
-      {groupSearchResults(results).map((group) => {
+      {groups.map((group) => {
         const title = t('search.group', { type: t(`search.groups.${group.kind}`), count: group.results.length });
         return (
           <section key={group.kind} className="ct-search__group" aria-labelledby={`ct-search-group-${group.kind}`}>
@@ -133,22 +185,7 @@ export function SearchGroups({ results, spaces, selectedKey, onSelect, onOpen, o
             </h2>
             <ul className="ct-search__list">
               {group.results.map((result) => (
-                <li key={result.key}>
-                  <button
-                    type="button"
-                    id={rowDomId(result)}
-                    className="ct-search__result"
-                    data-kind={result.hit.kind}
-                    data-selected={selectedKey === result.key ? 'true' : 'false'}
-                    tabIndex={selectedKey === result.key ? 0 : -1}
-                    aria-label={resultLabel(result, spaces)}
-                    onFocus={() => onSelect(result.key)}
-                    onClick={() => onOpen(result, false)}
-                    onKeyDown={(event) => handleKeyDown(event, result)}
-                  >
-                    <SearchResultContent result={result} spaces={spaces} />
-                  </button>
-                </li>
+                <SearchRow key={result.key} result={result} spaces={spaces} formatKey={formatKey}selected={selectedKey === result.key} onSelect={onSelect} onOpen={stableOpen} onKeyDown={handleKeyDown} />
               ))}
             </ul>
           </section>

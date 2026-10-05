@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
-import { closeSearch, groupTitles, insertSearchTasks, openSearch, resultRows, searchDialog, searchInput, typeSearch } from './helpers/search';
+import { closeSearch, describeTimings, groupTitles, insertSearchTasks, median, openSearch, resultRows, searchDialog, searchInput, typeSearch } from './helpers/search';
 import { filterPill } from './helpers/spaces';
 import { isPhone } from './helpers/today';
 
@@ -84,7 +84,7 @@ test.describe('RC-01 — recherche plein texte', () => {
     await openApp(page);
     await page.evaluate(() => window.__ctTest?.seedTasks(5000, '2026-08-01', 100));
     await openSearch(page, testInfo);
-    // Mesure dans la page : de la saisie à la première ligne de résultat affichée. Cinq essais, le meilleur est retenu (les autres
+    // Mesure dans la page : de la saisie à la première ligne de résultat affichée. Cinq essais, la médiane est comparée au budget (les autres
     // tests tournent en parallèle) ; la mesure sans concurrence est celle de `npm run test:perf`.
     const measure = async (query: string): Promise<number> =>
       page.evaluate(async (text) => {
@@ -112,7 +112,8 @@ test.describe('RC-01 — recherche plein texte', () => {
       await expect(resultRows(page)).toHaveCount(0);
       timings.push(await measure(query));
     }
-    testInfo.annotations.push({ type: 'mesure', description: `${timings.map((ms) => String(Math.round(ms))).join(' / ')} ms` });
-    expect(Math.min(...timings)).toBeLessThan(200);
+    testInfo.annotations.push({ type: 'mesure', description: describeTimings('recherche', timings) });
+    expect(median(timings), 'médiane des 5 essais').toBeLessThan(200);
+    expect(Math.max(...timings), 'plafond du pire essai').toBeLessThan(400);
   });
 });
