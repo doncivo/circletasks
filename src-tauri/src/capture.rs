@@ -53,6 +53,24 @@ pub fn toggle_action(visible: bool, focused: bool) -> ToggleAction {
     }
 }
 
+/// Destination de « Ajout rapide » (menu de la zone de notification) et de la combinaison globale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuickAddRoute {
+    /// Mini-fenêtre de capture (Q-01, critère 10).
+    MiniWindow,
+    /// Repli : fenêtre principale sur Aujourd'hui, champ focalisé (D-01 critère 5, mini-fenêtre non créée).
+    TodayField,
+}
+
+/// Choix de la destination selon que la mini-fenêtre existe.
+pub fn quick_add_route(mini_window_exists: bool) -> QuickAddRoute {
+    if mini_window_exists {
+        QuickAddRoute::MiniWindow
+    } else {
+        QuickAddRoute::TodayField
+    }
+}
+
 /// Hauteur logique demandée par le front, ramenée entre la hauteur par défaut et le maximum.
 pub fn clamp_height(requested: f64) -> f64 {
     if requested.is_nan() {
@@ -176,10 +194,14 @@ pub fn hide(app: &AppHandle) {
 /// Combinaison globale ou « Ajout rapide » du menu : bascule la mini-fenêtre. Sans mini-fenêtre
 /// (création échouée), repli sur l'ouverture d'Aujourd'hui avec le champ focalisé (D-04).
 pub fn trigger(app: &AppHandle) {
-    let Some(window) = capture_window(app) else {
-        show_main_window(app);
-        let _ = app.emit_to(MAIN_WINDOW, QUICK_ADD_EVENT, ());
-        return;
+    let existing = capture_window(app);
+    let window = match (quick_add_route(existing.is_some()), existing) {
+        (QuickAddRoute::MiniWindow, Some(window)) => window,
+        _ => {
+            show_main_window(app);
+            let _ = app.emit_to(MAIN_WINDOW, QUICK_ADD_EVENT, ());
+            return;
+        }
     };
     let visible = window.is_visible().unwrap_or(false);
     let focused = window.is_focused().unwrap_or(false);

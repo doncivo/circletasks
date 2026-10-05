@@ -2,7 +2,7 @@
 
 use circletasks_lib::capture::{
     is_valid_submit, SubmitRequest, CONTEXT_REQUEST_EVENT, SUBMIT_EVENT,
-    centered_origin, clamp_height, physical_size, toggle_action, ToggleAction, CAPTURE_PAGE, CAPTURE_WINDOW, DEFAULT_HEIGHT, MAX_HEIGHT, WINDOW_WIDTH,
+    centered_origin, clamp_height, quick_add_route, QuickAddRoute, physical_size, toggle_action, ToggleAction, CAPTURE_PAGE, CAPTURE_WINDOW, DEFAULT_HEIGHT, MAX_HEIGHT, WINDOW_WIDTH,
 };
 use serde_json::Value;
 
@@ -120,6 +120,16 @@ fn submit_events_match_the_front_and_the_request_shape_is_camel_case() {
     let json = serde_json::to_value(request("a")).expect("json");
     assert_eq!(json["requestId"], "capture-1");
     assert!(json.get("request_id").is_none());
+}
+
+#[test]
+fn tray_quick_add_opens_the_mini_window_with_today_field_as_fallback() {
+    // Q-01 critère 10 : « Ajout rapide » (menu de la zone de notification) passe par capture::trigger, comme la combinaison globale.
+    assert_eq!(quick_add_route(true), QuickAddRoute::MiniWindow);
+    // Mini-fenêtre non créée : repli D-01 (Aujourd'hui, champ focalisé).
+    assert_eq!(quick_add_route(false), QuickAddRoute::TodayField);
+    let desktop = include_str!("../../src/desktop.rs");
+    assert!(desktop.contains("TrayAction::QuickAdd => crate::capture::trigger(app)"), "le menu doit ouvrir la mini-fenêtre");
 }
 
 #[test]
