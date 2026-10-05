@@ -1,5 +1,5 @@
 import type { Repositories } from '../db/repositories';
-import { syncTable, type SyncTable } from '../domain/sync/syncTables';
+import { childRelations, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { Hlc, IsoDateTime } from '../domain/types';
 import type { SyncLogger } from './log';
 
@@ -23,9 +23,31 @@ const REMINDER_TARGETS: ReadonlySet<string> = new Set(['task', 'routine', 'event
 const maxHlc = (a: Hlc, b: Hlc | undefined): Hlc => (b !== undefined && b > a ? b : a);
 
 /** Purge `items` de la table `t` ; renvoie les lignes effectivement purgées et les rappels purgés avec elles. */
-export async function purgeRows(repos: Repositories, t: SyncTable, items: readonly PurgeItem[], purgedAt: IsoDateTime, logger: SyncLogger): Promise<{ readonly purged: PurgeItem[]; readonly reminders: string[] }> {
+export async function purgeRows(
+  repos: Repositories,
+  t: SyncTable,
+  items: readonly PurgeItem[],
+  purgedAt: IsoDateTime,
+  logger: SyncLogger,
+  options: { readonly reattach?: (table: string, ids: readonly string[]) => void } = {},
+): Promise<{ readonly purged: PurgeItem[]; readonly reminders: string[] }> {
   const reminderIds: string[] = [];
   if (items.length === 0) return { purged: [], reminders: reminderIds };
+  if (options.reattach && t.name === 'project') {
+    // Décision (c) : trace de purge d'un projet reçue (instantané, report d'époque) ; les tâches vivantes encore dessous passent à
+    // « Sans projet » du même espace et repartent entières (`'+'`) : rien n'est perdu, les appareils convergent.
+    for (const rel of childRelations(t.name)) {
+      const moved = await repos.sync.detachLiveChildren(
+        rel.table,
+        rel.column,
+        items.map((item) => item.id),
+      );
+      if (moved.length > 0) {
+        logger.log('children-reattached', { table: rel.table.name, parent: t.name, count: moved.length });
+        options.reattach(rel.table.name, moved);
+      }
+    }
+  }
   const blocked = await repos.sync.withChildren(
     t,
     items.map((item) => item.id),

@@ -275,7 +275,7 @@ async function applySnapshotTombstones(deps: SyncDeps, repos: Repositories, snap
         purge.push({ id, deletedHlc });
       }
       await repos.sync.insertTombstones(absent, now);
-      const done = await purgeRows(repos, t, purge, now, deps.logger);
+      const done = await purgeRows(repos, t, purge, now, deps.logger, { reattach: (table, ids) => addTouched(touched, table, ids) });
       addTouched(
         touched,
         t.name,

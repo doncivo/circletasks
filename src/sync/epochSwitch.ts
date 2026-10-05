@@ -200,7 +200,7 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         if (op.tomb !== undefined) {
           // Ligne présente : purgée avec ses rappels, sauf si elle a encore des enfants (écartée, journalisée) ; absente : trace seule.
           if ((await repos.sync.existingIds(t, [op.id])).has(op.id)) {
-            const done = await purgeRows(repos, t, [{ id: op.id, deletedHlc: op.tomb }], now, deps.logger);
+            const done = await purgeRows(repos, t, [{ id: op.id, deletedHlc: op.tomb }], now, deps.logger, { reattach: (table, ids) => ids.forEach((id) => addTouched(touched, table, id)) });
             for (const item of done.purged) addTouched(touched, t.name, item.id);
             for (const id of done.reminders) addTouched(touched, 'reminder', id);
           } else {

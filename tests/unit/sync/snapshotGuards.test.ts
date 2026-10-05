@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createManualClock } from '../../../src/domain/clock';
 import type { DeviceId, HexColor, ProjectId, SpaceId } from '../../../src/domain/types';
 import { openTestDb } from '../../../src/db/repositories/sql/testSetup';
-import { PRO, createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
+import { PRO, createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
 
 /**
  * Instantanés (ADR 0011 sections 4.4, 5.4, 5.5 ; Y-09 critères 7 et 10 ; revue Y2 points 10 et 11) : contrôle de dérive et réception
@@ -86,8 +86,8 @@ describe('instantané : horloge (revue Y2, point 10)', () => {
   });
 });
 
-describe('instantané : trace d’une ligne qui a encore des enfants (revue Y2, point 11)', () => {
-  it('projet purgé chez A, tâche créée dessous par B hors ligne : la reprise de B écarte la trace, le cycle aboutit, rien n’est perdu', async () => {
+describe('instantané : trace d’un parent qui a encore des enfants (revue Y2, point 11 ; décision (c))', () => {
+  it('projet purgé chez A, tâche créée dessous par B hors ligne : B la rattache à « Sans projet » et la republie entière, convergence', async () => {
     const a = await createSimDevice(A_ID, { name: 'PC' });
     const b = await createSimDevice(B_ID, { name: 'iPhone', clock: createManualClock(a.clock.nowMs()) });
     devices = [a, b];
@@ -118,10 +118,21 @@ describe('instantané : trace d’une ligne qui a encore des enfants (revue Y2, 
     b.clock.advance(208 * DAY);
     syncFolders(devices);
     expect((await b.cycle()).phase).toBe('idle');
-    expect(b.logger.entries.some((e) => e.event === 'purge-skipped')).toBe(true);
-    expect((await b.task(offline.id))?.title).toBe('Hors ligne dans le projet');
-    expect(await b.data.repos.projects.getById(projectId, { includeDeleted: true })).not.toBeNull();
-    // Le cycle suivant n'échoue pas non plus (plus de boucle d'échecs).
+    // Décision (c) : la tâche vivante passe à « Sans projet » du même espace, le projet est purgé chez B aussi, rien n'est perdu.
+    expect(b.logger.entries.some((e) => e.event === 'children-reattached')).toBe(true);
+    const onB = await b.task(offline.id);
+    expect(onB?.title).toBe('Hors ligne dans le projet');
+    expect(onB?.projectId).toBeNull();
+    expect(onB?.spaceId).toBe(PRO);
+    expect(await b.data.repos.projects.getById(projectId, { includeDeleted: true })).toBeNull();
+    // Le cycle suivant n'échoue pas (plus de boucle d'échecs) et publie la tâche entière ; A la reçoit sous « Sans projet ».
     expect((await b.cycle()).phase).toBe('idle');
+    syncFolders(devices);
+    await a.cycle();
+    await b.cycle();
+    const onA = await a.task(offline.id);
+    expect(onA?.title).toBe('Hors ligne dans le projet');
+    expect(onA?.projectId).toBeNull();
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
   });
 });

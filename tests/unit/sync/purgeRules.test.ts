@@ -4,11 +4,14 @@ import { createManualClock } from '../../../src/domain/clock';
 import type { NewTask } from '../../../src/domain/model';
 import { PAGE_ROWS, type DeviceAck, type EpochId } from '../../../src/domain/sync/format';
 import { UNBOUNDED } from '../../../src/domain/sync/retention';
-import type { DeviceId, Hlc, LocalDate, LocalDateTime, ReminderId, SpaceId, TaskId } from '../../../src/domain/types';
+import type { DeviceId, Hlc, IsoDateTime, LocalDate, LocalDateTime, ReminderId, SpaceId, TaskId } from '../../../src/domain/types';
 import { createAppContainer } from '../../../src/features/app/container';
 import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
 import { createMemorySyncLogger } from '../../../src/sync/log';
 import { purgeDeleted } from '../../../src/sync/maintenance';
+import { guarded } from '../../../src/sync/guarded';
+import { purgeRows } from '../../../src/sync/purge';
+import { syncTable, type SyncTable } from '../../../src/domain/sync/syncTables';
 import { STATE_FILE } from '../../../src/domain/sync/format';
 import { hydrate, propagate } from '../../sim/syncCloudSim';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
@@ -194,5 +197,30 @@ describe('purge au démarrage : rien tant qu’un appareil a des écritures publ
     hydrate(a.folder, READER);
     await a.cycle();
     expect((await a.task(t.id))?.deletedAt).toBeNull();
+  });
+});
+
+describe('purge commune : enfants (revue Y2, point 11 ; décision (c))', () => {
+  it('routine avec un journal (lien obligatoire) : écartée et journalisée ; projet avec une tâche vivante : tâche rattachée à « Sans projet », projet purgé', async () => {
+    db = await openTestDb(SELF, '2026-10-05T08:00:00.000Z');
+    const at = '2026-10-05T08:00:00.000Z';
+    const h = `001791187200000-0000-${SELF}`;
+    await db.driver.execute("INSERT INTO routine (id, space_id, title, schedule_type, start_date, created_at, updated_at, device_id, hlc) VALUES ('r1', ?, 'Lire', 'daily', '2026-10-01', ?, ?, ?, ?)", [PRO, at, at, SELF, h]);
+    await db.driver.execute("INSERT INTO routine_log (id, routine_id, date, done_at, created_at, updated_at, device_id, hlc) VALUES ('l1', 'r1', '2026-10-03', ?, ?, ?, ?, ?)", [at, at, at, SELF, h]);
+    await db.driver.execute("INSERT INTO project (id, space_id, name, color, sort_order, created_at, updated_at, device_id, hlc) VALUES ('p1', ?, 'P', '#123456', 1, ?, ?, ?, ?)", [PRO, at, at, SELF, h]);
+    const [task] = await db.data.repos.tasks.createMany([{ ...newTask(1), projectId: 'p1' as never }]);
+    const logger = createMemorySyncLogger();
+    const moved: string[] = [];
+    await guarded(db.data, async (repos) => {
+      const routine = await purgeRows(repos, syncTable('routine') as SyncTable, [{ id: 'r1', deletedHlc: h as Hlc }], at as IsoDateTime, logger, { reattach: (_, ids) => moved.push(...ids) });
+      expect(routine.purged).toEqual([]);
+      const project = await purgeRows(repos, syncTable('project') as SyncTable, [{ id: 'p1', deletedHlc: h as Hlc }], at as IsoDateTime, logger, { reattach: (_, ids) => moved.push(...ids) });
+      expect(project.purged.map((p) => p.id)).toEqual(['p1']);
+    });
+    expect(logger.entries.find((e) => e.event === 'purge-skipped')?.detail).toEqual({ table: 'routine', reason: 'live-children', count: 1 });
+    expect(moved).toEqual([(task as { id: string }).id]);
+    expect((await db.data.repos.tasks.getById((task as { id: TaskId }).id))?.projectId).toBeNull();
+    expect(await db.driver.select("SELECT field FROM sync_outbox WHERE row_id = ? AND field = '+'", [(task as { id: string }).id])).toEqual([{ field: '+' }]);
+    expect(await db.driver.select("SELECT field FROM sync_field_clock WHERE row_id = ? ORDER BY field", [(task as { id: string }).id])).toEqual([{ field: '*' }, { field: 'project_id' }]);
   });
 });

@@ -193,6 +193,12 @@ export interface SyncRepository {
   deletedRows(table: SyncTable, before: IsoDateTime, limit: number, afterId?: string | null): Promise<DeletedRow[]>;
   /** Y-09 : identifiants, parmi ceux donnés, qui ont encore au moins une ligne enfant (clés du catalogue) : jamais purgés. */
   withChildren(table: SyncTable, ids: readonly string[]): Promise<Set<string>>;
+  /**
+   * Y-09 (décision (c), question ouverte 10 de l'ADR 0011) : les lignes enfants **vivantes** de `table` dont `column` (colonne nullable)
+   * vise un des parents donnés perdent ce lien (`NULL`, « Sans projet ») par une écriture locale tamponnée, et sont mises dans la file
+   * en ligne entière (`'+'`). À appeler sous garde ; renvoie les identifiants rattachés.
+   */
+  detachLiveChildren(table: SyncTable, column: string, parentIds: readonly string[]): Promise<string[]>;
   /** Y-09 (T-08) : rappels qui visent les lignes données (`target_type`, `target_id`), avec leur hlc ; purgés avec elles. */
   targetReminders(targetType: string, targetIds: readonly string[]): Promise<{ readonly id: string; readonly targetId: string; readonly hlc: Hlc }[]>;
   /** Plus grand hlc présent (tables publiées), pour l'horloge locale. */
