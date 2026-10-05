@@ -69,7 +69,7 @@ describe('Lecture par blocs pour l’export (SQL, H-03)', () => {
     expect(titles).toHaveLength(5000);
     expect(new Set(titles).size).toBe(5000);
     expect(pages).toBe(10);
-  });
+  }, 15_000); // ordre 4 : chaque insertion passe aussi par les déclencheurs de capture de la synchro (~15 % de plus)
 
   it('filtre d’espace et de projet (ES-08), période d’un mois', async () => {
     await task('pro', '2026-09-10');

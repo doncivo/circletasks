@@ -129,6 +129,16 @@ describe('application (Y-02 critère 6)', () => {
     ]);
   });
 
+  it('ligne créée puis modifiée avant publication (une opération par horloge de champ) : recomposée, même en lots séparés', async () => {
+    const full = taskOp(T1, h(1));
+    const first = { ...full, f: new Map([...full.f].filter(([name]) => name !== 'title' && name !== 'deleted_at')) };
+    await apply(db.data, [first]);
+    expect(await db.driver.select('SELECT id FROM task')).toEqual([]);
+    await apply(db.data, [op('task', T1, { title: ['Titre', h(2), null] }), op('task', T1, { deleted_at: [null, h(3), null] })]);
+    expect(await db.driver.select('SELECT title, hlc FROM task')).toEqual([{ title: 'Titre', hlc: h(3) }]);
+    expect(await db.driver.select('SELECT * FROM sync_parked')).toEqual([]);
+  });
+
   it('sync_guard vide après chaque transaction, y compris en échec', async () => {
     await expect(guarded(db.data, async () => Promise.reject(new Error('échec')))).rejects.toThrow('échec');
     expect(await db.driver.select('SELECT * FROM sync_guard')).toEqual([]);

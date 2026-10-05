@@ -185,6 +185,24 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     }
 
     if (!row.exists) {
+      // Une ligne créée puis modifiée avant sa publication part en plusieurs opérations (une par horloge de champ) : la création n'est
+      // complète qu'avec toutes. Les parties déjà mises de côté pour cette ligne sont recomposées (plus grand hlc par champ).
+      let combined: number[] = [];
+      if (!t.columns.every((col) => fields.has(col.name))) {
+        const prior = await sync.parkedForRow('missing-row', t.name, op.id);
+        const union = new Map(fields);
+        for (const parked of prior) {
+          const raw = JSON.parse(parked.op) as { f: Record<string, SyncField> };
+          for (const [name, field] of Object.entries(raw.f)) {
+            const current = union.get(name);
+            if (syncColumn(t.name, name) && (!current || field[1] > current[1])) union.set(name, field);
+          }
+        }
+        if (t.columns.every((col) => union.has(col.name))) {
+          fields = union;
+          combined = prior.map((p) => p.id);
+        }
+      }
       const full = t.columns.every((col) => fields.has(col.name));
       const values = new Map([...fields].map(([name, field]) => [name, field[0]]));
       const parents = full ? await parentsPresent(t, values) : 'ok';
@@ -204,6 +222,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       await sync.insertRow(t, op.id, values, { hlc: rowHlc, updatedAt: op.at, deviceId: hlcDevice(rowHlc) });
       const clocks = [...fields].filter(([, f]) => f[1] !== rowHlc || f[2] !== null).map(([name, f]) => ({ field: name, hlc: f[1], base: f[2] }));
       if (clocks.length > 0) await sync.writeClocks(t, op.id, clocks);
+      if (combined.length > 0) await sync.removeParked(combined);
       row.exists = true;
       row.values = values;
       row.hlc = rowHlc;

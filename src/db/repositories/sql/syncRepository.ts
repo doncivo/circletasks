@@ -414,6 +414,10 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
       const rows = await db.select(`SELECT id, reason, table_name, row_id, hlc, op FROM sync_parked WHERE reason IN (${marks(reasons.length)}) AND id > ? ORDER BY id LIMIT ?`, [...reasons, afterId, limit]);
       return rows.map((r): ParkedOp => ({ id: Number(r['id']), reason: r['reason'] as ParkReason, table: String(r['table_name']), rowId: String(r['row_id']), hlc: r['hlc'] as Hlc, op: String(r['op']) }));
     },
+    async parkedForRow(reason, table, rowId) {
+      const rows = await db.select('SELECT id, reason, table_name, row_id, hlc, op FROM sync_parked WHERE reason = ? AND table_name = ? AND row_id = ? ORDER BY id', [reason, table, rowId]);
+      return rows.map((r): ParkedOp => ({ id: Number(r['id']), reason: r['reason'] as ParkReason, table: String(r['table_name']), rowId: String(r['row_id']), hlc: r['hlc'] as Hlc, op: String(r['op']) }));
+    },
     async removeParked(ids) {
       for (const part of chunks(ids)) await db.execute(`DELETE FROM sync_parked WHERE id IN (${marks(part.length)})`, part);
     },

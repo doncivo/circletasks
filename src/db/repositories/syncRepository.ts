@@ -216,6 +216,8 @@ export interface SyncRepository {
   // --- opérations mises de côté ---------------------------------------------------------------------------------------------------
   park(reason: ParkReason, table: string, rowId: string, hlc: Hlc, op: string, at: IsoDateTime): Promise<void>;
   parked(reasons: readonly ParkReason[], afterId: number, limit: number): Promise<ParkedOp[]>;
+  /** Opérations mises de côté pour une ligne (recomposition d'une ligne publiée en plusieurs opérations). */
+  parkedForRow(reason: ParkReason, table: string, rowId: string): Promise<ParkedOp[]>;
   removeParked(ids: readonly number[]): Promise<void>;
   parkedCount(reasons: readonly ParkReason[]): Promise<number>;
 

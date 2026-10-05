@@ -11,11 +11,13 @@ import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '
  */
 
 const IDS = ['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'] as const;
+const TASKS_DYNAMIC: TaskId[] = [];
 const TASKS = ['10000000-0000-4000-8000-000000000001', '10000000-0000-4000-8000-000000000002'] as TaskId[];
 
 type Step =
   | { readonly kind: 'title' | 'note'; readonly device: 0 | 1; readonly task: 0 | 1; readonly value: string }
   | { readonly kind: 'delete' | 'restore'; readonly device: 0 | 1; readonly task: 0 | 1 }
+  | { readonly kind: 'create'; readonly device: 0 | 1; readonly value: string }
   | { readonly kind: 'cycle'; readonly device: 0 | 1 }
   | { readonly kind: 'propagate'; readonly from: 0 | 1 }
   | { readonly kind: 'tick'; readonly ms: number };
@@ -25,6 +27,7 @@ const stepArb: fc.Arbitrary<Step> = fc.oneof(
   fc.record({ kind: fc.constantFrom<'title' | 'note'>('title', 'note'), device: dev, task: dev, value: fc.string({ minLength: 1, maxLength: 3 }) }),
   fc.record({ kind: fc.constantFrom<'delete' | 'restore'>('delete', 'restore'), device: dev, task: dev }),
   fc.record({ kind: fc.constant<'cycle'>('cycle'), device: dev }),
+  fc.record({ kind: fc.constant<'create'>('create'), device: dev, value: fc.string({ minLength: 1, maxLength: 3 }) }),
   fc.record({ kind: fc.constant<'propagate'>('propagate'), from: dev }),
   fc.record({ kind: fc.constant<'tick'>('tick'), ms: fc.integer({ min: 1, max: 5_000 }) }),
 );
@@ -45,6 +48,7 @@ describe('propriétés du moteur à deux appareils (fast-check)', () => {
         const a = await createSimDevice(IDS[0]);
         const b = await createSimDevice(IDS[1], { clock: a.clock });
         const devices = [a, b];
+        TASKS_DYNAMIC.length = 0;
         try {
           await setupFirst(a);
           for (const id of TASKS) await a.createTask('Initiale', { id });
@@ -55,17 +59,28 @@ describe('propriétés du moteur à deux appareils (fast-check)', () => {
           await a.cycle();
           // Toutes les écritures, avec leur hlc de champ : la valeur finale doit être celle du plus grand.
           const writes: { task: TaskId; field: string; value: unknown; hlc: string }[] = [];
+          const all = [...TASKS];
+          let created = 0;
           for (const step of steps) {
             if (step.kind === 'tick') {
               a.clock.advance(step.ms);
             } else if (step.kind === 'cycle') {
               await devices[step.device]?.cycle();
+            } else if (step.kind === 'create') {
+              // Création hors ligne puis éventuelles modifications avant publication (ligne publiée en plusieurs opérations).
+              const d = devices[step.device] as SimDevice;
+              created += 1;
+              const id = `20000000-0000-4000-8000-${String(created).padStart(12, '0')}` as TaskId;
+              await d.createTask(step.value, { id });
+              all.push(id);
+              TASKS_DYNAMIC.push(id);
             } else if (step.kind === 'propagate') {
               const from = devices[step.from] as SimDevice;
               propagate(from.folder, (devices[1 - step.from] as SimDevice).folder, from.id);
             } else {
               const d = devices[step.device] as SimDevice;
-              const task = TASKS[step.task] as TaskId;
+              const pool = [...TASKS, ...TASKS_DYNAMIC];
+              const task = pool[(step.task + TASKS_DYNAMIC.length) % pool.length] as TaskId;
               const current = await d.task(task);
               if (!current) continue;
               if (step.kind === 'title' || step.kind === 'note') {
@@ -88,7 +103,7 @@ describe('propriétés du moteur à deux appareils (fast-check)', () => {
           }
           await a.cycle();
           await b.cycle();
-          for (const task of TASKS) {
+          for (const task of all) {
             for (const field of ['title', 'note', 'deleted_at']) {
               const onA = await fieldState(a, task, field);
               const onB = await fieldState(b, task, field);
@@ -104,7 +119,7 @@ describe('propriétés du moteur à deux appareils (fast-check)', () => {
           await Promise.all(devices.map((d) => d.close()));
         }
       }),
-      { numRuns: 12 },
+      { numRuns: 15 },
     );
   }, 300_000);
 });
