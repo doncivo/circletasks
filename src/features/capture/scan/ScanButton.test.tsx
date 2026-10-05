@@ -32,7 +32,7 @@ describe('« Scan tâches » : disponibilité du moteur (Q-04 critère 1)', () =
 
   it('Q-04 critère 1 : visible avec le seul repli intégré', async () => {
     mocks.service = svc(false, true);
-    render(<ScanButton layout="phone" />);
+    render(<ScanButton layout="mobile" />);
     expect(await screen.findByRole('button', { name: 'Scan tâches' })).toBeInTheDocument();
   });
 
