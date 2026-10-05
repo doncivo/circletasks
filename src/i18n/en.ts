@@ -26,6 +26,7 @@ export const en: Messages = {
     dbError: 'Unable to open the database.',
     screenError: 'Unable to display this screen.',
     screenRetry: 'Retry',
+    screenReload: 'Reload',
     dbBackupError: 'Data update interrupted: the safety backup failed. Your data was not modified. Free some disk space, then restart CircleTasks.',
     version: 'Version {version}',
   },

@@ -1,6 +1,6 @@
 import { Component, createElement, lazy, Suspense, useState, type ComponentType, type ErrorInfo, type ReactElement, type ReactNode } from 'react';
 import { t } from '../../i18n';
-import { logDesktopFailure } from '../../platform';
+import { logFailure } from '../../platform';
 import { Button } from '../../ui';
 import { whenIdle } from './idle';
 import './lazyScreens.css';
@@ -20,8 +20,11 @@ function Fallback(): ReactElement {
   return <div className="ct-app__placeholder" aria-hidden="true" />;
 }
 
-/** Frontière d'erreur d'un écran : bloc illisible -> message et « Réessayer » (le parent recrée le composant paresseux). */
-class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; readonly children: ReactNode }, { readonly failed: boolean }> {
+/**
+ * Frontière d'erreur d'un écran : bloc illisible -> message et « Réessayer » (le parent recrée le composant paresseux). Après un
+ * nouvel échec, « Recharger » relance la page : sur WebKit, un second `import()` du même fichier peut renvoyer le même rejet.
+ */
+class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; readonly reload: boolean; readonly children: ReactNode }, { readonly failed: boolean }> {
   override state = { failed: false };
 
   static getDerivedStateFromError(): { failed: boolean } {
@@ -29,7 +32,7 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
   }
 
   override componentDidCatch(error: Error, _info: ErrorInfo): void {
-    logDesktopFailure('screen-load', error);
+    logFailure('screen-load', error);
   }
 
   override render(): ReactNode {
@@ -37,8 +40,8 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
     return (
       <div className="ct-app__screen-error" role="alert">
         <p>{t('app.screenError')}</p>
-        <Button variant="secondary" onClick={this.props.onRetry}>
-          {t('app.screenRetry')}
+        <Button variant="secondary" onClick={this.props.reload ? () => window.location.reload() : this.props.onRetry}>
+          {this.props.reload ? t('app.screenReload') : t('app.screenRetry')}
         </Button>
       </div>
     );
@@ -48,30 +51,34 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
 /**
  * Chaque écran porte sa propre frontière Suspense et d'erreur : un écran voisin déjà affiché (Aujourd'hui à côté d'Un jour) ne se
  * masque pas. Module déjà arrivé (préchargement ou affichage précédent) : rendu direct à la création de l'instance, sans repli ni
- * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état).
+ * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état). Le composant paresseux est
+ * propre à chaque instance : un « Réessayer » n'en touche aucune autre.
  */
 export function lazyScreen<P extends object>(load: Loader<P>): ComponentType<P> {
   let loaded: ComponentType<P> | null = null;
   const remember = (): Promise<{ default: ComponentType<P> }> =>
-    load().then((module) => {
-      loaded = module.default;
-      return module;
-    });
+    loaded
+      ? Promise.resolve({ default: loaded })
+      : load().then((module) => {
+          loaded = module.default;
+          return module;
+        });
   loaders.push(remember);
-  let Lazy = lazy<ComponentType<P>>(remember);
   return function LazyScreen(props: P): ReactElement {
     const [direct] = useState(() => loaded);
+    const [Lazy, setLazy] = useState(() => lazy<ComponentType<P>>(remember));
     const [attempt, setAttempt] = useState(0);
-    if (direct) return createElement(direct, props);
+    const body = direct ? createElement(direct, props) : <Suspense fallback={<Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
     return (
       <ScreenErrorBoundary
         key={attempt}
+        reload={attempt >= 1}
         onRetry={() => {
-          Lazy = lazy<ComponentType<P>>(remember);
+          if (!loaded) setLazy(() => lazy<ComponentType<P>>(remember));
           setAttempt((n) => n + 1);
         }}
       >
-        <Suspense fallback={<Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>
+        {body}
       </ScreenErrorBoundary>
     );
   };
@@ -105,7 +112,7 @@ export function preloadScreens(): () => void {
     const load = loaders[index];
     index += 1;
     if (!load) return;
-    void load().catch((error: unknown) => logDesktopFailure('screen-preload', error));
+    void load().catch((error: unknown) => logFailure('screen-preload', error));
     cancel = whenIdle(step, 200);
   };
   cancel = whenIdle(step, 200);

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { lazyScreen, preloadScreens } from './lazyScreens';
 
@@ -55,6 +55,58 @@ describe('écran chargé à la demande', () => {
     expect(await screen.findByText('Contenu de l’écran')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(calls).toBe(2);
+  });
+});
+
+describe('écran chargé à la demande : instances et échecs répétés', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('deux instances : « Réessayer » sur l’une ne touche pas l’autre', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let calls = 0;
+    const Lazy = lazyScreen<object>(() => (++calls <= 2 ? Promise.reject(new Error('bloc illisible')) : Promise.resolve({ default: Content })));
+    render(
+      <>
+        <section aria-label={'a'}>
+          <Lazy />
+        </section>
+        <section aria-label={'b'}>
+          <Lazy />
+        </section>
+      </>,
+    );
+    await waitFor(() => expect(screen.getAllByRole('alert')).toHaveLength(2));
+    fireEvent.click(within(screen.getByLabelText('a')).getByRole('button', { name: 'Réessayer' }));
+    expect(await within(screen.getByLabelText('a')).findByText('Contenu de l’écran')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('b')).getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('après un second échec, « Recharger » remplace « Réessayer »', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const Lazy = lazyScreen<object>(() => Promise.reject(new Error('même rejet')));
+    render(<Lazy />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByRole('button', { name: 'Recharger' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
+  });
+
+  it('écran déjà chargé (rendu direct) : une erreur de rendu passe aussi par la frontière', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    let broken = false;
+    function Fragile() {
+      if (broken) throw new Error('rendu cassé');
+      return <p>{'Contenu de l’écran'}</p>;
+    }
+    const Lazy = lazyScreen<object>(() => Promise.resolve({ default: Fragile }));
+    const first = render(<Lazy />);
+    await screen.findByText('Contenu de l’écran');
+    first.unmount();
+    broken = true;
+    render(<Lazy />);
+    expect(screen.getByRole('alert')).toHaveTextContent('Impossible d’afficher cet écran.');
   });
 });
 

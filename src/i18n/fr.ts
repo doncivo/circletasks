@@ -29,6 +29,7 @@ export const fr = {
     dbError: 'Impossible d’ouvrir la base de données.',
     screenError: 'Impossible d’afficher cet écran.',
     screenRetry: 'Réessayer',
+    screenReload: 'Recharger',
     dbBackupError: 'Mise à jour des données interrompue : la sauvegarde de sécurité a échoué. Vos données n’ont pas été modifiées. Libérez de l’espace disque puis relancez CircleTasks.',
     version: 'Version {version}',
   },
