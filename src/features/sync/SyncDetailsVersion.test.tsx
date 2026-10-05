@@ -13,6 +13,8 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
+import { SyncSettingsSection } from './SyncSettingsSection';
+import { createMemorySyncPlatform } from '../../platform/sync/memory';
 import { startSyncIntegration } from './startSync';
 import { formatSyncTime } from './syncText';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -270,5 +272,35 @@ describe('échec de réintégration visible (exigence d’Ali, 2026-10-05)', () 
     expect(root.innerHTML).toBe('');
     expect(banner()).toBeUndefined();
     integration.dispose();
+  });
+});
+
+describe('synchro non configurée avec un échec enregistré (revue 2, point 4)', () => {
+  const failure = { fields: 2, tables: [], at: '2026-10-05T07:30:00.000Z' as IsoDateTime, errors: ['DbError'] };
+
+  it('Réglages : la section SYNCHRONISATION « Non configurée » montre quand même la ligne d’échec ; la ligne d’état aussi', async () => {
+    sync.setStatus({ phase: 'not-configured', devices: [], reintegrationFailure: failure });
+    renderIn(<SyncSettingsSection platform={createMemorySyncPlatform()} />);
+    expect(await screen.findByText('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés')).toBeTruthy();
+    expect(screen.getByText('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés').getAttribute('role')).toBe('status');
+    cleanup();
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByRole('status').textContent).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
+  });
+
+  it('bandeau : l’échec reste signalé sans synchro configurée ; un appareil plus récent, non', () => {
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined });
+    sync.setStatus({ phase: 'not-configured', devices: [self, iphone({ newer: 'schema' })], reintegrationFailure: null });
+    expect(banner()).toBeUndefined();
+    sync.setStatus({ phase: 'not-configured', reintegrationFailure: failure });
+    expect(banner()).toEqual({ detail: 'reintegration' });
+    integration.dispose();
+  });
+
+  it('sans échec, la section non configurée ne montre rien de plus', async () => {
+    sync.setStatus({ phase: 'not-configured', devices: [], reintegrationFailure: null });
+    renderIn(<SyncSettingsSection platform={createMemorySyncPlatform()} />);
+    expect(await screen.findByTestId('sync-folder-state')).toBeTruthy();
+    expect(screen.queryByText(/n’ont pas pu être intégrés|n’a pas pu être intégré/)).toBeNull();
   });
 });

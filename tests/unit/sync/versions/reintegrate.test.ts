@@ -254,18 +254,23 @@ describe('réintégration (Y-07 critère 6)', () => {
       await createTask(id);
       await keep('task', id, TEST_COLUMN, i === 1 ? 'interdite' : `v${String(i)}`, h(3_600_000 + i));
     }
+    // Revue 2, point 3 : un champ encore inconnu de la même ligne n'est pas compté dans « N éléments » (il n'est pas réintégrable).
+    await keep('task', ids[1], 'y', 'encore inconnu', h(3_600_000));
     await db.driver.execute(`CREATE TRIGGER test_refuse_x BEFORE UPDATE OF ${TEST_COLUMN} ON task WHEN NEW.${TEST_COLUMN} = 'interdite' BEGIN SELECT RAISE(ABORT, 'interdite'); END`);
     const errors: string[] = [];
     for (const pageSize of [1, 200]) {
       errors.length = 0;
       const report = await reintegrateUnknownFields(db.driver, { now: NOW, catalogue, pageSize, onRowError: (name) => errors.push(name) });
-      expect(report.remaining, `page de ${String(pageSize)}`).toBe(1);
+      expect(report.remaining, `page de ${String(pageSize)}`).toBe(2);
       expect(errors).toHaveLength(1);
       expect(errors[0]).not.toContain('interdite');
     }
     expect(await db.driver.select('SELECT * FROM sync_guard')).toEqual([]);
     expect((await db.driver.select<{ x: string | null }>(`SELECT ${TEST_COLUMN} AS x FROM task ORDER BY id`)).map((r) => r.x)).toEqual(['v0', null, 'v2']);
-    expect(await unknownRows()).toEqual([{ table_name: 'task', row_id: ids[1], field: TEST_COLUMN }]);
+    expect(await unknownRows()).toEqual([
+      { table_name: 'task', row_id: ids[1], field: TEST_COLUMN },
+      { table_name: 'task', row_id: ids[1], field: 'y' },
+    ]);
     // La ligne en échec ne laisse rien d'écrit à moitié (horloge, file).
     expect(await clockOf(ids[1], TEST_COLUMN)).toBeNull();
     expect(await db.driver.select('SELECT * FROM sync_outbox WHERE field = ?', [TEST_COLUMN])).toEqual([]);
@@ -273,7 +278,7 @@ describe('réintégration (Y-07 critère 6)', () => {
     expect(parseReintegrationFailure(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META))).toEqual({ fields: 1, tables: ['task'], at: NOW, errors: ['DbError'] });
     expect(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)).not.toContain('interdite');
     await db.driver.execute('DROP TRIGGER test_refuse_x');
-    expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
+    expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 1 });
     // Réussite au démarrage suivant : l'échec est effacé.
     expect(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)).toBeNull();
   });

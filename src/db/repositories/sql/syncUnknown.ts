@@ -104,7 +104,29 @@ async function reintegrateRow(tx: SqlExecutor, catalogue: UnknownCatalogue, t: S
   return { reintegrated: decision.reintegrated, superseded: decision.superseded };
 }
 
+const saveFailure = (db: SqlExecutor, failure: ReintegrationFailure): Promise<unknown> =>
+  db.execute('INSERT INTO sync_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [REINTEGRATION_FAILURE_META, JSON.stringify(failure)]);
+
+/**
+ * Échec global (transaction refusée, disque plein, lecture impossible…) : l'échec est enregistré **au mieux** pour rester visible dans
+ * l'app (exigence d'Ali), avec toutes les lignes gardées comptées (on ne sait pas lesquelles étaient réintégrables) ; puis l'erreur repart
+ * (bootstrap.ts la journalise, l'app démarre). Si l'enregistrement échoue aussi, il est abandonné sans masquer l'erreur d'origine.
+ */
 export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, options) => {
+  try {
+    return await reintegrateAll(db, options);
+  } catch (error) {
+    try {
+      const n = Number((await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM sync_unknown'))[0]?.n ?? 0);
+      await saveFailure(db, { fields: Math.max(1, n), tables: [], at: options.now, errors: [error instanceof Error ? error.name : 'Error'] });
+    } catch {
+      // Enregistrement impossible : l'erreur d'origine est remontée telle quelle.
+    }
+    throw error;
+  }
+};
+
+const reintegrateAll: ReintegrateUnknownFields = async (db, options) => {
   const catalogue = options.catalogue ?? DEFAULT_CATALOGUE;
   const pageSize = Math.max(1, options.pageSize ?? 200);
   let reintegrated = 0;
@@ -156,7 +178,9 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
               failed.add(key);
               const name = error instanceof Error ? error.name : 'Error';
               errorNames.add(name);
-              const n = Number((await tx.select<{ n: number }>('SELECT COUNT(*) AS n FROM sync_unknown WHERE table_name = ? AND row_id = ?', [tableName, rowId]))[0]?.n ?? 0);
+              // « N éléments » : seuls les champs réintégrables de la ligne (un champ encore inconnu attend normalement, il n'est pas en échec).
+              const stored = await tx.select<StoredUnknown & Record<string, SqlValue>>('SELECT field, value, hlc, base_hlc FROM sync_unknown WHERE table_name = ? AND row_id = ?', [tableName, rowId]);
+              const n = keptFieldsOf(t, (name) => catalogue.column(t.name, name), stored).length;
               failedFields.set(t.name, (failedFields.get(t.name) ?? 0) + n);
               options.onRowError?.(name);
             }
@@ -174,7 +198,7 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
   // État d'échec gardé pour l'affichage (survit au redémarrage) ; effacé dès qu'un démarrage n'a plus d'échec.
   const fields = [...failedFields.values()].reduce((a, b) => a + b, 0);
   const failure: ReintegrationFailure | null = failed.size > 0 ? { fields: Math.max(1, fields), tables: [...failedFields.keys()].sort(), at: options.now, errors: [...errorNames].sort() } : null;
-  if (failure) await db.execute('INSERT INTO sync_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [REINTEGRATION_FAILURE_META, JSON.stringify(failure)]);
+  if (failure) await saveFailure(db, failure);
   else await db.execute('DELETE FROM sync_meta WHERE key = ?', [REINTEGRATION_FAILURE_META]);
   const remaining = Number((await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM sync_unknown'))[0]?.n ?? 0);
   return { reintegrated, superseded, remaining };

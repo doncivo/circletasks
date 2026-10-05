@@ -9,6 +9,10 @@ import { createUnavailableFiles } from '../../../../src/platform/files';
 import { useAppStore } from '../../../../src/features/app/appStore';
 import { bootstrapApp, reintegrateAfterMigration } from '../../../../src/features/app/bootstrap';
 import type { Hlc } from '../../../../src/domain/types';
+import { DbError } from '../../../../src/db/driver';
+import { createMemorySyncPlatform } from '../../../../src/platform/sync/memory';
+import { parseReintegrationFailure, REINTEGRATION_FAILURE_META } from '../../../../src/domain/sync/compat';
+import { isTroublePhase, statusLine } from '../../../../src/features/sync/syncText';
 
 /**
  * Crochet de fin du migrateur et démarrage (Y-07 critère 6, D3) : `afterApply` appelé à chaque `migrate()`, même sans migration en
@@ -105,6 +109,49 @@ describe('démarrage (bootstrap.ts, Y-07 critère 6)', () => {
     expect(await db.select('SELECT * FROM sync_guard')).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(String(warn.mock.calls[0]?.[0])).not.toContain('Titre de la version suivante');
+  });
+
+  it('revue 2, point 1 : échec global (transaction refusée) : reintegrationFailure enregistré, affiché dans Réglages (synchro non configurée), l’app démarre', async () => {
+    const db = await seededDb();
+    // Deux champs gardés, dont un encore inconnu : un échec global ne sait pas lesquels sont réintégrables, il compte toutes les lignes.
+    await db.execute("INSERT INTO sync_unknown (table_name, row_id, field, value, hlc, base_hlc, sv) VALUES ('task', ?, 'futur', '1', ?, NULL, 99)", [T1, h(60_000)]);
+    let fail = true;
+    const failing: SqlDriver = {
+      ...db,
+      execute: (sql, params) => db.execute(sql, params),
+      select: (sql, params) => db.select(sql, params),
+      transaction: (fn) => (fail ? Promise.reject(new DbError('busy', 'base occupée')) : db.transaction(fn)),
+      close: () => db.close(),
+    };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const container = await bootstrapApp({ ...common, open: () => Promise.resolve(failing), syncPlatform: createMemorySyncPlatform() });
+    fail = false;
+    expect(container).toBeDefined();
+    expect(useAppStore.getState().dbStatus).toBe('ready');
+    const failure = parseReintegrationFailure(await db.select<{ value: string }>('SELECT value FROM sync_meta WHERE key = ?', [REINTEGRATION_FAILURE_META]).then((r) => r[0]?.value ?? null));
+    expect(failure).toMatchObject({ fields: 2, tables: [], errors: ['DbError'] });
+    expect(warn).toHaveBeenCalled();
+    // Synchro non configurée (revue 2, point 4) : la ligne de Réglages montre quand même l'échec.
+    await container?.sync?.syncNow('manual');
+    const status = container?.sync?.status();
+    expect(status?.phase).toBe('not-configured');
+    expect(status?.reintegrationFailure).toMatchObject({ fields: 2 });
+    expect(status && statusLine(status, Date.now())).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
+    expect(status && isTroublePhase(status)).toBe(true);
+  });
+
+  it('échec global dont l’enregistrement échoue aussi : l’app démarre quand même', async () => {
+    const db = await seededDb();
+    const failing: SqlDriver = {
+      ...db,
+      execute: (sql, params) => (sql.includes('sync_meta') ? Promise.reject(new DbError('busy', 'base occupée')) : db.execute(sql, params)),
+      select: (sql, params) => db.select(sql, params),
+      transaction: () => Promise.reject(new DbError('busy', 'base occupée')),
+      close: () => db.close(),
+    };
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(await reintegrateAfterMigration(failing)).toBeNull();
+    expect(await db.select('SELECT * FROM sync_meta WHERE key = ?', [REINTEGRATION_FAILURE_META])).toEqual([]);
   });
 
   it('reintegrateAfterMigration renvoie le rapport (base vide : rien à faire)', async () => {

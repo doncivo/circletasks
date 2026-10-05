@@ -64,8 +64,11 @@ function errorText(code: string | null | undefined): string {
   }
 }
 
-/** Phases où un échec de réintégration remplace le texte (les erreurs, clés, versions et horloges gardent le leur, plus urgent). */
-const FAILURE_SHOWN_IN: ReadonlySet<SyncStatus['phase']> = new Set(['idle', 'waiting-icloud']);
+/**
+ * Phases où un échec de réintégration remplace le texte (les erreurs, clés, versions et horloges gardent le leur, plus urgent) ; synchro
+ * non configurée comprise (revue 2) : l'échec vient du démarrage, pas de la synchro, il reste à signaler.
+ */
+const FAILURE_SHOWN_IN: ReadonlySet<SyncStatus['phase']> = new Set(['idle', 'waiting-icloud', 'not-configured']);
 
 /** L'échec de réintégration (exigence d'Ali) est-il le texte de la ligne de Réglages ? */
 function failureShown(status: SyncStatus): boolean {

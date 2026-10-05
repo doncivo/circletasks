@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { t, type PlainMessageKey } from '../../i18n';
 import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderInfo, type SyncPlatform } from '../../platform/sync';
 import { Button, ChoiceDialog } from '../../ui';
-import { useAppContainer } from '../app/AppContainerContext';
+import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
 import { SyncStatusLine } from './SyncStatusLine';
-import { folderLabel } from './syncText';
+import { syncStore } from './syncStore';
+import { failureLine, folderLabel } from './syncText';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
@@ -92,6 +93,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
+  // Y-07 (exigence d'Ali, revue 2) : un échec de réintégration reste visible même sans dossier de synchro.
+  const failure = useFeatureStore(syncStore, (s) => s.status.reintegrationFailure ?? null);
 
   useEffect(() => {
     if (!available) return;
@@ -177,6 +180,11 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
             <span className="ct-settings__hint" data-testid="sync-folder-state">
               {t('sync.folder.notConfigured')}
             </span>
+            {failure && (
+              <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-reintegration-failure">
+                {failureLine(failure.fields)}
+              </span>
+            )}
           </span>
           {chooseButton}
         </div>
