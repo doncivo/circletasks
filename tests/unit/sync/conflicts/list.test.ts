@@ -118,3 +118,25 @@ describe('journal (critères 1, 2 et 4)', () => {
     expect(byProject?.blocked).toBe('parent-gone');
   });
 });
+
+describe('page complète après le filtre, lignes illisibles isolées (suggestions de la revue, défauts 2 et 3 de la QA)', () => {
+  it('60 conflits récents de champ masqué devant un conflit visible : la première page montre le conflit visible', async () => {
+    const task = await bench.createTask('Ancien conflit visible');
+    await bench.conflict({ table: 'task', rowId: task.id, field: 'title', kept: 'A', discarded: 'B', keptHlc: otherHlc(1) });
+    for (let i = 0; i < 60; i += 1) await bench.conflict({ table: 'task', rowId: task.id, field: 'sort_order', kept: i, discarded: i + 1, keptHlc: otherHlc(i + 10) });
+    const page = await bench.useCases.list(1);
+    expect(page.items.map((v) => v.column.name)).toEqual(['title']);
+    expect(page.hasMore).toBe(false);
+  });
+
+  it('une ligne au contenu altéré : les autres sont listées, elle est comptée ; « Restaurer » la refuse (valeur invalide)', async () => {
+    const task = await bench.createTask('Lisible');
+    await bench.conflict({ table: 'task', rowId: task.id, field: 'title', kept: 'A', discarded: 'B' });
+    await bench.driver.execute("INSERT INTO conflict_log (table_name, row_id, field, kept_value, discarded_value, detected_at) VALUES ('task', ?, 'note', '{altéré', '\"x\"', ?)", [task.id, '2026-10-05T07:00:00.000Z']);
+    const altered = Number((await bench.select<{ id: number }>('SELECT MAX(id) AS id FROM conflict_log'))[0]?.id);
+    const page = await bench.useCases.list(1);
+    expect(page.items).toHaveLength(1);
+    expect(page.unreadable).toBe(1);
+    expect(await bench.useCases.restore(altered)).toEqual({ status: 'refused', reason: 'invalid' });
+  });
+});

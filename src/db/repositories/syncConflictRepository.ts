@@ -1,3 +1,4 @@
+import type { ConflictRowState } from '../../domain/sync/conflictRestore';
 import type { SyncValue } from '../../domain/sync/format';
 import type { SyncColumn, SyncTable } from '../../domain/sync/syncTables';
 import type { Hlc, IsoDateTime } from '../../domain/types';
@@ -12,8 +13,14 @@ import type { StoredConflict } from './syncRepository';
  * (`listConflicts`, `countConflictsSince`) restent celles de `SyncRepository` (Y-02).
  */
 
-/** État d'une ligne visée par un conflit (ou d'un parent visé par une valeur). */
-export type ConflictRowState = 'live' | 'deleted' | 'missing' | 'purged';
+/** État d'une ligne visée par un conflit (ou d'un parent visé par une valeur) : règle du domaine. */
+export type { ConflictRowState };
+
+/** Ligne de `conflict_log` lue pour l'écran : le conflit, ou null si son contenu est illisible (isolée, signalée). */
+export interface ConflictLogEntry {
+  readonly id: number;
+  readonly conflict: StoredConflict | null;
+}
 
 /** Élément à décrire : table du catalogue et identifiant. */
 export interface ConflictTarget {
@@ -35,8 +42,13 @@ export interface ConflictFieldState {
 }
 
 export interface SyncConflictRepository {
-  /** Y-04 : un conflit par son numéro, ou null (purgé par le plafond ou les 12 mois). */
-  getConflict(id: number): Promise<StoredConflict | null>;
+  /** Y-04 : un conflit par son numéro ; null s'il n'existe plus (plafond, 12 mois) ; `'unreadable'` si son contenu est illisible. */
+  getConflict(id: number): Promise<StoredConflict | 'unreadable' | null>;
+  /**
+   * Y-04 : conflits détectés depuis `since`, du plus récent au plus ancien, `limit` au plus. Une ligne illisible (JSON altéré) ne fait
+   * pas échouer la lecture : elle revient sans conflit, pour être signalée (`listConflicts` de Y-02 échoue en bloc).
+   */
+  listLog(since: IsoDateTime, limit: number): Promise<ConflictLogEntry[]>;
   /** Y-04 : titre et état de chaque élément (clé `<table>|<id>`) ; tables et colonnes du catalogue seulement. */
   describe(targets: readonly ConflictTarget[]): Promise<Map<string, ConflictItemInfo>>;
   /** Y-04 : état d'une ligne (vivante, supprimée, absente, purgée : trace dans `sync_tombstone`). */

@@ -3,7 +3,7 @@ import type { SyncValue } from '../../../domain/sync/format';
 import { syncColumn, syncTable, type SyncTable, type SyncTableName } from '../../../domain/sync/syncTables';
 import type { Hlc, IsoDateTime } from '../../../domain/types';
 import type { SqlExecutor, SqlRow } from '../../driver';
-import type { ConflictFieldState, ConflictItemInfo, ConflictRowState, ConflictTarget, SyncConflictRepository } from '../syncConflictRepository';
+import type { ConflictFieldState, ConflictItemInfo, ConflictLogEntry, ConflictRowState, ConflictTarget, SyncConflictRepository } from '../syncConflictRepository';
 import type { StoredConflict } from '../syncRepository';
 
 /**
@@ -75,6 +75,15 @@ function rowToConflict(r: SqlRow): StoredConflict {
   };
 }
 
+/** Conflit d'une ligne, ou null si son contenu est illisible (valeur JSON altérée). */
+function readable(row: SqlRow): StoredConflict | null {
+  try {
+    return rowToConflict(row);
+  } catch {
+    return null;
+  }
+}
+
 export function createSyncConflictRepository(db: SqlExecutor, stamper: WriteStamper): SyncConflictRepository {
   /** Identifiants purgés (traces) parmi ceux donnés. */
   const purged = async (t: SyncTable, ids: readonly string[]): Promise<Set<string>> => {
@@ -123,7 +132,13 @@ export function createSyncConflictRepository(db: SqlExecutor, stamper: WriteStam
   return {
     async getConflict(id) {
       const rows = await db.select('SELECT * FROM conflict_log WHERE id = ?', [id]);
-      return rows[0] ? rowToConflict(rows[0]) : null;
+      if (!rows[0]) return null;
+      return readable(rows[0]) ?? 'unreadable';
+    },
+
+    async listLog(since, limit) {
+      const rows = await db.select('SELECT * FROM conflict_log WHERE detected_at >= ? ORDER BY id DESC LIMIT ?', [since, limit]);
+      return rows.map((row): ConflictLogEntry => ({ id: Number(row['id']), conflict: readable(row) }));
     },
 
     async describe(targets: readonly ConflictTarget[]) {
