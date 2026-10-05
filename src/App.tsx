@@ -14,24 +14,41 @@ import { openCaptureMainBridge } from './platform/capture';
 import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
 import { registerTabShortcuts } from './features/app/tabShortcuts';
+import {
+  AppearanceScreen,
+  CalendarsScreen,
+  ChecklistsScreen,
+  DoneTasksScreen,
+  EventsScreen,
+  GoalsScreen,
+  HolidaySettingsScreen,
+  ImportScreen,
+  preloadScreens,
+  QuietHoursRoute,
+  RecapSettingsScreen,
+  ReportScreen,
+  RoutinesScreen,
+  SettingsScreen,
+  SomedayScreen,
+  SpacesScreen,
+  TabsScreen,
+  TaskDetail,
+  TrashScreen,
+  WeekScreen,
+} from './features/app/lazyScreens';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
 import { startNetworkStatus } from './features/app/appStatus';
-import { CalendarsScreen, registerExternalEventsSource } from './features/calendars';
-import { ChecklistsScreen, registerChecklistsSource } from './features/checklists';
-import { EventEditorHost, EventsScreen, HolidayDetailHost, HolidaySettingsScreen, registerEventsSource } from './features/events';
+import { registerExternalEventsSource } from './features/calendars';
+import { registerChecklistsSource } from './features/checklists';
+import { EventEditorHost, HolidayDetailHost, registerEventsSource } from './features/events';
 import { FocusHost } from './features/focus';
-import { GoalsScreen, registerGoalsSource } from './features/goals';
-import { registerRoutinesSource, RoutinesScreen } from './features/routines';
+import { registerGoalsSource } from './features/goals';
+import { registerRoutinesSource } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { AppearanceScreen, ImportScreen, OnboardingHost, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
+import { OnboardingHost, restoreAppearance, startThemeSync } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
-import { RecapSettingsScreen } from './features/reminders';
-import { SomedayScreen } from './features/someday';
-import { persistSpaceFilter, QuietHoursRoute, registerSpaceShortcuts, restoreSpaceFilter, SpacesScreen } from './features/spaces';
-import { ReportScreen } from './features/stats';
-import { DoneTasksScreen, TaskDetail, TrashScreen } from './features/tasks';
+import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
 import { UpdateBanner } from './features/updater';
-import { WeekScreen } from './features/week';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
@@ -74,6 +91,9 @@ function AppShellContent() {
   // P-01 : onglets affichés selon la disposition de l'appareil ; un onglet masqué reste affiché tant qu'il est actif.
   const tabsConfig = useTabsConfigStore((s) => s.config);
   const railItems = resolveTabs(tabsConfig, TAB_IDS, route.tab).rail.map(requireTab);
+
+  // PERF-02 : écrans chargés à la demande, préchargés en arrière-plan après le premier rendu (le repli de Suspense reste exceptionnel).
+  useEffect(() => preloadScreens(), []);
 
   // A-09 : état du réseau (« Hors ligne »).
   useEffect(() => startNetworkStatus(), []);
