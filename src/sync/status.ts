@@ -1,3 +1,4 @@
+import type { ReintegrationFailure } from '../domain/sync/compat';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncPhase, type SyncStatus } from '../platform/sync/types';
 
@@ -43,11 +44,26 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
   return 'idle';
 }
 
-export function statusFromFacts(previous: SyncStatus, facts: CycleFacts, extra: { readonly folderLabel: string | null; readonly folderKind?: SyncStatus['folderKind']; readonly lastSyncAt: IsoDateTime | null; readonly conflictsThisWeek: number }): SyncStatus {
+export function statusFromFacts(
+  previous: SyncStatus,
+  facts: CycleFacts,
+  extra: {
+    readonly folderLabel: string | null;
+    readonly folderKind?: SyncStatus['folderKind'];
+    readonly lastSyncAt: IsoDateTime | null;
+    readonly conflictsThisWeek: number;
+    /** Y-07 (exigence d'Ali) : échec de réintégration lu dans `sync_meta` ; undefined : lecture impossible, valeur précédente gardée. */
+    readonly reintegrationFailure?: ReintegrationFailure | null;
+  },
+): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
+  // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
+  const { reintegrationFailure: kept, ...rest } = previous;
+  const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
   return {
-    ...previous,
+    ...rest,
+    ...(failure ? { reintegrationFailure: failure } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

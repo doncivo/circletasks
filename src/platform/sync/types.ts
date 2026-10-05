@@ -8,6 +8,7 @@
  * Couche platform : n'importe que `src/domain`.
  */
 
+import type { ReintegrationFailure } from '../../domain/sync/compat';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
 import {
@@ -317,6 +318,10 @@ export interface SyncDeviceStatus {
   readonly self: boolean;
   readonly lastReadAt: IsoDateTime | null;
   readonly status: DeviceSyncStatus;
+  /** Y-07 : numéro d'application publié par l'appareil (« 1.4.0 »), si connu. Facultatif. */
+  readonly appVersion?: string | null;
+  /** Y-07 : version plus récente que l'appareil local (`'schema'` : lu ; `'major'` : lecture suspendue), sinon null. Facultatif. */
+  readonly newer?: 'schema' | 'major' | null;
 }
 
 export interface SyncStatus {
@@ -338,6 +343,11 @@ export interface SyncStatus {
   readonly errorCode?: SyncErrorCode | null;
   /** Appareil dont l'horloge est en avance (phase `clock-ahead`, Y-09 critère 10). Ajout du lot Y2, facultatif. */
   readonly clockAheadDevice?: DeviceId | null;
+  /**
+   * Y-07 (exigence d'Ali) : champs reçus d'une version plus récente dont la réintégration a échoué au dernier démarrage (sans contenu :
+   * nombre, tables, date, noms d'erreur) ; absent ou null : aucun échec. Facultatif.
+   */
+  readonly reintegrationFailure?: ReintegrationFailure | null;
 }
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';

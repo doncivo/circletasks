@@ -5,7 +5,7 @@ import type { SyncDeviceStatus, SyncFolderInfo, SyncStatus } from '../../platfor
 import { syncAge } from '../../sync';
 
 /**
- * Textes de l'état de synchro (Y-02 critère 16, Y-05 critère 2, Y-09 critère 10) : sous-ligne de Réglages (« À jour · il y a 2 min »,
+ * Textes de l'état de synchro (Y-02 critère 16, Y-05 critère 2, Y-09 critère 10, Y-07 critères 8 et 10) : sous-ligne de Réglages (« À jour · il y a 2 min »,
  * D2), messages d'erreur explicites, noms d'appareils (« PC », « iPhone », suivis de 4 caractères si deux ont la même plateforme).
  */
 
@@ -64,8 +64,50 @@ function errorText(code: string | null | undefined): string {
   }
 }
 
+/**
+ * Phases où un échec de réintégration remplace le texte (les erreurs, clés, versions et horloges gardent le leur, plus urgent) ; synchro
+ * non configurée comprise (revue 2) : l'échec vient du démarrage, pas de la synchro, il reste à signaler.
+ */
+const FAILURE_SHOWN_IN: ReadonlySet<SyncStatus['phase']> = new Set(['idle', 'waiting-icloud', 'not-configured']);
+
+/** L'échec de réintégration (exigence d'Ali) est-il le texte de la ligne de Réglages ? */
+function failureShown(status: SyncStatus): boolean {
+  return Boolean(status.reintegrationFailure) && FAILURE_SHOWN_IN.has(status.phase);
+}
+
+/** « 3 éléments reçus d'une version plus récente n'ont pas pu être intégrés » (exigence d'Ali, Y-07). */
+export function failureLine(fields: number): string {
+  return fields === 1 ? t('sync.version.failedLineOne') : t('sync.version.failedLineMany', { count: fields });
+}
+
+const KIND_KEYS = {
+  space: 'sync.version.kinds.space',
+  project: 'sync.version.kinds.project',
+  recurrence: 'sync.version.kinds.recurrence',
+  goal: 'sync.version.kinds.goal',
+  task: 'sync.version.kinds.task',
+  routine: 'sync.version.kinds.routine',
+  routine_log: 'sync.version.kinds.routineLog',
+  routine_pause: 'sync.version.kinds.routinePause',
+  reminder: 'sync.version.kinds.reminder',
+  event: 'sync.version.kinds.event',
+  checklist: 'sync.version.kinds.checklist',
+  checklist_item: 'sync.version.kinds.checklistItem',
+  focus_session: 'sync.version.kinds.focusSession',
+  calendar_account: 'sync.version.kinds.calendarAccount',
+  holiday: 'sync.version.kinds.holiday',
+  settings: 'sync.version.kinds.settings',
+} as const;
+
+/** Types d'éléments d'un échec (« tâches, événements »), d'après les tables du catalogue. */
+export function failureKinds(tables: readonly string[]): string {
+  const labels = tables.map((table) => (Object.prototype.hasOwnProperty.call(KIND_KEYS, table) ? t(KIND_KEYS[table as keyof typeof KIND_KEYS]) : t('sync.version.kinds.other')));
+  return [...new Set(labels)].join(', ');
+}
+
 /** Sous-ligne de la ligne « iCloud Drive / CircleTasks » de Réglages. */
 export function statusLine(status: SyncStatus, nowMs: number): string {
+  if (failureShown(status) && status.reintegrationFailure) return failureLine(status.reintegrationFailure.fields);
   switch (status.phase) {
     case 'not-configured':
       return t('sync.status.notConfigured');
@@ -77,8 +119,11 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return status.errorCode ? errorText(status.errorCode) : t('sync.status.waitingIcloud');
     case 'restore-choice':
       return t('sync.status.restoreChoice');
-    case 'update-required':
-      return t('sync.status.updateRequired');
+    case 'update-required': {
+      // Y-07 critère 8 : l'appareil dont la lecture est suspendue, nommé comme dans APPAREILS.
+      const device = status.devices.find((d) => !d.self && d.status === 'newer-major');
+      return device ? t('sync.status.updateRequiredDevice', { device: deviceName(device, status.devices) }) : t('sync.status.updateRequired');
+    }
     case 'clock-ahead': {
       const device = status.devices.find((d) => d.deviceId === (status.clockAheadDevice as DeviceId | null));
       return t('sync.status.clockAhead', { device: device ? deviceName(device, status.devices) : '' });
@@ -116,7 +161,16 @@ export function deviceStatusText(status: SyncDeviceStatus['status']): string {
 
 /** Le texte de la phase est-il une erreur (couleur d'alerte, `role="alert"` évité : jamais de boîte bloquante) ? */
 export function isTroublePhase(status: SyncStatus): boolean {
-  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required';
+  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || failureShown(status);
+}
+
+/**
+ * Ligne de l'emplacement « version » (Y-07 critère 10, D2) : « {appareil} utilise une version plus récente de l'app », avec le numéro
+ * d'application publié s'il est connu ; jamais un numéro de migration.
+ */
+export function newerDeviceText(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'appVersion'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
+  const name = deviceName(device, all);
+  return device.appVersion ? t('sync.version.newerWithVersion', { device: name, version: device.appVersion }) : t('sync.version.newer', { device: name });
 }
 
 /** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */

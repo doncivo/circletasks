@@ -23,4 +23,5 @@ export type * from './syncRepository';
 // Y-04 (fin)
 export * from './sql';
 // Y-07 (début)
+export type * from './syncUnknownRepository';
 // Y-07 (fin)

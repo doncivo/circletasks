@@ -1,6 +1,7 @@
 import type { DataAccess } from '../db/repositories';
 import type { Clock } from '../domain/clock';
 import type { HlcClock } from '../domain/hlc';
+import { parseReintegrationFailure, REINTEGRATION_FAILURE_META, type ReintegrationFailure } from '../domain/sync/compat';
 import type { RestoreOption } from '../domain/sync/epoch';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
@@ -89,7 +90,22 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     } catch {
       // base occupée : valeur précédente
     }
-    publish(statusFromFacts(status, result, { folderLabel: result.folderLabel ?? status.folderLabel, folderKind: result.folderKind ?? status.folderKind ?? null, lastSyncAt: result.lastSyncAt ?? status.lastSyncAt, conflictsThisWeek: conflicts }));
+    // Y-07 (exigence d'Ali) : échec de réintégration du dernier démarrage, gardé dans sync_meta par la réintégration.
+    let reintegrationFailure: ReintegrationFailure | null | undefined;
+    try {
+      reintegrationFailure = parseReintegrationFailure(await options.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META));
+    } catch {
+      // base occupée : valeur précédente
+    }
+    publish(
+      statusFromFacts(status, result, {
+        folderLabel: result.folderLabel ?? status.folderLabel,
+        folderKind: result.folderKind ?? status.folderKind ?? null,
+        lastSyncAt: result.lastSyncAt ?? status.lastSyncAt,
+        conflictsThisWeek: conflicts,
+        ...(reintegrationFailure === undefined ? {} : { reintegrationFailure }),
+      }),
+    );
   };
 
   const cycle = async (cycleOptions: CycleOptions = {}): Promise<CycleResult> => {
