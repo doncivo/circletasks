@@ -48,4 +48,5 @@ export const backupEn: Messages['backup'] = {
   errorClosed: 'The restore failed. Restart CircleTasks to get your current data back.',
   errorRollback: 'The restore failed and the previous file could not be put back. A safety copy is in the backup folder.',
   restart: 'Restart',
+  recoveryFailed: 'Restore interrupted: restart CircleTasks.',
 };

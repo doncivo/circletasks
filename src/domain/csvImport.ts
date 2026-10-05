@@ -34,9 +34,21 @@ export function normalizeName(value: string): string {
   return value.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/** Marques bidirectionnelles (U+202A à U+202E, U+2066 à U+2069) : elles inverseraient l'affichage d'un titre ou d'un motif. */
+/**
+ * Marques invisibles qui trompent l'affichage : bidirectionnelles (U+202A à U+202E, U+2066 à U+2069, U+200E, U+200F, U+061C), espaces de largeur
+ * nulle (U+200B à U+200D), séparateurs de ligne et de paragraphe (U+2028, U+2029) et U+FEFF (la marque d'ordre des octets de TÊTE de fichier est
+ * retirée avant, par `parseImportFile` ; dans une cellule, elle n'a rien à faire).
+ */
 function isBidiMark(code: number): boolean {
-  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
+  return (
+    (code >= 0x202a && code <= 0x202e) ||
+    (code >= 0x2066 && code <= 0x2069) ||
+    (code >= 0x200b && code <= 0x200f) ||
+    code === 0x061c ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0xfeff
+  );
 }
 
 /**

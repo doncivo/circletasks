@@ -33,6 +33,15 @@ describe('Caractères de contrôle et marques bidirectionnelles (P-07, audit)', 
     expect(sanitizeLine(`a${chr(10)}b${chr(13)}c`)).toBe('abc');
   });
 
+  it('espaces de largeur nulle, marques U+200E / U+200F / U+061C, séparateurs U+2028 / U+2029 et U+FEFF retirés (titre et note)', () => {
+    const invisible = chr(0x200b, 0x200c, 0x200d, 0x200e, 0x200f, 0x061c, 0x2028, 0x2029, 0xfeff);
+    expect(sanitizeLine(`Pa${invisible}ul`)).toBe('Paul');
+    expect(sanitizeNote(`no${invisible}te\nsuite`)).toBe('note\nsuite');
+    // Une marque d'ordre des octets en TÊTE de fichier est retirée avant l'analyse, sans toucher à l'en-tête.
+    const parsed = parseImportFile(`${chr(0xfeff)}titre\nA`);
+    expect(parsed.ok && parsed.table.columns.titre).toBe(0);
+  });
+
   it('note : seuls \\n et \\t sont gardés ; CRLF et CR deviennent \\n', () => {
     expect(sanitizeNote(`l1${chr(13, 10)}l2${chr(13)}l3${chr(10)}l4${chr(9)}x${chr(0)}${chr(0x1b)}${chr(0x202e)}`)).toBe(`l1\nl2\nl3\nl4${chr(9)}x`);
   });

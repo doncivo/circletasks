@@ -22,6 +22,8 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
+use crate::backup_triggers::REFERENCE_TRIGGERS;
+
 /// Nom du fichier de base (tauri-plugin-sql, `sqlite:circletasks.db`).
 pub const DB_FILE: &str = "circletasks.db";
 /// Sous-dossier des sauvegardes.
@@ -39,20 +41,10 @@ pub const PRE_RESTORE_PREFIX: &str = "circletasks-pre-restore-";
 /// Nombre de copies de sécurité de restauration conservées (P-04 critère 6).
 pub const KEEP_PRE_RESTORE_BACKUPS: usize = 3;
 /// Version de schéma de cette app (plus haute migration de `src/db/migrations`). Une sauvegarde plus récente est refusée. Constante côté Rust :
-/// la WebView ne fournit jamais cette valeur ; un test (`restore.rs`) la compare aux fichiers de migration.
+/// la WebView ne fournit jamais cette valeur ; un test (`restore_hardening.rs`) la compare aux fichiers de migration.
 pub const APP_SCHEMA_VERSION: u32 = 14;
 /// Plafond de taille d'une base à vérifier ou à restaurer (512 Mo) : au-delà, la sauvegarde est refusée (`corrupt`).
 pub const MAX_BACKUP_BYTES: u64 = 512 * 1024 * 1024;
-/// Déclencheurs créés par les migrations de l'app (index de recherche, migration 0011). Toute autre définition (déclencheur ou vue) dans une
-/// base à restaurer est refusée : une base piégée pourrait exécuter du SQL à l'ouverture.
-pub const EXPECTED_TRIGGERS: [&str; 18] = [
-    "search_task_ai", "search_task_au", "search_task_ad",
-    "search_routine_ai", "search_routine_au", "search_routine_ad",
-    "search_event_ai", "search_event_au", "search_event_ad",
-    "search_goal_ai", "search_goal_au", "search_goal_ad",
-    "search_checklist_ai", "search_checklist_au", "search_checklist_ad",
-    "search_checklist_item_ai", "search_checklist_item_au", "search_checklist_item_ad",
-];
 /// Attente maximale d'un verrou pendant une sauvegarde quotidienne : la base n'est jamais bloquée plus de 2 s (P-04 critère 1).
 const DAILY_BUSY_MS: u64 = 2_000;
 /// Attente maximale d'un verrou pour les autres copies.
@@ -384,6 +376,9 @@ pub struct BackupEntry {
 
 /// Liste des sauvegardes de `dir`, les plus récentes d'abord. Dossier absent : liste vide. Les fichiers d'autres noms sont ignorés.
 pub fn list_backups_in(dir: &Path) -> Result<Vec<BackupEntry>, BackupError> {
+    if present(dir) && !is_plain_dir(dir) {
+        return Err(BackupError::new("not-found", "le dossier des sauvegardes n'est pas un dossier ordinaire"));
+    }
     let reader = match fs::read_dir(dir) {
         Ok(reader) => reader,
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -413,7 +408,7 @@ pub fn list_backups_in(dir: &Path) -> Result<Vec<BackupEntry>, BackupError> {
 
 /// Ouvre un fichier de sauvegarde en lecture seule avec `trusted_schema = OFF` : les fonctions SQL « non fiables » des déclencheurs et des vues
 /// d'une base venue de l'extérieur ne sont pas exécutées.
-fn open_read_only_with(path: &Path, busy_ms: u64) -> Result<rusqlite::Connection, rusqlite::Error> {
+pub fn open_read_only_with(path: &Path, busy_ms: u64) -> Result<rusqlite::Connection, rusqlite::Error> {
     let conn = rusqlite::Connection::open_with_flags(path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     conn.busy_timeout(std::time::Duration::from_millis(busy_ms))?;
     conn.pragma_update(None, "trusted_schema", "OFF")?;
@@ -428,12 +423,50 @@ fn open_read_only(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> 
 /// qui exécuterait autre chose) avant tout `COUNT`.
 fn read_summary(path: &Path) -> (Option<u64>, Option<u32>) {
     let Ok(conn) = open_read_only(path) else { return (None, None) };
-    let is_table = conn
-        .query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'task'", [], |r| r.get::<_, u64>(0))
-        .is_ok_and(|n| n == 1);
-    let tasks = if is_table { conn.query_row("SELECT COUNT(*) FROM task WHERE deleted_at IS NULL", [], |r| r.get::<_, u64>(0)).ok() } else { None };
-    let version = conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0)).ok().flatten();
+    let is_table = |name: &str| -> bool {
+        conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [name], |r| r.get::<_, u64>(0)).is_ok_and(|n| n == 1)
+    };
+    let tasks = if is_table("task") { conn.query_row("SELECT COUNT(*) FROM task WHERE deleted_at IS NULL", [], |r| r.get::<_, u64>(0)).ok() } else { None };
+    let version = if is_table("schema_migrations") {
+        conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0)).ok().flatten()
+    } else {
+        None
+    };
     (tasks, version)
+}
+
+/// SQL aux espaces compactés (retours à la ligne et indentation sans effet sur la comparaison).
+pub fn normalize_sql(sql: &str) -> String {
+    sql.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Supprime tous les déclencheurs du fichier puis recrée ceux de l'app depuis leur référence (pour les tables présentes). Appelée sur le fichier
+/// préparé d'une restauration, après sa vérification et AVANT l'échange : la base mise en place ne porte que des déclencheurs de l'app, et un
+/// échec ne laisse aucun état à moitié restauré. Sans table `search_index_doc` (schéma antérieur à la migration 0011), aucun déclencheur n'est créé :
+/// la migration le fera à l'ouverture.
+pub fn reset_triggers(path: &Path) -> Result<(), BackupError> {
+    let conn = rusqlite::Connection::open(path).map_err(sql_err)?;
+    conn.pragma_update(None, "trusted_schema", "OFF").map_err(sql_err)?;
+    let tx = conn.unchecked_transaction().map_err(sql_err)?;
+    let existing: Vec<String> = {
+        let mut statement = tx.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").map_err(sql_err)?;
+        let rows = statement.query_map([], |r| r.get::<_, String>(0)).map_err(sql_err)?.collect::<Result<_, _>>().map_err(sql_err)?;
+        rows
+    };
+    for name in existing {
+        tx.execute_batch(&format!("DROP TRIGGER \"{}\"", name.replace('"', "\"\""))).map_err(sql_err)?;
+    }
+    let has_table = |table: &str| -> Result<bool, BackupError> {
+        tx.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| r.get::<_, u64>(0)).map(|n| n == 1).map_err(sql_err)
+    };
+    if has_table("search_index_doc")? {
+        for (_, table, sql) in REFERENCE_TRIGGERS {
+            if has_table(table)? {
+                tx.execute_batch(sql).map_err(sql_err)?;
+            }
+        }
+    }
+    tx.commit().map_err(sql_err)
 }
 
 /// Vérifie un fichier de sauvegarde (P-04 critères 6 et 7) : base SQLite lisible, `PRAGMA integrity_check` = ok, table
@@ -458,17 +491,25 @@ pub fn check_backup_file(path: &Path, app_version: u32) -> Result<u32, BackupErr
         return Err(corrupt(rows.join("; ")));
     }
     // Seuls les déclencheurs de l'app sont admis, et aucune vue : une base piégée ne doit rien exécuter à l'ouverture.
+    // Chaque déclencheur doit être identique (type, nom, table, SQL aux espaces près) à la référence de l'app ; une sauvegarde plus ancienne peut
+    // en avoir moins (migration 0011 pas encore appliquée), jamais d'autre ni de différent.
     let mut definitions = conn
-        .prepare("SELECT type, name FROM sqlite_master WHERE type IN ('trigger', 'view')")
+        .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('trigger', 'view')")
         .map_err(|e| corrupt(e.to_string()))?;
-    let found: Vec<(String, String)> = definitions
-        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+    let found: Vec<(String, String, String, Option<String>)> = definitions
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?)))
         .map_err(|e| corrupt(e.to_string()))?
         .collect::<Result<_, _>>()
         .map_err(|e| corrupt(e.to_string()))?;
     drop(definitions);
-    if let Some((kind, name)) = found.iter().find(|(kind, name)| kind != "trigger" || !EXPECTED_TRIGGERS.contains(&name.as_str())) {
-        return Err(corrupt(format!("définition inattendue : {kind} {name}")));
+    for (kind, name, table, sql) in &found {
+        let matches_reference = kind == "trigger"
+            && REFERENCE_TRIGGERS
+                .iter()
+                .any(|(ref_name, ref_table, ref_sql)| ref_name == name && ref_table == table && sql.as_deref().is_some_and(|text| normalize_sql(text) == normalize_sql(ref_sql)));
+        if !matches_reference {
+            return Err(corrupt(format!("définition inattendue : {kind} {name}")));
+        }
     }
     let version = conn
         .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0))
@@ -501,35 +542,109 @@ pub struct RestoreOutcome {
 
 /// Des fichiers `.restore-old` existent-ils ? (restauration interrompue, ou retour arrière incomplet `rollback-failed`)
 pub fn has_pending_restore(db_path: &Path) -> bool {
-    ["", "-wal", "-shm"].iter().any(|suffix| sidecar(&sidecar(db_path, suffix), OLD_SUFFIX).exists())
+    ["", "-wal", "-shm"].iter().any(|suffix| present(&sidecar(&sidecar(db_path, suffix), OLD_SUFFIX)))
 }
 
-/// Récupération au démarrage, AVANT l'ouverture de la base : si `circletasks.db` est absent et qu'un `.restore-old` existe, l'échange a été
-/// interrompu (arrêt brutal, `rollback-failed`) : l'ancienne base revient avec son `-wal` et son `-shm`. Si la base est présente, l'échange a
-/// abouti et les `.restore-old` ne sont que des restes, supprimés. Un `.restoring` orphelin est toujours supprimé. Renvoie vrai si une
-/// ancienne base a été remise en place.
-pub fn recover_interrupted_restore(db_path: &Path) -> bool {
-    let _ = fs::remove_file(sidecar(db_path, STAGING_SUFFIX));
-    let _ = fs::remove_file(sidecar(&sidecar(db_path, STAGING_SUFFIX), ".tmp"));
-    if !has_pending_restore(db_path) {
-        return false;
-    }
-    if db_path.exists() {
-        for suffix in ["", "-wal", "-shm"] {
-            let _ = fs::remove_file(sidecar(&sidecar(db_path, suffix), OLD_SUFFIX));
+/// Le chemin existe-t-il, lien inclus (un lien brisé existe) ?
+fn present(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok()
+}
+
+/// Horodatage UTC `AAAAMMJJTHHMMSSZ` d'un instant en secondes depuis l'époque Unix (calendrier grégorien, algorithme de Howard Hinnant).
+fn utc_stamp(secs: u64) -> String {
+    let days = i64::try_from(secs / 86_400).unwrap_or(0);
+    let rest = secs % 86_400;
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1_460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!("{year:04}{month:02}{day:02}T{:02}{:02}{:02}Z", rest / 3_600, rest % 3_600 / 60, rest % 60)
+}
+
+/// Ce qu'a fait la récupération au démarrage.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recovery {
+    /// Rien à récupérer.
+    Nothing,
+    /// Des fichiers de l'ancienne base ont été remis en place (base, `-wal`, `-shm`).
+    PutBack,
+    /// L'échange était terminé : les restes de l'ancienne base ont été DÉPLACÉS dans `backups/` (famille `pre-restore`), jamais supprimés.
+    Archived,
+}
+
+/// Récupération au démarrage, AVANT l'ouverture de la base, fondée sur la présence de `circletasks.db.restore-old` (la base, déplacée en dernier
+/// par l'échange) :
+///
+/// | `circletasks.db` | `.db.restore-old` | `-wal` / `-shm.restore-old` | action |
+/// | --- | --- | --- | --- |
+/// | présente | présent | indifférent | échange terminé : les `.restore-old` sont déplacés dans `backups/` sous un nom `pre-restore` (purgé par la rotation) |
+/// | présente | absent | présent | échange interrompu avant la base, ou retour arrière partiel : `-wal` et `-shm` remis en place |
+/// | absente | présent | indifférent | la base, le `-wal` et le `-shm` sont remis en place |
+///
+/// Jamais de suppression d'une ancienne base. Chaque `.restore-old` doit être un fichier ordinaire (`is_plain_file`) : sinon rien n'est touché et
+/// l'erreur `unsafe-restore-file` est renvoyée. Une cible déjà occupée n'est jamais écrasée (`recovery-conflict`). Un `.restoring` orphelin est
+/// une copie préparée d'une sauvegarde qui existe toujours : il est supprimé s'il est ordinaire (sinon `unsafe-restore-file`). Toute erreur de
+/// renommage est propagée : l'appelant n'ouvre alors pas la base (voir `desktop.rs`).
+pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result<Recovery, BackupError> {
+    let fail = |code: &'static str, e: io::Error| BackupError::new(code, e.to_string());
+    let old_of = |suffix: &str| sidecar(&sidecar(db_path, suffix), OLD_SUFFIX);
+    let olds: Vec<(&str, PathBuf)> = ["", "-wal", "-shm"].into_iter().map(|suffix| (suffix, old_of(suffix))).collect();
+    let staged = sidecar(db_path, STAGING_SUFFIX);
+    // Vérifications avant tout déplacement.
+    for (_, old) in &olds {
+        if present(old) && !is_plain_file(old) {
+            return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
         }
-        return false;
     }
-    let mut restored = false;
-    // Base d'abord, puis son journal.
-    for suffix in ["", "-wal", "-shm"] {
-        let target = sidecar(db_path, suffix);
-        let old = sidecar(&target, OLD_SUFFIX);
-        if old.exists() && fs::rename(&old, &target).is_ok() && suffix.is_empty() {
-            restored = true;
+    for leftover in [staged.clone(), sidecar(&staged, ".tmp")] {
+        if present(&leftover) {
+            if !is_plain_file(&leftover) {
+                return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
+            }
+            fs::remove_file(&leftover).map_err(|e| fail("recovery-failed", e))?;
         }
     }
-    restored
+    let db_present = present(db_path);
+    let main_old = present(&olds[0].1);
+    let journal_old = olds[1..].iter().any(|(_, old)| present(old));
+
+    if db_present && main_old {
+        if present(backups_dir) && !is_plain_dir(backups_dir) {
+            return Err(BackupError::new("unsafe-restore-file", "le dossier des sauvegardes n'est pas un dossier ordinaire"));
+        }
+        fs::create_dir_all(backups_dir).map_err(|e| fail("recovery-failed", e))?;
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let target = (0..1_000)
+            .map(|n| backups_dir.join(pre_restore_backup_name(&utc_stamp(now + n))))
+            .find(|candidate| !present(candidate))
+            .ok_or_else(|| BackupError::new("recovery-conflict", "aucun nom libre pour archiver l'ancienne base"))?;
+        for (suffix, old) in &olds {
+            if present(old) {
+                fs::rename(old, sidecar(&target, suffix)).map_err(|e| fail("recovery-failed", e))?;
+            }
+        }
+        let _ = prune_family(backups_dir, Family::PreRestore, KEEP_PRE_RESTORE_BACKUPS);
+        return Ok(Recovery::Archived);
+    }
+    if (db_present && !main_old && journal_old) || (!db_present && main_old) {
+        // Base d'abord (si absente), puis son journal ; une cible occupée n'est jamais écrasée.
+        // Toutes les cibles sont vérifiées AVANT le premier déplacement : un conflit ne laisse rien à moitié remis en place.
+        if olds.iter().any(|(suffix, old)| present(old) && present(&sidecar(db_path, suffix))) {
+            return Err(BackupError::new("recovery-conflict", "un fichier de la base existe déjà : l'ancien n'est pas écrasé"));
+        }
+        for (suffix, old) in &olds {
+            if present(old) {
+                fs::rename(old, sidecar(db_path, suffix)).map_err(|e| fail("recovery-failed", e))?;
+            }
+        }
+        return Ok(Recovery::PutBack);
+    }
+    Ok(Recovery::Nothing)
 }
 
 /// Échange la base par le fichier préparé. Tout ce qui est déplacé est remis en place si une étape échoue : l'ancienne base (et son
@@ -615,7 +730,10 @@ pub fn restore_backup_file(
     let _ = fs::remove_file(&staged);
     let prepared = copy_database(&source, &staged, DEFAULT_BUSY_MS)
         .and_then(|()| check_backup_file(&staged, app_version))
-        .and_then(|_| hook(RestoreStep::Staged).map_err(io_err));
+        // Déclencheurs recréés depuis la référence de l'app sur le fichier préparé, avant l'échange : la base mise en place n'a que des
+        // déclencheurs de l'app, et un échec ici ne laisse aucun état à moitié restauré.
+        .and_then(|_| reset_triggers(&staged))
+        .and_then(|()| hook(RestoreStep::Staged).map_err(io_err));
     if let Err(error) = prepared {
         let _ = fs::remove_file(&staged);
         return Err(error);
@@ -645,7 +763,26 @@ pub fn backup_database_before_migration(
     stamp: String,
 ) -> Result<BackupOutcome, BackupError> {
     let dir = data_dir(&app)?;
-    create_migration_backup(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), from_version, to_version, &stamp, KEEP_MIGRATION_BACKUPS)
+    let outcome = create_migration_backup(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), from_version, to_version, &stamp, KEEP_MIGRATION_BACKUPS)?;
+    Ok(outcome_for_webview(outcome))
+}
+
+/// Ce que la WebView reçoit d'une sauvegarde avant migration : le NOM du fichier créé seulement, jamais le chemin absolu.
+pub fn outcome_for_webview(outcome: BackupOutcome) -> BackupOutcome {
+    let name = outcome.path.as_deref().and_then(|path| Path::new(path).file_name()).map(|n| n.to_string_lossy().into_owned());
+    BackupOutcome { path: name, removed: outcome.removed }
+}
+
+/// Vérifie la sauvegarde `name` du dossier : nom connu, dossier et fichier ordinaires (ni lien ni jonction), puis `check_backup_file`.
+pub fn check_named_backup(backups_dir: &Path, name: &str) -> Result<u32, BackupError> {
+    if parse_backup_name(name).is_none() {
+        return Err(BackupError::new("bad-name", "nom de sauvegarde inconnu"));
+    }
+    let path = backups_dir.join(name);
+    if !is_plain_dir(backups_dir) || !is_plain_file(&path) {
+        return Err(BackupError::new("not-found", format!("sauvegarde introuvable : {name}")));
+    }
+    check_backup_file(&path, APP_SCHEMA_VERSION)
 }
 
 /// Sauvegarde quotidienne (P-04) ; `replace` = « Sauvegarder maintenant ». Hors du fil de l'interface.
@@ -687,14 +824,7 @@ pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> 
 pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
     tauri::async_runtime::spawn_blocking(move || {
-        if parse_backup_name(&name).is_none() {
-            return Err(BackupError::new("bad-name", "nom de sauvegarde inconnu"));
-        }
-        let path = dir.join(&name);
-        if !path.is_file() {
-            return Err(BackupError::new("not-found", format!("sauvegarde introuvable : {name}")));
-        }
-        check_backup_file(&path, APP_SCHEMA_VERSION)
+        check_named_backup(&dir, &name)
     })
     .await
     .map_err(|e| join_error(e.into()))?

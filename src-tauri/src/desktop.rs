@@ -252,6 +252,28 @@ pub fn set_tray_labels(app: AppHandle, labels: TrayLabels) -> Result<(), Command
 }
 
 /// Enregistre les plugins PC, la fermeture en réduction et la zone de notification.
+/// Texte de la boîte montrée quand la récupération d'une restauration interrompue échoue. Exception assumée à « textes dans `src/i18n` » : la
+/// WebView n'existe pas encore (et ne doit pas s'ouvrir) à ce stade ; le début du texte est celui de `backup.recoveryFailed` de `src/i18n`.
+pub const RECOVERY_FAILED_MESSAGE: &str = "Restauration interrompue : redémarrez CircleTasks. Si ce message revient, vos données restent dans le dossier de l'application (fichiers « .restore-old »).";
+
+/// Voie retenue pour une récupération impossible : QUITTER, par le plus simple et le plus robuste de Tauri 2. `setup` renvoie une erreur, donc
+/// `Builder::run` échoue avant que la fenêtre principale ne soit affichée et que la WebView n'appelle le plugin SQL : aucune base n'est ouverte ni
+/// créée (le plugin SQL ouvre le fichier à la première commande de la WebView, jamais avant). Une boîte système bloquante (`MessageBoxW`, sous
+/// Windows) montre le message d'abord ; seul le code d'erreur est journalisé, sans chemin. Les fichiers `.restore-old` restent intacts.
+fn abort_startup_after_failed_recovery(code: &str) -> Box<dyn std::error::Error> {
+    eprintln!("[backup] récupération au démarrage impossible : {code}");
+    #[cfg(windows)]
+    {
+        use windows::core::{w, HSTRING};
+        use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
+        // SAFETY : appel Win32 sans fenêtre parente, chaînes valides pour la durée de l'appel.
+        unsafe {
+            MessageBoxW(None, &HSTRING::from(RECOVERY_FAILED_MESSAGE), w!("CircleTasks"), MB_OK | MB_ICONERROR);
+        }
+    }
+    format!("restauration interrompue non récupérée ({code})").into()
+}
+
 pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         // Instance unique : doit être le premier plugin (D-01, critère 8). Un second lancement
@@ -280,8 +302,11 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
         })
         .setup(|app| {
             // P-04 : une restauration interrompue (arrêt brutal pendant l'échange des fichiers) est récupérée AVANT que la WebView n'ouvre la base.
+            // Si elle échoue, l'app ne démarre pas : ni base neuve ni base ouverte sur un état à moitié restauré (voir `abort_startup_after_failed_recovery`).
             if let Ok(dir) = tauri::Manager::path(app).app_config_dir() {
-                crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE));
+                if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
+                    return Err(abort_startup_after_failed_recovery(error.code));
+                }
             }
             app.manage(QuitGate::default());
             crate::shortcut::manage(app.handle());

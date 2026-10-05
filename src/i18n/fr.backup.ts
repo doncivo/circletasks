@@ -48,4 +48,5 @@ export const backupFr = {
   errorClosed: 'La restauration a échoué. Redémarrez CircleTasks pour retrouver vos données actuelles.',
   errorRollback: 'La restauration a échoué et l’ancien fichier n’a pas pu être remis en place. Une copie de sécurité est dans le dossier des sauvegardes.',
   restart: 'Redémarrer',
+  recoveryFailed: 'Restauration interrompue : redémarrez CircleTasks.',
 } as const;
