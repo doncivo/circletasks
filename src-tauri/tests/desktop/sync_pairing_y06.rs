@@ -351,3 +351,54 @@ fn y06_4_already_open_and_not_foreground_have_their_own_codes() {
     assert_eq!(SyncCode::AlreadyOpen.as_str(), "already-open");
     assert_eq!(SyncCode::NotForeground.as_str(), "not-foreground");
 }
+
+/// Audit 2, QA 3 : la référence d'arrivée est la liste de `devices/` **à l'ouverture**, quel que soit l'état des appareils.
+#[test]
+fn y06_9_reference_is_the_folder_listing_at_opening() {
+    // iPhone déjà associé, son state.ctx pas encore livré par iCloud à l'ouverture : son dossier est listé, donc jamais un arrivant.
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish(&a, DEV_A, &epoch(1, DEV_A), None);
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = joiner(&fs, DEV_B);
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    publish(&b, DEV_B, &epoch(1, DEV_A), None);
+    let state_bytes = fs.get(&["devices", DEV_B, "state.ctx"]).expect("état de B");
+    fs.remove(&["devices", DEV_B, "state.ctx"]);
+    let registry = PairingRegistry::default();
+    registry.begin_open(false).unwrap();
+    registry.register(42, PairingMode::Show, NOW);
+    let listed = a.core.listed_devices().expect("liste");
+    assert!(listed.contains(&DEV_B.to_owned()), "listé quel que soit l'état");
+    registry.set_arrival_baseline(42, listed);
+    let first = a.core.scan(&[]).unwrap();
+    assert!(a.core.paired_with_self(&first).is_empty(), "état pas encore livré au premier scan");
+    assert_eq!(registry.observe_paired(&a.core.paired_with_self(&first)), None);
+    fs.put(&["devices", DEV_B, "state.ctx"], &state_bytes);
+    let later = a.core.scan(&[]).unwrap();
+    assert_eq!(a.core.paired_with_self(&later), vec![DEV_B.to_owned()]);
+    assert_eq!(registry.observe_paired(&a.core.paired_with_self(&later)), None, "déjà là à l'ouverture : pas une arrivée");
+    assert!(registry.current().is_some());
+}
+
+#[test]
+fn y06_9_association_before_the_first_scan_is_an_arrival() {
+    // L'iPhone s'associe dans les 10 premières secondes : déjà publié au premier scan, mais absent de la liste d'ouverture.
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish(&a, DEV_A, &epoch(1, DEV_A), None);
+    let registry = PairingRegistry::default();
+    registry.begin_open(false).unwrap();
+    registry.register(42, PairingMode::Show, NOW);
+    registry.set_arrival_baseline(42, a.core.listed_devices().unwrap());
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = joiner(&fs, DEV_B);
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    publish(&b, DEV_B, &epoch(1, DEV_A), None);
+    let scan = a.core.scan(&[]).unwrap();
+    assert_eq!(registry.observe_paired(&a.core.paired_with_self(&scan)), Some(42), "premier scan : arrivée détectée");
+    // La commande prend la liste à l'ouverture, avant l'affichage.
+    let source = include_str!("../../src/sync/commands.rs");
+    let set = source.find("set_arrival_baseline(hwnd").expect("référence posée par la commande");
+    assert!(set < source.find("window.show()").unwrap());
+}

@@ -245,9 +245,19 @@ impl PairingRegistry {
         instance
     }
 
+    /// Référence d'arrivée (audit 2, QA 3) : identifiants listés dans `devices/` à l'ouverture de l'instance, quel que soit leur état
+    /// (`state.ctx` dans le nuage, illisible…). Posée par `sync_pairing_open` avant l'affichage.
+    pub fn set_arrival_baseline(&self, hwnd: isize, listed: Vec<String>) {
+        let mut state = self.lock();
+        if state.instance.is_some_and(|i| i.hwnd == hwnd) {
+            state.paired_baseline = Some(listed.into_iter().collect());
+        }
+    }
+
     /// Scan du dossier pendant la vie d'une instance `show` (Y-06 critère 9) : `paired` = appareils dont l'état **authentifié** porte
-    /// `pairedBy` = ce PC. Le premier scan fixe la référence ; un appareil absent de la référence est celui qui vient de s'associer :
-    /// l'instance est effacée et son HWND renvoyé (fenêtre à détruire, une seule fois). Instance `import` ou absente : rien.
+    /// `pairedBy` = ce PC. Un appareil absent de la référence prise à l'ouverture est celui qui vient de s'associer : l'instance est
+    /// effacée et son HWND renvoyé (fenêtre à détruire, une seule fois). Repli si la liste d'ouverture n'a pas pu être lue : le premier
+    /// scan fixe la référence. Instance `import` ou absente : rien.
     pub fn observe_paired(&self, paired: &[String]) -> Option<isize> {
         let mut state = self.lock();
         let instance = state.instance.filter(|i| i.mode == PairingMode::Show)?;

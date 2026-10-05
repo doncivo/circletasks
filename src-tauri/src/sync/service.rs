@@ -494,6 +494,15 @@ impl SyncCore {
         store.scan(self_id.as_deref(), keep, accepted)
     }
 
+    /// Identifiants des dossiers d'appareil listés dans `devices/` (noms UUID), sans lire ni hydrater aucun fichier : référence
+    /// d'arrivée prise à l'ouverture de la fenêtre `pairing` (audit 2).
+    pub fn listed_devices(&self) -> SyncResult<Vec<String>> {
+        let mut inner = self.lock();
+        let bound = self.require_folder(&mut inner)?;
+        let listing = bound.fs.list(&[super::names::DEVICES_DIR], super::limits::MAX_SCAN_ENTRIES_PER_FOLDER).map_err(|e| SyncError::new(e.code()))?;
+        Ok(listing.entries.into_iter().filter(|e| e.is_dir && is_uuid_v4(&e.name)).map(|e| e.name).collect())
+    }
+
     /// Appareils du scan dont l'état **authentifié** (`stateStatus` `ok`, déchiffré avec la clé locale) porte `pairedBy` = cet appareil
     /// (Y-06 critère 9 : arrivée de l'appareil associé). Aucun si cet appareil n'est pas lié.
     pub fn paired_with_self(&self, scan: &FolderScan) -> Vec<String> {

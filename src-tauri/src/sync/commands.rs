@@ -280,6 +280,15 @@ async fn open_pairing_window(app: &AppHandle, main: &WebviewWindow, core: &Arc<S
         return Err(error);
     }
     registry.register(hwnd, mode, core.now());
+    if mode == PairingMode::Show {
+        // Référence d'arrivée : appareils listés à l'ouverture, quel que soit leur état (audit 2). Liste illisible : repli sur le
+        // premier scan, journalisé.
+        let list_core = core.clone();
+        match blocking(move || list_core.listed_devices()).await {
+            Ok(listed) => registry.set_arrival_baseline(hwnd, listed),
+            Err(error) => log::event("pairing-baseline-unavailable", error.code.as_str()),
+        }
+    }
     let events_app = app.clone();
     let events_registry = registry.clone();
     window.on_window_event(move |event| {
