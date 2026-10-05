@@ -60,7 +60,7 @@ fn y01_4_folder_is_remembered_after_restart_and_only_a_label_is_returned() {
     let (mut d, _) = device();
     assert!(!d.core.folder_info().unwrap().configured);
     let info = d.core.choose_folder(Path::new(FOLDER)).unwrap();
-    assert_eq!((info.configured, info.label.as_deref(), info.kind), (true, Some("iCloud Drive / CircleTasks"), "icloud"));
+    assert_eq!((info.configured, info.name.as_deref(), info.kind), (true, Some("CircleTasks"), "icloud"));
     let shown = serde_json::to_string(&info).unwrap();
     assert!(!shown.contains("Users") && !shown.contains('\\'), "jamais de chemin : {shown}");
     d.restart();
@@ -86,7 +86,7 @@ fn y01_5_device_binding_is_frozen_and_a_new_folder_resets_own_json() {
     // Autre dossier : own.json remis à zéro.
     d.backend.add(r"C:\Autre\CircleTasks", FolderKind::Local, MemFs::new());
     let info = d.core.choose_folder(Path::new(r"C:\Autre\CircleTasks")).unwrap();
-    assert_eq!((info.label.as_deref(), info.kind), (Some("CircleTasks"), "local"));
+    assert_eq!((info.name.as_deref(), info.kind), (Some("CircleTasks"), "local"));
     assert!(!own.exists());
     drop(fs);
 }

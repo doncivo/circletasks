@@ -90,7 +90,7 @@ fn y08_4_vectors_aad_padding_headers() {
     for case in v["aad"].as_array().unwrap() {
         let place = OwnedPlace::from(&case["place"]);
         let fields = place.place().aad_fields(case["sm"].as_u64().unwrap() as u32, case["sv"].as_u64().unwrap() as u32);
-        assert_eq!(hex(&aad_bytes(&fields)), case["hex"].as_str().unwrap());
+        assert_eq!(hex(&aad_bytes(&fields).unwrap()), case["hex"].as_str().unwrap());
     }
     for case in v["padding"].as_array().unwrap() {
         assert_eq!(padded_plaintext_bytes(case["jsonBytes"].as_u64().unwrap() as usize) as u64, case["paddedBytes"].as_u64().unwrap());

@@ -17,6 +17,7 @@ import {
   PAIRING_QR_PREFIX,
   RECOVERY_KEY_PREFIX,
   TAG_BYTES,
+  hasStrictJsonShape,
   isEpochId,
   isSyncDeviceId,
   paddedPlaintextBytes,
@@ -262,9 +263,17 @@ export async function recoveryKeyOf(key: Bytes): Promise<string> {
   return RECOVERY_KEY_PREFIX + (out.match(/.{1,5}/g) ?? []).join('-');
 }
 
-/** Saisie tolérante (casse, espaces, tirets, `O`/`0`, `I`/`L`/`1`), somme de contrôle vérifiée ; null si invalide. */
+/**
+ * Saisie tolérante (casse ASCII, espaces et retours ASCII, tirets, `O`/`0`, `I`/`L`/`1`), somme de contrôle vérifiée ; null si invalide.
+ * Mêmes règles que Rust (QA-Y1-4) : 256 octets au plus, majuscules ASCII seulement (ni « ı » ni « ſ »), ni espace insécable.
+ */
 export async function keyFromRecovery(input: string): Promise<Bytes | null> {
-  let text = input.toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+  if (encoder.encode(input).length > 256) return null;
+  let text = input
+    .replace(/[a-z]/g, (c) => c.toUpperCase())
+    .replace(/[ \t\n\r-]/g, '')
+    .replace(/O/g, '0')
+    .replace(/[IL]/g, '1');
   const prefix = RECOVERY_KEY_PREFIX.replace(/-/g, '');
   if (text.length === RECOVERY_CHARS + prefix.length && text.startsWith(prefix)) text = text.slice(prefix.length);
   if (text.length !== RECOVERY_CHARS) return null;
@@ -322,6 +331,8 @@ export function parseQrText(text: string): QrContent | null {
   }
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
   if (Object.keys(value).sort().join(',') !== 'd,e,k,v,x') return null;
+  // Comme serde (QA-Y1-4) : clé répétée refusée, `v` et `x` entiers canoniques (ni `1.0`, ni `1e0`).
+  if (!hasStrictJsonShape(new TextDecoder().decode(bytes), 5)) return null;
   const q = value as Record<string, unknown>;
   if (q['v'] !== 1 || typeof q['k'] !== 'string' || !isSyncDeviceId(q['d'])) return null;
   if (q['e'] !== null && !isEpochId(q['e'])) return null;

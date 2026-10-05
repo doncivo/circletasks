@@ -36,6 +36,17 @@ pub fn is_pairing_url(url: &str) -> bool {
     false
 }
 
+/// La page `pairing.html` embarquée est-elle présente ? Le résolveur d'actifs de Tauri sert `index.html` quand une page manque :
+/// absente (`None`) ou identique à `index.html` = absente (audit S1). Sans elle, `sync_pairing_open` refuse (`io`) avant toute boîte
+/// et toute fenêtre : jamais l'application entière dans la fenêtre qui reçoit la clé.
+pub fn pairing_page_present(page: Option<&[u8]>, index: Option<&[u8]>) -> bool {
+    match (page, index) {
+        (None, _) => false,
+        (Some(page), Some(index)) => page != index && !page.is_empty(),
+        (Some(page), None) => !page.is_empty(),
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PairingMode {
     /// Affichage du QR et de la clé de secours (après confirmation native).

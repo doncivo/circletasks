@@ -56,7 +56,7 @@ fn y01_6_accepts_a_plain_local_folder_with_a_warning_kind() {
     let checked = check_sync_path(&root).unwrap();
     assert_eq!(checked.path, root);
     assert_eq!(checked.kind, FolderKind::Local, "hors iCloud : avertissement");
-    assert_eq!(checked.label(), root.file_name().unwrap().to_string_lossy());
+    assert_eq!(checked.name(), root.file_name().unwrap().to_string_lossy());
     // Casse différente : accepté, le chemin final (casse réelle) est enregistré.
     let upper = PathBuf::from(root.to_string_lossy().to_uppercase());
     assert_eq!(check_sync_path(&upper).unwrap().path, root);
@@ -151,7 +151,7 @@ fn y01_full_flow_on_disk_with_the_production_backend() {
     let consent = Arc::new(ConsentGate::new(base.path().join("sync"), FakeUi::new(), clock.clock()));
     let core = SyncCore::new(SyncOptions::new(base.path().to_path_buf()), Arc::new(MemoryVault::default()), Arc::new(SystemBackend), consent, clock.clock());
     let info = core.choose_folder(&folder).unwrap();
-    assert_eq!((info.label.as_deref(), info.kind), (Some("CircleTasks"), "local"));
+    assert_eq!((info.name.as_deref(), info.kind), (Some("CircleTasks"), "local"));
     core.key_create().unwrap();
     core.bind_device(DEV_A).unwrap();
     let ep = epoch(1, DEV_A);

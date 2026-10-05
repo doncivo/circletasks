@@ -52,6 +52,17 @@ describe('createTauriFocusWindow (F-01, correctif du lot Y1)', () => {
     expect(actions).toEqual([{ type: 'ready' }]);
   });
 
+  it('revue 21 : une mini-fenêtre prête (ouverture dont la réponse a échoué) reçoit de nouveau les états publiés', async () => {
+    const call = vi.fn(async (command: string) => (command === 'focus_window_open' ? Promise.reject(new Error('délai')) : undefined));
+    const platform = createTauriFocusWindow(call);
+    await expect(platform.open(null)).rejects.toThrow();
+    await platform.onAction(() => undefined);
+    listeners[0]?.({ payload: { type: 'ready' } });
+    const state = { phase: 'running' } as never;
+    await platform.publish(state);
+    expect(emitTo).toHaveBeenCalledWith('focus', 'focus://state', state);
+  });
+
   it('une fermeture qui échoue côté Rust est sans effet visible', async () => {
     const platform = createTauriFocusWindow(vi.fn(async (command: string) => (command === 'focus_window_close' ? Promise.reject(new Error('x')) : undefined)));
     await expect(platform.close()).resolves.toBeUndefined();

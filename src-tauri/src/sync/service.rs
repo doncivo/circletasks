@@ -22,7 +22,7 @@ use super::limits::{NONCE_MAX_RECORDS, NONCE_WARN_RECORDS, PAIRING_CLOCK_TOLERAN
 use super::marker::{self, RestoreMarker};
 use super::names::{is_uuid_v4, EpochId};
 use super::state::{OwnState, PublishedState, Usage};
-use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotWriter, Store};
+use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, Store};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 use crate::vault::{SecretVault, VaultError};
 
@@ -69,11 +69,12 @@ impl SyncOptions {
     }
 }
 
-/// `SyncFolderInfo` : libellé seulement, jamais un chemin.
+/// Forme IPC de `SyncFolderInfo` : nom du dossier et nature, jamais un chemin ; le libellé affiché (« iCloud Drive / CircleTasks »)
+/// est composé par l'interface (`src/i18n`, revue 13).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FolderInfo {
     pub configured: bool,
-    pub label: Option<String>,
+    pub name: Option<String>,
     pub kind: &'static str,
     pub pinned: bool,
 }
@@ -92,6 +93,17 @@ pub struct PairingPayload {
     pub recovery_key: String,
     pub expires_at: u64,
 }
+
+/// La charge utile contient la clé : effacée à la destruction (audit S5).
+impl Drop for PairingPayload {
+    fn drop(&mut self) {
+        zeroize::Zeroize::zeroize(&mut self.qr_text);
+        zeroize::Zeroize::zeroize(&mut self.recovery_key);
+    }
+}
+
+/// Écrivains d'instantanés ouverts en même temps au plus (revue 5) : au-delà, le plus ancien est abandonné.
+pub const MAX_OPEN_SNAPSHOTS: usize = 4;
 
 /// Entrée de `sync_key_import` (PC : QR ou clé de secours ; le scan lancé par Rust arrive à l'ordre 5).
 pub enum KeyInput {
@@ -137,6 +149,8 @@ struct Inner {
     snapshots: HashMap<u32, SnapshotWriter>,
     next_handle: u32,
     pending_paired_by: Option<String>,
+    /// Dernier instantané lu par pages (revue 15) : relu du disque seulement quand un autre est demandé.
+    snapshot_cache: Option<SnapshotCache>,
 }
 
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -221,8 +235,15 @@ impl SyncCore {
         if inner.folder.is_none() {
             let Some(record) = &inner.record else { return fail(SyncCode::NotConfigured) };
             let checked = self.backend.check(Path::new(&record.path))?;
-            if checked.path != Path::new(&record.path) {
+            // Windows ignore la casse : un dossier renommé en ne changeant que la casse reste le même (QA-Y1-3) ; son chemin final est
+            // enregistré de nouveau.
+            if checked.path.to_string_lossy().to_lowercase() != record.path.to_lowercase() {
                 return fail(SyncCode::UnsafeFolder);
+            }
+            if checked.path != Path::new(&record.path) {
+                let updated = FolderRecord { path: checked.path.to_string_lossy().into_owned(), ..record.clone() };
+                write_config_file(&self.path(FOLDER_FILE), &serde_json::to_vec(&updated).unwrap_or_default())?;
+                inner.record = Some(updated);
             }
             let fs = self.backend.open(&checked);
             let folder_id = checked.folder_id();
@@ -232,7 +253,7 @@ impl SyncCore {
     }
 
     fn info_of(bound: &Bound) -> FolderInfo {
-        FolderInfo { configured: true, label: Some(bound.checked.label()), kind: kind_str(bound.checked.kind), pinned: bound.checked.pinned }
+        FolderInfo { configured: true, name: Some(bound.checked.name()), kind: kind_str(bound.checked.kind), pinned: bound.checked.pinned }
     }
 
     /// `sync_folder_info`.
@@ -240,9 +261,11 @@ impl SyncCore {
         let mut inner = self.lock();
         self.ensure_loaded(&mut inner);
         if inner.record.is_none() {
-            return Ok(FolderInfo { configured: false, label: None, kind: "unknown", pinned: false });
+            return Ok(FolderInfo { configured: false, name: None, kind: "unknown", pinned: false });
         }
         let bound = self.require_folder(&mut inner)?;
+        // Racine recontrôlée à chaque lecture (revue 1) : un dossier devenu jonction ou démonté est signalé aussitôt.
+        bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
         Ok(Self::info_of(bound))
     }
 
@@ -277,8 +300,8 @@ impl SyncCore {
             let present = self.vault.get(SYNC_KEY_ACCOUNT).map_err(vault_error)?.map(Zeroizing::new).is_some();
             if present {
                 self.consent.confirm(ConsentKind::EraseKey, owner)?;
+                // usage.json est indexé par kid : gardé, il resservira si la même clé est réimportée (audit S9).
                 self.vault.delete(SYNC_KEY_ACCOUNT).map_err(vault_error)?;
-                remove_config_file(&self.path(USAGE_FILE))?;
             }
         }
         let mut inner = self.lock();
@@ -307,14 +330,25 @@ impl SyncCore {
                 write_config_file(&self.path(FOLDER_FILE), &bytes)?;
             }
         }
-        if let Some(paired_by) = inner.pending_paired_by.take() {
+        // pairedBy reçu à l'import avant la liaison : reporté dès que own.json est disponible, jamais perdu (revue 17).
+        if inner.pending_paired_by.is_some() {
             if let Ok(key) = self.load_key(&mut inner) {
-                let mut own = self.valid_own(&mut inner, &key, device_id)?;
-                own.paired_by = Some(paired_by);
-                self.save_own(&mut inner, own)?;
+                if let Ok(own) = self.valid_own(&mut inner, &key, device_id) {
+                    self.apply_pending(&mut inner, own)?;
+                }
             }
         }
         Ok(())
+    }
+
+    /// Reporte un `pairedBy` en attente dans own.json.
+    fn apply_pending(&self, inner: &mut Inner, mut own: OwnState) -> SyncResult<OwnState> {
+        if let Some(paired_by) = inner.pending_paired_by.clone() {
+            own.paired_by = Some(paired_by);
+            self.save_own(inner, own.clone())?;
+            inner.pending_paired_by = None;
+        }
+        Ok(own)
     }
 
     fn bound_device(inner: &Inner) -> Option<String> {
@@ -347,11 +381,14 @@ impl SyncCore {
 
     /// `sync_key_create` : `key-exists` si une clé existe ; `folder-has-data` si le dossier contient déjà des données CircleTasks.
     pub fn key_create(&self) -> SyncResult<String> {
+        // Clé existante contrôlée sous le verrou (revue 17) : deux appels simultanés ne créent jamais deux clés.
+        let mut inner = self.lock();
         if self.read_vault_key()?.is_some() {
             return fail(SyncCode::KeyExists);
         }
-        let mut inner = self.lock();
         let bound = self.require_folder(&mut inner)?;
+        // Nouveau cycle d'hydratation (budget de 3 minutes) et racine recontrôlée (revue 2).
+        bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
         if Store::folder_has_data(bound.fs.as_ref())? {
             log::event("key-create-refused", "folder-has-data");
             return fail(SyncCode::FolderHasData);
@@ -468,9 +505,9 @@ impl SyncCore {
         let mut inner = self.lock();
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
-        let Inner { folder, accepted, .. } = &mut *inner;
+        let Inner { folder, accepted, snapshot_cache, .. } = &mut *inner;
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted)
+        Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
     }
 
     // --------------------------------------------------------------------------------------------------------------------------
@@ -483,6 +520,7 @@ impl SyncCore {
         let key = self.load_key(inner)?;
         let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
         let own = self.valid_own(inner, &key, &self_id)?;
+        let own = self.apply_pending(inner, own)?;
         let usage = self.usage(inner, key.kid());
         Ok((key, self_id, own, usage))
     }
@@ -534,8 +572,22 @@ impl SyncCore {
     pub fn snapshot_begin(&self, epoch: &str, seq: u64, sv: u64) -> SyncResult<u32> {
         let mut inner = self.lock();
         let (key, self_id, own, _) = self.writable(&mut inner)?;
-        let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        let writer = Store { fs: bound.fs.as_ref(), key: &key, pin: false }.snapshot_begin(&own, &self_id, epoch, seq, sv)?;
+        // Instantané de même époque et même numéro déjà en cours d'écriture : même code qu'un numéro pris (revue 5).
+        if inner.snapshots.values().any(|w| w.epoch == epoch && u64::from(w.seq) == seq) {
+            return fail(SyncCode::SegmentMismatch);
+        }
+        let Inner { folder, snapshots, .. } = &mut *inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        let writer = store.snapshot_begin(&own, &self_id, epoch, seq, sv)?;
+        // Plafond des écrivains ouverts (moteur interrompu sans validation) : le plus ancien est abandonné, son .tmp supprimé.
+        while snapshots.len() >= MAX_OPEN_SNAPSHOTS {
+            let Some(oldest) = snapshots.keys().min().copied() else { break };
+            if let Some(old) = snapshots.remove(&oldest) {
+                store.snapshot_discard(&old);
+                log::event("snapshot-abandoned", &old.seq.to_string());
+            }
+        }
         inner.next_handle = inner.next_handle.wrapping_add(1).max(1);
         let handle = inner.next_handle;
         inner.snapshots.insert(handle, writer);
@@ -615,6 +667,8 @@ impl SyncCore {
         let (key, paired_by, epoch, replace) = {
             let mut inner = self.lock();
             let bound = self.require_folder(&mut inner)?;
+            // Nouveau cycle d'hydratation et racine recontrôlée (revue 2).
+            bound.fs.revalidate().map_err(|e| SyncError::new(e.code()))?;
             let (key, paired_by, epoch) = match &input {
                 KeyInput::QrText(text) => {
                     let qr = parse_qr_text(text).ok_or(SyncError::new(SyncCode::InvalidPairing))?;
@@ -626,12 +680,13 @@ impl SyncCore {
                 KeyInput::RecoveryKey(text) => (key_from_recovery(text).ok_or(SyncError::new(SyncCode::InvalidPairing))?, None, None),
             };
             drop(input);
-            // Le `kid` doit être porté par le dossier avant tout enregistrement (audit B3).
-            let (readable, kids) = Store::folder_kids(bound.fs.as_ref(), paired_by.as_deref())?;
-            if readable == 0 {
+            // La clé doit être celle du dossier avant tout enregistrement (audit B3) : un state.ctx présent doit se déchiffrer avec
+            // elle, pas seulement annoncer son kid en clair (audit S4).
+            let check = Store::folder_kids(bound.fs.as_ref(), paired_by.as_deref(), &key)?;
+            if check.readable == 0 {
                 return fail(SyncCode::CloudPending);
             }
-            if !kids.contains(key.kid()) {
+            if !check.decrypts {
                 log::event("key-import-refused", "key-mismatch");
                 return fail(SyncCode::KeyMismatch);
             }
@@ -644,23 +699,28 @@ impl SyncCore {
             self.consent.confirm(ConsentKind::ReplaceKey, owner)?;
         }
         let mut inner = self.lock();
-        if replace.is_some() {
+        // Clé existante relue sous le verrou (revue 17) : une autre clé apparue pendant la boîte n'est jamais remplacée sans accord.
+        let existing = self.read_vault_key()?;
+        if replace != Some(true) && existing.as_ref().is_some_and(|e| !e.same_as(&key)) {
+            return fail(SyncCode::ConsentDenied);
+        }
+        if !existing.as_ref().is_some_and(|e| e.same_as(&key)) {
+            // usage.json n'est pas remis à zéro : indexé par kid, il ne repart de 0 que pour une autre clé (audit S9).
             self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
             inner.usage = None;
-            remove_config_file(&self.path(USAGE_FILE))?;
         }
         let kid = key.kid().to_owned();
         let key = Arc::new(key);
         inner.key = Some(key.clone());
-        if let Some(self_id) = Self::bound_device(&inner) {
-            let mut own = self.valid_own(&mut inner, &key, &self_id)?;
-            if paired_by.is_some() {
-                own.paired_by = paired_by.clone();
-            }
-            self.save_own(&mut inner, own)?;
-        } else {
-            inner.own = None;
+        inner.own = None;
+        if paired_by.is_some() {
             inner.pending_paired_by = paired_by.clone();
+        }
+        if let Some(self_id) = Self::bound_device(&inner) {
+            // own.json pas encore reconstructible (propre state.ctx dans le nuage) : pairedBy reste en attente, l'import réussit.
+            if let Ok(own) = self.valid_own(&mut inner, &key, &self_id) {
+                self.apply_pending(&mut inner, own)?;
+            }
         }
         log::event("key-imported", &kid);
         Ok(KeyImportResult { kid, paired_by, epoch })

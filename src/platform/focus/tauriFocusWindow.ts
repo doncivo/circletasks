@@ -42,6 +42,8 @@ export function createTauriFocusWindow(call: FocusWindowInvoker = (command, args
     onAction: (handler) =>
       listen<FocusWindowAction>(FOCUS_ACTION_EVENT, (event) => {
         // La mini-fenêtre vient de charger son interface : elle reçoit aussitôt l'état courant.
+        // La mini-fenêtre existe (rechargée, ou rouverte après un échec d'appel) : l'état lui est de nouveau publié (revue 21).
+        if (event.payload.type === 'ready') open = true;
         if (event.payload.type === 'ready' && lastState) void emitTo(FOCUS_WINDOW_LABEL, FOCUS_STATE_EVENT, lastState);
         handler(event.payload);
       }),

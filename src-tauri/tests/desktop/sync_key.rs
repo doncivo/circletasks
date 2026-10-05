@@ -125,7 +125,7 @@ fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
     }
     // Journal technique : aucun secret, aucun chemin complet.
     let lines = log::take_log();
-    assert!(!lines.is_empty());
+    assert!(lines.iter().any(|l| l.starts_with("sync:key-imported")), "lignes de CE test (journal par fil) : {lines:?}");
     for line in lines {
         for secret in secrets {
             assert!(!line.contains(secret), "{line}");
@@ -182,7 +182,7 @@ fn y08_14_import_requires_the_folder_and_a_matching_kid() {
     assert_eq!(code(b.core.key_import(KeyInput::QrText(Zeroizing::new("CTPAIR1.xx".into())), 1)), SyncCode::InvalidPairing);
     // Clé de secours valide (au-delà de la limite de 5 appels par 10 minutes) : enregistrée, même kid ; pairedBy inconnu.
     b.clock.advance(10 * 60_000);
-    let result = b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new(payload.recovery_key)), 1).unwrap();
+    let result = b.core.key_import(KeyInput::RecoveryKey(Zeroizing::new(payload.recovery_key.clone())), 1).unwrap();
     assert_eq!(result.kid, a.core.key_status().unwrap().kid.unwrap());
     assert_eq!(result.paired_by, None);
     assert!(vault_key(&b).same_as(&vault_key(&a)));
@@ -216,7 +216,7 @@ fn y08_14_qr_import_sets_paired_by_and_epoch_and_replacing_a_key_asks_first() {
     assert!(vault_key(&b).same_as(&vault_key(&a)));
     // Même clé : sans effet, aucune boîte.
     let prompts = b.ui.prompts();
-    b.core.key_import(KeyInput::QrText(Zeroizing::new(fresh.qr_text)), 1).unwrap();
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(fresh.qr_text.clone())), 1).unwrap();
     assert_eq!(b.ui.prompts(), prompts);
     // pairedBy mémorisé par Rust (own.json) : un état sans pairedBy est refusé, avec pairedBy accepté.
     let state = |paired: Option<&str>| {

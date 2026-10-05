@@ -129,6 +129,23 @@ pub const HYDRATE_CYCLE_BUDGET: Duration = Duration::from_millis(super::limits::
 
 pub use imp::StdFs;
 
+/// Composant de chemin sûr (défense en profondeur, revue 19) : non vide, 255 caractères au plus, ni `.` ni `..`, aucun séparateur, ni
+/// `:` (flux NTFS, lecteur), ni caractère interdit par Windows ou de contrôle, ni point ou espace final (Windows les retire), ni nom de
+/// périphérique réservé (`CON`, `NUL`, `COM1`, `LPT1`…, avec ou sans extension).
+pub fn is_safe_component(name: &str) -> bool {
+    if name.is_empty() || name.chars().count() > 255 || name == "." || name == ".." || name.ends_with(['.', ' ']) {
+        return false;
+    }
+    if name.chars().any(|c| c < ' ' || matches!(c, '\\' | '/' | ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
+        return false;
+    }
+    let stem = name.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$" | "CLOCK$")
+        || ((stem.starts_with("COM") || stem.starts_with("LPT")) && stem.len() == 4 && stem.as_bytes()[3].is_ascii_digit())
+        || ((stem.starts_with("COM") || stem.starts_with("LPT")) && matches!(stem.get(3..), Some("¹" | "²" | "³")));
+    !reserved
+}
+
 #[cfg(windows)]
 mod imp {
     use std::fs::File;
@@ -143,7 +160,7 @@ mod imp {
     use windows::Wdk::Foundation::OBJECT_ATTRIBUTES;
     use windows::Wdk::Storage::FileSystem::{
         NtCreateFile, NtSetInformationFile, FileRenameInformation, FileRenameInformationEx, FILE_CREATE, FILE_RENAME_INFORMATION, FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_IF, FILE_OPEN_REPARSE_POINT,
-        FILE_OVERWRITE_IF, FILE_SYNCHRONOUS_IO_NONALERT, NTCREATEFILE_CREATE_DISPOSITION, NTCREATEFILE_CREATE_OPTIONS,
+        FILE_SYNCHRONOUS_IO_NONALERT, NTCREATEFILE_CREATE_DISPOSITION, NTCREATEFILE_CREATE_OPTIONS,
     };
     use windows::Win32::Foundation::{HANDLE, NTSTATUS, OBJ_CASE_INSENSITIVE, UNICODE_STRING};
     use windows::Win32::Storage::FileSystem::{
@@ -191,7 +208,7 @@ mod imp {
         disposition: NTCREATEFILE_CREATE_DISPOSITION,
         options: NTCREATEFILE_CREATE_OPTIONS,
     ) -> Result<OwnedHandle, FsError> {
-        if name.is_empty() || name.contains(['\\', '/', ':']) || name == "." || name == ".." {
+        if !super::is_safe_component(name) {
             return Err(FsError::Unsafe);
         }
         let mut wide: Vec<u16> = name.encode_utf16().collect();
@@ -345,7 +362,7 @@ mod imp {
         /// Renomme dans le dossier `parent` (`NtSetInformationFile`, `RootDirectory` = handle du dossier contrôlé) : le nom n'est jamais
         /// résolu par rapport au dossier courant du processus (ce que ferait `SetFileInformationByHandle` avec un nom simple).
         fn rename_handle(handle: &OwnedHandle, parent: &OwnedHandle, to: &str) -> Result<(), FsError> {
-            if to.is_empty() || to.contains(['\\', '/', ':']) {
+            if !super::is_safe_component(to) {
                 return Err(FsError::Unsafe);
             }
             let name: Vec<u16> = to.encode_utf16().collect();
@@ -510,7 +527,17 @@ mod imp {
             let (dir, name) = Self::split(file)?;
             let parent = self.open_dir(dir, false)?;
             let temp = format!("{name}{}", super::super::names::TEMP_SUFFIX);
-            let handle = open_relative(&parent, &temp, FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | DELETE, FILE_OVERWRITE_IF, FILE_NON_DIRECTORY_FILE)?;
+            // Un ancien `.tmp` est supprimé (son nom seulement), puis le nouveau est créé exclusivement : un `.tmp` lien physique vers un
+            // autre fichier n'est jamais tronqué ni écrit (audit S3).
+            match open_relative(&parent, &temp, DELETE | FILE_READ_ATTRIBUTES, FILE_OPEN, FILE_NON_DIRECTORY_FILE) {
+                Ok(old) => {
+                    check_tag(&old)?;
+                    Self::delete_handle(&old)?;
+                }
+                Err(FsError::NotFound) => {}
+                Err(error) => return Err(error),
+            }
+            let handle = open_relative(&parent, &temp, FILE_WRITE_DATA | FILE_READ_ATTRIBUTES | DELETE, FILE_CREATE, FILE_NON_DIRECTORY_FILE)?;
             self.check_writable(&handle)?;
             let mut file = File::from(handle);
             file.write_all(bytes).map_err(|e| cloud_windows::io_error(&e))?;
@@ -594,7 +621,7 @@ mod imp {
         fn path(&self, parts: &[&str]) -> Result<PathBuf, FsError> {
             let mut path = self.root.clone();
             for part in parts {
-                if part.is_empty() || part.contains(['/', '\\']) || *part == "." || *part == ".." {
+                if !super::is_safe_component(part) {
                     return Err(FsError::Unsafe);
                 }
                 path.push(part);

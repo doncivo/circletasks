@@ -49,6 +49,8 @@ pub struct MemFs {
     /// Erreur rendue par `revalidate` (dossier devenu jonction, démonté).
     pub revalidate_error: Mutex<Option<FsError>>,
     pub writes: AtomicUsize,
+    /// Lectures de fichiers (revue 15 : un instantané lu par pages n'est relu qu'une fois).
+    pub reads: AtomicUsize,
 }
 
 fn key(parts: &[&str]) -> String {
@@ -161,6 +163,7 @@ impl SyncFs for SharedFs {
     }
 
     fn read(&self, file: &[&str], limit: u64, hydrate: bool) -> Result<Vec<u8>, FsError> {
+        self.0.reads.fetch_add(1, Ordering::SeqCst);
         let mut nodes = self.0.nodes.lock().unwrap();
         let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&key(file)) else { return Err(FsError::NotFound) };
         if bytes.len() as u64 + *extra > limit {

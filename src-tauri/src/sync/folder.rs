@@ -18,8 +18,6 @@ use super::{fail, SyncCode, SyncResult};
 /// Nom du sous-dossier de configuration de la synchro.
 pub const CONFIG_SUBDIR: &str = "sync";
 pub const FOLDER_FILE: &str = "folder.json";
-/// Libellé du dossier iCloud Drive (PRD 7 : « iCloud Drive / CircleTasks »).
-pub const ICLOUD_LABEL_PREFIX: &str = "iCloud Drive / ";
 /// Dossier proposé : `%USERPROFILE%\iCloudDrive\CircleTasks`.
 pub const ICLOUD_DRIVE_DIR: &str = "iCloudDrive";
 pub const DEFAULT_FOLDER_NAME: &str = "CircleTasks";
@@ -50,13 +48,10 @@ impl CheckedFolder {
         sha256_hex(self.path.to_string_lossy().to_lowercase().as_bytes())
     }
 
-    /// Libellé affiché, jamais un chemin : « iCloud Drive / <nom> » ou le seul nom du dossier.
-    pub fn label(&self) -> String {
-        let name = self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        match self.kind {
-            FolderKind::Icloud => format!("{ICLOUD_LABEL_PREFIX}{name}"),
-            _ => name,
-        }
+    /// Nom du dossier, jamais un chemin. Le libellé affiché (« iCloud Drive / CircleTasks ») est composé par l'interface à partir du
+    /// nom et de la nature (textes dans `src/i18n`, revue 13). Jamais vide : une racine de lecteur est refusée par `check_sync_path`.
+    pub fn name(&self) -> String {
+        self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
     }
 }
 
@@ -109,6 +104,17 @@ pub fn remove_config_file(path: &Path) -> SyncResult<()> {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(_) => fail(SyncCode::Io),
+    }
+}
+
+/// Dossier à lier après la boîte de choix (audit S10) : le dossier choisi ; si c'est `iCloud Drive` lui-même, son sous-dossier
+/// `CircleTasks`, à créer seulement maintenant que l'utilisateur a validé. Rend (dossier, à créer).
+pub fn chosen_target(chosen: &Path, icloud_drive: Option<&Path>) -> (PathBuf, bool) {
+    let is_drive = icloud_drive.is_some_and(|drive| drive.to_string_lossy().to_lowercase().trim_end_matches('\\') == chosen.to_string_lossy().to_lowercase().trim_end_matches('\\'));
+    if is_drive {
+        (chosen.join(DEFAULT_FOLDER_NAME), true)
+    } else {
+        (chosen.to_path_buf(), false)
     }
 }
 
@@ -255,6 +261,10 @@ mod win {
     pub fn check_sync_path(path: &Path) -> SyncResult<CheckedFolder> {
         cloud_windows::expose_placeholders();
         let requested = normalize_final_path(&path.to_string_lossy()).ok_or(crate::sync::SyncError::new(SyncCode::NotLocal))?;
+        // Racine de lecteur refusée (QA-Y1-2) : pas de nom à afficher, et `devices/` serait créé à la racine du disque.
+        if requested.len() <= 3 {
+            return fail(SyncCode::UnsafeFolder);
+        }
         let (handle, _) = check_components(&requested)?;
         let Some(final_path) = final_path_of(HANDLE(handle.as_raw_handle())) else { return fail(SyncCode::UnsafeFolder) };
         let Some(final_path) = normalize_final_path(&final_path) else {
@@ -286,5 +296,8 @@ pub fn check_sync_path(path: &Path) -> SyncResult<CheckedFolder> {
         return fail(SyncCode::UnsafeFolder);
     }
     let path = std::fs::canonicalize(path).map_err(|_| super::SyncError::new(SyncCode::FolderUnreachable))?;
+    if path.parent().is_none() {
+        return fail(SyncCode::UnsafeFolder);
+    }
     Ok(CheckedFolder { path, kind: FolderKind::Unknown, pinned: false })
 }

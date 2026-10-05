@@ -392,7 +392,7 @@ fn expand(id: &str, manifests: &Value, out: &mut std::collections::BTreeSet<Stri
     }
 }
 
-/// (5) aucune capability qui s'applique à `main` (y compris par joker ou `webviews`, ensembles `default` développés) n'accorde la
+/// (5) aucune capability (audit S6 : toutes, et pas seulement celles qui visent `main` par joker ou `webviews` ; ensembles `default` développés) n'accorde la
 /// création de fenêtre ou de webview.
 #[test]
 fn sync_5_no_capability_applying_to_main_grants_window_creation() {
@@ -404,16 +404,17 @@ fn sync_5_no_capability_applying_to_main_grants_window_creation() {
     for (name, text) in all_capabilities() {
         let capability: Value = serde_json::from_str(&text).expect("capability valide");
         let targets = |key: &str| capability[key].as_array().is_some_and(|a| a.iter().filter_map(Value::as_str).any(|w| glob_matches(w, "main")));
-        if !targets("windows") && !targets("webviews") {
-            continue;
+        // Audit S6 : la création de fenêtre ou de webview est interdite à TOUTES les capabilities (Focus, capture, pairing comprises),
+        // pas seulement à celles qui visent `main` ; seules les commandes Rust créent des fenêtres.
+        if targets("windows") || targets("webviews") {
+            applying += 1;
         }
-        applying += 1;
         let mut granted = std::collections::BTreeSet::new();
         for id in permissions_of(&text) {
             expand(&id, &manifests, &mut granted);
         }
         for permission in forbidden {
-            assert!(!granted.contains(permission), "{name} accorde {permission} à main");
+            assert!(!granted.contains(permission), "{name} accorde {permission}");
         }
     }
     assert!(applying >= 5, "les capabilities de main ont bien été trouvées");

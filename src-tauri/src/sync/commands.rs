@@ -15,9 +15,9 @@ use tauri_plugin_dialog::DialogExt;
 use zeroize::Zeroizing;
 
 use super::consent::{ConsentGate, WindowsConsentUi};
-use super::folder::{config_dir, DEFAULT_FOLDER_NAME, ICLOUD_DRIVE_DIR};
+use super::folder::{chosen_target, config_dir, DEFAULT_FOLDER_NAME, ICLOUD_DRIVE_DIR};
 use super::marker::RestoreMarker;
-use super::pairing::{Caller, PairingMode, PairingRegistry, PAIRING_PAGE, PAIRING_WINDOW};
+use super::pairing::{pairing_page_present, Caller, PairingMode, PairingRegistry, PAIRING_PAGE, PAIRING_WINDOW};
 use super::service::{system_clock, AppendRequest, FolderInfo, KeyImportResult, KeyInput, KeyStatus, PairingPayload, SyncCore, SyncOptions, SystemBackend};
 use super::store::{AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
@@ -84,13 +84,11 @@ pub async fn sync_folder_info(app: AppHandle, window: WebviewWindow, state: Stat
 pub async fn sync_folder_choose(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>) -> SyncResult<Option<FolderInfo>> {
     require_main(&window)?;
     let core = state.core(&app)?;
-    let proposed = std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(ICLOUD_DRIVE_DIR)).filter(|drive| drive.is_dir()).map(|drive| drive.join(DEFAULT_FOLDER_NAME));
-    let created = match &proposed {
-        Some(dir) if !dir.exists() => std::fs::create_dir(dir).is_ok(),
-        _ => false,
-    };
+    // Rien n'est créé avant la validation (audit S10) : la boîte s'ouvre sur `iCloud Drive\CircleTasks` s'il existe, sinon sur
+    // `iCloud Drive` ; choisir `iCloud Drive` lui-même crée puis lie `iCloud Drive\CircleTasks`.
+    let icloud = std::env::var_os("USERPROFILE").map(|home| PathBuf::from(home).join(ICLOUD_DRIVE_DIR)).filter(|drive| drive.is_dir());
+    let start = icloud.as_ref().map(|drive| drive.join(DEFAULT_FOLDER_NAME)).filter(|dir| dir.is_dir()).or_else(|| icloud.clone());
     let dialog_app = app.clone();
-    let start = proposed.clone();
     let chosen = tauri::async_runtime::spawn_blocking(move || {
         let mut dialog = dialog_app.dialog().file();
         if let Some(dir) = &start {
@@ -103,15 +101,11 @@ pub async fn sync_folder_choose(app: AppHandle, window: WebviewWindow, state: St
     })
     .await
     .map_err(|_| SyncError::new(SyncCode::Io))?;
-    let path = chosen.and_then(|file| file.into_path().ok());
-    if created {
-        if let Some(dir) = &proposed {
-            if path.as_deref() != Some(dir.as_path()) {
-                let _ = std::fs::remove_dir(dir);
-            }
-        }
+    let Some(path) = chosen.and_then(|file| file.into_path().ok()) else { return Ok(None) };
+    let (path, create) = chosen_target(&path, icloud.as_deref());
+    if create && !path.exists() {
+        std::fs::create_dir(&path).map_err(|_| SyncError::new(SyncCode::Io))?;
     }
-    let Some(path) = path else { return Ok(None) };
     blocking(move || core.choose_folder(&path).map(Some)).await
 }
 
@@ -156,6 +150,18 @@ pub async fn sync_key_create(app: AppHandle, window: WebviewWindow, state: State
 // ------------------------------------------------------------------------------------------------------------------------------
 // Fenêtre `pairing`
 // ------------------------------------------------------------------------------------------------------------------------------
+
+/// `pairing.html` est-elle embarquée sous ce nom ? Le résolveur de Tauri se replie sur `index.html` : la page n'est présente que si
+/// elle diffère d'`index.html`. En développement avec le serveur Vite, la page est servie par Vite (non vérifiable ici).
+fn pairing_page_available(app: &AppHandle) -> bool {
+    if cfg!(debug_assertions) && app.config().build.dev_url.is_some() {
+        return true;
+    }
+    let resolver = app.asset_resolver();
+    let page = resolver.get(PAIRING_PAGE.to_owned()).map(|a| a.bytes);
+    let index = resolver.get("index.html".to_owned()).map(|a| a.bytes);
+    pairing_page_present(page.as_deref(), index.as_deref())
+}
 
 fn caller_url(window: &WebviewWindow) -> String {
     window.url().map(|u| u.to_string()).unwrap_or_default()
@@ -211,6 +217,12 @@ pub async fn sync_pairing_open(app: AppHandle, window: WebviewWindow, state: Sta
     let registry = state.pairing.clone();
     let check = core.clone();
     blocking(move || check.pairing_preconditions(mode == PairingMode::Show)).await?;
+    // La page embarquée doit exister sous son nom exact : Tauri servirait index.html (l'application entière, avec ses stores) à sa
+    // place (audit S1). Installation incomplète, pas une question de consentement : `io`, aucune boîte, aucune fenêtre.
+    if !pairing_page_available(&app) {
+        log::event("pairing-refused", "page-missing");
+        return fail(SyncCode::Io);
+    }
     registry.begin_open(app.get_webview_window(PAIRING_WINDOW).is_some())?;
     let result = open_pairing_window(&app, &window, &core, &registry, mode).await;
     if result.is_err() {
@@ -267,7 +279,12 @@ async fn open_pairing_window(app: &AppHandle, main: &WebviewWindow, core: &Arc<S
         WindowEvent::Destroyed => events_registry.clear(hwnd),
         _ => {}
     });
-    window.show().map_err(|_| SyncError::new(SyncCode::Io))?;
+    // Affichage impossible : fenêtre détruite et instance effacée (revue 7), jamais une instance masquée qui garderait un jeton.
+    if window.show().is_err() {
+        destroy_pairing(app, registry, hwnd);
+        registry.clear(hwnd);
+        return fail(SyncCode::Io);
+    }
     let _ = window.set_focus();
     watch_pairing(app.clone(), registry.clone(), core.clone(), hwnd);
     log::event("pairing-opened", if mode == PairingMode::Show { "show" } else { "import" });

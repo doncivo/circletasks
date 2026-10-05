@@ -42,7 +42,12 @@ pub enum CryptoError {
     Unavailable,
     /// Texte clair trop long (256 Kio au plus).
     TooLarge,
+    /// `sm` ou `sv` hors de 1 à 999 999 : le lecteur ne pourrait pas relire la ligne (préfixe de 6 chiffres au plus).
+    BadVersion,
 }
+
+/// Plus grande valeur de `sm` et de `sv` dans le préfixe d'une ligne (6 chiffres).
+pub const MAX_LINE_VERSION: u32 = 999_999;
 
 /// Échec d'ouverture d'une ligne.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,8 +142,12 @@ impl MasterKey {
         if json.len() > MAX_RECORD_PLAINTEXT_BYTES {
             return Err(CryptoError::TooLarge);
         }
+        // Même borne que `parse_line_prefix` : jamais une ligne écrite que le lecteur refuserait (défaut QA-Y1-1).
+        if !(1..=MAX_LINE_VERSION).contains(&sm) || !(1..=MAX_LINE_VERSION).contains(&sv) {
+            return Err(CryptoError::BadVersion);
+        }
+        let aad = aad_bytes(&place.aad_fields(sm, sv)).ok_or(CryptoError::TooLarge)?;
         let mut in_out = pad(json);
-        let aad = aad_bytes(&place.aad_fields(sm, sv));
         let nonce = self.record.seal_in_place_append_tag(Aad::from(aad.as_slice()), &mut *in_out).map_err(|_| CryptoError::Unavailable)?;
         let mut payload = Vec::with_capacity(NONCE_BYTES + in_out.len());
         payload.extend_from_slice(nonce.as_ref());
@@ -154,7 +163,7 @@ impl MasterKey {
             return Err(OpenError::Malformed);
         }
         let nonce = Nonce::try_assume_unique_for_key(&payload[..NONCE_BYTES]).map_err(|_| OpenError::Malformed)?;
-        let aad = aad_bytes(&place.aad_fields(prefix.sm, prefix.sv));
+        let aad = aad_bytes(&place.aad_fields(prefix.sm, prefix.sv)).ok_or(OpenError::Malformed)?;
         let plain = self.record.open_in_place(nonce, Aad::from(aad.as_slice()), &mut payload[NONCE_BYTES..]).map_err(|_| OpenError::Decrypt)?;
         let json = unpad(plain).ok_or(OpenError::Decrypt)?;
         let text = std::str::from_utf8(json).map_err(|_| OpenError::Decrypt)?.to_owned();
@@ -195,15 +204,16 @@ impl Place<'_> {
     }
 }
 
-/// Chaque champ préfixé par sa longueur (u16 gros-boutiste), puis ses octets UTF-8.
-pub fn aad_bytes(fields: &[String]) -> Vec<u8> {
+/// Chaque champ préfixé par sa longueur (u16 gros-boutiste), puis ses octets UTF-8. `None` si un champ dépasse 65 535 octets : jamais
+/// tronqué (deux AAD différentes ne doivent jamais donner les mêmes octets).
+pub fn aad_bytes(fields: &[String]) -> Option<Vec<u8>> {
     let mut out = Vec::with_capacity(fields.iter().map(|f| f.len() + 2).sum());
     for field in fields {
-        let len = u16::try_from(field.len()).unwrap_or(u16::MAX);
+        let len = u16::try_from(field.len()).ok()?;
         out.extend_from_slice(&len.to_be_bytes());
-        out.extend_from_slice(&field.as_bytes()[..usize::from(len)]);
+        out.extend_from_slice(field.as_bytes());
     }
-    out
+    Some(out)
 }
 
 /// `longueur (u32 gros-boutiste) ‖ JSON ‖ zéros` au multiple de 4 Kio supérieur (4 Kio au minimum).
@@ -428,6 +438,8 @@ struct QrPayload {
     v: u8,
     k: String,
     d: String,
+    /// Clé obligatoire, même nulle (`Option::deserialize` : aucune valeur par défaut si elle manque).
+    #[serde(deserialize_with = "Option::deserialize")]
     e: Option<String>,
     x: u64,
 }
@@ -460,14 +472,8 @@ pub fn parse_qr_text(text: &str) -> Option<QrContent> {
     }
     let encoded = text.strip_prefix(PAIRING_QR_PREFIX)?;
     let json = Zeroizing::new(URL_SAFE_NO_PAD.decode(encoded).ok()?);
-    // Clés exactes (la clé `e` doit être présente, même nulle) ; une clé répétée ou inconnue est refusée par serde.
-    let keys: serde_json::Map<String, serde_json::Value> = serde_json::from_slice(&json).ok()?;
-    let mut names: Vec<&str> = keys.keys().map(String::as_str).collect();
-    names.sort_unstable();
-    if names != ["d", "e", "k", "v", "x"] {
-        return None;
-    }
-    drop(keys);
+    // Clés exactes, analysées directement dans la structure (aucune copie intermédiaire de la clé à effacer, revue 12) : clé manquante,
+    // répétée ou inconnue refusée par serde.
     let payload: QrPayload = serde_json::from_slice(&json).ok()?;
     if payload.v != 1 || !is_uuid_v4(&payload.d) || payload.x > (1u64 << 53) - 1 {
         return None;

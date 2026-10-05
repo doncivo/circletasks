@@ -154,7 +154,7 @@ fn y01_6_case_and_trailing_slash_do_not_change_the_folder_identity() {
     assert_eq!(a.folder_id(), c.folder_id());
     assert_eq!(a.folder_id(), d.folder_id());
     assert_eq!(a.folder_id().len(), 64);
-    assert!(!a.folder_id().contains("circletasks") && !a.label().contains('\\'), "ni chemin ni libellé à backslash");
+    assert!(!a.folder_id().contains("circletasks") && !a.name().contains('\\'), "ni chemin ni libellé à backslash");
     assert_eq!(a.kind, FolderKind::Local);
     // Deux dossiers distincts : deux identifiants distincts.
     let other = root.join("Autre");
@@ -166,12 +166,11 @@ fn y01_6_case_and_trailing_slash_do_not_change_the_folder_identity() {
 /// `C:\` est `None`), donc la ligne de Réglages n'affiche rien ; de plus `devices/` serait créé à la racine du disque. Attendu :
 /// refuser une racine de lecteur (`unsafe-folder`) ou renvoyer un libellé non vide.
 #[test]
-#[ignore = "défaut QA-Y1-2 : racine de lecteur acceptée, libellé vide"]
 fn y01_6_a_drive_root_is_not_a_usable_sync_folder() {
     let system_drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
     match check_sync_path(Path::new(&format!("{system_drive}\\"))) {
         Err(_) => {}
-        Ok(folder) => assert!(!folder.label().is_empty(), "libellé vide pour {}", folder.path.display()),
+        Ok(folder) => assert!(!folder.name().is_empty(), "nom vide pour {}", folder.path.display()),
     }
 }
 
@@ -274,7 +273,7 @@ mod persisted {
         // Un dossier valide persisté puis relu par une nouvelle instance : même libellé, sans nouvelle boîte (critère 4).
         write_record(base.path(), &folder.to_string_lossy(), Some(DEV_B));
         let info = core_on(base.path()).folder_info().unwrap();
-        assert_eq!((info.configured, info.label.as_deref()), (true, Some("CircleTasks")));
+        assert_eq!((info.configured, info.name.as_deref()), (true, Some("CircleTasks")));
     }
 
     #[test]
@@ -302,7 +301,6 @@ mod persisted {
     /// chemin de `folder.json` au chemin final en respectant la casse : `unsafe-folder` permanent jusqu'à « Oublier le dossier ».
     /// Attendu : comparaison insensible à la casse comme dans `check_sync_path`.
     #[test]
-    #[ignore = "défaut QA-Y1-3 : changement de casse du dossier lié -> unsafe-folder"]
     fn y01_7_a_case_only_rename_of_the_linked_folder_is_still_the_same_folder() {
         let (_dir, root) = temp_root();
         let base = tempfile::tempdir().unwrap();

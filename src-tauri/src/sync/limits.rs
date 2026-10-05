@@ -76,3 +76,10 @@ pub fn encrypted_line_bytes(json_bytes: usize, sm: u32, sv: u32) -> usize {
     let sealed = NONCE_BYTES + padded_plaintext_bytes(json_bytes) + TAG_BYTES;
     format!("{sm}.{sv}.").len() + base64url_len(sealed) + 1
 }
+
+/// Entrées listées au plus par opération (scan, reconstruction de `own.json`, recherche de données ; audit S2), toutes listes confondues.
+pub const MAX_SCAN_ENTRIES_TOTAL: usize = 50_000;
+/// Dossiers d'époque listés au plus par appareil retenu (les plus récents).
+pub const MAX_EPOCHS_PER_DEVICE: usize = 64;
+/// `state.ctx` d'appareils non protégés lus au plus par opération (candidats au plafond de 16 dossiers, import, reconstruction).
+pub const MAX_STATE_CANDIDATES: usize = 64;

@@ -192,25 +192,30 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
 /// Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3). Écrit sur la sortie d'erreur
 /// en développement seulement ; les tests le capturent par `take_log`.
 pub mod log {
-    use std::sync::Mutex;
+    use std::cell::RefCell;
 
-    static LINES: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    // Journal par fil d'exécution : les tests tournent en parallèle (un fil par test) et ne voient que leurs propres lignes ; un
+    // tampon global partagé laissait un test voisin évincer (plafond de 1 000 lignes) ou mêler ses lignes à celles du test observé.
+    thread_local! {
+        static LINES: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    }
 
     /// `event` : identifiant fixe (`folder-ignored`, `pin-failed`…) ; `detail` : nom strict, code, compteur ou identifiant d'appareil.
     pub fn event(event: &'static str, detail: &str) {
         let line = format!("sync:{event} {detail}");
         #[cfg(debug_assertions)]
         eprintln!("{line}");
-        if let Ok(mut lines) = LINES.lock() {
+        LINES.with(|lines| {
+            let mut lines = lines.borrow_mut();
             if lines.len() >= 1_000 {
                 lines.remove(0);
             }
             lines.push(line);
-        }
+        });
     }
 
-    /// Lignes journalisées depuis le dernier appel (tests : aucune ne doit contenir de secret).
+    /// Lignes journalisées par ce fil depuis le dernier appel (tests : aucune ne doit contenir de secret).
     pub fn take_log() -> Vec<String> {
-        LINES.lock().map(|mut lines| std::mem::take(&mut *lines)).unwrap_or_default()
+        LINES.with(|lines| std::mem::take(&mut *lines.borrow_mut()))
     }
 }

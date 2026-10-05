@@ -1,8 +1,8 @@
 //! Marqueur de restauration (ADR 0010 règle 2, ADR 0011 section 9 ; Y-01 critère 16).
 //!
 //! `<dossier de configuration>/restore-marker.json` : `{ v, backup, backupTakenAt, restoredAt, schemaVersion }`, écrit par `.tmp` +
-//! renommage **après un échange abouti et seulement si un dossier de synchro est configuré** (`write_after_restore`, appelée par
-//! `backup::restore_backup`), lu par `sync_restore_marker_get`, supprimé par `sync_restore_marker_clear`.
+//! renommage **après un échange abouti et seulement si un dossier de synchro est configuré** (`write_after_restore`, à appeler par
+//! `backup::restore_backup` : câblage au lot Y2, voir docs/dettes.md), lu par `sync_restore_marker_get`, supprimé par `sync_restore_marker_clear`.
 
 use std::path::Path;
 

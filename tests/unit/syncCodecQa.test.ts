@@ -187,10 +187,10 @@ describe('Y-08 critère 14 : texte du QR aux bornes', () => {
 /**
  * Défaut QA-Y1-4 (faible) : le codec de référence TypeScript est plus permissif que Rust sur des entrées exotiques. Rust (autorité de
  * production) refuse ; le codec TS accepte. Sans conséquence sur la production, mais les vecteurs croisés ne couvrent pas ces cas et
- * Y-02 s'appuie sur ce codec pour ses tests. `it.fails` : le test passe tant que l'écart existe et casse quand il est corrigé.
+ * Y-02 s'appuie sur ce codec pour ses tests. Corrigé au lot Y1 (corrections revue et audit) : le codec refuse comme Rust.
  */
 describe('Y-08 critère 4 : parité TS / Rust sur les entrées exotiques (défaut QA-Y1-4)', () => {
-  it.fails('clé de secours : espace insécable, « ı » et « ſ » (majuscules Unicode) refusés comme Rust ; plafond de 256 octets', async () => {
+  it('clé de secours : espace insécable, « ı » et « ſ » (majuscules Unicode) refusés comme Rust ; plafond de 256 octets', async () => {
     const body = (await recoveryKeyOf(key)).slice(4).replace(/-/g, '');
     expect(await keyFromRecovery(`${body.slice(0, 10)}${String.fromCharCode(0xa0)}${body.slice(10)}`)).toBeNull();
     const withOne = body.replace('1', 'ı');
@@ -198,7 +198,7 @@ describe('Y-08 critère 4 : parité TS / Rust sur les entrées exotiques (défau
     expect(await keyFromRecovery(`${' '.repeat(300)}${body}`)).toBeNull();
   });
 
-  it.fails('QR : clé répétée et x = 1.0 refusés comme Rust', () => {
+  it('QR : clé répétée et x = 1.0 refusés comme Rust', () => {
     const k = toBase64Url(key);
     const duplicate = `{"v":1,"k":"${k}","k":"${k}","d":"${VECTOR_DEVICE}","e":null,"x":1}`;
     const text = (json: string): string => `CTPAIR1.${toBase64Url(new TextEncoder().encode(json))}`;

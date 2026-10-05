@@ -186,7 +186,6 @@ fn y08_3_aad_separates_the_three_kinds_even_with_equal_numbers() {
 /// Défaut QA-Y1-1 (faible) : `seal` accepte `sm` / `sv` de plus de 6 chiffres, mais `open` les refuse (`Malformed`) : une ligne scellée
 /// avec `sv >= 1 000 000` serait écrite puis jamais relue. Attendu : `seal` refuse (`CryptoError`).
 #[test]
-#[ignore = "défaut QA-Y1-1 : seal accepte sv >= 1 000 000, ligne illisible ensuite"]
 fn y08_1_seal_refuses_a_version_the_reader_cannot_parse() {
     let key = fixed_key();
     let sealed = key.seal(&journal(), b"{}", 1, 1_000_000);
