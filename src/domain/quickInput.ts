@@ -1,4 +1,4 @@
-import { foldKeepLength, naturalDate, removeHits, type Hit, type NaturalDate, type NaturalNow } from './naturalDate';
+import { foldKeepLength, naturalDate, removeHits, type AbsoluteDateParser, type Hit, type NaturalDate, type NaturalNow } from './naturalDate';
 import type { Project, Space } from './model';
 import type { LocalDate, LocalTime, ProjectId, SpaceId } from './types';
 import type { FirstWeekday } from './week';
@@ -27,6 +27,8 @@ export interface QuickContext {
   /** « Maintenant » en heure locale de l'appareil ; absent : aucune date n'est cherchée. */
   readonly now?: NaturalNow;
   readonly firstWeekday?: FirstWeekday;
+  /** Analyseur des dates écrites (chargé à la demande, PERF-02) ; absent ou null : grammaire locale seule. */
+  readonly absoluteDates?: AbsoluteDateParser | null;
   /** Faux : seules les marques sont lues (écran « Un jour », date réglée à la main dans la feuille). Défaut : vrai. */
   readonly dates?: boolean;
 }
@@ -199,7 +201,7 @@ export function parseQuickInput(text: string, context: QuickContext, options: Pa
     return { title: '', spaceId: resolvedSpace, projectId, spaceWritten: spaceId !== null, unknownProject, date: null, time: null, dateRange: null, dateWritten: false, tokens, natural: null };
   }
 
-  let natural = context.dates === false || !context.now ? null : naturalDate(text, context.now, context.firstWeekday ? { firstWeekday: context.firstWeekday } : {}, hits);
+  let natural = context.dates === false || !context.now ? null : naturalDate(text, context.now, { ...(context.firstWeekday ? { firstWeekday: context.firstWeekday } : {}), absoluteDates: context.absoluteDates ?? null }, hits);
   let dateToken: QuickToken | null = null;
   if (natural) {
     const raw = natural.spans.map((span) => text.slice(span.start, span.end).trim()).join(' ');

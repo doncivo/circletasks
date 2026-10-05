@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chronoAbsoluteParser } from './chronoAbsolute';
 import { applySuggestion, parseQuickInput, quickSuggestions, tokenKey, type QuickContext, type QuickProject, type QuickSpace } from './quickInput';
 import { asLocalDate, asLocalTime, type ProjectId, type SpaceId } from './types';
 
@@ -28,7 +29,7 @@ const PROJECTS: QuickProject[] = [
   project('p-eco', PERSO, 'Écologie'),
 ];
 const NOW = { date: asLocalDate('2026-09-22'), time: asLocalTime('08:00') };
-const ctx = (extra: Partial<QuickContext> = {}): QuickContext => ({ spaces: SPACES, projects: PROJECTS, defaultSpaceId: PRO, now: NOW, ...extra });
+const ctx = (extra: Partial<QuickContext> = {}): QuickContext => ({ spaces: SPACES, projects: PROJECTS, defaultSpaceId: PRO, now: NOW, absoluteDates: chronoAbsoluteParser, ...extra });
 
 describe('parseQuickInput : marques # et @ (Q-06)', () => {
   it('critère 1 : « Relancer client #pro @mission »', () => {

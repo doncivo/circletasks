@@ -1,7 +1,7 @@
 import { nowLocalTime, todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Task } from '../../domain/model';
 import { effectiveProjectFilter } from '../../domain/projectRules';
-import { loadAbsoluteDates } from './absoluteDates';
+import { getAbsoluteDateParser, loadAbsoluteDates } from './absoluteDatesLoader';
 import { parseQuickInput, type QuickContext } from '../../domain/quickInput';
 import { defaultSpaceFor, isCreatedOutsideFilter } from '../../domain/spaceRules';
 import type { SpaceId } from '../../domain/types';
@@ -27,6 +27,7 @@ export function currentQuickContext(container: Pick<AppContainer, 'clock'>): Qui
     projects,
     defaultSpaceId: defaultSpaceFor(spaceFilter, spaces),
     dates: true,
+    absoluteDates: getAbsoluteDateParser(),
     firstWeekday: getFirstWeekday(),
     now: { date: todayLocal(container.clock), time: nowLocalTime(container.clock) },
   };

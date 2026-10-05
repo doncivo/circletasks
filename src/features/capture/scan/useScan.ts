@@ -8,7 +8,7 @@ import type { LocalDate, SpaceId } from '../../../domain/types';
 import { OcrError, type OcrEngine, type OcrService } from '../../../platform/ocr';
 import { useAppContainer } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
-import { useAbsoluteDates } from '../absoluteDates';
+import { useAbsoluteDateParser } from '../useAbsoluteDateParser';
 import { currentQuickContext } from '../captureUseCases';
 import { draftsFromProposals, type DateDefault, type ScanDraft } from './scanDrafts';
 import { isUncertain, MAX_SCAN_LINES, scanLinesToProposals, type ScanProposal } from './scanLines';
@@ -86,11 +86,13 @@ export function useScan({ service, onClose }: UseScanOptions) {
     };
   }, [service]);
 
+  // PERF-02 : l'analyseur des dates écrites arrive à la demande ; les lignes déjà proposées sont relues à ce moment.
+  const absoluteDates = useAbsoluteDateParser();
   const quickContext: QuickContext = useMemo(
-    () => currentQuickContext(container),
+    () => ({ ...currentQuickContext(container), absoluteDates }),
     // Recalculé quand les espaces, projets ou le jour changent ; l'heure n'a pas besoin d'être exacte pour l'aperçu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [container, spaces, projects, spaceFilter, today],
+    [container, spaces, projects, spaceFilter, today, absoluteDates],
   );
 
   const dateDefault: DateDefault = useMemo(() => {
@@ -98,13 +100,9 @@ export function useScan({ service, onClose }: UseScanOptions) {
     return { kind: dateKind };
   }, [dateKind, picked]);
 
-  const absoluteDates = useAbsoluteDates();
   const drafts: readonly ScanDraft[] = useMemo(
-    () => {
-      void absoluteDates; // relues à l'arrivée de l'analyseur des dates écrites
-      return spaceId ? draftsFromProposals(proposals, quickContext, { spaceId, date: dateDefault, today }) : [];
-    },
-    [proposals, quickContext, spaceId, dateDefault, today, absoluteDates],
+    () => (spaceId ? draftsFromProposals(proposals, quickContext, { spaceId, date: dateDefault, today }) : []),
+    [proposals, quickContext, spaceId, dateDefault, today],
   );
 
   const goToSource = useCallback(() => {

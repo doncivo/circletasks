@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chronoAbsoluteParser } from './chronoAbsolute';
 import { foldKeepLength, naturalDate, removeHits, type NaturalNow } from './naturalDate';
 import { parseQuickInput } from './quickInput';
 import { asLocalDate, asLocalTime } from './types';
@@ -7,7 +8,7 @@ import { asLocalDate, asLocalTime } from './types';
 const NOW: NaturalNow = { date: asLocalDate('2026-09-22'), time: asLocalTime('08:00') };
 type First = 'monday' | 'saturday' | 'sunday';
 const parse = (text: string, now: NaturalNow = NOW, firstWeekday?: First) =>
-  parseQuickInput(text, { spaces: [], projects: [], defaultSpaceId: null, now, ...(firstWeekday ? { firstWeekday } : {}) });
+  parseQuickInput(text, { spaces: [], projects: [], defaultSpaceId: null, now, absoluteDates: chronoAbsoluteParser, ...(firstWeekday ? { firstWeekday } : {}) });
 
 // [phrase, titre, date, heure] : au moins 40 phrases françaises (Q-02 critère 11).
 const PHRASES: ReadonlyArray<readonly [string, string, string | null, string | null]> = [
@@ -216,7 +217,7 @@ describe('naturalDate : utilitaires', () => {
 
   it('naturalDate rend les zones reconnues', () => {
     const text = 'Appeler demain 10h';
-    const result = naturalDate(text, NOW);
+    const result = naturalDate(text, NOW, { absoluteDates: chronoAbsoluteParser });
     expect(result?.spans.map((span) => [span.kind, text.slice(span.start, span.end)])).toEqual([
       ['date', 'demain'],
       ['time', '10h'],

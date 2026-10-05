@@ -33,21 +33,11 @@ export interface AbsoluteDateMatch {
 }
 
 /**
- * Analyseur des dates écrites (chrono-node, voir `chronoAbsolute.ts`). Posé après coup par la couche qui le charge à la demande
- * (PERF-02 : la bibliothèque pèse ~50 Ko gzip, elle n'est pas dans le bloc de départ). Tant qu'il manque, seule la grammaire locale
- * (demain, jours de semaine, heures) s'applique ; `registerAbsoluteDateParser` ne change rien d'autre.
+ * Analyseur des dates écrites (chrono-node, voir `chronoAbsolute.ts`), passé en paramètre (`NaturalDateOptions.absoluteDates`) : la
+ * couche features le charge à la demande (PERF-02, ~15 Ko gzip hors du bloc de départ). Absent, seule la grammaire locale (demain,
+ * jours de semaine, heures) s'applique. Le domaine ne garde aucun état.
  */
 export type AbsoluteDateParser = (text: string, reference: Date) => readonly AbsoluteDateMatch[];
-
-let absoluteDateParser: AbsoluteDateParser | null = null;
-
-export function registerAbsoluteDateParser(parser: AbsoluteDateParser | null): void {
-  absoluteDateParser = parser;
-}
-
-export function hasAbsoluteDateParser(): boolean {
-  return absoluteDateParser !== null;
-}
 
 /** Instant courant en heure locale de l'appareil (date civile et heure 24 h). */
 export interface NaturalNow {
@@ -58,6 +48,8 @@ export interface NaturalNow {
 export interface NaturalDateOptions {
   /** Premier jour de la semaine (P-03) : « la semaine prochaine » = son prochain premier jour. */
   readonly firstWeekday?: FirstWeekday;
+  /** Dates écrites en toutes lettres (« le 5 octobre », « dans 3 jours ») ; absent ou null : grammaire locale seule. */
+  readonly absoluteDates?: AbsoluteDateParser | null;
 }
 
 /** Zone du texte (indices dans le texte d'origine, fin exclue). */
@@ -243,12 +235,12 @@ function upcoming(from: LocalDate, weekday: Weekday): LocalDate {
   return addDays(from, ((weekday - weekdayOf(from) + 6) % 7) + 1);
 }
 
-function chronoDates(masked: string, now: NaturalNow): DateHit[] {
+function chronoDates(masked: string, now: NaturalNow, parser: AbsoluteDateParser | null | undefined): DateHit[] {
   const { year, month, day } = parseLocalDate(now.date);
   const [h, mi] = now.time.split(':').map(Number);
   const reference = new Date(year, month - 1, day, h ?? 0, mi ?? 0, 0);
   const hits: DateHit[] = [];
-  for (const result of absoluteDateParser?.(masked, reference) ?? []) {
+  for (const result of parser?.(masked, reference) ?? []) {
     if (/heure|minute|\bmin\b/i.test(result.text)) continue; // « dans 2 heures » : pas une date
     const relative = /^dans\b/i.test(result.text);
     if (!result.certain && !relative) continue;
@@ -275,7 +267,7 @@ export function naturalDate(text: string, now: NaturalNow, options: NaturalDateO
   const times = findTimes(folded);
   const words = findDates(folded);
   // Les zones lues par la grammaire locale sont masquées pour chrono-node : il ne voit que le reste.
-  const chronoHits = chronoDates(blank(text, [...skip, ...times, ...words]), now);
+  const chronoHits = chronoDates(blank(text, [...skip, ...times, ...words]), now, options.absoluteDates);
 
   let dateHit = [...chronoHits, ...words].sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.start - b.start)[0] ?? null;
   if (dateHit && (dateHit.kind === 'absolute' || dateHit.kind === 'relative')) {

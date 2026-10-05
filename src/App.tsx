@@ -10,7 +10,7 @@ import { useTabsConfigStore } from './features/app/tabsConfig';
 import { TAB_IDS, TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
 import { startCaptureHost } from './features/capture';
-import { preloadAbsoluteDates } from './features/capture/absoluteDates';
+import { preloadAbsoluteDates } from './features/capture/absoluteDatesLoader';
 import { openCaptureMainBridge } from './platform/capture';
 import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';

@@ -1,8 +1,5 @@
-import { chronoAbsoluteParser } from '../../src/domain/chronoAbsolute';
-import { registerAbsoluteDateParser } from '../../src/domain/naturalDate';
 import { registerCatalog } from '../../src/i18n';
 import { en } from '../../src/i18n/en';
 
-// PERF-02 : en production l'analyseur des dates écrites et le catalogue anglais sont chargés à la demande ; les tests les posent d'emblée.
-registerAbsoluteDateParser(chronoAbsoluteParser);
+// PERF-02 : en production le catalogue anglais est chargé à la demande (src/i18n) ; les tests l'ont d'emblée.
 registerCatalog('en', en);

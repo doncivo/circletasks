@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { chronoAbsoluteParser } from './chronoAbsolute';
 import { naturalDate, type NaturalNow } from './naturalDate';
 import { parseQuickInput, tokenKey, type QuickContext, type QuickProject, type QuickSpace } from './quickInput';
 import { asLocalDate, asLocalTime, type ProjectId, type SpaceId } from './types';
@@ -14,7 +15,7 @@ const PROJECTS = [proj('p-mission', PRO, 'Mission'), proj('p-maison', PERSO, 'Ma
 // Mardi 22 septembre 2026, 08:00.
 const NOW: NaturalNow = { date: asLocalDate('2026-09-22'), time: asLocalTime('08:00') };
 const MONDAY: NaturalNow = { date: asLocalDate('2026-09-28'), time: asLocalTime('08:00') };
-const ctx = (extra: Partial<QuickContext> = {}): QuickContext => ({ spaces: SPACES, projects: PROJECTS, defaultSpaceId: PRO, now: NOW, ...extra });
+const ctx = (extra: Partial<QuickContext> = {}): QuickContext => ({ spaces: SPACES, projects: PROJECTS, defaultSpaceId: PRO, now: NOW, absoluteDates: chronoAbsoluteParser, ...extra });
 const p = (text: string, extra: Partial<QuickContext> = {}, ignored: string[] = []) => parseQuickInput(text, ctx(extra), { ignored: new Set(ignored) });
 
 describe('Q-02 cas limites de date', () => {
@@ -91,7 +92,7 @@ describe('Q-02 faux positifs : le texte peut rester tel quel', () => {
     expect([off.title, off.spaceId, off.date]).toEqual(['Appeler Paul demain', PERSO, null]);
   });
   it('Q-02 « Mars » seul ne devient pas date (naturalDate)', () => {
-    expect(naturalDate('Mars', NOW, { firstWeekday: 'monday' })?.date ?? null).toBeNull();
+    expect(naturalDate('Mars', NOW, { firstWeekday: 'monday', absoluteDates: chronoAbsoluteParser })?.date ?? null).toBeNull();
   });
 });
 
