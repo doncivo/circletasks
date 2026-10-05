@@ -1,8 +1,8 @@
 # ADR 0011 — Synchronisation par iCloud Drive (M15, Y-01 à Y-09)
 
-- Statut : accepté (contrat ; implémentation par sync-icloud, lots Y1 à Y3)
+- Statut : accepté (contrat ; implémentation par sync-icloud, lots Y1 à Y3), **révisé le 2026-10-05 après l'audit de sécurité** (verdict « À CORRIGER », 8 points HAUTE, 10 MOYENNE, 6 BASSE ; correspondance point → section en annexe A)
 - Date : 2026-10-05
-- Stories : Y-01 à Y-09 (M15, ordre 4) ; A-09 critère 9 (bandeaux) ; parcours 10 et 11 ; prépare l'ordre 5 (iPhone : plugin folder-bookmark, scan du QR, rappels recalculés après synchro)
+- Stories : Y-01 à Y-09 (M15, ordre 4) ; A-09 critère 9 (bandeaux) ; parcours 10 et 11 ; prépare l'ordre 5 (iPhone : plugin folder-bookmark, scan du QR, rappels recalculés après synchro). Stories **proposées**, en attente de l'ajout au PRD par Ali : Y-10 « J'oublie un appareil », Y-11 « Je réinitialise la synchronisation avec une nouvelle clé » (section 14, conditionnelle)
 - Complète : ADR 0001 (couches), 0002 (driver, migrations), 0005 (HLC), 0008 (coffre `keyring`), 0009 (avenant P-04), 0010 (restauration et synchronisation, 6 règles)
 
 ## Contexte
@@ -17,22 +17,24 @@ Deux appareils (PC Windows, iPhone à l'ordre 5) partagent leurs données sans s
 - l'ADR 0010 impose six règles liées à la restauration P-04 ;
 - `docs/dettes.md` (ordre 4) liste dix points à trancher sur les données locales.
 
+**Modèle de menace** (précisé par l'audit) : (a) un tiers qui lit ou écrit le dossier iCloud sans la clé (compte iCloud compromis, autre programme de la session, dossier partagé par erreur) ; (b) un script hostile dans la WebView (contenu injecté, dépendance npm compromise) : il peut appeler toutes les commandes accordées à la fenêtre `main`, mais ne peut ni cliquer dans une boîte native ouverte par Rust, ni lire la mémoire du processus Rust ; (c) un appareil perdu ou volé, qui garde la clé et une copie complète. La session Windows ouverte et le compte administrateur sont **hors modèle** (risque accepté, section 2.2).
+
 ## Décision
 
 ### 0. Vue d'ensemble et couches
 
 | Couche | Fichiers | Rôle |
 | --- | --- | --- |
-| Rust | `src-tauri/src/sync/` (`mod.rs`, `commands.rs`, `crypto.rs`, `names.rs`, `files.rs`, `folder.rs`, `cloud_windows.rs`, `pairing.rs`, `marker.rs`) ; `src-tauri/src/vault.rs` | Dossier choisi (jamais de chemin dans la WebView), hydratation des fichiers du nuage, lecture et écriture des fichiers, chiffrement et AAD, clé au coffre, QR et clé de secours, marqueur de restauration. **Aucune règle de fusion.** |
+| Rust | `src-tauri/src/sync/` (`mod.rs`, `commands.rs`, `crypto.rs`, `names.rs`, `files.rs`, `folder.rs`, `cloud_windows.rs`, `pairing.rs`, `consent.rs`, `limits.rs`, `marker.rs`) ; `src-tauri/src/vault.rs` (+ `vault_ios.rs`) ; `src-tauri/build.rs` (manifeste) | Dossier choisi et contrôlé (jamais de chemin dans la WebView), hydratation des fichiers du nuage, lecture et écriture des fichiers, chiffrement, bourrage et AAD, bornes, clé au coffre, QR et clé de secours derrière une confirmation native, marqueur de restauration. **Aucune règle de fusion.** |
 | platform | `src/platform/sync/` (`types.ts`, `tauriSync.ts`, `memory.ts`, `index.ts`) | Contrat `SyncPlatform` (section 11), seul code qui appelle les commandes `sync_*`. Implémentation mémoire pour le navigateur de dev, Vitest et Playwright. |
-| domain | `src/domain/sync/` (`format.ts`, `syncTables.ts`, `merge.ts`, `retention.ts`, `epoch.ts`, `drift.ts`, `repairs.ts`, `naturalIds.ts`, `compat.ts`) | Règles pures : format des enregistrements, catalogue des tables et colonnes publiées, fusion et détection de conflit, rétention et purge, choix de l'époque, dérive d'horloge, réparations après fusion, identifiants déterministes, compatibilité de versions. Sans état ni I/O. |
-| db | `src/db/migrations/0015_sync_tables.ts`, `0016_sync_natural_ids.ts` (premiers numéros libres au moment du lot : le registre fait foi) ; `src/db/repositories/syncRepository.ts` + `sql/sync*.ts` | Tables de synchro, déclencheurs de capture, application des opérations, curseurs, conflits, traces, instantanés paginés. Aucune règle métier. |
+| domain | `src/domain/sync/` (`format.ts`, `syncTables.ts`, `parse.ts`, `merge.ts`, `retention.ts`, `epoch.ts`, `drift.ts`, `repairs.ts`, `naturalIds.ts`, `compat.ts`, `limits.ts`) | Règles pures : format et analyse stricte des enregistrements, catalogue des tables et colonnes publiées (types, longueurs), fusion et détection de conflit, rétention et purge, choix de l'époque, dérive d'horloge, réparations après fusion, identifiants déterministes, compatibilité de versions, plafonds. Sans état ni I/O. |
+| db | `src/db/migrations/0015_sync_tables.ts`, `0016_sync_natural_ids.ts`, `0017_calendar_account_username.ts` (premiers numéros libres au moment du lot : le registre fait foi) ; `src/db/repositories/syncRepository.ts` + `sql/sync*.ts` | Tables de synchro, déclencheurs de capture, application des opérations (identifiants SQL tirés du seul catalogue), curseurs, conflits, traces, instantanés paginés. Aucune règle métier. |
 | sync | `src/sync/` (`engine.ts`, `reader.ts`, `publisher.ts`, `snapshot.ts`, `epochSwitch.ts`, `restoreChoice.ts`, `join.ts`, `scheduler.ts`, `status.ts`, `events.ts`, `index.ts`) | Orchestration du cycle (section 10.2) ; dépend de domain, db, platform (ADR 0001). |
 | features | `src/features/sync/` | Réglages > Synchronisation, détails (état, appareils, conflits), appairage, choix après restauration, bandeaux A-09. |
 
 La phrase de l'ADR 0001 « `src/sync` : journaux, hlc, fusion » est précisée : la fusion est une **règle pure** dans `src/domain/sync`, appliquée par `src/sync` (règle CLAUDE.md : règles métier dans `src/domain` uniquement).
 
-**Pourquoi le chiffrement en Rust et pas en Web Crypto (écart au tableau du PRD 7, inscrit dans `docs/decisions.md`)** : la clé reste dans le processus Rust, comme les jetons des agendas (ADR 0008 : pas de `get` du coffre côté WebView) ; les fichiers sont de toute façon lus et écrits par Rust (hydratation Windows, accès coordonné iOS) ; la WebView ne voit que du texte clair déjà déchiffré, jamais la clé, sauf pendant l'affichage volontaire du QR et de la clé de secours (Y-06).
+**Pourquoi le chiffrement en Rust et pas en Web Crypto (écart au tableau du PRD 7, inscrit dans `docs/decisions.md`)** : la clé reste dans le processus Rust pour **tout le chiffrement et le déchiffrement**, comme les jetons des agendas (ADR 0008 : pas de `get` du coffre côté WebView) ; les fichiers sont de toute façon lus et écrits par Rust (hydratation Windows, accès coordonné iOS) ; la WebView ne voit que du texte clair déjà déchiffré. **La clé passe néanmoins par la WebView en deux points**, décrits et encadrés en section 2.1 : la sortie de `sync_pairing_payload` (`qrText` et `recoveryKey` contiennent `K`) et l'entrée de `sync_key_import` (`qrText` ou `recoveryKey` saisis). La version précédente de cet ADR affirmait le contraire : c'était faux (audit H1).
 
 ### 1. Format sur disque
 
@@ -41,61 +43,143 @@ La phrase de l'ADR 0001 « `src/sync` : journaux, hlc, fusion » est précisée 
 ```
 iCloud Drive/CircleTasks/
   devices/
-    <device_id>/                       un dossier par appareil, écrit par lui seul
-      state.ctx                        état publié de l'appareil (réécrit à chaque cycle)
+    <device_id>/                       un dossier par appareil, écrit par lui seul (16 dossiers au plus pris en compte)
+      state.ctx                        état publié de l'appareil (réécrit seulement s'il a changé, section 1.4)
       e0001-<device_id créateur>/      une époque (section 9)
         j-00000001.ctj                 segments de journal, ajout seul
         j-00000002.ctj
         s-00000001.cts                 instantanés écrits par cet appareil dans cette époque
 ```
 
-- **Un seul écrivain par fichier** : un appareil n'écrit, ne renomme et ne supprime que dans `devices/<son device_id>/`. Il n'existe **aucun fichier partagé** à la racine, donc **aucun verrou** : iCloud ne peut pas produire de conflit d'écriture entre deux appareils. Rust refuse toute écriture hors du dossier de l'appareil lié par `sync_bind_device`.
-- Noms stricts (`names.rs`, expressions exactes) : `device_id` UUID v4 en minuscules ; époque `e<4 chiffres>-<uuid>` ; segment `j-<8 chiffres>.ctj` ; instantané `s-<8 chiffres>.cts` ; `state.ctx`. Tout autre nom (copie de conflit d'iCloud « state 2.ctx », fichier temporaire `*.tmp`, fichier étranger) est **ignoré**, jamais lu ni supprimé, et signalé dans le journal technique.
+- **Un seul écrivain par fichier** : un appareil n'écrit, ne renomme et ne supprime que dans `devices/<son device_id>/`. Il n'existe **aucun fichier partagé** à la racine, donc **aucun verrou** : iCloud ne peut pas produire de conflit d'écriture entre deux appareils. Rust refuse toute écriture hors du dossier de l'appareil lié par `sync_bind_device`. Seule exception prévue, **si Y-10 est acceptée** : la suppression (jamais l'écriture ni le renommage) des fichiers d'un appareil marqué oublié (section 14.2).
+- Noms stricts (`names.rs`, expressions exactes) : `device_id` UUID v4 en minuscules ; époque `e<4 chiffres>-<uuid>` ; segment `j-<8 chiffres>.ctj` ; instantané `s-<8 chiffres>.cts` ; `state.ctx`. Tout autre nom (copie de conflit d'iCloud « state 2.ctx », fichier temporaire `*.tmp`, fichier étranger) est **ignoré**, jamais lu ni supprimé, et compté dans le journal technique. Les mêmes expressions valident **tous les paramètres de chemin** reçus par les commandes (`deviceId`, `epoch`, numéros : audit B5).
+- **Plafond de dossiers d'appareils** : au-delà de 16 dossiers `devices/<uuid>/`, les dossiers en surnombre (ordre : ceux qui n'ont pas de `state.ctx` valide, puis le plus ancien `lastSyncHlc`) sont ignorés et signalés (« Trop d'appareils dans le dossier ») ; son propre dossier et ceux déjà connus dans `sync_state` ne sont jamais écartés.
 - Écart assumé avec le PRD 7 (`changes-pc.jsonl`, `changes-iphone.jsonl`, `snapshot.json`) : même principe (un journal par appareil, instantané périodique), mais nommé par `device_id` (deux PC possibles, réinstallation) et découpé en segments pour pouvoir purger (Y-09). Le libellé affiché à l'utilisateur reste « journal du PC » / « journal de l'iPhone ».
 
 #### 1.2 Lignes chiffrées
 
 Chaque fichier est un texte UTF-8 en lignes terminées par `\n` :
 
-- **ligne 1, en clair** : en-tête JSON `{"f":"ct-j"|"ct-s"|"ct-state","sm":1,"kid":"<16 hexa>","dev":"<uuid>","e":"e0001-<uuid>","n":<numéro de segment ou d'instantané, absent pour state>}` ;
-- **lignes suivantes** : un enregistrement chiffré par ligne, `<sm>.<sv>.<base64url(nonce 12 octets ‖ texte chiffré ‖ étiquette 16 octets)>`.
+- **ligne 1, en clair** : en-tête JSON `{"f":"ct-j"|"ct-s"|"ct-state","sm":1,"kid":"<16 hexa>","dev":"<uuid>","e":"e0001-<uuid>","n":<entier>}` ; `n` = numéro de segment, d'instantané, ou **`stateSeq`** pour `state.ctx` (section 1.4). **Schéma strict** : 1 Kio au plus (lu octet par octet jusqu'au premier `\n`, refus au-delà), exactement ces six clés, aucune autre, types et expressions vérifiés (`deny_unknown_fields` en Rust). **L'en-tête doit correspondre au chemin** (audit B2) : `dev` = nom du dossier d'appareil, `e` = nom du dossier d'époque (pour `state.ctx`, une époque existante annoncée), `n` = numéro du nom de fichier, `f` = extension. Sinon `bad-header`, fichier non déchiffré.
+- **lignes suivantes** : un enregistrement chiffré par ligne, `<sm>.<sv>.<base64url(nonce 12 octets ‖ texte chiffré ‖ étiquette 16 octets)>`. **La longueur de la ligne est vérifiée avant le décodage base64** (360 000 octets au plus, section 1.6) : une ligne plus longue est une corruption, jamais décodée.
+- **Texte clair bourré** (audit M1) : `longueur JSON (u32 gros-boutiste) ‖ JSON UTF-8 ‖ zéros` jusqu'au multiple de **4 Kio** supérieur (4 Kio au minimum). Le lecteur vérifie la longueur annoncée et la nullité du bourrage ; tout écart est une corruption.
 
 `sm` = version **majeure** du format de synchro (`SYNC_FORMAT_MAJOR`, 1 au départ) ; `sv` = `schema_version` de l'écrivain = numéro de la dernière migration appliquée (14 aujourd'hui). Les deux sont en clair pour qu'un appareil sache **avant de déchiffrer** s'il peut lire (Y-07), et protégés par l'AAD.
 
-Une ligne sans `\n` final, ou dont le déchiffrement échoue alors qu'elle est la dernière du fichier, est une **ligne incomplète** (iCloud en cours de transfert) : la lecture s'arrête avant elle, le curseur n'avance pas, elle sera relue au cycle suivant (PRD 10). Un échec de déchiffrement au milieu d'un fichier est une **corruption** : la lecture de cet appareil est suspendue (état `error`, détail dans le journal technique), rien n'est appliqué au-delà.
+Une ligne sans `\n` final, ou dont le déchiffrement échoue alors qu'elle est la dernière du fichier **et au-delà de la tête authentifiée** (section 1.4), est une **ligne incomplète** (iCloud en cours de transfert) : la lecture s'arrête avant elle, le curseur n'avance pas, elle sera relue au cycle suivant (PRD 10). Un échec de déchiffrement au milieu d'un fichier, ou sur un enregistrement que la tête annonce, est une **corruption** : rien n'est appliqué au-delà, et l'appareil lecteur **repart de l'instantané** (section 5.5, audit M3).
 
 #### 1.3 Segments, rotation, tailles
 
 - Un segment est en **ajout seul** : ouverture en ajout, écriture des lignes, `sync_all`. Il n'est jamais réécrit.
-- Rotation : nouveau segment quand le segment courant dépasse **1 Mio**, à chaque nouvelle époque, et **à chaque démarrage de session de synchro après une restauration ou une reprise** (règle 1 de l'ADR 0010 : on n'ajoute jamais à un segment dont l'état publié pourrait être plus récent que la base locale).
-- Enregistrement : au plus **256 Kio** de texte clair (lot d'opérations, section 3). Un segment lu de plus de 8 Mio, un instantané de plus de 256 Mio sont refusés (`too-large`).
+- Rotation : nouveau segment quand le segment courant dépasse **1 Mio**, à chaque nouvelle époque, à **chaque démarrage de session de synchro après une restauration ou une reprise** (règle 1 de l'ADR 0010), et **chaque fois que le segment n'a pas exactement le nombre d'enregistrements attendu** (audit H6) : avant tout ajout, Rust compte les lignes complètes du segment ; s'il en trouve un autre nombre que `expectRecords` (tête locale), ou une ligne incomplète, il refuse (`segment-mismatch`) et le moteur ouvre le segment `max(local, publié, plus grand fichier listé) + 1`. Le premier index d'enregistrement est **calculé par Rust** (`firstRecord` renvoyé, audit B5), jamais fourni par la WebView.
+- Enregistrement : au plus **256 Kio** de texte clair avant bourrage (lot d'opérations, section 3). Bornes de lecture : section 1.6.
 - `state.ctx` et les instantanés sont écrits dans `<nom>.tmp` du même dossier puis renommés (remplacement atomique) ; les lecteurs ignorent les `.tmp`.
 
 #### 1.4 État publié (`state.ctx`)
 
-Texte clair de l'unique enregistrement chiffré (type `PublishedDeviceState`, section 11) : identifiant, plateforme (`windows` / `ios`), version de l'app, `sm`, `sv`, époque courante, **tête publiée** (`segment`, `record` = nombre d'enregistrements, `hlc` maximal publié), **accusés de lecture** par appareil distant (époque, segment, enregistrement, plus grand hlc lu), dernier instantané écrit, `purgeHorizon` (plus grand hlc de suppression déjà purgé, section 5.4), `lastSyncHlc` (fin du dernier cycle complet), `pairedBy` (Y-06).
+Texte clair de l'unique enregistrement chiffré (type `PublishedDeviceState`, section 11) : identifiant, plateforme (`windows` / `ios`), version de l'app, `sm`, `sv`, époque courante, **`stateSeq`** (entier strictement croissant à chaque réécriture), **tête publiée** (`segment`, `record` = nombre d'enregistrements, `hlc` maximal publié), **accusés de lecture** par appareil distant (époque, segment, enregistrement, plus grand hlc lu ; **64 au plus**), dernier instantané écrit, `purgeHorizon` (plus grand hlc de suppression déjà purgé, section 5.4), `lastSyncHlc` (fin du dernier cycle complet), `pairedBy` (Y-06), **`forgotten`** (liste d'appareils oubliés, **réservée** : toujours vide tant que Y-10 n'est pas acceptée, section 14.2). Taille : **1 Mio au plus** (chiffré).
 
-Ordre d'écriture d'un cycle : segments d'abord, `state.ctx` ensuite. Un lecteur ne considère comme publié que ce que la tête annonce ; si le segment local contient moins d'enregistrements que la tête, le fichier n'est pas encore arrivé : état « En attente d'iCloud ».
+- **Anti-rejeu** (audit H6) : l'AAD de `state.ctx` contient l'époque et `stateSeq` (section 2) ; `sync_state` mémorise pour chaque appareil le triplet `(state_epoch, state_seq, head)` du dernier état accepté. Un état dont l'époque est inférieure, ou de même époque avec un `stateSeq` inférieur, ou dont la tête recule, est **refusé** : statut `rollback` pour cet appareil, dernier état accepté conservé, message « Le dossier contient une version ancienne de l'état de {appareil} » (iCloud qui livre une ancienne version ou fichier remplacé par un tiers). Un `stateSeq` égal avec un contenu différent est aussi un `rollback`.
+- **Réécriture seulement s'il a changé** (audit M1) : `state.ctx` n'est réécrit que si un champ autre que `lastSyncHlc` a changé, ou si le `lastSyncHlc` publié a plus de **30 minutes** (l'avertissement N-07 du PC raisonne à 2 h).
 
-#### 1.5 Ce que voit un tiers qui accède au dossier
+Ordre d'écriture d'un cycle : segments d'abord, `state.ctx` ensuite. Un lecteur ne considère comme publié que ce que la tête annonce ; si le segment local contient moins d'enregistrements que la tête, le fichier n'est pas encore arrivé : état « En attente d'iCloud ». **Rien n'est hydraté ni lu au-delà de la tête authentifiée** (segments de numéro supérieur, enregistrements après `head.record`, instantanés non annoncés).
 
-Il voit : le nombre d'appareils et leurs UUID, les numéros d'époque, de segment et d'instantané, la taille et la date de modification des fichiers (donc le rythme d'activité), `sm`, `sv` et l'identifiant de clé `kid` (dérivé, ne révèle rien de la clé). Il ne voit pas : titres, notes, dates, noms de tables, nombre d'éléments par type, noms des appareils. Il ne peut ni modifier, ni réordonner, ni déplacer un enregistrement d'un fichier ou d'une position à une autre sans être détecté (AAD) ; il peut **supprimer** des fichiers ou tronquer la fin d'un segment : la tête publiée le révèle (état « En attente d'iCloud » durable), sans perte locale.
+#### 1.5 Ce que voit un tiers qui accède au dossier (métadonnées, audit M1)
+
+**Visible sans la clé**, après les mesures ci-dessous :
+
+| Métadonnée | Ce qu'elle révèle | Mesure |
+| --- | --- | --- |
+| Nom du dossier `CircleTasks`, en-têtes `ct-*` | Usage de l'app | Aucune (nom imposé par le PRD 7) |
+| Dossiers `devices/<uuid>` | Nombre d'appareils (et d'appareils réinstallés ou oubliés) | Plafond de 16 ; Y-10 permet d'en retirer |
+| Noms d'époques | Nombre de restaurations « appliquer partout » et de réinitialisations | Aucune |
+| Numéros de segments et d'instantanés, dates de modification | Rythme d'activité, heures d'usage | Aucune (inhérent à iCloud) |
+| Taille de chaque enregistrement | Volume d'un lot d'opérations | **Bourrage par paliers de 4 Kio** : un lot ordinaire (une tâche modifiée ou dix) a la même taille |
+| Instantanés | Volume total de données | **Découpage par taille** (enregistrements de 64 Kio de texte clair, lignes de toutes les tables à la suite) : la taille par table n'est plus visible, seul le total arrondi l'est |
+| `sm`, `sv` | Version de l'app | Aucune (lu avant déchiffrement, Y-07) |
+| `state.ctx` | Rythme des cycles | Réécrit seulement s'il a changé (section 1.4) |
+| `kid` | Identité de la clé (pas la clé) | Dérivé par HKDF, ne révèle rien de `K` |
+
+**Invisible** : titres, notes, dates, noms de tables, nombre d'éléments par type, noms des appareils, contenu des réglages, identifiants des éléments.
+
+Un tiers sans clé ne peut ni modifier, ni réordonner, ni déplacer un enregistrement d'un fichier ou d'une position à une autre, ni rejouer un ancien `state.ctx`, sans être détecté (AAD, `stateSeq`) ; il peut **supprimer** des fichiers ou tronquer la fin d'un segment : la tête publiée le révèle (état « En attente d'iCloud » durable), sans perte locale ; il peut **remplir** le dossier (bornes de la section 1.6) et y déposer des dossiers étrangers (statut `foreign`, section 3.4). **Un tiers qui possède la clé** (appareil perdu, clé de secours trouvée) lit tout et forge tout : section 14.1.
+
+#### 1.6 Bornes (audit M2)
+
+Constantes dans `src-tauri/src/sync/limits.rs` et `src/domain/sync/limits.ts` (mêmes valeurs, test croisé sur `vectors.json`). Tout dépassement est refusé **avant** l'allocation, le décodage ou l'hydratation, et journalisé sans contenu.
+
+| Objet | Borne | Au-delà |
+| --- | --- | --- |
+| En-tête de fichier | 1 Kio, schéma strict, correspondance au chemin | `bad-header` |
+| Ligne chiffrée | 360 000 octets (base64 de 256 Kio + 4 Kio de bourrage + 28 octets), contrôlée avant le base64 | corruption |
+| Texte clair d'un enregistrement | 256 Kio avant bourrage | refus à l'écriture ; corruption à la lecture |
+| `state.ctx` | 1 Mio | `too-large`, appareil en `corrupt` |
+| Accusés dans `state.ctx` | 64 | `state.ctx` refusé |
+| `forgotten` dans `state.ctx` | 64 | `state.ctx` refusé |
+| Segment | 8 Mio | `too-large` |
+| Instantané | 256 Mio | `too-large` |
+| Placeholder (taille annoncée par le système de fichiers **avant hydratation**) | mêmes bornes selon le type | pas d'hydratation, `too-large` |
+| Hydratation | seulement les fichiers annoncés par une tête ou un instantané authentifiés, plus les `state.ctx` | — |
+| Épinglage | `state.ctx` et fichiers de l'époque courante annoncés par une tête, jamais le dossier entier | — |
+| Taille totale du dossier | surveillée à chaque `scan` ; avertissement au-delà de 1 Gio, plus aucune hydratation au-delà de 4 Gio | `folder-too-large` |
+| Dossiers d'appareils | 16 | ignorés, signalés |
+| `sync_parked` | 10 000 opérations | la plus ancienne est abandonnée et journalisée (table, identifiant, motif) |
+| `sync_unknown` | 50 000 champs ou 16 Mio | le champ le plus ancien est abandonné et journalisé |
+| `conflict_log` | 10 000 lignes (en plus des 12 mois) | les plus anciennes résolues, puis les plus anciennes, sont retirées et journalisées |
+| Champ inconnu | accepté seulement si le `sv` distant est **strictement supérieur** au `sv` local | champ refusé et journalisé (`invalid-field`) |
 
 ### 2. Chiffrement (Y-08)
 
-- **Clé maîtresse** `K` : 32 octets aléatoires (`aws_lc_rs::rand::SystemRandom`), créée une seule fois, sur le premier appareil associé au dossier (section 10.3).
+- **Clé maîtresse** `K` : 32 octets aléatoires (`aws_lc_rs::rand::SystemRandom`), créée une seule fois, sur le premier appareil associé au dossier (section 10.3). En mémoire Rust, `K` et ses dérivées sont dans des tampons **`zeroize`** (`Zeroizing<[u8; 32]>`), sans `Debug` ni `Serialize` (audit B3).
 - **Dérivation** : HKDF-SHA256 (`aws_lc_rs::hkdf`), sel `"circletasks"` ; `K_rec = HKDF(K, info="ct/1 records")` (32 octets) chiffre tous les fichiers, l'AAD distingue leur nature ; `kid = hex(HKDF(K, info="ct/1 kid")[0..8])`.
-- **Algorithme** : AES-256-GCM (`aws_lc_rs::aead::AES_256_GCM`), **nonce aléatoire de 96 bits par enregistrement** (pas de nonce compteur : une base restaurée ou une réinstallation ne peut pas réutiliser un nonce). Volume attendu très inférieur à 2^32 enregistrements par clé.
-- **AAD** (UTF-8) :
-  - journal : `ct/1|j|<device_id>|<époque>|<segment>|<index de l'enregistrement>|<sm>|<sv>` ;
-  - instantané : `ct/1|s|<device_id>|<époque>|<numéro>|<index>|<sm>|<sv>` ;
-  - état : `ct/1|state|<device_id>|<sm>|<sv>`.
-  Le lecteur reconstruit l'AAD depuis le chemin, l'en-tête et la position : un enregistrement déplacé, réordonné ou recopié dans un autre fichier ne se déchiffre pas.
-- **Bibliothèque** : crate `aws-lc-rs` 1, **déjà compilée** sur Windows et iOS (fournisseur de `rustls` via `reqwest`, `cargo tree -i aws-lc-rs` sur les deux cibles) ; ajoutée en dépendance directe sans nouvelle entrée dans `Cargo.lock`, licence ISC / Apache-2.0, coût binaire négligeable. Écartées : `aes-gcm` + `hkdf` de RustCrypto (six crates nouvelles pour un service déjà présent) ; Web Crypto dans la WebView (clé exposée à la WebView, voir section 0). Les tests Vitest utilisent un **codec de référence TypeScript** (`tests/sim/syncCodec.ts`, Web Crypto de Node) qui doit produire et lire les mêmes vecteurs que Rust (`tests/fixtures/sync/vectors.json`, vérifiés par `cargo test` ET Vitest) ; ce codec n'est jamais embarqué.
-- **Coffre** : `src-tauri/src/calendars/vault.rs` est déplacé en `src-tauri/src/vault.rs` (réexporté pour les agendas, sans changement de comportement) ; entrée `service = fr.circletasks.planner`, `account = circletasks.sync.key.v1`, valeur = `K` en base64. Windows : Gestionnaire d'identification (`keyring` `windows-native`, déjà présent) ; iOS (ordre 5) : Trousseau (`keyring` `apple-native`, déjà présent). **Jamais** dans SQLite, dans iCloud, dans les journaux techniques ni dans l'état de l'interface. La WebView n'a aucune commande qui renvoie `K`, sauf `sync_pairing_payload` (affichage volontaire, section 10.3).
+- **Algorithme** : AES-256-GCM par **`aws_lc_rs::aead::RandomizedNonceKey`** (nonce aléatoire de 96 bits tiré par la bibliothèque à chaque scellement, jamais fourni par le code ; pas de nonce compteur : une base restaurée ou une réinstallation ne peut pas réutiliser un nonce).
+- **Budget de nonces** (audit B1) : estimation ~2^21 enregistrements chiffrés par clé sur 10 ans (≈ 200 enregistrements de journal par jour et par appareil, plus un instantané hebdomadaire de quelques centaines d'enregistrements), très en dessous de la limite de 2^32 messages par clé pour des nonces aléatoires. Chaque appareil compte les enregistrements qu'il a scellés (`sync/usage.json` du dossier de configuration) ; la somme des têtes publiées est surveillée : **alerte** au-delà de 2^30 (« Réinitialisez la synchronisation », Y-11), **refus de chiffrer** à 2^32 (`key-exhausted`). **AES-256-GCM-SIV** (`aws_lc_rs::aead::AES_256_GCM_SIV`, résistant à la réutilisation de nonce) reste une option pour une future majeure `sm`, sans l'imposer : le budget ci-dessus rend le risque négligeable.
+- **AAD** (audit B2, H6) : suite de champs, chacun **préfixé par sa longueur** (u16 gros-boutiste, puis octets UTF-8) ; aucune ambiguïté de séparateur. Champs, dans l'ordre :
+  - journal : `ct/1`, `j`, `<device_id>`, `<époque>`, `<segment>`, `<index de l'enregistrement>`, `<sm>`, `<sv>` ;
+  - instantané : `ct/1`, `s`, `<device_id>`, `<époque>`, `<numéro>`, `<index>`, `<sm>`, `<sv>` ;
+  - état : `ct/1`, `state`, `<device_id>`, `<époque>`, `<stateSeq>`, `<sm>`, `<sv>`.
+  Notation abrégée dans cet ADR : `ct/1|state|<dev>|<époque>|<stateSeq>|<sm>|<sv>`. Le lecteur reconstruit l'AAD depuis le chemin, l'en-tête (qui doit correspondre au chemin) et la position : un enregistrement déplacé, réordonné, recopié dans un autre fichier, ou un `state.ctx` d'une autre époque ou d'un autre `stateSeq`, ne se déchiffre pas.
+- **Bibliothèque** : crate `aws-lc-rs` 1, **déjà compilée** sur Windows et iOS (fournisseur de `rustls` via `reqwest`, `cargo tree -i aws-lc-rs` sur les deux cibles) ; ajoutée en dépendance directe sans nouvelle entrée dans `Cargo.lock`, licence ISC / Apache-2.0, coût binaire négligeable. Écartées : `aes-gcm` + `hkdf` de RustCrypto (six crates nouvelles pour un service déjà présent) ; Web Crypto dans la WebView (clé exposée à la WebView pour chaque fichier). Les tests Vitest utilisent un **codec de référence TypeScript** (`tests/sim/syncCodec.ts`, Web Crypto de Node) qui doit produire et lire les mêmes vecteurs que Rust (`tests/fixtures/sync/vectors.json`, vérifiés par `cargo test` ET Vitest, bourrage et AAD préfixée compris) ; ce codec n'est jamais embarqué.
 - **Clé de secours** (imprimable) : `K` + 2 octets de contrôle (`SHA-256(K)[0..2]`), en base32 Crockford, groupes de 5 caractères préfixés `CT1-` (55 caractères utiles). Saisie tolérante (casse, espaces, tirets, `O`/`0`, `I`/`L`/`1`). Décodage et contrôle en Rust uniquement.
-- **Clé différente** : un fichier dont le `kid` d'en-tête diffère du `kid` local n'est pas déchiffré ; état `key-mismatch` (« Ce dossier a été chiffré avec une autre clé : associez cet appareil »).
-- **Rotation de clé** : seulement par **nouvelle époque** (section 9) avec une nouvelle `K`, quand un appareil sans clé valide doit repartir d'un dossier illisible (clé perdue sur tous les appareils, sans clé de secours). Il n'y a pas d'écran « Changer la clé » à l'ordre 4 (aucune story ne le demande, voir questions ouvertes). Les fichiers de l'ancienne clé deviennent illisibles et sont purgés par leurs écrivains ; les autres appareils doivent être réassociés par QR.
+- **Clé différente** : un fichier dont le `kid` d'en-tête diffère du `kid` local n'est pas déchiffré ; l'appareil qui l'a écrit passe en statut `foreign` (section 3.4). L'état global `key-mismatch` (« Ce dossier a été chiffré avec une autre clé : associez cet appareil ») n'est affiché que si **aucun** appareil connu ne partage la clé locale.
+- **Rotation de clé** : **aucune à l'ordre 4.** Une rotation volontaire (appareil perdu, clé de secours compromise) est la story **Y-11 proposée** (section 14.3) ; tant qu'elle n'est pas acceptée, la seule issue est de faire **oublier le dossier** à chaque appareil, effacer la clé, vider le dossier iCloud à la main et réassocier (section 14.1). Le format (kid par fichier, époques indépendantes de la clé, statut `foreign` par appareil) rend Y-11 possible sans migration.
+
+#### 2.1 Exposition de la clé à la WebView (audit H1)
+
+La clé ne passe par la WebView qu'en **deux points**, chacun encadré :
+
+| Point | Sens | Encadrement |
+| --- | --- | --- |
+| `sync_pairing_payload` → `{ qrText, recoveryKey, expiresAt }` | Rust → WebView (`K` dans les deux chaînes) | **Confirmation native ouverte par Rust avant de renvoyer la charge** ; **3 appels au plus par 10 minutes** (`rate-limited` au-delà) ; capture d'écran bloquée pendant l'affichage (section 10.3) |
+| `sync_key_import({ qrText } \| { recoveryKey })` | WebView → Rust (`K` saisie ou scannée) | 5 appels au plus par 10 minutes ; confirmation native si une **autre** clé est déjà présente (audit M8) ; `kid` vérifié contre le dossier **avant** l'enregistrement (audit B3) |
+
+**Confirmation native : boîte `tauri-plugin-dialog` ouverte par Rust** (`MessageDialogBuilder`, boutons « Afficher la clé » / « Annuler »). Ses textes vivent dans `src/i18n/native/fr.json` (règle i18n respectée) et sont **compilés dans le binaire** par `include_str!` dans `consent.rs` : ils ne sont jamais fournis par la WebView, qui pourrait sinon les falsifier (« Cliquez sur OK pour continuer »). Choix justifié :
+
+- elle arrête la menace (b) : un script de la WebView peut appeler la commande mais ne peut pas cliquer dans une fenêtre native modale ; l'utilisateur voit une demande qu'il n'a pas faite ;
+- le plugin est déjà présent, sans permission `dialog:` accordée à la WebView, et le **même code** sert à l'iPhone (ordre 5) ;
+- **Windows Hello (`UserConsentVerifier`) écarté** : il ajoute une preuve d'identité contre une personne devant la session ouverte, menace hors modèle puisque la même personne peut lire le Gestionnaire d'identification (section 2.2) ; il n'est pas toujours configuré (repli obligatoire vers une boîte de toute façon) ; il n'existe pas sur iOS (LocalAuthentication serait un plugin Swift de plus). Réévaluable si le modèle de menace change.
+
+Règles côté interface (contrôlées par la revue et par des tests, section 12) :
+
+- `qrText`, `recoveryKey` et la saisie de la clé de secours ne vont **jamais dans un store Zustand**, jamais dans un journal (technique, console, rapport d'erreur), jamais dans l'URL, `localStorage` ou `sessionStorage` ; ils vivent dans l'état local du composant (`PairingDialog`, `RecoveryKeyEntry`) et sont **remis à `null` à la fermeture**, à l'expiration et au démontage ; le champ de saisie a `autocomplete="off"`, `spellcheck={false}`, `autocapitalize="characters"` et est vidé après l'envoi.
+- `SyncPlatformError` ne recopie jamais l'entrée d'une commande dans son message.
+- **Ordre 5, scan du QR** : le scan est **lancé par Rust** (API Rust du plugin barcode-scanner appelée depuis `sync_key_import({ scan: true })`), le texte scanné ne transite alors pas par la WebView. **À défaut** (si l'API mobile du plugin n'est appelable que depuis JS, à vérifier au premier build iOS), passage par le JS accepté : le texte scanné est transmis immédiatement à `sync_key_import` sans être stocké, et ce troisième point d'exposition est inscrit dans `docs/decisions.md` et dans cette section par avenant.
+
+#### 2.2 Coffre et fin de vie de la clé (audit H3)
+
+- `src-tauri/src/calendars/vault.rs` est déplacé en `src-tauri/src/vault.rs` (réexporté pour les agendas, sans changement de comportement) ; entrée `service = fr.circletasks.planner`, `account = circletasks.sync.key.v1`, valeur = `K` en base64. **Jamais** dans SQLite, dans iCloud, dans les journaux techniques ni dans l'état de l'interface.
+- **Windows** : Gestionnaire d'identification (`keyring` `windows-native`, déjà présent).
+- **iOS (ordre 5)** : Trousseau avec **`kSecAttrAccessibleWhenUnlockedThisDeviceOnly`** et **`kSecAttrSynchronizable = false`** pour `circletasks.sync.key.v1` : la clé ne part ni dans le Trousseau iCloud ni dans une sauvegarde chiffrée restaurable sur un autre iPhone. `keyring` 3 (`apple-native`) ne permet pas de fixer ces attributs : l'entrée de la clé de synchro passe par **`security-framework`** directement (`vault_ios.rs`, `#[cfg(target_os = "ios")]`, `PasswordOptions` avec contrôle d'accès `AccessibleWhenUnlockedThisDeviceOnly` et `set_access_synchronized(Some(false))`) ; les jetons d'agenda restent sur `keyring`. **Test de contrat** : `vault_ios.rs` expose `sync_key_attributes()` (constantes utilisées à l'écriture), vérifiées par un test `cargo test` compilé pour toutes les cibles ; à l'ordre 5, la checklist manuelle relit les attributs de l'élément par `SecItemCopyMatching`.
+- **Risque accepté sur Windows** : le Gestionnaire d'identification est lisible par **tout programme de la session** de l'utilisateur (pas d'ACL par application) ; un logiciel malveillant qui tourne sous la session d'Ali lit `K`. Hors modèle (la même session lit déjà la base SQLite en clair) ; inscrit en limite connue.
+- **Fin de vie de la clé** :
+  - `sync_folder_forget({ eraseKey: false })` (défaut) oublie le dossier, **garde la clé** : rechoisir le même dossier reprend sans réassociation ;
+  - `sync_folder_forget({ eraseKey: true })` oublie le dossier et **efface la clé** du coffre, après une confirmation native (« Sans clé, cet appareil devra être associé de nouveau ») ;
+  - si Y-11 est acceptée, l'ancienne clé est effacée à la fin de la réinitialisation (section 14.3) ;
+  - **désinstallation** : ni le désinstalleur Windows ni iOS n'effacent le coffre (l'élément du Trousseau `ThisDeviceOnly` peut survivre à la suppression de l'app) ; limite connue, l'écran de Réglages propose « Oublier le dossier et la clé » avant de désinstaller.
+
+#### 2.3 Journaux techniques (audit B6)
+
+Les journaux techniques de la synchro (Rust et TypeScript) ne contiennent **ni texte clair** d'enregistrement, **ni clé**, **ni `qrText`**, **ni saisie de la clé de secours**, ni chemin complet : seulement codes, compteurs, noms de fichiers stricts, identifiants d'appareil et d'époque. Test dédié (section 12).
 
 ### 3. Contenu des journaux
 
@@ -109,20 +193,21 @@ interface JournalRecord {
   readonly ops: readonly SyncOp[];           // ordre de publication ; parents avant enfants (section 3.3)
 }
 interface SyncOp {
-  readonly t: SyncTableName | string;        // table ; chaîne libre pour une table inconnue (Y-07)
+  readonly t: string;                        // table ; résolue par le catalogue seulement (section 3.3)
   readonly id: string;                       // id de la ligne ; pour settings, la clé du réglage
   readonly at: IsoDateTime;                  // updated_at de l'écriture la plus récente de l'opération
-  readonly f: Readonly<Record<string, SyncField>>;
+  readonly f: ReadonlyMap<string, SyncField>; // Map après analyse (jamais un objet ordinaire)
 }
 /** [valeur, hlc de la valeur, hlc de la valeur remplacée (base) ou null si inconnue]. */
 type SyncField = readonly [value: SqlValue, hlc: Hlc, base: Hlc | null];
 ```
 
+- **Analyse stricte** (`src/domain/sync/parse.ts`, audit H5) : le JSON déchiffré est validé par un schéma écrit à la main ; les objets de champs deviennent des `Map` (ou des objets `Object.create(null)` pour les copies) ; toute clé `__proto__`, `constructor` ou `prototype`, à n'importe quel niveau, **refuse l'enregistrement entier** (corruption) ; chaque hlc est validé par l'expression stricte de l'ADR 0005 (`^\d{15}-[0-9a-f]{4}-<uuid v4>$`) **avant toute comparaison** (audit M4).
 - **Upsert par champ, hlc par champ.** Une opération ne porte que les colonnes publiées modifiées (toutes à la création). Les colonnes techniques `updated_at`, `device_id`, `hlc` ne circulent pas comme champs : après fusion, `hlc` de la ligne = plus grand hlc de ses champs, `updated_at` et `device_id` = ceux de l'opération qui porte ce hlc. `created_at` est un champ ordinaire.
 - **Suppression** = champ `deleted_at` (valeur non nulle) ; **restauration** = `deleted_at` à `null` avec un hlc plus récent. Pas d'opération « delete » : une trace de suppression est une ligne dont `deleted_at` gagne. La purge physique ne circule jamais (section 5.4).
 - **Base** : hlc de la valeur que l'écrivain a remplacée, telle qu'il la connaissait avant sa première modification non publiée. Elle sert uniquement à détecter un conflit (section 4.2).
 
-#### 3.2 Capture des écritures locales (file d'envoi)
+#### 3.2 Capture des écritures locales (file d'envoi) et garde
 
 Les repositories ne savent pas quels champs ont changé ; la capture est faite par **déclencheurs SQL** générés depuis le catalogue (`syncTables.ts`) dans la migration `0015_sync_tables` :
 
@@ -133,14 +218,25 @@ Les repositories ne savent pas quels champs ont changé ; la capture est faite p
 - Les déclencheurs de recherche (migration 0011) ne sont pas gardés : ils s'exécutent aussi pour les écritures de la synchro (avenant RC-01 de l'ADR 0002).
 - Les nouveaux déclencheurs sont ajoutés à `REFERENCE_TRIGGERS` (`src-tauri/src/backup_triggers.rs`, contrôle des bases restaurées, ADR 0009) et au test `triggers.test.ts`.
 
+**Invariants de `sync_guard`** (audit M10) :
+
+1. La garantie qu'aucune écriture locale ne s'exécute pendant qu'une garde est posée vient du **pilote sérialisé de l'ADR 0002** (une seule connexion, transactions en file) : la garde n'existe que **dans** une transaction, aucune autre écriture ne peut s'intercaler.
+2. La garde est posée **et retirée dans la même transaction** (`INSERT` en tête, `DELETE` avant le `COMMIT`) ; un `ROLLBACK` la retire aussi.
+3. La table est **vérifiée vide au démarrage** (après `migrate()`) **et après une restauration P-04** ; une ligne trouvée est supprimée et journalisée (seule cause possible : base copiée à chaud).
+4. Les déclencheurs et la publication ne font **jamais de `SELECT *`** : les colonnes publiées sont listées depuis le catalogue ; une colonne locale ajoutée plus tard ne peut pas partir par accident.
+5. Test **« colonne locale ⇒ jamais dans `sync_outbox` »** : pour chaque colonne locale du catalogue (`task.discarded`, `routine.paused`, `calendar_account.token_ref`, `calendar_account.username`…), une mise à jour n'ajoute aucune entrée à la file.
+6. **La garde n'est pas une frontière de sécurité** : n'importe quel code qui écrit en base peut la poser ; elle évite seulement la republication des écritures venues de la synchro.
+
 La file `sync_outbox` est la **file locale du hors ligne** (Y-05) : elle survit aux redémarrages et n'est vidée qu'après l'écriture et le `sync_all` du segment qui la publie (section 10.2).
 
-#### 3.3 Ordre et idempotence
+#### 3.3 Ordre, idempotence, identifiants SQL
 
 - Publication : les entrées de la file sont regroupées par ligne (une opération par ligne, champs fusionnés, valeur courante relue en base au moment de publier), ordonnées par **ordre topologique des tables** (`space`, `project`, `recurrence`, `goal`, `task`, `routine`, `routine_log`, `routine_pause`, `reminder`, `event`, `checklist`, `checklist_item`, `focus_session`, `calendar_account`, `holiday`, `settings`) puis par plus grand hlc. Le plus grand hlc d'un enregistrement est donc croissant dans le journal d'un appareil ; un accusé « plus grand hlc lu de l'appareil X » signifie « tout ce que X a écrit jusqu'à ce hlc est lu ».
 - Application : un champ dont le hlc est **inférieur ou égal** à l'horloge locale du champ ne change rien. Rejouer un enregistrement, un segment ou un instantané déjà appliqué est sans effet. L'ordre entre appareils est indifférent (fusion commutative, section 4).
-- Clés étrangères : application dans une transaction avec `PRAGMA defer_foreign_keys = ON`. Une opération dont le parent manque encore au moment du `COMMIT` (parent publié par un troisième appareil pas encore lu) est mise de côté dans `sync_parked` (opération complète, motif), retentée à chaque cycle, jamais perdue ; si son parent est une trace purgée (section 5.4), elle est abandonnée et journalisée.
-- Valeur refusée par une contrainte locale (`CHECK` d'une version plus ancienne) : le champ est rangé dans `sync_unknown` comme un champ inconnu (Y-07, section 7.2), l'opération continue pour les autres champs.
+- **Identifiants SQL** (audit H5) : **aucun nom de table ou de colonne n'entre dans une requête SQL s'il n'est pas exactement dans `syncTables.ts`**. `op.t` et chaque nom de champ sont cherchés dans le catalogue (`Map` figée, comparaison exacte, sensible à la casse) ; les chaînes SQL sont construites à partir des **noms du catalogue**, jamais de la chaîne reçue. Une table ou une colonne absente du catalogue va dans `sync_unknown`, **uniquement par paramètres liés** (`table_name`, `field`, `value` sont des valeurs, jamais des identifiants), sous les conditions de la section 7.2.
+- **Type et longueur** : chaque colonne du catalogue déclare son type (`text`, `int`, `real`, `bool`, `json`, `date`, `datetime`, `id`, `hlc`, `enum`) et sa longueur maximale ; un champ connu dont la valeur ne respecte pas le catalogue est refusé et journalisé (`invalid-field`) si le `sv` distant est inférieur ou égal au `sv` local, rangé dans `sync_unknown` sinon (une version plus récente a pu élargir le type). `id` : 128 caractères au plus, expression du catalogue (UUID ou identifiant naturel de `naturalIds.ts`).
+- Clés étrangères : application dans une transaction avec `PRAGMA defer_foreign_keys = ON`. Une opération dont le parent manque encore au moment du `COMMIT` (parent publié par un troisième appareil pas encore lu) est mise de côté dans `sync_parked` (opération complète, motif), retentée à chaque cycle, plafonnée (section 1.6) ; si son parent est une trace purgée (section 5.4), elle est abandonnée et journalisée.
+- Valeur refusée par une contrainte locale (`CHECK` d'une version plus ancienne) : le champ est rangé dans `sync_unknown` comme un champ inconnu (Y-07, section 7.2) si le `sv` distant est supérieur, refusé sinon ; l'opération continue pour les autres champs.
 
 #### 3.4 Curseurs de lecture
 
@@ -152,10 +248,15 @@ Table locale `sync_state`, une ligne par appareil (distant ou soi-même, `is_sel
 | `epoch` | Époque courante de l'appareil |
 | `cursor_segment`, `cursor_record` | **Curseur de lecture** de cet appareil (le `last_cursor_other` du PRD) |
 | `ack_hlc` | Plus grand hlc lu de cet appareil |
-| `head_segment`, `head_record`, `head_hlc` | Dernière tête publiée vue |
+| `head_segment`, `head_record`, `head_hlc` | Dernière tête publiée acceptée |
+| `state_epoch`, `state_seq` | Époque et `stateSeq` du dernier `state.ctx` accepté (anti-rejeu, section 1.4) |
+| `last_acks` | JSON des accusés du dernier `state.ctx` accepté (gardés si l'état devient invalide, audit M3) |
 | `last_seen_hlc`, `last_sync_at` | `lastSyncHlc` publié par l'appareil ; heure locale du dernier cycle réussi (soi-même) |
-| `schema_version`, `format_major` | `sv` et `sm` publiés |
-| `status` | `active`, `expired` (section 5.5), `newer-major` (Y-07), `clock-ahead` (section 4.4), `corrupt` |
+| `schema_version`, `format_major`, `kid` | `sv`, `sm` et `kid` publiés |
+| `status` | `active`, `expired` (section 5.5), `newer-major` (Y-07), `clock-ahead` (section 4.4), `corrupt`, `foreign`, `rollback` ; `forgotten` réservé à Y-10 (contrainte `CHECK` posée dès 0015) |
+
+- **Statut par appareil** (audit M3) : `foreign` = `kid` différent du `kid` local ou en-têtes incohérents avec le chemin ; il ne concerne **que cet appareil**, les autres sont lus normalement.
+- **Un appareil sans état valide** (`state.ctx` absent, `foreign`, `corrupt`, `rollback`, dans le nuage) **garde son dernier accusé connu** (`last_acks`, `ack_hlc`) pour les calculs de purge : il ne débloque rien qu'il n'avait pas déjà accusé, et ne bloque pas plus qu'avant ; il devient `expired` à 180 jours comme les autres.
 
 Le curseur et les lignes appliquées sont écrits **dans la même transaction** : un arrêt brutal rejoue au pire le dernier lot, sans effet (idempotence). La colonne `folder_bookmark_ref` du PRD 6 n'existe pas : le dossier choisi est gardé par Rust (section 6.1).
 
@@ -163,7 +264,7 @@ Le curseur et les lignes appliquées sont écrits **dans la même transaction** 
 
 #### 4.1 Dernier hlc gagnant, par champ
 
-Pour chaque champ reçu `(v_r, h_r, b_r)` et le champ local `(v_l, h_l)` : si `h_r > h_l`, la valeur distante est écrite et l'horloge du champ devient `h_r` ; sinon rien. Les hlc sont des chaînes de largeur fixe (ADR 0005) : comparaison de chaînes, l'UUID de l'appareil départage. La fusion est **par champ**, jamais par ligne : deux appareils qui modifient deux champs différents d'une même tâche gardent les deux modifications. Deux champs liés (date et heure) peuvent ainsi se combiner ; c'est la règle du PRD, assumée.
+Pour chaque champ reçu `(v_r, h_r, b_r)` et le champ local `(v_l, h_l)` : si `h_r > h_l`, la valeur distante est écrite et l'horloge du champ devient `h_r` ; sinon rien. Les hlc sont des chaînes de largeur fixe (ADR 0005), **validées avant comparaison** (section 3.1) : comparaison de chaînes, l'UUID de l'appareil départage. La fusion est **par champ**, jamais par ligne : deux appareils qui modifient deux champs différents d'une même tâche gardent les deux modifications. Deux champs liés (date et heure) peuvent ainsi se combiner ; c'est la règle du PRD, assumée.
 
 `routine_log` « s'additionne » (PRD 7) grâce à l'identifiant déterministe `(routine_id, date)` (section 8) : deux validations du même jour sont la même ligne, deux jours différents sont deux lignes ; décocher sur un appareil et cocher sur l'autre se départage par hlc sur `deleted_at`.
 
@@ -184,11 +285,11 @@ Champs **non montrés** dans le journal des conflits (fusionnés par hlc, mais u
 
 `conflict_log` (table locale) : `id`, `table_name`, `row_id`, `field`, `kept_value`, `discarded_value` (JSON), `kept_device`, `discarded_device`, `kept_hlc`, `discarded_hlc`, `detected_at`, `resolved_at` (NULL), `restored` (0/1). L'écran lit le titre de l'élément au moment de l'affichage (élément supprimé ou purgé : « Élément supprimé »), le champ par une clé i18n (`sync.field.<table>.<colonne>`), la date et l'appareil de chaque valeur depuis son hlc (heure locale, format 24 h ou P-03).
 
-« Restaurer » (un clic) = **nouvelle écriture locale** de la valeur écartée, par le `WriteStamper` (base = horloge courante du champ : l'autre appareil ne verra pas de nouveau conflit), dans une transaction qui pose `restored = 1` et `resolved_at`. Refusé avec message si la ligne a été purgée. La restauration est elle-même annulable (`UndoKind` `syncRestore`, ADR 0005). Conservation : 12 mois glissants, purge au démarrage.
+« Restaurer » (un clic) = **nouvelle écriture locale** de la valeur écartée, par le `WriteStamper` (base = horloge courante du champ : l'autre appareil ne verra pas de nouveau conflit), dans une transaction qui pose `restored = 1` et `resolved_at`. Refusé avec message si la ligne a été purgée. La restauration est elle-même annulable (`UndoKind` `syncRestore`, ADR 0005). Conservation : 12 mois glissants et 10 000 lignes au plus (section 1.6), purge au démarrage.
 
 #### 4.4 Dérive d'horloge
 
-`HLC_MAX_DRIFT_MS = 3 600 000` (1 h), dans `src/domain/sync/drift.ts`. Un enregistrement distant dont un hlc dépasse `now + 1 h` (horloge locale) n'est **pas appliqué** : la lecture de cet appareil s'arrête avant lui (curseur inchangé), son `status` devient `clock-ahead` et l'écran de synchro affiche « L'horloge de {appareil} est en avance : vérifiez sa date et son heure ». La lecture reprend d'elle-même quand la condition n'est plus vraie. `HlcClock.receive()` n'est appelé qu'après ce contrôle : un hlc aberrant ne peut plus geler l'horloge locale (dette de l'ADR 0005 soldée). Rien ne bloque la publication locale.
+`HLC_MAX_DRIFT_MS = 3 600 000` (1 h), dans `src/domain/sync/drift.ts`. La dérive est mesurée contre **l'horloge physique injectée** (`Clock.nowMs()`, la même que celle de `createHlcClock`), **jamais contre le hlc local** qu'une réception a pu pousser (audit M4). Un enregistrement distant dont un hlc (validé, section 3.1) dépasse `nowMs() + 1 h` n'est **pas appliqué** : la lecture de cet appareil s'arrête avant lui (curseur inchangé), son `status` devient `clock-ahead` et l'écran de synchro affiche « L'horloge de {appareil} est en avance : vérifiez sa date et son heure ». La lecture reprend d'elle-même quand la condition n'est plus vraie. `HlcClock.receive()` n'est appelé qu'après ce contrôle : un hlc aberrant ne peut plus geler l'horloge locale (dette de l'ADR 0005 soldée). Rien ne bloque la publication locale.
 
 ### 5. Instantanés et rétention (Y-02, Y-09)
 
@@ -196,9 +297,9 @@ Champs **non montrés** dans le journal des conflits (fusionnés par hlc, mais u
 
 Un instantané `s-<n>.cts` est une suite d'enregistrements chiffrés (même ligne qu'un journal) :
 
-- `{"k":"snap-rows","t":<table>,"rows":[…]}` (500 lignes au plus) : toutes les colonnes publiées de chaque ligne, **lignes supprimées comprises**, et ses horloges de champ (entrée `'*'` plus les exceptions) ;
-- `{"k":"snap-unknown",…}` : champs inconnus conservés (Y-07) ;
-- `{"k":"snap-tombstones","ids":[[table, id, hlc]…]}` : identifiants purgés (section 5.4) ;
+- `{"k":"snap-rows","rows":[[<table>, <ligne>, <horloges>]…]}` : **découpé par taille** (64 Kio de texte clair au plus avant bourrage, audit M1), lignes de toutes les tables à la suite dans l'ordre topologique ; toutes les colonnes publiées de chaque ligne, **lignes supprimées comprises**, et ses horloges de champ (entrée `'*'` plus les exceptions) ;
+- `{"k":"snap-unknown",…}` : champs inconnus conservés (Y-07), même découpage ;
+- `{"k":"snap-tombstones","ids":[[table, id, hlc]…]}` : identifiants purgés (section 5.4), même découpage ;
 - `{"k":"snap-end","count":N,"covers":{<device_id>:{segment,record,hlc}},"epoch":…,"sv":…}` en dernier. Sans enregistrement de fin valide, l'instantané est incomplet (en attente d'iCloud) et ignoré.
 
 `covers` = position, pour chaque appareil, jusqu'à laquelle les journaux sont inclus.
@@ -209,46 +310,62 @@ Un instantané `s-<n>.cts` est une suite d'enregistrements chiffrés (même lign
 
 #### 5.3 Purge des journaux
 
-Un appareil supprime **ses propres** segments `j-n` quand les trois conditions sont vraies : un instantané de l'époque (de n'importe quel appareil) le couvre (`covers`) ; tous les appareils **actifs** ont accusé sa lecture ; son dernier enregistrement a plus de **30 jours**.
+Un appareil supprime **ses propres** segments `j-n` quand les trois conditions sont vraies : un instantané de l'époque (de n'importe quel appareil) le couvre (`covers`) ; tous les appareils **actifs** ont accusé sa lecture (un appareil sans état valide compte avec son dernier accusé connu, section 3.4) ; son dernier enregistrement a plus de **30 jours**.
 
-#### 5.4 Traces de suppression (Y-09)
+#### 5.4 Traces de suppression (Y-09, audit M7)
 
 - Une ligne dont `deleted_at` est posé reste en base (trace complète) tant que **tous les appareils actifs** n'ont pas lu la suppression (accusé `ack_hlc` de l'écrivain ≥ hlc de `deleted_at`), **puis 30 jours**. Alors seulement elle est purgée physiquement (garde posé), avec ses horloges de champ et ses entrées de file.
-- À la purge, l'identifiant est inscrit dans `sync_tombstone (table_name, row_id, deleted_hlc, purged_at)`, **sans aucun contenu**, et gardé **sans limite de durée** (quelques dizaines d'octets par élément). Toute opération qui vise un identifiant de `sync_tombstone` est ignorée : aucun appareil en retard, aucune base restaurée ne peut ressusciter un élément purgé. La liste est incluse dans chaque instantané.
+- À la purge, l'identifiant est inscrit dans `sync_tombstone (table_name, row_id, deleted_hlc, purged_at)`, **sans aucun contenu**, et gardé **sans limite de durée**. La liste est incluse dans chaque instantané.
+- **Portée d'une trace** : une trace ne bloque que les opérations dont le hlc est **inférieur ou égal à `deleted_hlc`** : aucun appareil en retard, aucune base restaurée ne peut ressusciter un élément purgé. Une opération **plus récente** :
+  - **identifiant naturel** (`routine_log` `rlog|…`, `holiday` `holiday|…`) : une **recréation complète** (opération `'*'` portant toutes les colonnes publiées) est acceptée ; la trace est retirée dans la même transaction (cocher de nouveau une routine un jour purgé, fête régénérée) ;
+  - **identifiant UUID** : une opération partielle n'a pas de ligne à modifier ; elle est abandonnée et journalisée (un UUID n'est jamais recréé légitimement).
+- **Exclus des purges** : les **espaces fixes** Pro et Perso (identifiants fixes communs, jamais purgés physiquement ni tracés) et la table **`settings`** (une clé de réglage n'est jamais purgée ; sa valeur suit la règle de hlc).
+- **Volume estimé** : une trace occupe environ 120 octets en base (index compris) et 80 octets de texte clair dans un instantané. Hypothèse haute de 20 suppressions purgées par jour (tâches, validations de routine décochées, rappels) : ≈ 7 300 traces par an, **≈ 0,9 Mo par an en base**, ≈ 0,6 Mo par instantané et par an, soit moins de 10 Mo sur 10 ans. Acceptable sans limite de durée ; réévaluer si le volume mesuré dépasse 50 000 traces.
 - `purgeHorizon` publié = plus grand `deleted_hlc` purgé par l'appareil (sert à la règle 4 de l'ADR 0010).
 - **Purge de la corbeille (T-08)** : `TaskRepository.purgeDeletedBefore` (DELETE physique à 30 jours, `taskRepository.ts`) est conservé mais doit passer par la règle ci-dessus : le cas d'usage reçoit l'horizon de purge de la synchro (`+∞` si la synchro n'est pas configurée), la suppression physique s'exécute sous `sync_guard` et inscrit les identifiants dans `sync_tombstone` dans la même transaction. Le moteur purge de la même façon les autres tables (aujourd'hui, seules les tâches et leurs rappels sont purgés).
 
 #### 5.5 Appareils inactifs, reprise depuis l'instantané
 
 - Un appareil dont `lastSyncHlc` a plus de **180 jours** est `expired` : il ne compte plus dans les accusés (sa présence ne bloque plus aucune purge).
-- Un appareil qui revient **repart de l'instantané** si son propre dernier cycle a plus de 180 jours ou si un segment dont il a besoin n'existe plus. Reprise (`snapshot.ts`, mode **fusion**) : il garde sa file d'envoi, remet ses curseurs à zéro, applique le dernier instantané de l'époque par la fusion ordinaire (section 4 ; les identifiants purgés retirent ses lignes), puis lit les journaux depuis `covers`, puis publie sa file. Les éléments supprimés ailleurs ne réapparaissent pas : leur trace ou leur identifiant purgé gagne.
+- Un appareil qui revient **repart de l'instantané** si son propre dernier cycle a plus de 180 jours, si un segment dont il a besoin n'existe plus, ou si **une corruption au milieu d'un segment** d'un autre appareil a été détectée (audit M3 : l'instantané le plus récent qui couvre au-delà du point corrompu ; s'il n'en existe pas, l'appareil corrompu reste `corrupt` et les autres sont lus normalement). Reprise (`snapshot.ts`, mode **fusion**) : il garde sa file d'envoi, remet ses curseurs à zéro, applique le dernier instantané de l'époque par la fusion ordinaire (section 4 ; les identifiants purgés retirent ses lignes), puis lit les journaux depuis `covers`, puis publie sa file. Les éléments supprimés ailleurs ne réapparaissent pas : leur trace ou leur identifiant purgé gagne.
 - **Nouvel appareil** (Y-06) : même chemin depuis une base vide, avec progression affichée (enregistrements lus / total annoncé par `snap-end`, puis journaux).
 
 ### 6. Téléchargement forcé avant lecture
 
 #### 6.1 Dossier (Y-01)
 
-- PC : `sync_folder_choose` ouvre la boîte de choix de dossier **côté Rust** (`tauri-plugin-dialog`, déjà présent, aucune permission `dialog:` pour la WebView), dossier proposé `%USERPROFILE%\iCloudDrive\CircleTasks` (créé s'il n'existe pas et si l'utilisateur le valide). Chemin à lettre de lecteur seulement (`is_local_disk_path` de `export.rs`), pas de lien ni de point d'analyse (`is_plain_dir`).
+- PC : `sync_folder_choose` ouvre la boîte de choix de dossier **côté Rust** (`tauri-plugin-dialog`, déjà présent, aucune permission `dialog:` pour la WebView), dossier proposé `%USERPROFILE%\iCloudDrive\CircleTasks` (créé s'il n'existe pas et si l'utilisateur le valide).
 - Le chemin est gardé par Rust dans `<dossier de configuration de l'app>/sync/folder.json` : **la WebView ne reçoit ni n'envoie jamais de chemin**, seulement un libellé (« iCloud Drive / CircleTasks », ou le nom du dossier). Choix mémorisé après redémarrage (critère Y-01). L'iPhone garde un signet de sécurité dans le plugin folder-bookmark (ordre 5).
 - Détection iCloud : `CfGetSyncRootInfoByPath` ; si le dossier n'est pas sous une racine de synchronisation dont le fournisseur est iCloud, il est accepté (tests, dossier local) avec l'avertissement « Ce dossier n'est pas dans iCloud Drive : vos appareils ne le partageront pas ».
-- **« Toujours conserver sur cet appareil »** : au choix du dossier puis à chaque cycle, `CfSetPinState(CF_PIN_STATE_PINNED, CF_SET_PIN_FLAG_RECURSE)` sur `CircleTasks` (sans effet hors iCloud). Un échec est journalisé, la lecture forcée ci-dessous reste la garantie.
+- **Épinglage limité** (audit M2) : `CfSetPinState(CF_PIN_STATE_PINNED)` **fichier par fichier**, seulement sur les `state.ctx` et les fichiers de l'époque courante annoncés par une tête authentifiée, jamais récursif sur le dossier entier ; taille totale surveillée (section 1.6). Un échec est journalisé, la lecture forcée ci-dessous reste la garantie.
+
+**Contrôle du dossier** (audit H4), fonction dédiée `sync::folder::check_sync_path(&Path) -> Result<CheckedFolder, FolderError>` (`#[cfg(windows)]` ; iOS : signet de sécurité, section 6.3) :
+
+1. Chemin à lettre de lecteur (`export::is_local_disk_path`, inchangé) **et** `GetDriveTypeW(racine) == DRIVE_FIXED` (refus des lecteurs réseau mappés, amovibles, `SUBST` vers un partage).
+2. **Chaque composant**, de la racine au dossier choisi, est ouvert par `CreateFileW` avec `FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS` (le point d'analyse n'est pas suivi), puis `GetFileInformationByHandleEx(FileAttributeTagInfo)` : si `FILE_ATTRIBUTE_REPARSE_POINT` est posé, **seules les balises `IO_REPARSE_TAG_CLOUD*`** sont acceptées (`IO_REPARSE_TAG_CLOUD` à `IO_REPARSE_TAG_CLOUD_F`, test `tag & 0xFFFF0FFF == IO_REPARSE_TAG_CLOUD`) ; `IO_REPARSE_TAG_MOUNT_POINT` (jonction), `IO_REPARSE_TAG_SYMLINK` et **toute autre balise** sont refusés (`unsafe-folder`).
+3. Le chemin final est résolu par **`GetFinalPathNameByHandleW`** (`FILE_NAME_NORMALIZED | VOLUME_NAME_DOS`) sur le handle du dossier, puis **contrôlé de nouveau** (étapes 1 et 2) ; il doit être égal, sans tenir compte de la casse, au chemin demandé ; sinon `unsafe-folder`.
+4. **Chaque fichier** lu ou écrit est ouvert de la même façon (`FILE_FLAG_OPEN_REPARSE_POINT`, balise contrôlée sur le handle, puis I/O **sur ce handle**, pas sur le chemin : la course contrôle puis action relevée pour les sauvegardes ne se reproduit pas) ; un fichier à plusieurs liens physiques (`nNumberOfLinks > 1`) est refusé en écriture.
+5. `folder.json` est **revalidé à chaque chargement** (démarrage, et début de chaque `sync_scan`) : un dossier devenu jonction, déplacé ou démonté donne `unsafe-folder` ou `folder-unreachable`, sans écrire.
+
+Conséquence pour l'existant : `backup::is_plain_dir` refuse **tout** point d'analyse (attribut 0x400) ; un dossier iCloud porte des balises cloud et serait refusé. Il **n'est pas assoupli** : la sauvegarde et la restauration gardent leur contrôle strict, l'export garde `is_local_disk_path`. La synchro a **sa propre fonction**, plus stricte sur tout le reste (balise par composant, `DRIVE_FIXED`, chemin final). Les dettes « lecteur réseau mappé » de l'export et de l'import (option `GetDriveTypeW`) pourront réutiliser l'étape 1 sans effet sur cet ADR.
 
 #### 6.2 Windows (iCloud pour Windows, fichiers à la demande, cfapi)
 
 Dans `cloud_windows.rs` (`#[cfg(windows)]`), crate `windows` déjà présente, fonctionnalités ajoutées `Win32_Storage_CloudFilters` et `Win32_Storage_FileSystem` :
 
-1. **Détection** : `GetFileAttributesW` ; un fichier qui porte `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS`, `FILE_ATTRIBUTE_RECALL_ON_OPEN` ou `FILE_ATTRIBUTE_OFFLINE` n'est pas sur le disque.
-2. **Hydratation** : `CfHydratePlaceholder` (fichier entier) sur un fil bloquant (`spawn_blocking`), délai **60 s par fichier** et 3 minutes par cycle ; en repli, lecture ordinaire du fichier (qui déclenche le rappel des données).
-3. **Erreurs** : délai dépassé ou réseau indisponible → `cloud-pending` ; fournisseur arrêté (`ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING`) → `cloud-provider-stopped` (« Ouvrez iCloud pour Windows ») ; autres erreurs cloud → `cloud-error`. Aucune n'est fatale : le cycle saute ce fichier, applique ce qui est lisible, et l'état « En attente d'iCloud » (A-09) liste les fichiers concernés (maquette Synchro.html).
-4. Les dossiers sont énumérés normalement (l'énumération peuple les placeholders de dossier) ; un fichier qui n'est pas encore apparu dans l'espace de noms local est simplement absent (tête publiée non atteinte → « En attente d'iCloud »).
+1. **Détection** : attributs lus sur le handle ; un fichier qui porte `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS`, `FILE_ATTRIBUTE_RECALL_ON_OPEN` ou `FILE_ATTRIBUTE_OFFLINE` n'est pas sur le disque.
+2. **Contrôle avant hydratation** (audit M2) : taille annoncée du placeholder comparée aux bornes de la section 1.6 ; fichier non annoncé par une tête ou un instantané authentifiés (hors `state.ctx`) : pas d'hydratation.
+3. **Hydratation** : `CfHydratePlaceholder` (fichier entier) sur un fil bloquant (`spawn_blocking`), délai **60 s par fichier** et 3 minutes par cycle ; en repli, lecture ordinaire du fichier (qui déclenche le rappel des données).
+4. **Erreurs** : délai dépassé ou réseau indisponible → `cloud-pending` ; fournisseur arrêté (`ERROR_CLOUD_FILE_PROVIDER_NOT_RUNNING`) → `cloud-provider-stopped` (« Ouvrez iCloud pour Windows ») ; autres erreurs cloud → `cloud-error`. Aucune n'est fatale : le cycle saute ce fichier, applique ce qui est lisible, et l'état « En attente d'iCloud » (A-09) liste les fichiers concernés (maquette Synchro.html).
+5. Les dossiers sont énumérés normalement (l'énumération peuple les placeholders de dossier) ; un fichier qui n'est pas encore apparu dans l'espace de noms local est simplement absent (tête publiée non atteinte → « En attente d'iCloud »).
 
 #### 6.3 iOS (ordre 5, contrat)
 
-Plugin Swift `src-tauri/plugins/folder-bookmark/` : choix du dossier (`UIDocumentPickerViewController`, mode dossier), signet de sécurité persistant, et **toutes** les opérations de fichier (lister, lire à partir d'un octet, ajouter, écrire puis renommer, supprimer) sous `startAccessingSecurityScopedResource` et `NSFileCoordinator` ; avant lecture : `FileManager.startDownloadingUbiquitousItem(at:)` puis attente de `ubiquitousItemDownloadingStatus == .current` (même délai de 60 s, mêmes codes d'erreur). Rust appelle le plugin à travers le trait `SyncFs` (`files.rs`) : implémentation `StdFs` + `cloud_windows` sur PC, `BookmarkFs` sur iOS ; le chiffrement et les noms restent dans Rust, identiques sur les deux plateformes. Aucun entitlement iCloud (PRD 7).
+Plugin Swift `src-tauri/plugins/folder-bookmark/` : choix du dossier (`UIDocumentPickerViewController`, mode dossier), signet de sécurité persistant, et **toutes** les opérations de fichier (lister, lire à partir d'un octet, ajouter, écrire puis renommer, supprimer) sous `startAccessingSecurityScopedResource` et `NSFileCoordinator` ; avant lecture : taille annoncée contrôlée (`ubiquitousItemDownloadingStatus`, `fileSize`), puis `FileManager.startDownloadingUbiquitousItem(at:)` et attente de `ubiquitousItemDownloadingStatus == .current` (même délai de 60 s, mêmes codes d'erreur). Liens symboliques refusés (`isSymbolicLink`) sur chaque composant sous la racine du signet. Rust appelle le plugin à travers le trait `SyncFs` (`files.rs`) : implémentation `StdFs` + `cloud_windows` sur PC, `BookmarkFs` sur iOS ; le chiffrement, les noms et les bornes restent dans Rust, identiques sur les deux plateformes. Aucun entitlement iCloud (PRD 7).
 
 #### 6.4 Partage Rust / TypeScript
 
-Rust : chemin, hydratation, I/O, chiffrement, noms, coffre, QR, marqueur. TypeScript : tout le reste. La frontière est le contrat `SyncPlatform` (section 11) : du **texte clair JSON** circule par l'IPC (pages de 2 Mio au plus), jamais de clé ni de chemin.
+Rust : chemin, contrôle du dossier, hydratation, I/O, chiffrement, bourrage, noms, bornes, coffre, QR, confirmation native, marqueur. TypeScript : tout le reste. La frontière est le contrat `SyncPlatform` (section 11) : du **texte clair JSON** circule par l'IPC (pages de 2 Mio au plus), jamais de chemin ; la clé seulement aux deux points de la section 2.1.
 
 ### 7. Hors ligne et versions
 
@@ -259,20 +376,22 @@ Toute écriture locale reste dans `sync_outbox` jusqu'à sa publication ; un cyc
 #### 7.2 Versions de schéma (Y-07)
 
 - `sv` (numéro de migration) varie à chaque migration ; `sm` (majeure) ne change que si une migration **retire, renomme ou change le sens** d'une colonne ou d'une table publiée, ou si le format des fichiers change. Une migration additive (colonne, table, valeur d'énumération) garde `sm`. Un test (`syncCatalogue.test.ts`) compare le catalogue à `PRAGMA table_info` : retirer une colonne publiée sans changer `SYNC_FORMAT_MAJOR` échoue.
-- Lecture d'un enregistrement de **même `sm`** et de `sv` plus grand : les champs et tables connus sont appliqués ; les champs inconnus (colonne absente, table absente, valeur refusée par une contrainte locale) vont dans `sync_unknown (table_name, row_id, field, value, hlc, base_hlc, sv)` avec la même règle de hlc : rien n'est effacé, ils repartent dans les instantanés de cet appareil. Bandeau « Mettez à jour l'app » (texte i18n) tant qu'un appareil actif publie un `sv` supérieur.
-- Après la mise à jour de l'app, à la fin de `migrate()`, les champs de `sync_unknown` devenus connus sont réintégrés (sous garde, règle de hlc ordinaire) puis retirés de la table.
+- Lecture d'un enregistrement de **même `sm`** et de `sv` **strictement plus grand** : les champs et tables connus sont appliqués ; les champs inconnus (colonne absente, table absente, valeur refusée par une contrainte locale ou par le type du catalogue) vont dans `sync_unknown (table_name, row_id, field, value, hlc, base_hlc, sv)` **par paramètres liés**, avec la même règle de hlc, sous les plafonds de la section 1.6 ; noms inconnus validés par `^[a-z][a-z0-9_]{0,62}$` (sinon l'enregistrement est refusé). Rien n'est effacé, ils repartent dans les instantanés de cet appareil. Bandeau « Mettez à jour l'app » (texte i18n) tant qu'un appareil actif publie un `sv` supérieur.
+- Un champ inconnu reçu avec un `sv` **inférieur ou égal** au `sv` local est **refusé** (`invalid-field`, journalisé) : une version égale ou plus ancienne ne peut pas connaître une colonne que la version locale ignore (audit M2).
+- Après la mise à jour de l'app, à la fin de `migrate()`, les champs de `sync_unknown` devenus connus sont réintégrés (sous garde, règle de hlc ordinaire, contrôle de type du catalogue) puis retirés de la table.
 - Lecture d'un appareil de **`sm` supérieur** : lecture de cet appareil suspendue (curseur figé, `status = newer-major`), message « Mettez à jour l'app pour lire les données de {appareil} ». La publication locale continue. Un appareil plus récent lit toujours les majeures plus anciennes (obligation de compatibilité ascendante de chaque version).
 
 ### 8. Données exclues de la synchro et cas particuliers (dettes de l'ordre 4)
 
-Catalogue `src/domain/sync/syncTables.ts` (seule source, utilisé par les déclencheurs, la publication, l'application et les instantanés). Tables **publiées** : `space`, `project`, `recurrence`, `goal`, `task`, `routine`, `routine_log`, `routine_pause`, `reminder`, `event`, `checklist`, `checklist_item`, `focus_session`, `calendar_account`, `holiday`, `settings` (réglages partagés seulement).
+Catalogue `src/domain/sync/syncTables.ts` (seule source, utilisé par les déclencheurs, la publication, l'application et les instantanés ; colonnes typées et bornées, section 3.3). Tables **publiées** : `space`, `project`, `recurrence`, `goal`, `task`, `routine`, `routine_log`, `routine_pause`, `reminder`, `event`, `checklist`, `checklist_item`, `focus_session`, `calendar_account`, `holiday`, `settings` (réglages partagés seulement).
 
 | Dette (docs/dettes.md, ordre 4) | Décision |
 | --- | --- |
 | `task.discarded` | **Colonne locale**, jamais publiée (avenant T-12). Conséquence acceptée : si une copie est publiée puis écartée dans les 5 s, l'autre appareil la voit dans sa corbeille (restaurable), jusqu'à la purge. |
 | `external_event` (et `task.external_event_id`) | Table **locale** (sans colonnes de synchro), relue par chaque appareil depuis ses comptes. `task.external_event_id` est publié : l'identifiant est déterministe (ADR 0008) et se résout sur tout appareil connecté au même compte, sinon « Événement supprimé ». |
-| Réglages locaux | Les clés de portée `local` de `SETTINGS_DEFINITIONS` ne sont **jamais** publiées (dont `device.id`, `onboarding.*`, `sample.ids`, `search.recent`, `spaces.filter`, `ui.*`, `view.compact`, `general.timeZone`, `desktop.*`, `shortcut.*`, `focus.*`). Les clés `shared` sont publiées (table `settings`, `id` = clé, un champ `value`). Une clé inconnue reçue d'une version plus récente est gardée telle quelle (elle ne peut être que partagée). |
+| Réglages locaux (audit M5) | Les clés de portée `local` de `SETTINGS_DEFINITIONS` ne sont **jamais** publiées (dont `device.id`, `onboarding.*`, `sample.ids`, `search.recent`, `spaces.filter`, `ui.*`, `view.compact`, `general.timeZone`, `desktop.*`, `shortcut.*`, `focus.*`). Les clés `shared` sont publiées (table `settings`, `id` = clé, un champ `value`). **À la réception**, une opération sur une clé de portée `local` est **refusée** et journalisée (un appareil ne peut pas imposer `device.id` ou un raccourci à l'autre). Une **clé inconnue** n'est acceptée que si elle respecte l'expression stricte `^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*){1,3}$` **et** si le `sv` distant est strictement supérieur au `sv` local ; elle est alors rangée dans `sync_unknown` (table `settings`), **pas** dans la table `settings`, et réintégrée quand la version locale la connaît (et la déclare `shared`). |
 | `calendar_account.token_ref` (constat de cet ADR) | **Colonne locale** : la référence du coffre est propre à l'appareil (K-01 D1). Publiée, elle écraserait celle de l'autre appareil. Une ligne reçue sans elle prend `''` (« à reconnecter »). |
+| `calendar_account.label` (audit M6) | Aujourd'hui, pour un compte iCloud (K-02), `label` contient l'**identifiant Apple**, utilisé comme **nom d'utilisateur de l'authentification Basic** (`providerFactory.ts`, `calendarsStore.ts`) : il serait publié, et un `label` modifié sur l'autre appareil changerait l'identifiant envoyé à Apple. Décision : **nouvelle colonne locale `calendar_account.username`** (non publiée, `TEXT NOT NULL DEFAULT ''`) ; `label` ne sert plus qu'à l'**affichage**. Migration **`0017_calendar_account_username`** (lot **Y2**, avant toute publication, SQL pur) : `username = label` pour `provider = 'icloud'`, puis `label = ''` pour ces comptes ; l'écran affiche `username` s'il est présent sur l'appareil, sinon le texte i18n « Compte iCloud ». Le coffre n'est pas touché (le mot de passe d'application reste seul dans son entrée ; écarté : stocker l'identifiant dans le coffre, qui obligerait à convertir les entrées existantes hors migration SQL). |
 | `sample.ids` | Reste **local**. Après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; ailleurs elles se suppriment comme des éléments ordinaires. |
 | `search_index`, `search_index_doc` | **Locales**, jamais publiées ; mises à jour par leurs déclencheurs pendant l'application des opérations (avenant RC-01 de l'ADR 0002), reconstruites si besoin (`SearchRepository.isStale`). |
 | `series_index = -1` | Entier **ordinaire**, publié tel quel (avenant T-09 de l'ADR 0004) : l'occurrence annulée reste exclue de la corbeille sur tous les appareils. Aucune contrainte `CHECK (series_index >= 0)`. |
@@ -281,8 +400,8 @@ Catalogue `src/domain/sync/syncTables.ts` (seule source, utilisé par les décle
 | `routine_log` (constat de cet ADR) | **Identifiant déterministe** `rlog|<routine_id>|<date>` (même migration, même module) : sans lui, deux validations du même jour sur deux appareils violeraient `UNIQUE (routine_id, date)`. |
 | Une seule session Focus active | Après chaque lot appliqué, si plusieurs `focus_session` non supprimées ont `ended_at IS NULL`, toutes sauf la plus récente (`started_at`, puis hlc) reçoivent `ended_at` = `started_at` de la plus récente, par une **écriture locale** (publiée). La valeur étant déterministe, deux appareils qui réparent en même temps écrivent la même valeur : pas de conflit. |
 | Corbeille (`trashStore.ts`, copies hors `taskEntities`) | Le moteur émet `onRemoteChanges({ tables, ids })` après chaque lot (section 11) ; `trashStore` recharge si `task` est touchée, `taskEntities` reçoit les tâches relues (règle « un hlc inférieur n'écrase jamais », avenant T-04 de l'ADR 0004), les autres stores rechargent leurs listes. Les commandes d'annulation restent protégées par leur contrôle de hlc (`'stale'`). |
-| Purge physique et traces | Section 5.4 : purge seulement quand tous les appareils actifs ont lu la suppression, puis 30 jours ; identifiant inscrit dans `sync_tombstone` dans la même transaction. |
-| Limite de dérive du hlc | Section 4.4 : 1 h. |
+| Purge physique et traces | Section 5.4 : purge seulement quand tous les appareils actifs ont lu la suppression, puis 30 jours ; identifiant inscrit dans `sync_tombstone` dans la même transaction ; espaces fixes et réglages exclus. |
+| Limite de dérive du hlc | Section 4.4 : 1 h, mesurée sur l'horloge physique. |
 | Bandeaux A-09 | `syncing` posé par le moteur pendant un cycle qui lit ou écrit (pas pendant un cycle vide de moins de 1 s) ; `waitingIcloud` posé tant qu'un fichier attendu est dans le nuage ou qu'une tête publiée n'est pas atteinte ; priorité existante (`APP_STATUS_PRIORITY`). |
 | Restauration P-04 | Section 9. |
 
@@ -290,19 +409,19 @@ Les tables techniques de cet ADR (`sync_field_clock`, `sync_outbox`, `sync_guard
 
 ### 9. Époques et règles de l'ADR 0010
 
-Une **époque** est identifiée par `e<n>-<device_id qui l'ouvre>` (ordre : `n`, puis l'UUID). L'époque 1 est ouverte par le premier appareil associé. L'époque courante du dossier est la plus grande époque annoncée par un `state.ctx` et dotée d'un instantané complet. Les journaux des époques antérieures sont ignorés.
+Une **époque** est identifiée par `e<n>-<device_id qui l'ouvre>` (ordre : `n`, puis l'UUID). L'époque 1 est ouverte par le premier appareil associé. L'époque courante du dossier est la plus grande époque annoncée par un `state.ctx` **déchiffré avec la clé locale** et dotée d'un instantané complet. Les journaux des époques antérieures sont ignorés. Une époque plus grande annoncée en clair par un appareil `foreign` n'est pas suivie (section 14.3 si Y-11 est acceptée).
 
 | Règle ADR 0010 | Application |
 | --- | --- |
-| 1. L'état publié fait foi | À chaque cycle, avant toute publication : lecture de son propre `state.ctx` (et, s'il manque, liste de ses segments) ; `HlcClock.receive(head.hlc publié)` (après le contrôle de dérive) ; le prochain segment est `max(local, publié) + 1` (section 1.3). Un numéro de segment ou d'enregistrement publié n'est jamais réutilisé. |
-| 2. Marqueur durable | `restore_backup` (`backup.rs`) écrit, **après un échange abouti et seulement si un dossier de synchro est configuré**, `<dossier de configuration>/restore-marker.json` : `{ "v": 1, "backup": <nom>, "backupTakenAt": <ISO, d'après le nom ou l'heure du fichier>, "restoredAt": <ISO>, "schemaVersion": <n> }` (écriture `.tmp` + renommage). Lu par `sync_restore_marker_get`, supprimé par `sync_restore_marker_clear` **seulement après** que le choix de la règle 3 est entièrement appliqué. Une restauration interrompue puis récupérée au démarrage n'a pas de marqueur (ADR 0010). |
+| 1. L'état publié fait foi | À chaque cycle, avant toute publication : lecture de son propre `state.ctx` **et liste de ses segments** ; `HlcClock.receive(head.hlc publié)` (après le contrôle de dérive) ; le prochain segment est **`max(local, publié, plus grand fichier listé) + 1`** et le prochain `stateSeq` `max(local, publié) + 1` (audit H6). Avant tout ajout à un segment existant, Rust contrôle son nombre d'enregistrements (section 1.3), sinon nouveau segment. Un numéro de segment, d'enregistrement ou de `stateSeq` publié n'est jamais réutilisé. |
+| 2. Marqueur durable | `restore_backup` (`backup.rs`) écrit, **après un échange abouti et seulement si un dossier de synchro est configuré**, `<dossier de configuration>/restore-marker.json` : `{ "v": 1, "backup": <nom>, "backupTakenAt": <ISO, d'après le nom ou l'heure du fichier>, "restoredAt": <ISO>, "schemaVersion": <n> }` (écriture `.tmp` + renommage). Lu par `sync_restore_marker_get`, supprimé par `sync_restore_marker_clear` **seulement après** que le choix de la règle 3 est entièrement appliqué. Une restauration interrompue puis récupérée au démarrage n'a pas de marqueur (ADR 0010). Après la restauration, `sync_guard` est vérifiée vide (section 3.2). |
 | 3. Pas de synchro automatique, choix explicite | Tant que le marqueur existe : aucun cycle (ni lecture ni publication), état `restore-choice`, fenêtre de choix (texte `src/i18n`, rattachée à Y-02) : **« Appliquer cette version sur tous mes appareils »** : règle 1, ouverture de l'époque `n+1` par cet appareil, file d'envoi vidée (l'instantané contient tout), instantané complet de la base restaurée, nouvel `state.ctx`. **« Garder les données synchronisées »** : curseurs remis à zéro et reprise depuis le dernier instantané en mode fusion (section 5.5) ; la copie `circletasks-pre-restore-…` reste disponible. |
 | — Changement d'époque sur les autres appareils | En voyant une époque plus récente : (a) leur file d'envoi est **matérialisée** (valeurs, horloges et bases des champs en attente) ; (b) sous garde, les tables publiées, horloges de champ, `sync_tombstone` et `sync_unknown` sont **remplacées** par l'instantané de la nouvelle époque (pas de fusion : la version restaurée porte des hlc anciens et perdrait) ; (c) les écritures matérialisées sont réappliquées par la règle de hlc et remises dans la file ; (d) publication dans la nouvelle époque. Écart de formulation assumé avec l'ADR 0010 (« publient d'abord leurs écritures non publiées ») : publiées dans l'ancienne époque, elles seraient ignorées ; elles sont donc republiées dans la nouvelle, ce qui donne le résultat voulu. |
 | 4. Âge de la version | Si `backupTakenAt` est antérieur au plus grand `purgeHorizon` publié par les appareils (une suppression postérieure à la version a déjà été purgée), seule l'option « Appliquer sur tous mes appareils » est proposée. |
 | 5. Identité de l'appareil | Sans effet tant que P-04 ne restaure que le dossier `backups/` de l'appareil. Toute future restauration d'un fichier venu d'ailleurs créera un nouveau `device.id` avant toute écriture (avenant obligatoire). |
-| 6. Données locales | Réglages locaux et `sync_state` sont restaurés avec la base ; la règle 1 les rend inoffensifs. `search_index` et `external_event` se reconstruisent comme d'habitude. |
+| 6. Données locales | Réglages locaux et `sync_state` sont restaurés avec la base ; la règle 1 (et l'anti-rejeu de `state.ctx`, qui ne s'applique pas à soi-même mais prend le maximum) les rend inoffensifs. `search_index` et `external_event` se reconstruisent comme d'habitude. |
 
-Deux appareils qui ouvrent la même époque `n+1` en même temps : la plus grande (UUID) l'emporte, l'autre suit la procédure de changement d'époque comme un appareil ordinaire. Les dossiers d'époques antérieures sont supprimés par leur écrivain quand tous les appareils actifs annoncent la nouvelle époque, ou après 30 jours.
+Deux appareils qui ouvrent la même époque `n+1` en même temps : la plus grande (UUID) l'emporte, l'autre suit la procédure de changement d'époque comme un appareil ordinaire. Les dossiers d'époques antérieures sont supprimés par leur écrivain quand tous les appareils actifs annoncent la nouvelle époque, ou après 30 jours. `sync_delete_own` **refuse l'époque courante** (`current-epoch`, audit B5).
 
 La feuille de restauration (P-04) affiche, quand un dossier est configuré, l'avertissement de l'ADR 0010 (« Cet appareil est associé : le choix vous sera demandé à la prochaine synchro »).
 
@@ -314,14 +433,14 @@ La feuille de restauration (P-04) affiche, quand un dossier est configuré, l'av
 
 #### 10.2 Cycle (`engine.ts`)
 
-0. Préconditions : dossier configuré, clé présente, pas de marqueur de restauration (sinon état dédié, rien d'autre).
-1. `scan()` : en-têtes, `state.ctx` des appareils (hydratés en premier), liste des fichiers et de leur état local / nuage.
+0. Préconditions : dossier configuré et revalidé (section 6.1), clé présente, pas de marqueur de restauration (sinon état dédié, rien d'autre).
+1. `scan()` : en-têtes (schéma strict, correspondance au chemin), `state.ctx` des appareils (hydratés en premier, bornes, anti-rejeu), liste des fichiers et de leur état local / nuage, statut par appareil.
 2. Règle 1 (section 9).
 3. Époque : changement d'époque si besoin (section 9).
-4. Lecture : pour chaque appareil actif de l'époque dont la tête dépasse le curseur, pages d'enregistrements ; contrôle `sm`, dérive ; application par lots de 500 opérations au plus, une transaction par lot (fusion, conflits, curseur, puis réparations de la section 8 hors garde). Reprise depuis l'instantané si nécessaire (section 5.5).
-5. Publication : file d'envoi → enregistrements → `appendJournal` (Rust chiffre, ajoute, `sync_all`) → retrait des entrées publiées de la file, dans une transaction. Un arrêt entre les deux republie les mêmes valeurs : sans effet chez les autres.
-6. `writeState` (tête, accusés, époque, `purgeHorizon`, `lastSyncHlc`).
-7. Entretien : instantané si dû, purge de ses segments et instantanés, purge des traces, purge du journal des conflits.
+4. Lecture : pour chaque appareil actif de l'époque dont la tête dépasse le curseur, pages d'enregistrements (jamais au-delà de la tête) ; analyse stricte, contrôle `sm`, dérive ; application par lots de 500 opérations au plus, une transaction par lot (fusion, conflits, curseur, puis réparations de la section 8 hors garde). Reprise depuis l'instantané si nécessaire (section 5.5).
+5. Publication : file d'envoi → enregistrements → `appendJournal` (Rust contrôle le segment, chiffre, ajoute, `sync_all`, renvoie `firstRecord`) → retrait des entrées publiées de la file, dans une transaction. Un arrêt entre les deux republie les mêmes valeurs : sans effet chez les autres.
+6. `writeState` si l'état a changé (tête, accusés, époque, `purgeHorizon`, `lastSyncHlc`, `stateSeq + 1`).
+7. Entretien : instantané si dû, purge de ses segments et instantanés, purge des traces, purge du journal des conflits, plafonds de `sync_parked` et `sync_unknown`.
 8. `onRemoteChanges` ; heure de dernière synchro ; à l'ordre 5, recalcul des rappels de l'iPhone (PRD 7).
 
 Cibles : cycle sans changement < 300 ms hors hydratation ; nouvel appareil avec 5 000 tâches < 15 s sur PC (mesurées par des tests `@perf`).
@@ -329,39 +448,47 @@ Cibles : cycle sans changement < 300 ms hors hydratation ; nouvel appareil avec 
 #### 10.3 Appairage (Y-06)
 
 - **Premier appareil** : au choix d'un dossier sans données CircleTasks, la clé est créée (`sync_key_create`) et l'époque 1 ouverte. Un dossier qui contient déjà des données chiffrées et un appareil sans clé : « Associez cet appareil » (QR ou clé de secours), jamais de nouvelle clé implicite.
-- **PC, « Associer l'iPhone »** (maquette PC-Appairage.html) : `sync_pairing_payload` renvoie `qrText` = `CTPAIR1.<base64url(JSON { v:1, k:<clé base64url>, d:<device_id du PC>, e:<époque>, x:<expiration ms> })>`, la clé de secours et l'expiration (**5 minutes**, « Nouveau code »). QR dessiné par le paquet npm `qrcode` (PRD 7), **chargé à la demande** à l'ouverture de la fenêtre (hors démarrage, contrôlé par `test:bundle`). « Imprimer la clé de secours » : impression de la seule clé (`window.print` sur une vue dédiée). « En attente de l'iPhone… » : le PC rescanne le dossier toutes les 10 s pendant que la fenêtre est ouverte et annonce l'appareil dont `state.ctx` porte `pairedBy` = son id.
+- **PC, « Associer l'iPhone »** (maquette PC-Appairage.html) : `sync_pairing_payload` ouvre d'abord la **confirmation native** (section 2.1 ; refus → `consent-denied`, rien n'est renvoyé), puis renvoie `qrText` = `CTPAIR1.<base64url(JSON { v:1, k:<clé base64url>, d:<device_id du PC>, e:<époque>, x:<expiration ms> })>`, la clé de secours et l'expiration (**5 minutes**, « Nouveau code » : nouvel appel, donc nouvelle confirmation, dans la limite de 3 par 10 minutes). QR dessiné par le paquet npm **`qrcode-generator` 2.0.4** (MIT, sans dépendance, audit B4), **chargé à la demande** à l'ouverture de la fenêtre (hors démarrage, contrôlé par `test:bundle`). « En attente de l'iPhone… » : le PC rescanne le dossier toutes les 10 s pendant que la fenêtre est ouverte et annonce l'appareil dont `state.ctx` porte `pairedBy` = son id.
+- **Protection de l'affichage** (audit M9) : avant de renvoyer la charge, Rust applique **`SetWindowDisplayAffinity(main, WDA_EXCLUDEFROMCAPTURE)`** (captures d'écran, enregistrement, partage d'écran et outils de capture voient une zone noire) ; l'affinité est rétablie (`WDA_NONE`) à l'expiration (minuteur Rust de 5 minutes) ou au masquage de la fenêtre, au premier des deux ; aucune commande supplémentaire. Sans effet sur iOS (l'iPhone n'affiche pas de QR). **Pas de bouton « Copier »** ; si un besoin apparaît, il passera par Rust avec les formats presse-papiers qui excluent l'historique et le cloud (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory = 0`, `CanUploadToCloudClipboard = 0`). « Imprimer la clé de secours » : impression de la seule clé (`window.print` sur une vue dédiée), précédée de l'avertissement i18n « Une imprimante ou un fichier PDF peut garder une copie de la clé : rangez la feuille comme un mot de passe ».
 - Le QR contient la clé : ses 5 minutes sont une **durée d'affichage** et un contrôle à la réception (`sync_key_import` refuse si l'heure locale dépasse `x` de plus de 2 minutes), pas une protection cryptographique. L'avertissement de la maquette (« Ce code transmet la clé… ») est affiché.
-- **iPhone, « Associer au PC »** (ordre 5, maquette Appairage.html) : scan (plugin barcode-scanner, ios-mobile), `sync_key_import({ qrText })`, choix du dossier, puis **nouvel appareil** (section 5.5) avec progression. Repli : saisie de la clé de secours (`sync_key_import({ recoveryKey })`), qui sert aussi à un second PC.
+- **Import d'une clé** (audit M8, B3), ordre imposé : **dossier d'abord, clé ensuite**. `sync_key_import` exige un dossier configuré ; Rust décode la clé, calcule son `kid`, lit les en-têtes du dossier (hydratation de `state.ctx` de l'appareil `d` du QR, ou de tous les `state.ctx` pour une clé de secours) : si aucun fichier ne porte ce `kid` → `key-mismatch`, **rien n'est enregistré** ; si le dossier ne contient encore rien de lisible → `cloud-pending` (« Le dossier ne contient pas encore les données du PC »). Si une **autre** clé est déjà au coffre, confirmation native « Remplacer la clé de synchronisation de cet appareil ? » (refus → `consent-denied`) ; même clé : sans effet. Ce n'est qu'ensuite que la clé est écrite au coffre (puis les tampons sont effacés, `zeroize`).
+- **iPhone, « Associer au PC »** (ordre 5, maquette Appairage.html) : choix du dossier, scan **lancé par Rust** (section 2.1, repli JS documenté), `sync_key_import`, puis **nouvel appareil** (section 5.5) avec progression. Repli : saisie de la clé de secours (`sync_key_import({ recoveryKey })`), qui sert aussi à un second PC.
 - **Appareil qui rejoint avec des données locales** (données d'exemple, usage avant association) : **fusion** (identifiants UUID distincts, espaces Pro / Perso aux identifiants fixes communs) ; rien n'est effacé.
 
 #### 10.4 État affiché
 
-`SyncStatus` (section 11) alimente : la ligne de Réglages (libellé du dossier, « À jour · il y a 2 min », appareil associé, nombre de conflits de la semaine) ; l'écran de détails (Synchro.html : état, « Synchroniser », « Associer », APPAREILS avec dernière lecture, fichiers en attente d'iCloud, JOURNAL DES CONFLITS) ; les bandeaux A-09 ; l'avertissement N-07 du PC (dernière synchro de l'iPhone, `sync_state.last_seen_hlc`).
+`SyncStatus` (section 11) alimente : la ligne de Réglages (libellé du dossier, « À jour · il y a 2 min », appareil associé, nombre de conflits de la semaine) ; l'écran de détails (Synchro.html : état, « Synchroniser », « Associer », APPAREILS avec dernière lecture et statut par appareil — dont « Clé différente » pour un appareil `foreign` —, fichiers en attente d'iCloud, JOURNAL DES CONFLITS) ; les bandeaux A-09 ; l'avertissement N-07 du PC (dernière synchro de l'iPhone, `sync_state.last_seen_hlc`).
 
 ### 11. Contrats
 
-#### 11.1 Commandes Tauri (capability `src-tauri/capabilities/sync.json`, fenêtre `main`, Windows ; iOS ajouté à l'ordre 5)
+#### 11.1 Commandes Tauri (capability `src-tauri/capabilities/sync.json`, fenêtre `main` seulement, Windows ; iOS ajouté à l'ordre 5)
 
-Toutes rejettent `{ code, message }` (message sans chemin ni clé). Codes : `not-configured`, `folder-unreachable`, `not-local`, `cloud-pending`, `cloud-provider-stopped`, `cloud-error`, `vault-unavailable`, `key-missing`, `key-exists`, `key-mismatch`, `decrypt-failed`, `truncated`, `bad-name`, `too-large`, `newer-format`, `invalid-pairing`, `pairing-expired`, `not-bound`, `io`.
+Les **19 commandes** ci-dessous sont déclarées dans **`src-tauri/build.rs`** (`AppManifest::commands`, audit H2), sinon Tauri n'émet pas leur permission `allow-<commande>` ; `sync.json` les accorde toutes, à la seule fenêtre `main`. Toutes rejettent `{ code, message }` (message sans chemin, sans clé, sans recopie de l'entrée). Codes : `not-configured`, `folder-unreachable`, `unsafe-folder`, `not-local`, `folder-too-large`, `cloud-pending`, `cloud-provider-stopped`, `cloud-error`, `vault-unavailable`, `key-missing`, `key-exists`, `key-mismatch`, `key-exhausted`, `consent-denied`, `rate-limited`, `decrypt-failed`, `truncated`, `bad-name`, `bad-header`, `too-large`, `newer-format`, `rollback`, `segment-mismatch`, `invalid-pairing`, `pairing-expired`, `not-bound`, `already-bound`, `current-epoch`, `io`.
 
 | Commande | Entrée | Sortie |
 | --- | --- | --- |
 | `sync_folder_info` | — | `SyncFolderInfo` |
 | `sync_folder_choose` | — | `SyncFolderInfo` ou `null` (annulé) |
-| `sync_folder_forget` | — | `null` |
-| `sync_bind_device` | `deviceId` | `null` (fixe le seul dossier d'appareil où Rust accepte d'écrire) |
+| `sync_folder_forget` | `{ eraseKey: boolean }` | `null` (`eraseKey` : confirmation native, section 2.2) |
+| `sync_bind_device` | `deviceId` | `null` ; **figé** : un second appel avec un autre id est refusé (`already-bound`) tant que le dossier n'est pas oublié (audit B5) |
 | `sync_key_status` | — | `{ present, kid }` |
 | `sync_key_create` | — | `{ kid }` (`key-exists` si une clé existe) |
-| `sync_pairing_payload` | — | `{ qrText, recoveryKey, expiresAt }` |
-| `sync_key_import` | `{ qrText }` ou `{ recoveryKey }` | `{ kid, pairedBy, epoch }` |
+| `sync_pairing_payload` | — | `{ qrText, recoveryKey, expiresAt }` après confirmation native, 3 appels / 10 min |
+| `sync_key_import` | `{ qrText }` ou `{ recoveryKey }` (ordre 5 : `{ scan: true }`) | `{ kid, pairedBy, epoch }` ; dossier exigé, `kid` vérifié avant enregistrement, confirmation si autre clé, 5 appels / 10 min |
 | `sync_scan` | — | `FolderScan` |
-| `sync_read_journal` | `{ deviceId, epoch, from, maxBytes }` | `ReadPage` |
-| `sync_append_journal` | `{ epoch, segment, firstRecord, sv, records }` | `{ head }` |
-| `sync_write_state` | `{ sv, state }` | `null` |
+| `sync_read_journal` | `{ deviceId, epoch, from, maxBytes }` | `ReadPage` (jamais au-delà de la tête authentifiée) |
+| `sync_append_journal` | `{ epoch, segment, expectRecords, sv, records }` | `{ firstRecord, head }` (`segment-mismatch` si le segment n'a pas `expectRecords` enregistrements) |
+| `sync_write_state` | `{ sv, state }` | `null` (`stateSeq` contrôlé croissant par Rust) |
 | `sync_snapshot_begin` / `sync_snapshot_append` / `sync_snapshot_commit` | `{ epoch, seq, sv }` / `{ handle, records }` / `{ handle }` | `{ handle }` / `null` / `null` |
 | `sync_read_snapshot` | `{ deviceId, epoch, seq, fromRecord, maxBytes }` | `ReadPage` |
-| `sync_delete_own` | `{ files: { epoch, kind: 'j' \| 's' \| 'epoch', n? }[] }` | `{ deleted }` |
+| `sync_delete_own` | `{ files: { epoch, kind: 'j' \| 's' \| 'epoch', n? }[] }` | `{ deleted }` (`current-epoch` pour l'époque courante) |
 | `sync_restore_marker_get` / `sync_restore_marker_clear` | — | `RestoreMarker` ou `null` / `null` |
+
+Tous les paramètres de chemin (`deviceId`, `epoch`, `segment`, `seq`, `n`) sont validés par `names.rs` avant toute construction de chemin (audit B5).
+
+**Test `config.rs`** (lot Y1) : (1) chaque commande de `tauri::generate_handler!` (lu dans `src-tauri/src/lib.rs`) figure dans la liste `AppManifest::commands` de `build.rs`, et réciproquement ; (2) `sync.json` accorde exactement les 19 `allow-sync_*`, `"windows": ["main"]`, plateforme `windows` ; (3) aucune autre capability n'accorde de permission `sync_*`.
+
+Commandes **conditionnelles** (section 14, ajoutées au manifeste et à `sync.json` seulement si Y-10 / Y-11 sont acceptées) : `sync_device_forget({ deviceId })`, `sync_reset_key()`.
 
 #### 11.2 TypeScript
 
@@ -371,6 +498,7 @@ export const SYNC_FORMAT_MAJOR = 1;                       // égal à la constan
 export type EpochId = string & { readonly __brand: 'EpochId' }; // 'e0001-<uuid>'
 export interface RecordCursor { readonly segment: number; readonly record: number }
 export interface DeviceAck extends RecordCursor { readonly epoch: EpochId; readonly hlc: Hlc | null }
+export interface ForgottenDevice { readonly deviceId: DeviceId; readonly at: Hlc; readonly lastAck: DeviceAck | null } // réservé (Y-10)
 export interface PublishedDeviceState {
   readonly deviceId: DeviceId;
   readonly platform: 'windows' | 'ios';
@@ -378,12 +506,14 @@ export interface PublishedDeviceState {
   readonly sm: number;
   readonly sv: number;
   readonly epoch: EpochId;
+  readonly stateSeq: number;                               // strictement croissant (section 1.4)
   readonly head: DeviceAck;
-  readonly acks: Readonly<Record<DeviceId, DeviceAck>>;
+  readonly acks: ReadonlyMap<DeviceId, DeviceAck>;         // 64 au plus
   readonly snapshot: { readonly seq: number; readonly endHlc: Hlc } | null;
   readonly purgeHorizon: Hlc | null;
   readonly lastSyncHlc: Hlc;
   readonly pairedBy?: DeviceId;
+  readonly forgotten: readonly ForgottenDevice[];          // toujours [] tant que Y-10 n'est pas acceptée ; 64 au plus
 }
 // + JournalRecord, SyncOp, SyncField (section 3.1), SnapshotRecord (section 5.1)
 
@@ -396,26 +526,28 @@ export interface DeviceScan {
   readonly deviceId: DeviceId;
   readonly kid: string | null;
   readonly state: PublishedDeviceState | null;
-  readonly stateStatus: 'ok' | 'missing' | 'cloud-pending' | 'key-mismatch' | 'corrupt' | 'newer-format';
+  readonly stateStatus: 'ok' | 'missing' | 'cloud-pending' | 'foreign' | 'corrupt' | 'rollback' | 'too-large' | 'newer-format';
   readonly epochs: readonly { readonly epoch: EpochId; readonly segments: readonly number[]; readonly snapshots: readonly number[] }[];
   readonly pending: readonly { readonly file: string; readonly availability: FileAvailability }[];
 }
-export interface FolderScan { readonly devices: readonly DeviceScan[]; readonly ignored: number }
+export interface FolderScan { readonly devices: readonly DeviceScan[]; readonly ignored: number; readonly totalBytes: number; readonly tooManyDevices: boolean }
 export interface ReadPage { readonly records: readonly string[]; readonly next: RecordCursor; readonly status: 'complete' | 'more' | 'cloud-pending' | 'truncated' }
 export interface RestoreMarker { readonly backup: string; readonly backupTakenAt: IsoDateTime; readonly restoredAt: IsoDateTime; readonly schemaVersion: number }
 export interface SyncPlatform {
   available(): boolean;                                     // faux sur iOS jusqu'à l'ordre 5
-  readonly folder: { info(): Promise<SyncFolderInfo>; choose(): Promise<SyncFolderInfo | null>; forget(): Promise<void> };
+  readonly folder: { info(): Promise<SyncFolderInfo>; choose(): Promise<SyncFolderInfo | null>; forget(o: { eraseKey: boolean }): Promise<void> };
   readonly key: {
     status(): Promise<{ present: boolean; kid: string | null }>;
     create(): Promise<{ kid: string }>;
+    /** Contient la clé : état local du composant seulement, jamais Zustand ni journal ; effacé à la fermeture (section 2.1). */
     pairingPayload(): Promise<{ qrText: string; recoveryKey: string; expiresAt: number }>;
-    import(input: { qrText: string } | { recoveryKey: string }): Promise<{ kid: string; pairedBy: DeviceId | null; epoch: EpochId | null }>;
+    /** Entrée sensible : transmise telle quelle, jamais stockée (section 2.1). */
+    import(input: { qrText: string } | { recoveryKey: string } | { scan: true }): Promise<{ kid: string; pairedBy: DeviceId | null; epoch: EpochId | null }>;
   };
   bindDevice(deviceId: DeviceId): Promise<void>;
   scan(): Promise<FolderScan>;
   readJournal(r: { deviceId: DeviceId; epoch: EpochId; from: RecordCursor; maxBytes?: number }): Promise<ReadPage>;
-  appendJournal(r: { epoch: EpochId; segment: number; firstRecord: number; sv: number; records: readonly string[] }): Promise<{ head: RecordCursor }>;
+  appendJournal(r: { epoch: EpochId; segment: number; expectRecords: number; sv: number; records: readonly string[] }): Promise<{ firstRecord: number; head: RecordCursor }>;
   writeState(r: { sv: number; state: PublishedDeviceState }): Promise<void>;
   writeSnapshot(r: { epoch: EpochId; seq: number; sv: number; records: AsyncIterable<readonly string[]> }): Promise<void>;
   readSnapshot(r: { deviceId: DeviceId; epoch: EpochId; seq: number; fromRecord: number; maxBytes?: number }): Promise<ReadPage>;
@@ -427,11 +559,12 @@ export interface SyncPlatform {
 export type SyncPhase =
   | 'not-configured' | 'needs-pairing' | 'idle' | 'syncing' | 'waiting-icloud'
   | 'restore-choice' | 'update-required' | 'clock-ahead' | 'key-mismatch' | 'error';
+export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 export interface SyncStatus {
   readonly phase: SyncPhase;
   readonly lastSyncAt: IsoDateTime | null;
   readonly folderLabel: string | null;
-  readonly devices: readonly { readonly deviceId: DeviceId; readonly platform: 'windows' | 'ios'; readonly self: boolean; readonly lastReadAt: IsoDateTime | null; readonly status: string }[];
+  readonly devices: readonly { readonly deviceId: DeviceId; readonly platform: 'windows' | 'ios'; readonly self: boolean; readonly lastReadAt: IsoDateTime | null; readonly status: DeviceSyncStatus }[];
   readonly pendingFiles: readonly string[];
   readonly conflictsThisWeek: number;
   readonly progress: { readonly done: number; readonly total: number } | null; // Y-06
@@ -445,40 +578,99 @@ export interface SyncService {                     // AppContainer.sync
 }
 ```
 
-`SyncRepository` (`src/db/repositories/syncRepository.ts`, exposé par `Repositories.sync`) : `readOutbox(limit)`, `clearOutbox(uptoSeq)`, `materializeOutbox()`, `applyOps(ops, ctx)` (renvoie lignes touchées et conflits détectés par la règle pure), `fieldClocks(table, ids)`, `getStates()`, `saveCursor(...)`, `listConflicts(range)`, `restoreDiscarded(conflictId)`, `purgeDeleted(horizon)`, `tombstones()`, `unknownFields()`, `reintegrateUnknown()`, `exportSnapshotPage(table, after, limit)`, `replaceFromSnapshot(...)`, `parked()`. Chaque méthode annotée de l'ID de story ; aucune règle métier.
+`SyncRepository` (`src/db/repositories/syncRepository.ts`, exposé par `Repositories.sync`) : `readOutbox(limit)`, `clearOutbox(uptoSeq)`, `materializeOutbox()`, `applyOps(ops, ctx)` (renvoie lignes touchées et conflits détectés par la règle pure ; identifiants SQL du catalogue seulement), `fieldClocks(table, ids)`, `getStates()`, `saveCursor(...)`, `saveAcceptedState(deviceId, { epoch, stateSeq, head, acks })`, `listConflicts(range)`, `restoreDiscarded(conflictId)`, `purgeDeleted(horizon)`, `tombstones()`, `unknownFields()`, `reintegrateUnknown()`, `exportSnapshotPage(after, maxBytes)`, `replaceFromSnapshot(...)`, `parked()`, `enforceCaps()`, `assertGuardEmpty()`. Chaque méthode annotée de l'ID de story ; aucune règle métier.
 
 ### 12. Tests
 
-- **Rust (`cargo test`, `src-tauri/tests/desktop/sync_*.rs`)** : vecteurs de chiffrement partagés avec Vitest ; AAD (enregistrement déplacé, réordonné, changé de fichier ou de `sv` : refusé) ; ligne incomplète et fichier tronqué ; noms stricts (copies de conflit iCloud ignorées) ; écriture limitée au dossier lié ; `state.ctx` atomique ; clé de secours (aller-retour, saisie tolérante, somme de contrôle) ; QR expiré ; marqueur écrit après échange seulement et absent si pas de dossier (`backup.rs`) ; capability exacte (`config.rs`) ; `REFERENCE_TRIGGERS` égal aux migrations.
-- **Domaine (Vitest)** : fusion par champ, base et conflit (les deux sens), suppression contre modification, dérive, compatibilité `sm` / `sv`, rétention (accusés, 30 jours, 180 jours), réparations (Focus, `routine.paused`), identifiants déterministes, catalogue contre `PRAGMA table_info`.
-- **Propriétés (`fast-check`, devDependency)** sur `merge` et sur le moteur complet : convergence quel que soit l'ordre d'arrivée des lots et des appareils ; idempotence (relire = rien) ; aucune perte (chaque champ final = valeur au plus grand hlc parmi toutes les écritures) ; un élément supprimé et non restauré l'est partout, un identifiant purgé ne revient jamais ; hlc publiés strictement croissants par appareil, y compris après restauration (règle 1) ; symétrie des conflits ; instantané + journaux depuis `covers` = tous les journaux.
-- **Simulation à deux dossiers (`tests/sim/syncCloudSim.ts`, `syncDevice.ts`)** : deux appareils dans le même processus, chacun avec sa base SQLite Wasm, son `HlcClock` sur horloge contrôlée (avance, recul, décalage de ±30 min, dérive > 1 h), son coffre en mémoire et **son propre dossier** ; un « iCloud » simulé recopie les fichiers de l'un vers l'autre sur ordre du test (`propagate({ partialLastLine, placeholder, delay, drop, conflictCopy })`) ; codec TypeScript de référence (vrai AES-GCM). Scénarios : hors ligne puis reprise, fichier partiel, fichier dans le nuage, appareil absent 200 jours, restauration (deux options, règle 4), deux époques concurrentes, version mineure et majeure plus récentes, clé différente, copie de conflit iCloud.
+- **Rust (`cargo test`, `src-tauri/tests/desktop/sync_*.rs`)** : vecteurs de chiffrement partagés avec Vitest (bourrage, AAD préfixée) ; AAD (enregistrement déplacé, réordonné, changé de fichier ou de `sv` : refusé) ; **rejeu de `state.ctx`** (ancien `stateSeq`, autre époque, tête qui recule : `rollback`) ; en-tête strict (clé en trop, plus de 1 Kio, en-tête qui ne correspond pas au chemin) ; ligne trop longue refusée avant base64 ; bornes de la section 1.6 ; ligne incomplète et fichier tronqué ; `segment-mismatch` et `firstRecord` calculé ; noms stricts (copies de conflit iCloud ignorées) et paramètres de chemin invalides ; écriture limitée au dossier lié, `sync_bind_device` figé, `sync_delete_own` refuse l'époque courante ; **contrôle du dossier** (jonction, lien symbolique, balise inconnue sur un composant intermédiaire, lecteur `SUBST` ou non fixe, chemin final différent, fichier à liens multiples : refusés ; balise cloud acceptée — simulée par un `SyncFs` de test là où l'API ne peut pas créer de placeholder) ; `state.ctx` atomique ; clé de secours (aller-retour, saisie tolérante, somme de contrôle) ; QR expiré ; import avec `kid` absent du dossier : clé non enregistrée ; limite d'appels ; confirmation refusée : rien n'est renvoyé (boîte injectée par un trait `Consent`) ; **attributs du Trousseau** (`sync_key_attributes()`) ; types de clé sans `Debug` (test de compilation) ; marqueur écrit après échange seulement et absent si pas de dossier (`backup.rs`) ; **`config.rs`** : `generate_handler!` = manifeste de `build.rs`, `sync.json` limitée à `main` et aux 19 commandes ; `REFERENCE_TRIGGERS` égal aux migrations.
+- **Domaine (Vitest)** : analyse stricte (`__proto__`, `constructor`, `prototype` refusés ; hlc mal formé refusé avant comparaison) ; fusion par champ, base et conflit (les deux sens), suppression contre modification, dérive sur horloge physique injectée, compatibilité `sm` / `sv` (champ inconnu refusé si `sv` distant ≤ local), réglage local reçu refusé, clé de réglage inconnue, traces (hlc ≤ `deleted_hlc` bloqué, recréation complète plus récente acceptée pour un identifiant naturel, espaces fixes et réglages jamais purgés), rétention (accusés, dernier accusé connu d'un appareil sans état valide, 30 jours, 180 jours), plafonds, réparations (Focus, `routine.paused`), identifiants déterministes, catalogue contre `PRAGMA table_info`.
+- **Repository (Vitest, SQLite Wasm)** : un nom de table ou de colonne hors catalogue n'atteint jamais le SQL (espion sur `execute` : aucune chaîne SQL ne contient l'identifiant reçu) ; `sync_unknown` par paramètres liés ; **« colonne locale ⇒ jamais dans `sync_outbox` »** ; `sync_guard` vide après chaque transaction, y compris en échec, et vérifiée au démarrage ; migration `0017` (identifiant Apple déplacé, `label` vidé).
+- **Exposition de la clé et journaux (audit H1, B6)** : test de simulation qui capture tous les journaux techniques (Rust et TS) et l'état de tous les stores Zustand pendant un appairage complet : ni `K`, ni `qrText`, ni clé de secours, ni saisie, ni titre de tâche n'y figurent ; test de composant : `PairingDialog` et `RecoveryKeyEntry` remettent leur état à `null` à la fermeture et au démontage.
+- **Propriétés (`fast-check`, devDependency)** sur `merge` et sur le moteur complet : convergence quel que soit l'ordre d'arrivée des lots et des appareils ; idempotence (relire = rien) ; aucune perte (chaque champ final = valeur au plus grand hlc parmi toutes les écritures) ; un élément supprimé et non restauré l'est partout, un identifiant purgé ne revient jamais avec un hlc ≤ `deleted_hlc` ; hlc publiés strictement croissants par appareil, y compris après restauration (règle 1) ; `stateSeq` strictement croissant ; symétrie des conflits ; instantané + journaux depuis `covers` = tous les journaux.
+- **Simulation à deux dossiers (`tests/sim/syncCloudSim.ts`, `syncDevice.ts`)** : deux appareils dans le même processus, chacun avec sa base SQLite Wasm, son `HlcClock` sur horloge contrôlée (avance, recul, décalage de ±30 min, dérive > 1 h), son coffre en mémoire et **son propre dossier** ; un « iCloud » simulé recopie les fichiers de l'un vers l'autre sur ordre du test (`propagate({ partialLastLine, placeholder, delay, drop, conflictCopy, staleState })`) ; codec TypeScript de référence (vrai AES-GCM). Scénarios : hors ligne puis reprise, fichier partiel, fichier dans le nuage, appareil absent 200 jours, restauration (deux options, règle 4), deux époques concurrentes, version mineure et majeure plus récentes, clé différente (appareil `foreign`, les autres lus), ancien `state.ctx` relivré (`rollback`), corruption au milieu d'un segment (reprise depuis l'instantané), copie de conflit iCloud.
 - **Parcours 10** (Y-02, Y-04, Y-05) : test d'intégration Vitest sur la simulation (cas d'usage réels des tâches), puis Playwright à deux pages du navigateur de dev reliées par un simulateur de dossier HTTP (`tests/sim/syncFolderSim.ts`, ports fixes dans `ports.ts`, `globalThis.__ctSync` en DEV seulement) : même tâche modifiée hors ligne des deux côtés, synchro, conflit dans le journal, « Restaurer ».
 - **Parcours 11** (P-05, Y-01, Y-06, Y-08) : en simulation, à l'ordre 4 (« PC » et « second appareil » rejoint par `qrText`) : la tâche créée est illisible en clair dans le dossier (recherche du titre dans les octets : absente), puis lisible sur le second appareil. Partie iPhone (scan réel) à l'ordre 5.
-- **Reste manuel (Ali)** : PC avec iCloud pour Windows réel (dossier épinglé, fichier mis volontairement « en ligne seulement » puis relu, iCloud arrêté, coupure réseau) ; puis, à l'ordre 5, iPhone (signet, `startDownloadingUbiquitousItem`, scan du QR, parcours 10 et 11 réels, Trousseau). Checklist dans `docs/stories/Y-0x.md`.
+- **Reste manuel (Ali)** : PC avec iCloud pour Windows réel (dossier épinglé, fichier mis volontairement « en ligne seulement » puis relu, iCloud arrêté, coupure réseau, capture d'écran pendant l'affichage du QR : zone noire, boîte de confirmation) ; puis, à l'ordre 5, iPhone (signet, `startDownloadingUbiquitousItem`, scan du QR, parcours 10 et 11 réels, attributs du Trousseau relus). Checklist dans `docs/stories/Y-0x.md`.
 
 ### 13. Découpage en lots
 
-**Amorce (premier commit de Y1, avant de lancer Y2)** : `src/domain/sync/format.ts` et `src/platform/sync/types.ts` recopiés de la section 11.2, `src/platform/sync/memory.ts` minimal. Y2 part de ce commit.
+**Amorce (premier commit de Y1, avant de lancer Y2)** : `src/domain/sync/format.ts`, `src/domain/sync/limits.ts` et `src/platform/sync/types.ts` recopiés de la section 11.2 et 1.6, `src/platform/sync/memory.ts` minimal. Y2 part de ce commit.
 
 | Lot | Stories | Fichiers et dossiers |
 | --- | --- | --- |
-| **Y1** | Y-08, Y-01 | `src-tauri/src/sync/**` (tous les modules de la section 0), `src-tauri/src/vault.rs` (déplacé de `calendars/vault.rs`), `src-tauri/src/lib.rs` (enregistrement), `src-tauri/capabilities/sync.json`, `src-tauri/Cargo.toml` (`aws-lc-rs` direct, fonctionnalités `windows`), `src-tauri/tests/desktop/sync_*.rs`, `config.rs` ; `src/platform/sync/**` ; `src/domain/sync/format.ts` ; `tests/fixtures/sync/vectors.json`, `tests/sim/syncCodec.ts` ; `src/features/sync/SyncSettingsSection.tsx` (ligne Réglages, choix du dossier, création de clé) et son insertion dans `src/features/settings/SettingsScreen.tsx` ; `src/i18n` (section `sync.folder`, `sync.key`) ; `docs/licences.md` |
-| **Y2** | Y-02, Y-09, Y-05, Y-03 | `src/db/migrations/0015_sync_tables.ts`, `0016_sync_natural_ids.ts`, `index.ts` ; `src/db/repositories/syncRepository.ts`, `sql/sync*.ts`, `index.ts`, `sql/index.ts` ; `src/domain/sync/{syncTables,merge,retention,epoch,drift,repairs,naturalIds}.ts` ; `src/sync/**` ; `src/features/app/{container,bootstrap}.ts`, `App.tsx` (planificateur), émetteurs A-09 ; `src/features/sync/{syncStore.ts, SyncDetailsScreen.tsx, RestoreChoiceDialog.tsx}` ; `src/features/tasks/trashUseCases.ts`, `src/db/repositories/sql/taskRepository.ts` (purge) ; `src/features/events/holidayUseCases.ts`, use case de validation des routines (identifiants déterministes) ; `src/features/settings/BackupSheet.tsx` (avertissement) ; `src-tauri/src/backup.rs` (marqueur), `backup_triggers.rs`, `src/platform/backup/triggers.test.ts` ; `src-tauri/src/desktop.rs` (entrée de menu, événement) ; `tests/sim/{syncCloudSim,syncDevice}.ts`, `tests/unit/sync/**` ; `package.json` (`fast-check` en dev) ; `src/i18n` (section `sync.status`, `sync.restore`) |
-| **Y3** | Y-04, Y-07, Y-06 | Y-04 : `src/features/sync/ConflictList.tsx`, `syncConflictUseCases.ts`, `src/db/repositories/sql/syncConflicts.ts`, `tests/e2e/parcours/J10*.spec.ts`, `tests/sim/syncFolderSim.ts`. Y-07 : `src/domain/sync/compat.ts`, `src/db/repositories/sql/syncUnknown.ts`, crochet de fin de `src/db/migrator.ts` (réintégration), bandeau « Mettez à jour l'app ». Y-06 : `src/features/sync/{PairingDialog,RecoveryKeyEntry,JoinProgress}.tsx`, `src/sync/join.ts`, `package.json` (`qrcode`), `tests/e2e/parcours/J11*.spec.ts`, `tests/bundle` (bloc à la demande). `src/i18n` (sections `sync.conflicts`, `sync.version`, `sync.pairing`) |
+| **Y1** | Y-08, Y-01 | `src-tauri/src/sync/**` (`mod.rs`, `commands.rs`, `crypto.rs`, `names.rs`, `files.rs`, `folder.rs`, `cloud_windows.rs`, `pairing.rs`, `consent.rs`, `limits.rs`, `marker.rs`), `src/i18n/native/fr.json` (textes des confirmations natives), `src-tauri/src/vault.rs` (déplacé de `calendars/vault.rs`) et `vault_ios.rs` (contrat, compilé pour iOS par la CI), `src-tauri/src/lib.rs` (enregistrement des 19 commandes), **`src-tauri/build.rs` (19 commandes `sync_*` dans `AppManifest::commands`)**, `src-tauri/capabilities/sync.json`, `src-tauri/Cargo.toml` (`aws-lc-rs` et `zeroize` directs ; `security-framework` direct pour la cible iOS ; fonctionnalités `windows` `Win32_Storage_CloudFilters`, `Win32_Storage_FileSystem`), `src-tauri/tests/desktop/sync_*.rs`, **`src-tauri/tests/desktop/config.rs`** (manifeste et capability) ; `src/platform/sync/**` ; `src/domain/sync/{format,limits}.ts` ; `tests/fixtures/sync/vectors.json`, `tests/sim/syncCodec.ts` ; `src/features/sync/SyncSettingsSection.tsx` (ligne Réglages, choix du dossier, création de clé, « Oublier le dossier et la clé ») et son insertion dans `src/features/settings/SettingsScreen.tsx` ; `src/i18n` (section `sync.folder`, `sync.key`) ; `docs/licences.md` |
+| **Y2** | Y-02, Y-09, Y-05, Y-03 | `src/db/migrations/0015_sync_tables.ts`, `0016_sync_natural_ids.ts`, **`0017_calendar_account_username.ts`**, `index.ts` ; `src/db/repositories/syncRepository.ts`, `sql/sync*.ts`, `index.ts`, `sql/index.ts` ; `src/db/repositories/sql/calendarRepository.ts` (colonne `username`) ; `src/domain/sync/{syncTables,parse,merge,retention,epoch,drift,repairs,naturalIds}.ts` ; `src/domain/types.ts` (`CalendarAccount.username`) ; `src/sync/**` ; `src/features/app/{container,bootstrap}.ts` (contrôle de `sync_guard` au démarrage), `App.tsx` (planificateur), émetteurs A-09 ; `src/features/sync/{syncStore.ts, SyncDetailsScreen.tsx, RestoreChoiceDialog.tsx}` ; `src/features/calendars/{calendarsStore.ts, providerFactory.ts}` (identifiant Apple lu dans `username`) ; `src/features/tasks/trashUseCases.ts`, `src/db/repositories/sql/taskRepository.ts` (purge) ; `src/features/events/holidayUseCases.ts`, use case de validation des routines (identifiants déterministes) ; `src/features/settings/BackupSheet.tsx` (avertissement) ; `src-tauri/src/backup.rs` (marqueur), `backup_triggers.rs`, `src/platform/backup/triggers.test.ts` ; `src-tauri/src/desktop.rs` (entrée de menu, événement) ; `tests/sim/{syncCloudSim,syncDevice}.ts`, `tests/unit/sync/**` ; `package.json` (`fast-check` en dev) ; `src/i18n` (section `sync.status`, `sync.restore`, `calendars.icloudDefaultLabel`) |
+| **Y3** | Y-04, Y-07, Y-06 | Y-04 : `src/features/sync/ConflictList.tsx`, `syncConflictUseCases.ts`, `src/db/repositories/sql/syncConflicts.ts`, `tests/e2e/parcours/J10*.spec.ts`, `tests/sim/syncFolderSim.ts`. Y-07 : `src/domain/sync/compat.ts`, `src/db/repositories/sql/syncUnknown.ts`, crochet de fin de `src/db/migrator.ts` (réintégration), bandeau « Mettez à jour l'app ». Y-06 : `src/features/sync/{PairingDialog,RecoveryKeyEntry,JoinProgress}.tsx`, `src/sync/join.ts`, `package.json` (`qrcode-generator` 2.0.4), `tests/e2e/parcours/J11*.spec.ts`, `tests/bundle` (bloc à la demande), test d'exposition de la clé (section 12). `src/i18n` (sections `sync.conflicts`, `sync.version`, `sync.pairing`) |
+| **Y4** (conditionnel) | Y-10, Y-11 si acceptées | Section 14.4 |
 
 Parallélisme :
-- **Y1 et Y2 en parallèle** (deux worktrees) après l'amorce : Y2 travaille sur l'implémentation mémoire de `SyncPlatform` et le codec de référence. Fichiers communs à surveiller : `src/i18n/fr.ts` et `en.ts` (sous-sections distinctes), `src-tauri/src/lib.rs` (Y1 seulement ; Y2 touche `desktop.rs` et `backup.rs`), `package.json` (Y2 seulement).
+- **Y1 et Y2 en parallèle** (deux worktrees) après l'amorce : Y2 travaille sur l'implémentation mémoire de `SyncPlatform` et le codec de référence. Fichiers communs à surveiller : `src/i18n/fr.ts` et `en.ts` (sous-sections distinctes), `src-tauri/src/lib.rs` et `build.rs` (Y1 seulement ; Y2 touche `desktop.rs` et `backup.rs`, dont les commandes existent déjà), `package.json` (Y2 seulement).
 - **Y3 après la fusion de Y2** (il dépend du moteur et de `SyncRepository`) ; ses trois stories peuvent alors tourner **en parallèle** : chacune a ses propres fichiers de repository (`syncConflicts.ts`, `syncUnknown.ts`) et de feature ; `SyncDetailsScreen.tsx` expose des emplacements (conflits, version, appairage) remplis par chaque story. Le moteur (`engine.ts`) n'est touché que par Y-06 (`join.ts` appelé depuis le cycle) et Y-07 (contrôle `sm` déjà présent depuis Y2, seul le bandeau est ajouté).
-- La fusion (`merge.ts`) détecte et renvoie les conflits **dès Y2** (le format porte la base dès le premier enregistrement publié) ; Y-04 n'ajoute que l'écran et la restauration. De même, `sync_unknown` est créée par la migration de Y2 : Y3 n'ajoute aucune migration.
+- La fusion (`merge.ts`) détecte et renvoie les conflits **dès Y2** (le format porte la base dès le premier enregistrement publié) ; Y-04 n'ajoute que l'écran et la restauration. De même, `sync_unknown` est créée par la migration de Y2 : Y3 n'ajoute aucune migration. **Y4 n'en ajoute pas non plus** (section 14.4).
+
+### 14. Appareil perdu, oubli et réinitialisation (Y-10, Y-11 proposées)
+
+#### 14.1 Limites actuelles, sans Y-10 ni Y-11
+
+Tant que les deux stories ne sont pas au PRD, la synchro de l'ordre 4 a ces limites, affichées nulle part dans l'app et assumées :
+
+- **Copie complète laissée par un appareil perdu** : un appareil perdu ou volé garde sa base SQLite complète (en clair), sa clé au coffre et son dossier `devices/<id>/` dans iCloud ; rien dans l'app ne permet d'agir sur cette copie.
+- **Purge bloquée jusqu'à 180 jours** : tant que l'appareil perdu n'est pas `expired`, il compte dans les accusés ; aucune trace de suppression ni aucun segment qu'il n'avait pas lus ne sont purgés pendant 180 jours (le contenu des éléments supprimés reste donc dans la corbeille des autres appareils et dans leurs instantanés).
+- **30 jours de « Supprimés récemment » iCloud** : tout fichier supprimé du dossier (segments purgés, anciennes époques, dossier vidé à la main) reste récupérable par le compte iCloud pendant 30 jours ; chiffré, mais lisible par quiconque a la clé.
+- **Une clé unique qui lit et forge tout** : `K` (coffre de chaque appareil, QR, clé de secours imprimée) déchiffre tous les fichiers, passés et futurs, et permet d'écrire des enregistrements valides dans n'importe quel dossier d'appareil ; l'AAD protège contre un tiers **sans** clé, pas contre un détenteur de la clé. Il n'existe ni signature par appareil ni révocation.
+- **Seule issue manuelle** : sur chaque appareil restant, « Oublier le dossier et la clé » ; vider `iCloud Drive/CircleTasks` (et « Supprimés récemment ») ; recréer une clé sur un appareil, réassocier les autres. Les données locales sont gardées (fusion à la réassociation).
+
+#### 14.2 Si Y-10 « J'oublie un appareil » est acceptée
+
+- **Action** : Réglages > Synchronisation > APPAREILS > « Oublier cet appareil » (maquette manquante), sur un autre appareil que celui oublié ; confirmation native ouverte par Rust (commande conditionnelle `sync_device_forget({ deviceId })`).
+- **Marqueur des appareils oubliés** : l'appareil qui oublie ajoute `{ deviceId, at: <hlc>, lastAck }` à `forgotten` dans **son** `state.ctx` (champ réservé dès `sm` 1, section 1.4). Union sur tous les appareils actifs : un appareil est oublié dès qu'un appareil actif non oublié le déclare ; un oubli ne s'annule pas (l'appareil revenu doit être réassocié sous un **nouveau** `device_id`).
+- **Effets chez tous les appareils** : statut `forgotten` (valeur déjà admise par la contrainte de `sync_state`) ; l'appareil oublié **ne compte plus dans les accusés immédiatement** (fin de la purge bloquée 180 jours) ; ses enregistrements **postérieurs à `lastAck`** sont ignorés (ce qu'il a publié avant reste appliqué : aucune perte).
+- **Avenant à la règle d'écrivain unique** (section 1.1) : un appareil actif **peut supprimer** — jamais écrire, renommer ni créer — les fichiers de `devices/<id oublié>/`, et seulement si ce dossier est marqué oublié dans un `state.ctx` **authentifié** d'un appareil actif non oublié. La suppression est idempotente (deux appareils qui suppriment en même temps : sans danger, aucune écriture concurrente). Rust vérifie la condition (commande dédiée, `sync_delete_own` reste limitée à son propre dossier).
+- **Appareil oublié qui revient** : il voit son `device_id` dans un `forgotten` authentifié (s'il a encore la clé) : il cesse de publier, garde sa base, affiche « Cet appareil a été oublié : associez-le de nouveau » ; à la réassociation, nouveau `device_id`, fusion de ses données locales.
+- **Ce que Y-10 ne règle pas** : l'appareil perdu garde la clé et sa base. Seule Y-11 coupe son accès aux données futures.
+
+#### 14.3 Si Y-11 « Je réinitialise la synchronisation avec une nouvelle clé » est acceptée
+
+- **Action** : Réglages > Synchronisation > « Réinitialiser la synchronisation » (maquette manquante) ; confirmation native ; commande conditionnelle `sync_reset_key()`.
+- **Déroulement** (sur l'appareil A qui réinitialise) : (1) Rust crée `K2` et l'écrit au coffre sous `circletasks.sync.key.next` ; (2) A ouvre l'époque `n+1` **chiffrée avec `K2`** (nouveau `kid` dans chaque en-tête), écrit un instantané complet de sa base, puis son `state.ctx` ; (3) Rust remplace `circletasks.sync.key.v1` par `K2` et efface l'ancienne clé (une reprise au démarrage termine l'échange si l'app s'arrête entre deux étapes) ; (4) A supprime ses fichiers de l'ancienne clé et, si Y-10 est acceptée, oublie d'office les appareils qui ne sont pas réassociés ; (5) nouvelle clé de secours affichée à imprimer, avertissement « l'ancienne clé de secours ne sert plus ».
+- **Autres appareils (B)** : B voit le `state.ctx` de A avec un `kid` inconnu et une époque supérieure annoncée en clair : A passe `foreign` (statut par appareil, section 3.4) ; B **suspend sa publication** (sa file d'envoi est gardée, rien n'est perdu) et affiche « Cet appareil doit être associé de nouveau » (maquette « Appareil en key-mismatch »). Choix : confidentialité avant disponibilité ; un tiers qui dépose un faux dossier `foreign` ne peut que suspendre la publication (comme il peut déjà supprimer des fichiers), jamais lire ni perdre de données. Réassociation par QR (`K2`) : B suit la procédure de changement d'époque de la section 9 (file matérialisée, remplacement par l'instantané de `n+1`, republication), puis supprime ses fichiers de l'ancienne clé.
+- **Ce que Y-11 coupe** : l'ancienne clé (appareil perdu, ancienne clé de secours) ne lit plus **rien de ce qui est écrit après** la réinitialisation. Elle lit encore ce qui reste chiffré avec elle : sa propre base locale, et les fichiers de l'ancienne clé tant qu'ils existent (au plus 30 jours dans « Supprimés récemment » après leur suppression).
+- Y-11 sert aussi de **rotation volontaire** de la clé et de réponse à l'alerte du budget de nonces (section 2).
+
+#### 14.4 Ce que le format prévoit dès maintenant (aucune migration supplémentaire)
+
+| Besoin | Déjà prévu à l'ordre 4 |
+| --- | --- |
+| Marquer des appareils oubliés | Champ `forgotten` de `PublishedDeviceState` (vide, 64 au plus) ; schéma strict qui l'accepte dès `sm` 1 |
+| Statut d'appareil oublié | Valeur `forgotten` admise par la contrainte `CHECK` de `sync_state.status` (migration 0015) et par `DeviceSyncStatus` |
+| Plusieurs clés dans un même dossier | `kid` dans chaque en-tête ; époques indépendantes de la clé ; statut `foreign` **par appareil** au lieu d'un état global |
+| Nouvelle clé sans perte | Procédure de changement d'époque (section 9) réutilisée telle quelle |
+| Suppression de fichiers d'un autre appareil | Exception isolée dans `files.rs` (vérification d'un `forgotten` authentifié), absente tant que Y-10 n'est pas acceptée |
+
+Lot **Y4** (conditionnel) : `src-tauri/src/sync/{commands.rs, files.rs, pairing.rs}`, `src-tauri/build.rs` et `capabilities/sync.json` (deux commandes de plus, test `config.rs` mis à jour), `src/sync/{engine.ts, epochSwitch.ts, forget.ts, reset.ts}`, `src/domain/sync/retention.ts` (appareils oubliés), `src/features/sync/{ForgetDeviceDialog, ResetSyncDialog}.tsx`, `src/i18n` (`sync.forget`, `sync.reset`), tests de simulation (appareil oublié qui revient, réinitialisation pendant qu'un appareil est hors ligne). Aucune migration.
 
 ## Conséquences
 
-- **Dépendances** : cargo `aws-lc-rs` 1 en direct (déjà dans `Cargo.lock`, ISC / Apache-2.0, iOS compatible) ; crate `windows` : fonctionnalités `Win32_Storage_CloudFilters`, `Win32_Storage_FileSystem` ; npm `qrcode` (MIT, bloc à la demande, taille mesurée par `test:bundle` au lot Y3 ; repli `qrcode-generator`, MIT, sans dépendance, si le bloc dépasse 25 Ko gzip) ; npm dev `fast-check` (MIT, non embarqué). Aucune autre. `docs/licences.md` et le tableau de l'ADR 0001 sont complétés par les lots.
-- **ADR modifiés par renvoi** : ADR 0001 (commandes `sync_*`, sous-dossier `src/domain/sync`), ADR 0005 (limite de dérive), ADR 0008 (`vault.rs` partagé), ADR 0009 (marqueur dans `backup.rs`), ADR 0010 (règles appliquées, précision sur la republication à l'époque nouvelle).
-- **Dettes soldées par l'implémentation** : toutes celles de la section « Ordre 4 » de `docs/dettes.md` (réponses en section 8).
-- **Écarts au PRD**, inscrits dans `docs/decisions.md` : chiffrement en Rust au lieu de Web Crypto ; noms de fichiers par appareil et par segment au lieu de `changes-pc.jsonl` / `snapshot.json` ; pas de colonne `folder_bookmark_ref` ; identifiants purgés gardés sans contenu au-delà des 30 jours.
-- **Limites connues** : un tiers qui accède au dossier peut supprimer des fichiers (détecté, pas empêché) ; la clé de secours imprimée donne accès à toutes les données ; un appareil revenu après 180 jours voit ses modifications hors ligne fusionnées par hlc, donc perdre contre des modifications plus récentes (journalisées en conflits) ; le QR « valable 5 minutes » ne l'est que par affichage et contrôle d'heure.
+- **Dépendances** (validées par l'architecte) :
+  - cargo `aws-lc-rs` 1 en direct (déjà dans `Cargo.lock`, ISC / Apache-2.0, iOS compatible) ;
+  - cargo **`zeroize`** 1 en direct (déjà dans `Cargo.lock` en 1.9.0, Apache-2.0 / MIT, sans dépendance, iOS compatible) ;
+  - cargo **`security-framework`** en direct pour la cible iOS seulement (déjà dans `Cargo.lock`, Apache-2.0 / MIT ; version alignée sur celle qu'utilise `keyring`, à confirmer par `cargo tree --target aarch64-apple-ios` au lot Y1 ; aucune nouvelle crate) ;
+  - crate `windows` : fonctionnalités `Win32_Storage_CloudFilters`, `Win32_Storage_FileSystem` (`CreateFileW`, `GetFileInformationByHandleEx`, `GetFinalPathNameByHandleW`, `GetDriveTypeW`) ; `SetWindowDisplayAffinity` est dans `Win32_UI_WindowsAndMessaging`, déjà active ;
+  - npm **`qrcode-generator` 2.0.4** (MIT, sans dépendance, bloc à la demande ; remplace `qrcode`, qui tire plusieurs dépendances, comme premier choix) ; npm dev `fast-check` (MIT, non embarqué) ;
+  - `cargo audit` déjà lancé en CI (`audit-rust` de `tests.yml`) : il couvre les nouvelles dépendances directes. Aucune autre dépendance. `docs/licences.md` et le tableau de l'ADR 0001 sont complétés par les lots.
+- **ADR modifiés par renvoi** : ADR 0001 (commandes `sync_*`, sous-dossier `src/domain/sync`), ADR 0005 (limite de dérive, format du hlc validé), ADR 0008 (`vault.rs` partagé ; identifiant Apple dans `calendar_account.username`), ADR 0009 (marqueur dans `backup.rs` ; `is_plain_dir` inchangé), ADR 0010 (règles appliquées, précision sur la republication à l'époque nouvelle).
+- **Dettes soldées par l'implémentation** : toutes celles de la section « Ordre 4 » de `docs/dettes.md` (réponses en section 8), et les points de l'audit (annexe A).
+- **Écarts au PRD**, inscrits dans `docs/decisions.md` : chiffrement en Rust au lieu de Web Crypto ; noms de fichiers par appareil et par segment au lieu de `changes-pc.jsonl` / `snapshot.json` ; pas de colonne `folder_bookmark_ref` ; identifiants purgés gardés sans contenu au-delà des 30 jours ; clé visible par la WebView en deux points encadrés.
+- **Limites connues** :
+  - la clé passe par la WebView à l'affichage du QR et de la clé de secours, et à l'import (section 2.1) ; un script hostile ne l'obtient qu'avec une confirmation native acceptée par l'utilisateur ;
+  - Windows : le Gestionnaire d'identification est lisible par tout programme de la session (risque accepté, section 2.2) ; la désinstallation n'efface pas la clé du coffre (Windows et iOS) ;
+  - un tiers qui accède au dossier peut supprimer des fichiers, en déposer d'étrangers (statut `foreign`) ou relivrer un ancien `state.ctx` (`rollback`) : détecté, pas empêché ; il voit les métadonnées de la section 1.5 ;
+  - la clé de secours imprimée donne accès à toutes les données ; l'impression peut laisser une copie (file d'impression, PDF) ;
+  - **appareil perdu** : copie complète, purge bloquée jusqu'à 180 jours, 30 jours de « Supprimés récemment » iCloud, clé unique qui lit et forge tout, aucune révocation tant que Y-10 et Y-11 ne sont pas acceptées (section 14.1) ;
+  - un appareil revenu après 180 jours voit ses modifications hors ligne fusionnées par hlc, donc perdre contre des modifications plus récentes (journalisées en conflits) ;
+  - les plafonds de `sync_parked`, `sync_unknown` et `conflict_log` peuvent abandonner des éléments (journalisés) au-delà de volumes jamais atteints en usage normal ;
+  - le QR « valable 5 minutes » ne l'est que par affichage et contrôle d'heure ;
+  - ordre 5 : si le scan ne peut pas être lancé par Rust, le texte du QR transite par la WebView (troisième point d'exposition, à documenter par avenant).
 
 ## Maquettes manquantes (à demander, non inventées)
 
@@ -487,15 +679,49 @@ Parallélisme :
 3. **Bandeaux A-09** « Synchro en cours » et « En attente d'iCloud » (aucune maquette de bandeau).
 4. **« Mettez à jour l'app »** (Y-07) et lecture suspendue d'un appareil.
 5. **Saisie de la clé de secours** (lien présent dans Appairage.html, écran absent) et **progression** du nouvel appareil (Y-06).
-6. États d'erreur : clé différente, horloge en avance, dossier hors iCloud, iCloud pour Windows arrêté.
+6. États d'erreur : clé différente, horloge en avance, dossier hors iCloud, dossier refusé (jonction, lecteur réseau), iCloud pour Windows arrêté, état ancien relivré (`rollback`).
 7. Choix du dossier sur PC (Y-01) : boîte système ; seule la ligne de Réglages.html existe (version iPhone).
+8. **« Oublier un appareil »** (Y-10 proposée) : action sur une ligne d'APPAREILS, confirmation, appareil oublié qui revient.
+9. **« Réinitialiser la synchronisation »** (Y-11 proposée) : avertissement, progression, nouvelle clé de secours.
+10. **« Appareil en key-mismatch »** : ligne d'appareil `foreign` dans APPAREILS et écran « Cet appareil doit être associé de nouveau ».
 
-En attendant, les lots composent ces écrans avec les composants existants (`ChoiceDialog`, `ConfirmDialog`, bandeau A-09, lignes de Réglages) et les textes de `src/i18n`, sans élément visuel nouveau.
+En attendant, les lots composent ces écrans avec les composants existants (`ChoiceDialog`, `ConfirmDialog`, bandeau A-09, lignes de Réglages) et les textes de `src/i18n`, sans élément visuel nouveau. Les confirmations natives (section 2.1) ne relèvent pas des maquettes (boîtes du système).
 
 ## Questions ouvertes
 
-1. Écran « Changer la clé de chiffrement » (rotation volontaire) : aucune story ; mécanisme prévu (nouvelle époque), pas d'interface.
-2. Retirer un appareil associé (PC remplacé) : aucune story ; un appareil absent 180 jours cesse simplement de compter.
+1. Écran « Changer la clé de chiffrement » (rotation volontaire) : renvoyé à **Y-11 proposée** (section 14.3), en attente de l'ajout au PRD par Ali ; le format le permet sans migration.
+2. Retirer un appareil associé (PC remplacé, iPhone perdu) : renvoyé à **Y-10 proposée** (section 14.2) ; sans elle, un appareil absent 180 jours cesse simplement de compter (section 14.1).
 3. Champs liés (date et heure, statut et date de fin) fusionnés séparément : combinaison possible jamais choisie par un appareil ; option future de « groupes de champs ».
 4. Réconciliation de `calendar_account.calendars` (JSON entier fusionné comme un seul champ : deux affectations d'agendas concurrentes donnent un conflit, pas une fusion fine).
 5. Correction du PRD 6 et 7 par Ali (noms de fichiers, Web Crypto, `folder_bookmark_ref`), sans effet sur l'implémentation.
+6. Ordre 5 : l'API Rust du plugin barcode-scanner permet-elle de lancer le scan sans passer par le JS (section 2.1) ? À vérifier au premier build iOS.
+7. Signature par appareil (clé d'écriture distincte de la clé de lecture) pour qu'un appareil ne puisse pas forger les enregistrements d'un autre : hors périmètre de Y-10 / Y-11, à réévaluer si le modèle de menace change.
+
+## Annexe A — Audit de sécurité du 2026-10-05 : point → section
+
+| Point | Sujet | Sections |
+| --- | --- | --- |
+| H1 | Clé exposée à la WebView | 0, 2.1, 10.3, 11.1, 11.2, 12, Limites connues |
+| H2 | Manifeste `build.rs`, test `config.rs` | 0, 11.1, 12, 13 (Y1) |
+| H3 | Trousseau iOS, risque Windows, fin de vie de la clé | 2.2, 11.1 (`sync_folder_forget`), 12, Limites connues |
+| H4 | Contrôle du dossier (balises, `DRIVE_FIXED`, chemin final) | 6.1, 6.2, 6.3, 12 |
+| H5 | Identifiants SQL du catalogue, `sync_unknown` lié, prototype | 3.1, 3.3, 7.2, 12 |
+| H6 | Rejeu de `state.ctx`, règle 1, contrôle du segment | 1.3, 1.4, 2 (AAD), 3.4, 9 (règle 1), 11.1, 12 |
+| H7 | Y-10 J'oublie un appareil | 1.1, 1.4, 14.1, 14.2, 14.4, Questions ouvertes 2 |
+| H8 | Y-11 Réinitialisation avec nouvelle clé | 2, 14.1, 14.3, 14.4, Questions ouvertes 1 |
+| M1 | Métadonnées, bourrage, instantanés par taille, `state.ctx` | 1.2, 1.4, 1.5, 5.1 |
+| M2 | Bornes | 1.2, 1.4, 1.6, 6.1, 6.2, 7.2 |
+| M3 | Statut `foreign` par appareil, dernier accusé, corruption | 1.2, 2, 3.4, 5.3, 5.5 |
+| M4 | Dérive sur horloge physique, hlc validé | 3.1, 4.1, 4.4 |
+| M5 | Réglages locaux reçus, clés inconnues | 8 |
+| M6 | `calendar_account.label` et identifiant Apple | 8, 13 (Y2) |
+| M7 | Portée des traces, recréation, exclusions, volume | 5.4 |
+| M8 | Import sans remplacement silencieux, `kid` vérifié | 2.1, 10.3, 11.1 |
+| M9 | Capture d'écran, copie, impression | 10.3 |
+| M10 | Invariants de `sync_guard` | 3.2, 9 (règle 2), 12 |
+| B1 | Budget de nonces, `RandomizedNonceKey`, GCM-SIV | 2 |
+| B2 | AAD préfixée, en-tête conforme au chemin | 1.2, 2 |
+| B3 | `zeroize`, `kid` avant enregistrement | 2, 10.3 |
+| B4 | `qrcode-generator`, `cargo audit` | 10.3, Conséquences |
+| B5 | `sync_bind_device` figé, `firstRecord` Rust, chemins validés, époque courante protégée | 1.1, 1.3, 9, 11.1 |
+| B6 | Journaux techniques sans secret | 2.3, 12 |

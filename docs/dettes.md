@@ -52,6 +52,17 @@ Réponses de l'architecte : ADR 0011, section 8 (données exclues et cas particu
 - Restauration P-04 et synchro : appliquer l'ADR 0010 (état publié qui fait foi, marqueur `restore-marker.json`, synchro suspendue et choix explicite, époque et instantané, âge de la version face aux traces de suppression).
 - `sample.ids` (P-05) est un réglage local : après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; à revoir dans l'ADR de synchro.
 
+Audit de sécurité de l'ADR 0011 (2026-10-05, verdict « À CORRIGER ») : l'ADR est révisé, et la correspondance point par section figure dans son annexe A. Les points sont soldés par les lots Y1 à Y3, qui doivent tous les couvrir :
+- H1 : clé visible par la WebView en deux points. Il faut une confirmation native ouverte par Rust, une limite d'appels, aucune trace dans Zustand ni dans les journaux, et un état effacé à la fermeture (Y1, Y3).
+- H2 : les 19 commandes `sync_*` dans `src-tauri/build.rs` ; test `config.rs` qui vérifie que le manifeste correspond à `generate_handler!` et que `sync.json` ne vise que `main` (Y1).
+- H3 : attributs du Trousseau iOS via `security-framework`, avec un test de contrat ; option « Oublier le dossier et la clé » (Y1).
+- H4 : `check_sync_path`, qui contrôle les balises d'analyse, `DRIVE_FIXED` et le chemin final ; `is_plain_dir` reste inchangé (Y1).
+- H5 : identifiants SQL tirés du seul catalogue ; analyse stricte qui refuse `__proto__` (Y2).
+- H6 : `stateSeq` et anti-rejeu, contrôle du segment avant ajout (Y1, Y2).
+- M1 à M10, B1 à B6 : bourrage, bornes, statut `foreign`, dérive sur l'horloge physique, réglages reçus, `calendar_account.username` (migration 0017, Y2), portée des traces, import, capture d'écran, invariants de `sync_guard`, nonces, AAD préfixée, `zeroize`, `qrcode-generator`, contrôle des commandes, journaux sans secret.
+- Limites acceptées tant que Y-10 et Y-11 ne sont pas au PRD (ADR 0011, section 14.1) : un appareil perdu garde une copie complète ; la purge reste bloquée jusqu'à 180 jours ; iCloud garde 30 jours de « Supprimés récemment » ; une clé unique lit et forge tout. À solder par le lot Y4 si Ali ajoute Y-10 et Y-11 au PRD M15.
+- Risque accepté : le Gestionnaire d'identification Windows est lisible par toute la session, et la désinstallation n'efface pas la clé du coffre.
+
 ## Ordre 5 (iPhone)
 
 - Rappels d'événements (E-01) : une ligne `reminder` par avance, calculée sur la prochaine occurrence ; l'ordre 5 doit recalculer l'échéance de chaque occurrence d'une série (mensuelle, annuelle) et ne planifier que les rappels à venir.
@@ -61,6 +72,7 @@ Réponses de l'architecte : ADR 0011, section 8 (données exclues et cas particu
 - Créer l'interface de planification des notifications dans `src/platform`, qui n'existe pas encore.
 - P-04 critère 11 (sauvegarde et restauration sur iPhone) : commandes limitées à Windows, `container.backups` indisponible sur iOS ; à ouvrir par un avenant à l'ADR 0009 (capability iOS, gestionnaire mobile, réouverture de la base sans `relaunch`) en respectant l'ADR 0010.
 - P-07 sur iPhone : « Télécharger un modèle » et le rapport des lignes rejetées sont masqués tant que le plugin Fichiers (`FileService.save`) n'existe pas.
+- Synchro (ADR 0011, section 2.1) : lancer le scan du QR depuis Rust (`sync_key_import({ scan: true })`). Si l'API Rust du plugin barcode-scanner ne le permet pas, faire passer le texte par le JS et documenter ce troisième point d'exposition par un avenant. Vérifier aussi les attributs du Trousseau (`SecItemCopyMatching`) et le refus des liens symboliques sous le signet du dossier.
 
 ## Livraison
 
