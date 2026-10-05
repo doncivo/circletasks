@@ -6,6 +6,7 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useDefaultSpaceId } from '../spaces';
+import { loadAbsoluteDates } from './absoluteDatesLoader';
 import { useAbsoluteDateParser } from './useAbsoluteDateParser';
 import { normalizeQuickText } from '../../domain/spokenTimes';
 
@@ -91,6 +92,18 @@ export function useQuickInputWithClock(clock: Clock, options: UseQuickInputOptio
   /** Relit l'analyse avec l'heure d'aujourd'hui (au moment d'envoyer). */
   const parseNow = useCallback((raw: string = text): QuickParse => parseQuickInput(normalizeQuickText(raw), buildContext(), { ignored }), [text, ignored, buildContext]);
 
+  /**
+   * Comme `parseNow`, mais attend l'analyseur des dates écrites (PERF-02) : à utiliser pour CRÉER. Un envoi fait avant le chargement de
+   * chrono-node lit ainsi « Dentiste le 12 octobre » en entier (seul l'aperçu peut être en retard, jamais la création).
+   */
+  const parseNowLoaded = useCallback(
+    async (raw: string = text): Promise<QuickParse> => {
+      const parser = await loadAbsoluteDates();
+      return parseQuickInput(normalizeQuickText(raw), { ...buildContext(), absoluteDates: parser }, { ignored });
+    },
+    [text, ignored, buildContext],
+  );
+
   const setText = useCallback((next: string) => {
     setTextState(next);
     if (next === '') setIgnored(new Set());
@@ -101,5 +114,5 @@ export function useQuickInputWithClock(clock: Clock, options: UseQuickInputOptio
     setIgnored(new Set());
   }, []);
 
-  return { text, setText, parse, parseNow, dismiss, reset, ignoredKeys: ignored, spaces, projects, defaultSpaceId, suggestionContext, today: todayLocal(clock) };
+  return { text, setText, parse, parseNow, parseNowLoaded, dismiss, reset, ignoredKeys: ignored, spaces, projects, defaultSpaceId, suggestionContext, today: todayLocal(clock) };
 }

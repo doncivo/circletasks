@@ -93,7 +93,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const parsed = quick.parseNow();
+    const parsed = await quick.parseNowLoaded();
     if (!validateTaskTitle(parsed.title).ok) return;
     // Marques explicites d'abord (Q-06 D3) ; un projet réglé à la main ne suit pas dans un autre espace.
     const finalSpaceId = parsed.spaceId ?? spaceId;

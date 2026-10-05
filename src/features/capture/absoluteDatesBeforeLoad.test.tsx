@@ -1,8 +1,11 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import { createRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createManualClock } from '../../domain/clock';
 import type { LocalDate } from '../../domain/types';
+import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import type { CaptureInput } from './useQuickInput';
 import type * as LoaderModule from './absoluteDatesLoader';
 import { setupToday, teardownToday, type TodayHarness } from '../today/testKit';
 
@@ -45,6 +48,7 @@ vi.mock('./absoluteDatesLoader', async () => {
 
 const { useQuickInputWithClock } = await import('./useQuickInput');
 const { createTaskFromCaptureText } = await import('./captureUseCases');
+const { TodayAddRow } = await import('../today/TodayCreate');
 const loader = (await import('./absoluteDatesLoader')) as typeof LoaderModule & { resetForTest: () => void };
 
 describe('avant l’arrivée de l’analyseur des dates écrites', () => {
@@ -76,6 +80,33 @@ describe('avant l’arrivée de l’analyseur des dates écrites', () => {
       h = await setupToday('b9a1');
     });
     afterEach(() => teardownToday(h));
+
+    it('Aujourd’hui : « Entrée » avant le chargement attend l’analyseur et envoie la date du 12 octobre (TodayCreate)', async () => {
+      const captures: CaptureInput[] = [];
+      render(
+        <AppContainerProvider container={h.container}>
+          <TodayAddRow
+            layout="pc"
+            today={h.today}
+            inputRef={createRef<HTMLInputElement>() as React.RefObject<HTMLInputElement>}
+            onSubmit={(capture) => {
+              captures.push(capture);
+              return Promise.resolve(true);
+            }}
+          />
+        </AppContainerProvider>,
+      );
+      expect(loader.getAbsoluteDateParser()).toBeNull();
+      const field = screen.getByLabelText('Nouvelle tâche');
+      fireEvent.change(field, { target: { value: 'Dentiste le 12 octobre' } });
+      fireEvent.submit(field.closest('form') as HTMLFormElement);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(captures).toHaveLength(0);
+      gate.release();
+      await waitFor(() => expect(captures).toHaveLength(1));
+      expect(captures[0]?.title).toBe('Dentiste');
+      expect(captures[0]?.date).toMatch(/-10-12$/);
+    });
 
     it('appelée avant le chargement, elle attend et crée une seule tâche datée du 12 octobre', async () => {
       expect(loader.getAbsoluteDateParser()).toBeNull();

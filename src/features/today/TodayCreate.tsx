@@ -31,7 +31,7 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const capture = captureInputFrom(quick.parseNow(), quick.defaultSpaceId, projectFilter);
+    const capture = captureInputFrom(await quick.parseNowLoaded(), quick.defaultSpaceId, projectFilter);
     if (await onSubmit(capture, choice)) {
       quick.reset();
       setChoice(null);
