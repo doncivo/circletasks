@@ -8,3 +8,6 @@ export function logDesktopFailure(scope: string, error: unknown): void {
   // eslint-disable-next-line no-console -- journal technique unique, voir le commentaire du fichier
   console.warn(`[desktop:${scope}] ${detail}`);
 }
+
+/** Même journal pour les échecs hors intégration PC (écrans, dates, catalogues) : même implémentation, nom neutre. */
+export const logFailure = logDesktopFailure;

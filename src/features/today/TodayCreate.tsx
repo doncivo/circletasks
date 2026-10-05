@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type RefObject } from 'react';
+import { useRef, useState, type FormEvent, type RefObject } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import { TASK_TITLE_MAX_LENGTH } from '../../domain/taskRules';
 import type { LocalDate } from '../../domain/types';
@@ -23,6 +23,7 @@ export interface TodayAddRowProps {
  */
 export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowProps) {
   const [choice, setChoice] = useState<DateChoice | null>(null);
+  const busy = useRef(false);
   const projectFilter = useEffectiveProjectFilter();
   // Une date réglée à la main l'emporte : le texte n'est plus lu pour la date.
   const quick = useQuickInput({ dates: choice === null });
@@ -31,11 +32,18 @@ export function TodayAddRow({ layout, today, inputRef, onSubmit }: TodayAddRowPr
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const capture = captureInputFrom(quick.parseNow(), quick.defaultSpaceId, projectFilter);
-    if (await onSubmit(capture, choice)) {
-      quick.reset();
-      setChoice(null);
-      inputRef.current?.focus();
+    // Un second Entrée pendant l'attente (chargement des dates, écriture) ne crée pas une seconde tâche.
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const capture = captureInputFrom(await quick.parseNowLoaded(), quick.defaultSpaceId, projectFilter);
+      if (await onSubmit(capture, choice)) {
+        quick.reset();
+        setChoice(null);
+        inputRef.current?.focus();
+      }
+    } finally {
+      busy.current = false;
     }
   }
 

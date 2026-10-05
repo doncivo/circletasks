@@ -70,6 +70,16 @@ describe('bundle de départ (index.html)', () => {
     expect(total).toBeLessThan(LIMIT_BYTES);
   });
 
+  // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
+  // import statique oublié, un barrel ou un effet de bord ajouté (retrait de « sideEffects » dans package.json compris).
+  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx'])('%s est un bloc à la demande, hors du départ', (source) => {
+    const start = new Set(startChunks().map((chunk) => chunk.file));
+    const chunk = manifest[source];
+    if (!chunk) throw new Error(`bloc ${source} absent du manifeste`);
+    expect(start.has(chunk.file)).toBe(false);
+    expect(Object.values(manifest).some((other) => other.dynamicImports?.includes(source))).toBe(true);
+  });
+
   it('le graphique du rapport (Recharts) est un bloc à la demande, hors du départ', () => {
     const start = new Set(startChunks().map((chunk) => chunk.file));
     const chart = manifest['src/features/stats/CompletionChart.tsx'];

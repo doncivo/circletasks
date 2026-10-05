@@ -75,7 +75,7 @@ Toutes compatibles iOS : soit exécutées dans la WebView (JS pur), soit outils 
 | @fontsource-variable/fraunces (PREP-04) | Police des titres, fichiers locaux (`src/ui/theme/fonts.css`) | SIL OFL 1.1 | ~124 Ko woff2 (latin + latin-ext, normal) | oui (fichiers statiques) |
 | @fontsource-variable/dm-sans (PREP-04) | Police du texte courant, fichiers locaux | SIL OFL 1.1 | ~54 Ko woff2 (latin + latin-ext, normal) | oui (fichiers statiques) |
 | lucide-react (PREP-04) | Icônes au trait des maquettes, `src/ui/Icon.tsx` | ISC | ~0,5 Ko par icône importée nommément (tree-shaking) | oui (JS) |
-| chrono-node 2.10 (Q-02, avenant du 2026-10-04) | Date et heure dans les phrases françaises (locale `fr` seule : `chrono-node/fr`), enveloppé dans `src/domain/naturalDate.ts` | MIT | ~55 Ko minifié, ~15 Ko gzip (locale fr et noyau) ; dans le bundle principal (seuil de 100 Ko gzip, Q-02 D1) | oui (JS pur, sans API navigateur ni Node) |
+| chrono-node 2.10 (Q-02, avenant du 2026-10-04) | Date et heure dans les phrases françaises (locale `fr` seule : `chrono-node/fr`), enveloppé dans `src/domain/chronoAbsolute.ts` (seul importateur), lu par `src/domain/naturalDate.ts` au travers du type `AbsoluteDateParser` | MIT | ~55 Ko minifié, ~15 Ko gzip (locale fr et noyau) ; **bloc à la demande** depuis PERF-02 (écart assumé à Q-02 D1, voir l'avenant « contrats du chargement à la demande » ci-dessous) | oui (JS pur, sans API navigateur ni Node) |
 | recharts 3.10 (H-02, ADR 0009) | Graphique « taux de complétion par semaine » du rapport, `src/features/stats/CompletionChart.tsx` uniquement | MIT (transitives MIT / ISC) | ~91 Ko gzip, **bloc paresseux** (`React.lazy`), hors bundle de départ | oui (JS, SVG) |
 | crate `tauri-plugin-dialog` (H-03, ADR 0009) | « Enregistrer sous » ouvert côté Rust par la commande `export_save_file` ; aucun paquet npm, aucune permission `dialog:` pour la WebView | MIT / Apache-2.0 | 0 Ko JS | PC seulement : crate absente du build iOS, `FileService` indisponible sur iPhone jusqu'à l'ordre 5 |
 
@@ -143,3 +143,68 @@ Hors démarrage : recharts en bloc paresseux (90,79 Ko gzip, conforme à l'ADR 0
 
 - Nommer explicitement le bloc des bibliothèques « vendor » au lieu de « tokens ». Constat : `vite.config.ts` ne définit pas aujourd'hui de `manualChunks` ; le nom « tokens » est choisi automatiquement par Rollup pour le bloc partagé entre les deux entrées (`index.html` et `capture.html`), d'après l'un des modules qu'il contient. Le renommage suppose donc d'ajouter `build.rollupOptions.output.manualChunks` (ou une règle `chunkFileNames`) ; le script `test:bundle` doit identifier les blocs de départ par le graphe (manifeste Vite), pas par leur nom, pour rester valable après ce changement.
 - Étudier un découpage du démarrage, par ordre de gain attendu : écrans secondaires (Réglages, Statistiques, Calendriers, Focus) en `React.lazy` hors de l'écran d'accueil ; chrono-node chargé à la première frappe dans un champ de saisie naturelle ; vérifier que lucide-react n'importe que les icônes nommées (tree-shaking) ; s'assurer que la fenêtre de capture (`capture.html`) ne tire pas le bloc entier. Chaque découpage se mesure avec `test:bundle` avant et après.
+
+### Suite de l'avenant : découpage du démarrage (PERF-02, 2026-10-05)
+
+Les recommandations ci-dessus sont **appliquées**, dans l'ordre. Mesure par `npm run test:bundle` (somme gzip des blocs JS atteints par imports statiques depuis `index.html`), avant le 1er commit puis après chaque piste. Le test annonce 381,2 Ko au départ (qa-test : 380,9 Ko).
+
+| Étape | Total départ | Blocs principaux (Ko gzip) |
+| --- | --- | --- |
+| Avant | 381,2 Ko (5 blocs) | `tokens` 225,5 (partagé avec `capture.html`) ; `main` 153,7 ; core 1,0 ; runtime 0,7 ; types 0,2 |
+| 1. Écrans en `React.lazy` + `sideEffects` | 275,4 Ko (52 blocs) | `main` 92,5 ; `tokens` 73,7 ; `id` 39,2 ; `todaySources` 8,2 ; le reste < 7 chacun |
+| 2. chrono-node à la demande | 260,6 Ko (51 blocs) | `main` 92,4 ; `tokens` 59,7 ; `id` 39,2 |
+| 3. Catalogue anglais à la demande | **243,8 Ko** (51 blocs) | `main` 92,5 ; `tokens` 59,1 ; `id` 23,0 ; `todaySources` 8,2 ; `GoalAttachSwitch` 6,2 ; `SpaceSegmented` 6,1 ; `container` 5,5 ; `iconCatalog` 3,9 |
+| 4. lucide-react | inchangé | contrôle sans correction : imports nommés, 40 icônes distinctes, déjà élaguées |
+
+`capture.html` (mini-fenêtre) : 99,0 Ko au total à l'état final (`tokens` 59,1 ; `id` 23,0 ; reste < 4 chacun). Marge sur le seuil de 350 Ko : 106 Ko (30 %) ; objectif interne 330 Ko tenu.
+
+Décisions :
+
+- **Écrans** (`src/features/app/lazyScreens.tsx`) : tous les écrans sauf Aujourd'hui sont importés fichier par fichier (pas par barrel) en `React.lazy`, chacun avec sa propre frontière Suspense au repli neutre (zone vide `ct-app__placeholder`, sans texte). Ils sont préchargés un par un aux moments d'inactivité après le premier rendu ; le repli ne s'affiche donc qu'en cas de navigation dans les premiers instants. Alt+1… et la navigation ne dépendent pas des chargements (le routage reste synchrone, seul le contenu de l'écran attend).
+- **`"sideEffects": ["**/*.css"]`** dans `package.json` : sans lui, les barrels des features (`index.ts`, qui réexportent les écrans) gardaient chaque écran dans le graphe statique (la 1re tentative a donné 383 Ko). Il dit à Rolldown que les modules JS n'ont pas d'effet de bord à l'import, sauf les feuilles CSS. Aucun import nu de module TypeScript n'existe dans `src/` (vérifié) ; tout nouvel effet de bord à l'import doit passer par un appel explicite (comme `registerRoutinesSource()` dans `App.tsx`).
+- **chrono-node** : `domain/naturalDate.ts` n'importe plus la bibliothèque ; il lit un analyseur injecté (option `absoluteDates` de `naturalDate` et de `QuickContext`, type `AbsoluteDateParser`). L'enveloppe `domain/chronoAbsolute.ts` (seul fichier à importer chrono-node) est chargée par `features/capture/absoluteDatesLoader.ts` (état, sans React ; hook `useAbsoluteDateParser.ts`) : au repos après le premier rendu (`preloadAbsoluteDates`, `App.tsx`) ou dès qu'un champ de saisie s'affiche (`useAbsoluteDateParser`). Tant qu'il manque, la grammaire locale lit demain, jours de semaine et heures ; à l'arrivée, `useAbsoluteDateParser` rend l’analyseur et les saisies déjà tapées sont relues (Q-06, scan). La mini-fenêtre attend le chargement avant de créer (`createTaskFromCaptureText`). Les tests du domaine passent `chronoAbsoluteParser` ; ceux des features le chargent d’emblée (`tests/setup/onDemandDates.ts`).
+- **Anglais** : `i18n/index.ts` ne livre que le français ; `ensureLocale('en')` charge le bloc anglais, `setLocale` le lance en arrière-plan, repli sur le français tant qu'il manque (`FocusMiniWindow` réaffiche à l'arrivée). Les tests posent le catalogue d'emblée (`registerCatalog`).
+- Après les corrections de revue (domaine sans état, frontière d’erreur par écran, rendu direct des écrans chargés) : **244,0 Ko** (50 blocs ; `main` 92,6 ; `tokens` 59,2 ; `id` 23,0). Garde-fous : ESLint (imports nus, blocs à la demande) et trois assertions de `test:bundle`.
+- Prochain levier si besoin : hôtes toujours montés (`FocusHost`, `SearchOverlay`, éditeurs d'événements) en chargement à la demande, et le bloc `main` (92,5 Ko, react-dom compris).
+
+## Avenant : contrats du chargement à la demande (PERF-02, architecte, 2026-10-05)
+
+### Contexte
+
+PERF-02 sort du bloc de départ les écrans secondaires, chrono-node et le catalogue anglais, et ajoute `"sideEffects": ["**/*.css"]`. Trois points d'architecture restaient ouverts : l'état mutable de module introduit dans `src/domain/naturalDate.ts` (`registerAbsoluteDateParser`), l'absence de garde-fou automatique sur `sideEffects` et sur les blocs à la demande, et l'écart avec Q-02 D1.
+
+### Décision
+
+1. **`src/domain` reste sans état de module.** L'analyseur des dates écrites est passé **en paramètre**, pas enregistré dans le domaine :
+   - `src/domain/naturalDate.ts` garde les types `AbsoluteDateMatch` et `AbsoluteDateParser` ; `NaturalDateOptions` reçoit `readonly absoluteDates?: AbsoluteDateParser | null` (absent ou `null` : grammaire locale seule) ; `registerAbsoluteDateParser` et `hasAbsoluteDateParser` sont retirés.
+   - `src/domain/quickInput.ts` : `QuickContext` reçoit `readonly absoluteDates?: AbsoluteDateParser | null`, transmis tel quel à `naturalDate`.
+   - L'état (analyseur chargé ou non) vit dans `src/features/capture/absoluteDatesLoader.ts` (état, sans React) ; hook séparé `useAbsoluteDateParser.ts`. Le chargeur expose :
+     ```ts
+     export function getAbsoluteDateParser(): AbsoluteDateParser | null;
+     export function loadAbsoluteDates(): Promise<AbsoluteDateParser | null>; // se résout toujours ; null si échec
+     export function preloadAbsoluteDates(): () => void;
+     export function useAbsoluteDateParser(): AbsoluteDateParser | null; // useSyncExternalStore sur l'analyseur lui-même
+     ```
+   - Les constructeurs de contexte des features (`currentQuickContext`, `buildContext` de `useQuickInput`, `useScan`) posent `absoluteDates` ; l'analyseur devient une dépendance ordinaire des `useMemo` / `useCallback` (plus de compteur de version ni de `void absoluteDates`).
+   - Tests du domaine : ils passent `chronoAbsoluteParser` explicitement (aide de test) ; `tests/setup/onDemand.ts` ne touche plus au domaine.
+   - Raison : un résultat de `naturalDate` qui dépend de l'ordre de chargement des modules n'est plus une fonction pure ; la règle « domain pur » (tableau des couches) vaut aussi pour l'état. Aucun autre module de `src/domain` (hors kits de test) n'a d'état mutable : pas de précédent à créer.
+2. **Qui charge quoi.** `src/domain/chronoAbsolute.ts` (pur, seul importateur de chrono-node) n'est importé **que dynamiquement**, et seulement par `src/features/capture/absoluteDatesLoader.ts` (état, sans React ; hook `useAbsoluteDateParser.ts`) ; `src/i18n/en.ts` seulement par `import()` dans `src/i18n/index.ts`. Les tests peuvent les importer statiquement.
+3. **`sideEffects`.** Règle : un module JS/TS de `src/` n'a aucun effet à l'import ; toute initialisation passe par un appel explicite depuis `App.tsx`, `main.tsx` ou une entrée (`register…()`, `start…()`). Seules les feuilles `.css` sont des imports nus.
+4. **Garde-fous automatiques** (à ajouter ; ils remplacent la vérification manuelle « aucun import nu ») :
+   - ESLint (`eslint.config.js`, `src/**` hors tests) : `no-restricted-syntax` sur `ImportDeclaration[specifiers.length=0]` dont la source ne finit pas par `.css`, message « Import nu interdit : sideEffects (package.json) l'élaguerait ; appeler une fonction d'initialisation ».
+   - ESLint : `no-restricted-imports` (imports statiques seulement, `import()` n'est pas concerné) de `**/domain/chronoAbsolute` et de `**/i18n/en` dans `src/**` hors fichiers de test.
+   - `tests/bundle/startBundle.test.ts`, sur le modèle du test Recharts : `src/domain/chronoAbsolute.ts`, `src/i18n/en.ts` et au moins un écran paresseux (`src/features/settings/SettingsScreen.tsx`) sont des imports dynamiques et absents des blocs de départ. Un barrel qui ramènerait un écran (retrait de `sideEffects`, effet de bord ajouté dans un `index.ts`) échoue ici au lieu de passer sous le seuil de 350 Ko.
+5. **Écart à Q-02 D1, assumé.** D1 gardait chrono-node dans le bundle principal sous 100 Ko gzip ; PERF-02 le charge à la demande (gain mesuré 14,8 Ko gzip) avec relecture des saisies à l'arrivée et attente dans `createTaskFromCaptureText`. Le comportement visible de Q-02 est inchangé une fois le bloc arrivé (préchargé au repos, fichier local). Inscrit dans `docs/decisions.md`.
+
+### Conséquences
+
+- iOS (WKWebView) : `import()` des blocs servis par le protocole de l'app fonctionne, la CSP `script-src 'self'` les couvre, tout est local et hors ligne. `requestIdleCallback` n'est pas activé par défaut dans WebKit : sur iPhone, c'est le repli `setTimeout` (100 ms pour chrono-node, 200 ms entre deux écrans) qui s'applique ; les deux branches doivent rester couvertes par les tests (jsdom n'a pas `requestIdleCallback`, il exerce la branche iPhone). Le préchargement des 19 écrans s'étale sur ~4 s après le premier rendu, sans effet sur le démarrage à froid mesuré (premier rendu d'Aujourd'hui).
+- Un échec de chargement d'un écran (bloc illisible) remonte à la frontière d'erreur la plus proche ; risque faible (fichiers locaux), à couvrir si une frontière d'erreur d'écran est ajoutée.
+- Le prochain module chargé à la demande suit le même schéma : contrat pur dans `domain` ou `i18n`, état et `import()` dans `features` (ou `i18n` pour les catalogues), garde-fou ESLint et assertion dans `test:bundle`.
+
+### Corrections de la seconde revue (PERF-02)
+
+- **Création avant le chargement** : les champs qui créent (`TodayCreate`, `WeekDayAdd`, `TaskCreateSheet`) appellent `parseNowLoaded` (`await loadAbsoluteDates()` puis analyse) ; seul l'aperçu peut être en retard. `SomedayAddField` lit `dates: false` (rien à attendre) ; l'unique autre `parseNow`, celui de `MiniCapture`, ne sert qu'à refuser un titre vide.
+- **Échec d'un écran à la demande** : « Réessayer » recrée le composant paresseux de l'instance concernée. Limite connue : sur WebKit, un second `import()` d'un fichier dont le premier a échoué peut renvoyer le même rejet. Voie choisie, la plus simple : après un second échec, le bouton devient « Recharger » (`location.reload()`), qui relance la page et repart d'un module neuf.
+- **Journal** : `logFailure` (alias de `logDesktopFailure`, `src/platform`) est utilisé hors intégration PC : écrans, dates, catalogues.
+- **ESLint** : le bloc des fichiers de `src/` hors couches exclut `App.tsx` et `main.tsx` (la configuration plate retient le dernier bloc qui définit une règle) ; `tests/unit/eslintGuards.test.ts` lance ESLint par API et prouve que les interdictions se cumulent. Les chemins relatifs courts (`./en`, `./chronoAbsolute`) sont interdits en import statique.

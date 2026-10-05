@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { chronoAbsoluteParser } from './chronoAbsolute';
 import { parseQuickInput } from './quickInput';
 import { asLocalDate, asLocalTime } from './types';
 import { normalizeQuickText, normalizeSpokenTimes } from './spokenTimes';
 
 // Mardi 22 septembre 2026, 08:00 (comme Q-02).
 const NOW = { date: asLocalDate('2026-09-22'), time: asLocalTime('08:00') };
-const parse = (text: string) => parseQuickInput(normalizeQuickText(text), { spaces: [], projects: [], defaultSpaceId: null, now: NOW });
+const parse = (text: string) => parseQuickInput(normalizeQuickText(text), { spaces: [], projects: [], defaultSpaceId: null, now: NOW, absoluteDates: chronoAbsoluteParser });
 
 // [dictée Windows, texte normalisé] : Q-03 critère 4, au moins 10 phrases dictées.
 const NORMALIZED: ReadonlyArray<readonly [string, string]> = [

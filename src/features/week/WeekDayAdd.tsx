@@ -61,7 +61,7 @@ export function WeekDayAdd({ date, layout, onAdd, onAdded }: WeekDayAddProps) {
 
   async function submit(event: FormEvent): Promise<void> {
     event.preventDefault();
-    const capture = captureInputFrom(quick.parseNow(), quick.defaultSpaceId, projectFilter);
+    const capture = captureInputFrom(await quick.parseNowLoaded(), quick.defaultSpaceId, projectFilter);
     if (!validateTaskTitle(capture.title).ok || busy.current) return;
     busy.current = true;
     try {
