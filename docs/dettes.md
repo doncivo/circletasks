@@ -75,7 +75,11 @@ Audits de sécurité de l'ADR 0011 (trois passes le 2026-10-05). L'ADR est révi
   - H1 : `main` ne peut plus créer de fenêtre. **Correctif de F-01 inclus dans Y1** : trois commandes Rust `focus_window_*` remplacent `core:webview:allow-create-webview-window` et les permissions de fenêtre de `focus-launcher.json`. L'instance `pairing` est créée par Rust, jamais réutilisée, et contrôlée par libellé, URL exacte et HWND.
   - M1 : changement d'époque matérialisé depuis la base locale, par pages.
   - B2, B3, B4, B6 : corrigés dans l'ADR (import au premier plan, `sync/own.json`, actions de la fenêtre `pairing`, graphe complet de `test:bundle`).
-  - **B1, B5, B7 et B9 restent à documenter** : leur texte n'a pas été transmis avec la demande de correction et n'est pas repris ici. À reporter depuis le rapport du troisième audit avant le lancement de Y1.
+  - Basses du troisième audit (risques acceptés, à documenter dans l'ADR 0011 « Limites connues » au lot Y1) :
+    - B1 : la condition « fenêtre au premier plan » de la confirmation native est affaiblie si `main` peut se remettre au premier plan elle-même ; le verrou de premier plan de Windows la limite, et le retrait de `show` / `set-focus` / `unminimize` de `focus-launcher.json` (H1) la réduit encore.
+    - B5 : un script de `main` peut ouvrir la boîte de confirmation alors que l'utilisateur est présent ; un refus bloque l'affichage 10 min. Déni de service local accepté.
+    - B7 : la mini-fenêtre `quick-capture` pouvait être imitée comme `pairing` ; impact faible, réglé par le même correctif H1 (plus de création de fenêtre depuis `main`).
+    - B9 : un tiers sans clé peut déposer un en-tête `ct-*` en clair dans le dossier, ce qui provoque `folder-has-data` et bloque la création de clé. Déni de service de la menace (a), accepté ; l'utilisateur peut choisir un autre dossier ou supprimer le fichier étranger.
 - Commandes : **20 commandes `sync_*`** dans `src-tauri/build.rs`, dont 18 pour `main` (`sync.json`) et 2 pour `pairing` (`sync-pairing.json` : `sync_pairing_payload`, `sync_key_import`, plus `core:window:allow-close`). S'y ajoutent les 3 commandes `focus_window_*` du correctif F-01.
 - Limites acceptées tant que Y-10 et Y-11 ne sont pas au PRD (ADR 0011, section 14.1) : un appareil perdu garde une copie complète ; la purge reste bloquée jusqu'à 180 jours ; iCloud garde 30 jours de « Supprimés récemment » ; une clé unique lit et forge tout. À solder par le lot Y4 si Ali ajoute Y-10 et Y-11 au PRD M15.
 - Risques acceptés :
