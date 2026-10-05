@@ -57,7 +57,6 @@ export const fr = {
   appearance: appearanceFr,
   calendars: calendarsFr,
   // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1.
-  // Synchro : moteur (lot Y2 : état, détails, restauration) et dossier / clé (lot Y1), un seul objet.
   sync: { ...syncEngineFr, folder: syncFolderFr, key: syncKeyFr },
   tasks: {
     newTask: 'Nouvelle tâche',

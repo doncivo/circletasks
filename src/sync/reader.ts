@@ -51,6 +51,20 @@ export function recordPositions(from: RecordCursor, count: number, next: RecordC
   });
 }
 
+interface ReadItem {
+  readonly record: JournalRecord;
+  readonly position: RecordCursor | null;
+  readonly hlc: Hlc | null;
+}
+
+/**
+ * Lecture par pages. **Un groupe de même hlc n'est jamais coupé** (ADR 0011 §3.3 : une opération de plus de 256 Kio part en plusieurs
+ * enregistrements au même hlc, tous dans le même appel d'ajout) : aucun lot n'est appliqué entre deux enregistrements de même hlc ; le
+ * dernier groupe d'une page n'est appliqué (curseur et accusé avancés) que si la tête est atteinte ; sinon il passe à la page suivante,
+ * ou, si la lecture s’arrête (fichier dans le nuage, enregistrement illisible, horloge en avance), il est appliqué sans avancer le curseur
+ * ni l’accusé (il reste avant lui). Un accusé n'annonce donc jamais lu un hlc dont une partie manque (sinon le report d'époque, qui ne reprend que les
+ * écritures au-delà de l'accusé, perdrait la partie manquante).
+ */
 export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<ReadOutcome> {
   const touched = new Map<string, Set<string>>();
   let cursor = request.cursor;
@@ -59,10 +73,46 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
   let conflicts = 0;
   const finish = (status: ReadStatus, errorCode: string | null = null): ReadOutcome => ({ status, cursor, ackHlc, records, touched, conflicts, errorCode });
 
+  /**
+   * Applique des enregistrements entiers dans une transaction gardée, avec le curseur et l'accusé du dernier ; `commit` faux : valeurs
+   * appliquées (fusion idempotente, relues plus tard) mais curseur et accusé inchangés.
+   */
+  const flush = async (items: readonly ReadItem[], commit = true): Promise<void> => {
+    if (items.length === 0) return;
+    let maxHlc: Hlc | null = null;
+    for (const item of items) if (item.hlc !== null && (maxHlc === null || item.hlc > maxHlc)) maxHlc = item.hlc;
+    // Contrôle de dérive déjà fait : l'horloge locale peut intégrer ces hlc.
+    if (maxHlc !== null) deps.hlc.receive(maxHlc);
+    const position = commit ? ([...items].reverse().find((item) => item.position !== null)?.position ?? null) : null;
+    const nextAck = commit && maxHlc !== null && (ackHlc === null || maxHlc > ackHlc) ? maxHlc : ackHlc;
+    const now = new Date(deps.clock.nowMs()).toISOString() as ApplyContext['now'];
+    const result = await guarded(deps.data, async (repos) => {
+      let applied = { touched: new Map<string, Set<string>>(), conflicts: 0 };
+      for (const item of items) {
+        const r = await applyOps(repos, item.record.ops, { localSv: deps.sv, remoteSv: item.record.sv, now, knows: request.knows, logger: deps.logger });
+        mergeTouched(applied.touched, r.touched);
+        applied = { touched: applied.touched, conflicts: applied.conflicts + r.conflicts };
+      }
+      if (position) await repos.sync.saveState(request.deviceId, { cursorSegment: position.segment, cursorRecord: position.record, ackHlc: nextAck });
+      else if (nextAck !== ackHlc) await repos.sync.saveState(request.deviceId, { ackHlc: nextAck });
+      return applied;
+    });
+    if (position) cursor = position;
+    ackHlc = nextAck;
+    records += items.length;
+    conflicts += result.conflicts;
+    mergeTouched(touched, result.touched);
+    await runRepairs(deps, result.touched);
+    request.onBatch?.(result.touched);
+  };
+
+  /** Enregistrements du dernier groupe (même hlc), reportés à la page suivante. */
+  let carry: ReadItem[] = [];
+  let from = cursor;
   for (;;) {
     let page;
     try {
-      page = await deps.platform.readJournal({ deviceId: request.deviceId, epoch: request.epoch, from: cursor });
+      page = await deps.platform.readJournal({ deviceId: request.deviceId, epoch: request.epoch, from });
     } catch (error) {
       const code = syncErrorCodeOf(error);
       deps.logger.log('read-failed', { device: request.deviceId, code });
@@ -71,46 +121,12 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
       if (code === 'cloud-pending') return finish('cloud-pending', code);
       return finish('error', code);
     }
-    const positions = recordPositions(cursor, page.records.length, page.next);
-    // Lots : enregistrements entiers, 500 opérations au plus (un enregistrement plus gros forme son lot).
-    let batch: { record: JournalRecord; position: RecordCursor | null }[] = [];
-    let batchOps = 0;
+    const positions = recordPositions(from, page.records.length, page.next);
+    // Lots : enregistrements entiers, 500 opérations au plus, jamais coupés au milieu d'un groupe de même hlc.
+    let batch: ReadItem[] = carry;
+    carry = [];
+    let batchOps = batch.reduce((n, item) => n + item.record.ops.length, 0);
     let stop: ReadStatus | null = null;
-
-    const flush = async (): Promise<void> => {
-      if (batch.length === 0) return;
-      const items = batch;
-      batch = [];
-      batchOps = 0;
-      let maxHlc: Hlc | null = null;
-      for (const item of items) {
-        const h = recordMaxHlc(item.record);
-        if (h !== null && (maxHlc === null || h > maxHlc)) maxHlc = h;
-      }
-      // Contrôle de dérive déjà fait : l'horloge locale peut intégrer ces hlc.
-      if (maxHlc !== null) deps.hlc.receive(maxHlc);
-      const position = [...items].reverse().find((item) => item.position !== null)?.position ?? null;
-      const nextAck = maxHlc !== null && (ackHlc === null || maxHlc > ackHlc) ? maxHlc : ackHlc;
-      const now = new Date(deps.clock.nowMs()).toISOString() as ApplyContext['now'];
-      const result = await guarded(deps.data, async (repos) => {
-        let applied = { touched: new Map<string, Set<string>>(), conflicts: 0 };
-        for (const item of items) {
-          const r = await applyOps(repos, item.record.ops, { localSv: deps.sv, remoteSv: item.record.sv, now, knows: request.knows, logger: deps.logger });
-          mergeTouched(applied.touched, r.touched);
-          applied = { touched: applied.touched, conflicts: applied.conflicts + r.conflicts };
-        }
-        if (position) await repos.sync.saveState(request.deviceId, { cursorSegment: position.segment, cursorRecord: position.record, ackHlc: nextAck });
-        else if (nextAck !== ackHlc) await repos.sync.saveState(request.deviceId, { ackHlc: nextAck });
-        return applied;
-      });
-      if (position) cursor = position;
-      ackHlc = nextAck;
-      records += items.length;
-      conflicts += result.conflicts;
-      mergeTouched(touched, result.touched);
-      await runRepairs(deps, result.touched);
-      request.onBatch?.(result.touched);
-    };
 
     for (let i = 0; i < page.records.length; i += 1) {
       const record = parseJournalRecord(page.records[i] as string);
@@ -123,16 +139,35 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
         stop = 'clock-ahead';
         break;
       }
-      if (batch.length > 0 && batchOps + record.ops.length > APPLY_BATCH_OPS) await flush();
-      batch.push({ record, position: positions[i] ?? null });
+      const hlc = recordMaxHlc(record);
+      const last = batch.at(-1);
+      if (last && batchOps + record.ops.length > APPLY_BATCH_OPS && last.hlc !== hlc) {
+        await flush(batch);
+        batch = [];
+        batchOps = 0;
+      }
+      batch.push({ record, position: positions[i] ?? null, hlc });
       batchOps += record.ops.length;
     }
-    await flush();
+    // Fin de page : le dernier groupe n'est complet que si la tête est atteinte (un appel d'ajout se termine à la tête).
+    const headReached = stop === null && (page.status === 'complete' || (page.status === 'more' && page.records.length === 0));
+    if (headReached) {
+      await flush(batch);
+    } else {
+      const lastHlc = batch.at(-1)?.hlc;
+      let cut = batch.length;
+      while (cut > 0 && (batch[cut - 1] as ReadItem).hlc === lastHlc) cut -= 1;
+      await flush(batch.slice(0, cut));
+      // Page suivante : le groupe y continue peut-être ; arrêt : ses enregistrements entiers sont appliqués, mais le curseur reste avant
+      // le groupe et l'accusé n'avance pas (relu, sans effet, au cycle suivant).
+      if (stop === null && page.status === 'more') carry = batch.slice(cut);
+      else await flush(batch.slice(cut), false);
+    }
     if (stop) return finish(stop);
     if (page.status === 'complete') return finish('complete');
     if (page.status === 'cloud-pending') return finish('cloud-pending');
     if (page.status === 'truncated') return finish('truncated');
     if (page.records.length === 0) return finish('complete');
-    cursor = page.next;
+    from = page.next;
   }
 }

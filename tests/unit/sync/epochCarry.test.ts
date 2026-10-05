@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { RestoreMarker } from '../../../src/platform/sync/types';
 import { setEpochSwitchTestHooks } from '../../../src/sync/epochSwitch';
+import { propagate } from '../../sim/syncCloudSim';
 import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -118,6 +119,58 @@ describe('changement d’époque : ligne recréée par le report (revue Y2, poin
     expect(onA?.title).toBe('Créée par A après la sauvegarde');
     expect(onA?.note).toBe('note de B');
     expect(await a.driver.select("SELECT reason FROM sync_parked WHERE row_id = ?", [t.id])).toEqual([]);
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+});
+
+describe('opération découpée (plus de 256 Kio) : accusé jamais au milieu d’un groupe de même hlc (revue finale Y2, point 4)', () => {
+  const note = '€'.repeat(85_000);
+  const title = '€'.repeat(4_000);
+
+  it('page coupée entre deux parties : accusé et curseur inchangés ; complet au cycle suivant', async () => {
+    const [a, b] = await twoDevices();
+    const before = (await a.driver.select<{ ack_hlc: string | null; cursor_segment: number; cursor_record: number }>('SELECT ack_hlc, cursor_segment, cursor_record FROM sync_state WHERE device_id = ?', [B_ID]))[0];
+    a.clock.advance(1_000);
+    const big = await b.createTask(title, { note });
+    await b.cycle();
+    expect(b.folder.fileNames(B_ID).length).toBeGreaterThan(0);
+    // La dernière partie n'est pas encore arrivée chez A.
+    propagate(b.folder, a.folder, B_ID, { partialLastLine: true });
+    expect((await a.cycle()).phase).toBe('waiting-icloud');
+    const cut = (await a.driver.select<{ ack_hlc: string | null; cursor_segment: number; cursor_record: number }>('SELECT ack_hlc, cursor_segment, cursor_record FROM sync_state WHERE device_id = ?', [B_ID]))[0];
+    expect(cut).toEqual(before);
+    expect(cut?.ack_hlc === null || (cut?.ack_hlc ?? '') < big.hlc).toBe(true);
+    propagate(b.folder, a.folder, B_ID);
+    expect((await a.cycle()).phase).toBe('idle');
+    const row = await a.task(big.id);
+    expect(row?.note).toBe(note);
+    expect(row?.title).toBe(title);
+    const after = (await a.driver.select<{ ack_hlc: string }>('SELECT ack_hlc FROM sync_state WHERE device_id = ?', [B_ID]))[0];
+    expect(after?.ack_hlc).toBe(big.hlc);
+  });
+
+  it('« Appliquer partout » après une lecture coupée au milieu du groupe : la ligne découpée de B n’est pas perdue', async () => {
+    const [a, b] = await twoDevices();
+    const copy = await backupOf(a);
+    a.clock.advance(1_000);
+    const big = await b.createTask(title, { note });
+    await b.cycle();
+    propagate(b.folder, a.folder, B_ID, { partialLastLine: true });
+    await a.cycle();
+    // A restaure sa sauvegarde et l'applique partout : covers[B] vient de ce que A a accusé de B.
+    await restore(a, copy);
+    await a.service.chooseRestoreOption('apply-everywhere');
+    syncFolders(devices);
+    await b.cycle();
+    expect(b.logger.entries.some((e) => e.event === 'epoch-switched')).toBe(true);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    for (const d of devices) {
+      const row = await d.task(big.id);
+      expect(row?.title, d.name).toBe(title);
+      expect(row?.note, d.name).toBe(note);
+    }
     expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
   });
 });
