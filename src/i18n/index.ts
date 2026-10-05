@@ -15,14 +15,37 @@ export function registerCatalog(locale: Locale, messages: Messages): void {
   catalogs[locale] = messages;
 }
 
-/** Charge le catalogue d'une langue s'il manque. La promesse se résout toujours (un échec laisse le français). */
-export async function ensureLocale(locale: Locale): Promise<void> {
-  if (catalogs[locale] || locale === 'fr') return;
-  try {
-    catalogs[locale] = await loaders[locale]();
-  } catch {
-    // catalogue illisible : repli sur le français
-  }
+/** Journal des échecs de chargement, posé par l'application (src/i18n est autonome : il ne connaît pas src/platform). */
+export type CatalogFailureReporter = (locale: Locale, error: unknown) => void;
+let reportFailure: CatalogFailureReporter | null = null;
+
+export function setCatalogFailureReporter(reporter: CatalogFailureReporter | null): void {
+  reportFailure = reporter;
+}
+
+/** Un seul chargement en cours par langue. */
+const loading = new Map<Locale, Promise<void>>();
+
+/**
+ * Charge le catalogue d'une langue s'il manque. La promesse se résout toujours : un échec est journalisé (`setCatalogFailureReporter`),
+ * laisse le français et permet un nouvel essai au prochain appel.
+ */
+export function ensureLocale(locale: Locale): Promise<void> {
+  if (catalogs[locale] || locale === 'fr') return Promise.resolve();
+  const running = loading.get(locale);
+  if (running) return running;
+  const load = loaders[locale]().then(
+    (messages) => {
+      catalogs[locale] = messages;
+      loading.delete(locale);
+    },
+    (error: unknown) => {
+      loading.delete(locale);
+      reportFailure?.(locale, error);
+    },
+  );
+  loading.set(locale, load);
+  return load;
 }
 
 export const DEFAULT_LOCALE: Locale = 'fr';

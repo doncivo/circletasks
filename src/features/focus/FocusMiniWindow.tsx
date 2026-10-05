@@ -22,10 +22,11 @@ export function FocusMiniWindow({ client, clock, player: injected }: { readonly 
     void (async () => {
       const subscriptions = await Promise.all([
         client.onState((next) => {
-          setLocale(next.locale);
-          setState(next);
-          // Langue chargée à la demande : réaffiche dès que son catalogue est là.
-          void ensureLocale(next.locale).then(() => setState((current) => (current === next ? { ...next } : current)));
+          // Langue chargée à la demande (ADR 0003, avenant) : catalogue d'abord, puis langue et état.
+          void ensureLocale(next.locale).then(() => {
+            setLocale(next.locale);
+            setState(next);
+          });
         }),
         client.onCloseRequested(() => setCloseRequests((count) => count + 1)),
         client.onMoved((position) => void client.send({ type: 'moved', x: position.x, y: position.y })),
