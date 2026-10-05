@@ -32,6 +32,8 @@ describe('Aujourd’hui : performance avec 5 000 tâches (A-01)', () => {
       const list = buildTodayList({ date: DAY, filter: 'all', tasks });
       const elapsed = performance.now() - start;
 
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf A-01] Aujourd'hui, 5 000 tâches : ${elapsed.toFixed(1)} ms`);
       expect(state.status).toBe('ready');
       expect(list.rows).toHaveLength(50);
       expect(elapsed).toBeLessThan(300);

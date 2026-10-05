@@ -37,6 +37,8 @@ describe('Export de l’historique : 5 000 tâches', () => {
       start = performance.now();
       const json = await buildHistoryJson(db.data, params);
       const jsonMs = performance.now() - start;
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf H-03] export de 5 000 tâches : CSV ${csvMs.toFixed(0)} ms, JSON ${jsonMs.toFixed(0)} ms`);
       expect(new TextDecoder().decode(csv).split('\r\n').length).toBeGreaterThan(5000);
       expect((JSON.parse(new TextDecoder().decode(json)) as { tasks: unknown[] }).tasks).toHaveLength(5000);
       expect(csvMs).toBeLessThan(2000);

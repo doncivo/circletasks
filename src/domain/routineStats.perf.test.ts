@@ -25,13 +25,19 @@ describe('performance des statistiques de routine (3 ans d’historique)', () =>
   it.each(routines.map((routine) => [routine.scheduleType, routine] as const))('%s : séries en moins de 50 ms', (_name, routine) => {
     const start = performance.now();
     computeStreaks(routine, done, today, pauses);
-    expect(performance.now() - start).toBeLessThan(50);
+    const elapsed = performance.now() - start;
+    // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+    console.info(`[perf R-04] séries (${routine.scheduleType}), 3 ans : ${elapsed.toFixed(2)} ms`);
+    expect(elapsed).toBeLessThan(50);
   });
 
   it.each(routines.map((routine) => [routine.scheduleType, routine] as const))('%s : taux 7, 30, 90 jours et carte de chaleur en moins de 50 ms', (_name, routine) => {
     const start = performance.now();
     for (const days of [7, 30, 90]) completionRate(routine, done, today, days, pauses);
     monthHeatmap(routine, done, 2026, 9, today, pauses);
-    expect(performance.now() - start).toBeLessThan(50);
+    const elapsed = performance.now() - start;
+    // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+    console.info(`[perf R-06] taux et carte de chaleur (${routine.scheduleType}), 3 ans : ${elapsed.toFixed(2)} ms`);
+    expect(elapsed).toBeLessThan(50);
   });
 });

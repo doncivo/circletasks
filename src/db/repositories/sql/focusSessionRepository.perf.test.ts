@@ -35,6 +35,8 @@ describe('FocusSessionRepository (SQL) : totaux sur 2 000 sessions', () => {
       const top = await db.data.repos.focusSessions.totalsByTask({ span: monthSpan(day), filter: ALL_ITEMS }, 5);
       const all = await db.data.repos.focusSessions.totals({ span: { from: '2000-01-01T00:00:00.000Z' as never, to: '2100-01-01T00:00:00.000Z' as never }, filter: ALL_ITEMS });
       const elapsed = performance.now() - start;
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf F-03] 2 000 sessions, quatre requêtes agrégées : ${elapsed.toFixed(1)} ms`);
       expect(all.sessions).toBe(2000);
       expect(today.sessions).toBeGreaterThanOrEqual(0);
       expect(month.sessions).toBeGreaterThan(0);

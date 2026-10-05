@@ -63,6 +63,8 @@ describe('SearchRepository (SQL) : performance (RC-01)', () => {
           if (index <= 1) expect(hits.length, query).toBeGreaterThan(0);
         }
       }
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf RC-01] ${String(worst.length)} requêtes de recherche : pire ${Math.max(...worst).toFixed(1)} ms, moyenne ${(worst.reduce((a, b) => a + b, 0) / worst.length).toFixed(1)} ms`);
       expect(Math.max(...worst), `temps de chaque requête (ms) : ${worst.map((ms) => ms.toFixed(1)).join(" / ")}`).toBeLessThan(200);
     } finally {
       await db.close();
