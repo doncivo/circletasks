@@ -89,7 +89,11 @@ describe('purge : revérification et parcours (revue Y2, point 7)', () => {
     await data.repos.tasks.softDelete([last.id]);
     const readUpTo = (await data.repos.tasks.getById(last.id, { includeDeleted: true }))?.hlc as Hlc;
     db.clock.advance(1_000);
-    await data.repos.tasks.softDelete(tasks.slice(0, PAGE_ROWS).map((t) => t.id));
+    // Une seule vraie suppression, puis les 499 autres par une requête (hlc et date de la première) : 500 UPDATE avec les déclencheurs de
+    // recherche et de synchro coûtent ~5 ms chacun et dépassaient 5 s sur une machine chargée.
+    const [first] = await data.repos.tasks.softDelete([(tasks[0] as { id: TaskId }).id]);
+    const firstDeleted = first as { deletedAt: string | null; hlc: string };
+    await db.driver.execute('UPDATE task SET deleted_at = ?, updated_at = ?, hlc = ? WHERE id <> ? AND id <> ? AND deleted_at IS NULL', [firstDeleted.deletedAt, firstDeleted.deletedAt, firstDeleted.hlc, (tasks[0] as { id: TaskId }).id, last.id]);
     db.clock.advance(31 * DAY);
     const ack: DeviceAck = { epoch: 'e0001-x' as EpochId, segment: 1, record: 1, hlc: readUpTo, stateSeq: 1 };
     const horizon = { kind: 'limited' as const, readers: [{ deviceId: READER, status: 'active', lastSeenHlc: null, acks: new Map([[SELF, ack]]) }] };
