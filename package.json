@@ -35,6 +35,7 @@
     "@tesseract.js-data/fra": "^1.0.0",
     "chrono-node": "^2.10.2",
     "lucide-react": "^1.49.0",
+    "qrcode-generator": "2.0.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "recharts": "^3.10.1",

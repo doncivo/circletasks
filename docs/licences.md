@@ -91,3 +91,9 @@ Ajoutées en dépendances directes **sans nouvelle entrée dans `Cargo.lock`** (
 - `zeroize` 1.9 (effacement des tampons de clé) : MIT OU Apache-2.0 ; déjà tirée par `keyring` et `aws-lc-rs`.
 - `security-framework` 3.7, **cible iOS seulement** (clé de synchro au Trousseau avec `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, non synchronisée) : MIT OU Apache-2.0 ; même version que celle déjà compilée pour iOS par `rustls-platform-verifier` (`cargo tree --target aarch64-apple-ios -i security-framework@3.7.0`).
 - `windows` 0.62 : fonctionnalités ajoutées (`Win32_Security`, `Win32_System_IO`, `Win32_Storage_FileSystem`, `Win32_Storage_CloudFilters`, `Win32_UI_Controls`, `Wdk_Foundation`, `Wdk_Storage_FileSystem`), même crate, même licence (MIT OU Apache-2.0).
+
+# Licence — qrcode-generator (Y-06, ADR 0011 section 10.3)
+
+- Paquet : [`qrcode-generator`](https://www.npmjs.com/package/qrcode-generator) **2.0.4** (version exacte), licence **MIT** (copyright Kazuhiko Arase), sans aucune dépendance.
+- Usage : dessin du QR code d'association dans la seule fenêtre `pairing` (`src/features/sync/pairing-window/PairingView.tsx`), chargé à la demande ; absent du bundle principal et du bundle `capture` (contrôlé par `npm run test:bundle`, `tests/bundle/pairingBundle.test.ts`).
+- Avis de licence : en tête de `node_modules/qrcode-generator/dist/qrcode.d.ts` et de `dist/qrcode.mjs` (le paquet ne fournit pas de fichier `LICENSE` séparé). « QR Code » est une marque déposée de DENSO WAVE INCORPORATED.
