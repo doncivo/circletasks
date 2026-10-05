@@ -91,6 +91,23 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     }
   }
 
+  // Parents cités par le lot : existence lue par table en une passe (au lieu d'une requête par opération).
+  const presentParents = new Set<string>();
+  const parentIds = new Map<SyncTable, Set<string>>();
+  for (const op of ops) {
+    const t = syncTable(op.t);
+    if (!t) continue;
+    for (const parent of t.parents) {
+      const value = op.f.get(parent.column)?.[0];
+      const pt = syncTable(parent.table);
+      if (typeof value !== 'string' || !pt) continue;
+      const set = parentIds.get(pt) ?? new Set<string>();
+      set.add(value);
+      parentIds.set(pt, set);
+    }
+  }
+  for (const [pt, ids] of parentIds) for (const id of await sync.existingIds(pt, [...ids])) presentParents.add(`${pt.name}\u0000${id}`);
+
   const reject = (op: SyncOp, reason: string, field?: string): void => {
     ctx.logger.log('apply-rejected', { table: syncTable(op.t)?.name ?? 'unknown-table', reason, ...(field && syncColumn(op.t, field) ? { field } : {}) });
   };
@@ -109,7 +126,12 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       if (!pt) continue;
       const cached = cache.get(`${pt.name}\u0000${value}`);
       if (cached?.exists) continue;
-      if ((await sync.existingIds(pt, [value])).has(value)) continue;
+      // Parents présents lus d'avance pour tout le lot (une requête par table) ; un parent n'est jamais supprimé par l'application.
+      if (presentParents.has(`${pt.name}\u0000${value}`)) continue;
+      if ((await sync.existingIds(pt, [value])).has(value)) {
+        presentParents.add(`${pt.name}\u0000${value}`);
+        continue;
+      }
       return (await sync.tombstones(pt.name, [value])).has(value) ? 'purged' : 'missing';
     }
     return 'ok';
@@ -299,7 +321,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     // Une écriture locale en attente écrasée par une valeur plus récente ne sera pas publiée.
     const superseded = [...applied.keys()].filter((name) => row.pending.has(name));
     if (superseded.length > 0) {
-      await sync.dropOutbox(superseded.map((field) => ({ table: t.name, rowId: op.id, field })));
+      await sync.dropPending(superseded.map((field) => ({ table: t.name, rowId: op.id, field })));
       for (const name of superseded) row.pending.delete(name);
     }
     row.values = nextValues;

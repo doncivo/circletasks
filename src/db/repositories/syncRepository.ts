@@ -151,13 +151,18 @@ export interface SyncRepository {
   assertGuardEmpty(): Promise<number>;
 
   // --- file d'envoi (Y-05) --------------------------------------------------------------------------------------------------------
-  /** Y-05 : entrées de la file, par numéro croissant. */
-  readOutbox(limit?: number): Promise<OutboxEntry[]>;
+  /** Y-05 : entrées de la file, par numéro croissant (numéro strictement supérieur à `afterSeq`, 0 par défaut). */
+  readOutbox(limit?: number, afterSeq?: number): Promise<OutboxEntry[]>;
   outboxCount(): Promise<number>;
   /** Y-02 : retire les entrées publiées (même numéro) ; base des champs modifiés depuis = hlc publié. */
   clearPublished(entries: readonly PublishedEntry[]): Promise<void>;
-  /** Y-02 : retire des entrées sans publication (ligne disparue, champ écrasé par une valeur distante plus récente). */
-  dropOutbox(entries: readonly Pick<OutboxEntry, 'table' | 'rowId' | 'field'>[]): Promise<void>;
+  /**
+   * Y-05 : retire des entrées lues sans rien à publier (ligne disparue, valeur d'un autre appareil), **par numéro** : une écriture faite
+   * depuis la lecture a reçu un nouveau numéro et reste dans la file.
+   */
+  dropOutbox(entries: readonly Pick<OutboxEntry, 'seq'>[]): Promise<void>;
+  /** Y-02 : retire les champs en attente écrasés par une valeur distante plus récente (dans la transaction gardée de l'application). */
+  dropPending(entries: readonly Pick<OutboxEntry, 'table' | 'rowId' | 'field'>[]): Promise<void>;
   /** Y-02 (« Appliquer partout ») : file vidée, l'instantané contient tout. */
   clearOutbox(uptoSeq?: number): Promise<void>;
   /** Y-02 (section 9.1 (c)) : remet un champ dans la file. */
@@ -169,6 +174,8 @@ export interface SyncRepository {
   readRows(table: SyncTable, ids: readonly string[]): Promise<Map<string, StoredRow>>;
   /** Y-02 : horloges de champ des lignes. */
   readClocks(table: SyncTable, ids: readonly string[]): Promise<Map<string, Map<string, FieldClock>>>;
+  /** Y-05 : lignes et leurs horloges lues par une seule instruction (valeurs et horloges cohérentes, publication). */
+  readRowsWithClocks(table: SyncTable, ids: readonly string[]): Promise<Map<string, ExportedRow>>;
   /** Y-02 : champs en attente de publication (`'*'` compris). */
   pendingFields(table: SyncTable, ids: readonly string[]): Promise<Map<string, Set<string>>>;
   /** Y-02 : identifiants existants parmi ceux donnés (contrôle des parents). */
@@ -178,12 +185,16 @@ export interface SyncRepository {
   /** Remplace les valeurs publiées et les horloges d'une ligne (remplacement par un instantané, section 9.1 (b)). */
   writeClocks(table: SyncTable, id: string, clocks: readonly { readonly field: string; readonly hlc: Hlc; readonly base: Hlc | null }[]): Promise<void>;
   replaceClocks(table: SyncTable, id: string, clocks: readonly { readonly field: string; readonly hlc: Hlc; readonly base: Hlc | null }[]): Promise<void>;
-  /** Y-02 : page de lignes par identifiant croissant (instantané, report d'époque, section 9.1 (a)). */
+  /** Y-02 : page de lignes par identifiant croissant, avec leurs horloges lues par la même instruction (instantané, report d'époque, section 9.1 (a)). */
   exportRows(table: SyncTable, afterId: string | null, limit: number): Promise<ExportedRow[]>;
   /** Y-09 : supprime physiquement des lignes, leurs horloges, leurs entrées de file (sous garde ; aucune trace écrite ici). */
   deleteRows(table: SyncTable, ids: readonly string[]): Promise<void>;
-  /** Y-09 : lignes supprimées avant `before` et sans enfant vivant (clés du catalogue), avec l'horloge de `deleted_at`. */
-  deletedRows(table: SyncTable, before: IsoDateTime, limit: number): Promise<DeletedRow[]>;
+  /** Y-09 : lignes supprimées avant `before` et sans enfant (clés du catalogue), avec l'horloge de `deleted_at`, par identifiant croissant après `afterId`. */
+  deletedRows(table: SyncTable, before: IsoDateTime, limit: number, afterId?: string | null): Promise<DeletedRow[]>;
+  /** Y-09 : identifiants, parmi ceux donnés, qui ont encore au moins une ligne enfant (clés du catalogue) : jamais purgés. */
+  withChildren(table: SyncTable, ids: readonly string[]): Promise<Set<string>>;
+  /** Y-09 (T-08) : rappels qui visent les lignes données (`target_type`, `target_id`), avec leur hlc ; purgés avec elles. */
+  targetReminders(targetType: string, targetIds: readonly string[]): Promise<{ readonly id: string; readonly targetId: string; readonly hlc: Hlc }[]>;
   /** Plus grand hlc présent (tables publiées), pour l'horloge locale. */
   maxRowHlc(): Promise<Hlc | null>;
 
@@ -195,6 +206,7 @@ export interface SyncRepository {
   setMeta(key: string, value: string | null): Promise<void>;
 
   // --- conflits (section 4.3) -----------------------------------------------------------------------------------------------------
+  /** Un conflit déjà inscrit (même ligne, même champ, mêmes hlc gardé et écarté) n'est pas inscrit deux fois (rejeu). */
   insertConflicts(conflicts: readonly ConflictEntry[], detectedAt: IsoDateTime): Promise<void>;
   countConflictsSince(since: IsoDateTime): Promise<number>;
   listConflicts(since: IsoDateTime, limit: number): Promise<StoredConflict[]>;
@@ -210,6 +222,7 @@ export interface SyncRepository {
   // --- champs inconnus (section 7.2) ----------------------------------------------------------------------------------------------
   /** Garde la valeur au plus grand hlc (règle ordinaire) ; renvoie vrai si elle a été écrite. */
   putUnknown(field: UnknownField): Promise<boolean>;
+  /** Page de champs inconnus par `rowid` croissant strictement supérieur à `afterRowid` (0 : depuis le début). */
   exportUnknown(afterRowid: number, limit: number): Promise<(UnknownField & { readonly rowid: number })[]>;
   clearUnknown(): Promise<void>;
 

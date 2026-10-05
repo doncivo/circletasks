@@ -129,12 +129,31 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
     return out;
   };
 
+  /** Horloges d'une ligne lues dans la même instruction que ses valeurs (sous-requête JSON) : jamais d'écriture entre les deux. */
+  const clocksColumn = (t: SyncTable, alias: string): string =>
+    `(SELECT json_group_array(json_array(c.field, c.hlc, c.base_hlc)) FROM sync_field_clock c WHERE c.table_name = '${t.name}' AND c.row_id = ${alias}.${keyOf(t)}) AS row_clocks`;
+
+  const toExported = (t: SyncTable, row: SqlRow): ExportedRow => {
+    const clocks = new Map<string, FieldClock>();
+    for (const [field, hlc, base] of JSON.parse(String(row['row_clocks'] ?? '[]')) as [string, string, string | null][]) clocks.set(field, { hlc: hlc as Hlc, base: base as Hlc | null });
+    return {
+      id: String(row['row_key']),
+      values: new Map<string, SyncValue>(columnsOf(t).map((col) => [col, row[col] ?? null])),
+      hlc: row['hlc'] as Hlc,
+      updatedAt: row['updated_at'] as IsoDateTime,
+      clocks,
+    };
+  };
+
   const upsertClocks = async (t: SyncTable, id: string, clocks: readonly { readonly field: string; readonly hlc: Hlc; readonly base: Hlc | null }[]): Promise<void> => {
-    for (const clock of clocks) {
+    // Une instruction par paquet de 80 horloges (400 paramètres) ; à champ répété, la dernière valeur l'emporte (comme une suite d'upserts).
+    const last = new Map<string, { readonly field: string; readonly hlc: Hlc; readonly base: Hlc | null }>();
+    for (const clock of clocks) last.set(clock.field, clock);
+    for (const part of chunks([...last.values()], 80)) {
       await db.execute(
-        `INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES ${part.map(() => '(?, ?, ?, ?, ?)').join(', ')}
          ON CONFLICT (table_name, row_id, field) DO UPDATE SET hlc = excluded.hlc, base_hlc = excluded.base_hlc`,
-        [t.name, id, clock.field, clock.hlc, clock.base],
+        part.flatMap((clock) => [t.name, id, clock.field, clock.hlc, clock.base]),
       );
     }
   };
@@ -155,10 +174,10 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
     },
 
     // --- file d'envoi ---------------------------------------------------------------------------------------------------------------
-    async readOutbox(limit = 1_000_000) {
+    async readOutbox(limit = 1_000_000, afterSeq = 0) {
       const rows = await db.select<{ seq: number; table_name: string; row_id: string; field: string }>(
-        'SELECT seq, table_name, row_id, field FROM sync_outbox ORDER BY seq LIMIT ?',
-        [limit],
+        'SELECT seq, table_name, row_id, field FROM sync_outbox WHERE seq > ? ORDER BY seq LIMIT ?',
+        [afterSeq, limit],
       );
       return rows.map((r): OutboxEntry => ({ seq: Number(r.seq), table: r.table_name, rowId: r.row_id, field: r.field }));
     },
@@ -180,6 +199,9 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
       }
     },
     async dropOutbox(entries) {
+      for (const part of chunks(entries.map((e) => e.seq))) await db.execute(`DELETE FROM sync_outbox WHERE seq IN (${marks(part.length)})`, part);
+    },
+    async dropPending(entries) {
       for (const e of entries) await db.execute('DELETE FROM sync_outbox WHERE table_name = ? AND row_id = ? AND field = ?', [e.table, e.rowId, e.field]);
     },
     async clearOutbox(uptoSeq) {
@@ -197,6 +219,14 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
     // --- lignes ---------------------------------------------------------------------------------------------------------------------
     readRows,
     readClocks,
+    async readRowsWithClocks(t, ids) {
+      const out = new Map<string, ExportedRow>();
+      for (const part of chunks([...new Set(ids)])) {
+        const rows = await db.select(`SELECT p.${keyOf(t)} AS row_key, p.hlc, p.updated_at, ${columnsOf(t).map((col) => `p.${col}`).join(', ')}, ${clocksColumn(t, 'p')} FROM ${t.name} p WHERE p.${keyOf(t)} IN (${marks(part.length)})`, part);
+        for (const row of rows) out.set(String(row['row_key']), toExported(t, row));
+      }
+      return out;
+    },
     async pendingFields(t, ids) {
       const out = new Map<string, Set<string>>();
       for (const part of chunks([...new Set(ids)])) {
@@ -235,23 +265,12 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
       await upsertClocks(t, id, clocks);
     },
     async exportRows(t, afterId, limit) {
-      const cols = columnsOf(t);
       const rows = await db.select(
-        `SELECT ${keyOf(t)} AS row_key, hlc, updated_at, ${cols.join(', ')} FROM ${t.name} ${afterId === null ? '' : `WHERE ${keyOf(t)} > ?`} ORDER BY ${keyOf(t)} LIMIT ?`,
+        `SELECT p.${keyOf(t)} AS row_key, p.hlc, p.updated_at, ${columnsOf(t).map((col) => `p.${col}`).join(', ')}, ${clocksColumn(t, 'p')}
+         FROM ${t.name} p ${afterId === null ? '' : `WHERE p.${keyOf(t)} > ?`} ORDER BY p.${keyOf(t)} LIMIT ?`,
         afterId === null ? [limit] : [afterId, limit],
       );
-      const ids = rows.map((row) => String(row['row_key']));
-      const clocks = await readClocks(t, ids);
-      return rows.map((row): ExportedRow => {
-        const id = String(row['row_key']);
-        return {
-          id,
-          values: new Map<string, SyncValue>(cols.map((col) => [col, row[col] ?? null])),
-          hlc: row['hlc'] as Hlc,
-          updatedAt: row['updated_at'] as IsoDateTime,
-          clocks: clocks.get(id) ?? new Map(),
-        };
-      });
+      return rows.map((row) => toExported(t, row));
     },
     async deleteRows(t, ids) {
       for (const part of chunks([...new Set(ids)])) {
@@ -260,7 +279,7 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
         await db.execute(`DELETE FROM ${t.name} WHERE ${keyOf(t)} IN (${marks(part.length)})`, part);
       }
     },
-    async deletedRows(t, before, limit) {
+    async deletedRows(t, before, limit, afterId = null) {
       if (!t.columns.some((col) => col.name === 'deleted_at')) return [];
       const children = childRelations(t.name).map((rel) => `NOT EXISTS (SELECT 1 FROM ${rel.table.name} c WHERE c.${rel.column} = p.${keyOf(t)})`);
       const rows = await db.select<{ row_key: string; deleted_at: string; deleted_hlc: string }>(
@@ -269,11 +288,34 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
                          (SELECT hlc FROM sync_field_clock WHERE table_name = ? AND row_id = p.${keyOf(t)} AND field = '*'),
                          p.hlc) AS deleted_hlc
          FROM ${t.name} p
-         WHERE p.deleted_at IS NOT NULL AND p.deleted_at < ? ${children.map((c) => `AND ${c}`).join(' ')}
+         WHERE p.deleted_at IS NOT NULL AND p.deleted_at < ? ${afterId === null ? '' : `AND p.${keyOf(t)} > ?`} ${children.map((c) => `AND ${c}`).join(' ')}
          ORDER BY p.${keyOf(t)} LIMIT ?`,
-        [t.name, t.name, before, limit],
+        afterId === null ? [t.name, t.name, before, limit] : [t.name, t.name, before, afterId, limit],
       );
       return rows.map((r): DeletedRow => ({ id: r.row_key, deletedAt: r.deleted_at as IsoDateTime, deletedHlc: r.deleted_hlc as Hlc }));
+    },
+    async withChildren(t, ids) {
+      const out = new Set<string>();
+      const relations = childRelations(t.name);
+      if (relations.length === 0) return out;
+      for (const part of chunks([...new Set(ids)])) {
+        for (const rel of relations) {
+          const rows = await db.select<{ k: string }>(`SELECT DISTINCT ${rel.column} AS k FROM ${rel.table.name} WHERE ${rel.column} IN (${marks(part.length)})`, part);
+          for (const row of rows) out.add(row.k);
+        }
+      }
+      return out;
+    },
+    async targetReminders(targetType, targetIds) {
+      const out: { id: string; targetId: string; hlc: Hlc }[] = [];
+      for (const part of chunks([...new Set(targetIds)])) {
+        const rows = await db.select<{ id: string; target_id: string; hlc: string }>(
+          `SELECT id, target_id, hlc FROM reminder WHERE target_type = ? AND target_id IN (${marks(part.length)}) ORDER BY id`,
+          [targetType, ...part],
+        );
+        for (const row of rows) out.push({ id: row.id, targetId: row.target_id, hlc: row.hlc as Hlc });
+      }
+      return out;
     },
     async maxRowHlc() {
       const rows = await db.select<{ hlc: string | null }>('SELECT MAX(hlc) AS hlc FROM sync_field_clock');
@@ -306,10 +348,12 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
     // --- conflits -------------------------------------------------------------------------------------------------------------------
     async insertConflicts(conflicts: readonly ConflictEntry[], detectedAt) {
       for (const c of conflicts) {
+        // Rejeu (relecture d'un enregistrement, réapplication d'un instantané, opération mise de côté) : le même conflit n'est pas réinscrit.
         await db.execute(
           `INSERT INTO conflict_log (table_name, row_id, field, kept_value, discarded_value, kept_device, discarded_device, kept_hlc, discarded_hlc, detected_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [c.table, c.rowId, c.field, JSON.stringify(c.keptValue), JSON.stringify(c.discardedValue), c.keptDevice, c.discardedDevice, c.keptHlc, c.discardedHlc, detectedAt],
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+           WHERE NOT EXISTS (SELECT 1 FROM conflict_log WHERE table_name = ? AND row_id = ? AND field = ? AND kept_hlc = ? AND discarded_hlc = ?)`,
+          [c.table, c.rowId, c.field, JSON.stringify(c.keptValue), JSON.stringify(c.discardedValue), c.keptDevice, c.discardedDevice, c.keptHlc, c.discardedHlc, detectedAt, c.table, c.rowId, c.field, c.keptHlc, c.discardedHlc],
         );
       }
     },
@@ -389,9 +433,9 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
       return true;
     },
     async exportUnknown(afterRowid, limit) {
-      const rows = await db.select('SELECT * FROM sync_unknown ORDER BY table_name, row_id, field LIMIT ? OFFSET ?', [limit, afterRowid]);
-      return rows.map((r, i) => ({
-        rowid: afterRowid + i + 1,
+      const rows = await db.select('SELECT rowid AS rid, * FROM sync_unknown WHERE rowid > ? ORDER BY rowid LIMIT ?', [afterRowid, limit]);
+      return rows.map((r) => ({
+        rowid: Number(r['rid']),
         table: String(r['table_name']),
         rowId: String(r['row_id']),
         field: String(r['field']),
@@ -437,18 +481,25 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
       );
       for (const row of parkedOver) dropped.push({ kind: 'parked', table: row.table_name, rowId: row.row_id, reason: row.reason });
       for (const part of chunks(parkedOver.map((row) => Number(row.id)))) await db.execute(`DELETE FROM sync_parked WHERE id IN (${marks(part.length)})`, part);
-      // sync_unknown : 50 000 champs ou 16 Mio, le plus ancien (hlc) d'abord.
-      for (;;) {
-        const stats = await db.select<{ n: number; bytes: number | null }>('SELECT COUNT(*) AS n, SUM(LENGTH(value)) AS bytes FROM sync_unknown');
-        const n = Number(stats[0]?.n ?? 0);
-        const bytes = Number(stats[0]?.bytes ?? 0);
-        if (n <= caps.unknownFields && bytes <= caps.unknownBytes) break;
-        const oldest = await db.select<{ table_name: string; row_id: string; field: string }>('SELECT table_name, row_id, field FROM sync_unknown ORDER BY hlc LIMIT ?', [Math.max(1, n - caps.unknownFields)]);
-        if (oldest.length === 0) break;
-        for (const row of oldest) {
-          await db.execute('DELETE FROM sync_unknown WHERE table_name = ? AND row_id = ? AND field = ?', [row.table_name, row.row_id, row.field]);
-          dropped.push({ kind: 'unknown', table: row.table_name, rowId: row.row_id, reason: 'cap' });
+      // sync_unknown : 50 000 champs ou 16 Mio, le plus ancien (hlc) d'abord. Une seule lecture, du plus récent au plus ancien : on garde
+      // tant que les deux plafonds tiennent, le reste (les plus anciens) part par paquets. Linéaire, jamais une boucle de recomptages.
+      const stats = await db.select<{ n: number; bytes: number | null }>('SELECT COUNT(*) AS n, SUM(LENGTH(value)) AS bytes FROM sync_unknown');
+      if (Number(stats[0]?.n ?? 0) > caps.unknownFields || Number(stats[0]?.bytes ?? 0) > caps.unknownBytes) {
+        const all = await db.select<{ rid: number; table_name: string; row_id: string; size: number | null }>('SELECT rowid AS rid, table_name, row_id, LENGTH(value) AS size FROM sync_unknown ORDER BY hlc DESC, rowid DESC');
+        let keptCount = 0;
+        let keptBytes = 0;
+        const drop: { rid: number; table_name: string; row_id: string }[] = [];
+        for (const row of all) {
+          const size = Number(row.size ?? 0);
+          if (drop.length === 0 && keptCount + 1 <= caps.unknownFields && keptBytes + size <= caps.unknownBytes) {
+            keptCount += 1;
+            keptBytes += size;
+          } else {
+            drop.push(row);
+          }
         }
+        for (const part of chunks(drop.map((row) => Number(row.rid)))) await db.execute(`DELETE FROM sync_unknown WHERE rowid IN (${marks(part.length)})`, part);
+        for (const row of drop) dropped.push({ kind: 'unknown', table: row.table_name, rowId: row.row_id, reason: 'cap' });
       }
       // conflict_log : 12 mois, puis 10 000 lignes (résolues d'abord, puis les plus anciennes).
       const expired = await db.select<{ table_name: string; row_id: string }>('SELECT table_name, row_id FROM conflict_log WHERE detected_at < ?', [caps.conflictsBefore]);

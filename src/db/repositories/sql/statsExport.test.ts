@@ -57,11 +57,18 @@ describe('Lecture par blocs pour l’export (SQL, H-03)', () => {
   });
 
   it('5 000 tâches lues par blocs de 500 : toutes, une seule fois', async () => {
+    // Insertion par lots de 250 lignes par instruction (20 instructions au lieu de 5 000) : les déclencheurs de capture de la synchro
+    // (ordre 4) restent exécutés pour chaque ligne, mais le coût d'aller-retour par instruction disparaît.
     await db.driver.transaction(async (tx) => {
-      for (let i = 0; i < 5000; i += 1) {
+      const BATCH = 250;
+      for (let start = 0; start < 5000; start += BATCH) {
+        const params: string[] = [];
+        for (let i = start; i < start + BATCH; i += 1) {
+          params.push(`21000000-0000-4000-8000-${String(i).padStart(12, '0')}`, SPACE_PRO_ID, `T${String(i)}`, new Date(Date.UTC(2023, 9, 4) + (i % 1000) * 86_400_000).toISOString().slice(0, 10));
+        }
         await tx.execute(
-          "INSERT INTO task (id, space_id, title, date, status, sort_order, created_at, updated_at, device_id, hlc) VALUES (?, ?, ?, ?, 'todo', 1, 'z', 'z', 'd', 'h')",
-          [`21000000-0000-4000-8000-${String(i).padStart(12, '0')}`, SPACE_PRO_ID, `T${String(i)}`, new Date(Date.UTC(2023, 9, 4) + (i % 1000) * 86_400_000).toISOString().slice(0, 10)],
+          `INSERT INTO task (id, space_id, title, date, status, sort_order, created_at, updated_at, device_id, hlc) VALUES ${Array.from({ length: BATCH }, () => "(?, ?, ?, ?, 'todo', 1, 'z', 'z', 'd', 'h')").join(', ')}`,
+          params,
         );
       }
     });
@@ -69,7 +76,7 @@ describe('Lecture par blocs pour l’export (SQL, H-03)', () => {
     expect(titles).toHaveLength(5000);
     expect(new Set(titles).size).toBe(5000);
     expect(pages).toBe(10);
-  }, 15_000); // ordre 4 : chaque insertion passe aussi par les déclencheurs de capture de la synchro (~15 % de plus)
+  });
 
   it('filtre d’espace et de projet (ES-08), période d’un mois', async () => {
     await task('pro', '2026-09-10');

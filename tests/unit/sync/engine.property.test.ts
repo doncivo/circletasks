@@ -119,7 +119,8 @@ describe('propriétés du moteur à deux appareils (fast-check)', () => {
           await Promise.all(devices.map((d) => d.close()));
         }
       }),
-      { numRuns: 15 },
+      // 15 tirages dans la suite ordinaire ; CT_PROPERTY_RUNS=60 pour la recette d'un lot.
+      { numRuns: Number(process.env['CT_PROPERTY_RUNS'] ?? 15) },
     );
   }, 300_000);
 });

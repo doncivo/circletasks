@@ -19,6 +19,12 @@ import { META, readJson, writeJson } from './meta';
  * l'époque : une valeur reçue d'ailleurs ne repart pas, une écriture déjà publiée (base restaurée) non plus.
  */
 
+/**
+ * Entrée de file « ligne entière » : posée par le report d'époque (section 9.1 (c)) sur une ligne qu'il recrée. Toutes les colonnes
+ * publiées partent, champs des autres appareils compris (avec leurs horloges), en une seule opération classée à son plus grand hlc.
+ */
+export const ROW_REPUBLISH_FIELD = '+';
+
 export interface PendingOp {
   readonly op: SyncOp;
   readonly hlc: Hlc;
@@ -52,15 +58,33 @@ export async function materializeOutbox(repos: Repositories, self: DeviceId, pub
   const entries: { entry: OutboxEntry; hlc: Hlc }[] = [];
   for (const [t, rowsEntries] of byTable) {
     const ids = [...rowsEntries.keys()];
-    const [rows, clocks] = await Promise.all([repos.sync.readRows(t, ids), repos.sync.readClocks(t, ids)]);
+    // Valeurs et horloges lues par une seule instruction : une écriture ne peut pas tomber entre les deux.
+    const rows = await repos.sync.readRowsWithClocks(t, ids);
     for (const [id, rowEntries] of rowsEntries) {
       const row = rows.get(id);
       if (!row) {
         stale.push(...rowEntries);
         continue;
       }
-      const rowClocks = clocks.get(id) ?? new Map();
+      const rowClocks = row.clocks;
       const fallback = rowClocks.get('*') ?? { hlc: row.hlc, base: null };
+      if (rowEntries.some((entry) => entry.field === ROW_REPUBLISH_FIELD)) {
+        // Ligne recréée par le report d'époque : republiée entière, une opération à son plus grand hlc.
+        const f = new Map<string, SyncField>();
+        let max: Hlc | null = null;
+        for (const col of t.columns) {
+          const clock = rowClocks.get(col.name) ?? fallback;
+          f.set(col.name, [row.values.get(col.name) ?? null, clock.hlc, rowClocks.get(col.name)?.base ?? null]);
+          if (max === null || clock.hlc > max) max = clock.hlc;
+        }
+        if (max === null) {
+          stale.push(...rowEntries);
+          continue;
+        }
+        for (const entry of rowEntries) entries.push({ entry, hlc: max });
+        ops.push({ op: { t: t.name, id, at: row.updatedAt, f }, hlc: max, rank: tableRank(t.name) });
+        continue;
+      }
       const byHlc = new Map<Hlc, Map<string, SyncField>>();
       const entryHlc = new Map<OutboxEntry, Hlc>();
       for (const entry of rowEntries) {
@@ -149,19 +173,37 @@ function splitOp(op: SyncOp, envelope: number, onTooLarge: (op: SyncOp) => void)
   return out;
 }
 
-/** Appels d'ajout : 1 Mio écrit au plus par appel. */
-export function batchRecords(records: readonly BuiltRecord[]): BuiltRecord[][] {
+/**
+ * Appels d'ajout : 1 Mio écrit au plus par appel, et **jamais un même hlc coupé entre deux appels** (Rust exige un `maxHlc` strictement
+ * croissant d'un appel à l'autre : la suite d'un hlc dans l'appel suivant serait refusée, `hlc-order`, à chaque cycle). Les
+ * enregistrements d'un même hlc sont consécutifs (`buildRecords`) ; un groupe qui dépasse à lui seul 1 Mio est refusé (`onTooLarge`).
+ */
+export function batchRecords(records: readonly BuiltRecord[], onTooLarge: (hlc: Hlc) => void = () => undefined): BuiltRecord[][] {
+  const groups: { hlc: Hlc; records: BuiltRecord[]; bytes: number }[] = [];
+  for (const record of records) {
+    const last = groups.at(-1);
+    if (last && last.hlc === record.maxHlc) {
+      last.records.push(record);
+      last.bytes += record.bytes;
+    } else {
+      groups.push({ hlc: record.maxHlc, records: [record], bytes: record.bytes });
+    }
+  }
   const batches: BuiltRecord[][] = [];
   let batch: BuiltRecord[] = [];
   let bytes = 0;
-  for (const record of records) {
-    if (batch.length > 0 && bytes + record.bytes > MAX_APPEND_CALL_BYTES) {
+  for (const group of groups) {
+    if (group.bytes > MAX_APPEND_CALL_BYTES) {
+      onTooLarge(group.hlc);
+      continue;
+    }
+    if (batch.length > 0 && bytes + group.bytes > MAX_APPEND_CALL_BYTES) {
       batches.push(batch);
       batch = [];
       bytes = 0;
     }
-    batch.push(record);
-    bytes += record.bytes;
+    batch.push(...group.records);
+    bytes += group.bytes;
   }
   if (batch.length > 0) batches.push(batch);
   return batches;
@@ -190,12 +232,20 @@ export interface PublishResult {
 export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: DeviceAck, maxSegment: number): Promise<PublishResult> {
   const { data, platform, deviceId, sv, logger } = deps;
   const material = await materializeOutbox(data.repos, deviceId, head.epoch === epoch ? head.hlc : null);
+  // Entrées lues sans rien à publier : retirées par numéro (une écriture faite depuis la lecture a un nouveau numéro et reste).
   if (material.stale.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(material.stale));
   if (material.ops.length === 0) return { published: 0, head, error: null };
   const records = buildRecords(material.ops, sv, (op) => logger.log('publish-too-large', { table: op.t }));
-  const batches = batchRecords(records);
+  const refused = new Set<Hlc>();
+  const batches = batchRecords(records, (hlc) => {
+    refused.add(hlc);
+    logger.log('publish-too-large', { table: 'group' });
+  });
+  // Opération trop grosse pour un appel : refusée et journalisée, ses entrées sont retirées (par numéro) au lieu de bloquer la file.
+  const refusedEntries = material.entries.filter((e) => refused.has(e.hlc)).map((e) => e.entry);
+  if (refusedEntries.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(refusedEntries));
   // Entrées à retirer après le lot qui porte leur plus grand hlc.
-  const pending = [...material.entries].sort((a, b) => (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
+  const pending = material.entries.filter((e) => !refused.has(e.hlc)).sort((a, b) => (a.hlc < b.hlc ? -1 : a.hlc > b.hlc ? 1 : 0));
   let current: DeviceAck = head.epoch === epoch ? head : { epoch, segment: 0, record: 0, hlc: null, stateSeq: head.stateSeq };
   let segment = current.segment === 0 ? Math.max(1, maxSegment + (maxSegment > 0 ? 1 : 0)) : current.segment;
   let expect = current.segment === 0 || segment !== current.segment ? 0 : current.record;
