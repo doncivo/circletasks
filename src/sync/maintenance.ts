@@ -1,6 +1,6 @@
 import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
-import { canPurgeDeletion, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
+import { BLOCKED, canPurgeDeletion, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
 import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
@@ -32,9 +32,22 @@ export function knownDevices(rows: readonly SyncStateRow[]): KnownDevice[] {
     });
 }
 
-/** Horizon de purge courant (Y-09) : `unbounded` sans autre appareil actif, donc sans synchro configurée. */
+/**
+ * Horizon de purge courant hors cycle (corbeille au démarrage, Y-09) : `unbounded` sans autre appareil actif ; `blocked` tant qu'un
+ * appareil actif a des écritures publiées non lues (curseur avant sa tête dans `sync_state`, état invalide) : une suppression lue par
+ * tous peut avoir été suivie d'une restauration encore dans le nuage.
+ */
 export async function currentPurgeHorizon(repos: Repositories, self: DeviceId, nowMs: number): Promise<PurgeHorizon> {
-  return purgeHorizon(knownDevices(await repos.sync.getStates()), self, nowMs);
+  const rows = await repos.sync.getStates();
+  const horizon = purgeHorizon(knownDevices(rows), self, nowMs);
+  if (horizon.kind !== 'limited') return horizon;
+  const active = new Set<string>(horizon.readers.map((r) => r.deviceId));
+  const unread = rows.some(
+    (row) =>
+      active.has(row.deviceId) &&
+      !publishedAllRead({ status: row.status, epoch: row.epoch, stateEpoch: row.stateEpoch, cursor: { segment: row.cursorSegment, record: row.cursorRecord }, head: { segment: row.headSegment, record: row.headRecord } }),
+  );
+  return unread ? BLOCKED : horizon;
 }
 
 /**

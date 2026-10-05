@@ -9,6 +9,8 @@ import { createAppContainer } from '../../../src/features/app/container';
 import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
 import { createMemorySyncLogger } from '../../../src/sync/log';
 import { purgeDeleted } from '../../../src/sync/maintenance';
+import { STATE_FILE } from '../../../src/domain/sync/format';
+import { hydrate, propagate } from '../../sim/syncCloudSim';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -158,5 +160,39 @@ describe('purge par la corbeille : horizon de purge (revue Y2, point 8)', () => 
     expect(await createTrashUseCases(container).purgeExpired()).toBe(1);
     const deleted = (await a.driver.select<{ deleted_hlc: string }>('SELECT deleted_hlc FROM sync_tombstone WHERE row_id = ?', [t.id]))[0]?.deleted_hlc;
     expect(JSON.parse(String(await a.data.repos.sync.getMeta('purgeHorizon')))).toBe(deleted);
+  });
+});
+
+describe('purge au démarrage : rien tant qu’un appareil a des écritures publiées non lues (revue Y2 passe 2, point 1)', () => {
+  it('state.ctx de B arrivé, son segment encore dans le nuage : aucune purge par la corbeille ; puis la restauration de B est appliquée', async () => {
+    const a = await createSimDevice('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { name: 'PC' });
+    const b = await createSimDevice(READER, { name: 'iPhone', clock: a.clock });
+    devices = [a, b];
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    const t = await a.createTask('Supprimée puis restaurée par B');
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    for (let i = 0; i < 2; i += 1) {
+      for (const d of devices) await d.cycle();
+      syncFolders(devices);
+    }
+    a.clock.advance(31 * DAY);
+    // B restaure la tâche et publie ; chez A, l'état de B arrive, son segment reste dans le nuage.
+    await b.data.repos.tasks.restore([t.id]);
+    await b.cycle();
+    propagate(b.folder, a.folder, READER, { placeholder: true });
+    a.folder.setAvailability(READER, STATE_FILE, 'local');
+    expect((await a.cycle()).phase).toBe('waiting-icloud');
+    const container = createAppContainer({ clock: a.clock, hlc: a.hlc, data: a.data, sync: a.service });
+    expect(await createTrashUseCases(container).purgeExpired()).toBe(0);
+    expect(await a.task(t.id)).not.toBeNull();
+    hydrate(a.folder, READER);
+    await a.cycle();
+    expect((await a.task(t.id))?.deletedAt).toBeNull();
   });
 });

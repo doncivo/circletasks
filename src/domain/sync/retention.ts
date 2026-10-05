@@ -36,8 +36,14 @@ export function activeReaders(devices: readonly KnownDevice[], self: DeviceId, n
   return devices.filter((d) => d.deviceId !== self && d.status !== 'expired' && d.status !== 'forgotten' && !isExpired(d.lastSeenHlc, nowMs));
 }
 
-/** Horizon de purge : sans autre appareil actif (synchro non configurée, appareil seul), rien ne retient une trace. */
-export type PurgeHorizon = { readonly kind: 'unbounded' } | { readonly kind: 'limited'; readonly readers: readonly KnownDevice[] };
+/**
+ * Horizon de purge : sans autre appareil actif (synchro non configurée, appareil seul), rien ne retient une trace ; `blocked` : un appareil
+ * actif a publié des écritures que cet appareil n'a pas encore lues (fichier dans le nuage, état illisible) : aucune purge (comme
+ * l'étape 7 du cycle, réservée aux cycles qui ont tout lu).
+ */
+export type PurgeHorizon = { readonly kind: 'unbounded' } | { readonly kind: 'blocked' } | { readonly kind: 'limited'; readonly readers: readonly KnownDevice[] };
+
+export const BLOCKED: PurgeHorizon = { kind: 'blocked' };
 
 export const UNBOUNDED: PurgeHorizon = { kind: 'unbounded' };
 
@@ -46,9 +52,31 @@ export function purgeHorizon(devices: readonly KnownDevice[], self: DeviceId, no
   return readers.length === 0 ? UNBOUNDED : { kind: 'limited', readers };
 }
 
+/** Lecture d'un appareil connu (ligne de `sync_state`) : ce que cet appareil a lu de lui, ce qu'il a publié, son statut local. */
+export interface DeviceReadState {
+  readonly status: string;
+  readonly epoch: string | null;
+  readonly stateEpoch: string | null;
+  readonly cursor: { readonly segment: number; readonly record: number };
+  readonly head: { readonly segment: number; readonly record: number };
+}
+
+/**
+ * Tout ce qu'un appareil a publié est-il lu (même condition que `allRead` du cycle, ADR 0011 section 10.2 étape 7) ? Faux si son état
+ * est invalide (`foreign`, `corrupt`, `rollback`, `newer-major`), s'il annonce une autre époque que celle où il est lu, ou si le
+ * curseur est avant sa tête annoncée.
+ */
+export function publishedAllRead(device: DeviceReadState): boolean {
+  if (['foreign', 'corrupt', 'rollback', 'newer-major', 'clock-ahead'].includes(device.status)) return false;
+  if (device.stateEpoch === null) return true;
+  if (device.epoch !== device.stateEpoch) return false;
+  return device.cursor.segment > device.head.segment || (device.cursor.segment === device.head.segment && device.cursor.record >= device.head.record);
+}
+
 /** Tous les appareils actifs ont-ils lu l'écriture `hlc` (accusé de son écrivain supérieur ou égal) ? */
 export function readByAll(hlc: Hlc, horizon: PurgeHorizon): boolean {
   if (horizon.kind === 'unbounded') return true;
+  if (horizon.kind === 'blocked') return false;
   const writer = hlcDevice(hlc);
   return horizon.readers.every((reader) => {
     if (reader.deviceId === writer) return true;

@@ -3,7 +3,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { epochId, type DeviceAck, type JournalRecord } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
 import { HLC_MAX_DRIFT_MS } from './limits';
-import { activeReaders, canPurgeDeletion, isExpired, purgeBefore, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
+import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
  * Rétention et dérive (ADR 0011, sections 3.4, 4.4, 5.3 à 5.5 ; Y-09 critères 2, 6, 7 et 10). Règle validée par Ali : une trace est
@@ -102,5 +102,21 @@ describe('dérive d’horloge (Y-09 critère 10)', () => {
     expect(recordIsAhead(record(h(NOW + 10, B)), NOW)).toBe(false);
     expect(recordMaxHlc(record(h(NOW, B)))).toBe(h(NOW, B));
     expect(recordMaxHlc({ k: 'ops', sv: 17, ops: [] })).toBeNull();
+  });
+});
+
+describe('publishedAllRead (revue Y2 passe 2, point 1)', () => {
+  const base = { status: 'active', epoch: 'e1', stateEpoch: 'e1', cursor: { segment: 2, record: 3 }, head: { segment: 2, record: 3 } };
+  it('tête lue : vrai ; curseur avant la tête, autre époque ou état invalide : faux ; état jamais reçu : vrai', () => {
+    expect(publishedAllRead(base)).toBe(true);
+    expect(publishedAllRead({ ...base, cursor: { segment: 3, record: 0 } })).toBe(true);
+    expect(publishedAllRead({ ...base, cursor: { segment: 2, record: 2 } })).toBe(false);
+    expect(publishedAllRead({ ...base, cursor: { segment: 1, record: 9 } })).toBe(false);
+    expect(publishedAllRead({ ...base, epoch: 'e0' })).toBe(false);
+    expect(publishedAllRead({ ...base, status: 'corrupt' })).toBe(false);
+    expect(publishedAllRead({ ...base, stateEpoch: null })).toBe(true);
+  });
+  it('horizon bloqué : rien n’est lu par tous', () => {
+    expect(readByAll(`001791187200000-0000-${'b'.repeat(8)}-bbbb-4bbb-8bbb-bbbbbbbbbbbb` as never, BLOCKED)).toBe(false);
   });
 });
