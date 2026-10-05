@@ -71,6 +71,10 @@ describe('purge des autres tables par le moteur (Y-09 critères 3 et 6)', () => 
       expect(await d.driver.select("SELECT * FROM sync_field_clock WHERE table_name = 'routine_log'"), d.name).toEqual([]);
     }
     expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+    // Critère 11 : le volume des traces est consigné au journal technique (nombre seulement).
+    const purged = [...a.logger.entries, ...b.logger.entries].filter((e) => e.event === 'purged');
+    expect(purged.length).toBeGreaterThan(0);
+    expect(purged.every((e) => typeof e.detail['tombstones'] === 'number' && Object.keys(e.detail).sort().join() === 'rows,tombstones')).toBe(true);
   });
 
   it('cocher de nouveau un jour purgé : recréation complète acceptée par l’autre appareil, trace retirée là-bas', async () => {
@@ -124,5 +128,20 @@ describe('nouvel appareil après une recréation (Y-09 critères 4 et 11)', () =
     await settle();
     expect(await c.driver.select('SELECT id, deleted_at FROM routine_log')).toEqual([{ id: LOG, deleted_at: null }]);
     expect(await a.driver.select('SELECT id, deleted_at FROM routine_log')).toEqual([{ id: LOG, deleted_at: null }]);
+  });
+});
+
+describe('identifiants déterministes (Y-02 critère 9)', () => {
+  it('le même jour validé hors ligne sur deux appareils est une seule ligne, sans doublon ni conflit', async () => {
+    const [a, b] = await twoDevices();
+    await a.data.repos.routines.create({ id: ROUTINE, spaceId: PRO, title: 'Lire', icon: null, scheduleType: 'daily', weekdays: [], timesPerWeek: null, interval: null, startDate: '2026-10-01', time: null, archived: false } as never);
+    await settle();
+    a.clock.advance(1_000);
+    await a.data.repos.routineLogs.markDone(ROUTINE, DATE, doneAt(a), LOG);
+    a.clock.advance(1_000);
+    await b.data.repos.routineLogs.markDone(ROUTINE, DATE, doneAt(b), LOG);
+    await settle();
+    for (const d of devices) expect(await d.driver.select('SELECT id, deleted_at FROM routine_log'), d.name).toEqual([{ id: LOG, deleted_at: null }]);
+    expect(await a.driver.select('SELECT COUNT(*) AS n FROM routine_log')).toEqual([{ n: 1 }]);
   });
 });
