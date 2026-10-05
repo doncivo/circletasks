@@ -40,6 +40,8 @@ describe('StatsRepository (SQL) : agrégats sur 5 000 tâches', () => {
       const goals = await db.data.repos.stats.goalCounts({ range, filter: ALL_ITEMS });
       const oldest = await db.data.repos.stats.oldestActivity();
       const elapsed = performance.now() - start;
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf H-01] StatsRepository, quatre requêtes sur 3 ans : ${elapsed.toFixed(1)} ms`);
       expect(weeks.length).toBeGreaterThan(0);
       expect(pro.length).toBeGreaterThan(0);
       expect(goals.total).toBeGreaterThanOrEqual(0);

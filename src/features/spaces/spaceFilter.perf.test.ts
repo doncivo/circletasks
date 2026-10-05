@@ -47,7 +47,10 @@ describe('Filtre d’espace : performance avec 5 000 tâches (ES-03)', () => {
         await week.getState().load(weekStart, filter);
         const weekTasks = selectWeekTasks(container.taskEntities.getSnapshot(), weekStart, filter);
         buildWeek({ weekStart, filter, tasks: weekTasks, extras: week.getState().extras });
-        expect(performance.now() - startWeek, `Semaine, filtre ${filter}`).toBeLessThan(100);
+        const weekElapsed = performance.now() - startWeek;
+        // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+        console.info(`[perf ES-03] 5 000 tâches, filtre ${filter} : Aujourd'hui ${todayElapsed.toFixed(1)} ms, Semaine ${weekElapsed.toFixed(1)} ms`);
+        expect(weekElapsed, `Semaine, filtre ${filter}`).toBeLessThan(100);
       }
     } finally {
       await db.close();

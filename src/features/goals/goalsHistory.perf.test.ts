@@ -45,7 +45,10 @@ describe('Historique des objectifs : performance avec 3 ans d’objectifs (OB-06
         expect(elapsed, `première page, filtre ${filter}`).toBeLessThan(300);
         const startMore = performance.now();
         await store.getState().loadMoreHistory();
-        expect(performance.now() - startMore, `page suivante, filtre ${filter}`).toBeLessThan(300);
+        const moreMs = performance.now() - startMore;
+        // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+        console.info(`[perf OB-06] historique 156 semaines, filtre ${filter} : première page ${elapsed.toFixed(1)} ms, page suivante ${moreMs.toFixed(1)} ms`);
+        expect(moreMs, `page suivante, filtre ${filter}`).toBeLessThan(300);
       }
       // Toute la profondeur : 156 semaines, jamais plus de 20 par page.
       expect(store.getState().history.length).toBeGreaterThan(20);

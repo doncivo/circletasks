@@ -39,6 +39,8 @@ describe('Semaine : performance avec 5 000 tâches (S-01, S-03)', () => {
       expect(first.elapsed).toBeLessThan(300);
 
       const next = await display(addWeeks(WEEK, 1));
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf S-01] Semaine, 5 000 tâches : ${first.elapsed.toFixed(1)} ms, semaine suivante ${next.elapsed.toFixed(1)} ms`);
       expect(next.days.reduce((total, day) => total + day.list.rows.length, 0)).toBeGreaterThan(300);
       expect(next.elapsed).toBeLessThan(300);
     } finally {

@@ -46,6 +46,8 @@ describe('Rapport du mois sur 3 ans de données', () => {
         timings.push(performance.now() - start);
         expect(report.weeks.length).toBeGreaterThan(0);
       }
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf H-01] rapport du mois, trois filtres : ${timings.map((ms) => ms.toFixed(1)).join(' / ')} ms`);
       for (const elapsed of timings) expect(elapsed).toBeLessThan(300);
     } finally {
       await db.close();

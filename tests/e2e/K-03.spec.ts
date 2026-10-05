@@ -16,8 +16,14 @@ let sims: TestSims;
 
 const timed = (id: string, summary: string, day: string, hour: string): GoogleSimEvent => ({ calendarId: GOOGLE_ACCOUNT, id, status: 'confirmed', summary, start: { dateTime: `${day}T${hour}:00Z` }, end: { dateTime: `${day}T${String(Number(hour.slice(0, 2)) + 1).padStart(2, '0')}${hour.slice(2)}:00Z` } });
 
+/**
+ * Horloge figée à un mercredi à 10:00 (Paris) : `browserMonday` et les jours des événements ne dépendent plus de la date réelle,
+ * donc un run qui franchit minuit du dimanche au lundi ne change plus de semaine (dette du 2026-10-05).
+ */
+const FIXED_NOW = new Date('2026-09-23T10:00:00+02:00');
+
 async function openWithClock(page: Page): Promise<void> {
-  await page.clock.install();
+  await page.clock.install({ time: FIXED_NOW });
   await page.goto('/');
   await expect(page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
 }

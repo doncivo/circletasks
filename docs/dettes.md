@@ -124,4 +124,3 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - `src/platform/relaunch.ts` importe `@tauri-apps/plugin-process` de façon statique (import dynamique pour alléger le bloc de départ) ;
   - renommer `FileExportError` en `FileError` (il sert aussi à la lecture) ;
   - restauration : points d'analyse de la couche de bureau (`app_config_dir` lui-même par jonction) non contrôlés au-delà du dossier `backups/`.
-- e2e K-03 (critères 2-3, iPhone) : `browserMonday` lit la date réelle alors que l'horloge du test avance ; un run qui franchit minuit du dimanche au lundi change de semaine et échoue (1 échec le 2026-10-05 vers 0 h, 5/5 verts ensuite). Figer la date du test (`page.clock.install` avec une date fixe).

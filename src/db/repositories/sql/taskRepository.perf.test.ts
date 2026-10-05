@@ -31,6 +31,8 @@ describe('TaskRepository (SQL) — performance', () => {
       const result = await db.data.repos.tasks.listForDay(DAY, 'all');
       const elapsed = performance.now() - start;
 
+      // eslint-disable-next-line no-console -- mesure relevée à la main pour le rapport de performance (sortie de `npm run test:perf`)
+      console.info(`[perf T-01] listForDay, 5 000 tâches : ${elapsed.toFixed(1)} ms`);
       expect(result).toHaveLength(5000);
       expect(elapsed).toBeLessThan(2000);
     } finally {
