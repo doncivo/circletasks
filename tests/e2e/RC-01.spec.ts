@@ -113,7 +113,7 @@ test.describe('RC-01 — recherche plein texte', () => {
       timings.push(await measure(query));
     }
     testInfo.annotations.push({ type: 'mesure', description: describeTimings('recherche', timings) });
-    process.stdout.write(`${describeTimings('RC-01 recherche', timings)}\n`);
     expect(median(timings), 'médiane des 5 essais').toBeLessThan(200);
+    expect(Math.max(...timings), 'plafond du pire essai').toBeLessThan(400);
   });
 });

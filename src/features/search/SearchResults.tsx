@@ -1,8 +1,9 @@
 import { Calendar, ClipboardList, FileText, Repeat, Target, type LucideIcon } from 'lucide-react';
-import { memo, useCallback, useLayoutEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type KeyboardEvent } from 'react';
 import type { Space } from '../../domain/model';
-import { groupSearchResults, type SearchKind, type SearchResult, type TextSegment } from '../../domain/search';
-import { t } from '../../i18n';
+import type { SearchGroup, SearchKind, SearchResult, TextSegment } from '../../domain/search';
+import { getLocale, t } from '../../i18n';
+import { formatPrefsVersion, subscribeFormatPrefs } from '../../i18n/formatPrefs';
 import { Icon, IconView, spaceTextColor } from '../../ui';
 import { resultLabel, subtitleParts, type SubtitlePart } from './searchRowText';
 import type { SelectionMove } from './useSearchSelection';
@@ -89,7 +90,8 @@ export function SearchResultContent({ result, spaces, parts: given }: { readonly
 export const rowDomId = (result: SearchResult): string => `ct-search-row-${result.hit.kind}-${result.hit.id}`;
 
 export interface SearchGroupsProps {
-  readonly results: readonly SearchResult[];
+  /** Résultats groupés par type, dans l'ordre d'affichage (calculés une seule fois par `useSearchSelection`). */
+  readonly groups: readonly SearchGroup[];
   readonly spaces: RowSpaces;
   /** Clé de la ligne sélectionnée (surlignée, seule dans l'ordre de tabulation). */
   readonly selectedKey: string | null;
@@ -105,6 +107,8 @@ const MOVE_OF_KEY: Readonly<Record<string, SelectionMove>> = { ArrowDown: 'next'
 interface SearchRowProps {
   readonly result: SearchResult;
   readonly spaces: RowSpaces;
+  /** Langue et préférences de format : la date et l'heure affichées (sous-ligne, nom accessible) en dépendent. */
+  readonly formatKey: string;
   readonly selected: boolean;
   readonly onSelect: (key: string) => void;
   readonly onOpen: (result: SearchResult, inTab: boolean) => void;
@@ -112,12 +116,16 @@ interface SearchRowProps {
 }
 
 /**
- * Une ligne de résultat, mémoïsée : elle ne se redessine que si son résultat, les espaces ou sa sélection changent. Sous-ligne et nom
- * accessible sont calculés une fois par résultat, pas à chaque rendu de la liste (RC-02 critère 8, budget 200 ms).
+ * Une ligne de résultat, mémoïsée : elle ne se redessine que si son résultat, les espaces, la langue ou les préférences de format, ou
+ * sa sélection changent. Sous-ligne et nom accessible sont calculés une fois par résultat, pas à chaque rendu de la liste
+ * (RC-02 critère 8, budget 200 ms).
  */
-const SearchRow = memo(function SearchRow({ result, spaces, selected, onSelect, onOpen, onKeyDown }: SearchRowProps) {
-  const parts = useMemo(() => subtitleParts(result, spaces), [result, spaces]);
-  const label = useMemo(() => resultLabel(result, spaces, parts), [result, spaces, parts]);
+const SearchRow = memo(function SearchRow({ result, spaces, formatKey, selected, onSelect, onOpen, onKeyDown }: SearchRowProps) {
+  // `formatKey` n'est pas lue : sa seule présence dans les dépendances invalide le calcul quand la langue ou le format d'heure changent.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const parts = useMemo(() => subtitleParts(result, spaces), [result, spaces, formatKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const label = useMemo(() => resultLabel(result, spaces, parts), [result, spaces, parts, formatKey]);
   return (
     <li>
       <button
@@ -143,7 +151,7 @@ const SearchRow = memo(function SearchRow({ result, spaces, selected, onSelect, 
  * complet (« Tâche, Envoyer la facture, mer. 23 sept., Pro, à faire »). La ligne sélectionnée est la seule dans l'ordre de tabulation
  * (Tab : champ, puces, liste) ; ↑ / ↓ / Début / Fin y déplacent le focus, Entrée ouvre, Ctrl+Entrée ouvre dans l'onglet.
  */
-export function SearchGroups({ results, spaces, selectedKey, onSelect, onOpen, onMove }: SearchGroupsProps) {
+export function SearchGroups({ groups, spaces, selectedKey, onSelect, onOpen, onMove }: SearchGroupsProps) {
   // Les rappels du parent changent à chaque rendu : les lignes mémoïsées reçoivent des fonctions stables qui appellent la dernière version.
   const latest = useRef({ onOpen, onMove });
   useLayoutEffect(() => {
@@ -163,7 +171,8 @@ export function SearchGroups({ results, spaces, selectedKey, onSelect, onOpen, o
       latest.current.onOpen(result, true);
     }
   }, []);
-  const groups = useMemo(() => groupSearchResults(results), [results]);
+  // Se réaffiche (et invalide les lignes mémoïsées) quand la langue ou une préférence de format change (P-03).
+  const formatKey = `${getLocale()}|${String(useSyncExternalStore(subscribeFormatPrefs, formatPrefsVersion))}`;
 
   return (
     <div role="region" aria-label={t('search.listLabel')}>
@@ -176,7 +185,7 @@ export function SearchGroups({ results, spaces, selectedKey, onSelect, onOpen, o
             </h2>
             <ul className="ct-search__list">
               {group.results.map((result) => (
-                <SearchRow key={result.key} result={result} spaces={spaces} selected={selectedKey === result.key} onSelect={onSelect} onOpen={stableOpen} onKeyDown={handleKeyDown} />
+                <SearchRow key={result.key} result={result} spaces={spaces} formatKey={formatKey}selected={selectedKey === result.key} onSelect={onSelect} onOpen={stableOpen} onKeyDown={handleKeyDown} />
               ))}
             </ul>
           </section>

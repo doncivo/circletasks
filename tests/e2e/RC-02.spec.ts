@@ -158,9 +158,10 @@ test.describe('RC-02 — filtres de la recherche', () => {
     const withRows = timings.filter((_, index) => index % 2 === 1);
     const report = `${describeTimings('états vides', empty)} ; ${describeTimings('états avec résultats', withRows)}`;
     testInfo.annotations.push({ type: 'mesure', description: report });
-    process.stdout.write(`RC-02 ${report}\n`);
     // Médiane de 10 essais par famille d'états (et non le meilleur essai) contre le budget de 200 ms.
     expect(median(empty), 'états vides (médiane)').toBeLessThan(200);
     expect(median(withRows), 'états avec résultats (médiane)').toBeLessThan(200);
+    // Plafond large sur le pire essai : signale une régression sans dépendre du bruit du navigateur de test.
+    expect(Math.max(...empty, ...withRows), 'plafond du pire essai').toBeLessThan(400);
   });
 });

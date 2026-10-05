@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { toSearchResult, type SearchHit } from '../../domain/search';
 import { asHexColor, asLocalDate, asSpaceId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
@@ -32,8 +32,15 @@ describe('résultat de recherche : texte des lignes', () => {
     expect(resultLabel(result, [SPACE])).toBe(`Tâche, Envoyer la facture, ${formatDayLabel('2026-09-23')}, Pro, à faire`);
   });
 
-  it('le libellé de jour reste identique d’un appel à l’autre (formateur réutilisé)', () => {
-    expect(formatDayLabel('2026-09-23')).toBe(formatDayLabel('2026-09-23'));
-    expect(formatDayLabel('2026-09-24')).not.toBe(formatDayLabel('2026-09-23'));
+  it('le formateur de jour est construit une seule fois pour de nombreux appels', () => {
+    formatDayLabel('2026-09-01'); // amorce le cache de la langue courante
+    const spy = vi.spyOn(Intl, 'DateTimeFormat');
+    try {
+      const labels = Array.from({ length: 50 }, (_, index) => formatDayLabel(`2026-09-${String((index % 28) + 1).padStart(2, '0')}`));
+      expect(spy).not.toHaveBeenCalled();
+      expect(labels[0]).not.toBe(labels[1]);
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

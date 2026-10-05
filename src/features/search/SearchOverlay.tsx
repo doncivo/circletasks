@@ -147,7 +147,7 @@ function SearchSurface() {
         )}
         {showResults && count > 0 && (
           <SearchGroups
-            results={outcome.results}
+            groups={selection.groups}
             spaces={spaces}
             selectedKey={selectedKey}
             onSelect={selection.select}

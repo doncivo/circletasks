@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
-import { groupSearchResults, type SearchResult } from '../../domain/search';
+import { groupSearchResults, type SearchGroup, type SearchResult } from '../../domain/search';
 
 export type SelectionMove = 'next' | 'previous' | 'first' | 'last';
 
 export interface SearchSelection {
+  /** Résultats groupés par type (calculés une seule fois, partagés avec l'affichage). */
+  readonly groups: readonly SearchGroup[];
   /** Résultats dans l'ordre d'affichage (groupe après groupe). */
   readonly ordered: readonly SearchResult[];
   /** Ligne sélectionnée : celle choisie si elle existe encore, sinon la première ; null sans résultat. */
@@ -19,7 +21,8 @@ export interface SearchSelection {
  * laisse la première sélectionnée).
  */
 export function useSearchSelection(results: readonly SearchResult[]): SearchSelection {
-  const ordered = useMemo(() => groupSearchResults(results).flatMap((group) => group.results), [results]);
+  const groups = useMemo(() => groupSearchResults(results), [results]);
+  const ordered = useMemo(() => groups.flatMap((group) => group.results), [groups]);
   const [chosen, setChosen] = useState<string | null>(null);
   const selected = ordered.find((result) => result.key === chosen) ?? ordered[0] ?? null;
 
@@ -35,5 +38,5 @@ export function useSearchSelection(results: readonly SearchResult[]): SearchSele
     [ordered, selected],
   );
 
-  return { ordered, selected, select: setChosen, move };
+  return { groups, ordered, selected, select: setChosen, move };
 }
