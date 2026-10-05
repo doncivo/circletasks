@@ -19,6 +19,11 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   thisDevicePaired: 'This device is paired',
   joinProgress: 'Receiving your data… {done} / {total}',
   joinProgressLabel: 'Receiving sync data',
+  joinWaiting: 'Receiving your data, waiting: {done} / {total}',
+  joinFailed: 'Receiving your data stopped at {done} / {total}: it will resume at the next sync',
+  joinFailedClock: 'Receiving your data is blocked: this device’s clock is behind. Set the time, it will resume afterwards',
+  retry: 'Try again',
+  retryLabel: 'Try receiving the data again',
   window: {
     section: 'SYNC',
     title: 'Pair the iPhone',

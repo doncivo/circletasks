@@ -87,6 +87,11 @@ export interface DesktopPlatform {
   /** Entrée « Synchroniser maintenant » du menu (Y-03, événement `tray-sync-now`). Renvoie la fonction de désabonnement. */
   onTraySyncNow(handler: () => void): Promise<() => void>;
   /**
+   * Appareil associé (Y-06, événement `sync-paired` émis par Rust vers `main`, sans clé) : import réussi dans la fenêtre `pairing`,
+   * ou arrivée de l'appareil qui a scanné le QR. Renvoie la fonction de désabonnement.
+   */
+  onSyncPaired(handler: () => void): Promise<() => void>;
+  /**
    * « Quitter » du menu (D-01, critère 7) : le gestionnaire termine les écritures en cours et le dernier cycle de synchro (Y-02) ;
    * la sortie attend sa fin (5 s au plus côté Rust, `QUIT_GRACE`), puis l'app se ferme. Un échec du handler n'empêche pas la sortie.
    */

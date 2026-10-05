@@ -21,6 +21,11 @@ export const syncPairingFr = {
   thisDevicePaired: 'Cet appareil est associé',
   joinProgress: 'Réception de vos données… {done} / {total}',
   joinProgressLabel: 'Réception des données de la synchronisation',
+  joinWaiting: 'Réception de vos données en attente : {done} / {total}',
+  joinFailed: 'La réception de vos données s’est arrêtée à {done} / {total} : elle reprendra à la prochaine synchronisation',
+  joinFailedClock: 'La réception de vos données est bloquée : l’horloge de cet appareil est en retard. Réglez l’heure, elle reprendra ensuite',
+  retry: 'Réessayer',
+  retryLabel: 'Réessayer la réception des données',
   window: {
     section: 'SYNCHRONISATION',
     title: 'Associer l’iPhone',
@@ -76,4 +81,4 @@ export const syncPairingFr = {
     wrongWindow: 'Cette fenêtre n’est plus valable : fermez-la et recommencez depuis Réglages',
     generic: 'L’association a échoué : réessayez',
   },
-};
+} as const;

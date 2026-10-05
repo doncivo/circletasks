@@ -4,6 +4,9 @@ import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderI
 import { Button, ChoiceDialog } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
+import { JoinProgress } from './JoinProgress';
+import { pairingOpenErrorKey } from './SyncDetailsPairing';
+import { onPairingChange, openPairingWindow, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { SyncStatusLine } from './SyncStatusLine';
 import { folderLabel } from './syncText';
 
@@ -92,6 +95,33 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
+  // Y-06 (branche needsPairing) : « Associer cet appareil », échec d'ouverture gardé jusqu'à la réussite, retour à l'état normal à l'association.
+  const [pairingFailure, setPairingFailure] = useState<PairingFailure | null>(null);
+  const [pairingNotice, setPairingNotice] = useState<PlainMessageKey | null>(null);
+  const [pairingBusy, setPairingBusy] = useState(false);
+
+  useEffect(() => {
+    if (!available) return;
+    let cancelled = false;
+    const refreshFailure = (): void => {
+      void readPairingFailure(container).then((value) => {
+        if (!cancelled) setPairingFailure(value);
+      });
+    };
+    refreshFailure();
+    const stop = onPairingChange(container, (event) => {
+      refreshFailure();
+      if (event !== 'paired') return;
+      setPairingNotice(null);
+      void readView(platform).then((next) => {
+        if (!cancelled) setView(next);
+      });
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [available, container, platform]);
 
   useEffect(() => {
     if (!available) return;
@@ -151,6 +181,19 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     }
   };
 
+  const associate = async (): Promise<void> => {
+    const focused = typeof document === 'undefined' || document.hasFocus();
+    setPairingBusy(true);
+    setPairingNotice(null);
+    try {
+      const code = await openPairingWindow(container, 'import', platform);
+      if (code) setPairingNotice(pairingOpenErrorKey(code, focused));
+    } finally {
+      setPairingBusy(false);
+    }
+  };
+  const pairingMessage = pairingNotice ?? (pairingFailure && pairingFailure.mode === 'import' ? pairingOpenErrorKey(pairingFailure.code, true) : null);
+
   const chooseButton = (
     <Button variant="secondary" ariaLabel={t('sync.folder.chooseLabel')} onClick={() => void choose()} className="ct-settings__link" disabled={busy}>
       {busy ? t('sync.folder.choosing') : t('sync.folder.choose')}
@@ -203,6 +246,22 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           {forgetButton}
         </div>
       )}
+      {view.kind === 'bound' && view.needsPairing && (
+        <div className="ct-settings__row">
+          <span className="ct-settings__stack">
+            {t('sync.pairing.importLabel')}
+            {pairingMessage && (
+              <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-pairing-notice">
+                {t(pairingMessage)}
+              </span>
+            )}
+          </span>
+          <Button variant="secondary" ariaLabel={t('sync.pairing.importLabel')} onClick={() => void associate()} className="ct-settings__link" disabled={pairingBusy || busy}>
+            {pairingBusy ? t('sync.pairing.opening') : t('sync.pairing.importAction')}
+          </Button>
+        </div>
+      )}
+      {view.kind === 'bound' && !view.needsPairing && <JoinProgress />}
       {view.kind === 'error' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
