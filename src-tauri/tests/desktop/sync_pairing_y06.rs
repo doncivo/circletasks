@@ -261,3 +261,28 @@ fn y06_9_state_not_authenticated_never_counts() {
     assert_ne!(foreign.state_status, "ok");
     assert!(a.core.paired_with_self(&scan).is_empty());
 }
+
+/// Sonde du journal technique (développement seulement) pendant un appairage avec arrivée : ni clé, ni QR, ni clé de secours.
+#[cfg(debug_assertions)]
+#[test]
+fn y06_16_arrival_logs_hold_no_secret() {
+    let capture = circletasks_lib::sync::log::capture();
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish(&a, DEV_A, &epoch(1, DEV_A), None);
+    let registry = PairingRegistry::default();
+    registry.begin_open(false).unwrap();
+    registry.register(42, PairingMode::Show, NOW);
+    registry.observe_paired(&a.core.paired_with_self(&a.core.scan(&[]).unwrap()));
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = joiner(&fs, DEV_B);
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    publish(&b, DEV_B, &epoch(1, DEV_A), Some(DEV_A));
+    assert_eq!(registry.observe_paired(&a.core.paired_with_self(&a.core.scan(&[]).unwrap())), Some(42));
+    let lines = capture.lines().join("\n");
+    assert!(lines.contains("pairing-arrival"));
+    let key_part = payload.qr_text.trim_start_matches("CTPAIR1.");
+    for needle in [payload.qr_text.as_str(), key_part, payload.recovery_key.as_str()] {
+        assert!(!lines.contains(needle));
+    }
+}
