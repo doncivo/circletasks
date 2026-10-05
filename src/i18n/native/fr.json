@@ -1,0 +1,26 @@
+{
+  "$comment": "Textes des boîtes de confirmation natives ouvertes par Rust (ADR 0011 section 2.1). Compilés dans le binaire par include_str! (src-tauri/src/sync/consent.rs) : jamais fournis par la WebView.",
+  "consent": {
+    "showKey": {
+      "title": "CircleTasks",
+      "instruction": "Afficher la clé de synchronisation ?",
+      "content": "Le code et la clé de secours qui vont s'afficher donnent accès à toutes vos données synchronisées. Ne les montrez qu'à vos propres appareils.",
+      "confirm": "Afficher la clé",
+      "cancel": "Annuler"
+    },
+    "replaceKey": {
+      "title": "CircleTasks",
+      "instruction": "Remplacer la clé de synchronisation de cet appareil ?",
+      "content": "Cet appareil a déjà une autre clé. Elle sera remplacée par la clé que vous venez de saisir.",
+      "confirm": "Remplacer la clé",
+      "cancel": "Annuler"
+    },
+    "eraseKey": {
+      "title": "CircleTasks",
+      "instruction": "Oublier le dossier et la clé ?",
+      "content": "Sans clé, cet appareil devra être associé de nouveau.",
+      "confirm": "Oublier la clé",
+      "cancel": "Annuler"
+    }
+  }
+}

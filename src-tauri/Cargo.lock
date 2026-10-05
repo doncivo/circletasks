@@ -620,12 +620,14 @@ dependencies = [
 name = "circletasks"
 version = "0.1.1"
 dependencies = [
+ "aws-lc-rs",
  "base64 0.22.1",
  "keyring",
  "minisign",
  "rand 0.9.5",
  "reqwest",
  "rusqlite",
+ "security-framework 3.7.0",
  "serde",
  "serde_json",
  "sha2",
@@ -643,6 +645,7 @@ dependencies = [
  "tokio",
  "url",
  "windows",
+ "zeroize",
 ]
 
 [[package]]

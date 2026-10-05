@@ -3,6 +3,7 @@ import { t } from '../../i18n';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncNowButton } from './SyncNowButton';
+import { folderLabel } from './SyncSettingsSection';
 import { syncStore } from './syncStore';
 import { isTroublePhase, statusLine } from './syncText';
 import './SyncDetailsScreen.css';
@@ -26,7 +27,7 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
   return (
     <div className="ct-sync__line">
       <div className="ct-sync__lineText">
-        <span className="ct-sync__folder">{status.folderLabel ?? t('sync.status.folderFallback')}</span>
+        <span className="ct-sync__folder">{status.folderLabel ? folderLabel({ label: status.folderLabel, kind: status.folderKind ?? 'unknown' }) : t('sync.status.folderFallback')}</span>
         <span className="ct-sync__sub" role="status" data-trouble={isTroublePhase(status) ? 'true' : undefined}>
           {statusLine(status, now)}
         </span>

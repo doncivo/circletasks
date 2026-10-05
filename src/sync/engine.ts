@@ -3,7 +3,7 @@ import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
 import { hlcIso, hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
+import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
@@ -35,11 +35,12 @@ export interface CycleOptions {
 
 export interface CycleResult extends CycleFacts {
   readonly folderLabel: string | null;
+  readonly folderKind?: SyncFolderInfo['kind'] | null;
   readonly lastSyncAt: IsoDateTime | null;
   readonly worked: boolean;
 }
 
-const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false };
+const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, folderKind: null, lastSyncAt: null, worked: false };
 
 const ZERO: RecordCursor = { segment: 0, record: 0 };
 
@@ -162,16 +163,18 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   // 0. Préconditions.
   if (!platform.available()) return { ...EMPTY, outcome: 'not-configured' };
   let folderLabel: string | null = null;
+  let folderKind: SyncFolderInfo['kind'] | null = null;
   try {
     const folder = await platform.folder.info();
     if (!folder.configured) return { ...EMPTY, outcome: 'not-configured' };
     folderLabel = folder.label;
+    folderKind = folder.kind;
     const key = await platform.key.status();
-    if (!key.present) return { ...EMPTY, folderLabel, outcome: 'needs-pairing' };
-    if (!options.ignoreMarker && (await platform.restoreMarker.get())) return { ...EMPTY, folderLabel, outcome: 'restore-choice' };
+    if (!key.present) return { ...EMPTY, folderLabel, folderKind, outcome: 'needs-pairing' };
+    if (!options.ignoreMarker && (await platform.restoreMarker.get())) return { ...EMPTY, folderLabel, folderKind, outcome: 'restore-choice' };
     await platform.bindDevice(self);
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel });
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
   }
 
   // 1. scan.
@@ -180,7 +183,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   try {
     scan = await platform.scan({ keep: [...known.keys()].filter((id) => id !== self) as DeviceId[] });
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel });
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
   }
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
   const accepted = await acceptStates(deps, scan, known);
@@ -283,7 +286,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
         // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
         const waiting = switched === 'cloud-pending' || switched === 'clock-ahead';
-        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, worked, devices: await deviceStatuses(repos, self, accepted) };
+        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted) };
       }
       epoch = target;
       resume = false;
@@ -461,11 +464,11 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
     const devices = await deviceStatuses(repos, self, accepted);
-    if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, worked, keyMismatch };
-    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
+    if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch };
+    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
   } catch (error) {
     logger.log('cycle-error', { code: syncErrorCodeOf(error) });
-    return fail(syncErrorCodeOf(error), { folderLabel, pendingFiles: [...pending] });
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind, pendingFiles: [...pending] });
   }
 }
 

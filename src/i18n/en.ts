@@ -18,6 +18,7 @@ import { importCsvEn } from './en.importCsv';
 import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
+import { syncFolderEn, syncKeyEn } from './en.syncFolder';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
 export const en: Messages = {
@@ -52,7 +53,7 @@ export const en: Messages = {
   stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
-  sync: { ...syncEngineEn },
+  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn },
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',

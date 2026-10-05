@@ -133,7 +133,9 @@ describe('service (Y-02 critère 1, Y-03 critère 3)', () => {
     const status = await a.cycle();
     expect(status.phase).toBe('idle');
     expect(status.lastSyncAt).toBe('2026-10-05T08:00:00.000Z');
-    expect(status.folderLabel).toBe('iCloud Drive / CircleTasks');
+    // Nom et nature du dossier (Y1 : le libellé « iCloud Drive / CircleTasks » est composé par l'interface).
+    expect(status.folderLabel).toBe('CircleTasks');
+    expect(status.folderKind).toBe('icloud');
     expect(status.devices).toEqual([{ deviceId: A_ID, platform: 'windows', self: true, lastReadAt: '2026-10-05T08:00:00.000Z', status: 'active' }]);
     expect(status.conflictsThisWeek).toBe(0);
   });

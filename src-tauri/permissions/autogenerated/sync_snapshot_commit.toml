@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-snapshot-commit"
+description = "Enables the sync_snapshot_commit command without any pre-configured scope."
+commands.allow = ["sync_snapshot_commit"]
+
+[[permission]]
+identifier = "deny-sync-snapshot-commit"
+description = "Denies the sync_snapshot_commit command without any pre-configured scope."
+commands.deny = ["sync_snapshot_commit"]

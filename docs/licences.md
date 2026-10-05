@@ -82,3 +82,12 @@ redistribue pas les fichiers de police séparément de l'application.
 
 - Aucun plugin Tauri dialog ni fs côté WebView : « Enregistrer sous » est ouvert et le fichier écrit par Rust. Seule la crate `tauri-plugin-dialog` (MIT OU Apache-2.0, projet Tauri, PC Windows uniquement) sert à ouvrir la boîte depuis Rust ; `tauri-plugin-opener` (déjà présent) affiche le fichier dans le dossier.
 - Aucune dépendance pour le PDF ni le PNG (dessin canvas, PDF minimal écrit par `src/domain/pdfDocument.ts`).
+
+# Licences — dépendances Rust de la synchronisation (Y-08, ADR 0011 section 2)
+
+Ajoutées en dépendances directes **sans nouvelle entrée dans `Cargo.lock`** (déjà compilées par les dépendances existantes ; seule la liste des dépendances du paquet `circletasks` change) :
+
+- `aws-lc-rs` 1.18 (AES-256-GCM par `RandomizedNonceKey`, HKDF-SHA256, SHA-256, aléa système), fonctionnalités `aws-lc-sys` et `alloc` seulement : licence **ISC ET (Apache-2.0 OU ISC)** ; déjà fournisseur de `rustls` (via `reqwest`). Bibliothèque C embarquée `aws-lc-sys` 0.45 : ISC, Apache-2.0, MIT, BSD-3-Clause (fichiers d'origine OpenSSL / BoringSSL), voir le dépôt `aws/aws-lc`.
+- `zeroize` 1.9 (effacement des tampons de clé) : MIT OU Apache-2.0 ; déjà tirée par `keyring` et `aws-lc-rs`.
+- `security-framework` 3.7, **cible iOS seulement** (clé de synchro au Trousseau avec `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`, non synchronisée) : MIT OU Apache-2.0 ; même version que celle déjà compilée pour iOS par `rustls-platform-verifier` (`cargo tree --target aarch64-apple-ios -i security-framework@3.7.0`).
+- `windows` 0.62 : fonctionnalités ajoutées (`Win32_Security`, `Win32_System_IO`, `Win32_Storage_FileSystem`, `Win32_Storage_CloudFilters`, `Win32_UI_Controls`, `Wdk_Foundation`, `Wdk_Storage_FileSystem`), même crate, même licence (MIT OU Apache-2.0).

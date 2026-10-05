@@ -43,13 +43,14 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
   return 'idle';
 }
 
-export function statusFromFacts(previous: SyncStatus, facts: CycleFacts, extra: { readonly folderLabel: string | null; readonly lastSyncAt: IsoDateTime | null; readonly conflictsThisWeek: number }): SyncStatus {
+export function statusFromFacts(previous: SyncStatus, facts: CycleFacts, extra: { readonly folderLabel: string | null; readonly folderKind?: SyncStatus['folderKind']; readonly lastSyncAt: IsoDateTime | null; readonly conflictsThisWeek: number }): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   return {
     ...previous,
     phase,
     folderLabel: extra.folderLabel,
+    folderKind: extra.folderKind ?? previous.folderKind ?? null,
     lastSyncAt: extra.lastSyncAt,
     devices: facts.devices.length > 0 || facts.outcome !== 'failed' ? facts.devices : previous.devices,
     pendingFiles: facts.pendingFiles,

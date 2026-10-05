@@ -89,7 +89,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     } catch {
       // base occupée : valeur précédente
     }
-    publish(statusFromFacts(status, result, { folderLabel: result.folderLabel ?? status.folderLabel, lastSyncAt: result.lastSyncAt ?? status.lastSyncAt, conflictsThisWeek: conflicts }));
+    publish(statusFromFacts(status, result, { folderLabel: result.folderLabel ?? status.folderLabel, folderKind: result.folderKind ?? status.folderKind ?? null, lastSyncAt: result.lastSyncAt ?? status.lastSyncAt, conflictsThisWeek: conflicts }));
   };
 
   const cycle = async (cycleOptions: CycleOptions = {}): Promise<CycleResult> => {

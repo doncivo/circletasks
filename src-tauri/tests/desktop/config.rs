@@ -227,3 +227,210 @@ fn no_fs_plugin_is_registered_for_the_webview() {
     assert!(!DESKTOP_SOURCE.contains("tauri_plugin_fs"));
 }
 
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Synchronisation (ADR 0011 section 11.1, test « config.rs » du lot Y1) et correctif F-01
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const LIB_SOURCE: &str = include_str!("../../src/lib.rs");
+const BUILD_SOURCE: &str = include_str!("../../build.rs");
+const SYNC_CAPABILITY: &str = include_str!("../../capabilities/sync.json");
+const SYNC_PAIRING_CAPABILITY: &str = include_str!("../../capabilities/sync-pairing.json");
+const FOCUS_LAUNCHER_CAPABILITY: &str = include_str!("../../capabilities/focus-launcher.json");
+
+/// Les 21 commandes `sync_*`, dans l'ordre de la section 11.1 (même liste que `SYNC_COMMANDS` de `types.ts`).
+const SYNC_COMMANDS: [&str; 21] = [
+    "sync_folder_info",
+    "sync_folder_choose",
+    "sync_folder_forget",
+    "sync_bind_device",
+    "sync_key_status",
+    "sync_key_create",
+    "sync_pairing_open",
+    "sync_pairing_payload",
+    "sync_key_import",
+    "sync_pairing_close",
+    "sync_scan",
+    "sync_read_journal",
+    "sync_append_journal",
+    "sync_write_state",
+    "sync_snapshot_begin",
+    "sync_snapshot_append",
+    "sync_snapshot_commit",
+    "sync_read_snapshot",
+    "sync_delete_own",
+    "sync_restore_marker_get",
+    "sync_restore_marker_clear",
+];
+const PAIRING_ONLY: [&str; 3] = ["sync_pairing_payload", "sync_key_import", "sync_pairing_close"];
+
+fn permission_of(command: &str) -> String {
+    format!("allow-{}", command.replace('_', "-"))
+}
+
+/// Noms des commandes de tous les `tauri::generate_handler![…]` de lib.rs (dernier segment de chemin).
+fn handler_commands() -> std::collections::BTreeSet<String> {
+    let mut out = std::collections::BTreeSet::new();
+    for block in LIB_SOURCE.split("generate_handler![").skip(1) {
+        let body = &block[..block.find(']').expect("fin de generate_handler!")];
+        let body: String = body.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join(" ");
+        for item in body.split(',') {
+            let item = item.trim();
+            if !item.is_empty() {
+                out.insert(item.rsplit("::").next().unwrap().trim().to_owned());
+            }
+        }
+    }
+    out
+}
+
+/// Commandes déclarées dans `AppManifest::commands` de build.rs.
+fn manifest_commands() -> std::collections::BTreeSet<String> {
+    let start = BUILD_SOURCE.find(".commands(&[").expect("manifeste");
+    let body = &BUILD_SOURCE[start..start + BUILD_SOURCE[start..].find("])").expect("fin du manifeste")];
+    body.lines()
+        .filter(|l| !l.trim_start().starts_with("//"))
+        .flat_map(|l| l.split('"').skip(1).step_by(2).map(str::to_owned).collect::<Vec<_>>())
+        .collect()
+}
+
+/// (1) `generate_handler!` = `AppManifest::commands`.
+#[test]
+fn sync_1_handlers_equal_the_build_manifest() {
+    let handlers = handler_commands();
+    let manifest = manifest_commands();
+    assert_eq!(handlers, manifest);
+    for command in SYNC_COMMANDS.iter().chain(["focus_window_open", "focus_window_bring_to_front", "focus_window_close"].iter()) {
+        assert!(manifest.contains(*command), "{command}");
+    }
+    assert_eq!(manifest.iter().filter(|c| c.starts_with("sync_")).count(), 21);
+}
+
+/// (2) `sync.json` : exactement les 18 permissions de `main`, Windows, sans les trois commandes de `pairing`.
+#[test]
+fn sync_2_main_capability_grants_exactly_eighteen_commands() {
+    let capability: Value = serde_json::from_str(SYNC_CAPABILITY).expect("sync.json valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
+    assert!(capability.get("webviews").is_none());
+    let mut granted = permissions_of(SYNC_CAPABILITY);
+    granted.sort();
+    let mut expected: Vec<String> = SYNC_COMMANDS.iter().filter(|c| !PAIRING_ONLY.contains(c)).map(|c| permission_of(c)).collect();
+    expected.sort();
+    assert_eq!(granted.len(), 18);
+    assert_eq!(granted, expected);
+}
+
+/// (3) `sync-pairing.json` : exactement ces trois commandes, fenêtre `pairing`, sans `webviews`, aucune permission `core:`.
+#[test]
+fn sync_3_pairing_capability_grants_exactly_three_commands_and_no_core_permission() {
+    let capability: Value = serde_json::from_str(SYNC_PAIRING_CAPABILITY).expect("sync-pairing.json valide");
+    assert_eq!(capability["windows"], serde_json::json!(["pairing"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
+    assert!(capability.get("webviews").is_none());
+    let granted = permissions_of(SYNC_PAIRING_CAPABILITY);
+    assert_eq!(granted, PAIRING_ONLY.iter().map(|c| permission_of(c)).collect::<Vec<_>>());
+    let core: Vec<&String> = granted.iter().filter(|p| p.starts_with("core:")).collect();
+    assert!(core.is_empty(), "liste vide figée : {core:?}");
+}
+
+/// (4) aucune autre capability n'accorde une permission `sync-*`.
+#[test]
+fn sync_4_no_other_capability_grants_sync_permissions() {
+    for (name, text) in all_capabilities() {
+        if name == "sync.json" || name == "sync-pairing.json" {
+            continue;
+        }
+        assert!(!permissions_of(&text).iter().any(|p| p.contains("sync-")), "{name}");
+    }
+}
+
+fn all_capabilities() -> Vec<(String, String)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities");
+    let mut out: Vec<(String, String)> = std::fs::read_dir(dir)
+        .expect("dossier capabilities")
+        .map(|e| e.expect("entrée").path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .map(|p| (p.file_name().unwrap().to_string_lossy().into_owned(), std::fs::read_to_string(&p).expect("capability")))
+        .collect();
+    out.sort();
+    out
+}
+
+/// Motif de fenêtre de Tauri (`*` joker, `?` un caractère) appliqué à un libellé.
+fn glob_matches(pattern: &str, label: &str) -> bool {
+    fn go(p: &[u8], l: &[u8]) -> bool {
+        match (p.first(), l.first()) {
+            (None, None) => true,
+            (Some(b'*'), _) => go(&p[1..], l) || (!l.is_empty() && go(p, &l[1..])),
+            (Some(b'?'), Some(_)) => go(&p[1..], &l[1..]),
+            (Some(a), Some(b)) if a == b => go(&p[1..], &l[1..]),
+            _ => false,
+        }
+    }
+    go(pattern.as_bytes(), label.as_bytes())
+}
+
+/// Développe une permission composée (`core:default`, `*:default`, ensembles) à partir des manifestes ACL générés.
+fn expand(id: &str, manifests: &Value, out: &mut std::collections::BTreeSet<String>) {
+    let Some((plugin, name)) = id.rsplit_once(':') else {
+        out.insert(id.to_owned());
+        return;
+    };
+    let manifest = &manifests[plugin];
+    let list = if name == "default" { &manifest["default_permission"]["permissions"] } else { &manifest["permission_sets"][name]["permissions"] };
+    match list.as_array() {
+        Some(children) => {
+            for child in children.iter().filter_map(Value::as_str) {
+                let full = if child.contains(':') { child.to_owned() } else { format!("{plugin}:{child}") };
+                expand(&full, manifests, out);
+            }
+        }
+        None => {
+            out.insert(id.to_owned());
+        }
+    }
+}
+
+/// (5) aucune capability (audit S6 : toutes, et pas seulement celles qui visent `main` par joker ou `webviews` ; ensembles `default` développés) n'accorde la
+/// création de fenêtre ou de webview.
+#[test]
+fn sync_5_no_capability_applying_to_main_grants_window_creation() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("gen").join("schemas").join("acl-manifests.json");
+    let manifests: Value = serde_json::from_str(&std::fs::read_to_string(path).expect("acl-manifests.json (généré par la compilation)")).expect("manifestes");
+    assert!(manifests["core:webview"]["permissions"].get("allow-create-webview-window").is_some(), "manifestes complets");
+    let forbidden = ["core:webview:allow-create-webview-window", "core:webview:allow-create-webview", "core:window:allow-create"];
+    let mut applying = 0;
+    for (name, text) in all_capabilities() {
+        let capability: Value = serde_json::from_str(&text).expect("capability valide");
+        let targets = |key: &str| capability[key].as_array().is_some_and(|a| a.iter().filter_map(Value::as_str).any(|w| glob_matches(w, "main")));
+        // Audit S6 : la création de fenêtre ou de webview est interdite à TOUTES les capabilities (Focus, capture, pairing comprises),
+        // pas seulement à celles qui visent `main` ; seules les commandes Rust créent des fenêtres.
+        if targets("windows") || targets("webviews") {
+            applying += 1;
+        }
+        let mut granted = std::collections::BTreeSet::new();
+        for id in permissions_of(&text) {
+            expand(&id, &manifests, &mut granted);
+        }
+        for permission in forbidden {
+            assert!(!granted.contains(permission), "{name} accorde {permission}");
+        }
+    }
+    assert!(applying >= 5, "les capabilities de main ont bien été trouvées");
+    // Le développement des ensembles fonctionne : core:default contient bien core:window:allow-get-all-windows.
+    let mut core = std::collections::BTreeSet::new();
+    expand("core:default", &manifests, &mut core);
+    assert!(core.contains("core:window:allow-get-all-windows"));
+    assert!(glob_matches("*", "main") && glob_matches("ma?n", "main") && !glob_matches("pairing", "main"));
+}
+
+/// (6) `focus-launcher.json` n'accorde que les trois commandes de la mini-fenêtre Focus.
+#[test]
+fn sync_6_focus_launcher_grants_only_the_three_focus_commands() {
+    let capability: Value = serde_json::from_str(FOCUS_LAUNCHER_CAPABILITY).expect("focus-launcher.json valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    let mut granted = permissions_of(FOCUS_LAUNCHER_CAPABILITY);
+    granted.sort();
+    assert_eq!(granted, ["allow-focus-window-bring-to-front", "allow-focus-window-close", "allow-focus-window-open"]);
+}

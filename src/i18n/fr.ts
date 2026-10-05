@@ -17,6 +17,7 @@ import { backupFr } from './fr.backup';
 import { importCsvFr } from './fr.importCsv';
 import { onboardingFr } from './fr.onboarding';
 import { syncEngineFr } from './fr.syncEngine';
+import { syncFolderFr, syncKeyFr } from './fr.syncFolder';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -56,7 +57,8 @@ export const fr = {
   appearance: appearanceFr,
   calendars: calendarsFr,
   // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1.
-  sync: { ...syncEngineFr },
+  // Synchro : moteur (lot Y2 : état, détails, restauration) et dossier / clé (lot Y1), un seul objet.
+  sync: { ...syncEngineFr, folder: syncFolderFr, key: syncKeyFr },
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',

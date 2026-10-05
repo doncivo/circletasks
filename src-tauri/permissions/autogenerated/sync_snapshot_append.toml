@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-snapshot-append"
+description = "Enables the sync_snapshot_append command without any pre-configured scope."
+commands.allow = ["sync_snapshot_append"]
+
+[[permission]]
+identifier = "deny-sync-snapshot-append"
+description = "Denies the sync_snapshot_append command without any pre-configured scope."
+commands.deny = ["sync_snapshot_append"]

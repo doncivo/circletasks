@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-bind-device"
+description = "Enables the sync_bind_device command without any pre-configured scope."
+commands.allow = ["sync_bind_device"]
+
+[[permission]]
+identifier = "deny-sync-bind-device"
+description = "Denies the sync_bind_device command without any pre-configured scope."
+commands.deny = ["sync_bind_device"]

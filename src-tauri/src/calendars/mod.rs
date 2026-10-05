@@ -24,14 +24,14 @@
 pub mod google;
 pub mod hosts;
 pub mod http;
-pub mod vault;
+/// Coffre système, déplacé à la racine de la crate au lot Y1 (partagé avec la synchro, ADR 0011 section 2.2).
+pub use crate::vault;
 
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-/// Service du coffre système (identique sur PC et iPhone).
-pub const VAULT_SERVICE: &str = "fr.circletasks.planner";
+pub use crate::vault::VAULT_SERVICE;
 
 /// Portée unique demandée à Google (K-01 critère 9).
 pub const GOOGLE_SCOPE: &str = "https://www.googleapis.com/auth/calendar.readonly";
