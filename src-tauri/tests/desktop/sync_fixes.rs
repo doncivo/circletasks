@@ -55,7 +55,7 @@ fn s1_missing_pairing_page_is_refused_before_any_dialog_or_window() {
 ").unwrap()];
     assert!(available.contains("resolver.iter()") && !available.contains(".get("), "aucun repli, aucune comparaison d'octets");
     let source = include_str!("../../src/sync/commands.rs");
-    let check = source.find("if !pairing_page_available(&app)").expect("contrôle de la page");
+    let check = source.find("pairing_page_available(&page_app)").expect("contrôle de la page");
     let open = source.find("registry.begin_open(").expect("ouverture");
     assert!(check < open, "aucune boîte ni fenêtre avant le contrôle");
 }

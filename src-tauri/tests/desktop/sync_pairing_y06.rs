@@ -402,3 +402,19 @@ fn y06_9_association_before_the_first_scan_is_an_arrival() {
     let set = source.find("set_arrival_baseline(hwnd").expect("référence posée par la commande");
     assert!(set < source.find("window.show()").unwrap());
 }
+
+/// Audit 1 : avant l'affichage, la WebView de la fenêtre `pairing` perd le menu contextuel, les raccourcis du navigateur (Ctrl+S,
+/// Ctrl+P, F5, Ctrl+Maj+S…), le remplissage automatique et l'enregistrement des mots de passe ; un échec détruit la fenêtre (`io`).
+#[test]
+fn y06_18_webview_is_hardened_before_it_is_shown() {
+    use circletasks_lib::sync::pairing::hardening_outcome;
+    assert_eq!(code(hardening_outcome(false)), SyncCode::Io);
+    assert!(hardening_outcome(true).is_ok());
+    let source = include_str!("../../src/sync/commands.rs");
+    for call in ["SetAreDefaultContextMenusEnabled(false)", "SetAreBrowserAcceleratorKeysEnabled(false)", "SetIsGeneralAutofillEnabled(false)", "SetIsPasswordAutosaveEnabled(false)"] {
+        let at = source.find(call).unwrap_or_else(|| panic!("{call} absent"));
+        assert!(at < source.find("window.show()").unwrap(), "{call} avant l'affichage");
+    }
+    let outcome = source.find("if let Err(error) = hardening_outcome(hardened)").expect("échec : destruction");
+    assert!(outcome < source.find("window.show()").unwrap());
+}

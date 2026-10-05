@@ -140,6 +140,16 @@ pub fn affinity_outcome(hwnd: isize, excluded: bool) -> SyncResult<()> {
     Ok(())
 }
 
+/// Durcissement de la WebView avant l'affichage (audit 1 : menu contextuel, raccourcis du navigateur, remplissage automatique,
+/// enregistrement des mots de passe désactivés) : en cas d'échec, la fenêtre est détruite et rien n'est renvoyé (`io`).
+pub fn hardening_outcome(hardened: bool) -> SyncResult<()> {
+    if hardened {
+        Ok(())
+    } else {
+        fail(SyncCode::Io)
+    }
+}
+
 /// Ce que la surveillance (toutes les 500 ms) voit de `main` et de l'instance.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WatchInput {

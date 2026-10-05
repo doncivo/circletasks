@@ -18,7 +18,7 @@ use super::consent::{ConsentGate, WindowsConsentUi};
 use super::folder::{chosen_target, config_dir, DEFAULT_FOLDER_NAME, ICLOUD_DRIVE_DIR};
 use super::marker::RestoreMarker;
 use super::pairing::{
-    affinity_outcome, pairing_page_listed, pairing_window_action, watch_decision, Caller, PairingMode, PairingRegistry, PairingWindowAction, PairingWindowEvent,
+    affinity_outcome, hardening_outcome, pairing_page_listed, pairing_window_action, watch_decision, Caller, PairingMode, PairingRegistry, PairingWindowAction, PairingWindowEvent,
     WatchInput, PAIRING_PAGE, PAIRING_WINDOW,
 };
 use super::service::{system_clock, AppendRequest, FolderInfo, KeyImportResult, KeyInput, KeyStatus, PairingPayload, SyncCore, SyncOptions, SystemBackend};
@@ -181,8 +181,8 @@ fn caller_url(window: &WebviewWindow) -> String {
 fn destroy_pairing(app: &AppHandle, registry: &PairingRegistry, hwnd: isize) {
     registry.clear(hwnd);
     if let Some(window) = app.get_webview_window(PAIRING_WINDOW) {
-        if hwnd_of(&window) == hwnd {
-            let _ = window.destroy();
+        if hwnd_of(&window) == hwnd && window.destroy().is_err() {
+            log::event("pairing-destroy-failed", "destroy");
         }
     }
 }
@@ -200,6 +200,33 @@ fn exclude_from_capture(_hwnd: isize) -> bool {
     false
 }
 
+/// Réglages de la WebView2 de la fenêtre `pairing` (audit 1) : ni menu contextuel, ni raccourcis du navigateur (Ctrl+S, Ctrl+P, F5,
+/// Ctrl+Maj+S…), ni remplissage automatique, ni enregistrement des mots de passe. Vrai seulement si les quatre réglages sont appliqués.
+#[cfg(windows)]
+fn harden_webview(webview: &tauri::webview::PlatformWebview) -> bool {
+    use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings4;
+    use windows::core::Interface;
+    // SAFETY: appels COM sur la WebView2 de la fenêtre que Rust vient de créer, depuis le fil de la WebView (`with_webview`).
+    let applied = unsafe {
+        (|| -> windows::core::Result<()> {
+            let settings = webview.controller().CoreWebView2()?.Settings()?;
+            settings.SetAreDefaultContextMenusEnabled(false)?;
+            let settings4: ICoreWebView2Settings4 = settings.cast()?;
+            // ICoreWebView2Settings3, hérité par Settings4.
+            settings4.SetAreBrowserAcceleratorKeysEnabled(false)?;
+            settings4.SetIsGeneralAutofillEnabled(false)?;
+            settings4.SetIsPasswordAutosaveEnabled(false)?;
+            Ok(())
+        })()
+    };
+    applied.is_ok()
+}
+
+#[cfg(not(windows))]
+fn harden_webview(_webview: &tauri::webview::PlatformWebview) -> bool {
+    false
+}
+
 /// Surveille l'instance : échéance de la génération courante, `main` réduite ou masquée → fenêtre détruite.
 fn watch_pairing(app: AppHandle, registry: Arc<PairingRegistry>, core: Arc<SyncCore>, hwnd: isize) {
     std::thread::spawn(move || loop {
@@ -213,7 +240,9 @@ fn watch_pairing(app: AppHandle, registry: Arc<PairingRegistry>, core: Arc<SyncC
             log::event("pairing-destroyed", reason);
             let handle = app.clone();
             let registry = registry.clone();
-            let _ = app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd));
+            if app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd)).is_err() {
+                log::event("pairing-destroy-failed", "watch");
+            }
             return;
         }
     });
@@ -231,7 +260,9 @@ pub async fn sync_pairing_open(app: AppHandle, window: WebviewWindow, state: Sta
     blocking(move || check.pairing_preconditions(mode == PairingMode::Show)).await?;
     // La page embarquée doit exister sous son nom exact : Tauri servirait index.html (l'application entière, avec ses stores) à sa
     // place (audit S1). Installation incomplète, pas une question de consentement : `io`, aucune boîte, aucune fenêtre.
-    if !pairing_page_available(&app) {
+    // Contrôle de la page hors du fil asynchrone : en développement, il fait une requête au serveur Vite (revue, faible).
+    let page_app = app.clone();
+    if !blocking(move || Ok(pairing_page_available(&page_app))).await? {
         log::event("pairing-refused", "page-missing");
         return fail(SyncCode::Io);
     }
@@ -275,8 +306,23 @@ async fn open_pairing_window(app: &AppHandle, main: &WebviewWindow, core: &Arc<S
     });
     let excluded = applied.is_ok() && tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(5)).unwrap_or(false)).await.unwrap_or(false);
     if let Err(error) = affinity_outcome(hwnd, excluded) {
-        let _ = window.destroy();
+        if window.destroy().is_err() {
+            log::event("pairing-destroy-failed", "display-affinity");
+        }
         log::event("pairing-refused", "display-affinity");
+        return Err(error);
+    }
+    // Durcissement de la WebView avant l'affichage (audit 1) ; échec : destruction, rien de renvoyé.
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let asked = window.with_webview(move |webview| {
+        let _ = sender.send(harden_webview(&webview));
+    });
+    let hardened = asked.is_ok() && tauri::async_runtime::spawn_blocking(move || receiver.recv_timeout(Duration::from_secs(5)).unwrap_or(false)).await.unwrap_or(false);
+    if let Err(error) = hardening_outcome(hardened) {
+        if window.destroy().is_err() {
+            log::event("pairing-destroy-failed", "webview-settings");
+        }
+        log::event("pairing-refused", "webview-settings");
         return Err(error);
     }
     registry.register(hwnd, mode, core.now());
@@ -374,7 +420,9 @@ pub async fn sync_key_import(
     let owner = caller.hwnd;
     let import_core = core.clone();
     let result = blocking(move || import_core.key_import(input, owner)).await?;
-    let _ = app.emit_to(MAIN_WINDOW, PAIRED_EVENT, ());
+    if app.emit_to(MAIN_WINDOW, PAIRED_EVENT, ()).is_err() {
+        log::event("pairing-emit-failed", "import");
+    }
     destroy_pairing(&app, &registry, instance.hwnd);
     Ok(result)
 }
@@ -404,8 +452,12 @@ pub async fn sync_scan(app: AppHandle, window: WebviewWindow, state: State<'_, S
     if let Some(hwnd) = state.pairing.observe_paired(&core.paired_with_self(&scan)) {
         let handle = app.clone();
         let registry = state.pairing.clone();
-        let _ = app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd));
-        let _ = app.emit_to(MAIN_WINDOW, PAIRED_EVENT, ());
+        if app.run_on_main_thread(move || destroy_pairing(&handle, &registry, hwnd)).is_err() {
+            log::event("pairing-destroy-failed", "arrival");
+        }
+        if app.emit_to(MAIN_WINDOW, PAIRED_EVENT, ()).is_err() {
+            log::event("pairing-emit-failed", "arrival");
+        }
     }
     Ok(scan)
 }
