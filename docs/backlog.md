@@ -123,10 +123,10 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | P-01 | M12 | Je réordonne et masque les onglets | settings-personalization | fait |
 | P-02 | M12 | Je choisis clair, sombre ou système | settings-personalization | fait |
 | P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | fait |
-| P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | à faire |
-| P-05 | M12 | Je suis guidé au premier lancement | settings-personalization | à faire |
+| P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | en cours (PC fait ; critère 11 iPhone à l’ordre 5, avec le plugin Fichiers) |
+| P-05 | M12 | Je suis guidé au premier lancement | settings-personalization | fait |
 | P-06 | M12 | Un écran vide m'indique quoi faire | settings-personalization | fait |
-| P-07 | M12 | J'importe mes tâches existantes | settings-personalization | à faire |
+| P-07 | M12 | J'importe mes tâches existantes | settings-personalization | fait |
 | P-08 | M12 | Je consulte les raccourcis clavier | settings-personalization | fait |
 | D-04 | M16 | J'utilise les raccourcis clavier | desktop-tauri | fait |
 
