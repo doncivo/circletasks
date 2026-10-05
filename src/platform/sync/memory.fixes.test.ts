@@ -61,6 +61,17 @@ describe('memory.ts, corrections du lot Y1', () => {
     expect(await codeOf(a.writeState({ sv: 14, state: stateOf(5, { segment: 1, record: 1, hlc: hlc(100) }) }))).toBe('state-mismatch');
   });
 
+  it('revue B1 : propre state.ctx remplacé (corrompu) : reconstruit avec le stateSeq lu en clair, réécriture possible', async () => {
+    const folder = new MemorySyncFolder();
+    const a = await published(folder);
+    a.testing.dropOwnState();
+    folder.corruptRecord(A, 'state.ctx', 0);
+    expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(200), records: ['{}'] }))).toBe('resolved');
+    const head = { segment: 1, record: 2, hlc: hlc(200) };
+    expect(await codeOf(a.writeState({ sv: 14, state: stateOf(5, head) }))).toBe('state-mismatch');
+    expect(await codeOf(a.writeState({ sv: 14, state: stateOf(6, head) }))).toBe('resolved');
+  });
+
   it('revue 16 : état dans le nuage : kid tiré d’un fichier présent', async () => {
     const folder = new MemorySyncFolder();
     const a = await published(folder);

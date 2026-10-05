@@ -567,12 +567,18 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const ack = read.status === 'ok' ? read.state?.acks.get(self) : undefined;
       if (ack) acks.push(ack);
     }
-    // Son propre state.ctx présent mais illisible (nuage, incomplet, remplacé) sans accusé qui borne : en attente, rien n'est retenu
-    // (revue 4 du lot Y1, même règle que Rust) ; l'appareil ne publie pas sur une tête qu'il ne connaît pas.
-    if (mine && mine.status !== 'ok' && mine.status !== 'missing' && acks.length === 0) fail('cloud-pending');
+    // Son propre state.ctx en transfert (nuage, ligne incomplète) sans accusé qui borne : en attente, rien n'est retenu (revue 4 du lot
+    // Y1, même règle que Rust).
+    if (mine?.status === 'cloud-pending' && acks.length === 0) fail('cloud-pending');
+    // Remplacé ou illisible (étranger, corrompu, rejeu, trop grand) : reconstruit sans lui, stateSeq au moins égal au numéro lu en clair
+    // dans l'en-tête du fichier remplacé et à l'état déjà accepté, pour le réécrire aussitôt (§1.4, revue B1).
+    const replacedSeq =
+      mine && mine.status !== 'ok' && mine.status !== 'missing' && mine.status !== 'cloud-pending'
+        ? Math.max(dir?.state && dir.state.header.f === 'ct-state' && dir.state.header.dev === self ? dir.state.header.n : 0, accepted.get(self)?.seq ?? 0)
+        : 0;
     const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(dir?.epochs.keys() ?? []), ...acks.map((a) => a.epoch)];
     const epoch = epochs.reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
-    const stateSeq = Math.max(state?.stateSeq ?? 0, ...acks.map((a) => a.stateSeq));
+    const stateSeq = Math.max(state?.stateSeq ?? 0, replacedSeq, ...acks.map((a) => a.stateSeq));
     const epochDir = epoch !== null ? dir?.epochs.get(epoch) : undefined;
     const listed = epochDir ? maxKey(epochDir.segments) : 0;
     const sources: { readonly cursor: RecordCursor; readonly hlc: Hlc | null }[] = [
