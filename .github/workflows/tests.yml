@@ -42,10 +42,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # RUSTSEC-2023-0071 (rsa, attaque Marvin, aucun correctif publié) : rsa n'est présent dans Cargo.lock que par sqlx-mysql,
+      # que tauri-plugin-sql (fonction « sqlite » seule) ne compile jamais. L'exception tient tant que l'étape suivante le prouve :
+      # si rsa entre un jour dans le graphe compilé, quelle que soit la cible, le job échoue.
+      - name: rsa jamais compilé
+        working-directory: src-tauri
+        run: |
+          out="$(cargo tree --locked -i rsa --target all -e normal,build)"
+          if [ -n "$out" ]; then echo "rsa est compilé : retirer l'exception RUSTSEC-2023-0071"; echo "$out"; exit 1; fi
       - name: cargo audit
         run: |
           cargo install cargo-audit --locked
-          cargo audit --file src-tauri/Cargo.lock
+          cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
 
   # Tests Rust du PC (cargo test, exécutable tests/desktop) : seulement si src-tauri/ change (ou lancement manuel). Le passage en
   # --release (URL du serveur Vite refusée hors debug pour la fenêtre pairing, ADR 0011 section 2.1) seulement sur main et à la demande.
