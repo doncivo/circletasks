@@ -115,6 +115,8 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
 - P-07 sur iPhone : « Télécharger un modèle » et le rapport des lignes rejetées sont masqués tant que le plugin Fichiers (`FileService.save`) n'existe pas.
 - Synchro (ADR 0011, section 2.1) : lancer le scan du QR depuis Rust (`sync_key_import({ scan: true })`). Si l'API Rust du plugin barcode-scanner ne le permet pas, faire passer le texte par le JS et documenter ce troisième point d'exposition par un avenant. Vérifier aussi les attributs du Trousseau (`SecItemCopyMatching`) et le refus des liens symboliques sous le signet du dossier.
 
+- **Y-07, à vérifier à l'ordre 5** : un échec de réintégration (sync_meta reintegrationFailure) doit s'afficher sur l'iPhone dès que le service de synchro y existe (avant l'ordre 5, aucun service : l'échec est enregistré mais pas affiché, cas impossible car sync_unknown n'est rempli que par la synchro).
+
 ## Livraison
 
 - D-03, critères 10-11 : workflow de release et secrets GitHub (PREP-01).
