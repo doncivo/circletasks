@@ -1,0 +1,4 @@
+/* Réglages › Synchronisation (Y-01) : sous-ligne verte « Dossier choisi » (Reglages.html : 13 px, #2F6B4A). */
+.ct-sync__ok {
+  color: var(--ct-color-achieved-text);
+}

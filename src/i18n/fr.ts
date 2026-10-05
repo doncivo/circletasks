@@ -16,6 +16,7 @@ import { shortcutsUiFr } from './fr.shortcuts';
 import { backupFr } from './fr.backup';
 import { importCsvFr } from './fr.importCsv';
 import { onboardingFr } from './fr.onboarding';
+import { syncFolderFr, syncKeyFr } from './fr.syncFolder';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -619,6 +620,7 @@ export const fr = {
   backup: backupFr,
   importCsv: importCsvFr,
   onboarding: onboardingFr,
+  sync: { folder: syncFolderFr, key: syncKeyFr },
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

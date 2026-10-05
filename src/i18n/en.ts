@@ -17,6 +17,7 @@ import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
 import { onboardingEn } from './en.onboarding';
 import type { Messages } from './types';
+import { syncFolderEn, syncKeyEn } from './en.syncFolder';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
 export const en: Messages = {
@@ -616,6 +617,7 @@ export const en: Messages = {
   backup: backupEn,
   importCsv: importCsvEn,
   onboarding: onboardingEn,
+  sync: { folder: syncFolderEn, key: syncKeyEn },
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',
