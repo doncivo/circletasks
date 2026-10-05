@@ -173,3 +173,4 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
   - renommer `FileExportError` en `FileError` (il sert aussi à la lecture) ;
   - restauration : points d'analyse de la couche de bureau (`app_config_dir` lui-même par jonction) non contrôlés au-delà du dossier `backups/`.
 - `cargo clippy --all-targets` : avertissements existants dans `src-tauri/src/backup.rs` (vers les lignes 757 à 904) et `src-tauri/tests/desktop/export.rs` (lignes 35 et 47), relevés pendant Q-01 critère 10 ; à corriger, puis ajouter clippy au job CI `tests.yml`.
+- build-windows.yml : l'extraction des notes depuis CHANGELOG.md garde la ligne vide qui suit le titre (`notes` de latest.json commence par « \n ») ; retirer les lignes vides de tête et de fin.
