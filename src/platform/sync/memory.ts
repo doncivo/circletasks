@@ -987,7 +987,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
 
   const writeState = async (r: { readonly sv: number; readonly state: PublishedDeviceState }): Promise<void> => {
     const { folder: f, kid, self, own: o } = requireWritable();
-    const s = r.state;
+    // Rust est maître de `pairedBy` (Y-06) : omis par le moteur, il est complété depuis `own.json` ; une valeur différente est refusée.
+    const s: PublishedDeviceState = r.state.pairedBy === undefined && o.pairedBy !== null ? { ...r.state, pairedBy: o.pairedBy } : r.state;
     if (!isPositive(r.sv)) fail('bad-name');
     if (s.acks.size > MAX_STATE_ACKS || s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
     const text = JSON.stringify(publishedStateToJson(s));

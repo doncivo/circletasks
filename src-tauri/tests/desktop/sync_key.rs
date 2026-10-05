@@ -14,7 +14,7 @@ use circletasks_lib::vault::SecretVault;
 use circletasks_lib::vault_ios::{is_sync_key_account, sync_key_attributes};
 use zeroize::Zeroizing;
 
-use crate::sync_support::{device, epoch, hlc, Device, FakeBackend, MemFs, DEV_A, DEV_B, FOLDER};
+use crate::sync_support::{device, epoch, hlc, Device, FakeBackend, MemFs, DEV_A, DEV_B, DEV_C, FOLDER};
 
 fn code<T>(result: Result<T, circletasks_lib::sync::SyncError>) -> SyncCode {
     match result {
@@ -227,7 +227,8 @@ fn y08_14_qr_import_sets_paired_by_and_epoch_and_replacing_a_key_asks_first() {
     let prompts = b.ui.prompts();
     b.core.key_import(KeyInput::QrText(Zeroizing::new(fresh.qr_text.clone())), 1).unwrap();
     assert_eq!(b.ui.prompts(), prompts);
-    // pairedBy mémorisé par Rust (own.json) : un état sans pairedBy est refusé, avec pairedBy accepté.
+    // pairedBy mémorisé par Rust (own.json), maître : un autre pairedBy est refusé ; omis, il est complété par Rust (Y-06,
+    // sync_pairing_y06.rs) ; le même est accepté.
     let state = |paired: Option<&str>| {
         let mut s = serde_json::json!({
             "deviceId": DEV_B, "platform": "windows", "appVersion": "0.1.1", "sm": 1, "sv": 14, "epoch": epoch(1, DEV_A), "stateSeq": 1,
@@ -239,7 +240,7 @@ fn y08_14_qr_import_sets_paired_by_and_epoch_and_replacing_a_key_asks_first() {
         }
         s
     };
-    assert_eq!(code(b.core.write_state(14, state(None))), SyncCode::StateMismatch);
+    assert_eq!(code(b.core.write_state(14, state(Some(DEV_C)))), SyncCode::StateMismatch);
     b.core.write_state(14, state(Some(DEV_A))).unwrap();
 }
 

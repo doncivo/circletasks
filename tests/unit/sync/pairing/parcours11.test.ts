@@ -18,7 +18,7 @@ import { createSimDevice, setupFirst, syncFolders, type SimDevice } from '../../
  * dossiers. Le PC choisit le dossier (clé créée), crée « Test synchro » ; les fichiers du dossier, tels que Rust les écrit (chiffrés
  * par le codec de référence, vrai AES-256-GCM avec l'AAD de la section 2), ne contiennent ni le titre ni un nom de table ; le second
  * appareil importe le QR (puis, second cas, la clé de secours), fait son premier cycle et lit la tâche. Cas d'erreur : QR expiré de plus
- * de 2 minutes, clé erronée (rien d'enregistré), dossier encore vide.
+ * de 2 minutes, clé erronée (rien d'enregistré), dossier encore vide. Le PC voit l'arrivée (`pairedBy` complété par la plateforme).
  *
  * Critère 16 : pendant tout l'appairage, ni la clé, ni le texte du QR, ni la clé de secours, ni la saisie, ni le titre de la tâche
  * n'apparaissent dans les journaux techniques, la console, l'état des stores Zustand ou le stockage. Critère 18 (c) : `key-mismatch`
@@ -109,7 +109,7 @@ async function readyToImport(phone: SimDevice): Promise<void> {
 }
 
 describe('parcours 11 en simulation (critère 19)', () => {
-  it('QR : fichiers chiffrés sans titre ni nom de table, tâche lisible sur le second appareil', async () => {
+  it('QR : fichiers chiffrés sans titre ni nom de table, tâche lisible sur le second appareil, arrivée vue par le PC', async () => {
     const { pc, taskId } = await pcWithTask();
     const payload = await showOnPc(pc);
     const key = keyOfQr(payload.qrText);
@@ -134,8 +134,12 @@ describe('parcours 11 en simulation (critère 19)', () => {
     expect(onPhone?.title).toBe(TITLE);
     expect(onPhone).toMatchObject({ title: onPc?.title, note: onPc?.note, date: onPc?.date, spaceId: onPc?.spaceId, status: onPc?.status });
 
-    // L'arrivée vue par le PC (état publié avec pairedBy) est vérifiée côté Rust (sync_pairing_y06.rs) : en simulation, le premier
-    // état d'un appareil associé par QR est refusé (state-mismatch, pairedBy inconnu du moteur), écart signalé dans le rapport de Y-06.
+    // Le moteur omet pairedBy : la plateforme (Rust, maître) le complète ; l'état est publié et le PC voit l'arrivée.
+    expect(phone.logger.entries.some((e) => e.event === 'write-state-failed')).toBe(false);
+    syncFolders(devices);
+    const scan = await pc.platform.scan({ keep: [] });
+    expect(scan.devices.find((d) => d.deviceId === PHONE_ID)?.state?.pairedBy).toBe(PC_ID);
+    expect((await pc.cycle()).devices.map((d) => d.deviceId)).toContain(PHONE_ID);
   });
 
   it('clé de secours : même résultat (saisie tolérante : minuscules et espaces)', async () => {

@@ -363,9 +363,14 @@ fn r17_paired_by_received_before_binding_is_kept() {
     b.core.key_import(KeyInput::QrText(Zeroizing::new(qr)), 1).unwrap();
     b.core.bind_device(DEV_B).unwrap();
     let mut s = state(DEV_B, &epoch(1, DEV_A), 1, 0, 0, None);
-    assert_eq!(code(b.core.write_state(14, s.clone())), SyncCode::StateMismatch, "pairedBy attendu par Rust");
-    s["pairedBy"] = json!(DEV_A);
+    s["pairedBy"] = json!(DEV_B);
+    assert_eq!(code(b.core.write_state(14, s.clone())), SyncCode::StateMismatch, "pairedBy différent de celui de Rust : refusé");
+    // Omis : complété par Rust (maître, décision Y-06) avec la valeur reçue avant la liaison.
+    s.as_object_mut().unwrap().remove("pairedBy");
     b.core.write_state(14, s).unwrap();
+    let scan = a.core.scan(&[]).unwrap();
+    let published = scan.devices.iter().find(|d| d.device_id == DEV_B).and_then(|d| d.state.as_ref()).and_then(|s| s.paired_by.clone());
+    assert_eq!(published.as_deref(), Some(DEV_A));
     let source = include_str!("../../src/sync/service.rs");
     let create = &source[source.find("pub fn key_create").unwrap()..];
     assert!(create.find("self.lock()").unwrap() < create.find("read_vault_key").unwrap(), "contrôle sous le verrou");

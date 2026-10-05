@@ -351,9 +351,11 @@ describe('appairage (Y-06, sections 2.1 et 10.3)', () => {
     expect(b.testing.pairing()).toBeNull();
     await b.bindDevice(B);
     await b.appendJournal({ epoch: E1, segment: 1, expectRecords: 0, sv: 14, maxHlc: hlc(1, B), records: ['b0'] });
-    // pairedBy mémorisé à l'import : Rust en est le maître.
-    expect(await codeOf(b.writeState({ sv: 14, state: stateOf(B, E1, 1, { segment: 1, record: 1, hlc: hlc(1, B) }) }))).toBe('state-mismatch');
-    await b.writeState({ sv: 14, state: stateOf(B, E1, 1, { segment: 1, record: 1, hlc: hlc(1, B) }, { pairedBy: A }) });
+    // pairedBy mémorisé à l'import : Rust en est le maître (Y-06). Différent : refusé ; omis : complété ; identique : accepté.
+    expect(await codeOf(b.writeState({ sv: 14, state: stateOf(B, E1, 1, { segment: 1, record: 1, hlc: hlc(1, B) }, { pairedBy: B }) }))).toBe('state-mismatch');
+    await b.writeState({ sv: 14, state: stateOf(B, E1, 1, { segment: 1, record: 1, hlc: hlc(1, B) }) });
+    expect((await a.scan({ keep: [] })).devices.find((d) => d.deviceId === B)?.state?.pairedBy).toBe(A);
+    await b.writeState({ sv: 14, state: stateOf(B, E1, 2, { segment: 1, record: 1, hlc: hlc(1, B) }, { pairedBy: A }) });
   });
 
   it('clé de secours : saisie tolérante, somme de contrôle vérifiée', async () => {

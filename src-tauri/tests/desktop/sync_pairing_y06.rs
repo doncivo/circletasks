@@ -286,3 +286,39 @@ fn y06_16_arrival_logs_hold_no_secret() {
         assert!(!lines.contains(needle));
     }
 }
+
+/// Rust est maître de `pairedBy` (décision Y-06) : le moteur l'omet dans le premier état d'un appareil associé par QR ; Rust le
+/// complète, l'état est publié et le PC voit l'arrivée. Une valeur différente reste refusée.
+#[test]
+fn y06_9_paired_by_is_completed_by_rust_when_the_engine_omits_it() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish(&a, DEV_A, &epoch(1, DEV_A), None);
+    let registry = PairingRegistry::default();
+    registry.begin_open(false).unwrap();
+    registry.register(42, PairingMode::Show, NOW);
+    registry.observe_paired(&a.core.paired_with_self(&a.core.scan(&[]).unwrap()));
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = joiner(&fs, DEV_B);
+    b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    // Valeur différente : refusée, rien n'est écrit.
+    let mut other = serde_json::json!({
+        "deviceId": DEV_B, "platform": "windows", "appVersion": "0.1.1", "sm": 1, "sv": 14, "epoch": epoch(1, DEV_A), "stateSeq": 1,
+        "head": { "epoch": epoch(1, DEV_A), "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 },
+        "acks": {}, "snapshot": null, "purgeHorizon": null, "lastSyncHlc": hlc(5, DEV_B), "forgotten": [], "reset": null
+    });
+    other["pairedBy"] = serde_json::json!(DEV_C);
+    assert_eq!(code(b.core.write_state(14, other)), SyncCode::StateMismatch);
+    // Omise (ce que fait le moteur) : acceptée et complétée.
+    publish(&b, DEV_B, &epoch(1, DEV_A), None);
+    let scan = a.core.scan(&[]).unwrap();
+    let state = scan.devices.iter().find(|d| d.device_id == DEV_B).and_then(|d| d.state.clone()).expect("état de B publié");
+    assert_eq!(state.paired_by.as_deref(), Some(DEV_A));
+    assert_eq!(registry.observe_paired(&a.core.paired_with_self(&scan)), Some(42));
+    // Clé de secours (aucun pairedBy connu) : l'état reste sans pairedBy.
+    let c = joiner(&fs, DEV_C);
+    c.core.key_import(KeyInput::RecoveryKey(Zeroizing::new(payload.recovery_key.clone())), 1).unwrap();
+    publish(&c, DEV_C, &epoch(1, DEV_A), None);
+    let scan = a.core.scan(&[]).unwrap();
+    assert_eq!(scan.devices.iter().find(|d| d.device_id == DEV_C).and_then(|d| d.state.as_ref()).map(|s| s.paired_by.clone()), Some(None));
+}
