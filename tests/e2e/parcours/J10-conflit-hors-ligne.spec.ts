@@ -177,7 +177,9 @@ test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; 
   expect(deviceId).toMatch(/^[0-9a-f-]{36}$/);
   await seedOfflineTasks(page, String(deviceId), 5_000);
 
-  // Tâches longues de la page pendant les deux cycles (interrompu, puis repris).
+  // Tâches longues de la page pendant les deux cycles (interrompu, puis repris). Sans prise en charge du type `longtask`, la mesure
+  // serait vide et le test passerait à vide : on l'exige explicitement.
+  expect(await page.evaluate(() => PerformanceObserver.supportedEntryTypes.includes('longtask')), 'le navigateur ne rapporte pas les tâches longues').toBe(true);
   await page.evaluate(() => {
     const durations: number[] = [];
     (window as unknown as { __ctLongTasks: number[] }).__ctLongTasks = durations;
