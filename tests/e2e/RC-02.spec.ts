@@ -4,7 +4,7 @@ import { insertChecklists } from './helpers/checklists';
 import { insertEvents } from './helpers/events';
 import { insertGoals } from './helpers/goals';
 import { addIsoDays, browserToday } from './helpers/schedule';
-import { assignProject, chipOf, chooseChip, closeSearch, groupTitles, insertSearchTasks, openSearch, resultRows, searchDialog, typeSearch } from './helpers/search';
+import { assignProject, chipOf, chooseChip, closeSearch, describeTimings, groupTitles, median, insertSearchTasks, openSearch, resultRows, searchDialog, typeSearch } from './helpers/search';
 import { addProject, backToToday, filterPill, openSpacesScreen } from './helpers/spaces';
 import { mondayOf } from './helpers/week';
 
@@ -148,14 +148,19 @@ test.describe('RC-02 — filtres de la recherche', () => {
         [chip, option, expected] as const,
       );
     const timings: number[] = [];
-    for (let i = 0; i < 3; i += 1) {
+    for (let i = 0; i < 5; i += 1) {
       timings.push(await measure('Filtre Statut : Tous', 'Fait', 'empty'));
       timings.push(await measure('Filtre Statut : Fait', 'Tous', 'rows'));
       timings.push(await measure('Filtre Type : Tous', 'Checklists', 'empty'));
       timings.push(await measure('Filtre Type : Checklists', 'Tous', 'rows'));
     }
-    testInfo.annotations.push({ type: 'mesure', description: `${timings.map((ms) => String(Math.round(ms))).join(' / ')} ms` });
-    expect(Math.min(...timings.filter((_, index) => index % 2 === 0)), 'états vides').toBeLessThan(200);
-    expect(Math.min(...timings.filter((_, index) => index % 2 === 1)), 'états avec résultats').toBeLessThan(200);
+    const empty = timings.filter((_, index) => index % 2 === 0);
+    const withRows = timings.filter((_, index) => index % 2 === 1);
+    const report = `${describeTimings('états vides', empty)} ; ${describeTimings('états avec résultats', withRows)}`;
+    testInfo.annotations.push({ type: 'mesure', description: report });
+    process.stdout.write(`RC-02 ${report}\n`);
+    // Médiane de 10 essais par famille d'états (et non le meilleur essai) contre le budget de 200 ms.
+    expect(median(empty), 'états vides (médiane)').toBeLessThan(200);
+    expect(median(withRows), 'états avec résultats (médiane)').toBeLessThan(200);
   });
 });

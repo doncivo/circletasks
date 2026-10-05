@@ -39,6 +39,6 @@ export function subtitleParts(result: SearchResult, spaces: readonly Pick<Space,
 }
 
 /** Nom accessible complet d'une ligne : « Tâche, Envoyer la facture, mer. 23 sept., Pro, à faire » (RC-03 critère 7). */
-export function resultLabel(result: SearchResult, spaces: readonly Pick<Space, 'id' | 'name' | 'color'>[]): string {
-  return [t(`search.kinds.${result.hit.kind}`), result.hit.title, ...subtitleParts(result, spaces).map((part) => part.text)].join(', ');
+export function resultLabel(result: SearchResult, spaces: readonly Pick<Space, 'id' | 'name' | 'color'>[], parts: readonly SubtitlePart[] = subtitleParts(result, spaces)): string {
+  return [t(`search.kinds.${result.hit.kind}`), result.hit.title, ...parts.map((part) => part.text)].join(', ');
 }

@@ -97,3 +97,15 @@ export async function assignProject(page: Page, taskTitle: string, projectName: 
     [taskTitle, projectName] as const,
   );
 }
+
+/** Médiane d'une série de mesures (ms) : retenue contre le budget, plus fidèle que le meilleur essai. */
+export function median(values: readonly number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? (sorted[mid] ?? 0) : ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
+}
+
+/** Texte des mesures (médiane, maximum, détail) pour l'annotation du test. */
+export function describeTimings(label: string, timings: readonly number[]): string {
+  return `${label} : médiane ${String(Math.round(median(timings)))} ms, max ${String(Math.round(Math.max(...timings)))} ms (${timings.map((ms) => String(Math.round(ms))).join(' / ')})`;
+}
