@@ -1,9 +1,9 @@
 /**
  * Textes de `sync.pairing` (Y-06), en français : source de vérité ; `en.syncPairing.ts` suit la même forme.
  *
- * Deux usages : la fenêtre principale (boutons « Associer », messages, progression du nouvel appareil, par `t('sync.pairing.…')`) et
- * la fenêtre dédiée `pairing` (`window`, `import`, `errors`), qui importe **directement** ce fichier pour garder un bundle minimal
- * (ADR 0011 section 2.1, décision D6). Aucun texte ne recopie une clé ni une saisie.
+ * Deux exports : `syncPairingFr` pour la fenêtre principale (boutons « Associer », messages, progression du nouvel appareil, par
+ * `t('sync.pairing.…')`) et `syncPairingWindowFr` pour la fenêtre dédiée `pairing`, qui importe **directement** ce fichier pour garder
+ * un bundle minimal (ADR 0011 section 2.1, décision D6). Aucun texte ne recopie une clé ni une saisie.
  */
 export const syncPairingFr = {
   rowLabel: 'Nouvel appareil',
@@ -26,6 +26,13 @@ export const syncPairingFr = {
   joinFailedClock: 'La réception de vos données est bloquée : l’horloge de cet appareil est en retard. Réglez l’heure, elle reprendra ensuite',
   retry: 'Réessayer',
   retryLabel: 'Réessayer la réception des données',
+} as const;
+
+/**
+ * Textes de la fenêtre dédiée `pairing` (affichage, saisie, erreurs) : importés **directement** par `src/features/sync/pairing-window`
+ * (D6), hors du catalogue de la fenêtre principale, qui n'en a pas besoin (bundle de départ plus léger).
+ */
+export const syncPairingWindowFr = {
   window: {
     section: 'SYNCHRONISATION',
     title: 'Associer l’iPhone',

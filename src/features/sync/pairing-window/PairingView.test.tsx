@@ -6,8 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PAIRING_VALIDITY_MS } from '../../../domain/sync/limits';
 import { epochId, type DeviceAck, type EpochId, type PublishedDeviceState } from '../../../domain/sync/format';
 import type { DeviceId, Hlc } from '../../../domain/types';
-import { syncPairingEn } from '../../../i18n/en.syncPairing';
-import { syncPairingFr } from '../../../i18n/fr.syncPairing';
+import { syncPairingEn, syncPairingWindowEn } from '../../../i18n/en.syncPairing';
+import { syncPairingFr, syncPairingWindowFr } from '../../../i18n/fr.syncPairing';
 import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type MemorySyncPlatform } from '../../../platform/sync';
 import { reducePairingPlatform, type PairingPlatform } from './pairingPlatform';
 import { pairingErrorText, pairingTexts } from './pairingText';
@@ -17,7 +17,7 @@ import { RecoveryKeyEntry } from './RecoveryKeyEntry';
 const A = '3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60' as DeviceId;
 const B = '7d4e1a2b-3c5f-4a6b-8d7e-9f0a1b2c3d4e' as DeviceId;
 const E1 = epochId(1, A);
-const T = syncPairingFr;
+const T = syncPairingWindowFr;
 const hlc = (ms: number, dev: string = A): Hlc => `${String(ms).padStart(15, '0')}-0000-${dev}` as Hlc;
 
 let nowMs = 1_800_000_000_000;
@@ -333,9 +333,10 @@ describe('exposition de la clé (critère 16) et textes (critère 22)', () => {
     const keys = (value: object, prefix = ''): string[] =>
       Object.entries(value).flatMap(([key, v]) => (typeof v === 'object' && v !== null ? keys(v as object, `${prefix}${key}.`) : [`${prefix}${key}`]));
     expect(keys(syncPairingEn).sort()).toEqual(keys(syncPairingFr).sort());
+    expect(keys(syncPairingWindowEn).sort()).toEqual(keys(syncPairingWindowFr).sort());
     const values = (value: object): string[] => Object.values(value).flatMap((v) => (typeof v === 'object' && v !== null ? values(v as object) : [String(v)]));
-    expect(values(syncPairingFr).every((v) => v.trim() !== '')).toBe(true);
-    expect(pairingTexts('en')).toBe(syncPairingEn);
-    expect(pairingTexts('fr')).toBe(syncPairingFr);
+    expect([...values(syncPairingFr), ...values(syncPairingWindowFr), ...values(syncPairingWindowEn)].every((v) => v.trim() !== '')).toBe(true);
+    expect(pairingTexts('en')).toBe(syncPairingWindowEn);
+    expect(pairingTexts('fr')).toBe(syncPairingWindowFr);
   });
 });

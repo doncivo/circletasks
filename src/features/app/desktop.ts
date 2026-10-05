@@ -7,7 +7,6 @@ import { useQuickAddStore } from './quickAdd';
 import { useNavigationStore } from './navigation';
 import { syncBeforeQuit } from '../sync/startSync';
 import { syncStore } from '../sync/syncStore';
-import { handleSyncPaired } from '../sync/pairingStatus';
 import { formatChord } from './shortcutsHelp';
 
 /** Textes du menu de la zone de notification (D-01) : seule source, src/i18n. */
@@ -80,7 +79,7 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
     .catch((error: unknown) => logDesktopFailure('tray-sync', error));
   // Y-06 : appareil associé (`sync-paired`, sans clé) : la fenêtre `pairing` est déjà détruite par Rust ; cycle et lignes rafraîchies.
   desktop
-    .onSyncPaired(() => void handleSyncPaired(container))
+    .onSyncPaired(() => void import('../sync/pairingStatus').then(({ handleSyncPaired }) => handleSyncPaired(container)))
     .then((stop) => {
       if (disposed) stop();
       else unlistenPaired = stop;

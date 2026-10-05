@@ -1,4 +1,4 @@
-import type { syncPairingFr } from './fr.syncPairing';
+import type { syncPairingFr, syncPairingWindowFr } from './fr.syncPairing';
 
 type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<T[K]> };
 
@@ -24,6 +24,10 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   joinFailedClock: 'Receiving your data is blocked: this device’s clock is behind. Set the time, it will resume afterwards',
   retry: 'Try again',
   retryLabel: 'Try receiving the data again',
+};
+
+/** Pairing window texts (`window`, `import`, `errors`), English. Same shape as `syncPairingWindowFr`. */
+export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
   window: {
     section: 'SYNC',
     title: 'Pair the iPhone',
