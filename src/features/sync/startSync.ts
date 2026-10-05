@@ -1,3 +1,4 @@
+import { newerDevices } from '../../domain/sync/compat';
 import { QUIT_HANDLER_SYNC_MS } from '../../domain/sync/limits';
 import { startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore } from '../app/appStatus';
@@ -13,7 +14,7 @@ const schedulers = new WeakMap<AppContainer, SyncScheduler>();
 
 /**
  * Branche la synchro sur l'app (Y-02 critères 1, 17 et 18) : planificateur (ouverture, 5 min fenêtre visible, masquage), bandeaux A-09
- * (« Synchro en cours », « En attente d'iCloud » ; « Hors ligne » n'est jamais retiré ici) et rechargement des stores après chaque lot
+ * (« Synchro en cours », « En attente d'iCloud », « Mettez à jour l'app » (Y-07) ; « Hors ligne » n'est jamais retiré ici) et rechargement des stores après chaque lot
  * reçu. Sans synchro (`container.sync` null) : rien, aucun coût.
  */
 export function startSyncIntegration(container: AppContainer, env: Partial<SyncSchedulerEnv> = {}): SyncIntegration {
@@ -21,9 +22,13 @@ export function startSyncIntegration(container: AppContainer, env: Partial<SyncS
   if (!sync) return { dispose: () => undefined };
   const status = useAppStatusStore.getState();
   const applyBanners = (): void => {
-    const phase = sync.status().phase;
+    const current = sync.status();
+    const phase = current.phase;
     status.setStatus('syncing', phase === 'syncing' ? {} : null);
     status.setStatus('waitingIcloud', phase === 'waiting-icloud' ? {} : null);
+    // Y-07 critère 9 : tant qu'un autre appareil actif publie une version plus récente ; jamais sans synchro configurée.
+    const configured = phase !== 'not-configured' && phase !== 'needs-pairing';
+    status.setStatus('updateRequired', configured && newerDevices(current.devices).length > 0 ? {} : null);
   };
   const stopStatus = sync.subscribe(applyBanners);
   const stopChanges = sync.onRemoteChanges((change) => void applyRemoteChanges(container, change).catch(() => undefined));
@@ -37,6 +42,7 @@ export function startSyncIntegration(container: AppContainer, env: Partial<SyncS
       stopChanges();
       useAppStatusStore.getState().setStatus('syncing', null);
       useAppStatusStore.getState().setStatus('waitingIcloud', null);
+      useAppStatusStore.getState().setStatus('updateRequired', null);
     },
   };
 }

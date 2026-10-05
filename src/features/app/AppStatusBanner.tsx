@@ -20,6 +20,9 @@ export function AppStatusBanner() {
           {...(source.onAction ? { actionLabel: t('status.reconnect'), onAction: source.onAction } : {})}
         />
       );
+    case 'updateRequired':
+      // Y-07 critère 9 : texte seul, aucun bouton (mise à jour par l'updater PC ou SideStore).
+      return <StatusBanner message={t('sync.version.banner')} />;
     case 'waitingIcloud':
       return <StatusBanner message={t('status.waitingIcloud')} />;
     case 'syncing':

@@ -17,6 +17,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     waitingIcloud: 'Waiting for iCloud',
     restoreChoice: 'A choice is needed after the restore',
     updateRequired: 'Update the app to read the data of your other devices',
+    updateRequiredDevice: 'Update the app to read the data of {device}',
     clockAhead: 'The clock of {device} is ahead: check its date and time',
     keyMismatch: 'This folder was encrypted with another key: pair this device',
     errorGeneric: 'Sync failed: it will retry at the next cycle',

@@ -4,8 +4,8 @@ import { isOnline, watchOnline } from '../../platform/network';
 
 /**
  * État de l'app visible dans le bandeau (A-09). Chaque source pose ou retire son état ; le bandeau n'en montre qu'un
- * (priorité du domaine). À l'ordre 1 seul `offline` est émis (réseau) ; `syncing` et `waitingIcloud` seront posés par la
- * synchro (Y-02), `calendarDisconnected` (avec son action « Reconnecter ») par les agendas (K-01 à K-03).
+ * (priorité du domaine). À l'ordre 1 seul `offline` est émis (réseau) ; `syncing`, `waitingIcloud` et `updateRequired` (Y-07) sont
+ * posés par la synchro (`startSync.ts`), `calendarDisconnected` (avec son action « Reconnecter ») par les agendas (K-01 à K-03).
  */
 export interface StatusSource {
   /** Nom de l'agenda (`calendarDisconnected`). */
