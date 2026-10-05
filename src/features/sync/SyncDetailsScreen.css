@@ -29,11 +29,11 @@
 
 .ct-sync__sub {
   font-size: 13px;
-  color: #2f6b4a;
+  color: var(--ct-color-achieved-text);
 }
 
 .ct-sync__sub[data-trouble='true'] {
-  color: #b5483b;
+  color: var(--ct-color-icon-red);
 }
 
 .ct-sync__lineActions {
