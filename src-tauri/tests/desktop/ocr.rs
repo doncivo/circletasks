@@ -239,3 +239,15 @@ fn png_declaring(width: u32, height: u32) -> Vec<u8> {
     chunk(&mut out, b"IEND", &[]);
     out
 }
+
+/// Cause du plantage CI (STATUS_ACCESS_VIOLATION) : les fabriques WinRT mises en cache vivaient dans un appartement MTA détruit
+/// dès que le premier fil appelant se terminait. Chaque appel vient ici d'un fil neuf, qui se termine avant le suivant.
+#[cfg(windows)]
+#[test]
+fn status_survives_the_end_of_the_thread_that_first_used_winrt() {
+    let first = std::thread::spawn(status).join().expect("premier fil");
+    for _ in 0..5 {
+        let next = std::thread::spawn(status).join().expect("fil suivant, sans plantage");
+        assert_eq!(next.languages, first.languages);
+    }
+}

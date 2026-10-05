@@ -48,7 +48,10 @@ export function syncErrorCodeOf(error: unknown): SyncErrorCode {
 
 export interface SyncFolderInfo {
   readonly configured: boolean;
-  /** Libellé seulement (« iCloud Drive / CircleTasks »), jamais un chemin. */
+  /**
+   * Nom du dossier (« CircleTasks »), jamais un chemin. Le libellé affiché (« iCloud Drive / CircleTasks ») est composé par l'interface
+   * avec `kind` et les textes de `src/i18n` (revue 13 du lot Y1).
+   */
   readonly label: string | null;
   readonly kind: 'icloud' | 'local' | 'unknown';
   readonly pinned: boolean;
@@ -171,14 +174,19 @@ export interface DeviceScanJson extends Omit<DeviceScan, 'state'> {
   readonly state: PublishedDeviceStateJson | null;
 }
 
+/** Forme IPC de `SyncFolderInfo` : Rust rend le nom du dossier (`name`), jamais un libellé composé ni un chemin. */
+export interface SyncFolderInfoJson extends Omit<SyncFolderInfo, 'label'> {
+  readonly name: string | null;
+}
+
 export interface FolderScanJson extends Omit<FolderScan, 'devices'> {
   readonly devices: readonly DeviceScanJson[];
 }
 
 /** Entrée (arguments d'`invoke`, `undefined` : aucun) et sortie de chaque commande `sync_*`. */
 export interface SyncCommandMap {
-  sync_folder_info: { readonly args: undefined; readonly result: SyncFolderInfo };
-  sync_folder_choose: { readonly args: undefined; readonly result: SyncFolderInfo | null };
+  sync_folder_info: { readonly args: undefined; readonly result: SyncFolderInfoJson };
+  sync_folder_choose: { readonly args: undefined; readonly result: SyncFolderInfoJson | null };
   sync_folder_forget: { readonly args: { readonly eraseKey: boolean }; readonly result: null };
   sync_bind_device: { readonly args: { readonly deviceId: DeviceId }; readonly result: null };
   sync_key_status: { readonly args: undefined; readonly result: { readonly present: boolean; readonly kid: string | null } };

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-focus-window-bring-to-front"
+description = "Enables the focus_window_bring_to_front command without any pre-configured scope."
+commands.allow = ["focus_window_bring_to_front"]
+
+[[permission]]
+identifier = "deny-focus-window-bring-to-front"
+description = "Denies the focus_window_bring_to_front command without any pre-configured scope."
+commands.deny = ["focus_window_bring_to_front"]

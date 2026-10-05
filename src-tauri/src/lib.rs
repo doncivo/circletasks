@@ -10,6 +10,8 @@ pub mod backup;
 pub mod backup_triggers;
 pub mod calendars;
 #[cfg(desktop)]
+pub mod focus_window;
+#[cfg(desktop)]
 pub mod capture;
 #[cfg(desktop)]
 pub mod desktop;
@@ -21,12 +23,34 @@ pub mod import;
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Synchronisation par iCloud Drive (ADR 0011, lot Y1 : Y-08, Y-01).
+pub mod sync;
+/// Coffre système (agendas, clé de synchro), déplacé de `calendars/vault.rs` au lot Y1.
+pub mod vault;
+/// Clé de synchro au Trousseau iOS (contrat, ordre 5).
+pub mod vault_ios;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
-    let builder = desktop::configure(builder).manage(export::ExportState::default()).invoke_handler(tauri::generate_handler![desktop::set_tray_labels, desktop::confirm_quit, shortcut::set_quick_capture_shortcut, shortcut::clear_quick_capture_shortcut, shortcut::get_quick_capture_shortcut, export::export_save_file, export::reveal_exported_file, import::import_open_file, capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error, ocr::ocr_status, ocr::ocr_recognize, backup::backup_database_before_migration, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
+    let builder = desktop::configure(builder).manage(export::ExportState::default()).manage(sync::commands::SyncState::default()).invoke_handler(tauri::generate_handler![
+        desktop::set_tray_labels, desktop::confirm_quit, shortcut::set_quick_capture_shortcut, shortcut::clear_quick_capture_shortcut, shortcut::get_quick_capture_shortcut,
+        export::export_save_file, export::reveal_exported_file, import::import_open_file,
+        capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error,
+        ocr::ocr_status, ocr::ocr_recognize,
+        backup::backup_database_before_migration, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder,
+        calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
+        // Mini-fenêtre Focus ouverte par Rust (correctif F-01, ADR 0011 section 2.1).
+        focus_window::focus_window_open, focus_window::focus_window_bring_to_front, focus_window::focus_window_close,
+        // Synchronisation (ADR 0011 section 11.1) : 18 commandes pour `main`, 3 pour `pairing`.
+        sync::commands::sync_folder_info, sync::commands::sync_folder_choose, sync::commands::sync_folder_forget, sync::commands::sync_bind_device,
+        sync::commands::sync_key_status, sync::commands::sync_key_create, sync::commands::sync_pairing_open, sync::commands::sync_pairing_payload,
+        sync::commands::sync_key_import, sync::commands::sync_pairing_close, sync::commands::sync_scan, sync::commands::sync_read_journal,
+        sync::commands::sync_append_journal, sync::commands::sync_write_state, sync::commands::sync_snapshot_begin, sync::commands::sync_snapshot_append,
+        sync::commands::sync_snapshot_commit, sync::commands::sync_read_snapshot, sync::commands::sync_delete_own, sync::commands::sync_restore_marker_get,
+        sync::commands::sync_restore_marker_clear,
+    ]);
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
     builder

@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "focus-launcher",
-  "description": "PC : la fenêtre principale ouvre, ramène au premier plan et ferme la mini-fenêtre Focus (M10, F-01). Création de fenêtre limitée à ce rôle ; aucune permission de plus pour la mini-fenêtre.",
+  "description": "PC : la fenêtre principale ouvre, ramène au premier plan et ferme la mini-fenêtre Focus (M10, F-01) par trois commandes Rust (libellé, URL et options fixés par Rust). Aucune permission de création de fenêtre, d'affichage ni de destruction : la fenêtre principale ne peut créer aucune fenêtre (ADR 0011 section 2.1, troisième audit H1).",
   "windows": ["main"],
   "platforms": ["windows"],
-  "permissions": ["core:webview:allow-create-webview-window", "core:window:allow-show", "core:window:allow-set-focus", "core:window:allow-unminimize", "core:window:allow-destroy"]
+  "permissions": ["allow-focus-window-open", "allow-focus-window-bring-to-front", "allow-focus-window-close"]
 }

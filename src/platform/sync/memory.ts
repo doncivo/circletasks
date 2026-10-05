@@ -141,7 +141,7 @@ export class MemorySyncFolder {
   constructor(
     readonly id: string = 'memory-folder',
     /** Faux de dev et de test : jamais affiché tel quel, l'écran tire ses textes de src/i18n (le libellé réel vient de Rust). */
-    readonly label: string = 'iCloud Drive / CircleTasks',
+    readonly label: string = 'CircleTasks',
     readonly kind: SyncFolderInfo['kind'] = 'icloud',
   ) {}
 
@@ -485,6 +485,9 @@ function fail(code: SyncErrorCode): never {
   throw new SyncPlatformError(code);
 }
 
+/** Écart maximal entre le stateSeq lu en clair dans l'en-tête de son propre état remplacé et les sources authentifiées (comme Rust). */
+const MAX_UNAUTHENTICATED_SEQ_JUMP = 1_000_000;
+
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 const isPositive = (value: unknown): value is number => isCount(value) && value >= 1;
 
@@ -567,9 +570,23 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const ack = read.status === 'ok' ? read.state?.acks.get(self) : undefined;
       if (ack) acks.push(ack);
     }
+    // Son propre state.ctx en transfert (nuage, ligne incomplète) sans accusé qui borne : en attente, rien n'est retenu (revue 4 du lot
+    // Y1, même règle que Rust).
+    if (mine?.status === 'cloud-pending' && acks.length === 0) fail('cloud-pending');
+    // État d'une version plus récente du format : jamais réécrit (Y-07, « Mettez à jour l'app »).
+    if (mine?.status === 'newer-format') fail('newer-format');
+    // Remplacé ou illisible (étranger, corrompu, rejeu, trop grand) : reconstruit sans lui, stateSeq au moins égal à l'état accepté et
+    // au numéro lu en clair dans l'en-tête du fichier remplacé, pour le réécrire aussitôt (§1.4, revue B1) ; ce numéro non authentifié
+    // n'est retenu que s'il dépasse d'au plus 1 000 000 les sources authentifiées (accusés, état accepté), sinon ignoré.
+    let replacedSeq = 0;
+    if (mine && mine.status !== 'ok' && mine.status !== 'missing' && mine.status !== 'cloud-pending') {
+      const authenticated = Math.max(accepted.get(self)?.seq ?? 0, ...acks.map((a) => a.stateSeq));
+      const header = dir?.state && dir.state.header.f === 'ct-state' && dir.state.header.dev === self ? dir.state.header.n : 0;
+      replacedSeq = header <= authenticated + MAX_UNAUTHENTICATED_SEQ_JUMP ? Math.max(authenticated, header) : authenticated;
+    }
     const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(dir?.epochs.keys() ?? []), ...acks.map((a) => a.epoch)];
     const epoch = epochs.reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
-    const stateSeq = Math.max(state?.stateSeq ?? 0, ...acks.map((a) => a.stateSeq));
+    const stateSeq = Math.max(state?.stateSeq ?? 0, replacedSeq, ...acks.map((a) => a.stateSeq));
     const epochDir = epoch !== null ? dir?.epochs.get(epoch) : undefined;
     const listed = epochDir ? maxKey(epochDir.segments) : 0;
     const sources: { readonly cursor: RecordCursor; readonly hlc: Hlc | null }[] = [

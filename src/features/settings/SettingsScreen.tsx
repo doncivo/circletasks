@@ -10,6 +10,7 @@ import { FocusSoundSetting } from '../focus/FocusSoundSetting';
 import { formatRecapSummary } from '../reminders';
 import { ShortcutsSettingsSection } from '../shortcuts';
 import { QuietHoursRows, SpacesSummaryRow } from '../spaces';
+import { SyncSettingsSection } from '../sync/SyncSettingsSection';
 import { AboutSection } from './AboutSection';
 import { BackupRow } from './BackupRow';
 import { ImportRow } from './ImportRow';
@@ -23,7 +24,7 @@ import './SettingsScreen.css';
  * Écran Réglages minimal (Reglages.html) : section « GÉNÉRAL » avec la seule ligne « Fuseau horaire » (T-11, lecture seule), section « TÂCHES » avec les interrupteurs « Reporter
  * les tâches non faites » (T-06) et « Masquer les routines de la liste » (A-03), section « DONNÉES ET SÉCURITÉ » avec la seule ligne
  * « Corbeille » (T-08, Q6 : unique point d'accès). Sur PC seulement : section « GÉNÉRAL » avec
- * « Démarrer avec Windows » (D-02) et section « À PROPOS » (D-03). Aucun autre réglage n'est
+ * « Démarrer avec Windows » (D-02) et section « À PROPOS » (D-03). Section « SYNCHRONISATION » (Y-01, PC à l’ordre 4). Aucun autre réglage n’est
  * simulé : ils arrivent avec M12.
  */
 export function SettingsScreen() {
@@ -131,6 +132,8 @@ export function SettingsScreen() {
       <SpacesSummaryRow />
       <CalendarsSummaryRow />
       <ShortcutsSettingsSection />
+      {/* M15 (Y-01) : dossier de synchro ; section absente sur iPhone jusqu'à l'ordre 5. */}
+      <SyncSettingsSection />
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
       {/* M12 (P-04) : sauvegarde automatique quotidienne et restauration. */}
       <BackupRow />

@@ -55,6 +55,41 @@ jobs:
           cargo install cargo-audit --locked
           cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
 
+  # Tests Rust du PC (cargo test, exécutable tests/desktop) : seulement si src-tauri/ change (ou lancement manuel). Le passage en
+  # --release (URL du serveur Vite refusée hors debug pour la fenêtre pairing, ADR 0011 section 2.1) seulement sur main et à la demande.
+  # Cache des dépendances seulement (rust-cache), sauvegardé seulement depuis main.
+  rust-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fichiers Rust modifiés ?
+        id: changes
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "${{ github.event_name }}" = "pull_request" ]; then base="${{ github.event.pull_request.base.sha }}"; else base="${{ github.event.before }}"; fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git diff --name-only "$base" HEAD -- src-tauri | grep -q .; then echo "rust=true" >> "$GITHUB_OUTPUT"; else echo "rust=false" >> "$GITHUB_OUTPUT"; fi
+      - name: Rust stable
+        if: steps.changes.outputs.rust == 'true'
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Cache des dépendances Rust
+        if: steps.changes.outputs.rust == 'true'
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        if: steps.changes.outputs.rust == 'true'
+        working-directory: src-tauri
+        run: cargo test --locked --test desktop
+      - name: cargo test --release (fenêtre pairing)
+        if: steps.changes.outputs.rust == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+        working-directory: src-tauri
+        run: cargo test --locked --release --test desktop sync_pairing
+
   e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.e2e
     runs-on: ubuntu-latest

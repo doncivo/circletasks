@@ -38,15 +38,38 @@ fn focus_window_only_exchanges_events() {
     }
 }
 
+/// Correctif F-01 (ADR 0011 section 2.1, troisième audit H1) : la fenêtre principale n'ouvre la mini-fenêtre que par trois commandes
+/// Rust ; aucune permission de création, d'affichage, de focus ni de destruction de fenêtre.
 #[test]
-fn only_the_main_window_may_create_the_focus_window() {
+fn only_the_main_window_may_open_the_focus_window_through_rust_commands() {
     let capability: Value = serde_json::from_str(LAUNCHER_CAPABILITY).expect("capability valide");
     assert_eq!(capability["windows"], serde_json::json!(["main"]));
     assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
     let granted = permissions(LAUNCHER_CAPABILITY);
-    assert!(granted.contains(&"core:webview:allow-create-webview-window".to_owned()));
-    for id in &granted {
-        assert!(!id.ends_with(":default") && !id.contains('*'), "{id}");
+    assert_eq!(granted, ["allow-focus-window-open", "allow-focus-window-bring-to-front", "allow-focus-window-close"]);
+    assert!(!granted.iter().any(|id| id.starts_with("core:")));
+}
+
+/// Libellé, URL et options fixés par Rust ; une position hors des écrans est recentrée (fenêtre centrée).
+#[test]
+fn focus_window_label_url_and_position_are_fixed_by_rust() {
+    use circletasks_lib::focus_window::{is_on_screen, usable_position, FocusPosition, Screen, FOCUS_HEIGHT, FOCUS_URL, FOCUS_WIDTH, FOCUS_WINDOW};
+    assert_eq!(FOCUS_WINDOW, "focus");
+    assert_eq!(FOCUS_URL, "index.html?window=focus");
+    assert_eq!((FOCUS_WIDTH, FOCUS_HEIGHT), (340.0, 460.0));
+    let screens = [Screen { x: 0, y: 0, width: 1920, height: 1080 }, Screen { x: 1920, y: 0, width: 1280, height: 1024 }];
+    assert!(is_on_screen(FocusPosition { x: 100, y: 100 }, &screens));
+    assert!(is_on_screen(FocusPosition { x: 2000, y: 900 }, &screens));
+    assert!(is_on_screen(FocusPosition { x: -40, y: 0 }, &screens));
+    assert!(!is_on_screen(FocusPosition { x: 1920 + 1280, y: 10 }, &screens), "écran débranché");
+    assert!(!is_on_screen(FocusPosition { x: 100, y: -5 }, &screens));
+    assert!(!is_on_screen(FocusPosition { x: 100, y: 1000 }, &screens[..1]));
+    assert_eq!(usable_position(Some(FocusPosition { x: 5000, y: 5000 }), &screens), None);
+    assert_eq!(usable_position(Some(FocusPosition { x: 10, y: 10 }), &screens), Some(FocusPosition { x: 10, y: 10 }));
+    assert_eq!(usable_position(None, &screens), None);
+    let source = include_str!("../../src/focus_window.rs");
+    for option in [".always_on_top(true)", ".skip_taskbar(true)", ".resizable(false)", ".maximizable(false)", ".minimizable(false)"] {
+        assert!(source.contains(option), "{option}");
     }
 }
 
