@@ -1,5 +1,6 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
+import { compareVersions, newerKind } from '../domain/sync/compat';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
 import { hlcIso, hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
@@ -286,7 +287,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
         // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
         const waiting = switched === 'cloud-pending' || switched === 'clock-ahead';
-        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted) };
+        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
       }
       epoch = target;
       resume = false;
@@ -463,7 +464,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     // 8. Heure de dernière synchro.
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
-    const devices = await deviceStatuses(repos, self, accepted);
+    const devices = await deviceStatuses(repos, self, accepted, deps.sv);
     if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch };
     return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
   } catch (error) {
@@ -482,17 +483,31 @@ async function knowsFrom(repos: Repositories): Promise<ApplyContext['knows']> {
   };
 }
 
-async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>): Promise<SyncDeviceStatus[]> {
+/**
+ * Appareils affichés (APPAREILS) et, Y-07 critère 11, leur version d'après `sync_state` : `newer` = `'major'` pour une majeure
+ * supérieure (statut `newer-major`, lecture suspendue), `'schema'` pour un `sv` supérieur de même majeure (`compat.ts`), sinon null ;
+ * `appVersion` = numéro d'application publié, null quand il n'est plus à jour (état d'une majeure supérieure illisible : la ligne garde
+ * le numéro de l'état précédent).
+ */
+async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, localSv: number): Promise<SyncDeviceStatus[]> {
   const rows = await repos.sync.getStates();
   return rows
     .filter((row) => row.isSelf || accepted.has(row.deviceId as DeviceId) || row.stateSeq > 0)
-    .map((row): SyncDeviceStatus => ({
-      deviceId: row.deviceId as DeviceId,
-      platform: row.platform === 'ios' ? 'ios' : 'windows',
-      self: row.deviceId === self,
-      lastReadAt: row.deviceId === self ? row.lastSyncAt : row.ackHlc ? hlcIso(row.ackHlc) : null,
-      status: (['active', 'expired', 'newer-major', 'clock-ahead', 'corrupt', 'foreign', 'rollback', 'forgotten'].includes(row.status) ? row.status : 'active') as SyncDeviceStatus['status'],
-    }))
+    .map((row): SyncDeviceStatus => {
+      const isSelf = row.deviceId === self;
+      const status = (['active', 'expired', 'newer-major', 'clock-ahead', 'corrupt', 'foreign', 'rollback', 'forgotten'].includes(row.status) ? row.status : 'active') as SyncDeviceStatus['status'];
+      const relation = compareVersions({ sm: SYNC_FORMAT_MAJOR, sv: localSv }, { sm: row.formatMajor, sv: row.schemaVersion });
+      const stale = status === 'newer-major' && relation !== 'newer-major';
+      return {
+        deviceId: row.deviceId as DeviceId,
+        platform: row.platform === 'ios' ? 'ios' : 'windows',
+        self: isSelf,
+        lastReadAt: isSelf ? row.lastSyncAt : row.ackHlc ? hlcIso(row.ackHlc) : null,
+        status,
+        // Champs Y-07 pour les autres appareils seulement (soi : sans objet ; les comparaisons existantes de la ligne de soi restent vraies).
+        ...(isSelf ? {} : { appVersion: stale ? null : row.appVersion, newer: status === 'newer-major' ? 'major' : newerKind(relation) }),
+      };
+    })
     .sort((a, b) => (a.self === b.self ? (a.deviceId < b.deviceId ? -1 : 1) : a.self ? -1 : 1));
 }
 

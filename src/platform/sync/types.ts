@@ -317,6 +317,10 @@ export interface SyncDeviceStatus {
   readonly self: boolean;
   readonly lastReadAt: IsoDateTime | null;
   readonly status: DeviceSyncStatus;
+  /** Y-07 : numéro d'application publié par l'appareil (« 1.4.0 »), si connu. Facultatif. */
+  readonly appVersion?: string | null;
+  /** Y-07 : version plus récente que l'appareil local (`'schema'` : lu ; `'major'` : lecture suspendue), sinon null. Facultatif. */
+  readonly newer?: 'schema' | 'major' | null;
 }
 
 export interface SyncStatus {

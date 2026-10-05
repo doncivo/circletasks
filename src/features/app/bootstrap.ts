@@ -1,4 +1,4 @@
-import { systemClock, type Clock } from '../../domain/clock';
+import { nowIso, systemClock, type Clock } from '../../domain/clock';
 import { createHlcClock, createWriteStamper, type WriteStamper } from '../../domain/hlc';
 import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
@@ -6,7 +6,7 @@ import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
-import { createDataAccess, createSqlRepositories, type RepositoryFactory } from '../../db/repositories';
+import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
 import { openBackupService, type BackupService } from '../../platform/backup';
 import { openFileService, type FileService } from '../../platform/files';
@@ -42,13 +42,27 @@ export async function bootstrapDatabase(
   try {
     db = await open();
     const port = await (options.backup ?? createMigrationBackup)(db);
-    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock) });
+    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock), afterApply: (migrated) => reintegrateAfterMigration(migrated, options.clock).then(() => undefined) });
     setDbStatus('ready');
     return db;
   } catch (error) {
     if (db) await db.close().catch(() => undefined);
     setDbStatus('error', { detail: error instanceof Error ? error.message : String(error), backupFailed: error instanceof MigrationBackupError });
     return undefined;
+  }
+}
+
+/**
+ * Y-07 critère 6 (décision D3) : à la fin de `migrate()`, à chaque démarrage, les champs de synchro gardés dans `sync_unknown` et devenus
+ * connus (mise à jour de l'app) sont réintégrés sous garde. Un échec n'empêche jamais le démarrage : la page en cours est annulée (garde
+ * comprise), les champs restent et sont retentés au démarrage suivant ; le journal ne porte que le nom de l'erreur, jamais une valeur.
+ */
+export async function reintegrateAfterMigration(db: SqlDriver, clock: Clock = systemClock): Promise<ReintegrationReport | null> {
+  try {
+    return await reintegrateUnknownFields(db, { now: nowIso(clock) });
+  } catch (error) {
+    logFailure('sync', `réintégration des champs inconnus impossible (${error instanceof Error ? error.name : 'erreur'})`);
+    return null;
   }
 }
 
