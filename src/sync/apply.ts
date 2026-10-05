@@ -69,7 +69,10 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
   const byTable = new Map<SyncTable, string[]>();
   for (const op of ops) {
     const t = syncTable(op.t);
-    if (t) byTable.set(t, [...(byTable.get(t) ?? []), op.id]);
+    if (!t) continue;
+    const ids = byTable.get(t);
+    if (ids) ids.push(op.id);
+    else byTable.set(t, [op.id]);
   }
   for (const [t, ids] of byTable) {
     const [rows, clocks, pending, tombs] = await Promise.all([sync.readRows(t, ids), sync.readClocks(t, ids), sync.pendingFields(t, ids), sync.tombstones(t.name, ids)]);

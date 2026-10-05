@@ -3,7 +3,7 @@ import { createHlcClock, createWriteStamper, type HlcClock } from '../../src/dom
 import type { Task } from '../../src/domain/model';
 import type { DeviceId, LocalDate, SpaceId, TaskId } from '../../src/domain/types';
 import type { SqlDriver } from '../../src/db/driver';
-import { openSqliteWasmDriver } from '../../src/db/drivers/sqliteWasm';
+import { exportSqliteWasmImage, openSqliteWasmDriver } from '../../src/db/drivers/sqliteWasm';
 import { migrations } from '../../src/db/migrations';
 import { migrate } from '../../src/db/migrator';
 import { createDataAccess, createSqlRepositories, type DataAccess } from '../../src/db/repositories';
@@ -46,9 +46,26 @@ export interface SimDevice {
 
 let counter = 0;
 
+/**
+ * Base migrée construite une seule fois par processus de test : chaque appareil en reçoit une copie au lieu de rejouer les
+ * 17 migrations (la moitié du coût d'un test à deux appareils).
+ */
+let migratedImage: Promise<Uint8Array> | null = null;
+function migratedDatabaseImage(): Promise<Uint8Array> {
+  migratedImage ??= (async () => {
+    const template = await openSqliteWasmDriver();
+    try {
+      await migrate(template, migrations);
+      return await exportSqliteWasmImage(template);
+    } finally {
+      await template.close();
+    }
+  })();
+  return migratedImage;
+}
+
 export async function createSimDevice(id: string, options: { readonly name?: string; readonly start?: string; readonly clock?: ManualClock } = {}): Promise<SimDevice> {
-  const driver = await openSqliteWasmDriver();
-  await migrate(driver, migrations);
+  const driver = await openSqliteWasmDriver({}, await migratedDatabaseImage());
   const clock = options.clock ?? createManualClock(options.start ?? '2026-10-05T08:00:00.000Z');
   const deviceId = id as DeviceId;
   const folder = createSimFolder();

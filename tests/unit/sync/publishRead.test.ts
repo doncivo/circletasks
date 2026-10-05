@@ -71,9 +71,9 @@ describe('publication (Y-02 critère 5)', () => {
     });
     const long = await a.createTask('Longue note', { note: 'x'.repeat(200 * 1024) });
     await a.data.transaction(async (repos) => {
-      for (let i = 0; i < 5_000; i += 1) {
-        await repos.tasks.create({ ...long, id: `${String(i).padStart(8, '0')}-1111-4111-8111-aaaaaaaaaaaa` as TaskId, title: `Tâche ${String(i)}`, note: '' });
-      }
+      await repos.tasks.createMany(
+        Array.from({ length: 5_000 }, (_, i) => ({ ...long, id: `${String(i).padStart(8, '0')}-1111-4111-8111-aaaaaaaaaaaa` as TaskId, title: `Tâche ${String(i)}`, note: '' })),
+      );
     });
     await a.cycle();
     const texts = journalOf(a).flatMap((s) => s.texts);
