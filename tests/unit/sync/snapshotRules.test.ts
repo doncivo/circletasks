@@ -95,7 +95,7 @@ describe('écriture de l’instantané : conditions (Y-02 critère 11)', () => {
   });
 
   it('enregistrements de 64 Kio au plus, snap-end en dernier avec le décompte et les couvertures de chaque appareil', async () => {
-    const [a, b] = await twoDevices();
+    const [a] = await twoDevices();
     await a.data.transaction(async (repos) => {
       await repos.tasks.createMany(
         Array.from({ length: 150 }, (_, i) => ({

@@ -52,9 +52,10 @@ describe('plafonds (Y-02 critère 20)', () => {
   });
 
   it('conflict_log : au-delà de 12 mois supprimé ; au-delà de 10 000 lignes, les résolues partent avant les non résolues', async () => {
-    db = await openTestDb(SELF);
+    const open = await openTestDb(SELF);
+    db = open;
     const insert = (where: string, detected: string, resolved: string): Promise<unknown> =>
-      db!.driver.execute(`${series(10_000)} INSERT INTO conflict_log (table_name, row_id, field, kept_value, discarded_value, detected_at, resolved_at) SELECT 'task', '${where}' || i, 'title', 'a', 'b', '${detected}', ${resolved} FROM n`);
+      open.driver.execute(`${series(10_000)} INSERT INTO conflict_log (table_name, row_id, field, kept_value, discarded_value, detected_at, resolved_at) SELECT 'task', '${where}' || i, 'title', 'a', 'b', '${detected}', ${resolved} FROM n`);
     await insert('vieux', '2024-01-01T00:00:00.000Z', 'NULL');
     await insert('recent', '2026-09-01T00:00:00.000Z', 'NULL');
     await db.driver.execute("UPDATE conflict_log SET resolved_at = '2026-09-02T00:00:00.000Z' WHERE row_id IN ('recent1', 'recent2', 'recent3')");
