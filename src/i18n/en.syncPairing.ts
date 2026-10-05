@@ -52,7 +52,7 @@ export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
     recoveryTitle: 'Recovery key',
     recoveryText: 'Print it and keep it safe. Without it, the iCloud data would be lost if both devices were reset.',
     print: 'Print the recovery key',
-    printWarning: 'A printer or a PDF file may keep a copy of the key: store the sheet like a password',
+    printWarning: 'A printer or a PDF file may keep a copy of the key: store the sheet like a password, and do not capture the print preview',
     printConfirm: 'Print',
     printSheetTitle: 'CircleTasks · recovery key',
     cancel: 'Cancel',
@@ -60,6 +60,8 @@ export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
     loading: 'Preparing the code…',
     loadFailed: 'The code could not be shown: close this window and start again from Settings',
     close: 'Close',
+    closeFailed: 'The window could not close: press “Close” to try again',
+    startFailed: 'The pairing window could not start: close it and start again from Settings',
   },
   import: {
     title: 'Pair this device',

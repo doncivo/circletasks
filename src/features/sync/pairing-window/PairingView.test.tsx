@@ -11,7 +11,7 @@ import { syncPairingFr, syncPairingWindowFr } from '../../../i18n/fr.syncPairing
 import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type MemorySyncPlatform } from '../../../platform/sync';
 import { reducePairingPlatform, type PairingPlatform } from './pairingPlatform';
 import { pairingErrorText, pairingTexts } from './pairingText';
-import { PairingView, PairingWindow, createSecretSlot, qrPath } from './PairingView';
+import { PairingRoot, PairingView, PairingWindow, createSecretSlot, qrPath } from './PairingView';
 import { RecoveryKeyEntry } from './RecoveryKeyEntry';
 
 const A = '3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60' as DeviceId;
@@ -120,7 +120,7 @@ describe('instance show : affichage (critères 5 et 22)', () => {
 });
 
 describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16)', () => {
-  it('compte à rebours depuis expiresAt ; à l’échéance, QR et clé effacés avant la fermeture demandée à Rust', async () => {
+  it('compte à rebours depuis expiresAt ; à l’échéance, QR et clé effacés (Rust détruit l’instance échue) ; « Fermer » demande alors la destruction', async () => {
     const { reduced } = await openShow();
     const slot = createSecretSlot();
     const seenAtClose: unknown[] = [];
@@ -136,10 +136,12 @@ describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16
     expect(screen.getByTestId('pairing-validity').textContent).toBe('Code valable 30 s');
     await tick(30_000);
     expect(slot.peek()).toBeNull();
-    expect(seenAtClose).toEqual([null]);
+    expect(seenAtClose).toEqual([]);
     expect(screen.queryByTestId('pairing-recovery-key')).toBeNull();
     expect(screen.queryByRole('img')).toBeNull();
     expect(screen.getByText(T.window.expired)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: T.window.close }));
+    await waitFor(() => expect(seenAtClose).toEqual([null]));
   });
 
   it('« Nouveau code » : nouvelle confirmation, nouveau code, minuteur remis à 5 minutes', async () => {
@@ -187,7 +189,11 @@ describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16
     expect(sheet?.querySelector('svg')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: T.window.printConfirm }));
     expect(print).toHaveBeenCalledTimes(1);
+    // La feuille reste montée pendant l'impression et disparaît sur afterprint.
+    expect(document.querySelector('.ct-pair__sheet')).not.toBeNull();
+    act(() => void window.dispatchEvent(new Event('afterprint')));
     expect(document.querySelector('.ct-pair__sheet')).toBeNull();
+    expect(T.window.printWarning).toContain('ne capturez pas l’aperçu d’impression');
   });
 
   it.each(['cancel', 'escape'] as const)('fermeture (%s) : état vidé, fenêtre détruite par Rust (instance effacée)', async (how) => {
@@ -338,5 +344,19 @@ describe('exposition de la clé (critère 16) et textes (critère 22)', () => {
     expect([...values(syncPairingFr), ...values(syncPairingWindowFr), ...values(syncPairingWindowEn)].every((v) => v.trim() !== '')).toBe(true);
     expect(pairingTexts('en')).toBe(syncPairingWindowEn);
     expect(pairingTexts('fr')).toBe(syncPairingWindowFr);
+  });
+});
+
+describe('démarrage de la fenêtre (QA, aucun échec silencieux)', () => {
+  it('plateforme impossible à ouvrir : message visible, jamais de page blanche', async () => {
+    render(<PairingRoot open={() => Promise.reject(new Error('démarrage'))} />);
+    expect((await screen.findByRole('status')).textContent).toBe(T.window.startFailed);
+  });
+
+  it('plateforme ouverte : la fenêtre normale', async () => {
+    const { reduced } = await openShow();
+    render(<PairingRoot open={() => Promise.resolve(reduced)} />);
+    expect(await screen.findByRole('heading', { level: 1, name: T.window.title })).toBeTruthy();
+    await waitFor(() => expect(reduced.pairingPayload).toHaveBeenCalledTimes(1));
   });
 });

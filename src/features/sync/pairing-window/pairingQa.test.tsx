@@ -314,7 +314,7 @@ describe('échecs visibles dans la fenêtre (exigence d’Ali, critère 22)', ()
     expect(message.textContent).not.toContain('inattendu');
   });
 
-  it('DÉFAUT : une destruction refusée par Rust (closePairing rejeté) laisse une fenêtre vide, sans message : l’échec est avalé (PairingView)', async () => {
+  it('QA 1 (corrigé) : une destruction refusée par Rust (closePairing rejeté) est annoncée et « Fermer » la redemande (PairingView)', async () => {
     const a = await pc();
     await a.key.openPairing('show');
     const platform = reducePairingPlatform(a.key);
@@ -332,7 +332,7 @@ describe('échecs visibles dans la fenêtre (exigence d’Ali, critère 22)', ()
     expect(platform.closePairing).toHaveBeenCalledTimes(2);
   });
 
-  it('DÉFAUT : même chose dans l’instance import (RecoveryKeyEntry), Annuler sans effet visible', async () => {
+  it('QA 2 (corrigé) : même chose dans l’instance import (RecoveryKeyEntry), échec annoncé', async () => {
     const folder = new MemorySyncFolder();
     await pc(folder);
     const b = createMemorySyncPlatform({ folder, nowMs: now });

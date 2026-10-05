@@ -106,6 +106,9 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
   const [message, setMessage] = useState<string | null>(null);
   const [renewing, setRenewing] = useState(false);
   const [printing, setPrinting] = useState(false);
+  // Feuille d'impression montée pendant l'impression, démontée sur `afterprint` (pas juste après l'appel, revue 4).
+  const [sheet, setSheet] = useState(false);
+  const [closeFailed, setCloseFailed] = useState(false);
   const requested = useRef(false);
   const closing = useRef(false);
 
@@ -114,10 +117,17 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
     (kind: 'closed' | 'expired') => {
       slot.clear();
       setPrinting(false);
+      setSheet(false);
       setLoad({ kind });
-      if (closing.current) return;
+      // Échéance : Rust détruit lui-même l'instance échue (et refuse sa fermeture) ; seul « Fermer » redemande la destruction.
+      if (kind === 'expired' || closing.current) return;
       closing.current = true;
-      void platform.closePairing().catch(() => undefined);
+      setCloseFailed(false);
+      // Destruction refusée (QA 1) : visible, et « Fermer » relance la demande.
+      platform.closePairing().catch(() => {
+        closing.current = false;
+        setCloseFailed(true);
+      });
     },
     [platform, slot],
   );
@@ -193,9 +203,17 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
     }
   };
 
+  useEffect(() => {
+    if (!sheet) return;
+    const done = (): void => setSheet(false);
+    window.addEventListener('afterprint', done);
+    return () => window.removeEventListener('afterprint', done);
+  }, [sheet]);
+
   const confirmPrint = (): void => {
-    print();
+    setSheet(true);
     setPrinting(false);
+    print();
   };
 
   const [before, after] = texts.window.step1.split('{path}');
@@ -209,7 +227,7 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
   } else if (load.kind !== 'ready' || !secrets) {
     body = (
       <p className="ct-pair__status" role="status">
-        {load.kind === 'expired' ? texts.window.expired : load.kind === 'failed' ? texts.window.loadFailed : null}
+        {closeFailed ? texts.window.closeFailed : load.kind === 'expired' ? texts.window.expired : load.kind === 'failed' ? texts.window.loadFailed : null}
       </p>
     );
   } else {
@@ -311,12 +329,12 @@ export function PairingView({ platform, texts = pairingTexts(), now = Date.now, 
       {body}
       {load.kind !== 'ready' && load.kind !== 'loading' && (
         <div className="ct-pair__actions">
-          <Button variant="secondary" onClick={() => close(load.kind === 'expired' ? 'expired' : 'closed')}>
+          <Button variant="secondary" onClick={() => close('closed')}>
             {texts.window.close}
           </Button>
         </div>
       )}
-      {printing && secrets && (
+      {(printing || sheet) && secrets && (
         <section className="ct-pair__sheet" aria-hidden="true">
           <p className="ct-pair__sheetTitle">{texts.window.printSheetTitle}</p>
           <p className="ct-pair__sheetKey">{secrets.recoveryKey}</p>
@@ -335,4 +353,41 @@ export function PairingWindow({ platform, texts = pairingTexts(), now = Date.now
   }, []);
   if (mode === 'import') return <RecoveryKeyEntry platform={platform} texts={texts} now={now} closeAfterMs={PAIRING_VALIDITY_MS} />;
   return <PairingView platform={platform} texts={texts} now={now} onImportMode={toImport} />;
+}
+
+/**
+ * Racine montée par `main.tsx` : attend la plateforme réduite ; si elle ne peut pas démarrer, le dit dans la fenêtre (QA, aucun
+ * échec silencieux) au lieu de laisser une page blanche.
+ */
+export function PairingRoot({ open, texts = pairingTexts() }: { readonly open: () => Promise<PairingPlatform>; readonly texts?: PairingTexts }) {
+  const [state, setState] = useState<{ readonly platform: PairingPlatform } | 'loading' | 'failed'>('loading');
+  useEffect(() => {
+    let cancelled = false;
+    open().then(
+      (platform) => {
+        if (!cancelled) setState({ platform });
+      },
+      () => {
+        if (!cancelled) setState('failed');
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+  if (state === 'loading') return null;
+  if (state === 'failed') {
+    return (
+      <main className="ct-pair" aria-labelledby="ct-pair-start-title">
+        <span className="ct-pair__section">{texts.window.section}</span>
+        <h1 id="ct-pair-start-title" className="ct-pair__title">
+          {texts.window.title}
+        </h1>
+        <p className="ct-pair__status" role="status">
+          {texts.window.startFailed}
+        </p>
+      </main>
+    );
+  }
+  return <PairingWindow platform={state.platform} texts={texts} />;
 }

@@ -36,8 +36,13 @@ export function RecoveryKeyEntry({ platform, texts = pairingTexts(), now = Date.
     setPhase('closed');
     if (closing.current) return;
     closing.current = true;
-    void platform.closePairing().catch(() => undefined);
-  }, [platform]);
+    setMessage(null);
+    // Destruction refusée (QA 2) : visible, et « Annuler » relance la demande.
+    platform.closePairing().catch(() => {
+      closing.current = false;
+      setMessage(texts.window.closeFailed);
+    });
+  }, [platform, texts]);
 
   const ref = useFocusTrap<HTMLElement>({ active: true, onEscape: close });
 

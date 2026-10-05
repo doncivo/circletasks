@@ -57,7 +57,7 @@ export const syncPairingWindowFr = {
     recoveryTitle: 'Clé de secours',
     recoveryText: 'Imprimez-la et rangez-la. Sans elle, les données iCloud seraient perdues si les deux appareils étaient réinitialisés.',
     print: 'Imprimer la clé de secours',
-    printWarning: 'Une imprimante ou un fichier PDF peut garder une copie de la clé : rangez la feuille comme un mot de passe',
+    printWarning: 'Une imprimante ou un fichier PDF peut garder une copie de la clé : rangez la feuille comme un mot de passe, et ne capturez pas l’aperçu d’impression',
     printConfirm: 'Imprimer',
     printSheetTitle: 'CircleTasks · clé de secours',
     cancel: 'Annuler',
@@ -65,6 +65,8 @@ export const syncPairingWindowFr = {
     loading: 'Préparation du code…',
     loadFailed: 'Le code n’a pas pu être affiché : fermez cette fenêtre et recommencez depuis Réglages',
     close: 'Fermer',
+    closeFailed: 'La fenêtre n’a pas pu se fermer : touchez « Fermer » pour réessayer',
+    startFailed: 'La fenêtre d’association n’a pas pu démarrer : fermez-la et recommencez depuis Réglages',
   },
   import: {
     title: 'Associer cet appareil',

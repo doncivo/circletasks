@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import '../../../ui/theme/tokens.css';
 import { openPairingPlatform } from './pairingPlatform';
-import { PairingWindow } from './PairingView';
+import { PairingRoot } from './PairingView';
 
 /**
  * Point d'entrée de la fenêtre dédiée `pairing` (`pairing.html`, Y-06 ; ADR 0011 section 2.1). Bundle minimal, contrôlé par
@@ -14,6 +14,8 @@ import { PairingWindow } from './PairingView';
 const container = document.getElementById('root');
 if (!container) throw new Error('Élément #root introuvable dans pairing.html');
 
-void openPairingPlatform().then((platform) => {
-  createRoot(container).render(<PairingWindow platform={platform} />);
-});
+// Aucun menu contextuel (Inspecter, Enregistrer sous, Imprimer la page) dans la fenêtre de la clé (audit 1) ; WebView2 le désactive
+// aussi côté Rust.
+document.addEventListener('contextmenu', (event) => event.preventDefault());
+
+createRoot(container).render(<PairingRoot open={openPairingPlatform} />);
