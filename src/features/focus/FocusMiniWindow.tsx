@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Clock } from '../../domain/clock';
-import { setLocale } from '../../i18n';
+import { ensureLocale, setLocale } from '../../i18n';
 import { createHtmlAudioPlayer, type FocusWindowClient, type FocusWindowState, type SoundPlayer } from '../../platform/focus';
 import { FocusView } from './FocusView';
 import { focusChimeUrl } from './sounds';
@@ -24,6 +24,8 @@ export function FocusMiniWindow({ client, clock, player: injected }: { readonly 
         client.onState((next) => {
           setLocale(next.locale);
           setState(next);
+          // Langue chargée à la demande : réaffiche dès que son catalogue est là.
+          void ensureLocale(next.locale).then(() => setState((current) => (current === next ? { ...next } : current)));
         }),
         client.onCloseRequested(() => setCloseRequests((count) => count + 1)),
         client.onMoved((position) => void client.send({ type: 'moved', x: position.x, y: position.y })),

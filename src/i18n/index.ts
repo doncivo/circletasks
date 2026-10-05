@@ -1,16 +1,37 @@
-import { en } from './en';
 import { fr } from './fr';
 import type { Locale, MessageKey, Messages, TArgs } from './types';
 
 export type { Locale, MessageKey, MessageParams, Messages, PlainMessageKey } from './types';
 
-const catalogs: Record<Locale, Messages> = { fr, en };
+/**
+ * Le français est livré avec le démarrage ; les autres langues (PERF-02 : l'anglais pèse ~21 Ko de source) sont des blocs chargés à la
+ * demande par `ensureLocale`. Tant qu'un catalogue manque, les clés se lisent en français (repli de `translateRaw`).
+ */
+const catalogs: Partial<Record<Locale, Messages>> = { fr };
+const loaders: Record<Exclude<Locale, 'fr'>, () => Promise<Messages>> = { en: () => import('./en').then((module) => module.en) };
+
+/** Pose un catalogue déjà chargé (tests, ou langue obtenue autrement). */
+export function registerCatalog(locale: Locale, messages: Messages): void {
+  catalogs[locale] = messages;
+}
+
+/** Charge le catalogue d'une langue s'il manque. La promesse se résout toujours (un échec laisse le français). */
+export async function ensureLocale(locale: Locale): Promise<void> {
+  if (catalogs[locale] || locale === 'fr') return;
+  try {
+    catalogs[locale] = await loaders[locale]();
+  } catch {
+    // catalogue illisible : repli sur le français
+  }
+}
 
 export const DEFAULT_LOCALE: Locale = 'fr';
 let current: Locale = DEFAULT_LOCALE;
 
 export function setLocale(locale: Locale): void {
   current = locale;
+  // Catalogue absent : chargement en arrière-plan ; les appelants qui doivent réafficher attendent `ensureLocale`.
+  if (!catalogs[locale]) void ensureLocale(locale);
 }
 
 export function getLocale(): Locale {
@@ -35,7 +56,7 @@ function interpolate(text: string, params: Record<string, string | number> | und
 }
 
 function translateRaw(locale: Locale, key: MessageKey, params: Record<string, string | number> | undefined): string {
-  const text = lookup(catalogs[locale], key) ?? lookup(fr, key) ?? key;
+  const text = lookup(catalogs[locale] ?? fr, key) ?? lookup(fr, key) ?? key;
   return interpolate(text, params);
 }
 

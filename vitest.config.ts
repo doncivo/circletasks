@@ -15,7 +15,7 @@ export default mergeConfig(
             name: 'node',
             environment: 'node',
             // PERF-02 : analyseur des dates écrites posé d'emblée (chargé à la demande dans l'app).
-            setupFiles: ['tests/setup/absoluteDates.ts'],
+            setupFiles: ['tests/setup/onDemand.ts'],
             include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'scripts/release/**/*.test.ts'],
             // Mesures de performance : hors de `npm run test` (script `test:perf`).
             exclude: ['**/*.perf.test.ts', '**/node_modules/**'],
@@ -27,7 +27,7 @@ export default mergeConfig(
             name: 'dom',
             environment: 'jsdom',
             include: ['src/**/*.test.tsx'],
-            setupFiles: ['tests/setup/absoluteDates.ts', 'tests/setup/dom.ts'],
+            setupFiles: ['tests/setup/onDemand.ts', 'tests/setup/dom.ts'],
             // Plusieurs agents et workers tournent en parallèle sur la machine : marge pour les écrans qui ouvrent une base en mémoire.
             testTimeout: 15_000,
           },
