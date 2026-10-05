@@ -6,8 +6,9 @@ use windows::{
     Graphics::Imaging::{BitmapAlphaMode, BitmapDecoder, BitmapPixelFormat},
     Media::Ocr::OcrEngine,
     Storage::Streams::{DataWriter, InMemoryRandomAccessStream},
-    Win32::System::WinRT::{RoInitialize, RO_INIT_MULTITHREADED},
+    Win32::System::Com::CoIncrementMTAUsage,
 };
+use std::sync::OnceLock;
 
 use super::{check_dimensions, pick_french, OcrError, OcrStatus};
 
@@ -15,10 +16,16 @@ fn engine_error(error: windows::core::Error) -> OcrError {
     OcrError::Engine(error.to_string())
 }
 
-/// Le fil d'un `spawn_blocking` n'a pas de COM : initialisation multithread (sans effet si déjà faite).
+/// Maintient l'appartement multithread (MTA) du processus en vie jusqu'à sa fin.
+///
+/// Les fabriques WinRT (`OcrEngine`, `Language`…) sont mises en cache par `windows-rs` dans des statiques. Or l'MTA n'existe
+/// que tant qu'un fil l'occupe : quand le fil qui l'a créé se termine (fil de `spawn_blocking` ou de test), l'MTA est détruit
+/// et le pointeur en cache devient invalide ; l'appel suivant, depuis un autre fil, plante (STATUS_ACCESS_VIOLATION, constaté
+/// sur le runner CI). `CoIncrementMTAUsage` garde l'MTA vivant ; les fils sans COM y entrent alors implicitement.
 fn init_runtime() {
-    // SAFETY: appel sans pointeur ; l'erreur « mode déjà choisi » est sans conséquence ici.
-    let _ = unsafe { RoInitialize(RO_INIT_MULTITHREADED) };
+    static MTA: OnceLock<bool> = OnceLock::new();
+    // SAFETY: appel sans pointeur ; le cookie n'est jamais libéré (usage valable pour la durée du processus).
+    MTA.get_or_init(|| unsafe { CoIncrementMTAUsage() }.is_ok());
 }
 
 fn installed_tags() -> Vec<String> {
