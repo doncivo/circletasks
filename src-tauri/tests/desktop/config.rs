@@ -75,6 +75,9 @@ fn setup_recovers_first_then_creates_the_main_window_before_anything_that_uses_i
     for later in ["crate::shortcut::manage", "crate::capture::setup", "create_tray(", "show_main_window("] {
         assert!(create < position(later), "{later} après la création de la fenêtre");
     }
+    // Dossier de données introuvable ou fenêtre impossible à créer : même arrêt avec la boîte système, jamais une app sans interface.
+    assert!(setup.contains("\"no-data-dir\"") && setup.contains("\"window-failed\""));
+    assert!(!setup.contains("create_main_window(app.handle())?"), "l'échec de création ne doit pas contourner la boîte");
 }
 
 #[test]

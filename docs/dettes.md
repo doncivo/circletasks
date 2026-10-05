@@ -114,7 +114,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Lot P (revue et audit du 2026-10-05, non bloquant) :
   - lecteur réseau mappé (`Z:`) : l'import (`import_open_file`) contrôle la lettre de lecteur seulement, comme l'export H-03 (option `GetDriveTypeW`) ;
   - iPhone : l'événement `cancel` de `<input type="file">` n'est pas déclenché de façon fiable par WKWebView ; une annulation peut laisser `pickText` en attente (promesse jamais résolue) : à traiter avec le plugin Fichiers de l'ordre 5 ;
-  - restauration et récupération : course entre `is_plain_file` et `rename` (contrôle puis action, sans verrou), et liens physiques (un fichier à plusieurs noms n'est pas détecté) ; option : ouvrir le fichier d'abord et renommer par descripteur ;
+  - import : U+200C (liaison nulle, utile en persan) est retiré avec les autres caractères de format Cf ; à autoriser entre deux lettres arabes si le besoin se présente ;
+  - restauration et récupération : course entre `is_plain_file` et `rename` (contrôle puis action, sans verrou), course entre `ensure_plain_backups_dir` et `create_dir_all` (le dossier peut devenir un lien entre le contrôle et l'écriture), et liens physiques (un fichier à plusieurs noms n'est pas détecté) ; option : ouvrir le fichier d'abord et renommer par descripteur ;
   - déclencheurs : la référence est unique (`backup_triggers.rs`, état après la migration 0011) ; une migration future qui modifie un déclencheur obligera à la mettre à jour (version d'introduction par déclencheur, ou DROP / CREATE imposés dans les migrations) ;
   - après un échange réussi, l'ancienne base existe en double : la copie de sécurité `pre-restore` ET ses restes archivés par la récupération au démarrage (si l'arrêt a eu lieu avant le nettoyage) ;
   - `stampCases()` (CASE par identifiant pour un tampon distinct par ligne) est dupliqué dans `taskRepository` et `reminderRepository` : à partager dans `sqlHelpers` ;

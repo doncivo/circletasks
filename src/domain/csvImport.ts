@@ -36,6 +36,7 @@ export function normalizeName(value: string): string {
 
 const FORMAT_CHAR = /\p{Cf}/u;
 const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
+const EMOJI_MODIFIER = /\p{Emoji_Modifier}/u;
 const isPictographic = (char: string | undefined): boolean => char !== undefined && PICTOGRAPHIC.test(char);
 /** Marques de format qui produisent un glyphe visible et sont gardées : signes numériques arabes (U+0600 à U+0605, U+06DD, U+08E2), U+070F, U+110BD, U+110CD. */
 const VISIBLE_FORMAT = new Set([0x600, 0x601, 0x602, 0x603, 0x604, 0x605, 0x6dd, 0x70f, 0x8e2, 0x110bd, 0x110cd]);
@@ -46,10 +47,26 @@ const VISIBLE_FORMAT = new Set([0x600, 0x601, 0x602, 0x603, 0x604, 0x605, 0x6dd,
  * paragraphe (U+2028, U+2029), qui tromperaient l'affichage d'un titre ou d'un motif. Exceptions voulues : les signes arabes visibles ci-dessus ;
  * la liaison U+200D entre deux pictogrammes (émojis composés, familles, couleurs de peau) et le sélecteur U+FE0F juste après un pictogramme (présentation
  * émoji). Partout ailleurs ils sont retirés. (La marque d'ordre des octets de TÊTE de fichier est retirée avant, par `parseImportFile`.)
+ *
+ * Autres exceptions : un modificateur de teinte (U+1F3FB à U+1F3FF) avant une liaison U+200D ; les balises U+E0020 à U+E007F qui suivent le drapeau noir
+ * U+1F3F4 (drapeaux de subdivision : Écosse, Pays de Galles) ; U+FE0F devant U+20E3 (touches « 1️⃣ »). Sont aussi retirés les blancs qui ne sont pas Cf :
+ * remplisseurs hangul U+115F, U+1160, U+3164, U+FFA0 et le braille vide U+2800. Limite connue : U+200C (liaison nulle, persan) est retiré (docs/dettes.md).
  */
-function isInvisible(code: number, previous: string | undefined, next: string | undefined): boolean {
-  if (code === 0x200d) return !((isPictographic(previous) || previous === String.fromCharCode(0xfe0f)) && isPictographic(next));
-  if (code === 0xfe0f) return !isPictographic(previous);
+function isInvisible(code: number, chars: readonly string[], index: number): boolean {
+  const previous = chars[index - 1];
+  const next = chars[index + 1];
+  if (code === 0x200d) {
+    const before = isPictographic(previous) || (previous !== undefined && EMOJI_MODIFIER.test(previous)) || previous === String.fromCharCode(0xfe0f);
+    return !(before && isPictographic(next));
+  }
+  if (code === 0xfe0f) return !(isPictographic(previous) || next === String.fromCharCode(0x20e3));
+  if (code >= 0xe0020 && code <= 0xe007f) {
+    // Balises d'un drapeau de subdivision : la série contiguë de balises doit commencer juste après U+1F3F4.
+    let start = index - 1;
+    while (start >= 0 && (chars[start]?.codePointAt(0) ?? 0) >= 0xe0020 && (chars[start]?.codePointAt(0) ?? 0) <= 0xe007f) start -= 1;
+    return chars[start]?.codePointAt(0) !== 0x1f3f4;
+  }
+  if (code === 0x115f || code === 0x1160 || code === 0x3164 || code === 0xffa0 || code === 0x2800) return true;
   if ((code >= 0xfe00 && code <= 0xfe0e) || (code >= 0xe0100 && code <= 0xe01ef) || code === 0x2028 || code === 0x2029) return true;
   if (VISIBLE_FORMAT.has(code)) return false;
   return FORMAT_CHAR.test(String.fromCodePoint(code));
@@ -68,7 +85,7 @@ export function sanitizeLine(value: string): string {
   chars.forEach((char, index) => {
     const code = char.codePointAt(0) ?? 0;
     if (code === 0x09) out += ' ';
-    else if (isControl(code) || isInvisible(code, chars[index - 1], chars[index + 1])) return;
+    else if (isControl(code) || isInvisible(code, chars, index)) return;
     else out += char;
   });
   return out;
@@ -82,7 +99,7 @@ export function sanitizeNote(value: string): string {
   chars.forEach((char, index) => {
     const code = char.codePointAt(0) ?? 0;
     if (code === 0x0a || code === 0x09) out += char;
-    else if (isControl(code) || isInvisible(code, chars[index - 1], chars[index + 1])) return;
+    else if (isControl(code) || isInvisible(code, chars, index)) return;
     else out += char;
   });
   return out;

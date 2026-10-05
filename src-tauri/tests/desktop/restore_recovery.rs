@@ -62,14 +62,49 @@ fn p04_archiving_never_mixes_with_an_orphan_wal_or_shm_at_the_target_name() {
     let main = kept.iter().find(|n| n.ends_with(".db")).expect("base archivée");
     assert_eq!(fs::read(backups.join(main)).unwrap(), b"ancienne");
     assert_eq!(fs::read(backups.join(format!("{main}-wal"))).unwrap(), b"ancien wal", "le -wal archivé est celui de l'ancienne base");
-    for n in 0..8 {
-        let orphan = backups.join(format!("circletasks-pre-restore-{}.db-wal", utc_stamp(start + n)));
-        if orphan.exists() && fs::read(&orphan).unwrap() == b"orphelin wal" {
-            continue;
-        }
-        assert!(orphan.to_string_lossy().contains(main.trim_end_matches(".db")), "un orphelin n'a été écrasé que si c'est le nom choisi");
-    }
-    assert_eq!(kept.iter().filter(|n| fs::read(backups.join(n)).map_or(false, |c| c == b"orphelin wal")).count(), 8, "aucun orphelin écrasé ni mélangé");
+    let orphan_names: Vec<String> = (0..8).map(|n| format!("circletasks-pre-restore-{}.db", utc_stamp(start + n))).collect();
+    assert!(!orphan_names.contains(main), "le nom choisi n'est pas celui d'un orphelin : {main}");
+    // La rotation a supprimé les -wal orphelins (leur base est absente) : il ne reste que l'archive complète.
+    assert_eq!(kept, [main.clone(), format!("{main}-wal")]);
+}
+
+#[test]
+fn p04_a_resumed_archive_targets_the_same_name_as_the_interrupted_one() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    write(dir.path(), "circletasks.db", b"nouvelle");
+    write(dir.path(), "circletasks.db.restore-old", b"ancienne");
+    write(dir.path(), "circletasks.db-wal.restore-old", b"ancien wal");
+    write(dir.path(), "circletasks.db-shm.restore-old", b"ancien shm");
+    // Nom dérivé de la date de modification de la base restore-old.
+    let modified = fs::metadata(dir.path().join("circletasks.db.restore-old")).unwrap().modified().unwrap();
+    let stem = format!("circletasks-pre-restore-{}.db", utc_stamp(modified.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()));
+    // Première tentative interrompue : seul le -shm a été déplacé, sous ce nom.
+    fs::rename(dir.path().join("circletasks.db-shm.restore-old"), backups.join(format!("{stem}-shm"))).unwrap();
+    assert_eq!(recover(dir.path()).unwrap(), Recovery::Archived);
+    assert_eq!(names(&backups), [stem.clone(), format!("{stem}-shm"), format!("{stem}-wal")], "la reprise complète le MÊME nom");
+    assert_eq!(fs::read(backups.join(&stem)).unwrap(), b"ancienne");
+    assert_eq!(fs::read(backups.join(format!("{stem}-shm"))).unwrap(), b"ancien shm");
+    assert_eq!(fs::read(backups.join(format!("{stem}-wal"))).unwrap(), b"ancien wal");
+}
+
+#[test]
+fn p04_rotation_removes_the_wal_and_shm_of_a_pre_restore_name_whose_base_is_absent() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    fs::write(backups.join("circletasks-pre-restore-20260101T000000Z.db-wal"), b"orphelin").unwrap();
+    fs::write(backups.join("circletasks-pre-restore-20260101T000000Z.db-shm"), b"orphelin").unwrap();
+    fs::write(backups.join("circletasks-pre-restore-20260202T000000Z.db"), b"base").unwrap();
+    fs::write(backups.join("circletasks-pre-restore-20260202T000000Z.db-wal"), b"wal vivant").unwrap();
+    fs::write(backups.join("circletasks-daily-20260301.db-wal"), b"autre famille").unwrap();
+    circletasks_lib::backup::prune_family(&backups, Family::PreRestore, 3).unwrap();
+    assert_eq!(
+        names(&backups),
+        ["circletasks-daily-20260301.db-wal", "circletasks-pre-restore-20260202T000000Z.db", "circletasks-pre-restore-20260202T000000Z.db-wal"],
+        "seuls les -wal / -shm sans base de la famille pre-restore disparaissent"
+    );
 }
 
 #[test]
@@ -85,7 +120,8 @@ fn p04_a_partial_archive_is_finished_at_the_next_startup_without_losing_anything
     assert_eq!(recover(dir.path()).unwrap(), Recovery::Archived);
     assert_eq!(names(dir.path()), ["backups", "circletasks.db"]);
     let kept = names(&backups);
-    assert!(kept.contains(&"circletasks-pre-restore-20261005T100000Z.db-shm".to_owned()), "le -shm déjà archivé est conservé");
+    // Un -shm orphelin d'un AUTRE nom (base absente) n'est pas celui de cette base : l'archive va sous un nom propre et la rotation le supprime.
+    assert!(!kept.contains(&"circletasks-pre-restore-20261005T100000Z.db-shm".to_owned()));
     let main = kept.iter().find(|n| n.ends_with(".db")).expect("base archivée au second passage");
     assert_eq!(fs::read(backups.join(main)).unwrap(), b"ancienne");
     assert_eq!(fs::read(backups.join(format!("{main}-wal"))).unwrap(), b"ancien wal");
@@ -204,9 +240,8 @@ fn make_search_db(path: &Path, tasks: &[&str]) {
          CREATE TABLE search_index_doc (id INTEGER PRIMARY KEY, type TEXT NOT NULL, ref_id TEXT NOT NULL, UNIQUE (type, ref_id));",
     )
     .unwrap();
-    for (name, table, sql) in REFERENCE_TRIGGERS {
+    for (_, table, sql) in REFERENCE_TRIGGERS {
         if table == "task" {
-            let _ = name;
             conn.execute_batch(sql).unwrap();
         }
     }

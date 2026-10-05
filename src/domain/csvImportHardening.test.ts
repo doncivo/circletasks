@@ -49,6 +49,23 @@ describe('Caractères de contrôle et marques bidirectionnelles (P-07, audit)', 
     expect(sanitizeLine(`a${chr(0xfe0f)}`)).toBe('a');
   });
 
+  it('émojis : teinte avant liaison, drapeaux de subdivision, touches ; blancs non Cf retirés', () => {
+    const technologist = `${String.fromCodePoint(0x1f468, 0x1f3fd)}${chr(0x200d)}${String.fromCodePoint(0x1f4bb)}`;
+    expect(sanitizeLine(`Dev ${technologist}`)).toBe(`Dev ${technologist}`);
+    const scotland = String.fromCodePoint(0x1f3f4, 0xe0067, 0xe0062, 0xe0073, 0xe0063, 0xe0074, 0xe007f);
+    expect(sanitizeLine(`Match ${scotland}`)).toBe(`Match ${scotland}`);
+    // Balises sans le drapeau noir devant : retirées.
+    expect(sanitizeLine(`x${String.fromCodePoint(0xe0067, 0xe0062, 0xe007f)}y`)).toBe('xy');
+    expect(sanitizeLine(`${String.fromCodePoint(0x1f600)}${String.fromCodePoint(0xe0067)}`)).toBe(String.fromCodePoint(0x1f600));
+    const keycap = `1${chr(0xfe0f, 0x20e3)}`;
+    expect(sanitizeLine(`Touche ${keycap}`)).toBe(`Touche ${keycap}`);
+    expect(sanitizeLine(`a${chr(0xfe0f)}b`)).toBe('ab');
+    expect(sanitizeLine(`A${chr(0x115f, 0x1160, 0x3164, 0xffa0, 0x2800)}B`)).toBe('AB');
+    expect(sanitizeNote(`n${chr(0x3164, 0x2800)}ote`)).toBe('note');
+    // U+200C (liaison nulle, persan) est une limite connue : retiré (docs/dettes.md).
+    expect(sanitizeLine(`a${chr(0x200c)}b`)).toBe('ab');
+  });
+
   it('titre, espace et projet : C0 et C1 retirés, la tabulation devient une espace, marques bidirectionnelles retirées', () => {
     expect(sanitizeLine(`A${chr(0)}B${chr(7)}C${chr(0x1b)}D${chr(0x7f)}E${chr(0x85)}F${chr(0x9f)}G`)).toBe('ABCDEFG');
     expect(sanitizeLine(`un${chr(9)}titre`)).toBe('un titre');

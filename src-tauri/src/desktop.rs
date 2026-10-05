@@ -333,12 +333,17 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             // P-04 : une restauration interrompue (arrêt brutal pendant l'échange des fichiers) est récupérée AVANT toute WebView : la fenêtre
             // principale (`create: false`) n'existe pas encore. Si la récupération échoue, l'app ne démarre pas : ni base neuve ni base ouverte
             // sur un état à moitié restauré (voir `abort_startup_after_failed_recovery`). Puis seulement, la fenêtre est construite.
-            if let Ok(dir) = tauri::Manager::path(app).app_config_dir() {
-                if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
-                    return Err(abort_startup_after_failed_recovery(error.code, &app.config().identifier));
-                }
+            // Dossier de données introuvable (`no-data-dir`) : impossible de savoir si une restauration est en suspens, donc l'app ne démarre pas non plus.
+            let Ok(dir) = tauri::Manager::path(app).app_config_dir() else {
+                return Err(abort_startup_after_failed_recovery("no-data-dir", &app.config().identifier));
+            };
+            if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
+                return Err(abort_startup_after_failed_recovery(error.code, &app.config().identifier));
             }
-            create_main_window(app.handle())?;
+            // Fenêtre impossible à créer (`window-failed`) : même boîte système, puis arrêt (sans elle l'app tournerait sans interface).
+            if create_main_window(app.handle()).is_err() {
+                return Err(abort_startup_after_failed_recovery("window-failed", &app.config().identifier));
+            }
             app.manage(QuitGate::default());
             crate::shortcut::manage(app.handle());
             // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).

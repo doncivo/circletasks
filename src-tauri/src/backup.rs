@@ -223,7 +223,23 @@ pub fn prune_family(dir: &Path, family: Family, keep: usize) -> io::Result<usize
         let _ = fs::remove_file(sidecar(&path, "-wal"));
         let _ = fs::remove_file(sidecar(&path, "-shm"));
     }
+    if family == Family::PreRestore {
+        remove_orphan_sidecars(dir);
+    }
     Ok(excess)
+}
+
+/// Rotation des copies `pre-restore` : supprime les `-wal` / `-shm` dont la base `.db` du même nom est absente (restes d'un archivage interrompu
+/// jamais repris). Appelée seulement quand aucun archivage n'est en cours (après un archivage ou une restauration abouti).
+fn remove_orphan_sidecars(dir: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    for path in entries.filter_map(Result::ok).map(|e| e.path()) {
+        let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+        let Some(base) = name.strip_suffix("-wal").or_else(|| name.strip_suffix("-shm")) else { continue };
+        if parse_backup_name(base).is_some_and(|(family, _)| family == Family::PreRestore) && !present(&dir.join(base)) && is_plain_file(&path) {
+            let _ = fs::remove_file(&path);
+        }
+    }
 }
 
 /// Vrai pour un fichier ordinaire, jamais pour un lien symbolique, une jonction ou tout autre point d'analyse (`FILE_ATTRIBUTE_REPARSE_POINT`).
@@ -651,11 +667,23 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
         }
         fs::create_dir_all(backups_dir).map_err(|e| fail("recovery-failed", e))?;
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let target = (0..1_000)
-            .map(|n| backups_dir.join(pre_restore_backup_name(&utc_stamp(now + n))))
-            // La cible ET ses -wal / -shm doivent être absents : un reste orphelin d'une archive précédente n'est jamais mélangé à une nouvelle.
-            .find(|candidate| ["", "-wal", "-shm"].iter().all(|suffix| !present(&sidecar(candidate, suffix))))
-            .ok_or_else(|| BackupError::new("recovery-conflict", "aucun nom libre pour archiver l'ancienne base"))?;
+        // Nom DÉRIVÉ de la date de modification de `circletasks.db.restore-old` : une reprise après un archivage interrompu vise le même nom que la
+        // tentative précédente (ses `-shm` / `-wal` déjà déplacés y sont, la base y manque). Il est accepté si la base est absente et si la cible de
+        // chaque fichier restant à déplacer est libre ; les autres orphelins de ce nom sont ceux de la même base (même seconde de modification).
+        let resumed = fs::symlink_metadata(&olds[0].1)
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|elapsed| backups_dir.join(pre_restore_backup_name(&utc_stamp(elapsed.as_secs()))))
+            .filter(|candidate| !present(candidate) && olds.iter().filter(|(_, old)| present(old)).all(|(suffix, _)| !present(&sidecar(candidate, suffix))));
+        let target = match resumed {
+            Some(candidate) => candidate,
+            None => (0..1_000)
+                .map(|n| backups_dir.join(pre_restore_backup_name(&utc_stamp(now + n))))
+                // La cible ET ses -wal / -shm doivent être absents : un reste orphelin d'une autre archive n'est jamais mélangé à une nouvelle.
+                .find(|candidate| ["", "-wal", "-shm"].iter().all(|suffix| !present(&sidecar(candidate, suffix))))
+                .ok_or_else(|| BackupError::new("recovery-conflict", "aucun nom libre pour archiver l'ancienne base"))?,
+        };
         // `-shm`, puis `-wal`, la base EN DERNIER : si l'archivage s'arrête en route, `circletasks.db.restore-old` est encore là et le démarrage suivant
         // recommence (cas « base présente + base restore-old présente ») ; ce qui a déjà été déplacé reste dans `backups/`, rien n'est perdu.
         for (suffix, old) in olds.iter().rev() {
