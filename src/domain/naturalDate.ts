@@ -1,12 +1,11 @@
-import * as chrono from 'chrono-node/fr';
 import { WEEKDAYS } from './dateInput';
 import { addDays, makeLocalDate, parseLocalDate, weekdayOf } from './localDate';
 import type { LocalDate, LocalTime, Weekday } from './types';
 import { DEFAULT_FIRST_WEEKDAY, daysSinceWeekStart, firstWeekdayIso, type FirstWeekday } from './week';
 
 /**
- * Date et heure dans une phrase française (Q-02). Enveloppe de chrono-node (locale fr, MIT) : si la bibliothèque change, seul ce
- * fichier bouge. Un seul analyseur de dates en langage libre : les tables de jours de `dateInput.ts` (T-14) sont partagées, et
+ * Date et heure dans une phrase française (Q-02). Les dates écrites passent par chrono-node (locale fr, MIT), chargé à la
+ * demande (PERF-02) : si la bibliothèque change, seul `chronoAbsolute.ts` bouge. Un seul analyseur de dates en langage libre : les tables de jours de `dateInput.ts` (T-14) sont partagées, et
  * `parseQuickInput` (Q-06) appelle cette fonction.
  *
  * Répartition : la grammaire relative et les heures (demain, après-demain, jours de semaine, « 10h », « 14 h 30 », midi, ce soir,
@@ -21,6 +20,34 @@ import { DEFAULT_FIRST_WEEKDAY, daysSinceWeekStart, firstWeekdayIso, type FirstW
  * abréviations (« lun. ») exigent le point ; « chaque lundi » (récurrence) n'est pas une date.
  * Pur : « maintenant » est fourni (horloge injectable, heure locale de l'appareil).
  */
+
+/** Un morceau de date lu par l'analyseur des dates écrites en toutes lettres (« le 5 octobre », « dans 3 jours »). */
+export interface AbsoluteDateMatch {
+  readonly index: number;
+  readonly text: string;
+  /** Jour et mois écrits sans ambiguïté (« mai » seul ne l'est pas). */
+  readonly certain: boolean;
+  /** Année, mois (1 à 12) et jour ; `null` : non lu dans le texte, le jour de référence s'applique. */
+  readonly start: { readonly year: number | null; readonly month: number | null; readonly day: number | null };
+  readonly end: { readonly year: number | null; readonly month: number | null; readonly day: number | null } | null;
+}
+
+/**
+ * Analyseur des dates écrites (chrono-node, voir `chronoAbsolute.ts`). Posé après coup par la couche qui le charge à la demande
+ * (PERF-02 : la bibliothèque pèse ~50 Ko gzip, elle n'est pas dans le bloc de départ). Tant qu'il manque, seule la grammaire locale
+ * (demain, jours de semaine, heures) s'applique ; `registerAbsoluteDateParser` ne change rien d'autre.
+ */
+export type AbsoluteDateParser = (text: string, reference: Date) => readonly AbsoluteDateMatch[];
+
+let absoluteDateParser: AbsoluteDateParser | null = null;
+
+export function registerAbsoluteDateParser(parser: AbsoluteDateParser | null): void {
+  absoluteDateParser = parser;
+}
+
+export function hasAbsoluteDateParser(): boolean {
+  return absoluteDateParser !== null;
+}
 
 /** Instant courant en heure locale de l'appareil (date civile et heure 24 h). */
 export interface NaturalNow {
@@ -221,13 +248,12 @@ function chronoDates(masked: string, now: NaturalNow): DateHit[] {
   const [h, mi] = now.time.split(':').map(Number);
   const reference = new Date(year, month - 1, day, h ?? 0, mi ?? 0, 0);
   const hits: DateHit[] = [];
-  for (const result of chrono.parse(masked, reference, { forwardDate: true })) {
+  for (const result of absoluteDateParser?.(masked, reference) ?? []) {
     if (/heure|minute|\bmin\b/i.test(result.text)) continue; // « dans 2 heures » : pas une date
-    const certain = result.start.isCertain('day') && result.start.isCertain('month');
     const relative = /^dans\b/i.test(result.text);
-    if (!certain && !relative) continue;
-    const start = makeLocalDate(result.start.get('year') ?? year, result.start.get('month') ?? month, result.start.get('day') ?? day);
-    const endDate = result.end ? makeLocalDate(result.end.get('year') ?? year, result.end.get('month') ?? month, result.end.get('day') ?? day) : null;
+    if (!result.certain && !relative) continue;
+    const start = makeLocalDate(result.start.year ?? year, result.start.month ?? month, result.start.day ?? day);
+    const endDate = result.end ? makeLocalDate(result.end.year ?? year, result.end.month ?? month, result.end.day ?? day) : null;
     hits.push({
       start: result.index,
       end: result.index + result.text.length,

@@ -6,6 +6,7 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useDefaultSpaceId } from '../spaces';
+import { useAbsoluteDates } from './absoluteDates';
 import { normalizeQuickText } from '../../domain/spokenTimes';
 
 export interface UseQuickInputOptions {
@@ -67,6 +68,8 @@ export function useQuickInputWithClock(clock: Clock, options: UseQuickInputOptio
   const [text, setTextState] = useState(options.initialText ?? '');
   const [ignored, setIgnored] = useState<ReadonlySet<string>>(new Set());
   const dates = options.dates !== false;
+  // PERF-02 : dates écrites (chrono-node) chargées à la demande ; la saisie déjà tapée est relue quand elles arrivent.
+  const absoluteDates = useAbsoluteDates();
 
   /** Contexte des suggestions : sans horloge, il ne change pas à chaque minute. */
   const suggestionContext = useMemo<QuickContext>(() => ({ spaces, projects, defaultSpaceId, dates: false }), [spaces, projects, defaultSpaceId]);
@@ -83,9 +86,18 @@ export function useQuickInputWithClock(clock: Clock, options: UseQuickInputOptio
     [spaces, projects, defaultSpaceId, dates, clock],
   );
 
-  const parse = useMemo(() => parseQuickInput(normalizeQuickText(text), buildContext(), { ignored }), [text, ignored, buildContext]);
+  const parse = useMemo(() => {
+    void absoluteDates; // relue à l'arrivée de l'analyseur des dates écrites
+    return parseQuickInput(normalizeQuickText(text), buildContext(), { ignored });
+  }, [text, ignored, buildContext, absoluteDates]);
   /** Relit l'analyse avec l'heure d'aujourd'hui (au moment d'envoyer). */
-  const parseNow = useCallback((raw: string = text): QuickParse => parseQuickInput(normalizeQuickText(raw), buildContext(), { ignored }), [text, ignored, buildContext]);
+  const parseNow = useCallback(
+    (raw: string = text): QuickParse => {
+      void absoluteDates;
+      return parseQuickInput(normalizeQuickText(raw), buildContext(), { ignored });
+    },
+    [text, ignored, buildContext, absoluteDates],
+  );
 
   const setText = useCallback((next: string) => {
     setTextState(next);

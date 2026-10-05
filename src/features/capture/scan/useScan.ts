@@ -8,6 +8,7 @@ import type { LocalDate, SpaceId } from '../../../domain/types';
 import { OcrError, type OcrEngine, type OcrService } from '../../../platform/ocr';
 import { useAppContainer } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
+import { useAbsoluteDates } from '../absoluteDates';
 import { currentQuickContext } from '../captureUseCases';
 import { draftsFromProposals, type DateDefault, type ScanDraft } from './scanDrafts';
 import { isUncertain, MAX_SCAN_LINES, scanLinesToProposals, type ScanProposal } from './scanLines';
@@ -97,9 +98,13 @@ export function useScan({ service, onClose }: UseScanOptions) {
     return { kind: dateKind };
   }, [dateKind, picked]);
 
+  const absoluteDates = useAbsoluteDates();
   const drafts: readonly ScanDraft[] = useMemo(
-    () => (spaceId ? draftsFromProposals(proposals, quickContext, { spaceId, date: dateDefault, today }) : []),
-    [proposals, quickContext, spaceId, dateDefault, today],
+    () => {
+      void absoluteDates; // relues à l'arrivée de l'analyseur des dates écrites
+      return spaceId ? draftsFromProposals(proposals, quickContext, { spaceId, date: dateDefault, today }) : [];
+    },
+    [proposals, quickContext, spaceId, dateDefault, today, absoluteDates],
   );
 
   const goToSource = useCallback(() => {

@@ -6,6 +6,7 @@ import { t } from '../../../i18n';
 import { formatDayLabel, formatTime } from '../../../i18n/format';
 import { DatePicker, DropdownSelect, Icon, SpaceSegmented, type Layout } from '../../../ui';
 import { useAppStore } from '../../app/appStore';
+import { useAbsoluteDates } from '../absoluteDates';
 import { detectLine } from './scanDrafts';
 import type { ScanProposal } from './scanLines';
 import type { DateKind, Scan } from './useScan';
@@ -28,7 +29,11 @@ interface LineProps {
 /** Une ligne proposée (Scan.html) : case de 26 px dans une zone de 44, champ de 40 px, date et espace détectés, incertitude. */
 const ScanLine = memo(function ScanLine({ line, index, context, onToggle, onEdit }: LineProps) {
   const noteId = useId();
-  const parse = useMemo(() => detectLine(line.text, context), [line.text, context]);
+  const absoluteDates = useAbsoluteDates();
+  const parse = useMemo(() => {
+    void absoluteDates; // relue à l'arrivée de l'analyseur des dates écrites
+    return detectLine(line.text, context);
+  }, [line.text, context, absoluteDates]);
   const dateToken = parse.tokens.find((token) => token.kind === 'date');
   const dateText =
     dateToken && parse.date ? t('scan.review.dateDetected', { date: parse.time ? `${formatDayLabel(parse.date)} · ${formatTime(parse.time)}` : formatDayLabel(parse.date) }) : null;

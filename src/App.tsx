@@ -10,6 +10,7 @@ import { useTabsConfigStore } from './features/app/tabsConfig';
 import { TAB_IDS, TABS, useNavigationStore, type TabDefinition, type TabId } from './features/app/navigation';
 import { startDesktopIntegration } from './features/app/desktop';
 import { startCaptureHost } from './features/capture';
+import { preloadAbsoluteDates } from './features/capture/absoluteDates';
 import { openCaptureMainBridge } from './platform/capture';
 import { toKeyInput, type ShortcutId } from './features/app/shortcuts';
 import { startAppStartup, type AppStartup } from './features/app/startup';
@@ -94,6 +95,8 @@ function AppShellContent() {
 
   // PERF-02 : écrans chargés à la demande, préchargés en arrière-plan après le premier rendu (le repli de Suspense reste exceptionnel).
   useEffect(() => preloadScreens(), []);
+  // PERF-02 : analyseur des dates écrites (Q-02, chrono-node) chargé en arrière-plan, prêt avant la première saisie.
+  useEffect(() => preloadAbsoluteDates(), []);
 
   // A-09 : état du réseau (« Hors ligne »).
   useEffect(() => startNetworkStatus(), []);

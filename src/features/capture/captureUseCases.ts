@@ -1,6 +1,7 @@
 import { nowLocalTime, todayLocal } from '../../domain/clock';
 import type { ReminderOffsetMin, Task } from '../../domain/model';
 import { effectiveProjectFilter } from '../../domain/projectRules';
+import { loadAbsoluteDates } from './absoluteDates';
 import { parseQuickInput, type QuickContext } from '../../domain/quickInput';
 import { defaultSpaceFor, isCreatedOutsideFilter } from '../../domain/spaceRules';
 import type { SpaceId } from '../../domain/types';
@@ -75,6 +76,8 @@ export function undoLabelFor(spaceId: SpaceId, title: string): Pick<UndoableComm
  */
 export async function createTaskFromCaptureText(container: Deps, text: string, ignored: readonly string[]): Promise<CaptureTextResult> {
   try {
+    // PERF-02 : la mini-fenêtre peut envoyer avant la fin du chargement des dates écrites : on l'attend (local, quelques millisecondes).
+    await loadAbsoluteDates();
     const context = currentQuickContext(container);
     const parse = parseQuickInput(normalizeQuickText(text), context, { ignored: new Set(ignored) });
     if (parse.title.trim() === '') return { ok: false, error: 'title-empty' };
