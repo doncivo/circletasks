@@ -1,6 +1,6 @@
 # ADR 0006 — App PC : zone de notification, démarrage avec Windows, mise à jour
 
-- Statut : accepté
+- Statut : accepté ; amendé par l'avenant Y-03 (2026-10-05, lot Y2)
 - Date : 2026-10-02
 - Tâches : D-01, D-02, D-03 (ordre 1, agent desktop-tauri)
 
@@ -19,13 +19,13 @@ L'app PC (Tauri 2, Windows 10/11) doit rester active en zone de notification (ca
 ### D-01 — Zone de notification
 
 - Icône : icône de l'app, info-bulle « CircleTasks » (nom du produit, non traduit). Clic gauche = fenêtre au premier plan ; clic droit = menu.
-- Menu, dans l'ordre : « Ouvrir CircleTasks », « Ajout rapide », « Synchroniser » (grisé : M15 n'existe pas, Y-03), séparateur, « Quitter ».
+- Menu, dans l'ordre : « Ouvrir CircleTasks », « Ajout rapide », « Synchroniser maintenant » (jamais grisé depuis Y-03, voir l'avenant Y-03), séparateur, « Quitter ».
 - **Textes** : source unique `src/i18n` (`desktop.tray.*`). Le front les envoie à la commande `set_tray_labels` au démarrage (`features/app/desktop.ts`). **Exception documentée** : Rust garde des libellés de repli (`fallback_labels`) pour la courte période entre la création de l'icône et la réception des textes, ou si l'interface ne démarre pas (« Quitter » doit rester accessible). Un test Vitest (`consistency.test.ts`) vérifie qu'ils sont égaux à `fr.ts`.
 - Fermer la fenêtre principale (croix, Alt+F4) la masque (`CloseRequested` interceptée). Le réglage `desktop.closeToTray` du modèle n'est pas exposé : le PRD ne demande pas de désactivation (fiche D-01).
 - Fenêtre `main` créée **masquée** par `src-tauri/tauri.windows.conf.json` (fusionné par Tauri pour Windows seulement : le tableau des fenêtres y est répété en entier, la base `tauri.conf.json` garde la fenêtre visible pour iOS), puis affichée par `setup` sauf démarrage réduit : aucun flash lors d'un démarrage avec Windows.
 - Instance unique (`tauri-plugin-single-instance`, premier plugin) : un second lancement affiche la fenêtre existante, sauf s'il porte `--minimized`.
 - « Ajout rapide » : affiche la fenêtre et émet l'événement `desktop://quick-add` ; le front (`quickAdd.ts`) va sur Aujourd'hui et focalise « Nouvelle tâche » comme Ctrl+N. Remplacé par la mini-fenêtre à Q-01.
-- « Quitter » : Rust émet `desktop://quitting`, le front termine ses écritures en cours (une lecture passe après les écritures en file du pilote SQL) puis appelle `confirm_quit` ; attente bornée à 2 s (`QUIT_GRACE`), puis `app.exit(0)` et fermeture des connexions par tauri-plugin-sql (`RunEvent::Exit`).
+- « Quitter » : Rust émet `desktop://quitting`, le front termine ses écritures en cours (une lecture passe après les écritures en file du pilote SQL) puis appelle `confirm_quit` ; attente bornée à **5 s** (`QUIT_GRACE`, 2 s avant l'avenant Y-03), puis `app.exit(0)` et fermeture des connexions par tauri-plugin-sql (`RunEvent::Exit`).
 
 ### D-02 — Démarrage avec Windows
 
@@ -48,7 +48,7 @@ L'app PC (Tauri 2, Windows 10/11) doit rester active en zone de notification (ca
 
 | Commande | Entrée | Sortie | Erreurs `{ code, message }` |
 | --- | --- | --- | --- |
-| `set_tray_labels` | `labels: { open, quickAdd, sync, quit, syncEnabled }` | `void` | `tray-unavailable`, `menu` |
+| `set_tray_labels` | `labels: { open, quickAdd, sync, quit, syncEnabled }` (`syncEnabled` = synchro configurée, avenant Y-03) | `void` | `tray-unavailable`, `menu` |
 | `confirm_quit` | aucune | `void` | aucune |
 
 Déclarée dans `build.rs` (manifeste d'application) : sa permission `allow-set-tray-labels` est la seule qui l'ouvre. Les plugins n'exposent que ce que le front utilise.
@@ -108,6 +108,13 @@ Mesure du 2026-10-02 (`npm run tauri build`, NSIS, avec updater, process, autost
 
 - Export par deux commandes Rust (`src-tauri/src/export.rs`) : `export_save_file` ouvre « Enregistrer sous » côté Rust (`tauri-plugin-dialog`, même bloc `cfg(not(any(android, ios)))`, aucune permission `dialog:` pour la WebView), écrit de façon atomique (temporaire puis renommage), refuse au-delà de 64 Mio et hors chemin à lettre de lecteur ; `reveal_exported_file` n'affiche que le dernier fichier écrit. `tauri-plugin-fs` n'est pas utilisé.
 - Capability séparée `export.json` (fenêtre `main`, Windows) : uniquement `allow-export-save-file` et `allow-reveal-exported-file`. `desktop.json` est inchangé. Détails, contrat `FileService` et taille : ADR 0009 et docs/decisions.md (H-03, « Permissions Tauri »).
+
+## Avenant Y-03 : synchronisation depuis la zone de notification et sortie (2026-10-05, lot Y2)
+
+- Entrée « Synchroniser maintenant » (`desktop.tray.sync`), **toujours active**. `syncEnabled` de `set_tray_labels` signifie désormais « synchro configurée » ; Rust le garde (`TraySyncState`). Synchro configurée : Rust émet l'événement **`tray-sync-now`** vers `main` (cycle silencieux, fenêtre inchangée). Non configurée : Rust affiche la fenêtre et émet le même événement ; le front ouvre Réglages > Synchronisation (`docs/decisions.md`, Y-03).
+- Contrat : **`DesktopPlatform.onTraySyncNow(handler): Promise<() => void>`** (`src/platform/desktop/types.ts` ; constante `TRAY_SYNC_NOW_EVENT` dans `releases.ts` ; faux dans `testing.ts`) ; `features/app/desktop.ts` appelle `syncNow('tray')` (ADR 0011 section 10.1). Aucune commande ni permission nouvelle.
+- « Quitter » : **`QUIT_GRACE` = 5 s** (au lieu de 2 s) ; le gestionnaire `onQuitting` termine les écritures **et le dernier cycle de synchro**, borné côté front à **4,5 s** (`syncBeforeQuit`) pour rester sous l'attente de Rust ; puis sortie quoi qu'il arrive (ADR 0011 section 10.1).
+- Le PC n'émet toujours aucune notification (CLAUDE.md).
 
 ## Avenant : taille mesurée de l'installeur v0.1.0 (2026-10-05)
 
