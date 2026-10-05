@@ -29,7 +29,10 @@ describe('bundle de départ (index.html)', () => {
 
   beforeAll(() => {
     outDir = mkdtempSync(join(tmpdir(), 'ct-bundle-'));
-    const build = spawnSync('npm', ['run', 'build', '--', '--outDir', outDir, '--emptyOutDir', '--manifest'], { encoding: 'utf8', shell: true, env: { ...process.env, TAURI_ENV_DEBUG: '' } });
+    // NODE_ENV forcé : sinon le build hérite de NODE_ENV=test posé par Vitest et embarque React en mode développement, ce qui mesure
+    // un bundle sans rapport avec l'app livrée.
+    const env = { ...process.env, NODE_ENV: 'production', TAURI_ENV_DEBUG: '' };
+    const build = spawnSync('npm', ['run', 'build', '--', '--outDir', outDir, '--emptyOutDir', '--manifest'], { encoding: 'utf8', shell: true, env });
     if (build.status !== 0) throw new Error(`npm run build a échoué (code ${String(build.status)}) :\n${build.stdout}\n${build.stderr}`);
     manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Record<string, ManifestChunk>;
   });

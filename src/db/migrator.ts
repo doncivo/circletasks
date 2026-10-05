@@ -38,6 +38,12 @@ export interface MigrateOptions {
    * est à jour) : point d'accroche de la sauvegarde automatique (PRD section 7).
    */
   readonly beforeApply?: (pending: readonly Migration[], info: BeforeApplyInfo) => Promise<void>;
+  /**
+   * Appelé à la fin de chaque `migrate()` réussi, **même si aucune migration n'était en attente** (Y-07, décision D3) : réintégration
+   * des champs de synchro devenus connus (`reintegrateUnknownFields`). Une erreur du crochet fait échouer `migrate()` ; les migrations
+   * déjà appliquées le restent (chacune dans sa transaction).
+   */
+  readonly afterApply?: (db: SqlDriver, report: MigrateReport) => Promise<void>;
 }
 
 export interface MigrateReport {
@@ -140,8 +146,10 @@ export async function migrate(
   }
 
   const last = migrations.at(-1);
-  return {
+  const report: MigrateReport = {
     applied: pending.map((m) => m.version),
     currentVersion: last ? last.version : 0,
   };
+  if (options.afterApply) await options.afterApply(db, report);
+  return report;
 }

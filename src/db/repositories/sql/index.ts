@@ -14,6 +14,7 @@ import { createProjectRepository, createSpaceRepository } from './spaceRepositor
 // Y-04 (fin)
 import { createSyncRepository } from './syncRepository';
 // Y-07 (début)
+export { reintegrateUnknownFields } from './syncUnknown';
 // Y-07 (fin)
 import { createRecurrenceRepository, createTaskRepository } from './taskRepository';
 

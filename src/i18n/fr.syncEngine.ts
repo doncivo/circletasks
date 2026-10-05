@@ -18,6 +18,7 @@ export const syncEngineFr = {
     waitingIcloud: 'En attente d’iCloud',
     restoreChoice: 'Un choix est à faire après la restauration',
     updateRequired: 'Mettez à jour l’app pour lire les données de vos autres appareils',
+    updateRequiredDevice: 'Mettez à jour l’app pour lire les données de {device}',
     clockAhead: 'L’horloge de {device} est en avance : vérifiez sa date et son heure',
     keyMismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',

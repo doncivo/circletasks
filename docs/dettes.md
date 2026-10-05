@@ -103,6 +103,8 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
   - ~~Critère 16 de Y-01 (QA-Y1-5) : appeler `sync::marker::write_after_restore` depuis `backup::restore_backup`.~~ Soldée par le lot Y2 (branchement sur Y1) : `backup::write_restore_marker` délègue à `write_after_restore`, testé dans `restore_hardening.rs` (marqueur écrit seulement avec un dossier configuré ; aucun marqueur après une restauration récupérée au démarrage).
   - ~~Fenêtre `pairing` (audit S1, A2) : en développement avec `devUrl` (serveur Vite), le contrôle de présence de `pairing.html` dans les actifs embarqués est sauté.~~ Soldée par Y-06 (D2) : les clés des actifs embarqués sont lues d'abord ; en développement seulement (`#[cfg(debug_assertions)]`), Rust demande `/pairing.html` au serveur Vite local et exige le marqueur `data-ct-page="pairing"` (le serveur répond `index.html` à une page absente), sinon `io` avant toute boîte et toute fenêtre ; testé avec un petit serveur local (`sync_pairing_y06.rs`).
   - Scan (audit S2) : au-delà de 64 appareils candidats non protégés, de 64 époques par appareil ou de 50 000 entrées listées, le scan est `incomplete` ; le moteur doit l'afficher (« dossier encombré ») sans en tirer de conclusion de purge.
+- **Y-07, règle « même écriture » de la réintégration** (`decideReintegration`, `src/domain/sync/compat.ts`) : un champ gardé au hlc du repli « * » de sa ligne, sans horloge propre, est écrit (il complète l'écriture reçue quand la colonne n'existait pas). La règle suppose que **toute future migration additive régénère les déclencheurs de capture** pour la nouvelle colonne (horloge propre posée à chaque écriture locale, comme `captureTriggers` de la migration 0015) : sans cela, une écriture locale de la colonne n'aurait pas d'horloge propre et pourrait être écrasée par une valeur gardée au hlc du repli. À vérifier dans la fiche de la première migration additive réelle (la migration de test `tests/sim/syncVersions.ts` le fait).
+- **Y-07, code copié entre `src/db/repositories/sql/syncUnknown.ts` et `src/sync/apply.ts`** (écriture d'une ligne et de ses horloges, repli « * », inscription des conflits, contrôle des parents) : à mettre en commun après le lot Y3 (`apply.ts` est en lecture seule pendant le lot).
 
 ## Ordre 5 (iPhone)
 
@@ -114,6 +116,8 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
 - P-04 critère 11 (sauvegarde et restauration sur iPhone) : commandes limitées à Windows, `container.backups` indisponible sur iOS ; à ouvrir par un avenant à l'ADR 0009 (capability iOS, gestionnaire mobile, réouverture de la base sans `relaunch`) en respectant l'ADR 0010.
 - P-07 sur iPhone : « Télécharger un modèle » et le rapport des lignes rejetées sont masqués tant que le plugin Fichiers (`FileService.save`) n'existe pas.
 - Synchro (ADR 0011, section 2.1) : lancer le scan du QR depuis Rust (`sync_key_import({ scan: true })`). Si l'API Rust du plugin barcode-scanner ne le permet pas, faire passer le texte par le JS et documenter ce troisième point d'exposition par un avenant. Vérifier aussi les attributs du Trousseau (`SecItemCopyMatching`) et le refus des liens symboliques sous le signet du dossier.
+
+- **Y-07, à vérifier à l'ordre 5** : un échec de réintégration (sync_meta reintegrationFailure) doit s'afficher sur l'iPhone dès que le service de synchro y existe (avant l'ordre 5, aucun service : l'échec est enregistré mais pas affiché, cas impossible car sync_unknown n'est rempli que par la synchro).
 
 ## Livraison
 
