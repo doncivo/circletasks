@@ -62,7 +62,8 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     body: 'The changes this device had already received will be replaced on all your devices',
     applyEverywhere: 'Apply this version to all my devices',
     keepSynced: 'Keep the synced data',
-    onlyApply: 'A deletion more recent than this backup has already been permanently erased from your devices: only the first option is possible.',
+    bodyOnlyApply:
+      'The changes this device had already received will be replaced on all your devices. A deletion more recent than this backup has already been permanently erased from your devices: only the first option is possible.',
     later: 'Later',
     backupWarning: 'This device is paired: you will be asked at the next sync',
   },

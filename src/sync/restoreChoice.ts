@@ -1,7 +1,7 @@
-import { compareEpochs, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
-import { folderEpoch, maxEpoch, nextEpoch, openingCover, restoreOptions, type RestoreOption } from '../domain/sync/epoch';
+import { SYNC_FORMAT_MAJOR, compareEpochs, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
+import { folderEpoch, maxEpoch, nextEpoch, openingCover, restoreOptions } from '../domain/sync/epoch';
 import type { DeviceId, Hlc } from '../domain/types';
-import type { RestoreMarker } from '../platform/sync/types';
+import type { RestoreContext, RestoreMarker } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
 import { snapshotPages } from './snapshot';
@@ -16,11 +16,7 @@ import { snapshotPages } from './snapshot';
  * Le marqueur n'est effacé qu'après application complète du choix (par le service).
  */
 
-export interface RestoreContext {
-  readonly marker: RestoreMarker;
-  /** Options proposées (règle 4 : seulement « Appliquer partout » si une suppression postérieure a déjà été purgée). */
-  readonly options: readonly RestoreOption[];
-}
+export type { RestoreContext };
 
 /** Lit les états publiés pour décider des options (règle 4). */
 export async function restoreContext(deps: SyncDeps, marker: RestoreMarker): Promise<RestoreContext> {
@@ -49,6 +45,8 @@ export async function applyEverywhere(deps: SyncDeps): Promise<EpochId> {
   const localEpoch = await readJson<EpochId>(data.repos, META.epoch);
   const current = maxEpoch([localEpoch, folderEpoch(states), ...states.map((s) => s.epoch)]);
   const target = nextEpoch(current, self);
+  // Contrôle avant toute écriture (instantané, état, base) : une époque non croissante ne laisse aucune trace.
+  if (current !== null && compareEpochs(target, current) <= 0) throw new Error('époque non croissante');
   // covers[B] : maximum de la base restaurée et du dernier état publié avant la restauration.
   const covers = new Map<DeviceId, DeviceAck>();
   const rows = await data.repos.sync.getStates();
@@ -73,7 +71,7 @@ export async function applyEverywhere(deps: SyncDeps): Promise<EpochId> {
       deviceId: self,
       platform: deps.devicePlatform,
       appVersion: deps.appVersion,
-      sm: 1,
+      sm: SYNC_FORMAT_MAJOR,
       sv: deps.sv,
       epoch: target,
       stateSeq,
@@ -101,7 +99,6 @@ export async function applyEverywhere(deps: SyncDeps): Promise<EpochId> {
     await writeJson(tx, META.lastState, null);
   });
   deps.logger.log('restore-applied-everywhere', { epoch: target, previous: current ?? 'none' });
-  if (current !== null && compareEpochs(target, current) <= 0) throw new Error('époque non croissante');
   return target;
 }
 

@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import type { ChangeCursor, ProviderCalendar } from '../../domain/calendarProvider';
-import { calendarAppStatuses, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
+import { calendarAppStatuses, disconnectedAccount, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
 import { prefillCalendarSpaces, validateCalendars } from '../../domain/externalCalendars';
 import { newEntityId } from '../../domain/id';
 import type { CalendarAccount, CalendarProviderKind, CalendarRef } from '../../domain/model';
@@ -121,10 +121,10 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       const map = new Map(Object.entries(states).map(([id, state]) => [id as CalendarAccountId, state]));
       const active = calendarAppStatuses(accounts, map);
       const statusStore = useAppStatusStore.getState();
-      const disconnected = active.calendarDisconnected;
-      // Rapprochement par identifiant de compte (ADR 0011 section 8) : le libellé n'identifie plus un compte (vide pour iCloud).
-      const target = disconnected ? accounts.find((account) => map.get(account.id)?.kind === 'reconnect-required') : undefined;
-      statusStore.setStatus('calendarDisconnected', disconnected && target ? { detail: accountDisplayName(target), onAction: () => get().requestReconnect(target.id) } : null);
+      // Le compte du bandeau est celui que désigne `calendarAppStatuses` (même règle, `disconnectedAccount`), rapproché par identifiant
+      // (ADR 0011 section 8) : le libellé n'identifie plus un compte (vide pour iCloud).
+      const target = active.calendarDisconnected ? disconnectedAccount(accounts, map) : undefined;
+      statusStore.setStatus('calendarDisconnected', target ? { detail: accountDisplayName(target), onAction: () => get().requestReconnect(target.id) } : null);
       if (active.offline) {
         if (!statusStore.sources.offline) {
           statusStore.setStatus('offline', {});

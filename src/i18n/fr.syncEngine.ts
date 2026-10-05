@@ -63,7 +63,8 @@ export const syncEngineFr = {
     body: 'Les modifications que cet appareil avait déjà reçues seront remplacées sur tous vos appareils',
     applyEverywhere: 'Appliquer cette version sur tous mes appareils',
     keepSynced: 'Garder les données synchronisées',
-    onlyApply: 'Une suppression plus récente que cette sauvegarde a déjà été effacée définitivement de vos appareils : seule la première option est possible.',
+    bodyOnlyApply:
+      'Les modifications que cet appareil avait déjà reçues seront remplacées sur tous vos appareils. Une suppression plus récente que cette sauvegarde a déjà été effacée définitivement de vos appareils : seule la première option est possible.',
     later: 'Plus tard',
     backupWarning: 'Cet appareil est associé : le choix vous sera demandé à la prochaine synchro',
   },

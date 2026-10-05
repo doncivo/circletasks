@@ -2,12 +2,14 @@ import type { ExportedRow, Repositories } from '../db/repositories';
 import { PAGE_ROWS, parseEpochId, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { mustCarry } from '../domain/sync/epoch';
 import { hlcDevice } from '../domain/sync/parse';
-import { SYNC_TABLES, settingKeyScope, syncTable } from '../domain/sync/syncTables';
+import { SYNC_TABLES, settingKeyScope, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { applyOps } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
+import { ROW_REPUBLISH_FIELD } from './publisher';
+import { purgeRows } from './purge';
 import { loadSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
 
 /**
@@ -32,6 +34,8 @@ interface SwitchProgress {
   readonly target: EpochId;
   readonly step: SwitchStep;
   readonly from: { readonly deviceId: DeviceId; readonly seq: number };
+  /** Plus grand numéro de la file au début de (a) : (b) ne vide la file que jusqu'à lui. */
+  readonly maxSeq: number;
 }
 
 /** Opération reportée : ligne complète (pour pouvoir la recréer) et champs écrits par cet appareil ; ou identifiant purgé. */
@@ -46,7 +50,8 @@ interface CarriedOp {
 
 /** Arrêt simulé entre deux étapes (tests de reprise). */
 export interface SwitchTestHooks {
-  afterStep?: (step: SwitchStep) => void;
+  /** Peut écrire dans la base (écriture locale pendant le changement) ou lever (arrêt simulé). */
+  afterStep?: (step: SwitchStep) => void | Promise<void>;
 }
 
 let testHooks: SwitchTestHooks = {};
@@ -61,15 +66,37 @@ function snapshotSource(target: EpochId, accepted: ReadonlyMap<DeviceId, Publish
   return chosen ? { deviceId: chosen[0], seq: (chosen[1].snapshot as { seq: number }).seq } : null;
 }
 
-/** (a) Matérialisation depuis la base locale, par pages de 500 lignes, une transaction par page. */
-async function materialize(deps: SyncDeps, cover: DeviceAck | null): Promise<number> {
+/** Ligne de la base → opération reportée (ligne complète, champs propres choisis par `isOwn`) ; null sans champ propre. */
+function carriedOf(t: SyncTable, row: ExportedRow, isOwn: (name: string, hlc: Hlc) => boolean): CarriedOp | null {
+  if (t.name === 'settings' && settingKeyScope(row.id) !== 'shared') return null;
+  const fallback = row.clocks.get('*') ?? { hlc: row.hlc, base: null };
+  const f: Record<string, SyncField> = {};
+  const own: string[] = [];
+  for (const col of t.columns) {
+    const clock = row.clocks.get(col.name) ?? fallback;
+    f[col.name] = [row.values.get(col.name) ?? null, clock.hlc, row.clocks.get(col.name)?.base ?? null];
+    if (isOwn(col.name, clock.hlc)) own.push(col.name);
+  }
+  return own.length > 0 ? { t: t.name, id: row.id, at: row.updatedAt, f, own } : null;
+}
+
+/** Champs en attente d'une ligne : `'*'` et `ROW_REPUBLISH_FIELD` valent pour toutes les colonnes. */
+const pendingHas = (pending: ReadonlySet<string>, name: string): boolean => pending.has(name) || pending.has('*') || pending.has(ROW_REPUBLISH_FIELD);
+
+/**
+ * (a) Matérialisation depuis la base locale, par pages de 500 lignes, une transaction par page. Le plus grand numéro de la file au
+ * début de (a) est mémorisé (`maxSeq`) : seules les entrées jusqu'à lui seront vidées en (b) ; les écritures suivantes sont reportées
+ * par `carryNewer` avant chaque transaction de remplacement.
+ */
+async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: number): Promise<number> {
   const self = deps.deviceId;
   const { data } = deps;
   await data.transaction(async (repos) => {
     const old = await repos.sync.parked(['epoch-carry'], 0, 1_000_000);
     await repos.sync.removeParked(old.map((p) => p.id));
+    await writeJson(repos, META.epochCarry, maxSeq);
   });
-  const outbox = await data.repos.sync.readOutbox();
+  const outbox = await data.repos.sync.readOutbox(undefined, 0);
   const pendingFields = new Map<string, Set<string>>();
   for (const e of outbox) {
     const key = `${e.table}\u0000${e.rowId}`;
@@ -85,22 +112,9 @@ async function materialize(deps: SyncDeps, cover: DeviceAck | null): Promise<num
       after = (rows.at(-1) as ExportedRow).id;
       const ops: CarriedOp[] = [];
       for (const row of rows) {
-        if (t.name === 'settings' && settingKeyScope(row.id) !== 'shared') continue;
-        const fallback = row.clocks.get('*') ?? { hlc: row.hlc, base: null };
         const pending = pendingFields.get(`${t.name}\u0000${row.id}`) ?? new Set<string>();
-        const f: Record<string, SyncField> = {};
-        const own: string[] = [];
-        let max: Hlc | null = null;
-        for (const col of t.columns) {
-          const clock = row.clocks.get(col.name) ?? fallback;
-          f[col.name] = [row.values.get(col.name) ?? null, clock.hlc, row.clocks.get(col.name)?.base ?? null];
-          const mine = hlcDevice(clock.hlc) === self;
-          if (mine && (mustCarry(clock.hlc, self, cover) || pending.has(col.name) || pending.has('*'))) {
-            own.push(col.name);
-            if (max === null || clock.hlc > max) max = clock.hlc;
-          }
-        }
-        if (own.length > 0 && max !== null) ops.push({ t: t.name, id: row.id, at: row.updatedAt, f, own });
+        const op = carriedOf(t, row, (name, hlc) => hlcDevice(hlc) === self && (mustCarry(hlc, self, cover) || pendingHas(pending, name)));
+        if (op) ops.push(op);
       }
       if (ops.length > 0) {
         await data.transaction(async (repos) => {
@@ -130,6 +144,40 @@ async function materialize(deps: SyncDeps, cover: DeviceAck | null): Promise<num
   return carried;
 }
 
+/**
+ * Report, en tête de **chaque** transaction de remplacement (b) et dans celle-ci, des écritures locales faites depuis le début de (a)
+ * (numéros de file au-delà du dernier reporté) : sans lui, le remplacement les écraserait et le vidage de la file les oublierait. Le
+ * dernier numéro reporté est mémorisé dans la même transaction (`sync_meta.epochCarry`).
+ */
+async function carryNewer(deps: SyncDeps, repos: Repositories): Promise<void> {
+  const after = (await readJson<number>(repos, META.epochCarry)) ?? 0;
+  const entries = await repos.sync.readOutbox(undefined, after);
+  if (entries.length === 0) return;
+  const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
+  const byTable = new Map<SyncTable, Map<string, Set<string>>>();
+  for (const e of entries) {
+    const t = syncTable(e.table);
+    if (!t) continue;
+    const rows = byTable.get(t) ?? new Map<string, Set<string>>();
+    rows.set(e.rowId, new Set([...(rows.get(e.rowId) ?? []), e.field]));
+    byTable.set(t, rows);
+  }
+  let carried = 0;
+  for (const [t, rowsFields] of byTable) {
+    const rows = await repos.sync.readRowsWithClocks(t, [...rowsFields.keys()]);
+    for (const [id, fields] of rowsFields) {
+      const row = rows.get(id);
+      if (!row) continue;
+      const op = carriedOf(t, row, (name, hlc) => hlcDevice(hlc) === deps.deviceId && pendingHas(fields, name));
+      if (!op) continue;
+      await repos.sync.park('epoch-carry', t.name, id, maxOwn(op), JSON.stringify(op), now);
+      carried += 1;
+    }
+  }
+  await writeJson(repos, META.epochCarry, Math.max(after, ...entries.map((e) => e.seq)));
+  if (carried > 0) deps.logger.log('epoch-carry-late', { rows: carried });
+}
+
 const maxOwn = (op: CarriedOp): Hlc => op.own.map((name) => (op.f[name] as SyncField)[1]).reduce((a, b) => (b > a ? b : a));
 
 /** (c) Réapplication par la règle de hlc, remise dans la file (hlc d'origine), retrait des reports de la page. */
@@ -139,16 +187,25 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
     const page = await deps.data.repos.sync.parked(['epoch-carry'], 0, PAGE_ROWS);
     if (page.length === 0) break;
     const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
+    // Horloge locale au-delà de tout ce qui est réappliqué (les écritures locales suivantes l'emportent toujours).
+    let pageMax: Hlc | null = null;
+    for (const parked of page) if (pageMax === null || parked.hlc > pageMax) pageMax = parked.hlc;
+    for (const parked of page) for (const field of Object.values((JSON.parse(parked.op) as CarriedOp).f)) if (pageMax === null || field[1] > pageMax) pageMax = field[1];
+    if (pageMax !== null) deps.hlc.receive(pageMax);
     await guarded(deps.data, async (repos) => {
       for (const parked of page) {
         const op = JSON.parse(parked.op) as CarriedOp;
         const t = syncTable(op.t);
         if (!t) continue;
         if (op.tomb !== undefined) {
-          await repos.sync.insertTombstones([{ table: t.name, rowId: op.id, deletedHlc: op.tomb }], now);
-          if (t.name === 'calendar_account') await repos.sync.deleteExternalEventsOf([op.id]);
-          await repos.sync.deleteRows(t, [op.id]);
-          addTouched(touched, t.name, op.id);
+          // Ligne présente : purgée avec ses rappels, sauf si elle a encore des enfants (écartée, journalisée) ; absente : trace seule.
+          if ((await repos.sync.existingIds(t, [op.id])).has(op.id)) {
+            const done = await purgeRows(repos, t, [{ id: op.id, deletedHlc: op.tomb }], now, deps.logger);
+            for (const item of done.purged) addTouched(touched, t.name, item.id);
+            for (const id of done.reminders) addTouched(touched, 'reminder', id);
+          } else {
+            await repos.sync.insertTombstones([{ table: t.name, rowId: op.id, deletedHlc: op.tomb }], now);
+          }
           continue;
         }
         const existed = (await repos.sync.existingIds(t, [op.id])).has(op.id);
@@ -158,7 +215,9 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         await applyOps(repos, [syncOp], { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
         if (!(await repos.sync.existingIds(t, [op.id])).has(op.id)) continue;
         if (!existed) {
-          await repos.sync.addOutbox([{ table: t.name, rowId: op.id, field: '*' }]);
+          // Ligne recréée : la nouvelle époque ne la connaît pas ; elle est republiée **entière** (champs des autres appareils compris,
+          // avec leurs horloges), sinon les autres appareils ne recevraient que ses champs propres et la mettraient de côté pour toujours.
+          await repos.sync.addOutbox([{ table: t.name, rowId: op.id, field: ROW_REPUBLISH_FIELD }]);
         } else {
           const clocks = (await repos.sync.readClocks(t, [op.id])).get(op.id) ?? new Map();
           const row = (await repos.sync.readRows(t, [op.id])).get(op.id);
@@ -184,13 +243,13 @@ export async function switchEpoch(
   accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
   _ownState: PublishedDeviceState | null,
   onRemoteChanges: (touched: ReadonlyMap<string, ReadonlySet<string>>) => void,
-): Promise<'done' | 'cloud-pending' | 'error'> {
+): Promise<'done' | 'cloud-pending' | 'error' | 'clock-ahead'> {
   const repos: Repositories = deps.data.repos;
   let progress = await readJson<SwitchProgress>(repos, META.epochSwitch);
   if (!progress || progress.target !== target) {
     const from = snapshotSource(target, accepted);
     if (!from) return 'cloud-pending';
-    progress = { target, step: 'a', from };
+    progress = { target, step: 'a', from, maxSeq: await repos.sync.maxOutboxSeq() };
     await writeJson(repos, META.epochSwitch, progress);
   }
   let snapshot: LoadedSnapshot | null = null;
@@ -209,26 +268,32 @@ export async function switchEpoch(
     const loaded = await load();
     if (loaded === 'cloud-pending') return 'cloud-pending';
     if (!loaded) return 'error';
-    const carried = await materialize(deps, loaded.end.covers.get(deps.deviceId) ?? null);
+    const carried = await materialize(deps, loaded.end.covers.get(deps.deviceId) ?? null, progress.maxSeq);
     deps.logger.log('epoch-carry', { target, rows: carried });
     await advance('b');
-    testHooks.afterStep?.('a');
+    await testHooks.afterStep?.('a');
   }
   if (progress.step === 'b') {
     const loaded = await load();
     if (loaded === 'cloud-pending') return 'cloud-pending';
     if (!loaded) return 'error';
-    const result = await replaceFromSnapshot(deps, loaded);
-    await repos.sync.clearOutbox();
+    const result = await replaceFromSnapshot(deps, loaded, (tx) => carryNewer(deps, tx));
+    if (result === 'clock-ahead') {
+      // Instantané d'ouverture trop en avance (section 4.4) : rien n'a été remplacé ; l'ouvreur est signalé, le changement attend.
+      await repos.sync.saveState(progress.from.deviceId, { status: 'clock-ahead' });
+      return 'clock-ahead';
+    }
+    // File vidée jusqu'au numéro mémorisé en (a) seulement : les écritures suivantes ont été reportées et restent dans la file.
+    await repos.sync.clearOutbox(progress.maxSeq);
     onRemoteChanges(result.touched);
     await advance('c');
-    testHooks.afterStep?.('b');
+    await testHooks.afterStep?.('b');
   }
   if (progress.step === 'c') {
     const touched = await reapply(deps);
     if (touched.size > 0) onRemoteChanges(touched);
     await advance('d');
-    testHooks.afterStep?.('c');
+    await testHooks.afterStep?.('c');
   }
   // (d) Nouvelle époque : tête vide, curseurs de tous les appareils au début de l'époque ; la publication suit dans le cycle.
   await deps.data.transaction(async (tx) => {
@@ -239,6 +304,7 @@ export async function switchEpoch(
     await writeJson(tx, META.segments, null);
     await writeJson(tx, META.resume, null);
     await writeJson(tx, META.epochSwitch, null);
+    await writeJson(tx, META.epochCarry, null);
   });
   deps.logger.log('epoch-switched', { target });
   return 'done';

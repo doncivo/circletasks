@@ -4,11 +4,11 @@ import type { HlcClock } from '../domain/hlc';
 import type { RestoreOption } from '../domain/sync/epoch';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import type { RemoteChanges, SyncPlatform, SyncReason, SyncService, SyncStatus } from '../platform/sync/types';
+import type { RemoteChanges, SyncEngineService, SyncPlatform, SyncReason, SyncStatus } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
-import { applyEverywhere, prepareKeepSynced, restoreContext, type RestoreContext } from './restoreChoice';
+import { applyEverywhere, prepareKeepSynced, restoreContext } from './restoreChoice';
 import { INITIAL_STATUS, statusFromFacts } from './status';
 
 /**
@@ -19,12 +19,7 @@ import { INITIAL_STATUS, statusFromFacts } from './status';
  * - Phase `syncing` seulement si le cycle lit ou écrit, ou s'il dure plus d'une seconde (A-09).
  * - Marqueur de restauration : aucun cycle ; `chooseRestoreOption` applique le choix puis efface le marqueur.
  */
-export interface SyncEngineService extends SyncService {
-  /** Options de la fenêtre de choix après restauration (null : pas de marqueur). */
-  restoreContext(): Promise<RestoreContext | null>;
-  /** Cycle en cours (tests, budget de « Quitter »). */
-  readonly running: () => Promise<void> | null;
-}
+export type { SyncEngineService };
 
 export interface SyncServiceOptions {
   readonly data: DataAccess;
@@ -62,7 +57,13 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
   const listeners = new Set<() => void>();
   const changeListeners = new Set<(c: RemoteChanges) => void>();
   let current: Promise<void> | null = null;
-  let queued: Promise<void> | null = null;
+  /**
+   * File par type d'action (section 10.1) : un seul cycle de synchro de plus, quel que soit le nombre de demandes pendant le cycle en
+   * cours ; le choix après restauration a sa propre place (le dernier choix demandé) et passe **avant** la synchro en attente. Un choix
+   * n'est donc jamais absorbé par une synchro déjà programmée.
+   */
+  type ActionKind = 'choice' | 'sync';
+  const waiting = new Map<ActionKind, { run: () => Promise<unknown>; done: () => void; promise: Promise<void> }>();
 
   const publish = (next: SyncStatus): void => {
     status = next;
@@ -111,26 +112,39 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     }
   };
 
-  const schedule = (run: () => Promise<unknown>): Promise<void> => {
-    if (current) {
-      // Un seul cycle de plus, quel que soit le nombre de demandes pendant le cycle en cours.
-      if (!queued) {
-        const after = current;
-        queued = after.then(async () => {
-          queued = null;
-          await schedule(run);
-        });
-      }
-      return queued;
+  const pump = (): void => {
+    if (current) return;
+    const kind: ActionKind | null = waiting.has('choice') ? 'choice' : waiting.has('sync') ? 'sync' : null;
+    if (kind === null) return;
+    const next = waiting.get(kind) as { run: () => Promise<unknown>; done: () => void };
+    waiting.delete(kind);
+    current = next
+      .run()
+      .then(
+        () => undefined,
+        () => undefined,
+      )
+      .finally(() => {
+        current = null;
+        next.done();
+        pump();
+      });
+  };
+
+  const schedule = (kind: ActionKind, run: () => Promise<unknown>): Promise<void> => {
+    const existing = waiting.get(kind);
+    if (existing) {
+      // Synchro : la demande déjà en attente suffit. Choix : le plus récent remplace celui qui n'a pas encore commencé.
+      if (kind === 'choice') existing.run = run;
+      return existing.promise;
     }
-    const started = run().then(
-      () => undefined,
-      () => undefined,
-    );
-    current = started.finally(() => {
-      current = null;
+    let done: () => void = () => undefined;
+    const promise = new Promise<void>((resolve) => {
+      done = resolve;
     });
-    return current;
+    waiting.set(kind, { run, done, promise });
+    pump();
+    return promise;
   };
 
   const service: SyncEngineService = {
@@ -141,7 +155,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     },
     syncNow: (reason: SyncReason) => {
       deps.logger.log('sync-now', { reason });
-      return schedule(() => cycle());
+      return schedule('sync', () => cycle());
     },
     onRemoteChanges: (listener) => {
       changeListeners.add(listener);
@@ -156,7 +170,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       }
     },
     chooseRestoreOption: (option: RestoreOption) =>
-      schedule(async () => {
+      schedule('choice', async () => {
         const context = await service.restoreContext();
         if (!context || !context.options.includes(option)) {
           deps.logger.log('restore-choice-refused', { option });

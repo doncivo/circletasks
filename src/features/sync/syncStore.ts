@@ -1,8 +1,6 @@
 import { createStore } from 'zustand';
 import type { RestoreOption } from '../../domain/sync/epoch';
-import type { SyncReason, SyncStatus } from '../../platform/sync/types';
-import type { RestoreContext } from '../../sync';
-import { INITIAL_STATUS } from '../../sync';
+import { INITIAL_STATUS, type RestoreContext, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 
 /**
@@ -59,10 +57,17 @@ export const syncStore = defineFeatureStore<SyncState>((container: AppContainer)
     async chooseRestore(option) {
       if (!service || get().choosing) return;
       set({ choosing: true });
+      let remaining: RestoreContext | null = get().restore;
       try {
         await service.chooseRestoreOption(option);
       } finally {
-        set({ choosing: false, restore: null });
+        // La fenêtre ne se ferme que si le choix a été exécuté (marqueur effacé) ; sinon elle reste, options relues.
+        try {
+          remaining = await service.restoreContext();
+        } catch {
+          // contexte illisible : la fenêtre reste telle quelle
+        }
+        set({ choosing: false, restore: remaining });
       }
     },
     closeRestore() {

@@ -10,6 +10,7 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { RestoreChoiceDialog } from './RestoreChoiceDialog';
 import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncStatusLine } from './SyncStatusLine';
+import { t } from '../../i18n';
 import { applyRemoteChanges } from './remoteChanges';
 import { startSyncIntegration } from './startSync';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -95,13 +96,30 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
     await waitFor(() => expect(sync.choices).toEqual(['keep-synced']));
   });
 
+  it('la fenêtre se ferme quand le choix est exécuté ; elle reste ouverte s’il ne l’a pas été (revue Y2, point 12)', async () => {
+    const context = { marker: { backup: 'x', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 17 }, options: ['apply-everywhere', 'keep-synced'] as const };
+    sync.restore = context;
+    sync.choiceExecuted = false;
+    sync.setStatus({ phase: 'restore-choice' });
+    renderIn(<RestoreChoiceDialog />);
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: 'Garder les données synchronisées' }));
+    await waitFor(() => expect(sync.choices).toEqual(['keep-synced']));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Garder les données synchronisées' })).toBeTruthy());
+    expect(screen.getByRole('alertdialog')).toBeTruthy();
+    sync.choiceExecuted = true;
+    fireEvent.click(screen.getByRole('button', { name: 'Garder les données synchronisées' }));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(sync.choices).toEqual(['keep-synced', 'keep-synced']);
+  });
+
   it('règle 4 : une seule option, explication ; « Plus tard » ferme sans rien changer', async () => {
     sync.restore = { marker: { backup: 'x', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 17 }, options: ['apply-everywhere'] };
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
     await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
     expect(screen.queryByRole('button', { name: 'Garder les données synchronisées' })).toBeNull();
-    expect(screen.getByText(/seule la première option est possible/)).toBeTruthy();
+    expect(screen.getByText(t('sync.restore.bodyOnlyApply'))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(sync.choices).toEqual([]);

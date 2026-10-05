@@ -245,8 +245,13 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       }
       const rowHlc = maxOf([...fields.values()].map((f) => f[1]));
       await sync.insertRow(t, op.id, values, { hlc: rowHlc, updatedAt: op.at, deviceId: hlcDevice(rowHlc) });
-      const clocks = [...fields].filter(([, f]) => f[1] !== rowHlc || f[2] !== null).map(([name, f]) => ({ field: name, hlc: f[1], base: f[2] }));
-      if (clocks.length > 0) await sync.writeClocks(t, op.id, clocks);
+      // Repli « * » toujours écrit (hlc de la ligne) : une écriture locale ultérieure d'un autre champ ne déplace pas l'horloge des champs
+      // sans entrée propre (sinon une écriture distante plus ancienne sur ces champs serait refusée d'un seul côté).
+      const clocks: { field: string; hlc: Hlc; base: Hlc | null }[] = [
+        { field: '*', hlc: rowHlc, base: null },
+        ...[...fields].filter(([, f]) => f[1] !== rowHlc || f[2] !== null).map(([name, f]) => ({ field: name, hlc: f[1], base: f[2] })),
+      ];
+      await sync.writeClocks(t, op.id, clocks);
       if (combined.length > 0) await sync.removeParked(combined);
       row.exists = true;
       row.values = values;
@@ -310,9 +315,9 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     const oldHlc = row.hlc as Hlc;
     let meta = null;
     const clocks = [...applied].map(([name, f]) => ({ field: name, hlc: f[1], base: f[2] }));
+    // Repli « * » dès qu'il manque (la ligne reçoit des horloges de champ) : les champs sans horloge propre gardent l'ancien hlc de la ligne.
+    if (!row.clocks.has('*')) clocks.unshift({ field: '*', hlc: oldHlc, base: null });
     if (appliedMax > oldHlc) {
-      // Repli « * » avant que le hlc de la ligne ne bouge : les champs sans horloge propre gardent l'ancien.
-      if (row.clocks.size === 0) clocks.unshift({ field: '*', hlc: oldHlc, base: null });
       meta = { hlc: appliedMax, updatedAt: op.at, deviceId: hlcDevice(appliedMax) };
     }
     await sync.updateRow(t, op.id, new Map([...applied].map(([n, f]) => [n, f[0]])), meta);

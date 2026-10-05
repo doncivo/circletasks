@@ -5,6 +5,7 @@ import { startUpdateChecks } from '../updater/updateChecks';
 import type { AppContainer } from './container';
 import { useQuickAddStore } from './quickAdd';
 import { useNavigationStore } from './navigation';
+import { syncBeforeQuit } from '../sync/startSync';
 import { syncStore } from '../sync/syncStore';
 import { formatChord } from './shortcutsHelp';
 
@@ -87,8 +88,8 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   desktop
     .onQuitting(async () => {
       await container.data.repos.settings.get('device.id');
-      // Y-02 : dernier cycle de synchro avant de quitter, 4,5 s au plus (Rust sort à 5 s quoi qu'il arrive).
-      if (container.sync) await Promise.race([container.sync.syncNow('quit'), new Promise((resolve) => setTimeout(resolve, 4_500))]);
+      // Y-02 : dernier cycle de synchro avant de quitter, par le planificateur (4,5 s au plus, minuteur annulé à la fin du cycle).
+      await syncBeforeQuit(container);
     })
     .then((stop) => {
       if (disposed) stop();

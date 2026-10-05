@@ -3,6 +3,7 @@ import type { Hlc } from '../../../domain/types';
 import type { WriteStamper } from '../../../domain/hlc';
 import type { SqlExecutor, SqlRow } from '../../driver';
 import type { SettingsRepository, SyncMetaRepository } from '../settingsRepository';
+import { SYNC_TABLES } from '../../../domain/sync/syncTables';
 import { toJson } from './sqlHelpers';
 
 interface SettingsRow extends SqlRow {
@@ -46,28 +47,17 @@ export function createSettingsRepository(db: SqlExecutor, stamper: WriteStamper)
   };
 }
 
-/** Tables métier portant les colonnes de synchro (ADR 0005), pour `maxHlc()`. */
-const SYNCED_TABLES = [
-  'space',
-  'project',
-  'recurrence',
-  'goal',
-  'task',
-  'routine',
-  'routine_log',
-  'reminder',
-  'event',
-  'checklist',
-  'checklist_item',
-  'holiday',
-  'focus_session',
-  'settings',
-] as const;
+/**
+ * Sources de `maxHlc()` (ADR 0005, ADR 0011 section 3.2) : toutes les tables publiées du catalogue de synchro (`routine_pause`,
+ * `calendar_account` compris) et les horloges de champ (`sync_field_clock`), qui peuvent porter un hlc reçu plus grand que celui de la
+ * ligne (champ d'une ligne dont le hlc n'a pas bougé).
+ */
+const HLC_SOURCES: readonly string[] = [...SYNC_TABLES.map((t) => t.name), 'sync_field_clock'];
 
 export function createSyncMetaRepository(db: SqlExecutor): SyncMetaRepository {
   return {
     async maxHlc() {
-      const union = SYNCED_TABLES.map((table) => `SELECT hlc FROM ${table}`).join(' UNION ALL ');
+      const union = HLC_SOURCES.map((table) => `SELECT MAX(hlc) AS hlc FROM ${table}`).join(' UNION ALL ');
       const rows = await db.select<{ hlc: string | null }>(`SELECT MAX(hlc) AS hlc FROM (${union})`);
       const value = rows[0]?.hlc;
       return value === undefined || value === null ? null : (value as Hlc);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CALENDAR_REFRESH_INTERVAL_MS, calendarAppStatuses, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshDecisionInput } from './calendarRefresh';
+import { CALENDAR_REFRESH_INTERVAL_MS, calendarAppStatuses, disconnectedAccount, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshDecisionInput } from './calendarRefresh';
 import type { CalendarAccountId, IsoDateTime } from './types';
 
 const iso = (value: string): IsoDateTime => value as IsoDateTime;
@@ -92,6 +92,13 @@ describe('calendarAppStatuses (A-09 critère 10)', () => {
   it('« Agenda déconnecté » nomme le premier compte à reconnecter', () => {
     const result = calendarAppStatuses(accounts, states({ a: connected(), b: { kind: 'reconnect-required', lastSuccessAt: null } }));
     expect(result).toEqual({ calendarDisconnected: { detail: 'ali@icloud.com' } });
+  });
+
+  it('le compte désigné (bandeau et action « Reconnecter ») est celui que nomme le bandeau, même avec deux comptes à reconnecter', () => {
+    const both = states({ a: { kind: 'reconnect-required', lastSuccessAt: null }, b: { kind: 'reconnect-required', lastSuccessAt: null } });
+    expect(disconnectedAccount(accounts, both)?.id).toBe('a');
+    expect(calendarAppStatuses(accounts, both)).toEqual({ calendarDisconnected: { detail: disconnectedAccount(accounts, both)?.label } });
+    expect(disconnectedAccount(accounts, states({ a: connected() }))).toBeUndefined();
   });
 
   it('« Hors ligne » pour une erreur réseau ou serveur, pas pour un 429', () => {

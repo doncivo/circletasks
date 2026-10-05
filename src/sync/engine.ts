@@ -265,10 +265,15 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       });
       logger.log('epoch-opened', { epoch });
     } else if (epoch === null && folderE !== null) {
-      // Nouvel appareil (ou dossier retrouvé) : reprise depuis l'instantané en fusion.
-      epoch = folderE;
-      await writeJson(repos, META.epoch, epoch);
-      await writeJson(repos, META.head, { epoch, segment: 0, record: 0, hlc: null, stateSeq: 0 } satisfies DeviceAck);
+      // Nouvel appareil (ou dossier retrouvé) : reprise depuis l'instantané en fusion. La reprise est mémorisée dans la même transaction
+      // que l'époque : un arrêt avant sa fin la relance au cycle suivant (sinon l'époque connue ferait lire les journaux sans l'instantané).
+      const opened = folderE;
+      epoch = opened;
+      await data.transaction(async (tx) => {
+        await writeJson(tx, META.resume, true);
+        await writeJson(tx, META.epoch, opened);
+        await writeJson(tx, META.head, { epoch: opened, segment: 0, record: 0, hlc: null, stateSeq: 0 } satisfies DeviceAck);
+      });
       resume = true;
     } else if (epoch !== null && ((folderE !== null && compareEpochs(folderE, epoch) > 0) || switchState)) {
       const target = switchState?.target ?? (folderE as EpochId);
@@ -276,7 +281,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const switched = await switchEpoch(deps, target, accepted, ownState, hooks.onRemoteChanges);
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
-        return { ...EMPTY, outcome: switched === 'cloud-pending' ? 'done' : 'failed', errorCode: switched === 'cloud-pending' ? null : 'io', pendingFiles: [...pending], folderLabel, worked, devices: await deviceStatuses(repos, self, accepted) };
+        // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
+        const waiting = switched === 'cloud-pending' || switched === 'clock-ahead';
+        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, worked, devices: await deviceStatuses(repos, self, accepted) };
       }
       epoch = target;
       resume = false;
@@ -329,10 +336,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     const doResume = async (): Promise<boolean> => {
       resumed = true;
       work();
-      const ok = await resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
-      if (ok) await writeJson(repos, META.resume, null);
-      else await writeJson(repos, META.resume, true);
-      return ok;
+      // Reprise mémorisée avant toute modification ; effacée par la dernière transaction de la reprise (avec les curseurs).
+      await writeJson(repos, META.resume, true);
+      return resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
     };
     if (resume) await doResume();
 
@@ -488,8 +494,10 @@ async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: Rea
 }
 
 /**
- * Reprise depuis l'instantané en **fusion** (section 5.5) : file gardée, curseurs remis aux positions `covers`, dernier instantané de
- * l'époque appliqué par la fusion ordinaire (identifiants purgés compris), puis lecture normale depuis `covers`.
+ * Reprise depuis l'instantané en **fusion** (section 5.5) : file gardée, dernier instantané de l'époque appliqué par la fusion ordinaire
+ * (identifiants purgés compris), puis lecture normale depuis `covers`. Les curseurs ne sont posés aux positions `covers` que dans la
+ * **dernière** transaction de l'application (après les lignes et les traces), avec l'effacement de `sync_meta.resume` : un arrêt avant
+ * laisse les curseurs et la demande de reprise intacts, et la reprise est rejouée (fusion idempotente).
  */
 export async function resumeFromSnapshot(
   deps: SyncDeps,
@@ -510,14 +518,24 @@ export async function resumeFromSnapshot(
       continue;
     }
     if (!loaded) continue;
-    // Curseurs aux positions couvertes (époque courante), sinon depuis le début.
-    for (const id of new Set<string>([...accepted.keys(), deps.deviceId])) {
-      const cover = loaded.end.covers.get(id as DeviceId);
-      const inEpoch = cover && cover.epoch === epoch;
-      await deps.data.repos.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
-    }
     const now = iso(deps.clock.nowMs());
-    const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress);
+    const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, async (tx) => {
+      // Curseurs aux positions couvertes (époque courante), sinon depuis le début.
+      for (const id of new Set<string>([...accepted.keys(), deps.deviceId])) {
+        const cover = loaded.end.covers.get(id as DeviceId);
+        const inEpoch = cover && cover.epoch === epoch;
+        await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
+      }
+      await writeJson(tx, META.resume, null);
+      // Instantané admis : son écrivain, écarté plus tôt pour dérive, n'est plus en avance.
+      const source = (await tx.sync.getStates()).find((row) => row.deviceId === deviceId);
+      if (deviceId !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(deviceId, { status: 'active' });
+    });
+    if (result === 'clock-ahead') {
+      // Instantané trop en avance (section 4.4) : écarté ; l'appareil qui l'a écrit est signalé.
+      if (deviceId !== deps.deviceId) await deps.data.repos.sync.saveState(deviceId, { status: 'clock-ahead' });
+      continue;
+    }
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
     return true;

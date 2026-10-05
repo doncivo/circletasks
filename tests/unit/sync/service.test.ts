@@ -104,6 +104,25 @@ describe('service (Y-02 critère 1, Y-03 critère 3)', () => {
     expect(a.service.status().phase).toBe('error');
   });
 
+  it('choix après restauration demandé pendant un cycle, une synchro déjà en attente : le choix est exécuté, avant la synchro (revue Y2, point 12)', async () => {
+    const a = await createSimDevice(A_ID);
+    devices = [a];
+    await setupFirst(a);
+    await a.cycle();
+    a.platform.testing.setRestoreMarker({ backup: 'circletasks-daily-20261005.db', backupTakenAt: '2026-10-05T07:00:00.000Z' as IsoDateTime, restoredAt: '2026-10-05T08:00:00.000Z' as IsoDateTime, schemaVersion: 17 });
+    const running = a.service.syncNow('open');
+    const queuedSync = a.service.syncNow('timer');
+    const choice = a.service.chooseRestoreOption('keep-synced');
+    await Promise.all([running, queuedSync, choice]);
+    expect(a.logger.entries.some((e) => e.event === 'restore-choice')).toBe(true);
+    expect(await a.platform.restoreMarker.get()).toBeNull();
+    // Le cycle en attente passe après le choix : il ne voit plus le marqueur.
+    expect(a.service.status().phase).toBe('idle');
+    const events = a.logger.entries.map((e) => e.event);
+    expect(events.indexOf('restore-choice')).toBeGreaterThan(-1);
+    expect(events.lastIndexOf('sync-now')).toBeLessThan(events.indexOf('restore-choice'));
+  });
+
   it('non configuré, à associer, à jour ; heure de dernière synchro ; conflits de la semaine', async () => {
     const a = await createSimDevice(A_ID);
     devices = [a];

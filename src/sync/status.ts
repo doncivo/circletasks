@@ -1,5 +1,7 @@
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import type { SyncDeviceStatus, SyncErrorCode, SyncPhase, SyncStatus } from '../platform/sync/types';
+import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncPhase, type SyncStatus } from '../platform/sync/types';
+
+export { INITIAL_STATUS };
 
 /**
  * Calcul de `SyncStatus` (ADR 0011, sections 10.4 et 11.2, avenant « Amorce » point 7 ; Y-02 critères 16 et 17, Y-05 critère 2,
@@ -15,18 +17,6 @@ export interface CycleFacts {
   /** Aucun appareil connu ne partage la clé locale (tous `foreign`). */
   readonly keyMismatch: boolean;
 }
-
-export const INITIAL_STATUS: SyncStatus = {
-  phase: 'not-configured',
-  lastSyncAt: null,
-  folderLabel: null,
-  devices: [],
-  pendingFiles: [],
-  conflictsThisWeek: 0,
-  progress: null,
-  errorCode: null,
-  clockAheadDevice: null,
-};
 
 /** Codes d'erreur qui signifient « en attente d'iCloud » plutôt qu'une erreur. */
 const WAITING_CODES: ReadonlySet<string> = new Set(['cloud-pending']);

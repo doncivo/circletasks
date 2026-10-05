@@ -28,7 +28,8 @@ export function RestoreChoiceDialog() {
 
   if (!restore) return null;
   const options = restore.options.map((id) => ({ id, label: t(id === 'apply-everywhere' ? 'sync.restore.applyEverywhere' : 'sync.restore.keepSynced') }));
-  const description = restore.options.includes('keep-synced') ? t('sync.restore.body') : `${t('sync.restore.body')}. ${t('sync.restore.onlyApply')}`;
+  // Règle 4 : texte dédié (une seule clé, jamais deux phrases assemblées dans le code).
+  const description = t(restore.options.includes('keep-synced') ? 'sync.restore.body' : 'sync.restore.bodyOnlyApply');
   return (
     <ChoiceDialog<RestoreOption>
       title={t('sync.restore.title')}

@@ -87,8 +87,8 @@ export interface DesktopPlatform {
   /** Entrée « Synchroniser maintenant » du menu (Y-03, événement `tray-sync-now`). Renvoie la fonction de désabonnement. */
   onTraySyncNow(handler: () => void): Promise<() => void>;
   /**
-   * « Quitter » du menu (D-01, critère 7) : le gestionnaire termine les écritures en cours ; la sortie
-   * attend sa fin (2 s au plus côté Rust), puis l'app se ferme. Un échec du handler n'empêche pas la sortie.
+   * « Quitter » du menu (D-01, critère 7) : le gestionnaire termine les écritures en cours et le dernier cycle de synchro (Y-02) ;
+   * la sortie attend sa fin (5 s au plus côté Rust, `QUIT_GRACE`), puis l'app se ferme. Un échec du handler n'empêche pas la sortie.
    */
   onQuitting(handler: () => Promise<void>): Promise<() => void>;
   /** État réel de l'entrée de démarrage Windows (D-02, critère 6), pas le réglage mémorisé. */

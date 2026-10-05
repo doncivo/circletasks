@@ -18,6 +18,8 @@ export const META = {
   purgeHorizon: 'purgeHorizon',
   /** Changement d'époque en cours (section 9.1). */
   epochSwitch: 'epochSwitch',
+  /** Dernier numéro de file reporté pendant le changement d'époque (écritures faites depuis le début de (a)). */
+  epochCarry: 'epochCarry',
   /** Heure du dernier ajout à chacun de ses segments de l'époque courante (purge à 30 jours, section 5.3). */
   segments: 'segments',
   /** Reprise depuis l'instantané demandée (corruption, « Garder », 180 jours). */

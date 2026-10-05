@@ -6,7 +6,8 @@ import type { Migration } from '../migrator';
  * Toutes les tables créées ici sont **locales** (jamais publiées) :
  * - `sync_guard` : garde posée dans une transaction par la synchro, les migrations et la purge ; tant qu'elle contient une ligne, les
  *   déclencheurs de capture ne s'exécutent pas (invariants de l'audit M10 : posée et retirée dans la même transaction) ;
- * - `sync_field_clock` : horloge (hlc) et base de chaque champ modifié ; entrée `'*'` = repli des champs sans entrée propre ;
+ * - `sync_field_clock` : horloge (hlc) et base de chaque champ modifié ; entrée `'*'` = repli des champs sans entrée propre, toujours
+ *   présente dès qu'une ligne a une horloge de champ (écrite au premier changement du hlc de la ligne s'il manque) ;
  * - `sync_outbox` : file d'envoi (Y-05), une entrée par (table, ligne, champ) ; une suppression suivie d’une insertion lui donne un nouveau numéro à chaque
  *   écriture, de sorte qu'une écriture faite pendant une publication n'est jamais retirée avec elle ;
  * - `sync_state` : une ligne par appareil (curseur, tête, accusés, anti-rejeu, statut) ;
@@ -109,7 +110,7 @@ function captureTriggers(table: string, key: string, columns: readonly string[])
     `CREATE TRIGGER sync_${table}_au AFTER UPDATE ON ${table} WHEN ${UNGUARDED}${shared} BEGIN
        INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc)
          SELECT '${table}', NEW.${key}, '*', OLD.hlc, NULL
-         WHERE OLD.hlc IS NOT NEW.hlc AND NOT EXISTS (SELECT 1 FROM sync_field_clock WHERE ${row});
+         WHERE OLD.hlc IS NOT NEW.hlc AND NOT EXISTS (SELECT 1 FROM sync_field_clock WHERE ${row} AND field = '*');
        ${perColumn.join('\n       ')}
      END`,
   ];
@@ -191,6 +192,7 @@ export const migration0015SyncTables: Migration = {
       parked_at  TEXT NOT NULL
     )`,
     'CREATE INDEX idx_sync_parked_reason ON sync_parked(reason, id)',
+    'CREATE INDEX idx_sync_parked_row ON sync_parked(reason, table_name, row_id)',
     `CREATE TABLE conflict_log (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
       table_name       TEXT NOT NULL,
@@ -207,6 +209,7 @@ export const migration0015SyncTables: Migration = {
       restored         INTEGER NOT NULL DEFAULT 0 CHECK (restored IN (0, 1))
     )`,
     'CREATE INDEX idx_conflict_log_detected_at ON conflict_log(detected_at)',
+    'CREATE INDEX idx_conflict_log_row ON conflict_log(table_name, row_id, field)',
     'CREATE TABLE sync_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
     ...CAPTURE_TABLES_V15.flatMap(([table, key, columns]) => captureTriggers(table, key, columns)),
   ],

@@ -1,6 +1,4 @@
-import type { RemoteChanges, SyncReason, SyncStatus } from '../../platform/sync/types';
-import type { RestoreContext, SyncEngineService } from '../../sync';
-import { INITIAL_STATUS } from '../../sync';
+import { INITIAL_STATUS, type RemoteChanges, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 
 /** Faux service de synchro pour les tests d'écran : état posé à la main, appels enregistrés, cycle libéré à la demande. */
 export interface FakeSyncService extends SyncEngineService {
@@ -11,6 +9,8 @@ export interface FakeSyncService extends SyncEngineService {
   release(): void;
   hold: boolean;
   restore: RestoreContext | null;
+  /** Le choix est exécuté (marqueur effacé : `restore` devient null) ; faux : refusé ou échoué, le marqueur reste. */
+  choiceExecuted: boolean;
   emitChanges(change: RemoteChanges): void;
 }
 
@@ -24,6 +24,7 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
     choices: [],
     hold: false,
     restore: null,
+    choiceExecuted: true,
     status: () => status,
     subscribe: (listener) => {
       listeners.add(listener);
@@ -51,6 +52,7 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
     },
     async chooseRestoreOption(option) {
       fake.choices.push(option);
+      if (fake.choiceExecuted) fake.restore = null;
     },
     restoreContext: async () => fake.restore,
     running: () => null,

@@ -28,6 +28,23 @@ describe('config ESLint : interdictions qui se cumulent', () => {
     expect(await ruleIds(filePath, code)).toContain('no-restricted-imports');
   });
 
+  // Revue Y2, point 22 : l'exception « domain/sync » (domaine pur) ne doit pas ouvrir la couche src/sync au domaine.
+  it.each([
+    ['src/domain/zz.ts', "import { createSyncService } from '../sync';\nexport const x = createSyncService;\n"],
+    ['src/domain/zz.ts', "import { runCycle } from '../sync/engine';\nexport const x = runCycle;\n"],
+    ['src/domain/sync/zz.ts', "import { runCycle } from '../../sync/engine';\nexport const x = runCycle;\n"],
+    ['src/domain/sync/zz.ts', "import { createSyncService } from '../../sync';\nexport const x = createSyncService;\n"],
+    ['src/db/zz.ts', "import { runCycle } from '../sync/engine';\nexport const x = runCycle;\n"],
+  ])('%s : import de la couche src/sync refusé', async (filePath, code) => {
+    expect(await ruleIds(filePath, code)).toContain('no-restricted-imports');
+  });
+
+  it('le domaine importe son propre dossier sync (domaine pur), src/sync aussi', async () => {
+    expect(await ruleIds('src/domain/sync/zz.ts', "import { epochId } from './format';\nexport const x = epochId;\n")).toEqual([]);
+    expect(await ruleIds('src/domain/zz.ts', "import { epochId } from '../domain/sync/format';\nexport const x = epochId;\n")).toEqual([]);
+    expect(await ruleIds('src/sync/zz.ts', "import { epochId } from '../domain/sync/format';\nexport const x = epochId;\n")).toEqual([]);
+  });
+
   it('un import nu hors CSS est interdit dans src, un import CSS nu est permis', async () => {
     expect(await ruleIds('src/features/today/zz.ts', "import './effet';\n")).toContain('no-restricted-syntax');
     expect(await ruleIds('src/features/today/zz.ts', "import './zz.css';\n")).not.toContain('no-restricted-syntax');

@@ -6,7 +6,7 @@ import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
 import { createUnavailableBackup, type BackupService } from '../../platform/backup';
-import type { SyncEngineService } from '../../sync';
+import type { SyncEngineService } from '../../platform/sync/types';
 import { createUnavailableFiles, type FileService } from '../../platform/files';
 import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';

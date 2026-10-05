@@ -98,12 +98,17 @@ export function nextAccountState(previous: CalendarAccountState, outcome: Refres
   }
 }
 
+/** Premier compte à reconnecter, dans l'ordre donné : celui que désigne le bandeau « Agenda … déconnecté » (et son action). */
+export function disconnectedAccount<A extends Pick<CalendarAccount, 'id'>>(accounts: readonly A[], states: ReadonlyMap<CalendarAccountId, CalendarAccountState>): A | undefined {
+  return accounts.find((account) => states.get(account.id)?.kind === 'reconnect-required');
+}
+
 /**
  * États A-09 émis par les agendas : `calendarDisconnected` (detail = label du premier compte à reconnecter, dans l'ordre donné),
  * `offline` si un compte est en erreur réseau ou serveur (K-03 critère 5). Un compte sans état (pas encore tenté) n'émet rien.
  */
 export function calendarAppStatuses(accounts: readonly Pick<CalendarAccount, 'id' | 'label'>[], states: ReadonlyMap<CalendarAccountId, CalendarAccountState>): ActiveStatuses {
-  const disconnected = accounts.find((account) => states.get(account.id)?.kind === 'reconnect-required');
+  const disconnected = disconnectedAccount(accounts, states);
   const offline = accounts.some((account) => {
     const state = states.get(account.id);
     return state?.kind === 'error' && state.error !== 'rate-limited';
