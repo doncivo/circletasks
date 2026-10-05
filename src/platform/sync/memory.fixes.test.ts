@@ -72,6 +72,30 @@ describe('memory.ts, corrections du lot Y1', () => {
     expect(await codeOf(a.writeState({ sv: 14, state: stateOf(6, head) }))).toBe('resolved');
   });
 
+  it('revue B1, décision 1 : propre state.ctx d’un format plus récent jamais réécrit (newer-format)', async () => {
+    const folder = new MemorySyncFolder();
+    const a = await published(folder);
+    a.testing.dropOwnState();
+    const file = folder.devices.get(A)?.state;
+    if (!file) throw new Error('état absent');
+    (file.header as { sm: number }).sm = 2;
+    expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(200), records: ['{}'] }))).toBe('newer-format');
+    expect(await codeOf(a.writeState({ sv: 14, state: stateOf(6, { segment: 1, record: 1, hlc: hlc(100) }) }))).toBe('newer-format');
+    expect(folder.devices.get(A)?.state).toBe(file);
+  });
+
+  it('revue B1, décision 2 : numéro d’en-tête absurde (2^53 - 1) ignoré, réécriture toujours possible', async () => {
+    const folder = new MemorySyncFolder();
+    const a = await published(folder);
+    a.testing.dropOwnState();
+    const file = folder.devices.get(A)?.state;
+    if (!file) throw new Error('état absent');
+    (file.header as { n: number }).n = Number.MAX_SAFE_INTEGER;
+    folder.corruptRecord(A, 'state.ctx', 0);
+    expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(200), records: ['{}'] }))).toBe('resolved');
+    expect(await codeOf(a.writeState({ sv: 14, state: stateOf(6, { segment: 1, record: 2, hlc: hlc(200) }) }))).toBe('resolved');
+  });
+
   it('revue 16 : état dans le nuage : kid tiré d’un fichier présent', async () => {
     const folder = new MemorySyncFolder();
     const a = await published(folder);

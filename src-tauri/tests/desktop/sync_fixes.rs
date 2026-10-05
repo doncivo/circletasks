@@ -556,3 +556,40 @@ fn b5_no_log_buffer_in_production() {
         assert!(log[..at].trim_end().ends_with("#[cfg(debug_assertions)]"), "{item} réservé au développement");
     }
 }
+
+/// Revue B1, décision 1 (jumeau de `memory.fixes.test.ts`) : son propre `state.ctx` d'un format plus récent n'est jamais réécrit ;
+/// l'appareil n'écrit rien (`newer-format`, Y-07 « Mettez à jour l'app »).
+#[test]
+fn b1_own_state_of_a_newer_format_is_never_rewritten() {
+    let (mut a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 100).unwrap();
+    a.core.write_state(14, state(DEV_A, &ep, 5, 1, 1, Some(hlc(100, DEV_A)))).unwrap();
+    std::fs::remove_file(a.base.path().join("sync").join("own.json")).unwrap();
+    a.restart();
+    let path = ["devices", DEV_A, "state.ctx"];
+    let newer = String::from_utf8(fs.get(&path).unwrap()).unwrap().replacen("\"sm\":1", "\"sm\":2", 1);
+    fs.put(&path, newer.as_bytes());
+    assert_eq!(code(append(&a, &ep, 1, 1, 200)), SyncCode::NewerFormat);
+    assert_eq!(code(a.core.write_state(14, state(DEV_A, &ep, 6, 1, 1, Some(hlc(100, DEV_A))))), SyncCode::NewerFormat);
+    assert_eq!(fs.get(&path).unwrap(), newer.as_bytes(), "aucune réécriture");
+}
+
+/// Revue B1, décision 2 : un numéro d'en-tête en clair au-delà des sources authentifiées + 1 000 000 (ici 2^53 - 1) est ignoré :
+/// l'appareil peut toujours réécrire son état.
+#[test]
+fn b1_an_absurd_clear_header_number_is_ignored() {
+    let (mut a, fs) = device();
+    a.setup(DEV_A);
+    let ep = epoch(1, DEV_A);
+    append(&a, &ep, 1, 0, 100).unwrap();
+    a.core.write_state(14, state(DEV_A, &ep, 5, 1, 1, Some(hlc(100, DEV_A)))).unwrap();
+    std::fs::remove_file(a.base.path().join("sync").join("own.json")).unwrap();
+    a.restart();
+    let path = ["devices", DEV_A, "state.ctx"];
+    let forged = String::from_utf8(fs.get(&path).unwrap()).unwrap().replacen("\"n\":5", "\"n\":9007199254740991", 1);
+    fs.put(&path, forged.as_bytes());
+    append(&a, &ep, 1, 1, 200).unwrap();
+    a.core.write_state(14, state(DEV_A, &ep, 6, 1, 2, Some(hlc(200, DEV_A)))).unwrap();
+}

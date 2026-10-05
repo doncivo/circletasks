@@ -24,6 +24,9 @@ use super::names::{
 use super::state::{OwnState, PublishedState, Usage};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 
+/// Écart maximal accepté entre le `stateSeq` lu en clair dans l'en-tête de son propre état remplacé et les sources authentifiées.
+pub const MAX_UNAUTHENTICATED_SEQ_JUMP: u64 = 1_000_000;
+
 /// Plus grand `sv` accepté (6 chiffres, comme le préfixe de ligne).
 pub const MAX_SV: u64 = 999_999;
 const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
@@ -1219,17 +1222,29 @@ impl Store<'_> {
             log::event("own-rebuild-pending", mine.status.as_str());
             return fail(SyncCode::CloudPending);
         }
+        // Son état vient d'une version plus récente du format : jamais réécrit par cette version (Y-07, « Mettez à jour l'app »).
+        if mine.status == StateStatus::NewerFormat {
+            log::event("own-rebuild-pending", mine.status.as_str());
+            return fail(SyncCode::NewerFormat);
+        }
         // Son état est remplacé ou illisible (étranger, corrompu, rejeu, trop grand) : reconstruction sans lui, `stateSeq` au moins égal
-        // au numéro lu en clair dans l'en-tête du fichier remplacé et à l'état déjà accepté, pour pouvoir le réécrire aussitôt (§1.4,
-        // revue B1).
+        // à l'état déjà accepté et au numéro lu en clair dans l'en-tête du fichier remplacé, pour pouvoir le réécrire aussitôt (§1.4,
+        // revue B1). Ce numéro n'est pas authentifié : pris en compte seulement s'il dépasse d'au plus 1 000 000 le plus grand numéro
+        // des sources authentifiées (accusés, état accepté) ; au-delà, un tiers pourrait l'approcher de 2^53 et interdire toute
+        // réécriture : il est ignoré.
         let mut replaced_seq = 0;
         if !matches!(mine.status, StateStatus::Ok | StateStatus::Missing | StateStatus::CloudPending) {
+            let authenticated = acks.iter().map(|a| a.state_seq).chain(accepted.get(self_id).map(|a| a.seq)).max().unwrap_or(0);
+            replaced_seq = authenticated;
             if let Some(h) = self.fs.read_head(&[DEVICES_DIR, self_id, STATE_FILE], MAX_HEADER_BYTES + 1).ok().and_then(|head| header_of(&head)) {
                 if h.kind() == Some(HeaderKind::State) && h.dev == self_id {
-                    replaced_seq = h.n;
+                    if h.n <= authenticated.saturating_add(MAX_UNAUTHENTICATED_SEQ_JUMP) {
+                        replaced_seq = replaced_seq.max(h.n);
+                    } else {
+                        log::event("own-state-seq-ignored", "jump");
+                    }
                 }
             }
-            replaced_seq = replaced_seq.max(accepted.get(self_id).map_or(0, |a| a.seq));
             log::event("own-state-replaced", mine.status.as_str());
         }
         // Époques des fichiers listés retenues seulement si l'une d'elles contient un segment authentifié.
