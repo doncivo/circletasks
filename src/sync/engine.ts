@@ -9,6 +9,7 @@ import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
+import { isJoining, joinFromSnapshot } from './join';
 import { publishOutbox, readInflight } from './publisher';
 import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
@@ -341,6 +342,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       work();
       // Reprise mémorisée avant toute modification ; effacée par la dernière transaction de la reprise (avec les curseurs).
       await writeJson(repos, META.resume, true);
+      // Y-06 : un nouvel appareil (aucune époque suivie avant ce cycle, ou arrivée commencée) rejoint par tranches, avec progression,
+      // reprise au même endroit et échec mémorisé (src/sync/join.ts) ; les autres reprises sont inchangées.
+      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
       return resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
     };
     if (resume) await doResume();
