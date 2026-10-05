@@ -1,5 +1,7 @@
 import { createStore } from 'zustand';
-import { importTemplateCsv, rejectedReportCsv, type RejectReason, type UndatedTarget } from '../../domain/csvImport';
+import { todayLocal } from '../../domain/clock';
+import { IMPORT_MAX_BYTES, importFileName, importTemplateCsv, rejectedReportCsv, type ImportFileError, type RejectReason, type UndatedTarget } from '../../domain/csvImport';
+import { addDays } from '../../domain/localDate';
 import { EXPORT_MIME } from '../../domain/historyExport';
 import { t, tDynamic, type MessageKey } from '../../i18n';
 import { logDesktopFailure } from '../../platform';
@@ -8,7 +10,7 @@ import { createImportUseCases, type ImportPreview } from './importUseCases';
 
 export type ImportStep = 'idle' | 'reading' | 'preview' | 'importing' | 'done';
 
-export type ImportErrorKey = 'importCsv.errorEmpty' | 'importCsv.errorNoTitle' | 'importCsv.errorTooManyRows' | 'importCsv.errorTooLarge' | 'importCsv.errorUnreadable' | 'importCsv.errorFailed' | 'importCsv.errorSave';
+export type ImportErrorKey = 'importCsv.errorEmpty' | 'importCsv.errorNoTitle' | 'importCsv.errorTooManyRows' | 'importCsv.errorTooManyColumns' | 'importCsv.errorTooLarge' | 'importCsv.errorUnreadable' | 'importCsv.errorFailed' | 'importCsv.errorSave';
 
 export interface ImportState {
   readonly step: ImportStep;
@@ -48,10 +50,11 @@ export function rejectReasonText(reason: RejectReason): string {
   return tDynamic(REASON_KEYS[reason.code], params);
 }
 
-const FILE_ERROR_KEYS: Record<string, ImportErrorKey> = {
+const FILE_ERROR_KEYS: Record<ImportFileError, ImportErrorKey> = {
   empty: 'importCsv.errorEmpty',
   'no-title-column': 'importCsv.errorNoTitle',
   'too-many-rows': 'importCsv.errorTooManyRows',
+  'too-many-columns': 'importCsv.errorTooManyColumns',
 };
 
 export const importStore = defineFeatureStore<ImportState>((container: AppContainer) => createImportStore(container));
@@ -66,7 +69,7 @@ function createImportStore(container: AppContainer) {
       set({ errorKey: null, savedKey: null });
       let picked;
       try {
-        picked = await container.files.pickText({ accept: ['.csv', '.txt', '.tsv', 'text/csv', 'text/plain'] });
+        picked = await container.files.pickText({ accept: ['.csv', '.txt', '.tsv', 'text/csv', 'text/plain'], maxBytes: IMPORT_MAX_BYTES });
       } catch (error) {
         logDesktopFailure('import-pick', error);
         set({ step: get().preview ? 'preview' : 'idle', errorKey: (error as { reason?: unknown } | null)?.reason === 'too-large' ? 'importCsv.errorTooLarge' : 'importCsv.errorUnreadable' });
@@ -77,7 +80,7 @@ function createImportStore(container: AppContainer) {
       try {
         const result = await useCases.analyze(picked.name, picked.text, get().undated);
         if (!result.ok) {
-          set({ step: 'idle', preview: null, errorKey: FILE_ERROR_KEYS[result.error] ?? 'importCsv.errorUnreadable' });
+          set({ step: 'idle', preview: null, errorKey: FILE_ERROR_KEYS[result.error] });
           return;
         }
         set({ step: 'preview', preview: result.preview });
@@ -111,9 +114,11 @@ function createImportStore(container: AppContainer) {
     },
     async downloadTemplate() {
       set({ errorKey: null, savedKey: null });
-      const csv = importTemplateCsv({ title: t('importCsv.templateExample'), date: '2026-10-06', time: '10:00', space: 'Pro', project: '', note: '' });
       try {
-        const result = await container.files.save({ suggestedName: 'circletasks-modele-import.csv', mime: EXPORT_MIME.csv, data: new TextEncoder().encode(csv) });
+        // L'exemple utilise le nom réel du premier espace et le lendemain du jour de l'horloge (pas de valeurs écrites en dur).
+        const [firstSpace] = await container.data.repos.spaces.listAll();
+        const csv = importTemplateCsv({ title: t('importCsv.templateExample'), date: addDays(todayLocal(container.clock), 1), time: '10:00', space: firstSpace?.name ?? '', project: '', note: '' });
+        const result = await container.files.save({ suggestedName: importFileName('template'), mime: EXPORT_MIME.csv, data: new TextEncoder().encode(csv) });
         if (result.saved) set({ savedKey: 'importCsv.templateSaved' });
       } catch (error) {
         logDesktopFailure('import-template', error);
@@ -126,7 +131,7 @@ function createImportStore(container: AppContainer) {
       set({ errorKey: null, savedKey: null });
       const csv = rejectedReportCsv(preview.table, preview.validation.rejected, rejectReasonText, { line: t('importCsv.reportColLine'), reason: t('importCsv.reportColReason') });
       try {
-        const result = await container.files.save({ suggestedName: 'circletasks-import-lignes-rejetees.csv', mime: EXPORT_MIME.csv, data: new TextEncoder().encode(csv) });
+        const result = await container.files.save({ suggestedName: importFileName('report'), mime: EXPORT_MIME.csv, data: new TextEncoder().encode(csv) });
         if (result.saved) set({ savedKey: 'importCsv.reportSaved' });
       } catch (error) {
         logDesktopFailure('import-report', error);

@@ -21,23 +21,64 @@ export type ImportColumn = (typeof IMPORT_COLUMNS)[number];
 
 export type Delimiter = ';' | ',' | '\t';
 
-/** Octets -> texte : UTF-8 avec ou sans BOM ; si l'UTF-8 est invalide, repli sur Windows-1252 (Excel français). */
-export function decodeImportBytes(bytes: Uint8Array): string {
-  try {
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(bytes);
-  } catch {
-    return new TextDecoder('windows-1252').decode(bytes);
-  }
-}
+/** Plus de colonnes que cela : fichier refusé (`too-many-columns`). */
+export const IMPORT_MAX_COLUMNS = 256;
+/** Longueur maximale d'une valeur recopiée dans un motif de rejet. */
+export const IMPORT_REASON_VALUE_MAX = 60;
+
+// Signes diacritiques combinants (U+0300 à U+036F), construits sans caractère invisible dans le source.
+const COMBINING_MARKS = new RegExp(`[${String.fromCharCode(0x300)}-${String.fromCharCode(0x36f)}]`, 'g');
 
 /** Sans accents, en minuscules, espaces simples : comparaison des en-têtes, des espaces et des projets. */
 export function normalizeName(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return value.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/** Marques bidirectionnelles (U+202A à U+202E, U+2066 à U+2069) : elles inverseraient l'affichage d'un titre ou d'un motif. */
+function isBidiMark(code: number): boolean {
+  return (code >= 0x202a && code <= 0x202e) || (code >= 0x2066 && code <= 0x2069);
+}
+
+/**
+ * Texte d'une ligne (titre, espace, projet) : les caractères de contrôle C0 et C1 sont retirés (la tabulation devient une espace) ainsi que
+ * les marques bidirectionnelles.
+ */
+export function sanitizeLine(value: string): string {
+  let out = '';
+  for (const char of value) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code === 0x09) out += ' ';
+    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiMark(code)) continue;
+    else out += char;
+  }
+  return out;
+}
+
+/** Note : seuls les retours à la ligne et les tabulations sont conservés parmi les caractères de contrôle ; marques bidirectionnelles retirées. */
+export function sanitizeNote(value: string): string {
+  let out = '';
+  // CRLF et CR seul deviennent LF avant le tri des caractères.
+  for (const char of value.replace(/\r\n?/g, '\n')) {
+    const code = char.codePointAt(0) ?? 0;
+    if (code === 0x0a || code === 0x09) out += char;
+    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiMark(code)) continue;
+    else out += char;
+  }
+  return out;
+}
+
+/** Valeur recopiée dans un motif de rejet : nettoyée et tronquée à environ 60 caractères. */
+export function truncateValue(value: string): string {
+  const clean = sanitizeLine(value);
+  const chars = [...clean];
+  return chars.length > IMPORT_REASON_VALUE_MAX ? `${chars.slice(0, IMPORT_REASON_VALUE_MAX).join('')}…` : clean;
+}
+
+export type ImportFileKind = 'template' | 'report';
+
+/** Noms de fichier proposés à l'enregistrement du modèle et du rapport des lignes rejetées (comme `exportFileName` de H-03). */
+export function importFileName(kind: ImportFileKind): string {
+  return kind === 'template' ? 'circletasks-modele-import.csv' : 'circletasks-import-lignes-rejetees.csv';
 }
 
 /** Début d'une cellule neutralisée par l'export H-03 (voir `neutralizeFormula` de `historyExport.ts`). */
@@ -124,7 +165,7 @@ export function parseCsv(text: string, delimiter: Delimiter): CsvRecord[] {
   return records;
 }
 
-export type ImportFileError = 'empty' | 'no-title-column' | 'too-many-rows';
+export type ImportFileError = 'empty' | 'no-title-column' | 'too-many-rows' | 'too-many-columns';
 
 export interface ImportTable {
   readonly delimiter: Delimiter;
@@ -149,12 +190,13 @@ export function parseImportFile(text: string): ImportFileResult {
   const delimiter = detectDelimiter(clean);
   const [headerRecord, ...rows] = parseCsv(clean, delimiter);
   if (!headerRecord) return { ok: false, error: 'empty' };
+  if (headerRecord.cells.length > IMPORT_MAX_COLUMNS) return { ok: false, error: 'too-many-columns' };
   const columns: Record<ImportColumn, number> = { titre: -1, date: -1, heure: -1, espace: -1, projet: -1, note: -1 };
   const ignored: string[] = [];
   headerRecord.cells.forEach((name, position) => {
     const known = IMPORT_COLUMNS.find((column) => column === normalizeName(name));
     if (known && columns[known] === -1) columns[known] = position;
-    else if (name.trim() !== '') ignored.push(name.trim());
+    else if (name.trim() !== '') ignored.push(truncateValue(name.trim()));
   });
   if (columns.titre === -1) return { ok: false, error: 'no-title-column' };
   if (rows.length > IMPORT_MAX_ROWS) return { ok: false, error: 'too-many-rows' };
@@ -268,7 +310,7 @@ export function validateImportRows(table: ImportTable, context: ImportContext): 
 
   for (const row of table.rows) {
     if (row.cells.every((value) => value.trim() === '')) continue;
-    const cell =(column: ImportColumn): string => {
+    const cell = (column: ImportColumn): string => {
       const position = table.columns[column];
       return position >= 0 ? (row.cells[position] ?? '') : '';
     };
@@ -276,7 +318,7 @@ export function validateImportRows(table: ImportTable, context: ImportContext): 
       rejected.push({ line: row.line, reason, cells: row.cells });
     };
 
-    const title = stripFormulaGuard(cell('titre').trim());
+    const title = sanitizeLine(stripFormulaGuard(cell('titre').trim())).trim();
     if (title === '') {
       reject({ code: 'title-empty' });
       continue;
@@ -290,36 +332,36 @@ export function validateImportRows(table: ImportTable, context: ImportContext): 
     const rawDate = cell('date').trim();
     const date = rawDate === '' ? null : parseImportDate(rawDate);
     if (rawDate !== '' && date === null) {
-      reject({ code: 'date-invalid', value: rawDate });
+      reject({ code: 'date-invalid', value: truncateValue(rawDate) });
       continue;
     }
     const rawTime = cell('heure').trim();
     const time = rawTime === '' ? null : parseImportTime(rawTime);
     if (rawTime !== '' && time === null) {
-      reject({ code: 'time-invalid', value: rawTime });
+      reject({ code: 'time-invalid', value: truncateValue(rawTime) });
       continue;
     }
     if (time !== null && date === null) {
-      reject({ code: 'time-without-date', value: rawTime });
+      reject({ code: 'time-without-date', value: truncateValue(rawTime) });
       continue;
     }
 
-    const rawSpace = stripFormulaGuard(cell('espace').trim());
+    const rawSpace = sanitizeLine(stripFormulaGuard(cell('espace').trim())).trim();
     const space = rawSpace === '' ? context.spaces.find((candidate) => candidate.id === context.defaultSpaceId) : spaces.get(normalizeName(rawSpace));
     if (!space) {
-      reject({ code: 'space-unknown', value: rawSpace });
+      reject({ code: 'space-unknown', value: truncateValue(rawSpace) });
       continue;
     }
 
-    const rawProject = stripFormulaGuard(cell('projet').trim());
+    const rawProject = sanitizeLine(stripFormulaGuard(cell('projet').trim())).trim();
     let project: ImportProject | undefined;
     if (rawProject !== '') {
       const wanted = normalizeName(rawProject);
       project = context.projects.find((candidate) => candidate.spaceId === space.id && !candidate.archived && normalizeName(candidate.name) === wanted);
-      if (!project) warnings.push({ line: row.line, warning: { code: 'project-unknown', value: rawProject } });
+      if (!project) warnings.push({ line: row.line, warning: { code: 'project-unknown', value: truncateValue(rawProject) } });
     }
 
-    let note = stripFormulaGuard(cell('note'));
+    let note = sanitizeNote(stripFormulaGuard(cell('note')));
     if ([...note].length > IMPORT_NOTE_MAX_LENGTH) {
       note = [...note].slice(0, IMPORT_NOTE_MAX_LENGTH).join('');
       warnings.push({ line: row.line, warning: { code: 'note-truncated' } });

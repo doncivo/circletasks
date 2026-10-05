@@ -24,6 +24,16 @@ export interface ReminderRepository {
    * supprimés logiquement, les nouveaux insérés. Une seule transaction.
    */
   replaceForTarget(target: ReminderTarget, reminders: readonly NewReminder[]): Promise<Reminder[]>;
+  /**
+   * P-07 : insère en lot (paquets, une instruction par paquet) des rappels d'éléments NEUFS (aucun rappel existant à remplacer), un tampon
+   * distinct par ligne. Renvoie le nombre de rappels écrits.
+   */
+  createMany(reminders: readonly NewReminder[]): Promise<number>;
+  /**
+   * P-07 : supprime logiquement en lot, par paquets, les rappels vivants de ces éléments (un seul type de cible), un tampon distinct par
+   * ligne. Renvoie le nombre de rappels supprimés.
+   */
+  softDeleteForTargets(targetType: ReminderTarget['type'], targetIds: readonly string[]): Promise<number>;
   /** Suppression de l'élément ciblé (T-08) : rappels supprimés avec lui. */
   softDeleteForTarget(target: ReminderTarget, deletedAt?: IsoDateTime): Promise<Reminder[]>;
   /** Restauration de l'élément ciblé : seuls les rappels supprimés avec lui (même marque) sont restaurés. */

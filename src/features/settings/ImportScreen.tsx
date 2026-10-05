@@ -81,6 +81,13 @@ export function ImportScreen() {
             {t(errorKey)}
           </p>
         )}
+        {/* Région d'annonce montée en permanence (sans nom accessible) : les lecteurs d'écran n'annoncent que le texte ajouté à une région
+            déjà présente ; les compteurs y apparaissent avec l'aperçu et sont aussi visibles. */}
+        <p className="ct-import__counters" role="status">
+          {(step === 'preview' || step === 'importing') && validation
+            ? [plural(validCount, 'importCsv.toImportOne', 'importCsv.toImport'), plural(rejectedCount, 'importCsv.rejectedOne', 'importCsv.rejected'), plural(warningCount, 'importCsv.warningsOne', 'importCsv.warnings')].join(' · ')
+            : ''}
+        </p>
         {savedKey && (
           <p className="ct-import__note" role="status">
             {t(savedKey)}
@@ -131,9 +138,6 @@ export function ImportScreen() {
                 ]}
               />
             </div>
-            <p className="ct-import__counters" role="status" aria-label={t('importCsv.counters')}>
-              {[plural(validCount, 'importCsv.toImportOne', 'importCsv.toImport'), plural(rejectedCount, 'importCsv.rejectedOne', 'importCsv.rejected'), plural(warningCount, 'importCsv.warningsOne', 'importCsv.warnings')].join(' · ')}
-            </p>
             {preview.duplicates > 0 && (
               <p className="ct-import__warning">
                 <Icon icon={AlertTriangle} size={18} />

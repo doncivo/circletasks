@@ -74,6 +74,7 @@ export const importCsvEn: Messages['importCsv'] = {
   errorEmpty: 'The file is empty.',
   errorNoTitle: 'The “titre” column is missing: nothing can be imported.',
   errorTooManyRows: 'The file has more than 5,000 rows: shorten it and try again.',
+  errorTooManyColumns: 'The file has more than 256 columns: check the separator and try again.',
   errorTooLarge: 'The file is larger than 2 MB: shorten it and try again.',
   errorUnreadable: 'Unable to read this file.',
   errorFailed: 'The import failed. No task was created.',

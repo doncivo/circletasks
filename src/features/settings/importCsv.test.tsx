@@ -127,6 +127,35 @@ describe('Import CSV (P-07)', () => {
       expect(await taskCount()).toBe(0);
     });
 
+    it('critère 7 : annuler écarte aussi les rappels du lot, et laisse en place une tâche modifiée depuis (filtre hlc)', async () => {
+      await db.data.repos.settings.set('reminders.defaultOffsets', [0]);
+      const useCases = createImportUseCases(container);
+      const analyzed = await useCases.analyze('x.csv', `${HEADER}\nA;2026-10-03;09:00;;;\nB;2026-10-03;10:00;;;\nC;2026-10-03;;;;`, 'today');
+      if (!analyzed.ok) throw new Error('analyse');
+      const { created } = await useCases.run(analyzed.preview);
+      const liveReminders = async (): Promise<number> => (await db.driver.select<{ n: number }>('SELECT COUNT(*) AS n FROM reminder WHERE deleted_at IS NULL'))[0]?.n ?? 0;
+      expect(await liveReminders()).toBe(2);
+      // B est modifiée après l'import : son hlc change, elle n'est pas retirée.
+      db.clock.advance(1000);
+      await db.data.repos.tasks.update(created[1]?.id as TaskId, { note: 'modifiée' });
+      expect(await container.undo.undoLast()).toMatchObject({ status: 'undone' });
+      expect((await db.data.repos.tasks.getById(created[0]?.id as TaskId))).toBeNull();
+      expect((await db.data.repos.tasks.getById(created[1]?.id as TaskId))?.note).toBe('modifiée');
+      expect((await db.data.repos.tasks.getById(created[2]?.id as TaskId))).toBeNull();
+      expect(await liveReminders()).toBe(1); // seul le rappel de B reste
+    });
+
+    it('critère 7 : toutes les tâches modifiées depuis -> « stale », rien n’est retiré', async () => {
+      const useCases = createImportUseCases(container);
+      const analyzed = await useCases.analyze('x.csv', `${HEADER}\nA;;;;;`, 'today');
+      if (!analyzed.ok) throw new Error('analyse');
+      const { created } = await useCases.run(analyzed.preview);
+      db.clock.advance(1000);
+      await db.data.repos.tasks.update(created[0]?.id as TaskId, { note: 'x' });
+      expect(await container.undo.undoLast()).toMatchObject({ status: 'stale' });
+      expect(await taskCount()).toBe(1);
+    });
+
     it('critère 7 : tout ou rien — un échec au deuxième lot ne laisse aucune tâche', async () => {
       const useCases = createImportUseCases(container);
       const analyzed = await useCases.analyze('x.csv', `${HEADER}\n${Array.from({ length: IMPORT_BATCH_SIZE + 1 }, (_, i) => `T${String(i)};;;;;`).join('\n')}`, 'today');
@@ -186,11 +215,15 @@ describe('Import CSV (P-07)', () => {
       renderScreen();
       expect(screen.getByRole('heading', { level: 1, name: 'Importer des tâches' })).toBeInTheDocument();
       expect(screen.getByText('titre;date;heure;espace;projet;note')).toBeInTheDocument();
+      // Critère 14 : la région d'annonce des compteurs existe dès l'ouverture, vide et sans nom accessible.
+      const region = screen.getByRole('status');
+      expect(region).toBeEmptyDOMElement();
+      expect(region).not.toHaveAttribute('aria-label');
       expect(screen.getByRole('button', { name: 'Choisir un fichier' })).toBeEnabled();
       await click(screen.getByRole('button', { name: 'Télécharger un modèle' }));
       await waitFor(() => expect(files.saved).toHaveLength(1));
       expect(files.saved[0]?.suggestedName).toBe('circletasks-modele-import.csv');
-      expect(new TextDecoder().decode(files.saved[0]?.data)).toContain('titre;date;heure;espace;projet;note\r\nAppeler Paul;2026-10-06;10:00;Pro;;\r\n');
+      expect(new TextDecoder().decode(files.saved[0]?.data)).toContain('titre;date;heure;espace;projet;note\r\nAppeler Paul;2026-10-03;10:00;Pro;;\r\n');
       expect(await screen.findByText('Modèle enregistré')).toBeInTheDocument();
     });
 

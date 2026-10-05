@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  decodeImportBytes,
+
   detectDelimiter,
   IMPORT_MAX_ROWS,
   importTemplateCsv,
@@ -43,20 +43,6 @@ function table(text: string): ImportTable {
   if (!result.ok) throw new Error(result.error);
   return result.table;
 }
-
-describe('Décodage (P-07 critère 2)', () => {
-  it('UTF-8 avec ou sans BOM', () => {
-    const utf8 = new TextEncoder().encode('titre\nÉcole');
-    expect(decodeImportBytes(utf8)).toBe('titre\nÉcole');
-    expect(decodeImportBytes(new Uint8Array([0xef, 0xbb, 0xbf, ...utf8]))).toBe('titre\nÉcole');
-  });
-
-  it('repli Windows-1252 quand l’UTF-8 est invalide', () => {
-    // « Réunion à 14 h » écrit par Excel en Windows-1252 (é = 0xE9, à = 0xE0).
-    const bytes = Uint8Array.from([0x52, 0xe9, 0x75, 0x6e, 0x69, 0x6f, 0x6e, 0x20, 0xe0, 0x20, 0x31, 0x34, 0x20, 0x68]);
-    expect(decodeImportBytes(bytes)).toBe('Réunion à 14 h');
-  });
-});
 
 describe('Séparateur et lecture CSV (critère 2)', () => {
   it('reconnaît « ; », « , » et la tabulation d’après l’en-tête', () => {

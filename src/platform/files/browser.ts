@@ -1,5 +1,5 @@
-import { decodeImportBytes, IMPORT_MAX_BYTES } from '../../domain/csvImport';
-import { FileExportError, type FileService, type PickedText } from './types';
+import { decodeTextBytes } from '../../domain/textEncoding';
+import { DEFAULT_PICK_MAX_BYTES, FileExportError, type FileService, type PickedText } from './types';
 
 /**
  * Navigateur de développement et tests de bout en bout : « enregistrer » déclenche un téléchargement (élément `<a download>`), le
@@ -26,7 +26,7 @@ export function createBrowserFiles(): FileService {
       }
     },
     pickText(options) {
-      return pickTextFromInput(options.accept, options.maxBytes ?? IMPORT_MAX_BYTES);
+      return pickTextFromInput(options.accept, options.maxBytes ?? DEFAULT_PICK_MAX_BYTES);
     },
   };
 }
@@ -48,7 +48,7 @@ export function pickTextFromInput(accept: readonly string[], maxBytes: number): 
         return;
       }
       file.arrayBuffer().then(
-        (buffer) => resolve({ name: file.name, text: decodeImportBytes(new Uint8Array(buffer)) }),
+        (buffer) => resolve({ name: file.name, text: decodeTextBytes(new Uint8Array(buffer)) }),
         (error: unknown) => reject(new FileExportError('unreadable', error)),
       );
     });

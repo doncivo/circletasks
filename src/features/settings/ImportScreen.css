@@ -99,6 +99,16 @@
   font-weight: var(--ct-font-weight-bold);
 }
 
+/* Vide, la région d'annonce reste dans l'arbre d'accessibilité mais ne prend aucune place. */
+.ct-import__counters:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
 .ct-import__done {
   margin: 0;
   font-size: var(--ct-font-size-heading-sm);

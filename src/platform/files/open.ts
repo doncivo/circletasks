@@ -1,7 +1,7 @@
 import { createBrowserFiles, pickTextFromInput } from './browser';
 import { createTauriFiles } from './tauriFiles';
 import { createUnavailableFiles } from './memory';
-import { IMPORT_MAX_BYTES } from '../../domain/csvImport';
+import { DEFAULT_PICK_MAX_BYTES } from './types';
 import type { FileService } from './types';
 
 /**
@@ -17,6 +17,6 @@ export function openFileService(runtime: 'tauri' | 'web', os: 'windows' | 'ios' 
   }
   if (runtime === 'web') return createBrowserFiles();
   if (os === 'windows') return createTauriFiles();
-  if (os === 'ios') return { ...createUnavailableFiles(), pickText: (options) => pickTextFromInput(options.accept, options.maxBytes ?? IMPORT_MAX_BYTES) };
+  if (os === 'ios') return { ...createUnavailableFiles(), pickText: (options) => pickTextFromInput(options.accept, options.maxBytes ?? DEFAULT_PICK_MAX_BYTES) };
   return createUnavailableFiles();
 }

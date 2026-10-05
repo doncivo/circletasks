@@ -56,6 +56,12 @@ export interface TaskRepository {
    * (tombstone conservé pour la synchro) mais exclue de la corbeille (`listTrash`), rien à restaurer.
    */
   discard(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * P-07 : annulation d'un lot créé (import) : écarte (comme `discard`) les seules tâches vivantes dont le `hlc` est encore celui de
+   * l'entrée, c'est-à-dire non modifiées depuis. Le filtre par hlc se fait dans la requête (par paquets), un tampon distinct par ligne.
+   * Renvoie les identifiants écartés.
+   */
+  discardUnchanged(entries: readonly { readonly id: TaskId; readonly hlc: string }[]): Promise<TaskId[]>;
   /** Annulation de T-08, restauration depuis la corbeille. */
   restore(ids: readonly TaskId[]): Promise<Task[]>;
 

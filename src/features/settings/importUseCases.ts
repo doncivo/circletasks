@@ -15,7 +15,7 @@ import { defaultSpaceFor } from '../../domain/spaceRules';
 import type { ReminderId, TaskId } from '../../domain/types';
 import { useAppStore } from '../app/appStore';
 import type { AppContainer } from '../app/container';
-import { createCaptureUndoCommand } from '../capture';
+import type { UndoableCommand } from '../app/undo';
 
 type Deps = Pick<AppContainer, 'clock' | 'ids' | 'data' | 'undo' | 'taskEntities'>;
 
@@ -48,6 +48,35 @@ export interface ImportUseCases {
    * tout le lot. Rejette si l'écriture échoue (rien n'est créé).
    */
   run(preview: ImportPreview, onProgress?: (done: number, total: number) => void): Promise<ImportOutcome>;
+}
+
+/**
+ * Commande « Annuler » propre à l'import (5 s et Ctrl+Z) : retire le lot d'un coup. Par paquets de 100, UNE requête retient les tâches
+ * encore au `hlc` écrit par l'import (non modifiées depuis) et les écarte, UNE autre écarte leurs rappels : pas de lecture ni d'écriture
+ * tâche par tâche. Aucune tâche retirée (toutes modifiées depuis) : 'stale'.
+ */
+export function createImportUndoCommand(deps: Pick<Deps, 'data' | 'taskEntities'>, created: readonly Task[]): UndoableCommand {
+  return {
+    kind: 'import',
+    count: created.length,
+    labelKey: created.length === 1 ? 'importCsv.undoLabelOne' : 'importCsv.undoLabel',
+    labelParams: { count: created.length },
+    async undo() {
+      const removed = await deps.data.transaction(async (repos) => {
+        const gone: TaskId[] = [];
+        for (let start = 0; start < created.length; start += 100) {
+          const chunk = created.slice(start, start + 100);
+          const ids = await repos.tasks.discardUnchanged(chunk.map((task) => ({ id: task.id, hlc: task.hlc })));
+          if (ids.length > 0) await repos.reminders.softDeleteForTargets('task', ids);
+          gone.push(...ids);
+        }
+        return gone;
+      });
+      if (removed.length === 0) return 'stale';
+      deps.taskEntities.remove(removed);
+      return 'undone';
+    },
+  };
 }
 
 /** Cas d'usage de l'import CSV (P-07). */
@@ -115,24 +144,24 @@ export function createImportUseCases(deps: Deps): ImportUseCases {
             }),
           );
           const written = await repos.tasks.createMany(tasks);
-          for (const task of written) {
-            // N-02 : rappels par défaut seulement pour une tâche datée avec une heure.
-            const reminders = buildReminders({
+          // N-02 : rappels par défaut seulement pour une tâche datée avec une heure ; écrits par paquets (une instruction par paquet).
+          const reminders = written.flatMap((task) =>
+            buildReminders({
               target: { type: 'task', id: task.id },
               date: task.date,
               time: task.time,
               offsets,
               newReminderId: () => newEntityId<ReminderId>(deps.ids),
-            });
-            if (reminders.length > 0) await repos.reminders.replaceForTarget({ type: 'task', id: task.id }, reminders);
-          }
+            }),
+          );
+          if (reminders.length > 0) await repos.reminders.createMany(reminders);
           created.push(...written);
           onProgress?.(created.length, drafts.length);
         }
       });
       deps.taskEntities.publish(created);
       if (created.length > 0) {
-        deps.undo.push(createCaptureUndoCommand(deps, created, created.length === 1 ? { labelKey: 'importCsv.undoLabelOne' } : { labelKey: 'importCsv.undoLabel', labelParams: { count: created.length } }));
+        deps.undo.push(createImportUndoCommand(deps, created));
       }
       return { created };
     },

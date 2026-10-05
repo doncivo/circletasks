@@ -16,7 +16,7 @@ import { getLocale, tDynamic, type MessageKey } from '../../i18n';
  * - message « Annuler » visible 5 s sur la dernière commande ; Ctrl+Z annule la
  *   dernière commande de la pile, même après la disparition du message.
  */
-export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal' | 'checklist' | 'event' | 'search' | 'linkedTask' | 'tabs' | 'capture';
+export type UndoKind = 'complete' | 'reopen' | 'postpone' | 'move' | 'someday' | 'schedule' | 'duplicate' | 'delete' | 'series' | 'routine' | 'goal' | 'checklist' | 'event' | 'search' | 'linkedTask' | 'tabs' | 'capture' | 'import';
 
 export type UndoOutcome = 'undone' | 'stale';
 
@@ -83,6 +83,8 @@ export const UNDO_LABEL_KEYS: { readonly [K in UndoKind]: MessageKey } = {
   tabs: 'appearance.undoTabs',
   // Création depuis la mini-fenêtre (Q-01) ou le scan (Q-04) : la commande porte son propre libellé ; ce libellé est un repli.
   capture: 'capture.undo.created',
+  // Import CSV (P-07) : la commande porte son propre libellé (pluriel ou singulier) ; ce libellé est un repli.
+  import: 'importCsv.undoLabel',
 };
 
 /** Libellé du message pour une action par lot (A-05) : « 3 tâches reportées » (pluriel via `Intl.PluralRules`). */

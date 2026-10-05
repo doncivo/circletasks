@@ -1,5 +1,5 @@
-import { decodeImportBytes, IMPORT_MAX_BYTES } from '../../domain/csvImport';
-import { FileExportError, MAX_EXPORT_BYTES, type FileService, type PickedText, type SaveRequest } from './types';
+import { decodeTextBytes } from '../../domain/textEncoding';
+import { DEFAULT_PICK_MAX_BYTES, FileExportError, MAX_EXPORT_BYTES, type FileService, type PickedText, type SaveRequest } from './types';
 
 /** Commandes Rust de l'export et de l'import (`src-tauri/src/export.rs`, `src-tauri/src/import.rs`), injectables pour les tests. */
 export interface TauriFileApi {
@@ -62,7 +62,7 @@ export function createTauriFiles(api: TauriFileApi = loadTauriFileApi()): FileSe
       return path === null ? { saved: false } : { saved: true, path };
     },
     reveal: () => api.revealExported(),
-    async pickText(): Promise<PickedText | null> {
+    async pickText(options): Promise<PickedText | null> {
       let picked: { name: string; data: string } | null;
       try {
         picked = await api.pickFile();
@@ -72,8 +72,8 @@ export function createTauriFiles(api: TauriFileApi = loadTauriFileApi()): FileSe
       }
       if (picked === null) return null;
       const bytes = bytesOfBase64(picked.data);
-      if (bytes.length > IMPORT_MAX_BYTES) throw new FileExportError('too-large');
-      return { name: picked.name, text: decodeImportBytes(bytes) };
+      if (bytes.length > (options.maxBytes ?? DEFAULT_PICK_MAX_BYTES)) throw new FileExportError('too-large');
+      return { name: picked.name, text: decodeTextBytes(bytes) };
     },
   };
 }

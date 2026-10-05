@@ -75,6 +75,7 @@ export const importCsvFr = {
   errorEmpty: 'Le fichier est vide.',
   errorNoTitle: 'La colonne « titre » est absente : rien ne peut être importé.',
   errorTooManyRows: 'Le fichier contient plus de 5 000 lignes : réduisez-le puis réessayez.',
+  errorTooManyColumns: 'Le fichier contient plus de 256 colonnes : vérifiez le séparateur puis réessayez.',
   errorTooLarge: 'Le fichier dépasse 2 Mo : réduisez-le puis réessayez.',
   errorUnreadable: 'Impossible de lire ce fichier.',
   errorFailed: 'L’import a échoué. Aucune tâche n’a été créée.',
