@@ -63,6 +63,8 @@ interface ChunkInfo {
   readonly modules: readonly string[];
   readonly imports: readonly string[];
   readonly dynamicImports: readonly string[];
+  /** Code rendu de chaque module du bloc (chemin normalisé -> source après compilation). */
+  readonly sources: ReadonlyMap<string, string>;
 }
 
 /** Chemin de module normalisé : relatif au dépôt, barres obliques, sans requête ; module virtuel sans son préfixe `\0`. */
@@ -78,41 +80,73 @@ function allowed(module: string): boolean {
   return ALLOWED_VIRTUAL.some((pattern) => pattern.test(module));
 }
 
+/** Build de production de l'app dans `outDir` ; relève le graphe des blocs (et leurs sources) dans `chunks`. `extra` : greffon de l'essai. */
+async function buildProduction(outDir: string, chunks: Map<string, ChunkInfo>, extra: readonly Plugin[] = []): Promise<void> {
+  const graph: Plugin = {
+    name: 'ct-pairing-graph',
+    generateBundle(_options, bundle) {
+      for (const output of Object.values(bundle)) {
+        if (output.type !== 'chunk') continue;
+        chunks.set(output.fileName, {
+          fileName: output.fileName,
+          isEntry: output.isEntry,
+          facade: output.facadeModuleId ? normalize(output.facadeModuleId) : null,
+          modules: output.moduleIds.map(normalize),
+          imports: output.imports,
+          dynamicImports: output.dynamicImports,
+          sources: new Map(Object.entries(output.modules).map(([id, info]) => [normalize(id), info.code ?? ''])),
+        });
+      }
+    },
+  };
+  // Build de production : Vitest pose NODE_ENV=test, qui ferait de `import.meta.env.DEV` une vérité (branches de développement
+  // gardées dans le bundle). On mesure ce que l'app installée charge.
+  const previous = { debug: process.env['TAURI_ENV_DEBUG'], node: process.env['NODE_ENV'] };
+  process.env['TAURI_ENV_DEBUG'] = '';
+  process.env['NODE_ENV'] = 'production';
+  try {
+    await build({ root, configFile: join(root, 'vite.config.ts'), logLevel: 'warn', mode: 'production', build: { outDir, emptyOutDir: true, sourcemap: false }, plugins: [graph, ...extra] });
+  } finally {
+    if (previous.debug === undefined) delete process.env['TAURI_ENV_DEBUG'];
+    else process.env['TAURI_ENV_DEBUG'] = previous.debug;
+    if (previous.node === undefined) delete process.env['NODE_ENV'];
+    else process.env['NODE_ENV'] = previous.node;
+  }
+}
+
+/** Blocs atteints depuis une page : imports statiques et dynamiques, récursivement, plus les scripts cités par la page. */
+function reachableFrom(outDir: string, chunks: ReadonlyMap<string, ChunkInfo>, page: string): ChunkInfo[] {
+  const entry = [...chunks.values()].find((chunk) => chunk.isEntry && chunk.facade === page);
+  if (!entry) throw new Error(`bloc d'entrée de ${page} absent`);
+  const html = readFileSync(join(outDir, page), 'utf8');
+  const cited = [...html.matchAll(/(?:src|href)="\/?([^"]+\.js)"/g)].map((m) => m[1] as string).filter((file) => chunks.has(file));
+  const queue = [entry.fileName, ...cited];
+  const seen = new Set<string>();
+  const result: ChunkInfo[] = [];
+  while (queue.length > 0) {
+    const file = queue.shift() as string;
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const chunk = chunks.get(file);
+    if (!chunk) throw new Error(`bloc ${file} absent`);
+    result.push(chunk);
+    queue.push(...chunk.imports, ...chunk.dynamicImports);
+  }
+  return result;
+}
+
+/** Modules du graphe d'une page hors liste blanche, ou interdits : ce que le test du bundle doit trouver vide. */
+function violations(modules: readonly string[]): string[] {
+  return [...modules.filter((module) => !allowed(module)), ...modules.filter((module) => FORBIDDEN.some((pattern) => pattern.test(module)))];
+}
+
 describe('bundle de la fenêtre pairing (pairing.html)', () => {
   let outDir = '';
   const chunks = new Map<string, ChunkInfo>();
 
   beforeAll(async () => {
     outDir = mkdtempSync(join(tmpdir(), 'ct-pairing-'));
-    const graph: Plugin = {
-      name: 'ct-pairing-graph',
-      generateBundle(_options, bundle) {
-        for (const output of Object.values(bundle)) {
-          if (output.type !== 'chunk') continue;
-          chunks.set(output.fileName, {
-            fileName: output.fileName,
-            isEntry: output.isEntry,
-            facade: output.facadeModuleId ? normalize(output.facadeModuleId) : null,
-            modules: output.moduleIds.map(normalize),
-            imports: output.imports,
-            dynamicImports: output.dynamicImports,
-          });
-        }
-      },
-    };
-    // Build de production : Vitest pose NODE_ENV=test, qui ferait de `import.meta.env.DEV` une vérité (branches de développement
-    // gardées dans le bundle). On mesure ce que l'app installée charge.
-    const previous = { debug: process.env['TAURI_ENV_DEBUG'], node: process.env['NODE_ENV'] };
-    process.env['TAURI_ENV_DEBUG'] = '';
-    process.env['NODE_ENV'] = 'production';
-    try {
-      await build({ root, configFile: join(root, 'vite.config.ts'), logLevel: 'warn', mode: 'production', build: { outDir, emptyOutDir: true, sourcemap: false }, plugins: [graph] });
-    } finally {
-      if (previous.debug === undefined) delete process.env['TAURI_ENV_DEBUG'];
-      else process.env['TAURI_ENV_DEBUG'] = previous.debug;
-      if (previous.node === undefined) delete process.env['NODE_ENV'];
-      else process.env['NODE_ENV'] = previous.node;
-    }
+    await buildProduction(outDir, chunks);
   });
 
   afterAll(() => {
@@ -186,5 +220,36 @@ describe('bundle de la fenêtre pairing (pairing.html)', () => {
     expect(modules).toContain('src/platform/sync/tauriSync.ts');
     expect(modules).not.toContain('src/platform/sync/memory.ts');
     expect(modules).not.toContain('src/platform/sync/index.ts');
+  });
+
+  it('critère 2 (QA) : le code de la fenêtre n’a accès ni au stockage, ni au réseau, ni aux messages, ni à la console', () => {
+    const own = reachable('pairing.html').flatMap((chunk) => [...chunk.sources].filter(([module]) => module.startsWith('src/') || module === 'pairing.html'));
+    expect(own.length).toBeGreaterThan(5);
+    const banned = /\b(localStorage|sessionStorage|indexedDB|BroadcastChannel|sendBeacon|XMLHttpRequest|WebSocket|EventSource|postMessage|__ctSync|createMemorySyncPlatform)\b|document\.cookie|\bfetch\s*\(|console\.\w+|history\.(push|replace)State|location\.(hash|search|assign|replace)/;
+    expect(own.filter(([, code]) => banned.test(code)).map(([module, code]) => `${module} : ${banned.exec(code)?.[0] ?? ''}`)).toEqual([]);
+  });
+
+  it('critère 2 (QA) : le test de liste blanche échoue bien quand un module hors liste entre dans le graphe (essai en négatif)', async () => {
+    // Même build, avec un greffon qui fait importer Zustand par le point d'entrée de la fenêtre (le fichier source n'est pas touché).
+    const mutated = mkdtempSync(join(tmpdir(), 'ct-pairing-neg-'));
+    const mutatedChunks = new Map<string, ChunkInfo>();
+    const inject: Plugin = {
+      name: 'ct-inject-store',
+      enforce: 'pre',
+      transform(code, id) {
+        return normalize(id) === 'src/features/sync/pairing-window/main.tsx' ? { code: `import { createStore as ctNegStore } from 'zustand/vanilla';
+globalThis.ctNeg = ctNegStore;
+${code}`, map: null } : null;
+      },
+    };
+    try {
+      await buildProduction(mutated, mutatedChunks, [inject]);
+      const modules = [...new Set(reachableFrom(mutated, mutatedChunks, 'pairing.html').flatMap((chunk) => chunk.modules))];
+      expect(violations(modules).some((module) => module.includes('zustand'))).toBe(true);
+      // Et la vérification sur le vrai build reste vide.
+      expect(violations(modulesOf('pairing.html'))).toEqual([]);
+    } finally {
+      rmSync(mutated, { recursive: true, force: true });
+    }
   });
 });
