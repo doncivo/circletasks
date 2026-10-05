@@ -57,7 +57,24 @@ fn main_window_starts_hidden_on_windows_only() {
     assert!(base.get("visible").is_none(), "visible:false ne doit pas toucher iOS");
     let mut expected = base.clone();
     expected["visible"] = Value::Bool(false);
+    // P-04 : la fenêtre est créée par `setup` APRÈS la récupération d'une restauration interrompue (desktop.rs::create_main_window), jamais par
+    // Tauri avant `setup` : sinon la WebView pourrait ouvrir une base vide pendant la récupération ou la boîte d'erreur.
+    expected["create"] = Value::Bool(false);
     assert_eq!(win, &expected);
+    assert!(base.get("create").is_none(), "iOS garde la création automatique de la fenêtre");
+}
+
+/// `setup` récupère d'abord, puis crée la fenêtre principale, puis seulement le reste (zone de notification, capture rapide, affichage).
+#[test]
+fn setup_recovers_first_then_creates_the_main_window_before_anything_that_uses_it() {
+    let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
+    let position = |needle: &str| setup.find(needle).unwrap_or_else(|| panic!("{needle} absent de setup"));
+    let recover = position("recover_interrupted_restore");
+    let create = position("create_main_window(app.handle())");
+    assert!(recover < create, "récupération avant la création de la fenêtre");
+    for later in ["crate::shortcut::manage", "crate::capture::setup", "create_tray(", "show_main_window("] {
+        assert!(create < position(later), "{later} après la création de la fenêtre");
+    }
 }
 
 #[test]

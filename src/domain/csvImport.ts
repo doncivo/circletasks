@@ -34,48 +34,57 @@ export function normalizeName(value: string): string {
   return value.normalize('NFD').replace(COMBINING_MARKS, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-/**
- * Marques invisibles qui trompent l'affichage : bidirectionnelles (U+202A à U+202E, U+2066 à U+2069, U+200E, U+200F, U+061C), espaces de largeur
- * nulle (U+200B à U+200D), séparateurs de ligne et de paragraphe (U+2028, U+2029) et U+FEFF (la marque d'ordre des octets de TÊTE de fichier est
- * retirée avant, par `parseImportFile` ; dans une cellule, elle n'a rien à faire).
- */
-function isBidiMark(code: number): boolean {
-  return (
-    (code >= 0x202a && code <= 0x202e) ||
-    (code >= 0x2066 && code <= 0x2069) ||
-    (code >= 0x200b && code <= 0x200f) ||
-    code === 0x061c ||
-    code === 0x2028 ||
-    code === 0x2029 ||
-    code === 0xfeff
-  );
-}
+const FORMAT_CHAR = /\p{Cf}/u;
+const PICTOGRAPHIC = /\p{Extended_Pictographic}/u;
+const isPictographic = (char: string | undefined): boolean => char !== undefined && PICTOGRAPHIC.test(char);
+/** Marques de format qui produisent un glyphe visible et sont gardées : signes numériques arabes (U+0600 à U+0605, U+06DD, U+08E2), U+070F, U+110BD, U+110CD. */
+const VISIBLE_FORMAT = new Set([0x600, 0x601, 0x602, 0x603, 0x604, 0x605, 0x6dd, 0x70f, 0x8e2, 0x110bd, 0x110cd]);
 
 /**
- * Texte d'une ligne (titre, espace, projet) : les caractères de contrôle C0 et C1 sont retirés (la tabulation devient une espace) ainsi que
- * les marques bidirectionnelles.
+ * Faut-il retirer ce caractère invisible ? Catégorie Unicode Cf (U+00AD, U+061C, U+180E, U+200B à U+200F, U+202A à U+202E, U+2060 à U+2064,
+ * U+2066 à U+206F, U+FEFF, balises U+E0001 à U+E007F…), sélecteurs de variation (U+FE00 à U+FE0E, U+E0100 à U+E01EF) et séparateurs de ligne et de
+ * paragraphe (U+2028, U+2029), qui tromperaient l'affichage d'un titre ou d'un motif. Exceptions voulues : les signes arabes visibles ci-dessus ;
+ * la liaison U+200D entre deux pictogrammes (émojis composés, familles, couleurs de peau) et le sélecteur U+FE0F juste après un pictogramme (présentation
+ * émoji). Partout ailleurs ils sont retirés. (La marque d'ordre des octets de TÊTE de fichier est retirée avant, par `parseImportFile`.)
+ */
+function isInvisible(code: number, previous: string | undefined, next: string | undefined): boolean {
+  if (code === 0x200d) return !((isPictographic(previous) || previous === String.fromCharCode(0xfe0f)) && isPictographic(next));
+  if (code === 0xfe0f) return !isPictographic(previous);
+  if ((code >= 0xfe00 && code <= 0xfe0e) || (code >= 0xe0100 && code <= 0xe01ef) || code === 0x2028 || code === 0x2029) return true;
+  if (VISIBLE_FORMAT.has(code)) return false;
+  return FORMAT_CHAR.test(String.fromCodePoint(code));
+}
+
+/** Caractère de contrôle C0 ou C1 (DEL et U+0080 à U+009F compris). */
+const isControl = (code: number): boolean => code < 0x20 || (code >= 0x7f && code <= 0x9f);
+
+/**
+ * Texte d'une ligne (titre, espace, projet) : caractères de contrôle C0 et C1 retirés (la tabulation devient une espace) ainsi que les caractères
+ * invisibles de `isInvisible`.
  */
 export function sanitizeLine(value: string): string {
+  const chars = [...value];
   let out = '';
-  for (const char of value) {
+  chars.forEach((char, index) => {
     const code = char.codePointAt(0) ?? 0;
     if (code === 0x09) out += ' ';
-    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiMark(code)) continue;
+    else if (isControl(code) || isInvisible(code, chars[index - 1], chars[index + 1])) return;
     else out += char;
-  }
+  });
   return out;
 }
 
-/** Note : seuls les retours à la ligne et les tabulations sont conservés parmi les caractères de contrôle ; marques bidirectionnelles retirées. */
+/** Note : seuls les retours à la ligne et les tabulations sont conservés parmi les caractères de contrôle ; caractères invisibles retirés. */
 export function sanitizeNote(value: string): string {
-  let out = '';
   // CRLF et CR seul deviennent LF avant le tri des caractères.
-  for (const char of value.replace(/\r\n?/g, '\n')) {
+  const chars = [...value.replace(/\r\n?/g, '\n')];
+  let out = '';
+  chars.forEach((char, index) => {
     const code = char.codePointAt(0) ?? 0;
     if (code === 0x0a || code === 0x09) out += char;
-    else if (code < 0x20 || (code >= 0x7f && code <= 0x9f) || isBidiMark(code)) continue;
+    else if (isControl(code) || isInvisible(code, chars[index - 1], chars[index + 1])) return;
     else out += char;
-  }
+  });
   return out;
 }
 

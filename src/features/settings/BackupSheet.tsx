@@ -14,6 +14,7 @@ const ERROR_KEYS: Record<BackupFailureReason, PlainMessageKey> = {
   'not-found': 'backup.errorNotFound',
   io: 'backup.errorIo',
   'rollback-failed': 'backup.errorRollback',
+  'restore-pending': 'backup.errorPending',
   unavailable: 'backup.errorIo',
 };
 

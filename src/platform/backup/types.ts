@@ -27,7 +27,7 @@ export interface BackupListing {
   readonly versions: readonly BackupVersion[];
 }
 
-export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'unavailable';
+export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'restore-pending' | 'unavailable';
 
 /** Échec d'une opération de sauvegarde. Pour `restore`, `databaseClosed` indique qu'un redémarrage est nécessaire pour rouvrir la base. */
 export class BackupError extends Error {

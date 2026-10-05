@@ -12,7 +12,8 @@
         "center": true,
         "resizable": true,
         "dragDropEnabled": false,
-        "visible": false
+        "visible": false,
+        "create": false
       }
     ]
   }

@@ -25,6 +25,30 @@ function run(row: string) {
 }
 
 describe('Caractères de contrôle et marques bidirectionnelles (P-07, audit)', () => {
+  it('catégorie Unicode Cf : trait d’union conditionnel, U+2060 à U+2064, U+180E, sélecteurs de variation, balises', () => {
+    expect(sanitizeLine(`co${chr(0xad)}op`)).toBe('coop');
+    expect(sanitizeLine(`a${chr(0x2060, 0x2061, 0x2062, 0x2063, 0x2064)}b`)).toBe('ab');
+    expect(sanitizeLine(`a${chr(0x180e)}b${chr(0x2066, 0x206f)}c`)).toBe('abc');
+    expect(sanitizeLine(`a${chr(0xfe00, 0xfe01, 0xfe0e)}b`)).toBe('ab');
+    expect(sanitizeLine(`x${String.fromCodePoint(0xe0041, 0xe0001, 0xe007f, 0xe0100)}y`)).toBe('xy');
+    expect(sanitizeNote(`n${chr(0xad)}ote${chr(0x2060)}`)).toBe('note');
+    // Texte courant conservé : accents, ponctuation, chiffres arabes (U+0600 reste, signe visible).
+    expect(sanitizeLine('Café – déjà 12 € « ok »')).toBe('Café – déjà 12 € « ok »');
+    expect(sanitizeLine(`${chr(0x600)}١٢٣`)).toBe(`${chr(0x600)}١٢٣`);
+  });
+
+  it('émojis composés conservés (liaison U+200D entre pictogrammes, présentation U+FE0F), liaison isolée retirée', () => {
+    const family = `${String.fromCodePoint(0x1f468)}${chr(0x200d)}${String.fromCodePoint(0x1f469)}${chr(0x200d)}${String.fromCodePoint(0x1f467)}`;
+    expect(sanitizeLine(`Famille ${family}`)).toBe(`Famille ${family}`);
+    const heart = `${chr(0x2764, 0xfe0f)}`;
+    expect(sanitizeLine(`J'aime ${heart}`)).toBe(`J'aime ${heart}`);
+    const heartFire = `${chr(0x2764, 0xfe0f, 0x200d)}${String.fromCodePoint(0x1f525)}`;
+    expect(sanitizeNote(heartFire)).toBe(heartFire);
+    expect(sanitizeLine(`a${chr(0x200d)}b`)).toBe('ab');
+    expect(sanitizeLine(`${String.fromCodePoint(0x1f468)}${chr(0x200d)}b`)).toBe(String.fromCodePoint(0x1f468) + 'b');
+    expect(sanitizeLine(`a${chr(0xfe0f)}`)).toBe('a');
+  });
+
   it('titre, espace et projet : C0 et C1 retirés, la tabulation devient une espace, marques bidirectionnelles retirées', () => {
     expect(sanitizeLine(`A${chr(0)}B${chr(7)}C${chr(0x1b)}D${chr(0x7f)}E${chr(0x85)}F${chr(0x9f)}G`)).toBe('ABCDEFG');
     expect(sanitizeLine(`un${chr(9)}titre`)).toBe('un titre');

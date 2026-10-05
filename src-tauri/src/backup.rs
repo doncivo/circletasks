@@ -243,6 +243,26 @@ pub fn is_plain_file(path: &Path) -> bool {
     true
 }
 
+/// Le dossier des sauvegardes, s'il existe, doit être un dossier ordinaire (ni lien ni jonction) avant toute écriture ou ouverture (`unsafe-folder`).
+fn ensure_plain_backups_dir(dir: &Path) -> Result<(), BackupError> {
+    // Seuls un lien ou une jonction sont refusés ici ; un fichier ordinaire à cet emplacement fait échouer `create_dir_all` (`io`).
+    let linked = fs::symlink_metadata(dir).is_ok_and(|meta| {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            meta.file_type().is_symlink() || meta.file_attributes() & 0x400 != 0
+        }
+        #[cfg(not(windows))]
+        {
+            meta.file_type().is_symlink()
+        }
+    });
+    if linked {
+        return Err(BackupError::new("unsafe-folder", "le dossier des sauvegardes est un lien ou une jonction"));
+    }
+    Ok(())
+}
+
 /// Vrai pour un dossier ordinaire (ni lien ni jonction).
 fn is_plain_dir(path: &Path) -> bool {
     let Ok(meta) = fs::symlink_metadata(path) else { return false };
@@ -316,6 +336,7 @@ pub fn create_migration_backup(
         }
         return Ok(BackupOutcome { path: None, removed: 0 });
     }
+    ensure_plain_backups_dir(backups_dir)?;
     fs::create_dir_all(backups_dir).map_err(io_err)?;
     remove_orphan_tmp(backups_dir);
     let target = backups_dir.join(migration_backup_name(from_version, to_version, stamp));
@@ -344,6 +365,7 @@ pub fn create_daily_backup(db_path: &Path, backups_dir: &Path, day: &str, replac
     if !db_path.is_file() {
         return Err(BackupError::new("no-database", "base introuvable"));
     }
+    ensure_plain_backups_dir(backups_dir)?;
     fs::create_dir_all(backups_dir).map_err(io_err)?;
     remove_orphan_tmp(backups_dir);
     let name = daily_backup_name(day);
@@ -435,9 +457,9 @@ fn read_summary(path: &Path) -> (Option<u64>, Option<u32>) {
     (tasks, version)
 }
 
-/// SQL aux espaces compactés (retours à la ligne et indentation sans effet sur la comparaison).
+/// SQL aux espaces ASCII compactés (retours à la ligne et indentation sans effet sur la comparaison ; une espace Unicode, elle, est une différence).
 pub fn normalize_sql(sql: &str) -> String {
-    sql.split_whitespace().collect::<Vec<_>>().join(" ")
+    sql.split(|c: char| c.is_ascii_whitespace()).filter(|part| !part.is_empty()).collect::<Vec<_>>().join(" ")
 }
 
 /// Supprime tous les déclencheurs du fichier puis recrée ceux de l'app depuis leur référence (pour les tables présentes). Appelée sur le fichier
@@ -447,14 +469,24 @@ pub fn normalize_sql(sql: &str) -> String {
 pub fn reset_triggers(path: &Path) -> Result<(), BackupError> {
     let conn = rusqlite::Connection::open(path).map_err(sql_err)?;
     conn.pragma_update(None, "trusted_schema", "OFF").map_err(sql_err)?;
+    // Journal « DELETE » : le fichier préparé reste un fichier unique (ni `-wal` ni `-shm` à côté, qu'un échange laisserait derrière lui).
+    conn.query_row("PRAGMA journal_mode = DELETE", [], |r| r.get::<_, String>(0)).map_err(sql_err)?;
     let tx = conn.unchecked_transaction().map_err(sql_err)?;
     let existing: Vec<String> = {
-        let mut statement = tx.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger'").map_err(sql_err)?;
+        let mut statement = tx.prepare("SELECT name FROM sqlite_master WHERE lower(type) = 'trigger'").map_err(sql_err)?;
         let rows = statement.query_map([], |r| r.get::<_, String>(0)).map_err(sql_err)?.collect::<Result<_, _>>().map_err(sql_err)?;
         rows
     };
     for name in existing {
         tx.execute_batch(&format!("DROP TRIGGER \"{}\"", name.replace('"', "\"\""))).map_err(sql_err)?;
+    }
+    // Un objet dont le `type` de sqlite_master a une autre casse ('Trigger') n'est pas supprimé par DROP TRIGGER (SQLite cherche 'trigger') : s'il en
+    // reste un, le fichier n'est pas fiable (`check_backup_file` l'aurait déjà refusé) et la préparation échoue, transaction annulée.
+    let leftover: u64 = tx
+        .query_row("SELECT COUNT(*) FROM sqlite_master WHERE lower(type) = 'trigger'", [], |r| r.get(0))
+        .map_err(sql_err)?;
+    if leftover > 0 {
+        return Err(BackupError::new("corrupt", "un déclencheur n'a pas pu être supprimé"));
     }
     let has_table = |table: &str| -> Result<bool, BackupError> {
         tx.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| r.get::<_, u64>(0)).map(|n| n == 1).map_err(sql_err)
@@ -494,7 +526,7 @@ pub fn check_backup_file(path: &Path, app_version: u32) -> Result<u32, BackupErr
     // Chaque déclencheur doit être identique (type, nom, table, SQL aux espaces près) à la référence de l'app ; une sauvegarde plus ancienne peut
     // en avoir moins (migration 0011 pas encore appliquée), jamais d'autre ni de différent.
     let mut definitions = conn
-        .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type IN ('trigger', 'view')")
+        .prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE type NOT IN ('table', 'index')")
         .map_err(|e| corrupt(e.to_string()))?;
     let found: Vec<(String, String, String, Option<String>)> = definitions
         .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?, r.get::<_, Option<String>>(3)?)))
@@ -551,7 +583,7 @@ fn present(path: &Path) -> bool {
 }
 
 /// Horodatage UTC `AAAAMMJJTHHMMSSZ` d'un instant en secondes depuis l'époque Unix (calendrier grégorien, algorithme de Howard Hinnant).
-fn utc_stamp(secs: u64) -> String {
+pub fn utc_stamp(secs: u64) -> String {
     let days = i64::try_from(secs / 86_400).unwrap_or(0);
     let rest = secs % 86_400;
     let z = days + 719_468;
@@ -601,7 +633,7 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
             return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
         }
     }
-    for leftover in [staged.clone(), sidecar(&staged, ".tmp")] {
+    for leftover in [staged.clone(), sidecar(&staged, ".tmp"), sidecar(&staged, "-wal"), sidecar(&staged, "-shm"), sidecar(&staged, "-journal")] {
         if present(&leftover) {
             if !is_plain_file(&leftover) {
                 return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
@@ -621,9 +653,12 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
         let target = (0..1_000)
             .map(|n| backups_dir.join(pre_restore_backup_name(&utc_stamp(now + n))))
-            .find(|candidate| !present(candidate))
+            // La cible ET ses -wal / -shm doivent être absents : un reste orphelin d'une archive précédente n'est jamais mélangé à une nouvelle.
+            .find(|candidate| ["", "-wal", "-shm"].iter().all(|suffix| !present(&sidecar(candidate, suffix))))
             .ok_or_else(|| BackupError::new("recovery-conflict", "aucun nom libre pour archiver l'ancienne base"))?;
-        for (suffix, old) in &olds {
+        // `-shm`, puis `-wal`, la base EN DERNIER : si l'archivage s'arrête en route, `circletasks.db.restore-old` est encore là et le démarrage suivant
+        // recommence (cas « base présente + base restore-old présente ») ; ce qui a déjà été déplacé reste dans `backups/`, rien n'est perdu.
+        for (suffix, old) in olds.iter().rev() {
             if present(old) {
                 fs::rename(old, sidecar(&target, suffix)).map_err(|e| fail("recovery-failed", e))?;
             }
@@ -846,6 +881,7 @@ pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Resu
 #[tauri::command]
 pub fn reveal_backups_folder(app: AppHandle) -> Result<(), BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
+    ensure_plain_backups_dir(&dir)?;
     fs::create_dir_all(&dir).map_err(io_err)?;
     tauri_plugin_opener::open_path(dir, None::<&str>).map_err(|e| BackupError::new("io", e.to_string()))
 }

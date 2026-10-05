@@ -47,6 +47,7 @@ export const backupFr = {
   errorIo: 'La restauration a échoué. Vos données actuelles sont intactes.',
   errorClosed: 'La restauration a échoué. Redémarrez CircleTasks pour retrouver vos données actuelles.',
   errorRollback: 'La restauration a échoué et l’ancien fichier n’a pas pu être remis en place. Une copie de sécurité est dans le dossier des sauvegardes.',
+  errorPending: 'Une restauration précédente a été interrompue : redémarrez CircleTasks pour la terminer avant d’en lancer une autre.',
   restart: 'Redémarrer',
   recoveryFailed: 'Restauration interrompue : redémarrez CircleTasks.',
 } as const;

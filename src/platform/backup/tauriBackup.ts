@@ -48,7 +48,7 @@ export function loadTauriBackupApi(): TauriBackupApi {
   };
 }
 
-const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed'];
+const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed', 'restore-pending'];
 
 /** Erreur Rust `{ code, message }` -> raison stable ; tout le reste vaut `io`. */
 export function reasonOf(error: unknown): BackupFailureReason {

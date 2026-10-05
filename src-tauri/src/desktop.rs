@@ -251,16 +251,22 @@ pub fn set_tray_labels(app: AppHandle, labels: TrayLabels) -> Result<(), Command
     tray.set_menu(Some(menu)).map_err(|e| CommandError { code: "menu", message: e.to_string() })
 }
 
-/// Enregistre les plugins PC, la fermeture en réduction et la zone de notification.
-/// Texte de la boîte montrée quand la récupération d'une restauration interrompue échoue. Exception assumée à « textes dans `src/i18n` » : la
-/// WebView n'existe pas encore (et ne doit pas s'ouvrir) à ce stade ; le début du texte est celui de `backup.recoveryFailed` de `src/i18n`.
-pub const RECOVERY_FAILED_MESSAGE: &str = "Restauration interrompue : redémarrez CircleTasks. Si ce message revient, vos données restent dans le dossier de l'application (fichiers « .restore-old »).";
+/// Début du texte de la boîte montrée quand la récupération d'une restauration interrompue échoue. Exception assumée à « textes dans
+/// `src/i18n` » : la boîte précède toute WebView ; ce début est celui de `backup.recoveryFailed` (vérifié par `recoveryMessage.test.ts`).
+pub const RECOVERY_FAILED_MESSAGE: &str = "Restauration interrompue : redémarrez CircleTasks.";
 
-/// Voie retenue pour une récupération impossible : QUITTER, par le plus simple et le plus robuste de Tauri 2. `setup` renvoie une erreur, donc
-/// `Builder::run` échoue avant que la fenêtre principale ne soit affichée et que la WebView n'appelle le plugin SQL : aucune base n'est ouverte ni
-/// créée (le plugin SQL ouvre le fichier à la première commande de la WebView, jamais avant). Une boîte système bloquante (`MessageBoxW`, sous
-/// Windows) montre le message d'abord ; seul le code d'erreur est journalisé, sans chemin. Les fichiers `.restore-old` restent intacts.
-fn abort_startup_after_failed_recovery(code: &str) -> Box<dyn std::error::Error> {
+/// Texte complet de la boîte : le début, le code d'erreur et la consigne (sans chemin personnel : le dossier est désigné par `%APPDATA%`).
+pub fn recovery_failed_text(code: &str, identifier: &str) -> String {
+    format!(
+        "{RECOVERY_FAILED_MESSAGE}\n\nCode : {code}\n\nSi ce message revient : fermez CircleTasks, ouvrez le dossier %APPDATA%\\{identifier} et conservez les fichiers « .restore-old » (ne les supprimez pas), puis demandez de l'aide."
+    )
+}
+
+/// Voie retenue pour une récupération impossible : QUITTER. La fenêtre principale n'existe pas encore (`create: false`, voir `create_main_window`) :
+/// aucune WebView n'est vivante pendant la boîte, donc aucune base ne peut être ouverte ni créée. `setup` renvoie ensuite une erreur et
+/// `Builder::run` échoue. Une boîte système bloquante (`MessageBoxW`, sous Windows) montre le message d'abord ; seul le code d'erreur est journalisé,
+/// sans chemin. Les fichiers `.restore-old` restent intacts.
+fn abort_startup_after_failed_recovery(code: &str, identifier: &str) -> Box<dyn std::error::Error> {
     eprintln!("[backup] récupération au démarrage impossible : {code}");
     #[cfg(windows)]
     {
@@ -268,12 +274,35 @@ fn abort_startup_after_failed_recovery(code: &str) -> Box<dyn std::error::Error>
         use windows::Win32::UI::WindowsAndMessaging::{MessageBoxW, MB_ICONERROR, MB_OK};
         // SAFETY : appel Win32 sans fenêtre parente, chaînes valides pour la durée de l'appel.
         unsafe {
-            MessageBoxW(None, &HSTRING::from(RECOVERY_FAILED_MESSAGE), w!("CircleTasks"), MB_OK | MB_ICONERROR);
+            MessageBoxW(None, &HSTRING::from(recovery_failed_text(code, identifier)), w!("CircleTasks"), MB_OK | MB_ICONERROR);
         }
     }
     format!("restauration interrompue non récupérée ({code})").into()
 }
 
+/// Construit une fenêtre depuis sa configuration (`tauri.conf.json`), quel que soit son champ `create`. Générique sur le runtime pour être testée.
+pub fn build_window_from_config<R: tauri::Runtime>(app: &tauri::AppHandle<R>, config: &tauri::utils::config::WindowConfig) -> tauri::Result<()> {
+    if app.get_webview_window(&config.label).is_none() {
+        tauri::WebviewWindowBuilder::from_config(app, config)?.build()?;
+    }
+    Ok(())
+}
+
+/// Crée la fenêtre principale (Windows : sa configuration porte `create: false`, voir `tauri.windows.conf.json`), APRÈS la récupération d'une
+/// restauration interrompue : la WebView, et donc le plugin SQL, n'existent qu'une fois les fichiers de la base remis en ordre.
+pub fn create_main_window(app: &AppHandle) -> tauri::Result<()> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == MAIN_WINDOW)
+        .cloned()
+        .ok_or_else(|| tauri::Error::WindowNotFound)?;
+    build_window_from_config(app, &config)
+}
+
+/// Enregistre les plugins PC, la fermeture en réduction et la zone de notification.
 pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder
         // Instance unique : doit être le premier plugin (D-01, critère 8). Un second lancement
@@ -301,13 +330,15 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             }
         })
         .setup(|app| {
-            // P-04 : une restauration interrompue (arrêt brutal pendant l'échange des fichiers) est récupérée AVANT que la WebView n'ouvre la base.
-            // Si elle échoue, l'app ne démarre pas : ni base neuve ni base ouverte sur un état à moitié restauré (voir `abort_startup_after_failed_recovery`).
+            // P-04 : une restauration interrompue (arrêt brutal pendant l'échange des fichiers) est récupérée AVANT toute WebView : la fenêtre
+            // principale (`create: false`) n'existe pas encore. Si la récupération échoue, l'app ne démarre pas : ni base neuve ni base ouverte
+            // sur un état à moitié restauré (voir `abort_startup_after_failed_recovery`). Puis seulement, la fenêtre est construite.
             if let Ok(dir) = tauri::Manager::path(app).app_config_dir() {
                 if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
-                    return Err(abort_startup_after_failed_recovery(error.code));
+                    return Err(abort_startup_after_failed_recovery(error.code, &app.config().identifier));
                 }
             }
+            create_main_window(app.handle())?;
             app.manage(QuitGate::default());
             crate::shortcut::manage(app.handle());
             // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).

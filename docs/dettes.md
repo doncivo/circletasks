@@ -114,7 +114,9 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Lot P (revue et audit du 2026-10-05, non bloquant) :
   - lecteur réseau mappé (`Z:`) : l'import (`import_open_file`) contrôle la lettre de lecteur seulement, comme l'export H-03 (option `GetDriveTypeW`) ;
   - iPhone : l'événement `cancel` de `<input type="file">` n'est pas déclenché de façon fiable par WKWebView ; une annulation peut laisser `pickText` en attente (promesse jamais résolue) : à traiter avec le plugin Fichiers de l'ordre 5 ;
-  - la récupération d'une restauration interrompue (`setup` de `desktop.rs`) repose sur l'ordre Tauri « `setup` puis première IPC de la WebView » ; plus robuste : la faire avant `Builder::run`, sans dépendre de cet ordre ;
+  - restauration et récupération : course entre `is_plain_file` et `rename` (contrôle puis action, sans verrou), et liens physiques (un fichier à plusieurs noms n'est pas détecté) ; option : ouvrir le fichier d'abord et renommer par descripteur ;
+  - déclencheurs : la référence est unique (`backup_triggers.rs`, état après la migration 0011) ; une migration future qui modifie un déclencheur obligera à la mettre à jour (version d'introduction par déclencheur, ou DROP / CREATE imposés dans les migrations) ;
+  - après un échange réussi, l'ancienne base existe en double : la copie de sécurité `pre-restore` ET ses restes archivés par la récupération au démarrage (si l'arrêt a eu lieu avant le nettoyage) ;
   - `stampCases()` (CASE par identifiant pour un tampon distinct par ligne) est dupliqué dans `taskRepository` et `reminderRepository` : à partager dans `sqlHelpers` ;
   - annulation de l'import : double découpage en paquets (commande d'annulation puis repository) ;
   - annulation de l'import : afficher « n retirées, m conservées » quand des tâches modifiées depuis restent en place ;
