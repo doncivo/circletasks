@@ -4,6 +4,7 @@ import { migrations } from '../../../../src/db/migrations';
 import { migrate } from '../../../../src/db/migrator';
 import { reintegrateUnknownFields, type UnknownCatalogue } from '../../../../src/db/repositories';
 import { openTestDb, type TestDb } from '../../../../src/db/repositories/sql/testSetup';
+import { parseReintegrationFailure, REINTEGRATION_FAILURE_META } from '../../../../src/domain/sync/compat';
 import { settingKeyScope, syncColumn, syncTable } from '../../../../src/domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime, LocalDate, SpaceId, TaskId } from '../../../../src/domain/types';
 import { extendedCatalogue, NEXT_MIGRATION, TEST_COLUMN } from '../../../sim/syncVersions';
@@ -179,6 +180,8 @@ describe('réintégration (Y-07 critère 6)', () => {
   it('ligne pas encore arrivée : le champ reste ; réintégré au démarrage suivant, une fois la ligne là (D3)', async () => {
     await keep('task', T2, TEST_COLUMN, 'en avance', h(3_600_000));
     expect(await run()).toEqual({ reintegrated: 0, superseded: 0, remaining: 1 });
+    // En attente (normal) : aucun échec enregistré.
+    expect(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)).toBeNull();
     await createTask(T2);
     expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
     expect(await db.driver.select(`SELECT ${TEST_COLUMN} AS x FROM task WHERE id = ?`, [T2])).toEqual([{ x: 'en avance' }]);
@@ -266,8 +269,13 @@ describe('réintégration (Y-07 critère 6)', () => {
     // La ligne en échec ne laisse rien d'écrit à moitié (horloge, file).
     expect(await clockOf(ids[1], TEST_COLUMN)).toBeNull();
     expect(await db.driver.select('SELECT * FROM sync_outbox WHERE field = ?', [TEST_COLUMN])).toEqual([]);
+    // Exigence d'Ali (point 9) : l'échec est gardé dans sync_meta, sans contenu (nombre de champs, table du catalogue, date, nom d'erreur).
+    expect(parseReintegrationFailure(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META))).toEqual({ fields: 1, tables: ['task'], at: NOW, errors: ['DbError'] });
+    expect(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)).not.toContain('interdite');
     await db.driver.execute('DROP TRIGGER test_refuse_x');
     expect(await run()).toEqual({ reintegrated: 1, superseded: 0, remaining: 0 });
+    // Réussite au démarrage suivant : l'échec est effacé.
+    expect(await db.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)).toBeNull();
   });
 
   it('parent et enfant tous deux en attente (ordre alphabétique inverse : project avant space) : réintégrés au même démarrage', async () => {

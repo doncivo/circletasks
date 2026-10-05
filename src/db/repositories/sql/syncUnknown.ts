@@ -1,4 +1,4 @@
-import { decideReintegration, keptFieldsOf, type ClockState, type ReintegrationDecision, type StoredUnknown } from '../../../domain/sync/compat';
+import { decideReintegration, keptFieldsOf, REINTEGRATION_FAILURE_META, type ClockState, type ReintegrationDecision, type ReintegrationFailure, type StoredUnknown } from '../../../domain/sync/compat';
 import type { SyncValue } from '../../../domain/sync/format';
 import { isValidRowId, settingKeyScope, syncColumn, syncTable, tableRank, type SyncTable } from '../../../domain/sync/syncTables';
 import type { Hlc, IsoDateTime } from '../../../domain/types';
@@ -111,6 +111,9 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
   let superseded = 0;
   /** Lignes en échec dans cet appel : plus retentées avant le démarrage suivant. */
   const failed = new Set<string>();
+  /** Échecs sans contenu (exigence d'Ali : visible dans l'app) : champs restés par table du catalogue, noms d'erreur. */
+  const failedFields = new Map<string, number>();
+  const errorNames = new Set<string>();
   for (let progress = true; progress; ) {
     progress = false;
     // Tables dans l'ordre parent → enfant (rang du catalogue) ; une table hors du catalogue n'a rien à réintégrer.
@@ -151,7 +154,11 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
               await tx.execute('ROLLBACK TO reintegrate_row');
               await tx.execute('RELEASE reintegrate_row');
               failed.add(key);
-              options.onRowError?.(error instanceof Error ? error.name : 'Error');
+              const name = error instanceof Error ? error.name : 'Error';
+              errorNames.add(name);
+              const n = Number((await tx.select<{ n: number }>('SELECT COUNT(*) AS n FROM sync_unknown WHERE table_name = ? AND row_id = ?', [tableName, rowId]))[0]?.n ?? 0);
+              failedFields.set(t.name, (failedFields.get(t.name) ?? 0) + n);
+              options.onRowError?.(name);
             }
           }
           await tx.execute('DELETE FROM sync_guard');
@@ -164,6 +171,11 @@ export const reintegrateUnknownFields: ReintegrateUnknownFields = async (db, opt
       }
     }
   }
+  // État d'échec gardé pour l'affichage (survit au redémarrage) ; effacé dès qu'un démarrage n'a plus d'échec.
+  const fields = [...failedFields.values()].reduce((a, b) => a + b, 0);
+  const failure: ReintegrationFailure | null = failed.size > 0 ? { fields: Math.max(1, fields), tables: [...failedFields.keys()].sort(), at: options.now, errors: [...errorNames].sort() } : null;
+  if (failure) await db.execute('INSERT INTO sync_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', [REINTEGRATION_FAILURE_META, JSON.stringify(failure)]);
+  else await db.execute('DELETE FROM sync_meta WHERE key = ?', [REINTEGRATION_FAILURE_META]);
   const remaining = Number((await db.select<{ n: number }>('SELECT COUNT(*) AS n FROM sync_unknown'))[0]?.n ?? 0);
   return { reintegrated, superseded, remaining };
 };

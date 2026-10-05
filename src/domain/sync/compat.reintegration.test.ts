@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Hlc } from '../types';
-import { decideReintegration, keptFieldsOf, type KeptField, type ReintegrationInput, type ReintegrationRow } from './compat';
+import { decideReintegration, keptFieldsOf, parseReintegrationFailure, type KeptField, type ReintegrationInput, type ReintegrationRow } from './compat';
 import { syncTable, type SyncColumn, type SyncTable } from './syncTables';
 
 /**
@@ -110,5 +110,16 @@ describe('keptFieldsOf : champs gardés devenus connus et valides', () => {
       stored('title', '"Titre"', h(2), h(1)),
     ]);
     expect(kept).toEqual([f('x', 'ok', h(1), null, false), f('title', 'Titre', h(2), h(1))]);
+  });
+});
+
+describe('parseReintegrationFailure (exigence d’Ali)', () => {
+  it('lecture stricte : nombre positif, noms simples, date ; sinon null', () => {
+    const ok = { fields: 2, tables: ['task'], at: '2026-10-05T09:00:00.000Z', errors: ['DbError'] };
+    expect(parseReintegrationFailure(JSON.stringify(ok))).toEqual(ok);
+    expect(parseReintegrationFailure(null)).toBeNull();
+    for (const bad of ['pas du json', 'null', '[]', JSON.stringify({ ...ok, fields: 0 }), JSON.stringify({ ...ok, fields: 1.5 }), JSON.stringify({ ...ok, tables: ['valeur reçue !'] }), JSON.stringify({ ...ok, errors: [42] }), JSON.stringify({ ...ok, at: 3 })]) {
+      expect(parseReintegrationFailure(bad), bad).toBeNull();
+    }
   });
 });

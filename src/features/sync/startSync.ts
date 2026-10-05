@@ -28,7 +28,8 @@ export function startSyncIntegration(container: AppContainer, env: Partial<SyncS
     status.setStatus('waitingIcloud', phase === 'waiting-icloud' ? {} : null);
     // Y-07 critère 9 : tant qu'un autre appareil actif publie une version plus récente ; jamais sans synchro configurée.
     const configured = phase !== 'not-configured' && phase !== 'needs-pairing';
-    status.setStatus('updateRequired', configured && newerDevices(current.devices).length > 0 ? {} : null);
+    // Exigence d'Ali : un échec de réintégration prime (rien d'autre ne le montre depuis l'écran principal) ; même état A-09.
+    status.setStatus('updateRequired', !configured ? null : current.reintegrationFailure ? { detail: 'reintegration' } : newerDevices(current.devices).length > 0 ? {} : null);
   };
   const stopStatus = sync.subscribe(applyBanners);
   const stopChanges = sync.onRemoteChanges((change) => void applyRemoteChanges(container, change).catch(() => undefined));

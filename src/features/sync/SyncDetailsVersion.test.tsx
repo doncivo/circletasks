@@ -14,6 +14,7 @@ import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { startSyncIntegration } from './startSync';
+import { formatSyncTime } from './syncText';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
 
 /** Bandeau « Mettez à jour l'app », ligne de Réglages et emplacement « version » (Y-07 critères 8 à 11 ; critère 12 : tests/unit/sync/versions/texts.test.ts). */
@@ -205,5 +206,69 @@ describe('bandeau A-09 (Y-07 critère 9, QA)', () => {
     integration.dispose();
     expect(banner()).toBeUndefined();
     expect(useAppStatusStore.getState().sources.offline).toBeDefined();
+  });
+});
+
+describe('échec de réintégration visible (exigence d’Ali, 2026-10-05)', () => {
+  const failure = { fields: 3, tables: ['task', 'event'], at: '2026-10-05T07:30:00.000Z' as IsoDateTime, errors: ['DbError'] };
+  const start = () => startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined });
+
+  it('Bandeau et corrupt / rollback : décision de revue, un état non fiable ne déclenche pas le bandeau ; clock-ahead oui', () => {
+    const integration = start();
+    for (const status of ['corrupt', 'rollback'] as const) {
+      sync.setStatus({ devices: [self, iphone({ status, newer: 'schema' })] });
+      expect(banner(), status).toBeUndefined();
+    }
+    sync.setStatus({ devices: [self, iphone({ status: 'clock-ahead', newer: 'schema' })] });
+    expect(banner()).toBeDefined();
+    integration.dispose();
+  });
+
+  it('ligne de Réglages en état « problème » : « 3 éléments reçus d’une version plus récente n’ont pas pu être intégrés »', () => {
+    sync.setStatus({ phase: 'idle', reintegrationFailure: failure });
+    renderIn(<SyncStatusLine />);
+    const line = screen.getByRole('status');
+    expect(line.textContent).toBe('3 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
+    cleanup();
+    sync.setStatus({ phase: 'idle', reintegrationFailure: { ...failure, fields: 1 } });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByRole('status').textContent).toBe('1 élément reçu d’une version plus récente n’a pas pu être intégré');
+    // Une erreur de synchro garde son texte (plus urgente).
+    cleanup();
+    sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable', reintegrationFailure: failure });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByRole('status').textContent).toContain('Dossier de synchro introuvable');
+  });
+
+  it('Détails, section VERSION : nombre, type d’élément, date du dernier essai, l’app réessaie à chaque démarrage ; annoncé, sans boîte', () => {
+    sync.setStatus({ reintegrationFailure: failure });
+    renderIn(<SyncDetailsVersion />);
+    expect(screen.getByText('VERSION')).toBeTruthy();
+    const region = screen.getByRole('status');
+    expect(region.textContent).toContain('3 éléments non intégrés (tâches, événements)');
+    expect(region.textContent).toContain(`Dernier essai : ${formatSyncTime(failure.at, db.clock.nowMs())}`);
+    expect(region.textContent).toContain('L’app réessaie à chaque démarrage');
+    expect(region.textContent).not.toContain('DbError');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('écran principal : bandeau A-09 de l’état le plus proche (updateRequired) avec le texte de l’échec ; retiré quand l’échec s’efface', () => {
+    const integration = start();
+    sync.setStatus({ reintegrationFailure: failure });
+    expect(banner()).toEqual({ detail: 'reintegration' });
+    render(<AppStatusBanner />);
+    expect(screen.getByRole('status').textContent).toBe('Des éléments reçus n’ont pas pu être intégrés : voir Réglages › Synchronisation');
+    act(() => sync.setStatus({ reintegrationFailure: null }));
+    expect(banner()).toBeUndefined();
+    integration.dispose();
+  });
+
+  it('aucun échec (null ou absent) : rien d’affiché nulle part', () => {
+    const integration = start();
+    sync.setStatus({ reintegrationFailure: null });
+    const { container: root } = renderIn(<SyncDetailsVersion />);
+    expect(root.innerHTML).toBe('');
+    expect(banner()).toBeUndefined();
+    integration.dispose();
   });
 });

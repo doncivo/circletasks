@@ -21,8 +21,9 @@ export function AppStatusBanner() {
         />
       );
     case 'updateRequired':
-      // Y-07 critère 9 : texte seul, aucun bouton (mise à jour par l'updater PC ou SideStore).
-      return <StatusBanner message={t('sync.version.banner')} />;
+      // Y-07 critère 9 : texte seul, aucun bouton (mise à jour par l'updater PC ou SideStore). Détail « reintegration » : échec de
+      // réintégration (exigence d'Ali), état A-09 le plus proche, faute d'autre signe visible depuis l'écran principal.
+      return <StatusBanner message={t(source.detail === 'reintegration' ? 'sync.version.failedBanner' : 'sync.version.banner')} />;
     case 'waitingIcloud':
       return <StatusBanner message={t('status.waitingIcloud')} />;
     case 'syncing':

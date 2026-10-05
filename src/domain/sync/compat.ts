@@ -242,3 +242,39 @@ export function decideReintegration(input: ReintegrationInput): ReintegrationDec
     superseded: remove.length - applied.length,
   };
 }
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Échec de réintégration visible (exigence d'Ali, 2026-10-05)
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** Clé de `sync_meta` de l'échec de réintégration (absente : aucun échec au dernier démarrage). */
+export const REINTEGRATION_FAILURE_META = 'reintegrationFailure';
+
+/**
+ * Lignes gardées dont la réintégration a levé une erreur au dernier démarrage (« en échec », à distinguer de « en attente » d'un parent,
+ * normal et jamais signalé). Sans contenu : nombre de champs, tables du catalogue, date du dernier essai, noms d'erreur.
+ */
+export interface ReintegrationFailure {
+  readonly fields: number;
+  readonly tables: readonly string[];
+  readonly at: IsoDateTime;
+  readonly errors: readonly string[];
+}
+
+const NAME_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+
+/** Lecture stricte de la valeur gardée ; null si absente ou illisible. */
+export function parseReintegrationFailure(raw: string | null): ReintegrationFailure | null {
+  if (raw === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof value !== 'object' || value === null) return null;
+  const v = value as Record<string, unknown>;
+  const names = (x: unknown): x is string[] => Array.isArray(x) && x.every((n) => typeof n === 'string' && NAME_RE.test(n));
+  if (typeof v['fields'] !== 'number' || !Number.isSafeInteger(v['fields']) || v['fields'] < 1 || !names(v['tables']) || !names(v['errors']) || typeof v['at'] !== 'string') return null;
+  return { fields: v['fields'], tables: v['tables'], at: v['at'] as IsoDateTime, errors: v['errors'] };
+}
