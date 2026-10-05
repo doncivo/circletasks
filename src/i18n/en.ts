@@ -356,7 +356,7 @@ export const en: Messages = {
     tray: {
       open: 'Open CircleTasks',
       quickAdd: 'Quick add',
-      sync: 'Sync',
+      sync: 'Sync now',
       quit: 'Quit',
     },
   },

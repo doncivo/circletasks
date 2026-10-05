@@ -12,6 +12,9 @@ export const LATEST_RELEASE_URL = `${RELEASES_REPOSITORY_URL}/releases/latest`;
 /** Événement émis par Rust pour l'entrée « Ajout rapide » (src-tauri/src/desktop.rs, QUICK_ADD_EVENT). */
 export const QUICK_ADD_EVENT = 'desktop://quick-add';
 
+/** Événement émis par Rust pour l'entrée « Synchroniser maintenant » (src-tauri/src/desktop.rs, TRAY_SYNC_NOW_EVENT ; Y-03). */
+export const TRAY_SYNC_NOW_EVENT = 'tray-sync-now';
+
 /** Commande Rust qui reçoit les textes du menu (src-tauri/src/desktop.rs, set_tray_labels). */
 export const SET_TRAY_LABELS_COMMAND = 'set_tray_labels';
 

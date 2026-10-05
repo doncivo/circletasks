@@ -360,7 +360,7 @@ export const fr = {
     tray: {
       open: 'Ouvrir CircleTasks',
       quickAdd: 'Ajout rapide',
-      sync: 'Synchroniser',
+      sync: 'Synchroniser maintenant',
       quit: 'Quitter',
     },
   },

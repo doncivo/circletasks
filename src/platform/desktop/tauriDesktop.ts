@@ -12,6 +12,7 @@ import {
   LATEST_RELEASE_URL,
   QUICK_ADD_EVENT,
   QUITTING_EVENT,
+  TRAY_SYNC_NOW_EVENT,
   SET_QUICK_CAPTURE_COMMAND,
   SET_TRAY_LABELS_COMMAND,
 } from './releases';
@@ -69,6 +70,8 @@ export function createTauriDesktop(): DesktopPlatform {
     },
 
     onQuickAdd: async (handler) => listen(QUICK_ADD_EVENT, () => handler()),
+
+    onTraySyncNow: async (handler) => listen(TRAY_SYNC_NOW_EVENT, () => handler()),
 
     onQuitting: async (handler) =>
       listen(QUITTING_EVENT, () => {

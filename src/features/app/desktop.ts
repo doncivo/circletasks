@@ -4,18 +4,20 @@ import { quickCaptureStore } from '../shortcuts';
 import { startUpdateChecks } from '../updater/updateChecks';
 import type { AppContainer } from './container';
 import { useQuickAddStore } from './quickAdd';
+import { useNavigationStore } from './navigation';
+import { syncStore } from '../sync/syncStore';
 import { formatChord } from './shortcutsHelp';
 
 /** Textes du menu de la zone de notification (D-01) : seule source, src/i18n. */
-export function trayLabels(quickCaptureKeys: string | null = null): TrayLabels {
+export function trayLabels(quickCaptureKeys: string | null = null, syncConfigured = false): TrayLabels {
   return {
     open: t('desktop.tray.open'),
     // D-04 : la combinaison de la capture rapide s'affiche à droite de l'entrée (tabulation = colonne des raccourcis du menu Windows).
     quickAdd: quickCaptureKeys ? `${t('desktop.tray.quickAdd')}\t${formatChord(quickCaptureKeys)}` : t('desktop.tray.quickAdd'),
     sync: t('desktop.tray.sync'),
     quit: t('desktop.tray.quit'),
-    // « Synchroniser » reste grisé tant que M15 n'existe pas (Y-03, ordre 4) : à passer à vrai avec Y-03.
-    syncEnabled: false,
+    // Y-03 : synchro configurée → cycle silencieux ; sinon l'entrée ouvre Réglages › Synchronisation (D1). Jamais grisée.
+    syncEnabled: syncConfigured,
   };
 }
 
@@ -37,19 +39,42 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   let disposed = false;
   let unlisten: (() => void) | null = null;
   let unlistenQuit: (() => void) | null = null;
+  let unlistenSync: (() => void) | null = null;
+  const sync = syncStore.get(container);
+  const syncConfigured = (): boolean => sync.getState().available && sync.getState().status.phase !== 'not-configured';
 
   // D-04 : menu de la zone de notification (avec la combinaison de la capture rapide quand elle est active), puis
   // enregistrement du raccourci global ; le menu est réécrit à chaque changement de combinaison ou d'état.
   const quickCapture = quickCaptureStore.get(container);
   const pushLabels = (): void => {
     const { keys, status } = quickCapture.getState();
-    desktop.setTrayLabels(trayLabels(status === 'active' ? keys : null)).catch((error: unknown) => logDesktopFailure('tray-labels', error));
+    desktop.setTrayLabels(trayLabels(status === 'active' ? keys : null, syncConfigured())).catch((error: unknown) => logDesktopFailure('tray-labels', error));
   };
   pushLabels();
   const stopQuickCapture = quickCapture.subscribe((state, previous) => {
     if (state.keys !== previous.keys || state.status !== previous.status) pushLabels();
   });
   void quickCapture.getState().init();
+  // Y-03 : le libellé et l'effet de « Synchroniser maintenant » suivent la configuration de la synchro.
+  let lastConfigured = syncConfigured();
+  const stopSyncLabels = sync.subscribe(() => {
+    const configured = syncConfigured();
+    if (configured !== lastConfigured) {
+      lastConfigured = configured;
+      pushLabels();
+    }
+  });
+  desktop
+    .onTraySyncNow(() => {
+      // Synchro configurée : cycle silencieux (la fenêtre ne s'affiche pas) ; sinon Rust a affiché la fenêtre : Réglages › Synchronisation.
+      if (syncConfigured()) void sync.getState().syncNow('tray');
+      else useNavigationStore.getState().navigate({ tab: 'settings', screen: 'sync' });
+    })
+    .then((stop) => {
+      if (disposed) stop();
+      else unlistenSync = stop;
+    })
+    .catch((error: unknown) => logDesktopFailure('tray-sync', error));
   desktop
     .onQuickAdd(() => useQuickAddStore.getState().request())
     .then((stop) => {
@@ -62,7 +87,7 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   desktop
     .onQuitting(async () => {
       await container.data.repos.settings.get('device.id');
-      // Y-02 : dernier cycle de synchro avant de quitter, 4,5 s au plus (puis sortie quoi qu'il arrive).
+      // Y-02 : dernier cycle de synchro avant de quitter, 4,5 s au plus (Rust sort à 5 s quoi qu'il arrive).
       if (container.sync) await Promise.race([container.sync.syncNow('quit'), new Promise((resolve) => setTimeout(resolve, 4_500))]);
     })
     .then((stop) => {
@@ -78,6 +103,8 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
       disposed = true;
       unlisten?.();
       unlistenQuit?.();
+      unlistenSync?.();
+      stopSyncLabels();
       stopQuickCapture();
       checks.dispose();
     },

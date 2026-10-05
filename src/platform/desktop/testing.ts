@@ -40,6 +40,9 @@ export interface FakeDesktop extends DesktopPlatform {
   /** Déclenche « Ajout rapide » comme le fait le menu de la zone de notification. */
   emitQuickAdd(): void;
   quickAddListeners: number;
+  /** Déclenche « Synchroniser maintenant » comme le fait le menu (Y-03). */
+  emitTraySyncNow(): void;
+  traySyncListeners: number;
   /** Déclenche « Quitter » ; résout quand le handler a fini et que la sortie est confirmée. */
   emitQuitting(): Promise<void>;
   quitConfirmed: boolean;
@@ -59,6 +62,7 @@ export interface FakeDesktop extends DesktopPlatform {
 
 export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart' | 'version' | 'nextCheck'>> = {}): FakeDesktop {
   const handlers = new Set<() => void>();
+  const syncHandlers = new Set<() => void>();
   const fake: FakeDesktop = {
     trayLabels: null,
     autostart: initial.autostart ?? false,
@@ -67,6 +71,16 @@ export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart'
     checks: 0,
     openedReleases: 0,
     quickAddListeners: 0,
+    traySyncListeners: 0,
+    emitTraySyncNow: () => syncHandlers.forEach((handler) => handler()),
+    onTraySyncNow: (handler) => {
+      syncHandlers.add(handler);
+      fake.traySyncListeners = syncHandlers.size;
+      return Promise.resolve(() => {
+        syncHandlers.delete(handler);
+        fake.traySyncListeners = syncHandlers.size;
+      });
+    },
     quitConfirmed: false,
     quittingHandler: null,
     emitQuitting: async () => {

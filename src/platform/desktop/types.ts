@@ -10,7 +10,10 @@ export interface TrayLabels {
   readonly quickAdd: string;
   readonly sync: string;
   readonly quit: string;
-  /** Faux tant que la synchronisation n'existe pas (Y-03) : l'entrée « Synchroniser » est grisée. */
+  /**
+   * Synchro configurée (Y-03) : « Synchroniser maintenant » lance un cycle silencieux ; sinon l'entrée affiche la fenêtre sur
+   * Réglages › Synchronisation (D1). L'entrée n'est jamais grisée.
+   */
   readonly syncEnabled: boolean;
 }
 
@@ -81,6 +84,8 @@ export interface DesktopPlatform {
   setTrayLabels(labels: TrayLabels): Promise<void>;
   /** Entrée « Ajout rapide » du menu (D-01, critère 5). Renvoie la fonction de désabonnement. */
   onQuickAdd(handler: () => void): Promise<() => void>;
+  /** Entrée « Synchroniser maintenant » du menu (Y-03, événement `tray-sync-now`). Renvoie la fonction de désabonnement. */
+  onTraySyncNow(handler: () => void): Promise<() => void>;
   /**
    * « Quitter » du menu (D-01, critère 7) : le gestionnaire termine les écritures en cours ; la sortie
    * attend sa fin (2 s au plus côté Rust), puis l'app se ferme. Un échec du handler n'empêche pas la sortie.

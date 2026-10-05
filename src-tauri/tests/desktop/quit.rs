@@ -27,5 +27,6 @@ fn silent_front_does_not_block_the_exit_beyond_the_grace_period() {
 fn confirmation_without_pending_exit_is_ignored_and_grace_is_bounded() {
     let gate = QuitGate::default();
     gate.confirm();
-    assert!(QUIT_GRACE <= Duration::from_secs(3));
+    // Y-02 : 5 s au plus pour le dernier cycle de synchro, puis sortie quoi qu'il arrive.
+    assert!(QUIT_GRACE <= Duration::from_secs(5));
 }

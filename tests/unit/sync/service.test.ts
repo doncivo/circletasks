@@ -88,6 +88,10 @@ describe('service (Y-02 critère 1, Y-03 critère 3)', () => {
     release();
     await Promise.all([first, ...extra]);
     expect(scans).toBe(2);
+    // Y-03 critère 7 : chaque appel journalise sa raison, sans contenu ni chemin.
+    await a.service.syncNow('tray');
+    expect(a.logger.entries.filter((e) => e.event === 'sync-now').map((e) => e.detail)).toContainEqual({ reason: 'tray' });
+    expect(JSON.stringify(a.logger.entries)).not.toMatch(/iCloud Drive|\\\\|\//);
     vi.spyOn(a.platform, 'scan').mockRejectedValue(new Error('panne'));
     await expect(a.service.syncNow('manual')).resolves.toBeUndefined();
     expect(a.service.status().phase).toBe('error');

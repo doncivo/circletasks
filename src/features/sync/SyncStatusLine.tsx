@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { SyncNowButton } from './SyncNowButton';
 import { syncStore } from './syncStore';
 import { isTroublePhase, statusLine } from './syncText';
 import './SyncDetailsScreen.css';
@@ -36,6 +37,7 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
             {t('sync.status.details')}
           </button>
         )}
+        <SyncNowButton />
       </div>
     </div>
   );
