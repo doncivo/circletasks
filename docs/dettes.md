@@ -38,6 +38,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 
 ## Ordre 4 (synchro)
 
+Réponses de l'architecte : ADR 0011, section 8 (données exclues et cas particuliers) et section 9 (règles de l'ADR 0010). Ces dettes sont soldées par l'implémentation des lots Y1 à Y3, pas par l'ADR.
+
 - focus_session : une seule session active garantie par le code seulement ; à la fusion de synchro, clore la plus ancienne si deux sessions sont ouvertes.
 - Exclure `search_index` et `search_index_doc` des journaux de synchro (RC-01 : index local reconstruit sur chaque appareil).
 - Lister dans l'ADR de synchro les colonnes locales, non synchronisées : `task.discarded`, `external_event` (sans colonnes de synchro) et les réglages de portée locale.
