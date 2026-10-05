@@ -23,8 +23,11 @@ pub const MINIMIZED_ARG: &str = "--minimized";
 pub const QUICK_ADD_EVENT: &str = "desktop://quick-add";
 /// Événement envoyé au front avant de quitter : il termine ses écritures puis appelle `confirm_quit`.
 pub const QUITTING_EVENT: &str = "desktop://quitting";
-/// Attente maximale de la confirmation du front avant de quitter malgré tout.
-pub const QUIT_GRACE: Duration = Duration::from_secs(2);
+/// Événement envoyé à la fenêtre principale par l'entrée « Synchroniser maintenant » (Y-03, critère 4).
+pub const TRAY_SYNC_NOW_EVENT: &str = "tray-sync-now";
+/// Attente maximale de la confirmation du front avant de quitter malgré tout : le dernier cycle de synchro a 5 s au plus
+/// (ADR 0011 section 10.1, Y-02 critère 1), puis la sortie a lieu quoi qu'il arrive.
+pub const QUIT_GRACE: Duration = Duration::from_secs(5);
 /// Identifiant de l'icône de la zone de notification.
 pub const TRAY_ID: &str = "main-tray";
 /// Info-bulle de l'icône : nom du produit, identique dans toutes les langues.
@@ -38,7 +41,7 @@ pub fn fallback_labels() -> TrayLabels {
     TrayLabels {
         open: "Ouvrir CircleTasks".to_owned(),
         quick_add: "Ajout rapide".to_owned(),
-        sync: "Synchroniser".to_owned(),
+        sync: "Synchroniser maintenant".to_owned(),
         quit: "Quitter".to_owned(),
         sync_enabled: false,
     }
@@ -65,7 +68,8 @@ pub struct TrayLabels {
     pub sync: String,
     /// « Quitter ».
     pub quit: String,
-    /// Faux tant que la synchronisation n'existe pas (Y-03) : l'entrée est grisée.
+    /// Vrai si la synchronisation est configurée (Y-03) : l'entrée lance un cycle silencieux ; faux : elle ouvre la fenêtre
+    /// principale sur Réglages › Synchronisation (D1). L'entrée n'est jamais grisée.
     pub sync_enabled: bool,
 }
 
@@ -104,16 +108,49 @@ pub enum TrayEntry {
     Separator,
 }
 
-/// Disposition du menu (D-01, critère 3) : Ouvrir, Ajout rapide, Synchroniser, séparateur, Quitter.
+/// Disposition du menu (D-01, critère 3) : Ouvrir, Ajout rapide, Synchroniser maintenant, séparateur, Quitter. Toutes les entrées
+/// sont actives (Y-03 D1 : sans synchro configurée, « Synchroniser maintenant » guide vers Réglages au lieu d'être grisée).
 pub fn menu_layout(labels: &TrayLabels) -> Vec<TrayEntry> {
     let item = |action, label: &str, enabled| TrayEntry::Item { action, label: label.to_owned(), enabled };
     vec![
         item(TrayAction::Open, &labels.open, true),
         item(TrayAction::QuickAdd, &labels.quick_add, true),
-        item(TrayAction::Sync, &labels.sync, labels.sync_enabled),
+        item(TrayAction::Sync, &labels.sync, true),
         TrayEntry::Separator,
         item(TrayAction::Quit, &labels.quit, true),
     ]
+}
+
+/// Effet de « Synchroniser maintenant » (Y-03, critères 4 et 5).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyncTrayEffect {
+    /// Synchro configurée : événement `tray-sync-now` seul, la fenêtre reste où elle est (cycle silencieux).
+    Silent,
+    /// Synchro non configurée : la fenêtre principale s'affiche, le front ouvre Réglages › Synchronisation (D1).
+    ShowSettings,
+}
+
+/// Effet de l'entrée selon l'état connu du front (`sync_enabled` reçu par `set_tray_labels`).
+pub fn sync_tray_effect(sync_configured: bool) -> SyncTrayEffect {
+    if sync_configured {
+        SyncTrayEffect::Silent
+    } else {
+        SyncTrayEffect::ShowSettings
+    }
+}
+
+/// Dernier état « synchro configurée » reçu du front (géré par Tauri, mis à jour par `set_tray_labels`).
+#[derive(Default)]
+pub struct TraySyncState(Mutex<bool>);
+
+impl TraySyncState {
+    pub fn set(&self, configured: bool) {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner()) = configured;
+    }
+
+    pub fn get(&self) -> bool {
+        *self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
 }
 
 /// Vrai si le lancement demande une fenêtre masquée (démarrage avec Windows, D-02).
@@ -158,8 +195,14 @@ fn run_action(app: &AppHandle, action: TrayAction) {
         TrayAction::Open => show_main_window(app),
         // Q-01 : « Ajout rapide » ouvre la mini-fenêtre ; sans elle, repli sur Aujourd'hui (capture::trigger).
         TrayAction::QuickAdd => crate::capture::trigger(app),
-        // Grisée tant que la synchronisation n'existe pas (Y-03) : rien à faire.
-        TrayAction::Sync => {}
+        // Y-03 : la fenêtre principale lance `syncNow('tray')` ; sans synchro configurée, elle s'affiche sur Réglages.
+        TrayAction::Sync => {
+            let configured = app.try_state::<TraySyncState>().map(|state| state.get()).unwrap_or(false);
+            if sync_tray_effect(configured) == SyncTrayEffect::ShowSettings {
+                show_main_window(app);
+            }
+            let _ = app.emit_to(MAIN_WINDOW, TRAY_SYNC_NOW_EVENT, ());
+        }
         // Quitter : le front termine ses écritures en cours (attente bornée), puis `exit` déclenche
         // `RunEvent::Exit`, où tauri-plugin-sql ferme ses connexions.
         TrayAction::Quit => quit_gracefully(app),
@@ -247,6 +290,9 @@ pub fn set_tray_labels(app: AppHandle, labels: TrayLabels) -> Result<(), Command
         code: "tray-unavailable",
         message: "icône de la zone de notification introuvable".to_owned(),
     })?;
+    if let Some(state) = app.try_state::<TraySyncState>() {
+        state.set(labels.sync_enabled);
+    }
     let menu = build_menu(&app, &labels).map_err(|e| CommandError { code: "menu", message: e.to_string() })?;
     tray.set_menu(Some(menu)).map_err(|e| CommandError { code: "menu", message: e.to_string() })
 }
@@ -345,6 +391,7 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
                 return Err(abort_startup_after_failed_recovery("window-failed", &app.config().identifier));
             }
             app.manage(QuitGate::default());
+            app.manage(TraySyncState::default());
             crate::shortcut::manage(app.handle());
             // Q-01 : mini-fenêtre créée masquée ; un échec n'empêche pas l'app de démarrer (repli sur Aujourd'hui).
             if let Err(error) = crate::capture::setup(app.handle()) {

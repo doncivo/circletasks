@@ -86,6 +86,8 @@ export const STATE_REFRESH_MS = 30 * 60_000;
 /** Déclenchement (section 10.1) et appairage (section 10.3). */
 export const SYNC_INTERVAL_MS = 5 * 60_000;
 export const QUIT_SYNC_BUDGET_MS = 5_000;
+/** Budget du dernier cycle dans le gestionnaire « Quitter » du PC : 4,5 s, la confirmation part avant la sortie forcée de Rust (5 s). */
+export const QUIT_HANDLER_SYNC_MS = 4_500;
 export const PAIRING_VALIDITY_MS = 5 * 60_000;
 export const PAIRING_CLOCK_TOLERANCE_MS = 2 * 60_000;
 export const PAIRING_RESCAN_MS = 10_000;

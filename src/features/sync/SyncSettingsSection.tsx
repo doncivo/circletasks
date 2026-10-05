@@ -4,6 +4,10 @@ import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderI
 import { Button, ChoiceDialog } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
+import { SyncStatusLine } from './SyncStatusLine';
+import { folderLabel } from './syncText';
+
+export { folderLabel };
 import './SyncSettingsSection.css';
 
 /** Une plateforme par conteneur : le dossier choisi en mémoire (navigateur de développement) survit à la navigation. */
@@ -72,12 +76,6 @@ async function readView(platform: SyncPlatform): Promise<View> {
   }
 }
 
-/** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */
-export function folderLabel(info: SyncFolderInfo | null): string {
-  if (!info?.label) return t('sync.folder.rowLabel');
-  return info.kind === 'icloud' ? t('sync.folder.icloudLabel', { name: info.label }) : info.label;
-}
-
 /**
  * Section « SYNCHRONISATION » de Réglages (Reglages.html ; Y-01 critères 1, 2, 5, 10, 17 à 19 ; Y-08). Sans dossier : « Non
  * configurée » et « Choisir le dossier » (boîte système ouverte par Rust). Dossier lié : son libellé (jamais un chemin) et, en
@@ -88,7 +86,8 @@ export function folderLabel(info: SyncFolderInfo | null): string {
  */
 export function SyncSettingsSection({ platform: injected }: { readonly platform?: SyncPlatform }) {
   const container = useAppContainer();
-  const platform = injected ?? platformOf(container);
+  // Même plateforme que le service de synchro (conteneur), pour que le cycle voie le dossier et la clé choisis ici.
+  const platform = injected ?? container.syncPlatform ?? platformOf(container);
   const available = platform.available();
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
@@ -127,6 +126,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       }
       await platform.bindDevice(container.hlc.deviceId);
       setView({ kind: 'bound', info, needsPairing });
+      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes.
+      if (!needsPairing) void container.sync?.syncNow('open');
     } catch (error) {
       // Dossier refusé par le contrôle : rien n'a été lié, « Choisir le dossier » reste proposé ; un dossier lié puis un échec de
       // clé ou de liaison : « Oublier » (revue 6).
@@ -183,8 +184,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       {view.kind === 'bound' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
-            {folderLabel(view.info)}
-            {view.needsPairing ? (
+            {container.sync && !view.needsPairing ? <SyncStatusLine /> : folderLabel(view.info)}
+            {container.sync && !view.needsPairing ? null : view.needsPairing ? (
               <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
                 {t('sync.key.needsPairing')}
               </span>

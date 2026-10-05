@@ -240,8 +240,9 @@ fn make_search_db(path: &Path, tasks: &[&str]) {
          CREATE TABLE search_index_doc (id INTEGER PRIMARY KEY, type TEXT NOT NULL, ref_id TEXT NOT NULL, UNIQUE (type, ref_id));",
     )
     .unwrap();
-    for (_, table, sql) in REFERENCE_TRIGGERS {
-        if table == "task" {
+    // Déclencheurs de recherche seulement : ceux de la synchro (`sync_*`, migration 0015) supposent ses tables.
+    for (name, table, sql) in REFERENCE_TRIGGERS {
+        if table == "task" && name.starts_with("search_") {
             conn.execute_batch(sql).unwrap();
         }
     }

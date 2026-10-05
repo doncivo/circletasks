@@ -23,7 +23,8 @@ const forbidLayers = (files, layers, message) => ({
       'error',
       {
         patterns: [
-          { group: layers.flatMap(layer), message },
+          // src/domain/sync est du domaine pur (ADR 0011, section 0) : le dossier « sync » de la couche domain n'est pas la couche src/sync.
+          { group: [...layers.flatMap(layer), '!**/domain/sync', '!**/domain/sync/**'], message },
           { group: ['@tauri-apps/*'], message: 'Les API Tauri ne s’importent que dans src/platform (ADR 0001).' },
           ON_DEMAND_PATTERN,
         ],

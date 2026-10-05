@@ -102,6 +102,7 @@ export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders
 export const HolidaySettingsScreen = lazyScreen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })));
 export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })));
 export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })));
+export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })));
 export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })));
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */

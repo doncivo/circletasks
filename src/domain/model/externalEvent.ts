@@ -18,6 +18,11 @@ export interface CalendarAccount extends SyncMeta {
   /** Nom affiché de la source (« Google Agenda », « iCloud »). */
   readonly label: string;
   readonly tokenRef: string;
+  /**
+   * Identifiant Apple d'un compte iCloud (nom d'utilisateur de l'authentification Basic), colonne **locale** jamais publiée par la
+   * synchro (ADR 0011 section 8, migration 0017) ; vide pour Google et pour un compte reçu d'un autre appareil (à reconnecter).
+   */
+  readonly username: string;
   readonly calendars: readonly CalendarRef[];
 }
 

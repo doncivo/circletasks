@@ -38,13 +38,13 @@ describe('intégration PC de la coquille (D-01)', () => {
     await db.close();
   });
 
-  it('le menu reçoit les textes français de src/i18n, « Synchroniser » grisé tant que M15 n’existe pas (critères 3 et 6)', async () => {
+  it('le menu reçoit les textes français de src/i18n ; sans synchro configurée, « Synchroniser maintenant » guide vers Réglages (critères 3 et 6, Y-03)', async () => {
     const integration = startDesktopIntegration(container);
     await vi.waitFor(() => expect(desktop.trayLabels).not.toBeNull());
     expect(desktop.trayLabels).toEqual({
       open: 'Ouvrir CircleTasks',
       quickAdd: 'Ajout rapide',
-      sync: 'Synchroniser',
+      sync: 'Synchroniser maintenant',
       quit: 'Quitter',
       syncEnabled: false,
     });

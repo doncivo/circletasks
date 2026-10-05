@@ -235,6 +235,7 @@ interface CalendarAccountRow extends SqlRow, SyncRow {
   readonly provider: string;
   readonly label: string;
   readonly token_ref: string;
+  readonly username: string;
   readonly calendars: string;
 }
 
@@ -244,6 +245,7 @@ function rowToAccount(row: CalendarAccountRow): CalendarAccount {
     provider: row.provider as CalendarProviderKind,
     label: row.label,
     tokenRef: row.token_ref,
+    username: row.username,
     calendars: parseCalendars(row.calendars),
     ...readSyncMeta(row),
   };
@@ -270,9 +272,9 @@ export function createCalendarAccountRepository(db: SqlExecutor, stamper: WriteS
     async create(account) {
       const stamp = stamper.next();
       await db.execute(
-        `INSERT INTO calendar_account (id, provider, label, token_ref, calendars, created_at, updated_at, deleted_at, device_id, hlc)
-         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-        [account.id, account.provider, account.label, account.tokenRef, encodeCalendars(account.calendars), stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
+        `INSERT INTO calendar_account (id, provider, label, token_ref, username, calendars, created_at, updated_at, deleted_at, device_id, hlc)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+        [account.id, account.provider, account.label, account.tokenRef, account.username ?? '', encodeCalendars(account.calendars), stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
       );
       return requireMapped(await fetchRow(account.id), 'calendar_account', account.id, rowToAccount);
     },
@@ -289,6 +291,13 @@ export function createCalendarAccountRepository(db: SqlExecutor, stamper: WriteS
       const stamp = stamper.next();
       await db.execute('UPDATE calendar_account SET deleted_at = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ? AND deleted_at IS NULL', [stamp.at, stamp.at, stamp.deviceId, stamp.hlc, id]);
       return requireMapped(await fetchRow(id, true), 'calendar_account', id, rowToAccount);
+    },
+
+    async setLocalCredentials(id, credentials) {
+      requireRow(await fetchRow(id), 'calendar_account', id);
+      // Colonnes locales seulement, sans tampon : hlc inchangé, rien n'entre dans la file d'envoi.
+      await db.execute('UPDATE calendar_account SET username = ?, token_ref = ? WHERE id = ? AND deleted_at IS NULL', [credentials.username, credentials.tokenRef, id]);
+      return requireMapped(await fetchRow(id), 'calendar_account', id, rowToAccount);
     },
   };
 }

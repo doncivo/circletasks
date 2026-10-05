@@ -6,6 +6,7 @@ import type { DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
 import { createUnavailableBackup, type BackupService } from '../../platform/backup';
+import type { SyncEngineService, SyncPlatform } from '../../platform/sync/types';
 import { createUnavailableFiles, type FileService } from '../../platform/files';
 import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
@@ -46,6 +47,13 @@ export interface AppContainer {
   readonly files: FileService;
   /** Sauvegardes locales (P-04) : quotidienne, liste, restauration ; commandes Rust sur PC, mémoire en développement, indisponible sur iPhone. */
   readonly backups: BackupService;
+  /**
+   * Synchronisation par iCloud Drive (ADR 0011, lot Y2) ; null sans plateforme de synchro (navigateur de dev sans simulateur,
+   * tests, iPhone avant l'ordre 5) : aucun coût ni écran.
+   */
+  readonly sync: SyncEngineService | null;
+  /** Plateforme de synchro du service (`openSyncPlatform`), partagée avec la section Réglages ; null sans synchro. */
+  readonly syncPlatform: SyncPlatform | null;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -67,6 +75,8 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     soundPlayer: parts.soundPlayer ?? null,
     files: parts.files ?? createUnavailableFiles(),
     backups: parts.backups ?? createUnavailableBackup(),
+    sync: parts.sync ?? null,
+    syncPlatform: parts.syncPlatform ?? null,
   };
 }
 

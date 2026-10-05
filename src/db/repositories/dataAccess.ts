@@ -10,6 +10,7 @@ import type { StatsRepository } from './statsRepository';
 import type { ReminderRepository } from './reminderRepository';
 import type { RoutineLogRepository, RoutineRepository } from './routineRepository';
 import type { SettingsRepository, SyncMetaRepository } from './settingsRepository';
+import type { SyncRepository } from './syncRepository';
 import type { ProjectRepository, SpaceRepository } from './spaceRepository';
 import type { RecurrenceRepository, TaskRepository } from './taskRepository';
 
@@ -34,6 +35,8 @@ export interface Repositories {
   readonly externalEvents: ExternalEventRepository;
   readonly calendarAccounts: CalendarAccountRepository;
   readonly syncMeta: SyncMetaRepository;
+  /** Tables de la synchronisation (ADR 0011, lot Y2). */
+  readonly sync: SyncRepository;
 }
 
 /**

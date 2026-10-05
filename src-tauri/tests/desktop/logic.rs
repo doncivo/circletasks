@@ -1,7 +1,8 @@
 //! Logique pure de la zone de notification et du démarrage réduit (D-01, D-02).
 
 use circletasks_lib::desktop::{
-    fallback_labels, hides_on_close, is_minimized_launch, menu_layout, TrayAction, TrayEntry, TrayLabels, MAIN_WINDOW,
+    fallback_labels, hides_on_close, is_minimized_launch, menu_layout, sync_tray_effect, SyncTrayEffect, TrayAction, TrayEntry, TrayLabels, TraySyncState,
+    MAIN_WINDOW, TRAY_SYNC_NOW_EVENT,
 };
 
 fn labels(sync_enabled: bool) -> TrayLabels {
@@ -28,22 +29,31 @@ fn menu_order_matches_story() {
 }
 
 #[test]
-fn sync_is_greyed_until_enabled() {
-    let enabled_of = |l: &TrayLabels| match &menu_layout(l)[2] {
-        TrayEntry::Item { enabled, .. } => *enabled,
-        TrayEntry::Separator => unreachable!(),
-    };
-    assert!(!enabled_of(&labels(false)));
-    assert!(enabled_of(&labels(true)));
+fn sync_now_is_never_greyed() {
+    // Y-03 D1 : sans synchro configurée, l'entrée reste active et guide vers Réglages.
+    for configured in [false, true] {
+        for entry in menu_layout(&labels(configured)) {
+            if let TrayEntry::Item { action, enabled, .. } = entry {
+                assert!(enabled, "{action:?}");
+            }
+        }
+    }
 }
 
 #[test]
-fn only_sync_can_be_greyed() {
-    for entry in menu_layout(&labels(false)) {
-        if let TrayEntry::Item { action, enabled, .. } = entry {
-            assert_eq!(enabled, action != TrayAction::Sync, "{action:?}");
-        }
-    }
+fn sync_now_label_comes_from_the_front() {
+    assert_eq!(menu_layout(&labels(true))[2], TrayEntry::Item { action: TrayAction::Sync, label: "Synchro".into(), enabled: true });
+}
+
+#[test]
+fn sync_now_is_silent_when_configured_and_opens_settings_otherwise() {
+    assert_eq!(sync_tray_effect(true), SyncTrayEffect::Silent);
+    assert_eq!(sync_tray_effect(false), SyncTrayEffect::ShowSettings);
+    assert_eq!(TRAY_SYNC_NOW_EVENT, "tray-sync-now");
+    let state = TraySyncState::default();
+    assert!(!state.get());
+    state.set(true);
+    assert!(state.get());
 }
 
 #[test]
@@ -54,9 +64,10 @@ fn labels_come_from_the_front() {
 }
 
 #[test]
-fn fallback_labels_are_complete_and_keep_sync_greyed() {
+fn fallback_labels_are_complete_and_assume_sync_not_configured() {
     let fallback = fallback_labels();
     assert!([&fallback.open, &fallback.quick_add, &fallback.sync, &fallback.quit].iter().all(|l| !l.is_empty()));
+    assert_eq!(fallback.sync, "Synchroniser maintenant");
     assert!(!fallback.sync_enabled);
 }
 

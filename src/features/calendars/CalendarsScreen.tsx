@@ -1,3 +1,4 @@
+import { accountDisplayName } from './accountName';
 import { Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import type { CalendarAccountState } from '../../domain/calendarRefresh';
@@ -36,13 +37,14 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
   const providerName = t(account.provider === 'google' ? 'calendars.providerGoogle' : 'calendars.providerIcloud');
   const reconnect = state?.kind === 'reconnect-required';
   const spaceOptions = spaces.map((space) => ({ value: space.id, label: space.name }));
+  const name = accountDisplayName(account);
   const update = (id: string, patch: Partial<CalendarRef>): void => onChange(account.calendars.map((calendar) => (calendar.id === id ? { ...calendar, ...patch } : calendar)));
   return (
-    <section className="ct-calendars__card" aria-label={`${providerName} · ${account.label}`}>
+    <section className="ct-calendars__card" aria-label={`${providerName} · ${name}`}>
       <div className="ct-calendars__cardHead">
         <div className="ct-calendars__identity">
           <span className="ct-calendars__provider">{providerName}</span>
-          <span className="ct-calendars__label">{account.label}</span>
+          <span className="ct-calendars__label">{name}</span>
         </div>
         <span className="ct-calendars__state" data-state={state?.kind ?? 'connected'}>
           {t(stateLabelKey(state))}
@@ -51,14 +53,14 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
       <span className="ct-calendars__updated">{formatUpdated(state?.lastSuccessAt ?? null, nowMs)}</span>
       <div className="ct-calendars__actions">
         {reconnect && (
-          <Button ariaLabel={t('calendars.reconnectLabel', { label: account.label })} onClick={onReconnect}>
+          <Button ariaLabel={t('calendars.reconnectLabel', { label: name })} onClick={onReconnect}>
             {t('calendars.reconnect')}
           </Button>
         )}
-        <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: account.label })} onClick={onRefresh}>
+        <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: name })} onClick={onRefresh}>
           {refreshing ? t('calendars.refreshing') : t('calendars.refresh')}
         </Button>
-        <Button variant="secondary" ariaLabel={t('calendars.removeLabel', { label: account.label })} onClick={onRemove}>
+        <Button variant="secondary" ariaLabel={t('calendars.removeLabel', { label: name })} onClick={onRemove}>
           {t('calendars.remove')}
         </Button>
       </div>
@@ -173,10 +175,10 @@ export function CalendarsScreen() {
           <IcloudForm
             key={icloudForm.accountId ?? 'new'}
             initialUsername={icloudForm.username}
-            usernameLocked={icloudForm.accountId !== null}
+            usernameLocked={icloudForm.accountId !== null && icloudForm.username !== ''}
             onCancel={() => store.getState().closeIcloudForm()}
             onSubmit={async (username, password) => {
-              const outcome = icloudForm.accountId === null ? await store.getState().connectIcloud(username, password) : await store.getState().reconnectIcloud(icloudForm.accountId, password);
+              const outcome = icloudForm.accountId === null ? await store.getState().connectIcloud(username, password) : await store.getState().reconnectIcloud(icloudForm.accountId, password, username);
               return outcome.ok ? null : FAILURE_KEYS[outcome.failure];
             }}
           />
@@ -185,7 +187,7 @@ export function CalendarsScreen() {
       {removing && (
         <ConfirmDialog
           title={t('calendars.removeTitle')}
-          description={t('calendars.removeBody', { label: removing.label })}
+          description={t('calendars.removeBody', { label: accountDisplayName(removing) })}
           confirmLabel={t('calendars.removeConfirm')}
           cancelLabel={t('calendars.removeCancel')}
           onCancel={() => setRemoving(null)}

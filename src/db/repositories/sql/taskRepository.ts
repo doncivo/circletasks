@@ -521,7 +521,13 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       const expired = await db.select<{ id: string }>('SELECT id FROM task WHERE deleted_at IS NOT NULL AND deleted_at < ?', [before]);
       if (expired.length === 0) return 0;
       const { sql, params } = inClause(expired.map((row) => asEntityId<TaskId>(row.id)));
+      // Sans synchro configurée (T-08, inchangée) : les horloges de champ et entrées de file des lignes purgées disparaissent avec elles
+      // (ADR 0011 section 5.4 ; avec synchro, la purge passe par la règle des traces, src/sync/maintenance.ts).
+      await db.execute(`DELETE FROM sync_field_clock WHERE table_name = 'reminder' AND row_id IN (SELECT id FROM reminder WHERE target_type = 'task' AND target_id IN ${sql})`, params);
+      await db.execute(`DELETE FROM sync_outbox WHERE table_name = 'reminder' AND row_id IN (SELECT id FROM reminder WHERE target_type = 'task' AND target_id IN ${sql})`, params);
       await db.execute(`DELETE FROM reminder WHERE target_type = 'task' AND target_id IN ${sql}`, params);
+      await db.execute(`DELETE FROM sync_field_clock WHERE table_name = 'task' AND row_id IN ${sql}`, params);
+      await db.execute(`DELETE FROM sync_outbox WHERE table_name = 'task' AND row_id IN ${sql}`, params);
       await db.execute(`DELETE FROM task WHERE id IN ${sql}`, params);
       return expired.length;
     },

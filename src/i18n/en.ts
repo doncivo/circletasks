@@ -16,6 +16,7 @@ import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
 import { onboardingEn } from './en.onboarding';
+import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
 import { syncFolderEn, syncKeyEn } from './en.syncFolder';
 
@@ -52,6 +53,7 @@ export const en: Messages = {
   stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
+  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn },
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',
@@ -355,7 +357,7 @@ export const en: Messages = {
     tray: {
       open: 'Open CircleTasks',
       quickAdd: 'Quick add',
-      sync: 'Sync',
+      sync: 'Sync now',
       quit: 'Quit',
     },
   },
@@ -617,7 +619,6 @@ export const en: Messages = {
   backup: backupEn,
   importCsv: importCsvEn,
   onboarding: onboardingEn,
-  sync: { folder: syncFolderEn, key: syncKeyEn },
   shortcuts: {
     quickCapture: 'Quick capture',
     newTask: 'New task',

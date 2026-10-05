@@ -9,6 +9,7 @@
  */
 
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
+import type { RestoreOption } from '../../domain/sync/epoch';
 import {
   isSyncErrorCode,
   type EpochId,
@@ -321,12 +322,22 @@ export interface SyncDeviceStatus {
 export interface SyncStatus {
   readonly phase: SyncPhase;
   readonly lastSyncAt: IsoDateTime | null;
+  /** Nom du dossier (`SyncFolderInfo.label`, jamais un chemin) ; le libellé affiché est composé par l'interface avec `folderKind`. */
   readonly folderLabel: string | null;
+  /** Nature du dossier (`SyncFolderInfo.kind`) : « iCloud Drive / <nom> » pour `icloud`. Ajout du lot Y2 (fusion avec Y1), facultatif. */
+  readonly folderKind?: SyncFolderInfo['kind'] | null;
   readonly devices: readonly SyncDeviceStatus[];
   readonly pendingFiles: readonly string[];
   readonly conflictsThisWeek: number;
   /** Nouvel appareil (Y-06) : enregistrements lus / total. */
   readonly progress: { readonly done: number; readonly total: number } | null;
+  /**
+   * Code de la dernière erreur de cycle (phase `error`, ou `waiting-icloud` causé par `cloud-pending`) : choisit le texte explicite de
+   * la ligne de Réglages (Y-05 critère 2). Ajout du lot Y2, facultatif.
+   */
+  readonly errorCode?: SyncErrorCode | null;
+  /** Appareil dont l'horloge est en avance (phase `clock-ahead`, Y-09 critère 10). Ajout du lot Y2, facultatif. */
+  readonly clockAheadDevice?: DeviceId | null;
 }
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';
@@ -345,3 +356,36 @@ export interface SyncService {
   onRemoteChanges(listener: (c: RemoteChanges) => void): () => void;
   chooseRestoreOption(option: 'apply-everywhere' | 'keep-synced'): Promise<void>;
 }
+
+/**
+ * Service de synchro tel que le conteneur l'expose (`AppContainer.sync`) : `SyncService` et la fenêtre de choix après restauration.
+ * Défini ici (couche platform) pour que le conteneur, les stores et leurs faux n'importent jamais `src/sync` (avenant « Amorce »
+ * point 7) ; implémenté par `src/sync/service.ts`.
+ */
+export interface SyncEngineService extends SyncService {
+  /** Options de la fenêtre de choix après restauration (null : pas de marqueur). */
+  restoreContext(): Promise<RestoreContext | null>;
+  /** Cycle en cours (tests, budget de « Quitter »). */
+  readonly running: () => Promise<void> | null;
+}
+
+/** Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9). */
+export interface RestoreContext {
+  readonly marker: RestoreMarker;
+  /** Options proposées (règle 4 : seulement « Appliquer partout » si une suppression postérieure a déjà été purgée). */
+  readonly options: readonly RestoreOption[];
+}
+
+/** État avant le premier cycle (et sans synchro) : non configurée, rien de connu. */
+export const INITIAL_STATUS: SyncStatus = {
+  phase: 'not-configured',
+  lastSyncAt: null,
+  folderLabel: null,
+  folderKind: null,
+  devices: [],
+  pendingFiles: [],
+  conflictsThisWeek: 0,
+  progress: null,
+  errorCode: null,
+  clockAheadDevice: null,
+};

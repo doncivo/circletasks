@@ -10,6 +10,7 @@ import { createStatsRepository } from './statsRepository';
 import { createRoutineLogRepository, createRoutineRepository } from './routineRepository';
 import { createSettingsRepository, createSyncMetaRepository } from './settingsRepository';
 import { createProjectRepository, createSpaceRepository } from './spaceRepository';
+import { createSyncRepository } from './syncRepository';
 import { createRecurrenceRepository, createTaskRepository } from './taskRepository';
 
 /**
@@ -37,4 +38,5 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   externalEvents: createExternalEventRepository(executor),
   calendarAccounts: createCalendarAccountRepository(executor, stamper),
   syncMeta: createSyncMetaRepository(executor),
+  sync: createSyncRepository(executor, stamper),
 });

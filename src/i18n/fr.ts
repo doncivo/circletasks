@@ -16,6 +16,7 @@ import { shortcutsUiFr } from './fr.shortcuts';
 import { backupFr } from './fr.backup';
 import { importCsvFr } from './fr.importCsv';
 import { onboardingFr } from './fr.onboarding';
+import { syncEngineFr } from './fr.syncEngine';
 import { syncFolderFr, syncKeyFr } from './fr.syncFolder';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
@@ -55,6 +56,8 @@ export const fr = {
   stats: statsFr,
   appearance: appearanceFr,
   calendars: calendarsFr,
+  // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1.
+  sync: { ...syncEngineFr, folder: syncFolderFr, key: syncKeyFr },
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',
@@ -358,7 +361,7 @@ export const fr = {
     tray: {
       open: 'Ouvrir CircleTasks',
       quickAdd: 'Ajout rapide',
-      sync: 'Synchroniser',
+      sync: 'Synchroniser maintenant',
       quit: 'Quitter',
     },
   },
@@ -620,7 +623,6 @@ export const fr = {
   backup: backupFr,
   importCsv: importCsvFr,
   onboarding: onboardingFr,
-  sync: { folder: syncFolderFr, key: syncKeyFr },
   shortcuts: {
     quickCapture: 'Capture rapide',
     newTask: 'Nouvelle tâche',

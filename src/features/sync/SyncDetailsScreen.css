@@ -1,0 +1,77 @@
+/* Synchronisation (Y-02, Y-03) : lignes de Réglages, sans élément visuel nouveau (maquettes Reglages.html et Synchro.html). */
+.ct-sync__topRow {
+  display: flex;
+  align-items: center;
+}
+
+.ct-sync__back {
+  border: 0;
+  background: none;
+  color: inherit;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.ct-sync__line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.ct-sync__lineText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ct-sync__sub {
+  font-size: 13px;
+  color: var(--ct-color-achieved-text);
+}
+
+.ct-sync__sub[data-trouble='true'] {
+  color: var(--ct-color-icon-red);
+}
+
+.ct-sync__lineActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ct-sync__details {
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ct-sync__devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ct-sync__device {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.ct-sync__deviceRead {
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+.ct-sync__deviceState {
+  margin-left: auto;
+}
+
+.ct-sync__progress {
+  font-size: 13px;
+}

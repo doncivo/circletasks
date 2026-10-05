@@ -66,6 +66,7 @@ import {
   type SyncFolderInfo,
   type SyncPlatform,
 } from './types';
+import { parsePublishedStateText } from '../../domain/sync/parse';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -665,13 +666,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (file.partialTail) return { kid: h.kid, state: null, status: 'cloud-pending' };
     const line = file.lines[0];
     if (!line || file.lines.length !== 1 || line.corrupt) return { kid: h.kid, state: null, status: 'corrupt' };
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(line.text);
-    } catch {
-      return { kid: h.kid, state: null, status: 'corrupt' };
-    }
-    const state = publishedStateFromJson(parsed);
+    // Analyse stricte du texte (parse.ts : clés répétées et nombres non entiers refusés comme serde, clés interdites).
+    const state = parsePublishedStateText(line.text);
     if (!state || state.deviceId !== deviceId || state.epoch !== h.e || state.stateSeq !== h.n || state.sm !== line.sm || state.sv !== line.sv) {
       return { kid: h.kid, state: null, status: 'corrupt' };
     }
