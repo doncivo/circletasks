@@ -102,8 +102,18 @@ function captureTriggers(table: string, key: string, columns: readonly string[])
     `DELETE FROM sync_outbox WHERE ${row} AND field = '${column}' AND OLD.${column} IS NOT NEW.${column};`,
     `INSERT INTO sync_outbox (table_name, row_id, field) SELECT '${table}', NEW.${key}, '${column}' WHERE OLD.${column} IS NOT NEW.${column};`,
   ]);
+  // Restauration (deleted_at non nul → nul) : la ligne entière repart (entrée « + »), car un autre appareil a pu la purger entre-temps
+  // (Y-09, restauration hors ligne contre purge) ; il ne peut la recréer qu'avec toutes ses colonnes.
+  const restore = columns.includes('deleted_at')
+    ? [
+        `DELETE FROM sync_outbox WHERE ${row} AND field = '+' AND OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;`,
+        `INSERT INTO sync_outbox (table_name, row_id, field) SELECT '${table}', NEW.${key}, '+' WHERE OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL;`,
+      ]
+    : [];
   return [
+    // Recréation locale d'un identifiant purgé (jour de routine recoché) : sa propre trace est retirée dans la même transaction.
     `CREATE TRIGGER sync_${table}_ai AFTER INSERT ON ${table} WHEN ${UNGUARDED}${shared} BEGIN
+       DELETE FROM sync_tombstone WHERE ${row};
        DELETE FROM sync_outbox WHERE ${row} AND field = '*';
        INSERT INTO sync_outbox (table_name, row_id, field) VALUES ('${table}', NEW.${key}, '*');
      END`,
@@ -111,7 +121,7 @@ function captureTriggers(table: string, key: string, columns: readonly string[])
        INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc)
          SELECT '${table}', NEW.${key}, '*', OLD.hlc, NULL
          WHERE OLD.hlc IS NOT NEW.hlc AND NOT EXISTS (SELECT 1 FROM sync_field_clock WHERE ${row} AND field = '*');
-       ${perColumn.join('\n       ')}
+       ${[...perColumn, ...restore].join('\n       ')}
      END`,
   ];
 }

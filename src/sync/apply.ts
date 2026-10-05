@@ -195,18 +195,30 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
 
     // Traces (section 5.4) : seule une écriture plus récente que la suppression purgée passe.
     const tomb = tombstoneCache.get(t.name)?.get(op.id);
+    let clearTomb = false;
     if (tomb !== undefined) {
-      fields = new Map([...fields].filter(([, field]) => field[1] > tomb));
-      const full = t.columns.every((col) => fields.has(col.name));
-      const natural = t.idKind === 'natural' && isNaturalId(t.name as NaturalIdTable, op.id);
-      if (fields.size === 0 || row.exists || !natural || !full) {
-        if (fields.size > 0 && !row.exists) ctx.logger.log('apply-abandoned', { table: t.name, reason: 'purged' });
-        outcomes.push('rejected');
-        continue;
+      const restoreField = fields.get('deleted_at');
+      // Restauration de la suppression purgée (Y-09, restauration hors ligne contre purge) : ligne entière, `deleted_at` remis à nul
+      // par une écriture plus récente que la trace et **fondée sur elle** (base au moins égale au hlc purgé). Elle l'emporte : la ligne
+      // est recréée avec toutes ses colonnes, identifiant UUID compris, et la trace retirée. Une opération ancienne ou sans cette base
+      // ne ressuscite jamais rien.
+      const restoration =
+        !row.exists && restoreField !== undefined && restoreField[0] === null && restoreField[1] > tomb && restoreField[2] !== null && restoreField[2] >= tomb && t.columns.every((col) => fields.has(col.name));
+      if (restoration) {
+        ctx.logger.log('apply-restored-purged', { table: t.name });
+        clearTomb = true;
+      } else {
+        fields = new Map([...fields].filter(([, field]) => field[1] > tomb));
+        const natural = t.idKind === 'natural' && isNaturalId(t.name as NaturalIdTable, op.id);
+        if (fields.size === 0 || row.exists || !natural) {
+          if (fields.size > 0 && !row.exists) ctx.logger.log('apply-abandoned', { table: t.name, reason: 'purged' });
+          outcomes.push('rejected');
+          continue;
+        }
+        // Identifiant naturel : une recréation complète retire la trace (même transaction) ; une opération partielle plus récente est
+        // mise de côté (missing-row) et recomposée à l'arrivée de la recréation, comme sans trace.
+        clearTomb = true;
       }
-      // Recréation complète d'un identifiant naturel : la trace est retirée dans la même transaction.
-      await sync.removeTombstone(t.name, op.id);
-      tombstoneCache.get(t.name)?.delete(op.id);
     }
 
     if (!row.exists) {
@@ -220,6 +232,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
           const raw = JSON.parse(parked.op) as { f: Record<string, SyncField> };
           for (const [name, field] of Object.entries(raw.f)) {
             const current = union.get(name);
+            if (tomb !== undefined && field[1] <= tomb) continue;
             if (syncColumn(t.name, name) && (!current || field[1] > current[1])) union.set(name, field);
           }
         }
@@ -245,6 +258,10 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       }
       const rowHlc = maxOf([...fields.values()].map((f) => f[1]));
       await sync.insertRow(t, op.id, values, { hlc: rowHlc, updatedAt: op.at, deviceId: hlcDevice(rowHlc) });
+      if (clearTomb) {
+        await sync.removeTombstone(t.name, op.id);
+        tombstoneCache.get(t.name)?.delete(op.id);
+      }
       // Repli « * » toujours écrit (hlc de la ligne) : une écriture locale ultérieure d'un autre champ ne déplace pas l'horloge des champs
       // sans entrée propre (sinon une écriture distante plus ancienne sur ces champs serait refusée d'un seul côté).
       const clocks: { field: string; hlc: Hlc; base: Hlc | null }[] = [

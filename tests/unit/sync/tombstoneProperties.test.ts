@@ -151,12 +151,12 @@ describe('traces : propriétés (Y-09 critère 9)', () => {
   const retry = (): Promise<unknown> => retryParked({ data: db.data, clock: { nowMs: () => Date.parse(AT) }, sv: 17, logger } as unknown as SyncDeps);
 
   /**
-   * DÉFAUT D2 (signalé, voir le rapport de QA du lot Y2) : sur un identifiant naturel tracé, une opération partielle plus récente que la
+   * DÉFAUT D2 (signalé par la QA, corrigé : l'opération partielle plus récente est mise de côté, missing-row) : sur un identifiant naturel tracé, une opération partielle plus récente que la
    * trace est abandonnée (apply.ts : !full donne rejected, jamais mise de côté) alors que la même opération sur un identifiant
    * absent sans trace est mise de côté (missing-row) et recomposée à l'arrivée de la création. Un appareil qui lit l'écriture
    * partielle (décocher) avant la recréation complète (cocher) qui la précède dans le temps diverge des deux autres définitivement.
    */
-  it.fails('DÉFAUT D2 : recréation complète (hlc 12) et décochage partiel (hlc 13) : même résultat quel que soit l’ordre d’arrivée', async () => {
+  it('D2 (corrigé) : recréation complète (hlc 12) et décochage partiel (hlc 13) : même résultat quel que soit l’ordre d’arrivée', async () => {
     const recreate = op('routine_log', LOG_ID, logFields(h(12), '2026-10-03T09:00:00.000Z'));
     const uncheck = op('routine_log', LOG_ID, { deleted_at: ['2026-10-04T08:00:00.000Z', h(13), h(12)] });
     await db.data.repos.sync.insertTombstones([{ table: 'routine_log', rowId: LOG_ID, deletedHlc: TOMB }], AT);

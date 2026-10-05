@@ -89,12 +89,12 @@ describe('purge des autres tables par le moteur (Y-09 critères 3 et 6)', () => 
   });
 
   /**
-   * DÉFAUT D3 (signalé, voir le rapport de QA du lot Y2) : A recrée localement un jour de routine purgé (INSERT) ; sa propre trace
+   * DÉFAUT D3 (signalé par la QA, corrigé) : A recrée localement un jour de routine purgé (INSERT) ; sa propre trace
    * `sync_tombstone` reste en base (aucun code local ne la retire : seul `apply.ts` le fait, pour une opération reçue). Quand B décoche
    * ensuite ce jour, l'opération partielle `deleted_at` reçue par A vise une ligne qui existe et un identifiant tracé : `apply.ts`
-   * (condition `row.exists`) la rejette. A reste coché, B décoché : divergence permanente.
+   * (condition `row.exists`) la rejette. A reste coché, B décoché : divergence permanente. Corrigé : le déclencheur d'insertion retire la trace locale.
    */
-  it.fails('DÉFAUT D3 : jour purgé recoché sur A puis décoché sur B : décoché partout', async () => {
+  it('D3 (corrigé) : jour purgé recoché sur A puis décoché sur B : décoché partout', async () => {
     const [a, b] = await routineWithDeletedLog();
     a.clock.advance(31 * DAY);
     await settle();

@@ -295,13 +295,13 @@ describe('suppression contre modification (Y-09 critère 1, section 4.2)', () =>
 
 describe('restauration depuis la corbeille et purge de l’autre appareil (Y-09 critères 2 et 4)', () => {
   /**
-   * DÉFAUT D1 (signalé, voir le rapport de QA du lot Y2) : A supprime une tâche, B la lit ; A part hors ligne et la restaure depuis la
+   * DÉFAUT D1 (signalé par la QA, corrigé) : A supprime une tâche, B la lit ; A part hors ligne et la restaure depuis la
    * corbeille à J+29 (la corbeille de T-08 l'autorise jusqu'à 30 jours) ; B purge la ligne à J+31 (suppression lue par tous, 30 jours
    * écoulés) ; au retour de A, la restauration (une seule opération partielle `deleted_at = null`) vise un identifiant UUID tracé :
    * « une opération partielle sur un UUID est abandonnée et journalisée » (Y-09 critère 4). B n'a plus la tâche, que A garde vivante :
-   * divergence permanente et perte de la tâche chez B. Le test décrit le comportement attendu (convergence) ; il échoue aujourd'hui.
+   * divergence permanente et perte de la tâche chez B. Corrigé : la restauration repart en ligne entière (entrée « + ») et, fondée sur la suppression purgée (base ≥ trace), recrée la ligne chez B.
    */
-  it.fails('DÉFAUT D1 : une tâche restaurée par A à J+29 (hors ligne) et purgée par B à J+31 revit sur B au retour de A', async () => {
+  it('D1 (corrigé) : une tâche restaurée par A à J+29 (hors ligne) et purgée par B à J+31 revit sur B au retour de A', async () => {
     const [a, b] = await twoDevices();
     const t = await a.createTask('À restaurer');
     await settle();
