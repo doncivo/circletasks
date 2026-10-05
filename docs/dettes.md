@@ -52,16 +52,36 @@ Réponses de l'architecte : ADR 0011, section 8 (données exclues et cas particu
 - Restauration P-04 et synchro : appliquer l'ADR 0010 (état publié qui fait foi, marqueur `restore-marker.json`, synchro suspendue et choix explicite, époque et instantané, âge de la version face aux traces de suppression).
 - `sample.ids` (P-05) est un réglage local : après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; à revoir dans l'ADR de synchro.
 
-Audit de sécurité de l'ADR 0011 (2026-10-05, verdict « À CORRIGER ») : l'ADR est révisé, et la correspondance point par section figure dans son annexe A. Les points sont soldés par les lots Y1 à Y3, qui doivent tous les couvrir :
-- H1 : clé visible par la WebView en deux points. Il faut une confirmation native ouverte par Rust, une limite d'appels, aucune trace dans Zustand ni dans les journaux, et un état effacé à la fermeture (Y1, Y3).
-- H2 : les 19 commandes `sync_*` dans `src-tauri/build.rs` ; test `config.rs` qui vérifie que le manifeste correspond à `generate_handler!` et que `sync.json` ne vise que `main` (Y1).
-- H3 : attributs du Trousseau iOS via `security-framework`, avec un test de contrat ; option « Oublier le dossier et la clé » (Y1).
-- H4 : `check_sync_path`, qui contrôle les balises d'analyse, `DRIVE_FIXED` et le chemin final ; `is_plain_dir` reste inchangé (Y1).
-- H5 : identifiants SQL tirés du seul catalogue ; analyse stricte qui refuse `__proto__` (Y2).
-- H6 : `stateSeq` et anti-rejeu, contrôle du segment avant ajout (Y1, Y2).
-- M1 à M10, B1 à B6 : bourrage, bornes, statut `foreign`, dérive sur l'horloge physique, réglages reçus, `calendar_account.username` (migration 0017, Y2), portée des traces, import, capture d'écran, invariants de `sync_guard`, nonces, AAD préfixée, `zeroize`, `qrcode-generator`, contrôle des commandes, journaux sans secret.
+Audits de sécurité de l'ADR 0011 (trois passes le 2026-10-05). L'ADR est révisé après chacune, et son annexe A donne la correspondance point par section pour les trois audits. Ces points sont soldés par les lots Y1 à Y3, qui doivent tous les couvrir :
+- Premier audit (24 points, validés par le second) :
+  - H1 : clé visible par une WebView en deux points ; confirmation native, limite d'appels, rien dans Zustand ni dans les journaux.
+  - H2 : manifeste de `build.rs` et test `config.rs`.
+  - H3 : Trousseau iOS.
+  - H4 : contrôle du dossier.
+  - H5 : identifiants SQL du seul catalogue.
+  - H6 : anti-rejeu de `state.ctx`.
+  - M1 à M10, B1 à B6 : bornes, métadonnées, `calendar_account.username` (migration 0017, Y2), traces, `sync_guard`, nonces, `zeroize`, `qrcode-generator`, journaux sans secret.
+- Second audit (16 points, validés par le troisième) :
+  - aucune perte au changement d'époque ;
+  - fenêtre dédiée `pairing` (`pairing.html`, capability `sync-pairing.json`) ;
+  - compteurs de confirmation persistés, « Annuler » par défaut ;
+  - `WDA_EXCLUDEFROMCAPTURE` sur `pairing` ;
+  - `stateSeq` dans les accusés ;
+  - plafond de 1 Mio par segment ;
+  - Rust maître de `head`, `pairedBy` et `forgotten` ;
+  - conception de Y-10 et Y-11 ;
+  - usages de `label` dans `calendarsStore.ts`.
+- Troisième audit (sur c8d1253) :
+  - H1 : `main` ne peut plus créer de fenêtre. **Correctif de F-01 inclus dans Y1** : trois commandes Rust `focus_window_*` remplacent `core:webview:allow-create-webview-window` et les permissions de fenêtre de `focus-launcher.json`. L'instance `pairing` est créée par Rust, jamais réutilisée, et contrôlée par libellé, URL exacte et HWND.
+  - M1 : changement d'époque matérialisé depuis la base locale, par pages.
+  - B2, B3, B4, B6 : corrigés dans l'ADR (import au premier plan, `sync/own.json`, actions de la fenêtre `pairing`, graphe complet de `test:bundle`).
+  - **B1, B5, B7 et B9 restent à documenter** : leur texte n'a pas été transmis avec la demande de correction et n'est pas repris ici. À reporter depuis le rapport du troisième audit avant le lancement de Y1.
+- Commandes : **20 commandes `sync_*`** dans `src-tauri/build.rs`, dont 18 pour `main` (`sync.json`) et 2 pour `pairing` (`sync-pairing.json` : `sync_pairing_payload`, `sync_key_import`, plus `core:window:allow-close`). S'y ajoutent les 3 commandes `focus_window_*` du correctif F-01.
 - Limites acceptées tant que Y-10 et Y-11 ne sont pas au PRD (ADR 0011, section 14.1) : un appareil perdu garde une copie complète ; la purge reste bloquée jusqu'à 180 jours ; iCloud garde 30 jours de « Supprimés récemment » ; une clé unique lit et forge tout. À solder par le lot Y4 si Ali ajoute Y-10 et Y-11 au PRD M15.
-- Risque accepté : le Gestionnaire d'identification Windows est lisible par toute la session, et la désinstallation n'efface pas la clé du coffre.
+- Risques acceptés :
+  - le Gestionnaire d'identification Windows est lisible par toute la session, et la désinstallation n'efface pas la clé du coffre ;
+  - sur iPhone (une seule WebView), la saisie de la clé de secours reste lisible par un script passif de la fenêtre principale ;
+  - la fenêtre `pairing` apparaît noire dans les captures pendant 5 minutes au plus.
 
 ## Ordre 5 (iPhone)
 
