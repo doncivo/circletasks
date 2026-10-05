@@ -11,6 +11,7 @@ const account: CalendarAccount = {
   id: asEntityId<CalendarAccountId>('94000000-0000-4000-8000-000000000001'),
   provider: 'google',
   label: 'Google Agenda',
+  username: '',
   tokenRef: '',
   calendars: [
     { id: 'pro', name: 'Travail', spaceId: PRO, shown: true },

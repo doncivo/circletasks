@@ -42,7 +42,7 @@ pub const PRE_RESTORE_PREFIX: &str = "circletasks-pre-restore-";
 pub const KEEP_PRE_RESTORE_BACKUPS: usize = 3;
 /// Version de schéma de cette app (plus haute migration de `src/db/migrations`). Une sauvegarde plus récente est refusée. Constante côté Rust :
 /// la WebView ne fournit jamais cette valeur ; un test (`restore_hardening.rs`) la compare aux fichiers de migration.
-pub const APP_SCHEMA_VERSION: u32 = 14;
+pub const APP_SCHEMA_VERSION: u32 = 17;
 /// Plafond de taille d'une base à vérifier ou à restaurer (512 Mo) : au-delà, la sauvegarde est refusée (`corrupt`).
 pub const MAX_BACKUP_BYTES: u64 = 512 * 1024 * 1024;
 /// Attente maximale d'un verrou pendant une sauvegarde quotidienne : la base n'est jamais bloquée plus de 2 s (P-04 critère 1).
@@ -507,8 +507,14 @@ pub fn reset_triggers(path: &Path) -> Result<(), BackupError> {
     let has_table = |table: &str| -> Result<bool, BackupError> {
         tx.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| r.get::<_, u64>(0)).map(|n| n == 1).map_err(sql_err)
     };
+    // Déclencheurs de capture de la synchro (`sync_*`, migration 0015) : seulement si leurs tables existent (une sauvegarde plus ancienne
+    // les recevra par la migration à l'ouverture ; les créer ici ferait échouer cette migration).
+    let has_sync = has_table("sync_guard")?;
     if has_table("search_index_doc")? {
-        for (_, table, sql) in REFERENCE_TRIGGERS {
+        for (name, table, sql) in REFERENCE_TRIGGERS {
+            if name.starts_with("sync_") && !has_sync {
+                continue;
+            }
             if has_table(table)? {
                 tx.execute_batch(sql).map_err(sql_err)?;
             }
@@ -809,6 +815,53 @@ pub fn restore_backup_file(
     Ok(RestoreOutcome { safety_copy, schema_version })
 }
 
+/// Marqueur de restauration de la synchro (ADR 0010 règle 2, ADR 0011 section 9) : `<dossier de configuration>/restore-marker.json`.
+pub const RESTORE_MARKER_FILE: &str = "restore-marker.json";
+/// Dossier de configuration de la synchro et fichier du dossier choisi (lot Y1, `sync/folder.json`) : sa présence = synchro configurée.
+pub const SYNC_CONFIG_DIR: &str = "sync";
+pub const SYNC_FOLDER_FILE: &str = "folder.json";
+
+/// Instant ISO 8601 UTC à la milliseconde (`2026-10-05T08:00:00.000Z`), forme de `IsoDateTime` côté TypeScript.
+pub fn iso_instant(secs: u64) -> String {
+    let stamp = utc_stamp(secs);
+    format!("{}-{}-{}T{}:{}:{}.000Z", &stamp[0..4], &stamp[4..6], &stamp[6..8], &stamp[9..11], &stamp[11..13], &stamp[13..15])
+}
+
+/// Texte du marqueur : `{ "v": 1, "backup", "backupTakenAt", "restoredAt", "schemaVersion" }` (ADR 0011 section 9, règle 2).
+pub fn restore_marker_json(backup: &str, taken_at_secs: u64, restored_at_secs: u64, schema_version: u32) -> String {
+    serde_json::json!({
+        "v": 1,
+        "backup": backup,
+        "backupTakenAt": iso_instant(taken_at_secs),
+        "restoredAt": iso_instant(restored_at_secs),
+        "schemaVersion": schema_version,
+    })
+    .to_string()
+}
+
+/// Un dossier de synchro est-il configuré (fichier `sync/folder.json` ordinaire présent) ?
+pub fn sync_configured(config_dir: &Path) -> bool {
+    is_plain_file(&config_dir.join(SYNC_CONFIG_DIR).join(SYNC_FOLDER_FILE))
+}
+
+/// Écrit le marqueur après un échange abouti, **seulement si un dossier de synchro est configuré** (ADR 0010 règle 2) : `.tmp` puis
+/// renommage. Renvoie vrai s'il a été écrit. L'heure de la sauvegarde est celle de son fichier (sinon l'heure de restauration).
+pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32) -> io::Result<bool> {
+    if !sync_configured(config_dir) {
+        return Ok(false);
+    }
+    let taken = fs::metadata(backups_dir.join(backup))
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(restored_at_secs, |d| d.as_secs());
+    let target = config_dir.join(RESTORE_MARKER_FILE);
+    let tmp = config_dir.join(format!("{RESTORE_MARKER_FILE}.tmp"));
+    fs::write(&tmp, restore_marker_json(backup, taken, restored_at_secs, schema_version))?;
+    fs::rename(&tmp, &target)?;
+    Ok(true)
+}
+
 fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {
     app.path().app_config_dir().map_err(|e| BackupError::new("no-data-dir", e.to_string()))
 }
@@ -898,7 +951,14 @@ pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupErr
 pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Result<RestoreOutcome, BackupError> {
     let dir = data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))
+        let outcome = restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))?;
+        // Échange abouti : marqueur de la synchro (aucun cycle ne partira avant le choix de l'utilisateur, ADR 0010 règle 3). Un échec
+        // d'écriture est journalisé sans bloquer la restauration déjà faite.
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        if let Err(error) = write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version) {
+            eprintln!("[backup] marqueur de restauration non écrit : {}", error.kind());
+        }
+        Ok(outcome)
     })
     .await
     .map_err(|e| join_error(e.into()))?

@@ -55,6 +55,8 @@ export interface NewCalendarAccount {
   readonly provider: CalendarProviderKind;
   readonly label: string;
   readonly tokenRef: string;
+  /** Identifiant Apple (iCloud) ; colonne locale, jamais publiée. Vide par défaut. */
+  readonly username?: string;
   readonly calendars: readonly CalendarRef[];
 }
 
@@ -68,4 +70,9 @@ export interface CalendarAccountRepository {
   updateCalendars(id: CalendarAccountId, calendars: readonly CalendarRef[]): Promise<CalendarAccount>;
   /** Suppression logique (K-01 critère 8) : le compte disparaît de la liste, ses lignes d'événements sont retirées à part. */
   softDelete(id: CalendarAccountId): Promise<CalendarAccount>;
+  /**
+   * Y-02 (ADR 0011 section 8) : complète un compte reçu par la synchro (identifiant Apple et référence du coffre, colonnes locales) ;
+   * aucun tampon d'écriture : rien n'est publié.
+   */
+  setLocalCredentials(id: CalendarAccountId, credentials: { readonly username: string; readonly tokenRef: string }): Promise<CalendarAccount>;
 }

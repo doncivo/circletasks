@@ -62,6 +62,8 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   desktop
     .onQuitting(async () => {
       await container.data.repos.settings.get('device.id');
+      // Y-02 : dernier cycle de synchro avant de quitter, 4,5 s au plus (puis sortie quoi qu'il arrive).
+      if (container.sync) await Promise.race([container.sync.syncNow('quit'), new Promise((resolve) => setTimeout(resolve, 4_500))]);
     })
     .then((stop) => {
       if (disposed) stop();

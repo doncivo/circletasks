@@ -5,7 +5,8 @@ import type { NewReminder, ReminderOffsetMin, Routine, RoutineFields } from '../
 import { normalizeReminderOffsets, routineReminderFireAt } from '../../domain/routineReminder';
 import { validateRoutine, type RoutineError } from '../../domain/routineRules';
 import { canToggleDay, doneDatesOf, mondayOf, pausesByRoutine } from '../../domain/routineSchedule';
-import type { LocalDate, ReminderId, Result, RoutineId, RoutineLogId, RoutinePauseId } from '../../domain/types';
+import type { LocalDate, ReminderId, Result, RoutineId, RoutinePauseId } from '../../domain/types';
+import { routineLogId } from '../../domain/sync/naturalIds';
 import type { DataAccess } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
 import type { UndoableCommand } from '../app/undo';
@@ -85,7 +86,7 @@ function reopenedCommand(deps: RoutineUseCaseDeps, routine: Routine, date: Local
     async undo() {
       const [current] = await deps.data.repos.routineLogs.listForRoutine(routine.id as RoutineId, { from: date, to: date });
       if (current) return 'stale';
-      await deps.data.repos.routineLogs.markDone(routine.id as RoutineId, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
+      await deps.data.repos.routineLogs.markDone(routine.id as RoutineId, date, nowIso(deps.clock), routineLogId(routine.id as RoutineId, date));
       emitRoutinesChanged(deps.data);
       return 'undone';
     },
@@ -213,7 +214,7 @@ export function createRoutineUseCases(deps: RoutineUseCaseDeps): RoutineUseCases
           const pauses = pausesByRoutine(await repos.routines.listPausesForRoutine(id)).get(id) ?? [];
           if (done) {
             if (week.has(date) || !canToggleDay(routine, week, date, today, pauses)) return { result: 'ignored' };
-            const log = await repos.routineLogs.markDone(id, date, nowIso(deps.clock), newEntityId<RoutineLogId>(deps.ids));
+            const log = await repos.routineLogs.markDone(id, date, nowIso(deps.clock), routineLogId(id, date));
             return { result: 'validated', command: validatedCommand(deps, routine, date, log.hlc) };
           }
           if (!week.has(date) || !canToggleDay(routine, week, date, today, pauses)) return { result: 'ignored' };

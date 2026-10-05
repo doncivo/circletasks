@@ -16,6 +16,7 @@ import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
 import { onboardingEn } from './en.onboarding';
+import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
@@ -51,6 +52,7 @@ export const en: Messages = {
   stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
+  sync: { ...syncEngineEn },
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',

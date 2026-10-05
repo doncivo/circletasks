@@ -1,7 +1,7 @@
 import { LUNAR_HOLIDAY_KEYS, LUNAR_TABLE_YEARS, holidaysInRange, isLunarKey, isValidOverrideDate, lunarTableDate, yearsToRead, type HolidayCountries, type HolidayEntry } from '../../domain/holidays';
-import { newEntityId } from '../../domain/id';
+import { holidayId } from '../../domain/sync/naturalIds';
 import type { Holiday, HolidayCountry } from '../../domain/model';
-import type { HolidayId, LocalDate } from '../../domain/types';
+import type { LocalDate } from '../../domain/types';
 import type { DataAccess, NewHoliday } from '../../db/repositories';
 import type { AppContainer } from '../app/container';
 import { emitEventsChanged } from './eventEvents';
@@ -26,7 +26,7 @@ export function ensureHolidayTable(deps: HolidayUseCaseDeps): Promise<void> {
   const rows: NewHoliday[] = LUNAR_TABLE_YEARS.flatMap((year) =>
     LUNAR_HOLIDAY_KEYS.flatMap((key) => {
       const date = lunarTableDate(year, key);
-      return date === null ? [] : [{ id: newEntityId<HolidayId>(deps.ids), country: 'TN' as const, year, key, date, name: key, kind: 'lunar' as const, source: 'table' as const, overridden: false }];
+      return date === null ? [] : [{ id: holidayId('TN', year, key), country: 'TN' as const, year, key, date, name: key, kind: 'lunar' as const, source: 'table' as const, overridden: false }];
     }),
   );
   const run = deps.data.transaction((repos) => repos.holidays.syncTable(rows)).then(() => undefined);
@@ -85,7 +85,7 @@ export function createHolidayUseCases(deps: HolidayUseCaseDeps): HolidayUseCases
       if (!isValidOverrideDate(holiday.year, date)) return { ok: false, error: 'invalid-date' };
       await ensureHolidayTable(deps).catch(() => undefined);
       await data.repos.holidays.setOverride(
-        { id: newEntityId<HolidayId>(deps.ids), country: 'TN', year: holiday.year, key: holiday.key, date, name: holiday.key, kind: 'lunar', source: 'manual', overridden: true },
+        { id: holidayId('TN', holiday.year, holiday.key), country: 'TN', year: holiday.year, key: holiday.key, date, name: holiday.key, kind: 'lunar', source: 'manual', overridden: true },
         date,
       );
       emitEventsChanged(data);

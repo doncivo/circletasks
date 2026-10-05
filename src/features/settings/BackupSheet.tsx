@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { t, type PlainMessageKey } from '../../i18n';
 import { formatBackupSize, formatBackupWhen } from '../../i18n/formatBackup';
 import type { BackupFailureReason, BackupVersion } from '../../platform/backup';
+import { syncStore } from '../sync/syncStore';
 import { Button, ConfirmDialog, Sheet, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { backupStore } from './backupStore';
@@ -75,6 +76,8 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
   const [chosen, setChosen] = useState<BackupVersion | null>(null);
   const reveal = container.backups.reveal?.bind(container.backups);
   const locked = phase === 'running' || phase === 'done';
+  // ADR 0010 / ADR 0011 section 9 : appareil associé à un dossier de synchro, le choix sera demandé à la prochaine synchro.
+  const syncPaired = useFeatureStore(syncStore, (s) => s.available && s.status.phase !== 'not-configured');
 
   useEffect(() => {
     void load();
@@ -91,6 +94,7 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
     <div className="ct-backup__content">
       <h2 className="ct-backup__title">{t('backup.sheetTitle')}</h2>
       <p className="ct-backup__note">{t('backup.sheetIntro')}</p>
+      {syncPaired && <p className="ct-backup__note">{t('sync.restore.backupWarning')}</p>}
       <div className="ct-backup__tools">
         <Button variant="secondary" onClick={() => void backupNow()} disabled={backingUp || locked}>
           {backingUp ? t('backup.backupNowBusy') : t('backup.backupNow')}

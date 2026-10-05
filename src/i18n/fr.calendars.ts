@@ -61,6 +61,8 @@ export const calendarsFr = {
   errorDuplicate: 'Ce compte est déjà connecté.',
   errorIcloudInvalid: 'Identifiant ou mot de passe d’application incorrect',
   errorIcloudUnreachable: 'Impossible de joindre iCloud',
+  errorIcloudChooseAccount: 'Plusieurs comptes iCloud reçus de vos autres appareils : touchez « Reconnecter » sur celui à compléter',
+  icloudDefaultLabel: 'Compte iCloud',
   errorGoogleUnreachable: 'Impossible de joindre Google',
   errorSave: 'Enregistrement impossible.',
   errorLoad: 'Impossible de lire les comptes.',

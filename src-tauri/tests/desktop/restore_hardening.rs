@@ -2,7 +2,7 @@
 
 use circletasks_lib::backup::{
     check_backup_file, check_named_backup, create_daily_backup, is_plain_file, is_valid_day, is_valid_stamp, list_backups_in, neutral_directory_label,
-    normalize_sql, open_read_only_with, outcome_for_webview, parse_backup_name, prune_family, recover_interrupted_restore, reset_triggers,
+    iso_instant, normalize_sql, open_read_only_with, restore_marker_json, write_restore_marker, RESTORE_MARKER_FILE, SYNC_CONFIG_DIR, SYNC_FOLDER_FILE, outcome_for_webview, parse_backup_name, prune_family, recover_interrupted_restore, reset_triggers,
     restore_backup_file, BackupOutcome, Family, Recovery, RestoreStep, APP_SCHEMA_VERSION, BACKUP_DIR, DB_FILE, MAX_BACKUP_BYTES,
 };
 use circletasks_lib::backup_triggers::REFERENCE_TRIGGERS;
@@ -226,7 +226,8 @@ fn p04_a_trapped_database_is_refused() {
     Connection::open(&known).unwrap().execute_batch(&format!("CREATE TABLE search_index_doc (x); {reference_sql}")).unwrap();
     assert_eq!(check_backup_file(&known, 9).unwrap(), 4);
     assert_eq!(normalize_sql("a  b\n c"), "a b c");
-    assert_eq!(REFERENCE_TRIGGERS.len(), 18);
+    // 18 déclencheurs de recherche (0011) + 32 de capture de la synchro (0015, deux par table publiée).
+    assert_eq!(REFERENCE_TRIGGERS.len(), 50);
 }
 
 #[test]
@@ -254,6 +255,49 @@ fn p04_reset_triggers_removes_foreign_triggers_and_recreates_the_reference_ones(
     reset_triggers(&old).unwrap();
     let count: u64 = Connection::open(&old).unwrap().query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger'", [], |r| r.get(0)).unwrap();
     assert_eq!(count, 0);
+    // Base postérieure à la migration 0015 : les déclencheurs de capture de la synchro sont recréés aussi.
+    let synced = dir.path().join("synchro.db");
+    make_db(&synced, 15, 1);
+    Connection::open(&synced).unwrap().execute_batch("CREATE TABLE search_index_doc (x); CREATE TABLE sync_guard (id INTEGER PRIMARY KEY);").unwrap();
+    reset_triggers(&synced).unwrap();
+    let names: Vec<String> = {
+        let conn = Connection::open(&synced).unwrap();
+        let mut statement = conn.prepare("SELECT name FROM sqlite_master WHERE type = 'trigger' ORDER BY name").unwrap();
+        let rows = statement.query_map([], |r| r.get(0)).unwrap().map(Result::unwrap).collect();
+        rows
+    };
+    assert_eq!(names, ["search_task_ad", "search_task_ai", "search_task_au", "sync_task_ai", "sync_task_au"]);
+}
+
+#[test]
+fn y02_restore_marker_written_only_when_a_sync_folder_is_configured() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    fs::write(backups.join("circletasks-daily-20261004.db"), b"x").unwrap();
+    // Sans dossier de synchro : aucun marqueur (ADR 0010 règle 2).
+    assert!(!write_restore_marker(dir.path(), &backups, "circletasks-daily-20261004.db", 1_791_187_200, 17).unwrap());
+    assert!(!dir.path().join(RESTORE_MARKER_FILE).exists());
+    // Dossier configuré (fichier `sync/folder.json` du lot Y1) : marqueur écrit par .tmp + renommage, aucun .tmp laissé.
+    fs::create_dir_all(dir.path().join(SYNC_CONFIG_DIR)).unwrap();
+    fs::write(dir.path().join(SYNC_CONFIG_DIR).join(SYNC_FOLDER_FILE), b"{}").unwrap();
+    assert!(write_restore_marker(dir.path(), &backups, "circletasks-daily-20261004.db", 1_791_187_200, 17).unwrap());
+    assert!(!dir.path().join(format!("{RESTORE_MARKER_FILE}.tmp")).exists());
+    let marker: serde_json::Value = serde_json::from_str(&fs::read_to_string(dir.path().join(RESTORE_MARKER_FILE)).unwrap()).unwrap();
+    assert_eq!(marker["v"], 1);
+    assert_eq!(marker["backup"], "circletasks-daily-20261004.db");
+    assert_eq!(marker["restoredAt"], "2026-10-05T08:00:00.000Z");
+    assert_eq!(marker["schemaVersion"], 17);
+    assert!(marker["backupTakenAt"].as_str().unwrap().ends_with(".000Z"));
+    assert_eq!(marker.as_object().unwrap().len(), 5);
+}
+
+#[test]
+fn y02_restore_marker_json_has_the_exact_contract_fields() {
+    let text = restore_marker_json("circletasks-pre-restore-20261005T080000Z.db", 0, 1_791_187_200, 17);
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(value["backupTakenAt"], "1970-01-01T00:00:00.000Z");
+    assert_eq!(iso_instant(1_791_187_200), "2026-10-05T08:00:00.000Z");
 }
 
 #[test]

@@ -14,6 +14,7 @@ import { defineFeatureStore, type AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { emitEventsChanged } from '../events/eventEvents';
 import { createCalendarUseCases } from './calendarUseCases';
+import { accountDisplayName } from './accountName';
 import { createProviderFor, tokenRefFor } from './providerFactory';
 import { refreshAccount } from './refreshUseCase';
 
@@ -24,7 +25,7 @@ import { refreshAccount } from './refreshUseCase';
  * dans ce store : seule une référence du coffre (`tokenRef`) existe côté interface.
  */
 
-export type ConnectFailure = 'cancelled' | 'not-configured' | 'failed' | 'duplicate' | 'icloud-invalid' | 'icloud-unreachable' | 'google-unreachable';
+export type ConnectFailure = 'cancelled' | 'not-configured' | 'failed' | 'duplicate' | 'icloud-invalid' | 'icloud-unreachable' | 'google-unreachable' | 'icloud-choose-account';
 export type ConnectOutcome = { readonly ok: true; readonly accountId: CalendarAccountId } | { readonly ok: false; readonly failure: ConnectFailure };
 
 /** Message (clé i18n) d'un échec de connexion. */
@@ -36,6 +37,7 @@ export const FAILURE_KEYS: Readonly<Record<ConnectFailure, PlainMessageKey>> = {
   'icloud-invalid': 'calendars.errorIcloudInvalid',
   'icloud-unreachable': 'calendars.errorIcloudUnreachable',
   'google-unreachable': 'calendars.errorGoogleUnreachable',
+  'icloud-choose-account': 'calendars.errorIcloudChooseAccount',
 };
 
 export type CalendarsStatus = 'idle' | 'loading' | 'ready' | 'error';
@@ -64,7 +66,8 @@ export interface CalendarsState {
   connectGoogle(): Promise<ConnectOutcome>;
   connectIcloud(username: string, password: string): Promise<ConnectOutcome>;
   reconnectGoogle(accountId: CalendarAccountId): Promise<ConnectOutcome>;
-  reconnectIcloud(accountId: CalendarAccountId, password: string): Promise<ConnectOutcome>;
+  /** `username` : identifiant Apple saisi pour un compte reçu d'un autre appareil (sans identifiant sur cet appareil). */
+  reconnectIcloud(accountId: CalendarAccountId, password: string, username?: string): Promise<ConnectOutcome>;
   /** ES-06 et K-01 critère 5 : enregistre les agendas affichés et leur espace ; refusé si un agenda affiché n'a pas d'espace. */
   setCalendars(accountId: CalendarAccountId, calendars: readonly CalendarRef[]): Promise<'ok' | 'space-required' | 'error'>;
   removeAccount(accountId: CalendarAccountId): Promise<boolean>;
@@ -107,7 +110,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
   let ownsOffline = false;
   const platform = container.calendars;
   const nowMs = (): number => container.clock.nowMs();
-  const providerFor = (account: Pick<CalendarAccount, 'provider' | 'tokenRef' | 'label'>) => createProviderFor(account, platform, nowMs, systemTimeZone);
+  const providerFor = (account: Pick<CalendarAccount, 'provider' | 'tokenRef' | 'username'>) => createProviderFor(account, platform, nowMs, systemTimeZone);
   const deps = { container, providerFor, timeZone: systemTimeZone, cursors };
   const useCases = createCalendarUseCases(container);
 
@@ -119,8 +122,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       const active = calendarAppStatuses(accounts, map);
       const statusStore = useAppStatusStore.getState();
       const disconnected = active.calendarDisconnected;
-      const target = disconnected ? accounts.find((account) => account.label === disconnected.detail && map.get(account.id)?.kind === 'reconnect-required') : undefined;
-      statusStore.setStatus('calendarDisconnected', disconnected && target ? { detail: disconnected.detail ?? target.label, onAction: () => get().requestReconnect(target.id) } : null);
+      // Rapprochement par identifiant de compte (ADR 0011 section 8) : le libellé n'identifie plus un compte (vide pour iCloud).
+      const target = disconnected ? accounts.find((account) => map.get(account.id)?.kind === 'reconnect-required') : undefined;
+      statusStore.setStatus('calendarDisconnected', disconnected && target ? { detail: accountDisplayName(target), onAction: () => get().requestReconnect(target.id) } : null);
       if (active.offline) {
         if (!statusStore.sources.offline) {
           statusStore.setStatus('offline', {});
@@ -158,9 +162,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
     };
 
     /** Crée le compte (agendas tous affichés, espace par défaut) puis lance son premier rafraîchissement (K-01 critère 6). */
-    const createAccount = async (provider: CalendarProviderKind, accountId: CalendarAccountId, label: string, calendars: readonly ProviderCalendar[]): Promise<ConnectOutcome> => {
+    const createAccount = async (provider: CalendarProviderKind, accountId: CalendarAccountId, label: string, calendars: readonly ProviderCalendar[], username = ''): Promise<ConnectOutcome> => {
       try {
-        await useCases.createAccount({ id: accountId, provider, label, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
+        await useCases.createAccount({ id: accountId, provider, label, username, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
         await reload();
       } catch {
         return { ok: false, failure: 'failed' };
@@ -227,7 +231,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           } catch (error) {
             return report({ ok: false, failure: connectionFailure(error) });
           }
-          const listed = await providerFor({ provider: 'google', tokenRef, label: '' }).listCalendars();
+          const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
           if (!listed.ok) {
             await discard('google', tokenRef);
             return report({ ok: false, failure: listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed' });
@@ -248,20 +252,28 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       async connectIcloud(username, password) {
         const accountId = newEntityId<CalendarAccountId>(container.ids);
         const tokenRef = tokenRefFor('icloud', accountId);
-        const label = username.trim();
-        if (label === '' || password === '') return { ok: false, failure: 'icloud-invalid' };
-        if (get().accounts.some((account) => account.provider === 'icloud' && account.label.toLowerCase() === label.toLowerCase())) return { ok: false, failure: 'duplicate' };
+        const appleId = username.trim();
+        if (appleId === '' || password === '') return { ok: false, failure: 'icloud-invalid' };
+        // Doublon contrôlé sur l'identifiant Apple de cet appareil (`username`, colonne locale ; ADR 0011 section 8).
+        if (get().accounts.some((account) => account.provider === 'icloud' && account.username.toLowerCase() === appleId.toLowerCase())) return { ok: false, failure: 'duplicate' };
+        // Compte iCloud reçu d'un autre appareil, sans identifiant ni secret ici : on le complète au lieu d'en créer un second ;
+        // s'il y en a plusieurs, l'utilisateur choisit lequel par « Reconnecter » sur sa carte.
+        const received = get().accounts.filter((account) => account.provider === 'icloud' && account.username === '' && account.tokenRef === '');
+        if (received.length > 1) return { ok: false, failure: 'icloud-choose-account' };
+        const only = received[0];
+        if (only) return get().reconnectIcloud(only.id, password, appleId);
+        const label = '';
         try {
           await platform.vault.set(tokenRef, password);
         } catch {
           return { ok: false, failure: 'failed' };
         }
-        const listed = await providerFor({ provider: 'icloud', tokenRef, label }).listCalendars();
+        const listed = await providerFor({ provider: 'icloud', tokenRef, username: appleId }).listCalendars();
         if (!listed.ok) {
           await discard('icloud', tokenRef);
           return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
         }
-        const created = await createAccount('icloud', accountId, label, listed.value);
+        const created = await createAccount('icloud', accountId, label, listed.value, appleId);
         if (!created.ok) {
           await discard('icloud', tokenRef);
           return created;
@@ -287,9 +299,14 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         }
       },
 
-      async reconnectIcloud(accountId, password) {
-        const account = get().accounts.find((candidate) => candidate.id === accountId);
-        if (!account || password === '') return { ok: false, failure: 'icloud-invalid' };
+      async reconnectIcloud(accountId, password, username) {
+        const found = get().accounts.find((candidate) => candidate.id === accountId);
+        if (!found || password === '') return { ok: false, failure: 'icloud-invalid' };
+        // Compte reçu par la synchro : identifiant Apple saisi ici et référence du coffre propre à cet appareil (colonnes locales).
+        const incomplete = found.username === '' || found.tokenRef === '';
+        const appleId = (found.username !== '' ? found.username : (username ?? '')).trim();
+        if (appleId === '') return { ok: false, failure: 'icloud-invalid' };
+        const account = { ...found, username: appleId, tokenRef: found.tokenRef !== '' ? found.tokenRef : tokenRefFor('icloud', accountId) };
         try {
           await platform.vault.set(account.tokenRef, password);
         } catch {
@@ -299,6 +316,14 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         if (!listed.ok) {
           if (listed.error.kind === 'unauthorized') await platform.vault.delete(account.tokenRef).catch(() => undefined);
           return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
+        }
+        if (incomplete) {
+          try {
+            await container.data.repos.calendarAccounts.setLocalCredentials(accountId, { username: appleId, tokenRef: account.tokenRef });
+            await reload();
+          } catch {
+            return { ok: false, failure: 'failed' };
+          }
         }
         markConnected(accountId);
         set({ icloudForm: null, messageKey: null });
@@ -382,7 +407,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         useNavigationStore.getState().navigate({ tab: 'settings', screen: 'calendars' });
         set({ messageKey: null });
         if (account.provider === 'google') void get().reconnectGoogle(accountId);
-        else set({ icloudForm: { accountId, username: account.label } });
+        else set({ icloudForm: { accountId, username: account.username } });
       },
 
       openIcloudForm() {

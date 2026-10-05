@@ -29,10 +29,10 @@ beforeEach(async () => {
 afterEach(() => h.close());
 
 describe('connexion iCloud (K-02)', () => {
-  it('crée le compte (label = identifiant), range le mot de passe au coffre, liste les seuls agendas d’événements, charge les événements (critères 2, 4, 5)', async () => {
+  it('crée le compte (identifiant Apple dans username, colonne locale ; label vide, ADR 0011 section 8), range le mot de passe au coffre, liste les seuls agendas d’événements, charge les événements (critères 2, 4, 5)', async () => {
     const accountId = await connected();
     const [account] = await h.container.data.repos.calendarAccounts.listAll();
-    expect(account).toMatchObject({ id: accountId, provider: 'icloud', label: CALDAV_USER, tokenRef: `circletasks.calendar.icloud.${accountId}` });
+    expect(account).toMatchObject({ id: accountId, provider: 'icloud', label: '', username: CALDAV_USER, tokenRef: `circletasks.calendar.icloud.${accountId}` });
     expect(account?.calendars).toEqual([{ id: '/1234567/calendars/famille/', name: 'Famille', spaceId: SPACE_PRO_ID, shown: true }]);
     expect(await h.container.calendars.vault.has(account?.tokenRef ?? '')).toBe(true);
     expect(await titles()).toEqual(['', 'Dîner chez Leïla', 'Marché', 'Piscine', 'Piscine', 'Week-end à Tunis']);

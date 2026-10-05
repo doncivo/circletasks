@@ -16,6 +16,7 @@ import { shortcutsUiFr } from './fr.shortcuts';
 import { backupFr } from './fr.backup';
 import { importCsvFr } from './fr.importCsv';
 import { onboardingFr } from './fr.onboarding';
+import { syncEngineFr } from './fr.syncEngine';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -54,6 +55,8 @@ export const fr = {
   stats: statsFr,
   appearance: appearanceFr,
   calendars: calendarsFr,
+  // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1.
+  sync: { ...syncEngineFr },
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',

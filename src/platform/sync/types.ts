@@ -319,6 +319,13 @@ export interface SyncStatus {
   readonly conflictsThisWeek: number;
   /** Nouvel appareil (Y-06) : enregistrements lus / total. */
   readonly progress: { readonly done: number; readonly total: number } | null;
+  /**
+   * Code de la dernière erreur de cycle (phase `error`, ou `waiting-icloud` causé par `cloud-pending`) : choisit le texte explicite de
+   * la ligne de Réglages (Y-05 critère 2). Ajout du lot Y2, facultatif.
+   */
+  readonly errorCode?: SyncErrorCode | null;
+  /** Appareil dont l'horloge est en avance (phase `clock-ahead`, Y-09 critère 10). Ajout du lot Y2, facultatif. */
+  readonly clockAheadDevice?: DeviceId | null;
 }
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';

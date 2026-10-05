@@ -13,6 +13,9 @@ import { openFileService, type FileService } from '../../platform/files';
 import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platform/focus';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
+import { logFailure } from '../../platform/desktop/log';
+import type { SyncPlatform } from '../../platform/sync/types';
+import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
 
@@ -66,6 +69,11 @@ export interface BootstrapAppOptions {
   readonly backups?: BackupService;
   /** Voir BootstrapDatabaseOptions.backup. */
   readonly backup?: BootstrapDatabaseOptions['backup'];
+  /**
+   * Plateforme de synchro (ADR 0011, lot Y2) ; null : pas de synchro, aucun coût ni écran. Par défaut null tant que le lot Y1 n'a pas
+   * livré `openSyncPlatform` (commandes Rust `sync_*`) : point de branchement à la fusion des lots Y1 et Y2.
+   */
+  readonly syncPlatform?: SyncPlatform | null;
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -95,13 +103,34 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
     const hlc = createHlcClock({ clock, deviceId, seed: await boot.syncMeta.maxHlc() });
     const data = createDataAccess(driver, createWriteStamper(clock, hlc), factory);
     if (!storedDeviceId) await data.repos.settings.set('device.id', deviceId);
+    // ADR 0011 section 3.2 (audit M10) : la garde de la synchro est vide au démarrage, y compris après une restauration P-04 (qui relance
+    // l'app). Une ligne trouvée (base copiée à chaud) est supprimée et journalisée.
+    const strayGuards = await Promise.resolve()
+      .then(() => data.repos.sync.assertGuardEmpty())
+      .catch(() => 0);
+    if (strayGuards > 0) logFailure('sync', `garde trouvée au démarrage : ${String(strayGuards)}`);
+    const desktop = options.desktop === undefined ? await openDesktopPlatform() : options.desktop;
+    const syncPlatform = options.syncPlatform ?? null;
+    const sync = syncPlatform
+      ? createSyncService({
+          data,
+          platform: syncPlatform,
+          hlc,
+          clock,
+          deviceId,
+          devicePlatform: detectOs() === 'ios' ? 'ios' : 'windows',
+          appVersion: desktop ? await desktop.getVersion().catch(() => '0.0.0') : '0.0.0',
+          sv: migrations.at(-1)?.version ?? 1,
+        })
+      : null;
     return createAppContainer({
       clock,
       ids,
       hlc,
       data,
       platform: { runtime: detectRuntime(), os: detectOs() },
-      desktop: options.desktop === undefined ? await openDesktopPlatform() : options.desktop,
+      desktop,
+      sync,
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
       backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),

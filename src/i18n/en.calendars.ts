@@ -60,6 +60,8 @@ export const calendarsEn: Messages['calendars'] = {
   errorDuplicate: 'This account is already connected.',
   errorIcloudInvalid: 'Incorrect Apple ID or app-specific password',
   errorIcloudUnreachable: 'Unable to reach iCloud',
+  errorIcloudChooseAccount: 'Several iCloud accounts were received from your other devices: tap “Reconnect” on the one to complete',
+  icloudDefaultLabel: 'iCloud account',
   errorGoogleUnreachable: 'Unable to reach Google',
   errorSave: 'Unable to save.',
   errorLoad: 'Unable to read the accounts.',

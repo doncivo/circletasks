@@ -32,6 +32,7 @@ import {
   SettingsScreen,
   SomedayScreen,
   SpacesScreen,
+  SyncDetailsScreen,
   TabsScreen,
   TaskDetail,
   TrashScreen,
@@ -50,6 +51,8 @@ import { OnboardingHost, restoreAppearance, startThemeSync } from './features/se
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
 import { UpdateBanner } from './features/updater';
+import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
+import { startSyncIntegration } from './features/sync/startSync';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
@@ -134,6 +137,8 @@ function AppShellContent() {
     >
       <AppStatusBanner />
       <UpdateBanner />
+      {/* Y-02 : choix après une restauration P-04 (aucune synchro ne part avant). */}
+      {container.sync && <RestoreChoiceDialog />}
       {/* P-05 : assistant de premier lancement (base neuve, app installée). */}
       <OnboardingHost />
       <EventEditorHost />
@@ -182,7 +187,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : route.screen === 'sync' ? <SyncDetailsScreen /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}
@@ -242,6 +247,12 @@ export function App() {
       startup.current = null;
     };
   }, []);
+
+  // Y-02 : synchro (ouverture, 5 min fenêtre visible, masquage), bandeaux A-09, rechargement après chaque lot reçu ; rien sans synchro.
+  useEffect(() => {
+    if (!container) return undefined;
+    return startSyncIntegration(container).dispose;
+  }, [container]);
 
   // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).
   useEffect(() => {
