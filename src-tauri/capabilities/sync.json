@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sync",
+  "description": "PC Windows : synchronisation par iCloud Drive (ADR 0011, Y-01 à Y-09). Les 18 commandes sync_* de la fenêtre principale : dossier choisi et contrôlé par Rust (jamais de chemin dans la WebView), clé au coffre, fichiers chiffrés, marqueur de restauration, ouverture de la fenêtre dédiée pairing. Les trois commandes qui exposent ou reçoivent la clé (sync_pairing_payload, sync_key_import, sync_pairing_close) ne sont accordées qu'à la fenêtre pairing (sync-pairing.json). Aucune permission de plugin dialog:, fs: ni opener:.",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": [
+    "allow-sync-folder-info",
+    "allow-sync-folder-choose",
+    "allow-sync-folder-forget",
+    "allow-sync-bind-device",
+    "allow-sync-key-status",
+    "allow-sync-key-create",
+    "allow-sync-pairing-open",
+    "allow-sync-scan",
+    "allow-sync-read-journal",
+    "allow-sync-append-journal",
+    "allow-sync-write-state",
+    "allow-sync-snapshot-begin",
+    "allow-sync-snapshot-append",
+    "allow-sync-snapshot-commit",
+    "allow-sync-read-snapshot",
+    "allow-sync-delete-own",
+    "allow-sync-restore-marker-get",
+    "allow-sync-restore-marker-clear"
+  ]
+}

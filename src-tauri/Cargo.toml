@@ -41,14 +41,23 @@ sha2 = "0.10"
 rand = "0.9"
 base64 = "0.22"
 tokio = { version = "1", features = ["time", "net", "io-util"] }
+# Synchronisation (ADR 0011, Y-08) : AES-256-GCM et HKDF-SHA256 par aws-lc-rs, déjà compilée (fournisseur de rustls) ; tampons de clé effacés
+# par zeroize. Fonctionnalités limitées à celles déjà actives : aucune nouvelle entrée dans Cargo.lock.
+aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys", "alloc"] }
+zeroize = "1"
 
 # Coffre système : Gestionnaire d'identification Windows, Trousseau iOS (ADR 0008 section 3).
 [target.'cfg(windows)'.dependencies]
 keyring = { version = "3", default-features = false, features = ["windows-native"] }
 # Capture rapide (Q-01, Q-04) : OCR Windows.Media.Ocr en flux mémoire, focus de l'application précédente.
-windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = ["Foundation", "Foundation_Collections", "Globalization", "Graphics_Imaging", "Media_Ocr", "Storage_Streams", "Win32_Foundation", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging",
+    # Synchro (ADR 0011, sections 2.1 et 6) : contrôle du dossier, fichiers ouverts par handle, iCloud (cfapi), confirmation native.
+    "Win32_Security", "Win32_System_IO", "Win32_Storage_FileSystem", "Win32_Storage_CloudFilters", "Win32_UI_Controls", "Wdk_Foundation", "Wdk_Storage_FileSystem"] }
 [target.'cfg(target_os = "ios")'.dependencies]
 keyring = { version = "3", default-features = false, features = ["apple-native"] }
+# Clé de synchro au Trousseau avec kSecAttrAccessibleWhenUnlockedThisDeviceOnly et non synchronisée (ADR 0011 section 2.2, vault_ios.rs) :
+# keyring ne règle pas ces attributs. Même version que celle déjà tirée par keyring.
+security-framework = { version = "3", default-features = false }
 
 # Plugins PC uniquement (absents du build iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

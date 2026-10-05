@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sync-pairing",
+  "description": "PC Windows : fenêtre dédiée pairing (ADR 0011 section 2.1), créée par Rust seulement, jamais déclarée dans tauri.conf.json. Trois commandes et rien d'autre : sync_pairing_payload (QR et clé de secours, après confirmation native), sync_key_import (saisie de la clé de secours) et sync_pairing_close (détruit la seule fenêtre appelante). Aucune permission core: (ni événements, ni fenêtre, ni création de fenêtre).",
+  "windows": ["pairing"],
+  "platforms": ["windows"],
+  "permissions": ["allow-sync-pairing-payload", "allow-sync-key-import", "allow-sync-pairing-close"]
+}

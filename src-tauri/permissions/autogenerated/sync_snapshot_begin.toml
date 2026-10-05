@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-snapshot-begin"
+description = "Enables the sync_snapshot_begin command without any pre-configured scope."
+commands.allow = ["sync_snapshot_begin"]
+
+[[permission]]
+identifier = "deny-sync-snapshot-begin"
+description = "Denies the sync_snapshot_begin command without any pre-configured scope."
+commands.deny = ["sync_snapshot_begin"]

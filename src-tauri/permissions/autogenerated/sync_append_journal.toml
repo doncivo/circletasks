@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-append-journal"
+description = "Enables the sync_append_journal command without any pre-configured scope."
+commands.allow = ["sync_append_journal"]
+
+[[permission]]
+identifier = "deny-sync-append-journal"
+description = "Denies the sync_append_journal command without any pre-configured scope."
+commands.deny = ["sync_append_journal"]

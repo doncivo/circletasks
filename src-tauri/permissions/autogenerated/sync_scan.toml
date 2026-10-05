@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-sync-scan"
+description = "Enables the sync_scan command without any pre-configured scope."
+commands.allow = ["sync_scan"]
+
+[[permission]]
+identifier = "deny-sync-scan"
+description = "Denies the sync_scan command without any pre-configured scope."
+commands.deny = ["sync_scan"]

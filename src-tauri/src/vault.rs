@@ -1,9 +1,15 @@
-//! Coffre des secrets d'agendas (ADR 0008). Production : crate `keyring` 3 (Gestionnaire
-//! d'identification Windows, Trousseau iOS), service `fr.circletasks.planner`, compte = `token_ref`.
-//! Tests : `MemoryVault`. Un secret n'est jamais journalisé ni renvoyé à la WebView.
+//! Coffre système (ADR 0008 ; ADR 0011 section 2.2). Production : crate `keyring` 3 (Gestionnaire d'identification Windows,
+//! Trousseau iOS), service `fr.circletasks.planner`. Comptes : jetons d'agendas (`circletasks.calendar.*`, `token_ref`) et clé de
+//! synchronisation (`circletasks.sync.key.v1`, voir `sync_key_vault`). Tests : `MemoryVault`. Un secret n'est jamais journalisé ni
+//! renvoyé à la WebView.
+//!
+//! Déplacé de `calendars/vault.rs` au lot Y1 (réexporté par `calendars::vault`, sans changement de comportement pour les agendas).
 
 use std::collections::HashMap;
 use std::sync::Mutex;
+
+/// Service du coffre système (identique sur PC et iPhone).
+pub const VAULT_SERVICE: &str = "fr.circletasks.planner";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VaultError {
@@ -48,7 +54,7 @@ pub struct SystemVault;
 #[cfg(any(windows, target_os = "ios"))]
 impl SystemVault {
     fn entry(token_ref: &str) -> Result<keyring::Entry, VaultError> {
-        keyring::Entry::new(super::VAULT_SERVICE, token_ref).map_err(|_| VaultError::Unavailable)
+        keyring::Entry::new(VAULT_SERVICE, token_ref).map_err(|_| VaultError::Unavailable)
     }
 }
 
@@ -111,5 +117,18 @@ pub fn parse_token_ref(token_ref: &str) -> Option<RefNamespace> {
         "google" => Some(RefNamespace::Google),
         "icloud" => Some(RefNamespace::Icloud),
         _ => None,
+    }
+}
+
+/// Coffre de la clé de synchronisation (ADR 0011 section 2.2) : Gestionnaire d'identification sur PC (`keyring`) ; sur iPhone, Trousseau
+/// par `security-framework` avec les attributs de `vault_ios::sync_key_attributes` (`keyring` ne permet pas de les fixer).
+pub fn sync_key_vault() -> Box<dyn SecretVault> {
+    #[cfg(target_os = "ios")]
+    {
+        Box::new(crate::vault_ios::IosSyncKeyVault)
+    }
+    #[cfg(not(target_os = "ios"))]
+    {
+        Box::new(SystemVault)
     }
 }
