@@ -3,6 +3,7 @@ import type { SpaceId, TaskId } from '../../../../src/domain/types';
 import type { SyncStatus } from '../../../../src/platform/sync/types';
 import { JOIN_CHUNK_RECORDS, JOIN_META, type JoinState } from '../../../../src/sync/join';
 import { setSnapshotTestHooks } from '../../../../src/sync/snapshot';
+import { armCrash } from '../../../sim/syncCrash';
 import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimDevice } from '../../../sim/syncDevice';
 
 /**
@@ -126,6 +127,73 @@ describe('nouvel appareil : instantané en fusion, progression, reprise (critèr
     b.folder.setAvailability(A_ID, `${epoch}/s-00000001.cts`, 'local');
     expect((await b.cycle()).phase).toBe('idle');
     expect(await joinState(b)).toBeNull();
+  });
+});
+
+describe('arrivée suivie dès le premier cycle (revue 1, bloquant)', () => {
+  /** Premier instantané du PC (époque 1). */
+  const snapshotFile = (b: SimDevice): string => `${[...(b.folder.devices.get(A_ID)?.epochs.keys() ?? [])][0] as string}/s-00000001.cts`;
+
+  it('premier cycle en attente d’iCloud : l’arrivée est mémorisée, le second cycle passe par join (reprise au même endroit)', async () => {
+    const a = await pcWithTasks(130);
+    const b = await joiner(a);
+    await pair(a, b);
+    b.folder.setAvailability(A_ID, snapshotFile(b), 'cloud');
+    expect((await b.cycle()).phase).toBe('waiting-icloud');
+    expect(await joinState(b)).toMatchObject({ done: 0, failure: null });
+    b.folder.setAvailability(A_ID, snapshotFile(b), 'local');
+    let calls = 0;
+    setSnapshotTestHooks({
+      beforeBatch: () => {
+        calls += 1;
+        if (calls === 3) throw new Error('arrêt simulé');
+      },
+    });
+    expect((await b.cycle()).phase).toBe('error');
+    expect(await joinState(b)).toMatchObject({ done: 2 * JOIN_CHUNK_RECORDS, failure: 'io' });
+    setSnapshotTestHooks({});
+    const { seen } = watchProgress(b);
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(seen[0]?.done).toBe(2 * JOIN_CHUNK_RECORDS);
+    expect(seen[0]?.total).toBeGreaterThan(2 * JOIN_CHUNK_RECORDS);
+    expect(await joinState(b)).toBeNull();
+    syncFolders(devices);
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+  });
+
+  it('arrêt juste après la transaction de l’époque, avant toute écriture de join : le cycle suivant passe par join', async () => {
+    const a = await pcWithTasks(60);
+    // Rang de l'écriture qui suit la transaction posant l'époque, mesuré sur un premier appareil neuf.
+    const probeDevice = await joiner(a);
+    await pair(a, probeDevice);
+    const probe = armCrash(probeDevice, null);
+    let afterEpochTx = -1;
+    const original = probeDevice.data.transaction.bind(probeDevice.data);
+    probeDevice.data.transaction = async (work) => {
+      const result = await original(work);
+      if (afterEpochTx < 0 && (await probeDevice.data.repos.sync.getMeta('epoch')) !== null) afterEpochTx = probe.writes + 1;
+      return result;
+    };
+    expect((await probeDevice.cycle()).phase).toBe('idle');
+    probe.disarm();
+    expect(afterEpochTx).toBeGreaterThan(1);
+    // Même scénario sur un autre appareil neuf, arrêté juste après cette transaction.
+    const c = await createSimDevice('cccccccc-cccc-4ccc-8ccc-cccccccccccc', { name: 'iPhone 2', clock: a.clock });
+    devices.push(c);
+    await pair(a, c);
+    const crash = armCrash(c, afterEpochTx);
+    await c.cycle();
+    expect(crash.crashed).toBe(true);
+    crash.disarm();
+    expect(await c.data.repos.sync.getMeta('epoch')).not.toBeNull();
+    await c.restart();
+    const { seen } = watchProgress(c);
+    expect((await c.cycle()).phase).toBe('idle');
+    // Progression en enregistrements de l'instantané (join), et non en lignes (reprise ordinaire : plus de 60).
+    const total = seen.at(-1)?.total ?? 0;
+    expect(total).toBeGreaterThan(0);
+    expect(total).toBeLessThan(60);
+    expect(await joinState(c)).toBeNull();
   });
 });
 

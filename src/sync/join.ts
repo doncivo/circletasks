@@ -27,8 +27,19 @@ import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type S
 /** Clé de `sync_meta` (table locale, jamais publiée) ; lue telle quelle par `src/features/sync/JoinProgress.tsx`. */
 export const JOIN_META = 'join';
 
-/** Enregistrements de l'instantané appliqués par tranche (une transaction de mémorisation par tranche). */
+/**
+ * Enregistrements de l'instantané appliqués par tranche (une transaction de mémorisation par tranche). Un enregistrement `snap-rows` porte
+ * jusqu'à 64 Kio de lignes : 4 enregistrements font des transactions de 256 Kio au plus, et un arrêt ne rejoue jamais plus de 256 Kio,
+ * pour un coût fixe d'une écriture de `sync_meta` par tranche (5 000 tâches : une vingtaine de tranches).
+ */
 export const JOIN_CHUNK_RECORDS = 4;
+
+/** Échec de l'arrivée qui porte son propre code (`clock-ahead`), gardé tel quel dans `sync_meta.join.failure`. */
+export class JoinError extends Error {
+  constructor(readonly code: JoinFailure) {
+    super(`arrivée : ${code}`);
+  }
+}
 
 /** `clock-ahead` : instantané refusé pour dérive d'horloge ; sinon le code de l'erreur survenue pendant l'application (`io`…). */
 export type JoinFailure = 'clock-ahead' | (string & {});
@@ -43,9 +54,15 @@ export interface JoinState {
   readonly failure: JoinFailure | null;
 }
 
-/** Appareil en train de rejoindre : jamais d'époque suivie avant ce cycle, ou une arrivée commencée et pas terminée. */
+/**
+ * Appareil en train de rejoindre : jamais d'époque suivie avant ce cycle, arrivée commencée et pas terminée, ou appareil qui n'a encore
+ * terminé aucun cycle (revue 1 : un arrêt entre la transaction qui pose l'époque et la première écriture de `join` ne fait pas basculer
+ * vers la reprise ordinaire).
+ */
 export async function isJoining(repos: Repositories, localEpoch: EpochId | null): Promise<boolean> {
-  return localEpoch === null || (await readJson<JoinState>(repos, JOIN_META)) !== null;
+  if (localEpoch === null || (await readJson<JoinState>(repos, JOIN_META)) !== null) return true;
+  const self = (await repos.sync.getStates()).find((row) => row.isSelf);
+  return !self?.lastSyncAt;
 }
 
 const isRowRecord = (record: SnapshotRecord): boolean => record.k === 'snap-rows' || record.k === 'snap-row';
@@ -75,8 +92,17 @@ export async function joinFromSnapshot(
   const candidates = [...accepted.entries(), ...(ownState ? [[deps.deviceId, ownState] as const] : [])]
     .filter(([, s]) => s.epoch === epoch && s.snapshot !== null)
     .sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? 1 : -1));
+  if (candidates.length === 0) {
+    // Aucun instantané dans l'époque : rien à suivre, l'appareil lit les journaux.
+    if (saved !== null) await writeJson(repos, JOIN_META, null);
+    deps.logger.log('resume-unavailable', { epoch });
+    return false;
+  }
+  // Entrée de départ dès le premier cycle (revue 1) : une attente d'iCloud ou un arrêt avant la première tranche garde l'arrivée suivie.
+  const start: JoinState = { epoch, from: deps.deviceId, seq: 0, done: 0, total: 0, failure: null };
+  if (saved === null) await writeJson(repos, JOIN_META, start);
   let failure: JoinFailure | null = null;
-  let tracked: JoinState | null = saved;
+  let tracked: JoinState = saved ?? start;
   for (const [deviceId, state] of candidates) {
     const seq = (state.snapshot as { seq: number }).seq;
     const loaded = await loadSnapshot(deps, deviceId, epoch, seq);
@@ -100,17 +126,20 @@ export async function joinFromSnapshot(
       await applyJoin(deps, deviceId, epoch, loaded, tracked, accepted, knows, hooks);
     } catch (error) {
       // Les tranches terminées ont mémorisé leur position : l'échec s'y ajoute sans la faire reculer.
-      const reached = (await readJson<JoinState>(repos, JOIN_META).catch(() => null)) ?? tracked;
-      await writeJson(repos, JOIN_META, { ...reached, failure: syncErrorCodeOf(error) } satisfies JoinState).catch(() => undefined);
+      const reached = (await readJson<JoinState>(repos, JOIN_META)) ?? tracked;
+      const code: JoinFailure = error instanceof JoinError ? error.code : syncErrorCodeOf(error);
+      try {
+        await writeJson(repos, JOIN_META, { ...reached, failure: code } satisfies JoinState);
+      } catch (writeError) {
+        // Base indisponible : l'échec du cycle reste visible par la phase `error` ; on le journalise sans contenu.
+        deps.logger.log('join-failure-unsaved', { code: syncErrorCodeOf(writeError) });
+      }
       throw error;
     }
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
     return true;
   }
-  if (tracked !== null || failure !== null) {
-    const base = tracked ?? { epoch, from: deps.deviceId, seq: 0, done: 0, total: 0, failure: null };
-    await writeJson(repos, JOIN_META, { ...base, failure } satisfies JoinState);
-  }
+  await writeJson(repos, JOIN_META, { ...tracked, failure } satisfies JoinState);
   deps.logger.log('resume-unavailable', { epoch });
   return false;
 }
@@ -136,7 +165,7 @@ async function applyJoin(
     const chunk: LoadedSnapshot = { records: records.slice(from, to), end: loaded.end };
     const remember: SnapshotTxHook = (tx) => writeJson(tx, JOIN_META, { ...start, done: to, failure: null } satisfies JoinState);
     const result = await mergeSnapshot(deps, chunk, ctx, (doneOps, totalOps) => hooks.onProgress?.(from + Math.floor(((to - from) * doneOps) / Math.max(1, totalOps)), total), remember);
-    if (result === 'clock-ahead') throw new Error('clock-ahead');
+    if (result === 'clock-ahead') throw new JoinError('clock-ahead');
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
   }
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
@@ -152,7 +181,7 @@ async function applyJoin(
     if (deviceId !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(deviceId, { status: 'active' });
   };
   const result = await mergeSnapshot(deps, { records: records.slice(rowsEnd), end: loaded.end }, ctx, undefined, finalize);
-  if (result === 'clock-ahead') throw new Error('clock-ahead');
+  if (result === 'clock-ahead') throw new JoinError('clock-ahead');
   if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
   hooks.onProgress?.(total, total);
 }
