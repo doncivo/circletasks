@@ -38,17 +38,21 @@ const READ_CHUNK = 400;
 /** Entrées de file lues par instruction (la file entière d'une grosse file hors ligne ne tient pas dans une tâche courte). */
 const OUTBOX_PAGE = 500;
 
-/** Lit la file par pages, dans l'ordre (`limit` : au plus ce nombre d'entrées), avec une pause possible entre deux pages. */
-async function readOutboxPaged(repos: Repositories, limit: number | undefined, slicer: Slicer): Promise<OutboxEntry[]> {
+/**
+ * Lit la file par pages, dans l'ordre (`limit` : au plus ce nombre d'entrées ; `maxSeq` : entrées de numéro inférieur ou égal
+ * seulement), avec une pause possible entre deux pages. Chaque page est une instruction : aucune transaction n'est tenue entre deux.
+ */
+async function readOutboxPaged(repos: Repositories, limit: number | undefined, slicer: Slicer, maxSeq = Number.POSITIVE_INFINITY): Promise<OutboxEntry[]> {
   const out: OutboxEntry[] = [];
   let after = 0;
   for (;;) {
     const want = limit === undefined ? OUTBOX_PAGE : Math.min(OUTBOX_PAGE, limit - out.length);
     if (want <= 0) return out;
     const page = await repos.sync.readOutbox(want, after);
-    out.push(...page);
+    const kept = page.filter((entry) => entry.seq <= maxSeq);
+    out.push(...kept);
     const last = page.at(-1);
-    if (page.length < want || !last) return out;
+    if (page.length < want || !last || kept.length < page.length) return out;
     after = last.seq;
     await slicer.pause();
   }
@@ -103,8 +107,22 @@ export interface Materialized {
 }
 
 /**
- * Lit la file et la transforme en opérations (valeurs courantes de la base). À appeler dans **une seule transaction de lecture** (aucune
- * écriture ne s'intercale entre la file et les lignes). `reserved` : hlc locaux neufs, **pris avant cette transaction**, donnés dans
+ * Bornes d'une lecture faite **hors transaction** (Y-05 critère 6, défaut 1 de la QA de Y-04 : la base n'est jamais tenue pendant la mise
+ * en forme d'une grosse file). `cut` : hlc local pris **avant** la lecture (le dernier des hlc réservés) ; `maxSeq` : dernier numéro de
+ * la file lu juste après. Toute écriture locale faite pendant la lecture a un hlc plus grand que `cut` et une entrée de numéro plus
+ * grand que `maxSeq` : le champ qu'elle porte n'est pas publié dans ce cycle (ni son entrée retirée) et part au suivant ; la tête
+ * publiée ne dépasse donc jamais `cut`, et aucune écriture non vue ne passe sous elle. Une création dont un champ est ainsi différé part
+ * en deux opérations, que l'autre appareil recompose (`missing-row`, ADR 0011 §3.3).
+ */
+export interface MaterializeBounds {
+  readonly maxSeq: number;
+  readonly cut: Hlc;
+}
+
+/**
+ * Lit la file et la transforme en opérations (valeurs courantes de la base). Sans `bounds`, à appeler dans **une seule transaction de
+ * lecture** (aucune écriture ne s'intercale entre la file et les lignes) ; avec `bounds`, lecture par instructions courtes hors
+ * transaction (valeurs et horloges d'une ligne toujours lues ensemble). `reserved` : hlc locaux neufs, **pris avant cette transaction**, donnés dans
  * l'ordre aux lignes entières (« + ») comme rang de publication (les suivantes partagent le dernier) : leurs horloges peuvent toutes
  * être sous la tête déjà publiée (rappel vivant d'une cible restaurée, ligne recréée par le report d'époque) et, classées à leur
  * maximum, un appel fait seulement de telles lignes serait refusé (`hlc-order`) à chaque cycle. Pris avant la lecture, ces hlc sont
@@ -118,9 +136,12 @@ export async function materializeOutbox(
   limit?: number,
   reserved: readonly Hlc[] = [],
   slicer: Slicer = NO_SLICING,
+  bounds: MaterializeBounds | null = null,
 ): Promise<Materialized> {
   let nextReserved = 0;
-  const outbox = await readOutboxPaged(repos, limit, slicer);
+  const outbox = await readOutboxPaged(repos, limit, slicer, bounds?.maxSeq);
+  /** Écrit après la coupure : publié au cycle suivant. */
+  const late = (hlc: Hlc): boolean => bounds !== null && hlc > bounds.cut;
   const byTable = new Map<SyncTable, Map<string, OutboxEntry[]>>();
   const stale: OutboxEntry[] = [];
   for (const entry of outbox) {
@@ -137,8 +158,8 @@ export async function materializeOutbox(
   const entries: { entry: OutboxEntry; hlc: Hlc }[] = [];
   for (const [t, rowsEntries] of byTable) {
     const ids = [...rowsEntries.keys()];
-    // Valeurs et horloges d'une ligne lues par une seule instruction : une écriture ne peut pas tomber entre les deux (et la lecture
-    // entière est dans la transaction de l'appelant). Par paquets, avec une pause possible entre deux (tâches courtes).
+    // Valeurs et horloges d'une ligne lues par une seule instruction : une écriture ne peut pas tomber entre les deux. Par paquets, avec
+    // une pause possible entre deux (tâches courtes).
     const rows = new Map<string, ExportedRow>();
     for (let i = 0; i < ids.length; i += READ_CHUNK) {
       for (const [id, row] of await repos.sync.readRowsWithClocks(t, ids.slice(i, i + READ_CHUNK))) rows.set(id, row);
@@ -157,13 +178,19 @@ export async function materializeOutbox(
         // Ligne recréée par le report d'époque : republiée entière, une opération à son plus grand hlc.
         const f = new Map<string, SyncField>();
         let max: Hlc | null = null;
+        let deferred = false;
         for (const col of t.columns) {
           const clock = rowClocks.get(col.name) ?? fallback;
+          if (late(clock.hlc)) {
+            // Champ réécrit après la coupure : il part au cycle suivant par sa propre entrée.
+            deferred = true;
+            continue;
+          }
           f.set(col.name, [row.values.get(col.name) ?? null, clock.hlc, rowClocks.get(col.name)?.base ?? null]);
           if (max === null || clock.hlc > max) max = clock.hlc;
         }
         if (max === null) {
-          stale.push(...rowEntries);
+          if (!deferred) stale.push(...rowEntries);
           continue;
         }
         const rank = reserved[Math.min(nextReserved, reserved.length - 1)];
@@ -175,11 +202,16 @@ export async function materializeOutbox(
       }
       const byHlc = new Map<Hlc, Map<string, SyncField>>();
       const entryHlc = new Map<OutboxEntry, Hlc>();
+      const deferredEntries = new Set<OutboxEntry>();
       for (const entry of rowEntries) {
         const names = entry.field === '*' ? t.columns.map((c) => c.name) : t.columns.some((c) => c.name === entry.field) ? [entry.field] : [];
         for (const name of names) {
           const clock = rowClocks.get(name) ?? fallback;
           if (hlcDevice(clock.hlc) !== self || (publishedMax !== null && clock.hlc <= publishedMax)) continue;
+          if (late(clock.hlc)) {
+            deferredEntries.add(entry);
+            continue;
+          }
           const fields = byHlc.get(clock.hlc) ?? new Map<string, SyncField>();
           fields.set(name, [row.values.get(name) ?? null, clock.hlc, rowClocks.get(name)?.base ?? null]);
           byHlc.set(clock.hlc, fields);
@@ -189,8 +221,8 @@ export async function materializeOutbox(
       }
       for (const entry of rowEntries) {
         const hlc = entryHlc.get(entry);
-        if (hlc === undefined) stale.push(entry);
-        else entries.push({ entry, hlc });
+        if (hlc !== undefined) entries.push({ entry, hlc });
+        else if (!deferredEntries.has(entry)) stale.push(entry);
       }
       for (const [hlc, fields] of byHlc) {
         // Ordre du catalogue à l'intérieur d'une opération (texte stable).
@@ -359,12 +391,15 @@ export interface PublishResult {
 export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: DeviceAck, maxSegment: number): Promise<PublishResult> {
   const { data, platform, deviceId, sv, logger } = deps;
   // Rangs des lignes entières réservés avant la lecture (le pilote est sérialisé : toute écriture tamponnée avant est déjà en file et
-  // sera vue ; toute écriture tamponnée après a un hlc plus grand), puis file et lignes lues dans une seule transaction.
+  // sera vue ; toute écriture tamponnée après a un hlc plus grand).
   // Tâches courtes (Y-05 critère 6) : une grosse file est lue et mise en forme par tranches, la boucle d'événements reprend la main entre deux.
   const slicer = createSlicer();
   const wholeRows = (await readOutboxPaged(data.repos, undefined, slicer)).filter((e) => e.field === ROW_REPUBLISH_FIELD).length;
   const reserved = Array.from({ length: wholeRows + 1 }, () => deps.hlc.now());
-  const material = await data.transaction((repos) => materializeOutbox(repos, deviceId, head.epoch === epoch ? head.hlc : null, undefined, reserved, slicer));
+  // Coupure : dernier hlc réservé, puis dernier numéro de la file. La lecture se fait ensuite par instructions courtes, hors
+  // transaction : l'interface lit et écrit pendant la mise en forme ; ce qu'elle écrit part au cycle suivant (voir MaterializeBounds).
+  const bounds: MaterializeBounds = { cut: reserved.at(-1) as Hlc, maxSeq: await data.repos.sync.maxOutboxSeq() };
+  const material = await materializeOutbox(data.repos, deviceId, head.epoch === epoch ? head.hlc : null, undefined, reserved, slicer, bounds);
   // Entrées lues sans rien à publier : retirées par numéro (une écriture faite depuis la lecture a un nouveau numéro et reste).
   if (material.stale.length > 0) await data.transaction((repos) => repos.sync.dropOutbox(material.stale));
   if (material.ops.length === 0) return { published: 0, head, error: null };
