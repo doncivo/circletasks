@@ -1,0 +1,158 @@
+import { afterEach, describe, expect, it } from 'vitest';
+import { openTestDb, type TestDb } from '../../../src/db/repositories/sql/testSetup';
+import { createManualClock } from '../../../src/domain/clock';
+import type { NewTask } from '../../../src/domain/model';
+import { PAGE_ROWS, type DeviceAck, type EpochId } from '../../../src/domain/sync/format';
+import { UNBOUNDED } from '../../../src/domain/sync/retention';
+import type { DeviceId, Hlc, LocalDate, LocalDateTime, ReminderId, SpaceId, TaskId } from '../../../src/domain/types';
+import { createAppContainer } from '../../../src/features/app/container';
+import { createTrashUseCases } from '../../../src/features/tasks/trashUseCases';
+import { createMemorySyncLogger } from '../../../src/sync/log';
+import { purgeDeleted } from '../../../src/sync/maintenance';
+import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
+
+/**
+ * Purge des lignes supprimées (ADR 0011 section 5.4 ; Y-09 critères 2, 6 et 11 ; revue Y2 points 7, 8 et 9) : suppression revérifiée
+ * dans la transaction gardée, parcours complet malgré des pages retenues, horizon de purge relevé par tout appelant, rappels des
+ * tâches purgées purgés et tracés avec elles.
+ */
+
+const SELF = '60000000-0000-4000-8000-0000000000c1' as DeviceId;
+const READER = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as DeviceId;
+const PRO = '00000000-0000-4000-8000-000000000001' as SpaceId;
+const DAY = 86_400_000;
+
+let db: TestDb | null = null;
+let devices: SimDevice[] = [];
+afterEach(async () => {
+  await db?.close();
+  db = null;
+  await Promise.all(devices.map((d) => d.close()));
+  devices = [];
+});
+
+const newTask = (n: number): NewTask => ({
+  id: `${String(n).padStart(8, '0')}-0000-4000-8000-000000000000` as TaskId,
+  spaceId: PRO,
+  projectId: null,
+  title: `Tâche ${String(n)}`,
+  note: '',
+  date: '2026-10-05' as LocalDate,
+  time: null,
+  status: 'todo',
+  doneAt: null,
+  sortOrder: n,
+  carriedOver: false,
+  recurrenceId: null,
+  seriesIndex: null,
+  seriesTemplate: null,
+  goalId: null,
+  icon: null,
+  someday: false,
+  source: 'local',
+  externalId: null,
+  externalEventId: null,
+});
+
+describe('purge : revérification et parcours (revue Y2, point 7)', () => {
+  it('une tâche restaurée entre la recherche des candidats et la transaction de purge n’est pas purgée', async () => {
+    db = await openTestDb(SELF, '2026-10-05T08:00:00.000Z');
+    const data = db.data;
+    const [task] = await data.repos.tasks.createMany([newTask(1)]);
+    await data.repos.tasks.softDelete([(task as { id: TaskId }).id]);
+    db.clock.advance(31 * DAY);
+    const sync = data.repos.sync as { deletedRows: typeof data.repos.sync.deletedRows };
+    const original = sync.deletedRows.bind(data.repos.sync);
+    let restored = false;
+    sync.deletedRows = async (...args) => {
+      const rows = await original(...args);
+      if (!restored && rows.length > 0) {
+        restored = true;
+        await data.repos.tasks.restore([(task as { id: TaskId }).id]);
+      }
+      return rows;
+    };
+    const result = await purgeDeleted({ data, logger: createMemorySyncLogger() }, UNBOUNDED, db.clock.nowMs());
+    expect(restored).toBe(true);
+    expect(result.count).toBe(0);
+    const back = await data.repos.tasks.getById((task as { id: TaskId }).id, { includeDeleted: true });
+    expect(back?.deletedAt).toBeNull();
+    expect(await db.driver.select('SELECT * FROM sync_tombstone')).toEqual([]);
+  });
+
+  it('une première page entièrement retenue n’arrête pas la purge des pages suivantes', async () => {
+    db = await openTestDb(SELF, '2026-10-05T08:00:00.000Z');
+    const data = db.data;
+    const tasks = await data.repos.tasks.createMany(Array.from({ length: PAGE_ROWS + 1 }, (_, i) => newTask(i + 1)));
+    const last = tasks.at(-1) as { id: TaskId };
+    // La tâche au plus grand identifiant est supprimée d'abord (lue par l'autre appareil) ; les 500 premières ensuite (pas encore lues).
+    await data.repos.tasks.softDelete([last.id]);
+    const readUpTo = (await data.repos.tasks.getById(last.id, { includeDeleted: true }))?.hlc as Hlc;
+    db.clock.advance(1_000);
+    await data.repos.tasks.softDelete(tasks.slice(0, PAGE_ROWS).map((t) => t.id));
+    db.clock.advance(31 * DAY);
+    const ack: DeviceAck = { epoch: 'e0001-x' as EpochId, segment: 1, record: 1, hlc: readUpTo, stateSeq: 1 };
+    const horizon = { kind: 'limited' as const, readers: [{ deviceId: READER, status: 'active', lastSeenHlc: null, acks: new Map([[SELF, ack]]) }] };
+    const result = await purgeDeleted({ data, logger: createMemorySyncLogger() }, horizon, db.clock.nowMs());
+    expect(result.count).toBe(1);
+    expect(await data.repos.tasks.getById(last.id, { includeDeleted: true })).toBeNull();
+    expect(await db.driver.select<{ n: number }>('SELECT COUNT(*) AS n FROM task WHERE deleted_at IS NOT NULL')).toEqual([{ n: PAGE_ROWS }]);
+  });
+});
+
+describe('purge : rappels des tâches purgées (revue Y2, point 9 ; T-08)', () => {
+  it('les rappels d’une tâche purgée sont purgés et tracés avec elle, vivants ou supprimés', async () => {
+    db = await openTestDb(SELF, '2026-10-05T08:00:00.000Z');
+    const data = db.data;
+    const [task] = await data.repos.tasks.createMany([newTask(1)]);
+    const taskId = (task as { id: TaskId }).id;
+    await data.repos.reminders.createMany([
+      { id: '90000000-0000-4000-8000-000000000001' as ReminderId, targetType: 'task', targetId: taskId, offsetMin: 15, fireAt: '2026-10-05T09:00' as LocalDateTime },
+      { id: '90000000-0000-4000-8000-000000000002' as ReminderId, targetType: 'task', targetId: taskId, offsetMin: 60, fireAt: '2026-10-05T08:00' as LocalDateTime },
+    ]);
+    // Un rappel supprimé avec la tâche, l'autre resté vivant (écrit après la suppression par un autre appareil, par exemple).
+    await data.repos.reminders.softDeleteForTargets('task', [taskId]);
+    await data.repos.tasks.softDelete([taskId]);
+    await db.driver.execute("UPDATE reminder SET deleted_at = NULL WHERE id = '90000000-0000-4000-8000-000000000002'");
+    db.clock.advance(31 * DAY);
+    await purgeDeleted({ data, logger: createMemorySyncLogger() }, UNBOUNDED, db.clock.nowMs());
+    expect(await data.repos.tasks.getById(taskId, { includeDeleted: true })).toBeNull();
+    expect(await db.driver.select('SELECT id FROM reminder')).toEqual([]);
+    const tombs = await db.driver.select<{ table_name: string; row_id: string }>('SELECT table_name, row_id FROM sync_tombstone ORDER BY table_name, row_id');
+    expect(tombs).toEqual([
+      { table_name: 'reminder', row_id: '90000000-0000-4000-8000-000000000001' },
+      { table_name: 'reminder', row_id: '90000000-0000-4000-8000-000000000002' },
+      { table_name: 'task', row_id: taskId },
+    ]);
+    expect(await db.driver.select("SELECT * FROM sync_field_clock WHERE table_name = 'reminder'")).toEqual([]);
+    expect(await db.driver.select("SELECT * FROM sync_outbox WHERE table_name = 'reminder'")).toEqual([]);
+  });
+});
+
+describe('purge par la corbeille : horizon de purge (revue Y2, point 8)', () => {
+  it('purgeExpired avec synchro relève sync_meta.purgeHorizon (règle 4 de la restauration)', async () => {
+    const a = await createSimDevice('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', { name: 'PC' });
+    const b = await createSimDevice(READER, { name: 'iPhone', clock: createManualClock(a.clock.nowMs()) });
+    devices = [a, b];
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    const t = await a.createTask('Corbeille');
+    a.clock.advance(1_000);
+    await a.deleteTask(t.id);
+    for (let i = 0; i < 2; i += 1) {
+      for (const d of devices) await d.cycle();
+      syncFolders(devices);
+    }
+    await a.cycle();
+    expect(await a.data.repos.sync.getMeta('purgeHorizon')).toBeNull();
+    a.clock.advance(31 * DAY);
+    const container = createAppContainer({ clock: a.clock, hlc: a.hlc, data: a.data, sync: a.service });
+    expect(await createTrashUseCases(container).purgeExpired()).toBe(1);
+    const deleted = (await a.driver.select<{ deleted_hlc: string }>('SELECT deleted_hlc FROM sync_tombstone WHERE row_id = ?', [t.id]))[0]?.deleted_hlc;
+    expect(JSON.parse(String(await a.data.repos.sync.getMeta('purgeHorizon')))).toBe(deleted);
+  });
+});

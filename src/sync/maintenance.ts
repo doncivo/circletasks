@@ -1,4 +1,4 @@
-import type { Repositories, SyncStateRow } from '../db/repositories';
+import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { canPurgeDeletion, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
 import { isStrictHlc } from '../domain/sync/format';
@@ -9,6 +9,7 @@ import { applyOps } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
+import { purgeRows } from './purge';
 
 /**
  * Entretien de fin de cycle (ADR 0011, sections 1.6, 5.3, 5.4, 9 et 10.2 étape 7 ; Y-02 critères 11 et 20, Y-09 critères 2, 3, 6 et 11) :
@@ -37,8 +38,11 @@ export async function currentPurgeHorizon(repos: Repositories, self: DeviceId, n
 }
 
 /**
- * Purge des lignes supprimées de toutes les tables publiées (sauf `settings` et espaces fixes) : sous garde, avec inscription des
- * identifiants dans `sync_tombstone` dans la même transaction. Renvoie le nombre de lignes purgées et le plus grand hlc de suppression purgé.
+ * Purge des lignes supprimées de toutes les tables publiées (sauf `settings` et espaces fixes), enfants d'abord : sous garde, avec
+ * inscription des identifiants dans `sync_tombstone` et des rappels visés (T-08) dans la même transaction (`purge.ts`). La suppression
+ * est **revérifiée dans la transaction gardée** (une restauration ou une nouvelle écriture entre la lecture et la purge l'emporte) ; les
+ * pages sont parcourues par identifiant, une page entièrement retenue n'arrête pas le parcours. `sync_meta.purgeHorizon` (plus grand hlc
+ * de suppression purgé, règle 4) est relevé dans la même transaction, quel que soit l'appelant (cycle ou corbeille T-08).
  */
 export async function purgeDeleted(deps: Pick<SyncDeps, 'data' | 'logger'>, horizon: PurgeHorizon, nowMs: number): Promise<{ readonly count: number; readonly maxPurged: Hlc | null }> {
   let maxPurged: Hlc | null = null;
@@ -47,17 +51,35 @@ export async function purgeDeleted(deps: Pick<SyncDeps, 'data' | 'logger'>, hori
   let total = 0;
   for (const t of [...SYNC_TABLES].reverse()) {
     if (!t.purgeable) continue;
+    let after: string | null = null;
     for (;;) {
-      const candidates = (await deps.data.repos.sync.deletedRows(t, before, PAGE_ROWS)).filter((row) => isPurgeable(t.name, row.id) && isStrictHlc(row.deletedHlc) && canPurgeDeletion(row, horizon, nowMs));
-      if (candidates.length === 0) break;
-      await guarded(deps.data, async (repos) => {
-        if (t.name === 'calendar_account') await repos.sync.deleteExternalEventsOf(candidates.map((c) => c.id));
-        await repos.sync.insertTombstones(candidates.map((c) => ({ table: t.name, rowId: c.id, deletedHlc: c.deletedHlc })), purgedAt);
-        await repos.sync.deleteRows(t, candidates.map((c) => c.id));
-      });
-      for (const c of candidates) if (maxPurged === null || c.deletedHlc > maxPurged) maxPurged = c.deletedHlc;
-      total += candidates.length;
-      if (candidates.length < PAGE_ROWS) break;
+      const page = await deps.data.repos.sync.deletedRows(t, before, PAGE_ROWS, after);
+      if (page.length === 0) break;
+      after = (page.at(-1) as DeletedRow).id;
+      const candidates = page.filter((row) => isPurgeable(t.name, row.id) && isStrictHlc(row.deletedHlc) && canPurgeDeletion(row, horizon, nowMs));
+      if (candidates.length > 0) {
+        const purged = await guarded(deps.data, async (repos) => {
+          const ids = candidates.map((c) => c.id);
+          const [rows, clocks] = await Promise.all([repos.sync.readRows(t, ids), repos.sync.readClocks(t, ids)]);
+          const still = candidates.filter((c) => {
+            const row = rows.get(c.id);
+            if (!row || row.values.get('deleted_at') !== c.deletedAt) return false;
+            const rowClocks = clocks.get(c.id);
+            return (rowClocks?.get('deleted_at') ?? rowClocks?.get('*') ?? { hlc: row.hlc }).hlc === c.deletedHlc;
+          });
+          const done = (await purgeRows(repos, t, still, purgedAt, deps.logger)).purged;
+          let pageMax: Hlc | null = null;
+          for (const item of done) if (pageMax === null || item.deletedHlc > pageMax) pageMax = item.deletedHlc;
+          if (pageMax !== null) {
+            const previous = await readJson<Hlc>(repos, META.purgeHorizon);
+            if (previous === null || pageMax > previous) await writeJson(repos, META.purgeHorizon, pageMax);
+          }
+          return { count: done.length, max: pageMax };
+        });
+        if (purged.max !== null && (maxPurged === null || purged.max > maxPurged)) maxPurged = purged.max;
+        total += purged.count;
+      }
+      if (page.length < PAGE_ROWS) break;
     }
   }
   if (total > 0) deps.logger.log('purged', { rows: total, tombstones: await deps.data.repos.sync.tombstoneCount() });
@@ -103,11 +125,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   const horizon = purgeHorizon(devices, deps.deviceId, nowMs);
 
   // Lignes supprimées : 30 jours ET lues par tous les appareils actifs.
-  const { maxPurged: purged } = await purgeDeleted(deps, horizon, nowMs);
-  if (purged !== null) {
-    const previous = await readJson<Hlc>(data.repos, META.purgeHorizon);
-    if (previous === null || purged > previous) await writeJson(data.repos, META.purgeHorizon, purged);
-  }
+  await purgeDeleted(deps, horizon, nowMs);
 
   // Ses segments : couverts par un instantané, accusés par tous, dernier enregistrement de plus de 30 jours.
   const snapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc; coveredSegment?: number }>(data.repos, META.snapshot);
