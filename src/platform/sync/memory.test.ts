@@ -102,7 +102,7 @@ describe('dossier et liaison (Y-01)', () => {
     expect(await p.folder.info()).toEqual({ configured: false, label: null, kind: 'unknown', pinned: false });
     expect(await codeOf(p.scan({ keep: [] }))).toBe('not-configured');
     expect(await codeOf(p.bindDevice(A))).toBe('not-configured');
-    expect(await p.folder.choose()).toEqual({ configured: true, label: 'iCloud Drive / CircleTasks', kind: 'icloud', pinned: true });
+    expect(await p.folder.choose()).toEqual({ configured: true, label: 'CircleTasks', kind: 'icloud', pinned: true });
     p.testing.setChooser(null);
     expect(await p.folder.choose()).toBeNull();
     expect((await p.folder.info()).configured).toBe(true);

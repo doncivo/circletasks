@@ -14,6 +14,7 @@ import {
   type SyncCommand,
   type SyncCommandMap,
   type SyncFolderInfo,
+  type SyncFolderInfoJson,
   type SyncPlatform,
 } from './types';
 
@@ -46,6 +47,11 @@ export function toSyncError(error: unknown): SyncPlatformError {
   return new SyncPlatformError(syncErrorCodeOf(error));
 }
 
+/** Forme IPC du dossier -> `SyncFolderInfo` (nom du dossier dans `label`). */
+function folderFromJson(info: SyncFolderInfoJson): SyncFolderInfo {
+  return { configured: info.configured, label: info.name, kind: info.kind, pinned: info.pinned };
+}
+
 function deviceFromJson(device: FolderScanJson['devices'][number]): DeviceScan {
   if (device.state === null) return { ...device, state: null };
   const state = publishedStateFromJson(device.state);
@@ -67,8 +73,11 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
   return {
     available: () => options.available,
     folder: {
-      info: (): Promise<SyncFolderInfo> => call('sync_folder_info'),
-      choose: (): Promise<SyncFolderInfo | null> => call('sync_folder_choose'),
+      info: async (): Promise<SyncFolderInfo> => folderFromJson(await call('sync_folder_info')),
+      choose: async (): Promise<SyncFolderInfo | null> => {
+        const info = await call('sync_folder_choose');
+        return info === null ? null : folderFromJson(info);
+      },
       forget: async ({ eraseKey }) => {
         await call('sync_folder_forget', { eraseKey });
       },

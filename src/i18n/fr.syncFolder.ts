@@ -6,6 +6,8 @@
 export const syncFolderFr = {
   sectionTitle: 'SYNCHRONISATION',
   rowLabel: 'Dossier de synchro',
+  /** Libellé d'un dossier iCloud Drive (Reglages.html) ; `{name}` : nom du dossier rendu par Rust. */
+  icloudLabel: 'iCloud Drive / {name}',
   notConfigured: 'Non configurée',
   choose: 'Choisir le dossier',
   chooseLabel: 'Choisir le dossier de synchronisation',

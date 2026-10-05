@@ -141,7 +141,7 @@ export class MemorySyncFolder {
   constructor(
     readonly id: string = 'memory-folder',
     /** Faux de dev et de test : jamais affiché tel quel, l'écran tire ses textes de src/i18n (le libellé réel vient de Rust). */
-    readonly label: string = 'iCloud Drive / CircleTasks',
+    readonly label: string = 'CircleTasks',
     readonly kind: SyncFolderInfo['kind'] = 'icloud',
   ) {}
 
@@ -567,6 +567,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const ack = read.status === 'ok' ? read.state?.acks.get(self) : undefined;
       if (ack) acks.push(ack);
     }
+    // Son propre state.ctx présent mais illisible (nuage, incomplet, remplacé) sans accusé qui borne : en attente, rien n'est retenu
+    // (revue 4 du lot Y1, même règle que Rust) ; l'appareil ne publie pas sur une tête qu'il ne connaît pas.
+    if (mine && mine.status !== 'ok' && mine.status !== 'missing' && acks.length === 0) fail('cloud-pending');
     const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(dir?.epochs.keys() ?? []), ...acks.map((a) => a.epoch)];
     const epoch = epochs.reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
     const stateSeq = Math.max(state?.stateSeq ?? 0, ...acks.map((a) => a.stateSeq));

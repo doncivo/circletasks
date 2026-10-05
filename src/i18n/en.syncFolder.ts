@@ -6,6 +6,7 @@ type Shape<T> = { readonly [K in keyof T]: string };
 export const syncFolderEn: Shape<typeof syncFolderFr> = {
   sectionTitle: 'SYNC',
   rowLabel: 'Sync folder',
+  icloudLabel: 'iCloud Drive / {name}',
   notConfigured: 'Not set up',
   choose: 'Choose folder',
   chooseLabel: 'Choose the sync folder',

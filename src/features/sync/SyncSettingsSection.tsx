@@ -22,7 +22,8 @@ type View =
   | { readonly kind: 'loading' }
   | { readonly kind: 'not-configured' }
   | { readonly kind: 'bound'; readonly info: SyncFolderInfo; readonly needsPairing: boolean }
-  | { readonly kind: 'error'; readonly code: SyncErrorCode; readonly info: SyncFolderInfo | null };
+  /** `configured` : un dossier est lié (erreur du dossier lié) ; faux si c'est le choix d'un dossier qui a échoué (revue 6). */
+  | { readonly kind: 'error'; readonly code: SyncErrorCode; readonly info: SyncFolderInfo | null; readonly configured: boolean };
 
 type ForgetChoice = 'folder' | 'folder-and-key';
 
@@ -59,19 +60,23 @@ async function readView(platform: SyncPlatform): Promise<View> {
   try {
     info = await platform.folder.info();
   } catch (error) {
-    return { kind: 'error', code: syncErrorCodeOf(error), info: null };
+    // `info()` n'échoue que pour un dossier lié devenu inutilisable (introuvable, jonction).
+    return { kind: 'error', code: syncErrorCodeOf(error), info: null, configured: true };
   }
   if (!info.configured) return { kind: 'not-configured' };
   try {
     const key = await platform.key.status();
     return { kind: 'bound', info, needsPairing: !key.present };
   } catch (error) {
-    return { kind: 'error', code: syncErrorCodeOf(error), info };
+    return { kind: 'error', code: syncErrorCodeOf(error), info, configured: true };
   }
 }
 
-/** Le dossier est lié mais inutilisable : on propose de l'oublier plutôt que d'en choisir un autre (D2 de Y-01). */
-const FOLDER_ERRORS: ReadonlySet<SyncErrorCode> = new Set(['folder-unreachable', 'unsafe-folder', 'not-local']);
+/** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */
+export function folderLabel(info: SyncFolderInfo | null): string {
+  if (!info?.label) return t('sync.folder.rowLabel');
+  return info.kind === 'icloud' ? t('sync.folder.icloudLabel', { name: info.label }) : info.label;
+}
 
 /**
  * Section « SYNCHRONISATION » de Réglages (Reglages.html ; Y-01 critères 1, 2, 5, 10, 17 à 19 ; Y-08). Sans dossier : « Non
@@ -106,6 +111,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const choose = async () => {
     setBusy(true);
     let info: SyncFolderInfo | null = null;
+    const wasConfigured = view.kind === 'bound' || (view.kind === 'error' && view.configured);
     try {
       info = await platform.folder.choose();
       if (!info) return;
@@ -122,7 +128,9 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       await platform.bindDevice(container.hlc.deviceId);
       setView({ kind: 'bound', info, needsPairing });
     } catch (error) {
-      setView({ kind: 'error', code: syncErrorCodeOf(error), info });
+      // Dossier refusé par le contrôle : rien n'a été lié, « Choisir le dossier » reste proposé ; un dossier lié puis un échec de
+      // clé ou de liaison : « Oublier » (revue 6).
+      setView({ kind: 'error', code: syncErrorCodeOf(error), info, configured: wasConfigured || info !== null });
     } finally {
       setBusy(false);
     }
@@ -136,7 +144,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       setView(await readView(platform));
     } catch (error) {
       const info = view.kind === 'bound' || view.kind === 'error' ? view.info : null;
-      setView({ kind: 'error', code: syncErrorCodeOf(error), info });
+      setView({ kind: 'error', code: syncErrorCodeOf(error), info, configured: true });
     } finally {
       setBusy(false);
     }
@@ -175,7 +183,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       {view.kind === 'bound' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
-            {view.info.label ?? t('sync.folder.rowLabel')}
+            {folderLabel(view.info)}
             {view.needsPairing ? (
               <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
                 {t('sync.key.needsPairing')}
@@ -197,12 +205,12 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       {view.kind === 'error' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
-            {view.info?.label ?? t('sync.folder.rowLabel')}
+            {folderLabel(view.info)}
             <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
               {t(syncErrorMessageKey(view.code))}
             </span>
           </span>
-          {view.info || FOLDER_ERRORS.has(view.code) ? forgetButton : chooseButton}
+          {view.configured ? forgetButton : chooseButton}
         </div>
       )}
       {forgetOpen && (

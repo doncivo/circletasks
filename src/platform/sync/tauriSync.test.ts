@@ -44,13 +44,13 @@ function fakeInvoker(results: Partial<Record<SyncCommand, unknown>> = {}) {
 describe('tauriSync (Y-01 critère 18)', () => {
   it('appelle chaque commande avec ses arguments, sans chemin', async () => {
     const { invoke, calls } = fakeInvoker({
-      sync_folder_info: { configured: true, label: 'iCloud Drive / CircleTasks', kind: 'icloud', pinned: false },
+      sync_folder_info: { configured: true, name: 'CircleTasks', kind: 'icloud', pinned: false },
       sync_key_status: { present: true, kid: '0123456789abcdef' },
       sync_delete_own: { deleted: 2 },
       sync_snapshot_begin: { handle: 7 },
     });
     const sync = createTauriSync({ available: true, invoke });
-    expect(await sync.folder.info()).toEqual({ configured: true, label: 'iCloud Drive / CircleTasks', kind: 'icloud', pinned: false });
+    expect(await sync.folder.info()).toEqual({ configured: true, label: 'CircleTasks', kind: 'icloud', pinned: false });
     await sync.folder.forget({ eraseKey: true });
     await sync.bindDevice(DEVICE);
     expect(await sync.key.status()).toEqual({ present: true, kid: '0123456789abcdef' });

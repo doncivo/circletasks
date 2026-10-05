@@ -97,6 +97,12 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
   - sur iPhone (une seule WebView), la saisie de la clé de secours reste lisible par un script passif de la fenêtre principale ;
   - la fenêtre `pairing` apparaît noire dans les captures pendant 5 minutes au plus.
 
+- **Lot Y1, corrections de la revue et de l'audit (dettes reportées au lot Y2)** :
+  - Budget de nonces (audit S9, revue 18) : Rust compte les enregistrements scellés par clé (`sync/usage.json`, gardé quand la même clé revient) et refuse de chiffrer à 2^32 ; l'alerte au-delà de 2^30 n'est que journalisée. À faire par Y2 : remonter l'alerte dans `SyncStatus` (« Réinitialisez la synchronisation », Y-11) et la calculer sur la **somme des têtes publiées** par tous les appareils (le compteur local de Rust ne voit que ses propres scellements).
+  - Revue 14 : publier le nombre d'enregistrements d'un segment **clos** et d'un instantané (fin de segment, `snap-end.count`) pour qu'un lecteur distingue un segment complet d'un segment tronqué par un tiers sans dépendre de la seule tête.
+  - Critère 16 de Y-01 (QA-Y1-5) : appeler `sync::marker::write_after_restore` depuis `backup::restore_backup` (après l'échange abouti, seulement si un dossier est configuré) et le tester dans `restore.rs`.
+  - Scan (audit S2) : au-delà de 64 appareils candidats non protégés, de 64 époques par appareil ou de 50 000 entrées listées, le scan est `incomplete` ; le moteur doit l'afficher (« dossier encombré ») sans en tirer de conclusion de purge.
+
 ## Ordre 5 (iPhone)
 
 - Rappels d'événements (E-01) : une ligne `reminder` par avance, calculée sur la prochaine occurrence ; l'ordre 5 doit recalculer l'échéance de chaque occurrence d'une série (mensuelle, annuelle) et ne planifier que les rappels à venir.

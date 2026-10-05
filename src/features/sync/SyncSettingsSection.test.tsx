@@ -85,6 +85,8 @@ describe('SyncSettingsSection (Y-01)', () => {
     renderSection(createMemorySyncPlatform({ folder: new MemorySyncFolder('local', 'ct-test', 'local') }));
     fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
     expect(await screen.findByTestId('sync-folder-warning')).toHaveTextContent('Ce dossier n’est pas dans iCloud Drive : vos appareils ne le partageront pas');
+    // Libellé composé par l'interface (revue 13) : un dossier hors iCloud n'affiche que son nom.
+    expect(screen.getByText('ct-test')).toBeInTheDocument();
   });
 
   it('erreur du dossier annoncée (role="status"), message français sans détail technique (critères 6, 7 et 19)', async () => {
@@ -93,6 +95,9 @@ describe('SyncSettingsSection (Y-01)', () => {
     renderSection(failing);
     fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
     expect(await screen.findByText('Ce dossier ne peut pas servir à la synchronisation')).toHaveAttribute('role', 'status');
+    // Revue 6 : le choix a échoué, rien n'est lié : « Choisir le dossier » reste proposé, jamais « Oublier ».
+    expect(screen.getByRole('button', { name: 'Choisir le dossier de synchronisation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Oublier le dossier de synchronisation' })).toBeNull();
     const unreachable: SyncPlatform = { ...platform, folder: { ...platform.folder, info: () => Promise.reject(new SyncPlatformError('folder-unreachable')) } };
     cleanup();
     renderSection(unreachable);
