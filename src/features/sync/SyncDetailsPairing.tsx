@@ -32,7 +32,7 @@ type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
  * reste affiché, même après un redémarrage, jusqu'à la prochaine ouverture réussie ou l'association. « iPhone associé » à l'arrivée.
  * Aucune clé ne passe par cette fenêtre.
  */
-export function SyncDetailsPairing() {
+export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { readonly showOnly?: boolean; readonly withProgress?: boolean } = {}) {
   const container = useAppContainer();
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
   const [failure, setFailure] = useState<PairingFailure | null>(null);
@@ -60,6 +60,8 @@ export function SyncDetailsPairing() {
 
   if (!container.syncPlatform || phase === 'not-configured') return null;
   const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' ? 'import' : 'show';
+  // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
+  if (showOnly && mode === 'import') return null;
 
   const open = async (): Promise<void> => {
     const focused = typeof document === 'undefined' || document.hasFocus();
@@ -90,7 +92,7 @@ export function SyncDetailsPairing() {
           {busy ? t('sync.pairing.opening') : mode === 'show' ? t('sync.pairing.show') : t('sync.pairing.importAction')}
         </Button>
       </div>
-      <JoinProgress />
+      {withProgress && <JoinProgress />}
     </>
   );
 }
