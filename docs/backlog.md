@@ -1,4 +1,4 @@
-# Backlog CircleTasks
+à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |# Backlog CircleTasks
 
 121 user stories, triées par ordre de construction (PRD section 9). Critères d'acceptation : docs/PRD.md section 4.
 
