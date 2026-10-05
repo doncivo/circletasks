@@ -19,6 +19,10 @@ import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
 import { syncFolderEn, syncKeyEn } from './en.syncFolder';
+import { syncConflictsEn } from './en.syncConflicts';
+import { syncFieldEn } from './en.syncField';
+import { syncVersionEn } from './en.syncVersion';
+import { syncPairingEn } from './en.syncPairing';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
 export const en: Messages = {
@@ -53,7 +57,7 @@ export const en: Messages = {
   stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
-  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn },
+  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn, conflicts: syncConflictsEn, field: syncFieldEn, version: syncVersionEn, pairing: syncPairingEn },
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',

@@ -19,4 +19,8 @@ export type * from './focusSessionRepository';
 export type * from './searchRepository';
 export type * from './statsRepository';
 export type * from './syncRepository';
+// Y-04 (début)
+// Y-04 (fin)
 export * from './sql';
+// Y-07 (début)
+// Y-07 (fin)

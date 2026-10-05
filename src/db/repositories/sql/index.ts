@@ -10,7 +10,11 @@ import { createStatsRepository } from './statsRepository';
 import { createRoutineLogRepository, createRoutineRepository } from './routineRepository';
 import { createSettingsRepository, createSyncMetaRepository } from './settingsRepository';
 import { createProjectRepository, createSpaceRepository } from './spaceRepository';
+// Y-04 (début)
+// Y-04 (fin)
 import { createSyncRepository } from './syncRepository';
+// Y-07 (début)
+// Y-07 (fin)
 import { createRecurrenceRepository, createTaskRepository } from './taskRepository';
 
 /**
@@ -38,5 +42,9 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   externalEvents: createExternalEventRepository(executor),
   calendarAccounts: createCalendarAccountRepository(executor, stamper),
   syncMeta: createSyncMetaRepository(executor),
+  // Y-04 (début)
+  // Y-04 (fin)
   sync: createSyncRepository(executor, stamper),
+  // Y-07 (début)
+  // Y-07 (fin)
 });

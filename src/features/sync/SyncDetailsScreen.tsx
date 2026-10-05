@@ -4,11 +4,15 @@ import { t } from '../../i18n';
 import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { SyncDetailsConflicts } from './SyncDetailsConflicts';
+import { SyncDetailsPairing } from './SyncDetailsPairing';
+import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { deviceName, deviceStatusText, formatSyncTime } from './syncText';
 import './SyncDetailsScreen.css';
 
+/** Remplacements facultatifs des emplacements (tests) ; par défaut, chaque story rend son composant d'emplacement. */
 export interface SyncDetailsSlots {
   /** Y-06 : bouton « Associer ». */
   readonly pairing?: ReactNode;
@@ -21,7 +25,8 @@ export interface SyncDetailsSlots {
 /**
  * Réglages › Synchronisation, détails (Y-02 critère 17, Y-03 critère 1, Y-09 critère 10) : sans maquette PC, composé avec les lignes
  * de Réglages d'après Synchro.html (iPhone) : état et « Synchroniser », APPAREILS (dernière lecture et statut), fichiers en attente
- * d'iCloud, nombre de conflits de la semaine. Emplacements vides pour l'appairage (Y-06), les conflits (Y-04) et la version (Y-07).
+ * d'iCloud, nombre de conflits de la semaine. Emplacements (étape 0 du lot Y3) : `SyncDetailsPairing` (Y-06), `SyncDetailsVersion` (Y-07),
+ * `SyncDetailsConflicts` (Y-04), chacun dans son fichier ; plus aucune story ne modifie ce fichier.
  */
 export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetailsSlots }) {
   const container = useAppContainer();
@@ -45,8 +50,8 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
           {t('sync.status.progress', { done: status.progress.done, total: status.progress.total })}
         </p>
       )}
-      {slots.pairing}
-      {slots.version}
+      {slots.pairing ?? <SyncDetailsPairing />}
+      {slots.version ?? <SyncDetailsVersion />}
       <h2 className="ct-settings__section">{t('sync.status.sectionDevices')}</h2>
       <ul className="ct-sync__devices">
         {status.devices.map((device) => (
@@ -83,7 +88,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
               : t('sync.status.conflictsMany', { count: status.conflictsThisWeek })}
         </span>
       </div>
-      {slots.conflicts}
+      {slots.conflicts ?? <SyncDetailsConflicts />}
     </div>
   );
 }
