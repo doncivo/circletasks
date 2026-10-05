@@ -12,11 +12,13 @@ export default defineConfig({
   server: {
     port: DEV_PORT,
     strictPort: true,
-    watch: { ignored: ['**/src-tauri/**'] },
+    watch: { ignored: ['**/src-tauri/**', '**/.claude/**', '**/coverage*/**', '**/test-results/**', '**/playwright-report/**', '**/dist/**'] },
   },
   envPrefix: ['VITE_', 'TAURI_ENV_'],
   // Le driver de développement charge son .wasm via import.meta.url : pas de pré-bundling.
-  optimizeDeps: { exclude: ['@sqlite.org/sqlite-wasm'] },
+  // Le balayage des dépendances ne part que des deux pages de l'app : par défaut Vite parcourt TOUS les .html du dépôt (rapports de
+  // couverture, worktrees d'agents : plus de 7 000 fichiers, 12 s au lieu de 2 s) et la première requête attend la fin du balayage.
+  optimizeDeps: { entries: ['index.html', 'capture.html'], exclude: ['@sqlite.org/sqlite-wasm'] },
   build: {
     // WebView2 (Chromium) sur Windows, WKWebView (Safari) sur iOS 17+.
     target: ['es2022', 'chrome120', 'safari17'],
