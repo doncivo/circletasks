@@ -1,6 +1,8 @@
 import type { Task } from '../../domain/model';
 import { sortTrash, trashCutoff } from '../../domain/taskTrash';
 import type { SpaceFilter, TaskId } from '../../domain/types';
+import type { AppContainer } from '../app/container';
+import { currentPurgeHorizon, purgeDeletedRows, defaultSyncLogger } from '../../sync';
 import type { TaskUseCaseDeps } from './taskUseCases';
 
 /** Cas d'usage de la corbeille (T-08). */
@@ -14,13 +16,14 @@ export interface TrashUseCases {
    */
   restore(id: TaskId): Promise<Task | null>;
   /**
-   * Purge physique des tâches supprimées depuis plus de 30 jours ; rend le nombre purgé. Appelée au
-   * démarrage (startup.ts). Point d'extension Y-09 : voir src/domain/taskTrash.
+   * Purge physique des tâches supprimées depuis plus de 30 jours ; rend le nombre purgé. Appelée au démarrage (startup.ts).
+   * Y-09 : sans synchro configurée, purge de T-08 inchangée ; avec synchro, la purge reçoit l'horizon de la synchro (30 jours
+   * **et** lue par tous les appareils actifs) et passe par la règle des traces (sous garde, identifiants dans `sync_tombstone`).
    */
   purgeExpired(): Promise<number>;
 }
 
-export function createTrashUseCases(deps: TaskUseCaseDeps): TrashUseCases {
+export function createTrashUseCases(deps: TaskUseCaseDeps & Partial<Pick<AppContainer, 'sync' | 'hlc'>>): TrashUseCases {
   return {
     async list(filter) {
       const now = deps.clock.nowMs();
@@ -41,8 +44,11 @@ export function createTrashUseCases(deps: TaskUseCaseDeps): TrashUseCases {
       return restored;
     },
 
-    purgeExpired() {
-      return deps.data.transaction((repos) => repos.tasks.purgeDeletedBefore(trashCutoff(deps.clock.nowMs())));
+    async purgeExpired() {
+      if (!deps.sync || !deps.hlc) return deps.data.transaction((repos) => repos.tasks.purgeDeletedBefore(trashCutoff(deps.clock.nowMs())));
+      const now = deps.clock.nowMs();
+      const horizon = await currentPurgeHorizon(deps.data.repos, deps.hlc.deviceId, now);
+      return (await purgeDeletedRows({ data: deps.data, logger: defaultSyncLogger }, horizon, now)).count;
     },
   };
 }
