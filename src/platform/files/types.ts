@@ -21,7 +21,7 @@ export interface SaveResult {
   readonly path?: string;
 }
 
-export type FileFailureReason = 'write-failed' | 'unavailable' | 'unsupported';
+export type FileFailureReason = 'write-failed' | 'unavailable' | 'unsupported' | 'too-large' | 'unreadable';
 
 /** Échec d'enregistrement (disque plein, droits…) : aucun fichier partiel n'est laissé. */
 export class FileExportError extends Error {
@@ -48,9 +48,16 @@ export interface PickedText {
   readonly text: string;
 }
 
+/** Taille maximale d'un fichier choisi par défaut (2 Mo), la même que `MAX_IMPORT_BYTES` de `src-tauri/src/import.rs`. */
+export const DEFAULT_PICK_MAX_BYTES = 2 * 1024 * 1024;
+
 export interface FilePicker {
-  /** Fichier texte choisi par l'utilisateur (P-07) ; null s'il annule. */
-  pickText(options: { readonly accept: readonly string[] }): Promise<PickedText | null>;
+  /**
+   * Fichier texte choisi par l'utilisateur (P-07) ; null s'il annule. Décodé en UTF-8 / UTF-16 / Windows-1252 (`decodeTextBytes`).
+   * `maxBytes` (défaut : 2 Mo) ne peut que RÉDUIRE la limite : sur PC, la commande Rust refuse de toute façon au-delà de 2 Mo (limite fixe de
+   * `import.rs`) ; sur iPhone et dans le navigateur, le fichier est refusé avant lecture. Dépassement : `FileExportError('too-large')`.
+   */
+  pickText(options: { readonly accept: readonly string[]; readonly maxBytes?: number }): Promise<PickedText | null>;
 }
 
 export interface FileService extends FileExporter, FilePicker {}

@@ -163,12 +163,13 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
 
     async createMany(tasks: readonly NewTask[]) {
       const created: Task[] = [];
-      for (const task of tasks) {
-        const stamp = stamper.next();
-        await db.execute(
-          `INSERT INTO task (${TASK_COLUMNS})
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
-          [
+      // Insertion par paquets (une instruction par paquet), un tampon distinct par ligne (règle commune n°3).
+      for (let start = 0; start < tasks.length; start += 50) {
+        const chunk = tasks.slice(start, start + 50);
+        const params: SqlValue[] = [];
+        const rows = chunk.map((task) => {
+          const stamp = stamper.next();
+          params.push(
             task.id,
             task.spaceId,
             task.projectId,
@@ -193,9 +194,11 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
             stamp.at,
             stamp.deviceId,
             stamp.hlc,
-          ],
-        );
-        created.push(taskFromNew(task, stamp));
+          );
+          created.push(taskFromNew(task, stamp));
+          return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)';
+        });
+        await db.execute(`INSERT INTO task (${TASK_COLUMNS}) VALUES ${rows.join(', ')}`, params);
       }
       return created;
     },
@@ -357,6 +360,31 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return fetchByIds(ids);
     },
 
+    async discardUnchanged(entries) {
+      const discarded: TaskId[] = [];
+      for (let start = 0; start < entries.length; start += 100) {
+        const chunk = entries.slice(start, start + 100);
+        const found = await db.select<{ id: string }>(
+          `SELECT id FROM task WHERE deleted_at IS NULL AND (${chunk.map(() => '(id = ? AND hlc = ?)').join(' OR ')})`,
+          chunk.flatMap((entry) => [entry.id, entry.hlc]),
+        );
+        if (found.length === 0) continue;
+        const stamps = found.map((row) => ({ id: row.id, stamp: stamper.next() }));
+        const cases = (pick: (stamp: WriteStamp) => string): { sql: string; params: SqlValue[] } => ({
+          sql: `CASE id ${stamps.map(() => 'WHEN ? THEN ?').join(' ')} END`,
+          params: stamps.flatMap((entry) => [entry.id, pick(entry.stamp)]),
+        });
+        const at = cases((stamp) => stamp.at);
+        const hlc = cases((stamp) => stamp.hlc);
+        await db.execute(
+          `UPDATE task SET deleted_at = ${at.sql}, discarded = 1, updated_at = ${at.sql}, device_id = ?, hlc = ${hlc.sql} WHERE id IN (${stamps.map(() => '?').join(', ')}) AND deleted_at IS NULL`,
+          [...at.params, ...at.params, stamps[0]?.stamp.deviceId ?? '', ...hlc.params, ...stamps.map((entry) => entry.id)],
+        );
+        discarded.push(...stamps.map((entry) => entry.id as TaskId));
+      }
+      return discarded;
+    },
+
     async restore(ids: readonly TaskId[]) {
       for (const id of ids) {
         const stamp = stamper.next();
@@ -468,6 +496,25 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
         [since, ...f.params],
       );
       return rows.map(rowToTask);
+    },
+
+    async existingTitleDates(keys) {
+      const wanted = new Set(keys.map((key) => `${key.title}\u0000${key.date ?? ''}`));
+      const titles = [...new Set(keys.map((key) => key.title))];
+      const found = new Set<string>();
+      // Titres par paquets de 200 : bien sous la limite de paramètres, une seule lecture de la table par paquet.
+      for (let index = 0; index < titles.length; index += 200) {
+        const chunk = titles.slice(index, index + 200);
+        const rows = await db.select<{ title: string; date: string | null }>(
+          `SELECT DISTINCT title, date FROM task WHERE deleted_at IS NULL AND title IN (${chunk.map(() => '?').join(', ')})`,
+          chunk,
+        );
+        for (const row of rows) {
+          const key = `${row.title}\u0000${row.date ?? ''}`;
+          if (wanted.has(key)) found.add(key);
+        }
+      }
+      return found;
     },
 
     async purgeDeletedBefore(before: IsoDateTime) {

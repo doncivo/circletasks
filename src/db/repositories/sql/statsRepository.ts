@@ -123,6 +123,13 @@ export function createStatsRepository(db: SqlExecutor): StatsRepository {
       return { achieved: rows[0]?.achieved ?? 0, total: rows[0]?.total ?? 0 } satisfies GoalsCount;
     },
 
+    async hasAnyContent() {
+      const rows = await db.select<{ found: number }>(
+        `SELECT (EXISTS (SELECT 1 FROM task) OR EXISTS (SELECT 1 FROM routine) OR EXISTS (SELECT 1 FROM event) OR EXISTS (SELECT 1 FROM checklist)) AS found`,
+      );
+      return (rows[0]?.found ?? 0) === 1;
+    },
+
     async oldestActivity() {
       const rows = await db.select<OldestRow>(
         `SELECT MIN(d) AS oldest FROM (

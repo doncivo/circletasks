@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-daily-backup"
+description = "Enables the daily_backup command without any pre-configured scope."
+commands.allow = ["daily_backup"]
+
+[[permission]]
+identifier = "deny-daily-backup"
+description = "Denies the daily_backup command without any pre-configured scope."
+commands.deny = ["daily_backup"]

@@ -56,6 +56,12 @@ export interface TaskRepository {
    * (tombstone conservé pour la synchro) mais exclue de la corbeille (`listTrash`), rien à restaurer.
    */
   discard(ids: readonly TaskId[]): Promise<Task[]>;
+  /**
+   * P-07 : annulation d'un lot créé (import) : écarte (comme `discard`) les seules tâches vivantes dont le `hlc` est encore celui de
+   * l'entrée, c'est-à-dire non modifiées depuis. Le filtre par hlc se fait dans la requête (par paquets), un tampon distinct par ligne.
+   * Renvoie les identifiants écartés.
+   */
+  discardUnchanged(entries: readonly { readonly id: TaskId; readonly hlc: string }[]): Promise<TaskId[]>;
   /** Annulation de T-08, restauration depuis la corbeille. */
   restore(ids: readonly TaskId[]): Promise<Task[]>;
 
@@ -77,6 +83,11 @@ export interface TaskRepository {
   progressByGoal(goalIds: readonly GoalId[]): Promise<ReadonlyMap<GoalId, GoalProgress>>;
   /** T-09, T-10 : occurrences d'une récurrence ; `includeDeleted` : corbeille comprise (pas de doublon de série, T-09). */
   listByRecurrence(recurrenceId: RecurrenceId, options?: ReadOptions): Promise<Task[]>;
+  /**
+   * P-07 critère 10 : parmi ces couples (titre exact, date ; null = sans date), ceux qu'une tâche vivante (hors corbeille et copies
+   * écartées, faites ou non, tous espaces) porte déjà. Clé rendue : `titre` + U+0000 + `date` ('' sans date).
+   */
+  existingTitleDates(keys: readonly { readonly title: string; readonly date: LocalDate | null }[]): Promise<ReadonlySet<string>>;
   /** T-08 : corbeille, tâches supprimées depuis `since` (30 jours) ; hors occurrences retirées par l'annulation d'une complétion (T-09, `series_index` < 0). */
   listTrash(since: IsoDateTime, filter: SpaceFilter): Promise<Task[]>;
   /**

@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { relaunch } from '@tauri-apps/plugin-process';
+import { relaunchApp } from '../relaunch';
 import { check } from '@tauri-apps/plugin-updater';
 import {
   CLEAR_QUICK_CAPTURE_COMMAND,
@@ -104,7 +104,7 @@ export function createTauriDesktop(): DesktopPlatform {
           } catch (error) {
             throw new UpdateInstallError(classifyUpdateError(error), error);
           }
-          await relaunch();
+          await relaunchApp();
         },
         dispose: async () => {
           try {

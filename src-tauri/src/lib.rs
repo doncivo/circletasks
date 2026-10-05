@@ -7,6 +7,7 @@
 //! aucune migration n'est déclarée dans tauri-plugin-sql.
 
 pub mod backup;
+pub mod backup_triggers;
 pub mod calendars;
 #[cfg(desktop)]
 pub mod capture;
@@ -14,6 +15,8 @@ pub mod capture;
 pub mod desktop;
 #[cfg(desktop)]
 pub mod export;
+#[cfg(desktop)]
+pub mod import;
 #[cfg(desktop)]
 pub mod ocr;
 #[cfg(desktop)]
@@ -23,7 +26,7 @@ pub mod shortcut;
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(desktop)]
-    let builder = desktop::configure(builder).manage(export::ExportState::default()).invoke_handler(tauri::generate_handler![desktop::set_tray_labels, desktop::confirm_quit, shortcut::set_quick_capture_shortcut, shortcut::clear_quick_capture_shortcut, shortcut::get_quick_capture_shortcut, export::export_save_file, export::reveal_exported_file, capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error, ocr::ocr_status, ocr::ocr_recognize, backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
+    let builder = desktop::configure(builder).manage(export::ExportState::default()).invoke_handler(tauri::generate_handler![desktop::set_tray_labels, desktop::confirm_quit, shortcut::set_quick_capture_shortcut, shortcut::clear_quick_capture_shortcut, shortcut::get_quick_capture_shortcut, export::export_save_file, export::reveal_exported_file, import::import_open_file, capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error, ocr::ocr_status, ocr::ocr_recognize, backup::backup_database_before_migration, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
     builder

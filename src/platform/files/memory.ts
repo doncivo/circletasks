@@ -8,6 +8,8 @@ export interface MemoryFiles extends FileService {
   cancelNext(): void;
   failNext(): void;
   setPick(file: PickedText | null): void;
+  /** Le prochain choix de fichier échoue (« too-large », « unreadable »). */
+  failNextPick(reason: 'too-large' | 'unreadable'): void;
 }
 
 /**
@@ -19,6 +21,7 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
   const revealed: string[] = [];
   let mode: 'save' | 'cancel' | 'fail' = 'save';
   let pick: PickedText | null = null;
+  let pickFailure: 'too-large' | 'unreadable' | null = null;
   const canSave = options.canSave ?? true;
   return {
     saved,
@@ -47,7 +50,17 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
       revealed.push(path);
       return Promise.resolve();
     },
-    pickText: () => Promise.resolve(pick),
+    failNextPick: (reason) => {
+      pickFailure = reason;
+    },
+    pickText() {
+      if (pickFailure) {
+        const reason = pickFailure;
+        pickFailure = null;
+        return Promise.reject(new FileExportError(reason));
+      }
+      return Promise.resolve(pick);
+    },
   };
 }
 

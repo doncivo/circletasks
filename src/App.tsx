@@ -23,7 +23,7 @@ import { FocusHost } from './features/focus';
 import { GoalsScreen, registerGoalsSource } from './features/goals';
 import { registerRoutinesSource, RoutinesScreen } from './features/routines';
 import { SearchOverlay, registerSearchShortcut } from './features/search';
-import { AppearanceScreen, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
+import { AppearanceScreen, ImportScreen, OnboardingHost, restoreAppearance, SettingsScreen, startThemeSync, TabsScreen } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { RecapSettingsScreen } from './features/reminders';
 import { SomedayScreen } from './features/someday';
@@ -111,6 +111,8 @@ function AppShellContent() {
     >
       <AppStatusBanner />
       <UpdateBanner />
+      {/* P-05 : assistant de premier lancement (base neuve, app installée). */}
+      <OnboardingHost />
       <EventEditorHost />
       <HolidayDetailHost />
       <SearchOverlay />
@@ -157,7 +159,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}

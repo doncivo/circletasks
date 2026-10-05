@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reveal-backups-folder"
+description = "Enables the reveal_backups_folder command without any pre-configured scope."
+commands.allow = ["reveal_backups_folder"]
+
+[[permission]]
+identifier = "deny-reveal-backups-folder"
+description = "Denies the reveal_backups_folder command without any pre-configured scope."
+commands.deny = ["reveal_backups_folder"]

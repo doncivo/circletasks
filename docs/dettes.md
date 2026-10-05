@@ -47,6 +47,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Fixer une limite de dérive du hlc.
 - Bandeaux « Synchro en cours » et « En attente d'iCloud » (A-09).
 - Corbeille : `trashStore.ts:18` garde des copies hors de `taskEntities`, ce qui est documenté ; à revoir avec la synchro.
+- Restauration P-04 et synchro : appliquer l'ADR 0010 (état publié qui fait foi, marqueur `restore-marker.json`, synchro suspendue et choix explicite, époque et instantané, âge de la version face aux traces de suppression).
+- `sample.ids` (P-05) est un réglage local : après association, seul l'appareil qui a créé les données d'exemple propose de les supprimer ; à revoir dans l'ADR de synchro.
 
 ## Ordre 5 (iPhone)
 
@@ -55,6 +57,8 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
 - Ignorer les routines en pause ou archivées.
 - Brancher le balayage (A-07) et la notification sur `sendToSomeday`.
 - Créer l'interface de planification des notifications dans `src/platform`, qui n'existe pas encore.
+- P-04 critère 11 (sauvegarde et restauration sur iPhone) : commandes limitées à Windows, `container.backups` indisponible sur iOS ; à ouvrir par un avenant à l'ADR 0009 (capability iOS, gestionnaire mobile, réouverture de la base sans `relaunch`) en respectant l'ADR 0010.
+- P-07 sur iPhone : « Télécharger un modèle » et le rapport des lignes rejetées sont masqués tant que le plugin Fichiers (`FileService.save`) n'existe pas.
 
 ## Livraison
 
@@ -107,4 +111,17 @@ Inventaire établi par la revue globale de fin d'ordre 1 (2026-10-03). Chaque de
   - repli JSON du corps : plafond vérifié après la désérialisation par Tauri (refuser ce repli ou plafond plus bas) ;
   - motif d'erreur dédié `too-large` (texte i18n) ; signature `reveal()` sans paramètre côté TS ;
   - tests ExportDialog : témoin positif pour `flush()`, `vi.restoreAllMocks()` en `afterEach`.
+- Lot P (revue et audit du 2026-10-05, non bloquant) :
+  - lecteur réseau mappé (`Z:`) : l'import (`import_open_file`) contrôle la lettre de lecteur seulement, comme l'export H-03 (option `GetDriveTypeW`) ;
+  - iPhone : l'événement `cancel` de `<input type="file">` n'est pas déclenché de façon fiable par WKWebView ; une annulation peut laisser `pickText` en attente (promesse jamais résolue) : à traiter avec le plugin Fichiers de l'ordre 5 ;
+  - import : U+200C (liaison nulle, utile en persan) est retiré avec les autres caractères de format Cf ; à autoriser entre deux lettres arabes si le besoin se présente ;
+  - restauration et récupération : course entre `is_plain_file` et `rename` (contrôle puis action, sans verrou), course entre `ensure_plain_backups_dir` et `create_dir_all` (le dossier peut devenir un lien entre le contrôle et l'écriture), et liens physiques (un fichier à plusieurs noms n'est pas détecté) ; option : ouvrir le fichier d'abord et renommer par descripteur ;
+  - déclencheurs : la référence est unique (`backup_triggers.rs`, état après la migration 0011) ; une migration future qui modifie un déclencheur obligera à la mettre à jour (version d'introduction par déclencheur, ou DROP / CREATE imposés dans les migrations) ;
+  - après un échange réussi, l'ancienne base existe en double : la copie de sécurité `pre-restore` ET ses restes archivés par la récupération au démarrage (si l'arrêt a eu lieu avant le nettoyage) ;
+  - `stampCases()` (CASE par identifiant pour un tampon distinct par ligne) est dupliqué dans `taskRepository` et `reminderRepository` : à partager dans `sqlHelpers` ;
+  - annulation de l'import : double découpage en paquets (commande d'annulation puis repository) ;
+  - annulation de l'import : afficher « n retirées, m conservées » quand des tâches modifiées depuis restent en place ;
+  - `src/platform/relaunch.ts` importe `@tauri-apps/plugin-process` de façon statique (import dynamique pour alléger le bloc de départ) ;
+  - renommer `FileExportError` en `FileError` (il sert aussi à la lecture) ;
+  - restauration : points d'analyse de la couche de bureau (`app_config_dir` lui-même par jonction) non contrôlés au-delà du dossier `backups/`.
 - e2e K-03 (critères 2-3, iPhone) : `browserMonday` lit la date réelle alors que l'horloge du test avance ; un run qui franchit minuit du dimanche au lundi change de semaine et échoue (1 échec le 2026-10-05 vers 0 h, 5/5 verts ensuite). Figer la date du test (`page.clock.install` avec une date fixe).

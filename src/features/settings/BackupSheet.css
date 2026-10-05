@@ -1,0 +1,150 @@
+/* Feuille « Restaurer une sauvegarde » (P-04) : fenêtre centrée sur PC (gabarit de la fenêtre d'export), feuille sur iPhone. */
+.ct-backup__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(46, 33, 80, 0.45);
+}
+
+.ct-backup {
+  width: 480px;
+  max-width: calc(100% - 40px);
+  max-height: calc(100% - 40px);
+  overflow-y: auto;
+  padding: var(--ct-space-5);
+  background: var(--ct-color-surface);
+  border-radius: var(--ct-radius-xl);
+  box-sizing: border-box;
+  font-family: var(--ct-font-text);
+}
+
+.ct-backup:focus-visible {
+  outline: none;
+}
+
+.ct-backup__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-3);
+  color: var(--ct-color-text);
+}
+
+.ct-backup__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+}
+
+.ct-backup__note {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-backup__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-2);
+}
+
+.ct-backup__error {
+  margin: 0;
+  padding: var(--ct-space-3) var(--ct-space-4);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-backup__error p {
+  margin: 0 0 var(--ct-space-2) 0;
+}
+
+.ct-backup__done {
+  margin: 0;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-backup__empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-1);
+}
+
+.ct-backup__emptyTitle {
+  margin: 0;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-backup__list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.ct-backup__version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-3);
+  width: 100%;
+  min-height: var(--ct-hit-target-min);
+  padding: var(--ct-space-2) 0;
+  border: 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ct-backup__version:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ct-backup__version:focus-visible {
+  outline: 2px solid var(--ct-color-accent);
+  outline-offset: 2px;
+}
+
+.ct-backup__versionMain {
+  display: flex;
+  flex-direction: column;
+}
+
+.ct-backup__versionTitle {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-backup__versionDetails {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+/* Étiquette « Avant mise à jour » : le texte porte le sens, la couleur n'est qu'un renfort. */
+.ct-backup__tag {
+  flex-shrink: 0;
+  padding: 2px var(--ct-space-2);
+  border: 1px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-pill);
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-backup__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
