@@ -140,7 +140,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | Y-04 | M15 | Je consulte les conflits | sync-icloud | en cours (lot Y3) |
 | Y-05 | M15 | Je travaille hors ligne | sync-icloud | en revue (lot Y2 fusionné ; parcours 10 à deux pages au lot Y3) |
 | Y-06 | M15 | Je raccorde un nouvel appareil | sync-icloud | en cours (lot Y3) |
-| Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | en cours (lot Y3) |
+| Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | fait (lot Y3 ; vérification réelle à l'ordre 5) |
 | Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | en revue (lot Y1 fusionné ; « fait » après le parcours 11, Y-06) |
 | Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
 | Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
