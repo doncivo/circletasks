@@ -1,7 +1,7 @@
 import { detectOs, detectRuntime, type OsFamily, type Runtime } from '../runtime';
 import type { DesktopPlatform } from './types';
 
-export { logDesktopFailure } from './log';
+export { logDesktopFailure, logFailure } from './log';
 export { LATEST_RELEASE_URL, RELEASES_REPOSITORY_URL } from './releases';
 export {
   GlobalShortcutError,

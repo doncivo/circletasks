@@ -7,6 +7,7 @@ export * from './backup';
 export * from './files';
 export {
   logDesktopFailure,
+  logFailure,
   openDesktopPlatform,
   LATEST_RELEASE_URL,
   GlobalShortcutError,

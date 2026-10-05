@@ -1,5 +1,5 @@
 import type { AbsoluteDateParser } from '../../domain/naturalDate';
-import { logDesktopFailure } from '../../platform';
+import { logFailure } from '../../platform';
 import { whenIdle } from '../app/idle';
 
 /**
@@ -31,7 +31,7 @@ export function createAbsoluteDatesLoader(importer: () => Promise<{ readonly chr
           return parser;
         },
         (error: unknown) => {
-          logDesktopFailure('absolute-dates', error);
+          logFailure('absolute-dates', error);
           pending = null; // nouvel essai possible à la prochaine demande
           return null;
         },
