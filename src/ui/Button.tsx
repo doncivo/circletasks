@@ -24,6 +24,8 @@ export interface ButtonProps {
    * le clic est ignoré (« Un jour » d'une tâche récurrente, QB-11).
    */
   ariaDisabled?: boolean;
+  /** Action en cours (`aria-busy`), avec `disabled` : « Restaurer » d'un conflit (Y-04). */
+  ariaBusy?: boolean;
   /** Identifiant de l'élément qui décrit le bouton (`aria-describedby`). */
   describedBy?: string;
   className?: string;
@@ -37,13 +39,14 @@ export interface ButtonProps {
  * <Button onClick={onSave}>{t('tasks.save')}</Button>
  * <Button variant="secondary" onClick={onPostpone}>{t('tasks.postpone')}</Button>
  */
-export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, ariaLabel, ariaDisabled, describedBy, className }: ButtonProps) {
+export function Button({ children, onClick, variant = 'primary', disabled, fullWidth, type = 'button', pressed, haspopup, expanded, ariaLabel, ariaDisabled, ariaBusy, describedBy, className }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={ariaDisabled ? undefined : onClick}
       disabled={disabled}
       aria-disabled={ariaDisabled}
+      aria-busy={ariaBusy}
       aria-describedby={describedBy}
       aria-pressed={pressed}
       aria-haspopup={haspopup}

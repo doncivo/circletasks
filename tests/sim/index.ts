@@ -5,6 +5,7 @@ export * from './caldavFixtures';
 export * from './caldavSim';
 export * from './googleSim';
 export type { InjectedFailure, RunningSim } from './httpSim';
+export { startSyncFolderSim, type SyncFolderSim } from './syncFolderSim';
 
 /**
  * Démarre les deux simulateurs (Vitest `beforeAll`, ou `globalSetup` Playwright). Ports fixes possibles pour Playwright, dont le

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
@@ -89,5 +89,20 @@ describe('bundle de départ (index.html)', () => {
     if (!chart) throw new Error('bloc CompletionChart absent du manifeste');
     expect(start.has(chart.file)).toBe(false);
     expect(Object.values(manifest).some((chunk) => chunk.dynamicImports?.includes('src/features/stats/CompletionChart.tsx'))).toBe(true);
+  });
+
+  // Y-04 critère 12, revue 7 : le client du simulateur de dossier (`__ctSyncSim`, route `/rpc`, codage `__ctMap`) n'est installé
+  // qu'en développement (`import.meta.env.DEV`) ; aucun fichier JavaScript du build n'en contient la moindre trace.
+  it('aucune trace du simulateur de synchro dans le JavaScript de production', () => {
+    const files = (dir: string): string[] =>
+      readdirSync(dir).flatMap((name) => {
+        const path = join(dir, name);
+        return statSync(path).isDirectory() ? files(path) : name.endsWith('.js') ? [path] : [];
+      });
+    const scripts = files(outDir);
+    expect(scripts.length).toBeGreaterThan(0);
+    for (const marker of ['__ctSyncSim', '/rpc', '__ctMap']) {
+      expect(scripts.filter((file) => readFileSync(file, 'utf8').includes(marker)), marker).toEqual([]);
+    }
   });
 });

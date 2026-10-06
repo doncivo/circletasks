@@ -174,8 +174,13 @@ test.describe('S-02 — déplacer une tâche d’un jour à l’autre', () => {
   });
 
   test('au clavier : Alt+→ / Alt+← changent la tâche de jour, Ctrl+D la reporte à demain (critère 9)', async ({ page }, testInfo) => {
-    const [, , wed, thu] = await days(page);
+    const week = await days(page);
     const today = await browserToday(page);
+    // Le jour de départ ne doit pas être demain : Ctrl+D sur une tâche déjà prévue demain ne change rien et n'annonce rien
+    // (planification inchangée, T-05). Mercredi par défaut, jeudi quand mercredi est demain (le mardi).
+    const start = week[2] === addIsoDays(today, 1) ? 3 : 2;
+    const wed = week[start] as string;
+    const thu = week[start + 1] as string;
     const title = `Clavier ${testInfo.project.name}`;
     await insertTasks(page, [{ title, date: wed, space: 'pro' }]);
     await openWeek(page);
