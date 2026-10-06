@@ -1,4 +1,5 @@
 import { expect } from 'vitest';
+import type { RestoreMarker } from '../../../../src/platform/sync/types';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../../sim/syncDevice';
 
 /**
@@ -79,3 +80,32 @@ export async function closeAll(room: Room): Promise<void> {
   await Promise.all(room.devices.map((d) => d.close()));
   room.devices.length = 0;
 }
+
+export async function backupOf(device: SimDevice): Promise<Map<string, unknown[]>> {
+  const tables = await device.driver.select<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'search_index%' AND name NOT LIKE 'sqlite_%'");
+  const copy = new Map<string, unknown[]>();
+  for (const { name } of tables) copy.set(name, await device.driver.select(`SELECT * FROM ${name}`));
+  return copy;
+}
+
+/** Restauration P-04 simulée (même méthode que `restore.test.ts`) : base remplacée, dossier, coffre et own.json gardés, marqueur posé. */
+export async function restoreBackup(device: SimDevice, copy: Map<string, unknown[]>): Promise<void> {
+  await device.driver.execute('PRAGMA foreign_keys = OFF');
+  await device.driver.transaction(async (tx) => {
+    await tx.execute('INSERT INTO sync_guard (id) VALUES (1)');
+    for (const [table, rows] of copy) {
+      if (table === 'sync_guard' || table === 'schema_migrations') continue;
+      await tx.execute(`DELETE FROM ${table}`);
+      for (const row of rows as Record<string, string | number | null>[]) {
+        const cols = Object.keys(row);
+        await tx.execute(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map((c) => row[c] ?? null));
+      }
+    }
+    await tx.execute('DELETE FROM sync_guard');
+  });
+  await device.driver.execute('PRAGMA foreign_keys = ON');
+  const marker: RestoreMarker = { backup: 'circletasks-daily-20261005.db', backupTakenAt: new Date(device.clock.nowMs() - DAY).toISOString() as RestoreMarker['backupTakenAt'], restoredAt: new Date(device.clock.nowMs()).toISOString() as RestoreMarker['restoredAt'], schemaVersion: 17 };
+  device.platform.testing.setRestoreMarker(marker);
+  await device.restart();
+}
+
