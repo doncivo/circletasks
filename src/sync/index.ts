@@ -5,6 +5,7 @@
 export { createSyncService, type SyncEngineService, type SyncServiceOptions } from './service';
 export { startSyncScheduler, SYNC_POLL_MS, type SyncScheduler, type SyncSchedulerEnv } from './scheduler';
 export { syncAge, phaseOf, INITIAL_STATUS, type SyncAge } from './status';
+export { storedDeviceStatuses } from './deviceStatus';
 export { currentPurgeHorizon, purgeDeleted as purgeDeletedRows } from './maintenance';
 export type { RestoreContext } from './restoreChoice';
 export { defaultSyncLogger, silentSyncLogger, createMemorySyncLogger, type SyncLogger } from './log';
