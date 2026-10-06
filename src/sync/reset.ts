@@ -303,6 +303,8 @@ export async function evaluateReset(deps: SyncDeps, input: ResetInput): Promise<
     if (input.key.nextKid) return next.failure?.step === 'required' ? { ...next, failure: null } : next;
     const failure = input.key.importFailure;
     if (!failure || (next.importFailureAt !== null && Date.parse(failure.at) <= Date.parse(next.importFailureAt))) return next;
+    // Seconde revue, point 4 : un refus antérieur au début de cette réinitialisation ne la concerne pas.
+    if (Date.parse(failure.at) < Date.parse(next.startedAt)) return next;
     deps.logger.log('reset-import-failed', { code: failure.code });
     return { ...next, failure: { code: failure.code, at: failure.at, step: 'required' }, importFailureAt: failure.at };
   };

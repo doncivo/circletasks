@@ -360,3 +360,24 @@ describe('seconde revue, bloquant : oubli après la réassociation', () => {
     expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
   });
 });
+
+describe('seconde revue, point 4 : échec d’import antérieur à la réinitialisation', () => {
+  it('un refus d’import plus ancien que le début de la réinitialisation n’est jamais recopié', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    const stranger = await createSimDevice('99999999-9999-4999-8999-999999999999', { name: 'X', clock: a.clock });
+    room.devices.push(stranger);
+    await stranger.platform.folder.choose();
+    await stranger.platform.key.create();
+    await stranger.platform.bindDevice(stranger.id);
+    const foreign = await recoveryOf(stranger);
+    await b.platform.key.openPairing('import');
+    await b.platform.key.import({ recoveryKey: foreign }).catch(() => undefined);
+    await b.platform.key.closePairing().catch(() => undefined);
+    expect((await b.platform.key.status()).importFailure?.code).toBe('key-mismatch');
+    a.clock.advance(60_000);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders(room.devices);
+    expect((await b.cycle()).phase).toBe('reset-required');
+    expect(b.service.status().reset?.failure ?? null).toBeNull();
+  });
+});
