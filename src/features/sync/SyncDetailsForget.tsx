@@ -7,6 +7,7 @@ import { Button, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { ForgetDeviceDialog } from './ForgetDeviceDialog';
 import { syncStore } from './syncStore';
+import './SyncDetailsForget.css';
 import { deviceName, formatSyncTime } from './syncText';
 
 /**
@@ -111,7 +112,7 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
       <div role="status" className="ct-sync__forget">
         {forgotten && (
           <div className="ct-settings__row ct-sync__device" data-forgotten-self="true">
-            <span className="ct-sync__sub" data-trouble="true">
+            <span className="ct-sync__forgetText" data-trouble="true">
               {t('sync.forget.selfForgotten')}
             </span>
             <span className="ct-sync__deviceRead">{t('sync.forget.selfForgottenDetail')}</span>
@@ -122,7 +123,7 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
         )}
         {failure && (
           <div className="ct-settings__row ct-sync__device" data-failed="true">
-            <span className="ct-sync__sub" data-trouble="true">
+            <span className="ct-sync__forgetText" data-trouble="true">
               {failureText(failure, status.devices)}
             </span>
             <span className="ct-sync__deviceRead">{t('sync.forget.failedAt', { time: formatSyncTime(failure.at, container.clock.nowMs()) })}</span>
