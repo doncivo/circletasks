@@ -12,7 +12,7 @@
  */
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import type { DeviceAck } from './format';
+import { compareEpochs, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from './format';
 import { DEVICE_EXPIRY_MS, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
 import { hlcDevice, hlcMs } from './parse';
 
@@ -108,4 +108,136 @@ export function segmentPurgeable(segment: number, input: { readonly headSegment:
     const ack = reader.acks.get(input.self);
     return ack !== undefined && ack.segment > segment;
   });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Y-10 : appareils oubliés (ADR 0011 sections 14.2, 11.2 et 18). Même table de cas que `forget.rs` (tests/fixtures/sync/forget-order.json).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** Déclaration d'oubli lue dans le `state.ctx` **authentifié** de l'appareil `by` (une entrée de son `forgotten`). */
+export interface ForgetDeclaration {
+  readonly by: DeviceId;
+  readonly entry: ForgottenDevice;
+}
+
+/** Oubli retenu par l'ordre total : auteur de la déclaration valide et son hlc. */
+export interface ForgetVerdict {
+  readonly by: DeviceId;
+  readonly at: Hlc;
+}
+
+const compareText = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Ordre total des déclarations : `at` (hlc), puis l'auteur, puis la cible (aucun ex aequo entre deux entrées distinctes). */
+function compareDeclarations(a: ForgetDeclaration, b: ForgetDeclaration): number {
+  return compareText(a.entry.at, b.entry.at) || compareText(a.by, b.by) || compareText(a.entry.deviceId, b.entry.deviceId);
+}
+
+/**
+ * Ordre total des oublis (section 14.2, second audit point 7) : les déclarations sont triées par `at` (hlc ; l'auteur puis la cible
+ * départagent) et appliquées dans cet ordre. Une déclaration est **sans effet** si son auteur est déjà oublié par une déclaration
+ * antérieure, si sa cible l'est déjà, si elle vise son auteur, ou si son hlc n'est pas celui de son auteur (Rust date chaque
+ * déclaration avec l'identifiant de l'appareil qui oublie). Deux appareils qui s'oublient l'un l'autre : seule la plus ancienne compte.
+ * Le résultat ne dépend ni de l'ordre de lecture ni des doublons. Les déclarations doivent venir d'états **authentifiés** (D5 : un
+ * `forgotten` lu dans un état `foreign`, `corrupt` ou `rollback` est ignoré par l'appelant).
+ */
+export function forgetOrder(declarations: readonly ForgetDeclaration[]): ReadonlyMap<DeviceId, ForgetVerdict> {
+  const sorted = [...declarations].sort(compareDeclarations);
+  const forgotten = new Map<DeviceId, ForgetVerdict>();
+  for (const { by, entry } of sorted) {
+    if (entry.deviceId === by || hlcDevice(entry.at) !== by) continue;
+    if (forgotten.has(by) || forgotten.has(entry.deviceId)) continue;
+    forgotten.set(entry.deviceId, { by, at: entry.at });
+  }
+  return forgotten;
+}
+
+/** Ordre des positions d'accusé : époque (section 9), puis segment, puis enregistrement. */
+export function compareAckPositions(a: DeviceAck, b: DeviceAck): number {
+  const byEpoch = compareEpochs(a.epoch, b.epoch);
+  if (byEpoch !== 0) return byEpoch;
+  if (a.segment !== b.segment) return a.segment - b.segment;
+  return a.record - b.record;
+}
+
+/** Ordre complet d'un accusé (position, puis hlc, puis `stateSeq`) : maximum déterministe des deux côtés. */
+function compareAcks(a: DeviceAck, b: DeviceAck): number {
+  const byPosition = compareAckPositions(a, b);
+  if (byPosition !== 0) return byPosition;
+  if (a.hlc !== b.hlc) return a.hlc === null ? -1 : b.hlc === null ? 1 : compareText(a.hlc, b.hlc);
+  return a.stateSeq - b.stateSeq;
+}
+
+/**
+ * Coupure d'un appareil oublié (section 14.2) : **maximum des accusés de `target`** publiés par `ackers` (l'appelant passe tous les
+ * appareils actifs non oubliés, et non le seul appareil qui oublie) ; null si aucun ne l'a jamais lu. Chaque appareil lit `target`
+ * jusqu'à cette position, jamais au-delà : tous finissent avec les mêmes écritures de l'appareil oublié.
+ */
+export function cutoff(target: DeviceId, ackers: readonly Pick<PublishedDeviceState, 'deviceId' | 'acks'>[]): DeviceAck | null {
+  let best: DeviceAck | null = null;
+  for (const acker of ackers) {
+    if (acker.deviceId === target) continue;
+    const ack = acker.acks.get(target);
+    if (ack !== undefined && (best === null || compareAcks(ack, best) > 0)) best = ack;
+  }
+  return best;
+}
+
+/** Statut de lecture d'un `state.ctx` (même vocabulaire que `DeviceScan.stateStatus`). */
+export type ForgetStateStatus = 'ok' | 'missing' | 'cloud-pending' | 'foreign' | 'corrupt' | 'rollback' | 'too-large' | 'newer-format';
+
+/** Appareil connu pour la suppression : dossier de `devices/`, appareil cité dans un accusé authentifié, ou cible d'une déclaration. */
+export interface ForgetKnownDevice {
+  readonly deviceId: DeviceId;
+  readonly status: ForgetStateStatus;
+  /** État authentifié (statut `ok`) ; null sinon. */
+  readonly state: Pick<PublishedDeviceState, 'deviceId' | 'stateSeq' | 'acks' | 'forgotten'> | null;
+}
+
+/**
+ * Peut-on supprimer les fichiers de `target` (section 14.2, « Suppression des fichiers d'un appareil oublié », conditions (d) à (f)) ?
+ * - `refused` : cible = soi (`bad-name`), aucune déclaration valide, ou appareil local oublié (`state-mismatch`) ;
+ * - `waiting` : un appareil actif (non oublié, `expired` compris) bloque : son état est dans le nuage (`cloud-pending`), illisible ou
+ *   absent, ou il n'a pas encore accusé la coupure ou l'état qui porte la déclaration (`state-mismatch`) ; `device` est le premier
+ *   bloquant dans l'ordre des identifiants (« suppression des fichiers en attente de {appareil} ») ;
+ * - `ready` : les fichiers peuvent être supprimés.
+ * Seules comptent les déclarations des états `ok` (publiées et authentifiées). Même fonction que `forgotten_delete_check` (`forget.rs`).
+ */
+export type ForgottenDeleteCheck =
+  | { readonly kind: 'ready'; readonly by: DeviceId; readonly cutoff: DeviceAck | null }
+  | { readonly kind: 'waiting'; readonly device: DeviceId; readonly code: 'cloud-pending' | 'state-mismatch' }
+  | { readonly kind: 'refused'; readonly code: 'bad-name' | 'state-mismatch' };
+
+export function forgottenDeleteCheck(target: DeviceId, self: DeviceId, known: readonly ForgetKnownDevice[]): ForgottenDeleteCheck {
+  if (target === self) return { kind: 'refused', code: 'bad-name' };
+  const byId = new Map<DeviceId, ForgetKnownDevice>();
+  for (const d of known) if (!byId.has(d.deviceId)) byId.set(d.deviceId, d);
+  if (!byId.has(self)) byId.set(self, { deviceId: self, status: 'missing', state: null });
+  const devices = [...byId.values()].sort((a, b) => compareText(a.deviceId, b.deviceId));
+  const declarations: ForgetDeclaration[] = [];
+  for (const d of devices) if (d.status === 'ok' && d.state) for (const entry of d.state.forgotten) declarations.push({ by: d.deviceId, entry });
+  const order = forgetOrder(declarations);
+  const verdict = order.get(target);
+  if (order.has(self) || verdict === undefined) return { kind: 'refused', code: 'state-mismatch' };
+  const actives = devices.filter((d) => !order.has(d.deviceId));
+  const states = new Map<DeviceId, NonNullable<ForgetKnownDevice['state']>>();
+  for (const d of actives) {
+    if (d.status !== 'ok' || !d.state) return { kind: 'waiting', device: d.deviceId, code: d.status === 'cloud-pending' ? 'cloud-pending' : 'state-mismatch' };
+    states.set(d.deviceId, d.state);
+  }
+  const cut = cutoff(target, [...states.values()]);
+  if (cut !== null) {
+    for (const [id, state] of states) {
+      const ack = state.acks.get(target);
+      if (ack === undefined || compareAckPositions(ack, cut) < 0) return { kind: 'waiting', device: id, code: 'state-mismatch' };
+    }
+  }
+  const author = states.get(verdict.by);
+  if (!author) return { kind: 'refused', code: 'state-mismatch' };
+  for (const [id, state] of states) {
+    if (id === verdict.by) continue;
+    const ack = state.acks.get(verdict.by);
+    if (ack === undefined || ack.stateSeq < author.stateSeq) return { kind: 'waiting', device: id, code: 'state-mismatch' };
+  }
+  return { kind: 'ready', by: verdict.by, cutoff: cut };
 }

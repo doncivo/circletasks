@@ -1,5 +1,1779 @@
 {
-  "description": "Table de cas commune Rust / Vitest de l'ordre total des déclarations d'oubli et de la coupure (ADR 0011 sections 14.2, 11.2 et 18 ; Y-10 critères 7 et 8). Lue par forget_order et cutoff de src-tauri/src/sync/forget.rs et par forgetOrder et cutoff de src/domain/sync/retention.ts. Squelette posé à l'étape 0 du lot Y4 ; cas ajoutés par Y-10.",
-  "forgetOrder": [],
-  "cutoff": []
+  "description": "Table de cas commune Rust / Vitest de l'ordre total des déclarations d'oubli, de la coupure et des conditions de suppression des fichiers d'un appareil oublié (ADR 0011 sections 14.2, 11.2 et 18 ; Y-10 critères 7, 8, 11 et 12). Lue par forget_order, cutoff et forgotten_delete_check de src-tauri/src/sync/forget.rs et par forgetOrder, cutoff et forgottenDeleteCheck de src/domain/sync/retention.ts. Accusés sous forme JSON publiée (objets indexés par device_id). Générée par un script, relue à la main.",
+  "forgetOrder": [
+    {
+      "name": "déclaration seule",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "aucune déclaration",
+      "declarations": [],
+      "expected": {}
+    },
+    {
+      "name": "oublis croisés : la plus ancienne (A) compte",
+      "declarations": [
+        {
+          "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "entry": {
+            "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "at": "001791000000200-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "oublis croisés : la plus ancienne (X) compte",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "entry": {
+            "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "at": "001791000000050-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+          "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000050-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+        }
+      }
+    },
+    {
+      "name": "auteur déjà oublié : sans effet",
+      "declarations": [
+        {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "entry": {
+            "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "at": "001791000000200-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "auteur oublié plus tard : sa déclaration antérieure compte",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "entry": {
+            "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "at": "001791000000050-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc": {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "at": "001791000000050-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        },
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "cible déjà oubliée : la première déclaration compte",
+      "declarations": [
+        {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000200-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "même déclaration lue deux fois",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "hlc d’un autre appareil : sans effet",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {}
+    },
+    {
+      "name": "appareil qui s’oublie lui-même : sans effet",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {}
+    },
+    {
+      "name": "appareil oublié qui tente d’oublier celui qui l’a oublié",
+      "declarations": [
+        {
+          "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "entry": {
+            "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "at": "001791000000300-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000200-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "même instant, même auteur : la cible départage, les deux comptent",
+      "declarations": [
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        },
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "chaîne : A oublie B, B (oublié) oublie C, C oublie X",
+      "declarations": [
+        {
+          "by": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "entry": {
+            "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "at": "001791000000400-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "entry": {
+            "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+            "at": "001791000000300-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "lastAck": null
+          }
+        },
+        {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "entry": {
+            "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "lastAck": null
+          }
+        }
+      ],
+      "expected": {
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+          "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        },
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+          "by": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000400-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+        }
+      }
+    }
+  ],
+  "cutoff": [
+    {
+      "name": "personne n’a lu l’appareil oublié",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {}
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {}
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "maximum des accusés de tous les appareils actifs",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 5,
+              "hlc": "001791000000010-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 3,
+              "record": 1,
+              "hlc": "001791000000020-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 3,
+        "record": 1,
+        "hlc": "001791000000020-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 1
+      }
+    },
+    {
+      "name": "l’époque prime sur la position",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 9,
+              "record": 9,
+              "hlc": "001791000000050-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000060-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 1,
+        "record": 0,
+        "hlc": "001791000000060-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 1
+      }
+    },
+    {
+      "name": "les accusés de l’appareil oublié sur lui-même ne comptent pas",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 9,
+              "record": 9,
+              "hlc": "001791000000099-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 2,
+              "hlc": "001791000000005-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 1,
+        "record": 2,
+        "hlc": "001791000000005-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 1
+      }
+    },
+    {
+      "name": "même position : le plus grand hlc",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": "001791000000030-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": "001791000000031-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 2,
+        "record": 3,
+        "hlc": "001791000000031-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 1
+      }
+    },
+    {
+      "name": "même position, même hlc : le plus grand stateSeq",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": "001791000000030-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 4
+            }
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": "001791000000030-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 7
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 2,
+        "record": 3,
+        "hlc": "001791000000030-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 7
+      }
+    },
+    {
+      "name": "hlc nul sous un hlc connu",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "ackers": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": null,
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "acks": {
+            "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 2,
+              "record": 3,
+              "hlc": "001791000000001-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "expected": {
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "segment": 2,
+        "record": 3,
+        "hlc": "001791000000001-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "stateSeq": 1
+      }
+    }
+  ],
+  "forgottenDelete": [
+    {
+      "name": "conditions réunies",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "ready",
+        "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "cutoff": {
+          "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "segment": 3,
+          "record": 2,
+          "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "stateSeq": 4
+        }
+      }
+    },
+    {
+      "name": "cible = appareil local",
+      "target": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "refused",
+        "code": "bad-name"
+      }
+    },
+    {
+      "name": "aucune déclaration",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {},
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "refused",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "déclaration d’un appareil oublié avant (X a oublié A le premier)",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {},
+            "forgotten": [
+              {
+                "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "at": "001791000000050-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "lastAck": null
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "kind": "refused",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "appareil local oublié",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "at": "001791000000050-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "refused",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "un actif n’a pas lu jusqu’à la coupure",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 1,
+                "hlc": "001791000000031-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "coupure au maximum : B a lu plus loin, A doit le rattraper",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 4,
+                "record": 0,
+                "hlc": "001791000000040-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "un actif n’a pas accusé l’état qui porte la déclaration",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 4
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "état d’un actif dans le nuage",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "cloud-pending",
+          "state": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "cloud-pending"
+      }
+    },
+    {
+      "name": "état d’un actif étranger",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "foreign",
+          "state": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "état d’un actif rejoué",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "rollback",
+          "state": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "actif sans dossier, cité dans un accusé",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "missing",
+          "state": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "faux état étranger qui oublie l’appareil local : ignoré",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "status": "foreign",
+          "state": null
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "code": "state-mismatch"
+      }
+    },
+    {
+      "name": "personne n’a lu l’appareil oublié",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "missing",
+          "state": null
+        }
+      ],
+      "expected": {
+        "kind": "ready",
+        "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "cutoff": null
+      }
+    },
+    {
+      "name": "état de l’appareil oublié illisible : ne bloque pas",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "status": "ok",
+          "state": {
+            "stateSeq": 5,
+            "acks": {
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "lastAck": null
+              }
+            ]
+          }
+        },
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "corrupt",
+          "state": null
+        }
+      ],
+      "expected": {
+        "kind": "ready",
+        "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "cutoff": {
+          "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "segment": 3,
+          "record": 2,
+          "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "stateSeq": 4
+        }
+      }
+    },
+    {
+      "name": "état local absent",
+      "target": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "known": [
+        {
+          "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "status": "ok",
+          "state": {
+            "stateSeq": 9,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 3,
+                "record": 2,
+                "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "stateSeq": 4
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "status": "ok",
+          "state": {
+            "stateSeq": 4,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 3
+              }
+            },
+            "forgotten": []
+          }
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "status": "ok",
+          "state": {
+            "stateSeq": 2,
+            "acks": {
+              "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "stateSeq": 5
+              },
+              "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+                "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                "segment": 1,
+                "record": 1,
+                "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                "stateSeq": 9
+              }
+            },
+            "forgotten": [
+              {
+                "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "at": "001791000000100-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                "lastAck": null
+              }
+            ]
+          }
+        }
+      ],
+      "expected": {
+        "kind": "waiting",
+        "device": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "code": "state-mismatch"
+      }
+    }
+  ]
 }
