@@ -13,6 +13,7 @@ import {
   MAX_RECORD_LINE_BYTES,
   MAX_STATE_ACKS,
   MAX_STATE_FORGOTTEN,
+  MAX_STATE_CLOSED_SEGMENTS,
   NONCE_BYTES,
   PADDING_BLOCK_BYTES,
   TAG_BYTES,
@@ -397,6 +398,18 @@ export interface PublishedDeviceState {
   readonly forgotten: readonly ForgottenDevice[];
   /** Toujours null jusqu'au lot Y4 ; maître : Rust. */
   readonly reset: ResetNotice | null;
+  /**
+   * Y-TECH-02 (ADR 0011 §21 point 2) : nombre d'enregistrements de chaque segment clos de l'époque `head.epoch` (segment < `head.segment`,
+   * croissants, 1 024 au plus) ; absent (jamais vide) : aucune entrée, règle de lecture d'avant. Maître : Rust (`own.json`), complété par
+   * `sync_write_state` quand le moteur l'omet.
+   */
+  readonly closed?: readonly ClosedSegment[];
+}
+
+/** Segment clos et nombre d'enregistrements que l'état annonce (ADR 0011 §21 point 2, `ClosedSegment` de la section 11.2). */
+export interface ClosedSegment {
+  readonly segment: number;
+  readonly records: number;
 }
 
 /**
@@ -435,7 +448,21 @@ export function publishedStateToJson(state: PublishedDeviceState): PublishedDevi
     forgotten: state.forgotten.map((f) => ({ deviceId: f.deviceId, at: f.at, lastAck: f.lastAck === null ? null : ackToJson(f.lastAck) })),
     reset: state.reset === null ? null : { kid: state.reset.kid, epoch: state.reset.epoch, at: state.reset.at },
   };
-  return state.pairedBy === undefined ? json : { ...json, pairedBy: state.pairedBy };
+  const paired = state.pairedBy === undefined ? json : { ...json, pairedBy: state.pairedBy };
+  // Y-TECH-02 : `closed` en dernier (même ordre que serde), omis quand la liste est vide.
+  return state.closed === undefined || state.closed.length === 0 ? paired : { ...paired, closed: state.closed.map((c) => ({ segment: c.segment, records: c.records })) };
+}
+
+/** `closed` valide pour une tête (ADR 0011 §21 point 2) : segments croissants, ≥ 1 et < `head.segment`, `records` ≥ 1, 1 024 au plus. */
+function isClosedList(value: unknown, headSegment: number): value is ClosedSegment[] {
+  if (!Array.isArray(value) || value.length > MAX_STATE_CLOSED_SEGMENTS) return false;
+  let previous = 0;
+  for (const entry of value) {
+    if (!hasExactKeys(entry, ['segment', 'records']) || !isPositive(entry['segment']) || !isPositive(entry['records'])) return false;
+    if (entry['segment'] <= previous || entry['segment'] >= headSegment) return false;
+    previous = entry['segment'];
+  }
+  return true;
 }
 
 const ACK_KEYS = ['epoch', 'hlc', 'record', 'segment', 'stateSeq'] as const;
@@ -510,7 +537,7 @@ function isResetNotice(value: unknown): value is ResetNotice {
  * pas contrôlées ici : un état d'une version plus récente peut les porter.
  */
 export function publishedStateFromJson(value: unknown): PublishedDeviceState | null {
-  if (!hasExactKeys(value, STATE_KEYS, ['pairedBy'])) return null;
+  if (!hasExactKeys(value, STATE_KEYS, ['pairedBy', 'closed'])) return null;
   const s = value;
   if (!isSyncDeviceId(s['deviceId']) || (s['platform'] !== 'windows' && s['platform'] !== 'ios')) return null;
   if (typeof s['appVersion'] !== 'string' || !APP_VERSION_RE.test(s['appVersion'])) return null;
@@ -537,6 +564,8 @@ export function publishedStateFromJson(value: unknown): PublishedDeviceState | n
   const forgotten = s['forgotten'];
   if (!Array.isArray(forgotten) || forgotten.length > MAX_STATE_FORGOTTEN || !forgotten.every(isForgottenDevice)) return null;
   if (s['reset'] !== null && !isResetNotice(s['reset'])) return null;
+  if ('closed' in s && !isClosedList(s['closed'], head.segment)) return null;
+  const closed = 'closed' in s ? (s['closed'] as ClosedSegment[]).map((c) => ({ segment: c.segment, records: c.records })) : [];
   const state: PublishedDeviceState = {
     deviceId: s['deviceId'],
     platform: s['platform'],
@@ -553,7 +582,8 @@ export function publishedStateFromJson(value: unknown): PublishedDeviceState | n
     forgotten: forgotten as readonly ForgottenDevice[],
     reset: s['reset'] as ResetNotice | null,
   };
-  return 'pairedBy' in s ? { ...state, pairedBy: s['pairedBy'] as DeviceId } : state;
+  const withClosed = closed.length > 0 ? { ...state, closed } : state;
+  return 'pairedBy' in s ? { ...withClosed, pairedBy: s['pairedBy'] as DeviceId } : withClosed;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

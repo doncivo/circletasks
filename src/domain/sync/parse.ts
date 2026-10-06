@@ -325,7 +325,8 @@ export function snapshotRecordToText(record: SnapshotRecord): string {
 export function parsePublishedStateText(text: string): PublishedDeviceState | null {
   const value = parseJsonSafely(text);
   if (!isPlainObject(value)) return null;
-  const keys = Object.prototype.hasOwnProperty.call(value, 'pairedBy') ? 15 : 14;
+  // Clés facultatives de premier niveau : `pairedBy` et `closed` (Y-TECH-02, ADR 0011 §21 point 2).
+  const keys = 14 + (Object.prototype.hasOwnProperty.call(value, 'pairedBy') ? 1 : 0) + (Object.prototype.hasOwnProperty.call(value, 'closed') ? 1 : 0);
   if (!hasStrictJsonShape(text, keys)) return null;
   return publishedStateFromJson(value);
 }

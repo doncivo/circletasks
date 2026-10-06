@@ -32,6 +32,8 @@ pub const MAX_IPC_PAGE_BYTES: usize = 2 * 1024 * 1024;
 
 pub const MAX_STATE_ACKS: usize = 64;
 pub const MAX_STATE_FORGOTTEN: usize = 64;
+/// Y-TECH-02 (ADR 0011 §21 point 2) : entrées `closed` (segments clos de l'époque courante) d'un `state.ctx` et d'`own.json`.
+pub const MAX_STATE_CLOSED_SEGMENTS: usize = 1_024;
 pub const MAX_DEVICE_FOLDERS: usize = 16;
 pub const MAX_SCAN_ENTRIES_PER_FOLDER: usize = 10_000;
 

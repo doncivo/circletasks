@@ -494,8 +494,11 @@ export async function republishWithoutNotice(deps: SyncDeps, own: PublishedDevic
   const repos = deps.data.repos;
   try {
     const seq = Math.max((await readJson<number>(repos, META.stateSeq)) ?? 0, own.stateSeq) + 1;
+    // Y-TECH-02 (§21 point 2) : `closed` omis, Rust le complète depuis own.json (ramené à l'époque `n`) ; jamais recopié de l'état lu.
+    const { closed: _closed, ...published } = own;
+    void _closed;
     const state: PublishedDeviceState = {
-      ...own,
+      ...published,
       sm: SYNC_FORMAT_MAJOR,
       sv: deps.sv,
       stateSeq: seq,

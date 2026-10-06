@@ -818,9 +818,17 @@ impl<'a> Store<'a> {
         let mut record = if from.segment == 0 { 0 } else { from.record };
         let mut status = "complete";
         let mut current: Option<(u64, Vec<u8>)> = None;
+        // Y-TECH-02 (ADR 0011 §21 point 2) : nombre d'enregistrements annoncé de chaque segment clos (sans entrée : règle d'avant).
+        let closed_count = |n: u64| if n < head.segment { state.closed.iter().find(|c| c.segment == n).map(|c| c.records) } else { None };
         'outer: loop {
             if (RecordCursor { segment, record }) >= head {
                 break;
+            }
+            // Segment clos déjà lu jusqu'au nombre annoncé : segment suivant, sans lire le fichier (lignes en trop ignorées).
+            if closed_count(segment).is_some_and(|c| record >= c) {
+                segment += 1;
+                record = 0;
+                continue 'outer;
             }
             if current.as_ref().map(|(n, _)| *n) != Some(segment) {
                 let Ok(n32) = u32::try_from(segment) else { return fail(SyncCode::BadName) };
@@ -836,12 +844,19 @@ impl<'a> Store<'a> {
             }
             let Some((_, bytes)) = &current else { break };
             let file = self.checked(bytes, HeaderKind::Journal, dev, epoch, segment)?;
+            let count = closed_count(segment);
             loop {
                 if (RecordCursor { segment, record }) >= head {
                     break 'outer;
                 }
+                if count.is_some_and(|c| record >= c) {
+                    segment += 1;
+                    record = 0;
+                    continue 'outer;
+                }
                 let Some(line) = file.lines.get(record as usize) else {
-                    if segment < head.segment && !file.partial_tail {
+                    // Segment clos avec entrée : il en manque (version ancienne livrée par iCloud, troncature) → attente, jamais le suivant.
+                    if count.is_none() && segment < head.segment && !file.partial_tail {
                         segment += 1;
                         record = 0;
                         continue 'outer;
@@ -1103,6 +1118,15 @@ impl<'a> Store<'a> {
             other => fs_error(other),
         })?;
         usage.sealed += records.len() as u64;
+        // Y-TECH-02 (§21 point 2) : un ajout qui ouvre un segment plus grand dans la même époque ferme celui de la tête, avec ce que l'état
+        // a pu en annoncer (`own.record`, jamais le nombre de lignes du fichier) ; une nouvelle époque repart d'une liste vide.
+        if same_epoch && segment > own.segment && own.segment >= 1 && own.record > 0 {
+            let (closed_segment, closed_records) = (own.segment, own.record);
+            own.close_segment(closed_segment, closed_records);
+        }
+        if !same_epoch {
+            own.closed.clear();
+        }
         own.epoch = Some(epoch.to_owned());
         own.segment = segment;
         own.record = first_record + records.len() as u64;
@@ -1131,6 +1155,19 @@ impl<'a> Store<'a> {
         let state = if state.paired_by.is_none() && own.paired_by.is_some() {
             completed = PublishedState { paired_by: own.paired_by.clone(), ..state.clone() };
             &completed
+        } else {
+            state
+        };
+        // Y-TECH-02 (§21 point 2) : Rust est maître de `closed` : omis → complété depuis `own.json` (même époque) ; fourni → égal, sinon refus.
+        let own_closed: &[super::state::ClosedSegment] = if own.epoch.as_deref() == Some(state.epoch.as_str()) { &own.closed } else { &[] };
+        if !state.closed.is_empty() && state.closed != own_closed {
+            log::event("write-state-refused", "closed");
+            return fail(SyncCode::StateMismatch);
+        }
+        let with_closed;
+        let state = if state.closed.is_empty() && !own_closed.is_empty() {
+            with_closed = PublishedState { closed: own_closed.to_vec(), ..state.clone() };
+            &with_closed
         } else {
             state
         };
@@ -1175,6 +1212,7 @@ impl<'a> Store<'a> {
             own.segment = 0;
             own.record = 0;
             own.max_hlc = None;
+            own.closed.clear();
         }
         own.state_seq = state.state_seq;
         Ok(sha256_hex(text.as_bytes()))
@@ -1250,7 +1288,7 @@ impl<'a> Store<'a> {
     }
 
     /// `sync_delete_own` : jamais l'époque courante ni son segment de tête ; seuls les noms stricts sont supprimés.
-    pub fn delete_own(&self, own: &OwnState, self_id: &str, files: &[OwnFileRef]) -> SyncResult<u64> {
+    pub fn delete_own(&self, own: &mut OwnState, self_id: &str, files: &[OwnFileRef]) -> SyncResult<u64> {
         for file in files {
             let valid_kind = matches!(file.kind.as_str(), "j" | "s" | "epoch");
             let valid_n = if file.kind == "epoch" { file.n.is_none() } else { file.n.is_some_and(is_file_number) };
@@ -1285,6 +1323,10 @@ impl<'a> Store<'a> {
                     let name = if kind == "j" { segment_name(n as u32) } else { snapshot_name(n as u32) };
                     if self.fs.remove_file(&[DEVICES_DIR, self_id, epoch, &name]).map_err(fs_error)? {
                         deleted += 1;
+                    }
+                    // Y-TECH-02 : l'entrée `closed` d'un segment supprimé de l'époque courante est retirée (partie avec l'état suivant).
+                    if kind == "j" && own.epoch.as_deref() == Some(epoch) {
+                        own.closed.retain(|c| c.segment != n);
                     }
                 }
                 _ => {}
@@ -1468,6 +1510,16 @@ impl<'a> Store<'a> {
                     max_hlc = Some(hlc);
                 }
             }
+        }
+        // Y-TECH-02 (§21 point 2) : entrées `closed` de son seul état authentifié de la même époque, sous la tête reconstruite, qu'aucun
+        // accusé authentifié sur soi ne dépasse dans ce segment ; aucune autre entrée n'est inventée (en cas de doute : règle d'avant).
+        if let Some(s) = state.as_ref().filter(|s| s.epoch == epoch_name) {
+            own.closed = s
+                .closed
+                .iter()
+                .filter(|c| c.segment < head.segment && !acks.iter().any(|a| a.epoch == epoch_name && a.segment == c.segment && a.record > c.records))
+                .copied()
+                .collect();
         }
         own.epoch = Some(epoch_name);
         own.segment = head.segment;

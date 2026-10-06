@@ -1,0 +1,76 @@
+{
+  "description": "ADR 0011 §21 point 2 (Y-TECH-02) : lecture d'un segment clos avec ou sans entrée `closed` de l'état publié. Table commune à Rust (sync_closed_segments.rs, store.rs) et Vitest (closedSegments.test.ts, memory.ts). L'écrivain ajoute `written` enregistrements à chaque segment dans l'ordre (rotation : entrée { segment, records } dans own.json), écrit son état (tête : dernier segment), puis le fichier lu est modifié : `keep` lignes complètes gardées (troncature sur une fin de ligne), `extra` lignes complètes ajoutées après, `partial` : ligne incomplète en fin, `corrupt` : rang d'une ligne qui ne se déchiffre plus, `cloud` : fichier resté dans le nuage. `announce` faux : état écrit sans `closed` (version antérieure à la story). Lecture depuis `from`, une page (aucune borne d'octets) ; `expect` : statut, curseur suivant, nombre d'enregistrements rendus.",
+  "maxEntries": 1024,
+  "cases": [
+    {
+      "name": "entrée c et c lignes : lues, segment suivant",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    },
+    {
+      "name": "entrée c, c - 1 lignes sans ligne incomplète (version ancienne livrée par iCloud) : attente, jamais le segment suivant",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3, "keep": 2 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "cloud-pending", "next": { "segment": 1, "record": 2 }, "records": 2 }
+    },
+    {
+      "name": "entrée c, c lignes et une ligne incomplète : lues, segment suivant (attente sans fin avant)",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3, "partial": true }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    },
+    {
+      "name": "entrée c, c lignes et une ligne complète en trop : ignorée",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3, "extra": 1 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    },
+    {
+      "name": "entrée c, curseur déjà à c et fichier resté dans le nuage : segment suivant sans le lire",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3, "cloud": true }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 1, "record": 3 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 2 }
+    },
+    {
+      "name": "entrée c, rang < c indéchiffrable : truncated",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3, "corrupt": 1 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "truncated", "next": { "segment": 1, "record": 1 }, "records": 1 }
+    },
+    {
+      "name": "aucune entrée, c lignes : règle d'aujourd'hui",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    },
+    {
+      "name": "aucune entrée, c - 1 lignes : règle d'aujourd'hui (segment suivant)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3, "keep": 2 }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 4 }
+    },
+    {
+      "name": "aucune entrée, ligne incomplète : règle d'aujourd'hui (attente)",
+      "announce": false,
+      "segments": [{ "segment": 1, "written": 3, "partial": true }, { "segment": 2, "written": 2 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "cloud-pending", "next": { "segment": 1, "record": 3 }, "records": 3 }
+    },
+    {
+      "name": "segment de tête : head.record fait foi, ligne en trop ignorée",
+      "announce": true,
+      "segments": [{ "segment": 1, "written": 3 }, { "segment": 2, "written": 2, "extra": 1 }],
+      "from": { "segment": 0, "record": 0 },
+      "expect": { "status": "complete", "next": { "segment": 2, "record": 2 }, "records": 5 }
+    }
+  ]
+}

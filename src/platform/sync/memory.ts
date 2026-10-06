@@ -16,6 +16,7 @@ import {
   MAX_STATE_ACKS,
   MAX_STATE_FILE_BYTES,
   MAX_STATE_FORGOTTEN,
+  MAX_STATE_CLOSED_SEGMENTS,
   NONCE_MAX_RECORDS,
   NONCE_WARN_RECORDS,
   PAIRING_CLOCK_TOLERANCE_MS,
@@ -39,6 +40,7 @@ import {
   segmentFileName,
   snapshotFileName,
   utf8Bytes,
+  type ClosedSegment,
   type DeviceAck,
   type EpochId,
   type FileHeader,
@@ -482,6 +484,8 @@ interface OwnState {
   maxHlc: Hlc | null;
   stateSeq: number;
   pairedBy: DeviceId | null;
+  /** Y-TECH-02 (§21 point 2) : segments clos de `epoch` et ce que l'état a pu en annoncer (`own.json` de Rust, `closed`). */
+  closed: ClosedSegment[];
 }
 
 interface PairingInstance {
@@ -519,6 +523,8 @@ export interface MemorySyncTesting {
   setSealedRecords(count: number): void;
   /** Simule la perte de `own.json` (dossier de configuration effacé). */
   dropOwnState(): void;
+  /** Y-TECH-02 : `own.json` écrit avant la story (aucune entrée `closed`) : l'état suivant est publié sans `closed`. */
+  clearClosedSegments(): void;
   /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
   setResetInProgress(value: boolean): void;
   /** Y-10 : déclarations de `sync/forgotten.json`. */
@@ -756,7 +762,16 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (compareCursor(source.cursor, head) > 0) head = { segment: source.cursor.segment, record: source.cursor.record };
       if (source.hlc !== null && (maxHlc === null || source.hlc > maxHlc)) maxHlc = source.hlc;
     }
-    return { folderId: f.id, kid, epoch, segment: head.segment, record: head.record, maxHlc, stateSeq, pairedBy: state?.pairedBy ?? null };
+    // Y-TECH-02 (§21 point 2) : entrées `closed` de son seul état authentifié de la même époque, sous la tête reconstruite, qu'aucun
+    // accusé authentifié sur soi ne dépasse dans ce segment ; aucune autre entrée n'est inventée.
+    const closed = state && state.epoch === epoch ? (state.closed ?? []).filter((c) => c.segment < head.segment && !acks.some((a) => a.epoch === epoch && a.segment === c.segment && a.record > c.records)) : [];
+    return { folderId: f.id, kid, epoch, segment: head.segment, record: head.record, maxHlc, stateSeq, pairedBy: state?.pairedBy ?? null, closed: closed.map((c) => ({ ...c })) };
+  };
+
+  /** Y-TECH-02 : entrée `closed` d'un segment qui se ferme ; au-delà de 1 024, la plus ancienne est retirée (journal `closed-dropped` de Rust). */
+  const closeSegment = (o: OwnState, segment: number, records: number): void => {
+    o.closed.push({ segment, records });
+    while (o.closed.length > MAX_STATE_CLOSED_SEGMENTS) o.closed.shift();
   };
 
   // --- confirmations natives (consent.rs) ---------------------------------------------------------------------------------------
@@ -1078,8 +1093,17 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     let segment = Math.max(1, r.from.segment);
     let record = r.from.segment === 0 ? 0 : r.from.record;
     let status: ReadPage['status'] = 'complete';
+    // Y-TECH-02 (§21 point 2) : nombre d'enregistrements annoncé de chaque segment clos (sans entrée : règle d'avant).
+    const closedCount = (n: number): number | null => (n < head.segment ? (state.closed?.find((c) => c.segment === n)?.records ?? null) : null);
     for (;;) {
       if (compareCursor({ segment, record }, head) >= 0) break;
+      // Segment clos déjà lu jusqu'au nombre annoncé : segment suivant, sans lire le fichier (lignes en trop ignorées).
+      const count = closedCount(segment);
+      if (count !== null && record >= count) {
+        segment += 1;
+        record = 0;
+        continue;
+      }
       const file = epochDir?.segments.get(segment);
       // Segment annoncé absent ou dans le nuage : en attente d'iCloud. Un numéro manquant n'est jamais sauté (choix conservateur :
       // un fichier pas encore arrivé ne se distingue pas d'un trou).
@@ -1090,7 +1114,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       checkFileForRead(file, kid, MAX_SEGMENT_BYTES);
       if (file.header.f !== 'ct-j' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== segment) fail('bad-header');
       if (record >= file.lines.length) {
-        if (segment < head.segment && !file.partialTail) {
+        // Segment clos avec entrée : il en manque (version ancienne livrée par iCloud, troncature) → attente, jamais le segment suivant.
+        if (count === null && segment < head.segment && !file.partialTail) {
           segment += 1;
           record = 0;
           continue;
@@ -1269,6 +1294,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const firstRecord = file.lines.length;
     file.lines.push(...lines);
     addSealed(lines.length, toNext);
+    // Y-TECH-02 (§21 point 2) : un ajout qui ouvre un segment plus grand dans la même époque ferme le segment de la tête, avec ce que
+    // l'état a pu en annoncer (`o.record`, jamais le nombre de lignes du fichier) ; une nouvelle époque repart d'une liste vide.
+    if (sameEpoch && r.segment > o.segment && o.record > 0 && o.segment >= 1) closeSegment(o, o.segment, o.record);
+    if (!sameEpoch) o.closed = [];
     o.epoch = r.epoch;
     o.segment = r.segment;
     o.record = file.lines.length;
@@ -1285,7 +1314,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // Y-10 : Rust est maître de `forgotten` (liste de `forgotten.json`, ou son préfixe complété) ; toute autre liste est refusée.
     const forgotten = completedForgotten(paired.forgotten, ensureRegistry(f, kid, self).entries);
     if (forgotten === null) return fail('state-mismatch');
-    const s: PublishedDeviceState = { ...paired, forgotten };
+    // Y-TECH-02 (§21 point 2) : Rust est maître de `closed` : omis → complété depuis own.json (même époque) ; fourni → égal, sinon refus.
+    const ownClosed = paired.epoch === o.epoch ? o.closed : [];
+    const given = paired.closed ?? [];
+    if (given.length > 0 && JSON.stringify(given) !== JSON.stringify(ownClosed)) fail('state-mismatch');
+    const { closed: _given, ...withoutClosed } = paired;
+    void _given;
+    const s: PublishedDeviceState = { ...withoutClosed, forgotten, ...(ownClosed.length > 0 ? { closed: ownClosed.map((c) => ({ ...c })) } : {}) };
     if (s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
     const text = JSON.stringify(publishedStateToJson(s));
     if (utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
@@ -1338,6 +1373,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       o.segment = 0;
       o.record = 0;
       o.maxHlc = null;
+      o.closed = [];
     }
     o.stateSeq = s.stateSeq;
     accepted.set(self, { epoch: s.epoch, seq: s.stateSeq, digest: text, head: s.head });
@@ -1406,6 +1442,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         deleted += 1;
       }
     }
+    // Y-TECH-02 : l'entrée `closed` d'un segment supprimé de l'époque courante est retirée (partie avec la réécriture suivante).
+    const gone = new Set(files.filter((ref) => ref.epoch === o.epoch && ref.kind === 'j').map((ref) => ref.n));
+    o.closed = o.closed.filter((c) => !gone.has(c.segment));
     return deleted;
   };
 
@@ -1840,6 +1879,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       own.segment = record.base.segment;
       own.record = record.base.record;
       own.maxHlc = record.base.maxHlc;
+      own.closed = [];
     }
     if (record.superseded) record.superseded.done = true;
   };
@@ -2337,6 +2377,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       },
       dropOwnState: () => {
         own = null;
+      },
+      clearClosedSegments: () => {
+        if (own) own.closed = [];
       },
       setResetInProgress: (value) => {
         resetPending = value;

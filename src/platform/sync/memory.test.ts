@@ -546,8 +546,13 @@ describe('lecture des journaux (sections 1.2, 1.4, 6)', () => {
     const pending = (await b.scan({ keep: [] })).devices.find((d) => d.deviceId === A)?.pending;
     expect(pending).toEqual([{ file: seg(E1, 2), availability: 'cloud' }]);
     folder.setAvailability(A, seg(E1, 2), 'local');
+    // Y-TECH-02 (ADR 0011 §21 point 2) : segment clos annoncé ({ 1, 2 } dans `closed`) : une ligne incomplète après les deux annoncées
+    // est ignorée, la lecture continue (avant : attente sans fin).
     folder.setPartialTail(A, seg(E1, 1), true);
-    expect(await b.readJournal(fromStart)).toEqual({ records: ['a0', 'a1'], next: { segment: 1, record: 2 }, status: 'cloud-pending' });
+    const page = await b.readJournal(fromStart);
+    expect(page.status).toBe('complete');
+    expect(page.records.slice(0, 2)).toEqual(['a0', 'a1']);
+    expect(page.next.segment).toBe(2);
     folder.setPartialTail(A, seg(E1, 1), false);
     folder.removeFile(A, seg(E1, 2));
     expect((await b.readJournal({ ...fromStart, from: { segment: 1, record: 2 } })).status).toBe('cloud-pending');

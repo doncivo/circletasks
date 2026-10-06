@@ -17,6 +17,7 @@ mod restore;
 mod restore_hardening;
 mod restore_recovery;
 mod shortcut;
+mod sync_closed_segments;
 mod sync_crypto;
 mod sync_fixes;
 mod sync_folder;

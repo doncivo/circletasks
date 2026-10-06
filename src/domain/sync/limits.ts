@@ -49,6 +49,8 @@ export const MAX_SYNC_ID_LENGTH = 128;
 /** Accusés et appareils oubliés dans un `state.ctx`. */
 export const MAX_STATE_ACKS = 64;
 export const MAX_STATE_FORGOTTEN = 64;
+/** Y-TECH-02 (ADR 0011 §21 point 2) : entrées `closed` (segments clos de l'époque courante) d'un `state.ctx`. */
+export const MAX_STATE_CLOSED_SEGMENTS = 1_024;
 /** Dossiers d'appareils pris en compte dans `devices/`. */
 export const MAX_DEVICE_FOLDERS = 16;
 /** Entrées listées par dossier pendant le `scan`. */

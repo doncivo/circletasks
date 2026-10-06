@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use super::limits::{MAX_STATE_ACKS, MAX_STATE_FORGOTTEN};
+use super::limits::{MAX_STATE_ACKS, MAX_STATE_CLOSED_SEGMENTS, MAX_STATE_FORGOTTEN};
 use super::names::{is_app_version, is_epoch_id, is_file_number, is_kid, is_strict_hlc, is_uuid_v4};
 
 const MAX_SAFE_INTEGER: u64 = (1 << 53) - 1;
@@ -62,6 +62,21 @@ pub struct ResetNotice {
     pub at: String,
 }
 
+/// Y-TECH-02 (ADR 0011 §21 point 2) : segment clos de l'époque courante et nombre d'enregistrements que l'état en annonce.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ClosedSegment {
+    pub segment: u64,
+    pub records: u64,
+}
+
+/// `closed` valide pour une tête : segments strictement croissants, ≥ 1 et < `head_segment`, `records` ≥ 1, 1 024 au plus.
+pub fn closed_is_valid(closed: &[ClosedSegment], head_segment: u64) -> bool {
+    closed.len() <= MAX_STATE_CLOSED_SEGMENTS
+        && closed.iter().all(|c| c.segment >= 1 && c.segment < head_segment && (1..=MAX_SAFE_INTEGER).contains(&c.records))
+        && closed.windows(2).all(|w| w[0].segment < w[1].segment)
+}
+
 /// Texte clair de `state.ctx`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -85,6 +100,10 @@ pub struct PublishedState {
     pub reset: Option<ResetNotice>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paired_by: Option<String>,
+    /// Y-TECH-02 (§21 point 2) : segments clos de `head.epoch` ; absent et `[]` valent liste vide, omis quand il est vide (dernière clé,
+    /// même texte que `publishedStateToJson`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub closed: Vec<ClosedSegment>,
 }
 
 impl PublishedState {
@@ -115,6 +134,7 @@ impl PublishedState {
             && self.forgotten.len() <= MAX_STATE_FORGOTTEN
             && self.forgotten.iter().all(|f| is_uuid_v4(&f.device_id) && is_strict_hlc(&f.at) && f.last_ack.as_ref().map_or(true, DeviceAck::is_valid))
             && self.reset.as_ref().map_or(true, |r| is_kid(&r.kid) && is_epoch_id(&r.epoch) && is_strict_hlc(&r.at))
+            && closed_is_valid(&self.closed, self.head.segment)
     }
 
     /// Texte canonique (même texte que `JSON.stringify(publishedStateToJson(state))`).
@@ -135,11 +155,24 @@ pub struct OwnState {
     pub max_hlc: Option<String>,
     pub state_seq: u64,
     pub paired_by: Option<String>,
+    /// Y-TECH-02 (§21 point 2) : segments clos de `epoch` et ce que l'état a pu en annoncer (absent d'un `own.json` antérieur : vide).
+    #[serde(default)]
+    pub closed: Vec<ClosedSegment>,
 }
 
 impl OwnState {
     pub fn empty(folder_id: &str, kid: &str) -> Self {
-        Self { folder_id: folder_id.to_owned(), kid: kid.to_owned(), epoch: None, segment: 0, record: 0, max_hlc: None, state_seq: 0, paired_by: None }
+        Self { folder_id: folder_id.to_owned(), kid: kid.to_owned(), epoch: None, segment: 0, record: 0, max_hlc: None, state_seq: 0, paired_by: None, closed: Vec::new() }
+    }
+
+    /// Ferme un segment (rotation dans la même époque) ; au-delà de 1 024 entrées, la plus ancienne est retirée (journal `closed-dropped`,
+    /// numéro seulement : ce segment est alors lu selon la règle d'avant).
+    pub fn close_segment(&mut self, segment: u64, records: u64) {
+        self.closed.push(ClosedSegment { segment, records });
+        while self.closed.len() > MAX_STATE_CLOSED_SEGMENTS {
+            let dropped = self.closed.remove(0);
+            super::log::event("closed-dropped", &dropped.segment.to_string());
+        }
     }
 }
 

@@ -1023,7 +1023,7 @@ impl SyncCore {
     /// `sync_delete_own`.
     pub fn delete_own(&self, files: &[OwnFileRef]) -> SyncResult<u64> {
         let mut inner = self.lock();
-        let (key, self_id, own, _) = self.writable(&mut inner)?;
+        let (key, self_id, mut own, _) = self.writable(&mut inner)?;
         // Y-11 : pendant une réinitialisation, l'époque de l'annonce n'est supprimée que par la bascule (si la réinitialisation perd,
         // `own.json` y revient et ses segments doivent rester lisibles).
         if let Some(base) = self.reset_record(&mut inner, &self_id)?.filter(|r| r.active()).and_then(|r| r.base).and_then(|b| b.epoch) {
@@ -1033,7 +1033,13 @@ impl SyncCore {
         }
         let next = self.active_next(&mut inner)?;
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        store_for(bound, &key, &next, false).delete_own(&own, &self_id, files)
+        let before = own.closed.len();
+        let deleted = store_for(bound, &key, &next, false).delete_own(&mut own, &self_id, files)?;
+        // Y-TECH-02 : entrée `closed` d'un segment supprimé retirée de own.json.
+        if own.closed.len() != before {
+            self.save_own(&mut inner, own)?;
+        }
+        Ok(deleted)
     }
 
     // --------------------------------------------------------------------------------------------------------------------------
@@ -2354,6 +2360,8 @@ impl SyncCore {
                     own.segment = base.segment;
                     own.record = base.record;
                     own.max_hlc = base.max_hlc.clone();
+                    // Y-TECH-02 : retour à l'époque `n` sans entrée `closed` (en cas de doute, règle de lecture d'avant).
+                    own.closed.clear();
                     self.save_own(inner, own)?;
                 }
             }
