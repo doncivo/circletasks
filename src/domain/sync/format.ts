@@ -35,17 +35,12 @@ export const AAD_VERSION = 'ct/1';
 // Noms stricts (section 1.1)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-/** Dossier racine dans iCloud Drive (PRD 7) et dossier des appareils. */
-export const SYNC_ROOT_FOLDER = 'CircleTasks';
-export const DEVICES_FOLDER = 'devices';
 /** État publié d'un appareil. */
 export const STATE_FILE = 'state.ctx';
-/** Réservé à la transition de Y-11 (section 14.3) : jamais écrit ni lu jusqu'au lot Y4. */
+/** Y-11 (section 14.3) : état sous la nouvelle clé pendant une réinitialisation. */
 export const STATE_NEXT_FILE = 'state.next.ctx';
 export const JOURNAL_EXTENSION = '.ctj';
 export const SNAPSHOT_EXTENSION = '.cts';
-export const STATE_EXTENSION = '.ctx';
-export const TEMP_EXTENSION = '.tmp';
 
 /** Plus grands numéros représentables : époque sur 4 chiffres, segment et instantané sur 8. */
 export const MAX_EPOCH_NUMBER = 9_999;
@@ -570,9 +565,6 @@ export type SyncValue = string | number | null;
 
 /** `[valeur, hlc de la valeur, hlc de la valeur remplacée (base) ou null si inconnue]`. */
 export type SyncField = readonly [value: SyncValue, hlc: Hlc, base: Hlc | null];
-
-/** Nom de champ « toutes les colonnes publiées » (file d'envoi, horloges de champ). */
-export const ALL_FIELDS = '*';
 
 export interface SyncOp {
   /** Table ; résolue par le catalogue seulement (section 3.3). */

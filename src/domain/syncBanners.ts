@@ -37,14 +37,14 @@ export const SYNC_PHASES = [
 export type SyncPhase = (typeof SYNC_PHASES)[number];
 
 /** Phase qui produit un bandeau `syncTrouble` (texte : `statusLine`, D5). */
-export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead' | 'forgotten' | 'reset-required';
+type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead' | 'forgotten' | 'reset-required';
 /** Appareil nommé comme dans APPAREILS, avec son statut. */
-export type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-rollback';
+type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-rollback';
 /** `state-unreadable` : l'état local de la synchro (`sync_meta`, `sync_state`) n'a pas pu être lu (revue A-09, point 1). */
 /** Y-10 : échec d'un oubli (`forgetFailure`) ; suppression des fichiers d'un appareil oublié en attente. */
-export type ForgetTroubleCode = 'forget-failed' | 'forget-pending';
+type ForgetTroubleCode = 'forget-failed' | 'forget-pending';
 /** Y-11 : réinitialisation en cours ou en échec (tant que la transition n'est pas terminée) ; rappel des 30 jours (appareils non réassociés). */
-export type ResetTroubleCode = 'reset-progress' | 'reset-reminder';
+type ResetTroubleCode = 'reset-progress' | 'reset-reminder';
 /**
  * Y-TECH-02 : avertissements du scan (jamais un blocage) : budget de nonces de la clé au-delà du seuil d'alerte (« réinitialisez la
  * synchronisation »), dossier de plus de 1 Gio, plus de 16 dossiers d'appareil (les plus anciens ignorés), scan incomplet (dossier
@@ -273,7 +273,7 @@ export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
   | { readonly code: 'forget-pending'; readonly deletion: ForgetFacts['deletions'][number] }
   | { readonly code: 'reset-progress' | 'reset-reminder'; readonly reset: ResetFacts };
 
-export interface SyncBanners<D extends SyncBannerDevice, S extends SyncBannerStatus<D>> {
+interface SyncBanners<D extends SyncBannerDevice, S extends SyncBannerStatus<D>> {
   /** Du plus urgent au moins urgent (D4) ; vide : aucun `syncTrouble`. */
   readonly troubles: readonly SyncTrouble<D>[];
   /** Appareils retenus (nommage « iPhone » / « PC 1a2b » comme dans APPAREILS). */

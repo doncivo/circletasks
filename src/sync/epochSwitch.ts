@@ -11,7 +11,7 @@ import { setSnapshotWait } from './forget';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
 import { ROW_REPUBLISH_FIELD } from './publisher';
-import { positionAfterReplace } from './positions';
+import { positionAfterReplace } from '../domain/sync/positions';
 import { purgeRows } from './purge';
 import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
 

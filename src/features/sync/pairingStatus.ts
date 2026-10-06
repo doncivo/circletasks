@@ -3,6 +3,7 @@ import type { JoinFailureFact } from '../../domain/syncBanners';
 import { syncErrorCodeOf, type SyncErrorCode, type SyncPlatform } from '../../platform/sync/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
+import { JOIN_META } from '../../sync';
 
 /**
  * Texte d'un échec d'ouverture de la fenêtre `pairing` (jamais une boîte bloquante, Y-06 critère 4). Codes distincts (revue 2) :
@@ -48,8 +49,8 @@ export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'
 
 /** Clé de `sync_meta` de l'échec d'ouverture (table locale, jamais publiée). */
 export const PAIRING_FAILURE_META = 'pairingFailure';
-/** Clé de `sync_meta` de l'arrivée en cours ; identique à `JOIN_META` de `src/sync/join.ts` (vérifié par un test). */
-export const JOIN_STATE_META = 'join';
+/** Clé de `sync_meta` de l'arrivée en cours : `JOIN_META` du moteur (Y-TECH-02 : une seule constante). */
+export { JOIN_META };
 
 export interface PairingFailure {
   readonly mode: 'show' | 'import';
@@ -122,7 +123,7 @@ function parseJoinView(value: unknown): JoinView | null {
 }
 
 export async function readJoinView(container: AppContainer): Promise<JoinView | null> {
-  return parseJoinView(await readMeta(container, JOIN_STATE_META));
+  return parseJoinView(await readMeta(container, JOIN_META));
 }
 
 /**
@@ -130,7 +131,7 @@ export async function readJoinView(container: AppContainer): Promise<JoinView | 
  * `readable` faux si la base n'a pas répondu (l'appelant garde alors l'état précédent et signale la lecture en échec).
  */
 export async function readJoinFailure(container: AppContainer): Promise<{ readonly failure: JoinFailureFact | null; readonly readable: boolean }> {
-  const { value, readable } = await readMetaResult(container, JOIN_STATE_META);
+  const { value, readable } = await readMetaResult(container, JOIN_META);
   const view = parseJoinView(value);
   return { failure: view?.failure ? { done: view.done, total: view.total, failure: view.failure } : null, readable };
 }

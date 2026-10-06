@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { epochId, type DeviceAck } from '../../../src/domain/sync/format';
 import type { DeviceId, Hlc } from '../../../src/domain/types';
-import { positionAfterReplace, positionFromCover, type LocalRow } from '../../../src/sync/positions';
+import { positionAfterReplace, positionFromCover, type LocalRow } from '../../../src/domain/sync/positions';
 
 /**
  * Y-TECH-01 (ADR 0011 §9.1 (d), §5.5, §20) : aucune position {époque, 0, 0} sur un appareil qui n'a rien publié dans cette époque ;

@@ -11,6 +11,7 @@
 import type { ReintegrationFailure } from '../../domain/sync/compat';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
+import type { DeviceStateStatus } from '../../domain/sync/ownState';
 import type { SyncPhase as DomainSyncPhase, SyncWarningCode } from '../../domain/syncBanners';
 import {
   isSyncErrorCode,
@@ -64,7 +65,8 @@ export interface SyncFolderInfo {
 
 export type FileAvailability = 'local' | 'cloud' | 'error';
 
-export type DeviceStateStatus = 'ok' | 'missing' | 'cloud-pending' | 'foreign' | 'corrupt' | 'rollback' | 'too-large' | 'newer-format';
+/** Statut du `state.ctx` au scan : liste unique dans `src/domain/sync/ownState.ts` (Y-TECH-02, règles pures du statut). */
+export type { DeviceStateStatus } from '../../domain/sync/ownState';
 
 export interface EpochListing {
   readonly epoch: EpochId;
@@ -225,7 +227,7 @@ export interface OwnFileRef {
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 /** Forme IPC d'un appareil listé : l'état est en JSON (accusés en objet), analysé strictement côté TypeScript (`parse.ts`). */
-export interface DeviceScanJson extends Omit<DeviceScan, 'state'> {
+interface DeviceScanJson extends Omit<DeviceScan, 'state'> {
   readonly state: PublishedDeviceStateJson | null;
 }
 

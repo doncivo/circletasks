@@ -11,8 +11,8 @@ import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
-import { positionFromCover } from './positions';
-import { cursorIds, isJoining, joinFromSnapshot } from './join';
+import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from '../domain/sync/ownState';
+import { finishResumeTx, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
@@ -64,57 +64,6 @@ function acksToJson(acks: ReadonlyMap<DeviceId, DeviceAck>): string {
   const out: Record<string, DeviceAck> = {};
   for (const [id, ack] of acks) out[id] = ack;
   return JSON.stringify(out);
-}
-
-const ZERO_HLC = '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc;
-
-/**
- * Texte comparé par « réécrit seulement s'il a changé » (section 1.4, audit M1) : sans `stateSeq` (le sien, celui de sa tête **et celui
- * de chaque accusé**, Y-TECH-01) ni `lastSyncHlc`. Le `stateSeq` d'un accusé change à chaque réécriture de l'appareil lu : compté, il
- * faisait réécrire l'état à chaque cycle entre appareils actifs qui se lisent (chaque écriture de l'un change l'accusé de l'autre).
- * Positions, hlc lus, instantané, horizon, liste maître (`forgotten`, qui ne fait que grandir) et annonce y restent : leur changement
- * est publié au cycle même.
- */
-export function comparableState(state: PublishedDeviceState): string {
-  const acks = new Map<DeviceId, DeviceAck>([...state.acks].map(([id, ack]) => [id, { ...ack, stateSeq: 0 }]));
-  return publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: ZERO_HLC, acks });
-}
-
-/** États d'un autre appareil qui attendent le `stateSeq` de nos accusés (jamais `cloud-pending` : transfert en cours, rien n'attend). */
-const AWAITING_ACK_SEQ: ReadonlySet<DeviceScan['stateStatus']> = new Set(['missing', 'foreign', 'corrupt', 'rollback', 'too-large']);
-
-/**
- * Y-TECH-01 : un accusé dont le `stateSeq` a avancé depuis le dernier état publié, sur un appareil dont le `state.ctx` est absent,
- * étranger, illisible ou rejoué à ce scan (`awaiting`), est republié aussitôt. Cet appareil attend ce `stateSeq` : borne de la règle 1
- * (état reconstruit ou rejoué sous un `stateSeq` trop bas, refusé par les autres tant qu'il ne la dépasse pas) et condition (iii) de la
- * reconstruction de `forgotten.json` (§18 point 7). Sans boucle : la ligne de cet appareil ne change que lorsqu'un de ses états est
- * accepté, et l'accusé n'est republié qu'une fois.
- */
-function ackSeqAwaited(state: PublishedDeviceState, published: PublishedDeviceState | null, awaiting: ReadonlySet<DeviceId>): boolean {
-  for (const [id, ack] of state.acks) {
-    if (awaiting.has(id) && ack.stateSeq > (published?.acks.get(id)?.stateSeq ?? 0)) return true;
-  }
-  return false;
-}
-
-/** Statut local d'un appareil d'après le statut de son `state.ctx` au scan (un état invalide garde son dernier accusé connu). */
-function deviceStatusOf(scan: DeviceScan, previous: string | undefined): string {
-  switch (scan.stateStatus) {
-    case 'foreign':
-      return 'foreign';
-    case 'corrupt':
-    case 'too-large':
-      return 'corrupt';
-    case 'rollback':
-      return 'rollback';
-    case 'newer-format':
-      return 'newer-major';
-    case 'ok':
-      return scan.state && scan.state.sm > SYNC_FORMAT_MAJOR ? 'newer-major' : previous === 'clock-ahead' ? 'clock-ahead' : 'active';
-    case 'missing':
-    case 'cloud-pending':
-      return previous ?? 'active';
-  }
 }
 
 /** Accepte les états authentifiés des autres appareils dans `sync_state` (anti-rejeu local, section 1.4). */
@@ -823,18 +772,10 @@ export async function resumeFromSnapshot(
     }
     if (!loaded) continue;
     const now = iso(deps.clock.nowMs());
-    const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, async (tx) => {
-      // Curseurs aux positions couvertes, sinon depuis le début de l'époque.
-      const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
-      for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
-        // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
-        await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId, local.get(id)));
-      }
-      await writeJson(tx, META.resume, null);
-      // Instantané admis : son écrivain, écarté plus tôt pour dérive, n'est plus en avance.
-      const source = (await tx.sync.getStates()).find((row) => row.deviceId === deviceId);
-      if (deviceId !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(deviceId, { status: 'active' });
-    });
+    // Dernière transaction (même fonction que l'arrivée, join.ts) : curseurs aux positions couvertes, fin de la reprise.
+    const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, (tx) =>
+      finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage }),
+    );
     if (result === 'clock-ahead') {
       // Instantané trop en avance (section 4.4) : écarté ; l'appareil qui l'a écrit est signalé.
       if (deviceId !== deps.deviceId) await deps.data.repos.sync.saveState(deviceId, { status: 'clock-ahead' });

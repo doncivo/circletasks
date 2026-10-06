@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { FOLDER_WARN_BYTES, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
+import { FOLDER_WARN_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
 import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/db/repositories/syncRepository';
 import { SyncPlatformError, type FolderScan, type SyncPlatform } from '../../../src/platform/sync/types';
@@ -173,6 +173,27 @@ describe('point 3 : échecs avalés', () => {
     await a.cycle();
     expect(events(a, 'delete-own-failed')).toContainEqual({ kind: 'epoch', code: 'cloud-error' });
     expect(events(a, 'old-epochs-deleted')).toEqual([]);
+  });
+});
+
+describe('point 7 : memory.ts aligné sur Rust', () => {
+  it('fichiers attendus plafonnés à 10 000 par dossier, scan incomplet au-delà (store.rs)', async () => {
+    const a = await first();
+    await a.createTask('A1');
+    await a.cycle();
+    const b = await createSimDevice(B_ID, { clock: a.clock });
+    devices.push(b);
+    await pair(a, b);
+    // Tête authentifiée très éloignée du plus ancien segment listé : 10 004 segments annoncés et absents (état lu par B pour la première fois).
+    const dir = b.folder.devices.get(a.id) as unknown as { state: { lines: { text: string }[] } };
+    const line = dir.state.lines[0] as { text: string };
+    const json = JSON.parse(line.text) as { head: { segment: number } };
+    dir.state.lines[0] = { ...line, text: JSON.stringify({ ...json, head: { ...json.head, segment: 10_005 } }) };
+    const scan = await b.platform.scan({ keep: [] });
+    const scanned = scan.devices.find((d) => d.deviceId === a.id);
+    expect(scanned?.stateStatus).toBe('ok');
+    expect(scanned?.pending).toHaveLength(MAX_SCAN_ENTRIES_PER_FOLDER);
+    expect(scan.incomplete).toBe(true);
   });
 });
 

@@ -13,7 +13,7 @@
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { compareEpochs, isStrictHlc, isSyncDeviceId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState } from './format';
-import { DEVICE_EXPIRY_MS, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
+import { DEVICE_EXPIRY_MS, MAX_STATE_FORGOTTEN, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
 import { hlcDevice, hlcMs } from './parse';
 
 /** Ce que la base locale sait d'un autre appareil (ligne de `sync_state`). */
@@ -124,8 +124,6 @@ export interface ForgetVerdict {
   readonly at: Hlc;
 }
 
-/** Déclarations gardées au plus dans la liste maître (borne de `forgotten`, section 1.6). */
-export const MAX_FORGOTTEN_ENTRIES = 64;
 /** Une nouvelle déclaration locale est refusée (`too-large`) à partir de ce nombre (16 places pour des déclarations concurrentes). */
 export const FORGET_DECLARE_LIMIT = 48;
 
@@ -137,7 +135,7 @@ export function declarationAuthor(entry: ForgottenDevice): DeviceId | null {
 }
 
 /** Bien formée : `at` strict, cible au format strict, auteur différent de la cible. */
-export function isWellFormedDeclaration(entry: ForgottenDevice): boolean {
+function isWellFormedDeclaration(entry: ForgottenDevice): boolean {
   const author = declarationAuthor(entry);
   return author !== null && isSyncDeviceId(entry.deviceId) && author !== entry.deviceId;
 }
@@ -167,7 +165,7 @@ const declarationKey = (entry: ForgottenDevice): string => `${entry.deviceId}|${
  * fin (ordre d'apprentissage, jamais retirée ni réordonnée). Candidates examinées par `at` puis cible. Au-delà de `cap` : non apprise,
  * `overflow` vrai (§18 point 5).
  */
-export function learnDeclarations(master: readonly ForgottenDevice[], candidates: readonly ForgottenDevice[], cap = MAX_FORGOTTEN_ENTRIES): { readonly entries: ForgottenDevice[]; readonly overflow: boolean } {
+export function learnDeclarations(master: readonly ForgottenDevice[], candidates: readonly ForgottenDevice[], cap = MAX_STATE_FORGOTTEN): { readonly entries: ForgottenDevice[]; readonly overflow: boolean } {
   const entries = [...master];
   const known = new Set(entries.map(declarationKey));
   let overflow = false;
@@ -419,7 +417,7 @@ export function forgetGaps(master: readonly ForgottenDevice[], ackers: readonly 
 }
 
 /** Terminés dont l'oubli est annulé (§18 point 12) : dans `done`, plus oubliés par l'ordre total. Triés. */
-export function revivedDevices(master: readonly ForgottenDevice[], done: readonly DeviceId[]): DeviceId[] {
+function revivedDevices(master: readonly ForgottenDevice[], done: readonly DeviceId[]): DeviceId[] {
   const order = forgetOrder(master);
   return [...new Set(done)].filter((id) => !order.has(id)).sort(compareText);
 }

@@ -1,5 +1,5 @@
-import type { SyncStatePatch, SyncStateRow } from '../db/repositories';
-import { compareEpochs, type DeviceAck, type EpochId } from '../domain/sync/format';
+import type { Hlc } from '../types';
+import { compareEpochs, type DeviceAck, type EpochId } from './format';
 
 /**
  * Position locale sur un autre appareil quand la base vient d'un instantané (Y-TECH-01, même règle que Y-11 §18 point 14 : **aucun accusé
@@ -9,7 +9,13 @@ import { compareEpochs, type DeviceAck, type EpochId } from '../domain/sync/form
  * (coupure d'un oubli déclaré plus tard, §14.2).
  */
 
-type Position = Pick<SyncStatePatch, 'epoch' | 'cursorSegment' | 'cursorRecord' | 'ackHlc'>;
+/** Position locale sur un appareil (colonnes de `sync_state` ; module pur, Y-TECH-02 : déplacé de `src/sync`). */
+export interface Position {
+  readonly epoch: string | null;
+  readonly cursorSegment: number;
+  readonly cursorRecord: number;
+  readonly ackHlc: Hlc | null;
+}
 
 const at = (cover: DeviceAck): Position => ({ epoch: cover.epoch, cursorSegment: cover.segment, cursorRecord: cover.record, ackHlc: cover.hlc });
 
@@ -17,7 +23,9 @@ const at = (cover: DeviceAck): Position => ({ epoch: cover.epoch, cursorSegment:
 const NONE: Position = { epoch: null, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
 
 /** Ligne locale actuelle d'un appareil (position et époque de son dernier état accepté). */
-export type LocalRow = Pick<SyncStateRow, 'epoch' | 'cursorSegment' | 'cursorRecord' | 'ackHlc' | 'stateEpoch'>;
+export interface LocalRow extends Position {
+  readonly stateEpoch: string | null;
+}
 
 /**
  * Reprise ou arrivée depuis un instantané de `epoch` (section 5.5, fusion : la base locale est gardée) :

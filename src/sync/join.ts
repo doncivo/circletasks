@@ -7,7 +7,8 @@ import type { SyncDeps } from './deps';
 import type { CycleHooks } from './engine';
 import { pickEligible, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { META, readJson, writeJson } from './meta';
-import { positionFromCover } from './positions';
+import { cursorIds } from '../domain/sync/ownState';
+import { positionFromCover } from '../domain/sync/positions';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
 /**
@@ -162,13 +163,23 @@ export async function joinFromSnapshot(
 }
 
 /**
- * Appareils dont le curseur est posé à la fin d'une reprise : ceux dont l'état est accepté, soi, et chaque oublié retenu présent dans
- * `covers` (§18 point 11 : un appareil qui n'a jamais lu X publie l'accusé **hérité** de l'instantané dont il est parti).
+ * Dernière transaction d'une reprise depuis l'instantané (`resumeFromSnapshot`) et d'une arrivée (Y-TECH-02 : une seule fonction) :
+ * curseurs aux positions `covers` (`cursorIds`, `positionFromCover` : une position d'une époque antérieure est gardée, accusé hérité,
+ * jamais ramenée au début de l'époque courante), fin de la reprise (`sync_meta.resume`), et l'écrivain de l'instantané admis, écarté plus
+ * tôt pour dérive, n'est plus en avance.
  */
-export function cursorIds(accepted: ReadonlyMap<DeviceId, unknown>, self: DeviceId, loaded: LoadedSnapshot, coverage: ForgetCoverage): Set<string> {
-  const ids = new Set<string>([...accepted.keys(), self]);
-  for (const id of loaded.end.covers.keys()) if (coverage.forgotten.has(id)) ids.add(id);
-  return ids;
+export async function finishResumeTx(
+  tx: Repositories,
+  deps: SyncDeps,
+  input: { readonly epoch: EpochId; readonly from: DeviceId; readonly loaded: LoadedSnapshot; readonly accepted: ReadonlyMap<DeviceId, unknown>; readonly coverage: ForgetCoverage },
+): Promise<void> {
+  const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
+  for (const id of cursorIds(input.accepted, deps.deviceId, input.loaded.end.covers, input.coverage.forgotten)) {
+    await tx.sync.saveState(id, positionFromCover(input.loaded.end.covers.get(id as DeviceId), input.epoch, id === deps.deviceId, local.get(id)));
+  }
+  await writeJson(tx, META.resume, null);
+  const source = (await tx.sync.getStates()).find((row) => row.deviceId === input.from);
+  if (input.from !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(input.from, { status: 'active' });
 }
 
 async function applyJoin(
@@ -198,15 +209,8 @@ async function applyJoin(
   }
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
   const finalize: SnapshotTxHook = async (tx) => {
-    const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
-    for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
-      // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
-      await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId, local.get(id)));
-    }
-    await writeJson(tx, META.resume, null);
+    await finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage });
     await writeJson(tx, JOIN_META, null);
-    const source = (await tx.sync.getStates()).find((row) => row.deviceId === deviceId);
-    if (deviceId !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(deviceId, { status: 'active' });
   };
   const result = await mergeSnapshot(deps, { records: records.slice(rowsEnd), end: loaded.end }, ctx, undefined, finalize);
   if (result === 'clock-ahead') throw new JoinError('clock-ahead');

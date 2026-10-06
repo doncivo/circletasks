@@ -10,7 +10,7 @@ import { createFakeDesktop, type FakeDesktop } from '../../platform/desktop/test
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startDesktopIntegration } from '../app/desktop';
-import { JOIN_STATE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
+import { JOIN_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { JoinProgress } from './JoinProgress';
 import { createFakeSyncService, nextCall, type FakeSyncService } from './testKit';
@@ -125,7 +125,7 @@ describe('relance pendant l’affichage du QR (critère 9, QA)', () => {
 
 describe('échec d’arrivée visible (exigence d’Ali, critère 13, QA)', () => {
   it('code d’échec inconnu : texte générique, « Réessayer » relance un cycle, aucun contenu affiché', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify({ epoch: 'e', from: 'x', seq: 1, done: 8, total: 20, failure: 'disk-on-fire' }));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e', from: 'x', seq: 1, done: 8, total: 20, failure: 'disk-on-fire' }));
     renderIn(await make(), <JoinProgress />);
     const failure = await screen.findByTestId('sync-join-failure');
     expect((failure.textContent ?? '').trim()).not.toBe('');

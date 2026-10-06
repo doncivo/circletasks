@@ -6,12 +6,11 @@ import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types'
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type MemorySyncPlatform, type SyncPlatform } from '../../platform/sync';
 import { createFakeDesktop, type FakeDesktop } from '../../platform/desktop/testing';
-import { JOIN_META } from '../../sync/join';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startDesktopIntegration } from '../app/desktop';
 import { JoinProgress } from './JoinProgress';
-import { JOIN_STATE_META, PAIRING_FAILURE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
+import { JOIN_META, PAIRING_FAILURE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { SyncSettingsSection } from './SyncSettingsSection';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -291,7 +290,6 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
   });
 
   it('échec mémorisé par le moteur : affiché en rouge avec « Réessayer », après un redémarrage aussi, effacé à la réussite', async () => {
-    expect(JOIN_STATE_META).toBe(JOIN_META);
     await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e0001-x', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
     renderIn(await make(), <JoinProgress />);
     expect((await screen.findByTestId('sync-join-failure')).textContent).toContain('La réception de vos données s’est arrêtée à 8 / 20 : elle reprendra à la prochaine synchronisation');

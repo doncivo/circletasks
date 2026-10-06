@@ -5,7 +5,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type FolderScan, type KeyStatus, type RestoreContext, type RestoreFailure, type RestoreMarker, type SyncErrorCode } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
-import { positionAfterReplace } from './positions';
+import { positionAfterReplace } from '../domain/sync/positions';
 import { snapshotPages } from './snapshot';
 
 /** Dernier choix refusé ou en échec (`sync_meta`, local, jamais publié) : affiché dans la fenêtre de choix jusqu'à un choix appliqué. */

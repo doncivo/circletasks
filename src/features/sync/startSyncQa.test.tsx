@@ -14,7 +14,7 @@ import { useAppStatusStore } from '../app/appStatus';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
-import { JOIN_STATE_META } from './pairingStatus';
+import { JOIN_META } from './pairingStatus';
 import { startSyncIntegration, type SyncIntegration } from './startSync';
 import { statusLine } from './syncText';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -216,7 +216,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
   }
 
   it('arrivée en échec : retirée par la seule réussite (meta effacée), pas par un cycle ni le temps ; revient après redémarrage', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();
@@ -231,7 +231,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
       await restart().refreshed();
     });
     expect(sources().syncTrouble?.detail).toBe('join-failed');
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, null);
+    await db.data.repos.sync.setMeta(JOIN_META, null);
     set({ phase: 'idle', lastSyncAt: NOW as IsoDateTime, conflictsThisWeek: 2 });
     await settle();
     expect(sources().syncTrouble).toBeUndefined();
@@ -253,7 +253,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
   });
 
   it('une valeur illisible de sync_meta.join est ignorée sans lever', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, '{pas du json');
+    await db.data.repos.sync.setMeta(JOIN_META, '{pas du json');
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();
@@ -282,7 +282,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
   });
 
   it('une lecture qui aboutit après dispose() ne repose rien, un état émis ensuite non plus', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     const real = db.data.repos.sync.getMeta.bind(db.data.repos.sync);
     let release: () => void = () => undefined;
     const slow = new Promise<void>((resolve) => (release = resolve));
@@ -304,7 +304,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
   // l'état précédent est « rien » : une arrivée en échec ou un appareil illisible reste invisible, et la lecture elle-même n'est
   // signalée nulle part. Corrigé (revue A-09, point 1) : état `state-unreadable`.
   it('DÉFAUT QA-1 (corrigé) : une lecture de sync_meta ou de sync_state en échec au démarrage est signalée (aucun échec silencieux)', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
     vi.spyOn(db.data.repos.sync, 'getStates').mockRejectedValue(new Error('base occupée'));
     render(<AppStatusBanner />);
@@ -317,7 +317,7 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
 
 describe('priorités et « (+N) » (9 a, 9 g)', () => {
   it('N compte exactement les autres états, diminue à chaque résolution, et le plus urgent passe devant', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();
@@ -330,7 +330,7 @@ describe('priorités et « (+N) » (9 a, 9 g)', () => {
     expect(text()).toMatch(/\(\+3\)/);
     set({ devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'corrupt'), device(LAPTOP, 'windows', 'active')] });
     expect(text()).toMatch(/\(\+2\)/);
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, null);
+    await db.data.repos.sync.setMeta(JOIN_META, null);
     set({ conflictsThisWeek: 1 });
     await settle();
     expect(text()).toMatch(/\(\+1\)/);
@@ -348,7 +348,7 @@ describe('priorités et « (+N) » (9 a, 9 g)', () => {
   });
 
   it('clé différente + arrivée en échec : la clé d’abord (+1) ; un appareil étranger en plus ne s’ajoute pas (même état)', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();
@@ -547,7 +547,7 @@ describe('accessibilité et textes (9 h, 9 j)', () => {
   });
 
   it('dispose() retire chaque état posé, y compris « (+N) » et le bouton, et un état émis ensuite est ignoré', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(JOIN));
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();

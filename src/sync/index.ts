@@ -11,3 +11,4 @@ export type { RestoreContext } from './restoreChoice';
 export { readForgetStatus } from './forget';
 export { readResetStatus } from './reset';
 export { defaultSyncLogger, silentSyncLogger, createMemorySyncLogger, type SyncLogger } from './log';
+export { JOIN_META } from './join';

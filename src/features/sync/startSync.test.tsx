@@ -12,7 +12,7 @@ import { useAppStatusStore } from '../app/appStatus';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
-import { handleSyncPaired, JOIN_STATE_META } from './pairingStatus';
+import { handleSyncPaired, JOIN_META } from './pairingStatus';
 import { BLOCKING_PHASE_META, startSyncIntegration, type SyncIntegration } from './startSync';
 import { syncStore } from './syncStore';
 import { statusLine } from './syncText';
@@ -223,7 +223,7 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
   const failure = { epoch: 'e0001-x', from: SELF, seq: 1, done: 1200, total: 5000, failure: 'io' };
 
   it('arrivée en échec : bandeau au texte de JoinProgress, avant le premier cycle, après un redémarrage, jusqu’à la réussite', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(failure));
     renderBanner();
     await start().refreshed();
     const shown = useAppStatusStore.getState().sources.syncTrouble;
@@ -245,28 +245,28 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('join-failed');
 
     // Réussite : le moteur efface l'entrée, la fin du cycle relit.
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, null);
+    await db.data.repos.sync.setMeta(JOIN_META, null);
     set({ phase: 'idle', lastSyncAt: NOW as IsoDateTime, conflictsThisWeek: 1 });
     await integration?.refreshed();
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
   });
 
   it('horloge en retard pendant l’arrivée : texte dédié de JoinProgress', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify({ ...failure, failure: 'clock-ahead' }));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ ...failure, failure: 'clock-ahead' }));
     renderBanner();
     await start().refreshed();
     expect(banner()?.textContent).toContain('l’horloge de cet appareil est en retard');
   });
 
   it('arrivée en attente sans échec : aucun bandeau d’échec', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify({ ...failure, failure: null }));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ ...failure, failure: null }));
     renderBanner();
     await start().refreshed();
     expect(banner()).toBeNull();
   });
 
   it('base illisible pendant une relecture : signalée (« (+1) » avec l’échec gardé, qui reste), effacée à la lecture réussie suivante', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(failure));
     renderBanner();
     await start().refreshed();
     const getMeta = vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
@@ -334,7 +334,7 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     await start().refreshed();
     set({ phase: 'syncing', reintegrationFailure: { fields: 2, tables: ['task'], at: NOW as IsoDateTime, errors: ['x'] } });
     fireTimers();
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(failure));
     set({ phase: 'waiting-icloud', errorCode: 'cloud-pending' });
     await integration?.refreshed();
     set({ phase: 'syncing' });
@@ -350,7 +350,7 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
 
 describe('un seul bandeau, le plus urgent (critère 9 g) ; sobriété (9 h)', () => {
   it('horloge + arrivée en échec + appareil illisible : le plus urgent, « (+2) »', async () => {
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify({ epoch: 'e', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
     renderBanner();
     await start().refreshed();
     set({ phase: 'clock-ahead', clockAheadDevice: PHONE, devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'clock-ahead'), device(LAPTOP, 'windows', 'corrupt')] });
@@ -554,7 +554,7 @@ describe('seconde revue A-09', () => {
     const slow = new Promise<void>((resolve) => (release = resolve));
     let joinReads = 0;
     vi.spyOn(db.data.repos.sync, 'getMeta').mockImplementation(async (key) => {
-      if (key !== JOIN_STATE_META) return real(key);
+      if (key !== JOIN_META) return real(key);
       joinReads += 1;
       if (joinReads === 1) {
         // Valeur lue avant l'échec ; la réponse n'arrive qu'après.
@@ -567,7 +567,7 @@ describe('seconde revue A-09', () => {
     renderBanner();
     const running = start();
     // Pendant la lecture : l'arrivée échoue (moteur) et l'association change.
-    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify(failure));
     await act(async () => {
       await handleSyncPaired(container);
     });
