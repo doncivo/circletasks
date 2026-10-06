@@ -28,6 +28,13 @@
       "content": "Il ne sera plus synchronisé et ses fichiers seront supprimés d'iCloud. L'oubli ne s'annule pas : l'appareil devra être associé de nouveau.",
       "confirm": "Oublier l'appareil",
       "cancel": "Annuler"
+    },
+    "resetKey": {
+      "title": "CircleTasks",
+      "instruction": "Réinitialiser la synchronisation avec une nouvelle clé ?",
+      "content": "Une nouvelle clé et une nouvelle clé de secours vont être créées. Vos autres appareils devront être associés de nouveau, ou oubliés. L'ancienne clé de secours ne servira plus.",
+      "confirm": "Réinitialiser",
+      "cancel": "Annuler"
     }
   },
   "forgetDetail": {

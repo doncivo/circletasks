@@ -112,6 +112,14 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     expect(pairingOpenErrorKey('already-open', 'import')).toBe('sync.pairing.openAlreadyOpen');
   });
 
+  it('Y-11 (revue 9) : ancienne clé retirée (state-mismatch en mode show) : « Cet appareil doit d’abord être associé avec la nouvelle clé »', async () => {
+    const { pairingOpenErrorKey } = await import('./pairingStatus');
+    expect(pairingOpenErrorKey('state-mismatch', 'show')).toBe('sync.pairing.openNeedsNewKey');
+    expect(pairingOpenErrorKey('state-mismatch', 'import')).toBe('sync.pairing.openFailed');
+    // Seconde revue, point 2 : l'état d'un appareil actif attend iCloud : réessayer.
+    expect(pairingOpenErrorKey('cloud-pending', 'show')).toBe('sync.pairing.openCloudPending');
+  });
+
   it('dossier lié sans clé : « Associer cet appareil » ouvre l’instance import, sans confirmation', async () => {
     sync.setStatus({ phase: 'needs-pairing' });
     const container = await make();

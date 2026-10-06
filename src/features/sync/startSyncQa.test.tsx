@@ -120,6 +120,8 @@ const BLOCKED: readonly { name: string; patch: Partial<SyncStatus> }[] = [
   { name: 'waiting-icloud', patch: { phase: 'waiting-icloud', errorCode: 'cloud-provider-stopped' } },
   // Y-10 : appareil local oublié.
   { name: 'forgotten', patch: { phase: 'forgotten' } },
+  // Y-11 : appareil à associer de nouveau après une réinitialisation.
+  { name: 'reset-required', patch: { phase: 'reset-required' } },
 ];
 
 describe('aucun échec silencieux : chaque phase bloquée (9 c, 9 e, 9 i)', () => {

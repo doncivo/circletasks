@@ -1,10 +1,14 @@
-import { SYNC_FORMAT_MAJOR, compareEpochs, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
-import { folderEpoch, maxEpoch, nextEpoch, openingCover, restoreOptions } from '../domain/sync/epoch';
-import type { DeviceId, Hlc } from '../domain/types';
-import type { RestoreContext, RestoreMarker } from '../platform/sync/types';
+import { SYNC_FORMAT_MAJOR, compareEpochs, isSyncErrorCode, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
+import { folderEpoch, maxEpoch, nextEpoch, openingCover, resetWinner, restoreCandidates, restoreOptions, type OpenedEpoch, type ResetCandidate, type RestoreOption } from '../domain/sync/epoch';
+import { forgetOrder } from '../domain/sync/retention';
+import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
+import type { FolderScan, KeyStatus, RestoreContext, RestoreFailure, RestoreMarker, SyncErrorCode } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
 import { snapshotPages } from './snapshot';
+
+/** Dernier choix refusé ou en échec (`sync_meta`, local, jamais publié) : affiché dans la fenêtre de choix jusqu'à un choix appliqué. */
+export const RESTORE_FAILURE_META = 'restoreFailure';
 
 /**
  * Choix après une restauration P-04 (ADR 0010 règles 1 à 4, ADR 0011 section 9 ; Y-02 critères 13 à 15, Y-09 critère 8).
@@ -18,18 +22,56 @@ import { snapshotPages } from './snapshot';
 
 export type { RestoreContext };
 
-/** Lit les états publiés pour décider des options (règle 4). */
+/**
+ * Y-11 (§18 point 16) : réinitialisation en cours vue d'un `sync_scan` seul (aucune lecture de journal, aucune écriture, aucune
+ * publication) : vue de Rust non nulle (tout rôle, perte comprise tant qu'elle n'est pas close), nouvelle clé au coffre, ou annonce
+ * gagnante lue dans les états authentifiés (mêmes règles que Rust : `announcements` et époques restaurées concurrentes).
+ */
+export function resetInProgress(scan: FolderScan, key: Pick<KeyStatus, 'kid' | 'nextKid'>, self: DeviceId): boolean {
+  if (scan.reset && !scan.reset.closed) return true;
+  if (key.nextKid) return true;
+  const announcements: ResetCandidate[] = [];
+  const opened: OpenedEpoch[] = [];
+  for (const d of scan.devices) {
+    if (d.stateStatus !== 'ok' || !d.state || d.kid !== key.kid) continue;
+    opened.push({ by: d.deviceId, epoch: d.state.epoch, snapshot: d.state.snapshot !== null, notice: d.state.reset !== null });
+    if (d.deviceId !== self && d.state.reset) announcements.push({ by: d.deviceId, stateEpoch: d.state.epoch, notice: d.state.reset });
+  }
+  const winner = resetWinner([...announcements, ...restoreCandidates(opened, announcements)], new Set(forgetOrder(scan.forgotten.entries).keys()));
+  return winner !== null && winner.restore !== true;
+}
+
+/** Lit les états publiés pour décider des options (règle 4 ; §18 point 16 pendant une réinitialisation). */
 export async function restoreContext(deps: SyncDeps, marker: RestoreMarker): Promise<RestoreContext> {
   let horizons: (Hlc | null)[] = [];
+  let inReset = false;
   try {
     const scan = await deps.platform.scan({ keep: [] });
     horizons = scan.devices.filter((d) => d.stateStatus === 'ok' && d.state).map((d) => (d.state as PublishedDeviceState).purgeHorizon);
+    inReset = resetInProgress(scan, await deps.platform.key.status(), deps.deviceId);
   } catch {
-    // dossier injoignable : les horizons connus en base suffisent
+    // dossier injoignable : les horizons connus en base suffisent ; Rust refuse de toute façon une époque pendant une réinitialisation
   }
   for (const row of await deps.data.repos.sync.getStates()) horizons.push(row.purgeHorizon);
   horizons.push(await readJson<Hlc>(deps.data.repos, META.purgeHorizon));
-  return { marker, options: restoreOptions(marker.backupTakenAt, horizons) };
+  const all = restoreOptions(marker.backupTakenAt, horizons);
+  const options = inReset ? all.filter((o) => o !== 'apply-everywhere') : all;
+  const notice = inReset ? (options.length > 0 ? 'reset-in-progress' : 'reset-finish') : null;
+  return { marker, options, notice, failure: await readRestoreFailure(deps) };
+}
+
+/** Échec gardé d'un choix (lecture défensive : une valeur mal formée est ignorée). */
+export async function readRestoreFailure(deps: SyncDeps): Promise<RestoreFailure | null> {
+  const value = await readJson<{ code?: unknown; at?: unknown; option?: unknown }>(deps.data.repos, RESTORE_FAILURE_META);
+  if (!value || !isSyncErrorCode(value.code) || typeof value.at !== 'string' || Number.isNaN(Date.parse(value.at))) return null;
+  if (value.option !== 'apply-everywhere' && value.option !== 'keep-synced') return null;
+  return { code: value.code, at: value.at as IsoDateTime, option: value.option };
+}
+
+/** Échec d'un choix gardé (QA-1 : aucun échec silencieux). */
+export async function recordRestoreFailure(deps: SyncDeps, option: RestoreOption, code: SyncErrorCode): Promise<void> {
+  await writeJson(deps.data.repos, RESTORE_FAILURE_META, { code, at: new Date(deps.clock.nowMs()).toISOString(), option });
+  deps.logger.log('restore-choice-failed', { option, code });
 }
 
 /**

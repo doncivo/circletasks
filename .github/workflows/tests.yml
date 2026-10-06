@@ -84,11 +84,11 @@ jobs:
       - name: cargo test
         if: steps.changes.outputs.rust == 'true'
         working-directory: src-tauri
-        run: cargo test --locked --test desktop
+        run: cargo test --locked --features test-hooks --test desktop
       - name: cargo test --release (fenêtre pairing)
         if: steps.changes.outputs.rust == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
         working-directory: src-tauri
-        run: cargo test --locked --release --test desktop sync_pairing
+        run: cargo test --locked --release --features test-hooks --test desktop sync_pairing
 
   e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.e2e

@@ -19,7 +19,7 @@ use super::limits::{
 };
 use super::names::{
     is_epoch_id, is_file_number, is_strict_hlc, is_uuid_v4, parse_file_name, segment_name, snapshot_name, EpochId, SyncFileName, DEVICES_DIR,
-    STATE_FILE, TEMP_SUFFIX,
+    STATE_FILE, STATE_NEXT_FILE, TEMP_SUFFIX,
 };
 use super::state::{OwnState, PublishedState, Usage};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
@@ -160,6 +160,8 @@ pub struct FolderScan {
     pub incomplete: bool,
     /// Y-10 : registre de l'oubli après fusion des déclarations lues (§11.1, §18) ; rempli par `SyncCore::scan`.
     pub forgotten: super::forget::ForgottenView,
+    /// Y-11 : réinitialisation en cours sur cet appareil (rôle, étape, perte, bascule) ; rempli par `SyncCore::scan`.
+    pub reset: Option<super::service::ResetView>,
 }
 
 /// Clé du cache des fins d'instantané : (kid, appareil, époque, numéro).
@@ -210,17 +212,19 @@ pub fn is_rollback(previous: &Accepted, current: &Accepted) -> bool {
     current.epoch == previous.epoch && current.head < previous.head
 }
 
-/// Lecture d'un `state.ctx`.
+/// Lecture d'un `state.ctx` (ou, pendant une réinitialisation, de `state.next.ctx`, Y-11).
 pub struct StateRead {
     pub kid: Option<String>,
     pub state: Option<PublishedState>,
     pub digest: Option<String>,
     pub status: StateStatus,
+    /// Y-11 : état lu dans `state.next.ctx` (nouvelle clé publiée pendant la transition).
+    pub from_next_file: bool,
 }
 
 impl StateRead {
     fn status(kid: Option<String>, status: StateStatus) -> Self {
-        Self { kid, state: None, digest: None, status }
+        Self { kid, state: None, digest: None, status, from_next_file: false }
     }
 }
 
@@ -239,12 +243,21 @@ struct DeviceListing {
     /// Le dossier d'appareil existe.
     exists: bool,
     state: Option<FsEntry>,
+    /// Y-11 : `state.next.ctx` (état sous la nouvelle clé pendant une réinitialisation).
+    next_state: Option<FsEntry>,
     /// Dossiers d'époque présents (noms stricts), listés ou non.
     epoch_names: BTreeSet<EpochId>,
     /// Fichiers des époques listées (appareils retenus seulement, audit S2).
     epochs: BTreeMap<EpochId, EpochFiles>,
     ignored: u64,
     bytes: u64,
+}
+
+impl DeviceListing {
+    /// Un fichier d'état est listé (`state.ctx`, ou `state.next.ctx` pendant une réinitialisation).
+    fn has_state(&self) -> bool {
+        self.state.is_some() || self.next_state.is_some()
+    }
 }
 
 fn fs_error(error: FsError) -> SyncError {
@@ -278,18 +291,49 @@ impl Budget {
     }
 }
 
-/// Contexte d'accès : dossier lié et clé locale. `pin` : épingler les fichiers annoncés (dossier iCloud).
+/// Y-11 : nouvelle clé d'une réinitialisation en cours (entrée `.next`) et époque qu'elle chiffre (`e<n+1>-<auteur>`).
+#[derive(Clone, Copy)]
+pub struct NextKey<'a> {
+    pub key: &'a MasterKey,
+    pub epoch: &'a str,
+}
+
+/// Contexte d'accès : dossier lié et clé locale. `pin` : épingler les fichiers annoncés (dossier iCloud). `next` (Y-11) : pendant une
+/// réinitialisation, l'époque visée est lue et écrite avec la nouvelle clé, son état publié dans `state.next.ctx` ; tout le reste garde
+/// la clé locale (`.v1`).
 pub struct Store<'a> {
     pub fs: &'a dyn SyncFs,
     pub key: &'a MasterKey,
     pub pin: bool,
+    pub next: Option<NextKey<'a>>,
 }
 
 fn device_dir(dev: &str) -> [&str; 2] {
     [DEVICES_DIR, dev]
 }
 
-impl Store<'_> {
+impl<'a> Store<'a> {
+    pub fn new(fs: &'a dyn SyncFs, key: &'a MasterKey, pin: bool) -> Self {
+        Self { fs, key, pin, next: None }
+    }
+
+    /// Clé d'une époque : la nouvelle clé pour l'époque visée par une réinitialisation en cours, sinon la clé locale (Y-11).
+    pub fn key_for(&self, epoch: &str) -> &'a MasterKey {
+        match self.next {
+            Some(next) if next.epoch == epoch => next.key,
+            _ => self.key,
+        }
+    }
+
+    /// Fichier d'état et clé d'un état publié par cet appareil dans `epoch` : `state.next.ctx` sous la nouvelle clé pour l'époque visée
+    /// d'une réinitialisation en cours, sinon `state.ctx` sous la clé locale.
+    pub fn state_target(&self, epoch: &str) -> (&'static str, &'a MasterKey) {
+        match self.next {
+            Some(next) if next.epoch == epoch => (STATE_NEXT_FILE, next.key),
+            _ => (STATE_FILE, self.key),
+        }
+    }
+
     /// Premier niveau d'un dossier d'appareil : `state.ctx` et noms des dossiers d'époque (sans les lister).
     fn list_device_top(&self, dev: &str, budget: &Budget) -> Result<DeviceListing, FsError> {
         let mut out = DeviceListing::default();
@@ -303,6 +347,11 @@ impl Store<'_> {
             if !entry.is_dir && entry.name == STATE_FILE {
                 out.bytes += entry.size;
                 out.state = Some(entry);
+                continue;
+            }
+            if !entry.is_dir && entry.name == STATE_NEXT_FILE {
+                out.bytes += entry.size;
+                out.next_state = Some(entry);
                 continue;
             }
             match if entry.is_dir && entry.availability != Availability::Error { EpochId::parse(&entry.name) } else { None } {
@@ -376,6 +425,7 @@ impl Store<'_> {
     /// chemin, à notre `kid`, et dernière ligne complète déchiffrée à sa place (audit S7). Un fichier déposé (`j-99999999.ctj`, en-tête
     /// illisible ou d'une autre clé) est ignoré. Rend (numéro, nombre d'enregistrements). 16 essais au plus.
     fn authenticated_tail(&self, dev: &str, epoch: &str, segments: impl Iterator<Item = u32>) -> Option<(u32, u64)> {
+        let key = self.key_for(epoch);
         // Pré-filtre sur l'en-tête seul (1 Kio, sans hydratation ni déchiffrement, hors des 16 essais) : un faux segment d'en-tête
         // illisible, d'une autre clé ou d'un autre chemin ne consomme aucun essai (audit A4).
         let plausible = segments.filter(|&n| {
@@ -383,27 +433,64 @@ impl Store<'_> {
                 .read_head(&[DEVICES_DIR, dev, epoch, &segment_name(n)], MAX_HEADER_BYTES + 1)
                 .ok()
                 .and_then(|head| header_of(&head))
-                .is_some_and(|h| h.kind() == Some(HeaderKind::Journal) && h.dev == dev && h.e == epoch && h.n == u64::from(n) && h.kid == self.key.kid())
+                .is_some_and(|h| h.kind() == Some(HeaderKind::Journal) && h.dev == dev && h.e == epoch && h.n == u64::from(n) && h.kid == key.kid())
         });
         for n in plausible.take(16) {
             let Ok(bytes) = self.fs.read(&[DEVICES_DIR, dev, epoch, &segment_name(n)], MAX_SEGMENT_BYTES, false) else { continue };
             let Ok(file) = parse_file(&bytes) else { continue };
             let h = &file.header;
-            if h.kind() != Some(HeaderKind::Journal) || h.dev != dev || h.e != epoch || h.n != u64::from(n) || h.kid != self.key.kid() {
+            if h.kind() != Some(HeaderKind::Journal) || h.dev != dev || h.e != epoch || h.n != u64::from(n) || h.kid != key.kid() {
                 continue;
             }
             let Some(last) = file.lines.last().and_then(|l| line_str(l)) else { continue };
             let index = file.lines.len() as u64 - 1;
-            if self.key.open(&Place::Journal { dev, epoch, segment: n, index }, last).is_ok() {
+            if key.open(&Place::Journal { dev, epoch, segment: n, index }, last).is_ok() {
                 return Some((n, file.lines.len() as u64));
             }
         }
         None
     }
 
-    /// Lecture d'un `state.ctx` : bornes, en-tête, clé, majeure, ligne unique, déchiffrement, analyse stricte, anti-rejeu.
+    /// État présenté d'un appareil (Y-11, §14.3) : pendant une réinitialisation, `state.next.ctx` sous la nouvelle clé, puis `state.ctx`
+    /// sous la nouvelle clé (appareil qui a déjà basculé) ; sinon `state.next.ctx` sous la clé locale (appareil associé pendant la
+    /// transition, qui ne détient que la nouvelle clé) ; enfin `state.ctx` sous la clé locale (cas ordinaire). Un `state.next.ctx` d'une
+    /// autre clé est ignoré (jamais `foreign` à la place de l'état ordinaire).
     pub fn read_state(&self, dev: &str, accepted: &HashMap<String, Accepted>) -> StateRead {
-        let path = [DEVICES_DIR, dev, STATE_FILE];
+        if let Some(next) = self.next {
+            let read = self.read_state_keys(dev, STATE_NEXT_FILE, &[next.key], accepted);
+            if !matches!(read.status, StateStatus::Missing | StateStatus::Foreign) {
+                return read;
+            }
+            // `state.ctx` lu une fois : clé choisie d'après l'en-tête (nouvelle clé d'un appareil qui a basculé, ou clé locale).
+            return self.read_state_keys(dev, STATE_FILE, &[next.key, self.key], accepted);
+        }
+        let read = self.read_state_keys(dev, STATE_FILE, &[self.key], accepted);
+        // `state.next.ctx` n'est lu que si `state.ctx` est d'une autre clé (appareil associé pendant une transition, qui ne détient
+        // que la nouvelle clé) : aucun coût dans le cas ordinaire.
+        if read.status == StateStatus::Foreign {
+            let next = self.read_state_keys(dev, STATE_NEXT_FILE, &[self.key], accepted);
+            if next.status == StateStatus::Ok {
+                return next;
+            }
+        }
+        read
+    }
+
+    /// Lecture d'un fichier d'état (`state.ctx` ou `state.next.ctx`) avec une clé : bornes, en-tête, clé, majeure, ligne unique,
+    /// déchiffrement, analyse stricte, anti-rejeu.
+    pub fn read_state_file(&self, dev: &str, file_name: &'static str, key: &MasterKey, accepted: &HashMap<String, Accepted>) -> StateRead {
+        self.read_state_keys(dev, file_name, &[key], accepted)
+    }
+
+    /// Même lecture avec plusieurs clés possibles : celle dont le `kid` est celui de l'en-tête (sinon `foreign`).
+    fn read_state_keys(&self, dev: &str, file_name: &'static str, keys: &[&MasterKey], accepted: &HashMap<String, Accepted>) -> StateRead {
+        let mut read = self.read_state_inner(dev, file_name, keys, accepted);
+        read.from_next_file = file_name == STATE_NEXT_FILE;
+        read
+    }
+
+    fn read_state_inner(&self, dev: &str, file_name: &'static str, keys: &[&MasterKey], accepted: &HashMap<String, Accepted>) -> StateRead {
+        let path = [DEVICES_DIR, dev, file_name];
         let bytes = match self.fs.read(&path, MAX_STATE_FILE_BYTES, true) {
             Ok(bytes) => bytes,
             Err(FsError::NotFound) => return StateRead::status(None, StateStatus::Missing),
@@ -418,7 +505,8 @@ impl Store<'_> {
         };
         let h = &file.header;
         let kid = Some(h.kid.clone());
-        if h.kind() != Some(HeaderKind::State) || h.dev != dev || h.kid != self.key.kid() {
+        let Some(key) = keys.iter().find(|k| k.kid() == h.kid) else { return StateRead::status(kid, StateStatus::Foreign) };
+        if h.kind() != Some(HeaderKind::State) || h.dev != dev {
             return StateRead::status(kid, StateStatus::Foreign);
         }
         if h.sm > SYNC_FORMAT_MAJOR {
@@ -431,7 +519,7 @@ impl Store<'_> {
         let [line] = file.lines.as_slice() else { return StateRead::status(kid, StateStatus::Corrupt) };
         let Some(line) = line_str(line) else { return StateRead::status(kid, StateStatus::Corrupt) };
         let place = Place::State { dev, epoch: &h.e, state_seq: h.n };
-        let Ok(opened) = self.key.open(&place, line) else { return StateRead::status(kid, StateStatus::Corrupt) };
+        let Ok(opened) = key.open(&place, line) else { return StateRead::status(kid, StateStatus::Corrupt) };
         let Some(state) = PublishedState::parse(&opened.json) else { return StateRead::status(kid, StateStatus::Corrupt) };
         if state.device_id != dev || state.epoch != h.e || state.state_seq != h.n || state.sm != u64::from(opened.sm) || state.sv != u64::from(opened.sv) {
             return StateRead::status(kid, StateStatus::Corrupt);
@@ -442,7 +530,7 @@ impl Store<'_> {
         if accepted.get(dev).is_some_and(|previous| is_rollback(previous, &current)) {
             return StateRead::status(kid, StateStatus::Rollback);
         }
-        StateRead { kid, state: Some(state), digest: Some(digest), status: StateStatus::Ok }
+        StateRead { kid, state: Some(state), digest: Some(digest), status: StateStatus::Ok, from_next_file: false }
     }
 
     /// Retient l'état lu comme accepté.
@@ -516,24 +604,26 @@ impl Store<'_> {
         //    la taille de leur `state.ctx` : des dossiers factices n'écartent pas un appareil en cours d'association (audit A3).
         let mut reads: BTreeMap<String, StateRead> = BTreeMap::new();
         for (dev, listing) in &listings {
-            if protected.contains(dev.as_str()) && listing.state.is_some() {
+            if protected.contains(dev.as_str()) && listing.has_state() {
                 reads.insert(dev.clone(), self.read_state(dev, accepted));
             }
         }
         let mut candidates: Vec<(u8, u64, &String)> = listings
             .iter()
-            .filter(|(dev, l)| !protected.contains(dev.as_str()) && l.state.is_some())
+            .filter(|(dev, l)| !protected.contains(dev.as_str()) && l.has_state())
             .map(|(dev, l)| {
-                let class = match self.fs.read_head(&[DEVICES_DIR, dev, STATE_FILE], MAX_HEADER_BYTES + 1) {
+                let file = if l.state.is_some() { STATE_FILE } else { STATE_NEXT_FILE };
+                let ours = |kid: &str| kid == self.key.kid() || self.next.is_some_and(|n| n.key.kid() == kid);
+                let class = match self.fs.read_head(&[DEVICES_DIR, dev, file], MAX_HEADER_BYTES + 1) {
                     Ok(head) => match header_of(&head) {
-                        Some(h) if h.kind() == Some(HeaderKind::State) && h.dev == *dev && h.kid == self.key.kid() => 0,
+                        Some(h) if h.kind() == Some(HeaderKind::State) && h.dev == *dev && ours(&h.kid) => 0,
                         _ => 2,
                     },
                     // Dans le nuage : en-tête inconnu, après les en-têtes vérifiés.
                     Err(FsError::CloudPending) => 1,
                     Err(_) => 2,
                 };
-                (class, l.state.as_ref().map_or(0, |s| s.size), dev)
+                (class, l.state.as_ref().or(l.next_state.as_ref()).map_or(0, |s| s.size), dev)
             })
             .collect();
         candidates.sort();
@@ -568,7 +658,7 @@ impl Store<'_> {
             ignored += listing.ignored - ignored_before;
             let read = match reads.remove(dev) {
                 Some(read) => read,
-                None if listing.state.is_some() => self.read_state(dev, accepted),
+                None if listing.has_state() => self.read_state(dev, accepted),
                 None => StateRead::status(None, StateStatus::Missing),
             };
             let (scan, cut) = self.scan_device(dev, &listing, read, accepted);
@@ -580,7 +670,7 @@ impl Store<'_> {
             log::event("folder-large", &total.to_string());
         }
         incomplete |= budget.cut.get();
-        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete, forgotten: Default::default() })
+        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete, forgotten: Default::default(), reset: None })
     }
 
     fn check_total(total: u64) -> SyncResult<()> {
@@ -611,12 +701,17 @@ impl Store<'_> {
                 pending.push(PendingFile { file, availability: availability.as_str() });
             }
         };
-        if let Some(entry) = &listing.state {
+        for (entry, name) in [(&listing.state, STATE_FILE), (&listing.next_state, STATE_NEXT_FILE)] {
+            let Some(entry) = entry else { continue };
+            // Y-11 : `state.next.ctx` n'est attendu que de l'appareil dont l'état présenté en vient (sinon une autre clé : jamais attendu).
+            if name == STATE_NEXT_FILE && !read.from_next_file {
+                continue;
+            }
             if entry.availability != Availability::Local && read.status != StateStatus::Ok {
-                push(&mut pending, &mut incomplete, STATE_FILE.to_owned(), entry.availability);
+                push(&mut pending, &mut incomplete, name.to_owned(), entry.availability);
             }
             if self.pin && entry.availability != Availability::Error {
-                self.pin_file(&[DEVICES_DIR, dev, STATE_FILE]);
+                self.pin_file(&[DEVICES_DIR, dev, name]);
             }
         }
         if let Some(state) = &read.state {
@@ -673,7 +768,7 @@ impl Store<'_> {
             Err(ParseError::Partial) => return fail(SyncCode::CloudPending),
             Err(ParseError::BadHeader) => return fail(SyncCode::BadHeader),
         };
-        if file.header.kid != self.key.kid() {
+        if file.header.kid != self.key_for(epoch).kid() {
             return fail(SyncCode::KeyMismatch);
         }
         if file.header.sm > SYNC_FORMAT_MAJOR {
@@ -746,7 +841,7 @@ impl Store<'_> {
                     return fail(SyncCode::NewerFormat);
                 }
                 // Échec de déchiffrement d'un enregistrement que la tête annonce : corruption, rien au-delà (section 1.2).
-                let Ok(opened) = self.key.open(&Place::Journal { dev, epoch, segment: segment as u32, index: record }, line) else {
+                let Ok(opened) = self.key_for(epoch).open(&Place::Journal { dev, epoch, segment: segment as u32, index: record }, line) else {
                     status = "truncated";
                     break 'outer;
                 };
@@ -808,7 +903,7 @@ impl Store<'_> {
                 status = "truncated";
                 break;
             };
-            let Ok(opened) = self.key.open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else {
+            let Ok(opened) = self.key_for(epoch).open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else {
                 status = "truncated";
                 break;
             };
@@ -849,7 +944,7 @@ impl Store<'_> {
         if state.epoch != epoch || state.snapshot.as_ref().map(|s| s.seq) != Some(seq) {
             return fail(SyncCode::StateMismatch);
         }
-        let key = (self.key.kid().to_owned(), dev.to_owned(), epoch.to_owned(), seq);
+        let key = (self.key_for(epoch).kid().to_owned(), dev.to_owned(), epoch.to_owned(), seq);
         if let Some(json) = ends.get(&key) {
             return Ok(ReadPage { records: vec![json.clone()], next: RecordCursor { segment: seq, record: 0 }, status: "complete" });
         }
@@ -873,7 +968,7 @@ impl Store<'_> {
         let index = (file.lines.len() - 1) as u64;
         let truncated = ReadPage { records: Vec::new(), next: RecordCursor { segment: seq, record: index }, status: "truncated" };
         let Some(line) = file.lines.last().and_then(|l| line_str(l)) else { return Ok(truncated) };
-        let Ok(opened) = self.key.open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else { return Ok(truncated) };
+        let Ok(opened) = self.key_for(epoch).open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else { return Ok(truncated) };
         ends.insert(key, opened.json.clone());
         Ok(ReadPage { records: vec![opened.json], next: RecordCursor { segment: seq, record: index + 1 }, status: "complete" })
     }
@@ -955,7 +1050,7 @@ impl Store<'_> {
             Some(bytes) => {
                 let file = parse_file(bytes).map_err(|_| SyncError::new(SyncCode::SegmentMismatch))?;
                 let h = &file.header;
-                if h.kind() != Some(HeaderKind::Journal) || h.dev != self_id || h.e != epoch || h.n != segment || h.kid != self.key.kid() {
+                if h.kind() != Some(HeaderKind::Journal) || h.dev != self_id || h.e != epoch || h.n != segment || h.kid != self.key_for(epoch).kid() {
                     return fail(SyncCode::SegmentMismatch);
                 }
                 if file.partial_tail || file.lines.len() as u64 != expect_records {
@@ -974,14 +1069,15 @@ impl Store<'_> {
             return fail(SyncCode::HlcOrder);
         }
         check_budget(usage, nonce_max, records.len() as u64)?;
+        let key = self.key_for(epoch);
         let mut out = String::with_capacity(add_bytes as usize + 256);
         if existing.is_none() {
-            out.push_str(&FileHeader::new(HeaderKind::Journal, self.key.kid(), self_id, epoch, segment).line());
+            out.push_str(&FileHeader::new(HeaderKind::Journal, key.kid(), self_id, epoch, segment).line());
             out.push('\n');
         }
         for (i, text) in records.iter().enumerate() {
             let place = Place::Journal { dev: self_id, epoch, segment: segment32, index: first_record + i as u64 };
-            out.push_str(&self.key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, sv32).map_err(|_| SyncError::new(SyncCode::Io))?);
+            out.push_str(&key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, sv32).map_err(|_| SyncError::new(SyncCode::Io))?);
             out.push('\n');
         }
         self.fs.create_dir(&[DEVICES_DIR, self_id, epoch]).map_err(fs_error)?;
@@ -1035,10 +1131,7 @@ impl Store<'_> {
         if state.device_id != self_id || state.platform != platform || state.sm != u64::from(SYNC_FORMAT_MAJOR) || state.sv != sv {
             return fail(SyncCode::StateMismatch);
         }
-        // `forgotten` : comparé à la liste de Rust par l'appelant (`SyncCore::write_state`, Y-10). `reset` : réservé jusqu'à Y-11.
-        if state.reset.is_some() {
-            return fail(SyncCode::StateMismatch);
-        }
+        // `forgotten` (Y-10) et `reset` (Y-11) : comparés à ce que Rust sait par l'appelant (`SyncCore::write_state`).
         if state.paired_by != own.paired_by || state.state_seq <= own.state_seq {
             return fail(SyncCode::StateMismatch);
         }
@@ -1053,11 +1146,13 @@ impl Store<'_> {
             return fail(SyncCode::StateMismatch);
         }
         check_budget(usage, nonce_max, 1)?;
+        // Y-11 : l'état de l'époque visée par une réinitialisation va dans `state.next.ctx`, sous la nouvelle clé (§14.3 étape 4).
+        let (file_name, key) = self.state_target(&state.epoch);
         let place = Place::State { dev: self_id, epoch: &state.epoch, state_seq: state.state_seq };
-        let line = self.key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, sv as u32).map_err(|_| SyncError::new(SyncCode::Io))?;
-        let header = FileHeader::new(HeaderKind::State, self.key.kid(), self_id, &state.epoch, state.state_seq).line();
+        let line = key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, sv as u32).map_err(|_| SyncError::new(SyncCode::Io))?;
+        let header = FileHeader::new(HeaderKind::State, key.kid(), self_id, &state.epoch, state.state_seq).line();
         self.fs.create_dir(&device_dir(self_id)).map_err(fs_error)?;
-        self.fs.write_atomic(&[DEVICES_DIR, self_id, STATE_FILE], format!("{header}\n{line}\n").as_bytes()).map_err(fs_error)?;
+        self.fs.write_atomic(&[DEVICES_DIR, self_id, file_name], format!("{header}\n{line}\n").as_bytes()).map_err(fs_error)?;
         usage.sealed += 1;
         if own.epoch.as_deref() != Some(state.epoch.as_str()) {
             own.epoch = Some(state.epoch.clone());
@@ -1091,7 +1186,7 @@ impl Store<'_> {
         let temp = format!("{name}{TEMP_SUFFIX}");
         self.fs.create_dir(&[DEVICES_DIR, self_id, epoch]).map_err(fs_error)?;
         self.fs.remove_file(&[DEVICES_DIR, self_id, epoch, &temp]).map_err(fs_error)?;
-        let header = format!("{}\n", FileHeader::new(HeaderKind::Snapshot, self.key.kid(), self_id, epoch, seq).line());
+        let header = format!("{}\n", FileHeader::new(HeaderKind::Snapshot, self.key_for(epoch).kid(), self_id, epoch, seq).line());
         self.fs.append(&[DEVICES_DIR, self_id, epoch, &temp], header.as_bytes(), AppendMode::CreateNew).map_err(fs_error)?;
         Ok(SnapshotWriter { dev: self_id.to_owned(), epoch: epoch.to_owned(), seq: seq as u32, sv: sv as u32, bytes: header.len() as u64, records: 0 })
     }
@@ -1110,10 +1205,11 @@ impl Store<'_> {
         }
         // Budget de nonces contrôlé avant tout chiffrement (revue 18).
         check_budget(usage, nonce_max, records.len() as u64)?;
+        let key = self.key_for(&writer.epoch);
         let mut out = String::new();
         for (i, text) in records.iter().enumerate() {
             let place = Place::Snapshot { dev: &writer.dev, epoch: &writer.epoch, seq: writer.seq, index: writer.records + i as u64 };
-            out.push_str(&self.key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, writer.sv).map_err(|_| SyncError::new(SyncCode::Io))?);
+            out.push_str(&key.seal(&place, text.as_bytes(), SYNC_FORMAT_MAJOR, writer.sv).map_err(|_| SyncError::new(SyncCode::Io))?);
             out.push('\n');
         }
         let temp = format!("{}{TEMP_SUFFIX}", snapshot_name(writer.seq));
@@ -1236,20 +1332,27 @@ impl Store<'_> {
         let mut check = KidCheck::default();
         let devices = root.entries.iter().filter(|e| e.is_dir && is_uuid_v4(&e.name) && only.is_none_or_eq(&e.name));
         for dev in devices.take(MAX_STATE_CANDIDATES) {
-            let Ok(bytes) = fs.read(&[DEVICES_DIR, &dev.name, STATE_FILE], MAX_STATE_FILE_BYTES, true) else { continue };
-            let Ok(file) = parse_file(&bytes) else { continue };
-            let h = &file.header;
-            if h.kind() != Some(HeaderKind::State) || h.dev != dev.name {
-                continue;
-            }
-            check.readable += 1;
-            if h.kid != key.kid() || file.partial_tail {
-                continue;
-            }
-            let place = Place::State { dev: &dev.name, epoch: &h.e, state_seq: h.n };
-            if let [line] = file.lines.as_slice() {
-                if line_str(line).is_some_and(|line| key.open(&place, line).is_ok()) {
-                    check.decrypts = true;
+            // Y-11 : la nouvelle clé d'une réinitialisation en cours n'est encore portée que par des `state.next.ctx`.
+            for name in [STATE_FILE, STATE_NEXT_FILE] {
+                let Ok(bytes) = fs.read(&[DEVICES_DIR, &dev.name, name], MAX_STATE_FILE_BYTES, true) else { continue };
+                let Ok(file) = parse_file(&bytes) else { continue };
+                let h = &file.header;
+                if h.kind() != Some(HeaderKind::State) || h.dev != dev.name {
+                    continue;
+                }
+                check.readable += 1;
+                if h.kid != key.kid() || file.partial_tail {
+                    continue;
+                }
+                let place = Place::State { dev: &dev.name, epoch: &h.e, state_seq: h.n };
+                if let [line] = file.lines.as_slice() {
+                    if line_str(line).is_some_and(|line| key.open(&place, line).is_ok()) {
+                        check.decrypts = true;
+                        let newer = check.epoch.as_deref().and_then(EpochId::parse).map_or(true, |e| EpochId::parse(&h.e).is_some_and(|f| f > e));
+                        if newer {
+                            check.epoch = Some(h.e.clone());
+                        }
+                    }
                 }
             }
         }
@@ -1359,10 +1462,12 @@ impl Store<'_> {
 }
 
 /// Résultat de `folder_kids`.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct KidCheck {
     pub readable: usize,
     pub decrypts: bool,
+    /// Y-11 : plus grande époque d'un état qui se déchiffre avec la clé candidate (époque visée d'une réinitialisation).
+    pub epoch: Option<String>,
 }
 
 /// Instantané gardé entre deux pages de lecture.

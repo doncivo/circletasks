@@ -414,8 +414,11 @@ pub async fn sync_key_import(
     let input = match (qr_text, recovery_key, scan) {
         (Some(text), None, None) => KeyInput::QrText(text),
         (None, Some(text), None) => KeyInput::RecoveryKey(text),
-        // Le scan lancé par Rust n'existe que sur l'iPhone (ordre 5).
-        _ => return fail(SyncCode::InvalidPairing),
+        // Le scan lancé par Rust n'existe que sur l'iPhone (ordre 5). Refus persisté (§18 point 17).
+        _ => {
+            core.record_import_failure(SyncCode::InvalidPairing);
+            return fail(SyncCode::InvalidPairing);
+        }
     };
     let owner = caller.hwnd;
     let import_core = core.clone();
@@ -579,7 +582,7 @@ pub async fn sync_restore_marker_clear(app: AppHandle, window: WebviewWindow, st
 // ------------------------------------------------------------------------------------------------------------------------------
 //
 // Région `sync_device_forget` et `sync_forgotten_delete` : Y-10 (`forget.rs`, logique dans `SyncCore`) ; région `sync_reset_key` : Y-11
-// (`reset.rs`), corps provisoire `not-configured` jusqu'à Y-11. Aucun code nouveau (38 codes inchangés).
+// (`reset.rs`, logique dans `SyncCore`). Aucun code nouveau (38 codes inchangés).
 
 /// Sortie de `sync_forgotten_delete` (Y-10) : entrées supprimées par l'appel, et `complete` faux s'il en reste (10 000 au plus).
 #[derive(Serialize)]
@@ -608,9 +611,13 @@ pub async fn sync_forgotten_delete(app: AppHandle, window: WebviewWindow, state:
     Ok(ForgottenDeleted { deleted: result.deleted, complete: result.complete })
 }
 
-/// Y-11 : réinitialisation avec une nouvelle clé (confirmation native, `K2` sous `.next`, seul le `kid` rendu). Étape 0 : `not-configured`.
+/// Y-11 : réinitialisation avec une nouvelle clé. Fenêtre `main` au premier plan, confirmation native (`ConsentKind::ResetKey`, « Annuler »
+/// par défaut), puis `K2` créée par Rust sous `circletasks.sync.key.next` ; seul le `kid` est rendu (jamais la clé). Une réinitialisation
+/// interrompue est reprise (même `K2`, sans boîte).
 #[tauri::command]
-pub async fn sync_reset_key(window: WebviewWindow) -> SyncResult<KeyCreated> {
+pub async fn sync_reset_key(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>) -> SyncResult<KeyCreated> {
     require_main(&window)?;
-    fail(SyncCode::NotConfigured)
+    let core = state.core(&app)?;
+    let owner = hwnd_of(&window);
+    blocking(move || core.reset_key(owner).map(|kid| KeyCreated { kid })).await
 }

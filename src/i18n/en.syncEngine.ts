@@ -66,6 +66,10 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     bodyOnlyApply:
       'The changes this device had already received will be replaced on all your devices. A deletion more recent than this backup has already been permanently erased from your devices: only the first option is possible.',
     later: 'Later',
+    resetInProgress: 'A synchronization reset is in progress: this version can only be applied everywhere once it is finished.',
+    resetFinish: 'A synchronization reset is in progress and a deletion more recent than this backup has already been permanently erased: finish it on the device that is resetting.',
+    failed: 'The choice could not be applied ({reason}). Nothing was changed: you can try again.',
+    failedReset: 'The choice was not applied: a synchronization reset is in progress. Nothing was changed.',
     backupWarning: 'This device is paired: you will be asked at the next sync',
   },
 };

@@ -71,7 +71,8 @@ afterEach(async () => {
 describe('ordre (ADR 0011 §19, emplacements réservés à Y-10)', () => {
   it('« oublié » en tête ; échec d’oubli puis suppression en attente à la fin', () => {
     expect(SYNC_TROUBLE_ORDER[0]).toBe('forgotten');
-    expect(SYNC_TROUBLE_ORDER.slice(-2)).toEqual(['forget-failed', 'forget-pending']);
+    // Y-11 : rappel des 30 jours après les états de Y-10 (§19 point 2).
+    expect(SYNC_TROUBLE_ORDER.slice(-3)).toEqual(['forget-failed', 'forget-pending', 'reset-reminder']);
   });
 });
 

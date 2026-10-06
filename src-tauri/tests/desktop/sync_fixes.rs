@@ -546,7 +546,7 @@ fn b3_snapshot_cache_is_dropped_at_the_start_of_a_scan() {
     a.core.read_snapshot(DEV_A, &ep, 1, 2, Some(4_000)).unwrap();
     assert_eq!(snapshot_reads() - before, 2, "après un scan : state.ctx et l'instantané relus");
     let service = include_str!("../../src/sync/service.rs");
-    assert_eq!(service.matches("inner.snapshot_cache = None;").count(), 3, "choose_folder, scan, key_import");
+    assert_eq!(service.matches("inner.snapshot_cache = None;").count(), 4, "choose_folder, scan, key_import, bascule de Y-11 (changement de clé)");
 }
 
 /// Revue B5 : en production, aucun tampon de journal (événement vide) ; la capture n'existe qu'en développement et voit tous les fils

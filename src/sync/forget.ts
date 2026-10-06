@@ -2,7 +2,7 @@ import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isDeviceAck, isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
 import { PAGE_ROWS } from '../domain/sync/limits';
 import { hlcDevice } from '../domain/sync/parse';
-import { compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, seenDevices, type ForgetKnownDevice, type ForgetVerdict, type SnapshotEndRead } from '../domain/sync/retention';
+import { compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, publishedEpochs, seenDevices, withoutStaleAcks, type ForgetKnownDevice, type ForgetVerdict, type SnapshotEndRead } from '../domain/sync/retention';
 import { SYNC_TABLES } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import {
@@ -257,8 +257,10 @@ export function readLimit(
   local: DeviceAck | null,
 ): DeviceAck | null {
   if (view.done.has(target)) return null;
-  const ackers = [...accepted.values()].filter((s) => !view.order.has(s.deviceId));
-  if (ownState) ackers.push(ownState);
+  const live = [...accepted.values()].filter((s) => !view.order.has(s.deviceId));
+  if (ownState) live.push(ownState);
+  // Y-11 (remarques finales) : un accusé après la dernière époque publiée par sa cible ne désigne rien (même filtre que Rust).
+  const ackers = withoutStaleAcks(live, publishedEpochs([...accepted.values(), ...(ownState ? [ownState] : [])]));
   const cut = cutoff(target, ackers);
   if (local === null) return cut;
   if (cut === null) return local;

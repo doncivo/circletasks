@@ -44,7 +44,7 @@ fn publish_state(d: &Device, dev: &str, seq: u64) {
 #[test]
 fn y08_6_create_status_and_key_exists() {
     let (d, _) = device();
-    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None });
+    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None, next_kid: None, import_failure: None });
     assert_eq!(code(d.core.key_create()), SyncCode::NotConfigured);
     d.core.choose_folder(Path::new(FOLDER)).unwrap();
     let kid = d.core.key_create().unwrap();

@@ -23,8 +23,8 @@ describe('Y-01 critère 19 : textes', () => {
     expect(source).not.toMatch(/>\s*[A-ZÉ][a-zéèêàç]+[^<{]*</);
   });
 
-  it('les boîtes natives (trois de Y-08, « Oublier cet appareil » de Y-10) ont titre, question, explication et deux boutons, « Annuler » en second', () => {
-    expect(Object.keys(native.consent).sort()).toEqual(['eraseKey', 'forgetDevice', 'replaceKey', 'showKey']);
+  it('les boîtes natives (trois de Y-08, « Oublier cet appareil » de Y-10, « Réinitialiser » de Y-11) ont titre, question, explication et deux boutons, « Annuler » en second', () => {
+    expect(Object.keys(native.consent).sort()).toEqual(['eraseKey', 'forgetDevice', 'replaceKey', 'resetKey', 'showKey']);
     for (const [name, box] of Object.entries(native.consent)) {
       expect(Object.keys(box).sort(), name).toEqual(['cancel', 'confirm', 'content', 'instruction', 'title']);
       expect(box.cancel, name).toBe('Annuler');

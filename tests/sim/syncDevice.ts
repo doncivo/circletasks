@@ -67,6 +67,14 @@ function migratedDatabaseImage(): Promise<Uint8Array> {
   return migratedImage;
 }
 
+/**
+ * Coût unique par processus de test (initialisation de SQLite Wasm et les 17 migrations de la base modèle, ~200 ms, bien plus quand la
+ * machine est chargée) : à payer dans un `beforeAll`, hors du budget du premier test du fichier.
+ */
+export async function warmSimDevices(): Promise<void> {
+  await migratedDatabaseImage();
+}
+
 export async function createSimDevice(id: string, options: { readonly name?: string; readonly start?: string; readonly clock?: ManualClock } = {}): Promise<SimDevice> {
   const driver = await openSqliteWasmDriver({}, await migratedDatabaseImage());
   const clock = options.clock ?? createManualClock(options.start ?? '2026-10-05T08:00:00.000Z');

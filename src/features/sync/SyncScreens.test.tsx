@@ -165,3 +165,34 @@ describe('branchements (Y-02 critères 17 à 19)', () => {
     expect(container.taskEntities.get(task.id)).toBeUndefined();
   });
 });
+
+describe('choix après restauration pendant une réinitialisation (Y-11, ADR 0011 §18 point 16 ; QA-1)', () => {
+  const marker = { backup: 'x', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 17 };
+  it('« Appliquer partout » retiré : texte de la réinitialisation en cours ; règle 4 : aucune option, « terminez-la »', async () => {
+    sync.restore = { marker, options: ['keep-synced'], notice: 'reset-in-progress' };
+    sync.setStatus({ phase: 'restore-choice' });
+    renderIn(<RestoreChoiceDialog />);
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    expect(screen.getByText(t('sync.restore.resetInProgress'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Appliquer cette version sur tous mes appareils' })).toBeNull();
+    cleanup();
+    sync.restore = { marker, options: [], notice: 'reset-finish' };
+    renderIn(<RestoreChoiceDialog />);
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    expect(screen.getByText(t('sync.restore.resetFinish'))).toBeTruthy();
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Plus tard']);
+  });
+
+  it('choix refusé ou en échec : gardé et dit dans la fenêtre (aucun échec silencieux)', async () => {
+    sync.restore = { marker, options: ['apply-everywhere', 'keep-synced'], failure: { code: 'io', at: NOW as IsoDateTime, option: 'keep-synced' } };
+    sync.setStatus({ phase: 'restore-choice' });
+    renderIn(<RestoreChoiceDialog />);
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    expect(screen.getByText('Le choix n’a pas pu être appliqué (erreur d’écriture). Rien n’a été changé : vous pouvez réessayer.')).toBeTruthy();
+    cleanup();
+    sync.restore = { marker, options: ['keep-synced'], notice: 'reset-in-progress', failure: { code: 'state-mismatch', at: NOW as IsoDateTime, option: 'apply-everywhere' } };
+    renderIn(<RestoreChoiceDialog />);
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    expect(screen.getByText(t('sync.restore.failedReset'))).toBeTruthy();
+  });
+});

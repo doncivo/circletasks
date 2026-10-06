@@ -67,6 +67,11 @@ export const syncEngineFr = {
     bodyOnlyApply:
       'Les modifications que cet appareil avait déjà reçues seront remplacées sur tous vos appareils. Une suppression plus récente que cette sauvegarde a déjà été effacée définitivement de vos appareils : seule la première option est possible.',
     later: 'Plus tard',
+    resetInProgress: 'Une réinitialisation de la synchronisation est en cours : cette version ne pourra être appliquée partout qu’à sa fin.',
+    resetFinish:
+      'Une réinitialisation de la synchronisation est en cours et une suppression plus récente que cette sauvegarde a déjà été effacée définitivement : terminez-la sur l’appareil qui réinitialise.',
+    failed: 'Le choix n’a pas pu être appliqué ({reason}). Rien n’a été changé : vous pouvez réessayer.',
+    failedReset: 'Le choix n’a pas été appliqué : une réinitialisation de la synchronisation est en cours. Rien n’a été changé.',
     backupWarning: 'Cet appareil est associé : le choix vous sera demandé à la prochaine synchro',
   },
 } as const;

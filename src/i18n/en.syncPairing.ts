@@ -17,6 +17,8 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   openRateLimited: 'Too many requests: try again in 10 minutes',
   openIncomplete: 'Incomplete installation: reinstall the app',
   openFailed: 'The pairing window could not open',
+  openNeedsNewKey: 'This device must first be paired with the new key',
+  openCloudPending: 'A file from another device is still waiting for iCloud: try again in a moment',
   paired: 'iPhone paired',
   thisDevicePaired: 'This device is paired',
   pairedSyncFailed: 'iPhone paired, but the sync that follows failed: see the status above',

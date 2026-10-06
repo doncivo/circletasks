@@ -1,4 +1,4 @@
-import type { DeviceId, Hlc } from '../../domain/types';
+import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import {
   CONSENT_BLOCK_MS,
   CONSENT_MAX_IMPORT,
@@ -22,6 +22,7 @@ import {
   RECOVERY_KEY_PREFIX,
   SEGMENT_ROTATE_BYTES,
   STATE_FILE,
+  STATE_NEXT_FILE,
   SYNC_FORMAT_MAJOR,
   compareEpochs,
   encryptedLineBytes,
@@ -42,7 +43,9 @@ import {
   type ForgottenDevice,
   type PublishedDeviceState,
   type RecordCursor,
+  type ResetNotice,
   type SyncDevicePlatform,
+  parseEpochId,
 } from '../../domain/sync/format';
 import {
   SyncPlatformError,
@@ -64,13 +67,39 @@ import {
   type ScanRequest,
   type ForgottenDeleteResult,
   type ForgottenRegistryView,
+  type ResetView,
   type RestoreMarker,
   type SyncErrorCode,
   type SyncFolderInfo,
   type SyncPlatform,
 } from './types';
-import { parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
-import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, seenDevices, type ForgetKnownDevice, type SnapshotEndRead } from '../../domain/sync/retention';
+import { hlcMs, parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
+import {
+  citedDevices,
+  completedForgotten,
+  coversForgotten,
+  cutoff,
+  declarationAuthor,
+  declarationHlc,
+  FORGET_DECLARE_LIMIT,
+  forgetOrder,
+  forgottenDeleteCheck,
+  learnDeclarations,
+  seenDevices,
+  type ForgetKnownDevice,
+  type SnapshotEndRead,
+} from '../../domain/sync/retention';
+import {
+  resetPrecondition,
+  resetWaiting,
+  resetWinner,
+  restoreCandidates,
+  type OpenedEpoch,
+  type ResetCandidate,
+  type ResetKnownDevice,
+  type ResetPreconditionDevice,
+} from '../../domain/sync/epoch';
+import { DEVICE_EXPIRY_MS } from '../../domain/sync/limits';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -114,6 +143,8 @@ interface EpochDir {
 
 interface DeviceDir {
   state: MemFile | null;
+  /** Y-11 : `state.next.ctx` (état sous la nouvelle clé pendant une réinitialisation). */
+  nextState: MemFile | null;
   readonly epochs: Map<EpochId, EpochDir>;
   /** Entrées au nom non strict (copies de conflit, `*.tmp`, fichiers étrangers) : ignorées, comptées. */
   strays: number;
@@ -152,7 +183,7 @@ export class MemorySyncFolder {
 
   /** Dossier d'appareil vide (nom quelconque : un nom non UUID est ignoré par `scan`). */
   addDeviceFolder(name: string): void {
-    if (!this.devices.has(name)) this.devices.set(name, { state: null, epochs: new Map(), strays: 0 });
+    if (!this.devices.has(name)) this.devices.set(name, { state: null, nextState: null, epochs: new Map(), strays: 0 });
   }
 
   addStrayEntries(deviceId: string | null, count: number): void {
@@ -195,6 +226,10 @@ export class MemorySyncFolder {
       dir.state = null;
       return;
     }
+    if (file === STATE_NEXT_FILE) {
+      dir.nextState = null;
+      return;
+    }
     const where = splitFile(file);
     const epochDir = where ? dir.epochs.get(where.epoch) : undefined;
     if (!where || !epochDir) return;
@@ -216,7 +251,7 @@ export class MemorySyncFolder {
   fileNames(deviceId: string): string[] {
     const dir = this.devices.get(deviceId);
     if (!dir) return [];
-    const names: string[] = dir.state ? [STATE_FILE] : [];
+    const names: string[] = [...(dir.state ? [STATE_FILE] : []), ...(dir.nextState ? [STATE_NEXT_FILE] : [])];
     for (const [epoch, epochDir] of dir.epochs) {
       for (const n of epochDir.segments.keys()) names.push(`${epoch}/${segmentFileName(n)}`);
       for (const n of epochDir.snapshots.keys()) names.push(`${epoch}/${snapshotFileName(n)}`);
@@ -248,6 +283,7 @@ function splitFile(file: string): { readonly epoch: EpochId; readonly kind: 'seg
 
 function findFile(dir: DeviceDir, file: string): MemFile | null {
   if (file === STATE_FILE) return dir.state;
+  if (file === STATE_NEXT_FILE) return dir.nextState;
   const where = splitFile(file);
   const epochDir = where ? dir.epochs.get(where.epoch) : undefined;
   if (!where || !epochDir) return null;
@@ -268,6 +304,7 @@ function folderBytes(folder: MemorySyncFolder): number {
   let total = folder.extraBytes;
   for (const dir of folder.devices.values()) {
     if (dir.state) total += fileBytes(dir.state);
+    if (dir.nextState) total += fileBytes(dir.nextState);
     for (const epochDir of dir.epochs.values()) {
       for (const file of epochDir.segments.values()) total += fileBytes(file);
       for (const file of epochDir.snapshots.values()) total += fileBytes(file);
@@ -490,7 +527,53 @@ export interface MemorySyncTesting {
   forgottenRegistry(): { readonly entries: readonly ForgottenDevice[]; readonly done: readonly DeviceId[] } | null;
   /** Y-10 : registre illisible (`io`). */
   setForgottenFileCorrupt(value: boolean): void;
+  /** Y-11 : arrêt simulé (`io`) avant l'étape nommée de la bascule (`switch-1` à `switch-6`) ou de la perte (`supersede-2` à `-4`), une fois. */
+  interruptBefore(step: string | null): void;
+  /** Y-11 : registre `sync/reset.json` (copie), ou null. */
+  resetRecord(): MemResetRecordView | null;
+  /** Y-11 : `kid` de l'entrée `.next` du coffre, ou null. */
+  nextKid(): string | null;
+  /** Y-11 : enregistrements scellés avec la nouvelle clé pendant la transition. */
+  sealedNextRecords(): number;
 }
+
+/** Y-11 : registre de la réinitialisation vu par les tests (aucune clé). */
+export interface MemResetRecordView {
+  readonly role: 'initiator' | 'joined';
+  readonly kid: string;
+  readonly epoch: EpochId;
+  readonly by: DeviceId;
+  readonly stage: 'created' | 'announced' | 'opened';
+  readonly base: { readonly epoch: EpochId | null; readonly segment: number; readonly record: number; readonly maxHlc: Hlc | null } | null;
+  readonly superseded: { readonly epoch: EpochId | null; readonly by: DeviceId | null; readonly done: boolean; readonly restore: boolean } | null;
+  readonly switchStep: number;
+  readonly noticeSeq: number | null;
+}
+
+/** Y-11 : `sync/reset.json` tenu par « Rust » (mêmes champs que `ResetRecord` de `reset.rs`). */
+interface MemResetRecord {
+  readonly folderId: string;
+  readonly deviceId: DeviceId;
+  readonly role: 'initiator' | 'joined';
+  readonly kid: string;
+  readonly epoch: EpochId;
+  readonly by: DeviceId;
+  notice: ResetNotice | null;
+  noticeEpoch: EpochId | null;
+  /** `stateSeq` de l'état qui porte l'annonce (revue 1). */
+  noticeSeq: number | null;
+  /** Dernier état écrit sous l'ancienne clé (audit 5) : seul repris par l'anti-rejeu de soi si la réinitialisation perd. */
+  kState: { seq: number; digest: string } | null;
+  /** Réassocié : état de l'auteur lu à l'import (seconde revue, point 3). */
+  authorAtImport: { seq: number; epoch: EpochId } | null;
+  stage: 'created' | 'announced' | 'opened';
+  base: { epoch: EpochId | null; segment: number; record: number; maxHlc: Hlc | null } | null;
+  superseded: { epoch: EpochId | null; by: DeviceId | null; done: boolean; restore: boolean } | null;
+  switchStep: number;
+}
+
+const RESET_STAGES = ['created', 'announced', 'opened'] as const;
+const stageRank = (stage: MemResetRecord['stage']): number => RESET_STAGES.indexOf(stage);
 
 export interface MemorySyncPlatform extends SyncPlatform {
   readonly testing: MemorySyncTesting;
@@ -562,8 +645,25 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let registryCorrupt = false;
   /** Ouvertures de la boîte « Oublier cet appareil » (fenêtre de 10 minutes). */
   let forgetOpenings: number[] = [];
-  /** Réinitialisation en cours (entrée `.next` au coffre, Y-11) : crochet de test. */
+  /** Entrée `.next` orpheline au coffre (crochet de test de Y-10) : réinitialisation en cours sans registre. */
   let resetPending = false;
+  /** Y-11 : entrée `.next` du coffre (nouvelle clé d'une réinitialisation). */
+  let nextKey: { readonly raw: Bytes; readonly kid: string } | null = null;
+  /** Y-11 : `sync/reset.json`. */
+  let resetRecord: MemResetRecord | null = null;
+  /** Y-11 : budget de nonces de la nouvelle clé (`usage.next.json`). */
+  let sealedNext = 0;
+  /** Y-11 : ouvertures de la boîte « Réinitialiser la synchronisation » (fenêtre de 10 minutes). */
+  let resetOpenings: number[] = [];
+  /** Y-11 : arrêt simulé avant l'étape nommée (une fois). */
+  let interruptAt: string | null = null;
+  /** Remarques finales : anti-rejeu et derniers accusés des `state.ctx` relus sous l'ancienne clé pour la coupure (comme Rust). */
+  const kAccepted = new Map<string, AcceptedState>();
+  const kAcks = new Map<string, ReadonlyMap<DeviceId, DeviceAck>>();
+  /** Seconde revue, point 2 : dernière synchro (ms) de chaque appareil vue au dernier scan (expiré à 180 jours). */
+  const lastSeen = new Map<string, number>();
+  /** Y-11 (§18 point 17) : `sync/import-failure.json`. */
+  let importFailure: { readonly folderId: string; readonly code: SyncErrorCode; readonly at: string; readonly next: boolean } | null = null;
 
   /** Dernier état accepté par appareil (anti-rejeu, section 1.4). */
   const accepted = new Map<string, AcceptedState>();
@@ -689,12 +789,39 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return pairing;
   };
 
+  // --- réinitialisation (Y-11, reset.rs) : clé de l'époque visée ------------------------------------------------------------------
+
+  const interrupt = (step: string): void => {
+    if (interruptAt === step) {
+      interruptAt = null;
+      fail('io');
+    }
+  };
+
+  const loadReset = (f: MemorySyncFolder, self: DeviceId): MemResetRecord | null =>
+    resetRecord && resetRecord.folderId === f.id && resetRecord.deviceId === self ? resetRecord : null;
+
+  /** Nouvelle clé active (registre non perdu et entrée `.next` de même kid) et époque visée. */
+  const activeNext = (): { readonly kid: string; readonly epoch: EpochId } | null => {
+    if (!folder || bound === null) return null;
+    const record = loadReset(folder, bound);
+    return record && record.superseded === null && nextKey && nextKey.kid === record.kid ? { kid: record.kid, epoch: record.epoch } : null;
+  };
+
+  /** Kid qui chiffre une époque : la nouvelle clé pour l'époque visée, sinon la clé locale. */
+  const kidFor = (epoch: EpochId, localKid: string): string => {
+    const next = activeNext();
+    return next && next.epoch === epoch ? next.kid : localKid;
+  };
+
   // --- lecture d'un état publié -------------------------------------------------------------------------------------------------
 
   interface StateRead {
     readonly kid: string | null;
     readonly state: PublishedDeviceState | null;
     readonly status: DeviceStateStatus;
+    /** Y-11 : état lu dans `state.next.ctx`. */
+    readonly fromNext?: boolean;
   }
 
   const anyKid = (dir: DeviceDir): string | null => {
@@ -706,14 +833,40 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return null;
   };
 
-  /** Lecture d'un `state.ctx` : bornes, en-tête, clé, majeure, analyse stricte, anti-rejeu (`remember` : retenir l'état accepté). */
+  /**
+   * État présenté (Y-11, même règle que `read_state` de `store.rs`) : pendant une réinitialisation, `state.next.ctx` sous la nouvelle clé,
+   * puis `state.ctx` sous la nouvelle clé ou la clé locale (d'après l'en-tête) ; sinon `state.ctx` sous la clé locale, et `state.next.ctx`
+   * seulement si `state.ctx` est d'une autre clé (appareil associé pendant la transition).
+   */
   const readState = (deviceId: string, dir: DeviceDir, localKid: string, remember: boolean): StateRead => {
-    const file = dir.state;
-    if (!file) return { kid: anyKid(dir), state: null, status: 'missing' };
-    if (file.availability !== 'local') return { kid: anyKid(dir), state: null, status: 'cloud-pending' };
+    const next = activeNext();
+    if (next) {
+      const first = readStateFile(deviceId, dir, 'next', [next.kid], remember);
+      if (first.status !== 'missing' && first.status !== 'foreign') return first;
+      return readStateFile(deviceId, dir, 'state', [next.kid, localKid], remember);
+    }
+    const read = readStateFile(deviceId, dir, 'state', [localKid], remember);
+    if (read.status === 'foreign') {
+      const other = readStateFile(deviceId, dir, 'next', [localKid], remember);
+      if (other.status === 'ok') return other;
+    }
+    return read;
+  };
+
+  /** Lecture d'un fichier d'état : bornes, en-tête, clé (d'après l'en-tête), majeure, analyse stricte, anti-rejeu (`replay` faux : sans). */
+  const readStateFile = (deviceId: string, dir: DeviceDir, which: 'state' | 'next', kids: readonly string[], remember: boolean, replay = true): StateRead => {
+    const fromNext = which === 'next';
+    const file = fromNext ? dir.nextState : dir.state;
+    if (!file) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'missing', fromNext };
+    if (file.availability !== 'local') return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
+    const read = readFileState(deviceId, file, kids, remember, replay);
+    return { ...read, fromNext };
+  };
+
+  const readFileState = (deviceId: string, file: MemFile, kids: readonly string[], remember: boolean, replay: boolean): StateRead => {
     if (fileBytes(file) > MAX_STATE_FILE_BYTES) return { kid: null, state: null, status: 'too-large' };
     const h = file.header;
-    if (h.f !== 'ct-state' || h.dev !== deviceId || h.kid !== localKid) return { kid: h.kid, state: null, status: 'foreign' };
+    if (h.f !== 'ct-state' || h.dev !== deviceId || !kids.includes(h.kid)) return { kid: h.kid, state: null, status: 'foreign' };
     if (h.sm > SYNC_FORMAT_MAJOR) return { kid: h.kid, state: null, status: 'newer-format' };
     // Ligne incomplète : iCloud est en train de livrer le fichier, il sera relu au cycle suivant (section 1.2).
     if (file.partialTail) return { kid: h.kid, state: null, status: 'cloud-pending' };
@@ -724,7 +877,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (!state || state.deviceId !== deviceId || state.epoch !== h.e || state.stateSeq !== h.n || state.sm !== line.sm || state.sv !== line.sv) {
       return { kid: h.kid, state: null, status: 'corrupt' };
     }
-    const previous = accepted.get(deviceId);
+    const previous = replay ? accepted.get(deviceId) : undefined;
     const current: AcceptedState = { epoch: state.epoch, seq: state.stateSeq, digest: line.text, head: state.head };
     if (previous && isRollback(previous, current)) return { kid: h.kid, state: null, status: 'rollback' };
     if (remember) accepted.set(deviceId, current);
@@ -792,6 +945,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // Fichiers attendus et pas encore lisibles : `state.ctx`, puis ce que la tête authentifiée annonce (jamais au-delà).
     const pending: { file: string; availability: FileAvailability }[] = [];
     if (dir.state && dir.state.availability !== 'local') pending.push({ file: STATE_FILE, availability: dir.state.availability });
+    // Y-11 : `state.next.ctx` attendu seulement de l'appareil dont l'état présenté en vient.
+    if (read.fromNext === true && dir.nextState && dir.nextState.availability !== 'local') pending.push({ file: STATE_NEXT_FILE, availability: dir.nextState.availability });
     const state = read.state;
     const epochDir = state ? dir.epochs.get(state.epoch) : undefined;
     if (state && state.head.segment >= 1) {
@@ -818,7 +973,20 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const scan = async (r: ScanRequest): Promise<FolderScan> => {
     const keepList: unknown = (r as Partial<ScanRequest> | undefined)?.keep;
     if (!Array.isArray(keepList) || !keepList.every((id) => isSyncDeviceId(id))) return fail('bad-name');
+    requireReadable();
+    // Y-11 : perte constatée et bascule (et sa reprise) faites avant la lecture du dossier, qui reflète alors les clés en vigueur.
+    let reset: ResetView | null = null;
+    if (bound !== null) {
+      const f0 = requireFolder();
+      ensureRegistry(f0, requireKey().kid, bound);
+      reset = resetPass(f0, bound);
+    }
     const { folder: f, kid } = requireReadable();
+    for (const [name, dir] of f.devices) {
+      if (!isSyncDeviceId(name)) continue;
+      const read = readState(name, dir, kid, false);
+      if (read.status === 'ok' && read.state) lastSeen.set(name, hlcMs(read.state.lastSyncHlc));
+    }
     let ignored = f.rootStrays;
     let incomplete = f.devices.size + f.rootStrays > MAX_SCAN_ENTRIES_PER_FOLDER;
     const scans: DeviceScan[] = [];
@@ -862,6 +1030,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       tooManyDevices: dropped > 0,
       incomplete,
       forgotten,
+      reset,
     };
   };
 
@@ -883,9 +1052,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (!isSyncDeviceId(r.deviceId) || !isEpochId(r.epoch) || !isCount(r.from.segment) || !isCount(r.from.record)) fail('bad-name');
     if (r.from.segment === 0 && r.from.record !== 0) fail('bad-name');
     const limit = pageLimit(r.maxBytes);
-    const { folder: f, kid } = requireReadable();
-    const state = authenticatedState(f, kid, r.deviceId);
+    const { folder: f, kid: localKid } = requireReadable();
+    const state = authenticatedState(f, localKid, r.deviceId);
     if (!state) return { records: [], next: r.from, status: 'cloud-pending' };
+    const kid = kidFor(r.epoch, localKid);
     const head = state.head;
     // Une autre époque que celle de la tête : aucune tête authentifiée pour elle, rien n'est lu ; l'état annonçant cette époque
     // n'est peut-être pas encore arrivé (choix conservateur : en attente plutôt que terminé, le curseur ne bouge pas).
@@ -940,9 +1110,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const readSnapshot = async (r: ReadSnapshotRequest): Promise<ReadPage> => {
     if (!isSyncDeviceId(r.deviceId) || !isEpochId(r.epoch) || !isFileNumber(r.seq) || !isCount(r.fromRecord)) fail('bad-name');
     const limit = pageLimit(r.maxBytes);
-    const { folder: f, kid } = requireReadable();
+    const { folder: f, kid: localKid } = requireReadable();
     const from: RecordCursor = { segment: r.seq, record: r.fromRecord };
-    const state = authenticatedState(f, kid, r.deviceId);
+    const state = authenticatedState(f, localKid, r.deviceId);
+    const kid = kidFor(r.epoch, localKid);
     if (r.tail === true) {
       // Y-10 (§18 point 11) : fin de l'instantané annoncé seulement.
       if (!state) return { records: [], next: from, status: 'cloud-pending' };
@@ -1003,13 +1174,49 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (o.epoch !== null && compareEpochs(epoch, o.epoch) < 0) fail('state-mismatch');
   };
 
-  const checkBudget = (count: number): void => {
-    if (sealed + count > NONCE_MAX_RECORDS) fail('key-exhausted');
+  const checkBudget = (count: number, next = false): void => {
+    if ((next ? sealedNext : sealed) + count > NONCE_MAX_RECORDS) fail('key-exhausted');
+  };
+
+  /** Budget de la clé qui chiffre `epoch` (Y-11 : la nouvelle clé repart de zéro). */
+  const isNextEpoch = (epoch: EpochId): boolean => activeNext()?.epoch === epoch;
+  const addSealed = (count: number, next: boolean): void => {
+    if (next) sealedNext += count;
+    else sealed += count;
+  };
+
+  /** Y-11 : ancienne époque figée dès l'annonce (ou l'import de la nouvelle clé) : seule l'époque visée reçoit des ajouts. */
+  const refuseFrozenEpoch = (f: MemorySyncFolder, self: DeviceId, epoch: EpochId): void => {
+    const record = loadReset(f, self);
+    if (record && record.superseded === null && (record.role === 'joined' || stageRank(record.stage) >= stageRank('announced')) && epoch !== record.epoch) fail('state-mismatch');
+  };
+
+  /**
+   * Garde d'époque (§18 point 16, audit 8 ; `refuse_epoch_open` de Rust) : rien dans l'époque visée avant l'annonce ; une époque
+   * supérieure à celle de `own.json` est refusée si `reset.json` existe et qu'elle n'est pas la sienne (ou la gagnante d'une perte), ou,
+   * sans registre, si une annonce valide d'un autre appareil l'emporte (sauf l'époque restaurée gagnante).
+   */
+  const refuseEpochOpen = (f: MemorySyncFolder, kid: string, self: DeviceId, o: OwnState, epoch: EpochId): void => {
+    const record = loadReset(f, self);
+    if (record && record.superseded === null && record.role === 'initiator' && stageRank(record.stage) < stageRank('announced') && epoch === record.epoch) fail('state-mismatch');
+    if (o.epoch === null || !isEpochId(epoch) || compareEpochs(epoch, o.epoch) <= 0) return;
+    const allowed = record ? (record.superseded === null ? record.epoch : record.superseded.epoch) : null;
+    if (allowed !== null) {
+      if (allowed !== epoch) fail('state-mismatch');
+      return;
+    }
+    const reg = ensureRegistry(f, kid, self);
+    const winner = resetWinner(contenders(readAllStates(f, kid), self), new Set(forgetOrder(reg.entries).keys()));
+    if (winner && !(winner.restore === true && winner.notice.epoch === epoch)) fail('state-mismatch');
   };
 
   const appendJournal = async (r: AppendJournalRequest): Promise<AppendJournalResult> => {
-    const { folder: f, kid, self, own: o } = requireWritable();
+    const { folder: f, kid: localKid, self, own: o } = requireWritable();
     if (!isEpochId(r.epoch) || !isFileNumber(r.segment) || !isCount(r.expectRecords) || !isPositive(r.sv) || !Array.isArray(r.records)) fail('bad-name');
+    refuseFrozenEpoch(f, self, r.epoch);
+    refuseEpochOpen(f, localKid, self, o, r.epoch);
+    const kid = kidFor(r.epoch, localKid);
+    const toNext = isNextEpoch(r.epoch);
     // Paramètres mal formés (hlc hors format strict, appel vide) : bad-name ; `hlc-order` est réservé à l'ordre des hlc valides.
     if (!isStrictHlc(r.maxHlc) || r.records.length === 0) fail('bad-name');
     let addBytes = 0;
@@ -1040,7 +1247,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     // Hlc strictement croissants d'un ajout à l'autre dans une époque ; le contrôle repart de zéro à chaque nouvelle époque.
     if (sameEpoch && o.maxHlc !== null && r.maxHlc <= o.maxHlc) fail('hlc-order');
-    checkBudget(lines.length);
+    checkBudget(lines.length, toNext);
 
     const dir = epochDirOf(f, self, r.epoch);
     let file = dir.segments.get(r.segment);
@@ -1050,7 +1257,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     const firstRecord = file.lines.length;
     file.lines.push(...lines);
-    sealed += lines.length;
+    addSealed(lines.length, toNext);
     o.epoch = r.epoch;
     o.segment = r.segment;
     o.record = file.lines.length;
@@ -1074,8 +1281,18 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // État mal formé (sm ou sv à 0, hlc invalide, clé en trop…) : paramètre invalide, `bad-name` (avenant « Amorce »).
     if (!publishedStateFromJson(JSON.parse(text))) fail('bad-name');
     if (s.deviceId !== self || s.platform !== devicePlatform || s.sm !== SYNC_FORMAT_MAJOR || s.sv !== r.sv) fail('state-mismatch');
-    // `reset` réservé jusqu'à Y-11 (section 14.4) ; `forgotten` comparé ci-dessus (Y-10).
-    if (s.reset !== null) fail('state-mismatch');
+    refuseEpochOpen(f, kid, self, o, s.epoch);
+    // Y-11 : Rust est maître de `reset` (annonce sous l'ancienne clé pour l'appareil qui réinitialise, nul partout ailleurs ; aucune donnée
+    // de l'époque visée avant l'annonce) ; `forgotten` comparé ci-dessus (Y-10).
+    const record = loadReset(f, self);
+    const active = record && record.superseded === null ? record : null;
+    const toNext = isNextEpoch(s.epoch);
+    if (toNext) {
+      if (s.reset !== null || (active?.role === 'initiator' && stageRank(active.stage) < stageRank('announced'))) fail('state-mismatch');
+    } else {
+      const expected = active?.role === 'initiator' ? active.notice : null;
+      if (!sameNotice(s.reset, expected) || active?.role === 'joined') fail('state-mismatch');
+    }
     if ((s.pairedBy ?? null) !== o.pairedBy) fail('state-mismatch');
     if (s.stateSeq <= o.stateSeq) fail('state-mismatch');
     checkEpochNotOlder(o, s.epoch);
@@ -1086,13 +1303,25 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       // Nouvelle époque annoncée avant tout ajout : tête vide.
       fail('state-mismatch');
     }
-    checkBudget(1);
+    checkBudget(1, toNext);
     f.addDeviceFolder(self);
     const dir = f.devices.get(self);
     if (!dir) return fail('io');
     const line = makeLine(text, SYNC_FORMAT_MAJOR, r.sv);
-    dir.state = { header: { f: 'ct-state', sm: SYNC_FORMAT_MAJOR, kid, dev: self, e: s.epoch, n: s.stateSeq }, lines: [line], partialTail: false, availability: 'local', extraBytes: 0 };
-    sealed += 1;
+    const file: MemFile = { header: { f: 'ct-state', sm: SYNC_FORMAT_MAJOR, kid: kidFor(s.epoch, kid), dev: self, e: s.epoch, n: s.stateSeq }, lines: [line], partialTail: false, availability: 'local', extraBytes: 0 };
+    // Y-11 : l'état de l'époque visée va dans `state.next.ctx`, sous la nouvelle clé (§14.3 étape 4).
+    if (toNext) dir.nextState = file;
+    else dir.state = file;
+    addSealed(1, toNext);
+    if (active?.role === 'initiator') {
+      if (!toNext) active.kState = { seq: s.stateSeq, digest: text };
+      if (!toNext && active.stage === 'created' && s.reset !== null) {
+        active.stage = 'announced';
+        active.base = { epoch: s.epoch, segment: s.head.segment, record: s.head.record, maxHlc: s.head.hlc };
+        active.noticeSeq = s.stateSeq;
+      }
+      if (toNext && active.stage === 'announced' && s.snapshot !== null) active.stage = 'opened';
+    }
     if (s.epoch !== o.epoch) {
       o.epoch = s.epoch;
       o.segment = 0;
@@ -1110,8 +1339,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     readonly records: AsyncIterable<readonly string[]>;
   }): Promise<void> => {
     // sync_snapshot_begin
-    const { folder: f, kid, self, own: o } = requireWritable();
+    const { folder: f, kid: localKid, self, own: o } = requireWritable();
     if (!isEpochId(r.epoch) || !isFileNumber(r.seq) || !isPositive(r.sv)) fail('bad-name');
+    refuseFrozenEpoch(f, self, r.epoch);
+    refuseEpochOpen(f, localKid, self, o, r.epoch);
+    const kid = kidFor(r.epoch, localKid);
+    const toNext = isNextEpoch(r.epoch);
     checkEpochNotOlder(o, r.epoch);
     const existing = f.devices.get(self)?.epochs.get(r.epoch);
     // Numéro d'instantané jamais réutilisé dans une époque (choix conservateur, code le plus proche).
@@ -1128,15 +1361,21 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         if (bytes > MAX_SNAPSHOT_BYTES) fail('too-large');
         lines.push(line);
       }
-      checkBudget(lines.length);
+      checkBudget(lines.length, toNext);
     }
     // sync_snapshot_commit : renommage atomique.
     epochDirOf(f, self, r.epoch).snapshots.set(r.seq, { header, lines, partialTail: false, availability: 'local', extraBytes: 0 });
-    sealed += lines.length;
+    addSealed(lines.length, toNext);
   };
 
   const deleteOwn = async (files: readonly OwnFileRef[]): Promise<number> => {
     const { folder: f, self, own: o } = requireWritable();
+    // Y-11 : l'époque de l'annonce n'est supprimée que par la bascule (si la réinitialisation perd, own.json y revient).
+    const baseEpoch = (() => {
+      const record = loadReset(f, self);
+      return record && record.superseded === null ? (record.base?.epoch ?? null) : null;
+    })();
+    if (baseEpoch !== null && files.some((ref) => ref.epoch === baseEpoch)) fail('state-mismatch');
     for (const ref of files) {
       if (!isEpochId(ref.epoch) || (ref.kind !== 'j' && ref.kind !== 's' && ref.kind !== 'epoch')) fail('bad-name');
       if (ref.kind === 'epoch' ? ref.n !== undefined : !isFileNumber(ref.n)) fail('bad-name');
@@ -1212,7 +1451,28 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return registry;
   };
 
-  const resetInProgress = (reads: ReadonlyMap<DeviceId, StateRead>): boolean => resetPending || okStates(reads).some(([, s]) => s.reset !== null);
+  /** Entrée `.next` au coffre (nouvelle clé, ou orpheline). */
+  const vaultHasNext = (): boolean => resetPending || nextKey !== null;
+
+  /** Suppression des fichiers d'un oublié : refusée pendant toute réinitialisation (Y-10 condition (b)). */
+  const resetInProgress = (reads: ReadonlyMap<DeviceId, StateRead>): boolean => vaultHasNext() || okStates(reads).some(([, s]) => s.reset !== null);
+
+  /**
+   * Y-11 (§18 points 14 et 15) : pendant une réinitialisation (registre, entrée `.next`, annonce lue), l'oubli n'est permis qu'à
+   * l'appareil qui réinitialise (bascule pas commencée), ou quand la cible est l'auteur d'une annonce (lue sous la clé locale, valide ou
+   * non ; auteur de la réinitialisation rejointe ; gagnant d'une perte). Même règle que `reset_blocks_forget` de Rust.
+   */
+  const resetBlocksForget = (f: MemorySyncFolder, self: DeviceId, reads: ReadonlyMap<DeviceId, StateRead>, target: DeviceId): boolean => {
+    const record = loadReset(f, self);
+    const announcers = new Set<DeviceId>(okStates(reads).filter(([id, s]) => id !== self && s.reset !== null).map(([id]) => id));
+    if (record === null && announcers.size === 0 && !vaultHasNext()) return false;
+    if (record !== null && record.superseded === null && record.role === 'initiator' && record.switchStep === 0) return false;
+    if (record !== null) {
+      if (record.by !== self) announcers.add(record.by);
+      if (record.superseded?.by) announcers.add(record.superseded.by);
+    }
+    return !announcers.has(target);
+  };
 
   const forgetContext = (): { readonly f: MemorySyncFolder; readonly kid: string; readonly self: DeviceId } => {
     const f = requireFolder();
@@ -1228,7 +1488,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (deviceId === self) return fail('bad-name');
     const reg = ensureRegistry(f, kid, self);
     const reads = readAllStates(f, kid);
-    if (resetInProgress(reads)) return fail('state-mismatch');
+    if (resetBlocksForget(f, self, reads, deviceId)) return fail('state-mismatch');
     const order = forgetOrder(reg.entries);
     if (order.has(self)) return fail('state-mismatch');
     if (order.has(deviceId)) return null;
@@ -1327,17 +1587,451 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const folderHasData =(f: MemorySyncFolder): boolean =>
     [...f.devices].some(([name, dir]) => isSyncDeviceId(name) && (dir.state !== null || [...dir.epochs.values()].some((e) => e.segments.size + e.snapshots.size > 0)));
 
-  const folderKids = (f: MemorySyncFolder, only: DeviceId | null): { readonly readable: number; readonly kids: Set<string> } => {
+  /** États lisibles et `kid` qu'ils portent ; Y-11 : `state.next.ctx` compris, et plus grande époque d'un état de chaque `kid`. */
+  const folderKids = (f: MemorySyncFolder, only: DeviceId | null): { readonly readable: number; readonly kids: Set<string>; readonly epochs: Map<string, EpochId> } => {
     let readable = 0;
     const kids = new Set<string>();
+    const epochs = new Map<string, EpochId>();
     for (const [name, dir] of f.devices) {
       if (!isSyncDeviceId(name) || (only !== null && name !== only)) continue;
-      if (dir.state && dir.state.availability === 'local') {
+      for (const file of [dir.state, dir.nextState]) {
+        if (!file || file.availability !== 'local' || file.header.f !== 'ct-state') continue;
         readable += 1;
-        kids.add(dir.state.header.kid);
+        if (file.lines.length !== 1 || file.lines[0]?.corrupt === true || file.partialTail) continue;
+        kids.add(file.header.kid);
+        const known = epochs.get(file.header.kid);
+        if (isEpochId(file.header.e) && (known === undefined || compareEpochs(file.header.e, known) > 0)) epochs.set(file.header.kid, file.header.e);
       }
     }
-    return { readable, kids };
+    return { readable, kids, epochs };
+  };
+
+  /** Annonces lues dans les états authentifiés des autres appareils. */
+  const announcements = (reads: ReadonlyMap<DeviceId, StateRead>, self: DeviceId): ResetCandidate[] =>
+    okStates(reads)
+      .filter(([id, s]) => id !== self && s.reset !== null)
+      .map(([id, s]) => ({ by: id, stateEpoch: s.epoch, notice: s.reset as ResetNotice }));
+
+  /** Concurrents (§18 point 16) : annonces des autres appareils et époques ouvertes sous la clé locale (soi compris). */
+  const contenders = (reads: ReadonlyMap<DeviceId, StateRead>, self: DeviceId): ResetCandidate[] => {
+    const out = announcements(reads, self);
+    const opened: OpenedEpoch[] = okStates(reads).map(([id, s]) => ({ by: id, epoch: s.epoch, snapshot: s.snapshot !== null, notice: s.reset !== null }));
+    return [...out, ...restoreCandidates(opened, out)];
+  };
+
+  /**
+   * Y-11 (D1) : l'ancienne clé ne doit plus être donnée (perte non réassociée, ou annonce valide d'un autre appareil qui l'emporte).
+   * Échoue fermé (audit 6) : registre illisible, état d'un autre appareil en attente d'iCloud (`cloud-pending`).
+   */
+  const oldKeyWithdrawn = (f: MemorySyncFolder, kid: string, self: DeviceId): boolean => {
+    const lost = loadReset(f, self)?.superseded;
+    if (lost?.epoch && !lost.restore) return true;
+    const entries = ensureRegistry(f, kid, self).entries;
+    const reads = readAllStates(f, kid);
+    const forgotten = new Set<string>(forgetOrder(entries).keys());
+    // Seconde revue, point 2 : seul un actif (ni oublié, ni expiré d'après le dernier scan) dont l'état attend iCloud bloque.
+    const expired = (id: string): boolean => {
+      const ms = lastSeen.get(id);
+      return ms !== undefined && ms + DEVICE_EXPIRY_MS < now();
+    };
+    if ([...reads].some(([id, r]) => id !== self && r.status === 'cloud-pending' && !forgotten.has(id) && !expired(id))) fail('cloud-pending');
+    const winner = resetWinner(contenders(reads, self), forgotten as Set<DeviceId>);
+    return winner !== null && winner.restore !== true;
+  };
+
+  /** Annonces égales (ou toutes deux nulles). */
+  const sameNotice = (a: ResetNotice | null, b: ResetNotice | null): boolean => (a === null || b === null ? a === b : a.kid === b.kid && a.epoch === b.epoch && a.at === b.at);
+
+  /** Époque courante vue par Rust : la plus grande annoncée par un état authentifié d'un appareil non oublié. */
+  const currentEpoch = (reads: ReadonlyMap<DeviceId, StateRead>, order: ReadonlyMap<DeviceId, unknown>): EpochId | null =>
+    okStates(reads)
+      .filter(([id]) => !order.has(id))
+      .map(([, s]) => s.epoch)
+      .reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
+
+  /** Appareils connus (dossiers, vus, cibles de la liste maître), vus, auteurs d'une déclaration. */
+  const knownIds = (reads: ReadonlyMap<DeviceId, StateRead>, entries: readonly ForgottenDevice[]): { ids: Set<DeviceId>; seen: Set<DeviceId>; authors: Set<DeviceId> } => {
+    const seen = new Set(seenDevices(accepted.keys() as Iterable<DeviceId>, okStates(reads).map(([, s]) => s), entries));
+    const authors = new Set(entries.flatMap((e) => {
+      const author = declarationAuthor(e);
+      return author ? [author] : [];
+    }));
+    return { ids: new Set<DeviceId>([...reads.keys(), ...seen, ...entries.map((e) => e.deviceId)]), seen, authors };
+  };
+
+  /** Contrôles de `sync_reset_key` (avant et après la boîte) : reprise, ou plan de création ; sinon refus sans rien écrire. */
+  const resetPlan = (): { readonly resume: string } | { readonly epoch: EpochId; readonly at: Hlc; readonly noticeEpoch: EpochId; readonly self: DeviceId; readonly f: MemorySyncFolder } => {
+    const { f, kid, self } = forgetContext();
+    const reg = ensureRegistry(f, kid, self);
+    const record = loadReset(f, self);
+    if (record && record.superseded === null && record.role === 'initiator') {
+      if (nextKey && nextKey.kid === record.kid) return { resume: record.kid };
+      return fail('state-mismatch');
+    }
+    if (record && record.superseded === null) return fail('state-mismatch');
+    if (record?.superseded?.epoch && !record.superseded.restore) return fail('state-mismatch');
+    const reads = readAllStates(f, kid);
+    const order = forgetOrder(reg.entries);
+    const forgotten = new Set(order.keys());
+    const winner = resetWinner(contenders(reads, self), forgotten);
+    if (winner && winner.restore !== true) return fail('state-mismatch');
+    const own = reads.get(self);
+    if (own?.status !== 'ok' || !own.state) return fail('state-mismatch');
+    const { ids, seen, authors } = knownIds(reads, reg.entries);
+    const live = okStates(reads).filter(([id]) => !order.has(id)).map(([, s]) => s);
+    const actives: ResetPreconditionDevice[] = [...ids]
+      .filter((id) => id !== self && !order.has(id))
+      .map((id) => {
+        const read = reads.get(id);
+        const status = read?.status ?? 'missing';
+        const state = status === 'ok' ? (read?.state ?? null) : null;
+        return {
+          deviceId: id,
+          status,
+          head: state?.head ?? null,
+          expired: state !== null && hlcMs(state.lastSyncHlc) + DEVICE_EXPIRY_MS < now(),
+          phantom: status !== 'ok' && !seen.has(id) && !authors.has(id),
+        };
+      });
+    const cuts = [...order.keys()].map((target) => ({ deviceId: target, cutoff: cutoff(target, live) }));
+    if (resetPrecondition(actives, cuts, own.state.acks)) return fail('state-mismatch');
+    const current = currentEpoch(reads, order);
+    const base = current !== null && compareEpochs(current, own.state.epoch) > 0 ? current : own.state.epoch;
+    const n = parseEpochId(base)?.n ?? 0;
+    if (n >= 9_999) return fail('too-large');
+    const at = declarationHlc(now(), live.flatMap(stateHlcs), self, PAIRING_CLOCK_TOLERANCE_MS);
+    if (at === null) return fail('hlc-order');
+    return { epoch: `e${String(n + 1).padStart(4, '0')}-${self}` as EpochId, at, noticeEpoch: own.state.epoch, self, f };
+  };
+
+  /** `sync_reset_key` : refus avant la boîte, reprise (même K2, sans boîte), confirmation native, K2 sous `.next` et registre. */
+  const resetStart = async (): Promise<{ readonly kid: string }> => {
+    const first = resetPlan();
+    if ('resume' in first) return { kid: first.resume };
+    gate();
+    resetOpenings = prune(resetOpenings);
+    if (resetOpenings.length >= CONSENT_MAX_SHOW) fail('rate-limited');
+    resetOpenings.push(now());
+    askConsent();
+    const plan = resetPlan();
+    if ('resume' in plan) return { kid: plan.resume };
+    // Une entrée `.next` orpheline (arrêt entre la clé et le registre) est reprise, jamais remplacée.
+    if (!nextKey) {
+      const raw = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
+      nextKey = { raw, kid: await kidOf(raw) };
+    }
+    const kid = nextKey.kid;
+    resetRecord = {
+      folderId: plan.f.id,
+      deviceId: plan.self,
+      role: 'initiator',
+      kid,
+      epoch: plan.epoch,
+      by: plan.self,
+      notice: { kid, epoch: plan.epoch, at: plan.at },
+      noticeEpoch: plan.noticeEpoch,
+      noticeSeq: null,
+      kState: null,
+      authorAtImport: null,
+      stage: 'created',
+      base: null,
+      superseded: null,
+      switchStep: 0,
+    };
+    sealedNext = 0;
+    return { kid };
+  };
+
+  /** Import d'une autre clé par un appareil associé (Y-11) : null (import ordinaire), registre `joined`, ou `already`. */
+  const joinPlan = (f: MemorySyncFolder, localKid: string, candidateKid: string, epoch: EpochId | undefined): MemResetRecord | 'already' | null => {
+    if (bound === null) return null;
+    const record = loadReset(f, bound);
+    if (record && record.superseded === null) {
+      if (record.kid === candidateKid) return 'already';
+      return fail('state-mismatch');
+    }
+    // Audit 2 : appartenance sur des preuves locales (son état, own.json lié au dossier et à l'ancienne clé, anti-rejeu de soi,
+    // fichiers déjà publiés) ; son état en attente d'iCloud : `cloud-pending`.
+    const dir = f.devices.get(bound);
+    const mine = dir ? readStateFile(bound, dir, 'state', [localKid], false, false) : null;
+    if (mine?.status === 'cloud-pending') return fail('cloud-pending');
+    const ownProof = own !== null && own.folderId === f.id && own.kid === localKid && (own.stateSeq > 0 || own.epoch !== null) ? own : null;
+    const published = dir !== undefined && (dir.state !== null || dir.epochs.size > 0);
+    const member = mine?.status === 'ok' || mine?.status === 'rollback' || record !== null || ownProof !== null || accepted.has(bound) || published;
+    if (!member) return null;
+    if (epoch === undefined) return fail('key-mismatch');
+    // Revue 2 : l'époque lue avec la clé candidate doit dépasser l'époque courante de cet appareil.
+    const current = [ownProof?.epoch ?? null, mine?.status === 'ok' ? (mine.state?.epoch ?? null) : null].reduce<EpochId | null>((best, e) => (e !== null && (best === null || compareEpochs(e, best) > 0) ? e : best), null);
+    if (current !== null && compareEpochs(epoch, current) <= 0) return fail('key-mismatch');
+    const by = parseEpochId(epoch)?.opener as DeviceId;
+    const byDir = f.devices.get(by);
+    const announced = byDir ? readStateFile(by, byDir, 'state', [localKid], false, false) : null;
+    const notice = announced?.status === 'ok' && announced.state?.reset?.kid === candidateKid && announced.state.reset.epoch === epoch ? announced.state.reset : null;
+    if (!own || own.folderId !== f.id || own.kid !== localKid) own = rebuildOwn(f, localKid, bound);
+    const line = dir?.state?.lines[0];
+    return {
+      folderId: f.id,
+      deviceId: bound,
+      role: 'joined',
+      kid: candidateKid,
+      epoch,
+      by,
+      notice,
+      noticeEpoch: notice ? (announced?.state?.epoch ?? null) : null,
+      noticeSeq: notice ? (announced?.state?.stateSeq ?? null) : null,
+      kState: mine?.status === 'ok' && mine.state && line ? { seq: mine.state.stateSeq, digest: line.text } : null,
+      authorAtImport: announced?.status === 'ok' && announced.state ? { seq: announced.state.stateSeq, epoch: announced.state.epoch } : null,
+      stage: 'opened',
+      base: { epoch: own.epoch, segment: own.segment, record: own.record, maxHlc: own.maxHlc },
+      superseded: null,
+      switchStep: 0,
+    };
+  };
+
+  const viewOf = (record: MemResetRecord, waiting: readonly DeviceId[], switched: boolean, resumed: boolean, closed = false): ResetView => ({
+    role: record.role,
+    kid: record.kid,
+    epoch: record.epoch,
+    by: record.by,
+    notice: record.role === 'initiator' && record.superseded === null ? record.notice : null,
+    stage: record.stage,
+    noticeEpoch: record.noticeEpoch,
+    closed,
+    superseded: record.superseded ? { epoch: record.superseded.epoch, by: record.superseded.by, restore: record.superseded.restore } : null,
+    switching: record.switchStep > 0 && !switched,
+    switched,
+    resumed,
+    waiting,
+  });
+
+  /** Étapes du perdant (§18 point 2), idempotentes : `state.next.ctx` supprimé, `.next` effacée, own.json ramené à l'époque `n`. */
+  const supersedeSteps = (f: MemorySyncFolder, record: MemResetRecord): void => {
+    interrupt('supersede-2');
+    const dir = f.devices.get(record.deviceId);
+    if (dir) dir.nextState = null;
+    // Son état publié redevient celui de l'ancienne clé : l'anti-rejeu de cet appareil seul y revient, s'il est bien le sien (même règle
+    // que `own_state_back` de Rust).
+    const k0 = key;
+    const mine = dir && k0 ? readStateFile(record.deviceId, dir, 'state', [k0.kid], false, false) : null;
+    const line = dir?.state?.lines[0];
+    if (mine?.status === 'ok' && mine.state && line) {
+      // Audit 5 : seule exception à l'anti-rejeu, le dernier état écrit sous l'ancienne clé (même stateSeq, même contenu), base exigée.
+      const ours = record.base !== null && record.kState !== null && record.kState.seq === mine.state.stateSeq && record.kState.digest === line.text;
+      if (ours) accepted.set(record.deviceId, { epoch: mine.state.epoch, seq: mine.state.stateSeq, digest: line.text, head: mine.state.head });
+    }
+    interrupt('supersede-3');
+    if (nextKey?.kid === record.kid) nextKey = null;
+    sealedNext = 0;
+    interrupt('supersede-4');
+    const k = key;
+    if (record.base && own && k && own.folderId === f.id && own.kid === k.kid && own.epoch !== record.base.epoch) {
+      own.epoch = record.base.epoch;
+      own.segment = record.base.segment;
+      own.record = record.base.record;
+      own.maxHlc = record.base.maxHlc;
+    }
+    if (record.superseded) record.superseded.done = true;
+  };
+
+  /** Bascule (§14.3 étape 5), étapes mémorisées : état K2 sous `state.ctx`, `state.next.ctx` supprimé, anciennes époques supprimées, K2 sous `.v1`, `.next` effacée, registre supprimé. */
+  const finishSwitch = (f: MemorySyncFolder, record: MemResetRecord): void => {
+    const dir = f.devices.get(record.deviceId);
+    if (record.switchStep < 1) {
+      interrupt('switch-1');
+      if (!dir?.nextState || dir.nextState.header.kid !== record.kid) return fail('state-mismatch');
+      dir.state = cloneFile(dir.nextState);
+      record.switchStep = 1;
+    }
+    // Audit 3 et audit bas de la seconde revue : avant d'effacer quoi que ce soit (étapes 2 à 5, dès la suppression de state.next.ctx),
+    // son `state.ctx` doit être sous la nouvelle clé dans l'époque visée.
+    if (record.switchStep < 5) {
+      const state = dir?.state;
+      const read = state && dir ? readStateFile(record.deviceId, dir, 'state', [record.kid], false, false) : null;
+      if (read?.status !== 'ok' || read.state?.epoch !== record.epoch) return fail('state-mismatch');
+    }
+    if (record.switchStep < 2) {
+      interrupt('switch-2');
+      if (dir) dir.nextState = null;
+      record.switchStep = 2;
+    }
+    if (record.switchStep < 3) {
+      interrupt('switch-3');
+      for (const epoch of [...(dir?.epochs.keys() ?? [])]) if (compareEpochs(epoch, record.epoch) < 0) dir?.epochs.delete(epoch);
+      record.switchStep = 3;
+    }
+    if (record.switchStep < 4) {
+      interrupt('switch-4');
+      const next = nextKey && nextKey.kid === record.kid ? nextKey : key && key.kid === record.kid ? key : null;
+      if (!next) return fail('vault-unavailable');
+      key = next;
+      if (own && own.folderId === f.id) own = { ...own, kid: record.kid };
+      sealed = sealedNext;
+      record.switchStep = 4;
+    }
+    if (record.switchStep < 5) {
+      interrupt('switch-5');
+      nextKey = null;
+      record.switchStep = 5;
+    }
+    interrupt('switch-6');
+    resetRecord = null;
+    record.switchStep = 6;
+  };
+
+  /**
+   * Oubliés retenus que l'instantané annoncé dans son `state.next.ctx` ne couvre pas (§18 point 14, `uncovered_forgotten` de Rust) :
+   * coupure sur les accusés de chaque actif non oublié, lus dans son état présenté et dans son `state.ctx` sous l'ancienne clé.
+   */
+  const uncoveredForgotten = (f: MemorySyncFolder, record: MemResetRecord, reads: ReadonlyMap<DeviceId, StateRead>, mine: StateRead | undefined, entries: readonly ForgottenDevice[]): DeviceId[] => {
+    const localKid = key?.kid ?? '';
+    const raw: Pick<PublishedDeviceState, 'deviceId' | 'acks'>[] = [];
+    // Époque la plus récente où chaque appareil a publié un état : un accusé au-delà ne désigne rien (seconde revue, bloquant).
+    const published = new Map<DeviceId, EpochId>();
+    const note = (id: DeviceId, s: PublishedDeviceState): void => {
+      const known = published.get(id);
+      if (known === undefined || compareEpochs(s.epoch, known) > 0) published.set(id, s.epoch);
+    };
+    for (const [id, read] of reads) {
+      if (read.status === 'ok' && read.state) {
+        note(id, read.state);
+        raw.push({ deviceId: id, acks: read.state.acks });
+      }
+      if (read.fromNext === true || read.kid !== localKid) {
+        const dir = f.devices.get(id);
+        const old = dir ? readStateFile(id, dir, 'state', [localKid], false, false) : null;
+        // Remarques finales : anti-rejeu propre à ces relectures sous l'ancienne clé ; un rejeu garde les derniers accusés acceptés.
+        const line = dir?.state?.lines[0];
+        const current = old?.status === 'ok' && old.state && line ? { epoch: old.state.epoch, seq: old.state.stateSeq, digest: line.text, head: old.state.head } : null;
+        const previous = kAccepted.get(id);
+        if (old?.state && current && !(previous && isRollback(previous, current))) {
+          note(id, old.state);
+          kAccepted.set(id, current);
+          kAcks.set(id, old.state.acks);
+          raw.push({ deviceId: id, acks: old.state.acks });
+        } else {
+          const kept = kAcks.get(id);
+          if (kept) raw.push({ deviceId: id, acks: kept });
+        }
+      }
+    }
+    const ackers = raw.map((a) => ({
+      deviceId: a.deviceId,
+      acks: new Map([...a.acks].filter(([target, ack]) => {
+        const p = published.get(target);
+        return p === undefined || compareEpochs(ack.epoch, p) <= 0;
+      })),
+    }));
+    const order = forgetOrder(entries);
+    const end = ownSnapshotEnd(f, record.deviceId, mine);
+    if (typeof end !== 'string') {
+      const missing = coversForgotten(end.covers, entries, ackers);
+      return missing === null ? [] : [missing];
+    }
+    const live = ackers.filter((a) => !order.has(a.deviceId));
+    return [...order.keys()].filter((target) => cutoff(target, live) !== null);
+  };
+
+  /** Passage de la réinitialisation au scan (mêmes règles que `reset_pass` de Rust). */
+  const resetPass = (f: MemorySyncFolder, self: DeviceId): ResetView | null => {
+    const record = loadReset(f, self);
+    if (!record) return null;
+    if (record.switchStep > 0) {
+      finishSwitch(f, record);
+      return viewOf(record, [], true, true);
+    }
+    if (record.superseded) {
+      if (!record.superseded.done) supersedeSteps(f, record);
+      // §18 point 16 : perdue face à une restauration et l'époque restaurée suivie : registre clos (rien à associer, K reste la clé).
+      const target = record.superseded.epoch;
+      if (record.superseded.restore && record.superseded.done && target !== null && own && own.folderId === f.id && own.epoch !== null && compareEpochs(own.epoch, target) >= 0) {
+        resetRecord = null;
+        return null;
+      }
+      // §18 point 15 : gagnant oublié : registre clos (les étapes faites ne sont pas défaites), `sync_reset_key` redevient possible.
+      const winnerBy = record.superseded.by;
+      if (winnerBy !== null && forgetOrder(ensureRegistry(f, requireKey().kid, self).entries).has(winnerBy)) {
+        resetRecord = null;
+        return viewOf(record, [], false, false, true);
+      }
+      return viewOf(record, [], false, false);
+    }
+    const localKid = requireKey().kid;
+    if (!nextKey || nextKey.kid !== record.kid) {
+      record.superseded = { epoch: null, by: null, done: false, restore: false };
+      supersedeSteps(f, record);
+      return viewOf(record, [], false, false);
+    }
+    const reg = ensureRegistry(f, localKid, self);
+    const order = forgetOrder(reg.entries);
+    const forgotten = new Set(order.keys());
+    const reads = readAllStates(f, localKid);
+    if (record.role === 'joined' && record.notice === null) {
+      const byDir = f.devices.get(record.by);
+      const announced = byDir ? readStateFile(record.by, byDir, 'state', [localKid], false, false) : null;
+      if (announced?.status === 'ok' && announced.state?.reset?.kid === record.kid && announced.state.reset.epoch === record.epoch) {
+        record.notice = announced.state.reset;
+        record.noticeEpoch = announced.state.epoch;
+        record.noticeSeq = announced.state.stateSeq;
+      }
+    }
+    const ours: ResetCandidate | null = record.notice && record.noticeEpoch ? { by: record.by, stateEpoch: record.noticeEpoch, notice: record.notice } : null;
+    const candidates: ResetCandidate[] = [];
+    const opened: OpenedEpoch[] = [];
+    let authorSwitched = false;
+    let authorWithdrew = false;
+    let authorSeen = false;
+    for (const [id, read] of reads) {
+      if (id === self || read.status !== 'ok' || !read.state) continue;
+      if (read.kid === record.kid) {
+        if (id === record.by) {
+          authorSeen = true;
+          authorSwitched ||= read.fromNext !== true && read.state.epoch === record.epoch;
+          if (ours) candidates.push(ours);
+        }
+        continue;
+      }
+      if (read.state.reset) candidates.push({ by: id, stateEpoch: read.state.epoch, notice: read.state.reset });
+      opened.push({ by: id, epoch: read.state.epoch, snapshot: read.state.snapshot !== null, notice: read.state.reset !== null });
+      if (id === record.by) {
+        authorSeen = true;
+        // Revue 1 : retrait compté seulement si l'annonce a été vue et que l'état lu est strictement plus récent qu'elle.
+        const newerThanNotice = record.notice !== null && record.noticeSeq !== null && read.state.stateSeq > record.noticeSeq;
+        // Seconde revue, point 3 : plus récent que l'état de l'auteur lu à l'import, même sans annonce lue.
+        const at = record.authorAtImport;
+        const newerThanImport = at !== null && (read.state.stateSeq > at.seq || compareEpochs(read.state.epoch, at.epoch) > 0);
+        const newer = newerThanNotice || newerThanImport;
+        authorWithdrew ||= newer && read.state.reset?.kid !== record.kid;
+      }
+    }
+    if ((record.role === 'initiator' || !authorSeen) && ours) candidates.push(ours);
+    // §18 point 16 : les époques ouvertes sous l'ancienne clé (restaurations) concourent avec les annonces.
+    candidates.push(...restoreCandidates(opened, ours ? [...candidates, ours] : candidates));
+    const winner = resetWinner(candidates, forgotten);
+    const lost = !authorSwitched && (winner ? winner.notice.epoch !== record.epoch : record.role === 'joined' && (authorWithdrew || forgotten.has(record.by)));
+    if (lost) {
+      record.superseded = { epoch: winner?.notice.epoch ?? null, by: winner?.by ?? null, done: false, restore: winner?.restore === true };
+      supersedeSteps(f, record);
+      return viewOf(record, [], false, false);
+    }
+    const mine = reads.get(self);
+    const ownReady =
+      mine?.status === 'ok' && mine.fromNext === true && mine.kid === record.kid && mine.state?.epoch === record.epoch && (record.role === 'joined' || mine.state.snapshot !== null);
+    const { ids, seen, authors } = knownIds(reads, reg.entries);
+    const known: ResetKnownDevice[] = [...ids].map((id) => {
+      const read = reads.get(id);
+      const status = read?.status ?? 'missing';
+      return { deviceId: id, status, epoch: status === 'ok' ? (read?.state?.epoch ?? null) : null, kid: read?.kid ?? null, seen: seen.has(id), author: authors.has(id) };
+    });
+    const waiting = record.role === 'initiator' ? resetWaiting(known, self, record.epoch, record.kid, forgotten) : [];
+    // §18 point 14 : l'instantané annoncé sous la nouvelle clé doit couvrir chaque oublié retenu (coupure sur les états des deux clés).
+    if (record.role === 'initiator' && ownReady && record.stage === 'opened' && waiting.length === 0 && order.size > 0) {
+      for (const id of uncoveredForgotten(f, record, reads, mine, reg.entries)) if (!waiting.includes(id)) waiting.push(id);
+      waiting.sort();
+    }
+    const ready = ownReady && (record.role === 'initiator' ? record.stage === 'opened' && waiting.length === 0 : authorSwitched);
+    if (!ready) return viewOf(record, waiting, false, false);
+    finishSwitch(f, record);
+    return viewOf(record, [], true, false);
   };
 
   const pairingPayload = async (o?: { readonly renew: true }): Promise<PairingPayload> => {
@@ -1347,6 +2041,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const k = requireKey();
     const self = requireBound();
     const f = requireFolder();
+    // Y-11 (D1) : pendant une réinitialisation, la nouvelle clé et l'époque visée ; jamais l'ancienne clé après une annonce.
+    const next = activeNext();
+    if (!next && oldKeyWithdrawn(f, k.kid, self)) return fail('state-mismatch');
     if (o?.renew) {
       openShowConsent();
       instance.generation += 1;
@@ -1356,13 +2053,29 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       // Jeton de consentement à usage unique : un second appel sans « Nouveau code » est refusé.
       return fail('wrong-window');
     }
-    const epoch = own && own.folderId === f.id && own.kid === k.kid ? own.epoch : null;
+    const epoch = next ? next.epoch : own && own.folderId === f.id && own.kid === k.kid ? own.epoch : null;
+    const raw = next && nextKey ? nextKey.raw : k.raw;
     const expiresAt = instance.openedAt + PAIRING_VALIDITY_MS;
     instance.payloadTaken = true;
-    return { qrText: qrTextOf({ key: k.raw, deviceId: self, epoch, expiresAt }), recoveryKey: await recoveryKeyOf(k.raw), expiresAt };
+    return { qrText: qrTextOf({ key: raw, deviceId: self, epoch, expiresAt }), recoveryKey: await recoveryKeyOf(raw), expiresAt };
   };
 
+  /** §18 point 17 : refus de `sync_key_import` persisté (sauf `wrong-window`, `wrong-mode`, `not-foreground`, `consent-denied`). */
   const importKey = async (input: KeyImportInput): Promise<KeyImportResult> => {
+    try {
+      const result = await importKeyInner(input);
+      importFailure = null;
+      return result;
+    } catch (error) {
+      const code = error instanceof SyncPlatformError ? error.code : 'io';
+      if (folder && !['wrong-window', 'wrong-mode', 'not-foreground', 'consent-denied'].includes(code)) {
+        importFailure = { folderId: folder.id, code, at: new Date(now()).toISOString(), next: nextKey !== null || resetRecord !== null };
+      }
+      throw error;
+    }
+  };
+
+  const importKeyInner = async (input: KeyImportInput): Promise<KeyImportResult> => {
     if (devicePlatform === 'windows') {
       const instance = livePairing();
       if (!instance) return fail('wrong-window');
@@ -1402,9 +2115,29 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     const kid = await kidOf(raw);
     // Dossier d'abord, clé ensuite : le `kid` doit être porté par le dossier avant tout enregistrement (audit B3).
-    const { readable, kids } = folderKids(f, pairedBy);
+    const { readable, kids, epochs } = folderKids(f, pairedBy);
     if (readable === 0) return fail('cloud-pending');
     if (!kids.has(kid)) return fail('key-mismatch');
+    // Y-11 : la clé locale déjà retirée (réinitialisation en cours ici, ou annonce d'un autre appareil qui l'emporte) n'« associe » rien.
+    if (key && key.kid === kid && bound !== null && (activeNext() !== null || oldKeyWithdrawn(f, kid, bound))) return fail('key-mismatch');
+    // Y-11 : appareil déjà associé avec une autre clé qui importe la nouvelle clé d'une réinitialisation : sous `.next`, jamais par-dessus
+    // `.v1` avant la bascule (confirmation native de remplacement de Y-08), registre `joined`.
+    if (key && key.kid !== kid) {
+      const plan = joinPlan(f, key.kid, kid, epochs.get(kid));
+      if (plan === 'already') {
+        pairing = null;
+        return { kid, pairedBy, epoch: epochs.get(kid) ?? null };
+      }
+      if (plan) {
+        askConsent();
+        nextKey = { raw, kid };
+        resetRecord = plan;
+        sealedNext = 0;
+        if (own && pairedBy !== null) own.pairedBy = pairedBy;
+        pairing = null;
+        return { kid, pairedBy, epoch: plan.epoch };
+      }
+    }
     if (key && key.kid !== kid) askConsent();
     if (!key || key.kid !== kid) {
       key = { raw, kid };
@@ -1437,6 +2170,11 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
           own = null;
           registry = null;
           accepted.clear(); // l'anti-rejeu vaut pour un dossier : les états d'un autre dossier ne comparent rien
+          // Y-11 : une réinitialisation est liée à son dossier ; un autre dossier l'abandonne (`.v1` reste valide ; `.next` effacée même
+          // sans registre, revue 10).
+          nextKey = null;
+          resetRecord = null;
+          sealedNext = 0;
         }
         folder = next;
         // Y-10 : appareil lié et clé présente : registre du dossier créé dès le choix (sinon au premier scan, mêmes règles).
@@ -1462,6 +2200,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         pairing = null;
         pendingPairedBy = null;
         accepted.clear();
+        // Y-11 : réinitialisation liée au dossier : abandonnée (nouvelle clé effacée sans condition, audit 7 et revue 10 ; `.v1` gardée
+        // sauf `eraseKey`) ; échec d'import effacé (§18 point 17).
+        nextKey = null;
+        resetRecord = null;
+        sealedNext = 0;
+        importFailure = null;
         if (eraseKey) {
           key = null;
           sealed = 0;
@@ -1471,7 +2215,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     key: {
       status: async () => {
         requireVault();
-        return { present: key !== null, kid: key?.kid ?? null };
+        const failure = importFailure && folder && importFailure.folderId === folder.id ? { code: importFailure.code, at: importFailure.at as IsoDateTime } : null;
+        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure };
       },
       create: async () => {
         requireVault();
@@ -1489,10 +2234,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       openPairing: async (mode) => {
         if (devicePlatform !== 'windows') return fail('wrong-window');
         if (mode !== 'show' && mode !== 'import') return fail('wrong-mode');
-        requireFolder();
+        const f = requireFolder();
         if (mode === 'show') {
-          requireKey();
-          requireBound();
+          const k = requireKey();
+          const self = requireBound();
+          // Y-11 (D1) : jamais l'ancienne clé quand une réinitialisation d'un autre appareil est annoncée (ou que la sienne a perdu).
+          if (!activeNext() && oldKeyWithdrawn(f, k.kid, self)) return fail('state-mismatch');
         }
         // Libellé `pairing` déjà pris (avant ou pendant la boîte) : refus, rien n'est créé.
         if (livePairing()) return fail('already-open');
@@ -1545,9 +2292,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       device: deviceForget,
       deleteFiles: forgottenDelete,
     },
-    // Lot Y4, étape 0 : même refus que le corps provisoire de Rust (`not-configured`, sans effet) jusqu'à Y-11.
+    // Y-11 : mêmes contrôles que `sync_reset_key` de Rust (`reset.rs`, `SyncCore::reset_key`).
     reset: {
-      start: async () => fail('not-configured'),
+      start: resetStart,
     },
     testing: {
       setConsent: (answer) => {
@@ -1591,6 +2338,25 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       setForgottenFileCorrupt: (value) => {
         registryCorrupt = value;
       },
+      interruptBefore: (step) => {
+        interruptAt = step;
+      },
+      resetRecord: () =>
+        resetRecord
+          ? {
+              role: resetRecord.role,
+              kid: resetRecord.kid,
+              epoch: resetRecord.epoch,
+              by: resetRecord.by,
+              stage: resetRecord.stage,
+              base: resetRecord.base ? { ...resetRecord.base } : null,
+              superseded: resetRecord.superseded ? { ...resetRecord.superseded } : null,
+              switchStep: resetRecord.switchStep,
+              noticeSeq: resetRecord.noticeSeq,
+            }
+          : null,
+      nextKid: () => nextKey?.kid ?? null,
+      sealedNextRecords: () => sealedNext,
     },
   };
   return platform;

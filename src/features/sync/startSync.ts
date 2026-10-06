@@ -7,7 +7,7 @@ import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
-import { readForgetStatus, startSyncScheduler, storedDeviceStatuses, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { readForgetStatus, readResetStatus, startSyncScheduler, storedDeviceStatuses, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
@@ -16,6 +16,7 @@ import { applyRemoteChanges } from './remoteChanges';
 import { syncStore } from './syncStore';
 import { deviceName, deviceStatusText, statusLine } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
+import { resetProgressBanner, resetReminderText } from './resetText';
 
 export interface SyncIntegration {
   dispose(): void;
@@ -69,12 +70,18 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'error':
     case 'clock-ahead':
     case 'forgotten':
+    case 'reset-required':
       return statusLine(textStatus, nowMs);
     // Y-10 : mêmes textes que l'emplacement `forget` et la ligne APPAREILS de Réglages, appareils nommés comme dans APPAREILS.
     case 'forget-failed':
       return forgetFailureText(trouble.failure, devices);
     case 'forget-pending':
       return forgetPendingBanner(trouble.deletion, devices);
+    // Y-11 : mêmes textes que l'emplacement `reset` de Réglages (étape, échec, rappel des 30 jours).
+    case 'reset-progress':
+      return resetProgressBanner(trouble.reset, devices);
+    case 'reset-reminder':
+      return resetReminderText(trouble.reset.waiting, devices);
   }
 }
 
@@ -96,7 +103,7 @@ function parseBlocking(raw: string | null): BlockingPhaseFact | null {
   }
   if (typeof value !== 'object' || value === null) return null;
   const { phase, errorCode, clockAheadDevice } = value as Record<string, unknown>;
-  if (phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'error' && phase !== 'clock-ahead' && phase !== 'forgotten') return null;
+  if (phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'error' && phase !== 'clock-ahead' && phase !== 'forgotten' && phase !== 'reset-required') return null;
   return {
     phase,
     errorCode: isSyncErrorCode(errorCode) ? errorCode : null,
@@ -226,6 +233,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     const beforeFirstCycle = !concluded;
     let { join, devices, blocking } = persisted;
     let forget = persisted.forget ?? null;
+    let reset = persisted.reset ?? null;
     let failed = false;
     activeReads += 1;
     try {
@@ -258,6 +266,12 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
         } catch {
           failed = true;
         }
+        // Y-11 : réinitialisation en cours, en échec ou appareil à associer de nouveau, montrés dès le démarrage.
+        try {
+          reset = await readResetStatus(repos, container.clock.nowMs());
+        } catch {
+          failed = true;
+        }
       }
     } finally {
       activeReads -= 1;
@@ -266,7 +280,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     const again = rereadPending && activeReads === 0 && !disposed;
     if (again) rereadPending = false;
     if (!disposed && seq === readSeq) {
-      persisted = { join, devices: concluded ? null : devices, blocking: concluded ? null : blocking, readFailed: failed, forget: concluded ? null : forget };
+      persisted = { join, devices: concluded ? null : devices, blocking: concluded ? null : blocking, readFailed: failed, forget: concluded ? null : forget, reset: concluded ? null : reset };
       safely(applyBanners);
     }
     if (again) void refreshPersisted();
@@ -307,7 +321,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
         settled = current;
         if (!concluded) {
           concluded = true;
-          persisted = { ...persisted, devices: null, blocking: null, forget: null };
+          persisted = { ...persisted, devices: null, blocking: null, forget: null, reset: null };
         }
         lastWrite = storeBlocking(current);
       }

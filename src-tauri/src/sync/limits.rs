@@ -42,6 +42,8 @@ pub const FOLDER_STOP_BYTES: u64 = 4 * GIB;
 /// Appairage (section 10.3) et confirmations natives (section 2.1).
 pub const PAIRING_VALIDITY_MS: u64 = 5 * 60_000;
 pub const PAIRING_CLOCK_TOLERANCE_MS: u64 = 2 * 60_000;
+/// Appareil absent depuis plus de 180 jours (`expired`, section 5.5) : même valeur que `DEVICE_EXPIRY_MS` de `limits.ts` (Y-11 : précondition).
+pub const DEVICE_EXPIRY_MS: u64 = 180 * 86_400_000;
 pub const CONSENT_WINDOW_MS: u64 = 10 * 60_000;
 pub const CONSENT_MAX_SHOW: usize = 3;
 pub const CONSENT_MAX_IMPORT: usize = 5;

@@ -21,6 +21,12 @@ export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'
       return 'sync.pairing.openRateLimited';
     case 'io':
       return 'sync.pairing.openIncomplete';
+    case 'cloud-pending':
+      // Seconde revue, point 2 : l'état d'un appareil actif attend iCloud ; rien n'est refusé pour de bon.
+      return mode === 'show' ? 'sync.pairing.openCloudPending' : 'sync.pairing.openFailed';
+    case 'state-mismatch':
+      // Y-11 (revue 9) : l'ancienne clé est retirée (réinitialisation annoncée ailleurs, ou perdue) : elle n'est plus jamais donnée.
+      return mode === 'show' ? 'sync.pairing.openNeedsNewKey' : 'sync.pairing.openFailed';
     case 'window-unprotected':
       // Fenêtre impossible à protéger : texte générique, jamais « Installation incomplète » (remarque finale 4).
       return 'sync.pairing.openFailed';

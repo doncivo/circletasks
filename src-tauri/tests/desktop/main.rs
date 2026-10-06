@@ -28,6 +28,7 @@ mod sync_pairing_qa;
 mod sync_pairing_y06;
 mod sync_qa_crypto;
 mod sync_qa_folder;
+mod sync_reset;
 mod sync_store;
 mod sync_support;
 mod updater;

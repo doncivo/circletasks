@@ -1,5 +1,411 @@
 {
-  "description": "Table de cas commune Rust / Vitest de la validité et du gagnant des annonces de réinitialisation (ADR 0011 sections 14.3, 11.2 et 18 ; Y-11 critère 15). Lue par reset_winner de src-tauri/src/sync/reset.rs et par validReset et resetWinner de src/domain/sync/epoch.ts. Squelette posé à l'étape 0 du lot Y4 ; cas ajoutés par Y-11.",
-  "validReset": [],
-  "resetWinner": []
+  "description": "Table de cas commune Rust / Vitest de la réinitialisation (ADR 0011 sections 14.3, 11.2 et 18 point 2 ; Y-11 critères 3, 12, 13 et 15). Lue par valid_reset, reset_winner, reset_precondition et reset_waiting de src-tauri/src/sync/reset.rs, et par validReset, resetWinner, resetPrecondition et resetWaiting de src/domain/sync/epoch.ts. Appareils : A < B < C < D (ordre des UUID).",
+  "validReset": [
+    {
+      "name": "annonce d'une époque suivante, ouverte par son auteur",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": true
+    },
+    {
+      "name": "époque ouverte par un autre appareil que celui qui l'annonce : ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": false
+    },
+    {
+      "name": "même numéro et UUID inférieur à l'époque de l'état : pas supérieure, ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0002-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": false
+    },
+    {
+      "name": "même époque que l'état : ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": false
+    },
+    {
+      "name": "numéro supérieur l'emporte sur l'UUID",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": true
+    },
+    {
+      "name": "kid mal formé : ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789ABCDEF", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": false
+    },
+    {
+      "name": "hlc non strict : ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "1000" } },
+      "expected": false
+    },
+    {
+      "name": "époque mal formée : ignorée",
+      "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e2-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+      "expected": false
+    },
+    {
+      "name": "annonce d'un UUID jamais vu, authentifiée : valide (§18 point 15)",
+      "candidate": { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } },
+      "expected": true
+    },
+    {
+      "name": "époque restaurée sous K (restore) : ouvreur et époque seulement",
+      "candidate": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true },
+      "expected": true
+    },
+    {
+      "name": "époque restaurée qui n'est pas la sienne : invalide",
+      "candidate": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-cccccccc-cccc-4ccc-8ccc-cccccccccccc", "at": "" }, "restore": true },
+      "expected": false
+    }
+  ],
+  "resetWinner": [
+    {
+      "name": "une seule annonce valide",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "deux réinitialisations simultanées : la plus grande époque (UUID) l'emporte",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000009000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "bbbbbbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "même ensemble dans l'ordre inverse : même gagnant (ni kid ni at ne départagent)",
+      "candidates": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0000000000000000", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "ffffffffffffffff", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000009000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "le numéro d'époque passe avant l'UUID",
+      "candidates": [
+        { "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateEpoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "notice": { "kid": "dddddddddddddddd", "epoch": "e0002-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "at": "000000000001000-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd" } },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0002-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0003-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0003-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "annonce d'un appareil oublié : sans effet",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "cccccccccccccccc", "epoch": "e0002-cccccccc-cccc-4ccc-8ccc-cccccccccccc", "at": "000000000001000-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc" } }
+      ],
+      "forgotten": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "annonce invalide (époque d'un autre auteur) écartée, la valide gagne même plus petite",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "bbbbbbbbbbbbbbbb", "epoch": "e0009-cccccccc-cccc-4ccc-8ccc-cccccccccccc", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "aucune annonce valide : aucun gagnant",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "forgotten": [],
+      "expected": null
+    },
+    {
+      "name": "aucune annonce",
+      "candidates": [],
+      "forgotten": [],
+      "expected": null
+    },
+    {
+      "name": "seule annonce d'un oublié : aucun gagnant",
+      "candidates": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "bbbbbbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } }
+      ],
+      "forgotten": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+      "expected": null
+    },
+    {
+      "name": "annonce d'un UUID jamais vu : même gagnant chez tous (aucune condition d'anti-rejeu)",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" }
+    },
+    {
+      "name": "gagnant oublié après coup : annonce suivante gagnante",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "gagnant oublié, seule annonce : aucune",
+      "candidates": [
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"],
+      "expected": null
+    },
+    {
+      "name": "époque restaurée sous K plus grande que l'annonce : la restauration l'emporte",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "époque restaurée plus petite : l'annonce l'emporte",
+      "candidates": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "" }, "restore": true }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "époque restaurée d'un auteur oublié : ignorée",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ],
+      "forgotten": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    }
+  ],
+  "resetPrecondition": [
+    {
+      "name": "tous les actifs lus jusqu'à leur tête : la réinitialisation peut commencer",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 2, "record": 3, "hlc": "000000000002003-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 7 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": { "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 2, "record": 3, "hlc": "000000000002003-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 7 } },
+      "expected": null
+    },
+    {
+      "name": "tête de B au-delà de l'accusé de A : Synchronisez d'abord, B nommé",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 2, "record": 4, "hlc": "000000000002004-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 8 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": { "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 2, "record": 3, "hlc": "000000000002003-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 7 } },
+      "expected": { "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "reason": "head" }
+    },
+    {
+      "name": "aucun accusé sur B qui a publié : en retard",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 1, "hlc": "000000000001001-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 2 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": {},
+      "expected": { "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "reason": "head" }
+    },
+    {
+      "name": "accusé d'une autre époque que la tête : en retard",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 1, "hlc": "000000000001001-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 9 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": { "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 9, "record": 9, "hlc": "000000000009009-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 7 } },
+      "expected": { "device": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "reason": "head" }
+    },
+    {
+      "name": "état d'un actif encore dans iCloud : en retard (état)",
+      "actives": [
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "cloud-pending", "head": null, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": {},
+      "expected": { "device": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "reason": "state" }
+    },
+    {
+      "name": "appareil expiré ou fantôme : ne compte pas",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 5, "record": 1, "hlc": "000000000005001-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 3 }, "expired": true, "phantom": false },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "missing", "head": null, "expired": false, "phantom": true }
+      ],
+      "forgotten": [],
+      "ownAcks": {},
+      "expected": null
+    },
+    {
+      "name": "tête vide (rien publié) : rien à lire",
+      "actives": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [],
+      "ownAcks": {},
+      "expected": null
+    },
+    {
+      "name": "oublié retenu pas lu jusqu'à sa coupure : en retard (coupure)",
+      "actives": [],
+      "forgotten": [
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "cutoff": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 3, "record": 2, "hlc": "000000000003002-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateSeq": 4 } }
+      ],
+      "ownAcks": { "dddddddd-dddd-4ddd-8ddd-dddddddddddd": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 3, "record": 1, "hlc": "000000000003001-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateSeq": 4 } },
+      "expected": { "device": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "reason": "cutoff" }
+    },
+    {
+      "name": "oublié retenu lu jusqu'à sa coupure, ou sans coupure : rien à faire",
+      "actives": [],
+      "forgotten": [
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "cutoff": null },
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "cutoff": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 3, "record": 2, "hlc": "000000000003002-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateSeq": 4 } }
+      ],
+      "ownAcks": { "dddddddd-dddd-4ddd-8ddd-dddddddddddd": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 3, "record": 2, "hlc": "000000000003002-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateSeq": 4 } },
+      "expected": null
+    },
+    {
+      "name": "deux appareils en retard : le plus petit identifiant est nommé, actifs avant oubliés",
+      "actives": [
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 1, "hlc": "000000000001001-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "stateSeq": 2 }, "expired": false, "phantom": false },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "head": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 1, "hlc": "000000000001001-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc", "stateSeq": 2 }, "expired": false, "phantom": false }
+      ],
+      "forgotten": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "cutoff": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 1, "hlc": "000000000001001-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateSeq": 2 } }
+      ],
+      "ownAcks": {},
+      "expected": { "device": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "reason": "head" }
+    }
+  ],
+  "resetWaiting": [
+    {
+      "name": "réassocié (état de l'époque visée) : n'attend plus ; resté sur l'ancienne clé : attendu",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "aaaaaaaaaaaaaaaa" },
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "aaaaaaaaaaaaaaaa" },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" }
+      ],
+      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "oublié par un choix explicite : n'attend plus",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "forgotten": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+      "known": [
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" }
+      ],
+      "expected": [],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "fantôme (jamais vu, état illisible) : ne bloque pas ; appareil vu dont l'état manque : attendu",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "missing", "epoch": null, "seen": false, "author": false, "kid": null },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "cloud-pending", "epoch": null, "seen": true, "author": false, "kid": null },
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": false, "author": true, "kid": null }
+      ],
+      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "réassocié à une réinitialisation concurrente (autre époque) : attendu",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" },
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": true, "author": false, "kid": null }
+      ],
+      "expected": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "aucun autre appareil : la bascule peut se faire au premier cycle",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "0123456789abcdef" }
+      ],
+      "expected": [],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "audit 4 : état de l'époque visée sous une autre clé que la nouvelle (forgé sous l'ancienne) : attendu",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "kid": "aaaaaaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "kid": "aaaaaaaaaaaaaaaa", "seen": true, "author": false },
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "kid": "0123456789abcdef", "seen": true, "author": false }
+      ],
+      "expected": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]
+    }
+  ],
+  "restoreCandidates": [
+    {
+      "name": "aucune annonce : aucune époque restaurée ne concourt",
+      "announcements": [],
+      "states": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false }
+      ],
+      "expected": []
+    },
+    {
+      "name": "époque ouverte par son auteur, instantané annoncé, au-delà de l'état de l'annonce : concourt",
+      "announcements": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "states": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false },
+        { "by": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false },
+        { "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "snapshot": true, "notice": false },
+        { "by": "11111111-1111-4111-8111-111111111111", "epoch": "e0002-11111111-1111-4111-8111-111111111111", "snapshot": false, "notice": false },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "snapshot": true, "notice": true }
+      ],
+      "expected": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ]
+    }
+  ],
+  "staleAcks": [
+    {
+      "name": "accusé sur C dans une époque où C n'a publié aucun état (début de l'époque visée) : ignoré ; position en n gardée",
+      "published": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      "ackers": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 }, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } },
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 3, "hlc": null, "stateSeq": 1 } } }
+      ],
+      "expected": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } },
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 3, "hlc": null, "stateSeq": 1 } } }
+      ]
+    },
+    {
+      "name": "cible sans état lisible et accepté : accusé gardé",
+      "published": {},
+      "ackers": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } }
+      ],
+      "expected": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } }
+      ]
+    }
+  ]
 }

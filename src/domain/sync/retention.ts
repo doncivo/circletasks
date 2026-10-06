@@ -475,3 +475,30 @@ export function forgottenDeleteCheck(
   }
   return { kind: 'ready', by: verdict.by, cutoff: cut };
 }
+
+/**
+ * Époque la plus récente d'un état lisible et accepté de chaque appareil (états donnés : acceptés par l'anti-rejeu, le sien compris).
+ */
+export function publishedEpochs(states: readonly Pick<PublishedDeviceState, 'deviceId' | 'epoch'>[]): Map<DeviceId, EpochId> {
+  const out = new Map<DeviceId, EpochId>();
+  for (const s of states) {
+    const known = out.get(s.deviceId);
+    if (known === undefined || compareEpochs(s.epoch, known) > 0) out.set(s.deviceId, s.epoch);
+  }
+  return out;
+}
+
+/**
+ * Accusés sans objet (Y-11, remarques finales ; même filtre que `uncovered_forgotten` de Rust, table `reset-order.json`) : un accusé sur
+ * une cible situé après la plus récente époque d'un état lisible et accepté de cette cible ne désigne rien (« début de l'époque visée »
+ * sur un appareil qui n'y a rien publié) ; il est retiré avant toute coupure. Cible sans état connu : accusé gardé.
+ */
+export function withoutStaleAcks<T extends Pick<PublishedDeviceState, 'deviceId' | 'acks'>>(ackers: readonly T[], published: ReadonlyMap<DeviceId, EpochId>): T[] {
+  return ackers.map((a) => {
+    const kept = [...a.acks].filter(([target, ack]) => {
+      const last = published.get(target);
+      return last === undefined || compareEpochs(ack.epoch, last) <= 0;
+    });
+    return kept.length === a.acks.size ? a : { ...a, acks: new Map(kept) };
+  });
+}

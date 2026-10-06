@@ -154,7 +154,10 @@ fn y01_11_strict_names_conflict_copies_and_bad_parameters() {
     let before = fs.get(&["devices", DEV_A, "state 2.ctx"]);
     let scan = d.core.scan(&[]).unwrap();
     assert_eq!(scan.devices.len(), 1);
-    assert_eq!(scan.ignored, 5);
+    // Y-11 (lot Y4) : state.next.ctx est un nom reconnu (état sous la nouvelle clé d'une réinitialisation), plus compté comme ignoré ;
+    // il n'est lu que si state.ctx est d'une autre clé, jamais supprimé ni écrit ici.
+    assert_eq!(scan.ignored, 4);
+    assert_eq!(fs.get(&["devices", DEV_A, "state.next.ctx"]).as_deref(), Some(&b"reserve"[..]));
     assert_eq!(fs.get(&["devices", DEV_A, "state 2.ctx"]), before, "jamais lu ni supprimé");
     let ep = epoch(1, DEV_A);
     assert_eq!(code(d.core.read_journal("../x", &ep, C0, None)), SyncCode::BadName);

@@ -25,7 +25,7 @@ describe('lot Y4, étape 0', () => {
     expect(SYNC_COMMAND_WINDOWS.sync_reset_key).toBe('main');
   });
 
-  it('mémoire : sans dossier, les trois refusent en not-configured ; Y-10 : sans liaison, forget refuse en not-bound ; reset.start reste not-configured (Y-11)', async () => {
+  it('mémoire : sans dossier, les trois refusent en not-configured ; sans liaison, forget (Y-10) et reset.start (Y-11) refusent en not-bound', async () => {
     const platform = createMemorySyncPlatform();
     const all = () => [platform.forget.device(OTHER), platform.forget.deleteFiles(OTHER), platform.reset.start()];
     for (const p of all()) expect(await codeOf(p)).toBe('not-configured');
@@ -33,8 +33,8 @@ describe('lot Y4, étape 0', () => {
     await platform.key.create();
     expect(await codeOf(platform.forget.device(OTHER))).toBe('not-bound');
     expect(await codeOf(platform.forget.deleteFiles(OTHER))).toBe('not-bound');
-    expect(await codeOf(platform.reset.start())).toBe('not-configured');
-    expect(await platform.key.status()).toMatchObject({ present: true });
+    expect(await codeOf(platform.reset.start())).toBe('not-bound');
+    expect(await platform.key.status()).toMatchObject({ present: true, nextKid: null });
   });
 
   it('tauriSync : chaque méthode appelle sa commande, rejet Rust rendu en SyncPlatformError', async () => {
