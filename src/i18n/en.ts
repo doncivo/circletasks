@@ -495,6 +495,9 @@ export const en: Messages = {
     waitingIcloud: 'Waiting for iCloud',
     calendarDisconnected: 'Calendar {name} disconnected',
     reconnect: 'Reconnect',
+    syncTroubleMore: '{message} (+{n})',
+    syncTroubleView: 'View',
+    syncDevice: '{device}: {state}',
     loading: 'Loading',
   },
   today: {

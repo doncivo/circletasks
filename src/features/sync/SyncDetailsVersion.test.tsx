@@ -152,8 +152,8 @@ describe('bandeau A-09 « Mettez à jour l’app » (Y-07 critère 9)', () => {
     expect(banner()).toBeUndefined();
   });
 
-  it('priorité (D1) : derrière « Agenda déconnecté », devant « En attente d’iCloud », « Synchro en cours » et « Hors ligne » ; texte seul, aucun bouton', () => {
-    expect(APP_STATUS_PRIORITY).toEqual(['calendarDisconnected', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']);
+  it('priorité (D1, A-09 D1) : derrière « Agenda déconnecté » et un problème de synchro, devant « En attente d’iCloud », « Synchro en cours » et « Hors ligne » ; texte seul, aucun bouton', () => {
+    expect(APP_STATUS_PRIORITY).toEqual(['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']);
     render(<AppStatusBanner />);
     const set = useAppStatusStore.getState().setStatus;
     act(() => {

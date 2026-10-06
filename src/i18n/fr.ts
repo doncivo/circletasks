@@ -500,6 +500,12 @@ export const fr = {
     waitingIcloud: 'En attente d’iCloud',
     calendarDisconnected: 'Agenda {name} déconnecté',
     reconnect: 'Reconnecter',
+    /** A-09 critère 9 g : autres problèmes de synchro en attente (détail dans Réglages). */
+    syncTroubleMore: '{message} (+{n})',
+    /** A-09 critère 9 c : ouvre Réglages › Synchronisation (ou la fenêtre de choix après restauration). */
+    syncTroubleView: 'Voir',
+    /** A-09 critère 9 f : appareil nommé et statut comme dans APPAREILS. */
+    syncDevice: '{device} : {state}',
     loading: 'Chargement',
   },
   today: {

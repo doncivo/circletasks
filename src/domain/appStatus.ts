@@ -1,16 +1,19 @@
 /**
- * États de l'app affichés dans le bandeau (A-09). Un seul bandeau est affiché à la fois, selon une priorité
- * fixe : agenda déconnecté > mettez à jour l'app > en attente d'iCloud > synchro en cours > hors ligne.
+ * États de l'app affichés dans le bandeau (A-09). Un seul bandeau est affiché à la fois, selon une priorité fixe (critère 5 ; D1 du
+ * solde du critère 9) : agenda déconnecté > problème de synchro > mettez à jour l'app > en attente d'iCloud > synchro en cours >
+ * hors ligne.
  *
- * Émetteurs : `offline` par la plateforme (réseau) ; `syncing` et `waitingIcloud` par la synchro (Y-02, ordre 4) ;
- * `calendarDisconnected` par l'intégration des agendas (K-01 à K-03, ordre 2) ; `updateRequired` par la synchro quand un autre appareil
- * actif publie une version plus récente (Y-07, D1 : un appel à agir, jamais masqué par un état passager, mais derrière l'agenda).
+ * Émetteurs : `offline` par la plateforme (réseau) ; `syncTrouble`, `syncing` et `waitingIcloud` par la synchro (`startSync.ts`, décision
+ * de `syncBanners.ts`) ; `calendarDisconnected` par l'intégration des agendas (K-01 à K-03) ; `updateRequired` par la synchro quand un
+ * autre appareil actif publie une version plus récente (Y-07 D1 : un appel à agir, jamais masqué par un état passager, mais derrière
+ * l'agenda et derrière un échec de synchro, qui empêche la synchro alors qu'une version plus récente n'empêche pas la lecture).
+ * « Hors ligne » ne masque jamais un échec de synchro (critère 9 a).
  */
-export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
+export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
 
 export type AppStatusKind = (typeof APP_STATUS_PRIORITY)[number];
 
-/** Un état actif ; `detail` : nom de l'agenda pour `calendarDisconnected`. */
+/** Un état actif ; `detail` : nom de l'agenda pour `calendarDisconnected`, code de l'état (`SyncTroubleCode`) pour `syncTrouble`. */
 export interface AppStatusEntry {
   readonly detail?: string;
 }
