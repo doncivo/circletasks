@@ -14,8 +14,8 @@ const ON_DEMAND_PATTERN = {
   message: 'Bloc chargé à la demande (PERF-02) : import() depuis src/features/capture/absoluteDatesLoader.ts ou src/i18n/index.ts seulement.',
 };
 
-/** Interdit l'import des couches listées depuis les fichiers ciblés. */
-const forbidLayers = (files, layers, message) => ({
+/** Interdit l'import des couches listées depuis les fichiers ciblés ; `allow` : motifs relatifs admis malgré tout (négations). */
+const forbidLayers = (files, layers, message, allow = []) => ({
   files,
   ignores: ['**/*.test.{ts,tsx}'],
   rules: {
@@ -24,7 +24,7 @@ const forbidLayers = (files, layers, message) => ({
       {
         patterns: [
           // src/domain/sync est du domaine pur (ADR 0011, section 0) : le dossier « sync » de la couche domain n'est pas la couche src/sync.
-          { group: [...layers.flatMap(layer), '!**/domain/sync', '!**/domain/sync/**'], message },
+          { group: [...layers.flatMap(layer), '!**/domain/sync', '!**/domain/sync/**', ...allow.map((pattern) => `!${pattern}`)], message },
           { group: ['@tauri-apps/*'], message: 'Les API Tauri ne s’importent que dans src/platform (ADR 0001).' },
           ON_DEMAND_PATTERN,
         ],
@@ -72,6 +72,8 @@ export default tseslint.config(
     ['src/domain/**'],
     ['db', 'features', 'ui', 'sync', 'platform', 'i18n'],
     'src/domain est pur : aucune dépendance vers les autres couches.',
+    // Un fichier de src/domain importe son dossier src/domain/sync par `./sync/…` (A-09) ; `../sync` (couche src/sync) reste interdit.
+    ['./sync', './sync/**'],
   ),
   forbidLayers(['src/db/**'], ['features', 'ui', 'sync', 'platform', 'i18n'], 'src/db ne dépend que de src/domain.'),
   forbidLayers(['src/sync/**'], ['features', 'ui'], 'src/sync ne dépend que de domain, db et platform.'),
