@@ -7,11 +7,13 @@
 //! - Compteurs persistés (`sync/consent.json`, `.tmp` + renommage) : 3 affichages et 5 imports par 10 minutes (toute ouverture compte,
 //!   refus compris), 10 minutes de blocage après un refus, relus après un redémarrage ; un fichier illisible vaut « bloqué 10
 //!   minutes ». Une seule boîte à la fois (`rate-limited` pendant qu'une boîte est ouverte).
+//! - Y-TECH-02 : une ouverture qui n'a pas pu être comptée sur le disque n'ouvre aucune boîte (`io`) ; un blocage (refus, fichier
+//!   illisible) est toujours gardé en mémoire, même si son écriture échoue.
 //!
 //! Le trait `ConsentUi` est injecté : les tests remplacent la boîte et les préconditions.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
@@ -145,6 +147,8 @@ pub struct ConsentGate {
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
     busy: AtomicBool,
     file: Mutex<()>,
+    /// Fin du dernier blocage décidé par cette instance (refus, fichier illisible), gardée même si son écriture échoue.
+    blocked_until: AtomicU64,
 }
 
 struct BusyGuard<'a>(&'a AtomicBool);
@@ -158,7 +162,7 @@ impl Drop for BusyGuard<'_> {
 impl ConsentGate {
     /// `config_dir` : dossier `sync/` du dossier de configuration.
     pub fn new(config_dir: PathBuf, ui: Arc<dyn ConsentUi>, now: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
-        Self { path: config_dir.join(CONSENT_FILE), ui, now, busy: AtomicBool::new(false), file: Mutex::new(()) }
+        Self { path: config_dir.join(CONSENT_FILE), ui, now, busy: AtomicBool::new(false), file: Mutex::new(()), blocked_until: AtomicU64::new(0) }
     }
 
     fn load(&self, now: u64) -> Counters {
@@ -169,17 +173,25 @@ impl ConsentGate {
                 // Fichier illisible : bloqué 10 minutes (et réécrit, pour que le blocage ne se prolonge pas à chaque lecture).
                 log::event("consent-file-unreadable", "blocked");
                 let blocked = Counters { blocked_until: now + CONSENT_BLOCK_MS, ..Counters::default() };
-                self.save(&blocked);
+                self.block_in_memory(blocked.blocked_until);
+                // Échec d'écriture journalisé par `save` : le blocage reste en mémoire, et le fichier illisible le redonne au démarrage.
+                let _ = self.save(&blocked);
                 blocked
             }
         }
     }
 
-    fn save(&self, counters: &Counters) {
-        let bytes = serde_json::to_vec(counters).unwrap_or_default();
-        if write_config_file(&self.path, &bytes).is_err() {
+    /// Écrit les compteurs ; un échec est journalisé et rendu (`io`) : l'appelant n'ouvre alors aucune boîte.
+    fn save(&self, counters: &Counters) -> SyncResult<()> {
+        let written = serde_json::to_vec(counters).map_err(|_| super::SyncError::new(SyncCode::Io)).and_then(|bytes| write_config_file(&self.path, &bytes));
+        if written.is_err() {
             log::event("consent-file-write-failed", "io");
         }
+        written
+    }
+
+    fn block_in_memory(&self, until: u64) {
+        self.blocked_until.fetch_max(until, Ordering::SeqCst);
     }
 
     /// Préconditions communes : propriétaire au premier plan, pas de blocage en cours, pas d'autre boîte ouverte.
@@ -190,7 +202,7 @@ impl ConsentGate {
         if !self.ui.owner_ready(owner) {
             return fail(SyncCode::NotForeground);
         }
-        if now < counters.blocked_until {
+        if now < counters.blocked_until.max(self.blocked_until.load(Ordering::SeqCst)) {
             return fail(SyncCode::RateLimited);
         }
         Ok(())
@@ -218,7 +230,9 @@ impl ConsentGate {
         let now = (self.now)();
         let mut counters = self.load(now);
         counters.blocked_until = now + CONSENT_BLOCK_MS;
-        self.save(&counters);
+        // Blocage gardé en mémoire d'abord : un échec d'écriture (journalisé) ne le lève jamais pendant cette session.
+        self.block_in_memory(counters.blocked_until);
+        let _ = self.save(&counters);
         fail(SyncCode::ConsentDenied)
     }
 
@@ -234,7 +248,8 @@ impl ConsentGate {
                 return fail(SyncCode::RateLimited);
             }
             counters.show.push(now);
-            self.save(&counters);
+            // Ouverture non comptée sur le disque : aucune boîte (le plafond ne tiendrait plus après un redémarrage).
+            self.save(&counters)?;
         }
         self.ask(ConsentKind::ShowKey, owner)
     }
@@ -252,7 +267,8 @@ impl ConsentGate {
                 return fail(SyncCode::RateLimited);
             }
             counters.forget.push(now);
-            self.save(&counters);
+            // Ouverture non comptée sur le disque : aucune boîte (le plafond ne tiendrait plus après un redémarrage).
+            self.save(&counters)?;
         }
         self.ask_with(ConsentKind::ForgetDevice, owner, Some(detail))
     }
@@ -270,7 +286,8 @@ impl ConsentGate {
                 return fail(SyncCode::RateLimited);
             }
             counters.reset.push(now);
-            self.save(&counters);
+            // Ouverture non comptée sur le disque : aucune boîte (le plafond ne tiendrait plus après un redémarrage).
+            self.save(&counters)?;
         }
         self.ask(ConsentKind::ResetKey, owner)
     }
@@ -286,8 +303,7 @@ impl ConsentGate {
             return fail(SyncCode::RateLimited);
         }
         counters.import.push(now);
-        self.save(&counters);
-        Ok(())
+        self.save(&counters)
     }
 
     /// Boîte sans compteur d'ouverture (remplacement ou effacement de la clé) : préconditions, blocage et verrou communs.

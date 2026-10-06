@@ -158,6 +158,11 @@ pub struct FolderScan {
     pub total_bytes: u64,
     pub too_many_devices: bool,
     pub incomplete: bool,
+    /// Y-TECH-02 : dossier de plus de 1 Gio (`FOLDER_WARN_BYTES`) : avertissement montré à l'utilisateur, jamais un blocage.
+    pub folder_large: bool,
+    /// Y-TECH-02 : budget de nonces de la clé courante (ou de la nouvelle clé d'une réinitialisation) au-delà du seuil d'alerte ;
+    /// rempli par `SyncCore::scan`.
+    pub nonce_warning: bool,
     /// Y-10 : registre de l'oubli après fusion des déclarations lues (§11.1, §18) ; rempli par `SyncCore::scan`.
     pub forgotten: super::forget::ForgottenView,
     /// Y-11 : réinitialisation en cours sur cet appareil (rôle, étape, perte, bascule) ; rempli par `SyncCore::scan`.
@@ -666,11 +671,22 @@ impl<'a> Store<'a> {
             scans.push(scan);
         }
         Self::check_total(total)?;
-        if total > FOLDER_WARN_BYTES {
+        let folder_large = total > FOLDER_WARN_BYTES;
+        if folder_large {
             log::event("folder-large", &total.to_string());
         }
         incomplete |= budget.cut.get();
-        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete, forgotten: Default::default(), reset: None })
+        Ok(FolderScan {
+            devices: scans,
+            ignored: ignored + dropped,
+            total_bytes: total,
+            too_many_devices: dropped > 0,
+            incomplete,
+            folder_large,
+            nonce_warning: false,
+            forgotten: Default::default(),
+            reset: None,
+        })
     }
 
     fn check_total(total: u64) -> SyncResult<()> {

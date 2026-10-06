@@ -705,6 +705,13 @@ impl SyncCore {
         self.sealed_records() > self.options.nonce_warn
     }
 
+    /// Alerte du budget de nonces de la clé locale ou, pendant une réinitialisation, de la nouvelle clé (rendue par `sync_scan`).
+    fn nonce_warning_for(&self, inner: &mut Inner, key: &MasterKey, next: &Option<(Arc<MasterKey>, String)>) -> bool {
+        let sealed = self.usage(inner, key.kid()).sealed;
+        let sealed_next = next.as_ref().map_or(0, |(k, _)| self.usage_next(k.kid()).sealed);
+        sealed.max(sealed_next) > self.options.nonce_warn
+    }
+
     // --------------------------------------------------------------------------------------------------------------------------
     // Lecture
     // --------------------------------------------------------------------------------------------------------------------------
@@ -748,6 +755,8 @@ impl SyncCore {
             }
         }
         scan.reset = reset;
+        // Y-TECH-02 : alerte du budget de nonces rendue au moteur (avertissement de `SyncStatus`), plus seulement journalisée.
+        scan.nonce_warning = self.nonce_warning_for(&mut inner, &key, &next);
         Ok(scan)
     }
 

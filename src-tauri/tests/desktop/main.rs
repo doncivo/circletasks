@@ -31,5 +31,6 @@ mod sync_qa_folder;
 mod sync_reset;
 mod sync_store;
 mod sync_support;
+mod sync_y_tech_02;
 mod updater;
 mod window;
