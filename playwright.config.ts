@@ -46,6 +46,8 @@ export default defineConfig({
       use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
       grep: /@perf/,
       dependencies: ['pc', 'iphone'],
+      // Consigne d'Ali : une mesure n'est jamais rejouée (aucune nouvelle tentative, même en CI).
+      retries: 0,
     },
   ],
   webServer: {

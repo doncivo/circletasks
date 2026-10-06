@@ -168,17 +168,17 @@ export function ConflictList() {
                   {view.restored ? (
                     <span className="ct-conflicts__restored">{view.restoredAt ? restoredOnText(view.restoredAt) : null}</span>
                   ) : (
-                    <button
-                      type="button"
-                      className="ct-button ct-button--secondary ct-settings__link"
-                      aria-label={t('sync.conflicts.restoreLabel', names)}
-                      aria-describedby={message ? statusId : undefined}
-                      aria-busy={busy === view.id}
+                    <Button
+                      variant="secondary"
+                      className="ct-settings__link"
+                      ariaLabel={t('sync.conflicts.restoreLabel', names)}
+                      {...(message ? { describedBy: statusId } : {})}
+                      ariaBusy={busy === view.id}
                       disabled={busy !== null}
                       onClick={() => void restore(view, names)}
                     >
                       {busy === view.id ? t('sync.conflicts.restoring') : t('sync.conflicts.restore')}
-                    </button>
+                    </Button>
                   )}
                 </span>
               </div>
