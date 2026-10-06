@@ -431,7 +431,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         // Y-11 (§18 point 14) : à travers une réinitialisation, il garde l'époque de sa position (`n`), jamais remis au début de `n+1`.
         if (row.isSelf || row.epoch === null) continue;
         const forgotten = forgetView.order.has(row.deviceId as DeviceId);
-        if (row.epoch !== currentEpoch && !forgotten) continue;
+        // Pendant une réinitialisation, la position en `n` d'un appareil pas encore lu dans `n+1` reste publiée (figée à l'import).
+        const frozen = resetActive(directive) && compareEpochs(row.epoch as EpochId, currentEpoch) < 0;
+        if (row.epoch !== currentEpoch && !forgotten && !frozen) continue;
         acks.set(row.deviceId as DeviceId, { epoch: row.epoch as EpochId, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
       }
       return acks;

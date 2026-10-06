@@ -2113,16 +2113,31 @@ impl SyncCore {
         let Some(bound) = folder.as_ref() else { return Vec::new() };
         let store = Store { fs: bound.fs.as_ref(), key, pin: false, next: Some(NextKey { key: next, epoch: &record.epoch }) };
         let mut acks: Vec<(String, BTreeMap<String, DeviceAck>)> = Vec::new();
+        // Époque la plus récente où chaque appareil a publié un état (seconde revue, bloquant) : un accusé dans une époque postérieure
+        // (« début de l'époque visée » sur un appareil qui n'y a rien publié) ne désigne rien et ne compte pas dans la coupure.
+        let mut published: BTreeMap<String, EpochId> = BTreeMap::new();
+        let mut note = |id: &str, state: &PublishedState| {
+            if let Some(e) = EpochId::parse(&state.epoch) {
+                if published.get(id).map_or(true, |p| e > *p) {
+                    published.insert(id.to_owned(), e);
+                }
+            }
+        };
         for (id, read) in reads {
             if let Some(state) = read.state.as_ref().filter(|_| read.status == StateStatus::Ok) {
+                note(id, state);
                 acks.push((id.clone(), state.acks.clone()));
             }
             if read.from_next_file || read.kid.as_deref() != Some(key.kid()) {
                 let old = store.read_state_file(id, STATE_FILE, key, &HashMap::new());
                 if let Some(state) = old.state.filter(|_| old.status == StateStatus::Ok) {
+                    note(id, &state);
                     acks.push((id.clone(), state.acks));
                 }
             }
+        }
+        for (_, map) in &mut acks {
+            map.retain(|target, ack| published.get(target).map_or(true, |p| EpochId::parse(&ack.epoch).map_or(true, |e| e <= *p)));
         }
         let ackers = || acks.iter().map(|(id, a)| (id.as_str(), a));
         let order = forget_order(entries);

@@ -337,3 +337,26 @@ describe('§18 point 18 : simulations complémentaires', () => {
     expect(await titles(a)).toEqual(['B avant']);
   });
 });
+
+describe('seconde revue, bloquant : oubli après la réassociation', () => {
+  it('A réinitialise, B se réassocie, PUIS A oublie C (jamais réassocié) : bascule de A et B, bases identiques', async () => {
+    const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
+    await c.createTask('C avant');
+    await settle(room.devices);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    await reassociate(a, b, [a, b]);
+    await b.cycle();
+    // Accusé de B sur C : figé à sa position de l'époque n, jamais au début de n+1.
+    const next = b.folder.devices.get(b.id)?.nextState?.lines[0]?.text;
+    const ack = next ? (JSON.parse(next) as { acks: Record<string, { epoch: string }> }).acks[C_ID] : undefined;
+    expect(ack?.epoch).toMatch(/^e0001-/);
+    syncFolders([a, b]);
+    a.clock.advance(11 * 60_000);
+    expect(await a.service.forgetDevice(C_ID as DeviceId)).toEqual({ kind: 'done' });
+    await settle([a, b], 4);
+    expect(a.service.status().reset?.step).toBe('done');
+    expect(b.service.status().reset?.step).toBe('done');
+    expect(await titles(a)).toContain('C avant');
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+  });
+});

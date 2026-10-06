@@ -1325,3 +1325,24 @@ fn p14_switch_waits_until_the_announced_k2_snapshot_covers_each_retained_forgott
     net.publish(DEV_A, Value::Null).unwrap();
     assert!(net.read_all(DEV_A).unwrap().reset.unwrap().switched, "couvert : bascule");
 }
+
+#[test]
+fn second_review_forget_after_reassociation_ignores_an_ack_in_an_epoch_the_forgotten_never_published() {
+    let mut net = Net::new(&[DEV_B, DEV_C]);
+    net.write(DEV_C).unwrap();
+    net.publish(DEV_C, Value::Null).unwrap();
+    for id in [DEV_B, DEV_C, DEV_A] {
+        net.cycle(id).unwrap();
+    }
+    net.reset_and_open(DEV_A);
+    net.join(DEV_B, DEV_A);
+    // B (moteur d'avant la correction) publie sous K2 un accusé sur C au début de l'époque visée, où C n'a jamais rien publié.
+    let target = epoch(2, DEV_A);
+    net.dev_mut(DEV_B).acks = json!({ DEV_C: { "epoch": target, "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } });
+    net.publish(DEV_B, Value::Null).unwrap();
+    net.core(DEV_A).device_forget(DEV_C, 1).unwrap();
+    let view = net.read_all(DEV_A).unwrap().reset.unwrap();
+    assert!(view.switched, "accusé sans objet ignoré : l'instantané d'ouverture couvre C (waiting {:?})", view.waiting);
+    net.publish(DEV_A, Value::Null).unwrap();
+    assert!(net.read_all(DEV_B).unwrap().reset.unwrap().switched);
+}

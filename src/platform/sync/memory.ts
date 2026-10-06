@@ -1863,15 +1863,34 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
    */
   const uncoveredForgotten = (f: MemorySyncFolder, record: MemResetRecord, reads: ReadonlyMap<DeviceId, StateRead>, mine: StateRead | undefined, entries: readonly ForgottenDevice[]): DeviceId[] => {
     const localKid = key?.kid ?? '';
-    const ackers: Pick<PublishedDeviceState, 'deviceId' | 'acks'>[] = [];
+    const raw: Pick<PublishedDeviceState, 'deviceId' | 'acks'>[] = [];
+    // Époque la plus récente où chaque appareil a publié un état : un accusé au-delà ne désigne rien (seconde revue, bloquant).
+    const published = new Map<DeviceId, EpochId>();
+    const note = (id: DeviceId, s: PublishedDeviceState): void => {
+      const known = published.get(id);
+      if (known === undefined || compareEpochs(s.epoch, known) > 0) published.set(id, s.epoch);
+    };
     for (const [id, read] of reads) {
-      if (read.status === 'ok' && read.state) ackers.push({ deviceId: id, acks: read.state.acks });
+      if (read.status === 'ok' && read.state) {
+        note(id, read.state);
+        raw.push({ deviceId: id, acks: read.state.acks });
+      }
       if (read.fromNext === true || read.kid !== localKid) {
         const dir = f.devices.get(id);
         const old = dir ? readStateFile(id, dir, 'state', [localKid], false, false) : null;
-        if (old?.status === 'ok' && old.state) ackers.push({ deviceId: id, acks: old.state.acks });
+        if (old?.status === 'ok' && old.state) {
+          note(id, old.state);
+          raw.push({ deviceId: id, acks: old.state.acks });
+        }
       }
     }
+    const ackers = raw.map((a) => ({
+      deviceId: a.deviceId,
+      acks: new Map([...a.acks].filter(([target, ack]) => {
+        const p = published.get(target);
+        return p === undefined || compareEpochs(ack.epoch, p) <= 0;
+      })),
+    }));
     const order = forgetOrder(entries);
     const end = ownSnapshotEnd(f, record.deviceId, mine);
     if (typeof end !== 'string') {

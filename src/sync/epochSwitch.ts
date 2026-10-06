@@ -343,7 +343,11 @@ export async function switchEpoch(
   // (d) Nouvelle époque : tête vide, curseurs de tous les appareils au début de l'époque ; la publication suit dans le cycle.
   await deps.data.transaction(async (tx) => {
     for (const row of await tx.sync.getStates()) {
-      if (options.keep?.has(row.deviceId as DeviceId) && !row.isSelf) continue;
+      // §18.14 « accusés figés à l'import » (seconde revue, bloquant) : dans une réinitialisation (fusion), la position en `n` de tout
+      // appareil encore en `n` est gardée ; elle ne passe à `n+1` qu'à sa première lecture dans `n+1` (jamais d'accusé « début de
+      // l'époque visée » sur un appareil qui n'y a rien publié).
+      const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && (options.mode === 'merge' || options.keep?.has(row.deviceId as DeviceId) === true);
+      if (keep) continue;
       await tx.sync.saveState(row.deviceId, { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
     }
     await writeJson(tx, META.epoch, target);
