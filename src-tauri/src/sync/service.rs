@@ -1922,6 +1922,7 @@ impl SyncCore {
         self.interrupt("supersede-2")?;
         let bound = self.require_folder(inner)?;
         bound.fs.remove_file(&[DEVICES_DIR, &self_id, STATE_NEXT_FILE]).map_err(|e| SyncError::new(e.code()))?;
+        self.own_state_back(inner, record)?;
         self.interrupt("supersede-3")?;
         if self.read_vault_next()?.is_some_and(|k| k.kid() == record.kid) {
             self.vault.delete(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)?;
@@ -1948,6 +1949,32 @@ impl SyncCore {
         }
         self.save_reset(record)?;
         log::event("reset-superseded-done", &record.kid);
+        Ok(())
+    }
+
+    /// Perte (§18 point 2) : son état publié redevient celui de l'ancienne clé (`state.ctx`, plus ancien que ses états sous la nouvelle
+    /// clé). L'anti-rejeu de **cet appareil seul** revient à cet état, à condition qu'il soit bien le sien : déchiffré avec la clé locale,
+    /// et portant l'annonce de cette réinitialisation (appareil qui réinitialise) ou figé dans l'époque de l'import (appareil réassocié).
+    /// Sans cela, son propre état serait vu comme un rejeu et il ne pourrait ni republier sans annonce, ni se réassocier.
+    fn own_state_back(&self, inner: &mut Inner, record: &ResetRecord) -> SyncResult<()> {
+        let key = self.load_key(inner)?;
+        let self_id = record.device_id.clone();
+        let read = {
+            let bound = self.require_folder(inner)?;
+            Store::new(bound.fs.as_ref(), &key, false).read_state_file(&self_id, STATE_FILE, &key, &HashMap::new())
+        };
+        let (Some(state), Some(digest)) = (read.state.filter(|_| read.status == StateStatus::Ok), read.digest) else { return Ok(()) };
+        let ours = match record.role {
+            ResetRole::Initiator => state.reset.as_ref().is_some_and(|n| n.kid == record.kid),
+            ResetRole::Joined => state.reset.is_none() && record.base.as_ref().and_then(|b| b.epoch.as_deref()).map_or(true, |e| e == state.epoch),
+        };
+        let Some(epoch) = EpochId::parse(&state.epoch).filter(|_| ours) else { return Ok(()) };
+        let head = RecordCursor { segment: state.head.segment, record: state.head.record };
+        inner.accepted.insert(self_id.clone(), Accepted { epoch, seq: state.state_seq, digest: digest.clone(), head });
+        let mut reg = self.registry(inner, &key, &self_id)?;
+        reg.accepted.insert(self_id.clone(), AcceptedRecord { epoch: state.epoch.clone(), state_seq: state.state_seq, digest });
+        self.save_registry(&reg)?;
+        log::event("reset-own-state-back", &state.state_seq.to_string());
         Ok(())
     }
 

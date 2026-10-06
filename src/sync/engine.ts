@@ -18,6 +18,7 @@ import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
+import { evaluateReset, noticeToPublish, openResetEpoch, recordResetFailure, republishWithoutNotice, resetActive, resetLagging, type ResetDirective } from './reset';
 import type { CycleFacts } from './status';
 
 /**
@@ -37,6 +38,8 @@ export interface CycleOptions {
   /** Choix « Garder les données synchronisées » en cours : le marqueur ne bloque pas ce cycle, la reprise est forcée. */
   readonly ignoreMarker?: boolean;
   readonly forceResume?: boolean;
+  /** Y-11 : calculer à la fin du cycle la précondition de la réinitialisation (« Synchronisez d'abord »). */
+  readonly resetCheck?: boolean;
 }
 
 export interface CycleResult extends CycleFacts {
@@ -44,6 +47,8 @@ export interface CycleResult extends CycleFacts {
   readonly folderKind?: SyncFolderInfo['kind'] | null;
   readonly lastSyncAt: IsoDateTime | null;
   readonly worked: boolean;
+  /** Y-11 (`resetCheck`) : premier appareil pas encore lu jusqu'à sa tête (null : la réinitialisation peut commencer). */
+  readonly resetLag?: ReturnType<typeof resetLagging>;
 }
 
 const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, folderKind: null, lastSyncAt: null, worked: false };
@@ -175,6 +180,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   if (!platform.available()) return { ...EMPTY, outcome: 'not-configured' };
   let folderLabel: string | null = null;
   let folderKind: SyncFolderInfo['kind'] | null = null;
+  /** Y-11 : `kid` de la clé locale et de la nouvelle clé (`.next`), jamais une clé. */
+  let keyStatus!: { readonly kid: string | null; readonly nextKid?: string | null };
   try {
     // Y-10 (D2) : « Associer de nouveau » interrompu avant que le dossier soit délié : terminé avant tout autre appel.
     if (await rejoinPending(repos)) {
@@ -193,6 +200,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     folderLabel = folder.label;
     folderKind = folder.kind;
     const key = await platform.key.status();
+    keyStatus = key;
     if (!key.present) return { ...EMPTY, folderLabel, folderKind, outcome: 'needs-pairing' };
     if (!options.ignoreMarker && (await platform.restoreMarker.get())) return { ...EMPTY, folderLabel, folderKind, outcome: 'restore-choice' };
     await platform.bindDevice(self);
@@ -228,6 +236,21 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   // Y-10 : un appareil oublié ne compte pas pour « aucun appareil ne partage la clé ».
   const keyMismatch = keyMismatchFromDevices(scan.devices.filter((d) => !forgetView.order.has(d.deviceId)).map((d) => ({ self: d.deviceId === self, foreign: d.stateStatus === 'foreign' })));
 
+  // Y-11 (§14.3, §18 point 2) : réinitialisation vue par Rust (rôle, étape, perte, bascule) ; annonce authentique d'un autre appareil :
+  // publication suspendue (file gardée, rien n'est écrit), phase `reset-required` ; perdant : son état sous l'ancienne clé republié une fois.
+  let resetDirective: ResetDirective;
+  try {
+    resetDirective = await evaluateReset(deps, { scan, known, accepted, forget: forgetView, key: keyStatus });
+    if (resetDirective.kind === 'required') {
+      if (resetDirective.republish) await republishWithoutNotice(deps, ownState, forgetView.master);
+      logger.log('publish-suspended', { reason: 'reset-required' });
+      return { ...EMPTY, outcome: 'reset-required', folderLabel, folderKind, keyMismatch: false, devices: await deviceStatuses(repos, self, accepted, deps.sv), pendingFiles: [...pending] };
+    }
+  } catch (error) {
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+  }
+  const directive = resetDirective;
+
   // 2. Règle 1 : bornes de sa propre publication.
   const acksOnSelf = [...accepted.values()].map((s) => s.acks.get(self)).filter((a): a is DeviceAck => a !== undefined);
   const localEpoch = await readJson<EpochId>(repos, META.epoch);
@@ -252,7 +275,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     ...(pairedBy ? { pairedBy } : {}),
     // Y-10 (§18 point 3) : chaque appareil republie la liste maître entière rendue par le scan (Rust complète ce qu'il a appris depuis).
     forgotten: [...forgetView.master],
-    reset: null,
+    // Y-11 : annonce de l'appareil qui réinitialise, sous l'ancienne clé (maître : Rust, qui la refuse si elle diffère de la sienne).
+    reset: noticeToPublish(directive, epoch),
   });
 
   /** Y-10 : déclaration confirmée à publier (intention posée avant l'appel à Rust). */
@@ -342,11 +366,20 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     } else if (epoch !== null && ((folderE !== null && compareEpochs(folderE, epoch) > 0) || switchState)) {
       const target = switchState?.target ?? (folderE as EpochId);
       work();
-      const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges);
+      // Y-11 (§9.1 b) : réinitialisation rejointe (nouvelle clé sous `.next`) : fusion, et l'instantané d'ouverture doit couvrir chaque
+      // oublié retenu jusqu'à sa coupure (accusés de l'ancienne époque).
+      const merge = directive.kind === 'joined';
+      const oldEpoch = epoch;
+      const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
+        mode: merge ? 'merge' : 'replace',
+        knows: await knowsFrom(repos),
+        coverage: { master: forgetView.master, ackers: [...live.values(), ...(ownState ? [ownState] : [])].filter((s) => s.epoch === oldEpoch) },
+      });
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
-        // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
-        const waiting = switched === 'cloud-pending' || switched === 'clock-ahead';
+        // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse ; 'uncovered' :
+        // attente visible d'un instantané couvrant (Y-10 « aucun instantané à jour »).
+        const waiting = switched === 'cloud-pending' || switched === 'clock-ahead' || switched === 'uncovered';
         return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
       }
       epoch = target;
@@ -535,9 +568,31 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       logger.log('publish-deferred', { reason: 'own-state-unknown' });
     }
 
-    // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers).
-    const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || ownState?.epoch !== currentEpoch;
+    // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers). Y-11 : l'annonce de l'appareil qui réinitialise est
+    // toujours publiée (forcée) tant que l'époque visée n'est pas ouverte.
+    const announcing = noticeToPublish(directive, currentEpoch) !== null;
+    const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || ownState?.epoch !== currentEpoch || announcing;
     if (publishAllowed) await writeState(await nextState(head), forceState);
+    if (announcing && directive.kind === 'initiator') {
+      // §14.3 étapes 3 et 4 : annonce publiée sous l'ancienne clé, puis époque visée ouverte sous la nouvelle (instantané, état).
+      const announced = (lastWritten as PublishedDeviceState | null)?.reset ?? null;
+      if (announced === null) {
+        await recordResetFailure(deps, 'announced', publishAllowed ? 'state-mismatch' : 'cloud-pending');
+        return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
+      }
+      const covers = await ackMap();
+      covers.set(self, { ...head, stateSeq });
+      const listedNext = ownScan?.epochs.find((e) => e.epoch === directive.view.epoch)?.snapshots ?? [];
+      await openResetEpoch(deps, {
+        target: directive.view.epoch,
+        covers,
+        listedSnapshots: listedNext,
+        writeState: (state) => writeState(state, true),
+        buildState: (target, h, snapshot) => buildState(target, h, stateSeq + 1, snapshot, purgeHorizon, new Map<DeviceId, DeviceAck>()),
+      });
+      logger.log('reset-announced', { epoch: directive.view.epoch });
+      return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked: true, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
+    }
     // Trous restants après la lecture (aucun instantané éligible) : attente visible, aucun instantané écrit (§18 point 11).
     const gapsAfter = await gaps();
     await setSnapshotWait(deps, gapsAfter[0] ?? noEligible);
@@ -563,11 +618,13 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch(() => 0);
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
       }
-      await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId) });
+      // Y-11 : anciennes époques gardées pendant une réinitialisation (supprimées par la bascule, ou relues si elle perd).
+      await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
     }
 
-    // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte).
-    if (publishAllowed && forgetView.order.size > 0) {
+    // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une
+    // réinitialisation (Rust la refuse, condition (b)).
+    if (publishAllowed && forgetView.order.size > 0 && !resetActive(directive)) {
       const ownPublished = lastWritten ?? ownState;
       const ownSnapshot: SnapshotEndRead = ownPublished && ownPublished.epoch === currentEpoch ? snapshotInEpoch(await readSnapshotEnd(deps, ownPublished), currentEpoch) : 'none';
       await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished, ownSnapshot });
@@ -577,11 +634,24 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
     const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv), scan, self, await readWaitingDevices(repos));
-    if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch };
-    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
+    // Y-11 : précondition calculée sur ce qui vient d'être lu et publié (mêmes règles que Rust).
+    const resetLag = options.resetCheck ? resetLagging(deps, { scan, forget: forgetView, accepted, own: lastWritten ?? ownState }) : undefined;
+    const lag = resetLag === undefined ? {} : { resetLag };
+    if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch, ...lag };
+    return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked, ...lag };
   } catch (error) {
-    logger.log('cycle-error', { code: syncErrorCodeOf(error) });
-    return fail(syncErrorCodeOf(error), { folderLabel, folderKind, pendingFiles: [...pending] });
+    const code = syncErrorCodeOf(error);
+    logger.log('cycle-error', { code });
+    // Y-11 : un échec pendant une réinitialisation est gardé avec son étape (jamais seulement journalisé).
+    if (directive.kind === 'initiator' || directive.kind === 'joined') {
+      const step = directive.kind === 'joined' ? 'joined' : directive.view.stage === 'opened' ? 'waiting-devices' : 'snapshot';
+      try {
+        await recordResetFailure(deps, step, code);
+      } catch {
+        logger.log('reset-failure-unrecorded', { code });
+      }
+    }
+    return fail(code, { folderLabel, folderKind, pendingFiles: [...pending] });
   }
 }
 

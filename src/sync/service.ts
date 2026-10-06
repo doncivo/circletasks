@@ -6,8 +6,9 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import type { ForgetOutcome, RejoinOutcome, RemoteChanges, SyncEngineService, SyncForgetStatus, SyncPlatform, SyncReason, SyncStatus } from '../platform/sync/types';
+import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 import { declareForget, prepareRejoin, readForgetStatus } from './forget';
+import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure } from './reset';
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
@@ -70,7 +71,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    * cours ; le choix après restauration a sa propre place (le dernier choix demandé) et passe **avant** la synchro en attente. Un choix
    * n'est donc jamais absorbé par une synchro déjà programmée.
    */
-  type ActionKind = 'choice' | 'forget' | 'sync';
+  type ActionKind = 'choice' | 'forget' | 'reset' | 'sync';
   const waiting = new Map<ActionKind, { run: () => Promise<unknown>; done: () => void; promise: Promise<void> }>();
 
   const publish = (next: SyncStatus): void => {
@@ -125,6 +126,13 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     } catch {
       // base occupée : valeur précédente
     }
+    // Y-11 (exigence d'Ali) : réinitialisation en cours, en échec, à réassocier ou terminée, gardée dans sync_meta.
+    let reset: SyncResetStatus | null | undefined;
+    try {
+      reset = await readResetStatus(options.data.repos, options.clock.nowMs());
+    } catch {
+      // base occupée : valeur précédente
+    }
     publish(
       statusFromFacts(withoutCycleStart(status), result, {
         folderLabel: result.folderLabel ?? status.folderLabel,
@@ -133,8 +141,20 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         conflictsThisWeek: conflicts,
         ...(reintegrationFailure === undefined ? {} : { reintegrationFailure }),
         ...(forget === undefined ? {} : { forget }),
+        ...(reset === undefined ? {} : { reset }),
       }),
     );
+  };
+
+  /** Y-11 : état de la réinitialisation relu de sync_meta et publié sans cycle (échec du lancement, visible aussitôt). */
+  const refreshReset = async (): Promise<void> => {
+    try {
+      const reset = await readResetStatus(options.data.repos, options.clock.nowMs());
+      const { reset: _previous, ...rest } = status;
+      publish(reset ? { ...rest, reset } : rest);
+    } catch {
+      // base occupée : l'état sera relu à la fin du prochain cycle
+    }
   };
 
   /** Y-10 : état de l'oubli relu de sync_meta et publié sans cycle (échec d'une déclaration, visible aussitôt). */
@@ -148,6 +168,9 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     }
   };
 
+  /** Premier cycle de ce service (démarrage) : une étape de réinitialisation en cours y est « reprise » (dit par l'écran, critère 17). */
+  let firstCycle = true;
+
   const cycle = async (cycleOptions: CycleOptions = {}): Promise<CycleResult> => {
     const before = status;
     const cycleStartedAt = options.clock.nowMs();
@@ -156,6 +179,10 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     };
     const timer = setTimer(markSyncing, SYNCING_BANNER_DELAY_MS);
     try {
+      if (firstCycle) {
+        firstCycle = false;
+        await markResumed();
+      }
       const result = await runCycle(deps, { onRemoteChanges: emitChanges, onWork: markSyncing, onProgress: (done, total) => publish({ ...status, progress: { done, total } }) }, cycleOptions);
       await finish(result);
       return result;
@@ -169,9 +196,23 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     }
   };
 
+  /** Y-11 : une réinitialisation trouvée en cours au démarrage (arrêt pendant l'annonce, l'ouverture ou la bascule) est marquée reprise. */
+  const markResumed = async (): Promise<void> => {
+    try {
+      const stored = await readResetState(options.data.repos);
+      if (stored && (stored.step === 'announced' || stored.step === 'snapshot' || stored.step === 'switching') && !stored.resumed) {
+        await options.data.repos.sync.setMeta('resetState', JSON.stringify({ ...stored, resumed: true }));
+        deps.logger.log('reset-resumed', { step: stored.step });
+      }
+    } catch {
+      // base occupée : l'étape reste affichée telle quelle ; elle sera reprise par le cycle
+      deps.logger.log('reset-resume-unmarked', { code: 'io' });
+    }
+  };
+
   const pump = (): void => {
     if (current) return;
-    const kind: ActionKind | null = waiting.has('choice') ? 'choice' : waiting.has('forget') ? 'forget' : waiting.has('sync') ? 'sync' : null;
+    const kind: ActionKind | null = waiting.has('choice') ? 'choice' : waiting.has('forget') ? 'forget' : waiting.has('reset') ? 'reset' : waiting.has('sync') ? 'sync' : null;
     if (kind === null) return;
     const next = waiting.get(kind) as { run: () => Promise<unknown>; done: () => void };
     waiting.delete(kind);
@@ -279,6 +320,61 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       }).catch(() => undefined);
       return outcome;
     },
+    async resetSync(): Promise<ResetOutcome> {
+      let outcome: ResetOutcome = { kind: 'failed', code: 'io' };
+      await schedule('reset', async () => {
+        outcome = await runReset();
+        await refreshReset();
+      }).catch(() => undefined);
+      return outcome;
+    },
+    async dismissReset(): Promise<void> {
+      await schedule('reset', async () => {
+        await dismissResetState(deps);
+        await refreshReset();
+      }).catch(() => undefined);
+    },
   };
+
+  /**
+   * Y-11 : un cycle (lecture de chaque appareil jusqu'à sa tête, accusés publiés), précondition (« Synchronisez d'abord »), confirmation
+   * native et `K2` (Rust), puis les cycles qui publient l'annonce et ouvrent l'époque visée, et la bascule si aucun autre appareil n'est
+   * attendu (appareil seul : au premier cycle). Refus de la boîte : annulation, rien n'est gardé ; tout autre échec : gardé et rendu.
+   */
+  const runReset = async (): Promise<ResetOutcome> => {
+    const checked = await cycle({ resetCheck: true });
+    if (checked.outcome !== 'done') {
+      const code = checked.errorCode ?? 'state-mismatch';
+      await recordResetFailure(deps, 'start', code);
+      return { kind: 'failed', code };
+    }
+    if (checked.resetLag) {
+      await recordResetFailure(deps, 'start', 'state-mismatch');
+      deps.logger.log('reset-lagging', { device: checked.resetLag.device, reason: checked.resetLag.reason });
+      return { kind: 'lagging', device: checked.resetLag.device };
+    }
+    let kid: string;
+    try {
+      ({ kid } = await options.platform.reset.start());
+    } catch (error) {
+      const code = syncErrorCodeOf(error);
+      if (code === 'consent-denied') {
+        // Choix de l'utilisateur : rien n'est créé ni gardé (un échec de lancement précédent est retiré).
+        await dismissResetState(deps);
+        deps.logger.log('reset-cancelled', {});
+        return { kind: 'cancelled' };
+      }
+      await recordResetFailure(deps, 'start', code);
+      return code === 'state-mismatch' ? { kind: 'lagging', device: null } : { kind: 'failed', code };
+    }
+    const stored = await readResetState(options.data.repos);
+    if (!stored || stored.role !== 'initiator' || stored.kid !== kid || stored.step === 'start') await beginReset(deps, kid);
+    // Annonce et ouverture de l'époque visée, puis bascule au scan suivant si aucun autre appareil n'est attendu.
+    await cycle();
+    await cycle();
+    const after = await readResetState(options.data.repos);
+    return { kind: 'started', switched: after?.step === 'done' };
+  };
+
   return service;
 }

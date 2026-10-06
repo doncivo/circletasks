@@ -1,16 +1,18 @@
 import type { ExportedRow, Repositories } from '../db/repositories';
-import { PAGE_ROWS, parseEpochId, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
+import { PAGE_ROWS, parseEpochId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { mustCarry } from '../domain/sync/epoch';
 import { hlcDevice } from '../domain/sync/parse';
 import { SYNC_TABLES, settingKeyScope, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
-import { applyOps } from './apply';
+import { coversForgotten } from '../domain/sync/retention';
+import { applyOps, type ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
+import { setSnapshotWait } from './forget';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
 import { ROW_REPUBLISH_FIELD } from './publisher';
 import { purgeRows } from './purge';
-import { loadSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
+import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
 
 /**
  * Passage à une époque plus récente sans perte (ADR 0011, section 9.1 ; Y-02 critère 14, Y-09 critère 9), sur chaque appareil B qui
@@ -20,6 +22,9 @@ import { loadSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapsh
  *     `covers[B].hlc` (ce que l'ouvreur avait lu de B), ou un champ en attente dans la file ; chaque identifiant purgé par B au-delà de
  *     `covers[B]` ; le tout gardé dans `sync_parked` (motif `epoch-carry`, jamais abandonné) ;
  * (b) **remplacement** de la base par l'instantané qui ouvre l'époque (la version restaurée porte des hlc anciens et perdrait à la fusion) ;
+ *     Y-11 (§9.1 b, réinitialisation) : **fusion** de la section 5.5 (mode `merge`), l'instantané contient tout ce que l'ouvreur a lu jusqu'aux
+ *     têtes, rien n'est à imposer ; l'instantané d'ouverture doit alors couvrir chaque oublié retenu jusqu'à sa coupure (accusés de
+ *     l'ancienne époque), sinon le changement attend de façon visible (`forgetSnapshotWait`, dette « changement d'époque ») ;
  * (c) **réapplication** des opérations de (a) par la règle de hlc, remise dans la file avec leurs hlc d'origine ;
  * (d) la publication ordinaire du cycle (triée par hlc croissant) les republie avant toute nouvelle écriture.
  *
@@ -236,19 +241,44 @@ function addTouched(touched: Map<string, Set<string>>, table: string, id: string
   touched.set(table, new Set([...(touched.get(table) ?? []), id]));
 }
 
-/** Passe à l'époque `target` ; reprend à l'étape mémorisée. */
+/**
+ * Y-11 : changement d'époque d'une réinitialisation (`merge`) : fusion au lieu du remplacement (§9.1 b) ; `coverage` : liste maître des
+ * oublis et états de l'**ancienne** époque (leurs accusés fixent la coupure de chaque oublié retenu), pour vérifier l'instantané d'ouverture.
+ */
+export interface SwitchOptions {
+  readonly mode: 'replace' | 'merge';
+  readonly knows?: ApplyContext['knows'];
+  readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
+}
+
+/** Passe à l'époque `target` ; reprend à l'étape mémorisée. `uncovered` : instantané d'ouverture qui ne couvre pas un oublié retenu (Y-11). */
 export async function switchEpoch(
   deps: SyncDeps,
   target: EpochId,
   accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
   _ownState: PublishedDeviceState | null,
   onRemoteChanges: (touched: ReadonlyMap<string, ReadonlySet<string>>) => void,
-): Promise<'done' | 'cloud-pending' | 'error' | 'clock-ahead'> {
+  options: SwitchOptions = { mode: 'replace' },
+): Promise<'done' | 'cloud-pending' | 'error' | 'clock-ahead' | 'uncovered'> {
   const repos: Repositories = deps.data.repos;
   let progress = await readJson<SwitchProgress>(repos, META.epochSwitch);
   if (!progress || progress.target !== target) {
     const from = snapshotSource(target, accepted);
     if (!from) return 'cloud-pending';
+    // Y-11 (dette « changement d'époque », piste appliquée) : l'instantané d'ouverture d'une réinitialisation porte, dans `covers`, la position
+    // de l'ouvreur sur chaque oublié retenu (ancienne époque) ; il doit atteindre la coupure, sinon le changement attend, de façon visible.
+    if (options.mode === 'merge' && options.coverage && options.coverage.master.length > 0) {
+      const loaded = await loadSnapshot(deps, from.deviceId, target, from.seq);
+      if (loaded === 'cloud-pending') return 'cloud-pending';
+      if (!loaded) return 'error';
+      const uncovered = coversForgotten(loaded.end.covers, options.coverage.master, options.coverage.ackers);
+      if (uncovered !== null) {
+        await setSnapshotWait(deps, uncovered);
+        deps.logger.log('epoch-switch-uncovered', { target, device: uncovered });
+        return 'uncovered';
+      }
+      await setSnapshotWait(deps, null);
+    }
     progress = { target, step: 'a', from, maxSeq: await repos.sync.maxOutboxSeq() };
     await writeJson(repos, META.epochSwitch, progress);
   }
@@ -277,7 +307,12 @@ export async function switchEpoch(
     const loaded = await load();
     if (loaded === 'cloud-pending') return 'cloud-pending';
     if (!loaded) return 'error';
-    const result = await replaceFromSnapshot(deps, loaded, (tx) => carryNewer(deps, tx));
+    const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
+    // Y-11 : réinitialisation : fusion (la base locale et les écritures faites pendant le changement sont gardées par la règle de hlc).
+    const result =
+      options.mode === 'merge'
+        ? await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows: options.knows ?? (() => false), logger: deps.logger })
+        : await replaceFromSnapshot(deps, loaded, (tx) => carryNewer(deps, tx));
     if (result === 'clock-ahead') {
       // Instantané d'ouverture trop en avance (section 4.4) : rien n'a été remplacé ; l'ouvreur est signalé, le changement attend.
       await repos.sync.saveState(progress.from.deviceId, { status: 'clock-ahead' });

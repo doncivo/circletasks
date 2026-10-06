@@ -19,6 +19,7 @@ import {
   type PublishedDeviceState,
   type PublishedDeviceStateJson,
   type RecordCursor,
+  type ResetNotice,
   type SyncDevicePlatform,
   type SyncErrorCode,
 } from '../../domain/sync/format';
@@ -94,6 +95,28 @@ export interface FolderScan {
   readonly incomplete: boolean;
   /** Y-10 (ADR 0011 §11.2, §18 points 3 à 6) : registre de l'oubli de Rust après fusion des déclarations lues. */
   readonly forgotten: ForgottenRegistryView;
+  /** Y-11 (ADR 0011 §14.3, §18 point 2) : réinitialisation en cours sur cet appareil, vue par Rust ; null : aucune. Facultatif (anciens faux). */
+  readonly reset?: ResetView | null;
+}
+
+/**
+ * Y-11 : réinitialisation vue par Rust au scan (`sync/reset.json`), jamais de clé. `initiator` : cet appareil l'a lancée ; `joined` : il a
+ * importé la nouvelle clé d'un autre (sous `.next`). `notice` : annonce à publier sous l'ancienne clé (maître : Rust). `superseded` : perte
+ * constatée (époque et auteur gagnants ; null : réinitialisation interrompue). `switched` : bascule terminée par ce scan ; `resumed` :
+ * bascule interrompue reprise. `waiting` : appareils connus pas encore réassociés (appareil qui réinitialise).
+ */
+export interface ResetView {
+  readonly role: 'initiator' | 'joined';
+  readonly kid: string;
+  readonly epoch: EpochId;
+  readonly by: DeviceId;
+  readonly notice: ResetNotice | null;
+  readonly stage: 'created' | 'announced' | 'opened';
+  readonly superseded: { readonly epoch: EpochId | null; readonly by: DeviceId | null } | null;
+  readonly switching: boolean;
+  readonly switched: boolean;
+  readonly resumed: boolean;
+  readonly waiting: readonly DeviceId[];
 }
 
 /** Y-10 : liste maître (ordre d'apprentissage, ne décroît jamais, 64 au plus, publiée telle quelle), terminés, débordement. */
@@ -212,7 +235,7 @@ export interface SyncCommandMap {
   sync_folder_choose: { readonly args: undefined; readonly result: SyncFolderInfoJson | null };
   sync_folder_forget: { readonly args: { readonly eraseKey: boolean }; readonly result: null };
   sync_bind_device: { readonly args: { readonly deviceId: DeviceId }; readonly result: null };
-  sync_key_status: { readonly args: undefined; readonly result: { readonly present: boolean; readonly kid: string | null } };
+  sync_key_status: { readonly args: undefined; readonly result: KeyStatus };
   sync_key_create: { readonly args: undefined; readonly result: { readonly kid: string } };
   sync_pairing_open: { readonly args: { readonly mode: PairingMode }; readonly result: null };
   sync_pairing_payload: { readonly args: { readonly renew?: true }; readonly result: PairingPayload };
@@ -285,7 +308,8 @@ export interface SyncPlatform {
     forget(o: { readonly eraseKey: boolean }): Promise<void>;
   };
   readonly key: {
-    status(): Promise<{ readonly present: boolean; readonly kid: string | null }>;
+    /** Y-11 : `nextKid`, `kid` de l'entrée `.next` (nouvelle clé d'une réinitialisation), fait foi pour le moteur ; absent des anciens faux. */
+    status(): Promise<KeyStatus>;
     create(): Promise<{ readonly kid: string }>;
     /** Fenêtre main : confirmation native puis fenêtre dédiée `pairing` (section 2.1). */
     openPairing(mode: PairingMode): Promise<void>;
@@ -327,11 +351,18 @@ export interface SyncPlatform {
     /** Fenêtre main, appelée par le cycle, sans boîte : conditions recalculées par Rust. */
     deleteFiles(deviceId: DeviceId): Promise<ForgottenDeleteResult>;
   };
-  /** Lot Y4, Y-11 (ADR 0011 section 14.3). Étape 0 : rejette `not-configured`. */
+  /** Lot Y4, Y-11 (ADR 0011 section 14.3). */
   readonly reset: {
     /** Fenêtre main : confirmation native, création ou reprise de K2. Ne renvoie que le kid. */
     start(): Promise<{ readonly kid: string }>;
   };
+}
+
+/** `sync_key_status` : présence et `kid` de la clé, `kid` de la nouvelle clé d'une réinitialisation (Y-11), jamais la clé. */
+export interface KeyStatus {
+  readonly present: boolean;
+  readonly kid: string | null;
+  readonly nextKid?: string | null;
 }
 
 /** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */
@@ -404,7 +435,47 @@ export interface SyncStatus {
    * bandeau « Synchro en cours » compte son seuil depuis elle. Facultatif.
    */
   readonly cycleStartedAt?: number | null;
+  /**
+   * Y-11 (exigence d'Ali : aucun échec silencieux) : réinitialisation en cours, en échec, à réassocier, ou terminée
+   * (`sync_meta.resetState`), lue à la fin de chaque cycle ; absent ou null : rien. Facultatif.
+   */
+  readonly reset?: SyncResetStatus | null;
 }
+
+/** Y-11 : étape de la réinitialisation (`sync_meta.resetState`, critère 17). */
+export type ResetStep = 'start' | 'announced' | 'snapshot' | 'waiting-devices' | 'switching' | 'superseded' | 'required' | 'joined' | 'done';
+
+/** Y-11 : échec persistant (code, heure, étape ; jamais de contenu ni de clé), effacé à la réussite de l'étape ou à la fin de la bascule. */
+export interface ResetFailure {
+  readonly code: SyncErrorCode;
+  readonly at: IsoDateTime;
+  readonly step: ResetStep;
+}
+
+/**
+ * Y-11 : état affiché de la réinitialisation. `initiator` : cet appareil réinitialise (`waiting` : appareils pas encore réassociés ;
+ * `reminder` : 30 jours dépassés, rappel sans action) ; `joined` : réassocié, bascule en attente ; `required` : cet appareil doit être
+ * associé de nouveau (`by` : appareil de l'annonce gagnante ; `superseded` : sa propre réinitialisation a perdu). `done` : bascule
+ * terminée (`resumed` : reprise après un arrêt), jusqu'à ce que l'écran soit fermé.
+ */
+export interface SyncResetStatus {
+  readonly role: 'initiator' | 'joined' | 'required';
+  readonly step: ResetStep;
+  readonly by: DeviceId | null;
+  readonly superseded: boolean;
+  readonly waiting: readonly DeviceId[];
+  readonly reminder: boolean;
+  readonly startedAt: IsoDateTime;
+  readonly resumed: boolean;
+  readonly failure: ResetFailure | null;
+}
+
+/** Y-11 : issue de « Réinitialiser la synchronisation ». */
+export type ResetOutcome =
+  | { readonly kind: 'started'; readonly switched: boolean }
+  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'lagging'; readonly device: DeviceId | null }
+  | { readonly kind: 'failed'; readonly code: SyncErrorCode };
 
 /** Y-10 : étape d'un oubli qui a échoué. `declare` : `sync_device_forget` ; `delete` : `sync_forgotten_delete` ; `rejoin` : « Associer de nouveau ». */
 /** `revived` : jamais gardé comme échec ; forme du bandeau « oubli en échec » d'un oubli annulé (§18 point 12). */
@@ -480,6 +551,14 @@ export interface SyncEngineService extends SyncService {
    * identité, le dossier est délié (clé gardée) ; l'app doit ensuite être relancée (puis le dossier choisi de nouveau). Ne rejette jamais.
    */
   rejoin(): Promise<RejoinOutcome>;
+  /**
+   * Y-11 : « Réinitialiser la synchronisation » : un cycle, précondition (« Synchronisez d'abord »), confirmation native de Rust et `K2`,
+   * puis les cycles qui annoncent, ouvrent l'époque `n+1` et basculent si aucun autre appareil n'est attendu. Ne rejette jamais : un
+   * échec est rendu et gardé dans `sync_meta.resetState` (visible dans `status().reset`).
+   */
+  resetSync(): Promise<ResetOutcome>;
+  /** Y-11 : efface l'état « réinitialisation terminée » (ou un échec de lancement abandonné) affiché dans Réglages. */
+  dismissReset(): Promise<void>;
 }
 
 /** Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9). */

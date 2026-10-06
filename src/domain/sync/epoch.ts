@@ -12,7 +12,8 @@
  */
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import { compareEpochs, epochId, parseEpochId, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from './format';
+import { compareEpochs, epochId, isEpochId, isKid, isStrictHlc, isSyncDeviceId, parseEpochId, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor, type ResetNotice } from './format';
+import { compareAckPositions } from './retention';
 import { hlcMs } from './parse';
 
 export const compareCursors = (a: RecordCursor, b: RecordCursor): number => (a.segment !== b.segment ? a.segment - b.segment : a.record - b.record);
@@ -119,4 +120,96 @@ export function openingCover(restored: DeviceAck | null, published: DeviceAck | 
 export function mustCarry(fieldHlc: Hlc, self: DeviceId, cover: DeviceAck | null): boolean {
   if (fieldHlc.slice(21) !== self) return false;
   return cover === null || cover.hlc === null || fieldHlc > cover.hlc;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Réinitialisation avec une nouvelle clé (Y-11 ; ADR 0011 sections 14.3 et 18 point 2). Mêmes règles que `reset.rs`, même table de
+// cas (`tests/fixtures/sync/reset-order.json`).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** Annonce lue dans un état authentifié : auteur (appareil dont l'état la porte), époque de cet état, annonce. */
+export interface ResetCandidate {
+  readonly by: DeviceId;
+  readonly stateEpoch: EpochId;
+  readonly notice: ResetNotice;
+}
+
+/** Validité d'une annonce : époque `e<m>-<auteur>` strictement supérieure à celle de l'état qui la porte ; `kid`, hlc, auteur stricts. */
+export function validReset(c: ResetCandidate): boolean {
+  if (!isSyncDeviceId(c.by) || !isEpochId(c.notice.epoch) || !isEpochId(c.stateEpoch)) return false;
+  if (parseEpochId(c.notice.epoch)?.opener !== c.by) return false;
+  return compareEpochs(c.notice.epoch, c.stateEpoch) > 0 && isKid(c.notice.kid) && isStrictHlc(c.notice.at);
+}
+
+/**
+ * Gagnant de réinitialisations simultanées : annonce valide d'un auteur non oublié dont l'époque est la plus grande (numéro, puis
+ * UUID), sans autre critère (ni `kid` ni `at`) ; à époque égale, la première rencontrée (impossible après l'anti-rejeu).
+ */
+export function resetWinner(candidates: readonly ResetCandidate[], forgotten: ReadonlySet<DeviceId>): ResetCandidate | null {
+  let best: ResetCandidate | null = null;
+  for (const c of candidates) {
+    if (!validReset(c) || forgotten.has(c.by)) continue;
+    if (best === null || compareEpochs(c.notice.epoch, best.notice.epoch) > 0) best = c;
+  }
+  return best;
+}
+
+/** Appareil actif vu par la précondition (statut de son état, tête publiée, expiré à 180 jours, fantôme jamais vu). */
+export interface ResetPreconditionDevice {
+  readonly deviceId: DeviceId;
+  readonly status: string;
+  readonly head: DeviceAck | null;
+  readonly expired: boolean;
+  readonly phantom: boolean;
+}
+
+export type ResetLagReason = 'state' | 'head' | 'cutoff';
+
+/**
+ * Précondition (§14.3 étape 1) : chaque appareil actif (ni expiré, ni fantôme) a un état authentifié et ses accusés (`ownAcks`) atteignent
+ * sa tête ; chaque oublié retenu est lu jusqu'à sa coupure (l'instantané d'ouverture le couvre, dette « changement d'époque »). Premier
+ * appareil en retard (identifiants triés, actifs d'abord) ; null : la réinitialisation peut commencer.
+ */
+export function resetPrecondition(
+  actives: readonly ResetPreconditionDevice[],
+  forgotten: readonly { readonly deviceId: DeviceId; readonly cutoff: DeviceAck | null }[],
+  ownAcks: ReadonlyMap<DeviceId, DeviceAck>,
+): { readonly device: DeviceId; readonly reason: ResetLagReason } | null {
+  for (const d of [...actives].sort((a, b) => (a.deviceId < b.deviceId ? -1 : a.deviceId > b.deviceId ? 1 : 0))) {
+    if (d.expired || d.phantom) continue;
+    if (d.status !== 'ok') return { device: d.deviceId, reason: 'state' };
+    if (!d.head || (d.head.segment === 0 && d.head.record === 0)) continue;
+    const ack = ownAcks.get(d.deviceId);
+    if (!ack || ack.epoch !== d.head.epoch || compareAckPositions(ack, d.head) < 0) return { device: d.deviceId, reason: 'head' };
+  }
+  for (const f of [...forgotten].sort((a, b) => (a.deviceId < b.deviceId ? -1 : a.deviceId > b.deviceId ? 1 : 0))) {
+    if (!f.cutoff) continue;
+    const ack = ownAcks.get(f.deviceId);
+    if (!ack || compareAckPositions(ack, f.cutoff) < 0) return { device: f.deviceId, reason: 'cutoff' };
+  }
+  return null;
+}
+
+/** Appareil connu pendant la transition : statut et époque de l'état présenté, vu (anti-rejeu, accusé d'un actif), auteur d'un oubli. */
+export interface ResetKnownDevice {
+  readonly deviceId: DeviceId;
+  readonly status: string;
+  readonly epoch: EpochId | null;
+  readonly seen: boolean;
+  readonly author: boolean;
+}
+
+/**
+ * Appareils pas encore réassociés (§14.3 étape 5) : connus, ni soi, ni oubliés, ni fantômes (jamais vus et illisibles), dont l'état
+ * n'est pas un état authentifié de l'époque visée (seule la nouvelle clé l'écrit). Triés ; vide : la bascule peut se faire.
+ */
+export function resetWaiting(known: readonly ResetKnownDevice[], self: DeviceId, epoch: EpochId, forgotten: ReadonlySet<DeviceId>): DeviceId[] {
+  const out = new Set<DeviceId>();
+  for (const d of known) {
+    if (d.deviceId === self || forgotten.has(d.deviceId)) continue;
+    if (d.status !== 'ok' && !d.seen && !d.author) continue;
+    if (d.status === 'ok' && d.epoch === epoch) continue;
+    out.add(d.deviceId);
+  }
+  return [...out].sort();
 }

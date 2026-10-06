@@ -136,10 +136,10 @@ describe('clé (Y-08)', () => {
     const p = createMemorySyncPlatform({ folder: new MemorySyncFolder(), nowMs: clock });
     expect(await codeOf(p.key.create())).toBe('not-configured');
     await p.folder.choose();
-    expect(await p.key.status()).toEqual({ present: false, kid: null });
+    expect(await p.key.status()).toEqual({ present: false, kid: null, nextKid: null });
     const { kid } = await p.key.create();
     expect(kid).toMatch(/^[0-9a-f]{16}$/);
-    expect(await p.key.status()).toEqual({ present: true, kid });
+    expect(await p.key.status()).toEqual({ present: true, kid, nextKid: null });
     expect(await codeOf(p.key.create())).toBe('key-exists');
     p.testing.setVaultAvailable(false);
     expect(await codeOf(p.key.status())).toBe('vault-unavailable');

@@ -790,6 +790,9 @@ fn concurrent_resets_the_greater_epoch_wins_and_the_loser_steps_back_without_any
         let own = net.own_json(DEV_A);
         assert_eq!(own["epoch"], epoch(1, DEV_A), "(4) own.json ramené à l'époque n");
         assert!(own["stateSeq"].as_u64() >= base_seq.as_u64(), "stateSeq garde son maximum");
+        // Son état sous K redevient son état publié (jamais vu comme un rejeu), même après un redémarrage.
+        net.dev_mut(DEV_A).d.restart();
+        assert_eq!(net.read_all(DEV_A).unwrap().states[DEV_A].0, "ok", "anti-rejeu de soi revenu à son état sous K");
         // Le perdant republie une fois son état sous K, sans annonce ; ni nouvelle réinitialisation ni clé donnée.
         let dev = net.dev_mut(DEV_A);
         dev.epoch = epoch(1, DEV_A);

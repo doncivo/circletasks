@@ -1,6 +1,6 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncStatus } from '../platform/sync/types';
+import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 
 export { INITIAL_STATUS };
 
@@ -11,7 +11,7 @@ export { INITIAL_STATUS };
 
 /** Ce qu'un cycle a constaté. */
 export interface CycleFacts {
-  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten' | 'restart-required';
+  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten' | 'restart-required' | 'reset-required';
   readonly errorCode: SyncErrorCode | null;
   readonly pendingFiles: readonly string[];
   readonly devices: readonly SyncDeviceStatus[];
@@ -35,6 +35,9 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
     case 'restart-required':
       // Y-10 : `restart-required` : nouvelle identité posée par « Associer de nouveau », l'app doit être relancée (même écran).
       return 'forgotten';
+    case 'reset-required':
+      // Y-11 : annonce authentique d'une réinitialisation lancée ailleurs, ou perte de la sienne : à associer de nouveau.
+      return 'reset-required';
     case 'failed':
       if (facts.errorCode === 'key-mismatch') return 'key-mismatch';
       return facts.errorCode !== null && WAITING_CODES.has(facts.errorCode) ? 'waiting-icloud' : 'error';
@@ -60,18 +63,22 @@ export function statusFromFacts(
     readonly reintegrationFailure?: ReintegrationFailure | null;
     /** Y-10 (exigence d'Ali) : échec d'oubli et suppressions en attente lus dans `sync_meta` ; undefined : lecture impossible, valeur gardée. */
     readonly forget?: SyncForgetStatus | null;
+    /** Y-11 (exigence d'Ali) : réinitialisation lue dans `sync_meta.resetState` ; undefined : lecture impossible, valeur gardée. */
+    readonly reset?: SyncResetStatus | null;
   },
 ): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, ...rest } = previous;
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, ...rest } = previous;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
   const forget = extra.forget === undefined ? (keptForget ?? null) : extra.forget;
+  const reset = extra.reset === undefined ? (keptReset ?? null) : extra.reset;
   return {
     ...rest,
     ...(failure ? { reintegrationFailure: failure } : {}),
     ...(forget ? { forget } : {}),
+    ...(reset ? { reset } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

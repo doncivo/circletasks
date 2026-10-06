@@ -30,18 +30,22 @@ export const SYNC_PHASES = [
   'error',
   // Y-10 : cet appareil a été oublié par un autre (« Associer de nouveau »).
   'forgotten',
+  // Y-11 : une réinitialisation authentique a été annoncée ailleurs (ou la sienne a perdu) : cet appareil doit être associé de nouveau.
+  'reset-required',
 ] as const;
 
 export type SyncPhase = (typeof SYNC_PHASES)[number];
 
 /** Phase qui produit un bandeau `syncTrouble` (texte : `statusLine`, D5). */
-export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead' | 'forgotten';
+export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead' | 'forgotten' | 'reset-required';
 /** Appareil nommé comme dans APPAREILS, avec son statut. */
 export type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-rollback';
 /** `state-unreadable` : l'état local de la synchro (`sync_meta`, `sync_state`) n'a pas pu être lu (revue A-09, point 1). */
 /** Y-10 : échec d'un oubli (`forgetFailure`) ; suppression des fichiers d'un appareil oublié en attente. */
 export type ForgetTroubleCode = 'forget-failed' | 'forget-pending';
-export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode;
+/** Y-11 : réinitialisation en cours ou en échec (tant que la transition n'est pas terminée) ; rappel des 30 jours (appareils non réassociés). */
+export type ResetTroubleCode = 'reset-progress' | 'reset-reminder';
+export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode | ResetTroubleCode;
 
 /**
  * Ordre d'urgence (D4) : le premier état actif de cette liste est montré, les autres comptent dans « (+N) ».
@@ -50,8 +54,9 @@ export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-fail
  * rappel des 30 jours à la fin.
  */
 export const SYNC_TROUBLE_ORDER = [
-  // Appareil à associer (Y-11 `reset-required` ici) : Y-10, cet appareil a été oublié.
+  // Appareil à associer : Y-10, cet appareil a été oublié ; Y-11, une réinitialisation l'exige.
   'forgotten',
+  'reset-required',
   'needs-pairing',
   // Clé différente.
   'key-mismatch',
@@ -63,15 +68,19 @@ export const SYNC_TROUBLE_ORDER = [
   'state-unreadable',
   // Horloge en avance.
   'clock-ahead',
-  // Arrivée d'un nouvel appareil en échec (Y-06). (Y-11 : réinitialisation en cours ou en échec ici.)
+  // Arrivée d'un nouvel appareil en échec (Y-06).
   'join-failed',
+  // Y-11 : réinitialisation en cours ou en échec.
+  'reset-progress',
   // Appareils à réassocier ou illisibles. (Y-10 oubli en attente ou en échec, Y-11 rappel des 30 jours ici.)
   'device-foreign',
   'device-corrupt',
   'device-rollback',
-  // Y-10 : oubli en échec, puis suppression des fichiers d'un appareil oublié en attente (Y-11 : rappel des 30 jours après).
+  // Y-10 : oubli en échec, puis suppression des fichiers d'un appareil oublié en attente.
   'forget-failed',
   'forget-pending',
+  // Y-11 : rappel des appareils pas encore réassociés après 30 jours (aucune action automatique).
+  'reset-reminder',
 ] as const satisfies readonly SyncTroubleCode[];
 
 /** Décision de bandeau d'une phase. `none` porte sa raison (critère 9 b : aucune phase sans décision explicite). */
@@ -103,7 +112,9 @@ export function phaseBanner(phase: SyncPhase): PhaseBanner {
     case 'error':
     case 'clock-ahead':
     case 'forgotten':
-      // Y-10 `forgotten` : appareil local oublié, il ne lit ni ne publie plus tant qu'il n'est pas associé de nouveau.
+    case 'reset-required':
+      // Y-10 `forgotten` : appareil local oublié, il ne lit ni ne publie plus tant qu'il n'est pas associé de nouveau. Y-11
+      // `reset-required` : publication suspendue (file gardée) jusqu'à la réassociation avec la nouvelle clé.
       return { kind: 'trouble', code: phase };
     default:
       return unknownPhase(phase);
@@ -164,6 +175,19 @@ export interface ForgetFacts {
   readonly revived?: readonly DeviceId[] | undefined;
 }
 
+/**
+ * Y-11 : réinitialisation (forme de `SyncStatus.reset`, gardée dans `sync_meta.resetState`) : rôle, étape, échec ; rappel des 30 jours.
+ */
+export interface ResetFacts {
+  readonly role: 'initiator' | 'joined' | 'required';
+  readonly step: string;
+  readonly by: DeviceId | null;
+  readonly superseded: boolean;
+  readonly waiting: readonly DeviceId[];
+  readonly reminder: boolean;
+  readonly failure: { readonly code: string; readonly step: string } | null;
+}
+
 /** Ce que la synchro expose (forme de `SyncStatus`). */
 export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice> {
   readonly phase: SyncPhase;
@@ -172,6 +196,8 @@ export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice>
   readonly devices: readonly D[];
   /** Y-10, facultatif. */
   readonly forget?: ForgetFacts | null | undefined;
+  /** Y-11, facultatif. */
+  readonly reset?: ResetFacts | null | undefined;
 }
 
 /** Arrivée d'un nouvel appareil arrêtée par un échec (`sync_meta.join`, Y-06) : gardée par le moteur jusqu'à la réussite. */
@@ -202,6 +228,8 @@ export interface PersistedSyncFacts<D extends SyncBannerDevice = SyncBannerDevic
   readonly readFailed: boolean;
   /** Y-10 : échec d'oubli et suppressions en attente gardés (`sync_meta`), tant qu'aucun cycle n'a conclu depuis le démarrage. */
   readonly forget?: ForgetFacts | null;
+  /** Y-11 : réinitialisation gardée (`sync_meta.resetState`), tant qu'aucun cycle n'a conclu depuis le démarrage. */
+  readonly reset?: ResetFacts | null;
 }
 
 export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
@@ -209,7 +237,8 @@ export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
   | { readonly code: 'join-failed'; readonly join: JoinFailureFact }
   | { readonly code: DeviceTroubleCode; readonly device: D }
   | { readonly code: 'forget-failed'; readonly failure: NonNullable<ForgetFacts['failure']> }
-  | { readonly code: 'forget-pending'; readonly deletion: ForgetFacts['deletions'][number] };
+  | { readonly code: 'forget-pending'; readonly deletion: ForgetFacts['deletions'][number] }
+  | { readonly code: 'reset-progress' | 'reset-reminder'; readonly reset: ResetFacts };
 
 export interface SyncBanners<D extends SyncBannerDevice, S extends SyncBannerStatus<D>> {
   /** Du plus urgent au moins urgent (D4) ; vide : aucun `syncTrouble`. */
@@ -243,6 +272,12 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
     textStatus = { ...shown, phase: persisted.blocking.phase, errorCode: persisted.blocking.errorCode, clockAheadDevice: persisted.blocking.clockAheadDevice, devices };
   }
 
+  // Y-11 : avant le premier cycle, un appareil à réassocier (annonce authentique ou perte) est montré d'après l'état gardé.
+  const reset = persisted.reset ?? shown.reset ?? null;
+  if (decision.kind !== 'trouble' && reset && (reset.role === 'required' || reset.step === 'superseded')) {
+    decision = { kind: 'trouble', code: 'reset-required' };
+    textStatus = { ...shown, phase: 'reset-required', reset, devices };
+  }
   const troubles: SyncTrouble<D>[] = [];
   let keyMismatch = decision.kind === 'trouble' && decision.code === 'key-mismatch';
   if (decision.kind === 'trouble') troubles.push({ code: decision.code });
@@ -266,6 +301,9 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   for (const id of forget?.revived ?? []) troubles.push({ code: 'forget-failed', failure: { deviceId: id, code: 'state-mismatch', step: 'revived' } });
   const pending = forget?.deletions.find((d) => d.state !== 'done');
   if (pending) troubles.push({ code: 'forget-pending', deletion: pending });
+  // Y-11 (critère 17) : réinitialisation en cours ou en échec, tant que la transition n'est pas terminée ; rappel des 30 jours.
+  if (reset && reset.role !== 'required' && reset.step !== 'superseded' && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
+  if (reset?.reminder) troubles.push({ code: 'reset-reminder', reset });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 
   return {

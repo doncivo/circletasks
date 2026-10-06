@@ -9,4 +9,5 @@ export { storedDeviceStatuses } from './deviceStatus';
 export { currentPurgeHorizon, purgeDeleted as purgeDeletedRows } from './maintenance';
 export type { RestoreContext } from './restoreChoice';
 export { readForgetStatus } from './forget';
+export { readResetStatus } from './reset';
 export { defaultSyncLogger, silentSyncLogger, createMemorySyncLogger, type SyncLogger } from './log';

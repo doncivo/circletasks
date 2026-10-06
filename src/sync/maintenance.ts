@@ -136,6 +136,8 @@ export interface MaintenanceInput {
   readonly coverage?: ForgetCoverage;
   /** Y-10 (§18 point 12) : terminés dont l'oubli est annulé (horizon `blocked`). */
   readonly revived?: readonly DeviceId[];
+  /** Y-11 : réinitialisation en cours : anciennes époques gardées (supprimées par la bascule, ou relues si elle perd). */
+  readonly keepOldEpochs?: boolean;
 }
 
 /** Son dernier instantané couvre-t-il chaque oublié retenu (§18 point 11, éligibilité) ? Sans oublié retenu : toujours. */
@@ -177,7 +179,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   // Anciennes époques : supprimées quand tous les appareils actifs annoncent l'époque courante.
   const older = (input.ownScan?.epochs ?? []).filter((e) => compareEpochs(e.epoch, input.epoch) < 0);
   const allMoved = readers.every((r) => input.accepted.get(r.deviceId)?.epoch === input.epoch);
-  if (older.length > 0 && allMoved) {
+  if (older.length > 0 && allMoved && input.keepOldEpochs !== true) {
     await platform.deleteOwn(older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const }))).catch(() => 0);
     logger.log('old-epochs-deleted', { count: older.length });
   }

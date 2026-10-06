@@ -136,9 +136,22 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return errorText(status.errorCode);
     case 'forgotten':
       return t('sync.forget.banner');
+    case 'reset-required':
+      return resetRequiredLine(status.reset, status.devices);
     case 'idle':
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
+}
+
+/**
+ * Y-11 : appareil à associer de nouveau (annonce authentique d'un autre appareil) ou perdant d'une réinitialisation simultanée (§18
+ * point 2), l'appareil gagnant nommé comme dans APPAREILS.
+ */
+export function resetRequiredLine(reset: Pick<NonNullable<SyncStatus['reset']>, 'by' | 'superseded'> | null | undefined, devices: readonly SyncDeviceStatus[]): string {
+  if (!reset?.superseded) return t('sync.reset.required');
+  if (!reset.by) return t('sync.reset.supersededUnknown');
+  const device = devices.find((d) => d.deviceId === reset.by);
+  return t('sync.reset.superseded', { device: device ? deviceName(device, devices) : t('sync.forget.unseenName', { short: String(reset.by).slice(0, 8) }) });
 }
 
 /** Libellé du statut d'un appareil (APPAREILS). */
@@ -165,7 +178,15 @@ export function deviceStatusText(status: SyncDeviceStatus['status']): string {
 
 /** Le texte de la phase est-il une erreur (couleur d'alerte, `role="alert"` évité : jamais de boîte bloquante) ? */
 export function isTroublePhase(status: SyncStatus): boolean {
-  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || status.phase === 'forgotten' || failureShown(status);
+  return (
+    status.phase === 'error' ||
+    status.phase === 'key-mismatch' ||
+    status.phase === 'clock-ahead' ||
+    status.phase === 'update-required' ||
+    status.phase === 'forgotten' ||
+    status.phase === 'reset-required' ||
+    failureShown(status)
+  );
 }
 
 /**

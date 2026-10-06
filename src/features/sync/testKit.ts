@@ -1,5 +1,5 @@
 import type { DeviceId } from '../../domain/types';
-import { INITIAL_STATUS, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
+import { INITIAL_STATUS, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 
 /** Faux service de synchro pour les tests d'écran : état posé à la main, appels enregistrés, cycle libéré à la demande. */
 export interface FakeSyncService extends SyncEngineService {
@@ -19,6 +19,10 @@ export interface FakeSyncService extends SyncEngineService {
   /** Y-10 : appels de « Associer de nouveau » et issue rendue. */
   rejoins: number;
   rejoinOutcome: RejoinOutcome;
+  /** Y-11 : appels de « Réinitialiser la synchronisation » et issue rendue ; fermetures du message « terminée ». */
+  resets: number;
+  resetOutcome: ResetOutcome;
+  dismissals: number;
 }
 
 export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSyncService {
@@ -74,6 +78,16 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
     async rejoin() {
       fake.rejoins += 1;
       return fake.rejoinOutcome;
+    },
+    resets: 0,
+    resetOutcome: { kind: 'started', switched: false },
+    async resetSync() {
+      fake.resets += 1;
+      return fake.resetOutcome;
+    },
+    dismissals: 0,
+    async dismissReset() {
+      fake.dismissals += 1;
     },
   };
   return fake;
