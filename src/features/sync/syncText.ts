@@ -133,7 +133,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'error':
       return errorText(status.errorCode);
     case 'forgotten':
-      return t('sync.forget.selfForgotten');
+      return t('sync.forget.banner');
     case 'idle':
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
@@ -163,7 +163,7 @@ export function deviceStatusText(status: SyncDeviceStatus['status']): string {
 
 /** Le texte de la phase est-il une erreur (couleur d'alerte, `role="alert"` évité : jamais de boîte bloquante) ? */
 export function isTroublePhase(status: SyncStatus): boolean {
-  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || failureShown(status);
+  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || status.phase === 'forgotten' || failureShown(status);
 }
 
 /**

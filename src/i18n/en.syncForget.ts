@@ -45,4 +45,8 @@ export const syncForgetEn: Shape<typeof syncForgetFr> = {
     'The folder is unlinked (the key is kept), this device gets a new identifier, then the app restarts; then choose the CircleTasks folder again. Nothing is erased: your data is merged then published.',
   rejoinRunning: 'Pairing…',
   banner: 'This device was forgotten: pair it again',
+  bannerPending: '{device} forgotten: deletion of its files waiting for {waiting}',
+  bannerPendingUnknown: '{device} forgotten: deletion of its files pending',
+  bannerRunning: '{device} forgotten: deleting its files',
+  bannerStrays: '{device} forgotten: unrecognized files remain in iCloud',
 };

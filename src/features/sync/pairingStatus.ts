@@ -1,4 +1,5 @@
 import { PAIRING_RESCAN_MS, PAIRING_VALIDITY_MS } from '../../domain/sync/limits';
+import type { JoinFailureFact } from '../../domain/syncBanners';
 import { syncErrorCodeOf, type SyncErrorCode, type SyncPlatform } from '../../platform/sync/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
@@ -67,22 +68,27 @@ export function pairingStorageFailed(container: AppContainer): boolean {
   return hubOf(container).storageFailed;
 }
 
-async function readMeta(container: AppContainer, key: string): Promise<unknown> {
+/** Lecture de `sync_meta` : valeur analysée et `readable` faux si la base n'a pas répondu (signalé par `storageResult`). */
+async function readMetaResult(container: AppContainer, key: string): Promise<{ readonly value: unknown; readonly readable: boolean }> {
   let raw: string | null;
   try {
     raw = await container.data.repos.sync.getMeta(key);
   } catch {
     storageResult(container, true);
-    return null;
+    return { value: null, readable: false };
   }
   storageResult(container, false);
-  if (raw === null) return null;
+  if (raw === null) return { value: null, readable: true };
   try {
-    return JSON.parse(raw) as unknown;
+    return { value: JSON.parse(raw) as unknown, readable: true };
   } catch {
     // Valeur illisible (écrite par une version plus ancienne ?) : traitée comme absente, jamais comme une panne de la base.
-    return null;
+    return { value: null, readable: true };
   }
+}
+
+async function readMeta(container: AppContainer, key: string): Promise<unknown> {
+  return (await readMetaResult(container, key)).value;
 }
 
 async function writeMeta(container: AppContainer, key: string, value: unknown): Promise<void> {
@@ -102,12 +108,25 @@ export async function readPairingFailure(container: AppContainer): Promise<Pairi
   return { mode, code: syncErrorCodeOf({ code }) };
 }
 
-export async function readJoinView(container: AppContainer): Promise<JoinView | null> {
-  const value = await readMeta(container, JOIN_STATE_META);
+function parseJoinView(value: unknown): JoinView | null {
   if (typeof value !== 'object' || value === null) return null;
   const { done, total, failure } = value as Record<string, unknown>;
   if (typeof done !== 'number' || typeof total !== 'number') return null;
   return { done, total, failure: typeof failure === 'string' ? failure : null };
+}
+
+export async function readJoinView(container: AppContainer): Promise<JoinView | null> {
+  return parseJoinView(await readMeta(container, JOIN_STATE_META));
+}
+
+/**
+ * Arrivée en échec pour le bandeau A-09 (critère 9 f) : même lecture et même analyse que `JoinProgress` (une seule source, revue 6) ;
+ * `readable` faux si la base n'a pas répondu (l'appelant garde alors l'état précédent et signale la lecture en échec).
+ */
+export async function readJoinFailure(container: AppContainer): Promise<{ readonly failure: JoinFailureFact | null; readonly readable: boolean }> {
+  const { value, readable } = await readMetaResult(container, JOIN_STATE_META);
+  const view = parseJoinView(value);
+  return { failure: view?.failure ? { done: view.done, total: view.total, failure: view.failure } : null, readable };
 }
 
 // --- abonnés et relance pendant l'affichage --------------------------------------------------------------------------------------

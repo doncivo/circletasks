@@ -46,4 +46,8 @@ export const syncForgetFr = {
     'Le dossier est délié (la clé est gardée), cet appareil reçoit un nouvel identifiant, puis l’app redémarre ; choisissez alors de nouveau le dossier CircleTasks. Rien n’est effacé : vos données sont fusionnées puis publiées.',
   rejoinRunning: 'Association en cours…',
   banner: 'Cet appareil a été oublié : associez-le de nouveau',
+  bannerPending: '{device} oublié : suppression de ses fichiers en attente de {waiting}',
+  bannerPendingUnknown: '{device} oublié : suppression de ses fichiers en attente',
+  bannerRunning: '{device} oublié : suppression de ses fichiers en cours',
+  bannerStrays: '{device} oublié : des fichiers non reconnus restent dans iCloud',
 } as const;

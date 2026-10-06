@@ -11,6 +11,7 @@
 import type { ReintegrationFailure } from '../../domain/sync/compat';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
+import type { SyncPhase as DomainSyncPhase } from '../../domain/syncBanners';
 import {
   isSyncErrorCode,
   type EpochId,
@@ -323,19 +324,12 @@ export interface ForgottenDeleteResult {
 // Service exposé par le conteneur (implémenté par src/sync, lot Y2)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-export type SyncPhase =
-  | 'not-configured'
-  | 'needs-pairing'
-  | 'idle'
-  | 'syncing'
-  | 'waiting-icloud'
-  | 'restore-choice'
-  | 'update-required'
-  | 'clock-ahead'
-  | 'key-mismatch'
-  | 'error'
-  /** Y-10 : cet appareil a été oublié par un autre (déclaration authentifiée) : il ne lit ni ne publie plus, « Associer de nouveau ». */
-  | 'forgotten';
+/**
+ * Phases de la synchro. Liste unique : `SYNC_PHASES` de `src/domain/syncBanners.ts` (A-09 critère 9 b) ; une phase nouvelle (Y-10,
+ * Y-11) s'y ajoute, et la compilation échoue tant que son bandeau (`phaseBanner`) et sa ligne de Réglages (`statusLine`) manquent.
+ */
+export type SyncPhase = DomainSyncPhase;
+export { SYNC_PHASES } from '../../domain/syncBanners';
 
 export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 
@@ -380,6 +374,11 @@ export interface SyncStatus {
    * des fichiers d'appareils oubliés en attente (`sync_meta.forgetDeletions`), lus à la fin de chaque cycle ; absent : rien. Facultatif.
    */
   readonly forget?: SyncForgetStatus | null;
+  /**
+   * A-09 (revue, point 3) : heure de début du cycle en cours (ms, horloge du service), posée seulement pendant la phase `syncing` ; le
+   * bandeau « Synchro en cours » compte son seuil depuis elle. Facultatif.
+   */
+  readonly cycleStartedAt?: number | null;
 }
 
 /** Y-10 : étape d'un oubli qui a échoué. `declare` : `sync_device_forget` ; `delete` : `sync_forgotten_delete` ; `rejoin` : « Associer de nouveau ». */

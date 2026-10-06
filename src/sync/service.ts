@@ -3,6 +3,7 @@ import type { Clock } from '../domain/clock';
 import type { HlcClock } from '../domain/hlc';
 import { parseReintegrationFailure, REINTEGRATION_FAILURE_META, type ReintegrationFailure } from '../domain/sync/compat';
 import type { RestoreOption } from '../domain/sync/epoch';
+import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import type { ForgetOutcome, RejoinOutcome, RemoteChanges, SyncEngineService, SyncForgetStatus, SyncPlatform, SyncReason, SyncStatus } from '../platform/sync/types';
@@ -18,7 +19,9 @@ import { INITIAL_STATUS, statusFromFacts } from './status';
  *
  * - Un seul cycle à la fois ; une demande pendant un cycle en programme **un seul** de plus (section 10.1).
  * - `syncNow` ne rejette jamais ; le résultat se lit dans `status()`.
- * - Phase `syncing` seulement si le cycle lit ou écrit, ou s'il dure plus d'une seconde (A-09).
+ * - Phase `syncing` seulement si le cycle lit ou écrit, ou s'il dure plus de `SYNCING_BANNER_DELAY_MS` ; elle porte l'heure de début du
+ *   cycle (`cycleStartedAt`), d'où le bandeau A-09 compte son seuil (un seul seuil, jamais deux délais cumulés).
+ * - Un abonné qui lève est journalisé et n'empêche ni les autres abonnés ni la synchro (revue A-09, point 2).
  * - Marqueur de restauration : aucun cycle ; `chooseRestoreOption` applique le choix puis efface le marqueur.
  */
 export type { SyncEngineService };
@@ -33,7 +36,7 @@ export interface SyncServiceOptions {
   readonly appVersion?: string;
   readonly sv: number;
   readonly logger?: SyncLogger;
-  /** Minuteur du seuil d'une seconde (tests : injecté). */
+  /** Minuteur du seuil `SYNCING_BANNER_DELAY_MS` (tests : injecté). */
   readonly setTimeout?: (handler: () => void, ms: number) => unknown;
   readonly clearTimeout?: (handle: unknown) => void;
   /** Y-10 (« Associer de nouveau ») : nouvel identifiant d'appareil (UUID v4 en minuscules) ; tests : injecté. */
@@ -42,7 +45,6 @@ export interface SyncServiceOptions {
 
 const randomDeviceId = (): DeviceId => crypto.randomUUID().toLowerCase() as DeviceId;
 
-const SYNCING_DELAY_MS = 1_000;
 const WEEK_MS = 7 * 86_400_000;
 
 export function createSyncService(options: SyncServiceOptions): SyncEngineService {
@@ -73,7 +75,14 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
 
   const publish = (next: SyncStatus): void => {
     status = next;
-    for (const listener of listeners) listener();
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch {
+        // Un écran en échec n'arrête ni la synchro ni les autres abonnés ; le bandeau A-09 a son propre repli visible (startSync.ts).
+        deps.logger.log('status-listener-failed', { code: 'io' });
+      }
+    }
   };
 
   const emitChanges = (touched: ReadonlyMap<string, ReadonlySet<string>>): void => {
@@ -86,6 +95,13 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         // un abonné en échec n'arrête pas la synchro
       }
     }
+  };
+
+  /** État sans l'heure de début de cycle (posée seulement pendant la phase `syncing`). */
+  const withoutCycleStart = (value: SyncStatus): SyncStatus => {
+    const { cycleStartedAt, ...rest } = value;
+    void cycleStartedAt;
+    return rest;
   };
 
   const finish = async (result: CycleResult): Promise<void> => {
@@ -110,7 +126,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       // base occupée : valeur précédente
     }
     publish(
-      statusFromFacts(status, result, {
+      statusFromFacts(withoutCycleStart(status), result, {
         folderLabel: result.folderLabel ?? status.folderLabel,
         folderKind: result.folderKind ?? status.folderKind ?? null,
         lastSyncAt: result.lastSyncAt ?? status.lastSyncAt,
@@ -134,10 +150,11 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
 
   const cycle = async (cycleOptions: CycleOptions = {}): Promise<CycleResult> => {
     const before = status;
+    const cycleStartedAt = options.clock.nowMs();
     const markSyncing = (): void => {
-      if (status.phase !== 'syncing') publish({ ...status, phase: 'syncing' });
+      if (status.phase !== 'syncing') publish({ ...status, phase: 'syncing', cycleStartedAt });
     };
-    const timer = setTimer(markSyncing, SYNCING_DELAY_MS);
+    const timer = setTimer(markSyncing, SYNCING_BANNER_DELAY_MS);
     try {
       const result = await runCycle(deps, { onRemoteChanges: emitChanges, onWork: markSyncing, onProgress: (done, total) => publish({ ...status, progress: { done, total } }) }, cycleOptions);
       await finish(result);

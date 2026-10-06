@@ -88,6 +88,11 @@ export const SYNC_INTERVAL_MS = 5 * 60_000;
 export const QUIT_SYNC_BUDGET_MS = 5_000;
 /** Budget du dernier cycle dans le gestionnaire « Quitter » du PC : 4,5 s, la confirmation part avant la sortie forcée de Rust (5 s). */
 export const QUIT_HANDLER_SYNC_MS = 4_500;
+/**
+ * Seuil unique de « Synchro en cours » (A-09 critère 9 d, D3 ; un cycle vide dure moins de 300 ms) : le service publie la phase `syncing`
+ * d'un cycle sans travail à ce seuil, et le bandeau ne s'affiche qu'une fois le cycle plus vieux que ce seuil (compté depuis son début).
+ */
+export const SYNCING_BANNER_DELAY_MS = 1_000;
 export const PAIRING_VALIDITY_MS = 5 * 60_000;
 export const PAIRING_CLOCK_TOLERANCE_MS = 2 * 60_000;
 export const PAIRING_RESCAN_MS = 10_000;

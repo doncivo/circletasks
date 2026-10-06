@@ -16,6 +16,12 @@ describe('StatusBanner (A-09)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Reconnecter' }));
     expect(onAction).toHaveBeenCalledTimes(1);
   });
+
+  it('nom accessible du bouton distinct de son libellé court quand il est donné (revue A-09, point 11)', () => {
+    render(<StatusBanner message="Échec" actionLabel="Voir" actionAriaLabel="Voir le problème de synchronisation" onAction={() => undefined} />);
+    const button = screen.getByRole('button', { name: 'Voir le problème de synchronisation' });
+    expect(button.textContent).toBe('Voir');
+  });
 });
 
 describe('ListSkeleton (A-09 critère 2)', () => {

@@ -50,6 +50,12 @@ describe('config ESLint : interdictions qui se cumulent', () => {
     expect(await ruleIds('src/sync/zz.ts', "import { epochId } from '../domain/sync/format';\nexport const x = epochId;\n")).toEqual([]);
   });
 
+  it('A-09 (revue, suggestion 8) : un fichier de src/domain importe ./sync/… ; src/sync reste interdit au domaine, ./sync aussi ailleurs', async () => {
+    expect(await ruleIds('src/domain/zz.ts', "import { epochId } from './sync/format';\nexport const x = epochId;\n")).toEqual([]);
+    expect(await ruleIds('src/domain/zz.ts', "import { createSyncService } from '../sync';\nexport const x = createSyncService;\n")).toContain('no-restricted-imports');
+    expect(await ruleIds('src/db/zz.ts', "import { runCycle } from './sync';\nexport const x = runCycle;\n")).toContain('no-restricted-imports');
+  });
+
   it('un import nu hors CSS est interdit dans src, un import CSS nu est permis', async () => {
     expect(await ruleIds('src/features/today/zz.ts', "import './effet';\n")).toContain('no-restricted-syntax');
     expect(await ruleIds('src/features/today/zz.ts', "import './zz.css';\n")).not.toContain('no-restricted-syntax');

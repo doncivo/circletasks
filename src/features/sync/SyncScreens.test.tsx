@@ -129,9 +129,13 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
 describe('branchements (Y-02 critères 17 à 19)', () => {
   it('bandeaux A-09 : « Synchro en cours » et « En attente d’iCloud » posés et retirés, « Hors ligne » jamais touché', () => {
     useAppStatusStore.getState().setStatus('offline', {});
-    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined });
+    // A-09 critère 9 d : « Synchro en cours » après 1 s de cycle (minuteur factice déclenché à la main, aucun délai réel).
+    const due: (() => void)[] = [];
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: (handler) => due.push(handler), clearTimeout: () => undefined });
     expect(sync.calls).toEqual(['open']);
     sync.setStatus({ phase: 'syncing' });
+    expect(useAppStatusStore.getState().sources.syncing).toBeUndefined();
+    for (const fire of due.splice(0)) fire();
     expect(useAppStatusStore.getState().sources.syncing).toBeDefined();
     sync.setStatus({ phase: 'waiting-icloud' });
     expect(useAppStatusStore.getState().sources.syncing).toBeUndefined();

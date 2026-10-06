@@ -1,8 +1,8 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
-import { compareVersions, newerKind } from '../domain/sync/compat';
+import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
-import { hlcIso, hlcMs, publishedStateToText } from '../domain/sync/parse';
+import { hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
@@ -13,6 +13,7 @@ import { META, readJson, writeJson } from './meta';
 import { isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, readLimit, rejoinPending, runForgetDeletions, type ForgetView } from './forget';
 import { publishOutbox, readInflight } from './publisher';
+import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
 import type { CycleFacts } from './status';
@@ -214,8 +215,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     logger.log('forgotten-self', { by: forgetView.order.get(self)?.by ?? null });
     return { ...EMPTY, outcome: 'forgotten', folderLabel, folderKind, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
   }
-  const others = scan.devices.filter((d) => d.deviceId !== self && !forgetView.order.has(d.deviceId));
-  const keyMismatch = others.length > 0 && others.every((d) => d.stateStatus === 'foreign');
+  // Y-10 : un appareil oublié ne compte pas pour « aucun appareil ne partage la clé ».
+  const keyMismatch = keyMismatchFromDevices(scan.devices.filter((d) => !forgetView.order.has(d.deviceId)).map((d) => ({ self: d.deviceId === self, foreign: d.stateStatus === 'foreign' })));
 
   // 2. Règle 1 : bornes de sa propre publication.
   const acksOnSelf = [...accepted.values()].map((s) => s.acks.get(self)).filter((a): a is DeviceAck => a !== undefined);
@@ -535,32 +536,9 @@ async function knowsFrom(repos: Repositories): Promise<ApplyContext['knows']> {
   };
 }
 
-/**
- * Appareils affichés (APPAREILS) et, Y-07 critère 11, leur version d'après `sync_state` : `newer` = `'major'` pour une majeure
- * supérieure (statut `newer-major`, lecture suspendue), `'schema'` pour un `sv` supérieur de même majeure (`compat.ts`), sinon null ;
- * `appVersion` = numéro d'application publié, null quand il n'est plus à jour (état d'une majeure supérieure illisible : la ligne garde
- * le numéro de l'état précédent).
- */
+/** Appareils affichés (APPAREILS) et leur version (Y-07 critère 11) : règle partagée avec les bandeaux A-09 (`deviceStatus.ts`). */
 async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, localSv: number): Promise<SyncDeviceStatus[]> {
-  const rows = await repos.sync.getStates();
-  return rows
-    .filter((row) => row.isSelf || accepted.has(row.deviceId as DeviceId) || row.stateSeq > 0)
-    .map((row): SyncDeviceStatus => {
-      const isSelf = row.deviceId === self;
-      const status = (['active', 'expired', 'newer-major', 'clock-ahead', 'corrupt', 'foreign', 'rollback', 'forgotten'].includes(row.status) ? row.status : 'active') as SyncDeviceStatus['status'];
-      const relation = compareVersions({ sm: SYNC_FORMAT_MAJOR, sv: localSv }, { sm: row.formatMajor, sv: row.schemaVersion });
-      const stale = status === 'newer-major' && relation !== 'newer-major';
-      return {
-        deviceId: row.deviceId as DeviceId,
-        platform: row.platform === 'ios' ? 'ios' : 'windows',
-        self: isSelf,
-        lastReadAt: isSelf ? row.lastSyncAt : row.ackHlc ? hlcIso(row.ackHlc) : null,
-        status,
-        // Champs Y-07 pour les autres appareils seulement (soi : sans objet ; les comparaisons existantes de la ligne de soi restent vraies).
-        ...(isSelf ? {} : { appVersion: stale ? null : row.appVersion, newer: status === 'newer-major' ? 'major' : newerKind(relation) }),
-      };
-    })
-    .sort((a, b) => (a.self === b.self ? (a.deviceId < b.deviceId ? -1 : 1) : a.self ? -1 : 1));
+  return storedDeviceStatuses(await repos.sync.getStates(), { self, accepted: new Set(accepted.keys()), localSv });
 }
 
 /**

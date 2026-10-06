@@ -93,6 +93,8 @@ test('Y-10 : oublier l’iPhone depuis le PC, suppression des fichiers en attent
   await syncNow(iphone.page, /^Cet appareil a été oublié/);
   expect((await inspect(room, 'iphone')).appends).toBe(appendsBefore);
   await expect(iphone.page.locator('.ct-sync__forget[role="status"]')).toContainText('Cet appareil a été oublié : associez-le de nouveau');
+  // Bandeau A-09 (ADR 0011 §19) depuis l'écran principal, avec « Voir ».
+  await expect(iphone.page.getByRole('button', { name: 'Voir le problème de synchronisation' })).toBeVisible();
 
   // Critère 17 : « Associer de nouveau » : confirmation, dossier délié (clé gardée), dossier choisi de nouveau, relance sous un nouvel identifiant.
   await iphone.page.getByRole('button', { name: 'Associer de nouveau cet appareil' }).click();

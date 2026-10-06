@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { relaunchApp } from '../../platform/relaunch';
-import type { ForgetFailure, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import type { SyncDeviceStatus } from '../../platform/sync/types';
 import { Button, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { ForgetDeviceDialog } from './ForgetDeviceDialog';
 import { syncStore } from './syncStore';
 import './SyncDetailsForget.css';
+import { forgetDeletionLine, forgetDeviceName, forgetFailureText } from './forgetText';
 import { deviceName, formatSyncTime } from './syncText';
 
 /**
@@ -15,48 +15,6 @@ import { deviceName, formatSyncTime } from './syncText';
  * boutons et `ConfirmDialog` existants ; décision d'Ali du 2026-10-05). Tous les états sont annoncés (`role="status"`), jamais de boîte
  * bloquante ; les textes sont dans `src/i18n` (`sync.forget`).
  */
-
-/** Raison lisible d'un code de refus ou d'erreur (jamais le code brut, jamais de chemin). */
-export function forgetReason(code: string): string {
-  switch (code) {
-    case 'not-foreground':
-      return t('sync.forget.reasons.notForeground');
-    case 'rate-limited':
-      return t('sync.forget.reasons.rateLimited');
-    case 'cloud-pending':
-    case 'cloud-error':
-    case 'cloud-provider-stopped':
-      return t('sync.forget.reasons.cloudPending');
-    case 'folder-unreachable':
-    case 'not-local':
-    case 'unsafe-folder':
-      return t('sync.forget.reasons.folderUnreachable');
-    case 'vault-unavailable':
-      return t('sync.forget.reasons.vaultUnavailable');
-    case 'key-missing':
-    case 'not-bound':
-      return t('sync.forget.reasons.keyMissing');
-    case 'state-mismatch':
-      return t('sync.forget.reasons.stateMismatch');
-    case 'not-configured':
-      return t('sync.forget.reasons.notConfigured');
-    default:
-      return t('sync.forget.reasons.other');
-  }
-}
-
-/** Nom d'un appareil comme dans APPAREILS (« PC », « iPhone », suivis de 4 caractères si deux ont la même plateforme). */
-function nameOf(id: DeviceId, devices: readonly SyncDeviceStatus[]): string {
-  const device = devices.find((d) => d.deviceId === id);
-  return device ? deviceName(device, devices) : t('sync.status.deviceNamed', { platform: t('sync.status.devicePc'), short: String(id).slice(0, 4) });
-}
-
-function failureText(failure: ForgetFailure, devices: readonly SyncDeviceStatus[]): string {
-  const reason = forgetReason(failure.code);
-  if (failure.step === 'rejoin') return t('sync.forget.failedRejoin', { reason });
-  const device = nameOf(failure.deviceId, devices);
-  return failure.step === 'declare' ? t('sync.forget.failedDeclare', { device, reason }) : t('sync.forget.failedDelete', { device, reason });
-}
 
 /** Relance de l'app après « Associer de nouveau » : processus relancé dans l'app installée, page rechargée ailleurs (dev, Playwright). */
 function defaultRelaunch(runtime: string): Promise<void> {
@@ -124,12 +82,12 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
         {failure && (
           <div className="ct-settings__row ct-sync__device" data-failed="true">
             <span className="ct-sync__forgetText" data-trouble="true">
-              {failureText(failure, status.devices)}
+              {forgetFailureText(failure, status.devices)}
             </span>
             <span className="ct-sync__deviceRead">{t('sync.forget.failedAt', { time: formatSyncTime(failure.at, container.clock.nowMs()) })}</span>
             <Button
               variant="secondary"
-              ariaLabel={failure.step === 'declare' ? t('sync.forget.retryDeclareLabel', { device: nameOf(failure.deviceId, status.devices) }) : t('sync.forget.retrySyncLabel')}
+              ariaLabel={failure.step === 'declare' ? t('sync.forget.retryDeclareLabel', { device: forgetDeviceName(failure.deviceId, status.devices) }) : t('sync.forget.retrySyncLabel')}
               onClick={() => void retry()}
               disabled={busy}
               ariaBusy={busy}
@@ -145,15 +103,6 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
       )}
     </>
   );
-}
-
-/** Ligne d'un appareil oublié dont les fichiers ne sont pas encore supprimés (critère 13, D3), sinon rien. */
-function deletionText(device: SyncDeviceStatus, status: SyncStatus): string | null {
-  const deletion = status.forget?.deletions.find((d) => d.deviceId === device.deviceId);
-  if (!deletion || deletion.state === 'done') return null;
-  if (deletion.state === 'deleting') return t('sync.forget.deletionRunning');
-  if (deletion.state === 'strays') return t('sync.forget.deletionStrays');
-  return deletion.waitingFor ? t('sync.forget.deletionWaiting', { device: nameOf(deletion.waitingFor, status.devices) }) : t('sync.forget.deletionWaitingUnknown');
 }
 
 /**
@@ -172,7 +121,7 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
   const name = deviceName(device, status.devices);
 
   if (device.status === 'forgotten') {
-    const text = deletionText(device, status);
+    const text = forgetDeletionLine(status.forget?.deletions.find((d) => d.deviceId === device.deviceId), status.devices);
     return text ? (
       <span role="status" className="ct-sync__deviceRead ct-sync__forgetLine">
         {text}

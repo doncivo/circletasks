@@ -476,7 +476,7 @@ Catalogue `src/domain/sync/syncTables.ts` (seule source, utilisé par les décle
 | Enfant vivant sous un parent purgé ailleurs (question ouverte 10) | **Décision (c)** (`docs/decisions.md`, 2026-10-05) : rattachement à « Sans projet » du même espace et republication entière (`'+'`), à la réception de la trace du parent (`detachLiveChildren`) et dans `applyOps` pour une colonne facultative (`detachField`) ; événement `children-reattached`. Les autres liens obligatoires gardent `purge-skipped` (section 5.4). |
 | `reminder.fire_at` | Type de catalogue **`localdatetime`** (heure locale flottante, sans fuseau), distinct de `datetime` (instant UTC) (section 3.3). |
 | Limite de dérive du hlc | Section 4.4 : 1 h, mesurée sur l'horloge physique. |
-| Bandeaux A-09 | `syncing` posé par le moteur pendant un cycle qui lit ou écrit (pas pendant un cycle vide de moins de 1 s) ; `waitingIcloud` posé tant qu'un fichier attendu est dans le nuage ou qu'une tête publiée n'est pas atteinte ; **`updateRequired`** (lot Y3, section 7.2 : appareil plus récent, ou `detail: 'reintegration'`) ; priorité `APP_STATUS_PRIORITY` = `['calendarDisconnected', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']`. |
+| Bandeaux A-09 | Décision dans `src/domain/syncBanners.ts` (module pur), pose par `src/features/sync/startSync.ts` (section 19). `syncing` publié par le service pendant un cycle qui lit ou écrit, ou plus vieux que `SYNCING_BANNER_DELAY_MS` (1 s, `limits.ts`, seuil unique compté depuis `SyncStatus.cycleStartedAt`) ; `waitingIcloud` posé tant qu'un fichier attendu est dans le nuage ou qu'une tête publiée n'est pas atteinte, avec sa cause (`errorCode`) ; **`syncTrouble`** : tout échec ou état bloqué de la synchro (ordre `SYNC_TROUBLE_ORDER`, un seul bandeau avec « (+N) » et « Voir ») ; **`updateRequired`** (lot Y3, section 7.2 : appareil plus récent, ou `detail: 'reintegration'`) ; priorité `APP_STATUS_PRIORITY` = `['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']` (« Hors ligne » ne masque jamais un échec de synchro). |
 | Restauration P-04 | Section 9. |
 
 Les tables techniques de cet ADR (`sync_field_clock`, `sync_outbox`, `sync_guard`, `sync_state`, `sync_tombstone`, `sync_unknown`, `sync_parked`, `conflict_log`, et `sync_meta` ajoutée par le lot Y2, section 10.2) sont **locales**.
@@ -571,6 +571,8 @@ Cibles : cycle sans changement < 300 ms hors hydratation ; nouvel appareil avec 
 #### 10.4 État affiché
 
 `SyncStatus` (section 11) alimente : la ligne de Réglages (libellé du dossier, « À jour · il y a 2 min », appareil associé, nombre de conflits de la semaine) ; l'écran de détails (Synchro.html : état, « Synchroniser », « Associer », APPAREILS avec dernière lecture et statut par appareil — dont « Clé différente » pour un appareil `foreign` —, fichiers en attente d'iCloud, JOURNAL DES CONFLITS) ; les bandeaux A-09 ; l'avertissement N-07 du PC (dernière synchro de l'iPhone, `sync_state.last_seen_hlc`). Lot Y3 : emplacements de l'écran de détails `SyncDetailsConflicts` (Y-04), `SyncDetailsVersion` (Y-07 : appareils plus récents, version publiée, échec de réintégration) et `SyncDetailsPairing` (Y-06 : « Associer l'iPhone », instance `show` ; « Associer cet appareil », instance `import`, aussi sur la ligne de Réglages quand le dossier est lié sans clé) ; `JoinProgress` sous la ligne liée ; `pairingFailure` et `join.failure` affichés jusqu'à la réussite.
+
+**Bandeaux A-09** (section 19) : `syncBannerFor(status, persisted, settled)` de `src/domain/syncBanners.ts` décide des bandeaux ; leur texte est celui de la ligne de Réglages de l'état qui les porte (`textStatus`, une seule formulation par état), l'appareil étant nommé et qualifié comme dans APPAREILS. Pendant un cycle, les bandeaux du dernier état conclu (échec, « En attente d'iCloud » avec sa cause) restent affichés jusqu'à sa conclusion. Avant le premier cycle conclu, les états persistés sont relus : appareils (`sync_state`, par `storedDeviceStatuses`), dernière phase bloquante (`sync_meta.bannerBlockingPhase`), marqueur de restauration, arrivée en échec (`sync_meta.join`). « Voir » ouvre Réglages › Synchronisation, ou la fenêtre de choix pour `restore-choice`.
 
 ### 11. Contrats
 
@@ -712,9 +714,11 @@ export interface SyncPlatform {
 
 // src/platform/sync/types.ts (suite ; avenant « Amorce » : ces types ne sont pas dans src/sync/status.ts,
 // qui ne fait que calculer SyncStatus ; features et AppContainer les importent depuis platform, sans dépendre de src/sync)
-export type SyncPhase =
-  | 'not-configured' | 'needs-pairing' | 'idle' | 'syncing' | 'waiting-icloud'
-  | 'restore-choice' | 'update-required' | 'clock-ahead' | 'key-mismatch' | 'error';
+// A-09 : liste unique SYNC_PHASES de src/domain/syncBanners.ts (section 19) ; platform en dérive le type et réexporte la liste.
+export type SyncPhase = DomainSyncPhase;           // (typeof SYNC_PHASES)[number] :
+  // 'not-configured' | 'needs-pairing' | 'idle' | 'syncing' | 'waiting-icloud'
+  // | 'restore-choice' | 'update-required' | 'clock-ahead' | 'key-mismatch' | 'error'
+export { SYNC_PHASES } from '../../domain/syncBanners';
 export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 export interface SyncStatus {
   readonly phase: SyncPhase;
@@ -728,6 +732,7 @@ export interface SyncStatus {
   readonly errorCode?: SyncErrorCode | null;          // lot Y2, facultatif : texte explicite de la phase error / waiting-icloud (Y-05)
   readonly clockAheadDevice?: DeviceId | null;        // lot Y2, facultatif : appareil en avance (phase clock-ahead, section 4.4)
   readonly reintegrationFailure?: ReintegrationFailure | null; // lot Y3 (Y-07), facultatif : sync_meta.reintegrationFailure lu à la fin de chaque cycle (section 7.2) ; absent : aucun échec
+  readonly cycleStartedAt?: number | null;           // A-09, facultatif : début du cycle en cours (ms, horloge du service), posé seulement en phase syncing, retiré à la conclusion
 }
 // src/domain/sync/compat.ts (lot Y3) : compareVersions, canRead, keepsUnknownFields, acceptsUnknownFrom, newerKind, newerDevices,
 // keptFieldsOf, decideReintegration, REINTEGRATION_FAILURE_META = 'reintegrationFailure', ReintegrationFailure, parseReintegrationFailure.
@@ -772,7 +777,8 @@ interface AppContainer {
 ```ts
 // src/platform/sync/types.ts
 // SYNC_COMMAND_WINDOWS : + sync_device_forget, sync_forgotten_delete, sync_reset_key → 'main' (24 commandes, main 21, pairing 3)
-export type SyncPhase = /* valeurs existantes */ | 'forgotten' | 'reset-required';
+// SyncPhase : 'forgotten' et 'reset-required' s'ajoutent à SYNC_PHASES (src/domain/syncBanners.ts, section 19), avec leur ligne
+// dans phaseBanner et statusLine (switch exhaustifs) et leur emplacement en tête de SYNC_TROUBLE_ORDER.
 export interface SyncPlatform {
   // … existant ; key.status() renvoie en plus nextKid :
   // status(): Promise<{ present: boolean; kid: string | null; nextKid: string | null }>;
@@ -801,6 +807,45 @@ export function resetWinner(candidates: readonly ResetCandidate[], forgotten: Re
 **Démarrage** (`src/features/app/bootstrap.ts`) : `openSyncPlatform(detectRuntime(), detectOs())` sauf plateforme injectée (`options.syncPlatform`, tests) ; une plateforme **indisponible** (`available()` faux : iPhone jusqu'à l'ordre 5) ou `null` donne `syncPlatform = null` et **aucun service** (`sync = null`, aucun coût). La section Réglages lit `container.syncPlatform` ; elle n'ouvre sa propre plateforme qu'à défaut (tests).
 
 `SyncRepository` (`src/db/repositories/syncRepository.ts`, exposé par `Repositories.sync`) : `readOutbox(limit)`, `clearOutbox(uptoSeq)`, `materializeOutbox()`, `applyOps(ops, ctx)` (renvoie lignes touchées et conflits détectés par la règle pure ; identifiants SQL du catalogue seulement), `fieldClocks(table, ids)`, `getStates()`, `saveCursor(...)`, `saveAcceptedState(deviceId, { epoch, stateSeq, head, acks })`, `listConflicts(range)`, `restoreDiscarded(conflictId)`, `purgeDeleted(horizon)`, `tombstones()`, `detachLiveChildren(table, column, parentIds)` et `detachField(table, id, column)` (décision (c) : colonne facultative mise à nul par une écriture locale tamponnée sous garde, ligne remise entière dans la file `'+'`, section 5.4), `unknownFields()`, `reintegrateUnknown()`, `exportSnapshotPage(after, maxBytes)`, `replaceFromSnapshot(...)`, `parked()`, `enforceCaps()`, `assertGuardEmpty()`. Chaque méthode annotée de l'ID de story ; aucune règle métier.
+
+**A-09** (section 19 ; ajouts seulement) :
+
+```ts
+// src/domain/appStatus.ts
+export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
+// AppStatusEntry.detail : code SyncTroubleCode pour syncTrouble
+
+// src/domain/syncBanners.ts (module pur)
+export const SYNC_PHASES: readonly [...];          // seule source de SyncPhase
+export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead';
+export type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-rollback';
+export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode;
+export const SYNC_TROUBLE_ORDER: readonly SyncTroubleCode[]; // needs-pairing, key-mismatch, restore-choice, error, state-unreadable,
+                                                   // clock-ahead, join-failed, device-foreign, device-corrupt, device-rollback
+export function phaseBanner(phase: SyncPhase): PhaseBanner; // switch exhaustif ; inconnue à l'exécution : { kind: 'trouble', code: 'error' }
+export function deviceTrouble(status: DeviceState): DeviceTroubleCode | null; // inconnu à l'exécution : 'device-corrupt'
+export function syncBannerFor(status: S, persisted: PersistedSyncFacts<D>, settled?: S | null): SyncBanners<D, S>;
+// PersistedSyncFacts : { join: JoinFailureFact | null ; devices (avant le premier cycle conclu, sinon null) ; blocking: BlockingPhaseFact | null ; readFailed }
+// SyncBanners : { troubles (triés selon SYNC_TROUBLE_ORDER) ; devices ; textStatus ; waitingIcloud: { cause: SyncErrorCode | null } | null ; syncing }
+
+// src/domain/sync/devices.ts (module pur, partagé moteur / bandeaux)
+export const DEVICE_STATES: readonly DeviceState[];
+export function deviceStateOf(raw: string): DeviceState;    // valeur inconnue : 'corrupt' (jamais 'active')
+export function keyMismatchFromDevices(devices: readonly { self: boolean; foreign: boolean }[]): boolean;
+
+// src/domain/sync/limits.ts
+export const SYNCING_BANNER_DELAY_MS = 1_000;
+
+// src/sync/deviceStatus.ts (partagé moteur / bandeaux)
+export function storedDeviceStatuses(rows: readonly SyncStateRow[], options: { self?: DeviceId; accepted?: ReadonlySet<DeviceId>; localSv?: number }): SyncDeviceStatus[];
+
+// src/sync/service.ts : abonné qui lève → journal status-listener-failed (code seulement), autres abonnés et synchro poursuivis
+
+// src/features/sync/startSync.ts
+export const BLOCKING_PHASE_META = 'bannerBlockingPhase'; // clé locale de sync_meta, jamais publiée, codes seulement :
+// { phase: 'needs-pairing' | 'key-mismatch' | 'error' | 'clock-ahead'; errorCode: SyncErrorCode | null; clockAheadDevice: DeviceId | null }
+// SyncIntegration : { dispose(): void ; refreshed(): Promise<void> }
+```
 
 ### 12. Tests
 
@@ -1004,6 +1049,20 @@ Deux écarts relevés par le product-owner (fiches Y-10 D4 et Y-11 D4, `docs/dec
 
 1. **Trois commandes au lot Y4**, et non deux : `sync_device_forget`, **`sync_forgotten_delete`**, `sync_reset_key` ; 24 commandes `sync_*`, `main` 21, `pairing` 3 (le « 23 » de la fiche Y-10 D4 comptait deux commandes). `sync_forgotten_delete` : fenêtre `main` seule, sans confirmation native, seule entrée `deviceId`, conditions recalculées par Rust depuis les `state.ctx` authentifiés (ordre total et coupure réimplémentés en Rust, table de cas commune), actifs `expired` compris, réinitialisation en cours refusée, noms stricts seulement (11.1, 11.2, 13, 14.2, 14.4). `sync_key_status` renvoie aussi `nextKid`.
 2. **Deux réinitialisations simultanées** : l'annonce valide de plus grande époque l'emporte (ordre `n` puis UUID, total sans autre critère puisque l'UUID de l'époque est celui de l'auteur) ; annonces d'appareils oubliés sans effet ; le perdant est constaté par Rust au `sync_scan` (`reset.json` `superseded`, `state.next.ctx` supprimé, `.next` effacée, `own.json` ramené à l'époque `n`), puis se réassocie avec la clé gagnante par fusion ; tout appareil garde `K` jusqu'à la bascule du gagnant ; les appareils réassociés publient eux aussi dans `state.next.ctx` jusque-là (9, 11.1, 11.2, 14.3, 14.4).
+
+### 19. Avenant A-09, bandeaux de synchro (2026-10-06)
+
+Solde du critère 9 de A-09 (exigence : **aucun échec silencieux**) ; **aucune migration, aucun changement du format sur disque** (`sm` 1), **aucun code d'erreur nouveau** (38), aucune commande nouvelle (8, 10.4, 11.2).
+
+1. **Priorité** : `APP_STATUS_PRIORITY` = `['calendarDisconnected', 'syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']`. Un échec de synchro passe devant « Mettez à jour l'app » (il empêche la synchro, une version plus récente n'empêche pas la lecture) ; « Hors ligne » ne le masque jamais.
+2. **`syncTrouble`** : un seul bandeau, l'état le plus urgent selon `SYNC_TROUBLE_ORDER` (`needs-pairing`, `key-mismatch`, `restore-choice`, `error`, `state-unreadable`, `clock-ahead`, `join-failed`, `device-foreign`, `device-corrupt`, `device-rollback`), les autres comptés en « (+N) », bouton « Voir ». Emplacements réservés (14.2, 14.3) : Y-10 `forgotten` et Y-11 `reset-required` en tête ; Y-11 réinitialisation en cours ou en échec après `join-failed` ; Y-10 oubli en attente ou en échec et Y-11 rappel des 30 jours à la fin. Quand aucun autre appareil ne partage la clé locale, un seul état `key-mismatch` (pas un `device-foreign` par appareil).
+3. **Phases** : `SYNC_PHASES` de `src/domain/syncBanners.ts` est la seule source de `SyncPhase` (`src/platform/sync/types.ts` en dérive) ; `phaseBanner` et `deviceTrouble` sont des `switch` exhaustifs (une phase ajoutée ne compile pas sans sa ligne) ; une valeur inconnue à l'exécution donne un bandeau de repli visible (« échec », « illisible »), jamais une exception ni « aucun bandeau ».
+4. **`syncing`** : seuil unique `SYNCING_BANNER_DELAY_MS` (`limits.ts`) ; le service publie `syncing` à ce seuil ou dès le premier travail, avec le champ facultatif `SyncStatus.cycleStartedAt`, depuis lequel le bandeau compte le même seuil (jamais deux délais cumulés) ; le champ est retiré à la conclusion.
+5. **Pendant un cycle**, les bandeaux d'échec et « En attente d'iCloud » du dernier état conclu restent affichés jusqu'à sa conclusion (ni clignotement toutes les 5 minutes, ni disparition sans résolution) ; « En attente d'iCloud » affiche sa cause (`errorCode`, texte de la ligne de Réglages).
+6. **Clé locale `sync_meta.bannerBlockingPhase`** (`BLOCKING_PHASE_META`) : interface seulement (écrite et effacée par `startSync.ts`, jamais lue par le moteur), jamais publiée, codes seulement (phase, `SyncErrorCode`, identifiant d'appareil). Avec le marqueur de restauration (`restore-choice`, jamais écrit dans cette clé), elle est relue au démarrage pour montrer la phase bloquante avant le premier cycle ; une valeur mal formée est ignorée.
+7. **`state-unreadable`** : lecture ou écriture de l'état local de la synchro (`sync_meta`, `sync_state`) en échec ; valeurs précédentes gardées, bandeau jusqu'à l'opération réussie suivante. Un statut d'appareil inconnu dans `sync_state.status` est traité comme `corrupt` (`deviceStateOf`), dans les bandeaux comme dans APPAREILS (auparavant `active`).
+8. **Abonné en échec** : `src/sync/service.ts` capture l'exception d'un abonné de `subscribe`, la journalise (`status-listener-failed`, code seulement) et poursuit les autres abonnés et la synchro ; une décision de bandeau qui lève pose un `syncTrouble` générique.
+9. **Règles partagées** : `storedDeviceStatuses` (`src/sync/deviceStatus.ts`) et `keyMismatchFromDevices` (`src/domain/sync/devices.ts`) servent au moteur (fin de cycle) et aux bandeaux (avant le premier cycle) : une seule règle.
 
 ## Conséquences
 

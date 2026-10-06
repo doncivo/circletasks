@@ -5,6 +5,8 @@ export interface StatusBannerProps {
   message: string;
   /** Bouton d'action facultatif (« Reconnecter »). */
   actionLabel?: string;
+  /** Nom accessible du bouton quand le libellé visible est court (« Voir » → « Voir le problème de synchronisation »). */
+  actionAriaLabel?: string;
   onAction?: () => void;
 }
 
@@ -15,12 +17,12 @@ export interface StatusBannerProps {
  * @example
  * <StatusBanner message={t('status.offline')} />
  */
-export function StatusBanner({ message, actionLabel, onAction }: StatusBannerProps) {
+export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction }: StatusBannerProps) {
   return (
     <div role="status" className="ct-status-banner">
       <span>{message}</span>
       {actionLabel && onAction && (
-        <button type="button" className="ct-status-banner__action" onClick={onAction}>
+        <button type="button" className="ct-status-banner__action" onClick={onAction} {...(actionAriaLabel ? { 'aria-label': actionAriaLabel } : {})}>
           {actionLabel}
         </button>
       )}
