@@ -3,7 +3,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { epochId, type DeviceAck, type JournalRecord } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
 import { HLC_MAX_DRIFT_MS } from './limits';
-import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
+import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
  * Rétention et dérive (ADR 0011, sections 3.4, 4.4, 5.3 à 5.5 ; Y-09 critères 2, 6, 7 et 10). Règle validée par Ali : une trace est
@@ -118,5 +118,17 @@ describe('publishedAllRead (revue Y2 passe 2, point 1)', () => {
   });
   it('horizon bloqué : rien n’est lu par tous', () => {
     expect(readByAll(`001791187200000-0000-${'b'.repeat(8)}-bbbb-4bbb-8bbb-bbbbbbbbbbbb` as never, BLOCKED)).toBe(false);
+  });
+});
+
+describe('Y-TECH-02 (QA) : segment absent de la liste, purge possible ?', () => {
+  const at = (ms: number) => `${String(ms).padStart(15, '0')}-0000-0f8fad5b-d9cb-469f-a165-70867728950e` as Hlc;
+  const DAY = 86_400_000;
+  it('sans instantané publié : jamais ; hlc lu de moins de 30 jours : jamais ; au-delà, ou rien lu : possible', () => {
+    const now = 100 * DAY;
+    expect(purgeExplainsMissingSegment({ snapshot: null }, null, now)).toBe(false);
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - DAY), now)).toBe(false);
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 30 * DAY), now)).toBe(true);
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, null, now)).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredAcks, type StoredStateLog } from '../db/repositories/syncRepository';
-import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
+import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
@@ -15,7 +15,7 @@ import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from
 import { finishResumeTx, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
+import { coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -553,7 +553,16 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // Segment nécessaire disparu (purgé) : reprise depuis l'instantané.
         const minListed = Math.min(...(target.epochListing?.segments ?? [Infinity]));
         if (cursor.segment > 0 && Number.isFinite(minListed) && cursor.segment < minListed) {
-          needResume = true;
+          // Y-TECH-02 (QA) : une purge seulement si l'état publié la rend possible ; sinon le fichier n'est pas encore arrivé (désordre
+          // d'iCloud) : attente visible, jamais une reprise à chaque cycle.
+          const writer = accepted.get(target.id) ?? (target.id === self ? ownState : null);
+          if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs())) {
+            needResume = true;
+          } else {
+            allRead = false;
+            pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}/${segmentFileName(cursor.segment)}`);
+            logger.log('segment-awaited', { device: target.id, segment: cursor.segment });
+          }
           continue;
         }
         if (cursor.segment === 0 && Number.isFinite(minListed) && minListed > 1) {

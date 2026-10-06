@@ -103,6 +103,18 @@ export function purgeBefore(nowMs: number): IsoDateTime {
  * Un de ses propres segments peut-il être supprimé (section 5.3) ? Un instantané le couvre, tous les appareils actifs l'ont accusé
  * (position au-delà de sa fin), son dernier enregistrement a plus de 30 jours. Jamais le segment de tête.
  */
+/**
+ * Y-TECH-02 (QA) : un segment nécessaire absent de la liste du dossier peut-il avoir été purgé par son écrivain ? La purge
+ * (`segmentPurgeable`) exige un instantané qui le couvre et un dernier enregistrement de plus de 30 jours ; or tout enregistrement de ce
+ * segment est postérieur au dernier hlc lu de cet appareil (`ackHlc`, hlc strictement croissants). Sans instantané publié dans
+ * l'époque, ou avec un hlc lu de moins de 30 jours, la purge est impossible : le fichier n'est pas encore arrivé (attente d'iCloud
+ * visible), jamais une reprise depuis l'instantané à chaque cycle.
+ */
+export function purgeExplainsMissingSegment(writer: { readonly snapshot: unknown }, ackHlc: Hlc | null, nowMs: number): boolean {
+  if (writer.snapshot === null) return false;
+  return ackHlc === null || nowMs - hlcMs(ackHlc) >= SEGMENT_PURGE_AGE_MS;
+}
+
 export function segmentPurgeable(segment: number, input: { readonly headSegment: number; readonly coveredSegment: number; readonly readers: readonly KnownDevice[]; readonly self: DeviceId; readonly lastWriteMs: number | null; readonly nowMs: number }): boolean {
   if (segment >= input.headSegment || segment >= input.coveredSegment) return false;
   if (input.lastWriteMs === null || input.nowMs - input.lastWriteMs < SEGMENT_PURGE_AGE_MS) return false;

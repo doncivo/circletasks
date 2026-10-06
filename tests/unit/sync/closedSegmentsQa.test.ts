@@ -137,10 +137,12 @@ describe('désordre d’iCloud à trois appareils (§21 point 2)', () => {
     await writeThenRotate(a, [b]);
     const { epoch } = epochDirOf(a, a.id);
     propagate(a.folder, b.folder, a.id, { drop: [`${epoch}/j-00000001.ctj`] });
+    // Reprises comptées depuis ici (l'arrivée de B, dans `group`, en est une).
+    const before = b.logger.entries.length;
     await b.cycle();
     const status = await b.cycle();
     expect(status.phase).toBe('waiting-icloud');
-    expect(b.logger.entries.filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(0);
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(0);
   });
 
   it('j-1 resté dans le nuage (placeholder) : attente, jamais le segment suivant', async () => {
