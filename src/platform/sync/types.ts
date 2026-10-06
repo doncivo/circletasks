@@ -369,6 +369,11 @@ export interface SyncStatus {
    * nombre, tables, date, noms d'erreur) ; absent ou null : aucun échec. Facultatif.
    */
   readonly reintegrationFailure?: ReintegrationFailure | null;
+  /**
+   * A-09 (revue, point 3) : heure de début du cycle en cours (ms, horloge du service), posée seulement pendant la phase `syncing` ; le
+   * bandeau « Synchro en cours » compte son seuil depuis elle. Facultatif.
+   */
+  readonly cycleStartedAt?: number | null;
 }
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';
