@@ -1612,7 +1612,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
    * Échoue fermé (audit 6) : registre illisible, état d'un autre appareil en attente d'iCloud (`cloud-pending`).
    */
   const oldKeyWithdrawn = (f: MemorySyncFolder, kid: string, self: DeviceId): boolean => {
-    if (loadReset(f, self)?.superseded?.epoch) return true;
+    const lost = loadReset(f, self)?.superseded;
+    if (lost?.epoch && !lost.restore) return true;
     const entries = ensureRegistry(f, kid, self).entries;
     const reads = readAllStates(f, kid);
     if ([...reads].some(([id, r]) => id !== self && r.status === 'cloud-pending')) fail('cloud-pending');
@@ -1650,7 +1651,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       return fail('state-mismatch');
     }
     if (record && record.superseded === null) return fail('state-mismatch');
-    if (record?.superseded?.epoch) return fail('state-mismatch');
+    if (record?.superseded?.epoch && !record.superseded.restore) return fail('state-mismatch');
     const reads = readAllStates(f, kid);
     const order = forgetOrder(reg.entries);
     const forgotten = new Set(order.keys());
@@ -1891,6 +1892,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     if (record.superseded) {
       if (!record.superseded.done) supersedeSteps(f, record);
+      // §18 point 16 : perdue face à une restauration et l'époque restaurée suivie : registre clos (rien à associer, K reste la clé).
+      const target = record.superseded.epoch;
+      if (record.superseded.restore && record.superseded.done && target !== null && own && own.folderId === f.id && own.epoch !== null && compareEpochs(own.epoch, target) >= 0) {
+        resetRecord = null;
+        return null;
+      }
       // §18 point 15 : gagnant oublié : registre clos (les étapes faites ne sont pas défaites), `sync_reset_key` redevient possible.
       const winnerBy = record.superseded.by;
       if (winnerBy !== null && forgetOrder(ensureRegistry(f, requireKey().kid, self).entries).has(winnerBy)) {

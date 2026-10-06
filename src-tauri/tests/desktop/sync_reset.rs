@@ -1229,6 +1229,15 @@ fn p16_a_restore_applied_before_the_announcement_competes_by_epoch_order() {
     dev.snap = None;
     dev.acks = json!({});
     net.publish(DEV_A, Value::Null).expect("époque gagnante suivie");
+    // Suivie : la perte face à une restauration est close (rien à associer, l'ancienne clé reste la clé du dossier) ; A peut donner sa
+    // clé et relancer une réinitialisation.
+    assert!(net.read_all(DEV_A).unwrap().reset.is_none());
+    assert!(net.reset_file(DEV_A).is_none());
+    assert!(net.core(DEV_A).pairing_preconditions(true).is_ok());
+    net.cycle(DEV_W).unwrap();
+    net.cycle(DEV_A).unwrap();
+    net.dev(DEV_A).d.clock.advance(11 * 60_000);
+    assert!(net.core(DEV_A).reset_key(1).is_ok(), "relance");
     // Plus petite : l'annonce l'emporte.
     let mut net = Net::new(&[DEV_Z]);
     net.cycle(DEV_Z).unwrap();

@@ -1038,7 +1038,8 @@ impl SyncCore {
     /// qui l'emporte. Échoue fermé (audit 6) : registre illisible, liste coupée (`state-mismatch`) ou état dans le nuage (`cloud-pending`)
     /// refusent, jamais « rien d'annoncé ».
     fn old_key_withdrawn(&self, inner: &mut Inner, key: &MasterKey, self_id: &str) -> SyncResult<bool> {
-        if self.reset_record(inner, self_id)?.is_some_and(|r| r.superseded.as_ref().is_some_and(|s| s.epoch.is_some())) {
+        // Perte face à une autre réinitialisation : sa nouvelle clé l'emporte ; face à une restauration (§18 point 16), K reste la clé.
+        if self.reset_record(inner, self_id)?.is_some_and(|r| r.superseded.as_ref().is_some_and(|s| s.epoch.is_some() && !s.restore)) {
             return Ok(true);
         }
         let entries = self.registry(inner, key, self_id)?.entries;
@@ -1782,7 +1783,7 @@ impl SyncCore {
                 log::event("reset-refused", "joined");
                 return fail(SyncCode::StateMismatch);
             }
-            Some(record) if record.superseded.as_ref().is_some_and(|s| s.epoch.is_some()) => {
+            Some(record) if record.superseded.as_ref().is_some_and(|s| s.epoch.is_some() && !s.restore) => {
                 log::event("reset-refused", "superseded");
                 return fail(SyncCode::StateMismatch);
             }
@@ -1935,6 +1936,23 @@ impl SyncCore {
         if let Some(lost) = record.superseded.clone() {
             if !lost.done {
                 self.supersede_steps(inner, &mut record)?;
+            }
+            // §18 point 16 : perdue face à une restauration, et l'époque restaurée est suivie (`own.json` y est) : registre clos (rien à
+            // associer, K reste la clé) ; l'état « interrompue » reste affiché par le moteur jusqu'à « Fermer » ou une relance.
+            if lost.restore && record.superseded.as_ref().is_some_and(|s| s.done) {
+                let folder_id = self.require_folder(inner)?.folder_id.clone();
+                let key = self.load_key(inner)?;
+                let own = read_config_file::<OwnState>(&self.path(OWN_FILE)).ok().flatten().filter(|o| o.folder_id == folder_id && o.kid == key.kid());
+                let reached = match (own.and_then(|o| o.epoch).as_deref().and_then(EpochId::parse), lost.epoch.as_deref().and_then(EpochId::parse)) {
+                    (Some(own), Some(target)) => own >= target,
+                    _ => false,
+                };
+                if reached {
+                    remove_config_file(&self.path(RESET_FILE))?;
+                    inner.next = None;
+                    log::event("reset-superseded-followed", lost.epoch.as_deref().unwrap_or("none"));
+                    return Ok(None);
+                }
             }
             // §18 point 15 : gagnant oublié (son annonce, ou son époque restaurée, est sans effet) : registre clos ; les étapes déjà
             // faites ne sont pas défaites (`.next` effacée) et `sync_reset_key` redevient possible.

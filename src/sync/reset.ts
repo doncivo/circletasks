@@ -341,8 +341,9 @@ export async function evaluateReset(deps: SyncDeps, input: ResetInput): Promise<
     await save({ ...base(view.role, step), waiting: view.waiting, waitingSince, resumed });
     return view.role === 'initiator' ? { kind: 'initiator', view } : { kind: 'joined', kid: view.kid, view };
   }
-  // Perte close ou face à une restauration, déjà constatée : rien à associer, gardée jusqu'à « Fermer » ou une nouvelle réinitialisation.
-  if (stored?.step === 'superseded' && (stored.closed || stored.restore)) return stored.restore ? { kind: 'follow', target: stored.epoch } : { kind: 'none' };
+  // Perte close ou face à une restauration déjà suivie (registre clos par Rust) : rien à associer, aucune contrainte d'époque ; l'état
+  // reste affiché jusqu'à « Fermer » ou une nouvelle réinitialisation.
+  if (stored?.step === 'superseded' && (stored.closed || stored.restore)) return { kind: 'none' };
   // Bascule faite par un scan dont ce cycle n'a pas vu le résultat (arrêt juste après) : la clé locale est devenue la nouvelle clé.
   if (stored && (stored.role === 'initiator' || stored.role === 'joined') && !['done', 'start', 'superseded'].includes(stored.step) && stored.kid !== null && input.key.kid === stored.kid && !input.key.nextKid) {
     await save({ ...stored, step: 'done', failure: null, waiting: [] });

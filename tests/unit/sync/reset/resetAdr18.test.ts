@@ -172,6 +172,11 @@ describe('§18 point 16 : restauration pendant une réinitialisation', () => {
     await settle(room.devices, 3);
     expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
     expect((await a.platform.key.status()).nextKid ?? null).toBeNull();
+    // Époque restaurée suivie : perte close par Rust ; l'état « interrompue » reste affiché jusqu'à « Fermer » ; A peut relancer.
+    expect(a.platform.testing.resetRecord()).toBeNull();
+    expect(a.service.status().reset).toMatchObject({ step: 'superseded', restore: true });
+    a.clock.advance(11 * 60_000);
+    expect((await a.service.resetSync()).kind).toBe('started');
   });
 });
 
