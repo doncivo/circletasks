@@ -6,6 +6,11 @@ import { describe, expect, it } from 'vitest';
  * bloc ajouté ne désactive pas les interdictions des autres (couches, API Tauri, blocs à la demande, imports nus).
  */
 const eslint = new ESLint({ cwd: process.cwd() });
+// Chargement unique de la config plate et de ses plugins (~1,7 s au repos, bien plus sous la charge de la suite complète) fait à la
+// collecte du fichier, hors du délai de chaque test : sinon le premier cas le paie seul et dépasse son délai quand la machine est chargée.
+// Les cas mesurent ensuite seulement l'analyse de leur extrait (~10 ms).
+await eslint.calculateConfigForFile('src/App.tsx');
+await eslint.lintText('export {};\n', { filePath: 'src/App.tsx' });
 
 async function ruleIds(filePath: string, code: string): Promise<string[]> {
   const [result] = await eslint.lintText(code, { filePath });
