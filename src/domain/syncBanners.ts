@@ -159,7 +159,7 @@ export interface SyncBannerDevice {
 /** Y-10 : échec d'un oubli et suppressions en attente (forme de `SyncStatus.forget`, gardés dans `sync_meta`). */
 export interface ForgetFacts {
   readonly failure: { readonly deviceId: DeviceId; readonly code: string; readonly step: 'declare' | 'delete' | 'rejoin' | 'overflow' } | null;
-  readonly deletions: readonly { readonly deviceId: DeviceId; readonly state: 'waiting' | 'deleting' | 'strays' | 'done'; readonly waitingFor: DeviceId | null }[];
+  readonly deletions: readonly { readonly deviceId: DeviceId; readonly state: 'waiting' | 'deleting' | 'finalizing' | 'strays' | 'done'; readonly waitingFor: DeviceId | null }[];
 }
 
 /** Ce que la synchro expose (forme de `SyncStatus`). */

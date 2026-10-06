@@ -1,5 +1,5 @@
 {
-  "description": "Table de cas commune Rust / Vitest (Y-10 ; ADR 0011 §14.2, §11.2 et §18 points 3 à 10) : ordre total sur la liste maître (auteur = appareil du hlc at), apprentissage du registre, coupure, conditions de suppression (fantômes, done, déclarations republiées, state.ctx de la cible dans le nuage), comparaison de forgotten par sync_write_state, hlc d'une nouvelle déclaration. Lue par forget_order, learn_declarations, cutoff, forgotten_delete_check, completed_forgotten et next_declaration_hlc (src-tauri/src/sync/forget.rs) et par forgetOrder, learnDeclarations, cutoff, forgottenDeleteCheck, completedForgotten et declarationHlc (src/domain/sync/retention.ts). Valeurs attendues écrites à la main.",
+  "description": "Table de cas commune Rust / Vitest (Y-10 ; ADR 0011 §14.2, §11.2 et §18 points 3 à 10) : ordre total sur la liste maître (auteur = appareil du hlc at), apprentissage du registre, coupure, conditions de suppression (fantômes, done, déclarations republiées, state.ctx de la cible dans le nuage), comparaison de forgotten par sync_write_state, hlc d'une nouvelle déclaration, appareils vus. Lue par forget_order, learn_declarations, cutoff, forgotten_delete_check, completed_forgotten, next_declaration_hlc et seen_devices (src-tauri/src/sync/forget.rs) et par forgetOrder, learnDeclarations, cutoff, forgottenDeleteCheck, completedForgotten, declarationHlc et seenDevices (src/domain/sync/retention.ts). Valeurs attendues écrites à la main.",
   "forgetOrder": [
     {
       "name": "déclaration seule",
@@ -4166,6 +4166,189 @@
       "seen": [],
       "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "expected": null
+    }
+  ],
+  "seen": [
+    {
+      "name": "rien accepté, aucun état : personne",
+      "accepted": [],
+      "states": [],
+      "master": [],
+      "expected": []
+    },
+    {
+      "name": "état déjà accepté, dossier disparu depuis : vu",
+      "accepted": [
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      ],
+      "states": [],
+      "master": [],
+      "expected": [
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      ]
+    },
+    {
+      "name": "cité par un actif : vu",
+      "accepted": [],
+      "states": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "master": [],
+      "expected": [
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+      ]
+    },
+    {
+      "name": "cité seulement par un oublié : pas vu",
+      "accepted": [],
+      "states": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "acks": {
+            "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": []
+    },
+    {
+      "name": "cité par l’état local (actif) : vu",
+      "accepted": [
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      ],
+      "states": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              "stateSeq": 1
+            },
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": [
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+      ]
+    },
+    {
+      "name": "oublié accepté avant son oubli : reste vu",
+      "accepted": [
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+      ],
+      "states": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": [
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+      ]
+    },
+    {
+      "name": "X a oublié A le premier : A oublié, ses accusés ne comptent plus, ceux de X comptent",
+      "accepted": [],
+      "states": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "acks": {
+            "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+              "stateSeq": 1
+            }
+          }
+        },
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "acks": {
+            "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+              "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+              "segment": 1,
+              "record": 0,
+              "hlc": "001791000000010-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+              "stateSeq": 1
+            }
+          }
+        }
+      ],
+      "master": [
+        {
+          "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "at": "001791000000050-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "lastAck": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": [
+        "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+      ]
     }
   ]
 }

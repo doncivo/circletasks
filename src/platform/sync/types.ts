@@ -101,6 +101,8 @@ export interface ForgottenRegistryView {
   readonly entries: readonly ForgottenDevice[];
   readonly done: readonly DeviceId[];
   readonly overflow: boolean;
+  /** Identifiants dont un état a déjà été accepté (anti-rejeu du registre, identifiants seuls) : base de `seenDevices` (revue point 4). */
+  readonly accepted: readonly DeviceId[];
 }
 
 /** Page de texte clair : jamais au-delà de la tête authentifiée. `next` = position après le dernier enregistrement rendu. */
@@ -413,7 +415,8 @@ export interface ForgetFailure {
  */
 export interface ForgetDeletionStatus {
   readonly deviceId: DeviceId;
-  readonly state: 'waiting' | 'deleting' | 'strays' | 'done';
+  /** `finalizing` : dossier déjà disparu, mais Rust ne l'a pas encore inscrit dans `done` (conditions pas encore réunies, revue point 5). */
+  readonly state: 'waiting' | 'deleting' | 'finalizing' | 'strays' | 'done';
   readonly waitingFor: DeviceId | null;
 }
 

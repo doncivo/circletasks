@@ -2,7 +2,7 @@ import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isDeviceAck, isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
 import { PAGE_ROWS } from '../domain/sync/limits';
 import { hlcDevice, hlcMs } from '../domain/sync/parse';
-import { citedDevices, compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, type ForgetKnownDevice, type ForgetVerdict } from '../domain/sync/retention';
+import { compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, seenDevices, type ForgetKnownDevice, type ForgetVerdict } from '../domain/sync/retention';
 import { SYNC_TABLES } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import {
@@ -73,7 +73,7 @@ export async function forgetSnapshotDue(repos: Repositories, lastOwnSnapshotMs: 
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 const STEPS: readonly ForgetStep[] = ['declare', 'delete', 'rejoin', 'overflow'];
-const DELETION_STATES: readonly ForgetDeletionStatus['state'][] = ['waiting', 'deleting', 'strays', 'done'];
+const DELETION_STATES: readonly ForgetDeletionStatus['state'][] = ['waiting', 'deleting', 'finalizing', 'strays', 'done'];
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
 export function parseForgetFailure(value: unknown): ForgetFailure | null {
@@ -154,6 +154,9 @@ export async function forgetPublishPending(repos: Repositories): Promise<boolean
 // Ordre total et statut des appareils (critères 7, 9, 10, 16)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
+/** Auteurs oubliés (Y-10, seconde revue point 1) : leurs instantanés ne sont jamais proposés (arrivée, reprise, changement d'époque). */
+export type ForgottenAuthors = Pick<ReadonlySet<DeviceId>, 'has'>;
+
 export interface ForgetView {
   /** Appareils oubliés par la liste maître, et l'auteur de la déclaration retenue. */
   readonly order: ReadonlyMap<DeviceId, ForgetVerdict>;
@@ -221,21 +224,20 @@ export function readLimit(
 
 /**
  * Appareils connus vus du moteur, sous la forme de `forgottenDeleteCheck` (mêmes règles que Rust) : dossiers du scan, appareils cités
- * dans les accusés des actifs non oubliés, cibles de la liste maître ; `seen` : état déjà accepté (`sync_state`) ou cité par un actif.
+ * dans les accusés des actifs non oubliés, états déjà acceptés, cibles de la liste maître ; `seen` : `seenDevices` (anti-rejeu du registre
+ * rendu par le scan, ou cité par un actif), comme Rust.
  */
 export function forgetKnownDevices(
   scan: FolderScan,
   view: ForgetView,
   accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
-  rows: readonly SyncStateRow[],
   self: DeviceId,
   ownPublished: PublishedDeviceState | null,
 ): ForgetKnownDevice[] {
-  const everAccepted = new Set(rows.filter((r) => r.stateSeq > 0 || r.isSelf).map((r) => r.deviceId));
-  const actives = [...accepted.values(), ...(ownPublished ? [ownPublished] : [])].filter((s) => !view.order.has(s.deviceId));
-  const cited = citedDevices(actives);
+  // Même définition que Rust (seconde revue, point 4) : anti-rejeu du registre (`scan.forgotten.accepted`) ou cité par un actif.
+  const seenSet = seenDevices(scan.forgotten.accepted, [...accepted.values(), ...(ownPublished ? [ownPublished] : [])], view.master);
   const known = new Map<DeviceId, ForgetKnownDevice>();
-  const seen = (id: DeviceId): boolean => everAccepted.has(id) || cited.has(id);
+  const seen = (id: DeviceId): boolean => id === self || seenSet.has(id);
   for (const device of scan.devices) {
     if (device.deviceId === self) continue;
     const state = accepted.get(device.deviceId) ?? null;
@@ -244,7 +246,7 @@ export function forgetKnownDevices(
     known.set(device.deviceId, { deviceId: device.deviceId, status, state: status === 'ok' ? state : null, seen: seen(device.deviceId) });
   }
   known.set(self, ownPublished ? { deviceId: self, status: 'ok', state: ownPublished, seen: true } : { deviceId: self, status: 'missing', state: null, seen: true });
-  for (const id of [...cited, ...view.master.map((e) => e.deviceId)]) {
+  for (const id of [...seenSet, ...view.master.map((e) => e.deviceId)]) {
     if (!known.has(id)) known.set(id, { deviceId: id, status: 'missing', state: null, seen: seen(id) });
   }
   return [...known.values()];
@@ -269,7 +271,7 @@ export async function runForgetDeletions(
   const repos = deps.data.repos;
   const stored = new Map(parseForgetDeletions(await readJson<unknown>(repos, FORGET_META.deletions)).map((d) => [d.deviceId, d]));
   const next = new Map(stored);
-  const known = forgetKnownDevices(input.scan, input.view, input.accepted, input.rows, deps.deviceId, input.ownPublished);
+  const known = forgetKnownDevices(input.scan, input.view, input.accepted, deps.deviceId, input.ownPublished);
   for (const target of input.view.order.keys()) {
     if (target === deps.deviceId) continue;
     const listing = input.scan.devices.find((d) => d.deviceId === target);
@@ -283,9 +285,10 @@ export async function runForgetDeletions(
     if (!listing) await clearFailure(repos, target, ['delete']);
     const check = forgottenDeleteCheck(target, deps.deviceId, input.view.master, [...input.view.done], known);
     if (check.kind === 'waiting' || check.kind === 'refused') {
-      // Dossier déjà disparu (supprimé par un autre appareil actif) : plus rien à attendre ici (critère 13) ; Rust l'inscrira dans
-      // `done` au premier appel possible.
-      next.set(target, listing ? { deviceId: target, state: 'waiting', waitingFor: check.kind === 'waiting' && check.device !== deps.deviceId ? check.device : null } : { deviceId: target, state: 'done', waitingFor: null });
+      // Dossier déjà disparu (supprimé par un autre appareil actif) : « finalisation en attente de {appareil} » jusqu'à ce que Rust
+      // l'inscrive dans `done` (seconde revue, point 5 : jamais effacée avant).
+      const waitingFor = check.kind === 'waiting' && check.device !== deps.deviceId ? check.device : null;
+      next.set(target, { deviceId: target, state: listing ? 'waiting' : 'finalizing', waitingFor });
       continue;
     }
     const previous = stored.get(target);

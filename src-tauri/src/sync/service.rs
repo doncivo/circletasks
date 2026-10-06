@@ -24,7 +24,7 @@ use super::names::{is_uuid_v4, EpochId};
 use super::files::{delete_forgotten_device_files, ForgottenDeletion};
 use super::files::Listing;
 use super::forget::{
-    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes,
+    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
     next_declaration_hlc, state_hlcs, AcceptedRecord, DeleteCheck, ForgottenRegistry, ForgottenView, KnownDevice, KnownState, FORGET_DECLARE_LIMIT, FORGOTTEN_FILE,
     MAX_FORGOTTEN_DELETE_ENTRIES, MAX_FORGOTTEN_ENTRIES, SYNC_NEXT_KEY_ACCOUNT,
 };
@@ -1059,18 +1059,17 @@ impl SyncCore {
         }
         let order = forget_order(&reg.entries);
         let ok = Self::ok_states(&reads);
-        let cited = cited_devices(ok.iter().filter(|(id, _)| !order.contains_key(*id)).map(|(_, s)| *s));
+        let seen_set = seen_devices(reg.accepted.keys(), ok.iter().map(|(id, s)| (*id, &s.acks)), &reg.entries);
         let mut ids: BTreeSet<String> = reads.keys().cloned().collect();
-        ids.extend(cited.iter().cloned());
+        ids.extend(seen_set.iter().cloned());
         ids.extend(reg.entries.iter().map(|f| f.device_id.clone()));
-        ids.extend(reg.accepted.keys().cloned());
         let authors: BTreeSet<&str> = reg.entries.iter().filter_map(declaration_author).collect();
         let known: Vec<KnownDevice> = ids
             .into_iter()
             .map(|id| {
                 let read = reads.get(&id);
                 let status = read.map_or(StateStatus::Missing, |r| r.status);
-                let seen = reg.accepted.contains_key(&id) || cited.contains(&id);
+                let seen = seen_set.contains(&id);
                 if status != StateStatus::Ok && !seen && !authors.contains(id.as_str()) && !order.contains_key(&id) && id != self_id {
                     log::event("forgotten-delete-phantom", &id);
                 }

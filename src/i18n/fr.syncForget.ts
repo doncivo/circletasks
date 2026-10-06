@@ -21,6 +21,8 @@ export const syncForgetFr = {
   deletionWaitingUnknown: 'Oublié · suppression des fichiers en attente',
   deletionRunning: 'Oublié · suppression des fichiers en cours',
   deletionStrays: 'Oublié · des fichiers non reconnus restent dans iCloud',
+  deletionFinalizing: 'Oublié · finalisation en attente de {device}',
+  deletionFinalizingUnknown: 'Oublié · finalisation en attente',
   section: 'OUBLI D’UN APPAREIL',
   failedDeclare: 'L’oubli de {device} a échoué : {reason}',
   failedDelete: 'La suppression des fichiers de {device} a échoué : {reason}',
@@ -54,4 +56,6 @@ export const syncForgetFr = {
   bannerPendingUnknown: '{device} oublié : suppression de ses fichiers en attente',
   bannerRunning: '{device} oublié : suppression de ses fichiers en cours',
   bannerStrays: '{device} oublié : des fichiers non reconnus restent dans iCloud',
+  bannerFinalizing: '{device} oublié : finalisation en attente de {waiting}',
+  bannerFinalizingUnknown: '{device} oublié : finalisation en attente',
 } as const;

@@ -221,6 +221,22 @@ export function citedDevices(activeStates: readonly Pick<PublishedDeviceState, '
   return out;
 }
 
+/**
+ * Appareils « vus » (seconde revue Y-10, point 4 ; même définition que `seen_devices` de forget.rs) : état déjà accepté par l'anti-rejeu
+ * du registre (`FolderScan.forgotten.accepted`), ou cité dans un accusé d'un état authentifié dont l'auteur n'est pas oublié par la
+ * liste maître. Un appareil jamais vu, sans état authentifié et sans déclaration, est un fantôme : il ne bloque pas une suppression.
+ */
+export function seenDevices(
+  accepted: Iterable<DeviceId>,
+  states: readonly Pick<PublishedDeviceState, 'deviceId' | 'acks'>[],
+  master: readonly ForgottenDevice[],
+): ReadonlySet<DeviceId> {
+  const order = forgetOrder(master);
+  const out = new Set<DeviceId>(accepted);
+  for (const id of citedDevices(states.filter((s) => !order.has(s.deviceId)))) out.add(id);
+  return out;
+}
+
 const sameEntry = (a: ForgottenDevice, b: ForgottenDevice): boolean =>
   a.deviceId === b.deviceId &&
   a.at === b.at &&

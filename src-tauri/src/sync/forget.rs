@@ -72,7 +72,7 @@ impl ForgottenRegistry {
 
     /// Vue rendue par `sync_scan` (`FolderScan.forgotten`).
     pub fn view(&self, overflow: bool) -> ForgottenView {
-        ForgottenView { entries: self.entries.clone(), done: self.done.clone(), overflow }
+        ForgottenView { entries: self.entries.clone(), done: self.done.clone(), overflow, accepted: self.accepted.keys().cloned().collect() }
     }
 }
 
@@ -82,6 +82,8 @@ pub struct ForgottenView {
     pub entries: Vec<ForgottenDevice>,
     pub done: Vec<String>,
     pub overflow: bool,
+    /// Identifiants de l'anti-rejeu du registre (identifiants seuls) : base de `seen_devices` chez le moteur (revue point 4).
+    pub accepted: Vec<String>,
 }
 
 /// Oubli retenu par l'ordre total : auteur de la déclaration (appareil de son hlc) et son hlc.
@@ -183,6 +185,23 @@ pub fn cutoff<'a>(target: &str, ackers: impl IntoIterator<Item = (&'a str, &'a B
 /// Appareils cités dans les accusés des états donnés (audit Y-10 c : l'appelant ne passe que les actifs non oubliés).
 pub fn cited_devices<'a>(active_states: impl IntoIterator<Item = &'a PublishedState>) -> BTreeSet<String> {
     active_states.into_iter().flat_map(|s| s.acks.keys().cloned()).collect()
+}
+
+/// Appareils « vus » (seconde revue Y-10, point 4 ; même définition que `seenDevices` de retention.ts) : état déjà accepté par
+/// l'anti-rejeu du registre, ou cité dans un accusé d'un état authentifié dont l'auteur n'est pas oublié par la liste maître.
+pub fn seen_devices<'a>(
+    accepted: impl IntoIterator<Item = &'a String>,
+    states: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, DeviceAck>)>,
+    master: &[ForgottenDevice],
+) -> BTreeSet<String> {
+    let order = forget_order(master);
+    let mut out: BTreeSet<String> = accepted.into_iter().cloned().collect();
+    for (id, acks) in states {
+        if !order.contains_key(id) {
+            out.extend(acks.keys().cloned());
+        }
+    }
+    out
 }
 
 /// Ce que la vérification retient d'un état authentifié.

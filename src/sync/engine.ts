@@ -11,7 +11,7 @@ import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { isJoining, joinFromSnapshot } from './join';
-import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, forgetSnapshotDue, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, type ForgetView } from './forget';
+import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, forgetSnapshotDue, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, type ForgetView, type ForgottenAuthors } from './forget';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -288,7 +288,10 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
 
   try {
     // 3. Époque.
-    const states = [...accepted.values()];
+    // Y-10 (seconde revue, point 1) : un appareil oublié ne fixe ni l'époque du dossier, ni la date du dernier instantané, ni la source d'un
+    // changement d'époque (son état reste accepté pour les curseurs et la coupure).
+    const live = new Map([...accepted].filter(([id]) => !forgetView.order.has(id)));
+    const states = [...live.values()];
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
     let epoch = localEpoch;
     let resume = options.forceResume === true || (await readJson<boolean>(repos, META.resume)) === true;
@@ -325,7 +328,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     } else if (epoch !== null && ((folderE !== null && compareEpochs(folderE, epoch) > 0) || switchState)) {
       const target = switchState?.target ?? (folderE as EpochId);
       work();
-      const switched = await switchEpoch(deps, target, accepted, ownState, hooks.onRemoteChanges);
+      const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges);
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
         // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
@@ -362,8 +365,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const rows = await repos.sync.getStates();
       const acks = new Map<DeviceId, DeviceAck>();
       for (const row of rows) {
-        // Y-10 (§18 point 6) : plus aucun accusé sur un appareil oublié terminé.
-        if (row.isSelf || row.epoch !== currentEpoch || acks.size >= MAX_STATE_ACKS || forgetView.done.has(row.deviceId as DeviceId)) continue;
+        // Y-10 (ADR 0011 §18 point 11) : l'accusé sur un appareil oublié reste publié, figé à sa position (il n'est plus lu), même une
+        // fois terminé : sans lui, un autre actif ne verrait jamais la coupure atteinte (finalisation bloquée, seconde revue point 5).
+        if (row.isSelf || row.epoch !== currentEpoch || acks.size >= MAX_STATE_ACKS) continue;
         acks.set(row.deviceId as DeviceId, { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
       }
       return acks;
@@ -388,8 +392,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       await writeJson(repos, META.resume, true);
       // Y-06 : un nouvel appareil (aucune époque suivie avant ce cycle, ou arrivée commencée) rejoint par tranches, avec progression,
       // reprise au même endroit et échec mémorisé (src/sync/join.ts) ; les autres reprises sont inchangées.
-      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
-      return resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
+      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, forgetView.order);
+      return resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, forgetView.order);
     };
     if (resume) await doResume();
 
@@ -581,9 +585,11 @@ export async function resumeFromSnapshot(
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
   pending: Set<string>,
+  forgotten: ForgottenAuthors,
 ): Promise<boolean> {
+  // Y-10 (seconde revue, point 1) : jamais l'instantané d'un auteur oublié (il peut couvrir des écritures au-delà de sa coupure).
   const candidates = [...accepted.entries(), ...(ownState ? [[deps.deviceId, ownState] as const] : [])]
-    .filter(([, s]) => s.epoch === epoch && s.snapshot !== null)
+    .filter(([id, s]) => !forgotten.has(id) && s.epoch === epoch && s.snapshot !== null)
     .sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? 1 : -1));
   for (const [deviceId, state] of candidates) {
     const loaded = await loadSnapshot(deps, deviceId, epoch, (state.snapshot as { seq: number }).seq);

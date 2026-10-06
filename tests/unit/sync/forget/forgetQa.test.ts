@@ -221,9 +221,16 @@ describe('suppression des fichiers faite par un autre appareil actif (critère 1
     await a.cycle();
     expect(a.folder.devices.has(x.id)).toBe(false);
     const line = a.service.status().forget?.deletions.find((d) => d.deviceId === x.id);
-    expect(line === undefined || line.state === 'done').toBe(true);
+    // Seconde revue point 5 : tant que Rust n'a pas inscrit X dans done, la ligne reste « finalisation en attente » (jamais effacée avant).
+    const done = (): boolean => (a.platform.testing.forgottenRegistry()?.done ?? []).includes(x.id);
+    if (!done()) expect(line?.state).toBe('finalizing');
     expect(a.service.status().forget?.failure ?? null).toBeNull();
     expect(statusOf(a, x.id)).toBe('forgotten');
+    expect(await meta(a, FORGET_META.failure)).toBeNull();
+    // A de nouveau en ligne : conditions réunies, Rust inscrit X dans done, la ligne disparaît, sans échec.
+    await settle([a, b, c]);
+    expect(done()).toBe(true);
+    expect(a.service.status().forget?.deletions ?? []).toEqual([]);
     expect(await meta(a, FORGET_META.failure)).toBeNull();
   });
 });

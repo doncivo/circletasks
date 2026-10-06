@@ -70,7 +70,7 @@ import {
   type SyncPlatform,
 } from './types';
 import { parsePublishedStateText } from '../../domain/sync/parse';
-import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, type ForgetKnownDevice } from '../../domain/sync/retention';
+import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, seenDevices, type ForgetKnownDevice } from '../../domain/sync/retention';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -833,12 +833,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const kept = [...selfScan, ...others.slice(0, room)];
     const dropped = Math.max(0, others.length - room);
     // Y-10 (§18 point 3) : déclarations retenues des états authentifiés apprises dans la liste maître, gardée avant de rendre le scan.
-    let forgotten: ForgottenRegistryView = { entries: [], done: [], overflow: false };
+    let forgotten: ForgottenRegistryView = { entries: [], done: [], overflow: false, accepted: [] };
     if (bound !== null) {
       const reg = ensureRegistry(f, kid, bound);
       const learned = learnDeclarations(reg.entries, kept.filter((d) => d.stateStatus === 'ok' && d.state).flatMap((d) => (d.state as PublishedDeviceState).forgotten));
       registry = { ...reg, entries: learned.entries };
-      forgotten = { entries: learned.entries, done: [...reg.done], overflow: learned.overflow };
+      forgotten = { entries: learned.entries, done: [...reg.done], overflow: learned.overflow, accepted: ([...accepted.keys()] as DeviceId[]).sort() };
     }
     return {
       devices: kept.sort((a, b) => (a.deviceId < b.deviceId ? -1 : 1)),
@@ -1240,14 +1240,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const reg = ensureRegistry(f, kid, self);
     const reads = readAllStates(f, kid);
     if (resetInProgress(reads)) return fail('state-mismatch');
-    const order = forgetOrder(reg.entries);
     const ok = okStates(reads);
-    const cited = citedDevices(ok.filter(([id]) => !order.has(id)).map(([, s]) => s));
-    const ids = new Set<DeviceId>([...reads.keys(), ...cited, ...reg.entries.map((e) => e.deviceId), ...([...accepted.keys()] as DeviceId[])]);
+    const seen = seenDevices(accepted.keys() as Iterable<DeviceId>, ok.map(([, s]) => s), reg.entries);
+    const ids = new Set<DeviceId>([...reads.keys(), ...seen, ...reg.entries.map((e) => e.deviceId)]);
     const known: ForgetKnownDevice[] = [...ids].map((id) => {
       const read = reads.get(id);
       const status = read?.status ?? 'missing';
-      return { deviceId: id, status, state: status === 'ok' ? (read?.state ?? null) : null, seen: accepted.has(id) || cited.has(id) };
+      return { deviceId: id, status, state: status === 'ok' ? (read?.state ?? null) : null, seen: seen.has(id) };
     });
     const check = forgottenDeleteCheck(deviceId, self, reg.entries, reg.done, known);
     if (check.kind !== 'ready') return fail(check.code);

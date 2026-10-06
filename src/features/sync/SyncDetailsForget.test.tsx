@@ -74,6 +74,8 @@ describe('ligne APPAREILS (critère 1)', () => {
     expect(within(iphone).getByRole('status').textContent).toBe('Oublié · suppression des fichiers en attente de PC cccc');
     act(() => sync.setStatus({ forget: { failure: null, deletions: [{ deviceId: IPHONE, state: 'deleting', waitingFor: null }] } }));
     expect(within(devicesList()[1] as HTMLElement).getByRole('status').textContent).toBe('Oublié · suppression des fichiers en cours');
+    act(() => sync.setStatus({ forget: { failure: null, deletions: [{ deviceId: IPHONE, state: 'finalizing', waitingFor: PC2 }] } }));
+    expect(within(devicesList()[1] as HTMLElement).getByRole('status').textContent).toBe('Oublié · finalisation en attente de PC cccc');
     act(() => sync.setStatus({ forget: null }));
     expect(within(devicesList()[1] as HTMLElement).queryByRole('status')).toBeNull();
   });

@@ -119,6 +119,9 @@ describe('échec d’un oubli et suppression en attente (critère 15 d)', () => 
     expect(text()).toMatch(/^iPhone oublié : suppression de ses fichiers en attente de PC/);
     set({ forget: { failure: null, deletions: [{ deviceId: PHONE, state: 'deleting', waitingFor: null }] } });
     expect(text()).toContain('iPhone oublié : suppression de ses fichiers en cours');
+    // Seconde revue point 5 : dossier disparu, pas encore terminé chez Rust : finalisation en attente, nommée, jusqu'à done.
+    set({ forget: { failure: null, deletions: [{ deviceId: PHONE, state: 'finalizing', waitingFor: LAPTOP }] } });
+    expect(text()).toMatch(/^iPhone oublié : finalisation en attente de PC/);
     set({ forget: null });
     await settle();
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();

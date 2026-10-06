@@ -20,6 +20,8 @@ export const syncForgetEn: Shape<typeof syncForgetFr> = {
   deletionWaitingUnknown: 'Forgotten · file deletion pending',
   deletionRunning: 'Forgotten · deleting files',
   deletionStrays: 'Forgotten · unrecognized files remain in iCloud',
+  deletionFinalizing: 'Forgotten · finishing, waiting for {device}',
+  deletionFinalizingUnknown: 'Forgotten · finishing, pending',
   section: 'FORGOTTEN DEVICE',
   failedDeclare: 'Forgetting {device} failed: {reason}',
   failedDelete: 'Deleting the files of {device} failed: {reason}',
@@ -53,4 +55,6 @@ export const syncForgetEn: Shape<typeof syncForgetFr> = {
   bannerPendingUnknown: '{device} forgotten: deletion of its files pending',
   bannerRunning: '{device} forgotten: deleting its files',
   bannerStrays: '{device} forgotten: unrecognized files remain in iCloud',
+  bannerFinalizing: '{device} forgotten: finishing, waiting for {waiting}',
+  bannerFinalizingUnknown: '{device} forgotten: finishing, pending',
 };

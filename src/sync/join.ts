@@ -5,6 +5,7 @@ import { syncErrorCodeOf } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import type { CycleHooks } from './engine';
+import type { ForgottenAuthors } from './forget';
 import { META, readJson, writeJson } from './meta';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
@@ -87,11 +88,13 @@ export async function joinFromSnapshot(
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
   pending: Set<string>,
+  forgotten: ForgottenAuthors,
 ): Promise<boolean> {
   const repos = deps.data.repos;
   const saved = await readJson<JoinState>(repos, JOIN_META);
+  // Y-10 (seconde revue, point 1) : jamais l'instantané d'un auteur oublié (il peut couvrir des écritures au-delà de sa coupure).
   const candidates = [...accepted.entries(), ...(ownState ? [[deps.deviceId, ownState] as const] : [])]
-    .filter(([, s]) => s.epoch === epoch && s.snapshot !== null)
+    .filter(([id, s]) => !forgotten.has(id) && s.epoch === epoch && s.snapshot !== null)
     .sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? 1 : -1));
   if (candidates.length === 0) {
     // Aucun instantané dans l'époque : rien à suivre, l'appareil lit les journaux.

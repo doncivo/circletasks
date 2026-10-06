@@ -9,7 +9,7 @@ use std::path::Path;
 
 use circletasks_lib::sync::files::{delete_forgotten_device_files, Availability, FsError};
 use circletasks_lib::sync::forget::{
-    completed_forgotten, cutoff, forget_order, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, DeleteCheck, KnownDevice, KnownState,
+    completed_forgotten, cutoff, forget_order, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, seen_devices, DeleteCheck, KnownDevice, KnownState,
     Verdict, FORGOTTEN_FILE, SYNC_NEXT_KEY_ACCOUNT,
 };
 use circletasks_lib::sync::limits::PAIRING_CLOCK_TOLERANCE_MS;
@@ -151,6 +151,36 @@ fn shared_table_declaration_hlc() {
         let result = next_declaration_hlc(case["nowMs"].as_u64().unwrap(), seen.iter().map(String::as_str), case["self"].as_str().unwrap(), PAIRING_CLOCK_TOLERANCE_MS);
         assert_eq!(json!(result), case["expected"], "{}", case["name"]);
     }
+}
+
+#[test]
+fn shared_table_seen_devices() {
+    let cases = table()["seen"].as_array().unwrap().clone();
+    assert!(cases.len() >= 6);
+    for case in cases {
+        let accepted: Vec<String> = serde_json::from_value(case["accepted"].clone()).unwrap();
+        let states: Vec<(String, BTreeMap<String, DeviceAck>)> = case["states"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| (s["deviceId"].as_str().unwrap().to_owned(), serde_json::from_value(s["acks"].clone()).unwrap()))
+            .collect();
+        let seen = seen_devices(accepted.iter(), states.iter().map(|(id, acks)| (id.as_str(), acks)), &entries_of(&case["master"]));
+        assert_eq!(json!(seen), case["expected"], "{}", case["name"]);
+    }
+}
+
+#[test]
+fn forget_detail_texts_are_all_present_in_the_compiled_file() {
+    // Sécurité (basse) : une clé absente de native/fr.json donnerait un texte vide (unwrap_or_default) et une boîte sans détail.
+    let texts = circletasks_lib::sync::consent::forget_detail_texts();
+    for (name, text) in [("detail", &texts.detail), ("never", &texts.never), ("windows", &texts.windows), ("ios", &texts.ios)] {
+        assert!(!text.trim().is_empty(), "forgetDetail.{name} absent ou vide");
+    }
+    for field in ["{platform}", "{id}", "{date}", "{time}"] {
+        assert!(texts.detail.contains(field), "{field}");
+    }
+    assert!(texts.never.contains("{id}"));
 }
 
 #[test]
@@ -494,6 +524,22 @@ fn registry_rebuilt_case_ii_for_a_device_that_never_published() {
     let scan = fresh.core.scan(&[]).unwrap();
     assert!(scan.forgotten.entries.is_empty());
     assert!(registry_path(&fresh).exists());
+}
+
+#[test]
+fn scan_exposes_accepted_ids_only_same_as_the_registry() {
+    // Seconde revue point 4 : FolderScan.forgotten.accepted = identifiants de l'anti-rejeu du registre (aucun condensé), base commune
+    // de seen_devices chez Rust et chez le moteur.
+    let mut net = Net::new(&[DEV_B]);
+    net.cycle(DEV_A).unwrap();
+    net.cycle(DEV_B).unwrap();
+    let scan = net.dev(DEV_A).d.core.scan(&[]).unwrap();
+    let registry = net.registry(DEV_A);
+    let ids: Vec<String> = registry["accepted"].as_object().unwrap().keys().cloned().collect();
+    assert!(ids.contains(&DEV_B.to_owned()));
+    assert_eq!(scan.forgotten.accepted, ids);
+    let json = serde_json::to_value(&scan.forgotten).unwrap();
+    assert!(json["accepted"].as_array().unwrap().iter().all(Value::is_string), "identifiants seuls");
 }
 
 #[test]

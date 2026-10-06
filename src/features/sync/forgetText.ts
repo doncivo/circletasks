@@ -58,6 +58,9 @@ export function forgetDeletionLine(deletion: ForgetFacts['deletions'][number] | 
   if (!deletion || deletion.state === 'done') return null;
   if (deletion.state === 'deleting') return t('sync.forget.deletionRunning');
   if (deletion.state === 'strays') return t('sync.forget.deletionStrays');
+  if (deletion.state === 'finalizing') {
+    return deletion.waitingFor ? t('sync.forget.deletionFinalizing', { device: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.deletionFinalizingUnknown');
+  }
   return deletion.waitingFor ? t('sync.forget.deletionWaiting', { device: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.deletionWaitingUnknown');
 }
 
@@ -66,5 +69,8 @@ export function forgetPendingBanner(deletion: ForgetFacts['deletions'][number], 
   const device = forgetDeviceName(deletion.deviceId, devices);
   if (deletion.state === 'deleting') return t('sync.forget.bannerRunning', { device });
   if (deletion.state === 'strays') return t('sync.forget.bannerStrays', { device });
+  if (deletion.state === 'finalizing') {
+    return deletion.waitingFor ? t('sync.forget.bannerFinalizing', { device, waiting: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.bannerFinalizingUnknown', { device });
+  }
   return deletion.waitingFor ? t('sync.forget.bannerPending', { device, waiting: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.bannerPendingUnknown', { device });
 }

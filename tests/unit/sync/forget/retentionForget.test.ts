@@ -12,6 +12,7 @@ import {
   forgottenDeleteCheck,
   learnDeclarations,
   purgeHorizon,
+  seenDevices,
   type ForgetKnownDevice,
   type ForgetStateStatus,
   type KnownDevice,
@@ -36,6 +37,7 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
     expect(table.forgottenDelete.length).toBeGreaterThanOrEqual(20);
     expect(table.learn.length).toBeGreaterThanOrEqual(5);
     expect(table.declarationHlc.length).toBeGreaterThanOrEqual(6);
+    expect(table.seen.length).toBeGreaterThanOrEqual(6);
     for (const c of table.cutoff) {
       for (const a of c.ackers) for (const ack of Object.values(a.acks)) expect(isDeviceAck(ack)).toBe(true);
       if (c.expected !== null) expect(isDeviceAck(c.expected)).toBe(true);
@@ -52,6 +54,13 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
   for (const c of table.learn) {
     it(`learnDeclarations : ${c.name}`, () => {
       expect(learnDeclarations(c.master as unknown as ForgottenDevice[], c.candidates as unknown as ForgottenDevice[])).toEqual(c.expected);
+    });
+  }
+
+  for (const c of table.seen) {
+    it(`seenDevices (même définition que Rust, seconde revue point 4) : ${c.name}`, () => {
+      const states = c.states.map((s) => ({ deviceId: s.deviceId as DeviceId, acks: toAcks(s.acks as unknown as JsonAcks) }));
+      expect([...seenDevices(c.accepted as DeviceId[], states, c.master as unknown as ForgottenDevice[])].sort()).toEqual(c.expected);
     });
   }
 

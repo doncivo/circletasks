@@ -34,4 +34,14 @@ describe('Y-01 critère 19 : textes', () => {
     expect(native.consent.showKey.confirm).toBe('Afficher la clé');
     expect(native.consent.eraseKey.content).toContain('Sans clé, cet appareil devra être associé de nouveau');
   });
+
+  it('Y-10 (sécurité, basse) : les quatre clés de forgetDetail existent et ne sont pas vides (sinon la boîte perdrait son détail sans le dire)', () => {
+    const detail = (native as unknown as { forgetDetail?: Record<string, unknown> }).forgetDetail ?? {};
+    for (const key of ['detail', 'never', 'windows', 'ios']) {
+      expect(typeof detail[key], key).toBe('string');
+      expect((detail[key] as string).trim().length, key).toBeGreaterThan(0);
+    }
+    for (const field of ['{platform}', '{id}', '{date}', '{time}']) expect(detail.detail as string).toContain(field);
+    expect(detail.never as string).toContain('{id}');
+  });
 });

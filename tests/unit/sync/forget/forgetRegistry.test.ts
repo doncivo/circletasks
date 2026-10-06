@@ -8,7 +8,7 @@ import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimD
 
 /**
  * Y-10, revue et audit (ADR 0011 §18 points 3 à 10, tranché par l'architecte) par simulation du moteur : liste maître republiée par tous
- * (« X oublie Z, A oublie X, suppression de X »), accusés retirés des terminés, appareil associé ensuite, variantes (état de X supprimé
+ * (« X oublie Z, A oublie X, suppression de X »), accusés sur les terminés gardés (figés), appareil associé ensuite, variantes (état de X supprimé
  * par un tiers, registre de A effacé, Z qui revient), plus aucun cycle après « Associer de nouveau » sans relance (revue point 2),
  * intention de publication restaurée (point 7), échec effacé quand la cible n'a plus de dossier (point 4). Aucun délai réel.
  */
@@ -70,7 +70,7 @@ async function xForgetsZThenAForgetsX(): Promise<[SimDevice, SimDevice, SimDevic
 }
 
 describe('X oublie Z, A oublie X, suppression de X (§18 point 10)', () => {
-  it('chez le moteur de A : Z et X oubliés, fichiers supprimés, plus aucun accusé publié sur eux une fois terminés', async () => {
+  it('chez le moteur de A : Z et X oubliés, fichiers supprimés, accusés sur eux gardés, figés (ADR 0011 §18 point 11, seconde revue point 5)', async () => {
     const [a, x, z] = await xForgetsZThenAForgetsX();
     expect(a.folder.devices.has(x.id)).toBe(false);
     expect(a.folder.devices.has(z.id)).toBe(false);
@@ -78,8 +78,8 @@ describe('X oublie Z, A oublie X, suppression de X (§18 point 10)', () => {
     expect(statusOf(a, z.id)).toBe('forgotten');
     expect(publishedForgotten(a).sort()).toEqual([x.id, z.id].sort());
     expect(a.platform.testing.forgottenRegistry()?.done.slice().sort()).toEqual([x.id, z.id].sort());
-    expect(publishedAcks(a)).not.toContain(x.id);
-    expect(publishedAcks(a)).not.toContain(z.id);
+    expect(publishedAcks(a)).toContain(x.id);
+    expect(publishedAcks(a)).toContain(z.id);
     expect(a.service.status().forget ?? null).toBeNull();
   });
 
