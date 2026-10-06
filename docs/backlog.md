@@ -143,8 +143,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | Y-07 | M15 | Mes deux appareils n'ont pas la même version | sync-icloud | fait (lot Y3 ; vérification réelle à l'ordre 5) |
 | Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | fait (parcours 11 vert, validation security-privacy du 2026-10-06) |
 | Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
-| Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
-| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | à faire (validée par Ali le 2026-10-05 ; texte du PRD M15 à compléter par Ali ; lot Y4) |
+| Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | en cours (lot Y4) |
+| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | en cours (lot Y4) |
 
 Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lot Y1 (Y-08 puis Y-01) en parallèle du lot Y2 (Y-02, Y-09, Y-05, Y-03), deux worktrees ; lot Y3 (Y-04, Y-07, Y-06, en parallèle) après la fusion de Y2 ; lot Y4 (Y-10, Y-11) ensuite. Écrans sans maquette relus par Ali en fin d'ordre 4.
 

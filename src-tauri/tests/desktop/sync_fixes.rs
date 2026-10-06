@@ -293,7 +293,7 @@ fn r5_snapshot_writers_are_unique_and_capped() {
     assert_eq!(code(a.core.snapshot_append(first, &["{}".into()])), SyncCode::BadName);
 }
 
-/// Revue 11 : les 37 codes Rust (35, plus `not-foreground`, `already-open` et `window-unprotected` de Y-06) sont exactement `SYNC_ERROR_CODES` de format.ts, dans le même ordre.
+/// Revue 11 : les 38 codes Rust (35, plus `not-foreground`, `already-open` et `window-unprotected` de Y-06) sont exactement `SYNC_ERROR_CODES` de format.ts, dans le même ordre.
 #[test]
 fn r11_error_codes_match_typescript() {
     let format = include_str!("../../../src/domain/sync/format.ts");
