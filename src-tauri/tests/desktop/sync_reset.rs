@@ -1403,3 +1403,18 @@ fn second_review_withdrawal_is_proven_by_a_newer_author_state_read_after_the_imp
     let lost = view.superseded.expect("retrait prouvé par un état plus récent que celui lu à l'import");
     assert!(lost.epoch.is_none());
 }
+
+#[test]
+fn audit_low_switch_rechecks_its_own_k2_state_before_deleting_state_next() {
+    let mut net = Net::new(&[]);
+    net.cycle(DEV_A).unwrap();
+    let old_state = net.fs.get(&["devices", DEV_A, "state.ctx"]).unwrap();
+    net.reset_and_open(DEV_A);
+    net.dev(DEV_A).stop.at("switch-2");
+    assert_eq!(code(net.read_all(DEV_A)), SyncCode::Io);
+    // Un tiers remet un ancien state.ctx sous K après l'étape 1 : rien n'est supprimé, state.next.ctx reste.
+    net.fs.put(&["devices", DEV_A, "state.ctx"], &old_state);
+    net.dev_mut(DEV_A).d.restart();
+    assert_eq!(code(net.read_all(DEV_A)), SyncCode::StateMismatch);
+    assert!(net.fs.get(&["devices", DEV_A, "state.next.ctx"]).is_some(), "state.next.ctx gardé");
+}

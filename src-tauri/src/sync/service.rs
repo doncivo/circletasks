@@ -2209,15 +2209,9 @@ impl SyncCore {
             record.switch_step = 1;
             self.save_reset(record)?;
         }
-        if record.switch_step < 2 {
-            self.interrupt("switch-2")?;
-            let bound = self.require_folder(inner)?;
-            bound.fs.remove_file(&[DEVICES_DIR, &self_id, STATE_NEXT_FILE]).map_err(|e| SyncError::new(e.code()))?;
-            record.switch_step = 2;
-            self.save_reset(record)?;
-        }
-        // Audit 3 : avant d'effacer quoi que ce soit (étapes 3 à 5), son `state.ctx` doit se déchiffrer avec la nouvelle clé dans l'époque
-        // visée ; sinon la bascule s'arrête (`state-mismatch`), l'ancienne clé reste.
+        // Audit 3 et audit bas de la seconde revue : avant d'effacer quoi que ce soit (étapes 2 à 5, dès la suppression de
+        // `state.next.ctx`), son `state.ctx` doit se déchiffrer avec la nouvelle clé dans l'époque visée ; sinon la bascule s'arrête
+        // (`state-mismatch`), l'ancienne clé et `state.next.ctx` restent.
         if record.switch_step < 5 {
             let next = match self.read_vault_next()?.filter(|k| k.kid() == record.kid) {
                 Some(next) => next,
@@ -2229,6 +2223,13 @@ impl SyncCore {
                 log::event("reset-switch-refused", probe.status.as_str());
                 return fail(SyncCode::StateMismatch);
             }
+        }
+        if record.switch_step < 2 {
+            self.interrupt("switch-2")?;
+            let bound = self.require_folder(inner)?;
+            bound.fs.remove_file(&[DEVICES_DIR, &self_id, STATE_NEXT_FILE]).map_err(|e| SyncError::new(e.code()))?;
+            record.switch_step = 2;
+            self.save_reset(record)?;
         }
         if record.switch_step < 3 {
             self.interrupt("switch-3")?;

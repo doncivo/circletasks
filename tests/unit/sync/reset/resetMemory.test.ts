@@ -254,3 +254,18 @@ describe('seconde revue, point 3 : retrait prouvé sans annonce lue', () => {
     expect(view?.superseded).toMatchObject({ epoch: null });
   });
 });
+
+describe('seconde revue, audit bas : revérification sous K2 avant la suppression de state.next.ctx', () => {
+  it('arrêt avant l’étape 2, ancien state.ctx remis : state-mismatch, state.next.ctx gardé, ancienne clé gardée', async () => {
+    const [a] = (await setupRoom(room, [])) as [SimDevice];
+    const old = a.folder.takeState(a.id);
+    const k = (await a.platform.key.status()).kid;
+    a.platform.testing.interruptBefore('switch-2');
+    expect((await a.service.resetSync()).kind).toBe('started');
+    expect(a.platform.testing.resetRecord()?.switchStep).toBe(1);
+    a.folder.putState(old);
+    expect(await codeOf(a.platform.scan({ keep: [] }))).toBe('state-mismatch');
+    expect(a.folder.devices.get(a.id)?.nextState).not.toBeNull();
+    expect((await a.platform.key.status()).kid).toBe(k);
+  });
+});

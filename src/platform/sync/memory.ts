@@ -1839,16 +1839,17 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       dir.state = cloneFile(dir.nextState);
       record.switchStep = 1;
     }
-    if (record.switchStep < 2) {
-      interrupt('switch-2');
-      if (dir) dir.nextState = null;
-      record.switchStep = 2;
-    }
-    // Audit 3 : avant d'effacer quoi que ce soit (étapes 3 à 5), son `state.ctx` doit être sous la nouvelle clé dans l'époque visée.
+    // Audit 3 et audit bas de la seconde revue : avant d'effacer quoi que ce soit (étapes 2 à 5, dès la suppression de state.next.ctx),
+    // son `state.ctx` doit être sous la nouvelle clé dans l'époque visée.
     if (record.switchStep < 5) {
       const state = dir?.state;
       const read = state && dir ? readStateFile(record.deviceId, dir, 'state', [record.kid], false, false) : null;
       if (read?.status !== 'ok' || read.state?.epoch !== record.epoch) return fail('state-mismatch');
+    }
+    if (record.switchStep < 2) {
+      interrupt('switch-2');
+      if (dir) dir.nextState = null;
+      record.switchStep = 2;
     }
     if (record.switchStep < 3) {
       interrupt('switch-3');
