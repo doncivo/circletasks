@@ -112,7 +112,8 @@ export interface Materialized {
  * la file lu juste après. Toute écriture locale faite pendant la lecture a un hlc plus grand que `cut` et une entrée de numéro plus
  * grand que `maxSeq` : le champ qu'elle porte n'est pas publié dans ce cycle (ni son entrée retirée) et part au suivant ; la tête
  * publiée ne dépasse donc jamais `cut`, et aucune écriture non vue ne passe sous elle. Une création dont un champ est ainsi différé part
- * en deux opérations, que l'autre appareil recompose (`missing-row`, ADR 0011 §3.3).
+ * en deux opérations, que l'autre appareil recompose (`missing-row`, ADR 0011 §3.3) ; une ligne entière (« + ») ne part jamais en partie :
+ * elle attend le cycle suivant avec toutes ses entrées.
  */
 export interface MaterializeBounds {
   readonly maxSeq: number;
@@ -178,19 +179,17 @@ export async function materializeOutbox(
         // Ligne recréée par le report d'époque : republiée entière, une opération à son plus grand hlc.
         const f = new Map<string, SyncField>();
         let max: Hlc | null = null;
-        let deferred = false;
+        // Une ligne entière part en entier ou pas du tout (seconde revue de Y-04, point 1) : l'appareil qui l'a purgée ne peut la recréer
+        // qu'avec toutes ses colonnes (ADR 0011 §5.4). Un champ écrit après la coupure : rien de la ligne dans ce cycle, toutes ses
+        // entrées restent (ni publiées ni retirées) ; elle part entière, avec ce champ, au cycle suivant.
+        if (t.columns.some((col) => late((rowClocks.get(col.name) ?? fallback).hlc))) continue;
         for (const col of t.columns) {
           const clock = rowClocks.get(col.name) ?? fallback;
-          if (late(clock.hlc)) {
-            // Champ réécrit après la coupure : il part au cycle suivant par sa propre entrée.
-            deferred = true;
-            continue;
-          }
           f.set(col.name, [row.values.get(col.name) ?? null, clock.hlc, rowClocks.get(col.name)?.base ?? null]);
           if (max === null || clock.hlc > max) max = clock.hlc;
         }
         if (max === null) {
-          if (!deferred) stale.push(...rowEntries);
+          stale.push(...rowEntries);
           continue;
         }
         const rank = reserved[Math.min(nextReserved, reserved.length - 1)];
