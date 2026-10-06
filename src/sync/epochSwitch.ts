@@ -11,6 +11,7 @@ import { setSnapshotWait } from './forget';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
 import { ROW_REPUBLISH_FIELD } from './publisher';
+import { positionAfterReplace } from './positions';
 import { purgeRows } from './purge';
 import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
 
@@ -254,11 +255,6 @@ export interface SwitchOptions {
   readonly mode: 'replace' | 'merge';
   readonly knows?: ApplyContext['knows'];
   readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
-  /**
-   * Y-11 (§18 point 14) : appareils (oubliés retenus) dont la position est gardée telle quelle en (d) : leur accusé reste celui de
-   * l'époque où il a été lu (coupure), jamais remis au début de la nouvelle époque.
-   */
-  readonly keep?: ReadonlySet<DeviceId>;
 }
 
 /** Passe à l'époque `target` ; reprend à l'étape mémorisée. `uncovered` : instantané d'ouverture qui ne couvre pas un oublié retenu (Y-11). */
@@ -340,15 +336,26 @@ export async function switchEpoch(
     await advance('d');
     await testHooks.afterStep?.('c');
   }
-  // (d) Nouvelle époque : tête vide, curseurs de tous les appareils au début de l'époque ; la publication suit dans le cycle.
+  // (d) Nouvelle époque : tête vide ; la publication suit dans le cycle.
+  // Y-TECH-01 : en remplacement, la position sur chaque autre appareil est celle que la base remplacée contient (`positionAfterReplace`).
+  let covers: ReadonlyMap<DeviceId, DeviceAck> = new Map<DeviceId, DeviceAck>();
+  if (options.mode === 'replace') {
+    const loaded = await load();
+    if (loaded === 'cloud-pending') return 'cloud-pending';
+    if (!loaded) return 'error';
+    covers = loaded.end.covers;
+  }
   await deps.data.transaction(async (tx) => {
     for (const row of await tx.sync.getStates()) {
       // §18.14 « accusés figés à l'import » (seconde revue, bloquant) : dans une réinitialisation (fusion), la position en `n` de tout
       // appareil encore en `n` est gardée ; elle ne passe à `n+1` qu'à sa première lecture dans `n+1` (jamais d'accusé « début de
       // l'époque visée » sur un appareil qui n'y a rien publié).
-      const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && (options.mode === 'merge' || options.keep?.has(row.deviceId as DeviceId) === true);
+      const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && options.mode === 'merge';
       if (keep) continue;
-      await tx.sync.saveState(row.deviceId, { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
+      // Remplacement (ADR §9.1 (d), §20 point 3) : l'accusé suit la base, oubliés retenus et terminés compris ; position
+      // couverte par l'instantané (accusé hérité, §14.2), ou aucune ; jamais {`target`, 0, 0} sur un appareil qui n'y a rien publié.
+      const replaced = !row.isSelf && options.mode === 'replace';
+      await tx.sync.saveState(row.deviceId, replaced ? positionAfterReplace(row.stateEpoch, covers.get(row.deviceId as DeviceId), target) : { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
     }
     await writeJson(tx, META.epoch, target);
     await writeJson(tx, META.head, { epoch: target, segment: 0, record: 0, hlc: null, stateSeq: 0 } satisfies DeviceAck);

@@ -10,6 +10,7 @@ import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
+import { positionFromCover } from './positions';
 import { cursorIds, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
@@ -72,6 +73,37 @@ function acksToJson(acks: ReadonlyMap<DeviceId, DeviceAck>): string {
   const out: Record<string, DeviceAck> = {};
   for (const [id, ack] of acks) out[id] = ack;
   return JSON.stringify(out);
+}
+
+const ZERO_HLC = '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc;
+
+/**
+ * Texte comparé par « réécrit seulement s'il a changé » (section 1.4, audit M1) : sans `stateSeq` (le sien, celui de sa tête **et celui
+ * de chaque accusé**, Y-TECH-01) ni `lastSyncHlc`. Le `stateSeq` d'un accusé change à chaque réécriture de l'appareil lu : compté, il
+ * faisait réécrire l'état à chaque cycle entre appareils actifs qui se lisent (chaque écriture de l'un change l'accusé de l'autre).
+ * Positions, hlc lus, instantané, horizon, liste maître (`forgotten`, qui ne fait que grandir) et annonce y restent : leur changement
+ * est publié au cycle même.
+ */
+export function comparableState(state: PublishedDeviceState): string {
+  const acks = new Map<DeviceId, DeviceAck>([...state.acks].map(([id, ack]) => [id, { ...ack, stateSeq: 0 }]));
+  return publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: ZERO_HLC, acks });
+}
+
+/** États d'un autre appareil qui attendent le `stateSeq` de nos accusés (jamais `cloud-pending` : transfert en cours, rien n'attend). */
+const AWAITING_ACK_SEQ: ReadonlySet<DeviceScan['stateStatus']> = new Set(['missing', 'foreign', 'corrupt', 'rollback', 'too-large']);
+
+/**
+ * Y-TECH-01 : un accusé dont le `stateSeq` a avancé depuis le dernier état publié, sur un appareil dont le `state.ctx` est absent,
+ * étranger, illisible ou rejoué à ce scan (`awaiting`), est republié aussitôt. Cet appareil attend ce `stateSeq` : borne de la règle 1
+ * (état reconstruit ou rejoué sous un `stateSeq` trop bas, refusé par les autres tant qu'il ne la dépasse pas) et condition (iii) de la
+ * reconstruction de `forgotten.json` (§18 point 7). Sans boucle : la ligne de cet appareil ne change que lorsqu'un de ses états est
+ * accepté, et l'accusé n'est republié qu'une fois.
+ */
+function ackSeqAwaited(state: PublishedDeviceState, published: PublishedDeviceState | null, awaiting: ReadonlySet<DeviceId>): boolean {
+  for (const [id, ack] of state.acks) {
+    if (awaiting.has(id) && ack.stateSeq > (published?.acks.get(id)?.stateSeq ?? 0)) return true;
+  }
+  return false;
 }
 
 /** Statut local d'un appareil d'après le statut de son `state.ctx` au scan (un état invalide garde son dernier accusé connu). */
@@ -282,6 +314,11 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     reset: noticeToPublish(directive, epoch),
   });
 
+  /**
+   * Y-TECH-01 : appareils dont l'état n'est pas lisible à ce scan (`ackSeqAwaited`) ; un état `ok` au scan mais refusé par l'anti-rejeu
+   * local est un état rejoué.
+   */
+  const awaitingAckSeq = new Set(scan.devices.filter((d) => d.deviceId !== self && (AWAITING_ACK_SEQ.has(d.stateStatus) || (d.stateStatus === 'ok' && !accepted.has(d.deviceId)))).map((d) => d.deviceId));
   /** Y-10 : déclaration confirmée à publier (intention posée avant l'appel à Rust). */
   let publishForget = await forgetPublishPending(repos);
   /** Dernier état écrit dans ce cycle (suppression des fichiers d'un appareil oublié : Rust relit son état sur le disque). */
@@ -289,14 +326,17 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
 
   /** Écrit son `state.ctx` ; renvoie faux sur `state-mismatch` (hypothèse refusée par Rust). */
   const writeState = async (state: PublishedDeviceState, force: boolean): Promise<boolean> => {
-    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc, forgotten: [] });
+    const comparable = comparableState(state);
     if (state.acks.size > MAX_STATE_ACKS) {
       // Plus de 64 accusés (oublis retenus au-delà des places, §14.2) : état refusé par Rust ; rien publié, « oubli en échec ».
       logger.log('acks-overflow', { count: state.acks.size });
       await recordForgetOverflow(deps);
       return false;
     }
-    const forced = force || publishForget;
+    // Y-TECH-01 : le `stateSeq` des accusés n'entre pas dans la comparaison (`comparableState`) ; il est republié avec toute autre
+    // modification ou au rafraîchissement de 30 minutes, et **aussitôt** sur un appareil dont l'état est absent, étranger, illisible ou
+    // rejoué : c'est la borne qu'il attend pour republier (règle 1, reconstruction (iii) de `forgotten.json`).
+    const forced = force || publishForget || ackSeqAwaited(state, lastWritten ?? ownState, awaitingAckSeq);
     if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
     try {
       await platform.writeState({ sv: deps.sv, state });
@@ -387,7 +427,6 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
-        keep: new Set(forgetView.order.keys()),
       });
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
@@ -440,6 +479,20 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         acks.set(row.deviceId as DeviceId, { epoch: row.epoch as EpochId, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
       }
       return acks;
+    };
+    /**
+     * Y-TECH-01 (revue, point 2) : `covers` d'un instantané écrit par cet appareil = ses accusés publiés (`ackMap`, inchangé), plus la
+     * position **héritée** de chaque ligne restée dans une époque antérieure (ce que sa base contient d'un appareil qui n'a rien publié
+     * dans l'époque courante, §9.1 (d)). Sans elle, un appareil qui remplace ou reprend depuis cet instantané (autre que celui
+     * d'ouverture) n'aurait aucune position sur cet appareil, et l'oubli de celui-ci attendrait sans fin (condition (f)).
+     */
+    const snapshotCovers = async (): Promise<Map<DeviceId, DeviceAck>> => {
+      const covers = await ackMap();
+      for (const row of await repos.sync.getStates()) {
+        if (row.isSelf || row.epoch === null || covers.has(row.deviceId as DeviceId) || compareEpochs(row.epoch as EpochId, currentEpoch) >= 0) continue;
+        covers.set(row.deviceId as DeviceId, { epoch: row.epoch as EpochId, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
+      }
+      return covers;
     };
     const nextState = async (h: DeviceAck): Promise<PublishedDeviceState> => buildState(currentEpoch, h, stateSeq + 1, snapshotMeta, purgeHorizon, await ackMap());
 
@@ -610,7 +663,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         await recordResetFailure(deps, 'announced', publishAllowed ? 'state-mismatch' : 'cloud-pending');
         return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
       }
-      const covers = await ackMap();
+      const covers = await snapshotCovers();
       covers.set(self, { ...head, stateSeq });
       const listedNext = ownScan?.epochs.find((e) => e.epoch === directive.view.epoch)?.snapshots ?? [];
       // §18 point 14 : l'état sous la nouvelle clé porte les accusés sur les oubliés retenus, à leur position de l'époque `n` (coupure).
@@ -639,7 +692,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         work();
         const listedSnapshots = listed?.snapshots ?? [];
         const seq = Math.max(snapshotMeta?.seq ?? 0, ...listedSnapshots) + 1;
-        const covers = await ackMap();
+        const covers = await snapshotCovers();
         covers.set(self, { ...head, stateSeq: stateSeq });
         const endHlc = deps.hlc.now();
         await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
@@ -757,11 +810,11 @@ export async function resumeFromSnapshot(
     if (!loaded) continue;
     const now = iso(deps.clock.nowMs());
     const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, async (tx) => {
-      // Curseurs aux positions couvertes (époque courante), sinon depuis le début.
+      // Curseurs aux positions couvertes, sinon depuis le début de l'époque.
+      const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
       for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
-        const cover = loaded.end.covers.get(id as DeviceId);
-        const inEpoch = cover && cover.epoch === epoch;
-        await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
+        // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
+        await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId, local.get(id)));
       }
       await writeJson(tx, META.resume, null);
       // Instantané admis : son écrivain, écarté plus tôt pour dérive, n'est plus en avance.

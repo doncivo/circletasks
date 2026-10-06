@@ -1125,3 +1125,46 @@ fn attack_foreign_state_forgets_nobody() {
     net.settle(&[DEV_A, DEV_B], 2);
     assert!(net.dev(DEV_A).d.core.forgotten_delete(DEV_X).unwrap().complete);
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-TECH-01 (ADR 0011 §20 point 3, « l'accusé suit la base ») : aucun changement de Rust ; la coupure est recalculée sans mémoire
+// ------------------------------------------------------------------------------------------------------------------------------
+
+#[test]
+fn y_tech_01_cutoff_follows_an_ack_lowered_by_a_replacement_and_a_replayed_higher_ack_is_rollback() {
+    let mut net = Net::new(&[DEV_B, DEV_X]);
+    net.journal(DEV_X);
+    net.settle(&[DEV_A, DEV_B], 1);
+    net.dev(DEV_A).d.core.device_forget(DEV_X, 1).unwrap();
+    net.settle(&[DEV_A, DEV_B], 2);
+    // B porte p_B = tête de X (2, 1) ; A, dont la base a été remplacée, publie p_A = (1, 1) et un instantané qui couvre p_A.
+    let master = serde_json::to_value(&net.dev(DEV_A).d.core.scan(&[]).unwrap().forgotten.entries).unwrap();
+    let (seq_b, seq_x) = (net.dev(DEV_B).seq, net.dev(DEV_X).seq);
+    let p_a = ack(DEV_X, 1, 1, seq_x);
+    net.snapshot(DEV_A, &json!({ DEV_B: ack(DEV_B, 0, 0, seq_b), DEV_X: p_a.clone() })).unwrap();
+    net.publish_raw(DEV_A, json!({ DEV_B: ack(DEV_B, 0, 0, seq_b), DEV_X: p_a.clone() }), master.clone()).unwrap();
+    let x_files = net.files_of(DEV_X);
+    assert_eq!(code(net.dev(DEV_A).d.core.forgotten_delete(DEV_X)), SyncCode::StateMismatch, "B porte encore la coupure p_B");
+    assert_eq!(net.files_of(DEV_X), x_files);
+    // B remplace à son tour : nouvel état authentifié (stateSeq supérieur) dont l'accusé sur X baisse à p_A.
+    let old_b = net.fs.get(&["devices", DEV_B, "state.ctx"]).unwrap();
+    let seq_a = net.dev(DEV_A).seq;
+    net.publish_raw(DEV_B, json!({ DEV_A: ack(DEV_A, 0, 0, seq_a), DEV_X: p_a }), master).unwrap();
+    // Coupure recalculée sans mémoire : p_A ; condition (h) remplie par l'instantané de A.
+    assert!(net.dev(DEV_A).d.core.forgotten_delete(DEV_X).unwrap().complete);
+    assert!(net.files_of(DEV_X).is_empty());
+    // L'état de B lu par sync_forgotten_delete (sans scan entre-deux) fonde la suppression : il entre dans l'anti-rejeu persistant.
+    // Redémarrage de Rust chez A, puis un tiers remet l'ancien état de B (p_B) : rollback ; rien de plus n'est supprimé, X reste terminé.
+    net.dev_mut(DEV_A).d.restart();
+    net.fs.put(&["devices", DEV_B, "state.ctx"], &old_b);
+    let scan = net.dev(DEV_A).d.core.scan(&[]).unwrap();
+    assert_eq!(scan.devices.iter().find(|d| d.device_id == DEV_B).unwrap().state_status, "rollback");
+    assert_eq!(net.registry(DEV_A)["done"], json!([DEV_X]));
+    assert!(net.files_of(DEV_X).is_empty());
+    // Aucune coupure mémorisée par Rust (ni dans forgotten.json ni dans own.json).
+    let sync_dir = net.dev(DEV_A).d.base.path().join("sync");
+    for file in [FORGOTTEN_FILE, "own.json"] {
+        let text = std::fs::read_to_string(sync_dir.join(file)).unwrap();
+        assert!(!text.to_lowercase().contains("cutoff") && !text.contains("coupure"), "{file} : {text}");
+    }
+}
