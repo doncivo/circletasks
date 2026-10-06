@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { SyncPlatformError } from '../../../../src/platform/sync/types';
+import { setEpochSwitchTestHooks } from '../../../../src/sync/epochSwitch';
 import { RESET_META } from '../../../../src/sync/reset';
 import { hydrate, propagate } from '../../../sim/syncCloudSim';
 import { syncFolders, taskSnapshot, type SimDevice } from '../../../sim/syncDevice';
@@ -67,6 +68,39 @@ describe('bascule interrompue avant chacune de ses écritures (critère 12)', ()
       const b = room.devices[1] as SimDevice;
       expect((await b.platform.key.status()).kid).toBe(k2);
       expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+    });
+  }
+});
+
+describe('réassociation de B interrompue à chaque étape du changement d’époque (critère 10, §9.1)', () => {
+  for (const step of ['a', 'b', 'c'] as const) {
+    it(`arrêt après l'étape (${step}), redémarrage : fusion reprise, écritures hors ligne de B republiées, bases identiques`, async () => {
+      const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+      await a.createTask('A1');
+      await settle(room.devices);
+      expect((await a.service.resetSync()).kind).toBe('started');
+      await b.createTask('B hors ligne');
+      syncFolders(room.devices);
+      expect((await b.cycle()).phase).toBe('reset-required');
+      await reassociate(a, b, room.devices);
+      setEpochSwitchTestHooks({
+        afterStep: (done) => {
+          if (done === step) throw new Error('arrêt simulé');
+        },
+      });
+      try {
+        expect((await b.cycle()).phase, 'échec visible').toBe('error');
+      } finally {
+        setEpochSwitchTestHooks({});
+      }
+      await b.restart();
+      await b.cycle();
+      syncFolders(room.devices);
+      await a.cycle();
+      expect(a.service.status().reset?.step).toBe('done');
+      await settle(room.devices, 3);
+      expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+      expect((await a.driver.select<{ title: string }>("SELECT title FROM task WHERE title = 'B hors ligne'")).length).toBe(1);
     });
   }
 });

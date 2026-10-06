@@ -852,3 +852,56 @@ fn a_complete_reset_logs_no_key_no_recovery_key_and_no_qr_text() {
         assert!(!line.contains(r"C:\"), "aucun chemin : {line}");
     }
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Ce que Y-11 coupe (critère 16)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+#[test]
+fn the_old_key_still_opens_old_files_but_reads_and_forges_nothing_written_after() {
+    let mut net = Net::new(&[DEV_B]);
+    net.write(DEV_A).unwrap();
+    net.publish(DEV_A, Value::Null).unwrap();
+    net.cycle(DEV_B).unwrap();
+    net.cycle(DEV_A).unwrap();
+    let k = net.key_of(DEV_A, SYNC_KEY_ACCOUNT);
+    let old_epoch = epoch(1, DEV_A);
+    // Fichier écrit avant : encore lisible avec K tant qu'il existe (copie d'un appareil perdu, « Supprimés récemment »).
+    let old_segment = net.fs.get(&["devices", DEV_A, &old_epoch, "j-00000001.ctj"]).expect("segment de l'époque 1");
+    let line = std::str::from_utf8(old_segment.split(|&b| b == b'\n').nth(1).unwrap()).unwrap();
+    assert!(k.open(&Place::Journal { dev: DEV_A, epoch: &old_epoch, segment: 1, index: 0 }, line).is_ok(), "ancien fichier lisible avec K");
+    // Réinitialisation complète (B réassocié, tous basculent), puis A écrit dans la nouvelle époque.
+    let kid = net.reset_and_open(DEV_A);
+    net.join(DEV_B, DEV_A);
+    net.read_all(DEV_A).unwrap();
+    net.publish(DEV_A, Value::Null).unwrap();
+    net.read_all(DEV_B).unwrap();
+    net.publish(DEV_B, Value::Null).unwrap();
+    net.write(DEV_A).unwrap();
+    net.publish(DEV_A, Value::Null).unwrap();
+    let new_epoch = epoch(2, DEV_A);
+    let segment = net.fs.get(&["devices", DEV_A, &new_epoch, "j-00000001.ctj"]).expect("segment de l'époque 2");
+    assert_eq!(header_kid(&segment).as_deref(), Some(kid.as_str()));
+    let line = std::str::from_utf8(segment.split(|&b| b == b'\n').nth(1).unwrap()).unwrap();
+    assert!(k.open(&Place::Journal { dev: DEV_A, epoch: &new_epoch, segment: 1, index: 0 }, line).is_err(), "K ne lit rien d'écrit après");
+    // Un détenteur de K seul forge un segment et un état dans le dossier de A : ni lus, ni appliqués, aucune suspension.
+    let forged_line = k.seal(&Place::Journal { dev: DEV_A, epoch: &new_epoch, segment: 1, index: 0 }, br#"{"forged":true}"#, 1, SV as u32).unwrap();
+    let header = json!({ "f": "ct-j", "sm": 1, "kid": k.kid(), "dev": DEV_A, "e": new_epoch, "n": 1 }).to_string();
+    net.fs.put(&["devices", DEV_A, &new_epoch, "j-00000001.ctj"], format!("{header}\n{forged_line}\n").as_bytes());
+    let from = circletasks_lib::sync::store::RecordCursor { segment: 0, record: 0 };
+    assert_eq!(code(net.core(DEV_B).read_journal(DEV_A, &new_epoch, from, None)), SyncCode::KeyMismatch, "segment forgé sous K refusé");
+    let mut forged_state = state_json(net.dev(DEV_A), json!({ "kid": k.kid(), "epoch": epoch(3, DEV_A), "at": hlc(NOW_FORGE, DEV_A) }));
+    forged_state["stateSeq"] = json!(9_999);
+    forged_state["head"]["stateSeq"] = json!(9_999);
+    let text = forged_state.to_string();
+    let place = Place::State { dev: DEV_A, epoch: &new_epoch, state_seq: 9_999 };
+    let sealed = k.seal(&place, text.as_bytes(), 1, SV as u32).unwrap();
+    let header = json!({ "f": "ct-state", "sm": 1, "kid": k.kid(), "dev": DEV_A, "e": new_epoch, "n": 9_999 }).to_string();
+    net.fs.put(&["devices", DEV_A, "state.ctx"], format!("{header}\n{sealed}\n").as_bytes());
+    let seen = net.read_all(DEV_B).unwrap();
+    assert_eq!(seen.states[DEV_A].0, "foreign", "état forgé sous K : clé différente, rien de lu");
+    assert!(seen.reset.is_none(), "aucune suspension");
+    assert_eq!(code(net.core(DEV_B).reset_key(1)), SyncCode::StateMismatch, "précondition : A illisible, jamais une annonce suivie");
+}
+
+const NOW_FORGE: u64 = 1_790_000_100_000;
