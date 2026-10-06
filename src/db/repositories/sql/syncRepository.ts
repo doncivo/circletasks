@@ -150,11 +150,12 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
    * précédente), repli « * » figé avant que le hlc de la ligne ne bouge, ligne entière remise dans la file (« + »).
    */
   const detachRow = async (t: SyncTable, column: string, id: string, rowHlc: Hlc): Promise<void> => {
-    const stamp = stamper.next();
     const clock = await db.select<{ hlc: string }>(
       `SELECT COALESCE((SELECT hlc FROM sync_field_clock WHERE table_name = ? AND row_id = ? AND field = ?), (SELECT hlc FROM sync_field_clock WHERE table_name = ? AND row_id = ? AND field = '*'), ?) AS hlc`,
       [t.name, id, column, t.name, id, rowHlc],
     );
+    // Tampon pris juste avant l'écriture, jamais avant une lecture (seconde revue de Y-04, point 2).
+    const stamp = stamper.next();
     await db.execute(`UPDATE ${t.name} SET ${column} = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE ${keyOf(t)} = ?`, [stamp.at, stamp.deviceId, stamp.hlc, id]);
     await db.execute("INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES (?, ?, '*', ?, NULL) ON CONFLICT (table_name, row_id, field) DO NOTHING", [t.name, id, rowHlc]);
     await upsertClocks(t, id, [{ field: column, hlc: stamp.hlc as Hlc, base: (clock[0]?.hlc ?? rowHlc) as Hlc }]);
