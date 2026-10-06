@@ -8,7 +8,7 @@
 //! Modules : `limits` (bornes), `names` (noms stricts), `crypto` (chiffrement, clé de secours, QR), `files` (trait `SyncFs`,
 //! `StdFs`), `folder` (contrôle du dossier, `folder.json`), `cloud_windows` (fichiers à la demande), `store` (journaux, état,
 //! instantanés, `own.json`), `consent` (confirmation native et compteurs), `pairing` (fenêtre dédiée), `marker` (marqueur de
-//! restauration), `service` (service commun aux commandes et aux tests), `state` (état publié, `own.json`), `commands` (21 commandes Tauri, PC).
+//! restauration), `service` (service commun aux commandes et aux tests), `state` (état publié, `own.json`), `commands` (24 commandes Tauri, PC).
 //!
 //! Journal technique : codes, compteurs, noms stricts, identifiants d'appareil et d'époque seulement ; jamais de clé, de texte
 //! clair, de `qrText`, de saisie ni de chemin complet (section 2.3).

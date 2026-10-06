@@ -22,6 +22,8 @@ import { syncConflictsFr } from './fr.syncConflicts';
 import { syncFieldFr } from './fr.syncField';
 import { syncVersionFr } from './fr.syncVersion';
 import { syncPairingFr } from './fr.syncPairing';
+import { syncForgetFr } from './fr.syncForget';
+import { syncResetFr } from './fr.syncReset';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -61,8 +63,8 @@ export const fr = {
   appearance: appearanceFr,
   calendars: calendarsFr,
   // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1 ;
-  // lot Y3 : `conflicts` et `field` (Y-04), `version` (Y-07), `pairing` (Y-06), chacune dans son fichier.
-  sync: { ...syncEngineFr, folder: syncFolderFr, key: syncKeyFr, conflicts: syncConflictsFr, field: syncFieldFr, version: syncVersionFr, pairing: syncPairingFr },
+  // lot Y3 : `conflicts` et `field` (Y-04), `version` (Y-07), `pairing` (Y-06) ; lot Y4 : `forget` (Y-10), `reset` (Y-11) ; chacune dans son fichier.
+  sync: { ...syncEngineFr, folder: syncFolderFr, key: syncKeyFr, conflicts: syncConflictsFr, field: syncFieldFr, version: syncVersionFr, pairing: syncPairingFr, forget: syncForgetFr, reset: syncResetFr },
   tasks: {
     newTask: 'Nouvelle tâche',
     titleLabel: 'Titre',

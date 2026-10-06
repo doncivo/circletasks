@@ -1,0 +1,5 @@
+{
+  "description": "Table de cas commune Rust / Vitest de l'ordre total des déclarations d'oubli et de la coupure (ADR 0011 sections 14.2, 11.2 et 18 ; Y-10 critères 7 et 8). Lue par forget_order et cutoff de src-tauri/src/sync/forget.rs et par forgetOrder et cutoff de src/domain/sync/retention.ts. Squelette posé à l'étape 0 du lot Y4 ; cas ajoutés par Y-10.",
+  "forgetOrder": [],
+  "cutoff": []
+}

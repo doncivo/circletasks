@@ -119,5 +119,14 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
         await call('sync_restore_marker_clear');
       },
     },
+    forget: {
+      device: async (deviceId) => {
+        await call('sync_device_forget', { deviceId });
+      },
+      deleteFiles: (deviceId) => call('sync_forgotten_delete', { deviceId }),
+    },
+    reset: {
+      start: () => call('sync_reset_key'),
+    },
   };
 }

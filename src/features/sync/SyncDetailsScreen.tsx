@@ -5,7 +5,9 @@ import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncDetailsConflicts } from './SyncDetailsConflicts';
+import { SyncDetailsForget, SyncDeviceForgetAction } from './SyncDetailsForget';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
+import { SyncDetailsReset } from './SyncDetailsReset';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
@@ -20,13 +22,18 @@ export interface SyncDetailsSlots {
   readonly conflicts?: ReactNode;
   /** Y-07 : version et lecture suspendue. */
   readonly version?: ReactNode;
+  /** Y-10 : échec ou suppression en attente d'un oubli d'appareil. */
+  readonly forget?: ReactNode;
+  /** Y-11 : réinitialisation de la synchronisation. */
+  readonly reset?: ReactNode;
 }
 
 /**
  * Réglages › Synchronisation, détails (Y-02 critère 17, Y-03 critère 1, Y-09 critère 10) : sans maquette PC, composé avec les lignes
  * de Réglages d'après Synchro.html (iPhone) : état et « Synchroniser », APPAREILS (dernière lecture et statut), fichiers en attente
  * d'iCloud, nombre de conflits de la semaine. Emplacements (étape 0 du lot Y3) : `SyncDetailsPairing` (Y-06), `SyncDetailsVersion` (Y-07),
- * `SyncDetailsConflicts` (Y-04), chacun dans son fichier ; plus aucune story ne modifie ce fichier.
+ * `SyncDetailsConflicts` (Y-04), chacun dans son fichier. Étape 0 du lot Y4 : `SyncDetailsForget` et l'action de ligne
+ * `SyncDeviceForgetAction` (Y-10), `SyncDetailsReset` (Y-11) ; plus aucune story ne modifie ce fichier.
  */
 export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetailsSlots }) {
   const container = useAppContainer();
@@ -67,9 +74,11 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
               <span className="ct-sync__deviceRead">{device.lastReadAt ? t('sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
             )}
             {!device.self && <span className="ct-settings__value ct-sync__deviceState">{deviceStatusText(device.status)}</span>}
+            {!device.self && <SyncDeviceForgetAction device={device} />}
           </li>
         ))}
       </ul>
+      {slots.forget ?? <SyncDetailsForget />}
       {status.pendingFiles.length > 0 && (
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionPending')}</h2>
@@ -89,6 +98,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         </span>
       </div>
       {slots.conflicts ?? <SyncDetailsConflicts />}
+      {slots.reset ?? <SyncDetailsReset />}
     </div>
   );
 }

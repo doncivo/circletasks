@@ -88,5 +88,7 @@ function createSyncSimClient(config: SyncSimConfig): SyncPlatform {
     readSnapshot: method('readSnapshot'),
     deleteOwn: method('deleteOwn'),
     restoreMarker: { get: method('restoreMarker.get'), clear: method('restoreMarker.clear') },
+    forget: { device: method('forget.device'), deleteFiles: method('forget.deleteFiles') },
+    reset: { start: method('reset.start') },
   };
 }

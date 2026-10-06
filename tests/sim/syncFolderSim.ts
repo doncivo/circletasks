@@ -77,6 +77,9 @@ const METHODS: ReadonlySet<string> = new Set([
   'deleteOwn',
   'restoreMarker.get',
   'restoreMarker.clear',
+  'forget.device',
+  'forget.deleteFiles',
+  'reset.start',
 ]);
 
 /** Recopie mutuelle de tous les dossiers d'un espace (iCloud à jour partout). */

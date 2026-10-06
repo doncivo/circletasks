@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "sync",
-  "description": "PC Windows : synchronisation par iCloud Drive (ADR 0011, Y-01 à Y-09). Les 18 commandes sync_* de la fenêtre principale : dossier choisi et contrôlé par Rust (jamais de chemin dans la WebView), clé au coffre, fichiers chiffrés, marqueur de restauration, ouverture de la fenêtre dédiée pairing. Les trois commandes qui exposent ou reçoivent la clé (sync_pairing_payload, sync_key_import, sync_pairing_close) ne sont accordées qu'à la fenêtre pairing (sync-pairing.json). Aucune permission de plugin dialog:, fs: ni opener:.",
+  "description": "PC Windows : synchronisation par iCloud Drive (ADR 0011, Y-01 à Y-09). Les 21 commandes sync_* de la fenêtre principale : dossier choisi et contrôlé par Rust (jamais de chemin dans la WebView), clé au coffre, fichiers chiffrés, marqueur de restauration, ouverture de la fenêtre dédiée pairing, oubli d'un appareil et suppression de ses fichiers (Y-10), réinitialisation de la clé (Y-11). Les trois commandes qui exposent ou reçoivent la clé (sync_pairing_payload, sync_key_import, sync_pairing_close) ne sont accordées qu'à la fenêtre pairing (sync-pairing.json). Aucune permission de plugin dialog:, fs: ni opener:.",
   "windows": ["main"],
   "platforms": ["windows"],
   "permissions": [
@@ -22,6 +22,9 @@
     "allow-sync-read-snapshot",
     "allow-sync-delete-own",
     "allow-sync-restore-marker-get",
-    "allow-sync-restore-marker-clear"
+    "allow-sync-restore-marker-clear",
+    "allow-sync-device-forget",
+    "allow-sync-forgotten-delete",
+    "allow-sync-reset-key"
   ]
 }
