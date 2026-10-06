@@ -112,7 +112,12 @@ export interface ResetView {
   readonly by: DeviceId;
   readonly notice: ResetNotice | null;
   readonly stage: 'created' | 'announced' | 'opened';
-  readonly superseded: { readonly epoch: EpochId | null; readonly by: DeviceId | null } | null;
+  /** Époque de l'état qui porte l'annonce (`n`) : arrivée par fusion seulement depuis elle (§18 point 16, complément 2). */
+  readonly noticeEpoch?: EpochId | null;
+  /** Perte : époque et auteur gagnants ; `restore` : le gagnant est une époque restaurée sous l'ancienne clé (§18 point 16). */
+  readonly superseded: { readonly epoch: EpochId | null; readonly by: DeviceId | null; readonly restore?: boolean } | null;
+  /** Registre `superseded` clos par ce scan, son gagnant étant oublié (§18 point 15) : « Réinitialisation interrompue : relancez-la ». */
+  readonly closed?: boolean | undefined;
   readonly switching: boolean;
   readonly switched: boolean;
   readonly resumed: boolean;
@@ -363,6 +368,8 @@ export interface KeyStatus {
   readonly present: boolean;
   readonly kid: string | null;
   readonly nextKid?: string | null;
+  /** Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null. */
+  readonly importFailure?: { readonly code: SyncErrorCode; readonly at: IsoDateTime } | null;
 }
 
 /** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */
@@ -468,6 +475,10 @@ export interface SyncResetStatus {
   readonly startedAt: IsoDateTime;
   readonly resumed: boolean;
   readonly failure: ResetFailure | null;
+  /** §18 point 16 : réinitialisation perdue face à une restauration appliquée partout sur `by` (« relancez-la »). */
+  readonly restore?: boolean | undefined;
+  /** §18 point 15 : perte close (gagnant oublié) : « Réinitialisation interrompue : relancez-la ». */
+  readonly closed?: boolean | undefined;
 }
 
 /** Y-11 : issue de « Réinitialiser la synchronisation ». */
@@ -566,6 +577,20 @@ export interface RestoreContext {
   readonly marker: RestoreMarker;
   /** Options proposées (règle 4 : seulement « Appliquer partout » si une suppression postérieure a déjà été purgée). */
   readonly options: readonly RestoreOption[];
+  /**
+   * Y-11 (§18 point 16) : réinitialisation en cours : « Appliquer partout » retiré (`reset-in-progress`) ; dans le cas de la règle 4, aucune
+   * option (`reset-finish` : « terminez-la sur l'appareil qui réinitialise »).
+   */
+  readonly notice?: 'reset-in-progress' | 'reset-finish' | null;
+  /** Dernier choix refusé ou en échec (code, heure, option), gardé jusqu'à un choix appliqué (aucun échec silencieux, QA-1). */
+  readonly failure?: RestoreFailure | null;
+}
+
+/** Échec d'un choix après restauration (`sync_meta.restoreFailure`). */
+export interface RestoreFailure {
+  readonly code: SyncErrorCode;
+  readonly at: IsoDateTime;
+  readonly option: RestoreOption;
 }
 
 /** État avant le premier cycle (et sans synchro) : non configurée, rien de connu. */

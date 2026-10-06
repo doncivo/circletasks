@@ -209,12 +209,12 @@ describe('réassociation de B : échec visible et persistant (critère 18)', () 
     expect((await a.service.resetSync()).kind).toBe('started');
     syncFolders(room.devices);
     expect((await b.cycle()).phase).toBe('reset-required');
-    // Ancienne clé de secours : B possède déjà K, rien ne change ; saisie fausse : refus.
+    // Ancienne clé de secours : B possède déjà K, retirée par l'annonce : refusée (`key-mismatch`), jamais « associé » ; saisie fausse : refus.
     a.clock.advance(11 * 60_000);
     await b.platform.key.openPairing('import');
     const refused = await codeOf(b.platform.key.import({ recoveryKey: oldRecovery }));
     await b.platform.key.closePairing().catch(() => undefined);
-    expect(refused, 'l’ancienne clé est déjà celle de B : sans effet').toBe('ok');
+    expect(refused, 'l’ancienne clé, retirée, n’associe rien').toBe('key-mismatch');
     expect((await b.platform.key.status()).nextKid ?? null, 'rien d’enregistré sous .next avec l’ancienne clé').toBeNull();
     // Clé d'un autre dossier : « Cette clé ne correspond pas aux données du dossier », rien n'est enregistré.
     const stranger = await createSimDevice('99999999-9999-4999-8999-999999999999', { name: 'Étranger', clock: a.clock });

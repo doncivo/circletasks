@@ -116,3 +116,97 @@ describe('réassociation vers .next (critère 10)', () => {
     expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
   });
 });
+
+const openImport = async (d: SimDevice): Promise<void> => {
+  if (d.platform.testing.pairing()) await d.platform.key.closePairing();
+  await d.platform.key.openPairing('import');
+};
+
+const epochAfter = (epoch: string, opener: string): string => `e${String(Number(epoch.slice(1, 5)) + 1).padStart(4, '0')}-${opener}`;
+
+describe('ADR 0011 §18 points 14, 16 et 17 sur la plateforme mémoire (mêmes cas que sync_reset.rs)', () => {
+  it('oubli pendant la transition : deux exceptions seulement (initiateur avant bascule ; cible auteur d’une annonce)', async () => {
+    const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders(room.devices);
+    await b.cycle();
+    let prompts = b.platform.testing.consentPrompts();
+    expect(await codeOf(b.platform.forget.device(C_ID as never)), 'non-annonceur').toBe('state-mismatch');
+    expect(b.platform.testing.consentPrompts(), 'sans boîte').toBe(prompts);
+    expect(await codeOf(b.platform.forget.device(a.id as never)), 'auteur d’une annonce').toBe('ok');
+    expect(b.platform.testing.consentPrompts()).toBe(prompts + 1);
+    // Réassocié : non-annonceur refusé sans boîte, auteur de la réinitialisation rejointe permis.
+    a.clock.advance(11 * 60_000);
+    syncFolders(room.devices);
+    const recovery = await recoveryOf(a);
+    await c.platform.key.openPairing('import');
+    await c.platform.key.import({ recoveryKey: recovery });
+    prompts = c.platform.testing.consentPrompts();
+    expect(await codeOf(c.platform.forget.device(B_ID as never))).toBe('state-mismatch');
+    expect(c.platform.testing.consentPrompts()).toBe(prompts);
+    expect(await codeOf(c.platform.forget.device(a.id as never))).toBe('ok');
+    // L'initiateur, bascule pas commencée : toute cible (boîte).
+    expect(await codeOf(a.platform.forget.device(B_ID as never))).toBe('ok');
+  });
+
+  it('garde d’époque : rien dans l’époque visée avant l’annonce ; aucune autre époque pendant la réinitialisation ; annonce lue : aucune', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    await a.cycle();
+    await a.platform.reset.start();
+    const target = a.platform.testing.resetRecord()?.epoch as string;
+    const snapshot = (p: SimDevice, epoch: string) =>
+      p.platform.writeSnapshot({ epoch: epoch as never, seq: 1, sv: 14, records: (async function* () { yield ['{}']; })() });
+    expect(await codeOf(snapshot(a, target)), 'audit 8').toBe('state-mismatch');
+    expect(await codeOf(a.platform.appendJournal({ epoch: target as never, segment: 1, expectRecords: 0, sv: 14, maxHlc: `${String(a.clock.nowMs()).padStart(15, '0')}-0000-${a.id}` as never, records: ['{}'] })), 'audit 8').toBe('state-mismatch');
+    await a.cycle();
+    expect(a.platform.testing.resetRecord()?.stage).toBe('opened');
+    expect(await codeOf(snapshot(a, epochAfter(target, a.id))), 'autre époque que celle de reset.json').toBe('state-mismatch');
+    syncFolders(room.devices);
+    await b.cycle();
+    const own = (await b.platform.scan({ keep: [] })).devices.find((d) => d.deviceId === b.id)?.state;
+    expect(await codeOf(snapshot(b, epochAfter(own?.epoch as string, b.id))), 'annonce lue').toBe('state-mismatch');
+  });
+
+  it('échec d’import persisté (importFailure) : écrit sur les refus, jamais sur not-foreground ni consent-denied ; effacé à la réussite et par l’oubli du dossier', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    expect((await b.platform.key.status()).importFailure ?? null).toBeNull();
+    await openImport(b);
+    expect(await codeOf(b.platform.key.import({ recoveryKey: 'CT1-AAAAA' }))).toBe('invalid-pairing');
+    const first = (await b.platform.key.status()).importFailure;
+    expect(first?.code).toBe('invalid-pairing');
+    expect(first?.at).toMatch(/Z$/);
+    b.platform.testing.setForeground(false);
+    expect(await codeOf(b.platform.key.import({ recoveryKey: 'CT1-AAAAA' }))).toBe('not-foreground');
+    b.platform.testing.setForeground(true);
+    expect((await b.platform.key.status()).importFailure?.code).toBe('invalid-pairing');
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders(room.devices);
+    await b.cycle();
+    const recovery = await recoveryOf(a);
+    b.platform.testing.setConsent(false);
+    await openImport(b);
+    expect(await codeOf(b.platform.key.import({ recoveryKey: recovery }))).toBe('consent-denied');
+    expect((await b.platform.key.status()).importFailure?.code, 'choix de l’utilisateur : rien d’écrit').toBe('invalid-pairing');
+    expect(await codeOf(b.platform.key.import({ recoveryKey: recovery }))).toBe('rate-limited');
+    expect((await b.platform.key.status()).importFailure?.code).toBe('rate-limited');
+    b.platform.testing.setConsent(true);
+    b.clock.advance(11 * 60_000);
+    await openImport(b);
+    await b.platform.key.import({ recoveryKey: recovery });
+    expect((await b.platform.key.status()).importFailure ?? null, 'effacé à la réussite').toBeNull();
+    await openImport(b);
+    expect(await codeOf(b.platform.key.import({ recoveryKey: 'CT1-AAAAA' }))).toBe('invalid-pairing');
+    await b.platform.folder.forget({ eraseKey: false });
+    expect((await b.platform.key.status()).importFailure ?? null, 'effacé par l’oubli du dossier').toBeNull();
+  });
+
+  it('ancienne clé de secours sur B, qui la détient déjà et a lu l’annonce : key-mismatch, jamais « associé »', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    const old = await recoveryOf(a);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders(room.devices);
+    await b.cycle();
+    await b.platform.key.openPairing('import');
+    expect(await codeOf(b.platform.key.import({ recoveryKey: old }))).toBe('key-mismatch');
+  });
+});

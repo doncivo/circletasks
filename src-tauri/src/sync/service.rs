@@ -31,10 +31,11 @@ use super::forget::{
 use super::limits::{DEVICE_EXPIRY_MS, MAX_SCAN_ENTRIES_PER_FOLDER, MAX_STATE_FILE_BYTES};
 use super::names::{parse_file_name, SyncFileName, DEVICES_DIR, STATE_FILE, STATE_NEXT_FILE};
 use super::reset::{
-    reset_precondition, reset_waiting, reset_winner, ForgottenCut, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown, ResetRecord, ResetRole, ResetStage,
-    Superseded, RESET_FILE, USAGE_NEXT_FILE,
+    reset_precondition, reset_waiting, reset_winner, restore_candidates, ForgottenCut, KState, OpenedEpoch, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown,
+    ResetRecord, ResetRole, ResetStage, Superseded, RESET_FILE, USAGE_NEXT_FILE,
 };
-use super::state::{ForgottenDevice, OwnState, PublishedState, ResetNotice, Usage};
+use super::forget::covers_forgotten;
+use super::state::{DeviceAck, ForgottenDevice, OwnState, PublishedState, ResetNotice, Usage};
 use super::store::{Accepted, AppendResult, NextKey, SnapshotEndKey, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, StateRead, StateStatus, Store};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 use crate::vault::{SecretVault, VaultError};
@@ -64,7 +65,8 @@ impl FolderBackend for SystemBackend {
 }
 
 /// Point d'arrêt injectable (Y-11 : arrêt brutal simulé avant une étape de la bascule ou de la perte) ; `true` : l'étape nommée échoue
-/// (`io`) avant toute écriture. Jamais posé en production.
+/// (`io`) avant toute écriture. N'existe que dans les tests (fonctionnalité cargo `test-hooks`, revue 8) : absent du binaire livré.
+#[cfg(feature = "test-hooks")]
 pub type Interrupt = Arc<dyn Fn(&str) -> bool + Send + Sync>;
 
 /// Réglages du service.
@@ -77,7 +79,8 @@ pub struct SyncOptions {
     /// Seuils du budget de nonces (injectables dans les tests).
     pub nonce_warn: u64,
     pub nonce_max: u64,
-    /// Y-11 : arrêts simulés des tests (`None` en production).
+    /// Y-11 : arrêts simulés des tests (fonctionnalité `test-hooks` seulement).
+    #[cfg(feature = "test-hooks")]
     pub interrupt: Option<Interrupt>,
 }
 
@@ -90,7 +93,14 @@ impl std::fmt::Debug for SyncOptions {
 impl SyncOptions {
     pub fn new(base_dir: PathBuf) -> Self {
         let platform = if cfg!(target_os = "ios") { "ios" } else { "windows" };
-        Self { base_dir, platform, nonce_warn: NONCE_WARN_RECORDS, nonce_max: NONCE_MAX_RECORDS, interrupt: None }
+        Self {
+            base_dir,
+            platform,
+            nonce_warn: NONCE_WARN_RECORDS,
+            nonce_max: NONCE_MAX_RECORDS,
+            #[cfg(feature = "test-hooks")]
+            interrupt: None,
+        }
     }
 }
 
@@ -111,7 +121,30 @@ pub struct KeyStatus {
     pub kid: Option<String>,
     /// Y-11 : `kid` de l'entrée `circletasks.sync.key.next` (nouvelle clé d'une réinitialisation), ou null ; fait foi pour le moteur.
     pub next_kid: Option<String>,
+    /// Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null.
+    pub import_failure: Option<ImportFailureView>,
 }
+
+/// Échec d'import persisté (§18 point 17) : code et instant ISO UTC, jamais de clé.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportFailureView {
+    pub code: String,
+    pub at: String,
+}
+
+/// `sync/import-failure.json`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ImportFailureFile {
+    v: u32,
+    folder_id: String,
+    code: String,
+    at: String,
+    next: bool,
+}
+
+pub const IMPORT_FAILURE_FILE: &str = "import-failure.json";
 
 /// Y-11 : réinitialisation vue par le moteur (`FolderScan.reset`) : jamais de clé, seulement des `kid`, époques et étapes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -124,7 +157,11 @@ pub struct ResetView {
     /// Annonce à publier sous l'ancienne clé (appareil qui réinitialise) ; maître : Rust.
     pub notice: Option<ResetNotice>,
     pub stage: &'static str,
+    /// Époque de l'état qui porte l'annonce (`n`) : le moteur n'arrive par fusion que depuis elle (§18 point 16, complément 2).
+    pub notice_epoch: Option<String>,
     pub superseded: Option<SupersededView>,
+    /// Registre `superseded` clos par ce scan (gagnant oublié, §18 point 15) : « Réinitialisation interrompue : relancez-la ».
+    pub closed: bool,
     /// Bascule commencée (reprise par Rust au scan, quelles que soient les conditions).
     pub switching: bool,
     /// Bascule terminée par ce scan : l'ancienne clé est effacée, la nouvelle est sous `.v1`.
@@ -141,6 +178,8 @@ pub struct ResetView {
 pub struct SupersededView {
     pub epoch: Option<String>,
     pub by: Option<String>,
+    /// Le gagnant est une époque restaurée sous l'ancienne clé (§18 point 16).
+    pub restore: bool,
 }
 
 /// Réponse de `sync_pairing_payload` : contient la clé (destinée à la seule fenêtre `pairing`).
@@ -386,6 +425,10 @@ impl SyncCore {
                 // usage.json est indexé par kid : gardé, il resservira si la même clé est réimportée (audit S9).
                 self.vault.delete(SYNC_KEY_ACCOUNT).map_err(vault_error)?;
             }
+            // Audit 7 : la nouvelle clé d'une réinitialisation est effacée sans condition (registre présent ou non).
+            if self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)? {
+                self.vault.delete(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)?;
+            }
         }
         let mut inner = self.lock();
         inner.snapshot_ends.clear();
@@ -394,8 +437,10 @@ impl SyncCore {
         // Y-10 : les déclarations sont liées au dossier et à l'appareil ; reconstruites depuis son `state.ctx` si le même dossier est
         // repris sous la même identité, jamais héritées par une nouvelle identité (« Associer de nouveau »).
         remove_config_file(&self.path(FORGOTTEN_FILE))?;
-        // Y-11 : réinitialisation liée au dossier : abandonnée (nouvelle clé effacée, `.v1` gardée sauf `erase_key`).
+        // Y-11 : réinitialisation liée au dossier : abandonnée (nouvelle clé effacée, `.v1` gardée sauf `erase_key`) ; échec d'import
+        // effacé (§18 point 17).
         self.abandon_reset()?;
+        remove_config_file(&self.path(IMPORT_FAILURE_FILE))?;
         let loaded = Inner { loaded: true, ..Inner::default() };
         *inner = loaded;
         log::event("folder-forgotten", if erase_key { "key-erased" } else { "key-kept" });
@@ -473,7 +518,50 @@ impl SyncCore {
     pub fn key_status(&self) -> SyncResult<KeyStatus> {
         let key = self.read_vault_key()?;
         let next = self.read_vault_next()?;
-        Ok(KeyStatus { present: key.is_some(), kid: key.map(|k| k.kid().to_owned()), next_kid: next.map(|k| k.kid().to_owned()) })
+        let import_failure = self.import_failure();
+        Ok(KeyStatus { present: key.is_some(), kid: key.map(|k| k.kid().to_owned()), next_kid: next.map(|k| k.kid().to_owned()), import_failure })
+    }
+
+    /// Identifiant du dossier lié d'après `folder.json` (sans contrôle du dossier) ; `None` sans dossier.
+    fn recorded_folder_id(&self) -> Option<String> {
+        let mut inner = self.lock();
+        self.ensure_loaded(&mut inner);
+        if let Some(bound) = &inner.folder {
+            return Some(bound.folder_id.clone());
+        }
+        inner.record.as_ref().map(|r| CheckedFolder { path: PathBuf::from(&r.path), kind: FolderKind::Unknown, pinned: false }.folder_id())
+    }
+
+    /// Échec d'import du dossier lié (§18 point 17) : un fichier illisible donne `None` et un journal, jamais une erreur.
+    fn import_failure(&self) -> Option<ImportFailureView> {
+        let file = match read_config_file::<ImportFailureFile>(&self.path(IMPORT_FAILURE_FILE)) {
+            Ok(file) => file?,
+            Err(()) => {
+                log::event("import-failure-unreadable", "ignored");
+                return None;
+            }
+        };
+        if file.v != 1 || SyncCode::ALL.iter().all(|c| c.as_str() != file.code) {
+            log::event("import-failure-unreadable", "ignored");
+            return None;
+        }
+        (Some(file.folder_id.as_str()) == self.recorded_folder_id().as_deref()).then_some(ImportFailureView { code: file.code, at: file.at })
+    }
+
+    /// Persiste un refus de `sync_key_import` (§18 point 17) ; un échec d'écriture est journalisé et ne remplace jamais le code rendu.
+    pub fn record_import_failure(&self, code: SyncCode) {
+        if matches!(code, SyncCode::WrongWindow | SyncCode::WrongMode | SyncCode::NotForeground | SyncCode::ConsentDenied) {
+            return;
+        }
+        let Some(folder_id) = self.recorded_folder_id() else {
+            log::event("import-failure-unrecorded", "no-folder");
+            return;
+        };
+        let next = self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).unwrap_or(false) || read_config_file::<serde_json::Value>(&self.path(RESET_FILE)).ok().flatten().is_some();
+        let file = ImportFailureFile { v: 1, folder_id, code: code.as_str().to_owned(), at: iso_ms(self.now()), next };
+        if write_config_file(&self.path(IMPORT_FAILURE_FILE), &serde_json::to_vec(&file).unwrap_or_default()).is_err() {
+            log::event("import-failure-unrecorded", code.as_str());
+        }
     }
 
     /// Entrée `.next` du coffre (Y-11) : nouvelle clé d'une réinitialisation ; une valeur illisible vaut `vault-unavailable`.
@@ -754,6 +842,7 @@ impl SyncCore {
         let (key, self_id, mut own, _) = self.writable(&mut inner)?;
         // Y-11 : l'ancienne époque est figée dès l'annonce (ou l'import de la nouvelle clé) : seule l'époque visée reçoit des ajouts.
         self.refuse_frozen_epoch(&mut inner, &self_id, &request.epoch)?;
+        self.refuse_epoch_open(&mut inner, &key, &self_id, &own, &request.epoch)?;
         let next = self.active_next(&mut inner)?;
         let (mut usage, is_next) = self.usage_for(&mut inner, &key, &next, &request.epoch);
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
@@ -791,6 +880,8 @@ impl SyncCore {
             return fail(SyncCode::StateMismatch);
         };
         let state = PublishedState { forgotten, ..state };
+        // Y-11 (§18 point 16) : aucune autre époque que celle de la réinitialisation (ou de la restauration gagnante).
+        self.refuse_epoch_open(&mut inner, &key, &self_id, &own, &state.epoch)?;
         // Y-11 (§14.3 étapes 3 et 4, §11.1) : Rust est maître de `reset`. Sous l'ancienne clé, l'appareil qui réinitialise publie son
         // annonce, tout autre état publie `reset: null` ; sous la nouvelle clé (`state.next.ctx`), `reset` est toujours nul ; aucune
         // donnée de l'époque visée avant l'annonce.
@@ -818,15 +909,20 @@ impl SyncCore {
         self.save_own(&mut inner, own)?;
         if let Some(epoch) = EpochId::parse(&state.epoch) {
             let head = RecordCursor { segment: state.head.segment, record: state.head.record };
-            inner.accepted.insert(self_id.clone(), Accepted { epoch, seq: state.state_seq, digest, head });
+            inner.accepted.insert(self_id.clone(), Accepted { epoch, seq: state.state_seq, digest: digest.clone(), head });
         }
         // Y-11 : étapes de l'appareil qui réinitialise, constatées sur ce qu'il vient de publier.
         if let Some(mut record) = record.filter(|r| r.active() && r.role == ResetRole::Initiator) {
             let mut changed = false;
+            if !to_next {
+                // Audit 5 : dernier état écrit sous l'ancienne clé, seul que l'anti-rejeu de soi peut reprendre en cas de perte.
+                record.k_state = Some(KState { state_seq: state.state_seq, digest: digest.clone() });
+                changed = true;
+            }
             if !to_next && record.stage == ResetStage::Created && state.reset.is_some() {
                 record.stage = ResetStage::Announced;
                 record.base = Some(ResetBase { epoch: Some(state.epoch.clone()), segment: state.head.segment, record: state.head.record, max_hlc: state.head.hlc.clone() });
-                changed = true;
+                record.notice_seq = Some(state.state_seq);
                 log::event("reset-announced", &record.epoch);
             }
             if to_next && record.stage == ResetStage::Announced && state.snapshot.is_some() {
@@ -846,6 +942,7 @@ impl SyncCore {
         let mut inner = self.lock();
         let (key, self_id, own, _) = self.writable(&mut inner)?;
         self.refuse_frozen_epoch(&mut inner, &self_id, epoch)?;
+        self.refuse_epoch_open(&mut inner, &key, &self_id, &own, epoch)?;
         // Instantané de même époque et même numéro déjà en cours d'écriture : même code qu'un numéro pris (revue 5).
         if inner.snapshots.values().any(|w| w.epoch == epoch && u64::from(w.seq) == seq) {
             return fail(SyncCode::SegmentMismatch);
@@ -937,18 +1034,26 @@ impl SyncCore {
         Ok(())
     }
 
-    /// Y-11 : l'ancienne clé ne doit plus être donnée : registre perdu non réassocié, ou annonce valide d'un autre appareil déjà lisible.
+    /// Y-11 : l'ancienne clé ne doit plus être donnée : registre perdu non réassocié, ou annonce valide d'un autre appareil déjà lisible
+    /// qui l'emporte. Échoue fermé (audit 6) : registre illisible, liste coupée (`state-mismatch`) ou état dans le nuage (`cloud-pending`)
+    /// refusent, jamais « rien d'annoncé ».
     fn old_key_withdrawn(&self, inner: &mut Inner, key: &MasterKey, self_id: &str) -> SyncResult<bool> {
         if self.reset_record(inner, self_id)?.is_some_and(|r| r.superseded.as_ref().is_some_and(|s| s.epoch.is_some())) {
             return Ok(true);
         }
-        // Contrôle de prudence : un registre ou un dossier illisible ne bloque pas l'affichage (les autres refus en rendent compte).
-        let entries = self.registry(inner, key, self_id).map(|r| r.entries).unwrap_or_default();
+        let entries = self.registry(inner, key, self_id)?.entries;
         let forgotten: BTreeSet<String> = forget_order(&entries).into_keys().collect();
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store::new(bound.fs.as_ref(), key, false);
-        let Ok(Some(reads)) = Self::read_all_states(&store, &inner.accepted) else { return Ok(false) };
-        Ok(reset_winner(&Self::announcements(&reads, self_id), &forgotten).is_some())
+        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+            log::event("pairing-refused", "listing");
+            return fail(SyncCode::StateMismatch);
+        };
+        if reads.iter().any(|(id, r)| id != self_id && r.status == StateStatus::CloudPending) {
+            log::event("pairing-refused", "cloud-pending");
+            return fail(SyncCode::CloudPending);
+        }
+        Ok(reset_winner(&Self::contenders(&reads, self_id), &forgotten).is_some_and(|w| !w.restore))
     }
 
     /// Annonces lues dans les états authentifiés des autres appareils (sous la clé locale).
@@ -956,8 +1061,22 @@ impl SyncCore {
         reads
             .iter()
             .filter(|(id, r)| id.as_str() != self_id && r.status == StateStatus::Ok)
-            .filter_map(|(id, r)| r.state.as_ref().and_then(|s| s.reset.as_ref().map(|n| ResetCandidate { by: id.clone(), state_epoch: s.epoch.clone(), notice: n.clone() })))
+            .filter_map(|(id, r)| {
+                r.state.as_ref().and_then(|s| s.reset.as_ref().map(|n| ResetCandidate { by: id.clone(), state_epoch: s.epoch.clone(), notice: n.clone(), restore: false }))
+            })
             .collect()
+    }
+
+    /// Concurrents (§18 point 16) : annonces des autres appareils et époques ouvertes sous la clé locale (soi compris).
+    fn contenders(reads: &BTreeMap<String, StateRead>, self_id: &str) -> Vec<ResetCandidate> {
+        let mut out = Self::announcements(reads, self_id);
+        let opened: Vec<OpenedEpoch> = Self::ok_states(reads)
+            .into_iter()
+            .map(|(id, s)| OpenedEpoch { by: id.to_owned(), epoch: s.epoch.clone(), snapshot: s.snapshot.is_some(), notice: s.reset.is_some() })
+            .collect();
+        let restores = restore_candidates(&opened, &out);
+        out.extend(restores);
+        out
     }
 
     /// Contenu du QR et clé de secours (`sync_pairing_payload`, après les contrôles de fenêtre et de jeton). Y-11 (D1) : pendant une
@@ -992,6 +1111,19 @@ impl SyncCore {
     /// elle) qui importe la nouvelle clé d'une réinitialisation l'écrit sous `circletasks.sync.key.next`, jamais par-dessus `.v1` avant la
     /// bascule (confirmation native de remplacement de Y-08) ; `reset.json` passe au rôle `joined`.
     pub fn key_import(&self, input: KeyInput, owner: isize) -> SyncResult<KeyImportResult> {
+        let result = self.key_import_inner(input, owner);
+        match &result {
+            Ok(_) => {
+                if remove_config_file(&self.path(IMPORT_FAILURE_FILE)).is_err() {
+                    log::event("import-failure-uncleared", "io");
+                }
+            }
+            Err(error) => self.record_import_failure(error.code),
+        }
+        result
+    }
+
+    fn key_import_inner(&self, input: KeyInput, owner: isize) -> SyncResult<KeyImportResult> {
         self.consent.count_import(owner)?;
         let (key, paired_by, epoch, replace, joined) = {
             let mut inner = self.lock();
@@ -1022,6 +1154,17 @@ impl SyncCore {
             let existing = self.read_vault_key()?;
             let replace = existing.as_ref().is_some_and(|e| !e.same_as(&key));
             let same = existing.as_ref().is_some_and(|e| e.same_as(&key));
+            // Y-11 : la clé locale déjà retirée (réinitialisation en cours ici, ou annonce d'un autre appareil qui l'emporte) n'« associe »
+            // rien : l'ancienne clé de secours est refusée comme une autre clé.
+            if same {
+                if let Some(self_id) = Self::bound_device(&inner) {
+                    let withdrawn = self.active_next(&mut inner)?.is_some() || self.old_key_withdrawn(&mut inner, &key, &self_id)?;
+                    if withdrawn {
+                        log::event("key-import-refused", "withdrawn");
+                        return fail(SyncCode::KeyMismatch);
+                    }
+                }
+            }
             // Y-11 : réassociation après une réinitialisation (nouvelle clé sous `.next`) ? Déjà importée : sans effet.
             let joined = match &existing {
                 Some(old) if replace => self.join_plan(&mut inner, old, &key, check.epoch.clone())?,
@@ -1242,19 +1385,33 @@ impl SyncCore {
         Ok(reads.values().any(|r| r.status == StateStatus::Ok && r.state.as_ref().is_some_and(|s| s.reset.is_some())))
     }
 
-    /// Y-11 (§14.3 « Pas d'oubli d'office ») : la déclaration d'un oubli (`sync_device_forget`) reste possible pour l'appareil qui
-    /// réinitialise (appareils pas encore réassociés, choix explicite) ; refusée pendant toute autre réinitialisation (entrée `.next` d'un
-    /// appareil réassocié ou orpheline, annonce d'un autre appareil, réinitialisation perdue).
-    fn reset_blocks_forget(&self, inner: &mut Inner, reads: &BTreeMap<String, StateRead>, self_id: &str) -> SyncResult<bool> {
+    /// Y-11 (§14.3 « Pas d'oubli d'office », §18 points 14 et 15) : pendant une réinitialisation en cours (registre, entrée `.next`, ou
+    /// annonce lue), la déclaration d'un oubli (`sync_device_forget`) n'est permise que (i) à l'appareil qui réinitialise, bascule pas
+    /// commencée, quelle que soit la cible, ou (ii) sur tout appareil quand la cible est l'auteur d'une annonce (lue dans un état `ok`
+    /// sous la clé locale, valide ou non ; auteur de la réinitialisation rejointe ; gagnant d'une perte). Tout autre cas : refus.
+    fn reset_blocks_forget(&self, inner: &mut Inner, reads: &BTreeMap<String, StateRead>, self_id: &str, target: &str) -> SyncResult<bool> {
         let record = self.reset_record(inner, self_id)?;
-        let initiator = record.as_ref().is_some_and(|r| r.active() && r.role == ResetRole::Initiator && r.switch_step == 0);
-        if record.as_ref().is_some_and(|r| !r.active()) {
-            return Ok(true);
+        let mut announcers: BTreeSet<String> = reads
+            .iter()
+            .filter(|(id, r)| id.as_str() != self_id && r.status == StateStatus::Ok && r.state.as_ref().is_some_and(|s| s.reset.is_some()))
+            .map(|(id, _)| id.clone())
+            .collect();
+        let in_progress = record.is_some() || !announcers.is_empty() || self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)?;
+        if !in_progress {
+            return Ok(false);
         }
-        if self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)? && !initiator {
-            return Ok(true);
+        if record.as_ref().is_some_and(|r| r.active() && r.role == ResetRole::Initiator && r.switch_step == 0) {
+            return Ok(false);
         }
-        Ok(reads.iter().any(|(id, r)| (id != self_id || !initiator) && r.status == StateStatus::Ok && r.state.as_ref().is_some_and(|s| s.reset.is_some())))
+        if let Some(r) = &record {
+            if r.by != self_id {
+                announcers.insert(r.by.clone());
+            }
+            if let Some(by) = r.superseded.as_ref().and_then(|s| s.by.clone()) {
+                announcers.insert(by);
+            }
+        }
+        Ok(!announcers.contains(target))
     }
 
     /// États de tous les dossiers d'appareils de `devices/` (liste complète exigée, 10 000 entrées ; le plafond de 16 dossiers ne
@@ -1308,7 +1465,8 @@ impl SyncCore {
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = store_for(bound, &key, &next, false);
         let reads = Self::read_all_states(&store, &inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
-        if self.reset_blocks_forget(inner, &reads, &self_id)? {
+        if self.reset_blocks_forget(inner, &reads, &self_id, device_id)? {
+            log::event("forget-refused", "reset");
             return fail(SyncCode::StateMismatch);
         }
         let order = forget_order(&reg.entries);
@@ -1427,12 +1585,19 @@ impl SyncCore {
     // Réinitialisation avec une nouvelle clé (Y-11 ; ADR 0011 sections 2.2, 9.1, 11.1, 14.3 et 18 point 2)
     // --------------------------------------------------------------------------------------------------------------------------
 
-    /// Point d'arrêt simulé des tests (`io` avant l'étape nommée) ; sans effet en production.
+    /// Point d'arrêt simulé des tests (`io` avant l'étape nommée) ; absent hors de la fonctionnalité `test-hooks`.
+    #[cfg(feature = "test-hooks")]
     fn interrupt(&self, step: &str) -> SyncResult<()> {
         if self.options.interrupt.as_ref().is_some_and(|stop| stop(step)) {
             log::event("reset-interrupted", step);
             return fail(SyncCode::Io);
         }
+        Ok(())
+    }
+
+    #[cfg(not(feature = "test-hooks"))]
+    #[inline(always)]
+    fn interrupt(&self, _step: &str) -> SyncResult<()> {
         Ok(())
     }
 
@@ -1475,7 +1640,8 @@ impl SyncCore {
     /// Abandon d'une réinitialisation liée au dossier délié ou remplacé : registre et budget supprimés, nouvelle clé effacée ; `.v1`
     /// reste (jamais d'instant sans clé valide).
     fn abandon_reset(&self) -> SyncResult<()> {
-        if read_config_file::<serde_json::Value>(&self.path(RESET_FILE)).ok().flatten().is_some() && self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)? {
+        // Revue 10 : la nouvelle clé est effacée même sans registre valide (orpheline d'un arrêt pendant `sync_reset_key`).
+        if self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)? {
             self.vault.delete(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)?;
         }
         remove_config_file(&self.path(RESET_FILE))?;
@@ -1492,6 +1658,48 @@ impl SyncCore {
         if frozen && epoch != record.epoch {
             log::event("reset-frozen-epoch", epoch);
             return fail(SyncCode::StateMismatch);
+        }
+        Ok(())
+    }
+
+    /// Garde d'époque (§18 point 16, audit 8) : (0) rien dans l'époque visée avant l'annonce ; une époque supérieure à celle de
+    /// `own.json` est refusée (i) si `reset.json` existe et qu'elle n'est pas la sienne (époque visée, ou gagnante d'une perte), ou (ii)
+    /// sans registre, si une annonce valide d'un autre appareil est lue et l'emporte (sauf l'époque restaurée gagnante). `state-mismatch`,
+    /// rien n'est écrit.
+    fn refuse_epoch_open(&self, inner: &mut Inner, key: &MasterKey, self_id: &str, own: &OwnState, epoch: &str) -> SyncResult<()> {
+        let record = self.reset_record(inner, self_id)?;
+        if let Some(r) = record.as_ref().filter(|r| r.active() && r.role == ResetRole::Initiator && r.stage < ResetStage::Announced) {
+            if epoch == r.epoch {
+                log::event("epoch-open-refused", "not-announced");
+                return fail(SyncCode::StateMismatch);
+            }
+        }
+        let (Some(target), Some(current)) = (EpochId::parse(epoch), own.epoch.as_deref().and_then(EpochId::parse)) else { return Ok(()) };
+        if target <= current {
+            return Ok(());
+        }
+        let allowed = record.as_ref().and_then(|r| if r.active() { Some(r.epoch.clone()) } else { r.superseded.as_ref().and_then(|s| s.epoch.clone()) });
+        if let Some(allowed) = allowed {
+            if allowed != epoch {
+                log::event("epoch-open-refused", "reset");
+                return fail(SyncCode::StateMismatch);
+            }
+            return Ok(());
+        }
+        let reg = self.registry(inner, key, self_id)?;
+        let forgotten: BTreeSet<String> = forget_order(&reg.entries).into_keys().collect();
+        let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store::new(bound.fs.as_ref(), key, false);
+        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+            log::event("epoch-open-refused", "listing");
+            return fail(SyncCode::StateMismatch);
+        };
+        let contenders = Self::contenders(&reads, self_id);
+        if let Some(winner) = reset_winner(&contenders, &forgotten) {
+            if !(winner.restore && winner.notice.epoch == epoch) {
+                log::event("epoch-open-refused", "announced");
+                return fail(SyncCode::StateMismatch);
+            }
         }
         Ok(())
     }
@@ -1542,6 +1750,8 @@ impl SyncCore {
             by: plan.self_id,
             notice: Some(ResetNotice { kid: kid.clone(), epoch: plan.epoch, at: plan.at }),
             notice_epoch: Some(plan.notice_epoch),
+            notice_seq: None,
+            k_state: None,
             stage: ResetStage::Created,
             base: None,
             superseded: None,
@@ -1588,8 +1798,9 @@ impl SyncCore {
         };
         let order = forget_order(&reg.entries);
         let forgotten: BTreeSet<String> = order.keys().cloned().collect();
-        // Annonce valide d'un autre appareil déjà lue : traité comme un appareil à réassocier (§14.3, deux réinitialisations).
-        if reset_winner(&Self::announcements(&reads, &self_id), &forgotten).is_some() {
+        // Annonce valide d'un autre appareil déjà lue (et gagnante) : traité comme un appareil à réassocier (§14.3, deux
+        // réinitialisations).
+        if reset_winner(&Self::contenders(&reads, &self_id), &forgotten).is_some_and(|w| !w.restore) {
             log::event("reset-refused", "announced");
             return fail(SyncCode::StateMismatch);
         }
@@ -1647,10 +1858,24 @@ impl SyncCore {
             log::event("key-import-refused", "reset-in-progress");
             return fail(SyncCode::StateMismatch);
         }
+        // Audit 2 : appartenance au dossier sur des preuves locales (son état sous l'ancienne clé, `own.json` lié au dossier et à
+        // l'ancienne clé, anti-rejeu de soi au registre Y-10, fichiers déjà publiés) ; son état dans le nuage : `cloud-pending`. Jamais
+        // l'import ordinaire, qui écraserait `.v1`, pour un appareil qui a publié sous l'ancienne clé.
+        let own_json = read_config_file::<OwnState>(&self.path(OWN_FILE)).ok().flatten().filter(|o| o.folder_id == folder_id && o.kid == old.kid());
+        let registered = matches!(self.load_registry(&folder_id, &self_id), Ok(Some(reg)) if reg.accepted.contains_key(&self_id));
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store::new(bound.fs.as_ref(), old, false);
         let own = store.read_state_file(&self_id, STATE_FILE, old, &HashMap::new());
-        let member = matches!(own.status, StateStatus::Ok | StateStatus::Rollback) || record.is_some();
+        if own.status == StateStatus::CloudPending {
+            log::event("key-import-refused", "own-state-cloud-pending");
+            return fail(SyncCode::CloudPending);
+        }
+        let published = matches!(store.fs.list(&[DEVICES_DIR, &self_id], 1), Ok(Listing { entries, .. }) if !entries.is_empty());
+        let member = matches!(own.status, StateStatus::Ok | StateStatus::Rollback)
+            || record.is_some()
+            || own_json.as_ref().is_some_and(|o| o.state_seq > 0 || o.epoch.is_some())
+            || registered
+            || published;
         if !member {
             return Ok(None);
         }
@@ -1658,12 +1883,24 @@ impl SyncCore {
             log::event("key-import-refused", "epoch");
             return fail(SyncCode::KeyMismatch);
         };
+        // Revue 2 : l'époque lue avec la clé candidate doit dépasser l'époque courante de cet appareil (ancienne clé de secours, copie
+        // d'une époque antérieure : `key-mismatch`, rien n'est enregistré).
+        let current = own_json.as_ref().and_then(|o| o.epoch.as_deref()).and_then(EpochId::parse).into_iter().chain(own.state.as_ref().and_then(|s| EpochId::parse(&s.epoch))).max();
+        if current.is_some_and(|c| EpochId::parse(&epoch).map_or(true, |e| e <= c)) {
+            log::event("key-import-refused", "epoch-not-newer");
+            return fail(SyncCode::KeyMismatch);
+        }
         let by = EpochId::parse(&epoch).map(|e| e.opener).unwrap_or_default();
         // Annonce de l'auteur lue sous l'ancienne clé (absente si l'auteur a déjà basculé).
         let announced = store.read_state_file(&by, STATE_FILE, old, &HashMap::new());
-        let (notice, notice_epoch) = match announced.state.filter(|_| announced.status == StateStatus::Ok) {
-            Some(s) if s.reset.as_ref().is_some_and(|n| n.kid == candidate.kid() && n.epoch == epoch) => (s.reset.clone(), Some(s.epoch.clone())),
-            _ => (None, None),
+        let (notice, notice_epoch, notice_seq) = match announced.state.filter(|_| announced.status == StateStatus::Ok) {
+            Some(s) if s.reset.as_ref().is_some_and(|n| n.kid == candidate.kid() && n.epoch == epoch) => (s.reset.clone(), Some(s.epoch.clone()), Some(s.state_seq)),
+            _ => (None, None, None),
+        };
+        // Audit 5 : son dernier état sous l'ancienne clé (seul repris par l'anti-rejeu de soi si la réinitialisation perd).
+        let k_state = match (own.status, &own.state, &own.digest) {
+            (StateStatus::Ok, Some(s), Some(d)) => Some(KState { state_seq: s.state_seq, digest: d.clone() }),
+            _ => None,
         };
         let own_json = self.valid_own(inner, old, &self_id).ok();
         let base = own_json.map(|o| ResetBase { epoch: o.epoch, segment: o.segment, record: o.record, max_hlc: o.max_hlc });
@@ -1676,6 +1913,8 @@ impl SyncCore {
             by,
             notice,
             notice_epoch,
+            notice_seq,
+            k_state,
             stage: ResetStage::Opened,
             base,
             superseded: None,
@@ -1697,13 +1936,27 @@ impl SyncCore {
             if !lost.done {
                 self.supersede_steps(inner, &mut record)?;
             }
+            // §18 point 15 : gagnant oublié (son annonce, ou son époque restaurée, est sans effet) : registre clos ; les étapes déjà
+            // faites ne sont pas défaites (`.next` effacée) et `sync_reset_key` redevient possible.
+            if let Some(by) = lost.by.as_deref() {
+                let key = self.load_key(inner)?;
+                let entries = self.registry(inner, &key, self_id)?.entries;
+                if forget_order(&entries).contains_key(by) {
+                    remove_config_file(&self.path(RESET_FILE))?;
+                    inner.next = None;
+                    log::event("reset-superseded-void", by);
+                    let mut view = Self::view(&record, Vec::new(), false, false);
+                    view.closed = true;
+                    return Ok(Some(view));
+                }
+            }
             return Ok(Some(Self::view(&record, Vec::new(), false, false)));
         }
         let key = self.load_key(inner)?;
         let Some(next) = self.read_vault_next()?.filter(|k| k.kid() == record.kid) else {
             // Nouvelle clé disparue du coffre : la réinitialisation ne peut plus aboutir ; perdue sans gagnant (« relancez-la »).
             log::event("reset-next-missing", &record.kid);
-            record.superseded = Some(Superseded { epoch: None, by: None, done: false });
+            record.superseded = Some(Superseded { epoch: None, by: None, done: false, restore: false });
             self.save_reset(&record)?;
             inner.next = None;
             self.supersede_steps(inner, &mut record)?;
@@ -1725,11 +1978,13 @@ impl SyncCore {
                 if s.reset.as_ref().is_some_and(|n| n.kid == record.kid && n.epoch == record.epoch) {
                     record.notice = s.reset.clone();
                     record.notice_epoch = Some(s.epoch.clone());
+                    record.notice_seq = Some(s.state_seq);
                     self.save_reset(&record)?;
                 }
             }
         }
         let mut candidates: Vec<ResetCandidate> = Vec::new();
+        let mut opened: Vec<OpenedEpoch> = Vec::new();
         let mut author_switched = false;
         let mut author_withdrew = false;
         let mut author_seen = false;
@@ -1748,16 +2003,23 @@ impl SyncCore {
                 continue;
             }
             if let Some(notice) = &state.reset {
-                candidates.push(ResetCandidate { by: id.clone(), state_epoch: state.epoch.clone(), notice: notice.clone() });
+                candidates.push(ResetCandidate { by: id.clone(), state_epoch: state.epoch.clone(), notice: notice.clone(), restore: false });
             }
+            opened.push(OpenedEpoch { by: id.clone(), epoch: state.epoch.clone(), snapshot: state.snapshot.is_some(), notice: state.reset.is_some() });
             if *id == record.by {
                 author_seen = true;
-                author_withdrew |= state.reset.as_ref().map(|n| n.kid.as_str()) != Some(record.kid.as_str());
+                // Revue 1 : retrait compté seulement si l'annonce a été vue et que l'état lu est strictement plus récent qu'elle.
+                let newer = record.notice.is_some() && record.notice_seq.is_some_and(|seq| state.state_seq > seq);
+                author_withdrew |= newer && state.reset.as_ref().map(|n| n.kid.as_str()) != Some(record.kid.as_str());
             }
         }
         if record.role == ResetRole::Initiator || !author_seen {
             candidates.extend(record.candidate());
         }
+        // §18 point 16 : les époques ouvertes sous l'ancienne clé (restaurations) concourent avec les annonces.
+        let mut announced = candidates.clone();
+        announced.extend(record.candidate());
+        candidates.extend(restore_candidates(&opened, &announced));
         let winner = reset_winner(&candidates, &forgotten).cloned();
         let lost = !author_switched
             && match &winner {
@@ -1766,7 +2028,8 @@ impl SyncCore {
             };
         if lost {
             log::event("reset-superseded", winner.as_ref().map_or("none", |w| w.notice.epoch.as_str()));
-            record.superseded = Some(Superseded { epoch: winner.as_ref().map(|w| w.notice.epoch.clone()), by: winner.map(|w| w.by), done: false });
+            let restore = winner.as_ref().is_some_and(|w| w.restore);
+            record.superseded = Some(Superseded { epoch: winner.as_ref().map(|w| w.notice.epoch.clone()), by: winner.map(|w| w.by), done: false, restore });
             self.save_reset(&record)?;
             inner.next = None;
             self.supersede_steps(inner, &mut record)?;
@@ -1784,12 +2047,23 @@ impl SyncCore {
                     device_id: id.clone(),
                     status: read.map_or(StateStatus::Missing, |r| r.status),
                     epoch: read.filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref()).map(|s| s.epoch.clone()),
+                    kid: read.and_then(|r| r.kid.clone()),
                     seen: seen.contains(id),
                     author: authors.contains(id),
                 }
             })
             .collect();
-        let waiting = if record.role == ResetRole::Initiator { reset_waiting(&known, self_id, &record.epoch, &forgotten) } else { Vec::new() };
+        let mut waiting = if record.role == ResetRole::Initiator { reset_waiting(&known, self_id, &record.epoch, &record.kid, &forgotten) } else { Vec::new() };
+        // §18 point 14 : l'instantané annoncé sous la nouvelle clé doit couvrir chaque oublié retenu (coupure sur les états des deux clés).
+        if record.role == ResetRole::Initiator && own_ready && record.stage == ResetStage::Opened && waiting.is_empty() && !order.is_empty() {
+            let own_state = own.and_then(|r| r.state.clone());
+            for id in self.uncovered_forgotten(inner, &key, &next, &record, &reads, own_state.as_ref(), &reg.entries) {
+                if !waiting.contains(&id) {
+                    waiting.push(id);
+                }
+            }
+            waiting.sort();
+        }
         let ready = own_ready
             && match record.role {
                 ResetRole::Initiator => record.stage == ResetStage::Opened && waiting.is_empty(),
@@ -1803,6 +2077,44 @@ impl SyncCore {
         Ok(Some(Self::view(&record, Vec::new(), true, false)))
     }
 
+    /// Oubliés retenus que l'instantané annoncé dans son `state.next.ctx` ne couvre pas (§18 point 14) : coupure calculée sur les
+    /// accusés de chaque actif non oublié, lus dans son `state.ctx` sous l'ancienne clé et dans son état sous la nouvelle ; fin
+    /// d'instantané lue sous la nouvelle clé (même lecture que `tail`). Fin illisible : chaque oublié retenu de coupure non nulle.
+    #[allow(clippy::too_many_arguments)]
+    fn uncovered_forgotten(
+        &self,
+        inner: &mut Inner,
+        key: &MasterKey,
+        next: &MasterKey,
+        record: &ResetRecord,
+        reads: &BTreeMap<String, StateRead>,
+        own_state: Option<&PublishedState>,
+        entries: &[ForgottenDevice],
+    ) -> Vec<String> {
+        let Inner { folder, accepted, snapshot_ends, .. } = &mut *inner;
+        let Some(bound) = folder.as_ref() else { return Vec::new() };
+        let store = Store { fs: bound.fs.as_ref(), key, pin: false, next: Some(NextKey { key: next, epoch: &record.epoch }) };
+        let mut acks: Vec<(String, BTreeMap<String, DeviceAck>)> = Vec::new();
+        for (id, read) in reads {
+            if let Some(state) = read.state.as_ref().filter(|_| read.status == StateStatus::Ok) {
+                acks.push((id.clone(), state.acks.clone()));
+            }
+            if read.from_next_file || read.kid.as_deref() != Some(key.kid()) {
+                let old = store.read_state_file(id, STATE_FILE, key, &HashMap::new());
+                if let Some(state) = old.state.filter(|_| old.status == StateStatus::Ok) {
+                    acks.push((id.clone(), state.acks));
+                }
+            }
+        }
+        let ackers = || acks.iter().map(|(id, a)| (id.as_str(), a));
+        let order = forget_order(entries);
+        let end = Self::own_snapshot_end(&store, &record.device_id, own_state, Some(&record.epoch), accepted, snapshot_ends);
+        match end {
+            SnapshotEndRead::End(end) => covers_forgotten(&end.covers, entries, ackers()).into_iter().collect(),
+            _ => order.keys().filter(|target| super::forget::cutoff(target, ackers().filter(|(id, _)| !order.contains_key(*id))).is_some()).cloned().collect(),
+        }
+    }
+
     fn view(record: &ResetRecord, waiting: Vec<String>, switched: bool, resumed: bool) -> ResetView {
         ResetView {
             role: record.role.as_str(),
@@ -1811,7 +2123,9 @@ impl SyncCore {
             by: record.by.clone(),
             notice: if record.role == ResetRole::Initiator && record.active() { record.notice.clone() } else { None },
             stage: record.stage.as_str(),
-            superseded: record.superseded.as_ref().map(|s| SupersededView { epoch: s.epoch.clone(), by: s.by.clone() }),
+            notice_epoch: record.notice_epoch.clone(),
+            closed: false,
+            superseded: record.superseded.as_ref().map(|s| SupersededView { epoch: s.epoch.clone(), by: s.by.clone(), restore: s.restore }),
             switching: record.switch_step > 0 && !switched,
             switched,
             resumed,
@@ -1848,6 +2162,20 @@ impl SyncCore {
             bound.fs.remove_file(&[DEVICES_DIR, &self_id, STATE_NEXT_FILE]).map_err(|e| SyncError::new(e.code()))?;
             record.switch_step = 2;
             self.save_reset(record)?;
+        }
+        // Audit 3 : avant d'effacer quoi que ce soit (étapes 3 à 5), son `state.ctx` doit se déchiffrer avec la nouvelle clé dans l'époque
+        // visée ; sinon la bascule s'arrête (`state-mismatch`), l'ancienne clé reste.
+        if record.switch_step < 5 {
+            let next = match self.read_vault_next()?.filter(|k| k.kid() == record.kid) {
+                Some(next) => next,
+                None => self.read_vault_key()?.filter(|k| k.kid() == record.kid).ok_or(SyncError::new(SyncCode::VaultUnavailable))?,
+            };
+            let bound = self.require_folder(inner)?;
+            let probe = Store::new(bound.fs.as_ref(), &next, false).read_state_file(&self_id, STATE_FILE, &next, &HashMap::new());
+            if probe.status != StateStatus::Ok || probe.state.as_ref().map_or(true, |s| s.epoch != record.epoch) {
+                log::event("reset-switch-refused", probe.status.as_str());
+                return fail(SyncCode::StateMismatch);
+            }
         }
         if record.switch_step < 3 {
             self.interrupt("switch-3")?;
@@ -1964,10 +2292,12 @@ impl SyncCore {
             Store::new(bound.fs.as_ref(), &key, false).read_state_file(&self_id, STATE_FILE, &key, &HashMap::new())
         };
         let (Some(state), Some(digest)) = (read.state.filter(|_| read.status == StateStatus::Ok), read.digest) else { return Ok(()) };
-        let ours = match record.role {
-            ResetRole::Initiator => state.reset.as_ref().is_some_and(|n| n.kid == record.kid),
-            ResetRole::Joined => state.reset.is_none() && record.base.as_ref().and_then(|b| b.epoch.as_deref()).map_or(true, |e| e == state.epoch),
-        };
+        // Audit 5 : seule exception à l'anti-rejeu, le dernier état écrit sous l'ancienne clé (même `stateSeq`, même empreinte), base
+        // exigée ; un état plus ancien rejoué reste un rejeu.
+        let ours = record.base.is_some() && record.k_state.as_ref().is_some_and(|k| k.state_seq == state.state_seq && k.digest == digest);
+        if !ours {
+            log::event("reset-own-state-not-back", &state.state_seq.to_string());
+        }
         let Some(epoch) = EpochId::parse(&state.epoch).filter(|_| ours) else { return Ok(()) };
         let head = RecordCursor { segment: state.head.segment, record: state.head.record };
         inner.accepted.insert(self_id.clone(), Accepted { epoch, seq: state.state_seq, digest: digest.clone(), head });
@@ -2016,4 +2346,10 @@ enum JoinPlan {
 /// Millisecondes d'un hlc strict (`<15 chiffres>-…`).
 fn hlc_ms(hlc: &str) -> Option<u64> {
     hlc.get(..15).and_then(|ms| ms.parse().ok())
+}
+
+/// Instant ISO 8601 UTC à la milliseconde.
+fn iso_ms(ms: u64) -> String {
+    let seconds = crate::backup::iso_instant(ms / 1000);
+    format!("{}.{:03}Z", &seconds[..seconds.len() - 5], ms % 1000)
 }

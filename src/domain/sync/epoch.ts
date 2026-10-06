@@ -127,18 +127,51 @@ export function mustCarry(fieldHlc: Hlc, self: DeviceId, cover: DeviceAck | null
 // cas (`tests/fixtures/sync/reset-order.json`).
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-/** Annonce lue dans un état authentifié : auteur (appareil dont l'état la porte), époque de cet état, annonce. */
+/**
+ * Annonce lue dans un état authentifié : auteur (appareil dont l'état la porte), époque de cet état, annonce. `restore` (§18 point 16) :
+ * époque ouverte sous l'ancienne clé (restauration), qui concourt avec les annonces ; `notice.epoch` est l'époque ouverte, `kid` et `at`
+ * sont vides.
+ */
 export interface ResetCandidate {
   readonly by: DeviceId;
   readonly stateEpoch: EpochId;
   readonly notice: ResetNotice;
+  readonly restore?: true;
 }
 
-/** Validité d'une annonce : époque `e<m>-<auteur>` strictement supérieure à celle de l'état qui la porte ; `kid`, hlc, auteur stricts. */
+/**
+ * Validité d'une annonce : époque `e<m>-<auteur>` strictement supérieure à celle de l'état qui la porte ; `kid`, hlc, auteur stricts
+ * (époque restaurée : ouvreur et époque seulement).
+ */
 export function validReset(c: ResetCandidate): boolean {
   if (!isSyncDeviceId(c.by) || !isEpochId(c.notice.epoch) || !isEpochId(c.stateEpoch)) return false;
   if (parseEpochId(c.notice.epoch)?.opener !== c.by) return false;
-  return compareEpochs(c.notice.epoch, c.stateEpoch) > 0 && isKid(c.notice.kid) && isStrictHlc(c.notice.at);
+  return compareEpochs(c.notice.epoch, c.stateEpoch) > 0 && (c.restore === true || (isKid(c.notice.kid) && isStrictHlc(c.notice.at)));
+}
+
+/** État `ok` sous l'ancienne clé vu pour les époques restaurées : auteur, époque, instantané annoncé, annonce portée. */
+export interface OpenedEpoch {
+  readonly by: DeviceId;
+  readonly epoch: EpochId;
+  readonly snapshot: boolean;
+  readonly notice: boolean;
+}
+
+/**
+ * Époques ouvertes sous l'ancienne clé qui concourent avec les annonces (§18 point 16, complément 1) : état sans annonce, instantané
+ * annoncé, ouvreur = auteur, époque supérieure à celle de l'état qui porte une annonce (la plus petite). Aucune annonce : aucune.
+ */
+export function restoreCandidates(states: readonly OpenedEpoch[], announcements: readonly ResetCandidate[]): ResetCandidate[] {
+  let base: EpochId | null = null;
+  for (const a of announcements) {
+    if (a.restore || !validReset(a)) continue;
+    if (base === null || compareEpochs(a.stateEpoch, base) < 0) base = a.stateEpoch;
+  }
+  if (base === null) return [];
+  const from = base;
+  return states
+    .filter((s) => !s.notice && s.snapshot && isEpochId(s.epoch) && parseEpochId(s.epoch)?.opener === s.by && compareEpochs(s.epoch, from) > 0)
+    .map((s) => ({ by: s.by, stateEpoch: from, notice: { kid: '', epoch: s.epoch, at: '' as ResetNotice['at'] }, restore: true as const }));
 }
 
 /**
@@ -190,25 +223,29 @@ export function resetPrecondition(
   return null;
 }
 
-/** Appareil connu pendant la transition : statut et époque de l'état présenté, vu (anti-rejeu, accusé d'un actif), auteur d'un oubli. */
+/**
+ * Appareil connu pendant la transition : statut, époque et `kid` de l'état présenté, vu (anti-rejeu, accusé d'un actif), auteur d'un
+ * oubli.
+ */
 export interface ResetKnownDevice {
   readonly deviceId: DeviceId;
   readonly status: string;
   readonly epoch: EpochId | null;
+  readonly kid: string | null;
   readonly seen: boolean;
   readonly author: boolean;
 }
 
 /**
  * Appareils pas encore réassociés (§14.3 étape 5) : connus, ni soi, ni oubliés, ni fantômes (jamais vus et illisibles), dont l'état
- * n'est pas un état authentifié de l'époque visée (seule la nouvelle clé l'écrit). Triés ; vide : la bascule peut se faire.
+ * n'est pas un état authentifié de l'époque visée sous la nouvelle clé (`kid`, audit 4). Triés ; vide : la bascule peut se faire.
  */
-export function resetWaiting(known: readonly ResetKnownDevice[], self: DeviceId, epoch: EpochId, forgotten: ReadonlySet<DeviceId>): DeviceId[] {
+export function resetWaiting(known: readonly ResetKnownDevice[], self: DeviceId, epoch: EpochId, kid: string, forgotten: ReadonlySet<DeviceId>): DeviceId[] {
   const out = new Set<DeviceId>();
   for (const d of known) {
     if (d.deviceId === self || forgotten.has(d.deviceId)) continue;
     if (d.status !== 'ok' && !d.seen && !d.author) continue;
-    if (d.status === 'ok' && d.epoch === epoch) continue;
+    if (d.status === 'ok' && d.epoch === epoch && d.kid === kid) continue;
     out.add(d.deviceId);
   }
   return [...out].sort();

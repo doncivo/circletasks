@@ -40,6 +40,21 @@
       "name": "époque mal formée : ignorée",
       "candidate": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "0123456789abcdef", "epoch": "e2-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
       "expected": false
+    },
+    {
+      "name": "annonce d'un UUID jamais vu, authentifiée : valide (§18 point 15)",
+      "candidate": { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } },
+      "expected": true
+    },
+    {
+      "name": "époque restaurée sous K (restore) : ouvreur et époque seulement",
+      "candidate": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true },
+      "expected": true
+    },
+    {
+      "name": "époque restaurée qui n'est pas la sienne : invalide",
+      "candidate": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-cccccccc-cccc-4ccc-8ccc-cccccccccccc", "at": "" }, "restore": true },
+      "expected": false
     }
   ],
   "resetWinner": [
@@ -117,6 +132,59 @@
       ],
       "forgotten": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
       "expected": null
+    },
+    {
+      "name": "annonce d'un UUID jamais vu : même gagnant chez tous (aucune condition d'anti-rejeu)",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": [],
+      "expected": { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" }
+    },
+    {
+      "name": "gagnant oublié après coup : annonce suivante gagnante",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
+    },
+    {
+      "name": "gagnant oublié, seule annonce : aucune",
+      "candidates": [
+        { "by": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "at": "000000000001000-0000-eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" } }
+      ],
+      "forgotten": ["eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"],
+      "expected": null
+    },
+    {
+      "name": "époque restaurée sous K plus grande que l'annonce : la restauration l'emporte",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "époque restaurée plus petite : l'annonce l'emporte",
+      "candidates": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "000000000001000-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" } },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "" }, "restore": true }
+      ],
+      "forgotten": [],
+      "expected": { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }
+    },
+    {
+      "name": "époque restaurée d'un auteur oublié : ignorée",
+      "candidates": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ],
+      "forgotten": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"],
+      "expected": { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }
     }
   ],
   "resetPrecondition": [
@@ -223,11 +291,12 @@
       "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "forgotten": [],
       "known": [
-        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false },
-        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false },
-        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false }
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "aaaaaaaaaaaaaaaa" },
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "aaaaaaaaaaaaaaaa" },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" }
       ],
-      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"]
+      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
+      "kid": "aaaaaaaaaaaaaaaa"
     },
     {
       "name": "oublié par un choix explicite : n'attend plus",
@@ -235,9 +304,10 @@
       "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "forgotten": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc"],
       "known": [
-        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false }
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" }
       ],
-      "expected": []
+      "expected": [],
+      "kid": "aaaaaaaaaaaaaaaa"
     },
     {
       "name": "fantôme (jamais vu, état illisible) : ne bloque pas ; appareil vu dont l'état manque : attendu",
@@ -245,11 +315,12 @@
       "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "forgotten": [],
       "known": [
-        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "missing", "epoch": null, "seen": false, "author": false },
-        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "cloud-pending", "epoch": null, "seen": true, "author": false },
-        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": false, "author": true }
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "missing", "epoch": null, "seen": false, "author": false, "kid": null },
+        { "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "status": "cloud-pending", "epoch": null, "seen": true, "author": false, "kid": null },
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": false, "author": true, "kid": null }
       ],
-      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"]
+      "expected": ["cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+      "kid": "aaaaaaaaaaaaaaaa"
     },
     {
       "name": "réassocié à une réinitialisation concurrente (autre époque) : attendu",
@@ -257,10 +328,11 @@
       "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "forgotten": [],
       "known": [
-        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false },
-        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": true, "author": false }
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "seen": true, "author": false, "kid": "0123456789abcdef" },
+        { "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "status": "foreign", "epoch": null, "seen": true, "author": false, "kid": null }
       ],
-      "expected": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"]
+      "expected": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "dddddddd-dddd-4ddd-8ddd-dddddddddddd"],
+      "kid": "aaaaaaaaaaaaaaaa"
     },
     {
       "name": "aucun autre appareil : la bascule peut se faire au premier cycle",
@@ -268,9 +340,48 @@
       "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
       "forgotten": [],
       "known": [
-        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false }
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "seen": true, "author": false, "kid": "0123456789abcdef" }
+      ],
+      "expected": [],
+      "kid": "aaaaaaaaaaaaaaaa"
+    },
+    {
+      "name": "audit 4 : état de l'époque visée sous une autre clé que la nouvelle (forgé sous l'ancienne) : attendu",
+      "self": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "kid": "aaaaaaaaaaaaaaaa",
+      "forgotten": [],
+      "known": [
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "kid": "aaaaaaaaaaaaaaaa", "seen": true, "author": false },
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "status": "ok", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "kid": "0123456789abcdef", "seen": true, "author": false }
+      ],
+      "expected": ["bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"]
+    }
+  ],
+  "restoreCandidates": [
+    {
+      "name": "aucune annonce : aucune époque restaurée ne concourt",
+      "announcements": [],
+      "states": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false }
       ],
       "expected": []
+    },
+    {
+      "name": "époque ouverte par son auteur, instantané annoncé, au-delà de l'état de l'annonce : concourt",
+      "announcements": [
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "aaaaaaaaaaaaaaaa", "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "at": "000000000001000-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } }
+      ],
+      "states": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false },
+        { "by": "cccccccc-cccc-4ccc-8ccc-cccccccccccc", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "snapshot": true, "notice": false },
+        { "by": "dddddddd-dddd-4ddd-8ddd-dddddddddddd", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "snapshot": true, "notice": false },
+        { "by": "11111111-1111-4111-8111-111111111111", "epoch": "e0002-11111111-1111-4111-8111-111111111111", "snapshot": false, "notice": false },
+        { "by": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "epoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "snapshot": true, "notice": true }
+      ],
+      "expected": [
+        { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
+      ]
     }
   ]
 }

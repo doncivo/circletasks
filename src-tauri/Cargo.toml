@@ -24,6 +24,11 @@ test = false
 [[test]]
 name = "desktop"
 path = "tests/desktop/main.rs"
+required-features = ["test-hooks"]
+
+[features]
+# Points d'arrêt simulés des tests (Y-11, revue 8) : jamais dans le binaire livré ; `cargo test --features test-hooks`.
+test-hooks = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -414,8 +414,11 @@ pub async fn sync_key_import(
     let input = match (qr_text, recovery_key, scan) {
         (Some(text), None, None) => KeyInput::QrText(text),
         (None, Some(text), None) => KeyInput::RecoveryKey(text),
-        // Le scan lancé par Rust n'existe que sur l'iPhone (ordre 5).
-        _ => return fail(SyncCode::InvalidPairing),
+        // Le scan lancé par Rust n'existe que sur l'iPhone (ordre 5). Refus persisté (§18 point 17).
+        _ => {
+            core.record_import_failure(SyncCode::InvalidPairing);
+            return fail(SyncCode::InvalidPairing);
+        }
     };
     let owner = caller.hwnd;
     let import_core = core.clone();

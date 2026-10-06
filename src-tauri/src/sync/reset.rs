@@ -75,13 +75,24 @@ pub struct ResetBase {
 }
 
 /// Perte constatée au scan (§18 point 2) : époque et auteur de l'annonce gagnante (aucune : annonce retirée ou sans effet) ; `done` :
-/// les quatre étapes du perdant sont faites.
+/// les quatre étapes du perdant sont faites ; `restore` : le gagnant est une époque restaurée sous l'ancienne clé (§18 point 16).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Superseded {
     pub epoch: Option<String>,
     pub by: Option<String>,
     pub done: bool,
+    #[serde(default)]
+    pub restore: bool,
+}
+
+/// Dernier état écrit sous l'ancienne clé pendant la réinitialisation (audit 5) : seul état que l'anti-rejeu de soi peut reprendre
+/// si la réinitialisation perd.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KState {
+    pub state_seq: u64,
+    pub digest: String,
 }
 
 /// `sync/reset.json`.
@@ -102,6 +113,12 @@ pub struct ResetRecord {
     pub notice: Option<ResetNotice>,
     /// Époque de l'état qui porte l'annonce (`n`).
     pub notice_epoch: Option<String>,
+    /// `stateSeq` de l'état qui porte l'annonce (revue 1) : un retrait n'est compté que sur un état strictement plus récent.
+    #[serde(default)]
+    pub notice_seq: Option<u64>,
+    /// Dernier état écrit sous l'ancienne clé (audit 5).
+    #[serde(default)]
+    pub k_state: Option<KState>,
     pub stage: ResetStage,
     pub base: Option<ResetBase>,
     pub superseded: Option<Superseded>,
@@ -119,6 +136,7 @@ impl ResetRecord {
             && is_uuid_v4(&self.by)
             && self.notice.as_ref().map_or(true, |n| is_kid(&n.kid) && is_epoch_id(&n.epoch) && is_strict_hlc(&n.at))
             && self.notice_epoch.as_deref().map_or(true, is_epoch_id)
+            && self.k_state.as_ref().map_or(true, |k| k.digest.len() == 64 && k.digest.bytes().all(|b| b.is_ascii_hexdigit()))
             && self.base.as_ref().map_or(true, |b| b.epoch.as_deref().map_or(true, is_epoch_id) && b.max_hlc.as_deref().map_or(true, is_strict_hlc))
             && self.superseded.as_ref().map_or(true, |s| s.epoch.as_deref().map_or(true, is_epoch_id) && s.by.as_deref().map_or(true, is_uuid_v4))
             && self.switch_step <= 6
@@ -131,24 +149,51 @@ impl ResetRecord {
 
     /// Candidat de cette réinitialisation pour le calcul du gagnant (annonce connue seulement).
     pub fn candidate(&self) -> Option<ResetCandidate> {
-        Some(ResetCandidate { by: self.by.clone(), state_epoch: self.notice_epoch.clone()?, notice: self.notice.clone()? })
+        Some(ResetCandidate { by: self.by.clone(), state_epoch: self.notice_epoch.clone()?, notice: self.notice.clone()?, restore: false })
     }
 }
 
-/// Annonce lue (§11.2 `ResetCandidate`) : auteur (appareil dont l'état la porte), époque de cet état, annonce.
+/// Annonce lue (§11.2 `ResetCandidate`) : auteur (appareil dont l'état la porte), époque de cet état, annonce. `restore` (§18 point
+/// 16) : époque ouverte sous l'ancienne clé (restauration « Appliquer partout »), qui concourt avec les annonces ; `notice.epoch` est
+/// alors l'époque ouverte, `notice.kid` et `notice.at` sont vides.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResetCandidate {
     pub by: String,
     pub state_epoch: String,
     pub notice: ResetNotice,
+    #[serde(default)]
+    pub restore: bool,
 }
 
 /// Validité d'une annonce (§14.3) : époque `e<m>-<auteur>` strictement supérieure à l'époque de l'état qui la porte ; `kid`, hlc et
-/// auteur bien formés. Même fonction que `validReset`.
+/// auteur bien formés (époque restaurée : ouvreur et époque seulement). Même fonction que `validReset`.
 pub fn valid_reset(candidate: &ResetCandidate) -> bool {
     let (Some(target), Some(state)) = (EpochId::parse(&candidate.notice.epoch), EpochId::parse(&candidate.state_epoch)) else { return false };
-    is_uuid_v4(&candidate.by) && target.opener == candidate.by && target > state && is_kid(&candidate.notice.kid) && is_strict_hlc(&candidate.notice.at)
+    is_uuid_v4(&candidate.by) && target.opener == candidate.by && target > state && (candidate.restore || (is_kid(&candidate.notice.kid) && is_strict_hlc(&candidate.notice.at)))
+}
+
+/// État `ok` sous l'ancienne clé vu pour les époques restaurées (§18 point 16) : auteur, époque, instantané annoncé, annonce portée.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenedEpoch {
+    pub by: String,
+    pub epoch: String,
+    pub snapshot: bool,
+    pub notice: bool,
+}
+
+/// Époques ouvertes sous l'ancienne clé qui concourent avec les annonces (§18 point 16, complément 1) : état sans annonce, instantané
+/// annoncé, ouvreur = auteur, époque supérieure à celle de l'état qui porte une annonce. Aucune annonce : aucune. Même fonction que
+/// `restoreCandidates`.
+pub fn restore_candidates(states: &[OpenedEpoch], announcements: &[ResetCandidate]) -> Vec<ResetCandidate> {
+    let bases: Vec<EpochId> = announcements.iter().filter(|a| !a.restore && valid_reset(a)).filter_map(|a| EpochId::parse(&a.state_epoch)).collect();
+    let Some(base) = bases.into_iter().min() else { return Vec::new() };
+    states
+        .iter()
+        .filter(|s| !s.notice && s.snapshot)
+        .filter(|s| EpochId::parse(&s.epoch).is_some_and(|e| e.opener == s.by && e > base))
+        .map(|s| ResetCandidate { by: s.by.clone(), state_epoch: base.name(), notice: ResetNotice { kid: String::new(), epoch: s.epoch.clone(), at: String::new() }, restore: true })
+        .collect()
 }
 
 /// Gagnant de réinitialisations simultanées (§18 point 2) : l'annonce valide d'un auteur non oublié dont l'époque est la plus grande (ordre
@@ -244,14 +289,16 @@ pub struct ResetKnown {
     pub device_id: String,
     pub status: StateStatus,
     pub epoch: Option<String>,
+    /// `kid` de l'en-tête de l'état présenté (audit 4) : seule la nouvelle clé compte.
+    pub kid: Option<String>,
     pub seen: bool,
     pub author: bool,
 }
 
 /// Appareils pas encore réassociés (§14.3 étape 5) : connus, ni soi, ni oubliés, ni fantômes (Y-10 : jamais vus, état illisible), dont
-/// l'état présenté n'est pas un état authentifié de l'époque visée (seule la nouvelle clé l'écrit). Triés. Vide : la bascule peut se
-/// faire. Même fonction que `resetWaiting`.
-pub fn reset_waiting(known: &[ResetKnown], self_id: &str, epoch: &str, forgotten: &BTreeSet<String>) -> Vec<String> {
+/// l'état présenté n'est pas un état authentifié de l'époque visée sous la nouvelle clé (`kid`, audit 4). Triés. Vide : la bascule peut
+/// se faire. Même fonction que `resetWaiting`.
+pub fn reset_waiting(known: &[ResetKnown], self_id: &str, epoch: &str, kid: &str, forgotten: &BTreeSet<String>) -> Vec<String> {
     let mut out: BTreeSet<String> = BTreeSet::new();
     for device in known {
         if device.device_id == self_id || forgotten.contains(&device.device_id) {
@@ -260,7 +307,7 @@ pub fn reset_waiting(known: &[ResetKnown], self_id: &str, epoch: &str, forgotten
         if device.status != StateStatus::Ok && !device.seen && !device.author {
             continue;
         }
-        if device.status == StateStatus::Ok && device.epoch.as_deref() == Some(epoch) {
+        if device.status == StateStatus::Ok && device.epoch.as_deref() == Some(epoch) && device.kid.as_deref() == Some(kid) {
             continue;
         }
         out.insert(device.device_id.clone());

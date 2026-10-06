@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { epochId, type DeviceAck, type EpochId } from '../../../../src/domain/sync/format';
-import { resetPrecondition, resetWaiting, resetWinner, validReset, type ResetCandidate, type ResetKnownDevice, type ResetPreconditionDevice } from '../../../../src/domain/sync/epoch';
+import { resetPrecondition, resetWaiting, resetWinner, restoreCandidates, validReset, type OpenedEpoch, type ResetCandidate, type ResetKnownDevice, type ResetPreconditionDevice } from '../../../../src/domain/sync/epoch';
 import type { DeviceId, Hlc } from '../../../../src/domain/types';
 import table from '../../../fixtures/sync/reset-order.json';
 
@@ -11,8 +11,13 @@ import table from '../../../fixtures/sync/reset-order.json';
  * résultats des deux côtés).
  */
 
-type JsonCandidate = { by: string; stateEpoch: string; notice: { kid: string; epoch: string; at: string } };
-const candidateOf = (c: JsonCandidate): ResetCandidate => ({ by: c.by as DeviceId, stateEpoch: c.stateEpoch as EpochId, notice: { kid: c.notice.kid, epoch: c.notice.epoch as EpochId, at: c.notice.at as Hlc } });
+type JsonCandidate = { by: string; stateEpoch: string; notice: { kid: string; epoch: string; at: string }; restore?: boolean };
+const candidateOf = (c: JsonCandidate): ResetCandidate => ({
+  by: c.by as DeviceId,
+  stateEpoch: c.stateEpoch as EpochId,
+  notice: { kid: c.notice.kid, epoch: c.notice.epoch as EpochId, at: c.notice.at as Hlc },
+  ...(c.restore ? { restore: true } : {}),
+});
 
 describe('table de cas commune Rust / Vitest (reset-order.json)', () => {
   it('validReset', () => {
@@ -39,9 +44,17 @@ describe('table de cas commune Rust / Vitest (reset-order.json)', () => {
   });
 
   it('resetWaiting', () => {
-    expect(table.resetWaiting.length).toBeGreaterThanOrEqual(5);
+    expect(table.resetWaiting.length).toBeGreaterThanOrEqual(6);
     for (const c of table.resetWaiting) {
-      expect(resetWaiting(c.known as unknown as ResetKnownDevice[], c.self as DeviceId, c.epoch as EpochId, new Set(c.forgotten as DeviceId[])), c.name).toEqual(c.expected);
+      expect(resetWaiting(c.known as unknown as ResetKnownDevice[], c.self as DeviceId, c.epoch as EpochId, c.kid, new Set(c.forgotten as DeviceId[])), c.name).toEqual(c.expected);
+    }
+  });
+
+  it('restoreCandidates (§18 point 16 : époques restaurées sous K qui concourent avec les annonces)', () => {
+    expect(table.restoreCandidates.length).toBeGreaterThanOrEqual(2);
+    for (const c of table.restoreCandidates) {
+      const got = restoreCandidates(c.states as unknown as OpenedEpoch[], (c.announcements as JsonCandidate[]).map(candidateOf));
+      expect(got, c.name).toEqual((c.expected as JsonCandidate[]).map(candidateOf));
     }
   });
 });
