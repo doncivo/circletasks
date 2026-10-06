@@ -79,7 +79,6 @@ export const SEGMENT_PURGE_AGE_MS = 30 * DAY_MS;
 export const DEVICE_EXPIRY_MS = 180 * DAY_MS;
 export const SNAPSHOT_INTERVAL_MS = 7 * DAY_MS;
 export const SNAPSHOTS_KEPT_PER_EPOCH = 2;
-export const OLD_EPOCH_RETENTION_MS = 30 * DAY_MS;
 /** `state.ctx` réécrit pour le seul `lastSyncHlc` au plus toutes les 30 minutes (audit M1). */
 export const STATE_REFRESH_MS = 30 * 60_000;
 
