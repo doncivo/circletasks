@@ -11,7 +11,7 @@ import { setSnapshotWait } from './forget';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
 import { ROW_REPUBLISH_FIELD } from './publisher';
-import { positionAfterReplace } from '../domain/sync/positions';
+import { positionAfterReplace, positionFromCover } from '../domain/sync/positions';
 import { purgeRows } from './purge';
 import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot } from './snapshot';
 
@@ -338,13 +338,12 @@ export async function switchEpoch(
   }
   // (d) Nouvelle époque : tête vide ; la publication suit dans le cycle.
   // Y-TECH-01 : en remplacement, la position sur chaque autre appareil est celle que la base remplacée contient (`positionAfterReplace`).
-  let covers: ReadonlyMap<DeviceId, DeviceAck> = new Map<DeviceId, DeviceAck>();
-  if (options.mode === 'replace') {
-    const loaded = await load();
-    if (loaded === 'cloud-pending') return 'cloud-pending';
-    if (!loaded) return 'error';
-    covers = loaded.end.covers;
-  }
+  // Y-TECH-02 (ADR 0011 §21 point 4) : `covers` de l'instantané d'ouverture chargé dans les deux modes ; en fusion, il donne la position
+  // d'une ligne sans époque (`positionFromCover`).
+  const loaded = await load();
+  if (loaded === 'cloud-pending') return 'cloud-pending';
+  if (!loaded) return 'error';
+  const covers: ReadonlyMap<DeviceId, DeviceAck> = loaded.end.covers;
   await deps.data.transaction(async (tx) => {
     for (const row of await tx.sync.getStates()) {
       // §18.14 « accusés figés à l'import » (seconde revue, bloquant) : dans une réinitialisation (fusion), la position en `n` de tout
@@ -352,6 +351,12 @@ export async function switchEpoch(
       // l'époque visée » sur un appareil qui n'y a rien publié).
       const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && options.mode === 'merge';
       if (keep) continue;
+      // Y-TECH-02 (§21 point 4) : en fusion, ligne d'un autre appareil sans époque (la base ne contenait rien de lui) : elle en contient
+      // maintenant `covers` de l'instantané d'ouverture, ou rien ; « l'accusé suit la base », jamais {`target`, 0, 0}.
+      if (!row.isSelf && row.epoch === null && options.mode === 'merge') {
+        await tx.sync.saveState(row.deviceId, positionFromCover(covers.get(row.deviceId as DeviceId), target, false, row));
+        continue;
+      }
       // Remplacement (ADR §9.1 (d), §20 point 3) : l'accusé suit la base, oubliés retenus et terminés compris ; position
       // couverte par l'instantané (accusé hérité, §14.2), ou aucune ; jamais {`target`, 0, 0} sur un appareil qui n'y a rien publié.
       const replaced = !row.isSelf && options.mode === 'replace';
