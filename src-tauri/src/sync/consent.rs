@@ -40,6 +40,8 @@ pub enum ConsentKind {
     EraseKey,
     /// Oublier un autre appareil (`sync_device_forget`, Y-10) : irréversible.
     ForgetDevice,
+    /// Réinitialiser la synchronisation avec une nouvelle clé (`sync_reset_key`, Y-11).
+    ResetKey,
 }
 
 impl ConsentKind {
@@ -49,6 +51,7 @@ impl ConsentKind {
             ConsentKind::ReplaceKey => "replaceKey",
             ConsentKind::EraseKey => "eraseKey",
             ConsentKind::ForgetDevice => "forgetDevice",
+            ConsentKind::ResetKey => "resetKey",
         }
     }
 }
@@ -130,6 +133,9 @@ struct Counters {
     /// Y-10 : ouvertures de la boîte « Oublier cet appareil » (même plafond que l'affichage de la clé). Absent des fichiers antérieurs.
     #[serde(default)]
     forget: Vec<u64>,
+    /// Y-11 : ouvertures de la boîte « Réinitialiser la synchronisation » (même plafond). Absent des fichiers antérieurs.
+    #[serde(default)]
+    reset: Vec<u64>,
 }
 
 /// Compteurs persistés et verrou « une seule boîte à la fois ».
@@ -249,6 +255,24 @@ impl ConsentGate {
             self.save(&counters);
         }
         self.ask_with(ConsentKind::ForgetDevice, owner, Some(detail))
+    }
+
+    /// Réinitialisation (Y-11) : mêmes préconditions, compteur persisté (3 ouvertures par 10 minutes, refus compris), blocage et verrou
+    /// que l'affichage de la clé (Y-08), puis la boîte, « Annuler » par défaut.
+    pub fn confirm_reset(&self, owner: isize) -> SyncResult<()> {
+        {
+            let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
+            let now = (self.now)();
+            let mut counters = self.load(now);
+            self.gate(owner, &counters, now)?;
+            Self::prune(&mut counters.reset, now);
+            if counters.reset.len() >= CONSENT_MAX_SHOW {
+                return fail(SyncCode::RateLimited);
+            }
+            counters.reset.push(now);
+            self.save(&counters);
+        }
+        self.ask(ConsentKind::ResetKey, owner)
     }
 
     /// Appel d'import : 5 par 10 minutes, fenêtre appelante au premier plan (aucune boîte à ce stade).
