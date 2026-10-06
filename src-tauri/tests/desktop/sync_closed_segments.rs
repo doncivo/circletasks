@@ -38,18 +38,17 @@ fn segment_path(ep: &str, n: u64) -> Vec<String> {
     vec!["devices".to_owned(), DEV_A.to_owned(), ep.to_owned(), format!("j-{n:08}.ctj")]
 }
 
-fn published(fs: &MemFs, d: &Device) -> PublishedState {
+fn published(d: &Device) -> PublishedState {
     // L'état de soi relu par le scan (déchiffré par Rust) : le champ `closed` tel qu'il est publié.
     let scan = d.core.scan(&[]).unwrap();
-    let _ = fs;
     scan.devices.into_iter().find(|s| s.device_id == DEV_A).and_then(|s| s.state).expect("état publié")
 }
 
-/// `own.json` écrit avant la story : aucune entrée `closed` (le prochain état est publié sans `closed`).
+/// `own.json` écrit avant la story : sans la clé `closed` (lu avec une liste vide ; le prochain état est publié sans `closed`).
 fn clear_own_closed(d: &mut Device) {
     let path = d.base.path().join("sync").join("own.json");
     let mut own: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    own.as_object_mut().unwrap().insert("closed".to_owned(), json!([]));
+    own.as_object_mut().unwrap().remove("closed");
     std::fs::write(&path, serde_json::to_vec(&own).unwrap()).unwrap();
     d.restart();
 }
@@ -160,14 +159,14 @@ fn y_tech_02_closed_schema() {
 
 #[test]
 fn y_tech_02_closed_written_by_rust() {
-    let (d, fs) = device();
+    let (d, _fs) = device();
     d.setup(DEV_A);
     let ep = epoch(1, DEV_A);
     append(&d, &ep, 1, 10, 2).unwrap();
     append(&d, &ep, 2, 20, 1).unwrap();
     // Omis par le moteur → complété depuis own.json ; différent → state-mismatch ; égal → accepté.
     d.core.write_state(14, state(&ep, 1, 2, 1, Some(hlc(20, DEV_A)))).unwrap();
-    let closed: Vec<(u64, u64)> = published(&fs, &d).closed.iter().map(|c| (c.segment, c.records)).collect();
+    let closed: Vec<(u64, u64)> = published(&d).closed.iter().map(|c| (c.segment, c.records)).collect();
     assert_eq!(closed, vec![(1, 2)]);
     let mut wrong = state(&ep, 2, 2, 1, Some(hlc(20, DEV_A)));
     wrong.as_object_mut().unwrap().insert("closed".to_owned(), json!([{ "segment": 1, "records": 1 }]));
@@ -179,11 +178,11 @@ fn y_tech_02_closed_written_by_rust() {
     append(&d, &ep, 3, 30, 1).unwrap();
     d.core.delete_own(&[OwnFileRef { epoch: ep.clone(), kind: "j".to_owned(), n: Some(1) }]).unwrap();
     d.core.write_state(14, state(&ep, 4, 3, 1, Some(hlc(30, DEV_A)))).unwrap();
-    let closed: Vec<(u64, u64)> = published(&fs, &d).closed.iter().map(|c| (c.segment, c.records)).collect();
+    let closed: Vec<(u64, u64)> = published(&d).closed.iter().map(|c| (c.segment, c.records)).collect();
     assert_eq!(closed, vec![(2, 1)]);
     let ep2 = epoch(2, DEV_A);
     d.core.write_state(14, state(&ep2, 5, 0, 0, None)).unwrap();
-    assert!(published(&fs, &d).closed.is_empty());
+    assert!(published(&d).closed.is_empty());
 }
 
 #[test]
@@ -202,7 +201,7 @@ fn y_tech_02_closed_after_an_interrupted_append_counts_what_the_state_could_anno
     assert_eq!(code(d.core.append_journal(&request)), SyncCode::SegmentMismatch);
     append(&d, &ep, 2, 20, 1).unwrap();
     d.core.write_state(14, state(&ep, 1, 2, 1, Some(hlc(20, DEV_A)))).unwrap();
-    let closed: Vec<(u64, u64)> = published(&fs, &d).closed.iter().map(|c| (c.segment, c.records)).collect();
+    let closed: Vec<(u64, u64)> = published(&d).closed.iter().map(|c| (c.segment, c.records)).collect();
     assert_eq!(closed, vec![(1, 2)]);
     let page = d.core.read_journal(DEV_A, &ep, RecordCursor { segment: 0, record: 0 }, None).unwrap();
     assert_eq!((page.status, page.records.len()), ("complete", 3), "aucune attente sans fin sur la ligne incomplète");
@@ -210,7 +209,7 @@ fn y_tech_02_closed_after_an_interrupted_append_counts_what_the_state_could_anno
 
 #[test]
 fn y_tech_02_closed_cap_drops_the_oldest() {
-    let (d, fs) = device();
+    let (d, _fs) = device();
     d.setup(DEV_A);
     let ep = epoch(1, DEV_A);
     let last = MAX_STATE_CLOSED_SEGMENTS as u64 + 2;
@@ -218,7 +217,7 @@ fn y_tech_02_closed_cap_drops_the_oldest() {
         append(&d, &ep, n, 10 * n, 1).unwrap();
     }
     d.core.write_state(14, state(&ep, 1, last, 1, Some(hlc(10 * last, DEV_A)))).unwrap();
-    let closed = published(&fs, &d).closed;
+    let closed = published(&d).closed;
     assert_eq!(closed.len(), MAX_STATE_CLOSED_SEGMENTS);
     assert_eq!((closed[0].segment, closed[0].records), (2, 1));
 }
@@ -235,7 +234,7 @@ fn y_tech_02_closed_rebuilt_from_its_own_state_only() {
     std::fs::remove_file(d.base.path().join("sync").join("own.json")).unwrap();
     d.restart();
     d.core.write_state(14, state(&ep, 2, 2, 1, Some(hlc(20, DEV_A)))).unwrap();
-    let closed: Vec<(u64, u64)> = published(&fs, &d).closed.iter().map(|c| (c.segment, c.records)).collect();
+    let closed: Vec<(u64, u64)> = published(&d).closed.iter().map(|c| (c.segment, c.records)).collect();
     assert_eq!(closed, vec![(1, 2)]);
     // Un accusé authentifié sur soi dépasse l'entrée dans ce segment : écartée à la reconstruction.
     let b = Device::new(circletasks_lib_backend(&fs));
@@ -253,14 +252,14 @@ fn y_tech_02_closed_rebuilt_from_its_own_state_only() {
     std::fs::remove_file(d.base.path().join("sync").join("own.json")).unwrap();
     d.restart();
     d.core.write_state(14, state(&ep, 3, 2, 1, Some(hlc(20, DEV_A)))).unwrap();
-    assert!(published(&fs, &d).closed.is_empty(), "entrée dépassée par l'accusé de B : écartée");
+    assert!(published(&d).closed.is_empty(), "entrée dépassée par l'accusé de B : écartée");
     // État absent et own.json perdu : aucune entrée (règle d'avant), jamais inventée ; tête reconstruite des fichiers, sans hlc.
     fs.remove(&["devices", DEV_B, "state.ctx"]);
     fs.remove(&["devices", DEV_A, "state.ctx"]);
     std::fs::remove_file(d.base.path().join("sync").join("own.json")).unwrap();
     d.restart();
     d.core.write_state(14, state(&ep, 4, 2, 1, None)).unwrap();
-    assert!(published(&fs, &d).closed.is_empty());
+    assert!(published(&d).closed.is_empty());
 }
 
 fn circletasks_lib_backend(fs: &std::sync::Arc<MemFs>) -> std::sync::Arc<crate::sync_support::FakeBackend> {

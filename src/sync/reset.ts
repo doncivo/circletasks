@@ -17,6 +17,7 @@ import type { SyncDeps } from './deps';
 import type { ForgetView } from './forget';
 import { META, readJson, writeJson } from './meta';
 import { snapshotPages } from './snapshot';
+import { omitKey } from '../domain/omitKey';
 
 /**
  * Réinitialisation de la synchronisation avec une nouvelle clé (Y-11 ; ADR 0011 sections 9.1, 14.3 et 18 point 2) : partie moteur.
@@ -495,8 +496,7 @@ export async function republishWithoutNotice(deps: SyncDeps, own: PublishedDevic
   try {
     const seq = Math.max((await readJson<number>(repos, META.stateSeq)) ?? 0, own.stateSeq) + 1;
     // Y-TECH-02 (§21 point 2) : `closed` omis, Rust le complète depuis own.json (ramené à l'époque `n`) ; jamais recopié de l'état lu.
-    const { closed: _closed, ...published } = own;
-    void _closed;
+    const published = omitKey(own, 'closed');
     const state: PublishedDeviceState = {
       ...published,
       sm: SYNC_FORMAT_MAJOR,

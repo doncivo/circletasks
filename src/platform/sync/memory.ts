@@ -1,4 +1,5 @@
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
+import { omitKey } from '../../domain/omitKey';
 import {
   CONSENT_BLOCK_MS,
   CONSENT_MAX_IMPORT,
@@ -1318,8 +1319,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const ownClosed = paired.epoch === o.epoch ? o.closed : [];
     const given = paired.closed ?? [];
     if (given.length > 0 && JSON.stringify(given) !== JSON.stringify(ownClosed)) fail('state-mismatch');
-    const { closed: _given, ...withoutClosed } = paired;
-    void _given;
+    const withoutClosed = omitKey(paired, 'closed');
     const s: PublishedDeviceState = { ...withoutClosed, forgotten, ...(ownClosed.length > 0 ? { closed: ownClosed.map((c) => ({ ...c })) } : {}) };
     if (s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
     const text = JSON.stringify(publishedStateToJson(s));

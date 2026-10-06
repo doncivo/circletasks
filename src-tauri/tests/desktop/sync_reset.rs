@@ -1460,3 +1460,42 @@ fn shared_table_stale_acks() {
         assert_eq!(got, ackers(&case["expected"]), "{}", case["name"]);
     }
 }
+
+/// Y-TECH-02 (revue, point 6 ; ADR 0011 §21 point 2) : rotation dans l'époque `n` (entrée `closed`), réinitialisation perdue, puis
+/// republication sous l'ancienne clé : acceptée, sans `closed` (own.json ramené à `n` sans entrée) ni `state-mismatch`.
+#[test]
+fn y_tech_02_lost_reset_republishes_without_closed() {
+    let mut net = Net::new(&[DEV_W]);
+    net.write(DEV_A).unwrap();
+    // Rotation : un ajout au segment 2 ferme le segment 1 (un enregistrement).
+    let ep = epoch(1, DEV_A);
+    let max_hlc = hlc(2_000_100, DEV_A);
+    net.core(DEV_A).append_journal(&AppendRequest { epoch: ep.clone(), segment: 2, expect_records: 0, sv: SV, max_hlc: max_hlc.clone(), records: vec!["{\"n\":2}".to_owned()] }).unwrap();
+    net.dev_mut(DEV_A).head = (2, 1, Some(max_hlc));
+    for id in [DEV_W, DEV_A, DEV_W] {
+        net.cycle(id).unwrap();
+    }
+    let closed = |net: &Net| -> Value {
+        let scan = net.core(DEV_W).scan(&[]).unwrap();
+        let state = scan.devices.into_iter().find(|d| d.device_id == DEV_A).and_then(|d| d.state).expect("état de A");
+        serde_json::to_value(&state.closed).unwrap()
+    };
+    assert_eq!(closed(&net), json!([{ "segment": 1, "records": 1 }]));
+    // A et W réinitialisent ensemble ; W l'emporte, A constate la perte.
+    let kid_a = net.core(DEV_A).reset_key(1).unwrap();
+    let kid_w = net.core(DEV_W).reset_key(1).unwrap();
+    net.announce_and_open(DEV_A, &kid_a);
+    net.announce_and_open(DEV_W, &kid_w);
+    assert!(net.read_all(DEV_A).unwrap().reset.unwrap().superseded.is_some());
+    let own = net.own_json(DEV_A);
+    assert_eq!(own["epoch"], ep);
+    assert_eq!(own["closed"], json!([]), "own.json ramené à n sans entrée closed");
+    // Republication sous K (le moteur omet `closed`) : acceptée.
+    let dev = net.dev_mut(DEV_A);
+    dev.epoch = ep.clone();
+    dev.head = (own["segment"].as_u64().unwrap(), own["record"].as_u64().unwrap(), own["maxHlc"].as_str().map(str::to_owned));
+    dev.snap = Some((1, hlc(5_000_001, DEV_A)));
+    dev.seq = own["stateSeq"].as_u64().unwrap();
+    net.publish(DEV_A, Value::Null).expect("republication acceptée, sans state-mismatch");
+    assert_eq!(closed(&net), json!([]));
+}

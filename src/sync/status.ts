@@ -1,4 +1,5 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
+import { omitKey } from '../domain/omitKey';
 import type { SyncWarningCode } from '../domain/syncBanners';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
@@ -77,8 +78,7 @@ export function statusFromFacts(
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, stateUnreadable: _unreadable, ...rest } = previous;
-  void _unreadable;
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(previous, 'stateUnreadable');
   const warnings = facts.warnings ?? keptWarnings ?? [];
   const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
