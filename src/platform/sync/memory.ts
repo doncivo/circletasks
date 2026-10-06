@@ -655,6 +655,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let resetOpenings: number[] = [];
   /** Y-11 : arrêt simulé avant l'étape nommée (une fois). */
   let interruptAt: string | null = null;
+  /** Seconde revue, point 2 : dernière synchro (ms) de chaque appareil vue au dernier scan (expiré à 180 jours). */
+  const lastSeen = new Map<string, number>();
   /** Y-11 (§18 point 17) : `sync/import-failure.json`. */
   let importFailure: { readonly folderId: string; readonly code: SyncErrorCode; readonly at: string; readonly next: boolean } | null = null;
 
@@ -975,6 +977,11 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       reset = resetPass(f0, bound);
     }
     const { folder: f, kid } = requireReadable();
+    for (const [name, dir] of f.devices) {
+      if (!isSyncDeviceId(name)) continue;
+      const read = readState(name, dir, kid, false);
+      if (read.status === 'ok' && read.state) lastSeen.set(name, hlcMs(read.state.lastSyncHlc));
+    }
     let ignored = f.rootStrays;
     let incomplete = f.devices.size + f.rootStrays > MAX_SCAN_ENTRIES_PER_FOLDER;
     const scans: DeviceScan[] = [];
@@ -1616,8 +1623,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (lost?.epoch && !lost.restore) return true;
     const entries = ensureRegistry(f, kid, self).entries;
     const reads = readAllStates(f, kid);
-    if ([...reads].some(([id, r]) => id !== self && r.status === 'cloud-pending')) fail('cloud-pending');
-    const winner = resetWinner(contenders(reads, self), new Set(forgetOrder(entries).keys()));
+    const forgotten = new Set<string>(forgetOrder(entries).keys());
+    // Seconde revue, point 2 : seul un actif (ni oublié, ni expiré d'après le dernier scan) dont l'état attend iCloud bloque.
+    const expired = (id: string): boolean => {
+      const ms = lastSeen.get(id);
+      return ms !== undefined && ms + DEVICE_EXPIRY_MS < now();
+    };
+    if ([...reads].some(([id, r]) => id !== self && r.status === 'cloud-pending' && !forgotten.has(id) && !expired(id))) fail('cloud-pending');
+    const winner = resetWinner(contenders(reads, self), forgotten as Set<DeviceId>);
     return winner !== null && winner.restore !== true;
   };
 

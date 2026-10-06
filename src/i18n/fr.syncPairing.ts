@@ -20,6 +20,7 @@ export const syncPairingFr = {
   openIncomplete: 'Installation incomplète : réinstallez l’application',
   openFailed: 'La fenêtre d’association n’a pas pu s’ouvrir',
   openNeedsNewKey: 'Cet appareil doit d’abord être associé avec la nouvelle clé',
+  openCloudPending: 'Un fichier d’un autre appareil attend encore iCloud : réessayez dans un instant',
   paired: 'iPhone associé',
   thisDevicePaired: 'Cet appareil est associé',
   pairedSyncFailed: 'iPhone associé, mais la synchronisation qui suit a échoué : voir l’état ci-dessus',

@@ -116,6 +116,8 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     const { pairingOpenErrorKey } = await import('./pairingStatus');
     expect(pairingOpenErrorKey('state-mismatch', 'show')).toBe('sync.pairing.openNeedsNewKey');
     expect(pairingOpenErrorKey('state-mismatch', 'import')).toBe('sync.pairing.openFailed');
+    // Seconde revue, point 2 : l'état d'un appareil actif attend iCloud : réessayer.
+    expect(pairingOpenErrorKey('cloud-pending', 'show')).toBe('sync.pairing.openCloudPending');
   });
 
   it('dossier lié sans clé : « Associer cet appareil » ouvre l’instance import, sans confirmation', async () => {

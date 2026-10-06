@@ -1346,3 +1346,26 @@ fn second_review_forget_after_reassociation_ignores_an_ack_in_an_epoch_the_forgo
     net.publish(DEV_A, Value::Null).unwrap();
     assert!(net.read_all(DEV_B).unwrap().reset.unwrap().switched);
 }
+
+#[test]
+fn second_review_pairing_ignores_a_forgotten_or_expired_device_still_in_the_cloud() {
+    // Oublié dans le nuage : sans effet sur « Associer l'iPhone ».
+    let mut net = Net::new(&[DEV_B, DEV_C]);
+    for id in [DEV_B, DEV_C, DEV_A] {
+        net.cycle(id).unwrap();
+    }
+    net.core(DEV_B).device_forget(DEV_C, 1).unwrap();
+    net.fs.set_availability(&["devices", DEV_C, "state.ctx"], circletasks_lib::sync::files::Availability::Cloud);
+    *net.fs.hydrate_error.lock().unwrap() = Some(circletasks_lib::sync::files::FsError::CloudPending);
+    assert!(net.core(DEV_B).pairing_preconditions(true).is_ok(), "oublié ignoré");
+    // Expiré (180 jours sans synchro, vu au dernier scan) dans le nuage : ignoré aussi.
+    let mut net = Net::new(&[DEV_B, DEV_C]);
+    for id in [DEV_B, DEV_C, DEV_A] {
+        net.cycle(id).unwrap();
+    }
+    net.dev(DEV_B).d.clock.advance(181 * 86_400_000);
+    net.read_all(DEV_B).unwrap();
+    net.fs.set_availability(&["devices", DEV_C, "state.ctx"], circletasks_lib::sync::files::Availability::Cloud);
+    *net.fs.hydrate_error.lock().unwrap() = Some(circletasks_lib::sync::files::FsError::CloudPending);
+    assert!(net.core(DEV_B).pairing_preconditions(true).is_ok(), "expiré ignoré");
+}

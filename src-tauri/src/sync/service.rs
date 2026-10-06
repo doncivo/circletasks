@@ -255,6 +255,9 @@ struct Inner {
     /// Y-11 : nouvelle clé active (registre `reset.json` actif et entrée `.next` de même `kid`) et époque visée ; `None` : pas encore lue.
     /// Vidée à chaque changement du registre, du coffre, du dossier ou de l'appareil.
     next: Option<Option<(Arc<MasterKey>, String)>>,
+    /// Dernière synchro (`lastSyncHlc`, ms) de chaque appareil vue au dernier scan de la session : un appareil expiré (180 jours) dont
+    /// l'état attend iCloud ne bloque pas le don de la clé (seconde revue, point 2).
+    last_seen: HashMap<String, u64>,
 }
 
 /// Construit l'accès au dossier avec la clé locale et, pendant une réinitialisation, la nouvelle clé de l'époque visée.
@@ -734,6 +737,11 @@ impl SyncCore {
         if let Some(id) = self_id.as_deref() {
             scan.forgotten = self.merge_scan(&mut inner, &key, id, &scan)?;
         }
+        for device in &scan.devices {
+            if let Some(ms) = device.state.as_ref().filter(|_| device.state_status == "ok").and_then(|s| hlc_ms(&s.last_sync_hlc)) {
+                inner.last_seen.insert(device.device_id.clone(), ms);
+            }
+        }
         scan.reset = reset;
         Ok(scan)
     }
@@ -1050,7 +1058,11 @@ impl SyncCore {
             log::event("pairing-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
-        if reads.iter().any(|(id, r)| id != self_id && r.status == StateStatus::CloudPending) {
+        // Seconde revue, point 2 : seul un actif (ni oublié, ni expiré d'après le dernier scan) dont l'état attend iCloud bloque ; le
+        // message invite à réessayer.
+        let now = self.now();
+        let expired = |id: &str| inner.last_seen.get(id).is_some_and(|ms| ms.saturating_add(DEVICE_EXPIRY_MS) < now);
+        if reads.iter().any(|(id, r)| id != self_id && r.status == StateStatus::CloudPending && !forgotten.contains(id) && !expired(id)) {
             log::event("pairing-refused", "cloud-pending");
             return fail(SyncCode::CloudPending);
         }

@@ -213,3 +213,16 @@ describe('ADR 0011 §18 points 14, 16 et 17 sur la plateforme mémoire (mêmes c
     expect(await codeOf(b.platform.key.import({ recoveryKey: old }))).toBe('key-mismatch');
   });
 });
+
+describe('seconde revue, point 2 : don de la clé hors réinitialisation', () => {
+  it('un oublié dont l’état attend iCloud ne bloque pas « Associer l’iPhone » ; un actif, si (cloud-pending)', async () => {
+    const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
+    void a;
+    b.folder.setAvailability(C_ID, 'state.ctx', 'cloud');
+    expect(await codeOf(b.platform.key.openPairing('show'))).toBe('cloud-pending');
+    b.folder.setAvailability(C_ID, 'state.ctx', 'local');
+    expect(await b.service.forgetDevice(c.id)).toEqual({ kind: 'done' });
+    b.folder.setAvailability(C_ID, 'state.ctx', 'cloud');
+    expect(await codeOf(b.platform.key.openPairing('show'))).toBe('ok');
+  });
+});
