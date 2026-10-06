@@ -1,6 +1,4 @@
-// Chemins par `../domain/sync` : l'exception de couche d'ESLint (`**/domain/sync/**`, domaine pur) ne reconnaît pas `./sync`.
-import type { DeviceState } from '../domain/sync/compat';
-import type { SyncErrorCode } from '../domain/sync/format';
+import type { DeviceState } from './sync/compat';import type { SyncErrorCode } from './sync/format';
 import type { DeviceId } from './types';
 
 /**
