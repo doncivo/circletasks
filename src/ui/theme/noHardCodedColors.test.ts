@@ -19,8 +19,19 @@ function cssOf(dir: string): string[] {
   });
 }
 
-/** Composants dont une couleur est fixe dans les deux thèmes (curseur blanc d'interrupteur, voile de feuille, mélange avec le blanc des pastilles d'espace). */
-const FIXED_UI = new Set(['ui/EditControls.css', 'ui/Sheet.css', 'ui/Switch.css', 'ui/SpaceSegmented.css', 'ui/DropdownSelect.css', 'features/tasks/TrashScreen.css']);
+/**
+ * Composants dont une couleur est fixe dans les deux thèmes (curseur blanc d'interrupteur, voile de feuille, mélange avec le blanc des pastilles
+ * d'espace, fond blanc du QR d'appairage qui doit rester lisible par l'appareil photo et encre noire de la feuille imprimée de la clé).
+ */
+const FIXED_UI = new Set([
+  'ui/EditControls.css',
+  'ui/Sheet.css',
+  'ui/Switch.css',
+  'ui/SpaceSegmented.css',
+  'ui/DropdownSelect.css',
+  'features/tasks/TrashScreen.css',
+  'features/sync/pairing-window/pairing.css',
+]);
 
 describe('aucune couleur en dur dans les écrans (P-02 critère 5)', () => {
   const files = cssOf(SRC).map((file) => ({ file, name: relative(SRC, file).split(sep).join('/') }));

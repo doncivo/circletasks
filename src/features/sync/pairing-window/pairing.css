@@ -169,6 +169,7 @@ body {
 .ct-pair__qr {
   padding: 16px;
   border-radius: 16px;
+  /* Blanc fixe dans les deux thèmes : un QR clair sur fond sombre n'est pas lu par tous les appareils photo. */
   background: #ffffff;
   line-height: 0;
 }
@@ -263,6 +264,7 @@ body {
     position: absolute;
     top: 0;
     left: 0;
+    /* Encre noire fixe : la feuille imprimée ne suit pas le thème. */
     color: #000000;
   }
 
