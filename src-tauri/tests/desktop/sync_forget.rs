@@ -337,6 +337,27 @@ fn device_forget_rate_limit_three_openings_per_ten_minutes() {
     a.core.device_forget(DEV_D, 1).unwrap();
 }
 
+#[test]
+fn device_forget_keeps_at_most_64_declarations() {
+    let f = Folder::new();
+    let ids: Vec<String> = (0..65).map(|i| format!("{:08x}-0000-4000-8000-000000000000", 0x1000_0000 + i)).collect();
+    for id in &ids {
+        f.fs.mkdir(&["devices", id]);
+    }
+    for (i, id) in ids.iter().take(64).enumerate() {
+        if i > 0 && i % 3 == 0 {
+            f.a.clock.advance(10 * 60_000);
+        }
+        f.a.core.device_forget(id, 1).unwrap();
+    }
+    f.a.clock.advance(10 * 60_000);
+    let prompts = f.a.ui.prompts();
+    assert_eq!(code(f.a.core.device_forget(&ids[64], 1)), SyncCode::TooLarge);
+    assert_eq!(f.a.ui.prompts(), prompts, "refus avant toute boîte");
+    let saved: Value = serde_json::from_slice(&std::fs::read(f.a.base.path().join("sync").join(FORGOTTEN_FILE)).unwrap()).unwrap();
+    assert_eq!(saved["entries"].as_array().unwrap().len(), 64);
+}
+
 // ------------------------------------------------------------------------------------------------------------------------------
 // sync_write_state : Rust maître de `forgotten` (critère 6)
 // ------------------------------------------------------------------------------------------------------------------------------

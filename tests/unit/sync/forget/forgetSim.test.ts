@@ -318,6 +318,24 @@ describe('aucun échec silencieux : chemins d’erreur de forget.ts (critère 15
   });
 });
 
+describe('journaux sans contenu (critère 19)', () => {
+  it('événements forget-declared, forget-applied, forgotten-delete : identifiants d’appareil, codes et nombres seulement', async () => {
+    const [a, x] = (await setup([X_ID])) as [SimDevice, SimDevice];
+    await x.createTask('Titre secret de X');
+    await settle([a, x]);
+    expect(await a.service.forgetDevice(x.id as DeviceId)).toEqual({ kind: 'done' });
+    await settle([a]);
+    const events = a.logger.entries.filter((e) => /forget|forgotten/.test(e.event));
+    expect(events.map((e) => e.event)).toEqual(expect.arrayContaining(['forget-declared', 'forget-applied', 'forgotten-delete']));
+    for (const e of events) {
+      for (const value of Object.values(e.detail)) {
+        expect(value === null || typeof value === 'number' || typeof value === 'boolean' || /^[0-9a-f-]{36}$|^[a-z-]{1,32}$/.test(String(value)), `${e.event} : ${String(value)}`).toBe(true);
+      }
+    }
+    expect(JSON.stringify(a.logger.entries)).not.toMatch(/Titre secret|CircleTasks|[\\]/);
+  });
+});
+
 describe('table de cas de l’état publié', () => {
   it('l’état publié par A porte sa déclaration une seule fois, même après plusieurs cycles et un redémarrage', async () => {
     const [a, , x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];

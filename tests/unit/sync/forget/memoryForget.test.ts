@@ -208,6 +208,21 @@ describe('forget.device (sync_device_forget)', () => {
     await a.forget.device(D);
   });
 
+  it('64 déclarations au plus (section 1.4) : la 65e est refusée (too-large), rien n’est ajouté', async () => {
+    const room = await Room.started();
+    const a = (room.devs.get(A) as Dev).p;
+    const ids = Array.from({ length: 65 }, (_, i) => `${(0x10000000 + i).toString(16)}-0000-4000-8000-000000000000` as DeviceId);
+    for (const id of ids) room.folder.addDeviceFolder(id);
+    for (const [i, id] of ids.slice(0, 64).entries()) {
+      if (i > 0 && i % 3 === 0) room.nowMs += CONSENT_WINDOW_MS;
+      await a.forget.device(id);
+    }
+    expect(a.testing.forgottenDeclarations()).toHaveLength(64);
+    room.nowMs += CONSENT_WINDOW_MS;
+    expect(await codeOf(a.forget.device(ids[64] as DeviceId))).toBe('too-large');
+    expect(a.testing.forgottenDeclarations()).toHaveLength(64);
+  });
+
   it('hlc de la déclaration : après l’horloge et après tout hlc lu (même milliseconde : compteur suivant)', () => {
     expect(nextDeclarationHlc(5_000, [], A)).toBe(hlc(5_000, A));
     expect(nextDeclarationHlc(5_000, [hlc(9_000, B)], A)).toBe(`${String(9_000).padStart(15, '0')}-0001-${A}`);
