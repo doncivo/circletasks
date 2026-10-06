@@ -500,7 +500,7 @@ export const en: Messages = {
     syncTroubleMore: '{message} (+{n})',
     syncTroubleView: 'View',
     syncTroubleViewLabel: 'View the sync problem',
-    syncStateUnreadable: 'Sync state unreadable, retrying at the next cycle',
+    syncStateUnreadable: 'Sync state inaccessible, retrying at the next cycle',
     syncDevice: '{device}: {state}',
     loading: 'Loading',
   },

@@ -12,8 +12,8 @@ import { useAppStatusStore } from '../app/appStatus';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
-import { JOIN_STATE_META } from './pairingStatus';
-import { startSyncIntegration, type SyncIntegration } from './startSync';
+import { handleSyncPaired, JOIN_STATE_META } from './pairingStatus';
+import { BLOCKING_PHASE_META, startSyncIntegration, type SyncIntegration } from './startSync';
 import { syncStore } from './syncStore';
 import { statusLine } from './syncText';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -276,7 +276,7 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     const shown = useAppStatusStore.getState().sources.syncTrouble;
     expect(shown?.detail).toBe('state-unreadable');
     expect(shown?.more).toBe(1);
-    expect(banner()?.textContent).toBe('État de la synchro illisible, nouvel essai au prochain cycle (+1)Voir');
+    expect(banner()?.textContent).toBe('État de la synchro inaccessible, nouvel essai au prochain cycle (+1)Voir');
     expect(screen.getByRole('button', { name: 'Voir le problème de synchronisation' })).toBeTruthy();
     // Lecture réussie : le signal part, l'échec gardé reste.
     getMeta.mockRestore();
@@ -522,5 +522,60 @@ describe('repli visible (revue, point 2)', () => {
     });
     expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('error');
     expect(banner()?.textContent).toContain('La synchronisation a échoué');
+  });
+});
+
+describe('seconde revue A-09', () => {
+  const failure = { epoch: 'e0001-x', from: SELF, seq: 1, done: 1200, total: 5000, failure: 'io' };
+
+  it('point 1 : écriture de la phase bloquante en échec signalée, puis retirée au cycle suivant qui n’a rien à écrire', async () => {
+    renderBanner();
+    await start().refreshed();
+    const real = db.data.repos.sync.setMeta.bind(db.data.repos.sync);
+    const setMeta = vi.spyOn(db.data.repos.sync, 'setMeta').mockImplementation(async (key, value) => {
+      if (key === BLOCKING_PHASE_META) throw new Error('base occupée');
+      return real(key, value);
+    });
+    set({ phase: 'error', errorCode: 'io' });
+    await integration?.refreshed();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('error');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.more).toBe(1);
+    // Base rétablie ; le cycle conclut « à jour » : rien à écrire (aucune phase gardée), le signal part.
+    setMeta.mockRestore();
+    set({ phase: 'idle', errorCode: null });
+    await integration?.refreshed();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    expect(banner()).toBeNull();
+  });
+
+  it('point 2 : un changement d’association pendant une lecture est relu une fois à la fin, nombre de lectures borné', async () => {
+    const real = db.data.repos.sync.getMeta.bind(db.data.repos.sync);
+    let release: () => void = () => undefined;
+    const slow = new Promise<void>((resolve) => (release = resolve));
+    let joinReads = 0;
+    vi.spyOn(db.data.repos.sync, 'getMeta').mockImplementation(async (key) => {
+      if (key !== JOIN_STATE_META) return real(key);
+      joinReads += 1;
+      if (joinReads === 1) {
+        // Valeur lue avant l'échec ; la réponse n'arrive qu'après.
+        const before = await real(key);
+        await slow;
+        return before;
+      }
+      return real(key);
+    });
+    renderBanner();
+    const running = start();
+    // Pendant la lecture : l'arrivée échoue (moteur) et l'association change.
+    await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
+    await act(async () => {
+      await handleSyncPaired(container);
+    });
+    release();
+    await act(async () => {
+      await running.refreshed();
+    });
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('join-failed');
+    expect(joinReads).toBeLessThanOrEqual(3);
   });
 });

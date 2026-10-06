@@ -131,7 +131,9 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   /** Début d'une phase `syncing` vue sans `cycleStartedAt` (service qui ne le publie pas). */
   let syncingSeenAt: number | null = null;
   let readSeq = 0;
-  let reading = false;
+  /** Lectures en cours (elles peuvent se chevaucher) et relecture demandée pendant l'une d'elles (revue 2, point 2). */
+  let activeReads = 0;
+  let rereadPending = false;
   let lastRefresh: Promise<void> = Promise.resolve();
   let lastWrite: Promise<void> = Promise.resolve();
 
@@ -217,7 +219,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     const beforeFirstCycle = !concluded;
     let { join, devices, blocking } = persisted;
     let failed = false;
-    reading = true;
+    activeReads += 1;
     try {
       const joined = await readJoinFailure(container);
       if (joined.readable) join = joined.failure;
@@ -244,11 +246,16 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
         }
       }
     } finally {
-      reading = false;
+      activeReads -= 1;
     }
-    if (disposed || seq !== readSeq) return;
-    persisted = { join, devices: concluded ? null : devices, blocking: concluded ? null : blocking, readFailed: failed };
-    safely(applyBanners);
+    // Un changement d'association arrivé pendant la lecture : une seule relecture, à la fin de la dernière lecture en cours.
+    const again = rereadPending && activeReads === 0 && !disposed;
+    if (again) rereadPending = false;
+    if (!disposed && seq === readSeq) {
+      persisted = { join, devices: concluded ? null : devices, blocking: concluded ? null : blocking, readFailed: failed };
+      safely(applyBanners);
+    }
+    if (again) void refreshPersisted();
   };
   const refreshPersisted = (): Promise<void> => (lastRefresh = readPersisted());
 
@@ -256,7 +263,14 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   const storeBlocking = async (status: SyncStatus): Promise<void> => {
     const fact = blockingOf(status);
     const text = fact ? JSON.stringify(fact) : null;
-    if (text === storedBlocking) return;
+    if (text === storedBlocking) {
+      // Rien à écrire : la base contient déjà la bonne valeur ; un échec d'écriture précédent est résolu (revue 2, point 1).
+      if (writeFailed) {
+        writeFailed = false;
+        if (!disposed) safely(applyBanners);
+      }
+      return;
+    }
     try {
       await repos.sync.setMeta(BLOCKING_PHASE_META, text);
       storedBlocking = text;
@@ -290,9 +304,11 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   };
 
   const stopStatus = sync.subscribe(onStatus);
-  // Un changement d'association relit ; ceux que la relecture provoque elle-même (signal de la base) sont ignorés : aucune boucle.
+  // Un changement d'association relit ; pendant une lecture, il est noté et relu une seule fois à sa fin (jamais perdu, jamais en boucle :
+  // le signal de la base que la lecture provoque elle-même ne change qu'une fois par changement d'état de la base).
   const stopPairing = onPairingChange(container, () => {
-    if (!reading) void refreshPersisted();
+    if (activeReads > 0) rereadPending = true;
+    else void refreshPersisted();
   });
   const stopChanges = sync.onRemoteChanges((change) => void applyRemoteChanges(container, change).catch(() => undefined));
   safely(() => {
