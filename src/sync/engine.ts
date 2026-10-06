@@ -74,6 +74,37 @@ function acksToJson(acks: ReadonlyMap<DeviceId, DeviceAck>): string {
   return JSON.stringify(out);
 }
 
+const ZERO_HLC = '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc;
+
+/**
+ * Texte comparé par « réécrit seulement s'il a changé » (section 1.4, audit M1) : sans `stateSeq` (le sien, celui de sa tête **et celui
+ * de chaque accusé**, Y-TECH-01) ni `lastSyncHlc`. Le `stateSeq` d'un accusé change à chaque réécriture de l'appareil lu : compté, il
+ * faisait réécrire l'état à chaque cycle entre appareils actifs qui se lisent (chaque écriture de l'un change l'accusé de l'autre).
+ * Positions, hlc lus, instantané, horizon, liste maître (`forgotten`, qui ne fait que grandir) et annonce y restent : leur changement
+ * est publié au cycle même.
+ */
+export function comparableState(state: PublishedDeviceState): string {
+  const acks = new Map<DeviceId, DeviceAck>([...state.acks].map(([id, ack]) => [id, { ...ack, stateSeq: 0 }]));
+  return publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: ZERO_HLC, acks });
+}
+
+/** États d'un autre appareil qui attendent le `stateSeq` de nos accusés (jamais `cloud-pending` : transfert en cours, rien n'attend). */
+const AWAITING_ACK_SEQ: ReadonlySet<DeviceScan['stateStatus']> = new Set(['missing', 'foreign', 'corrupt', 'rollback', 'too-large']);
+
+/**
+ * Y-TECH-01 : un accusé dont le `stateSeq` a avancé depuis le dernier état publié, sur un appareil dont le `state.ctx` est absent,
+ * étranger, illisible ou rejoué à ce scan (`awaiting`), est republié aussitôt. Cet appareil attend ce `stateSeq` : borne de la règle 1
+ * (état reconstruit ou rejoué sous un `stateSeq` trop bas, refusé par les autres tant qu'il ne la dépasse pas) et condition (iii) de la
+ * reconstruction de `forgotten.json` (§18 point 7). Sans boucle : la ligne de cet appareil ne change que lorsqu'un de ses états est
+ * accepté, et l'accusé n'est republié qu'une fois.
+ */
+function ackSeqAwaited(state: PublishedDeviceState, published: PublishedDeviceState | null, awaiting: ReadonlySet<DeviceId>): boolean {
+  for (const [id, ack] of state.acks) {
+    if (awaiting.has(id) && ack.stateSeq > (published?.acks.get(id)?.stateSeq ?? 0)) return true;
+  }
+  return false;
+}
+
 /** Statut local d'un appareil d'après le statut de son `state.ctx` au scan (un état invalide garde son dernier accusé connu). */
 function deviceStatusOf(scan: DeviceScan, previous: string | undefined): string {
   switch (scan.stateStatus) {
@@ -282,6 +313,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     reset: noticeToPublish(directive, epoch),
   });
 
+  /** Y-TECH-01 : appareils dont l'état n'est pas lisible à ce scan (`ackSeqAwaited`). */
+  // (un état `ok` au scan mais refusé par l'anti-rejeu local est un état rejoué)
+  const awaitingAckSeq = new Set(scan.devices.filter((d) => d.deviceId !== self && (AWAITING_ACK_SEQ.has(d.stateStatus) || (d.stateStatus === 'ok' && !accepted.has(d.deviceId)))).map((d) => d.deviceId));
   /** Y-10 : déclaration confirmée à publier (intention posée avant l'appel à Rust). */
   let publishForget = await forgetPublishPending(repos);
   /** Dernier état écrit dans ce cycle (suppression des fichiers d'un appareil oublié : Rust relit son état sur le disque). */
@@ -289,14 +323,17 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
 
   /** Écrit son `state.ctx` ; renvoie faux sur `state-mismatch` (hypothèse refusée par Rust). */
   const writeState = async (state: PublishedDeviceState, force: boolean): Promise<boolean> => {
-    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc, forgotten: [] });
+    const comparable = comparableState(state);
     if (state.acks.size > MAX_STATE_ACKS) {
       // Plus de 64 accusés (oublis retenus au-delà des places, §14.2) : état refusé par Rust ; rien publié, « oubli en échec ».
       logger.log('acks-overflow', { count: state.acks.size });
       await recordForgetOverflow(deps);
       return false;
     }
-    const forced = force || publishForget;
+    // Y-TECH-01 : le `stateSeq` des accusés n'entre pas dans la comparaison (`comparableState`) ; il est republié avec toute autre
+    // modification ou au rafraîchissement de 30 minutes, et **aussitôt** sur un appareil dont l'état est absent, étranger, illisible ou
+    // rejoué : c'est la borne qu'il attend pour republier (règle 1, reconstruction (iii) de `forgotten.json`).
+    const forced = force || publishForget || ackSeqAwaited(state, lastWritten ?? ownState, awaitingAckSeq);
     if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
     try {
       await platform.writeState({ sv: deps.sv, state });
