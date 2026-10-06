@@ -53,6 +53,15 @@ export function armCrash(device: SimDevice, crashBeforeWrite: number | null): Cr
       return real.apply(device.platform, args);
     };
   }
+  // Y-10 : déclaration d'oubli (écriture de `forgotten.json` par Rust) et suppression des fichiers d'un appareil oublié.
+  const forget = (device.platform as unknown as { forget: Record<string, (...args: unknown[]) => Promise<unknown>> }).forget;
+  for (const name of ['device', 'deleteFiles']) {
+    const real = forget[name] as (...args: unknown[]) => Promise<unknown>;
+    forget[name] = (...args) => {
+      write();
+      return real.apply(forget, args);
+    };
+  }
 
   const driver = device.driver as unknown as { execute: (sql: string, params?: unknown) => Promise<unknown>; select: (sql: string, params?: unknown) => Promise<unknown>; transaction: (fn: unknown) => Promise<unknown> };
   const execute = driver.execute.bind(device.driver);

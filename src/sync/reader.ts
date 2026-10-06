@@ -3,6 +3,7 @@ import { recordIsAhead, recordMaxHlc } from '../domain/sync/drift';
 import { parseJournalRecord } from '../domain/sync/parse';
 import type { DeviceId, Hlc } from '../domain/types';
 import { syncErrorCodeOf } from '../platform/sync/types';
+import { compareCursors } from '../domain/sync/epoch';
 import { applyOps, mergeTouched, type ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
@@ -37,6 +38,11 @@ export interface ReadRequest {
   readonly knows: ApplyContext['knows'];
   /** Appelé après chaque lot appliqué (`onRemoteChanges`). */
   readonly onBatch?: (touched: ReadonlyMap<string, ReadonlySet<string>>) => void;
+  /**
+   * Y-10 : appareil oublié, lu jusqu'à cette position (coupure), jamais au-delà ; les enregistrements suivants sont ignorés. Lecture
+   * enregistrement par enregistrement (pages d'un enregistrement : chaque position est connue exactement).
+   */
+  readonly limit?: RecordCursor;
 }
 
 /** Positions (après chaque enregistrement) d'une page lue depuis `from` ; null quand elle ne peut pas être connue. */
@@ -109,10 +115,13 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
   /** Enregistrements du dernier groupe (même hlc), reportés à la page suivante. */
   let carry: ReadItem[] = [];
   let from = cursor;
+  const limit = request.limit;
+  const atLimit = (position: RecordCursor | null): boolean => limit !== undefined && position !== null && compareCursors(position, limit) >= 0;
   for (;;) {
+    if (limit !== undefined && carry.length === 0 && compareCursors(from, limit) >= 0) return finish('complete');
     let page;
     try {
-      page = await deps.platform.readJournal({ deviceId: request.deviceId, epoch: request.epoch, from });
+      page = await deps.platform.readJournal({ deviceId: request.deviceId, epoch: request.epoch, from, ...(limit !== undefined ? { maxBytes: 1 } : {}) });
     } catch (error) {
       const code = syncErrorCodeOf(error);
       deps.logger.log('read-failed', { device: request.deviceId, code });
@@ -121,7 +130,18 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
       if (code === 'cloud-pending') return finish('cloud-pending', code);
       return finish('error', code);
     }
-    const positions = recordPositions(from, page.records.length, page.next);
+    let positions = recordPositions(from, page.records.length, page.next);
+    if (limit !== undefined) {
+      // Y-10 : rien au-delà de la coupure ; une position inconnue arrête la page (jamais un enregistrement de plus).
+      let keep = 0;
+      while (keep < positions.length && positions[keep] !== null && compareCursors(positions[keep] as RecordCursor, limit) <= 0) keep += 1;
+      if (keep < page.records.length) {
+        page = { ...page, records: page.records.slice(0, keep), status: 'complete' as const };
+        positions = positions.slice(0, keep);
+      } else if (atLimit(positions.at(-1) ?? null)) {
+        page = { ...page, status: 'complete' as const };
+      }
+    }
     // Lots : enregistrements entiers, 500 opérations au plus, jamais coupés au milieu d'un groupe de même hlc.
     let batch: ReadItem[] = carry;
     carry = [];

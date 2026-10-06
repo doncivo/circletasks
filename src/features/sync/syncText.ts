@@ -132,6 +132,8 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return t('sync.status.keyMismatch');
     case 'error':
       return errorText(status.errorCode);
+    case 'forgotten':
+      return t('sync.forget.selfForgotten');
     case 'idle':
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }

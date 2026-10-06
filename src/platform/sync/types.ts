@@ -333,7 +333,9 @@ export type SyncPhase =
   | 'update-required'
   | 'clock-ahead'
   | 'key-mismatch'
-  | 'error';
+  | 'error'
+  /** Y-10 : cet appareil a été oublié par un autre (déclaration authentifiée) : il ne lit ni ne publie plus, « Associer de nouveau ». */
+  | 'forgotten';
 
 export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 
@@ -373,7 +375,44 @@ export interface SyncStatus {
    * nombre, tables, date, noms d'erreur) ; absent ou null : aucun échec. Facultatif.
    */
   readonly reintegrationFailure?: ReintegrationFailure | null;
+  /**
+   * Y-10 (exigence d'Ali : aucun échec silencieux) : échec d'un oubli ou d'une suppression (`sync_meta.forgetFailure`) et suppressions
+   * des fichiers d'appareils oubliés en attente (`sync_meta.forgetDeletions`), lus à la fin de chaque cycle ; absent : rien. Facultatif.
+   */
+  readonly forget?: SyncForgetStatus | null;
 }
+
+/** Y-10 : étape d'un oubli qui a échoué. `declare` : `sync_device_forget` ; `delete` : `sync_forgotten_delete` ; `rejoin` : « Associer de nouveau ». */
+export type ForgetStep = 'declare' | 'delete' | 'rejoin';
+
+/** Y-10 : échec persistant (sans contenu, sans clé, sans chemin), effacé seulement à la réussite de la même étape pour le même appareil. */
+export interface ForgetFailure {
+  readonly deviceId: DeviceId;
+  readonly code: string;
+  readonly at: IsoDateTime;
+  readonly step: ForgetStep;
+}
+
+/**
+ * Y-10 : suppression des fichiers d'un appareil oublié. `waiting` : un appareil actif n'a pas encore accusé (`waitingFor`, null si
+ * inconnu) ; `deleting` : commencée, le cycle suivant continue ; `strays` : fichiers non reconnus laissés dans le dossier ; `done`.
+ */
+export interface ForgetDeletionStatus {
+  readonly deviceId: DeviceId;
+  readonly state: 'waiting' | 'deleting' | 'strays' | 'done';
+  readonly waitingFor: DeviceId | null;
+}
+
+export interface SyncForgetStatus {
+  readonly failure: ForgetFailure | null;
+  readonly deletions: readonly ForgetDeletionStatus[];
+}
+
+/** Y-10 : issue de « Oublier cet appareil » (`cancelled` : la boîte native a été refusée ou fermée, rien n'est écrit). */
+export type ForgetOutcome = { readonly kind: 'done' } | { readonly kind: 'cancelled' } | { readonly kind: 'failed'; readonly code: string };
+
+/** Y-10 : issue de « Associer de nouveau » (`restart` : l'app doit être relancée sous sa nouvelle identité). */
+export type RejoinOutcome = { readonly kind: 'restart' } | { readonly kind: 'failed'; readonly code: string };
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';
 
@@ -402,6 +441,16 @@ export interface SyncEngineService extends SyncService {
   restoreContext(): Promise<RestoreContext | null>;
   /** Cycle en cours (tests, budget de « Quitter »). */
   readonly running: () => Promise<void> | null;
+  /**
+   * Y-10 : « Oublier cet appareil » : confirmation native de Rust, déclaration, puis deux cycles (publication, application). Ne rejette
+   * jamais : un échec est rendu et gardé dans `sync_meta.forgetFailure` (visible dans `status().forget`).
+   */
+  forgetDevice(deviceId: DeviceId): Promise<ForgetOutcome>;
+  /**
+   * Y-10 (D2) : « Associer de nouveau » sur l'appareil oublié : ses écritures non lues des autres sont republiées sous une nouvelle
+   * identité, le dossier est délié (clé gardée) ; l'app doit ensuite être relancée (puis le dossier choisi de nouveau). Ne rejette jamais.
+   */
+  rejoin(): Promise<RejoinOutcome>;
 }
 
 /** Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9). */

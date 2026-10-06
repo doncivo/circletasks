@@ -11,6 +11,7 @@ import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { isJoining, joinFromSnapshot } from './join';
+import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, readLimit, rejoinPending, runForgetDeletions, type ForgetView } from './forget';
 import { publishOutbox, readInflight } from './publisher';
 import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
@@ -91,7 +92,8 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
   for (const device of scan.devices) {
     if (device.deviceId === deps.deviceId) continue;
     const previous = known.get(device.deviceId);
-    let status = deviceStatusOf(device, previous?.status);
+    // Y-10 : un oubli ne s'annule pas ; le statut `forgotten` reste quel que soit l'état lu.
+    let status = previous?.status === 'forgotten' ? 'forgotten' : deviceStatusOf(device, previous?.status);
     const state = device.stateStatus === 'ok' ? device.state : null;
     if (state) {
       const text = publishedStateToText(state);
@@ -102,7 +104,9 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
       if (rollback) {
         status = 'rollback';
       } else {
-        if (hlcMs(state.lastSyncHlc) < deps.clock.nowMs() - DEVICE_EXPIRY_MS) status = 'expired';
+        if (status === 'forgotten') {
+          // Y-10 : état gardé (ses accusés et ses déclarations comptent pour l'ordre total), statut inchangé.
+        } else if (hlcMs(state.lastSyncHlc) < deps.clock.nowMs() - DEVICE_EXPIRY_MS) status = 'expired';
         // Corruption au milieu d'un segment sans instantané plus récent : l'appareil reste `corrupt` tant que sa tête ne bouge pas (section 5.5).
         else if (previous?.status === 'corrupt' && previous.headSegment === state.head.segment && previous.headRecord === state.head.record && previous.stateEpoch === state.epoch) status = 'corrupt';
         accepted.set(device.deviceId, state);
@@ -167,6 +171,11 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   let folderLabel: string | null = null;
   let folderKind: SyncFolderInfo['kind'] | null = null;
   try {
+    // Y-10 (D2) : « Associer de nouveau » interrompu avant que le dossier soit délié : terminé avant tout autre appel.
+    if (await rejoinPending(repos)) {
+      const rejoined = await finishRejoin(deps);
+      if (rejoined.kind === 'failed') return fail(rejoined.code as SyncErrorCode);
+    }
     const folder = await platform.folder.info();
     if (!folder.configured) return { ...EMPTY, outcome: 'not-configured' };
     folderLabel = folder.label;
@@ -192,7 +201,20 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
   const pending = new Set<string>(scan.devices.flatMap((d) => d.pending.map((p) => `${String(d.deviceId).slice(0, 8)}/${p.file}`)));
-  const keyMismatch = scan.devices.some((d) => d.deviceId !== self) && scan.devices.filter((d) => d.deviceId !== self).every((d) => d.stateStatus === 'foreign');
+
+  // Y-10 : ordre total des oublis (déclarations des seuls états authentifiés). Appareil local oublié : il ne lit ni ne publie plus.
+  let forgetView: ForgetView;
+  try {
+    forgetView = await evaluateForget(deps, { accepted, ownState, rows: await repos.sync.getStates() });
+  } catch (error) {
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+  }
+  if (forgetView.selfForgotten) {
+    logger.log('forgotten-self', { by: forgetView.order.get(self)?.by ?? null });
+    return { ...EMPTY, outcome: 'forgotten', folderLabel, folderKind, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
+  }
+  const others = scan.devices.filter((d) => d.deviceId !== self && !forgetView.order.has(d.deviceId));
+  const keyMismatch = others.length > 0 && others.every((d) => d.stateStatus === 'foreign');
 
   // 2. Règle 1 : bornes de sa propre publication.
   const acksOnSelf = [...accepted.values()].map((s) => s.acks.get(self)).filter((a): a is DeviceAck => a !== undefined);
@@ -216,21 +238,32 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     purgeHorizon,
     lastSyncHlc: deps.hlc.now(),
     ...(pairedBy ? { pairedBy } : {}),
-    forgotten: [],
+    // Y-10 : liste déjà publiée ; Rust (maître) la complète de ses déclarations confirmées et pas encore publiées.
+    forgotten: ownState?.forgotten ?? [],
     reset: null,
   });
 
+  /** Y-10 : déclaration confirmée à publier (intention posée avant l'appel à Rust). */
+  let publishForget = await forgetPublishPending(repos);
+  /** Dernier état écrit dans ce cycle (suppression des fichiers d'un appareil oublié : Rust relit son état sur le disque). */
+  let lastWritten: PublishedDeviceState | null = null;
+
   /** Écrit son `state.ctx` ; renvoie faux sur `state-mismatch` (hypothèse refusée par Rust). */
   const writeState = async (state: PublishedDeviceState, force: boolean): Promise<boolean> => {
-    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc });
-    if (!force && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
+    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc, forgotten: [] });
+    const forced = force || publishForget;
+    if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
     try {
       await platform.writeState({ sv: deps.sv, state });
       stateSeq = state.stateSeq;
       await data.transaction(async (tx) => {
         await writeJson(tx, META.stateSeq, state.stateSeq);
         await writeJson(tx, META.lastState, { text: comparable, at: deps.clock.nowMs() });
+        if (publishForget) await writeJson(tx, FORGET_META.publish, null);
       });
+      if (publishForget) logger.log('forget-published', {});
+      publishForget = false;
+      lastWritten = state;
       work();
       return true;
     } catch (error) {
@@ -356,14 +389,24 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const truncated: string[] = [];
       allRead = true;
       const rows = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
-      const targets: { id: DeviceId; head: DeviceAck; epochListing: DeviceScan['epochs'][number] | undefined }[] = [];
+      const targets: { id: DeviceId; head: DeviceAck; epochListing: DeviceScan['epochs'][number] | undefined; limit?: DeviceAck }[] = [];
       for (const [id, state] of accepted) {
         const row = rows.get(id);
+        const epochListing = scan.devices.find((d) => d.deviceId === id)?.epochs.find((e) => e.epoch === currentEpoch);
+        if (forgetView.order.has(id)) {
+          // Y-10 : appareil oublié, lu jusqu'à la coupure (maximum des accusés des appareils actifs et de sa position locale), jamais au-delà.
+          const local: DeviceAck | null = row?.epoch === currentEpoch ? { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: 0 } : null;
+          const limit = readLimit(id, forgetView, accepted, ownState, local);
+          if (state.epoch !== currentEpoch || limit === null || limit.epoch !== currentEpoch) continue;
+          const head = compareCursors(state.head, limit) <= 0 ? state.head : { ...state.head, segment: limit.segment, record: limit.record };
+          targets.push({ id, head, epochListing, limit });
+          continue;
+        }
         if (state.epoch !== currentEpoch || row?.status === 'foreign' || row?.status === 'newer-major' || row?.status === 'rollback' || row?.status === 'corrupt') {
           if (state.epoch === currentEpoch && row?.status !== 'expired') allRead = false;
           continue;
         }
-        targets.push({ id, head: state.head, epochListing: scan.devices.find((d) => d.deviceId === id)?.epochs.find((e) => e.epoch === currentEpoch) });
+        targets.push({ id, head: state.head, epochListing });
       }
       // Soi-même : seulement après une reprise (ses écritures au-delà de l'instantané, base restaurée).
       const selfState = rows.get(self);
@@ -393,6 +436,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
           ackHlc: row?.epoch === currentEpoch ? row.ackHlc : null,
           knows,
           onBatch: hooks.onRemoteChanges,
+          ...(target.limit ? { limit: target.limit } : {}),
         });
         if (outcome.status !== 'complete') allRead = false;
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${currentEpoch}`);
@@ -403,7 +447,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
             truncated.push(target.id);
           }
         }
-        if (target.id !== self) {
+        if (target.id !== self && !forgetView.order.has(target.id)) {
           const status = outcome.status === 'truncated' ? (resumed ? 'corrupt' : undefined) : outcome.status === 'clock-ahead' ? 'clock-ahead' : outcome.status === 'newer-major' ? 'newer-major' : outcome.status === 'foreign' ? 'foreign' : row?.status === 'clock-ahead' ? 'active' : undefined;
           if (status) await repos.sync.saveState(target.id, { status });
         }
@@ -464,6 +508,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       }
       await maintain(deps, { epoch: currentEpoch, head, accepted, ownScan, rows: await repos.sync.getStates() });
     }
+
+    // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte).
+    if (publishAllowed && forgetView.order.size > 0) await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished: lastWritten ?? ownState });
 
     // 8. Heure de dernière synchro.
     const lastSyncAt = iso(deps.clock.nowMs());

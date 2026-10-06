@@ -68,6 +68,18 @@ export function propagate(from: MemorySyncFolder, to: MemorySyncFolder, deviceId
   }
 }
 
+/**
+ * Y-10 : iCloud propage l'état du dossier `devices/<deviceId>/` de `from` vers `to`, **suppression comprise** (dossier d'un appareil
+ * oublié supprimé par un appareil actif) : absent chez `from`, il disparaît chez `to` ; présent, il est recopié.
+ */
+export function mirrorDeviceFolder(from: MemorySyncFolder, to: MemorySyncFolder, deviceId: string): void {
+  if (!from.devices.has(deviceId)) {
+    to.devices.delete(deviceId);
+    return;
+  }
+  propagate(from, to, deviceId);
+}
+
 /** Rend lisibles les fichiers d'un appareil restés dans le nuage (hydratation réussie au cycle suivant). */
 export function hydrate(folder: MemorySyncFolder, deviceId: string): void {
   for (const name of folder.fileNames(deviceId)) folder.setAvailability(deviceId, name, 'local');

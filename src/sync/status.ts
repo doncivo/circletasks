@@ -1,6 +1,6 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncPhase, type SyncStatus } from '../platform/sync/types';
+import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncStatus } from '../platform/sync/types';
 
 export { INITIAL_STATUS };
 
@@ -11,7 +11,7 @@ export { INITIAL_STATUS };
 
 /** Ce qu'un cycle a constaté. */
 export interface CycleFacts {
-  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed';
+  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten';
   readonly errorCode: SyncErrorCode | null;
   readonly pendingFiles: readonly string[];
   readonly devices: readonly SyncDeviceStatus[];
@@ -31,6 +31,8 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
       return 'needs-pairing';
     case 'restore-choice':
       return 'restore-choice';
+    case 'forgotten':
+      return 'forgotten';
     case 'failed':
       if (facts.errorCode === 'key-mismatch') return 'key-mismatch';
       return facts.errorCode !== null && WAITING_CODES.has(facts.errorCode) ? 'waiting-icloud' : 'error';
@@ -54,16 +56,20 @@ export function statusFromFacts(
     readonly conflictsThisWeek: number;
     /** Y-07 (exigence d'Ali) : échec de réintégration lu dans `sync_meta` ; undefined : lecture impossible, valeur précédente gardée. */
     readonly reintegrationFailure?: ReintegrationFailure | null;
+    /** Y-10 (exigence d'Ali) : échec d'oubli et suppressions en attente lus dans `sync_meta` ; undefined : lecture impossible, valeur gardée. */
+    readonly forget?: SyncForgetStatus | null;
   },
 ): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, ...rest } = previous;
+  const { reintegrationFailure: kept, forget: keptForget, ...rest } = previous;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
+  const forget = extra.forget === undefined ? (keptForget ?? null) : extra.forget;
   return {
     ...rest,
     ...(failure ? { reintegrationFailure: failure } : {}),
+    ...(forget ? { forget } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

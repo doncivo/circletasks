@@ -22,7 +22,8 @@ export const PRO = '00000000-0000-4000-8000-000000000001' as SpaceId;
 export const SCHEMA_VERSION = migrations.at(-1)?.version ?? 1;
 
 export interface SimDevice {
-  readonly id: DeviceId;
+  /** Identifiant d'appareil ; change seulement par `restartAs` (Y-10, « Associer de nouveau »). */
+  id: DeviceId;
   readonly name: string;
   readonly driver: SqlDriver;
   readonly data: DataAccess;
@@ -37,6 +38,8 @@ export interface SimDevice {
   cycle(): Promise<SyncStatus>;
   /** Nouvelle instance de l'app sur la même base et le même dossier (redémarrage). */
   restart(): Promise<void>;
+  /** Y-10 (« Associer de nouveau ») : redémarrage sous l'identité `device.id` posée par le moteur (même base, dossier, plateforme). */
+  restartAs(id: DeviceId): Promise<void>;
   createTask(title: string, extra?: Partial<Task>): Promise<Task>;
   updateTask(id: TaskId, patch: Parameters<DataAccess['repos']['tasks']['update']>[1]): Promise<Task>;
   deleteTask(id: TaskId): Promise<void>;
@@ -67,7 +70,7 @@ function migratedDatabaseImage(): Promise<Uint8Array> {
 export async function createSimDevice(id: string, options: { readonly name?: string; readonly start?: string; readonly clock?: ManualClock } = {}): Promise<SimDevice> {
   const driver = await openSqliteWasmDriver({}, await migratedDatabaseImage());
   const clock = options.clock ?? createManualClock(options.start ?? '2026-10-05T08:00:00.000Z');
-  const deviceId = id as DeviceId;
+  let deviceId = id as DeviceId;
   const folder = createSimFolder();
   const logger = createMemorySyncLogger();
   const changes: RemoteChanges[] = [];
@@ -104,6 +107,11 @@ export async function createSimDevice(id: string, options: { readonly name?: str
       hlc = createHlcClock({ clock, deviceId, seed: await data.repos.syncMeta.maxHlc() });
       device.hlc = hlc;
       device.service = makeService(device.platform);
+    },
+    async restartAs(next) {
+      deviceId = next;
+      device.id = next;
+      await device.restart();
     },
     async createTask(title, extra = {}) {
       counter += 1;

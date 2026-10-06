@@ -1,2 +1,49 @@
-/** Textes de `sync.forget` (Y-10), en français : source de vérité ; vide à l'étape 0 du lot Y4, rempli par Y-10. */
-export const syncForgetFr = {};
+/**
+ * Textes de `sync.forget` (Y-10), en français : source de vérité. Action « Oublier cet appareil » de la ligne APPAREILS, boîte de
+ * l'app avant la confirmation native (le texte de celle-ci est dans `native/fr.json`), ligne d'un appareil oublié, emplacement `forget`
+ * de Réglages › Synchronisation › Détails (échec persistant, exigence d'Ali), appareil oublié qui revient (« Associer de nouveau »).
+ * Jamais de clé, de chemin ni de contenu.
+ */
+export const syncForgetFr = {
+  action: 'Oublier cet appareil',
+  actionLabel: 'Oublier {device}',
+  dialogTitle: 'Oublier {device} ?',
+  dialogBody:
+    '{device} ne sera plus lu au-delà d’un point commun à tous vos appareils, et ses fichiers seront supprimés d’iCloud (récupérables 30 jours dans « Supprimés récemment » d’iCloud). L’oubli ne s’annule pas : l’appareil devra être associé de nouveau. {device} garde sa copie des données et sa clé : seule « Réinitialiser la synchronisation » coupe son accès aux données futures.',
+  continue: 'Continuer',
+  pending: 'Oubli de {device} en cours…',
+  cancelled: 'Oubli annulé',
+  done: '{device} est oublié',
+  deletionWaiting: 'Oublié · suppression des fichiers en attente de {device}',
+  deletionWaitingUnknown: 'Oublié · suppression des fichiers en attente',
+  deletionRunning: 'Oublié · suppression des fichiers en cours',
+  deletionStrays: 'Oublié · des fichiers non reconnus restent dans iCloud',
+  section: 'OUBLI D’UN APPAREIL',
+  failedDeclare: 'L’oubli de {device} a échoué : {reason}',
+  failedDelete: 'La suppression des fichiers de {device} a échoué : {reason}',
+  failedRejoin: 'L’association de cet appareil a échoué : {reason}',
+  failedAt: 'Dernier essai : {time}',
+  retry: 'Réessayer',
+  retryDeclareLabel: 'Réessayer d’oublier {device}',
+  retrySyncLabel: 'Réessayer maintenant',
+  reasons: {
+    notForeground: 'CircleTasks n’était pas au premier plan',
+    rateLimited: 'trop de demandes, réessayez dans 10 minutes',
+    cloudPending: 'un fichier attend encore iCloud',
+    folderUnreachable: 'dossier de synchronisation introuvable',
+    vaultUnavailable: 'coffre du système indisponible',
+    keyMissing: 'clé de synchronisation absente',
+    stateMismatch: 'les appareils ne sont pas encore à jour',
+    notConfigured: 'synchronisation non configurée',
+    other: 'erreur inattendue',
+  },
+  selfForgotten: 'Cet appareil a été oublié : associez-le de nouveau',
+  selfForgottenDetail: 'Un autre appareil l’a oublié. Vos données restent sur cet appareil : elles seront fusionnées et publiées sous un nouvel identifiant.',
+  rejoin: 'Associer de nouveau',
+  rejoinLabel: 'Associer de nouveau cet appareil',
+  rejoinTitle: 'Associer de nouveau cet appareil ?',
+  rejoinBody:
+    'Le dossier est délié (la clé est gardée), cet appareil reçoit un nouvel identifiant, puis l’app redémarre ; choisissez alors de nouveau le dossier CircleTasks. Rien n’est effacé : vos données sont fusionnées puis publiées.',
+  rejoinRunning: 'Association en cours…',
+  banner: 'Cet appareil a été oublié : associez-le de nouveau',
+} as const;
