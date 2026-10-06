@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { epochId, type DeviceAck, type EpochId } from '../../../../src/domain/sync/format';
 import { resetPrecondition, resetWaiting, resetWinner, restoreCandidates, validReset, type OpenedEpoch, type ResetCandidate, type ResetKnownDevice, type ResetPreconditionDevice } from '../../../../src/domain/sync/epoch';
 import type { DeviceId, Hlc } from '../../../../src/domain/types';
+import { withoutStaleAcks } from '../../../../src/domain/sync/retention';
 import table from '../../../fixtures/sync/reset-order.json';
 
 /**
@@ -77,5 +78,17 @@ describe('propriétés du gagnant (même vue sur chaque appareil)', () => {
         if (a) expect(set.has(a.by)).toBe(false);
       }),
     );
+  });
+});
+
+describe('accusés sans objet (remarques finales, même filtre que uncovered_forgotten de Rust)', () => {
+  it('staleAcks : un accusé après la plus récente époque d’un état lisible et accepté de sa cible est ignoré', () => {
+    type JsonAcker = { deviceId: string; acks: Record<string, DeviceAck> };
+    const toMaps = (list: JsonAcker[]) => list.map((a) => ({ deviceId: a.deviceId as DeviceId, acks: new Map(Object.entries(a.acks).map(([id, ack]) => [id as DeviceId, ack])) }));
+    expect(table.staleAcks.length).toBeGreaterThanOrEqual(2);
+    for (const c of table.staleAcks) {
+      const published = new Map(Object.entries(c.published as Record<string, string>).map(([id, e]) => [id as DeviceId, e as EpochId]));
+      expect(withoutStaleAcks(toMaps(c.ackers as unknown as JsonAcker[]), published), c.name).toEqual(toMaps(c.expected as unknown as JsonAcker[]));
+    }
   });
 });

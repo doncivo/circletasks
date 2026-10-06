@@ -1418,3 +1418,45 @@ fn audit_low_switch_rechecks_its_own_k2_state_before_deleting_state_next() {
     assert_eq!(code(net.read_all(DEV_A)), SyncCode::StateMismatch);
     assert!(net.fs.get(&["devices", DEV_A, "state.next.ctx"]).is_some(), "state.next.ctx gardé");
 }
+
+#[test]
+fn final_remarks_replayed_older_k_state_never_lowers_the_cutoff() {
+    let mut net = Net::new(&[DEV_B, DEV_C]);
+    for id in [DEV_B, DEV_C, DEV_A] {
+        net.cycle(id).unwrap();
+    }
+    let old_b = net.fs.get(&["devices", DEV_B, "state.ctx"]).unwrap();
+    net.reset_and_open(DEV_A);
+    // C publie dans n ; B le lit (son accusé sous K dépasse les covers de A), puis A oublie C et B se réassocie.
+    net.write(DEV_C).unwrap();
+    net.publish(DEV_C, Value::Null).unwrap();
+    net.cycle(DEV_B).unwrap();
+    net.core(DEV_A).device_forget(DEV_C, 1).unwrap();
+    net.join(DEV_B, DEV_A);
+    assert_eq!(net.read_all(DEV_A).unwrap().reset.unwrap().waiting, vec![DEV_C.to_owned()]);
+    // Une copie plus ancienne du state.ctx de B (accusé sur C plus bas) est remise : la coupure ne baisse pas, la bascule n'avance pas.
+    net.fs.put(&["devices", DEV_B, "state.ctx"], &old_b);
+    let view = net.read_all(DEV_A).unwrap().reset.unwrap();
+    assert!(!view.switched, "bascule non avancée par un rejeu");
+    assert_eq!(view.waiting, vec![DEV_C.to_owned()]);
+}
+
+#[test]
+fn shared_table_stale_acks() {
+    let cases = table()["staleAcks"].as_array().unwrap().clone();
+    assert!(cases.len() >= 2);
+    let ackers = |v: &Value| -> Vec<(String, BTreeMap<String, DeviceAck>)> {
+        v.as_array().unwrap().iter().map(|a| (a["deviceId"].as_str().unwrap().to_owned(), serde_json::from_value(a["acks"].clone()).unwrap())).collect()
+    };
+    for case in cases {
+        let published: BTreeMap<String, circletasks_lib::sync::names::EpochId> = case["published"]
+            .as_object()
+            .unwrap()
+            .iter()
+            .map(|(id, e)| (id.clone(), circletasks_lib::sync::names::EpochId::parse(e.as_str().unwrap()).unwrap()))
+            .collect();
+        let mut got = ackers(&case["ackers"]);
+        circletasks_lib::sync::reset::without_stale_acks(&mut got, &published);
+        assert_eq!(got, ackers(&case["expected"]), "{}", case["name"]);
+    }
+}

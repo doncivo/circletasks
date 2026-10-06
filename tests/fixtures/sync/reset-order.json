@@ -383,5 +383,29 @@
         { "by": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "stateEpoch": "e0001-dddddddd-dddd-4ddd-8ddd-dddddddddddd", "notice": { "kid": "", "epoch": "e0002-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "at": "" }, "restore": true }
       ]
     }
+  ],
+  "staleAcks": [
+    {
+      "name": "accusé sur C dans une époque où C n'a publié aucun état (début de l'époque visée) : ignoré ; position en n gardée",
+      "published": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      "ackers": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 }, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } },
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 3, "hlc": null, "stateSeq": 1 } } }
+      ],
+      "expected": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } },
+        { "deviceId": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 1, "record": 3, "hlc": null, "stateSeq": 1 } } }
+      ]
+    },
+    {
+      "name": "cible sans état lisible et accepté : accusé gardé",
+      "published": {},
+      "ackers": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } }
+      ],
+      "expected": [
+        { "deviceId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "acks": { "cccccccc-cccc-4ccc-8ccc-cccccccccccc": { "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } } }
+      ]
+    }
   ]
 }

@@ -1,3 +1,4 @@
+import { readLimit } from '../../../../src/sync/forget';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -148,5 +149,38 @@ describe('annonce authentique seulement (critère 8)', () => {
     expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>() }), B), 'appareil inconnu de B').toHaveLength(1);
     expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row(K, 0)]]) }), B), 'aucun état déjà accepté').toHaveLength(1);
     expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row('ffffffffffffffff', 6)]]) }), B), 'connu avec une autre clé').toHaveLength(1);
+  });
+});
+
+describe('remarques finales : accusés sans objet ignorés par le moteur (même filtre que Rust)', () => {
+  it('readLimit : un accusé sur C au début d’une époque où C n’a rien publié ne fixe pas la limite de lecture', () => {
+    const A2 = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' as DeviceId;
+    const B2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as DeviceId;
+    const C2 = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' as DeviceId;
+    const e1 = `e0001-${A2}` as EpochId;
+    const e2 = `e0002-${A2}` as EpochId;
+    const st = (deviceId: DeviceId, epoch: EpochId, acks: [DeviceId, DeviceAck][]): PublishedDeviceState => ({
+      deviceId,
+      platform: 'windows',
+      appVersion: '0.4.0',
+      sm: 1,
+      sv: 17,
+      epoch,
+      stateSeq: 3,
+      head: { epoch, segment: 0, record: 0, hlc: null, stateSeq: 3 },
+      acks: new Map(acks),
+      snapshot: null,
+      purgeHorizon: null,
+      lastSyncHlc: `000000000001000-0000-${deviceId}` as Hlc,
+      forgotten: [],
+      reset: null,
+    });
+    const atN: DeviceAck = { epoch: e1, segment: 1, record: 3, hlc: null, stateSeq: 2 };
+    const accepted = new Map<DeviceId, PublishedDeviceState>([
+      [B2, st(B2, e2, [[C2, { epoch: e2, segment: 0, record: 0, hlc: null, stateSeq: 2 }]])],
+      [C2, st(C2, e1, [])],
+    ]);
+    const view = { order: new Map([[C2, { by: A2, at: `000000000002000-0000-${A2}` as Hlc }]]), master: [], done: new Set<DeviceId>(), selfForgotten: false, revived: [] };
+    expect(readLimit(C2, view, accepted, st(A2, e2, [[C2, atN]]), null)).toEqual(atN);
   });
 });

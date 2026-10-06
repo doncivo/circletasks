@@ -147,4 +147,17 @@ describe('bandeaux de la réinitialisation (critères 17 et 18)', () => {
     await settle();
     expect(text()).toContain('Cet appareil doit être associé de nouveau');
   });
+
+  it('réinitialisation interrompue (restauration) gardée dans sync_meta : montrée avant le premier cycle, jamais « à associer »', async () => {
+    await db.data.repos.sync.setMeta(
+      RESET_META,
+      JSON.stringify({ role: 'initiator', step: 'superseded', by: PHONE, superseded: true, restore: true, startedAt: NOW, waiting: [], failure: null }),
+    );
+    render(<AppStatusBanner />);
+    start();
+    await settle();
+    // Avant le premier cycle, APPAREILS n'est pas encore connu : nom neutre, jamais une plateforme inventée.
+    expect(text()).toContain('Réinitialisation interrompue par une restauration sur Appareil 60000000 : relancez-la');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reset-progress');
+  });
 });

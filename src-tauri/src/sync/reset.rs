@@ -327,3 +327,11 @@ pub fn reset_waiting(known: &[ResetKnown], self_id: &str, epoch: &str, kid: &str
     }
     out.into_iter().collect()
 }
+
+/// Accusés sans objet (remarques finales ; même fonction que `withoutStaleAcks`, table `reset-order.json`) : un accusé sur une cible
+/// situé après la plus récente époque d'un état lisible et accepté de cette cible ne désigne rien et ne compte dans aucune coupure.
+pub fn without_stale_acks(ackers: &mut [(String, BTreeMap<String, DeviceAck>)], published: &BTreeMap<String, EpochId>) {
+    for (_, acks) in ackers.iter_mut() {
+        acks.retain(|target, ack| published.get(target).map_or(true, |last| EpochId::parse(&ack.epoch).map_or(true, |e| e <= *last)));
+    }
+}

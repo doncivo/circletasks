@@ -31,7 +31,7 @@ use super::forget::{
 use super::limits::{DEVICE_EXPIRY_MS, MAX_SCAN_ENTRIES_PER_FOLDER, MAX_STATE_FILE_BYTES};
 use super::names::{parse_file_name, SyncFileName, DEVICES_DIR, STATE_FILE, STATE_NEXT_FILE};
 use super::reset::{
-    reset_precondition, reset_waiting, reset_winner, restore_candidates, AuthorSeen, ForgottenCut, KState, OpenedEpoch, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown,
+    reset_precondition, reset_waiting, reset_winner, restore_candidates, without_stale_acks, AuthorSeen, ForgottenCut, KState, OpenedEpoch, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown,
     ResetRecord, ResetRole, ResetStage, Superseded, RESET_FILE, USAGE_NEXT_FILE,
 };
 use super::forget::covers_forgotten;
@@ -258,6 +258,11 @@ struct Inner {
     /// Dernière synchro (`lastSyncHlc`, ms) de chaque appareil vue au dernier scan de la session : un appareil expiré (180 jours) dont
     /// l'état attend iCloud ne bloque pas le don de la clé (seconde revue, point 2).
     last_seen: HashMap<String, u64>,
+    /// Remarques finales (sécurité basse) : anti-rejeu des `state.ctx` sous l'ancienne clé relus pour la coupure pendant une
+    /// réinitialisation (appareils déjà réassociés), et derniers accusés acceptés : une copie plus ancienne remise n'abaisse jamais la
+    /// coupure.
+    k_accepted: HashMap<String, Accepted>,
+    k_acks: HashMap<String, BTreeMap<String, DeviceAck>>,
 }
 
 /// Construit l'accès au dossier avec la clé locale et, pendant une réinitialisation, la nouvelle clé de l'époque visée.
@@ -2129,7 +2134,7 @@ impl SyncCore {
         own_state: Option<&PublishedState>,
         entries: &[ForgottenDevice],
     ) -> Vec<String> {
-        let Inner { folder, accepted, snapshot_ends, .. } = &mut *inner;
+        let Inner { folder, accepted, snapshot_ends, k_accepted, k_acks, .. } = &mut *inner;
         let Some(bound) = folder.as_ref() else { return Vec::new() };
         let store = Store { fs: bound.fs.as_ref(), key, pin: false, next: Some(NextKey { key: next, epoch: &record.epoch }) };
         let mut acks: Vec<(String, BTreeMap<String, DeviceAck>)> = Vec::new();
@@ -2149,16 +2154,27 @@ impl SyncCore {
                 acks.push((id.clone(), state.acks.clone()));
             }
             if read.from_next_file || read.kid.as_deref() != Some(key.kid()) {
-                let old = store.read_state_file(id, STATE_FILE, key, &HashMap::new());
-                if let Some(state) = old.state.filter(|_| old.status == StateStatus::Ok) {
-                    note(id, &state);
-                    acks.push((id.clone(), state.acks));
+                let old = store.read_state_file(id, STATE_FILE, key, k_accepted);
+                match (old.status, old.state, old.digest) {
+                    (StateStatus::Ok, Some(state), Some(digest)) => {
+                        note(id, &state);
+                        if let Some(epoch) = EpochId::parse(&state.epoch) {
+                            let head = RecordCursor { segment: state.head.segment, record: state.head.record };
+                            k_accepted.insert(id.clone(), Accepted { epoch, seq: state.state_seq, digest, head });
+                        }
+                        k_acks.insert(id.clone(), state.acks.clone());
+                        acks.push((id.clone(), state.acks));
+                    }
+                    // Rejeu, illisible ou absent : les derniers accusés acceptés comptent toujours.
+                    _ => {
+                        if let Some(kept) = k_acks.get(id) {
+                            acks.push((id.clone(), kept.clone()));
+                        }
+                    }
                 }
             }
         }
-        for (_, map) in &mut acks {
-            map.retain(|target, ack| published.get(target).map_or(true, |p| EpochId::parse(&ack.epoch).map_or(true, |e| e <= *p)));
-        }
+        without_stale_acks(&mut acks, &published);
         let ackers = || acks.iter().map(|(id, a)| (id.as_str(), a));
         let order = forget_order(entries);
         let end = Self::own_snapshot_end(&store, &record.device_id, own_state, Some(&record.epoch), accepted, snapshot_ends);

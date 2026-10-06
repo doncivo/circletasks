@@ -657,6 +657,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let resetOpenings: number[] = [];
   /** Y-11 : arrêt simulé avant l'étape nommée (une fois). */
   let interruptAt: string | null = null;
+  /** Remarques finales : anti-rejeu et derniers accusés des `state.ctx` relus sous l'ancienne clé pour la coupure (comme Rust). */
+  const kAccepted = new Map<string, AcceptedState>();
+  const kAcks = new Map<string, ReadonlyMap<DeviceId, DeviceAck>>();
   /** Seconde revue, point 2 : dernière synchro (ms) de chaque appareil vue au dernier scan (expiré à 180 jours). */
   const lastSeen = new Map<string, number>();
   /** Y-11 (§18 point 17) : `sync/import-failure.json`. */
@@ -1896,9 +1899,18 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (read.fromNext === true || read.kid !== localKid) {
         const dir = f.devices.get(id);
         const old = dir ? readStateFile(id, dir, 'state', [localKid], false, false) : null;
-        if (old?.status === 'ok' && old.state) {
+        // Remarques finales : anti-rejeu propre à ces relectures sous l'ancienne clé ; un rejeu garde les derniers accusés acceptés.
+        const line = dir?.state?.lines[0];
+        const current = old?.status === 'ok' && old.state && line ? { epoch: old.state.epoch, seq: old.state.stateSeq, digest: line.text, head: old.state.head } : null;
+        const previous = kAccepted.get(id);
+        if (old?.state && current && !(previous && isRollback(previous, current))) {
           note(id, old.state);
+          kAccepted.set(id, current);
+          kAcks.set(id, old.state.acks);
           raw.push({ deviceId: id, acks: old.state.acks });
+        } else {
+          const kept = kAcks.get(id);
+          if (kept) raw.push({ deviceId: id, acks: kept });
         }
       }
     }

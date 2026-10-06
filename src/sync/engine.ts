@@ -13,7 +13,7 @@ import { META, readJson, writeJson } from './meta';
 import { cursorIds, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, snapshotInEpoch, type SnapshotEndRead } from '../domain/sync/retention';
+import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -329,9 +329,12 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     const live = new Map([...accepted].filter(([id]) => !forgetView.order.has(id)));
     const states = [...live.values()];
     /** Liste maître et accusés des actifs (le sien compris) : coupures, instantanés éligibles, trous (§18 point 11). */
+    // Y-11 (remarques finales) : un accusé après la dernière époque publiée par sa cible (état accepté) ne compte dans aucune coupure
+    // (même filtre que Rust, table `reset-order.json`).
+    const published = (own: PublishedDeviceState | null) => publishedEpochs([...accepted.values(), ...(own ? [own] : [])]);
     const coverage = (): ForgetCoverage => {
       const own = lastWritten ?? ownState;
-      return { master: forgetView.master, ackers: [...live.values(), ...(own ? [own] : [])], forgotten: forgetView.order };
+      return { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(own ? [own] : [])], published(own)), forgotten: forgetView.order };
     };
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
     let epoch = localEpoch;
@@ -383,7 +386,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos),
-        coverage: { master: forgetView.master, ackers: [...live.values(), ...(ownState ? [ownState] : [])] },
+        coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
         keep: new Set(forgetView.order.keys()),
       });
       if (switched !== 'done') {
