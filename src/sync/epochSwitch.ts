@@ -257,7 +257,8 @@ export interface SwitchOptions {
   readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
   /**
    * Y-11 (§18 point 14) : appareils (oubliés retenus) dont la position est gardée telle quelle en (d) : leur accusé reste celui de
-   * l'époque où il a été lu (coupure), jamais remis au début de la nouvelle époque.
+   * l'époque où il a été lu (coupure), jamais remis au début de la nouvelle époque. **Fusion seulement** (ADR §20 point 3, « l'accusé
+   * suit la base ») : ignoré en remplacement, où la position sur un oublié devient `covers` de l'instantané (`positionAfterReplace`).
    */
   readonly keep?: ReadonlySet<DeviceId>;
 }
@@ -355,10 +356,10 @@ export async function switchEpoch(
       // §18.14 « accusés figés à l'import » (seconde revue, bloquant) : dans une réinitialisation (fusion), la position en `n` de tout
       // appareil encore en `n` est gardée ; elle ne passe à `n+1` qu'à sa première lecture dans `n+1` (jamais d'accusé « début de
       // l'époque visée » sur un appareil qui n'y a rien publié).
-      const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && (options.mode === 'merge' || options.keep?.has(row.deviceId as DeviceId) === true);
+      const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && options.mode === 'merge';
       if (keep) continue;
-      // Remplacement : même règle (aucun accusé {`target`, 0, 0} sur un appareil qui n'y a rien publié) ; position de l'ancienne époque
-      // couverte par l'instantané d'ouverture (accusé hérité, §14.2), ou aucune.
+      // Remplacement (ADR §9.1 (d), §20 point 3) : l'accusé suit la base, oubliés retenus et terminés compris (`keep` ignoré) ; position
+      // couverte par l'instantané (accusé hérité, §14.2), ou aucune ; jamais {`target`, 0, 0} sur un appareil qui n'y a rien publié.
       const replaced = !row.isSelf && options.mode === 'replace';
       await tx.sync.saveState(row.deviceId, replaced ? positionAfterReplace(row.stateEpoch, covers.get(row.deviceId as DeviceId), target) : { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
     }

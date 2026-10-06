@@ -198,9 +198,10 @@ async function applyJoin(
   }
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
   const finalize: SnapshotTxHook = async (tx) => {
+    const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
     for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
       // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
-      await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId));
+      await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId, local.get(id)));
     }
     await writeJson(tx, META.resume, null);
     await writeJson(tx, JOIN_META, null);

@@ -1,4 +1,4 @@
-import type { SyncStatePatch } from '../db/repositories';
+import type { SyncStatePatch, SyncStateRow } from '../db/repositories';
 import { compareEpochs, type DeviceAck, type EpochId } from '../domain/sync/format';
 
 /**
@@ -16,24 +16,38 @@ const at = (cover: DeviceAck): Position => ({ epoch: cover.epoch, cursorSegment:
 /** Aucune position : rien de cet appareil n'est dans la base (jamais d'accusé publié tant qu'il n'est pas lu). */
 const NONE: Position = { epoch: null, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
 
+/** Ligne locale actuelle d'un appareil (position et époque de son dernier état accepté). */
+export type LocalRow = Pick<SyncStateRow, 'epoch' | 'cursorSegment' | 'cursorRecord' | 'ackHlc' | 'stateEpoch'>;
+
 /**
- * Reprise ou arrivée depuis un instantané de `epoch` (section 5.5) : `covers` de l'époque courante tel quel ; position d'une époque
- * antérieure gardée telle quelle (accusé **hérité** de l'instantané, §14.2), jamais ramenée au début de `epoch` ; sans entrée : début de
- * `epoch` (lu depuis le début). Sa propre ligne (`self`) : toujours dans `epoch` (ses écritures au-delà de l'instantané sont relues).
+ * Reprise ou arrivée depuis un instantané de `epoch` (section 5.5, fusion : la base locale est gardée) :
+ * - entrée `covers` de l'époque courante : telle quelle ; d'une époque antérieure : gardée telle quelle (accusé **hérité**, §14.2) ;
+ * - sans entrée (revue Y-TECH-01, point 1 : instantané plus récent que l'ouverture, dont l'auteur n'avait pas de position) : début de
+ *   `epoch` **seulement** pour un appareil dont le dernier état accepté est déjà dans `epoch` (il y est lu depuis le début) ; sinon la
+ *   ligne locale est gardée si elle est dans une époque antérieure (la base fusionnée contient toujours ce qu'elle désigne), ou aucune
+ *   position ; jamais {`epoch`, 0, 0} sur un appareil qui n'y a rien publié.
+ * Sa propre ligne (`self`) : toujours dans `epoch` (ses écritures au-delà de l'instantané sont relues).
  */
-export function positionFromCover(cover: DeviceAck | undefined, epoch: EpochId, self: boolean): Position {
-  if (cover !== undefined && (cover.epoch === epoch || (!self && compareEpochs(cover.epoch, epoch) < 0))) return at(cover);
-  return { epoch, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
+export function positionFromCover(cover: DeviceAck | undefined, epoch: EpochId, self: boolean, row?: LocalRow): Position {
+  const start: Position = { epoch, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
+  if (self) return cover !== undefined && cover.epoch === epoch ? at(cover) : start;
+  if (cover !== undefined && compareEpochs(cover.epoch, epoch) <= 0) return at(cover);
+  if (row?.stateEpoch != null && compareEpochs(row.stateEpoch as EpochId, epoch) >= 0) return start;
+  if (row?.epoch != null && compareEpochs(row.epoch as EpochId, epoch) < 0) return { epoch: row.epoch, cursorSegment: row.cursorSegment, cursorRecord: row.cursorRecord, ackHlc: row.ackHlc };
+  return NONE;
 }
 
 /**
  * Base **remplacée** par l'instantané qui ouvre `target` (restauration « Appliquer partout », époques concurrentes ; section 9.1 b) :
- * - appareil dont le dernier état accepté (`stateEpoch`) est déjà dans `target` (l'ouvreur) : début de `target`, lu ensuite ;
- * - sinon, la base ne contient de lui que ce que l'instantané couvre : position `covers` de l'ancienne époque (accusé hérité, §14.2),
- *   ou aucune position si l'instantané ne le couvre pas ; jamais {`target`, 0, 0}.
+ * - appareil dont le dernier état accepté (`stateEpoch`) est déjà dans `target` (l'ouvreur) : sa position `covers` de `target` si
+ *   l'instantané en a une, sinon début de `target` ; lu ensuite ;
+ * - sinon, oubliés retenus et terminés compris (ADR §20 point 3, « l'accusé suit la base »), la base ne contient de lui que ce que
+ *   l'instantané couvre : position `covers` de l'ancienne époque (accusé hérité, §14.2), ou aucune position si l'instantané ne le couvre
+ *   pas ; jamais {`target`, 0, 0}.
  */
 export function positionAfterReplace(stateEpoch: string | null, cover: DeviceAck | undefined, target: EpochId): Position {
-  if (stateEpoch !== null && compareEpochs(stateEpoch as EpochId, target) >= 0) return { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
+  // L'ouvreur (état déjà dans la cible) : position `covers` de la cible si l'instantané en a une (instantané autre que celui d'ouverture).
+  if (stateEpoch !== null && compareEpochs(stateEpoch as EpochId, target) >= 0) return cover !== undefined && cover.epoch === target ? at(cover) : { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null };
   if (cover !== undefined && compareEpochs(cover.epoch, target) < 0) return at(cover);
   return NONE;
 }
