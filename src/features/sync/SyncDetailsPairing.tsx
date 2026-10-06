@@ -45,7 +45,8 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   }, [container]);
 
   if (!container.syncPlatform || phase === 'not-configured') return null;
-  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' ? 'import' : 'show';
+  // Y-11 : un appareil à associer de nouveau (réinitialisation annoncée ailleurs) importe la nouvelle clé ; il ne montre jamais l'ancienne.
+  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' ? 'import' : 'show';
   // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
   if (showOnly && mode === 'import') return null;
 
