@@ -86,6 +86,14 @@ pub struct Superseded {
     pub restore: bool,
 }
 
+/// État de l'auteur lu à l'import (seconde revue, point 3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AuthorSeen {
+    pub state_seq: u64,
+    pub epoch: String,
+}
+
 /// Dernier état écrit sous l'ancienne clé pendant la réinitialisation (audit 5) : seul état que l'anti-rejeu de soi peut reprendre
 /// si la réinitialisation perd.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -119,6 +127,10 @@ pub struct ResetRecord {
     /// Dernier état écrit sous l'ancienne clé (audit 5).
     #[serde(default)]
     pub k_state: Option<KState>,
+    /// Appareil réassocié : état de l'auteur lu sous l'ancienne clé à l'import (seconde revue, point 3) ; un état plus récent, ou d'une
+    /// époque supérieure, sans cette annonce, prouve le retrait même si l'annonce n'a jamais été lue.
+    #[serde(default)]
+    pub author_at_import: Option<AuthorSeen>,
     pub stage: ResetStage,
     pub base: Option<ResetBase>,
     pub superseded: Option<Superseded>,
@@ -137,6 +149,7 @@ impl ResetRecord {
             && self.notice.as_ref().map_or(true, |n| is_kid(&n.kid) && is_epoch_id(&n.epoch) && is_strict_hlc(&n.at))
             && self.notice_epoch.as_deref().map_or(true, is_epoch_id)
             && self.k_state.as_ref().map_or(true, |k| k.digest.len() == 64 && k.digest.bytes().all(|b| b.is_ascii_hexdigit()))
+            && self.author_at_import.as_ref().map_or(true, |a| is_epoch_id(&a.epoch))
             && self.base.as_ref().map_or(true, |b| b.epoch.as_deref().map_or(true, is_epoch_id) && b.max_hlc.as_deref().map_or(true, is_strict_hlc))
             && self.superseded.as_ref().map_or(true, |s| s.epoch.as_deref().map_or(true, is_epoch_id) && s.by.as_deref().map_or(true, is_uuid_v4))
             && self.switch_step <= 6

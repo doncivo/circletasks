@@ -564,6 +564,8 @@ interface MemResetRecord {
   noticeSeq: number | null;
   /** Dernier état écrit sous l'ancienne clé (audit 5) : seul repris par l'anti-rejeu de soi si la réinitialisation perd. */
   kState: { seq: number; digest: string } | null;
+  /** Réassocié : état de l'auteur lu à l'import (seconde revue, point 3). */
+  authorAtImport: { seq: number; epoch: EpochId } | null;
   stage: 'created' | 'announced' | 'opened';
   base: { epoch: EpochId | null; segment: number; record: number; maxHlc: Hlc | null } | null;
   superseded: { epoch: EpochId | null; by: DeviceId | null; done: boolean; restore: boolean } | null;
@@ -1727,6 +1729,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       noticeEpoch: plan.noticeEpoch,
       noticeSeq: null,
       kState: null,
+      authorAtImport: null,
       stage: 'created',
       base: null,
       superseded: null,
@@ -1774,6 +1777,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       noticeEpoch: notice ? (announced?.state?.epoch ?? null) : null,
       noticeSeq: notice ? (announced?.state?.stateSeq ?? null) : null,
       kState: mine?.status === 'ok' && mine.state && line ? { seq: mine.state.stateSeq, digest: line.text } : null,
+      authorAtImport: announced?.status === 'ok' && announced.state ? { seq: announced.state.stateSeq, epoch: announced.state.epoch } : null,
       stage: 'opened',
       base: { epoch: own.epoch, segment: own.segment, record: own.record, maxHlc: own.maxHlc },
       superseded: null,
@@ -1978,7 +1982,11 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (id === record.by) {
         authorSeen = true;
         // Revue 1 : retrait compté seulement si l'annonce a été vue et que l'état lu est strictement plus récent qu'elle.
-        const newer = record.notice !== null && record.noticeSeq !== null && read.state.stateSeq > record.noticeSeq;
+        const newerThanNotice = record.notice !== null && record.noticeSeq !== null && read.state.stateSeq > record.noticeSeq;
+        // Seconde revue, point 3 : plus récent que l'état de l'auteur lu à l'import, même sans annonce lue.
+        const at = record.authorAtImport;
+        const newerThanImport = at !== null && (read.state.stateSeq > at.seq || compareEpochs(read.state.epoch, at.epoch) > 0);
+        const newer = newerThanNotice || newerThanImport;
         authorWithdrew ||= newer && read.state.reset?.kid !== record.kid;
       }
     }

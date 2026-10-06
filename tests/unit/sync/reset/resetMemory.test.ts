@@ -226,3 +226,31 @@ describe('seconde revue, point 2 : don de la clé hors réinitialisation', () =>
     expect(await codeOf(b.platform.key.openPairing('show'))).toBe('ok');
   });
 });
+
+describe('seconde revue, point 3 : retrait prouvé sans annonce lue', () => {
+  it('B importe K2 sans avoir lu l’annonce ; un état de l’auteur plus récent que celui lu à l’import, sans annonce : perte', async () => {
+    const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
+    const before = b.folder.takeState(a.id);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders([a, c]);
+    a.clock.advance(11 * 60_000);
+    await c.platform.key.openPairing('import');
+    await c.platform.key.import({ recoveryKey: await recoveryOf(a) });
+    await c.cycle();
+    propagate(c.folder, b.folder, c.id);
+    a.clock.advance(11 * 60_000);
+    await b.platform.key.openPairing('import');
+    await b.platform.key.import({ recoveryKey: await recoveryOf(c) });
+    expect(b.platform.testing.resetRecord()?.role).toBe('joined');
+    expect((await b.platform.scan({ keep: [] })).reset?.superseded ?? null).toBeNull();
+    // A retire sa réinitialisation : état sous K plus récent, sans annonce.
+    const file = before.file;
+    if (!file) throw new Error('état');
+    const text = JSON.parse(file.lines[0]?.text ?? '{}') as { stateSeq: number; head: { stateSeq: number } };
+    const seq = text.stateSeq + 1000;
+    const newer = { ...file, header: { ...file.header, n: seq }, lines: [{ ...(file.lines[0] as (typeof file.lines)[number]), text: JSON.stringify({ ...text, stateSeq: seq, head: { ...text.head, stateSeq: seq } }) }] };
+    b.folder.putState({ deviceId: a.id, file: newer });
+    const view = (await b.platform.scan({ keep: [] })).reset;
+    expect(view?.superseded).toMatchObject({ epoch: null });
+  });
+});

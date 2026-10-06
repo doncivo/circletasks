@@ -1369,3 +1369,37 @@ fn second_review_pairing_ignores_a_forgotten_or_expired_device_still_in_the_clou
     *net.fs.hydrate_error.lock().unwrap() = Some(circletasks_lib::sync::files::FsError::CloudPending);
     assert!(net.core(DEV_B).pairing_preconditions(true).is_ok(), "expiré ignoré");
 }
+
+#[test]
+fn second_review_withdrawal_is_proven_by_a_newer_author_state_read_after_the_import_even_without_the_notice() {
+    let mut net = Net::new(&[DEV_B, DEV_C]);
+    for id in [DEV_B, DEV_C, DEV_A] {
+        net.cycle(id).unwrap();
+    }
+    let before = net.fs.get(&["devices", DEV_A, "state.ctx"]).unwrap();
+    let k = net.key_of(DEV_A, SYNC_KEY_ACCOUNT);
+    net.reset_and_open(DEV_A);
+    net.join(DEV_C, DEV_A);
+    // B importe K2 par C en ne voyant que l'état de A d'avant l'annonce (annonce jamais lue).
+    net.fs.put(&["devices", DEV_A, "state.ctx"], &before);
+    net.fs.remove(&["devices", DEV_A, "state.next.ctx"]);
+    net.join(DEV_B, DEV_C);
+    assert!(net.read_all(DEV_B).unwrap().reset.unwrap().superseded.is_none());
+    // A republie ensuite sous K un état plus récent, sans annonce (réinitialisation retirée) : preuve du retrait.
+    let mut state = state_json(net.dev(DEV_A), Value::Null);
+    let seq = 9_000;
+    state["stateSeq"] = json!(seq);
+    state["head"]["stateSeq"] = json!(seq);
+    state["epoch"] = json!(epoch(1, DEV_A));
+    state["head"]["epoch"] = json!(epoch(1, DEV_A));
+    state["acks"] = json!({});
+    state["snapshot"] = Value::Null;
+    let ep = epoch(1, DEV_A);
+    let text = state.to_string();
+    let sealed = k.seal(&Place::State { dev: DEV_A, epoch: &ep, state_seq: seq }, text.as_bytes(), 1, SV as u32).unwrap();
+    let header = json!({ "f": "ct-state", "sm": 1, "kid": k.kid(), "dev": DEV_A, "e": ep, "n": seq }).to_string();
+    net.fs.put(&["devices", DEV_A, "state.ctx"], format!("{header}\n{sealed}\n").as_bytes());
+    let view = net.read_all(DEV_B).unwrap().reset.unwrap();
+    let lost = view.superseded.expect("retrait prouvé par un état plus récent que celui lu à l'import");
+    assert!(lost.epoch.is_none());
+}

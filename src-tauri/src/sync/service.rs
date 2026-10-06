@@ -31,7 +31,7 @@ use super::forget::{
 use super::limits::{DEVICE_EXPIRY_MS, MAX_SCAN_ENTRIES_PER_FOLDER, MAX_STATE_FILE_BYTES};
 use super::names::{parse_file_name, SyncFileName, DEVICES_DIR, STATE_FILE, STATE_NEXT_FILE};
 use super::reset::{
-    reset_precondition, reset_waiting, reset_winner, restore_candidates, ForgottenCut, KState, OpenedEpoch, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown,
+    reset_precondition, reset_waiting, reset_winner, restore_candidates, AuthorSeen, ForgottenCut, KState, OpenedEpoch, PreconditionDevice, ResetBase, ResetCandidate, ResetKnown,
     ResetRecord, ResetRole, ResetStage, Superseded, RESET_FILE, USAGE_NEXT_FILE,
 };
 use super::forget::covers_forgotten;
@@ -1765,6 +1765,7 @@ impl SyncCore {
             notice_epoch: Some(plan.notice_epoch),
             notice_seq: None,
             k_state: None,
+            author_at_import: None,
             stage: ResetStage::Created,
             base: None,
             superseded: None,
@@ -1906,6 +1907,7 @@ impl SyncCore {
         let by = EpochId::parse(&epoch).map(|e| e.opener).unwrap_or_default();
         // Annonce de l'auteur lue sous l'ancienne clé (absente si l'auteur a déjà basculé).
         let announced = store.read_state_file(&by, STATE_FILE, old, &HashMap::new());
+        let author_at_import = announced.state.as_ref().filter(|_| announced.status == StateStatus::Ok).map(|s| AuthorSeen { state_seq: s.state_seq, epoch: s.epoch.clone() });
         let (notice, notice_epoch, notice_seq) = match announced.state.filter(|_| announced.status == StateStatus::Ok) {
             Some(s) if s.reset.as_ref().is_some_and(|n| n.kid == candidate.kid() && n.epoch == epoch) => (s.reset.clone(), Some(s.epoch.clone()), Some(s.state_seq)),
             _ => (None, None, None),
@@ -1928,6 +1930,7 @@ impl SyncCore {
             notice_epoch,
             notice_seq,
             k_state,
+            author_at_import,
             stage: ResetStage::Opened,
             base,
             superseded: None,
@@ -2039,7 +2042,12 @@ impl SyncCore {
             if *id == record.by {
                 author_seen = true;
                 // Revue 1 : retrait compté seulement si l'annonce a été vue et que l'état lu est strictement plus récent qu'elle.
-                let newer = record.notice.is_some() && record.notice_seq.is_some_and(|seq| state.state_seq > seq);
+                let newer_than_notice = record.notice.is_some() && record.notice_seq.is_some_and(|seq| state.state_seq > seq);
+                // Seconde revue, point 3 : plus récent que l'état de l'auteur lu à l'import (stateSeq ou époque), même sans annonce lue.
+                let newer_than_import = record.author_at_import.as_ref().is_some_and(|a| {
+                    state.state_seq > a.state_seq || EpochId::parse(&state.epoch).zip(EpochId::parse(&a.epoch)).is_some_and(|(e, f)| e > f)
+                });
+                let newer = newer_than_notice || newer_than_import;
                 author_withdrew |= newer && state.reset.as_ref().map(|n| n.kid.as_str()) != Some(record.kid.as_str());
             }
         }
