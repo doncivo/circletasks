@@ -382,3 +382,30 @@ describe('(4) oubli annulé : appareil qui avait fait « Associer de nouveau »'
     expect(c.folder.devices.get(oldId)?.state?.lines[0]?.text ?? '').not.toContain(newId);
   });
 });
+
+describe('troisième revue, point 1 : fin d’instantané lue une fois par session', () => {
+  it('oubli retenu pour toujours : sur des cycles consécutifs, chaque instantané annoncé n’est demandé (tail) qu’une fois', async () => {
+    const a = await first();
+    const b = await join(a, B_ID);
+    const x = await join(a, X_ID);
+    await x.createTask('X1');
+    await settle([a, b, x]);
+    const calls = new Map<string, number>();
+    for (const d of [a, b]) {
+      const platform = d.platform as unknown as { readSnapshot: (r: { deviceId: string; seq: number; tail?: true }) => Promise<unknown> };
+      const real = platform.readSnapshot.bind(d.platform);
+      platform.readSnapshot = (r) => {
+        if (r.tail) {
+          const key = `${d.name}:${r.deviceId}:${String(r.seq)}`;
+          calls.set(key, (calls.get(key) ?? 0) + 1);
+        }
+        return real(r);
+      };
+    }
+    expect(await a.service.forgetDevice(x.id as DeviceId)).toEqual({ kind: 'done' });
+    await settle([a, b], 4);
+    expect(a.folder.devices.has(x.id)).toBe(false);
+    expect(calls.size).toBeGreaterThan(0);
+    for (const [key, count] of calls) expect(count, key).toBe(1);
+  });
+});

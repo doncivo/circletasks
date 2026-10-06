@@ -330,6 +330,15 @@ export type SnapshotEndRead = SnapshotEnd | 'none' | 'cloud-pending' | 'unreadab
 type Acker = Pick<PublishedDeviceState, 'deviceId' | 'acks'>;
 
 /**
+ * Condition (h) : seul un instantané de l'époque courante compte (troisième revue Y-10, point 2) ; une fin d'une autre époque vaut `none`.
+ * Même fonction que `snapshot_in_epoch` (`forget.rs`), même table de cas (`ownSnapshotEpoch`).
+ */
+export function snapshotInEpoch(read: SnapshotEndRead, epoch: EpochId | null): SnapshotEndRead {
+  if (typeof read === 'string') return read;
+  return epoch !== null && read.epoch === epoch ? read : 'none';
+}
+
+/**
  * Un `covers` couvre-t-il chaque oublié retenu (§18 point 11) ? Pour chaque cible retenue (ordre total) dont la coupure (calculée sur les
  * `ackers` non oubliés, accusés figés compris) n'est pas nulle : `covers[X]` ≥ `cutoff(X)` (positions). Renvoie null si tout est
  * couvert, sinon la première cible non couverte. Même fonction que `covers_forgotten` (`forget.rs`).

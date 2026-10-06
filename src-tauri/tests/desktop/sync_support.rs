@@ -51,6 +51,8 @@ pub struct MemFs {
     pub writes: AtomicUsize,
     /// Lectures de fichiers (revue 15 : un instantané lu par pages n'est relu qu'une fois).
     pub reads: AtomicUsize,
+    /// Chemins lus par `read`, dans l'ordre (Y-10, troisième revue : une lecture complète par instantané et par session).
+    pub read_log: Mutex<Vec<String>>,
     /// Lectures d'en-tête (`read_head`) et cycles d'hydratation ouverts (`start_cycle`).
     pub head_reads: AtomicUsize,
     pub cycles: AtomicUsize,
@@ -182,6 +184,7 @@ impl SyncFs for SharedFs {
 
     fn read(&self, file: &[&str], limit: u64, hydrate: bool) -> Result<Vec<u8>, FsError> {
         self.0.reads.fetch_add(1, Ordering::SeqCst);
+        self.0.read_log.lock().unwrap().push(key(file));
         let mut nodes = self.0.nodes.lock().unwrap();
         let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&key(file)) else { return Err(FsError::NotFound) };
         if bytes.len() as u64 + *extra > limit {

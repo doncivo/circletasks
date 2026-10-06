@@ -24,14 +24,14 @@ use super::names::{is_uuid_v4, EpochId};
 use super::files::{delete_forgotten_device_files, ForgottenDeletion};
 use super::files::Listing;
 use super::forget::{
-    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, parse_snapshot_end, SnapshotEnd, SnapshotEndRead, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
+    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, parse_snapshot_end, snapshot_in_epoch, SnapshotEnd, SnapshotEndRead, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
     next_declaration_hlc, state_hlcs, AcceptedRecord, DeleteCheck, ForgottenRegistry, ForgottenView, KnownDevice, KnownState, FORGET_DECLARE_LIMIT, FORGOTTEN_FILE,
     MAX_FORGOTTEN_DELETE_ENTRIES, MAX_FORGOTTEN_ENTRIES, SYNC_NEXT_KEY_ACCOUNT,
 };
 use super::limits::MAX_SCAN_ENTRIES_PER_FOLDER;
 use super::names::DEVICES_DIR;
 use super::state::{ForgottenDevice, OwnState, PublishedState, Usage};
-use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, StateRead, StateStatus, Store};
+use super::store::{Accepted, AppendResult, SnapshotEndKey, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, StateRead, StateStatus, Store};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 use crate::vault::{SecretVault, VaultError};
 
@@ -160,8 +160,10 @@ struct Inner {
     pending_paired_by: Option<String>,
     /// Dernier instantané lu par pages (revue 15) : relu du disque seulement quand un autre est demandé.
     snapshot_cache: Option<SnapshotCache>,
-    /// Fins d'instantané déjà lues (`tail`, §18 point 11) par (appareil, époque, numéro) : un numéro n'est jamais réécrit.
-    snapshot_ends: HashMap<(String, String, u64), String>,
+    /// Fins d'instantané déjà lues (`tail`, §18 point 11) par (`kid`, appareil, époque, numéro) : un numéro n'est jamais réécrit sous un
+    /// état authentifié ; gardées toute la session (vidées seulement au changement de dossier ou de clé), l'annonce restant contrôlée à
+    /// chaque appel (Y-10, troisième revue point 1).
+    snapshot_ends: HashMap<SnapshotEndKey, String>,
 }
 
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -326,6 +328,7 @@ impl SyncCore {
             }
         }
         let mut inner = self.lock();
+        inner.snapshot_ends.clear();
         remove_config_file(&self.path(FOLDER_FILE))?;
         remove_config_file(&self.path(OWN_FILE))?;
         // Y-10 : les déclarations sont liées au dossier et à l'appareil ; reconstruites depuis son `state.ctx` si le même dossier est
@@ -519,9 +522,9 @@ impl SyncCore {
             return fail(SyncCode::BadName);
         }
         let mut inner = self.lock();
-        // Début de cycle : le cache de lecture d'instantané est vidé (revue B3).
+        // Début de cycle : le cache des octets d'instantané est vidé (revue B3) ; les fins lues restent pour la session (troisième revue
+        // Y-10, point 1 : sinon chaque cycle relirait en entier l'instantané annoncé de chaque actif).
         inner.snapshot_cache = None;
-        inner.snapshot_ends.clear();
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
         let self_id = Self::bound_device(&inner);
@@ -590,16 +593,27 @@ impl SyncCore {
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
         if tail {
-            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends);
+            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends, Some(snapshot_cache));
         }
         store.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
     }
 
     /// Condition (h) (§18 point 11) : fin de l'instantané annoncé par son propre état authentifié, lue par Rust (même lecture que `tail`).
-    fn own_snapshot_end(store: &Store<'_>, self_id: &str, own: Option<&PublishedState>, accepted: &mut HashMap<String, Accepted>, ends: &mut HashMap<(String, String, u64), String>) -> SnapshotEndRead {
+    fn own_snapshot_end(
+        store: &Store<'_>,
+        self_id: &str,
+        own: Option<&PublishedState>,
+        current_epoch: Option<&str>,
+        accepted: &mut HashMap<String, Accepted>,
+        ends: &mut HashMap<SnapshotEndKey, String>,
+    ) -> SnapshotEndRead {
         let Some(state) = own else { return SnapshotEndRead::None };
         let Some(announced) = &state.snapshot else { return SnapshotEndRead::None };
-        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends) {
+        // Troisième revue, point 2 : seul un instantané de l'époque courante compte (même filtre que le moteur).
+        if current_epoch.is_some_and(|e| e != state.epoch) {
+            return SnapshotEndRead::None;
+        }
+        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends, None) {
             Ok(page) if page.status == "complete" => match page.records.first().and_then(|json| parse_snapshot_end(json, &state.epoch)) {
                 Some(covers) => SnapshotEndRead::End(SnapshotEnd { author: self_id.to_owned(), epoch: state.epoch.clone(), seq: announced.seq, end_hlc: announced.end_hlc.clone(), covers }),
                 None => SnapshotEndRead::Unreadable,
@@ -947,6 +961,12 @@ impl SyncCore {
         Ok(reg)
     }
 
+    /// Époque courante du dossier vue par Rust : la plus grande époque annoncée par un état authentifié d'un appareil non oublié (section 9 ;
+    /// un oublié ne fixe pas l'époque, comme chez le moteur).
+    fn current_epoch(reads: &BTreeMap<String, StateRead>, order: &BTreeMap<String, super::forget::Verdict>) -> Option<String> {
+        Self::ok_states(reads).into_iter().filter(|(id, _)| !order.contains_key(*id)).filter_map(|(_, s)| EpochId::parse(&s.epoch)).max().map(|e| e.name())
+    }
+
     fn ok_states(reads: &BTreeMap<String, StateRead>) -> Vec<(&str, &PublishedState)> {
         reads.iter().filter(|(_, r)| r.status == StateStatus::Ok).filter_map(|(id, r)| r.state.as_ref().map(|s| (id.as_str(), s))).collect()
     }
@@ -1125,7 +1145,8 @@ impl SyncCore {
             })
             .collect();
         let own_state = reads.get(&self_id).filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref());
-        let own_snapshot = Self::own_snapshot_end(&store, &self_id, own_state, accepted, snapshot_ends);
+        let current_epoch = Self::current_epoch(&reads, &order);
+        let own_snapshot = snapshot_in_epoch(Self::own_snapshot_end(&store, &self_id, own_state, current_epoch.as_deref(), accepted, snapshot_ends), current_epoch.as_deref());
         match forgotten_delete_check(device_id, &self_id, &reg.entries, &reg.done, &known, &own_snapshot) {
             DeleteCheck::Ready { .. } => {}
             DeleteCheck::Waiting { device, code, reason } => {

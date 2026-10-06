@@ -1,5 +1,5 @@
 {
-  "description": "Table de cas commune Rust / Vitest (Y-10 ; ADR 0011 §14.2, §11.2 et §18 points 3 à 10) : ordre total sur la liste maître (auteur = appareil du hlc at), apprentissage du registre, coupure, conditions de suppression (fantômes, done, déclarations republiées, state.ctx de la cible dans le nuage), comparaison de forgotten par sync_write_state, hlc d'une nouvelle déclaration, appareils vus, couverture des oubliés par un instantané (condition (h)), instantané éligible, trous, oubli annulé (§18 points 11 à 13). Lue par forget_order, learn_declarations, cutoff, forgotten_delete_check, completed_forgotten, next_declaration_hlc, seen_devices, covers_forgotten, eligible_snapshot et forget_gaps (src-tauri/src/sync/forget.rs) et par forgetOrder, learnDeclarations, cutoff, forgottenDeleteCheck, completedForgotten, declarationHlc, seenDevices, coversForgotten, eligibleSnapshot et forgetGaps (src/domain/sync/retention.ts). Valeurs attendues écrites à la main.",
+  "description": "Table de cas commune Rust / Vitest (Y-10 ; ADR 0011 §14.2, §11.2 et §18 points 3 à 10) : ordre total sur la liste maître (auteur = appareil du hlc at), apprentissage du registre, coupure, conditions de suppression (fantômes, done, déclarations republiées, state.ctx de la cible dans le nuage), comparaison de forgotten par sync_write_state, hlc d'une nouvelle déclaration, appareils vus, couverture des oubliés par un instantané (condition (h)), instantané éligible, trous, oubli annulé (§18 points 11 à 13). Lue par forget_order, learn_declarations, cutoff, forgotten_delete_check, completed_forgotten, next_declaration_hlc, seen_devices, covers_forgotten, eligible_snapshot, forget_gaps et snapshot_in_epoch (src-tauri/src/sync/forget.rs) et par forgetOrder, learnDeclarations, cutoff, forgottenDeleteCheck, completedForgotten, declarationHlc, seenDevices, coversForgotten, eligibleSnapshot, forgetGaps et snapshotInEpoch (src/domain/sync/retention.ts). Valeurs attendues écrites à la main.",
   "forgetOrder": [
     {
       "name": "déclaration seule",
@@ -8320,6 +8320,128 @@
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
       ],
       "expected": []
+    }
+  ],
+  "ownSnapshotEpoch": [
+    {
+      "name": "instantané de l’époque courante : gardé",
+      "read": {
+        "author": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "seq": 3,
+        "endHlc": "001791000000090-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "covers": {
+          "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 1,
+            "record": 1,
+            "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "stateSeq": 9
+          },
+          "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 3,
+            "record": 2,
+            "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "stateSeq": 4
+          }
+        }
+      },
+      "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected": {
+        "author": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "seq": 3,
+        "endHlc": "001791000000090-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "covers": {
+          "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 1,
+            "record": 1,
+            "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "stateSeq": 9
+          },
+          "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 3,
+            "record": 2,
+            "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "stateSeq": 4
+          }
+        }
+      }
+    },
+    {
+      "name": "instantané d’une époque antérieure : none",
+      "read": {
+        "author": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "seq": 3,
+        "endHlc": "001791000000090-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "covers": {
+          "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 1,
+            "record": 1,
+            "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "stateSeq": 9
+          },
+          "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 3,
+            "record": 2,
+            "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "stateSeq": 4
+          }
+        }
+      },
+      "epoch": "e0002-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected": "none"
+    },
+    {
+      "name": "époque courante inconnue : none",
+      "read": {
+        "author": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "seq": 3,
+        "endHlc": "001791000000090-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "covers": {
+          "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 1,
+            "record": 1,
+            "hlc": "001791000000011-0000-bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "stateSeq": 9
+          },
+          "dddddddd-dddd-4ddd-8ddd-dddddddddddd": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 3,
+            "record": 2,
+            "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "stateSeq": 4
+          }
+        }
+      },
+      "epoch": null,
+      "expected": "none"
+    },
+    {
+      "name": "dans le nuage : inchangé",
+      "read": "cloud-pending",
+      "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected": "cloud-pending"
+    },
+    {
+      "name": "illisible : inchangé",
+      "read": "unreadable",
+      "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected": "unreadable"
+    },
+    {
+      "name": "aucun : inchangé",
+      "read": "none",
+      "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "expected": "none"
     }
   ]
 }

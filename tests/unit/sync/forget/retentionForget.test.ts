@@ -9,6 +9,7 @@ import {
   cutoff,
   eligibleSnapshot,
   forgetGaps,
+  snapshotInEpoch,
   declarationAuthor,
   declarationHlc,
   forgetOrder,
@@ -122,6 +123,13 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
       const shown = result.kind === 'ok' ? { kind: 'ok', author: result.end.author, seq: result.end.seq } : result;
       expect(shown).toEqual(c.expected);
       if (result.kind === 'ok') expect(snapshotEndJson(result.end)).toEqual(c.candidates.find((x) => typeof x.end !== 'string' && x.end.author === result.end.author)?.end);
+    });
+  }
+
+  for (const c of table.ownSnapshotEpoch) {
+    it(`snapshotInEpoch (condition (h), troisième revue) : ${c.name}`, () => {
+      const result = snapshotInEpoch(snapshotReadOf(c.read), c.epoch as never);
+      expect(typeof result === 'string' ? result : snapshotEndJson(result)).toEqual(c.expected);
     });
   }
 

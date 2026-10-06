@@ -19,10 +19,22 @@ export interface ForgetCoverage {
   readonly forgotten: Pick<ReadonlySet<DeviceId>, 'has'>;
 }
 
+/**
+ * Fins lues, par plateforme (une session : un dossier, une clé) et par (appareil, époque, numéro, hlc de fin) : un instantané annoncé n'est
+ * jamais réécrit sous le même numéro ; seules les fins lisibles sont gardées (troisième revue Y-10, point 1 : sans cela chaque cycle
+ * redemandait la fin de chaque instantané annoncé).
+ */
+const endCache = new WeakMap<object, Map<string, SnapshotEnd>>();
+
 /** Fin de l'instantané annoncé par `state` (`none` : aucun annoncé). Une erreur de lecture vaut `unreadable`, sauf l'attente d'iCloud. */
 export async function readSnapshotEnd(deps: SyncDeps, state: PublishedDeviceState): Promise<SnapshotEndRead> {
   const announced = state.snapshot;
   if (announced === null) return 'none';
+  const cache = endCache.get(deps.platform) ?? new Map<string, SnapshotEnd>();
+  endCache.set(deps.platform, cache);
+  const key = `${state.deviceId}|${state.epoch}|${String(announced.seq)}|${announced.endHlc}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
   try {
     const page = await deps.platform.readSnapshot({ deviceId: state.deviceId, epoch: state.epoch, seq: announced.seq, fromRecord: 0, tail: true });
     if (page.status === 'cloud-pending') return 'cloud-pending';
@@ -30,6 +42,7 @@ export async function readSnapshotEnd(deps: SyncDeps, state: PublishedDeviceStat
     const record = page.records[0] === undefined ? null : parseSnapshotRecord(page.records[0]);
     if (record === null || record.k !== 'snap-end' || record.epoch !== state.epoch) return 'unreadable';
     const end: SnapshotEnd = { author: state.deviceId, epoch: state.epoch, seq: announced.seq, endHlc: announced.endHlc, covers: record.covers };
+    cache.set(key, end);
     return end;
   } catch (error) {
     const code = syncErrorCodeOf(error);
@@ -41,7 +54,9 @@ export async function readSnapshotEnd(deps: SyncDeps, state: PublishedDeviceStat
 /** Candidats : instantané annoncé de chaque état `ok` donné (époque `epoch`, auteur non oublié), fin lue. */
 export async function snapshotCandidates(deps: SyncDeps, epoch: EpochId, states: readonly PublishedDeviceState[], coverage: ForgetCoverage): Promise<SnapshotCandidate[]> {
   const out: SnapshotCandidate[] = [];
-  for (const state of states) {
+  // Le plus récent lu en dernier : Rust garde les octets du dernier instantané lu, souvent celui que la reprise lira ensuite par pages.
+  const ordered = [...states].sort((a, b) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? -1 : 1));
+  for (const state of ordered) {
     if (state.epoch !== epoch || state.snapshot === null || coverage.forgotten.has(state.deviceId)) continue;
     out.push({ state, end: await readSnapshotEnd(deps, state) });
   }

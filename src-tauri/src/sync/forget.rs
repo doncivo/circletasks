@@ -313,6 +313,15 @@ pub enum SnapshotEndRead {
     Unreadable,
 }
 
+/// Condition (h) : seul un instantané de l'époque courante compte (troisième revue Y-10, point 2) ; une fin d'une autre époque vaut
+/// `None`. Même fonction que `snapshotInEpoch`.
+pub fn snapshot_in_epoch(read: SnapshotEndRead, epoch: Option<&str>) -> SnapshotEndRead {
+    match read {
+        SnapshotEndRead::End(end) if epoch != Some(end.epoch.as_str()) => SnapshotEndRead::None,
+        other => other,
+    }
+}
+
 /// `covers` couvre-t-il chaque oublié retenu (§18 point 11) ? Première cible retenue (ordre total) de coupure non nulle que `covers` ne
 /// couvre pas ; `None` si tout est couvert. Coupure calculée sur les `ackers` non oubliés. Même fonction que `coversForgotten`.
 pub fn covers_forgotten<'a>(

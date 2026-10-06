@@ -13,7 +13,7 @@ import { META, readJson, writeJson } from './meta';
 import { cursorIds, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, type SnapshotEndRead } from '../domain/sync/retention';
+import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, snapshotInEpoch, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -569,7 +569,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte).
     if (publishAllowed && forgetView.order.size > 0) {
       const ownPublished = lastWritten ?? ownState;
-      const ownSnapshot: SnapshotEndRead = ownPublished && ownPublished.epoch === currentEpoch ? await readSnapshotEnd(deps, ownPublished) : 'none';
+      const ownSnapshot: SnapshotEndRead = ownPublished && ownPublished.epoch === currentEpoch ? snapshotInEpoch(await readSnapshotEnd(deps, ownPublished), currentEpoch) : 'none';
       await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished, ownSnapshot });
     }
 

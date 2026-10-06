@@ -9,7 +9,7 @@ use std::path::Path;
 
 use circletasks_lib::sync::files::{delete_forgotten_device_files, Availability, FsError};
 use circletasks_lib::sync::forget::{
-    completed_forgotten, covers_forgotten, cutoff, eligible_snapshot, forget_gaps, forget_order, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, seen_devices,
+    completed_forgotten, covers_forgotten, cutoff, eligible_snapshot, forget_gaps, forget_order, snapshot_in_epoch, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, seen_devices,
     DeleteCheck, Eligible, KnownDevice, KnownState, SnapshotCandidate, SnapshotEnd, SnapshotEndRead,
     Verdict, FORGOTTEN_FILE, SYNC_NEXT_KEY_ACCOUNT,
 };
@@ -198,6 +198,16 @@ fn shared_table_eligible_snapshot() {
 }
 
 #[test]
+fn shared_table_own_snapshot_epoch() {
+    let cases = table()["ownSnapshotEpoch"].as_array().unwrap().clone();
+    assert!(cases.len() >= 5);
+    for case in cases {
+        let result = snapshot_in_epoch(snapshot_of(&case["read"]), case["epoch"].as_str());
+        assert_eq!(result, snapshot_of(&case["expected"]), "{}", case["name"]);
+    }
+}
+
+#[test]
 fn shared_table_forget_gaps() {
     let cases = table()["gaps"].as_array().unwrap().clone();
     assert!(cases.len() >= 6);
@@ -322,6 +332,60 @@ fn read_snapshot_tail_returns_only_the_end_of_the_announced_snapshot() {
     bytes[at] = if bytes[at] == b'A' { b'B' } else { b'A' };
     net.fs.put(&parts, &bytes);
     assert_eq!(net.dev(DEV_B).d.core.read_snapshot_with(DEV_A, &ep, 3, 0, None, true).unwrap().status, "truncated");
+}
+
+/// Lectures complètes du fichier `path` faites depuis `from` (index dans le journal des lectures du dossier simulé).
+fn reads_of(net: &Net, path: &str, from: usize) -> usize {
+    net.fs.read_log.lock().unwrap()[from..].iter().filter(|p| p.as_str() == path).count()
+}
+
+#[test]
+fn snapshot_end_is_read_once_per_session_across_scans_and_reused_for_the_paged_read() {
+    // Troisième revue Y-10, point 1 : la fin d'un instantané annoncé n'est relue ni à chaque scan ni à chaque condition (h) ; la lecture
+    // par pages qui suit (reprise) réutilise les octets déjà lus.
+    let mut net = Net::new(&[DEV_B, DEV_X]);
+    net.settle(&[DEV_A, DEV_B, DEV_X], 1);
+    net.dev(DEV_A).d.core.device_forget(DEV_X, 1).unwrap();
+    net.settle(&[DEV_A, DEV_B], 3);
+    let ep = epoch(1, DEV_A);
+    let n = net.dev(DEV_A).snap.as_ref().unwrap().0;
+    let path = format!("devices/{DEV_A}/{ep}/{}", circletasks_lib::sync::names::snapshot_name(n as u32));
+    // A : deux cycles consécutifs (scan puis condition (h)), un seul fichier lu en entier.
+    let start = net.fs.read_log.lock().unwrap().len();
+    for _ in 0..2 {
+        net.dev(DEV_A).d.core.scan(&[]).unwrap();
+        let _ = net.dev(DEV_A).d.core.forgotten_delete(DEV_X);
+    }
+    assert_eq!(reads_of(&net, &path, start), 1, "A : une lecture complète par session");
+    // B : fin lue deux fois, deux scans entre ; une lecture ; puis la lecture par pages depuis le début ne relit pas le fichier.
+    let start = net.fs.read_log.lock().unwrap().len();
+    let b = &net.dev(DEV_B).d.core;
+    for _ in 0..2 {
+        b.scan(&[]).unwrap();
+        assert_eq!(b.read_snapshot_with(DEV_A, &ep, n, 0, None, true).unwrap().status, "complete");
+    }
+    assert_eq!(reads_of(&net, &path, start), 1, "B : une lecture complète par session");
+    let start = net.fs.read_log.lock().unwrap().len();
+    b.scan(&[]).unwrap();
+    let _ = b.read_snapshot_with(DEV_A, &ep, n, 0, None, true).unwrap();
+    // Le scan vide les octets (B3) : la fin vient du cache, sans lecture ; la lecture par pages relit alors une fois.
+    assert_eq!(reads_of(&net, &path, start), 0);
+    assert_eq!(b.read_snapshot(DEV_A, &ep, n, 0, None).unwrap().status, "complete");
+    assert_eq!(reads_of(&net, &path, start), 1);
+}
+
+#[test]
+fn snapshot_end_read_then_paged_read_reads_the_file_once() {
+    let mut net = Net::new(&[DEV_B]);
+    net.cycle(DEV_A).unwrap();
+    let ep = epoch(1, DEV_A);
+    let path = format!("devices/{DEV_A}/{ep}/{}", circletasks_lib::sync::names::snapshot_name(1));
+    let b = &net.dev(DEV_B).d.core;
+    b.scan(&[]).unwrap();
+    let start = net.fs.read_log.lock().unwrap().len();
+    assert_eq!(b.read_snapshot_with(DEV_A, &ep, 1, 0, None, true).unwrap().status, "complete");
+    assert_eq!(b.read_snapshot(DEV_A, &ep, 1, 0, None).unwrap().status, "complete");
+    assert_eq!(reads_of(&net, &path, start), 1, "fin puis lecture par pages : un seul fichier lu");
 }
 
 #[test]
