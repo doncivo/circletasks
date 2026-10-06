@@ -4,6 +4,8 @@ import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderI
 import { Button, ChoiceDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
+import { JoinProgress } from './JoinProgress';
+import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
@@ -50,6 +52,8 @@ export function syncErrorMessageKey(code: SyncErrorCode): PlainMessageKey {
       return 'sync.folder.errorDenied';
     case 'rate-limited':
       return 'sync.folder.errorRateLimited';
+    case 'not-foreground':
+      return 'sync.pairing.openBackground';
     case 'key-mismatch':
       return 'sync.key.mismatch';
     case 'folder-has-data':
@@ -95,6 +99,33 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const [forgetOpen, setForgetOpen] = useState(false);
   // Y-07 (exigence d'Ali, revue 2) : un échec de réintégration reste visible même sans dossier de synchro.
   const failure = useFeatureStore(syncStore, (s) => s.status.reintegrationFailure ?? null);
+  // Y-06 (branche needsPairing) : « Associer cet appareil », échec d'ouverture gardé jusqu'à la réussite, retour à l'état normal à l'association.
+  const [pairingFailure, setPairingFailure] = useState<PairingFailure | null>(null);
+  const [pairingNotice, setPairingNotice] = useState<PlainMessageKey | null>(null);
+  const [pairingBusy, setPairingBusy] = useState(false);
+
+  useEffect(() => {
+    if (!available) return;
+    let cancelled = false;
+    const refreshFailure = (): void => {
+      void readPairingFailure(container).then((value) => {
+        if (!cancelled) setPairingFailure(value);
+      });
+    };
+    refreshFailure();
+    const stop = onPairingChange(container, (event) => {
+      refreshFailure();
+      if (event !== 'paired') return;
+      setPairingNotice(null);
+      void readView(platform).then((next) => {
+        if (!cancelled) setView(next);
+      });
+    });
+    return () => {
+      cancelled = true;
+      stop();
+    };
+  }, [available, container, platform]);
 
   useEffect(() => {
     if (!available) return;
@@ -154,6 +185,18 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     }
   };
 
+  const associate = async (): Promise<void> => {
+    setPairingBusy(true);
+    setPairingNotice(null);
+    try {
+      const code = await openPairingWindow(container, 'import', platform);
+      if (code) setPairingNotice(pairingOpenErrorKey(code, 'import'));
+    } finally {
+      setPairingBusy(false);
+    }
+  };
+  const pairingMessage = pairingNotice ?? (pairingFailure && pairingFailure.mode === 'import' ? pairingOpenErrorKey(pairingFailure.code, 'import') : null);
+
   const chooseButton = (
     <Button variant="secondary" ariaLabel={t('sync.folder.chooseLabel')} onClick={() => void choose()} className="ct-settings__link" disabled={busy}>
       {busy ? t('sync.folder.choosing') : t('sync.folder.choose')}
@@ -211,6 +254,22 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           {forgetButton}
         </div>
       )}
+      {view.kind === 'bound' && view.needsPairing && (
+        <div className="ct-settings__row">
+          <span className="ct-settings__stack">
+            {t('sync.pairing.importLabel')}
+            {pairingMessage && (
+              <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-pairing-notice">
+                {t(pairingMessage)}
+              </span>
+            )}
+          </span>
+          <Button variant="secondary" ariaLabel={t('sync.pairing.importLabel')} onClick={() => void associate()} className="ct-settings__link" disabled={pairingBusy || busy}>
+            {pairingBusy ? t('sync.pairing.opening') : t('sync.pairing.importAction')}
+          </Button>
+        </div>
+      )}
+      {view.kind === 'bound' && !view.needsPairing && <JoinProgress />}
       {view.kind === 'error' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">

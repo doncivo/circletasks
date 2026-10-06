@@ -38,17 +38,17 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 
 /**
  * Ouvre l'app dans un nouveau contexte (base neuve) relié au simulateur : `first` choisit le dossier et crée la clé ; `join` est associé
- * au premier (qui doit déjà avoir synchronisé une fois).
+ * au premier (qui doit déjà avoir synchronisé une fois) ; `bare` reçoit le dossier du premier sans clé (association par l'app, Y-06).
  */
-export async function openSyncedPage(browser: Browser, room: string, device: 'pc' | 'iphone', role: 'first' | 'join'): Promise<SyncedPage> {
-  const context = await browser.newContext({ ...(device === 'pc' ? PC_CONTEXT : IPHONE_CONTEXT), locale: 'fr-FR', timezoneId: 'Europe/Paris' });
+export async function openSyncedPage(browser: Browser, room: string, device: string, role: 'first' | 'join' | 'bare', kind: 'pc' | 'iphone' = device === 'iphone' ? 'iphone' : 'pc'): Promise<SyncedPage> {
+  const context = await browser.newContext({ ...(kind === 'pc' ? PC_CONTEXT : IPHONE_CONTEXT), locale: 'fr-FR', timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   await page.addInitScript((config) => {
     (globalThis as { __ctSyncSim?: unknown }).__ctSyncSim = config;
-  }, { url: SYNC_SIM_URL, room, device, role, platform: device === 'pc' ? 'windows' : 'ios' });
+  }, { url: SYNC_SIM_URL, room, device, role, platform: kind === 'pc' ? 'windows' : 'ios' });
   await page.goto('/');
   await expect(page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
-  return { page, context, device };
+  return { page, context, device: kind };
 }
 
 /** « iCloud » recopie les dossiers de tous les appareils de l'espace (retour en ligne). */
@@ -103,3 +103,33 @@ export async function openTasks(page: Page): Promise<void> {
 
 /** Ligne d'une tâche de la liste du jour, par son titre exact. */
 export const taskRow = (page: Page, title: string): Locator => page.locator('.ct-list-row').filter({ has: page.getByRole('button', { name: title, exact: true }) });
+
+/**
+ * Fenêtre dédiée `pairing` (Y-06, parcours 11) : `pairing.html` servie par Vite, dans le contexte de l'appareil donné. Sa plateforme
+ * réduite (trois méthodes) est posée en `__ctSync` par le test et adossée au simulateur de dossier : comme Rust, le simulateur tient
+ * l'instance ouverte par la fenêtre principale (`openPairing`) et refuse tout appel sans elle.
+ */
+export async function openPairingWindow(context: BrowserContext, room: string, device: string): Promise<Page> {
+  const page = await context.newPage();
+  await page.addInitScript((config) => {
+    const call = async (path: string, args: unknown[]): Promise<unknown> => {
+      const response = await fetch(`${config.url}/rpc`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ room: config.room, device: config.device, role: 'first', platform: 'windows', path, args }),
+      });
+      const reply = (await response.json()) as { ok?: unknown; error?: { code?: string; message?: string } };
+      if (reply.error) throw Object.assign(new Error('simulateur'), { code: reply.error.code });
+      return reply.ok;
+    };
+    (globalThis as { __ctSync?: unknown }).__ctSync = {
+      key: {
+        pairingPayload: (o?: { renew: true }) => call('key.pairingPayload', o ? [o] : []),
+        closePairing: () => call('key.closePairing', []),
+        import: (input: unknown) => call('key.import', [input]),
+      },
+    };
+  }, { url: SYNC_SIM_URL, room, device });
+  await page.goto('/pairing.html');
+  return page;
+}

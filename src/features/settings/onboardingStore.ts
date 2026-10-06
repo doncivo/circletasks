@@ -46,6 +46,17 @@ export interface OnboardingState {
 
 export const onboardingStore = defineFeatureStore<OnboardingState>((container: AppContainer) => createOnboardingStore(container));
 
+/**
+ * Modules livrés (Y-06, D5) : l'étape « Synchronisation » n'existe que si la synchro est disponible, c'est-à-dire dans l'app installée
+ * (PC à l'ordre 4) ou, en développement, avec un simulateur de dossier posé par un test (`globalThis.__ctSync`). Sans synchro
+ * (iPhone avant l'ordre 5, navigateur de développement sans simulateur), l'assistant garde ses 3 étapes.
+ */
+export function onboardingCapabilities(container: AppContainer): OnboardingCapabilities {
+  const available = container.syncPlatform?.available() === true;
+  const simulated = import.meta.env.DEV && (globalThis as { __ctSync?: unknown }).__ctSync !== undefined;
+  return { ...ORDER3_CAPABILITIES, pairing: available && (container.platform.runtime === 'tauri' || simulated) };
+}
+
 function createOnboardingStore(container: AppContainer) {
   const useCases = createOnboardingUseCases(container);
 
@@ -77,7 +88,7 @@ function createOnboardingStore(container: AppContainer) {
       sampleError: false,
       busy: false,
       errorKey: null,
-      async start(capabilities = ORDER3_CAPABILITIES) {
+      async start(capabilities = onboardingCapabilities(container)) {
         try {
           await open(capabilities, false);
         } catch (error) {
@@ -123,7 +134,7 @@ function createOnboardingStore(container: AppContainer) {
           set({ open: false, busy: false, errorKey: 'onboarding.sampleError', sampleError: true, sampleExists: await useCases.sampleExists().catch(() => false) });
         }
       },
-      async relaunch(capabilities = ORDER3_CAPABILITIES) {
+      async relaunch(capabilities = onboardingCapabilities(container)) {
         try {
           await useCases.relaunch();
           await open(capabilities, true);

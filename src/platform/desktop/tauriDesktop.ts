@@ -16,6 +16,9 @@ import {
   SET_QUICK_CAPTURE_COMMAND,
   SET_TRAY_LABELS_COMMAND,
 } from './releases';
+
+/** Événement émis par Rust vers `main` à l'association d'un appareil (src-tauri/src/sync/commands.rs, PAIRED_EVENT ; Y-06). */
+export const SYNC_PAIRED_EVENT = 'sync-paired';
 import {
   GlobalShortcutError,
   UpdateInstallError,
@@ -72,6 +75,8 @@ export function createTauriDesktop(): DesktopPlatform {
     onQuickAdd: async (handler) => listen(QUICK_ADD_EVENT, () => handler()),
 
     onTraySyncNow: async (handler) => listen(TRAY_SYNC_NOW_EVENT, () => handler()),
+
+    onSyncPaired: async (handler) => listen(SYNC_PAIRED_EVENT, () => handler()),
 
     onQuitting: async (handler) =>
       listen(QUITTING_EVENT, () => {

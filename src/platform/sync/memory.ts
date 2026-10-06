@@ -609,7 +609,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const prune = (list: number[]): number[] => list.filter((at) => now() - at < CONSENT_WINDOW_MS);
 
   const gate = (): void => {
-    if (!foreground) fail('consent-denied');
+    if (!foreground) fail('not-foreground');
     if (now() < blockedUntil) fail('rate-limited');
   };
 
@@ -987,7 +987,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
 
   const writeState = async (r: { readonly sv: number; readonly state: PublishedDeviceState }): Promise<void> => {
     const { folder: f, kid, self, own: o } = requireWritable();
-    const s = r.state;
+    // Rust est maître de `pairedBy` (Y-06) : omis par le moteur, il est complété depuis `own.json` ; une valeur différente est refusée.
+    const s: PublishedDeviceState = r.state.pairedBy === undefined && o.pairedBy !== null ? { ...r.state, pairedBy: o.pairedBy } : r.state;
     if (!isPositive(r.sv)) fail('bad-name');
     if (s.acks.size > MAX_STATE_ACKS || s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
     const text = JSON.stringify(publishedStateToJson(s));
@@ -1233,7 +1234,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
           requireBound();
         }
         // Libellé `pairing` déjà pris (avant ou pendant la boîte) : refus, rien n'est créé.
-        if (livePairing()) return fail('consent-denied');
+        if (livePairing()) return fail('already-open');
         if (mode === 'show') openShowConsent();
         else gate();
         pairing = { mode, generation: 1, openedAt: now(), payloadTaken: false };

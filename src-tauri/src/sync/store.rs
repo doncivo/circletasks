@@ -957,6 +957,15 @@ impl Store<'_> {
         if !(1..=MAX_SV).contains(&sv) {
             return fail(SyncCode::BadName);
         }
+        // Rust est maître de `pairedBy` (Y-06) : omis par le moteur, il est complété depuis `own.json` (clé importée par QR) ; une
+        // valeur différente reste refusée plus bas.
+        let completed;
+        let state = if state.paired_by.is_none() && own.paired_by.is_some() {
+            completed = PublishedState { paired_by: own.paired_by.clone(), ..state.clone() };
+            &completed
+        } else {
+            state
+        };
         if state.acks.len() > MAX_STATE_ACKS || state.forgotten.len() > MAX_STATE_FORGOTTEN {
             return fail(SyncCode::TooLarge);
         }

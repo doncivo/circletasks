@@ -22,6 +22,8 @@ mod sync_fixes;
 mod sync_folder;
 mod sync_key;
 mod sync_pairing;
+mod sync_pairing_qa;
+mod sync_pairing_y06;
 mod sync_qa_crypto;
 mod sync_qa_folder;
 mod sync_store;

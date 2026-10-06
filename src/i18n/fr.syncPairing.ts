@@ -1,2 +1,99 @@
-/** Textes de `sync.pairing` (Y-06), en français : source de vérité ; vide à l'étape 0 du lot Y3, rempli par Y-06. */
-export const syncPairingFr = {};
+/**
+ * Textes de `sync.pairing` (Y-06), en français : source de vérité ; `en.syncPairing.ts` suit la même forme.
+ *
+ * Deux exports : `syncPairingFr` pour la fenêtre principale (boutons « Associer », messages, progression du nouvel appareil, par
+ * `t('sync.pairing.…')`) et `syncPairingWindowFr` pour la fenêtre dédiée `pairing`, qui importe **directement** ce fichier pour garder
+ * un bundle minimal (ADR 0011 section 2.1, décision D6). Aucun texte ne recopie une clé ni une saisie.
+ */
+export const syncPairingFr = {
+  rowLabel: 'Nouvel appareil',
+  show: 'Associer l’iPhone',
+  showLabel: 'Associer l’iPhone : afficher le code d’association',
+  importAction: 'Associer cet appareil',
+  importLabel: 'Associer cet appareil avec la clé de secours',
+  opening: 'Ouverture…',
+  openDenied: 'Affichage annulé',
+  openBackground: 'Revenez dans l’application et réessayez',
+  openAlreadyOpen: 'La fenêtre d’association est déjà ouverte',
+  importCancelled: 'Association annulée',
+  openRateLimited: 'Trop de demandes : réessayez dans 10 minutes',
+  openIncomplete: 'Installation incomplète : réinstallez l’application',
+  openFailed: 'La fenêtre d’association n’a pas pu s’ouvrir',
+  paired: 'iPhone associé',
+  thisDevicePaired: 'Cet appareil est associé',
+  pairedSyncFailed: 'iPhone associé, mais la synchronisation qui suit a échoué : voir l’état ci-dessus',
+  thisDevicePairedSyncFailed: 'Cet appareil est associé, mais la synchronisation qui suit a échoué : voir l’état ci-dessus',
+  stateUnavailable: 'L’état de l’association n’a pas pu être lu ou enregistré : réessayez',
+  joinProgress: 'Réception de vos données… {done} / {total}',
+  joinProgressLabel: 'Réception des données de la synchronisation',
+  joinWaiting: 'Réception de vos données en attente : {done} / {total}',
+  joinFailed: 'La réception de vos données s’est arrêtée à {done} / {total} : elle reprendra à la prochaine synchronisation',
+  joinFailedClock: 'La réception de vos données est bloquée : l’horloge de cet appareil est en retard. Réglez l’heure, elle reprendra ensuite',
+  retry: 'Réessayer',
+  retryLabel: 'Réessayer la réception des données',
+} as const;
+
+/**
+ * Textes de la fenêtre dédiée `pairing` (affichage, saisie, erreurs) : importés **directement** par `src/features/sync/pairing-window`
+ * (D6), hors du catalogue de la fenêtre principale, qui n'en a pas besoin (bundle de départ plus léger).
+ */
+export const syncPairingWindowFr = {
+  window: {
+    section: 'SYNCHRONISATION',
+    title: 'Associer l’iPhone',
+    warning: 'Ce code transmet la clé de chiffrement de vos données. Il ne passe jamais par iCloud.',
+    step1: 'Sur l’iPhone, ouvrez {path}.',
+    step1Path: 'Réglages → Synchronisation → Associer au PC',
+    step2: 'Scannez ce code avec l’iPhone.',
+    step3: 'Choisissez le même dossier iCloud Drive / CircleTasks sur l’iPhone.',
+    qrLabel: 'QR code d’association',
+    noCapture: 'Ce code n’apparaît pas dans les captures d’écran',
+    waiting: 'En attente de l’iPhone…',
+    validMinutes: 'Code valable {n} minutes',
+    validMinute: 'Code valable 1 minute',
+    validSeconds: 'Code valable {n} s',
+    renew: 'Nouveau code',
+    renewLabel: 'Afficher un nouveau code (nouvelle confirmation)',
+    renewing: 'Nouveau code…',
+    renewDenied: 'Nouveau code annulé : le code affiché reste valable jusqu’à son échéance',
+    renewRateLimited: 'Trop de demandes : le code affiché reste valable jusqu’à son échéance',
+    renewFailed: 'Nouveau code impossible : le code affiché reste valable jusqu’à son échéance',
+    expired: 'Code expiré',
+    recoveryTitle: 'Clé de secours',
+    recoveryText: 'Imprimez-la et rangez-la. Sans elle, les données iCloud seraient perdues si les deux appareils étaient réinitialisés.',
+    print: 'Imprimer la clé de secours',
+    printWarning: 'Une imprimante ou un fichier PDF peut garder une copie de la clé : rangez la feuille comme un mot de passe, et ne capturez pas l’aperçu d’impression',
+    printConfirm: 'Imprimer',
+    printSheetTitle: 'CircleTasks · clé de secours',
+    cancel: 'Annuler',
+    cancelLabel: 'Annuler et fermer la fenêtre d’association',
+    loading: 'Préparation du code…',
+    loadFailed: 'Le code n’a pas pu être affiché : fermez cette fenêtre et recommencez depuis Réglages',
+    close: 'Fermer',
+    closeFailed: 'La fenêtre n’a pas pu se fermer : touchez « Fermer » pour réessayer',
+    startFailed: 'La fenêtre d’association n’a pas pu démarrer : fermez-la et recommencez depuis Réglages',
+  },
+  import: {
+    title: 'Associer cet appareil',
+    text: 'Saisissez la clé de secours imprimée sur le premier appareil (CT1-…). Majuscules, minuscules, espaces et tirets sont acceptés.',
+    field: 'Clé de secours',
+    submit: 'Associer',
+    busy: 'Association…',
+    closesIn: 'Cette fenêtre se fermera dans {n} min',
+    closesInOne: 'Cette fenêtre se fermera dans 1 min',
+    closesSoon: 'Cette fenêtre se fermera dans moins d’une minute',
+    done: 'Cet appareil est associé',
+  },
+  errors: {
+    invalidPairing: 'Cette clé de secours n’est pas valide : vérifiez la saisie',
+    keyMismatch: 'Cette clé ne correspond pas aux données du dossier',
+    cloudPending: 'Le dossier ne contient pas encore les données du PC',
+    pairingExpired: 'Ce code a expiré : affichez un nouveau code sur le PC',
+    consentDenied: 'Remplacement de la clé refusé : rien n’a été modifié',
+    notForeground: 'Revenez dans cette fenêtre et réessayez',
+    rateLimited: 'Trop de tentatives : réessayez dans 10 minutes',
+    notConfigured: 'Choisissez d’abord le dossier de synchronisation',
+    wrongWindow: 'Cette fenêtre n’est plus valable : fermez-la et recommencez depuis Réglages',
+    generic: 'L’association a échoué : réessayez',
+  },
+} as const;

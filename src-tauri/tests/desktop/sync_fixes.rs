@@ -55,7 +55,7 @@ fn s1_missing_pairing_page_is_refused_before_any_dialog_or_window() {
 ").unwrap()];
     assert!(available.contains("resolver.iter()") && !available.contains(".get("), "aucun repli, aucune comparaison d'octets");
     let source = include_str!("../../src/sync/commands.rs");
-    let check = source.find("if !pairing_page_available(&app)").expect("contrôle de la page");
+    let check = source.find("pairing_page_available(&page_app)").expect("contrôle de la page");
     let open = source.find("registry.begin_open(").expect("ouverture");
     assert!(check < open, "aucune boîte ni fenêtre avant le contrôle");
 }
@@ -293,7 +293,7 @@ fn r5_snapshot_writers_are_unique_and_capped() {
     assert_eq!(code(a.core.snapshot_append(first, &["{}".into()])), SyncCode::BadName);
 }
 
-/// Revue 11 : les 35 codes Rust sont exactement `SYNC_ERROR_CODES` de format.ts, dans le même ordre.
+/// Revue 11 : les 37 codes Rust (35, plus `not-foreground`, `already-open` et `window-unprotected` de Y-06) sont exactement `SYNC_ERROR_CODES` de format.ts, dans le même ordre.
 #[test]
 fn r11_error_codes_match_typescript() {
     let format = include_str!("../../../src/domain/sync/format.ts");
@@ -301,7 +301,7 @@ fn r11_error_codes_match_typescript() {
     let body = &format[start..start + format[start..].find("] as const").unwrap()];
     let ts: Vec<&str> = body.split('\'').skip(1).step_by(2).collect();
     let rust: Vec<&str> = SyncCode::ALL.iter().map(|c| c.as_str()).collect();
-    assert_eq!(rust.len(), 35);
+    assert_eq!(rust.len(), 38);
     assert_eq!(rust, ts);
 }
 
@@ -363,9 +363,14 @@ fn r17_paired_by_received_before_binding_is_kept() {
     b.core.key_import(KeyInput::QrText(Zeroizing::new(qr)), 1).unwrap();
     b.core.bind_device(DEV_B).unwrap();
     let mut s = state(DEV_B, &epoch(1, DEV_A), 1, 0, 0, None);
-    assert_eq!(code(b.core.write_state(14, s.clone())), SyncCode::StateMismatch, "pairedBy attendu par Rust");
-    s["pairedBy"] = json!(DEV_A);
+    s["pairedBy"] = json!(DEV_B);
+    assert_eq!(code(b.core.write_state(14, s.clone())), SyncCode::StateMismatch, "pairedBy différent de celui de Rust : refusé");
+    // Omis : complété par Rust (maître, décision Y-06) avec la valeur reçue avant la liaison.
+    s.as_object_mut().unwrap().remove("pairedBy");
     b.core.write_state(14, s).unwrap();
+    let scan = a.core.scan(&[]).unwrap();
+    let published = scan.devices.iter().find(|d| d.device_id == DEV_B).and_then(|d| d.state.as_ref()).and_then(|s| s.paired_by.clone());
+    assert_eq!(published.as_deref(), Some(DEV_A));
     let source = include_str!("../../src/sync/service.rs");
     let create = &source[source.find("pub fn key_create").unwrap()..];
     assert!(create.find("self.lock()").unwrap() < create.find("read_vault_key").unwrap(), "contrôle sous le verrou");

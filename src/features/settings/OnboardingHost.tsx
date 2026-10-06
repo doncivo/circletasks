@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { joinNextSteps, SAMPLE_COUNTS, type OnboardingStepId } from '../../domain/onboarding';
 import { FIRST_WEEKDAYS, type FirstWeekday } from '../../domain/week';
@@ -19,12 +19,12 @@ import './OnboardingHost.css';
 
 const WEEKDAY_KEY = { monday: 'appearance.monday', saturday: 'appearance.saturday', sunday: 'appearance.sunday' } as const satisfies Record<FirstWeekday, PlainMessageKey>;
 
-// `pairing` (association PC / iPhone, ordre 4) et `notifications` (iPhone, ordre 5) ne sont jamais affichées à l'ordre 3 (`onboardingSteps` ne les
-// liste pas) : leurs titres et leur contenu arrivent avec leurs stories ; le titre ci-dessous n'est qu'un repli pour garder la table exhaustive.
+// `pairing` (« Synchronisation », Y-06) n'est listée que si la synchro est disponible (`onboardingCapabilities`) ; `notifications` (iPhone,
+// ordre 5) arrive avec sa story : son titre ci-dessous n'est qu'un repli pour garder la table exhaustive.
 const TITLE_KEY: Record<OnboardingStepId, PlainMessageKey> = {
   language: 'onboarding.languageTitle',
   spaces: 'onboarding.spacesTitle',
-  pairing: 'onboarding.sampleTitle',
+  pairing: 'onboarding.pairingTitle',
   notifications: 'onboarding.sampleTitle',
   sample: 'onboarding.sampleTitle',
 };
@@ -112,6 +112,28 @@ function SpacesStep() {
   );
 }
 
+/**
+ * Étape « Synchronisation » (Y-06 critère 15, D5 ; sans maquette, passable) : la section de Réglages elle-même (choix du dossier, clé
+ * créée ou « Associer cet appareil ») et « Associer l'iPhone » quand cet appareil a la clé. Une seule implémentation du choix du dossier.
+ */
+// Chargées à la demande : la section de synchro (et la plateforme mémoire de développement) reste hors du bundle de départ (PERF-02).
+const SyncSettingsSection = lazy(async () => ({ default: (await import('../sync/SyncSettingsSection')).SyncSettingsSection }));
+const SyncDetailsPairing = lazy(async () => ({ default: (await import('../sync/SyncDetailsPairing')).SyncDetailsPairing }));
+
+function PairingStep() {
+  return (
+    <>
+      <p className="ct-onboarding__text">{t('onboarding.pairingText')}</p>
+      <div className="ct-settings ct-onboarding__sync">
+        <Suspense fallback={null}>
+          <SyncSettingsSection />
+          <SyncDetailsPairing showOnly withProgress={false} />
+        </Suspense>
+      </div>
+    </>
+  );
+}
+
 function SampleStep() {
   const enabled = useFeatureStore(onboardingStore, (s) => s.sampleEnabled);
   const exists = useFeatureStore(onboardingStore, (s) => s.sampleExists);
@@ -187,6 +209,7 @@ function Wizard() {
       <div className="ct-onboarding__body">
         {step === 'language' && <LanguageStep />}
         {step === 'spaces' && <SpacesStep />}
+        {step === 'pairing' && <PairingStep />}
         {step === 'sample' && <SampleStep />}
       </div>
       {errorKey && (

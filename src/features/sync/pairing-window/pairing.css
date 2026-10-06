@@ -1,0 +1,276 @@
+/* Fenêtre dédiée `pairing` (Y-06) : carte de PC-Appairage.html (780 × 720, deux colonnes), jetons du thème clair et sombre. */
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--ct-color-surface);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+}
+
+#root {
+  height: 100%;
+}
+
+.ct-pair {
+  box-sizing: border-box;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 40px 48px;
+  outline: none;
+}
+
+.ct-pair__section {
+  font-size: var(--ct-font-size-sm);
+  font-weight: var(--ct-font-weight-bold);
+  letter-spacing: 0.08em;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-pair__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-pair__title:focus {
+  outline: none;
+}
+
+.ct-pair__columns {
+  flex-grow: 1;
+  display: flex;
+  gap: 40px;
+  min-height: 0;
+}
+
+.ct-pair__left {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ct-pair__right {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border-radius: 20px;
+  background: var(--ct-color-surface-input);
+  padding: 16px;
+  text-align: center;
+}
+
+.ct-pair__warning,
+.ct-pair__text {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-pair__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ct-pair__steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.ct-pair__n {
+  width: 30px;
+  height: 30px;
+  border-radius: 15px;
+  background: var(--ct-color-text);
+  color: var(--ct-color-surface);
+  font-weight: var(--ct-font-weight-bold);
+  font-size: var(--ct-font-size-text-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ct-pair__spacer {
+  flex-grow: 1;
+}
+
+.ct-pair__recovery {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--ct-radius-lg);
+  background: var(--ct-color-warning-bg);
+  border: 1px solid var(--ct-color-warning-border);
+  color: var(--ct-color-warning-text);
+}
+
+.ct-pair__recoveryTitle {
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-pair__recoveryKey {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+  user-select: none;
+}
+
+.ct-pair__recoveryText {
+  font-size: var(--ct-font-size-text-sm);
+  line-height: 1.45;
+}
+
+.ct-pair__printWarning,
+.ct-pair__message,
+.ct-pair__status {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  line-height: 1.45;
+}
+
+.ct-pair__printWarning {
+  color: var(--ct-color-warning-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-pair__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ct-pair__cancel {
+  border-color: transparent;
+  background: transparent;
+}
+
+.ct-pair__qr {
+  padding: 16px;
+  border-radius: 16px;
+  /* Blanc fixe dans les deux thèmes : un QR clair sur fond sombre n'est pas lu par tous les appareils photo. */
+  background: #ffffff;
+  line-height: 0;
+}
+
+.ct-pair__qrPlaceholder {
+  display: block;
+  width: 232px;
+  height: 232px;
+}
+
+.ct-pair__waiting {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-pair__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--ct-color-goal);
+}
+
+.ct-pair__validity,
+.ct-pair__noCapture {
+  font-size: var(--ct-font-size-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-pair__link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ct-pair__link:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.ct-pair__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
+
+.ct-pair__label {
+  font-size: var(--ct-font-size-text);
+  font-weight: var(--ct-font-weight-semibold);
+}
+
+.ct-pair__input {
+  height: 48px;
+  padding: 0 14px;
+  border: 1.5px solid var(--ct-color-border-strong);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-text);
+  font: var(--ct-font-weight-semibold) var(--ct-font-size-text-lg) var(--ct-font-text);
+  letter-spacing: 0.04em;
+}
+
+.ct-pair__sheet {
+  display: none;
+}
+
+/* Impression (D3) : seule la clé de secours sort sur la feuille, jamais le QR. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .ct-pair__qr,
+  .ct-pair__qr * {
+    display: none;
+  }
+
+  .ct-pair__sheet,
+  .ct-pair__sheet * {
+    display: block;
+    visibility: visible;
+  }
+
+  .ct-pair__sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    /* Encre noire fixe : la feuille imprimée ne suit pas le thème. */
+    color: #000000;
+  }
+
+  .ct-pair__sheetKey {
+    font-size: 20pt;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+}

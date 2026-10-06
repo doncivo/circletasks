@@ -41,6 +41,7 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
   let unlisten: (() => void) | null = null;
   let unlistenQuit: (() => void) | null = null;
   let unlistenSync: (() => void) | null = null;
+  let unlistenPaired: (() => void) | null = null;
   const sync = syncStore.get(container);
   const syncConfigured = (): boolean => sync.getState().available && sync.getState().status.phase !== 'not-configured';
 
@@ -76,6 +77,19 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
       else unlistenSync = stop;
     })
     .catch((error: unknown) => logDesktopFailure('tray-sync', error));
+  // Y-06 : appareil associé (`sync-paired`, sans clé) : la fenêtre `pairing` est déjà détruite par Rust ; cycle et lignes rafraîchies.
+  desktop
+    .onSyncPaired(
+      () =>
+        void import('../sync/pairingStatus')
+          .then(({ handleSyncPaired }) => handleSyncPaired(container))
+          .catch((error: unknown) => logDesktopFailure('sync-paired', error)),
+    )
+    .then((stop) => {
+      if (disposed) stop();
+      else unlistenPaired = stop;
+    })
+    .catch((error: unknown) => logDesktopFailure('sync-paired', error));
   desktop
     .onQuickAdd(() => useQuickAddStore.getState().request())
     .then((stop) => {
@@ -105,6 +119,7 @@ export function startDesktopIntegration(container: AppContainer): DesktopIntegra
       unlisten?.();
       unlistenQuit?.();
       unlistenSync?.();
+      unlistenPaired?.();
       stopSyncLabels();
       stopQuickCapture();
       checks.dispose();

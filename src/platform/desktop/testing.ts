@@ -43,6 +43,9 @@ export interface FakeDesktop extends DesktopPlatform {
   /** Déclenche « Synchroniser maintenant » comme le fait le menu (Y-03). */
   emitTraySyncNow(): void;
   traySyncListeners: number;
+  /** Déclenche `sync-paired` comme le fait Rust (Y-06). */
+  emitSyncPaired(): void;
+  syncPairedListeners: number;
   /** Déclenche « Quitter » ; résout quand le handler a fini et que la sortie est confirmée. */
   emitQuitting(): Promise<void>;
   quitConfirmed: boolean;
@@ -63,6 +66,7 @@ export interface FakeDesktop extends DesktopPlatform {
 export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart' | 'version' | 'nextCheck'>> = {}): FakeDesktop {
   const handlers = new Set<() => void>();
   const syncHandlers = new Set<() => void>();
+  const pairedHandlers = new Set<() => void>();
   const fake: FakeDesktop = {
     trayLabels: null,
     autostart: initial.autostart ?? false,
@@ -72,6 +76,16 @@ export function createFakeDesktop(initial: Partial<Pick<FakeDesktop, 'autostart'
     openedReleases: 0,
     quickAddListeners: 0,
     traySyncListeners: 0,
+    syncPairedListeners: 0,
+    emitSyncPaired: () => pairedHandlers.forEach((handler) => handler()),
+    onSyncPaired: (handler) => {
+      pairedHandlers.add(handler);
+      fake.syncPairedListeners = pairedHandlers.size;
+      return Promise.resolve(() => {
+        pairedHandlers.delete(handler);
+        fake.syncPairedListeners = pairedHandlers.size;
+      });
+    },
     emitTraySyncNow: () => syncHandlers.forEach((handler) => handler()),
     onTraySyncNow: (handler) => {
       syncHandlers.add(handler);
