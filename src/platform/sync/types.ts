@@ -15,6 +15,7 @@ import type { SyncPhase as DomainSyncPhase } from '../../domain/syncBanners';
 import {
   isSyncErrorCode,
   type EpochId,
+  type ForgottenDevice,
   type PublishedDeviceState,
   type PublishedDeviceStateJson,
   type RecordCursor,
@@ -91,6 +92,15 @@ export interface FolderScan {
    * Champ absent de la section 11.2 : ajouté pour porter ce signal (écart à reporter dans l'ADR).
    */
   readonly incomplete: boolean;
+  /** Y-10 (ADR 0011 §11.2, §18 points 3 à 6) : registre de l'oubli de Rust après fusion des déclarations lues. */
+  readonly forgotten: ForgottenRegistryView;
+}
+
+/** Y-10 : liste maître (ordre d'apprentissage, ne décroît jamais, 64 au plus, publiée telle quelle), terminés, débordement. */
+export interface ForgottenRegistryView {
+  readonly entries: readonly ForgottenDevice[];
+  readonly done: readonly DeviceId[];
+  readonly overflow: boolean;
 }
 
 /** Page de texte clair : jamais au-delà de la tête authentifiée. `next` = position après le dernier enregistrement rendu. */
@@ -343,6 +353,11 @@ export interface SyncDeviceStatus {
   readonly appVersion?: string | null;
   /** Y-07 : version plus récente que l'appareil local (`'schema'` : lu ; `'major'` : lecture suspendue), sinon null. Facultatif. */
   readonly newer?: 'schema' | 'major' | null;
+  /**
+   * Y-10 (audit a) : faux : appareil jamais lu (dossier sans état authentifié, ou seulement cité dans un accusé), montré pour pouvoir
+   * l'oublier ; nom neutre (« Appareil » et 8 caractères), jamais une plateforme inventée. Facultatif.
+   */
+  readonly seen?: boolean;
 }
 
 export interface SyncStatus {
@@ -382,7 +397,7 @@ export interface SyncStatus {
 }
 
 /** Y-10 : étape d'un oubli qui a échoué. `declare` : `sync_device_forget` ; `delete` : `sync_forgotten_delete` ; `rejoin` : « Associer de nouveau ». */
-export type ForgetStep = 'declare' | 'delete' | 'rejoin';
+export type ForgetStep = 'declare' | 'delete' | 'rejoin' | 'overflow';
 
 /** Y-10 : échec persistant (sans contenu, sans clé, sans chemin), effacé seulement à la réussite de la même étape pour le même appareil. */
 export interface ForgetFailure {

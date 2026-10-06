@@ -136,8 +136,15 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
     setNotice(t('sync.forget.pending', { device: name }));
     try {
       const outcome = await sync.forgetDevice(device.deviceId);
-      // Échec : gardé et affiché dans l'emplacement `forget` (rouge, « Réessayer »).
-      setNotice(outcome.kind === 'cancelled' ? t('sync.forget.cancelled') : outcome.kind === 'done' ? t('sync.forget.done', { device: name }) : null);
+      // Échec : gardé et affiché dans l'emplacement `forget` (rouge, « Réessayer ») ; dit aussi ici, au cas où il n'aurait pas pu être
+      // gardé (revue Y-10, suggestion 9). Réussite : la parade de l'ADR (§14.2, antidatage) est proposée.
+      setNotice(
+        outcome.kind === 'cancelled'
+          ? t('sync.forget.cancelled')
+          : outcome.kind === 'done'
+            ? t('sync.forget.done', { device: name })
+            : forgetFailureText({ deviceId: device.deviceId, code: outcome.code, step: 'declare' }, status.devices),
+      );
     } finally {
       setBusy(false);
     }
@@ -145,6 +152,7 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
 
   return (
     <>
+      <span className="ct-sync__deviceRead">{t('sync.forget.shortId', { id: String(device.deviceId).slice(0, 8) })}</span>
       <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
         {t('sync.forget.action')}
       </Button>

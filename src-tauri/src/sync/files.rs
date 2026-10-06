@@ -221,7 +221,10 @@ pub fn delete_forgotten_device_files(fs: &dyn SyncFs, dev: &str, max_entries: us
                     return Ok(out);
                 }
                 fs.remove_empty_dir(&[DEVICES_DIR, dev, epoch])?;
-                out.deleted += 1;
+                // Compté seulement s'il a vraiment disparu (revue Y-10, suggestion 10).
+                if matches!(fs.list(&[DEVICES_DIR, dev, epoch], 1), Err(FsError::NotFound)) {
+                    out.deleted += 1;
+                }
             }
         } else if !entry.is_dir && entry.name == STATE_FILE {
             has_state = true;

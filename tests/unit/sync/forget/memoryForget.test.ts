@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONSENT_BLOCK_MS, CONSENT_WINDOW_MS, epochId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState } from '../../../../src/domain/sync/format';
 import type { DeviceId, Hlc } from '../../../../src/domain/types';
-import { createMemorySyncPlatform, MemorySyncFolder, nextDeclarationHlc, type MemorySyncPlatform } from '../../../../src/platform/sync/memory';
+import { createMemorySyncPlatform, MemorySyncFolder, type MemorySyncPlatform } from '../../../../src/platform/sync/memory';
 import { SyncPlatformError } from '../../../../src/platform/sync/types';
 
 /**
@@ -74,9 +74,13 @@ class Room {
     return dev;
   }
 
-  /** Publie l'état de `id` : accusés donnés, `forgotten` envoyé par le moteur (vide par défaut : Rust complète). */
-  async publish(id: DeviceId, acks: Record<string, DeviceAck> = {}, forgotten: readonly ForgottenDevice[] = []): Promise<void> {
+  /**
+   * Publie l'état de `id` : scan d'abord (le registre apprend les déclarations lues, comme au cycle), sauf `learn` faux ; accusés
+   * donnés ; `forgotten` envoyé par le moteur (vide par défaut : Rust complète avec la liste maître).
+   */
+  async publish(id: DeviceId, acks: Record<string, DeviceAck> = {}, forgotten: readonly ForgottenDevice[] = [], learn = true): Promise<void> {
     const dev = this.devs.get(id) as Dev;
+    if (learn) await dev.p.scan({ keep: [] });
     const seq = dev.seq + 1;
     const state: PublishedDeviceState = {
       deviceId: id,
@@ -208,25 +212,34 @@ describe('forget.device (sync_device_forget)', () => {
     await a.forget.device(D);
   });
 
-  it('64 déclarations au plus (section 1.4) : la 65e est refusée (too-large), rien n’est ajouté', async () => {
+  it('liste maître : une déclaration locale est refusée dès 48 (too-large, avant la boîte), rien n’est ajouté', async () => {
     const room = await Room.started();
     const a = (room.devs.get(A) as Dev).p;
-    const ids = Array.from({ length: 65 }, (_, i) => `${(0x10000000 + i).toString(16)}-0000-4000-8000-000000000000` as DeviceId);
+    const ids = Array.from({ length: 49 }, (_, i) => `${(0x10000000 + i).toString(16)}-0000-4000-8000-000000000000` as DeviceId);
     for (const id of ids) room.folder.addDeviceFolder(id);
-    for (const [i, id] of ids.slice(0, 64).entries()) {
+    for (const [i, id] of ids.slice(0, 48).entries()) {
       if (i > 0 && i % 3 === 0) room.nowMs += CONSENT_WINDOW_MS;
       await a.forget.device(id);
     }
-    expect(a.testing.forgottenDeclarations()).toHaveLength(64);
+    expect(a.testing.forgottenDeclarations()).toHaveLength(48);
     room.nowMs += CONSENT_WINDOW_MS;
-    expect(await codeOf(a.forget.device(ids[64] as DeviceId))).toBe('too-large');
-    expect(a.testing.forgottenDeclarations()).toHaveLength(64);
+    const prompts = a.testing.consentPrompts();
+    expect(await codeOf(a.forget.device(ids[48] as DeviceId))).toBe('too-large');
+    expect(a.testing.consentPrompts()).toBe(prompts);
+    expect(a.testing.forgottenDeclarations()).toHaveLength(48);
   });
 
-  it('hlc de la déclaration : après l’horloge et après tout hlc lu (même milliseconde : compteur suivant)', () => {
-    expect(nextDeclarationHlc(5_000, [], A)).toBe(hlc(5_000, A));
-    expect(nextDeclarationHlc(5_000, [hlc(9_000, B)], A)).toBe(`${String(9_000).padStart(15, '0')}-0001-${A}`);
-    expect(nextDeclarationHlc(5_000, [hlc(4_000, B), 'pas un hlc'], A)).toBe(hlc(5_000, A));
+  it('registre illisible : io partout (scan, écriture de l’état, oubli, suppression), jamais traité comme absent', async () => {
+    const room = await Room.started();
+    const a = (room.devs.get(A) as Dev).p;
+    a.testing.setForgottenFileCorrupt(true);
+    expect(await codeOf(a.scan({ keep: [] }))).toBe('io');
+    expect(await codeOf(room.publish(A, {}, [], false))).toBe('io');
+    expect(await codeOf(a.forget.device(X))).toBe('io');
+    expect(await codeOf(a.forget.deleteFiles(X))).toBe('io');
+    a.testing.setForgottenFileCorrupt(false);
+    await a.forget.device(X);
+    expect(a.testing.forgottenDeclarations().map((e) => e.deviceId)).toEqual([X]);
   });
 });
 
@@ -250,7 +263,7 @@ describe('writeState : Rust maître de forgotten (critère 6)', () => {
 });
 
 describe('forget.deleteFiles (sync_forgotten_delete)', () => {
-  it('refus un par un, rien n’est supprimé ; conditions réunies : seuls les fichiers de devices/<X>/, idempotent', async () => {
+  it('refus un par un, rien n’est supprimé ; conditions réunies : seuls les fichiers de devices/<X>/, terminé, idempotent', async () => {
     const room = await Room.started();
     const a = (room.devs.get(A) as Dev).p;
     const b = (room.devs.get(B) as Dev).p;
@@ -259,26 +272,25 @@ describe('forget.deleteFiles (sync_forgotten_delete)', () => {
     const xFiles = room.files(X);
     expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
     await a.forget.device(X);
-    // Déclaration confirmée, pas encore publiée.
-    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
+    // Déclarée, mais B ne l'a pas encore apprise ni republiée (condition f).
     await room.publish(A, room.upToDate(A, [2, 1]));
-    // B en retard sur la coupure.
+    await room.publish(B, room.upToDate(B, [2, 1]), [], false);
+    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
+    // B republie la déclaration mais en retard sur la coupure.
     await room.publish(B, room.upToDate(B, [1, 2]));
     expect(await codeOf(b.forget.deleteFiles(X))).toBe('state-mismatch');
-    // B à jour de la coupure mais pas de l'état de A qui porte la déclaration.
-    const stale = room.upToDate(B, [2, 1]);
-    stale[A] = ackOf(A, 0, 0, (room.devs.get(A) as Dev).seq - 1);
-    await room.publish(B, stale);
-    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
     // A en retard sur la coupure atteinte par B (maximum des accusés).
     await room.publish(B, room.upToDate(B, [2, 1]));
-    await room.publish(A, room.upToDate(A, [1, 1]), room.published(A)?.forgotten ?? []);
+    await room.publish(A, room.upToDate(A, [1, 1]));
     expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
     await room.settle();
-    // État d'un actif dans le nuage, réinitialisation en cours.
+    // État d'un actif dans le nuage, state.ctx de la cible dans le nuage (g), réinitialisation en cours.
     room.folder.setAvailability(B, 'state.ctx', 'cloud');
     expect(await codeOf(a.forget.deleteFiles(X))).toBe('cloud-pending');
     room.folder.setAvailability(B, 'state.ctx', 'local');
+    room.folder.setAvailability(X, 'state.ctx', 'cloud');
+    expect(await codeOf(a.forget.deleteFiles(X))).toBe('cloud-pending');
+    room.folder.setAvailability(X, 'state.ctx', 'local');
     a.testing.setResetInProgress(true);
     expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
     a.testing.setResetInProgress(false);
@@ -289,6 +301,7 @@ describe('forget.deleteFiles (sync_forgotten_delete)', () => {
     expect(room.files(X)).toEqual([]);
     expect(room.folder.devices.has(X)).toBe(true);
     expect([room.files(A), room.files(B)]).toEqual(others);
+    expect(a.testing.forgottenRegistry()?.done).toEqual([X]);
     expect(await b.forget.deleteFiles(X)).toEqual({ deleted: 0, complete: true });
   });
 });
@@ -311,6 +324,7 @@ describe('attaques', () => {
   it('appareil oublié : ne peut ni oublier celui qui l’a oublié, ni supprimer ses fichiers ; ses propres fichiers peuvent l’être', async () => {
     const room = await Room.settled();
     const x = (room.devs.get(X) as Dev).p;
+    await x.scan({ keep: [] });
     expect(await codeOf(x.forget.device(A))).toBe('state-mismatch');
     expect(await codeOf(x.forget.deleteFiles(A))).toBe('state-mismatch');
     expect(await codeOf((room.devs.get(B) as Dev).p.forget.deleteFiles(A))).toBe('state-mismatch');
@@ -325,11 +339,12 @@ describe('attaques', () => {
     await room.publish(X, { [A]: ackOf(A, 0, 0, 1), [B]: ackOf(B, 0, 0, 1) });
     room.nowMs += 60_000;
     const a = (room.devs.get(A) as Dev).p;
+    await a.scan({ keep: [] });
     expect(await codeOf(a.forget.device(X))).toBe('state-mismatch');
     expect(await codeOf((room.devs.get(B) as Dev).p.forget.deleteFiles(X))).toBe('state-mismatch');
   });
 
-  it('faux state.ctx étranger : n’oublie personne et ne débloque aucune suppression', async () => {
+  it('faux state.ctx étranger : n’oublie personne ; fantôme jamais vu, il ne bloque pas la suppression (ADR 0011 §18 point 8 a)', async () => {
     const room = await Room.started();
     // Un autre dossier, une autre clé : son état recopié ici est « étranger ».
     const other = new MemorySyncFolder('ailleurs');
@@ -345,12 +360,9 @@ describe('attaques', () => {
     const a = (room.devs.get(A) as Dev).p;
     const scan = await a.scan({ keep: [] });
     expect(scan.devices.find((d) => d.deviceId === C)?.stateStatus).toBe('foreign');
+    expect(scan.forgotten.entries).toEqual([]);
     await a.forget.device(X);
     await room.settle();
-    const xFiles = room.files(X);
-    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
-    expect(room.files(X)).toEqual(xFiles);
-    room.folder.devices.delete(C);
     expect((await a.forget.deleteFiles(X)).complete).toBe(true);
   });
 });

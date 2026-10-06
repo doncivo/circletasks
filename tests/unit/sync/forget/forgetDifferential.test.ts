@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceAck, ForgottenDevice } from '../../../../src/domain/sync/format';
-import { cutoff, forgetOrder, forgottenDeleteCheck, type ForgetDeclaration, type ForgetKnownDevice, type ForgetStateStatus } from '../../../../src/domain/sync/retention';
+import { cutoff, forgetOrder, forgottenDeleteCheck, learnDeclarations, type ForgetKnownDevice, type ForgetStateStatus } from '../../../../src/domain/sync/retention';
 import type { DeviceId, Hlc } from '../../../../src/domain/types';
 import random from '../../../fixtures/sync/forget-order-random.json';
 import table from '../../../fixtures/sync/forget-order.json';
@@ -25,12 +25,14 @@ describe('cas pseudo-aléatoires figés (référence TypeScript de forget.rs)', 
     expect(kinds.filter((k) => k === 'ready').length).toBeGreaterThanOrEqual(30);
     expect(kinds.filter((k) => k === 'waiting').length).toBeGreaterThanOrEqual(100);
     expect(random.forgetOrder.filter((c) => Object.keys(c.expected as object).length > 0).length).toBeGreaterThanOrEqual(60);
-    expect(random.forgetOrder.filter((c) => (c.declarations as unknown[]).length > Object.keys(c.expected as object).length).length).toBeGreaterThanOrEqual(30);
+    expect(random.forgetOrder.filter((c) => (c.entries as unknown[]).length > Object.keys(c.expected as object).length).length).toBeGreaterThanOrEqual(30);
+    expect(random.learn.filter((c) => (c.expected as { overflow: boolean }).overflow).length).toBeGreaterThanOrEqual(5);
     expect(random.cutoff.filter((c) => c.expected !== null).length).toBeGreaterThanOrEqual(60);
   });
 
-  it('forgetOrder, cutoff et forgottenDeleteCheck redonnent chaque sortie attendue', () => {
-    for (const c of random.forgetOrder) expect(Object.fromEntries(forgetOrder(c.declarations as unknown as ForgetDeclaration[])), c.name).toEqual(c.expected);
+  it('forgetOrder, learnDeclarations, cutoff et forgottenDeleteCheck redonnent chaque sortie attendue', () => {
+    for (const c of random.forgetOrder) expect(Object.fromEntries(forgetOrder(c.entries as unknown as ForgottenDevice[])), c.name).toEqual(c.expected);
+    for (const c of random.learn) expect(learnDeclarations(c.master as unknown as ForgottenDevice[], c.candidates as unknown as ForgottenDevice[], c.cap), c.name).toEqual(c.expected);
     for (const c of random.cutoff) {
       const ackers = c.ackers.map((a) => ({ deviceId: a.deviceId as DeviceId, acks: toAcks(a.acks as unknown as JsonAcks) }));
       expect(cutoff(c.target as DeviceId, ackers), c.name).toEqual(c.expected);
@@ -39,9 +41,10 @@ describe('cas pseudo-aléatoires figés (référence TypeScript de forget.rs)', 
       const known: ForgetKnownDevice[] = c.known.map((d) => ({
         deviceId: d.deviceId as DeviceId,
         status: d.status as ForgetStateStatus,
+        seen: d.seen,
         state: d.state ? { deviceId: d.deviceId as DeviceId, stateSeq: d.state.stateSeq, acks: toAcks(d.state.acks as unknown as JsonAcks), forgotten: d.state.forgotten as unknown as ForgottenDevice[] } : null,
       }));
-      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, known), c.name).toEqual(c.expected);
+      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known), c.name).toEqual(c.expected);
     }
   });
 });
@@ -62,20 +65,20 @@ describe('table commune forget-order.json : chaque condition de suppression du c
     expectCase(/aucune déclaration/, 'refused', 'state-mismatch');
     expectCase(/déclaration d’un appareil oublié avant/, 'refused', 'state-mismatch');
     expectCase(/un actif n’a pas lu jusqu’à la coupure/, 'waiting', 'state-mismatch');
-    expectCase(/n’a pas accusé l’état qui porte la déclaration/, 'waiting', 'state-mismatch');
-    expectCase(/dans le nuage/, 'waiting', 'cloud-pending');
+    expectCase(/ne republie pas une déclaration retenue/, 'waiting', 'state-mismatch');
+    expectCase(/fantôme jamais vu/, 'ready');
+    expectCase(/state\.ctx de la cible dans le nuage/, 'waiting', 'cloud-pending');
+    expectCase(/cible terminée/, 'ready');
+    expectCase(/état d’un actif dans le nuage/, 'waiting', 'cloud-pending');
     expectCase(/actif étranger|actif rejoué/, 'waiting', 'state-mismatch');
   });
 });
 
-describe('hlc d’une déclaration mal formé (écart TypeScript / Rust sur une entrée que l’analyse de l’état refuse déjà)', () => {
+describe('hlc d’une déclaration mal formé (QA-2, corrigé : forgetOrder vérifie le hlc strict, comme forget.rs)', () => {
   const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' as DeviceId;
   const X = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' as DeviceId;
-  // forget.rs écarte une déclaration dont le hlc n'est pas strict (`is_strict_hlc`) ; forgetOrder ne regarde que le suffixe.
-  // Inatteignable aujourd'hui (`isForgottenDevice` exige un hlc strict avant toute évaluation) : défaut de gravité faible, signalé à
-  // sync-icloud. Ce test passera au vert (et it.fails le fera échouer pour qu'on le retire) quand forgetOrder sera aligné.
-  it.fails('QA-2 : forgetOrder écarte un hlc non strict, comme forget.rs', () => {
+  it('QA-2 : forgetOrder écarte un hlc non strict, comme forget.rs', () => {
     const bad = `bad791000000023-0000-${A}` as Hlc;
-    expect(forgetOrder([{ by: A, entry: { deviceId: X, at: bad, lastAck: null } }]).size).toBe(0);
+    expect(forgetOrder([{ deviceId: X, at: bad, lastAck: null }]).size).toBe(0);
   });
 });

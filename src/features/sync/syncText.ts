@@ -35,9 +35,11 @@ export function formatSyncAge(lastSyncAt: string, nowMs: number): string {
 }
 
 /** Nom affiché d'un appareil. */
-export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
+export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'seen'>, all: readonly Pick<SyncDeviceStatus, 'platform' | 'seen'>[]): string {
+  // Y-10 (audit a) : appareil jamais lu, nom neutre et 8 caractères, jamais une plateforme inventée.
+  if (device.seen === false) return t('sync.forget.unseenName', { short: String(device.deviceId).slice(0, 8) });
   const platform = t(device.platform === 'ios' ? 'sync.status.deviceIphone' : 'sync.status.devicePc');
-  const twins = all.filter((d) => d.platform === device.platform).length > 1;
+  const twins = all.filter((d) => d.platform === device.platform && d.seen !== false).length > 1;
   return twins ? t('sync.status.deviceNamed', { platform, short: String(device.deviceId).slice(0, 4) }) : platform;
 }
 

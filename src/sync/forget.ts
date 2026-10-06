@@ -1,8 +1,8 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isDeviceAck, isStrictHlc, isSyncDeviceId, type DeviceAck, type PublishedDeviceState } from '../domain/sync/format';
+import { isDeviceAck, isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
 import { PAGE_ROWS } from '../domain/sync/limits';
-import { hlcDevice } from '../domain/sync/parse';
-import { compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, type ForgetDeclaration, type ForgetKnownDevice, type ForgetVerdict } from '../domain/sync/retention';
+import { hlcDevice, hlcMs } from '../domain/sync/parse';
+import { citedDevices, compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, type ForgetKnownDevice, type ForgetVerdict } from '../domain/sync/retention';
 import { SYNC_TABLES } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import {
@@ -12,6 +12,7 @@ import {
   type ForgetFailure,
   type ForgetOutcome,
   type ForgetStep,
+  type ForgottenRegistryView,
   type RejoinOutcome,
   type SyncForgetStatus,
 } from '../platform/sync/types';
@@ -44,7 +45,7 @@ import { META, readJson, writeJson } from './meta';
 
 /** Clés de `sync_meta` propres à Y-10 (table locale, jamais publiée). */
 export const FORGET_META = {
-  /** Déclarations authentifiées déjà lues (`{ by, entry }[]`). */
+  /** Cache de la liste maître rendue par le dernier scan (`FolderScan.forgotten.entries`) : jamais une source d'oubli (§18 point 3). */
   declarations: 'forgetDeclarations',
   /** Dernier échec (`ForgetFailure`), effacé à la réussite. */
   failure: 'forgetFailure',
@@ -54,16 +55,24 @@ export const FORGET_META = {
   publish: 'forgetPublish',
   /** « Associer de nouveau » en cours : dossier à délier avant tout autre appel (`{ from, to }`). */
   rejoin: 'rejoin',
+  /**
+   * Instantané demandé avant de supprimer les fichiers d'un appareil oublié (ms de la demande) : un appareil associé ensuite reçoit ses
+   * écritures (jusqu'à la coupure) par cet instantané, puisque son journal disparaît et que personne ne le relit (aucune perte).
+   */
+  snapshot: 'forgetSnapshot',
 } as const;
 
-/** Déclarations gardées au plus (16 appareils × 64 déclarations, bornes de la section 1.6). */
-const MAX_KEPT_DECLARATIONS = 16 * 64;
+/** Un instantané est-il à écrire pour une suppression d'appareil oublié (demandé, et pas encore écrit depuis la demande) ? */
+export async function forgetSnapshotDue(repos: Repositories, lastOwnSnapshotMs: number | null): Promise<boolean> {
+  const requested = await readJson<number>(repos, FORGET_META.snapshot);
+  return requested !== null && (lastOwnSnapshotMs === null || lastOwnSnapshotMs < requested);
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Lecture défensive de sync_meta
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-const STEPS: readonly ForgetStep[] = ['declare', 'delete', 'rejoin'];
+const STEPS: readonly ForgetStep[] = ['declare', 'delete', 'rejoin', 'overflow'];
 const DELETION_STATES: readonly ForgetDeletionStatus['state'][] = ['waiting', 'deleting', 'strays', 'done'];
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
@@ -86,18 +95,6 @@ export function parseForgetDeletions(value: unknown): ForgetDeletionStatus[] {
   return out;
 }
 
-function parseDeclarations(value: unknown): ForgetDeclaration[] {
-  if (!Array.isArray(value)) return [];
-  const out: ForgetDeclaration[] = [];
-  for (const item of value) {
-    if (!isRecord(item) || !isSyncDeviceId(item['by']) || !isRecord(item['entry'])) continue;
-    const e = item['entry'];
-    if (!isSyncDeviceId(e['deviceId']) || !isStrictHlc(e['at']) || !(e['lastAck'] === null || isDeviceAck(e['lastAck']))) continue;
-    out.push({ by: item['by'], entry: { deviceId: e['deviceId'], at: e['at'], lastAck: e['lastAck'] as DeviceAck | null } });
-  }
-  return out;
-}
-
 /** État Y-10 affiché (`SyncStatus.forget`) : échec et suppressions en cours (les suppressions terminées ne sont plus montrées). */
 export async function readForgetStatus(repos: Repositories): Promise<SyncForgetStatus | null> {
   const failure = parseForgetFailure(await readJson<unknown>(repos, FORGET_META.failure));
@@ -111,7 +108,7 @@ async function recordFailure(deps: SyncDeps, deviceId: DeviceId, step: ForgetSte
   deps.logger.log(`forget-${step}-failed`, { device: deviceId, code });
 }
 
-/** Efface l'échec s'il concerne la même étape pour le même appareil (réussite). */
+/** Efface l'échec s'il concerne une des étapes données pour le même appareil (réussite, ou cible devenue sans objet). */
 async function clearFailure(repos: Repositories, deviceId: DeviceId, steps: readonly ForgetStep[]): Promise<void> {
   const failure = parseForgetFailure(await readJson<unknown>(repos, FORGET_META.failure));
   if (failure && failure.deviceId === deviceId && steps.includes(failure.step)) await writeJson(repos, FORGET_META.failure, null);
@@ -123,17 +120,19 @@ async function clearFailure(repos: Repositories, deviceId: DeviceId, steps: read
 
 /**
  * « Oublier cet appareil » confirmé dans l'app : intention mémorisée, appel à Rust (confirmation native), puis l'appelant lance les
- * cycles qui publient et appliquent l'oubli. `consent-denied` (boîte refusée ou fermée) : annulation volontaire, rien n'est écrit ni
- * gardé ; tout autre refus ou erreur : `forgetFailure`, rendu à l'appelant.
+ * cycles qui publient et appliquent l'oubli. `consent-denied` : annulation volontaire, rien n'est écrit ni gardé ; tout autre refus ou
+ * erreur : `forgetFailure`, rendu à l'appelant. En cas d'échec, l'intention reprend sa valeur précédente (revue Y-10, point 7 : une
+ * déclaration antérieure pas encore publiée le reste).
  */
 export async function declareForget(deps: SyncDeps, deviceId: DeviceId): Promise<ForgetOutcome> {
+  const previous = await readJson<boolean>(deps.data.repos, FORGET_META.publish);
   await writeJson(deps.data.repos, FORGET_META.publish, true);
   try {
     await deps.platform.forget.device(deviceId);
   } catch (error) {
     const code = syncErrorCodeOf(error);
-    // Rust n'a rien écrit (refus ou erreur avant le renommage de forgotten.json) : aucune publication à forcer.
-    await writeJson(deps.data.repos, FORGET_META.publish, null);
+    // Rust n'a rien écrit (refus ou erreur avant le renommage du registre) : l'intention redevient ce qu'elle était.
+    await writeJson(deps.data.repos, FORGET_META.publish, previous === true ? true : null);
     if (code === 'consent-denied') {
       deps.logger.log('forget-cancelled', { device: deviceId });
       return { kind: 'cancelled' };
@@ -156,43 +155,40 @@ export async function forgetPublishPending(repos: Repositories): Promise<boolean
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 export interface ForgetView {
-  /** Appareils oubliés par une déclaration valide, et l'auteur de cette déclaration. */
+  /** Appareils oubliés par la liste maître, et l'auteur de la déclaration retenue. */
   readonly order: ReadonlyMap<DeviceId, ForgetVerdict>;
+  /** Liste maître rendue par Rust (publiée telle quelle). */
+  readonly master: readonly ForgottenDevice[];
+  /** Appareils oubliés terminés (plus aucun accusé publié sur eux, jamais relus). */
+  readonly done: ReadonlySet<DeviceId>;
   /** Cet appareil est oublié : il ne lit ni ne publie plus (phase `forgotten`). */
   readonly selfForgotten: boolean;
 }
 
-const declarationKey = (d: ForgetDeclaration): string => `${d.by}|${d.entry.deviceId}|${d.entry.at}`;
-
 /**
- * Début de cycle : déclarations des états **authentifiés** de ce scan (autres appareils acceptés et son propre état), ajoutées à celles
- * déjà lues ; ordre total ; statut `forgotten` posé pour chaque appareil oublié (autre que soi).
+ * Début de cycle : ordre total calculé sur la liste maître du scan (Rust, §18 point 3 ; `sync_meta` n'en garde qu'un cache), statut
+ * `forgotten` posé pour chaque appareil oublié (autre que soi) ; débordement de la liste (§18 point 5) : échec visible tant qu'il dure.
  */
-export async function evaluateForget(
-  deps: SyncDeps,
-  input: { readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>; readonly ownState: PublishedDeviceState | null; readonly rows: readonly SyncStateRow[] },
-): Promise<ForgetView> {
+export async function evaluateForget(deps: SyncDeps, input: { readonly registry: ForgottenRegistryView; readonly rows: readonly SyncStateRow[] }): Promise<ForgetView> {
   const repos = deps.data.repos;
-  const kept = parseDeclarations(await readJson<unknown>(repos, FORGET_META.declarations));
-  const merged = new Map<string, ForgetDeclaration>(kept.map((d) => [declarationKey(d), d]));
-  const before = merged.size;
-  const sources: [DeviceId, PublishedDeviceState][] = [...input.accepted, ...(input.ownState ? [[deps.deviceId, input.ownState] as [DeviceId, PublishedDeviceState]] : [])];
-  for (const [by, state] of sources) {
-    for (const entry of state.forgotten) {
-      const d: ForgetDeclaration = { by, entry };
-      if (!merged.has(declarationKey(d)) && merged.size < MAX_KEPT_DECLARATIONS) merged.set(declarationKey(d), d);
-    }
-  }
-  const declarations = [...merged.values()];
-  if (merged.size !== before) await writeJson(repos, FORGET_META.declarations, declarations);
-  const order = forgetOrder(declarations);
+  const master = input.registry.entries;
+  const cached = await readJson<unknown>(repos, FORGET_META.declarations);
+  // Cache seulement (jamais une source) ; rien écrit tant qu'il n'y a rien à garder.
+  if (JSON.stringify(cached ?? []) !== JSON.stringify(master)) await writeJson(repos, FORGET_META.declarations, master);
+  const order = forgetOrder(master);
   const status = new Map(input.rows.map((row) => [row.deviceId, row.status]));
   for (const [target, verdict] of order) {
     if (target === deps.deviceId || status.get(target) === 'forgotten') continue;
     await repos.sync.saveState(target, { status: 'forgotten' });
     deps.logger.log('forget-applied', { device: target, by: verdict.by });
   }
-  return { order, selfForgotten: order.has(deps.deviceId) };
+  if (input.registry.overflow) {
+    const failure = parseForgetFailure(await readJson<unknown>(repos, FORGET_META.failure));
+    if (failure?.step !== 'overflow') await recordFailure(deps, deps.deviceId, 'overflow', 'too-large');
+  } else {
+    await clearFailure(repos, deps.deviceId, ['overflow']);
+  }
+  return { order, master, done: new Set(input.registry.done), selfForgotten: order.has(deps.deviceId) };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -201,7 +197,7 @@ export async function evaluateForget(
 
 /**
  * Position jusqu'à laquelle lire l'appareil oublié `target` : maximum des accusés de `target` publiés par les appareils actifs non
- * oubliés (son propre état compris) et de sa position locale ; null : rien à lire.
+ * oubliés (son propre état compris) et de sa position locale ; null : rien à lire (aucun accusé, ou appareil terminé).
  */
 export function readLimit(
   target: DeviceId,
@@ -210,6 +206,7 @@ export function readLimit(
   ownState: PublishedDeviceState | null,
   local: DeviceAck | null,
 ): DeviceAck | null {
+  if (view.done.has(target)) return null;
   const ackers = [...accepted.values()].filter((s) => !view.order.has(s.deviceId));
   if (ownState) ackers.push(ownState);
   const cut = cutoff(target, ackers);
@@ -222,65 +219,93 @@ export function readLimit(
 // Suppression des fichiers des appareils oubliés (critères 11 à 13, 15)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-/** Appareils connus vus du moteur, sous la forme de `forgottenDeleteCheck` (mêmes règles que Rust). */
-function knownDevices(scan: FolderScan, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, self: DeviceId, ownPublished: PublishedDeviceState | null): ForgetKnownDevice[] {
+/**
+ * Appareils connus vus du moteur, sous la forme de `forgottenDeleteCheck` (mêmes règles que Rust) : dossiers du scan, appareils cités
+ * dans les accusés des actifs non oubliés, cibles de la liste maître ; `seen` : état déjà accepté (`sync_state`) ou cité par un actif.
+ */
+export function forgetKnownDevices(
+  scan: FolderScan,
+  view: ForgetView,
+  accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
+  rows: readonly SyncStateRow[],
+  self: DeviceId,
+  ownPublished: PublishedDeviceState | null,
+): ForgetKnownDevice[] {
+  const everAccepted = new Set(rows.filter((r) => r.stateSeq > 0 || r.isSelf).map((r) => r.deviceId));
+  const actives = [...accepted.values(), ...(ownPublished ? [ownPublished] : [])].filter((s) => !view.order.has(s.deviceId));
+  const cited = citedDevices(actives);
   const known = new Map<DeviceId, ForgetKnownDevice>();
+  const seen = (id: DeviceId): boolean => everAccepted.has(id) || cited.has(id);
   for (const device of scan.devices) {
     if (device.deviceId === self) continue;
     const state = accepted.get(device.deviceId) ?? null;
     // Un état `ok` au scan mais refusé par l'anti-rejeu local (rejeu) n'est pas authentifié ici.
     const status = device.stateStatus === 'ok' && state === null ? 'rollback' : device.stateStatus;
-    known.set(device.deviceId, { deviceId: device.deviceId, status, state: status === 'ok' ? state : null });
+    known.set(device.deviceId, { deviceId: device.deviceId, status, state: status === 'ok' ? state : null, seen: seen(device.deviceId) });
   }
-  known.set(self, ownPublished ? { deviceId: self, status: 'ok', state: ownPublished } : { deviceId: self, status: 'missing', state: null });
-  for (const d of [...known.values()]) {
-    for (const id of [...(d.state?.acks.keys() ?? []), ...(d.state?.forgotten.map((f) => f.deviceId) ?? [])]) {
-      if (!known.has(id)) known.set(id, { deviceId: id, status: 'missing', state: null });
-    }
+  known.set(self, ownPublished ? { deviceId: self, status: 'ok', state: ownPublished, seen: true } : { deviceId: self, status: 'missing', state: null, seen: true });
+  for (const id of [...cited, ...view.master.map((e) => e.deviceId)]) {
+    if (!known.has(id)) known.set(id, { deviceId: id, status: 'missing', state: null, seen: seen(id) });
   }
   return [...known.values()];
 }
 
 /**
- * Fin de cycle : pour chaque appareil oublié dont les fichiers ne sont pas encore supprimés, conditions vérifiées (mêmes que Rust) ;
- * réunies : `sync_forgotten_delete` (sans boîte) ; sinon « en attente de {appareil} ». L'état est gardé dans `sync_meta`.
+ * Fin de cycle : pour chaque appareil oublié pas encore terminé (`done` de Rust), conditions vérifiées (mêmes que Rust) ; réunies :
+ * `sync_forgotten_delete` (sans boîte), y compris quand son dossier a déjà disparu (Rust l'inscrit alors dans `done`) ; sinon « en
+ * attente de {appareil} ». L'état est gardé dans `sync_meta` ; un échec de suppression est effacé quand la cible est terminée ou n'a
+ * plus de dossier (revue Y-10, point 4).
  */
 export async function runForgetDeletions(
   deps: SyncDeps,
-  input: { readonly view: ForgetView; readonly scan: FolderScan; readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>; readonly ownPublished: PublishedDeviceState | null },
+  input: {
+    readonly view: ForgetView;
+    readonly scan: FolderScan;
+    readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>;
+    readonly rows: readonly SyncStateRow[];
+    readonly ownPublished: PublishedDeviceState | null;
+  },
 ): Promise<void> {
   const repos = deps.data.repos;
   const stored = new Map(parseForgetDeletions(await readJson<unknown>(repos, FORGET_META.deletions)).map((d) => [d.deviceId, d]));
   const next = new Map(stored);
-  const known = knownDevices(input.scan, input.accepted, deps.deviceId, input.ownPublished);
+  const known = forgetKnownDevices(input.scan, input.view, input.accepted, input.rows, deps.deviceId, input.ownPublished);
   for (const target of input.view.order.keys()) {
     if (target === deps.deviceId) continue;
-    const listed = input.scan.devices.some((d) => d.deviceId === target);
-    const previous = stored.get(target);
-    if (!listed) {
-      // Plus aucun dossier pour lui (supprimé par un autre appareil actif, ou jamais arrivé) : rien à supprimer ici (critère 13).
-      if (previous !== undefined) next.set(target, { deviceId: target, state: 'done', waitingFor: null });
+    const listing = input.scan.devices.find((d) => d.deviceId === target);
+    const strictFiles = listing !== undefined && (listing.stateStatus !== 'missing' || listing.epochs.some((e) => e.segments.length + e.snapshots.length > 0));
+    if (input.view.done.has(target) && !strictFiles) {
+      // Terminé chez Rust : plus rien à faire ; un dossier qui ne garde que des noms étrangers est signalé.
+      next.set(target, { deviceId: target, state: listing ? 'strays' : 'done', waitingFor: null });
+      await clearFailure(repos, target, ['delete']);
       continue;
     }
-    if (previous?.state === 'done' || previous?.state === 'strays') {
-      // Fichiers déjà supprimés : un dossier qui réapparaît (appareil oublié qui publie encore) est traité de nouveau.
-      const files = input.scan.devices.find((d) => d.deviceId === target);
-      const recreated = files !== undefined && (files.stateStatus !== 'missing' || files.epochs.some((e) => e.segments.length + e.snapshots.length > 0));
-      if (!recreated) {
-        next.set(target, { deviceId: target, state: listed ? 'strays' : 'done', waitingFor: null });
+    if (!listing) await clearFailure(repos, target, ['delete']);
+    const check = forgottenDeleteCheck(target, deps.deviceId, input.view.master, [...input.view.done], known);
+    if (check.kind === 'waiting' || check.kind === 'refused') {
+      // Dossier déjà disparu (supprimé par un autre appareil actif) : plus rien à attendre ici (critère 13) ; Rust l'inscrira dans
+      // `done` au premier appel possible.
+      next.set(target, listing ? { deviceId: target, state: 'waiting', waitingFor: check.kind === 'waiting' && check.device !== deps.deviceId ? check.device : null } : { deviceId: target, state: 'done', waitingFor: null });
+      continue;
+    }
+    const previous = stored.get(target);
+    if (listing) {
+      // Aucune perte (§18 point 10, appareil associé ensuite) : ses écritures jusqu'à la coupure sont d'abord dans un instantané de cet
+      // appareil (écrit à l'étape 7 du cycle suivant), puisque son journal va disparaître.
+      const requested = await readJson<number>(repos, FORGET_META.snapshot);
+      const own = await readJson<{ endHlc: Hlc }>(repos, META.snapshot);
+      if (requested === null || own === null || hlcMs(own.endHlc) < requested) {
+        if (requested === null) await writeJson(repos, FORGET_META.snapshot, deps.clock.nowMs());
+        next.set(target, { deviceId: target, state: 'waiting', waitingFor: null });
         continue;
       }
-    }
-    const check = forgottenDeleteCheck(target, deps.deviceId, known);
-    if (check.kind === 'waiting' || check.kind === 'refused') {
-      next.set(target, { deviceId: target, state: 'waiting', waitingFor: check.kind === 'waiting' && check.device !== deps.deviceId ? check.device : null });
-      continue;
     }
     try {
       const result = await deps.platform.forget.deleteFiles(target);
       deps.logger.log('forgotten-delete', { device: target, deleted: result.deleted, complete: result.complete });
       await clearFailure(repos, target, ['delete']);
       next.set(target, { deviceId: target, state: result.complete ? 'done' : 'deleting', waitingFor: null });
+      if (result.complete) await writeJson(repos, FORGET_META.snapshot, null);
     } catch (error) {
       await recordFailure(deps, target, 'delete', syncErrorCodeOf(error));
       next.set(target, { deviceId: target, state: previous?.state === 'deleting' ? 'deleting' : 'waiting', waitingFor: null });
@@ -312,6 +337,9 @@ const IDENTITY_META = [META.epoch, META.stateSeq, META.head, META.inflight, META
 export async function prepareRejoin(deps: SyncDeps, newId: DeviceId): Promise<RejoinOutcome> {
   const repos = deps.data.repos;
   const self = deps.deviceId;
+  // Déjà fait par cette instance (nouvelle identité posée, app pas encore relancée) : rien n'est refait, seule la délie peut rester.
+  const storedId = await repos.settings.get('device.id');
+  if (storedId !== null && storedId !== self) return finishRejoin(deps);
   try {
     const rows = await repos.sync.getStates();
     const forgotten = new Set(rows.filter((r) => r.status === 'forgotten').map((r) => r.deviceId));

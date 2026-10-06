@@ -38,15 +38,16 @@ export function forgetReason(code: string): string {
   }
 }
 
-/** Nom d'un appareil comme dans APPAREILS (« PC », « iPhone », suivis de 4 caractères si deux ont la même plateforme). */
+/** Nom d'un appareil comme dans APPAREILS ; absent de la liste : nom neutre (« Appareil » et 8 caractères), jamais « PC » inventé. */
 export function forgetDeviceName(id: DeviceId, devices: readonly SyncDeviceStatus[]): string {
   const device = devices.find((d) => d.deviceId === id);
-  return device ? deviceName(device, devices) : t('sync.status.deviceNamed', { platform: t('sync.status.devicePc'), short: String(id).slice(0, 4) });
+  return device ? deviceName(device, devices) : t('sync.forget.unseenName', { short: String(id).slice(0, 8) });
 }
 
 /** Échec d'un oubli, d'une suppression ou d'une association (emplacement `forget` et bandeau). */
 export function forgetFailureText(failure: NonNullable<ForgetFacts['failure']>, devices: readonly SyncDeviceStatus[]): string {
   const reason = forgetReason(failure.code);
+  if (failure.step === 'overflow') return t('sync.forget.failedOverflow');
   if (failure.step === 'rejoin') return t('sync.forget.failedRejoin', { reason });
   const device = forgetDeviceName(failure.deviceId, devices);
   return failure.step === 'declare' ? t('sync.forget.failedDeclare', { device, reason }) : t('sync.forget.failedDelete', { device, reason });

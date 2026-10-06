@@ -29,5 +29,12 @@
       "confirm": "Oublier l'appareil",
       "cancel": "Annuler"
     }
+  },
+  "forgetDetail": {
+    "$comment": "Détail de la boîte « Oublier cet appareil » (Y-10, audit e) : lu par Rust dans l'état authentifié de l'appareil visé, jamais fourni par la WebView.",
+    "detail": "{platform} · identifiant {id}… · dernière synchronisation le {date} à {time}",
+    "never": "Appareil jamais lu · identifiant {id}…",
+    "windows": "PC Windows",
+    "ios": "iPhone"
   }
 }

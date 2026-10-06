@@ -11,7 +11,7 @@ import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { isJoining, joinFromSnapshot } from './join';
-import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, readLimit, rejoinPending, runForgetDeletions, type ForgetView } from './forget';
+import { evaluateForget, finishRejoin, FORGET_META, forgetPublishPending, forgetSnapshotDue, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, type ForgetView } from './forget';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -178,6 +178,13 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const rejoined = await finishRejoin(deps);
       if (rejoined.kind === 'failed') return fail(rejoined.code as SyncErrorCode);
     }
+    // Y-10 (revue, point 2) : « Associer de nouveau » a changé l'identité de l'appareil ; tant que l'app n'est pas relancée, ce service
+    // (ancienne identité) ne fait plus aucun cycle : il ne lierait jamais l'ancien identifiant à un dossier choisi de nouveau.
+    const storedId = await repos.settings.get('device.id');
+    if (storedId !== null && storedId !== self) {
+      logger.log('restart-required', {});
+      return { ...EMPTY, outcome: 'restart-required' };
+    }
     const folder = await platform.folder.info();
     if (!folder.configured) return { ...EMPTY, outcome: 'not-configured' };
     folderLabel = folder.label;
@@ -207,7 +214,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   // Y-10 : ordre total des oublis (déclarations des seuls états authentifiés). Appareil local oublié : il ne lit ni ne publie plus.
   let forgetView: ForgetView;
   try {
-    forgetView = await evaluateForget(deps, { accepted, ownState, rows: await repos.sync.getStates() });
+    forgetView = await evaluateForget(deps, { registry: scan.forgotten, rows: await repos.sync.getStates() });
   } catch (error) {
     return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
   }
@@ -240,8 +247,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     purgeHorizon,
     lastSyncHlc: deps.hlc.now(),
     ...(pairedBy ? { pairedBy } : {}),
-    // Y-10 : liste déjà publiée ; Rust (maître) la complète de ses déclarations confirmées et pas encore publiées.
-    forgotten: ownState?.forgotten ?? [],
+    // Y-10 (§18 point 3) : chaque appareil republie la liste maître entière rendue par le scan (Rust complète ce qu'il a appris depuis).
+    forgotten: [...forgetView.master],
     reset: null,
   });
 
@@ -355,7 +362,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const rows = await repos.sync.getStates();
       const acks = new Map<DeviceId, DeviceAck>();
       for (const row of rows) {
-        if (row.isSelf || row.epoch !== currentEpoch || acks.size >= MAX_STATE_ACKS) continue;
+        // Y-10 (§18 point 6) : plus aucun accusé sur un appareil oublié terminé.
+        if (row.isSelf || row.epoch !== currentEpoch || acks.size >= MAX_STATE_ACKS || forgetView.done.has(row.deviceId as DeviceId)) continue;
         acks.set(row.deviceId as DeviceId, { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
       }
       return acks;
@@ -493,7 +501,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         snapshotMeta ? hlcMs(snapshotMeta.endHlc) : 0,
         ...states.filter((s) => s.epoch === currentEpoch && s.snapshot).map((s) => hlcMs((s.snapshot as { endHlc: Hlc }).endHlc)),
       );
-      if (deps.clock.nowMs() - lastSnapshotMs >= SNAPSHOT_INTERVAL_MS) {
+      // Y-10 : instantané aussi avant de supprimer les fichiers d'un appareil oublié (ses écritures n'arriveront plus que par lui).
+      const forgetSnapshot = await forgetSnapshotDue(repos, snapshotMeta ? hlcMs(snapshotMeta.endHlc) : null);
+      if (deps.clock.nowMs() - lastSnapshotMs >= SNAPSHOT_INTERVAL_MS || forgetSnapshot) {
         work();
         const listedSnapshots = listed?.snapshots ?? [];
         const seq = Math.max(snapshotMeta?.seq ?? 0, ...listedSnapshots) + 1;
@@ -512,12 +522,12 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     }
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte).
-    if (publishAllowed && forgetView.order.size > 0) await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished: lastWritten ?? ownState });
+    if (publishAllowed && forgetView.order.size > 0) await runForgetDeletions(deps, { view: forgetView, scan, accepted, rows: await repos.sync.getStates(), ownPublished: lastWritten ?? ownState });
 
     // 8. Heure de dernière synchro.
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
-    const devices = await deviceStatuses(repos, self, accepted, deps.sv);
+    const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv), scan, self, await readWaitingDevices(repos));
     if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch };
     return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
   } catch (error) {
@@ -534,6 +544,22 @@ async function knowsFrom(repos: Repositories): Promise<ApplyContext['knows']> {
     const ack = acks.get(deleter)?.get(device);
     return ack !== undefined && ack.hlc !== null && ack.hlc >= hlc;
   };
+}
+
+/**
+ * Y-10 (audit a, §18 point 8) : tout appareil du dossier jamais lu (dossier sans état authentifié accepté) et tout appareil qui bloque une
+ * suppression sont montrés dans APPAREILS, « jamais vu » (`seen: false`), pour pouvoir les oublier ; jamais une plateforme inventée.
+ */
+function withUnseenDevices(devices: SyncDeviceStatus[], scan: FolderScan, self: DeviceId, waiting: readonly DeviceId[]): SyncDeviceStatus[] {
+  const listed = new Set(devices.map((d) => d.deviceId));
+  const extra = [...scan.devices.map((d) => d.deviceId), ...waiting].filter((id) => id !== self && !listed.has(id));
+  const unseen = [...new Set(extra)].sort().map((deviceId): SyncDeviceStatus => ({ deviceId, platform: 'windows', self: false, lastReadAt: null, status: 'active', seen: false }));
+  return [...devices, ...unseen];
+}
+
+async function readWaitingDevices(repos: Repositories): Promise<DeviceId[]> {
+  const status = await readForgetStatus(repos);
+  return (status?.deletions ?? []).flatMap((d) => (d.waitingFor ? [d.waitingFor] : []));
 }
 
 /** Appareils affichés (APPAREILS) et leur version (Y-07 critère 11) : règle partagée avec les bandeaux A-09 (`deviceStatus.ts`). */

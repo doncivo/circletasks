@@ -75,6 +75,21 @@ pub fn dialog_texts(kind: ConsentKind) -> DialogTexts {
     })
 }
 
+/// Textes du détail de la boîte « Oublier cet appareil » (`forgetDetail` de `native/fr.json`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct ForgetDetailTexts {
+    pub detail: String,
+    pub never: String,
+    pub windows: String,
+    pub ios: String,
+}
+
+/// Textes du détail de la boîte d'oubli, lus dans le fichier compilé.
+pub fn forget_detail_texts() -> ForgetDetailTexts {
+    let all: serde_json::Value = serde_json::from_str(NATIVE_TEXTS).unwrap_or(serde_json::Value::Null);
+    serde_json::from_value(all["forgetDetail"].clone()).unwrap_or_default()
+}
+
 /// Configuration d'une boîte (fonction pure, testée) : propriétaire, deux boutons, « Annuler » par défaut.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DialogSpec {
@@ -85,7 +100,15 @@ pub struct DialogSpec {
 }
 
 pub fn dialog_spec(kind: ConsentKind, owner: isize) -> DialogSpec {
-    let texts = dialog_texts(kind);
+    dialog_spec_with(kind, owner, None)
+}
+
+/// Même boîte, avec une ligne de détail composée par Rust en tête de l'explication (Y-10 : appareil visé, audit e).
+pub fn dialog_spec_with(kind: ConsentKind, owner: isize, detail: Option<&str>) -> DialogSpec {
+    let mut texts = dialog_texts(kind);
+    if let Some(detail) = detail {
+        texts.content = format!("{detail}\n\n{}", texts.content);
+    }
     let buttons = vec![(ID_CONFIRM, texts.confirm.clone()), (IDCANCEL, texts.cancel.clone())];
     DialogSpec { owner, texts, buttons, default_button: IDCANCEL }
 }
@@ -173,12 +196,16 @@ impl ConsentGate {
 
     /// Ouvre la boîte ; un refus bloque 10 minutes.
     fn ask(&self, kind: ConsentKind, owner: isize) -> SyncResult<()> {
+        self.ask_with(kind, owner, None)
+    }
+
+    fn ask_with(&self, kind: ConsentKind, owner: isize, detail: Option<&str>) -> SyncResult<()> {
         if self.busy.swap(true, Ordering::SeqCst) {
             return fail(SyncCode::RateLimited);
         }
         let _busy = BusyGuard(&self.busy);
         log::event("consent-dialog", kind.key());
-        if self.ui.ask(&dialog_spec(kind, owner)) {
+        if self.ui.ask(&dialog_spec_with(kind, owner, detail)) {
             return Ok(());
         }
         let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
@@ -208,7 +235,7 @@ impl ConsentGate {
 
     /// Oubli d'un appareil (Y-10) : mêmes préconditions, compteur persisté (3 ouvertures par 10 minutes, refus compris), blocage et
     /// verrou que l'affichage de la clé (Y-08), puis la boîte, « Annuler » par défaut.
-    pub fn confirm_forget(&self, owner: isize) -> SyncResult<()> {
+    pub fn confirm_forget(&self, owner: isize, detail: &str) -> SyncResult<()> {
         {
             let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
             let now = (self.now)();
@@ -221,7 +248,7 @@ impl ConsentGate {
             counters.forget.push(now);
             self.save(&counters);
         }
-        self.ask(ConsentKind::ForgetDevice, owner)
+        self.ask_with(ConsentKind::ForgetDevice, owner, Some(detail))
     }
 
     /// Appel d'import : 5 par 10 minutes, fenêtre appelante au premier plan (aucune boîte à ce stade).

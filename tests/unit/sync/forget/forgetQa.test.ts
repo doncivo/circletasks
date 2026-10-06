@@ -67,61 +67,52 @@ const mirrorDeletion = (from: SimDevice, id: string): void => {
 };
 
 describe('faux dossier devices/<uuid> et appareil seulement cité : la suppression attend, visiblement (critère 13, exigence d’Ali)', () => {
-  it('un dossier sans état bloque la suppression sans fin : l’attente est écrite, nomme ce dossier, survit au redémarrage et ne produit aucun échec', async () => {
-    const [a, , x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
+  // ADR 0011 §18 point 8 a (tranché par l'architecte après la QA) : un dossier jamais vu (vide, état illisible ou étranger, auteur
+  // d'aucune déclaration) est un fantôme : il ne bloque pas la suppression, et il est montré dans APPAREILS (« jamais vu », nom neutre)
+  // avec « Oublier ». QA-1 corrigé : les deux `it.fails` sont devenus des tests ordinaires.
+  it('un dossier sans état (fantôme jamais vu) ne bloque pas la suppression ; aucun échec, aucune attente', async () => {
+    const [a, b, x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
     a.folder.addDeviceFolder(GHOST);
     expect(await a.service.forgetDevice(x.id as DeviceId)).toEqual({ kind: 'done' });
-    for (let i = 0; i < 4; i += 1) {
-      a.clock.advance(1_000);
-      await a.cycle();
+    for (let i = 0; i < 3; i += 1) {
+      for (const d of [a, b]) {
+        syncFolders([a, b]);
+        d.clock.advance(1_000);
+        await d.cycle();
+      }
     }
-    const waiting = a.service.status().forget?.deletions.find((d) => d.deviceId === x.id);
-    expect(waiting).toEqual({ deviceId: x.id, state: 'waiting', waitingFor: GHOST });
+    const deleter = [a, b].find((d) => !d.folder.devices.has(x.id));
+    expect(deleter, 'A ou B a supprimé les fichiers de X').toBeDefined();
     expect(a.service.status().forget?.failure ?? null).toBeNull();
-    expect(a.folder.devices.has(x.id)).toBe(true);
-    await a.restart();
-    // Avant le premier cycle, l'attente est déjà lisible dans la base (bandeau de démarrage, A-09) ; Réglages la montre après le premier cycle.
-    expect((await readForgetStatus(a.data.repos))?.deletions.find((d) => d.deviceId === x.id)?.waitingFor).toBe(GHOST);
-    await a.cycle();
-    expect(a.service.status().forget?.deletions.find((d) => d.deviceId === x.id)?.waitingFor).toBe(GHOST);
-    await a.cycle();
-    expect(a.service.status().forget?.deletions.find((d) => d.deviceId === x.id)?.state).toBe('waiting');
+    expect((await readForgetStatus(a.data.repos))?.deletions.find((d) => d.deviceId === x.id && d.state === 'waiting')).toBeUndefined();
   });
 
-  // QA-1 (gravité moyenne) : le faux dossier n'est PAS dans APPAREILS (aucune ligne, donc aucun « Oublier cet appareil »), alors que
-  // Rust accepterait de l'oublier (`sync_forget_qa.rs`). L'utilisateur lit « en attente de PC eeee » (nom inventé : plateforme « PC » par
-  // défaut) sans aucun moyen d'agir : blocage sans fin. it.fails : passera au vert (et devra être retiré) quand la ligne existera.
-  it.fails('QA-1 : l’appareil attendu par la suppression a une ligne dans APPAREILS (l’utilisateur peut l’oublier)', async () => {
+  it('QA-1 (corrigé) : le fantôme a une ligne dans APPAREILS, « jamais vu », nom neutre (l’utilisateur peut l’oublier)', async () => {
     const [a, , x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
     a.folder.addDeviceFolder(GHOST);
     await a.service.forgetDevice(x.id as DeviceId);
-    const waitingFor = a.service.status().forget?.deletions.find((d) => d.deviceId === x.id)?.waitingFor;
-    expect(waitingFor).toBe(GHOST);
-    expect(a.service.status().devices.map((d) => d.deviceId)).toContain(GHOST);
+    const ghost = a.service.status().devices.find((d) => d.deviceId === GHOST);
+    expect(ghost).toMatchObject({ self: false, seen: false });
   });
 
-  // Même défaut avec un faux dossier dont le state.ctx est présent mais illisible (copie abîmée) : ni ligne dans APPAREILS, ni action.
-  it.fails('QA-1 : un faux dossier à state.ctx illisible a, lui aussi, une ligne dans APPAREILS', async () => {
+  it('QA-1 (corrigé) : un faux dossier à state.ctx illisible a, lui aussi, une ligne dans APPAREILS', async () => {
     const [a, b, x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
     const copy = a.folder.devices.get(b.id);
     expect(copy).toBeDefined();
     a.folder.devices.set(GHOST, structuredClone(copy) as NonNullable<typeof copy>);
     a.folder.corruptRecord(GHOST, 'state.ctx', 0);
     await a.service.forgetDevice(x.id as DeviceId);
-    for (let i = 0; i < 4; i += 1) {
+    for (let i = 0; i < 2; i += 1) {
       a.clock.advance(1_000);
       await a.cycle();
     }
-    expect(a.service.status().forget?.deletions.find((d) => d.deviceId === x.id)?.waitingFor).toBe(GHOST);
-    expect(a.service.status().devices.map((d) => d.deviceId)).toContain(GHOST);
+    expect(a.service.status().devices.find((d) => d.deviceId === GHOST)).toMatchObject({ seen: false });
   });
 
-  it('QA-1 : la ligne dit « en attente de PC eeee » pour un appareil absent de APPAREILS (nom de repli)', async () => {
-    const [a, , x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
-    a.folder.addDeviceFolder(GHOST);
-    await a.service.forgetDevice(x.id as DeviceId);
-    const line = forgetDeletionLine(a.service.status().forget?.deletions.find((d) => d.deviceId === x.id), a.service.status().devices);
-    expect(line).toContain('PC eeee');
+  it('QA-1 (corrigé) : un appareil attendu absent de APPAREILS est nommé neutrement (« Appareil » et 8 caractères), jamais « PC » inventé', () => {
+    const line = forgetDeletionLine({ deviceId: X_ID as DeviceId, state: 'waiting', waitingFor: GHOST as DeviceId }, []);
+    expect(line).toBe('Oublié · suppression des fichiers en attente de Appareil eeeeeeee');
+    expect(line).not.toContain('PC');
   });
 
   it('un appareil dont le dossier a disparu mais qui a une ligne dans APPAREILS : l’attente le nomme, et l’oublier débloque la suppression', async () => {

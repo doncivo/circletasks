@@ -11,7 +11,7 @@ export { INITIAL_STATUS };
 
 /** Ce qu'un cycle a constaté. */
 export interface CycleFacts {
-  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten';
+  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten' | 'restart-required';
   readonly errorCode: SyncErrorCode | null;
   readonly pendingFiles: readonly string[];
   readonly devices: readonly SyncDeviceStatus[];
@@ -32,6 +32,8 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
     case 'restore-choice':
       return 'restore-choice';
     case 'forgotten':
+    case 'restart-required':
+      // Y-10 : `restart-required` : nouvelle identité posée par « Associer de nouveau », l'app doit être relancée (même écran).
       return 'forgotten';
     case 'failed':
       if (facts.errorCode === 'key-mismatch') return 'key-mismatch';

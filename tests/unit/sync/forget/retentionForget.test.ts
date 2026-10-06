@@ -6,14 +6,17 @@ import {
   canPurgeDeletion,
   completedForgotten,
   cutoff,
+  declarationAuthor,
+  declarationHlc,
   forgetOrder,
   forgottenDeleteCheck,
+  learnDeclarations,
   purgeHorizon,
-  type ForgetDeclaration,
   type ForgetKnownDevice,
   type ForgetStateStatus,
   type KnownDevice,
 } from '../../../../src/domain/sync/retention';
+import { PAIRING_CLOCK_TOLERANCE_MS } from '../../../../src/domain/sync/limits';
 import type { DeviceId, Hlc, IsoDateTime } from '../../../../src/domain/types';
 import table from '../../../fixtures/sync/forget-order.json';
 
@@ -30,7 +33,9 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
   it('la table contient des cas pour les trois fonctions, accusés valides', () => {
     expect(table.forgetOrder.length).toBeGreaterThanOrEqual(10);
     expect(table.cutoff.length).toBeGreaterThanOrEqual(5);
-    expect(table.forgottenDelete.length).toBeGreaterThanOrEqual(10);
+    expect(table.forgottenDelete.length).toBeGreaterThanOrEqual(20);
+    expect(table.learn.length).toBeGreaterThanOrEqual(5);
+    expect(table.declarationHlc.length).toBeGreaterThanOrEqual(6);
     for (const c of table.cutoff) {
       for (const a of c.ackers) for (const ack of Object.values(a.acks)) expect(isDeviceAck(ack)).toBe(true);
       if (c.expected !== null) expect(isDeviceAck(c.expected)).toBe(true);
@@ -39,8 +44,20 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
 
   for (const c of table.forgetOrder) {
     it(`forgetOrder : ${c.name}`, () => {
-      const result = forgetOrder(c.declarations as unknown as ForgetDeclaration[]);
+      const result = forgetOrder(c.entries as unknown as ForgottenDevice[]);
       expect(Object.fromEntries(result)).toEqual(c.expected);
+    });
+  }
+
+  for (const c of table.learn) {
+    it(`learnDeclarations : ${c.name}`, () => {
+      expect(learnDeclarations(c.master as unknown as ForgottenDevice[], c.candidates as unknown as ForgottenDevice[])).toEqual(c.expected);
+    });
+  }
+
+  for (const c of table.declarationHlc) {
+    it(`declarationHlc : ${c.name}`, () => {
+      expect(declarationHlc(c.nowMs, c.seen, c.self as DeviceId, PAIRING_CLOCK_TOLERANCE_MS)).toEqual(c.expected);
     });
   }
 
@@ -62,11 +79,12 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
       const known: ForgetKnownDevice[] = c.known.map((d) => ({
         deviceId: d.deviceId as DeviceId,
         status: d.status as ForgetStateStatus,
+        seen: d.seen,
         state: d.state
           ? { deviceId: d.deviceId as DeviceId, stateSeq: d.state.stateSeq, acks: toAcks(d.state.acks as JsonAcks), forgotten: d.state.forgotten as unknown as ForgottenDevice[] }
           : null,
       }));
-      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, known)).toEqual(c.expected);
+      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known)).toEqual(c.expected);
     });
   }
 });
@@ -84,9 +102,10 @@ const DEVICES = [
 ] as DeviceId[];
 const hlcOf = (n: number, dev: DeviceId, counter = 0): Hlc => `${String(1_791_000_000_000 + n).padStart(15, '0')}-${counter.toString(16).padStart(4, '0')}-${dev}` as Hlc;
 
-const declArb: fc.Arbitrary<ForgetDeclaration> = fc
-  .record({ by: fc.constantFrom(...DEVICES), target: fc.constantFrom(...DEVICES), n: fc.integer({ min: 0, max: 40 }), counter: fc.integer({ min: 0, max: 3 }), foreignHlc: fc.boolean() })
-  .map(({ by, target, n, counter, foreignHlc }) => ({ by, entry: { deviceId: target, at: hlcOf(n, foreignHlc ? (DEVICES[(DEVICES.indexOf(by) + 1) % DEVICES.length] as DeviceId) : by, counter), lastAck: null } }));
+/** Déclaration (auteur = appareil du hlc) ; parfois mal formée (hlc non strict) pour vérifier qu'elle est toujours ignorée. */
+const declArb: fc.Arbitrary<ForgottenDevice> = fc
+  .record({ by: fc.constantFrom(...DEVICES), target: fc.constantFrom(...DEVICES), n: fc.integer({ min: 0, max: 40 }), counter: fc.integer({ min: 0, max: 3 }), broken: fc.integer({ min: 0, max: 9 }) })
+  .map(({ by, target, n, counter, broken }) => ({ deviceId: target, at: (broken === 0 ? `x${hlcOf(n, by, counter).slice(1)}` : hlcOf(n, by, counter)) as Hlc, lastAck: null }));
 
 describe('ordre total : propriétés (fast-check, aucun délai)', () => {
   it('le résultat ne dépend ni de l’ordre de lecture ni des déclarations lues deux fois', () => {
@@ -118,12 +137,40 @@ describe('ordre total : propriétés (fast-check, aucun délai)', () => {
     );
   });
 
-  it('chaque oubli retenu correspond à une déclaration lue, datée par son auteur', () => {
+  it('chaque oubli retenu correspond à une déclaration lue, bien formée, dont l’auteur est l’appareil de son hlc', () => {
     fc.assert(
       fc.property(fc.array(declArb, { maxLength: 24 }), (decls) => {
         for (const [target, verdict] of forgetOrder(decls)) {
-          expect(decls.some((d) => d.by === verdict.by && d.entry.deviceId === target && d.entry.at === verdict.at && d.entry.at.endsWith(d.by))).toBe(true);
+          expect(decls.some((d) => d.deviceId === target && d.at === verdict.at && declarationAuthor(d) === verdict.by)).toBe(true);
         }
+      }),
+    );
+  });
+
+  it('apprentissage : la liste maître ne fait que grandir, et après de nouvelles lectures (scans suivants) son ordre total est celui de toutes les déclarations lues, quel que soit l’ordre de lecture', () => {
+    /** Scans successifs : chaque scan relit toutes les déclarations encore publiées, jusqu'à ce que la liste ne change plus. */
+    const settleAll = (start: ForgottenDevice[], all: readonly ForgottenDevice[]): ForgottenDevice[] => {
+      let master = start;
+      for (let i = 0; i < 20; i += 1) {
+        const next = learnDeclarations(master, all).entries;
+        if (next.length === master.length) return next;
+        master = next;
+      }
+      return master;
+    };
+    fc.assert(
+      fc.property(fc.array(fc.array(declArb, { maxLength: 6 }), { maxLength: 5 }), (batches) => {
+        let master: ForgottenDevice[] = [];
+        for (const batch of batches) {
+          const before = master;
+          master = learnDeclarations(before, batch).entries;
+          expect(master.slice(0, before.length)).toEqual(before);
+        }
+        const all = batches.flat();
+        const forward = settleAll(master, all);
+        const backward = settleAll([...batches].reverse().reduce<ForgottenDevice[]>((m, batch) => learnDeclarations(m, batch).entries, []), all);
+        expect(Object.fromEntries(forgetOrder(forward))).toEqual(Object.fromEntries(forgetOrder(all)));
+        expect(Object.fromEntries(forgetOrder(backward))).toEqual(Object.fromEntries(forgetOrder(all)));
       }),
     );
   });

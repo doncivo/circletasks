@@ -158,6 +158,8 @@ pub struct FolderScan {
     pub total_bytes: u64,
     pub too_many_devices: bool,
     pub incomplete: bool,
+    /// Y-10 : registre de l'oubli après fusion des déclarations lues (§11.1, §18) ; rempli par `SyncCore::scan`.
+    pub forgotten: super::forget::ForgottenView,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -575,7 +577,7 @@ impl Store<'_> {
             log::event("folder-large", &total.to_string());
         }
         incomplete |= budget.cut.get();
-        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete })
+        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete, forgotten: Default::default() })
     }
 
     fn check_total(total: u64) -> SyncResult<()> {
