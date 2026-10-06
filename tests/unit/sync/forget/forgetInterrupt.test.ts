@@ -81,7 +81,7 @@ async function resume(a: SimDevice, x: SimDevice): Promise<void> {
 
 describe('oubli interrompu à chaque écriture (critère 14)', () => {
   /** Écritures de A pendant « Oublier X » (intention, déclaration, deux cycles et la suppression) sans arrêt ; mesurées. */
-  const WRITES = 34;
+  const WRITES = 27;
 
   it('référence : sans arrêt, l’oubli fait exactement WRITES écritures (sinon ajuster la borne) et finit oublié, publié une fois, fichiers supprimés', async () => {
     const [a, x] = await scenario();

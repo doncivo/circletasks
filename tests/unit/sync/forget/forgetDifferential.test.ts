@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceAck, ForgottenDevice } from '../../../../src/domain/sync/format';
 import { cutoff, forgetOrder, forgottenDeleteCheck, learnDeclarations, type ForgetKnownDevice, type ForgetStateStatus } from '../../../../src/domain/sync/retention';
+import { snapshotReadOf } from './snapshotJson';
 import type { DeviceId, Hlc } from '../../../../src/domain/types';
 import random from '../../../fixtures/sync/forget-order-random.json';
 import table from '../../../fixtures/sync/forget-order.json';
@@ -44,7 +45,7 @@ describe('cas pseudo-aléatoires figés (référence TypeScript de forget.rs)', 
         seen: d.seen,
         state: d.state ? { deviceId: d.deviceId as DeviceId, stateSeq: d.state.stateSeq, acks: toAcks(d.state.acks as unknown as JsonAcks), forgotten: d.state.forgotten as unknown as ForgottenDevice[] } : null,
       }));
-      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known), c.name).toEqual(c.expected);
+      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known, snapshotReadOf(c.ownSnapshot)), c.name).toEqual(c.expected);
     }
   });
 });

@@ -13,7 +13,7 @@ use circletasks_lib::sync::{SyncCode, SyncError};
 use circletasks_lib::vault::SecretVault;
 use serde_json::{json, Value};
 
-use crate::sync_forget::{check_json, entries_of, known_of};
+use crate::sync_forget::{check_json, entries_of, known_of, snapshot_of};
 use crate::sync_support::{device, epoch, hlc, Device, FakeBackend, MemFs, DEV_A, FOLDER};
 use circletasks_lib::sync::service::SYNC_KEY_ACCOUNT;
 
@@ -78,7 +78,7 @@ fn qa_differential_forgotten_delete_check_matches_typescript() {
     let mut waiting = 0;
     for case in cases {
         let done: Vec<String> = serde_json::from_value(case["done"].clone()).unwrap();
-        let check = forgotten_delete_check(case["target"].as_str().unwrap(), case["self"].as_str().unwrap(), &entries_of(&case["master"]), &done, &known_of(&case));
+        let check = forgotten_delete_check(case["target"].as_str().unwrap(), case["self"].as_str().unwrap(), &entries_of(&case["master"]), &done, &known_of(&case), &snapshot_of(&case["ownSnapshot"]));
         let actual = check_json(&check);
         assert_eq!(actual, case["expected"], "{}", case["name"]);
         match check {
@@ -110,6 +110,17 @@ fn state_json(dev: &str, seq: u64) -> Value {
         "head": { "epoch": ep, "segment": 0, "record": 0, "hlc": null, "stateSeq": seq },
         "acks": {}, "snapshot": null, "purgeHorizon": null, "lastSyncHlc": hlc(1_000 + seq, dev), "forgotten": [], "reset": null
     })
+}
+
+/// Instantané `n` de `dev` (un seul enregistrement `snap-end`, `covers` donnés) puis état `seq` qui l'annonce (§18 point 11).
+fn announce_snapshot(d: &Device, dev: &str, seq: u64, n: u64, covers: Value) {
+    let ep = epoch(1, DEV_A);
+    let handle = d.core.snapshot_begin(&ep, n, SV).unwrap();
+    d.core.snapshot_append(handle, &[json!({ "k": "snap-end", "count": 0, "covers": covers, "epoch": ep, "sv": SV }).to_string()]).unwrap();
+    d.core.snapshot_commit(handle).unwrap();
+    let mut state = state_json(dev, seq);
+    state["snapshot"] = json!({ "seq": n, "endHlc": hlc(5_000 + n, dev) });
+    d.core.write_state(SV, state).unwrap();
 }
 
 fn published_forgotten(a: &Device) -> Vec<String> {
@@ -167,12 +178,16 @@ fn qa_fake_device_folder_never_seen_does_not_block_the_deletion_and_can_still_be
     fs.mkdir(&["devices", GHOST]);
     a.core.device_forget(DEV_X, 1).unwrap();
     a.core.write_state(SV, state_json(DEV_A, 2)).unwrap();
+    // Condition (h) (§18 point 11) : aucun instantané annoncé par A, appel direct (WebView) : refusé, rien supprimé.
+    assert_eq!(code(a.core.forgotten_delete(DEV_X)), SyncCode::StateMismatch);
+    assert!(fs.names().iter().any(|n| n.starts_with(&format!("devices/{DEV_X}"))));
+    announce_snapshot(&a, DEV_A, 3, 2, json!({}));
     assert!(a.core.forgotten_delete(DEV_X).unwrap().complete);
     assert!(fs.names().iter().all(|n| !n.starts_with(&format!("devices/{DEV_X}"))));
     // Il reste oubliable (il est dans devices/), et ses fichiers supprimables ensuite (dossier vide : sans erreur).
     a.clock.advance(10 * 60_000);
     a.core.device_forget(GHOST, 1).unwrap();
-    a.core.write_state(SV, state_json(DEV_A, 3)).unwrap();
+    announce_snapshot(&a, DEV_A, 4, 3, json!({}));
     assert!(a.core.forgotten_delete(GHOST).unwrap().complete);
 }
 
@@ -184,7 +199,7 @@ fn qa_device_cited_only_by_a_forgotten_device_is_not_known_and_does_not_block() 
     with_ack["acks"] = json!({ GHOST: { "epoch": epoch(1, DEV_A), "segment": 0, "record": 0, "hlc": null, "stateSeq": 1 } });
     x.core.write_state(SV, with_ack).unwrap();
     a.core.device_forget(DEV_X, 1).unwrap();
-    a.core.write_state(SV, state_json(DEV_A, 2)).unwrap();
+    announce_snapshot(&a, DEV_A, 2, 2, json!({}));
     // X est oublié : ses accusés ne font connaître personne (audit Y-10 c) ; la suppression se fait.
     assert!(a.core.forgotten_delete(DEV_X).unwrap().complete);
     assert!(fs.names().iter().all(|n| !n.starts_with(&format!("devices/{DEV_X}"))));

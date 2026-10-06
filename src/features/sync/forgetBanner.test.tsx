@@ -119,9 +119,23 @@ describe('échec d’un oubli et suppression en attente (critère 15 d)', () => 
     expect(text()).toMatch(/^iPhone oublié : suppression de ses fichiers en attente de PC/);
     set({ forget: { failure: null, deletions: [{ deviceId: PHONE, state: 'deleting', waitingFor: null }] } });
     expect(text()).toContain('iPhone oublié : suppression de ses fichiers en cours');
+    // Seconde revue (§18 point 11) : aucun instantané éligible : dit sur le bandeau, l'oublié nommé.
+    set({ forget: { failure: null, deletions: [{ deviceId: PHONE, state: 'no-snapshot', waitingFor: null }] } });
+    expect(text()).toMatch(/^iPhone oublié : aucun instantané à jour, ouvrez un autre appareil associé/);
     // Seconde revue point 5 : dossier disparu, pas encore terminé chez Rust : finalisation en attente, nommée, jusqu'à done.
     set({ forget: { failure: null, deletions: [{ deviceId: PHONE, state: 'finalizing', waitingFor: LAPTOP }] } });
     expect(text()).toMatch(/^iPhone oublié : finalisation en attente de PC/);
+    set({ forget: null });
+    await settle();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+  });
+
+  it('oubli annulé (§18 point 12) : bandeau « oubli en échec » tant que l’appareil n’est pas oublié de nouveau', async () => {
+    render(<AppStatusBanner />);
+    start();
+    await settle();
+    set({ phase: 'idle', devices: DEVICES, forget: { failure: null, deletions: [], revived: [PHONE] } });
+    expect(text()).toMatch(/^Oubli de iPhone annulé : l’appareil qui l’avait oublié a lui-même été oublié/);
     set({ forget: null });
     await settle();
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();

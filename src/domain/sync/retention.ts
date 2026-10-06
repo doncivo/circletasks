@@ -12,7 +12,7 @@
  */
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import { compareEpochs, isStrictHlc, isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from './format';
+import { compareEpochs, isStrictHlc, isSyncDeviceId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState } from './format';
 import { DEVICE_EXPIRY_MS, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
 import { hlcDevice, hlcMs } from './parse';
 
@@ -47,7 +47,9 @@ export const BLOCKED: PurgeHorizon = { kind: 'blocked' };
 
 export const UNBOUNDED: PurgeHorizon = { kind: 'unbounded' };
 
-export function purgeHorizon(devices: readonly KnownDevice[], self: DeviceId, nowMs: number): PurgeHorizon {
+export function purgeHorizon(devices: readonly KnownDevice[], self: DeviceId, nowMs: number, revived: readonly DeviceId[] = []): PurgeHorizon {
+  // Y-10 (ADR 0011 §18 point 12) : un terminé dont l'oubli est annulé est un actif dont on ne lira plus rien : aucune purge.
+  if (revived.length > 0) return BLOCKED;
   const readers = activeReaders(devices, self, nowMs);
   return readers.length === 0 ? UNBOUNDED : { kind: 'limited', readers };
 }
@@ -300,8 +302,118 @@ export interface ForgetKnownDevice {
  */
 export type ForgottenDeleteCheck =
   | { readonly kind: 'ready'; readonly by: DeviceId; readonly cutoff: DeviceAck | null }
-  | { readonly kind: 'waiting'; readonly device: DeviceId; readonly code: 'cloud-pending' | 'state-mismatch' }
+  | { readonly kind: 'waiting'; readonly device: DeviceId; readonly code: 'cloud-pending' | 'state-mismatch'; readonly reason: ForgetWaitReason }
   | { readonly kind: 'refused'; readonly code: 'bad-name' | 'state-mismatch' };
+
+/**
+ * Raison d'une attente (§18 point 11) : `state` (état d'un actif ou de la cible pas `ok`), `cutoff` (actif en retard sur la coupure),
+ * `declarations` (déclaration retenue pas republiée), `snapshot` (condition (h) : son instantané annoncé ne couvre pas la cible ;
+ * `device` = soi), `revived` (terminé dont l'oubli est annulé, §18 point 12).
+ */
+export type ForgetWaitReason = 'state' | 'cutoff' | 'declarations' | 'snapshot' | 'revived';
+
+/**
+ * Fin d'un instantané (`snap-end`, section 5.1) lue par `sync_read_snapshot` `tail` : `author`, `epoch`, `seq` et `endHlc` sont ceux
+ * annoncés par `state.snapshot` de l'auteur ; `covers` vient de l'enregistrement de fin.
+ */
+export interface SnapshotEnd {
+  readonly author: DeviceId;
+  readonly epoch: EpochId;
+  readonly seq: number;
+  readonly endHlc: Hlc;
+  readonly covers: ReadonlyMap<DeviceId, DeviceAck>;
+}
+
+/** `none` : aucun instantané annoncé dans l'époque courante ; `unreadable` : fin absente ou illisible. */
+export type SnapshotEndRead = SnapshotEnd | 'none' | 'cloud-pending' | 'unreadable';
+
+type Acker = Pick<PublishedDeviceState, 'deviceId' | 'acks'>;
+
+/**
+ * Un `covers` couvre-t-il chaque oublié retenu (§18 point 11) ? Pour chaque cible retenue (ordre total) dont la coupure (calculée sur les
+ * `ackers` non oubliés, accusés figés compris) n'est pas nulle : `covers[X]` ≥ `cutoff(X)` (positions). Renvoie null si tout est
+ * couvert, sinon la première cible non couverte. Même fonction que `covers_forgotten` (`forget.rs`).
+ */
+export function coversForgotten(covers: ReadonlyMap<DeviceId, DeviceAck>, master: readonly ForgottenDevice[], ackers: readonly Acker[]): DeviceId | null {
+  const order = forgetOrder(master);
+  const live = ackers.filter((a) => !order.has(a.deviceId));
+  for (const target of order.keys()) {
+    const cut = cutoff(target, live);
+    if (cut === null) continue;
+    const cover = covers.get(target);
+    if (cover === undefined || compareAckPositions(cover, cut) < 0) return target;
+  }
+  return null;
+}
+
+/** Candidat à l'instantané éligible : état `ok` de son auteur (`ok` faux : état non authentifié, exclu) et fin lue. */
+export interface SnapshotCandidate {
+  readonly state: Pick<PublishedDeviceState, 'deviceId' | 'epoch' | 'snapshot'>;
+  readonly end: SnapshotEndRead;
+  readonly ok?: boolean;
+}
+
+export type EligibleSnapshot =
+  | { readonly kind: 'ok'; readonly end: SnapshotEnd }
+  | { readonly kind: 'waiting'; readonly code: 'cloud-pending' }
+  | { readonly kind: 'none'; readonly uncovered: DeviceId | null };
+
+/**
+ * Instantané éligible (§18 point 11, section 14.2) : annoncé dans l'état `ok` de son auteur, époque courante, auteur non oublié, fin
+ * valide (même auteur, époque et numéro que l'annonce), `coversForgotten` nul ; le plus récent par `endHlc` parmi les éligibles
+ * seulement. Aucun éligible : `waiting` si un candidat qui pourrait l'être est dans le nuage, sinon `none` (avec la cible que le plus
+ * récent des candidats lisibles ne couvre pas). Même fonction que `eligible_snapshot` (`forget.rs`).
+ */
+export function eligibleSnapshot(candidates: readonly SnapshotCandidate[], master: readonly ForgottenDevice[], ackers: readonly Acker[], epoch: EpochId): EligibleSnapshot {
+  const order = forgetOrder(master);
+  let best: SnapshotEnd | null = null;
+  let uncovered: { readonly target: DeviceId; readonly endHlc: Hlc } | null = null;
+  let cloud = false;
+  for (const candidate of candidates) {
+    const { state, end } = candidate;
+    if (candidate.ok === false || order.has(state.deviceId) || state.epoch !== epoch || state.snapshot === null) continue;
+    if (end === 'cloud-pending') {
+      cloud = true;
+      continue;
+    }
+    if (end === 'none' || end === 'unreadable') continue;
+    if (end.author !== state.deviceId || end.epoch !== epoch || end.seq !== state.snapshot.seq || end.endHlc !== state.snapshot.endHlc) continue;
+    const missing = coversForgotten(end.covers, master, ackers);
+    if (missing !== null) {
+      if (uncovered === null || compareText(end.endHlc, uncovered.endHlc) > 0) uncovered = { target: missing, endHlc: end.endHlc };
+      continue;
+    }
+    if (best === null || compareText(end.endHlc, best.endHlc) > 0) best = end;
+  }
+  if (best !== null) return { kind: 'ok', end: best };
+  if (cloud) return { kind: 'waiting', code: 'cloud-pending' };
+  return { kind: 'none', uncovered: uncovered?.target ?? null };
+}
+
+/**
+ * Trous (§18 point 11) : oubliés retenus dont la coupure n'est pas nulle, que le journal ne peut plus combler (`gone` : terminés, ou
+ * `state.ctx` `missing`) et dont le curseur local est sous la coupure (ou absent). Non vide : reprise depuis un instantané éligible,
+ * aucun instantané écrit avant. Ordre total.
+ */
+export function forgetGaps(master: readonly ForgottenDevice[], ackers: readonly Acker[], cursors: ReadonlyMap<DeviceId, DeviceAck>, gone: ReadonlySet<DeviceId>): readonly DeviceId[] {
+  const order = forgetOrder(master);
+  const live = ackers.filter((a) => !order.has(a.deviceId));
+  const out: DeviceId[] = [];
+  for (const target of order.keys()) {
+    if (!gone.has(target)) continue;
+    const cut = cutoff(target, live);
+    if (cut === null) continue;
+    const cursor = cursors.get(target);
+    if (cursor === undefined || compareAckPositions(cursor, cut) < 0) out.push(target);
+  }
+  return out;
+}
+
+/** Terminés dont l'oubli est annulé (§18 point 12) : dans `done`, plus oubliés par l'ordre total. Triés. */
+export function revivedDevices(master: readonly ForgottenDevice[], done: readonly DeviceId[]): DeviceId[] {
+  const order = forgetOrder(master);
+  return [...new Set(done)].filter((id) => !order.has(id)).sort(compareText);
+}
 
 export function forgottenDeleteCheck(
   target: DeviceId,
@@ -309,6 +421,7 @@ export function forgottenDeleteCheck(
   master: readonly ForgottenDevice[],
   done: readonly DeviceId[],
   known: readonly ForgetKnownDevice[],
+  ownSnapshot: SnapshotEndRead,
 ): ForgottenDeleteCheck {
   if (target === self) return { kind: 'refused', code: 'bad-name' };
   const order = forgetOrder(master);
@@ -317,7 +430,10 @@ export function forgottenDeleteCheck(
   const byId = new Map<DeviceId, ForgetKnownDevice>();
   for (const d of known) if (!byId.has(d.deviceId)) byId.set(d.deviceId, d);
   if (!byId.has(self)) byId.set(self, { deviceId: self, status: 'missing', state: null, seen: true });
-  if (byId.get(target)?.status === 'cloud-pending') return { kind: 'waiting', device: target, code: 'cloud-pending' };
+  if (byId.get(target)?.status === 'cloud-pending') return { kind: 'waiting', device: target, code: 'cloud-pending', reason: 'state' };
+  // (i) Terminé dont l'oubli est annulé : bloque toujours, quel que soit son état (§18 point 12).
+  const revived = revivedDevices(master, done)[0];
+  if (revived !== undefined) return { kind: 'waiting', device: revived, code: 'state-mismatch', reason: 'revived' };
   const authors = new Set(master.map(declarationAuthor).filter((a): a is DeviceId => a !== null));
   const actives = [...byId.values()]
     .filter((d) => !order.has(d.deviceId))
@@ -325,20 +441,28 @@ export function forgottenDeleteCheck(
     .sort((a, b) => compareText(a.deviceId, b.deviceId));
   const states = new Map<DeviceId, NonNullable<ForgetKnownDevice['state']>>();
   for (const d of actives) {
-    if (d.status !== 'ok' || !d.state) return { kind: 'waiting', device: d.deviceId, code: d.status === 'cloud-pending' ? 'cloud-pending' : 'state-mismatch' };
+    if (d.status !== 'ok' || !d.state) return { kind: 'waiting', device: d.deviceId, code: d.status === 'cloud-pending' ? 'cloud-pending' : 'state-mismatch', reason: 'state' };
     states.set(d.deviceId, d.state);
   }
-  const cut = done.includes(target) ? null : cutoff(target, [...states.values()]);
+  const finished = done.includes(target);
+  const cut = finished ? null : cutoff(target, [...states.values()]);
   if (cut !== null) {
     for (const [id, state] of states) {
       const ack = state.acks.get(target);
-      if (ack === undefined || compareAckPositions(ack, cut) < 0) return { kind: 'waiting', device: id, code: 'state-mismatch' };
+      if (ack === undefined || compareAckPositions(ack, cut) < 0) return { kind: 'waiting', device: id, code: 'state-mismatch', reason: 'cutoff' };
     }
   }
   for (const [id, state] of states) {
     for (const [t, v] of order) {
-      if (!state.forgotten.some((f) => f.deviceId === t && f.at === v.at)) return { kind: 'waiting', device: id, code: 'state-mismatch' };
+      if (!state.forgotten.some((f) => f.deviceId === t && f.at === v.at)) return { kind: 'waiting', device: id, code: 'state-mismatch', reason: 'declarations' };
     }
+  }
+  // (h) Son instantané annoncé couvre la cible jusqu'à la coupure (sans objet pour un terminé).
+  if (!finished) {
+    if (ownSnapshot === 'cloud-pending') return { kind: 'waiting', device: self, code: 'cloud-pending', reason: 'snapshot' };
+    if (ownSnapshot === 'none' || ownSnapshot === 'unreadable') return { kind: 'waiting', device: self, code: 'state-mismatch', reason: 'snapshot' };
+    const cover = ownSnapshot.covers.get(target);
+    if (cut !== null && (cover === undefined || compareAckPositions(cover, cut) < 0)) return { kind: 'waiting', device: self, code: 'state-mismatch', reason: 'snapshot' };
   }
   return { kind: 'ready', by: verdict.by, cutoff: cut };
 }

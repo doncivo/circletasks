@@ -9,7 +9,8 @@ use std::path::Path;
 
 use circletasks_lib::sync::files::{delete_forgotten_device_files, Availability, FsError};
 use circletasks_lib::sync::forget::{
-    completed_forgotten, cutoff, forget_order, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, seen_devices, DeleteCheck, KnownDevice, KnownState,
+    completed_forgotten, covers_forgotten, cutoff, eligible_snapshot, forget_gaps, forget_order, forgotten_delete_check, learn_declarations, local_date_time, next_declaration_hlc, seen_devices,
+    DeleteCheck, Eligible, KnownDevice, KnownState, SnapshotCandidate, SnapshotEnd, SnapshotEndRead,
     Verdict, FORGOTTEN_FILE, SYNC_NEXT_KEY_ACCOUNT,
 };
 use circletasks_lib::sync::limits::PAIRING_CLOCK_TOLERANCE_MS;
@@ -61,7 +62,7 @@ pub fn status_of(name: &str) -> StateStatus {
 pub fn check_json(check: &DeleteCheck) -> Value {
     match check {
         DeleteCheck::Ready { by, cutoff } => json!({ "kind": "ready", "by": by, "cutoff": cutoff }),
-        DeleteCheck::Waiting { device, code } => json!({ "kind": "waiting", "device": device, "code": code.as_str() }),
+        DeleteCheck::Waiting { device, code, reason } => json!({ "kind": "waiting", "device": device, "code": code.as_str(), "reason": reason.as_str() }),
         DeleteCheck::Refused(code) => json!({ "kind": "refused", "code": code.as_str() }),
     }
 }
@@ -87,6 +88,27 @@ pub fn known_of(case: &Value) -> Vec<KnownDevice> {
             },
         })
         .collect()
+}
+
+/// Fin d'instantané d'un cas de table (`snapshotReadOf` de `snapshotJson.ts`) : chaîne ou objet `{ author, epoch, seq, endHlc, covers }`.
+pub fn snapshot_of(value: &Value) -> SnapshotEndRead {
+    match value.as_str() {
+        Some("none") => SnapshotEndRead::None,
+        Some("cloud-pending") => SnapshotEndRead::CloudPending,
+        Some("unreadable") => SnapshotEndRead::Unreadable,
+        Some(other) => panic!("fin inconnue : {other}"),
+        None => SnapshotEndRead::End(SnapshotEnd {
+            author: value["author"].as_str().unwrap().to_owned(),
+            epoch: value["epoch"].as_str().unwrap().to_owned(),
+            seq: value["seq"].as_u64().unwrap(),
+            end_hlc: value["endHlc"].as_str().unwrap().to_owned(),
+            covers: serde_json::from_value(value["covers"].clone()).unwrap(),
+        }),
+    }
+}
+
+fn ackers_of(value: &Value) -> Vec<(String, BTreeMap<String, DeviceAck>)> {
+    value.as_array().unwrap().iter().map(|a| (a["deviceId"].as_str().unwrap().to_owned(), serde_json::from_value(a["acks"].clone()).unwrap())).collect()
 }
 
 pub fn entries_of(value: &Value) -> Vec<ForgottenDevice> {
@@ -130,8 +152,61 @@ fn shared_table_cutoff() {
 fn shared_table_forgotten_delete_check() {
     for case in table()["forgottenDelete"].as_array().unwrap() {
         let done: Vec<String> = serde_json::from_value(case["done"].clone()).unwrap();
-        let check = forgotten_delete_check(case["target"].as_str().unwrap(), case["self"].as_str().unwrap(), &entries_of(&case["master"]), &done, &known_of(case));
+        let check = forgotten_delete_check(case["target"].as_str().unwrap(), case["self"].as_str().unwrap(), &entries_of(&case["master"]), &done, &known_of(case), &snapshot_of(&case["ownSnapshot"]));
         assert_eq!(check_json(&check), case["expected"], "{}", case["name"]);
+    }
+}
+
+#[test]
+fn shared_table_covers_forgotten() {
+    let cases = table()["coversForgotten"].as_array().unwrap().clone();
+    assert!(cases.len() >= 8);
+    for case in cases {
+        let covers: BTreeMap<String, DeviceAck> = serde_json::from_value(case["covers"].clone()).unwrap();
+        let ackers = ackers_of(&case["ackers"]);
+        let result = covers_forgotten(&covers, &entries_of(&case["master"]), ackers.iter().map(|(id, acks)| (id.as_str(), acks)));
+        assert_eq!(json!(result), case["expected"], "{}", case["name"]);
+    }
+}
+
+#[test]
+fn shared_table_eligible_snapshot() {
+    let cases = table()["eligible"].as_array().unwrap().clone();
+    assert!(cases.len() >= 8);
+    for case in cases {
+        let candidates: Vec<SnapshotCandidate> = case["candidates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| SnapshotCandidate {
+                author: c["state"]["deviceId"].as_str().unwrap().to_owned(),
+                epoch: c["state"]["epoch"].as_str().unwrap().to_owned(),
+                announced: c["state"]["snapshot"].as_object().map(|s| (s["seq"].as_u64().unwrap(), s["endHlc"].as_str().unwrap().to_owned())),
+                ok: c["ok"].as_bool().unwrap_or(true),
+                end: snapshot_of(&c["end"]),
+            })
+            .collect();
+        let ackers = ackers_of(&case["ackers"]);
+        let result = eligible_snapshot(&candidates, &entries_of(&case["master"]), ackers.iter().map(|(id, acks)| (id.as_str(), acks)), case["epoch"].as_str().unwrap());
+        let shown = match result {
+            Eligible::Ok(end) => json!({ "kind": "ok", "author": end.author, "seq": end.seq }),
+            Eligible::Waiting => json!({ "kind": "waiting", "code": "cloud-pending" }),
+            Eligible::None { uncovered } => json!({ "kind": "none", "uncovered": uncovered }),
+        };
+        assert_eq!(shown, case["expected"], "{}", case["name"]);
+    }
+}
+
+#[test]
+fn shared_table_forget_gaps() {
+    let cases = table()["gaps"].as_array().unwrap().clone();
+    assert!(cases.len() >= 6);
+    for case in cases {
+        let ackers = ackers_of(&case["ackers"]);
+        let cursors: BTreeMap<String, DeviceAck> = serde_json::from_value(case["cursors"].clone()).unwrap();
+        let gone: std::collections::BTreeSet<String> = serde_json::from_value(case["gone"].clone()).unwrap();
+        let result = forget_gaps(&entries_of(&case["master"]), ackers.iter().map(|(id, acks)| (id.as_str(), acks)), &cursors, &gone);
+        assert_eq!(json!(result), case["expected"], "{}", case["name"]);
     }
 }
 
@@ -183,6 +258,109 @@ fn forget_detail_texts_are_all_present_in_the_compiled_file() {
     assert!(texts.never.contains("{id}"));
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+// Seconde revue (ADR 0011 §18 points 11 à 13) : condition (h), lecture `tail`, arrêt définitif `selfForgotten`
+// ------------------------------------------------------------------------------------------------------------------------------
+
+fn snapshot_parts(dev: &str, n: u32) -> Vec<String> {
+    vec!["devices".into(), dev.into(), epoch(1, DEV_A), circletasks_lib::sync::names::snapshot_name(n)]
+}
+
+#[test]
+fn condition_h_is_read_by_rust_from_its_own_announced_snapshot() {
+    let mut net = Net::new(&[DEV_B, DEV_X]);
+    net.journal(DEV_X);
+    net.settle(&[DEV_A, DEV_B, DEV_X], 2);
+    net.dev(DEV_A).d.core.device_forget(DEV_X, 1).unwrap();
+    net.settle(&[DEV_A, DEV_B], 3);
+    // A annonce un instantané qui ne couvre pas X jusqu'à la coupure (2, 1) : la WebView appelle la suppression, Rust lit la fin de
+    // l'instantané lui-même et refuse ; rien supprimé.
+    let low = json!({ DEV_B: ack(DEV_B, 0, 0, 1), DEV_X: ack(DEV_X, 1, 0, 1) });
+    net.cycle_with(DEV_A, Some(low)).unwrap();
+    assert_eq!(code(net.dev(DEV_A).d.core.forgotten_delete(DEV_X)), SyncCode::StateMismatch);
+    assert!(!net.files_of(DEV_X).is_empty());
+    // Instantané couvrant mais pas encore arrivé en entier (iCloud) : cloud-pending, rien supprimé.
+    net.cycle(DEV_A).unwrap();
+    let n = net.dev(DEV_A).snap.as_ref().unwrap().0 as u32;
+    let parts = snapshot_parts(DEV_A, n);
+    let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+    let len = net.fs.get(&parts).unwrap().len();
+    net.fs.truncate(&parts, len - 5);
+    assert_eq!(code(net.dev(DEV_A).d.core.forgotten_delete(DEV_X)), SyncCode::CloudPending);
+    assert!(!net.files_of(DEV_X).is_empty());
+    // Instantané couvrant annoncé et lisible : suppression.
+    net.cycle(DEV_A).unwrap();
+    assert!(net.dev(DEV_A).d.core.forgotten_delete(DEV_X).unwrap().complete);
+    assert!(net.files_of(DEV_X).is_empty());
+}
+
+#[test]
+fn read_snapshot_tail_returns_only_the_end_of_the_announced_snapshot() {
+    let mut net = Net::new(&[DEV_B]);
+    net.cycle(DEV_A).unwrap();
+    let ep = epoch(1, DEV_A);
+    let b = &net.dev(DEV_B).d.core;
+    let page = b.read_snapshot_with(DEV_A, &ep, 1, 0, None, true).unwrap();
+    assert_eq!(page.status, "complete");
+    assert_eq!(page.records.len(), 1);
+    assert!(page.records[0].contains("\"snap-end\""));
+    // Instantané non annoncé (numéro différent de l'annonce) : refusé.
+    assert_eq!(code(b.read_snapshot_with(DEV_A, &ep, 2, 0, None, true)), SyncCode::StateMismatch);
+    // Ligne finale incomplète (iCloud n'a pas fini) : cloud-pending.
+    net.cycle(DEV_A).unwrap();
+    let parts = snapshot_parts(DEV_A, 2);
+    let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+    let bytes = net.fs.get(&parts).unwrap();
+    net.fs.truncate(&parts, bytes.len() - 5);
+    assert_eq!(net.dev(DEV_B).d.core.read_snapshot_with(DEV_A, &ep, 2, 0, None, true).unwrap().status, "cloud-pending");
+    // Dernière ligne qui ne se déchiffre pas : truncated.
+    net.cycle(DEV_A).unwrap();
+    let parts = snapshot_parts(DEV_A, 3);
+    let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+    let mut bytes = net.fs.get(&parts).unwrap();
+    let at = bytes.len() - 10;
+    bytes[at] = if bytes[at] == b'A' { b'B' } else { b'A' };
+    net.fs.put(&parts, &bytes);
+    assert_eq!(net.dev(DEV_B).d.core.read_snapshot_with(DEV_A, &ep, 3, 0, None, true).unwrap().status, "truncated");
+}
+
+#[test]
+fn self_forgotten_is_permanent_even_if_the_verdict_changes_after_restart_and_after_a_rebuild() {
+    let mut net = Net::new(&[DEV_B, DEV_X]);
+    net.settle(&[DEV_A, DEV_B, DEV_X], 1);
+    net.dev(DEV_A).d.core.device_forget(DEV_X, 1).unwrap();
+    net.settle(&[DEV_A, DEV_B], 2);
+    // X voit son oubli : toute écriture refusée.
+    assert_eq!(code(net.cycle(DEV_X)), SyncCode::StateMismatch);
+    assert!(net.registry(DEV_X)["selfForgotten"].is_string());
+    assert!(net.dev(DEV_X).d.core.scan(&[]).unwrap().forgotten.self_forgotten.is_some());
+    let ep = epoch(1, DEV_A);
+    let x = &net.dev(DEV_X).d.core;
+    assert_eq!(code(x.append_journal(&AppendRequest { epoch: ep.clone(), segment: 1, expect_records: 0, sv: SV, max_hlc: hlc(900, DEV_X), records: vec!["{}".into()] })), SyncCode::StateMismatch);
+    assert_eq!(code(x.device_forget(DEV_B, 1)), SyncCode::StateMismatch);
+    assert_eq!(code(x.forgotten_delete(DEV_B)), SyncCode::StateMismatch);
+    assert_eq!(code(x.delete_own(&[])), SyncCode::StateMismatch);
+    // Registre perdu puis reconstruit (son état est ok) : de nouveau arrêté.
+    std::fs::remove_file(registry_path(&net.dev(DEV_X).d)).unwrap();
+    net.dev_mut(DEV_X).d.restart();
+    assert!(net.dev(DEV_X).d.core.scan(&[]).unwrap().forgotten.self_forgotten.is_some());
+    assert_eq!(code(net.cycle(DEV_X)), SyncCode::StateMismatch);
+    // Le verdict change ensuite (déclaration plus ancienne, antidatée, qui oublie A ; republiée par B) : X n'est plus oublié par l'ordre
+    // total, mais reste arrêté, après redémarrage aussi.
+    let mut reg = net.registry(DEV_B);
+    let older = json!({ "deviceId": DEV_A, "at": hlc(1, DEV_C), "lastAck": null });
+    reg["entries"].as_array_mut().unwrap().push(older);
+    std::fs::write(net.dev(DEV_B).d.base.path().join("sync").join(FORGOTTEN_FILE), serde_json::to_vec(&reg).unwrap()).unwrap();
+    net.dev_mut(DEV_B).d.restart();
+    net.cycle(DEV_B).unwrap();
+    let scan = net.dev(DEV_X).d.core.scan(&[]).unwrap();
+    assert!(!forget_order(&scan.forgotten.entries).contains_key(DEV_X), "le verdict ne l'oublie plus");
+    assert!(scan.forgotten.self_forgotten.is_some());
+    assert_eq!(code(net.cycle(DEV_X)), SyncCode::StateMismatch);
+    net.dev_mut(DEV_X).d.restart();
+    assert_eq!(code(net.cycle(DEV_X)), SyncCode::StateMismatch);
+}
+
 #[test]
 fn local_date_time_is_24h_and_civil() {
     assert_eq!(local_date_time(0), ("01/01/1970".to_owned(), "00:00".to_owned()));
@@ -199,6 +377,8 @@ struct Dev {
     d: Device,
     seq: u64,
     head: (u64, u64, Option<String>),
+    /// Dernier instantané écrit (numéro, hlc de fin), annoncé dans chaque état publié ensuite (§18 point 11).
+    snap: Option<(u64, String)>,
 }
 
 struct Net {
@@ -219,11 +399,16 @@ fn ack(dev: &str, segment: u64, record: u64, state_seq: u64) -> Value {
 }
 
 fn state_json(dev: &str, seq: u64, head: &(u64, u64, Option<String>), acks: Value, forgotten: Value) -> Value {
+    state_json_with(dev, seq, head, acks, forgotten, None)
+}
+
+fn state_json_with(dev: &str, seq: u64, head: &(u64, u64, Option<String>), acks: Value, forgotten: Value, snap: Option<&(u64, String)>) -> Value {
     let ep = epoch(1, DEV_A);
+    let snapshot = snap.map_or(Value::Null, |(n, end)| json!({ "seq": n, "endHlc": end }));
     json!({
         "deviceId": dev, "platform": "windows", "appVersion": "0.1.1", "sm": 1, "sv": SV, "epoch": ep, "stateSeq": seq,
         "head": { "epoch": ep, "segment": head.0, "record": head.1, "hlc": head.2, "stateSeq": seq },
-        "acks": acks, "snapshot": null, "purgeHorizon": null, "lastSyncHlc": hlc(1_000 + seq, dev), "forgotten": forgotten, "reset": null
+        "acks": acks, "snapshot": snapshot, "purgeHorizon": null, "lastSyncHlc": hlc(1_000 + seq, dev), "forgotten": forgotten, "reset": null
     })
 }
 
@@ -232,10 +417,10 @@ impl Net {
     fn new(ids: &[&'static str]) -> Self {
         let (a, fs) = device();
         a.setup(DEV_A);
-        let mut devs = vec![Dev { id: DEV_A, d: a, seq: 0, head: (0, 0, None) }];
+        let mut devs = vec![Dev { id: DEV_A, d: a, seq: 0, head: (0, 0, None), snap: None }];
         for id in ids {
             let d = joined(&fs, &devs[0].d, id);
-            devs.push(Dev { id, d, seq: 0, head: (0, 0, None) });
+            devs.push(Dev { id, d, seq: 0, head: (0, 0, None), snap: None });
         }
         let mut net = Self { fs, devs };
         for id in net.ids() {
@@ -270,24 +455,46 @@ impl Net {
     fn publish_raw(&mut self, id: &str, acks: Value, forgotten: Value) -> Result<(), SyncError> {
         let dev = self.dev(id);
         let seq = dev.seq + 1;
-        dev.d.core.write_state(SV, state_json(id, seq, &dev.head, acks, forgotten))?;
+        dev.d.core.write_state(SV, state_json_with(id, seq, &dev.head, acks, forgotten, dev.snap.as_ref()))?;
         self.dev_mut(id).seq = seq;
         Ok(())
     }
 
-    /// Un cycle de `id` : scan (fusion du registre), puis état republiant la liste maître rendue, accusés à jour (têtes, `stateSeq`) ;
-    /// aucun accusé sur les appareils de `done` ; un appareil sans dossier n'est pas accusé.
+    /// Instantané de `id` (un seul enregistrement `snap-end`, `covers` donnés), annoncé par l'état publié ensuite.
+    fn snapshot(&mut self, id: &str, covers: &Value) -> Result<(), SyncError> {
+        let ep = epoch(1, DEV_A);
+        let n = self.dev(id).snap.as_ref().map_or(1, |(n, _)| n + 1);
+        let core = &self.dev(id).d.core;
+        let handle = core.snapshot_begin(&ep, n, SV)?;
+        core.snapshot_append(handle, &[json!({ "k": "snap-end", "count": 0, "covers": covers, "epoch": ep, "sv": SV }).to_string()])?;
+        core.snapshot_commit(handle)?;
+        self.dev_mut(id).snap = Some((n, hlc(5_000 + n, id)));
+        Ok(())
+    }
+
+    /// Un cycle de `id` : scan (fusion du registre), puis instantané (`covers` = ses accusés) et état republiant la liste maître rendue,
+    /// accusés à jour (têtes, `stateSeq`) ; l'accusé sur un appareil oublié reste publié, figé, même sans dossier (§18 point 11) ; un
+    /// autre appareil sans dossier n'est pas accusé.
     fn cycle(&mut self, id: &str) -> Result<(), SyncError> {
+        self.cycle_with(id, None)
+    }
+
+    /// Même cycle ; `covers` donnés : instantané qui ne reprend pas ses accusés (instantané non couvrant, condition (h)).
+    fn cycle_with(&mut self, id: &str, covers: Option<Value>) -> Result<(), SyncError> {
         let scan = self.dev(id).d.core.scan(&[])?;
+        let order = forget_order(&scan.forgotten.entries);
         let mut acks = serde_json::Map::new();
         for other in &self.devs {
-            if other.id == id || scan.forgotten.done.iter().any(|d| d == other.id) || !self.fs.names().iter().any(|n| n == &format!("devices/{}", other.id)) {
+            let has_folder = self.fs.names().iter().any(|n| n == &format!("devices/{}", other.id));
+            if other.id == id || (!has_folder && !order.contains_key(other.id)) {
                 continue;
             }
             acks.insert(other.id.to_owned(), ack(other.id, other.head.0, other.head.1, other.seq));
         }
         let forgotten = serde_json::to_value(&scan.forgotten.entries).unwrap();
-        self.publish_raw(id, Value::Object(acks), forgotten)
+        let acks = Value::Object(acks);
+        self.snapshot(id, covers.as_ref().unwrap_or(&acks))?;
+        self.publish_raw(id, acks, forgotten)
     }
 
     /// Plusieurs tours de cycles des appareils donnés (les erreurs d'un appareil oublié qui ne peut plus rien écrire sont ignorées).

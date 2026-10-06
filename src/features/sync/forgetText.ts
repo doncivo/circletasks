@@ -48,6 +48,7 @@ export function forgetDeviceName(id: DeviceId, devices: readonly SyncDeviceStatu
 export function forgetFailureText(failure: NonNullable<ForgetFacts['failure']>, devices: readonly SyncDeviceStatus[]): string {
   const reason = forgetReason(failure.code);
   if (failure.step === 'overflow') return t('sync.forget.failedOverflow');
+  if (failure.step === 'revived') return t('sync.forget.failedRevived', { device: forgetDeviceName(failure.deviceId, devices) });
   if (failure.step === 'rejoin') return t('sync.forget.failedRejoin', { reason });
   const device = forgetDeviceName(failure.deviceId, devices);
   return failure.step === 'declare' ? t('sync.forget.failedDeclare', { device, reason }) : t('sync.forget.failedDelete', { device, reason });
@@ -58,6 +59,7 @@ export function forgetDeletionLine(deletion: ForgetFacts['deletions'][number] | 
   if (!deletion || deletion.state === 'done') return null;
   if (deletion.state === 'deleting') return t('sync.forget.deletionRunning');
   if (deletion.state === 'strays') return t('sync.forget.deletionStrays');
+  if (deletion.state === 'no-snapshot') return t('sync.forget.deletionNoSnapshot');
   if (deletion.state === 'finalizing') {
     return deletion.waitingFor ? t('sync.forget.deletionFinalizing', { device: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.deletionFinalizingUnknown');
   }
@@ -69,6 +71,7 @@ export function forgetPendingBanner(deletion: ForgetFacts['deletions'][number], 
   const device = forgetDeviceName(deletion.deviceId, devices);
   if (deletion.state === 'deleting') return t('sync.forget.bannerRunning', { device });
   if (deletion.state === 'strays') return t('sync.forget.bannerStrays', { device });
+  if (deletion.state === 'no-snapshot') return t('sync.forget.bannerNoSnapshot', { device });
   if (deletion.state === 'finalizing') {
     return deletion.waitingFor ? t('sync.forget.bannerFinalizing', { device, waiting: forgetDeviceName(deletion.waitingFor, devices) }) : t('sync.forget.bannerFinalizingUnknown', { device });
   }

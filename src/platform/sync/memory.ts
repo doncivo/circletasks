@@ -69,8 +69,8 @@ import {
   type SyncFolderInfo,
   type SyncPlatform,
 } from './types';
-import { parsePublishedStateText } from '../../domain/sync/parse';
-import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, seenDevices, type ForgetKnownDevice } from '../../domain/sync/retention';
+import { parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
+import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, seenDevices, type ForgetKnownDevice, type SnapshotEndRead } from '../../domain/sync/retention';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -514,7 +514,16 @@ interface MemRegistry {
   readonly deviceId: DeviceId;
   readonly entries: ForgottenDevice[];
   readonly done: DeviceId[];
+  /** Arrêt définitif (§18 point 12), jamais effacé. */
+  readonly selfForgotten: Hlc | null;
 }
+
+/** `selfForgotten` posé si l'ordre total oublie l'appareil du registre (jamais effacé), comme `note_self_forgotten` de Rust. */
+const withSelfForgotten = (reg: MemRegistry): MemRegistry => {
+  if (reg.selfForgotten !== null) return reg;
+  const verdict = forgetOrder(reg.entries).get(reg.deviceId);
+  return verdict ? { ...reg, selfForgotten: verdict.at } : reg;
+};
 
 /** Écart maximal entre le stateSeq lu en clair dans l'en-tête de son propre état remplacé et les sources authentifiées (comme Rust). */
 const MAX_UNAUTHENTICATED_SEQ_JUMP = 1_000_000;
@@ -586,8 +595,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const f = requireFolder();
     const k = requireKey();
     const self = requireBound();
+    refuseIfSelfForgotten(f, self);
     if (!own || own.folderId !== f.id || own.kid !== k.kid) own = rebuildOwn(f, k.kid, self);
     return { folder: f, kid: k.kid, self, own };
+  };
+
+  /** Arrêt définitif (§18 point 12) : appareil qui s'est vu oublié → toute écriture refusée (`state-mismatch`). */
+  const refuseIfSelfForgotten = (f: MemorySyncFolder, self: DeviceId): void => {
+    if (loadRegistry(f, self)?.selfForgotten) fail('state-mismatch');
   };
 
   /**
@@ -833,12 +848,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const kept = [...selfScan, ...others.slice(0, room)];
     const dropped = Math.max(0, others.length - room);
     // Y-10 (§18 point 3) : déclarations retenues des états authentifiés apprises dans la liste maître, gardée avant de rendre le scan.
-    let forgotten: ForgottenRegistryView = { entries: [], done: [], overflow: false, accepted: [] };
+    let forgotten: ForgottenRegistryView = { entries: [], done: [], overflow: false, accepted: [], selfForgotten: null };
     if (bound !== null) {
       const reg = ensureRegistry(f, kid, bound);
       const learned = learnDeclarations(reg.entries, kept.filter((d) => d.stateStatus === 'ok' && d.state).flatMap((d) => (d.state as PublishedDeviceState).forgotten));
-      registry = { ...reg, entries: learned.entries };
-      forgotten = { entries: learned.entries, done: [...reg.done], overflow: learned.overflow, accepted: ([...accepted.keys()] as DeviceId[]).sort() };
+      registry = withSelfForgotten({ ...reg, entries: learned.entries });
+      forgotten = { entries: learned.entries, done: [...reg.done], overflow: learned.overflow, accepted: ([...accepted.keys()] as DeviceId[]).sort(), selfForgotten: registry.selfForgotten };
     }
     return {
       devices: kept.sort((a, b) => (a.deviceId < b.deviceId ? -1 : 1)),
@@ -928,12 +943,23 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const { folder: f, kid } = requireReadable();
     const from: RecordCursor = { segment: r.seq, record: r.fromRecord };
     const state = authenticatedState(f, kid, r.deviceId);
+    if (r.tail === true) {
+      // Y-10 (§18 point 11) : fin de l'instantané annoncé seulement.
+      if (!state) return { records: [], next: from, status: 'cloud-pending' };
+      if (state.epoch !== r.epoch || state.snapshot?.seq !== r.seq) fail('state-mismatch');
+    }
     // Seuls les instantanés annoncés par l'état authentifié sont lus (le dernier annoncé et les plus anciens gardés).
     if (!state || state.epoch !== r.epoch || !state.snapshot || r.seq > state.snapshot.seq) return { records: [], next: from, status: 'cloud-pending' };
     const file = f.devices.get(r.deviceId)?.epochs.get(r.epoch)?.snapshots.get(r.seq);
     if (!file || file.availability !== 'local') return { records: [], next: from, status: 'cloud-pending' };
     checkFileForRead(file, kid, MAX_SNAPSHOT_BYTES);
     if (file.header.f !== 'ct-s' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== r.seq) fail('bad-header');
+    if (r.tail === true) {
+      const last = file.lines[file.lines.length - 1];
+      if (file.partialTail || !last) return { records: [], next: from, status: 'cloud-pending' };
+      if (last.corrupt) return { records: [], next: { segment: r.seq, record: file.lines.length - 1 }, status: 'truncated' };
+      return { records: [last.text], next: { segment: r.seq, record: file.lines.length }, status: 'complete' };
+    }
     const records: string[] = [];
     let bytes = 0;
     let index = r.fromRecord;
@@ -1175,7 +1201,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         allowed = (status === 'missing' && neverPublished) || (ownValid !== null && acksOnSelf.some((seq) => seq >= ownValid.stateSeq));
     }
     if (!allowed) return fail('state-mismatch');
-    return { folderId: f.id, deviceId: self, entries, done: [] };
+    return withSelfForgotten({ folderId: f.id, deviceId: self, entries, done: [], selfForgotten: null });
   };
 
   /** Registre valide pour le dossier et l'appareil liés : lu, sinon reconstruit et gardé avant toute écriture. */
@@ -1192,6 +1218,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const f = requireFolder();
     const k = requireKey();
     const self = requireBound();
+    refuseIfSelfForgotten(f, self);
     return { f, kid: k.kid, self };
   };
 
@@ -1248,11 +1275,24 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const status = read?.status ?? 'missing';
       return { deviceId: id, status, state: status === 'ok' ? (read?.state ?? null) : null, seen: seen.has(id) };
     });
-    const check = forgottenDeleteCheck(deviceId, self, reg.entries, reg.done, known);
+    const check = forgottenDeleteCheck(deviceId, self, reg.entries, reg.done, known, ownSnapshotEnd(f, self, reads.get(self)));
     if (check.kind !== 'ready') return fail(check.code);
     const result = deleteDeviceFiles(f, deviceId);
     if (result.complete && !reg.done.includes(deviceId)) registry = { ...reg, done: [...reg.done, deviceId] };
     return result;
+  };
+
+  /** Condition (h) (§18 point 11) : fin de l'instantané annoncé par son propre état authentifié, lue comme `tail`. */
+  const ownSnapshotEnd = (f: MemorySyncFolder, self: DeviceId, read: StateRead | undefined): SnapshotEndRead => {
+    const state = read?.status === 'ok' ? read.state : null;
+    if (!state?.snapshot) return 'none';
+    const file = f.devices.get(self)?.epochs.get(state.epoch)?.snapshots.get(state.snapshot.seq);
+    if (!file || file.availability !== 'local') return 'cloud-pending';
+    const last = file.lines[file.lines.length - 1];
+    if (file.partialTail || !last) return 'cloud-pending';
+    const end = last.corrupt ? null : parseSnapshotRecord(last.text);
+    if (!end || end.k !== 'snap-end' || end.epoch !== state.epoch) return 'unreadable';
+    return { author: self, epoch: state.epoch, seq: state.snapshot.seq, endHlc: state.snapshot.endHlc, covers: end.covers };
   };
 
   /** Seuls les noms stricts (en mémoire : segments, instantanés, dossiers d'époque, état), `state.ctx` en dernier. */

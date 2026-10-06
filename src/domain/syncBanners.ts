@@ -158,8 +158,10 @@ export interface SyncBannerDevice {
 
 /** Y-10 : échec d'un oubli et suppressions en attente (forme de `SyncStatus.forget`, gardés dans `sync_meta`). */
 export interface ForgetFacts {
-  readonly failure: { readonly deviceId: DeviceId; readonly code: string; readonly step: 'declare' | 'delete' | 'rejoin' | 'overflow' } | null;
-  readonly deletions: readonly { readonly deviceId: DeviceId; readonly state: 'waiting' | 'deleting' | 'finalizing' | 'strays' | 'done'; readonly waitingFor: DeviceId | null }[];
+  readonly failure: { readonly deviceId: DeviceId; readonly code: string; readonly step: 'declare' | 'delete' | 'rejoin' | 'overflow' | 'revived' } | null;
+  readonly deletions: readonly { readonly deviceId: DeviceId; readonly state: 'waiting' | 'deleting' | 'finalizing' | 'no-snapshot' | 'strays' | 'done'; readonly waitingFor: DeviceId | null }[];
+  /** Oublis annulés (§18 point 12) : « oubli en échec » tant que l'appareil n'est pas oublié de nouveau. */
+  readonly revived?: readonly DeviceId[] | undefined;
 }
 
 /** Ce que la synchro expose (forme de `SyncStatus`). */
@@ -261,6 +263,7 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   // Y-10 (critère 15 d) : échec d'un oubli et suppression en attente, tant qu'ils durent (gardés avant le premier cycle).
   const forget = persisted.forget ?? shown.forget ?? null;
   if (forget?.failure) troubles.push({ code: 'forget-failed', failure: forget.failure });
+  for (const id of forget?.revived ?? []) troubles.push({ code: 'forget-failed', failure: { deviceId: id, code: 'state-mismatch', step: 'revived' } });
   const pending = forget?.deletions.find((d) => d.state !== 'done');
   if (pending) troubles.push({ code: 'forget-pending', deletion: pending });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));

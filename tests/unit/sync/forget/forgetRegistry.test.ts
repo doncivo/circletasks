@@ -90,11 +90,15 @@ describe('X oublie Z, A oublie X, suppression de X (§18 point 10)', () => {
     await pair(a, n);
     await n.cycle();
     await settle([a, n]);
-    // N n'a jamais vu X ni Z (aucun état accepté : pas de ligne dans APPAREILS) ; ils sont oubliés dans sa base, jamais lus.
+    // N n'a jamais vu X ni Z (aucun état accepté) ; ils sont oubliés dans sa base, jamais lus ; son curseur sur eux est hérité de covers
+    // de l'instantané dont il est parti (§18 point 11), égal à celui de A : il publie le même accusé figé.
     const rows = await n.data.repos.sync.getStates();
+    const aRows = await a.data.repos.sync.getStates();
     for (const id of [x.id, z.id]) {
-      expect(rows.find((r) => r.deviceId === id)?.status, id).toBe('forgotten');
-      expect(rows.find((r) => r.deviceId === id)?.cursorSegment ?? 0).toBe(0);
+      const row = rows.find((r) => r.deviceId === id);
+      const aRow = aRows.find((r) => r.deviceId === id);
+      expect(row?.status, id).toBe('forgotten');
+      expect([row?.cursorSegment, row?.cursorRecord], id).toEqual([aRow?.cursorSegment, aRow?.cursorRecord]);
     }
     expect(publishedForgotten(n).sort()).toEqual([x.id, z.id].sort());
     expect(await taskSnapshot(n)).toEqual(await taskSnapshot(a));

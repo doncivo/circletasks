@@ -24,7 +24,7 @@ use super::names::{is_uuid_v4, EpochId};
 use super::files::{delete_forgotten_device_files, ForgottenDeletion};
 use super::files::Listing;
 use super::forget::{
-    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
+    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, parse_snapshot_end, SnapshotEnd, SnapshotEndRead, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
     next_declaration_hlc, state_hlcs, AcceptedRecord, DeleteCheck, ForgottenRegistry, ForgottenView, KnownDevice, KnownState, FORGET_DECLARE_LIMIT, FORGOTTEN_FILE,
     MAX_FORGOTTEN_DELETE_ENTRIES, MAX_FORGOTTEN_ENTRIES, SYNC_NEXT_KEY_ACCOUNT,
 };
@@ -160,6 +160,8 @@ struct Inner {
     pending_paired_by: Option<String>,
     /// Dernier instantané lu par pages (revue 15) : relu du disque seulement quand un autre est demandé.
     snapshot_cache: Option<SnapshotCache>,
+    /// Fins d'instantané déjà lues (`tail`, §18 point 11) par (appareil, époque, numéro) : un numéro n'est jamais réécrit.
+    snapshot_ends: HashMap<(String, String, u64), String>,
 }
 
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -285,6 +287,7 @@ impl SyncCore {
         let mut inner = self.lock();
         // Autre dossier, ou le même rechoisi : aucun instantané en cache (revue B3).
         inner.snapshot_cache = None;
+        inner.snapshot_ends.clear();
         self.ensure_loaded(&mut inner);
         let folder_id = checked.folder_id();
         let previous_id = inner.record.as_ref().map(|r| CheckedFolder { path: PathBuf::from(&r.path), kind: FolderKind::Unknown, pinned: false }.folder_id());
@@ -518,6 +521,7 @@ impl SyncCore {
         let mut inner = self.lock();
         // Début de cycle : le cache de lecture d'instantané est vidé (revue B3).
         inner.snapshot_cache = None;
+        inner.snapshot_ends.clear();
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
         let self_id = Self::bound_device(&inner);
@@ -573,14 +577,37 @@ impl SyncCore {
         Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_journal(device_id, epoch, from, max_bytes, accepted)
     }
 
-    /// `sync_read_snapshot`.
+    /// `sync_read_snapshot` ; `tail` : dernier enregistrement seul de l'instantané annoncé (§18 point 11).
     pub fn read_snapshot(&self, device_id: &str, epoch: &str, seq: u64, from_record: u64, max_bytes: Option<u64>) -> SyncResult<ReadPage> {
+        self.read_snapshot_with(device_id, epoch, seq, from_record, max_bytes, false)
+    }
+
+    pub fn read_snapshot_with(&self, device_id: &str, epoch: &str, seq: u64, from_record: u64, max_bytes: Option<u64>, tail: bool) -> SyncResult<ReadPage> {
         let mut inner = self.lock();
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
-        let Inner { folder, accepted, snapshot_cache, .. } = &mut *inner;
+        let Inner { folder, accepted, snapshot_cache, snapshot_ends, .. } = &mut *inner;
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        if tail {
+            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends);
+        }
+        store.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
+    }
+
+    /// Condition (h) (§18 point 11) : fin de l'instantané annoncé par son propre état authentifié, lue par Rust (même lecture que `tail`).
+    fn own_snapshot_end(store: &Store<'_>, self_id: &str, own: Option<&PublishedState>, accepted: &mut HashMap<String, Accepted>, ends: &mut HashMap<(String, String, u64), String>) -> SnapshotEndRead {
+        let Some(state) = own else { return SnapshotEndRead::None };
+        let Some(announced) = &state.snapshot else { return SnapshotEndRead::None };
+        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends) {
+            Ok(page) if page.status == "complete" => match page.records.first().and_then(|json| parse_snapshot_end(json, &state.epoch)) {
+                Some(covers) => SnapshotEndRead::End(SnapshotEnd { author: self_id.to_owned(), epoch: state.epoch.clone(), seq: announced.seq, end_hlc: announced.end_hlc.clone(), covers }),
+                None => SnapshotEndRead::Unreadable,
+            },
+            Ok(page) if page.status == "cloud-pending" => SnapshotEndRead::CloudPending,
+            Err(error) if error.code == SyncCode::CloudPending => SnapshotEndRead::CloudPending,
+            _ => SnapshotEndRead::Unreadable,
+        }
     }
 
     // --------------------------------------------------------------------------------------------------------------------------
@@ -592,6 +619,7 @@ impl SyncCore {
         self.require_folder(inner)?;
         let key = self.load_key(inner)?;
         let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
+        self.refuse_if_self_forgotten(inner, &self_id)?;
         let own = self.valid_own(inner, &key, &self_id)?;
         let own = self.apply_pending(inner, own)?;
         let usage = self.usage(inner, key.kid());
@@ -782,6 +810,7 @@ impl SyncCore {
         let mut inner = self.lock();
         // Nouvelle clé : aucun instantané lu avec l'ancienne ne reste en cache (revue B3).
         inner.snapshot_cache = None;
+        inner.snapshot_ends.clear();
         // Clé existante relue sous le verrou (revue 17) : une autre clé apparue pendant la boîte n'est jamais remplacée sans accord.
         let existing = self.read_vault_key()?;
         if replace != Some(true) && existing.as_ref().is_some_and(|e| !e.same_as(&key)) {
@@ -913,6 +942,8 @@ impl SyncCore {
                 reg.accepted.insert(id.clone(), AcceptedRecord { epoch: state.epoch.clone(), state_seq: state.state_seq, digest: digest.clone() });
             }
         }
+        // Registre reconstruit : un appareil oublié par la liste reconstruite est de nouveau arrêté (§18 point 12).
+        reg.note_self_forgotten();
         Ok(reg)
     }
 
@@ -933,6 +964,10 @@ impl SyncCore {
         let mut changed = entries.len() != reg.entries.len();
         reg.entries = entries;
         changed |= Self::absorb_accepted(&mut reg, &inner.accepted);
+        if reg.note_self_forgotten() {
+            log::event("self-forgotten", self_id);
+            changed = true;
+        }
         if changed {
             self.save_registry(&reg)?;
         }
@@ -972,7 +1007,19 @@ impl SyncCore {
         bound.fs.start_cycle().map_err(|e| SyncError::new(e.code()))?;
         let key = self.load_key(inner)?;
         let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
+        self.refuse_if_self_forgotten(inner, &self_id)?;
         Ok((key, self_id))
+    }
+
+    /// Arrêt définitif (§18 point 12) : appareil qui s'est vu oublié (`selfForgotten` du registre) → toute écriture refusée
+    /// (`state-mismatch`), même si le verdict a changé depuis ; seuls `sync_folder_forget` et une nouvelle identité en sortent.
+    fn refuse_if_self_forgotten(&self, inner: &mut Inner, self_id: &str) -> SyncResult<()> {
+        let folder_id = self.require_folder(inner)?.folder_id.clone();
+        if self.load_registry(&folder_id, self_id)?.is_some_and(|reg| reg.self_forgotten.is_some()) {
+            log::event("self-forgotten-refused", self_id);
+            return fail(SyncCode::StateMismatch);
+        }
+        Ok(())
     }
 
     /// Contrôles de `sync_device_forget`, avant puis après la boîte (sous le verrou) : `Ok(None)` si l'appareil est déjà oublié
@@ -1048,9 +1095,10 @@ impl SyncCore {
             return fail(SyncCode::BadName);
         }
         let mut reg = self.registry(&mut inner, &key, &self_id)?;
-        let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let Inner { folder, accepted, snapshot_ends, .. } = &mut *inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
-        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+        let Some(reads) = Self::read_all_states(&store, accepted)? else {
             log::event("forgotten-delete-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
@@ -1076,10 +1124,12 @@ impl SyncCore {
                 KnownDevice { state: read.filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref()).map(KnownState::from), status, seen, device_id: id }
             })
             .collect();
-        match forgotten_delete_check(device_id, &self_id, &reg.entries, &reg.done, &known) {
+        let own_state = reads.get(&self_id).filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref());
+        let own_snapshot = Self::own_snapshot_end(&store, &self_id, own_state, accepted, snapshot_ends);
+        match forgotten_delete_check(device_id, &self_id, &reg.entries, &reg.done, &known, &own_snapshot) {
             DeleteCheck::Ready { .. } => {}
-            DeleteCheck::Waiting { device, code } => {
-                log::event("forgotten-delete-waiting", &device);
+            DeleteCheck::Waiting { device, code, reason } => {
+                log::event("forgotten-delete-waiting", &format!("{device} {}", reason.as_str()));
                 return fail(code);
             }
             DeleteCheck::Refused(code) => {

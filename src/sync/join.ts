@@ -5,7 +5,7 @@ import { syncErrorCodeOf } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
 import type { CycleHooks } from './engine';
-import type { ForgottenAuthors } from './forget';
+import { pickEligible, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { META, readJson, writeJson } from './meta';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
@@ -88,14 +88,13 @@ export async function joinFromSnapshot(
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
   pending: Set<string>,
-  forgotten: ForgottenAuthors,
+  coverage: ForgetCoverage,
 ): Promise<boolean> {
   const repos = deps.data.repos;
   const saved = await readJson<JoinState>(repos, JOIN_META);
-  // Y-10 (seconde revue, point 1) : jamais l'instantané d'un auteur oublié (il peut couvrir des écritures au-delà de sa coupure).
-  const candidates = [...accepted.entries(), ...(ownState ? [[deps.deviceId, ownState] as const] : [])]
-    .filter(([id, s]) => !forgotten.has(id) && s.epoch === epoch && s.snapshot !== null)
-    .sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? 1 : -1));
+  // Y-10 (§18 point 11, seconde revue point 1) : instantané **éligible** seulement (auteur non oublié, annoncé, couvrant chaque oublié
+  // retenu jusqu'à sa coupure) ; jamais le plus récent par endHlc s'il ne l'est pas.
+  const candidates = await snapshotCandidates(deps, epoch, [...accepted.values(), ...(ownState ? [ownState] : [])], coverage);
   if (candidates.length === 0) {
     // Aucun instantané dans l'époque : rien à suivre, l'appareil lit les journaux.
     if (saved !== null) await writeJson(repos, JOIN_META, null);
@@ -107,8 +106,21 @@ export async function joinFromSnapshot(
   if (saved === null) await writeJson(repos, JOIN_META, start);
   let failure: JoinFailure | null = null;
   let tracked: JoinState = saved ?? start;
-  for (const [deviceId, state] of candidates) {
-    const seq = (state.snapshot as { seq: number }).seq;
+  const excluded = new Set<DeviceId>();
+  for (const c of candidates) if (c.end === 'cloud-pending') pending.add(`${String(c.state.deviceId).slice(0, 8)}/${epoch}/snapshot`);
+  for (;;) {
+    const pick = pickEligible(candidates, coverage, epoch, excluded);
+    if (pick.kind !== 'ok') {
+      // Aucun éligible : attente visible (§14.2, « Aucun instantané à jour ») quand un candidat ne couvre pas un oublié ; l'attente
+      // d'iCloud n'est pas un échec.
+      if (pick.kind === 'none' && pick.uncovered !== null) {
+        failure ??= 'state-mismatch';
+        deps.logger.log('join-no-eligible-snapshot', { uncovered: pick.uncovered });
+      }
+      break;
+    }
+    const { author: deviceId, seq } = pick.end;
+    excluded.add(deviceId);
     const loaded = await loadSnapshot(deps, deviceId, epoch, seq);
     if (loaded === 'cloud-pending') {
       pending.add(`${String(deviceId).slice(0, 8)}/${epoch}/snapshot`);
@@ -127,7 +139,7 @@ export async function joinFromSnapshot(
     tracked = { epoch, from: deviceId, seq, done: same ? Math.min(saved.done, loaded.records.length) : 0, total: loaded.end.count, failure: null };
     await writeJson(repos, JOIN_META, tracked);
     try {
-      await applyJoin(deps, deviceId, epoch, loaded, tracked, accepted, knows, hooks);
+      await applyJoin(deps, deviceId, epoch, loaded, tracked, accepted, knows, hooks, coverage);
     } catch (error) {
       // Les tranches terminées ont mémorisé leur position : l'échec s'y ajoute sans la faire reculer.
       const reached = (await readJson<JoinState>(repos, JOIN_META)) ?? tracked;
@@ -148,6 +160,16 @@ export async function joinFromSnapshot(
   return false;
 }
 
+/**
+ * Appareils dont le curseur est posé à la fin d'une reprise : ceux dont l'état est accepté, soi, et chaque oublié retenu présent dans
+ * `covers` (§18 point 11 : un appareil qui n'a jamais lu X publie l'accusé **hérité** de l'instantané dont il est parti).
+ */
+export function cursorIds(accepted: ReadonlyMap<DeviceId, unknown>, self: DeviceId, loaded: LoadedSnapshot, coverage: ForgetCoverage): Set<string> {
+  const ids = new Set<string>([...accepted.keys(), self]);
+  for (const id of loaded.end.covers.keys()) if (coverage.forgotten.has(id)) ids.add(id);
+  return ids;
+}
+
 async function applyJoin(
   deps: SyncDeps,
   deviceId: DeviceId,
@@ -157,6 +179,7 @@ async function applyJoin(
   accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
+  coverage: ForgetCoverage,
 ): Promise<void> {
   const records = loaded.records;
   const rowsEnd = rowPrefix(records);
@@ -174,7 +197,7 @@ async function applyJoin(
   }
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
   const finalize: SnapshotTxHook = async (tx) => {
-    for (const id of new Set<string>([...accepted.keys(), deps.deviceId])) {
+    for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
       const cover = loaded.end.covers.get(id as DeviceId);
       const inEpoch = cover && cover.epoch === epoch;
       await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });

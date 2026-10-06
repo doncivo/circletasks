@@ -1,6 +1,6 @@
-import { cutoff, forgetOrder, forgottenDeleteCheck, learnDeclarations } from '../../../src/domain/sync/retention';
-import type { DeviceAck, ForgottenDevice } from '../../../src/domain/sync/format';
-import type { DeviceId } from '../../../src/domain/types';
+import { cutoff, forgetOrder, forgottenDeleteCheck, learnDeclarations, type SnapshotEndRead } from '../../../src/domain/sync/retention';
+import type { DeviceAck, EpochId, ForgottenDevice } from '../../../src/domain/sync/format';
+import type { DeviceId, Hlc } from '../../../src/domain/types';
 
 /**
  * Générateur des cas pseudo-aléatoires figés de `forget-order-random.json` (Y-10, QA ; règles de l'ADR 0011 §18 points 3 à 10) :
@@ -43,7 +43,7 @@ export function generateForgetRandom(): { description: string; forgetOrder: unkn
 
   const out = { description: '', forgetOrder: [] as unknown[], learn: [] as unknown[], cutoff: [] as unknown[], forgottenDelete: [] as unknown[] };
   out.description =
-    'Cas pseudo-aléatoires figés (congruence linéaire, graine 20261006, tests/fixtures/sync/forgetRandom.ts) de l’ordre total, de l’apprentissage de la liste maître, de la coupure et des conditions de suppression (ADR 0011 §18 points 3 à 10) : la sortie de la version TypeScript est la référence, forget.rs doit donner exactement la même (comparaison différentielle Rust / TypeScript, Y-10 QA).';
+    'Cas pseudo-aléatoires figés (congruence linéaire, graine 20261006, tests/fixtures/sync/forgetRandom.ts) de l’ordre total, de l’apprentissage de la liste maître, de la coupure et des conditions de suppression (ADR 0011 §18 points 3 à 13, condition (h) et oubli annulé compris) : la sortie de la version TypeScript est la référence, forget.rs doit donner exactement la même (comparaison différentielle Rust / TypeScript, Y-10 QA).';
   for (let i = 0; i < 120; i += 1) {
     const entries = Array.from({ length: 1 + rnd(8) }, decl);
     out.forgetOrder.push({ name: `aléatoire ${String(i)}`, entries, expected: Object.fromEntries(forgetOrder(entries)) });
@@ -66,7 +66,9 @@ export function generateForgetRandom(): { description: string; forgetOrder: unkn
     const author = rnd(3) === 0 ? (pick(ids.slice(1)) as string) : self;
     const target = pick(ids.filter((id) => id !== author && id !== self));
     const master: ForgottenDevice[] = [{ deviceId: target, at: hlc(10 + rnd(5), rnd(2), author), lastAck: null } as ForgottenDevice, ...(rnd(4) === 0 ? [decl()] : [])];
-    const done = rnd(6) === 0 ? [target] : [];
+    // Terminé : la cible, ou (oubli annulé, §18 point 12) un appareil qui n'est pas oublié.
+    const doneKind = rnd(14);
+    const done = doneKind < 2 ? [target] : doneKind === 2 ? [pick(ids.filter((id) => id !== self && id !== target))] : [];
     const cutPos = ack();
     const list = ids.map((id) => {
       const status: string = rnd(10) === 0 ? pick(STATUS) : 'ok';
@@ -80,6 +82,20 @@ export function generateForgetRandom(): { description: string; forgetOrder: unkn
       const forgotten = rnd(8) === 0 ? master.slice(1) : rnd(10) === 0 ? [decl()] : master;
       return { deviceId: id, status, seen: rnd(5) > 0, state: status === 'ok' ? { stateSeq: 1 + rnd(6), acks: a, forgotten } : null };
     });
+    // Condition (h) (§18 point 11) : instantané annoncé de l'appareil local, absent, illisible, dans le nuage, couvrant ou non.
+    const snapKind = rnd(14);
+    const ownSnapshot =
+      snapKind === 0
+        ? 'none'
+        : snapKind === 1
+          ? 'unreadable'
+          : snapKind === 2
+            ? 'cloud-pending'
+            : { author: self, epoch: `e0001-${self}`, seq: 1 + rnd(3), endHlc: hlc(40 + rnd(9), 0, self), covers: { [target]: rnd(3) === 0 ? ack() : { ...cutPos, stateSeq: 0 } } };
+    const ownRead: SnapshotEndRead =
+      typeof ownSnapshot === 'string'
+        ? ownSnapshot
+        : { author: self as DeviceId, epoch: ownSnapshot.epoch as EpochId, seq: ownSnapshot.seq, endHlc: ownSnapshot.endHlc as Hlc, covers: new Map(Object.entries(ownSnapshot.covers) as [DeviceId, DeviceAck][]) };
     const expected = forgottenDeleteCheck(
       target as DeviceId,
       self as DeviceId,
@@ -91,8 +107,9 @@ export function generateForgetRandom(): { description: string; forgetOrder: unkn
         seen: d.seen,
         state: d.state ? { deviceId: d.deviceId as DeviceId, stateSeq: d.state.stateSeq, forgotten: d.state.forgotten, acks: new Map(Object.entries(d.state.acks) as [DeviceId, DeviceAck][]) } : null,
       })),
+      ownRead,
     );
-    out.forgottenDelete.push({ name: `aléatoire ${String(i)}`, target, self, master, done, known: list, expected });
+    out.forgottenDelete.push({ name: `aléatoire ${String(i)}`, target, self, master, done, known: list, ownSnapshot, expected });
   }
   return out;
 }

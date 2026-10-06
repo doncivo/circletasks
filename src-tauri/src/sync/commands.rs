@@ -540,10 +540,12 @@ pub async fn sync_read_snapshot(
     seq: u64,
     from_record: u64,
     max_bytes: Option<u64>,
+    tail: Option<bool>,
 ) -> SyncResult<ReadPage> {
     require_main(&window)?;
     let core = state.core(&app)?;
-    blocking(move || core.read_snapshot(&device_id, &epoch, seq, from_record, max_bytes)).await
+    // tail (§18 point 11) : dernier enregistrement seul de l'instantané annoncé.
+    blocking(move || core.read_snapshot_with(&device_id, &epoch, seq, from_record, max_bytes, tail == Some(true))).await
 }
 
 #[derive(Serialize)]

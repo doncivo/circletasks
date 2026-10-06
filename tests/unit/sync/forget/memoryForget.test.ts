@@ -40,6 +40,8 @@ interface Dev {
   readonly p: MemorySyncPlatform;
   seq: number;
   head: { segment: number; record: number; hlc: Hlc | null };
+  /** Dernier instantané écrit, annoncé par chaque état publié ensuite (condition (h), §18 point 11). */
+  snap?: { seq: number; endHlc: Hlc };
 }
 
 class Room {
@@ -92,7 +94,7 @@ class Room {
       stateSeq: seq,
       head: { epoch: E1, ...dev.head, stateSeq: seq },
       acks: new Map(Object.entries(acks) as [DeviceId, DeviceAck][]),
-      snapshot: null,
+      snapshot: dev.snap ?? null,
       purgeHorizon: null,
       lastSyncHlc: hlc(this.nowMs, id),
       forgotten,
@@ -147,7 +149,27 @@ class Room {
   }
 
   async settle(): Promise<void> {
-    for (const id of [A, B, A, B]) await this.publish(id, this.upToDate(id, [2, 1]), id === A ? (this.published(A)?.forgotten ?? []) : []);
+    for (const id of [A, B, A, B]) {
+      const acks = this.upToDate(id, [2, 1]);
+      await this.announce(id, acks);
+      await this.publish(id, acks, id === A ? (this.published(A)?.forgotten ?? []) : []);
+    }
+  }
+
+  /** Instantané de `id` (un seul enregistrement `snap-end`, `covers` donnés), annoncé par l'état publié ensuite. */
+  async announce(id: DeviceId, covers: Record<string, DeviceAck>): Promise<void> {
+    const dev = this.devs.get(id) as Dev;
+    const seq = (dev.snap?.seq ?? 0) + 1;
+    const text = JSON.stringify({ k: 'snap-end', count: 0, covers, epoch: E1, sv: 17 });
+    await dev.p.writeSnapshot({
+      epoch: E1,
+      seq,
+      sv: 17,
+      records: (async function* () {
+        yield [text];
+      })(),
+    });
+    dev.snap = { seq, endHlc: hlc(this.nowMs + seq, id) };
   }
 
   files(id: DeviceId): string[] {
@@ -364,5 +386,43 @@ describe('attaques', () => {
     await a.forget.device(X);
     await room.settle();
     expect((await a.forget.deleteFiles(X)).complete).toBe(true);
+  });
+});
+
+describe('seconde revue (§18 points 11 et 12), mêmes règles que Rust', () => {
+  it('condition (h) : sans instantané couvrant annoncé, la suppression est refusée et rien n’est supprimé ; couvrant : faite', async () => {
+    const room = await Room.started();
+    const a = (room.devs.get(A) as Dev).p;
+    await a.forget.device(X);
+    for (const id of [A, B, A, B]) await room.publish(id, room.upToDate(id, [2, 1]), id === A ? (room.published(A)?.forgotten ?? []) : []);
+    const xFiles = room.files(X);
+    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
+    await room.announce(A, room.upToDate(A, [1, 0]));
+    await room.publish(A, room.upToDate(A, [2, 1]), room.published(A)?.forgotten ?? []);
+    expect(await codeOf(a.forget.deleteFiles(X))).toBe('state-mismatch');
+    expect(room.files(X)).toEqual(xFiles);
+    await room.settle();
+    expect((await a.forget.deleteFiles(X)).complete).toBe(true);
+  });
+
+  it('readSnapshot tail : fin de l’instantané annoncé seulement ; autre numéro refusé', async () => {
+    const room = await Room.settled();
+    const b = (room.devs.get(B) as Dev).p;
+    const seq = (room.devs.get(A) as Dev).snap?.seq as number;
+    const page = await b.readSnapshot({ deviceId: A, epoch: E1, seq, fromRecord: 0, tail: true });
+    expect(page.status).toBe('complete');
+    expect(page.records).toHaveLength(1);
+    expect(page.records[0]).toContain('"snap-end"');
+    expect(await codeOf(b.readSnapshot({ deviceId: A, epoch: E1, seq: seq - 1, fromRecord: 0, tail: true }))).toBe('state-mismatch');
+  });
+
+  it('selfForgotten : l’appareil qui s’est vu oublié est arrêté, toute écriture refusée (verdict qui change ensuite : test Rust)', async () => {
+    const room = await Room.settled();
+    const x = room.devs.get(X) as Dev;
+    const scan = await x.p.scan({ keep: [] });
+    expect(scan.forgotten.selfForgotten).not.toBeNull();
+    expect(await codeOf(x.p.appendJournal({ epoch: E1, segment: 3, expectRecords: 0, sv: 17, maxHlc: hlc(900, X), records: ['{}'] }))).toBe('state-mismatch');
+    expect(await codeOf(x.p.forget.device(B))).toBe('state-mismatch');
+    expect(await codeOf(x.p.deleteOwn([]))).toBe('state-mismatch');
   });
 });

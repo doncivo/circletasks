@@ -5,13 +5,17 @@ import {
   activeReaders,
   canPurgeDeletion,
   completedForgotten,
+  coversForgotten,
   cutoff,
+  eligibleSnapshot,
+  forgetGaps,
   declarationAuthor,
   declarationHlc,
   forgetOrder,
   forgottenDeleteCheck,
   learnDeclarations,
   purgeHorizon,
+  readByAll,
   seenDevices,
   type ForgetKnownDevice,
   type ForgetStateStatus,
@@ -20,6 +24,7 @@ import {
 import { PAIRING_CLOCK_TOLERANCE_MS } from '../../../../src/domain/sync/limits';
 import type { DeviceId, Hlc, IsoDateTime } from '../../../../src/domain/types';
 import table from '../../../fixtures/sync/forget-order.json';
+import { snapshotEndJson, snapshotReadOf } from './snapshotJson';
 
 /**
  * Y-10 critères 7, 8, 10, 11 et 12 (ADR 0011 §14.2, §18) : ordre total des oublis, coupure au maximum des accusés, conditions de
@@ -93,7 +98,36 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
           ? { deviceId: d.deviceId as DeviceId, stateSeq: d.state.stateSeq, acks: toAcks(d.state.acks as JsonAcks), forgotten: d.state.forgotten as unknown as ForgottenDevice[] }
           : null,
       }));
-      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known)).toEqual(c.expected);
+      expect(forgottenDeleteCheck(c.target as DeviceId, c.self as DeviceId, c.master as unknown as ForgottenDevice[], c.done as DeviceId[], known, snapshotReadOf(c.ownSnapshot))).toEqual(c.expected);
+    });
+  }
+
+  const ackersOf = (list: readonly { deviceId: string; acks: unknown }[]): { deviceId: DeviceId; acks: Map<DeviceId, DeviceAck> }[] =>
+    list.map((a) => ({ deviceId: a.deviceId as DeviceId, acks: toAcks(a.acks as JsonAcks) }));
+
+  for (const c of table.coversForgotten) {
+    it(`coversForgotten (§18 point 11) : ${c.name}`, () => {
+      expect(coversForgotten(toAcks(c.covers as unknown as JsonAcks), c.master as unknown as ForgottenDevice[], ackersOf(c.ackers))).toEqual(c.expected);
+    });
+  }
+
+  for (const c of table.eligible) {
+    it(`eligibleSnapshot (§18 point 11) : ${c.name}`, () => {
+      const candidates = c.candidates.map((x) => ({
+        state: x.state as never,
+        end: snapshotReadOf(x.end),
+        ...('ok' in x ? { ok: x.ok as boolean } : {}),
+      }));
+      const result = eligibleSnapshot(candidates, c.master as unknown as ForgottenDevice[], ackersOf(c.ackers), c.epoch as never);
+      const shown = result.kind === 'ok' ? { kind: 'ok', author: result.end.author, seq: result.end.seq } : result;
+      expect(shown).toEqual(c.expected);
+      if (result.kind === 'ok') expect(snapshotEndJson(result.end)).toEqual(c.candidates.find((x) => typeof x.end !== 'string' && x.end.author === result.end.author)?.end);
+    });
+  }
+
+  for (const c of table.gaps) {
+    it(`forgetGaps (§18 point 11) : ${c.name}`, () => {
+      expect(forgetGaps(c.master as unknown as ForgottenDevice[], ackersOf(c.ackers), toAcks(c.cursors as unknown as JsonAcks), new Set(c.gone as DeviceId[]))).toEqual(c.expected);
     });
   }
 });
@@ -246,5 +280,36 @@ describe('purge : l’appareil oublié ne compte plus dans les accusés', () => 
     expect(canPurgeDeletion(del, purgeHorizon([forgotten, readerB], SELF, NOW), NOW)).toBe(true);
     // Toujours 30 jours au moins après la suppression.
     expect(canPurgeDeletion(deletedAt(NOW - 29 * DAY), purgeHorizon([forgotten, readerB], SELF, NOW), NOW)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Horizon de purge (§18 point 13) : terminé dont l'oubli est annulé, accusés figés d'un terminé.
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+describe('horizon de purge et oublis (seconde revue, §18 points 12 et 13)', () => {
+  const SELF = DEVICES[0] as DeviceId;
+  const B = DEVICES[1] as DeviceId;
+  const C = DEVICES[2] as DeviceId;
+  const X = DEVICES[3] as DeviceId;
+  const NOW_MS = 1_791_000_100_000;
+  const ackOn = (dev: DeviceId, n: number): DeviceAck => ({ epoch: `e0001-${SELF}` as DeviceAck['epoch'], segment: 1, record: n, hlc: hlcOf(n, dev), stateSeq: 1 });
+  const device = (deviceId: DeviceId, status: string, acks: [DeviceId, DeviceAck][]): KnownDevice => ({ deviceId, status, lastSeenHlc: hlcOf(90, deviceId), acks: new Map(acks) });
+
+  it('terminé dont l’oubli est annulé : blocked, quels que soient les accusés', () => {
+    const devices = [device(B, 'active', [[SELF, ackOn(SELF, 99)]])];
+    expect(purgeHorizon(devices, SELF, NOW_MS).kind).toBe('limited');
+    expect(purgeHorizon(devices, SELF, NOW_MS, [C]).kind).toBe('blocked');
+  });
+
+  it('accusés figés d’un terminé sans effet sur l’horizon : un oublié ne compte pas comme lecteur, ses accusés publiés par les actifs non plus', () => {
+    const withFrozen = [device(B, 'active', [[SELF, ackOn(SELF, 5)], [X, ackOn(X, 3)]]), device(X, 'forgotten', [[SELF, ackOn(SELF, 1)]])];
+    const without = [device(B, 'active', [[SELF, ackOn(SELF, 5)]])];
+    const a = purgeHorizon(withFrozen, SELF, NOW_MS);
+    const b = purgeHorizon(without, SELF, NOW_MS);
+    expect(a.kind).toBe('limited');
+    expect(a.kind === 'limited' ? a.readers.map((r) => r.deviceId) : []).toEqual([B]);
+    expect(readByAll(hlcOf(4, SELF), a)).toBe(readByAll(hlcOf(4, SELF), b));
+    expect(readByAll(hlcOf(6, SELF), a)).toBe(readByAll(hlcOf(6, SELF), b));
   });
 });

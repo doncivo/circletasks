@@ -54,11 +54,25 @@ pub struct ForgottenRegistry {
     pub accepted: BTreeMap<String, AcceptedRecord>,
     #[serde(default)]
     pub done: Vec<String>,
+    /// Arrêt définitif (§18 point 12) : hlc de la déclaration qui a oublié cet appareil, posé au premier scan qui le constate ; ne
+    /// s'efface jamais pour ce dossier et cette identité, même si le verdict change ensuite.
+    #[serde(default)]
+    pub self_forgotten: Option<String>,
 }
 
 impl ForgottenRegistry {
     pub fn empty(folder_id: &str, device_id: &str) -> Self {
-        Self { folder_id: folder_id.to_owned(), device_id: device_id.to_owned(), entries: Vec::new(), accepted: BTreeMap::new(), done: Vec::new() }
+        Self { folder_id: folder_id.to_owned(), device_id: device_id.to_owned(), entries: Vec::new(), accepted: BTreeMap::new(), done: Vec::new(), self_forgotten: None }
+    }
+
+    /// Pose `self_forgotten` si l'ordre total oublie cet appareil (jamais effacé) ; vrai s'il vient d'être posé.
+    pub fn note_self_forgotten(&mut self) -> bool {
+        if self.self_forgotten.is_some() {
+            return false;
+        }
+        let Some(verdict) = forget_order(&self.entries).remove(&self.device_id) else { return false };
+        self.self_forgotten = Some(verdict.at);
+        true
     }
 
     /// Schéma : au plus 64 entrées, chacune au format de `state.rs` ; anti-rejeu et terminés bien formés. Sinon le registre est
@@ -68,11 +82,12 @@ impl ForgottenRegistry {
             && self.entries.iter().all(|f| is_uuid_v4(&f.device_id) && is_strict_hlc(&f.at) && f.last_ack.as_ref().map_or(true, DeviceAck::is_valid))
             && self.accepted.iter().all(|(id, a)| is_uuid_v4(id) && is_epoch_id(&a.epoch) && a.digest.len() == 64 && a.digest.bytes().all(|b| b.is_ascii_hexdigit()))
             && self.done.iter().all(|id| is_uuid_v4(id))
+            && self.self_forgotten.as_deref().map_or(true, is_strict_hlc)
     }
 
     /// Vue rendue par `sync_scan` (`FolderScan.forgotten`).
     pub fn view(&self, overflow: bool) -> ForgottenView {
-        ForgottenView { entries: self.entries.clone(), done: self.done.clone(), overflow, accepted: self.accepted.keys().cloned().collect() }
+        ForgottenView { entries: self.entries.clone(), done: self.done.clone(), overflow, accepted: self.accepted.keys().cloned().collect(), self_forgotten: self.self_forgotten.clone() }
     }
 }
 
@@ -84,7 +99,28 @@ pub struct ForgottenView {
     pub overflow: bool,
     /// Identifiants de l'anti-rejeu du registre (identifiants seuls) : base de `seen_devices` chez le moteur (revue point 4).
     pub accepted: Vec<String>,
+    /// Arrêt définitif de cet appareil (§18 point 12) : hlc de la déclaration constatée, jamais effacé.
+    #[serde(rename = "selfForgotten")]
+    pub self_forgotten: Option<String>,
 }
+
+/// Enregistrement de fin d'instantané (`snap-end`, section 5.1) : `covers` s'il est bien formé et de l'époque attendue.
+pub fn parse_snapshot_end(json: &str, epoch: &str) -> Option<BTreeMap<String, DeviceAck>> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct End {
+        k: String,
+        count: u64,
+        covers: BTreeMap<String, DeviceAck>,
+        epoch: String,
+        sv: u64,
+    }
+    let end: End = serde_json::from_str(json).ok()?;
+    let well_formed = end.k == "snap-end" && end.epoch == epoch && end.count <= MAX_SAFE_COUNT && end.sv > 0;
+    (well_formed && end.covers.iter().all(|(id, a)| is_uuid_v4(id) && a.is_valid())).then_some(end.covers)
+}
+
+const MAX_SAFE_COUNT: u64 = 9_007_199_254_740_991;
 
 /// Oubli retenu par l'ordre total : auteur de la déclaration (appareil de son hlc) et son hlc.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,17 +263,169 @@ pub struct KnownDevice {
     pub seen: bool,
 }
 
+/// Raison d'une attente (§18 point 11, même vocabulaire que `ForgetWaitReason` de `retention.ts`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WaitReason {
+    State,
+    Cutoff,
+    Declarations,
+    Snapshot,
+    Revived,
+}
+
+impl WaitReason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::State => "state",
+            Self::Cutoff => "cutoff",
+            Self::Declarations => "declarations",
+            Self::Snapshot => "snapshot",
+            Self::Revived => "revived",
+        }
+    }
+}
+
 /// Résultat de `forgotten_delete_check` (même forme que `ForgottenDeleteCheck` de `retention.ts`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DeleteCheck {
     Ready { by: String, cutoff: Option<DeviceAck> },
-    Waiting { device: String, code: SyncCode },
+    Waiting { device: String, code: SyncCode, reason: WaitReason },
     Refused(SyncCode),
+}
+
+/// Fin d'un instantané annoncé (`SnapshotEnd` de `retention.ts`) : auteur, époque, numéro et `endHlc` de l'annonce, `covers` lu dans
+/// `snap-end`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotEnd {
+    pub author: String,
+    pub epoch: String,
+    pub seq: u64,
+    pub end_hlc: String,
+    pub covers: BTreeMap<String, DeviceAck>,
+}
+
+/// `SnapshotEndRead` : fin lue, aucun instantané annoncé dans l'époque courante, dans le nuage, illisible.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SnapshotEndRead {
+    End(SnapshotEnd),
+    None,
+    CloudPending,
+    Unreadable,
+}
+
+/// `covers` couvre-t-il chaque oublié retenu (§18 point 11) ? Première cible retenue (ordre total) de coupure non nulle que `covers` ne
+/// couvre pas ; `None` si tout est couvert. Coupure calculée sur les `ackers` non oubliés. Même fonction que `coversForgotten`.
+pub fn covers_forgotten<'a>(
+    covers: &BTreeMap<String, DeviceAck>,
+    master: &[ForgottenDevice],
+    ackers: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, DeviceAck>)>,
+) -> Option<String> {
+    let order = forget_order(master);
+    let live: Vec<(&str, &BTreeMap<String, DeviceAck>)> = ackers.into_iter().filter(|(id, _)| !order.contains_key(*id)).collect();
+    for (target, _) in verdicts_in_order(&order) {
+        let Some(cut) = cutoff(target, live.iter().copied()) else { continue };
+        if covers.get(target.as_str()).map_or(true, |c| compare_ack_positions(c, &cut) == Ordering::Less) {
+            return Some(target.clone());
+        }
+    }
+    None
+}
+
+/// Candidat à l'instantané éligible (`SnapshotCandidate`) : auteur, époque et annonce de son état, état `ok` ou non, fin lue.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SnapshotCandidate {
+    pub author: String,
+    pub epoch: String,
+    pub announced: Option<(u64, String)>,
+    pub ok: bool,
+    pub end: SnapshotEndRead,
+}
+
+/// Résultat de `eligible_snapshot` (`EligibleSnapshot`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Eligible {
+    Ok(SnapshotEnd),
+    Waiting,
+    None { uncovered: Option<String> },
+}
+
+/// Instantané éligible (§18 point 11) : même fonction que `eligibleSnapshot`.
+pub fn eligible_snapshot<'a>(
+    candidates: &[SnapshotCandidate],
+    master: &[ForgottenDevice],
+    ackers: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, DeviceAck>)>,
+    epoch: &str,
+) -> Eligible {
+    let order = forget_order(master);
+    let ackers: Vec<(&str, &BTreeMap<String, DeviceAck>)> = ackers.into_iter().collect();
+    let mut best: Option<&SnapshotEnd> = None;
+    let mut uncovered: Option<(String, &str)> = None;
+    let mut cloud = false;
+    for c in candidates {
+        let Some((seq, end_hlc)) = &c.announced else { continue };
+        if !c.ok || order.contains_key(&c.author) || c.epoch != epoch {
+            continue;
+        }
+        let end = match &c.end {
+            SnapshotEndRead::CloudPending => {
+                cloud = true;
+                continue;
+            }
+            SnapshotEndRead::None | SnapshotEndRead::Unreadable => continue,
+            SnapshotEndRead::End(end) => end,
+        };
+        if end.author != c.author || end.epoch != epoch || end.seq != *seq || &end.end_hlc != end_hlc {
+            continue;
+        }
+        if let Some(missing) = covers_forgotten(&end.covers, master, ackers.iter().copied()) {
+            if uncovered.as_ref().map_or(true, |(_, h)| end.end_hlc.as_str() > *h) {
+                uncovered = Some((missing, end.end_hlc.as_str()));
+            }
+            continue;
+        }
+        if best.map_or(true, |b| end.end_hlc > b.end_hlc) {
+            best = Some(end);
+        }
+    }
+    match best {
+        Some(end) => Eligible::Ok(end.clone()),
+        None if cloud => Eligible::Waiting,
+        None => Eligible::None { uncovered: uncovered.map(|(t, _)| t) },
+    }
+}
+
+/// Trous (§18 point 11) : même fonction que `forgetGaps`.
+pub fn forget_gaps<'a>(
+    master: &[ForgottenDevice],
+    ackers: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, DeviceAck>)>,
+    cursors: &BTreeMap<String, DeviceAck>,
+    gone: &BTreeSet<String>,
+) -> Vec<String> {
+    let order = forget_order(master);
+    let live: Vec<(&str, &BTreeMap<String, DeviceAck>)> = ackers.into_iter().filter(|(id, _)| !order.contains_key(*id)).collect();
+    let mut out = Vec::new();
+    for (target, _) in verdicts_in_order(&order) {
+        if !gone.contains(target) {
+            continue;
+        }
+        let Some(cut) = cutoff(target, live.iter().copied()) else { continue };
+        if cursors.get(target.as_str()).map_or(true, |c| compare_ack_positions(c, &cut) == Ordering::Less) {
+            out.push(target.clone());
+        }
+    }
+    out
+}
+
+/// Terminés dont l'oubli est annulé (§18 point 12) : dans `done`, plus oubliés par l'ordre total ; triés.
+pub fn revived_devices(master: &[ForgottenDevice], done: &[String]) -> Vec<String> {
+    let order = forget_order(master);
+    let set: BTreeSet<&String> = done.iter().filter(|id| !order.contains_key(*id)).collect();
+    set.into_iter().cloned().collect()
 }
 
 /// Conditions (c) à (g) de la suppression des fichiers de `target` (section 14.2, §18 points 8 et 9). Même fonction que
 /// `forgottenDeleteCheck`.
-pub fn forgotten_delete_check(target: &str, self_id: &str, master: &[ForgottenDevice], done: &[String], known: &[KnownDevice]) -> DeleteCheck {
+pub fn forgotten_delete_check(target: &str, self_id: &str, master: &[ForgottenDevice], done: &[String], known: &[KnownDevice], own_snapshot: &SnapshotEndRead) -> DeleteCheck {
     if target == self_id {
         return DeleteCheck::Refused(SyncCode::BadName);
     }
@@ -253,7 +441,11 @@ pub fn forgotten_delete_check(target: &str, self_id: &str, master: &[ForgottenDe
     let missing_self = KnownDevice { device_id: self_id.to_owned(), status: StateStatus::Missing, state: None, seen: true };
     devices.entry(self_id).or_insert(&missing_self);
     if devices.get(target).is_some_and(|d| d.status == StateStatus::CloudPending) {
-        return DeleteCheck::Waiting { device: target.to_owned(), code: SyncCode::CloudPending };
+        return DeleteCheck::Waiting { device: target.to_owned(), code: SyncCode::CloudPending, reason: WaitReason::State };
+    }
+    // (i) Terminé dont l'oubli est annulé : bloque toujours, quel que soit son état (§18 point 12).
+    if let Some(revived) = revived_devices(master, done).into_iter().next() {
+        return DeleteCheck::Waiting { device: revived, code: SyncCode::StateMismatch, reason: WaitReason::Revived };
     }
     let authors: BTreeSet<&str> = master.iter().filter_map(declaration_author).collect();
     let mut states: BTreeMap<&str, &KnownState> = BTreeMap::new();
@@ -269,15 +461,16 @@ pub fn forgotten_delete_check(target: &str, self_id: &str, master: &[ForgottenDe
             (StateStatus::Ok, Some(state)) => {
                 states.insert(id, state);
             }
-            (StateStatus::CloudPending, _) => return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::CloudPending },
-            _ => return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch },
+            (StateStatus::CloudPending, _) => return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::CloudPending, reason: WaitReason::State },
+            _ => return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch, reason: WaitReason::State },
         }
     }
-    let cut = if done.iter().any(|d| d == target) { None } else { cutoff(target, states.iter().map(|(id, s)| (*id, &s.acks))) };
+    let finished = done.iter().any(|d| d == target);
+    let cut = if finished { None } else { cutoff(target, states.iter().map(|(id, s)| (*id, &s.acks))) };
     if let Some(cut) = &cut {
         for (id, state) in &states {
             if state.acks.get(target).map_or(true, |ack| compare_ack_positions(ack, cut) == Ordering::Less) {
-                return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch };
+                return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch, reason: WaitReason::Cutoff };
             }
         }
     }
@@ -285,7 +478,22 @@ pub fn forgotten_delete_check(target: &str, self_id: &str, master: &[ForgottenDe
     for (id, state) in &states {
         for (t, v) in &retained {
             if !state.forgotten.iter().any(|f| &f.device_id == *t && f.at == v.at) {
-                return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch };
+                return DeleteCheck::Waiting { device: (*id).to_owned(), code: SyncCode::StateMismatch, reason: WaitReason::Declarations };
+            }
+        }
+    }
+    // (h) Son instantané annoncé couvre la cible jusqu'à la coupure (sans objet pour un terminé).
+    if !finished {
+        let snapshot_wait = |code| DeleteCheck::Waiting { device: self_id.to_owned(), code, reason: WaitReason::Snapshot };
+        match own_snapshot {
+            SnapshotEndRead::CloudPending => return snapshot_wait(SyncCode::CloudPending),
+            SnapshotEndRead::None | SnapshotEndRead::Unreadable => return snapshot_wait(SyncCode::StateMismatch),
+            SnapshotEndRead::End(end) => {
+                if let Some(cut) = &cut {
+                    if end.covers.get(target).map_or(true, |c| compare_ack_positions(c, cut) == Ordering::Less) {
+                        return snapshot_wait(SyncCode::StateMismatch);
+                    }
+                }
             }
         }
     }

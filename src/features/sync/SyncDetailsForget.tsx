@@ -150,8 +150,16 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
     }
   };
 
+  // Y-10 (§18 point 12) : oubli annulé (l'appareil qui l'avait oublié a lui-même été oublié) : dit sur la ligne, « Oublier » proposé.
+  const revived = status.forget?.revived?.includes(device.deviceId) === true;
+
   return (
     <>
+      {revived && (
+        <span role="status" className="ct-sync__deviceRead ct-sync__forgetLine" data-revived="true">
+          {t('sync.forget.revivedLine')}
+        </span>
+      )}
       <span className="ct-sync__deviceRead">{t('sync.forget.shortId', { id: String(device.deviceId).slice(0, 8) })}</span>
       <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
         {t('sync.forget.action')}

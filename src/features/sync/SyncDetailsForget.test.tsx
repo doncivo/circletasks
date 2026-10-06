@@ -55,6 +55,15 @@ describe('ligne APPAREILS (critère 1)', () => {
     expect(within(pc as HTMLElement).getByRole('button', { name: /^Oublier PC/ })).toBeTruthy();
   });
 
+  it('oubli annulé (§18 point 12) : « Oubli annulé : l’appareil qui l’avait oublié a lui-même été oublié » et « Oublier cet appareil » ; aucun instantané à jour : ligne dite', () => {
+    sync.setStatus({ devices: [self, other(IPHONE, 'ios'), other(PC2, 'windows', 'forgotten')], forget: { failure: null, deletions: [{ deviceId: PC2, state: 'no-snapshot', waitingFor: null }], revived: [IPHONE] } });
+    renderIn(<SyncDetailsScreen />);
+    const [, iphone, pc] = devicesList();
+    expect(within(iphone as HTMLElement).getByText('Oubli annulé : l’appareil qui l’avait oublié a lui-même été oublié')).toBeTruthy();
+    expect(within(iphone as HTMLElement).getByRole('button', { name: 'Oublier iPhone' })).toBeTruthy();
+    expect(within(pc as HTMLElement).getByRole('status').textContent).toBe('Oublié · aucun instantané à jour : ouvrez un autre appareil associé');
+  });
+
   it('seul appareil (PC seul, vérification manuelle 1) : aucun bouton, aucune ligne « Oublié »', () => {
     sync.setStatus({ devices: [self] });
     renderIn(<SyncDetailsScreen />);

@@ -36,14 +36,14 @@ const state = (deviceId: DeviceId, acks: [DeviceId, DeviceAck][]): PublishedDevi
   reset: null,
 });
 
-const view: ForgetView = { order: forgetOrder(MASTER), master: MASTER, done: new Set(), selfForgotten: false };
+const view: ForgetView = { order: forgetOrder(MASTER), master: MASTER, done: new Set(), selfForgotten: false, revived: [] };
 const scanOf = (accepted: DeviceId[]): FolderScan => ({
   devices: [],
   ignored: 0,
   totalBytes: 0,
   tooManyDevices: false,
   incomplete: false,
-  forgotten: { entries: MASTER, done: [], overflow: false, accepted },
+  forgotten: { entries: MASTER, done: [], overflow: false, accepted, selfForgotten: null },
 });
 
 describe('appareil vu : même définition que Rust (seconde revue, point 4)', () => {
@@ -51,14 +51,15 @@ describe('appareil vu : même définition que Rust (seconde revue, point 4)', ()
     const own = state(A, [[X, ack(X, 4)]]);
     const known = forgetKnownDevices(scanOf([A, B, X]), view, new Map<DeviceId, PublishedDeviceState>(), A, own);
     expect(known.find((d) => d.deviceId === B)).toEqual({ deviceId: B, status: 'missing', state: null, seen: true });
-    expect(forgottenDeleteCheck(X, A, MASTER, [], known)).toEqual({ kind: 'waiting', device: B, code: 'state-mismatch' });
+    expect(forgottenDeleteCheck(X, A, MASTER, [], known, 'none')).toEqual({ kind: 'waiting', device: B, code: 'state-mismatch', reason: 'state' });
   });
 
   it('jamais accepté ni cité : absent de la liste (fantôme), la suppression ne l’attend pas', () => {
     const own = state(A, [[X, ack(X, 4)]]);
     const known = forgetKnownDevices(scanOf([A, X]), view, new Map<DeviceId, PublishedDeviceState>(), A, own);
     expect(known.some((d) => d.deviceId === B)).toBe(false);
-    expect(forgottenDeleteCheck(X, A, MASTER, [], known).kind).toBe('ready');
+    const covering = { author: A, epoch: E1, seq: 1, endHlc: h(90, A), covers: new Map([[X, ack(X, 4)]]) };
+    expect(forgottenDeleteCheck(X, A, MASTER, [], known, covering).kind).toBe('ready');
   });
 
   it('cité seulement par l’état de l’appareil oublié : pas vu', () => {
