@@ -66,7 +66,7 @@ export function scanWarnings(scan: { readonly incomplete: boolean; readonly tooM
 
 const isSyncWarning = (value: unknown): value is SyncWarningCode => (SYNC_WARNINGS as readonly unknown[]).includes(value);
 
-export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode | ResetTroubleCode | SyncWarningCode;
+export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'reload-failed' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode | ResetTroubleCode | SyncWarningCode;
 
 /**
  * Ordre d'urgence (D4) : le premier état actif de cette liste est montré, les autres comptent dans « (+N) ».
@@ -87,6 +87,8 @@ export const SYNC_TROUBLE_ORDER = [
   'error',
   // État local illisible : les états gardés ne peuvent plus être vérifiés (revue A-09, point 1).
   'state-unreadable',
+  // Y-TECH-02 : rechargement des écrans après un lot reçu en échec (données en base, écran pas à jour).
+  'reload-failed',
   // Horloge en avance.
   'clock-ahead',
   // Arrivée d'un nouvel appareil en échec (Y-06).
@@ -259,6 +261,8 @@ export interface PersistedSyncFacts<D extends SyncBannerDevice = SyncBannerDevic
   readonly blocking: BlockingPhaseFact | null;
   /** La dernière lecture de ces états a échoué (les valeurs ci-dessus sont alors les précédentes). */
   readonly readFailed: boolean;
+  /** Y-TECH-02 : le dernier rechargement des écrans après un lot reçu a échoué. Facultatif. */
+  readonly reloadFailed?: boolean;
   /** Y-10 : échec d'oubli et suppressions en attente gardés (`sync_meta`), tant qu'aucun cycle n'a conclu depuis le démarrage. */
   readonly forget?: ForgetFacts | null;
   /** Y-11 : réinitialisation gardée (`sync_meta.resetState`), tant qu'aucun cycle n'a conclu depuis le démarrage. */
@@ -266,7 +270,7 @@ export interface PersistedSyncFacts<D extends SyncBannerDevice = SyncBannerDevic
 }
 
 export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
-  | { readonly code: PhaseTroubleCode | 'state-unreadable' | SyncWarningCode }
+  | { readonly code: PhaseTroubleCode | 'state-unreadable' | 'reload-failed' | SyncWarningCode }
   | { readonly code: 'join-failed'; readonly join: JoinFailureFact }
   | { readonly code: DeviceTroubleCode; readonly device: D }
   | { readonly code: 'forget-failed'; readonly failure: NonNullable<ForgetFacts['failure']> }
@@ -320,6 +324,7 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
     keyMismatch = true;
   }
   if (persisted.readFailed || shown.stateUnreadable === true) troubles.push({ code: 'state-unreadable' });
+  if (persisted.reloadFailed === true) troubles.push({ code: 'reload-failed' });
   if (persisted.join) troubles.push({ code: 'join-failed', join: persisted.join });
   for (const device of devices) {
     if (device.self) continue;

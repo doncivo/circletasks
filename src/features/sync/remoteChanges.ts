@@ -1,6 +1,7 @@
 import type { Task } from '../../domain/model';
 import { asEntityId, type TaskId } from '../../domain/types';
-import type { RemoteChanges } from '../../platform/sync/types';
+import { syncErrorCodeOf, type RemoteChanges } from '../../platform/sync/types';
+import { defaultSyncLogger, type SyncLogger } from '../../sync';
 import { useAppStore } from '../app/appStore';
 import type { AppContainer } from '../app/container';
 import { checklistsStore } from '../checklists/checklistsStore';
@@ -16,8 +17,22 @@ import { weekStore } from '../week/weekStore';
  * Après chaque lot appliqué par la synchro (ADR 0011 section 8 ; Y-02 critère 18) : `taskEntities` reçoit les tâches relues (un hlc
  * inférieur n'écrase jamais, avenant T-04), la corbeille recharge si `task` est touchée, les autres stores rechargent leur liste. Les
  * commandes d'annulation (T-13) restent protégées par leur contrôle de hlc (`'stale'`) : rien n'est fait ici pour elles.
+ *
+ * Y-TECH-02 (revue, point 2) : une relecture en échec n'est jamais prise pour une suppression (la tâche reste à l'écran telle qu'elle
+ * était) ; chaque relecture en échec est journalisée (`remote-reload-failed`, code seulement) et rendue (`failed`) pour que
+ * l'interface la signale ; les données sont en base, relues au lot suivant.
  */
-export async function applyRemoteChanges(container: AppContainer, change: RemoteChanges): Promise<void> {
+export async function applyRemoteChanges(container: AppContainer, change: RemoteChanges, logger: SyncLogger = defaultSyncLogger): Promise<{ readonly failed: readonly string[] }> {
+  const failed = new Set<string>();
+  const attempt = async <T>(what: string, run: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false }> => {
+    try {
+      return { ok: true, value: await run() };
+    } catch (error) {
+      logger.log('remote-reload-failed', { what, code: syncErrorCodeOf(error) });
+      failed.add(what);
+      return { ok: false };
+    }
+  };
   const tasks = change.ids.get('task');
   if (tasks && tasks.size > 0) {
     const read: Task[] = [];
@@ -27,9 +42,14 @@ export async function applyRemoteChanges(container: AppContainer, change: Remote
       try {
         taskId = asEntityId<TaskId>(id);
       } catch {
+        // Identifiant reçu mal formé : ignoré (rien à recharger), journalisé sans sa valeur.
+        logger.log('remote-id-ignored', { table: 'task' });
         continue;
       }
-      const task = await container.data.repos.tasks.getById(taskId, { includeDeleted: true }).catch(() => null);
+      const result = await attempt('task', () => container.data.repos.tasks.getById(taskId, { includeDeleted: true }));
+      // Lecture en échec : rien n'est conclu (ni publiée, ni retirée).
+      if (!result.ok) continue;
+      const task = result.value;
       if (task && task.deletedAt === null) read.push(task);
       else gone.push(taskId);
     }
@@ -56,8 +76,13 @@ export async function applyRemoteChanges(container: AppContainer, change: Remote
     const checklists = checklistsStore.get(container).getState();
     if (checklists.status !== 'idle') void checklists.load(checklists.filter);
   }
-  if (change.tables.has('space')) useAppStore.getState().setSpaces(await container.data.repos.spaces.listAll().catch(() => useAppStore.getState().spaces));
-  if (change.tables.has('project')) {
-    useAppStore.getState().setProjects(await container.data.repos.projects.listForFilter('all', { includeArchived: true }).catch(() => useAppStore.getState().projects));
+  if (change.tables.has('space')) {
+    const spaces = await attempt('space', () => container.data.repos.spaces.listAll());
+    if (spaces.ok) useAppStore.getState().setSpaces(spaces.value);
   }
+  if (change.tables.has('project')) {
+    const projects = await attempt('project', () => container.data.repos.projects.listForFilter('all', { includeArchived: true }));
+    if (projects.ok) useAppStore.getState().setProjects(projects.value);
+  }
+  return { failed: [...failed] };
 }

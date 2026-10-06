@@ -501,6 +501,7 @@ export const en: Messages = {
     syncTroubleView: 'View',
     syncTroubleViewLabel: 'View the sync problem',
     syncStateUnreadable: 'Sync state inaccessible, retrying at the next cycle',
+    syncReloadFailed: 'Some received changes are not shown yet: retrying at the next sync',
     syncDevice: '{device}: {state}',
     loading: 'Loading',
   },

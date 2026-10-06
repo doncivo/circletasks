@@ -22,6 +22,8 @@ export interface SyncIntegration {
   dispose(): void;
   /** Se résout quand la dernière relecture des états persistés est appliquée (tests : aucune attente par délai). */
   refreshed(): Promise<void>;
+  /** Y-TECH-02 : se résout quand le dernier rechargement des écrans après un lot reçu est terminé (tests). */
+  reloaded(): Promise<void>;
 }
 
 /** Environnement injectable (tests : document, horloge et minuteries factices ; aucun délai réel). */
@@ -62,6 +64,8 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
       return t('status.syncDevice', { device: deviceName(trouble.device, devices), state: deviceStatusText(trouble.device.status) });
     case 'state-unreadable':
       return t('status.syncStateUnreadable');
+    case 'reload-failed':
+      return t('status.syncReloadFailed');
     case 'key-mismatch':
       // Phase `key-mismatch`, ou déduite des appareils avant le premier cycle (même texte).
       return textStatus.phase === 'key-mismatch' ? statusLine(textStatus, nowMs) : t('sync.status.keyMismatch');
@@ -132,13 +136,16 @@ function parseBlocking(raw: string | null): BlockingPhaseFact | null {
  */
 export function startSyncIntegration(container: AppContainer, env: SyncIntegrationEnv = {}): SyncIntegration {
   const sync = container.sync;
-  if (!sync) return { dispose: () => undefined, refreshed: () => Promise.resolve() };
+  if (!sync) return { dispose: () => undefined, refreshed: () => Promise.resolve(), reloaded: () => Promise.resolve() };
   const setTimer = env.setTimeout ?? ((handler, ms) => setTimeout(handler, ms));
   const clearTimer = env.clearTimeout ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const repos = container.data.repos;
   let disposed = false;
   let persisted: PersistedSyncFacts<SyncDeviceStatus> = { join: null, devices: null, blocking: null, readFailed: false };
   let writeFailed = false;
+  /** Y-TECH-02 (revue, point 2) : dernier rechargement des écrans après un lot reçu en échec (bandeau `reload-failed`). */
+  let reloadFailed = false;
+  let lastReload: Promise<void> = Promise.resolve();
   /** Un cycle a conclu depuis le démarrage : l'état exposé fait foi pour les appareils et la phase. */
   let concluded = false;
   /** Dernier état hors cycle (bandeaux de phase gardés pendant le cycle suivant). */
@@ -188,7 +195,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     if (disposed) return;
     const current = sync.status();
     const nowMs = container.clock.nowMs();
-    const banners = syncBannerFor(current, { ...persisted, readFailed: persisted.readFailed || writeFailed }, settled);
+    const banners = syncBannerFor(current, { ...persisted, readFailed: persisted.readFailed || writeFailed, reloadFailed }, settled);
 
     const [first, ...others] = banners.troubles;
     if (first) put('syncTrouble', { detail: first.code, message: syncTroubleText(first, banners.textStatus, banners.devices, nowMs), more: others.length, onAction: actionFor(first) });
@@ -344,7 +351,23 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     if (activeReads > 0) rereadPending = true;
     else void refreshPersisted();
   });
-  const stopChanges = sync.onRemoteChanges((change) => void applyRemoteChanges(container, change).catch(() => undefined));
+  // Y-TECH-02 (revue, point 2) : rechargement en échec journalisé (par `applyRemoteChanges`, ou ici s'il lève) et signalé jusqu'au
+  // rechargement réussi suivant.
+  const reload = async (change: Parameters<typeof applyRemoteChanges>[1]): Promise<void> => {
+    let failed: boolean;
+    try {
+      failed = (await applyRemoteChanges(container, change)).failed.length > 0;
+    } catch {
+      logFailure('sync', 'remote-reload-failed {"code":"io"}');
+      failed = true;
+    }
+    if (failed === reloadFailed) return;
+    reloadFailed = failed;
+    safely(applyBanners);
+  };
+  const stopChanges = sync.onRemoteChanges((change) => {
+    lastReload = lastReload.then(() => reload(change));
+  });
   safely(() => {
     const initial = sync.status();
     lastPhase = initial.phase;
@@ -355,6 +378,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}) });
   schedulers.set(container, scheduler);
   return {
+    reloaded: () => lastReload,
     refreshed: async () => {
       // Une relecture peut en lancer une autre (changement d'état) : attendre la dernière.
       let seen: readonly Promise<void>[] = [];
