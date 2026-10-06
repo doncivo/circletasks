@@ -51,8 +51,12 @@ export const syncStore = defineFeatureStore<SyncState>((container: AppContainer)
     },
     async openRestore() {
       if (!service) return;
-      const context = await service.restoreContext();
-      set({ restore: context });
+      try {
+        set({ restore: await service.restoreContext() });
+      } catch {
+        // Contexte illisible : journalisé et rendu visible par le service (état `state-unreadable` ou phase d'erreur) ; fenêtre fermée.
+        set({ restore: null });
+      }
     },
     async chooseRestore(option) {
       if (!service || get().choosing) return;
@@ -65,7 +69,7 @@ export const syncStore = defineFeatureStore<SyncState>((container: AppContainer)
         try {
           remaining = await service.restoreContext();
         } catch {
-          // contexte illisible : la fenêtre reste telle quelle
+          // Contexte illisible : journalisé et rendu visible par le service ; la fenêtre reste telle quelle.
         }
         set({ choosing: false, restore: remaining });
       }

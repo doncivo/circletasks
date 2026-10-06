@@ -232,3 +232,27 @@ describe('point 4 : accusés et valeurs stockés illisibles', () => {
     expect(await a.data.repos.settings.get('device.id')).toBe(A_ID);
   });
 });
+
+describe('revue, point 1 : fenêtre de restauration, état local illisible', () => {
+  const marker = { backup: 'b', backupTakenAt: '2026-10-05T07:00:00.000Z' as IsoDateTime, restoredAt: '2026-10-05T07:30:00.000Z' as IsoDateTime, schemaVersion: 1 };
+  it('sync_meta.purgeHorizon corrompu : restoreContext rejette (jamais « aucun marqueur »), journalisé, state-unreadable ; le choix échoue de façon visible', async () => {
+    const a = await first();
+    a.platform.testing.setRestoreMarker(marker);
+    await a.data.repos.sync.setMeta('purgeHorizon', '{pas du json');
+    await expect(a.service.restoreContext()).rejects.toThrow(SyncStateUnreadableError);
+    expect(events(a, 'restore-context-failed')).toEqual([{ code: 'io' }]);
+    expect(a.service.status().stateUnreadable).toBe(true);
+    await a.service.chooseRestoreOption('keep-synced');
+    expect(a.service.status().phase).toBe('error');
+    expect(events(a, 'restore-choice-failed')).toEqual([{ option: 'keep-synced', code: 'io' }]);
+  });
+
+  it('marqueur illisible (plateforme en échec) : phase d’erreur avec le code réel, pas state-unreadable', async () => {
+    const a = await first();
+    const marker = a.platform.restoreMarker as unknown as Record<string, unknown>;
+    marker['get'] = () => Promise.reject(new SyncPlatformError('vault-unavailable'));
+    await expect(a.service.restoreContext()).rejects.toMatchObject({ code: 'vault-unavailable' });
+    expect(a.service.status()).toMatchObject({ phase: 'error', errorCode: 'vault-unavailable' });
+    expect(a.service.status().stateUnreadable ?? false).toBe(false);
+  });
+});

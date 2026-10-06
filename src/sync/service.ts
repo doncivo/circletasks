@@ -7,7 +7,7 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
+import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 import { declareForget, prepareRejoin, readForgetStatus } from './forget';
 import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure, RESET_META } from './reset';
 import type { SyncDeps } from './deps';
@@ -94,9 +94,9 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     for (const listener of changeListeners) {
       try {
         listener(change);
-      } catch {
+      } catch (error) {
         // Un abonné en échec n'arrête ni la synchro ni les autres abonnés ; journalisé comme `publish` (code seulement, jamais le message).
-        deps.logger.log('remote-listener-failed', { code: 'io' });
+        deps.logger.log('remote-listener-failed', { code: syncErrorCodeOf(error) });
       }
     }
   };
@@ -114,6 +114,21 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    */
   const readFailed = (what: string, error: unknown): void => {
     deps.logger.log('state-read-failed', { what, code: syncErrorCodeOf(error) });
+  };
+
+  /**
+   * Échec hors cycle rendu visible (revue, suggestion 7) : valeur stockée illisible → `state-unreadable` ; toute autre erreur → phase
+   * d'erreur avec son code réel.
+   */
+  const signalFailure = (error: unknown): void => {
+    if (isSyncStateUnreadable(error)) publish({ ...status, stateUnreadable: true });
+    else publish({ ...status, phase: 'error', errorCode: syncErrorCodeOf(error) });
+  };
+
+  /** Contexte de la fenêtre de choix ; toute erreur remonte (jamais lue comme « aucun marqueur »). */
+  const loadRestoreContext = async (): Promise<RestoreContext | null> => {
+    const marker = await options.platform.restoreMarker.get();
+    return marker ? await restoreContext(deps, marker) : null;
   };
 
   const finish = async (result: CycleResult): Promise<void> => {
@@ -234,7 +249,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         (error: unknown) => {
           // Action en échec (lecture ou écriture de l'état local hors cycle) : journalisée et visible (`state-unreadable`).
           deps.logger.log('action-failed', { kind, code: syncErrorCodeOf(error) });
-          publish({ ...status, stateUnreadable: true });
+          signalFailure(error);
         },
       )
       .finally(() => {
@@ -284,10 +299,12 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     },
     async restoreContext() {
       try {
-        const marker = await options.platform.restoreMarker.get();
-        return marker ? await restoreContext(deps, marker) : null;
-      } catch {
-        return null;
+        return await loadRestoreContext();
+      } catch (error) {
+        // Revue, point 1 : journalisé et visible, puis rendu à l'appelant (jamais converti en « aucun marqueur »).
+        deps.logger.log('restore-context-failed', { code: syncErrorCodeOf(error) });
+        signalFailure(error);
+        throw error;
       }
     },
     chooseRestoreOption: (option: RestoreOption) =>
@@ -305,7 +322,8 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
           publish({ ...status, phase: 'error', errorCode: code });
         };
         try {
-          const context = await service.restoreContext();
+          // Une erreur de lecture atteint `failed` (catch ci-dessous) : choix refusé de façon visible, jamais ignoré.
+          const context = await loadRestoreContext();
           if (!context) return;
           if (!context.options.includes(option)) {
             deps.logger.log('restore-choice-refused', { option });
