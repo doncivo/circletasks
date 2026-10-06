@@ -506,6 +506,10 @@ export const fr = {
     syncTroubleMore: '{message} (+{n})',
     /** A-09 critère 9 c : ouvre Réglages › Synchronisation (ou la fenêtre de choix après restauration). */
     syncTroubleView: 'Voir',
+    /** Nom accessible du bouton « Voir » (revue A-09, point 11). */
+    syncTroubleViewLabel: 'Voir le problème de synchronisation',
+    /** Revue A-09, point 1 : l'état local de la synchro (sync_meta, sync_state) n'a pas pu être lu. */
+    syncStateUnreadable: 'État de la synchro illisible, nouvel essai au prochain cycle',
     /** A-09 critère 9 f : appareil nommé et statut comme dans APPAREILS. */
     syncDevice: '{device} : {state}',
     loading: 'Chargement',

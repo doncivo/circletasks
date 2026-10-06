@@ -24,7 +24,7 @@ export function AppStatusBanner() {
       // Critères 9 c et 9 g : texte de la ligne de Réglages (composé par la synchro), « (+N) » s'il y a d'autres états, « Voir ».
       const text = source.message ?? t('sync.status.errorGeneric');
       const message = source.more && source.more > 0 ? t('status.syncTroubleMore', { message: text, n: source.more }) : text;
-      return <StatusBanner message={message} {...(source.onAction ? { actionLabel: t('status.syncTroubleView'), onAction: source.onAction } : {})} />;
+      return <StatusBanner message={message} {...(source.onAction ? { actionLabel: t('status.syncTroubleView'), actionAriaLabel: t('status.syncTroubleViewLabel'), onAction: source.onAction } : {})} />;
     }
     case 'updateRequired':
       // Y-07 critère 9 : texte seul, aucun bouton (mise à jour par l'updater PC ou SideStore). Détail « reintegration » : échec de

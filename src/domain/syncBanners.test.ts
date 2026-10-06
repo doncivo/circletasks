@@ -11,6 +11,7 @@ import {
   type PersistedSyncFacts,
   type PhaseBanner,
   type SyncBannerDevice,
+  type SyncBannerStatus,
   type SyncPhase,
 } from './syncBanners';
 import { asEntityId, type DeviceId } from './types';
@@ -20,7 +21,7 @@ const PHONE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000b2');
 const LAPTOP = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000c3');
 
 const device = (deviceId: DeviceId, status: DeviceState, self = false): SyncBannerDevice => ({ deviceId, self, status });
-const NONE: PersistedSyncFacts = { join: null, devices: null };
+const NONE: PersistedSyncFacts = { join: null, devices: null, blocking: null, readFailed: false };
 const JOIN = { done: 1200, total: 5000, failure: 'io' };
 
 /** Décision attendue de chaque phase (critère 9 b) : une ligne par phase, rien par défaut. */
@@ -49,9 +50,9 @@ describe('correspondance phase → bandeau (A-09 critère 9 b)', () => {
     for (const phase of SYNC_PHASES) expect(phaseBanner(phase), phase).toEqual(EXPECTED[phase]);
   });
 
-  it('une valeur hors liste est refusée (jamais « aucun bandeau » par défaut)', () => {
-    expect(() => phaseBanner('forgotten' as SyncPhase)).toThrow(/non décidé/);
-    expect(() => deviceTrouble('lost' as DeviceState)).toThrow(/non décidé/);
+  it('une valeur hors liste (version plus récente) : repli visible, jamais une erreur ni « aucun bandeau » (revue 2)', () => {
+    expect(phaseBanner('forgotten' as SyncPhase)).toEqual({ kind: 'trouble', code: 'error' });
+    expect(deviceTrouble('lost' as DeviceState)).toBe('device-corrupt');
   });
 
   it('chaque statut d’appareil a une décision ; seuls foreign, corrupt et rollback sont des échecs', () => {
@@ -66,7 +67,9 @@ describe('correspondance phase → bandeau (A-09 critère 9 b)', () => {
     expect(new Set(SYNC_TROUBLE_ORDER).size).toBe(SYNC_TROUBLE_ORDER.length);
     const phaseCodes = SYNC_PHASES.map(phaseBanner).flatMap((b) => (b.kind === 'trouble' ? [b.code] : []));
     const deviceCodes = DEVICE_STATES.map(deviceTrouble).filter((c) => c !== null);
-    for (const code of [...phaseCodes, ...deviceCodes, 'join-failed' as const]) expect(SYNC_TROUBLE_ORDER).toContain(code);
+    for (const code of [...phaseCodes, ...deviceCodes, 'join-failed' as const, 'state-unreadable' as const]) expect(SYNC_TROUBLE_ORDER).toContain(code);
+    // Revue 1 : base illisible juste après l'échec.
+    expect(SYNC_TROUBLE_ORDER.indexOf('state-unreadable')).toBe(SYNC_TROUBLE_ORDER.indexOf('error') + 1);
   });
 });
 
@@ -89,7 +92,7 @@ describe('syncBannerFor : phases (critères 9 c, 9 d, 9 e)', () => {
   });
 
   it('pendant un cycle, l’échec de la phase précédente reste jusqu’à la conclusion du cycle (pas de clignotement)', () => {
-    const settled = { phase: 'error' as const, devices: [] };
+    const settled: SyncBannerStatus = { phase: 'error', devices: [] };
     const during = syncBannerFor({ phase: 'syncing', devices: [] }, NONE, settled);
     expect(during.troubles).toEqual([{ code: 'error' }]);
     expect(during.syncing).toBe(true);
@@ -103,10 +106,10 @@ describe('syncBannerFor : phases (critères 9 c, 9 d, 9 e)', () => {
 describe('syncBannerFor : états persistés et appareils (critère 9 f)', () => {
   it('arrivée en échec : bandeau quelle que soit la phase, même avant le premier cycle', () => {
     for (const phase of SYNC_PHASES) {
-      const codes = syncBannerFor({ phase, devices: [] }, { join: JOIN, devices: null }).troubles.map((t) => t.code);
+      const codes = syncBannerFor({ phase, devices: [] }, { ...NONE, join: JOIN }).troubles.map((t) => t.code);
       expect(codes, phase).toContain('join-failed');
     }
-    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { join: JOIN, devices: [] }).troubles).toEqual([{ code: 'join-failed', join: JOIN }]);
+    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { ...NONE, join: JOIN, devices: [] }).troubles).toEqual([{ code: 'join-failed', join: JOIN }]);
   });
 
   it('appareils foreign, corrupt, rollback : un bandeau par appareil, avec l’appareil pour le nommer', () => {
@@ -133,13 +136,13 @@ describe('syncBannerFor : états persistés et appareils (critère 9 f)', () => 
 
   it('avant le premier cycle : appareils lus dans la base (même règle de clé différente que le moteur)', () => {
     const stored = [device(SELF, 'active', true), device(PHONE, 'foreign')];
-    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { join: null, devices: stored }).troubles).toEqual([{ code: 'key-mismatch' }]);
+    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { ...NONE, devices: stored }).troubles).toEqual([{ code: 'key-mismatch' }]);
     const mixed = [device(SELF, 'active', true), device(PHONE, 'foreign'), device(LAPTOP, 'active')];
-    const banners = syncBannerFor({ phase: 'not-configured', devices: [] }, { join: null, devices: mixed });
+    const banners = syncBannerFor({ phase: 'not-configured', devices: [] }, { ...NONE, devices: mixed });
     expect(banners.troubles).toEqual([{ code: 'device-foreign', device: mixed[1] }]);
     expect(banners.devices).toBe(mixed);
     // Seul : aucun autre appareil, aucune clé différente.
-    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { join: null, devices: [device(SELF, 'active', true)] }).troubles).toEqual([]);
+    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { ...NONE, devices: [device(SELF, 'active', true)] }).troubles).toEqual([]);
   });
 });
 
@@ -148,7 +151,7 @@ describe('un seul bandeau, le plus urgent (critère 9 g, D4)', () => {
     const devices = [device(SELF, 'active', true), device(LAPTOP, 'rollback'), device(PHONE, 'foreign')];
     const reversed = [devices[0], devices[2], devices[1]] as SyncBannerDevice[];
     for (const list of [devices, reversed]) {
-      const codes = syncBannerFor({ phase: 'clock-ahead', devices: list }, { join: JOIN, devices: null }).troubles.map((t) => t.code);
+      const codes = syncBannerFor({ phase: 'clock-ahead', devices: list }, { ...NONE, join: JOIN }).troubles.map((t) => t.code);
       expect(codes).toEqual(['clock-ahead', 'join-failed', 'device-foreign', 'device-rollback']);
     }
   });
@@ -156,9 +159,42 @@ describe('un seul bandeau, le plus urgent (critère 9 g, D4)', () => {
   it('l’ordre suit SYNC_TROUBLE_ORDER pour chaque phase en échec', () => {
     const devices = [device(SELF, 'active', true), device(PHONE, 'corrupt')];
     for (const phase of SYNC_PHASES) {
-      const codes = syncBannerFor({ phase, devices }, { join: JOIN, devices: null }).troubles.map((t) => t.code);
+      const codes = syncBannerFor({ phase, devices }, { ...NONE, join: JOIN }).troubles.map((t) => t.code);
       const ranks = codes.map((code) => SYNC_TROUBLE_ORDER.indexOf(code));
       expect(ranks, phase).toEqual([...ranks].sort((a, b) => a - b));
     }
+  });
+});
+
+describe('revue A-09 : lecture en échec, attente gardée, phase bloquante persistée, texte (points 1, 6, 7, 9)', () => {
+  it('lecture de la base en échec : « state-unreadable », compté avec l’échec gardé qu’il ne remplace pas', () => {
+    const banners = syncBannerFor({ phase: 'idle', devices: [] }, { ...NONE, join: JOIN, readFailed: true });
+    expect(banners.troubles.map((t) => t.code)).toEqual(['state-unreadable', 'join-failed']);
+    expect(syncBannerFor({ phase: 'not-configured', devices: [] }, { ...NONE, readFailed: true }).troubles).toEqual([{ code: 'state-unreadable' }]);
+  });
+
+  it('« En attente d’iCloud » reste pendant le cycle suivant, avec sa cause (QA-2)', () => {
+    const settled: SyncBannerStatus = { phase: 'waiting-icloud', errorCode: 'cloud-provider-stopped', devices: [] };
+    const during = syncBannerFor({ phase: 'syncing', devices: [] }, NONE, settled);
+    expect(during.waitingIcloud).toEqual({ cause: 'cloud-provider-stopped' });
+    expect(during.syncing).toBe(true);
+    expect(during.textStatus).toBe(settled);
+  });
+
+  it('phase bloquante persistée (avant le premier cycle) : bandeau de cette phase, texte d’un état composé avec ses codes', () => {
+    const devices = [device(SELF, 'active', true), device(PHONE, 'clock-ahead')];
+    const status = { phase: 'not-configured' as const, devices: [] };
+    const banners = syncBannerFor(status, { ...NONE, devices, blocking: { phase: 'clock-ahead', errorCode: null, clockAheadDevice: PHONE } });
+    expect(banners.troubles).toEqual([{ code: 'clock-ahead' }]);
+    expect(banners.textStatus).toMatchObject({ phase: 'clock-ahead', clockAheadDevice: PHONE, devices });
+    const error = syncBannerFor(status, { ...NONE, blocking: { phase: 'error', errorCode: 'folder-unreachable', clockAheadDevice: null } });
+    expect(error.textStatus).toMatchObject({ phase: 'error', errorCode: 'folder-unreachable' });
+  });
+
+  it('une phase en échec actuelle passe avant la phase persistée ; sans échec, l’état affiché est le texte', () => {
+    const status = { phase: 'key-mismatch' as const, devices: [] };
+    const banners = syncBannerFor(status, { ...NONE, blocking: { phase: 'error', errorCode: 'io', clockAheadDevice: null } });
+    expect(banners.troubles).toEqual([{ code: 'key-mismatch' }]);
+    expect(banners.textStatus).toBe(status);
   });
 });

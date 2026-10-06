@@ -499,6 +499,8 @@ export const en: Messages = {
     reconnect: 'Reconnect',
     syncTroubleMore: '{message} (+{n})',
     syncTroubleView: 'View',
+    syncTroubleViewLabel: 'View the sync problem',
+    syncStateUnreadable: 'Sync state unreadable, retrying at the next cycle',
     syncDevice: '{device}: {state}',
     loading: 'Loading',
   },

@@ -85,7 +85,7 @@ describe('bandeau d’état de l’app (A-09)', () => {
     act(() => set('syncTrouble', { detail: 'key-mismatch', message: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil', more: 0, onAction }));
     expect(screen.getByRole('status')).toHaveTextContent('Ce dossier a été chiffré avec une autre clé : associez cet appareil');
     expect(screen.queryByRole('alert')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Voir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 

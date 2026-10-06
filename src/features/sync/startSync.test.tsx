@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { SYNCING_BANNER_DELAY_MS } from '../../domain/sync/limits';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
+import { createMemorySyncPlatform, type MemorySyncPlatform, type SyncFolderInfo } from '../../platform/sync';
+import { createSyncService, silentSyncLogger } from '../../sync';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
 import { useAppStatusStore } from '../app/appStatus';
@@ -101,7 +103,7 @@ describe('phases en échec ou bloquées (critère 9 c)', () => {
       const expected = statusLine(sync.status(), db.clock.nowMs());
       if (text) expect(expected).toBe(text);
       expect(banner()?.textContent, phase).toBe(`${expected}Voir`);
-      expect(screen.getByRole('button', { name: 'Voir' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Voir le problème de synchronisation' })).toBeTruthy();
       expect(screen.queryByRole('alert')).toBeNull();
       expect(timers.filter((t) => !t.cleared)).toHaveLength(0);
     }
@@ -111,7 +113,7 @@ describe('phases en échec ou bloquées (critère 9 c)', () => {
     renderBanner();
     await start().refreshed();
     set({ phase: 'error', errorCode: 'io' });
-    fireEvent.click(screen.getByRole('button', { name: 'Voir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'sync' });
   });
 
@@ -121,7 +123,7 @@ describe('phases en échec ou bloquées (critère 9 c)', () => {
     renderBanner();
     await start().refreshed();
     set({ phase: 'restore-choice' });
-    fireEvent.click(screen.getByRole('button', { name: 'Voir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(openRestore).toHaveBeenCalledTimes(1);
     expect(useNavigationStore.getState().route).toEqual(INITIAL_NAVIGATION.route);
   });
@@ -263,15 +265,41 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     expect(banner()).toBeNull();
   });
 
-  it('base illisible pendant une relecture : l’état précédent reste (aucune disparition sans résolution)', async () => {
+  it('base illisible pendant une relecture : signalée (« (+1) » avec l’échec gardé, qui reste), effacée à la lecture réussie suivante', async () => {
     await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(failure));
     renderBanner();
     await start().refreshed();
-    vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
+    const getMeta = vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
     vi.spyOn(db.data.repos.sync, 'getStates').mockRejectedValue(new Error('base occupée'));
     set({ phase: 'idle' });
     await integration?.refreshed();
+    const shown = useAppStatusStore.getState().sources.syncTrouble;
+    expect(shown?.detail).toBe('state-unreadable');
+    expect(shown?.more).toBe(1);
+    expect(banner()?.textContent).toBe('État de la synchro illisible, nouvel essai au prochain cycle (+1)Voir');
+    expect(screen.getByRole('button', { name: 'Voir le problème de synchronisation' })).toBeTruthy();
+    // Lecture réussie : le signal part, l'échec gardé reste.
+    getMeta.mockRestore();
+    set({ phase: 'idle', conflictsThisWeek: 1 });
+    await integration?.refreshed();
     expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('join-failed');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.more).toBe(0);
+  });
+
+  it('relecture de la base seulement au changement de phase, à la conclusion d’un cycle et sur un changement d’association (revue 4)', async () => {
+    renderBanner();
+    await start().refreshed();
+    const getMeta = vi.spyOn(db.data.repos.sync, 'getMeta');
+    set({ phase: 'syncing' });
+    await integration?.refreshed();
+    const afterPhase = getMeta.mock.calls.length;
+    expect(afterPhase).toBeGreaterThan(0);
+    for (let done = 1; done <= 5; done += 1) set({ phase: 'syncing', progress: { done, total: 5 } });
+    await integration?.refreshed();
+    expect(getMeta.mock.calls.length).toBe(afterPhase);
+    set({ phase: 'idle', progress: null });
+    await integration?.refreshed();
+    expect(getMeta.mock.calls.length).toBeGreaterThan(afterPhase);
   });
 
   it('appareils foreign, corrupt, rollback avant le premier cycle (sync_state), nommés comme dans APPAREILS', async () => {
@@ -312,7 +340,8 @@ describe('états persistés et redémarrage (critères 9 f, 9 i, 9 j)', () => {
     set({ phase: 'syncing' });
     fireTimers();
     const sources = useAppStatusStore.getState().sources;
-    expect(Object.keys(sources).sort()).toEqual(['offline', 'syncTrouble', 'syncing', 'updateRequired']);
+    // « En attente d’iCloud » reste pendant le cycle suivant (QA-2) : les cinq états à la fois.
+    expect(Object.keys(sources).sort()).toEqual(['offline', 'syncTrouble', 'syncing', 'updateRequired', 'waitingIcloud']);
     act(() => stop());
     expect(Object.keys(useAppStatusStore.getState().sources)).toEqual(['offline']);
     act(() => status.setStatus('offline', null));
@@ -361,5 +390,137 @@ describe('un seul bandeau, le plus urgent (critère 9 g) ; sobriété (9 h)', ()
     await none.refreshed();
     expect(useAppStatusStore.getState().sources).toEqual({});
     none.dispose();
+  });
+});
+
+describe('phase bloquante persistée : visible dès le démarrage (revue, point 7)', () => {
+  let platform: MemorySyncPlatform;
+  beforeEach(() => {
+    platform = createMemorySyncPlatform();
+  });
+
+  /** Nouveau processus : service neuf (état initial, aucun cycle encore), même base. */
+  async function freshProcess(patch: Partial<SyncStatus> = {}): Promise<void> {
+    stop();
+    sync = createFakeSyncService(patch);
+    container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync, syncPlatform: platform });
+    await act(async () => {
+      await start().refreshed();
+    });
+  }
+
+  const blockedCases: readonly Partial<SyncStatus>[] = [{ phase: 'error', errorCode: 'folder-unreachable' }, { phase: 'needs-pairing' }, { phase: 'key-mismatch' }];
+  for (const blocked of blockedCases) {
+    it(`${String(blocked.phase)} : gardée à la conclusion du cycle, montrée au redémarrage avant tout cycle, effacée quand un cycle conclut sans elle`, async () => {
+      renderBanner();
+      await start().refreshed();
+      set(blocked);
+      await integration?.refreshed();
+      const expected = statusLine(sync.status(), db.clock.nowMs());
+      await freshProcess();
+      expect(sync.status().phase).toBe('not-configured');
+      expect(useAppStatusStore.getState().sources.syncTrouble?.message).toBe(expected);
+      // Le premier cycle conclut sans elle : effacée, et ne revient pas au redémarrage suivant.
+      set({ phase: 'idle', errorCode: null });
+      await integration?.refreshed();
+      expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+      await freshProcess();
+      expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    });
+  }
+
+  it('clock-ahead : l’appareil est nommé d’après sync_state dès le démarrage', async () => {
+    await db.data.repos.sync.saveState(SELF, { isSelf: true, platform: 'windows', status: 'active' });
+    await db.data.repos.sync.saveState(PHONE, { platform: 'ios', status: 'clock-ahead', stateSeq: 3 });
+    renderBanner();
+    await start().refreshed();
+    set({ phase: 'clock-ahead', clockAheadDevice: PHONE, devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'clock-ahead')] });
+    await integration?.refreshed();
+    await freshProcess();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.message).toBe('L’horloge de iPhone est en avance : vérifiez sa date et son heure');
+  });
+
+  it('restore-choice : le marqueur de restauration suffit, dès le démarrage ; « Voir » ouvre la fenêtre de choix', async () => {
+    platform.testing.setRestoreMarker({ backup: 'b', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 1 });
+    renderBanner();
+    await freshProcess();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('restore-choice');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.message).toBe('Un choix est à faire après la restauration');
+    const openRestore = vi.fn(() => Promise.resolve());
+    syncStore.get(container).setState({ openRestore });
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
+    expect(openRestore).toHaveBeenCalledTimes(1);
+  });
+
+  it('lecture du marqueur en échec au démarrage : signalée', async () => {
+    vi.spyOn(platform.restoreMarker, 'get').mockRejectedValue(new Error('io'));
+    renderBanner();
+    await freshProcess();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('state-unreadable');
+  });
+});
+
+describe('« Synchro en cours » avec le vrai service : un seul seuil (revue, point 3)', () => {
+  it('cycle sans travail de 1,5 s : bandeau visible dès que le service publie la phase, sans second délai', async () => {
+    const base = createMemorySyncPlatform();
+    let release: (info: SyncFolderInfo) => void = () => undefined;
+    const held = new Promise<SyncFolderInfo>((resolve) => (release = resolve));
+    const serviceTimers: (() => void)[] = [];
+    const service = createSyncService({
+      data: db.data,
+      platform: { ...base, folder: { ...base.folder, info: () => held } },
+      hlc: createHlcClock({ clock: db.clock, deviceId: SELF }),
+      clock: db.clock,
+      deviceId: SELF,
+      sv: 1,
+      logger: silentSyncLogger,
+      setTimeout: (handler) => serviceTimers.push(handler),
+      clearTimeout: () => undefined,
+    });
+    container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync: service });
+    renderBanner();
+    await start().refreshed();
+    db.clock.advance(1_500);
+    for (const fire of serviceTimers.splice(0)) act(() => fire());
+    expect(banner()?.textContent).toBe('Synchro en cours');
+    expect(timers.filter((t) => !t.cleared)).toHaveLength(0);
+    release({ configured: false, label: null, kind: 'unknown', pinned: false });
+    await act(async () => {
+      await service.running();
+      await integration?.refreshed();
+    });
+    expect(banner()).toBeNull();
+  });
+
+  it('cycle qui travaille dès le début : bandeau seulement au seuil compté depuis le début du cycle', async () => {
+    renderBanner();
+    await start().refreshed();
+    const startedAt = db.clock.nowMs();
+    db.clock.advance(400);
+    set({ phase: 'syncing', cycleStartedAt: startedAt });
+    expect(banner()).toBeNull();
+    expect(timers.map((t) => t.ms)).toEqual([600]);
+    fireTimers();
+    expect(banner()?.textContent).toBe('Synchro en cours');
+  });
+});
+
+describe('repli visible (revue, point 2)', () => {
+  it('une erreur pendant le calcul du bandeau donne un bandeau d’échec, jamais rien', async () => {
+    renderBanner();
+    await start().refreshed();
+    const real = sync.status;
+    sync.status = () => {
+      throw new Error('état illisible');
+    };
+    act(() => {
+      try {
+        sync.setStatus({ phase: 'idle' });
+      } finally {
+        sync.status = real;
+      }
+    });
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('error');
+    expect(banner()?.textContent).toContain('La synchronisation a échoué');
   });
 });

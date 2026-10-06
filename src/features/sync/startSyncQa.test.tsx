@@ -162,7 +162,7 @@ describe('aucun échec silencieux : chaque phase bloquée (9 c, 9 e, 9 i)', () =
     await start().refreshed();
     for (const phase of ['needs-pairing', 'restore-choice', 'key-mismatch', 'error', 'clock-ahead'] as const) {
       set({ phase });
-      expect(screen.getByRole('button', { name: 'Voir' }), phase).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }), phase).toBeTruthy();
     }
   });
 
@@ -298,8 +298,8 @@ describe('aucun échec silencieux : états persistés et appareils (9 f, 9 i)', 
 
   // Défaut constaté : `readPersisted` (startSync.ts) avale l'erreur de lecture (« base occupée : état précédent gardé »). Au démarrage
   // l'état précédent est « rien » : une arrivée en échec ou un appareil illisible reste invisible, et la lecture elle-même n'est
-  // signalée nulle part. Quand il sera corrigé, remplacer `it.fails` par `it`.
-  it.fails('DÉFAUT QA-1 : une lecture de sync_meta ou de sync_state en échec au démarrage est signalée (aucun échec silencieux)', async () => {
+  // signalée nulle part. Corrigé (revue A-09, point 1) : état `state-unreadable`.
+  it('DÉFAUT QA-1 (corrigé) : une lecture de sync_meta ou de sync_state en échec au démarrage est signalée (aucun échec silencieux)', async () => {
     await db.data.repos.sync.setMeta(JOIN_STATE_META, JSON.stringify(JOIN));
     vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base occupée'));
     vi.spyOn(db.data.repos.sync, 'getStates').mockRejectedValue(new Error('base occupée'));
@@ -457,8 +457,9 @@ describe('« Synchro en cours » jamais avant 1 s ; pas de clignotement entre de
 
   // Défaut constaté : `syncBannerFor` ne garde pendant le cycle suivant que les échecs (`trouble`) de la phase précédente ;
   // « En attente d'iCloud » est retiré au début de chaque cycle puis reposé à sa fin : clignotement toutes les 5 minutes tant que
-  // iCloud est indisponible (le cycle dure plus de 1 s quand le fichier est en attente, et « Synchro en cours » le remplace).
-  it.fails('DÉFAUT QA-2 : « En attente d’iCloud » qui dure ne clignote pas entre deux cycles', async () => {
+  // iCloud est indisponible (le cycle dure plus de 1 s quand le fichier est en attente, et « Synchro en cours » le remplace). Corrigé : l'attente
+  // est gardée pendant le cycle suivant comme les échecs.
+  it('DÉFAUT QA-2 (corrigé) : « En attente d’iCloud » qui dure ne clignote pas entre deux cycles', async () => {
     render(<AppStatusBanner />);
     await act(async () => {
       await start().refreshed();
@@ -493,7 +494,7 @@ describe('accessibilité et textes (9 h, 9 j)', () => {
     render(<AppStatusBanner />);
     await start().refreshed();
     set({ phase: 'clock-ahead', clockAheadDevice: PHONE, devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'clock-ahead')] });
-    const button = screen.getByRole('button', { name: 'Voir' });
+    const button = screen.getByRole('button', { name: 'Voir le problème de synchronisation' });
     button.focus();
     expect(document.activeElement).toBe(button);
     expect(button.tagName).toBe('BUTTON');
@@ -511,10 +512,12 @@ describe('accessibilité et textes (9 h, 9 j)', () => {
       const line = statusLine(sync.status(), db.clock.nowMs());
       expect(banner()?.textContent, name).toContain(line);
       expect(line, name).not.toBe(statusLineFr(name));
-      if (name !== 'waiting-icloud') expect(screen.getByRole('button', { name: 'View' })).toBeTruthy();
+      if (name !== 'waiting-icloud') expect(screen.getByRole('button', { name: 'View the sync problem' }).textContent).toBe('View');
     }
     set({ phase: 'waiting-icloud', errorCode: null });
     expect(text()).toBe(en.status.waitingIcloud);
+    // L'attente reste pendant le cycle suivant (QA-2) : « Syncing » se lit après un cycle conclu « à jour ».
+    set({ phase: 'idle', errorCode: null });
     set({ phase: 'syncing' });
     fireTimers();
     expect(text()).toBe(en.status.syncing);
