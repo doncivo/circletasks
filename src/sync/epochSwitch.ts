@@ -64,9 +64,14 @@ export function setEpochSwitchTestHooks(hooks: SwitchTestHooks): void {
   testHooks = hooks;
 }
 
-function snapshotSource(target: EpochId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>): { deviceId: DeviceId; seq: number } | null {
+/**
+ * Instantané qui ouvre `target` : celui de l'ouvreur s'il est annoncé, sinon le plus récent annoncé dans `target`. Son propre état compte
+ * (QA-2 : après une restauration antérieure à l'époque que cet appareil a lui-même ouverte, il est l'ouvreur et la seule source).
+ */
+function snapshotSource(target: EpochId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, own: PublishedDeviceState | null): { deviceId: DeviceId; seq: number } | null {
   const opener = parseEpochId(target)?.opener;
-  const inTarget = [...accepted.entries()].filter(([, s]) => s.epoch === target && s.snapshot !== null);
+  const states: [DeviceId, PublishedDeviceState][] = [...accepted.entries(), ...(own && !accepted.has(own.deviceId) ? [[own.deviceId, own] as [DeviceId, PublishedDeviceState]] : [])];
+  const inTarget = states.filter(([, s]) => s.epoch === target && s.snapshot !== null);
   const chosen = inTarget.find(([id]) => id === opener) ?? inTarget.sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? -1 : 1))[0];
   return chosen ? { deviceId: chosen[0], seq: (chosen[1].snapshot as { seq: number }).seq } : null;
 }
@@ -249,6 +254,11 @@ export interface SwitchOptions {
   readonly mode: 'replace' | 'merge';
   readonly knows?: ApplyContext['knows'];
   readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
+  /**
+   * Y-11 (§18 point 14) : appareils (oubliés retenus) dont la position est gardée telle quelle en (d) : leur accusé reste celui de
+   * l'époque où il a été lu (coupure), jamais remis au début de la nouvelle époque.
+   */
+  readonly keep?: ReadonlySet<DeviceId>;
 }
 
 /** Passe à l'époque `target` ; reprend à l'étape mémorisée. `uncovered` : instantané d'ouverture qui ne couvre pas un oublié retenu (Y-11). */
@@ -256,14 +266,14 @@ export async function switchEpoch(
   deps: SyncDeps,
   target: EpochId,
   accepted: ReadonlyMap<DeviceId, PublishedDeviceState>,
-  _ownState: PublishedDeviceState | null,
+  ownState: PublishedDeviceState | null,
   onRemoteChanges: (touched: ReadonlyMap<string, ReadonlySet<string>>) => void,
   options: SwitchOptions = { mode: 'replace' },
 ): Promise<'done' | 'cloud-pending' | 'error' | 'clock-ahead' | 'uncovered'> {
   const repos: Repositories = deps.data.repos;
   let progress = await readJson<SwitchProgress>(repos, META.epochSwitch);
   if (!progress || progress.target !== target) {
-    const from = snapshotSource(target, accepted);
+    const from = snapshotSource(target, accepted, ownState);
     if (!from) return 'cloud-pending';
     // Y-11 (dette « changement d'époque », piste appliquée) : l'instantané d'ouverture d'une réinitialisation porte, dans `covers`, la position
     // de l'ouvreur sur chaque oublié retenu (ancienne époque) ; il doit atteindre la coupure, sinon le changement attend, de façon visible.
@@ -332,7 +342,10 @@ export async function switchEpoch(
   }
   // (d) Nouvelle époque : tête vide, curseurs de tous les appareils au début de l'époque ; la publication suit dans le cycle.
   await deps.data.transaction(async (tx) => {
-    for (const row of await tx.sync.getStates()) await tx.sync.saveState(row.deviceId, { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
+    for (const row of await tx.sync.getStates()) {
+      if (options.keep?.has(row.deviceId as DeviceId) && !row.isSelf) continue;
+      await tx.sync.saveState(row.deviceId, { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
+    }
     await writeJson(tx, META.epoch, target);
     await writeJson(tx, META.head, { epoch: target, segment: 0, record: 0, hlc: null, stateSeq: 0 } satisfies DeviceAck);
     await writeJson(tx, META.snapshot, null);

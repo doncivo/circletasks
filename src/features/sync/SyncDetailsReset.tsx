@@ -29,6 +29,9 @@ type Notice = { readonly text: string; readonly tone: 'ok' | 'danger'; readonly 
 
 const IN_PROGRESS: ReadonlySet<SyncResetStatus['step']> = new Set(['announced', 'snapshot', 'waiting-devices', 'switching', 'joined']);
 
+/** Réinitialisation interrompue (perte close, ou face à une restauration, §18 points 15 et 16) : rien à associer, relance possible. */
+const interrupted = (reset: SyncResetStatus | null): boolean => reset?.step === 'superseded' && (reset.closed === true || reset.restore === true);
+
 export function SyncDetailsReset() {
   const container = useAppContainer();
   const status = useFeatureStore(syncStore, (s) => s.status);
@@ -40,7 +43,8 @@ export function SyncDetailsReset() {
   if (!sync || !container.syncPlatform) return null;
   const reset = status.reset ?? null;
   const phase = status.phase;
-  const required = phase === 'reset-required' || reset?.role === 'required' || reset?.step === 'superseded';
+  const stopped = interrupted(reset);
+  const required = phase === 'reset-required' || reset?.role === 'required' || (reset?.step === 'superseded' && !stopped);
   const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten';
   const running = reset !== null && IN_PROGRESS.has(reset.step);
   const canStart = configured && !required && !running;
@@ -124,10 +128,12 @@ export function SyncDetailsReset() {
         {reset && !required && (reset.step !== 'start' || reset.failure === null) && (
           <div className="ct-settings__row ct-sync__device" data-reset-step={reset.step}>
             <span className="ct-settings__stack">
-              <span className="ct-sync__forgetText">{resetStepText(reset, devices)}</span>
+              <span className="ct-sync__forgetText" {...(stopped ? { 'data-trouble': 'true' } : {})}>
+                {stopped ? resetRequiredLine(reset, devices) : resetStepText(reset, devices)}
+              </span>
               {reset.resumed && reset.step !== 'done' && <span className="ct-settings__hint">{t('sync.reset.steps.resumed')}</span>}
             </span>
-            {reset.step === 'done' && (
+            {(reset.step === 'done' || stopped) && (
               <Button variant="secondary" ariaLabel={t('sync.reset.dismissLabel')} onClick={() => void sync.dismissReset()} className="ct-settings__link">
                 {t('sync.reset.dismiss')}
               </Button>
@@ -145,7 +151,7 @@ export function SyncDetailsReset() {
             <Button variant="secondary" ariaLabel={t('sync.reset.retryLabel')} onClick={() => void retry()} disabled={busy} ariaBusy={busy} className="ct-settings__link">
               {t('sync.reset.retry')}
             </Button>
-            {reset.step === 'start' && (
+            {(reset.step === 'start' || reset.failure.step === 'required') && (
               <Button variant="secondary" ariaLabel={t('sync.reset.dismissLabel')} onClick={() => void sync.dismissReset()} className="ct-settings__link">
                 {t('sync.reset.dismiss')}
               </Button>
@@ -215,12 +221,14 @@ function WaitingDevices({ waiting, devices, nowMs }: { readonly waiting: readonl
       <p className="ct-settings__hint">{t('sync.reset.waitingHint')}</p>
       <ul className="ct-sync__devices" data-testid="sync-reset-waiting">
         {waiting.map((id) => {
-          const device: SyncDeviceStatus = devices.find((d) => d.deviceId === id) ?? { deviceId: id, platform: 'windows', self: false, lastReadAt: null, status: 'active', seen: false };
+          // Revue 13 : un appareil absent de la liste n'a aucune plateforme inventée ; nom neutre, sans action (le moteur l'ajoute à APPAREILS,
+          // « jamais vu », au cycle suivant).
+          const device = devices.find((d) => d.deviceId === id) ?? null;
           return (
             <li key={id} className="ct-settings__row ct-sync__device">
               <span className="ct-sync__deviceName">{forgetDeviceName(id, devices)}</span>
-              <span className="ct-sync__deviceRead">{device.lastReadAt ? t('sync.reset.waitingLastSync', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.reset.waitingNever')}</span>
-              <SyncDeviceForgetAction device={device} />
+              <span className="ct-sync__deviceRead">{device?.lastReadAt ? t('sync.reset.waitingLastSync', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.reset.waitingNever')}</span>
+              {device && <SyncDeviceForgetAction device={device} />}
             </li>
           );
         })}

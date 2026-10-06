@@ -69,8 +69,13 @@ export const syncResetFr = {
     notForeground: 'CircleTasks n’était pas au premier plan',
     rateLimited: 'trop de demandes, réessayez dans 10 minutes',
     io: 'erreur d’écriture',
+    keyMismatch: 'cette clé ne correspond pas à la nouvelle clé du dossier',
+    invalidPairing: 'QR ou clé de secours illisible',
+    pairingExpired: 'QR expiré, affichez-en un nouveau',
     other: 'erreur inattendue',
   },
+  waitingSnapshot: 'En attente d’un instantané à jour de l’appareil qui réinitialise',
+  supersededRestore: 'Réinitialisation interrompue par une restauration sur {device} : relancez-la',
   required: 'Cet appareil doit être associé de nouveau',
   requiredDetail:
     'La synchronisation a été réinitialisée avec une nouvelle clé sur {device}. Rien n’est perdu : vos modifications attendent et seront publiées après l’association (QR ou nouvelle clé de secours).',

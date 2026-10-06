@@ -186,7 +186,13 @@ export interface ResetFacts {
   readonly waiting: readonly DeviceId[];
   readonly reminder: boolean;
   readonly failure: { readonly code: string; readonly step: string } | null;
+  /** §18 points 15 et 16 : perte close, ou face à une restauration : rien à associer, à relancer. */
+  readonly restore?: boolean | undefined;
+  readonly closed?: boolean | undefined;
 }
+
+/** Réinitialisation perdue mais rien à associer (perte close, ou face à une restauration) : bandeau d'étape, jamais « à associer ». */
+const stoppedReset = (reset: ResetFacts): boolean => reset.step === 'superseded' && (reset.restore === true || reset.closed === true);
 
 /** Ce que la synchro expose (forme de `SyncStatus`). */
 export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice> {
@@ -274,7 +280,7 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
 
   // Y-11 : avant le premier cycle, un appareil à réassocier (annonce authentique ou perte) est montré d'après l'état gardé.
   const reset = persisted.reset ?? shown.reset ?? null;
-  if (decision.kind !== 'trouble' && reset && (reset.role === 'required' || reset.step === 'superseded')) {
+  if (decision.kind !== 'trouble' && reset && (reset.role === 'required' || (reset.step === 'superseded' && !stoppedReset(reset)))) {
     decision = { kind: 'trouble', code: 'reset-required' };
     textStatus = { ...shown, phase: 'reset-required', reset, devices };
   }
@@ -302,7 +308,7 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   const pending = forget?.deletions.find((d) => d.state !== 'done');
   if (pending) troubles.push({ code: 'forget-pending', deletion: pending });
   // Y-11 (critère 17) : réinitialisation en cours ou en échec, tant que la transition n'est pas terminée ; rappel des 30 jours.
-  if (reset && reset.role !== 'required' && reset.step !== 'superseded' && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
+  if (reset && reset.role !== 'required' && (reset.step !== 'superseded' || stoppedReset(reset)) && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
   if (reset?.reminder) troubles.push({ code: 'reset-reminder', reset });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 

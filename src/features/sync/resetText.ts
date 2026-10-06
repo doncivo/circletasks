@@ -35,6 +35,12 @@ export function resetReason(code: string): string {
       return t('sync.reset.reasons.rateLimited');
     case 'io':
       return t('sync.reset.reasons.io');
+    case 'key-mismatch':
+      return t('sync.reset.reasons.keyMismatch');
+    case 'invalid-pairing':
+      return t('sync.reset.reasons.invalidPairing');
+    case 'pairing-expired':
+      return t('sync.reset.reasons.pairingExpired');
     default:
       return t('sync.reset.reasons.other');
   }
@@ -65,6 +71,8 @@ function stepName(step: string): string {
 
 /** Échec gardé (« La réinitialisation a échoué (étape) : raison »). */
 export function resetFailureText(failure: NonNullable<ResetFacts['failure']>): string {
+  // §18 point 14 : réassocié sans instantané couvrant de l'appareil qui réinitialise : attente visible, réessayée à chaque cycle.
+  if (failure.step === 'joined' && failure.code === 'state-mismatch') return t('sync.reset.waitingSnapshot');
   const reason = resetReason(failure.code);
   return failure.step === 'start' ? t('sync.reset.failedStart', { reason }) : t('sync.reset.failed', { step: stepName(failure.step), reason });
 }
@@ -92,7 +100,7 @@ export function resetStepText(reset: ResetFacts & { readonly resumed?: boolean }
 }
 
 /** Appareil à associer de nouveau : annonce d'un autre appareil, ou perte de sa propre réinitialisation (§18 point 2). */
-export function resetRequiredText(reset: Pick<ResetFacts, 'by' | 'superseded'> | null | undefined, devices: readonly SyncDeviceStatus[]): string {
+export function resetRequiredText(reset: Pick<ResetFacts, 'by' | 'superseded' | 'restore' | 'closed'> | null | undefined, devices: readonly SyncDeviceStatus[]): string {
   return resetRequiredLine(reset, devices);
 }
 

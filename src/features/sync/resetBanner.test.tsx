@@ -91,6 +91,18 @@ describe('bandeaux de la réinitialisation (critères 17 et 18)', () => {
     expect(text()).toContain('Une réinitialisation lancée sur iPhone l’emporte : associez cet appareil avec sa nouvelle clé');
   });
 
+  it('§18 points 15 et 16 : réinitialisation interrompue (restauration, ou perte close) : bandeau « relancez-la », jamais « à associer »', async () => {
+    render(<AppStatusBanner />);
+    start();
+    await settle();
+    set({ phase: 'idle', devices: DEVICES, reset: reset({ step: 'superseded', superseded: true, restore: true, by: PHONE }) });
+    expect(text()).toContain('Réinitialisation interrompue par une restauration sur iPhone : relancez-la');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reset-progress');
+    set({ reset: reset({ step: 'superseded', superseded: true, closed: true, by: null }) });
+    expect(text()).toContain('Réinitialisation interrompue : relancez-la');
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reset-progress');
+  });
+
   it('réinitialisation en cours puis en échec ; gardée dans sync_meta, elle revient dès le redémarrage ; retirée à la fin de la bascule', async () => {
     render(<AppStatusBanner />);
     start();

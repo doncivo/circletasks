@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { resetPrecondition, resetWinner, type ResetCandidate, type ResetLagReason, type ResetPreconditionDevice } from '../domain/sync/epoch';
+import { resetPrecondition, resetWinner, restoreCandidates, type OpenedEpoch, type ResetCandidate, type ResetLagReason, type ResetPreconditionDevice } from '../domain/sync/epoch';
 import { DEVICE_EXPIRY_MS, isSyncDeviceId, isSyncErrorCode, SYNC_FORMAT_MAJOR, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
 import { hlcMs } from '../domain/sync/parse';
 import { cutoff, seenDevices } from '../domain/sync/retention';
@@ -61,6 +61,12 @@ export interface ResetState {
   /** Bascule interrompue reprise au démarrage (dit par l'écran). */
   readonly resumed: boolean;
   readonly failure: ResetFailure | null;
+  /** §18 point 16 : perte face à une époque restaurée sous l'ancienne clé (« interrompue par une restauration : relancez-la »). */
+  readonly restore: boolean;
+  /** §18 point 15 : perte close par Rust (gagnant oublié) : « Réinitialisation interrompue : relancez-la », plus à associer. */
+  readonly closed: boolean;
+  /** §18 point 17 : instant du dernier échec d'import (`KeyStatus.importFailure.at`) déjà copié ; local, jamais publié. */
+  readonly importFailureAt: IsoDateTime | null;
 }
 
 const STEPS: readonly ResetStep[] = ['start', 'announced', 'snapshot', 'waiting-devices', 'switching', 'superseded', 'required', 'joined', 'done'];
@@ -68,7 +74,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const isIso = (value: unknown): value is IsoDateTime => typeof value === 'string' && !Number.isNaN(Date.parse(value));
 
 function parseFailure(value: unknown): ResetFailure | null {
-  if (!isRecord(value) || !isSyncErrorCode(value['code']) || !isIso(value['at']) || !(STEPS.includes(value['step'] as ResetStep) || value['step'] === 'start')) return null;
+  if (!isRecord(value) || !isSyncErrorCode(value['code']) || !isIso(value['at']) || !STEPS.includes(value['step'] as ResetStep)) return null;
   return { code: value['code'], at: value['at'], step: value['step'] as ResetFailure['step'] };
 }
 
@@ -92,6 +98,9 @@ export function parseResetState(value: unknown): ResetState | null {
     republished: value['republished'] === true,
     resumed: value['resumed'] === true,
     failure: parseFailure(value['failure']),
+    restore: value['restore'] === true,
+    closed: value['closed'] === true,
+    importFailureAt: isIso(value['importFailureAt']) ? value['importFailureAt'] : null,
   };
 }
 
@@ -119,6 +128,8 @@ export function resetStatusOf(state: ResetState | null, nowMs: number): SyncRese
     startedAt: state.startedAt,
     resumed: state.resumed,
     failure: state.failure,
+    ...(state.restore ? { restore: true } : {}),
+    ...(state.closed ? { closed: true } : {}),
   };
 }
 
@@ -146,15 +157,36 @@ export async function recordResetFailure(deps: SyncDeps, step: ResetFailure['ste
     republished: false,
     resumed: false,
     failure: null,
+    restore: false,
+    closed: false,
+    importFailureAt: null,
   };
   await writeResetState(deps, { ...base, failure: { code, at: now, step } });
   deps.logger.log('reset-failed', { step, code });
 }
 
-/** Efface l'état « terminée » ou un échec de lancement (choix de l'utilisateur) ; jamais une transition en cours. */
+/** Échec d'une étape résolu (attente visible terminée) : effacé s'il porte cette étape et ce code. */
+export async function clearResetFailure(deps: SyncDeps, step: ResetFailure['step'], code: SyncErrorCode): Promise<void> {
+  const current = await readResetState(deps.data.repos);
+  if (current?.failure?.step === step && current.failure.code === code) {
+    await writeResetState(deps, { ...current, failure: null });
+    deps.logger.log('reset-failure-cleared', { step, code });
+  }
+}
+
+/**
+ * Choix de l'utilisateur (« Fermer ») : efface l'état « terminée », un échec de lancement, ou une réinitialisation interrompue (perte close
+ * ou face à une restauration) ; pendant une transition ou une association attendue, seul l'échec affiché est écarté (l'échec d'import
+ * déjà copié n'est pas recopié : même `importFailureAt`).
+ */
 export async function dismissResetState(deps: SyncDeps): Promise<void> {
   const current = await readResetState(deps.data.repos);
-  if (current && (current.step === 'done' || current.step === 'start')) await writeResetState(deps, null);
+  if (!current) return;
+  if (current.step === 'done' || current.step === 'start' || (current.step === 'superseded' && (current.closed || current.restore))) {
+    await writeResetState(deps, null);
+    return;
+  }
+  if (current.failure) await writeResetState(deps, { ...current, failure: null });
 }
 
 /** Lancement accepté par Rust (`K2` créée) : l'appareil qui réinitialise publie l'annonce au cycle suivant. */
@@ -173,6 +205,9 @@ export async function beginReset(deps: SyncDeps, kid: string): Promise<void> {
     republished: false,
     resumed: false,
     failure: null,
+    restore: false,
+    closed: false,
+    importFailureAt: null,
   });
   deps.logger.log('reset-started', { kid });
 }
@@ -189,7 +224,9 @@ export type ResetDirective =
   /** Cet appareil est réassocié : il rejoint l'époque visée par fusion et attend la bascule de l'auteur. */
   | { readonly kid: string; readonly kind: 'joined'; readonly view: ResetView }
   /** Cet appareil doit être associé de nouveau (annonce authentique, ou perte) : publication suspendue, file gardée. */
-  | { readonly kind: 'required'; readonly republish: boolean };
+  | { readonly kind: 'required'; readonly republish: boolean }
+  /** §18 point 16 : réinitialisation perdue face à une époque restaurée : cycle ordinaire, époque suivie seulement celle désignée par Rust. */
+  | { readonly kind: 'follow'; readonly target: EpochId | null };
 
 export interface ResetInput {
   readonly scan: FolderScan;
@@ -198,22 +235,28 @@ export interface ResetInput {
   /** États acceptés par l'anti-rejeu dans ce cycle. */
   readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>;
   readonly forget: ForgetView;
-  readonly key: { readonly kid: string | null; readonly nextKid?: string | null };
+  readonly key: { readonly kid: string | null; readonly nextKid?: string | null; readonly importFailure?: { readonly code: SyncErrorCode; readonly at: IsoDateTime } | null };
 }
 
-/** Annonces **authentiques** (critère 8) : état déchiffré avec la clé locale, accepté, d'un appareil déjà connu avec cette clé. */
+/**
+ * Annonces **authentiques** (critère 8 (1) révisé, §18 point 15) : état déchiffré avec la clé locale et accepté par l'anti-rejeu, même
+ * règle que `announcements` de Rust (aucune condition « appareil déjà connu » : le gagnant ne dépend que des états authentifiés et de la
+ * liste maître, identique partout). Les époques ouvertes sous la clé locale (restaurations) concourent avec elles (§18 point 16).
+ */
 export function authenticAnnouncements(input: ResetInput, self: DeviceId): ResetCandidate[] {
   const out: ResetCandidate[] = [];
+  const opened: OpenedEpoch[] = [];
   for (const device of input.scan.devices) {
-    if (device.deviceId === self || device.stateStatus !== 'ok' || !device.state?.reset) continue;
+    if (device.stateStatus !== 'ok' || !device.state) continue;
     if (input.key.kid === null || device.kid !== input.key.kid) continue;
-    const state = input.accepted.get(device.deviceId);
-    if (!state || state.stateSeq !== device.state.stateSeq) continue;
-    const row = input.known.get(device.deviceId);
-    if (!row || row.kid !== input.key.kid || row.stateSeq <= 0) continue;
-    out.push({ by: device.deviceId, stateEpoch: device.state.epoch, notice: device.state.reset });
+    if (device.deviceId !== self) {
+      const state = input.accepted.get(device.deviceId);
+      if (!state || state.stateSeq !== device.state.stateSeq) continue;
+    }
+    opened.push({ by: device.deviceId, epoch: device.state.epoch, snapshot: device.state.snapshot !== null, notice: device.state.reset !== null });
+    if (device.deviceId !== self && device.state.reset) out.push({ by: device.deviceId, stateEpoch: device.state.epoch, notice: device.state.reset });
   }
-  return out;
+  return [...out, ...restoreCandidates(opened, out)];
 }
 
 function stepOf(view: ResetView): ResetStep {
@@ -247,18 +290,47 @@ export async function evaluateReset(deps: SyncDeps, input: ResetInput): Promise<
     resumed: stored?.resumed ?? false,
     // Un échec reste affiché jusqu'à la réussite de la même étape (sinon il est effacé quand l'étape avance).
     failure: stored?.failure && stored.step === step ? stored.failure : null,
+    restore: false,
+    closed: false,
+    importFailureAt: stored?.importFailureAt ?? null,
   });
-  const save = async (next: ResetState): Promise<void> => {
-    if (JSON.stringify(next) !== JSON.stringify(stored)) await writeResetState(deps, next);
+  /**
+   * §18 point 17 : un refus d'import (Rust, `KeyStatus.importFailure`) plus récent que le dernier copié devient l'échec affiché (étape
+   * `required`) d'un appareil à associer, perdant ou réassocié ; une nouvelle clé importée (`nextKid`) l'efface.
+   */
+  const withImport = (next: ResetState): ResetState => {
+    if (next.role !== 'required' && next.role !== 'joined' && next.step !== 'superseded') return next;
+    if (input.key.nextKid) return next.failure?.step === 'required' ? { ...next, failure: null } : next;
+    const failure = input.key.importFailure;
+    if (!failure || (next.importFailureAt !== null && Date.parse(failure.at) <= Date.parse(next.importFailureAt))) return next;
+    deps.logger.log('reset-import-failed', { code: failure.code });
+    return { ...next, failure: { code: failure.code, at: failure.at, step: 'required' }, importFailureAt: failure.at };
   };
+  const save = async (next: ResetState): Promise<void> => {
+    const final = withImport(next);
+    if (JSON.stringify(final) !== JSON.stringify(stored)) await writeResetState(deps, final);
+  };
+  /** Échec gardé d'une étape d'association (import refusé) : jamais effacé par un simple changement d'étape. */
+  const keepRequiredFailure = (next: ResetState): ResetState => (next.failure === null && stored?.failure?.step === 'required' ? { ...next, failure: stored.failure } : next);
 
   if (view?.switched) {
     await save({ ...base(stored?.role === 'joined' || view.role === 'joined' ? 'joined' : 'initiator', 'done'), resumed: view.resumed || (stored?.resumed ?? false), failure: null, waiting: [] });
     deps.logger.log('reset-switched', { resumed: view.resumed });
     return { kind: 'none' };
   }
+  if (view?.closed) {
+    // §18 point 15 : gagnant oublié, registre clos par Rust : « Réinitialisation interrompue : relancez-la » ; plus à associer.
+    await writeResetState(deps, { ...base(view.role, 'superseded'), by: null, epoch: null, superseded: true, closed: true, failure: null });
+    deps.logger.log('reset-superseded-void', {});
+    return { kind: 'none' };
+  }
+  if (view?.superseded?.restore) {
+    // §18 point 16 : une époque restaurée l'emporte : la réinitialisation est perdue, l'appareil suit cette époque par remplacement.
+    await save({ ...base(view.role, 'superseded'), by: view.superseded.by, epoch: view.superseded.epoch, superseded: true, restore: true });
+    return { kind: 'follow', target: view.superseded.epoch };
+  }
   if (view?.superseded) {
-    await save({ ...base(view.role, 'superseded'), by: view.superseded.by, epoch: view.superseded.epoch, superseded: true });
+    await save(keepRequiredFailure({ ...base(view.role, 'superseded'), by: view.superseded.by, epoch: view.superseded.epoch, superseded: true }));
     return { kind: 'required', republish: view.role === 'initiator' && stored?.republished !== true };
   }
   if (view) {
@@ -269,6 +341,8 @@ export async function evaluateReset(deps: SyncDeps, input: ResetInput): Promise<
     await save({ ...base(view.role, step), waiting: view.waiting, waitingSince, resumed });
     return view.role === 'initiator' ? { kind: 'initiator', view } : { kind: 'joined', kid: view.kid, view };
   }
+  // Perte close ou face à une restauration, déjà constatée : rien à associer, gardée jusqu'à « Fermer » ou une nouvelle réinitialisation.
+  if (stored?.step === 'superseded' && (stored.closed || stored.restore)) return stored.restore ? { kind: 'follow', target: stored.epoch } : { kind: 'none' };
   // Bascule faite par un scan dont ce cycle n'a pas vu le résultat (arrêt juste après) : la clé locale est devenue la nouvelle clé.
   if (stored && (stored.role === 'initiator' || stored.role === 'joined') && !['done', 'start', 'superseded'].includes(stored.step) && stored.kid !== null && input.key.kid === stored.kid && !input.key.nextKid) {
     await save({ ...stored, step: 'done', failure: null, waiting: [] });
@@ -278,21 +352,41 @@ export async function evaluateReset(deps: SyncDeps, input: ResetInput): Promise<
   // Autres appareils : annonce authentique d'une réinitialisation lancée ailleurs.
   const forgotten = new Set(input.forget.order.keys());
   const winner = resetWinner(authenticAnnouncements(input, self), forgotten);
-  if (winner && input.key.nextKid !== winner.notice.kid) {
+  if (winner && !winner.restore && input.key.nextKid !== winner.notice.kid) {
     if (stored?.role !== 'required' || stored.by !== winner.by || stored.epoch !== winner.notice.epoch) deps.logger.log('reset-required', { by: winner.by });
-    await save({ ...base('required', 'required'), by: winner.by, epoch: winner.notice.epoch, kid: null, superseded: stored?.superseded ?? false });
+    await save(keepRequiredFailure({ ...base('required', 'required'), by: winner.by, epoch: winner.notice.epoch, kid: null, superseded: stored?.superseded ?? false }));
     return { kind: 'required', republish: false };
   }
   if (stored?.role === 'required' || stored?.step === 'superseded') {
-    // Gardé jusqu'à la réassociation, sauf retrait constaté : l'auteur suivi est lu avec la clé locale, sans annonce (ou une autre).
+    // Gardé jusqu'à la réassociation, sauf retrait constaté : l'auteur suivi est lu avec la clé locale, sans annonce (ou une autre), ou
+    // oublié (§18 point 15 : son annonce est sans effet), ou battu par une époque restaurée (§18 point 16).
     const author = stored.by ? input.scan.devices.find((d) => d.deviceId === stored.by) : undefined;
-    const withdrawn = author?.stateStatus === 'ok' && author.kid === input.key.kid && (!author.state?.reset || author.state.reset.epoch !== stored.epoch) && stored.role === 'required';
-    if (!withdrawn) return { kind: 'required', republish: false };
+    const authorForgotten = stored.by !== null && forgotten.has(stored.by);
+    const withdrawn =
+      stored.role === 'required' &&
+      (authorForgotten || winner?.restore === true || (author?.stateStatus === 'ok' && author.kid === input.key.kid && (!author.state?.reset || author.state.reset.epoch !== stored.epoch)));
+    if (!withdrawn) {
+      await save(stored);
+      return { kind: 'required', republish: false };
+    }
     await writeResetState(deps, null);
     deps.logger.log('reset-required-cleared', { by: stored.by });
     return { kind: 'none' };
   }
   return { kind: 'none' };
+}
+
+/** Époque vers laquelle le moteur peut changer pendant une réinitialisation (§18 point 16) ; `undefined` : aucune contrainte. */
+export function allowedSwitchTarget(directive: ResetDirective): EpochId | null | undefined {
+  switch (directive.kind) {
+    case 'initiator':
+    case 'joined':
+      return directive.view.epoch;
+    case 'follow':
+      return directive.target;
+    default:
+      return undefined;
+  }
 }
 
 /** Annonce à publier sous l'ancienne clé par l'appareil qui réinitialise (tant qu'il n'a pas ouvert l'époque visée). */
@@ -304,7 +398,7 @@ export function noticeToPublish(directive: ResetDirective, epoch: EpochId): Publ
 
 /** Réinitialisation en cours sur cet appareil (suppressions de Y-10 et anciennes époques suspendues, comme chez Rust). */
 export function resetActive(directive: ResetDirective): boolean {
-  return directive.kind !== 'none';
+  return directive.kind !== 'none' && directive.kind !== 'follow';
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

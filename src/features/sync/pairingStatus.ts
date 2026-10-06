@@ -21,6 +21,9 @@ export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'
       return 'sync.pairing.openRateLimited';
     case 'io':
       return 'sync.pairing.openIncomplete';
+    case 'state-mismatch':
+      // Y-11 (revue 9) : l'ancienne clé est retirée (réinitialisation annoncée ailleurs, ou perdue) : elle n'est plus jamais donnée.
+      return mode === 'show' ? 'sync.pairing.openNeedsNewKey' : 'sync.pairing.openFailed';
     case 'window-unprotected':
       // Fenêtre impossible à protéger : texte générique, jamais « Installation incomplète » (remarque finale 4).
       return 'sync.pairing.openFailed';

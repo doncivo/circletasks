@@ -135,15 +135,18 @@ describe('annonce authentique seulement (critère 8)', () => {
     ...over,
   });
 
-  it('état déchiffré avec la clé locale, accepté, d’un appareil déjà connu avec cette clé : authentique', () => {
+  it('état déchiffré avec la clé locale et accepté : authentique', () => {
     expect(authenticAnnouncements(input({}), B)).toHaveLength(1);
   });
 
-  it('clé inconnue (foreign), état rejoué (rollback, non accepté), appareil jamais accepté, connu avec une autre clé : sans effet', () => {
+  it('clé inconnue (foreign), état rejoué (rollback, non accepté) : sans effet', () => {
     expect(authenticAnnouncements(input({ scan: scan('ffffffffffffffff', 'foreign') }), B)).toHaveLength(0);
     expect(authenticAnnouncements(input({ accepted: new Map<DeviceId, PublishedDeviceState>() }), B), 'rejoué : non accepté').toHaveLength(0);
-    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>() }), B), 'appareil inconnu de B').toHaveLength(0);
-    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row(K, 0)]]) }), B), 'aucun état déjà accepté').toHaveLength(0);
-    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row('ffffffffffffffff', 6)]]) }), B), 'connu avec une autre clé').toHaveLength(0);
+  });
+
+  it('§18 point 15 (critère 8 (1) révisé) : appareil jamais accepté ou connu avec une autre clé : authentique, comme chez Rust (même gagnant partout)', () => {
+    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>() }), B), 'appareil inconnu de B').toHaveLength(1);
+    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row(K, 0)]]) }), B), 'aucun état déjà accepté').toHaveLength(1);
+    expect(authenticAnnouncements(input({ known: new Map<string, SyncStateRow>([[A, row('ffffffffffffffff', 6)]]) }), B), 'connu avec une autre clé').toHaveLength(1);
   });
 });

@@ -6,13 +6,14 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
+import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 import { declareForget, prepareRejoin, readForgetStatus } from './forget';
-import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure } from './reset';
+import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure, RESET_META } from './reset';
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
-import { applyEverywhere, prepareKeepSynced, restoreContext } from './restoreChoice';
+import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
+import { writeJson } from './meta';
 import { INITIAL_STATUS, statusFromFacts } from './status';
 
 /**
@@ -196,17 +197,20 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     }
   };
 
-  /** Y-11 : une réinitialisation trouvée en cours au démarrage (arrêt pendant l'annonce, l'ouverture ou la bascule) est marquée reprise. */
+  /**
+   * Y-11 : une réinitialisation trouvée en cours au démarrage (arrêt pendant l'annonce, l'ouverture ou la bascule) est marquée reprise
+   * (`RESET_META`, écriture ordinaire de `sync_meta`). Un échec est visible (phase d'erreur), jamais seulement journalisé (revue 11).
+   */
   const markResumed = async (): Promise<void> => {
     try {
       const stored = await readResetState(options.data.repos);
       if (stored && (stored.step === 'announced' || stored.step === 'snapshot' || stored.step === 'switching') && !stored.resumed) {
-        await options.data.repos.sync.setMeta('resetState', JSON.stringify({ ...stored, resumed: true }));
+        await writeJson(options.data.repos, RESET_META, { ...stored, resumed: true });
         deps.logger.log('reset-resumed', { step: stored.step });
       }
-    } catch {
-      // base occupée : l'étape reste affichée telle quelle ; elle sera reprise par le cycle
-      deps.logger.log('reset-resume-unmarked', { code: 'io' });
+    } catch (error) {
+      deps.logger.log('reset-resume-unmarked', { code: syncErrorCodeOf(error) });
+      publish({ ...status, phase: 'error', errorCode: syncErrorCodeOf(error) });
     }
   };
 
@@ -277,25 +281,47 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     },
     chooseRestoreOption: (option: RestoreOption) =>
       schedule('choice', async () => {
-        const context = await service.restoreContext();
-        if (!context || !context.options.includes(option)) {
-          deps.logger.log('restore-choice-refused', { option });
-          return;
-        }
-        deps.logger.log('restore-choice', { option });
-        if (option === 'apply-everywhere') {
-          await applyEverywhere(deps);
+        /**
+         * QA-1 (aucun échec silencieux) : un choix refusé (option retirée, §18 point 16) ou en échec est gardé dans `sync_meta`
+         * (`restoreFailure`, montré par la fenêtre de choix jusqu'à un choix appliqué) et rendu visible aussitôt (phase d'erreur).
+         */
+        const failed = async (code: SyncErrorCode): Promise<void> => {
+          try {
+            await recordRestoreFailure(deps, option, code);
+          } catch {
+            deps.logger.log('restore-failure-unrecorded', { code });
+          }
+          publish({ ...status, phase: 'error', errorCode: code });
+        };
+        try {
+          const context = await service.restoreContext();
+          if (!context) return;
+          if (!context.options.includes(option)) {
+            deps.logger.log('restore-choice-refused', { option });
+            await failed('state-mismatch');
+            return;
+          }
+          deps.logger.log('restore-choice', { option });
+          if (option === 'apply-everywhere') {
+            await applyEverywhere(deps);
+            await options.platform.restoreMarker.clear();
+            await writeJson(options.data.repos, RESTORE_FAILURE_META, null);
+            await cycle();
+            return;
+          }
+          await prepareKeepSynced(deps);
+          const result = await cycle({ ignoreMarker: true, forceResume: true });
+          if (result.outcome !== 'done') {
+            await failed(result.errorCode ?? 'io');
+            return;
+          }
           await options.platform.restoreMarker.clear();
-          await cycle();
-          return;
-        }
-        await prepareKeepSynced(deps);
-        const result = await cycle({ ignoreMarker: true, forceResume: true });
-        if (result.outcome === 'done') {
-          await options.platform.restoreMarker.clear();
+          await writeJson(options.data.repos, RESTORE_FAILURE_META, null);
           await finish(result);
+        } catch (error) {
+          await failed(syncErrorCodeOf(error));
         }
-      }).catch(() => undefined),
+      }),
     running: () => current,
     async forgetDevice(deviceId: DeviceId): Promise<ForgetOutcome> {
       let outcome: ForgetOutcome = { kind: 'failed', code: 'io' };

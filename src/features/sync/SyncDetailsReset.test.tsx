@@ -184,3 +184,48 @@ describe('textes (critère 19)', () => {
     expect(native.consent.resetKey.content).toContain('L\'ancienne clé de secours ne servira plus');
   });
 });
+
+describe('ADR 0011 §18 points 14 à 17 (revue et décision de l’architecte)', () => {
+  it('perte face à une restauration : « interrompue par une restauration sur … : relancez-la », relance possible, « Fermer »', async () => {
+    sync.setStatus({ reset: state({ step: 'superseded', superseded: true, restore: true, by: IPHONE }) });
+    renderIn(<SyncDetailsReset />);
+    expect(within(slot()).getByText('Réinitialisation interrompue par une restauration sur iPhone : relancez-la')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Réinitialiser la synchronisation avec une nouvelle clé' })).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Fermer le message de réinitialisation terminée' }));
+    });
+    expect(sync.dismissals).toBe(1);
+  });
+
+  it('perte close (gagnant oublié) : « Réinitialisation interrompue : relancez-la », plus à associer, relance possible', () => {
+    sync.setStatus({ reset: state({ step: 'superseded', superseded: true, closed: true, by: null }) });
+    renderIn(<SyncDetailsReset />);
+    expect(within(slot()).getByText('Réinitialisation interrompue : relancez-la')).toBeTruthy();
+    expect(screen.queryByText('Cet appareil doit être associé de nouveau')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Réinitialiser la synchronisation avec une nouvelle clé' })).toBeTruthy();
+  });
+
+  it('réassocié sans instantané couvrant : « En attente d’un instantané à jour de l’appareil qui réinitialise » ; import refusé : raison lisible et « Fermer »', async () => {
+    sync.setStatus({ reset: state({ role: 'joined', step: 'joined', by: IPHONE, failure: { code: 'state-mismatch', at: '2026-10-06T08:01:00.000Z' as IsoDateTime, step: 'joined' } }) });
+    renderIn(<SyncDetailsReset />);
+    expect(within(slot()).getByText('En attente d’un instantané à jour de l’appareil qui réinitialise')).toBeTruthy();
+    cleanup();
+    sync.setStatus({ phase: 'reset-required', reset: state({ role: 'required', step: 'required', by: IPHONE, failure: { code: 'key-mismatch', at: '2026-10-06T08:01:00.000Z' as IsoDateTime, step: 'required' } }) });
+    renderIn(<SyncDetailsReset />);
+    expect(within(slot()).getByText('La réinitialisation a échoué (association) : cette clé ne correspond pas à la nouvelle clé du dossier')).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Fermer le message de réinitialisation terminée' }));
+    });
+    expect(sync.dismissals).toBe(1);
+  });
+
+  it('appareil attendu absent de la liste : nom neutre, aucune plateforme inventée, pas d’action (revue 13)', () => {
+    const ghost = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd' as DeviceId;
+    sync.setStatus({ reset: state({ waiting: [ghost] }) });
+    renderIn(<SyncDetailsReset />);
+    const list = screen.getByTestId('sync-reset-waiting');
+    expect(within(list).getByText('Jamais synchronisé')).toBeTruthy();
+    expect(within(list).queryByText(/PC|iPhone/)).toBeNull();
+    expect(within(list).queryByRole('button')).toBeNull();
+  });
+});

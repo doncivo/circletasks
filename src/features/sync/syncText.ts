@@ -147,11 +147,13 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
  * Y-11 : appareil à associer de nouveau (annonce authentique d'un autre appareil) ou perdant d'une réinitialisation simultanée (§18
  * point 2), l'appareil gagnant nommé comme dans APPAREILS.
  */
-export function resetRequiredLine(reset: Pick<NonNullable<SyncStatus['reset']>, 'by' | 'superseded'> | null | undefined, devices: readonly SyncDeviceStatus[]): string {
+export function resetRequiredLine(reset: Pick<NonNullable<SyncStatus['reset']>, 'by' | 'superseded' | 'restore' | 'closed'> | null | undefined, devices: readonly SyncDeviceStatus[]): string {
   if (!reset?.superseded) return t('sync.reset.required');
-  if (!reset.by) return t('sync.reset.supersededUnknown');
+  if (!reset.by || reset.closed) return t('sync.reset.supersededUnknown');
   const device = devices.find((d) => d.deviceId === reset.by);
-  return t('sync.reset.superseded', { device: device ? deviceName(device, devices) : t('sync.forget.unseenName', { short: String(reset.by).slice(0, 8) }) });
+  const name = device ? deviceName(device, devices) : t('sync.forget.unseenName', { short: String(reset.by).slice(0, 8) });
+  // §18 point 16 : perdue face à une restauration appliquée partout : rien à associer, à relancer.
+  return reset.restore ? t('sync.reset.supersededRestore', { device: name }) : t('sync.reset.superseded', { device: name });
 }
 
 /** Libellé du statut d'un appareil (APPAREILS). */

@@ -145,16 +145,14 @@ describe('suspension seulement sur une annonce authentique (critères 8 et 9)', 
     expect(await titles(a)).toContain('B toujours publié');
   });
 
-  it('une annonce d’un appareil que B n’a jamais accepté ne suspend rien au premier scan', async () => {
+  it('§18 point 15 : une annonce d’un appareil que B n’a jamais accepté est authentique dès le premier scan (même gagnant partout)', async () => {
     const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
     // B oublie tout ce qu'il savait de C (ligne sync_state effacée) : C lui est inconnu.
     await b.driver.execute('DELETE FROM sync_state WHERE device_id = ?', [c.id]);
     await c.cycle();
     expect((await c.service.resetSync()).kind).toBe('started');
     propagate(c.folder, b.folder, c.id);
-    expect((await b.cycle()).phase, 'appareil inconnu de B avec la clé locale').not.toBe('reset-required');
-    // Au scan suivant, C est connu (état accepté, même clé) : l'annonce est authentique.
-    expect((await b.cycle()).phase).toBe('reset-required');
+    expect((await b.cycle()).phase, 'état authentifié sous la clé locale : comme chez Rust').toBe('reset-required');
     void a;
   });
 });

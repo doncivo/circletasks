@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import type { RestoreOption } from '../../domain/sync/epoch';
+import type { RestoreContext } from '../../platform/sync/types';
 import { t } from '../../i18n';
 import { ChoiceDialog } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
+import { resetReason } from './resetText';
 import { syncStore } from './syncStore';
 
 /**
@@ -28,16 +30,26 @@ export function RestoreChoiceDialog() {
 
   if (!restore) return null;
   const options = restore.options.map((id) => ({ id, label: t(id === 'apply-everywhere' ? 'sync.restore.applyEverywhere' : 'sync.restore.keepSynced') }));
-  // Règle 4 : texte dédié (une seule clé, jamais deux phrases assemblées dans le code).
-  const description = t(restore.options.includes('keep-synced') ? 'sync.restore.body' : 'sync.restore.bodyOnlyApply');
   return (
     <ChoiceDialog<RestoreOption>
       title={t('sync.restore.title')}
-      description={description}
+      description={restoreDescription(restore)}
       options={options}
       cancelLabel={t('sync.restore.later')}
       onChoose={(option) => void chooseRestore(option)}
       onCancel={closeRestore}
     />
   );
+}
+
+/**
+ * Texte de la fenêtre (une seule clé par cas, jamais deux phrases assemblées dans le code) : choix refusé ou en échec (QA-1, gardé jusqu'à
+ * un choix appliqué), réinitialisation en cours (§18 point 16 : « Appliquer partout » retiré ; règle 4 : aucune option), règle 4, cas
+ * ordinaire.
+ */
+function restoreDescription(restore: RestoreContext): string {
+  if (restore.failure) return restore.notice ? t('sync.restore.failedReset') : t('sync.restore.failed', { reason: resetReason(restore.failure.code) });
+  if (restore.notice === 'reset-finish') return t('sync.restore.resetFinish');
+  if (restore.notice === 'reset-in-progress') return t('sync.restore.resetInProgress');
+  return t(restore.options.includes('keep-synced') ? 'sync.restore.body' : 'sync.restore.bodyOnlyApply');
 }
