@@ -1271,6 +1271,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         marker = null;
       },
     },
+    // Lot Y4, étape 0 : mêmes refus que les corps provisoires de Rust (`not-configured`, sans effet) jusqu'à Y-10 et Y-11.
+    forget: {
+      device: async () => fail('not-configured'),
+      deleteFiles: async () => fail('not-configured'),
+    },
+    reset: {
+      start: async () => fail('not-configured'),
+    },
     testing: {
       setConsent: (answer) => {
         consentAnswer = answer;

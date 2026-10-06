@@ -48,11 +48,13 @@ fn main() {
             "calendar_oauth_google_authorize", "calendar_oauth_google_revoke", "calendar_http",
             // Mini-fenêtre Focus ouverte par Rust (correctif F-01 du lot Y1) : `main` ne crée plus aucune fenêtre.
             "focus_window_open", "focus_window_bring_to_front", "focus_window_close",
-            // Synchronisation (ADR 0011 section 11.1) : 21 commandes ; capabilities sync.json (main, 18) et sync-pairing.json (pairing, 3).
+            // Synchronisation (ADR 0011 section 11.1) : 24 commandes ; capabilities sync.json (main, 21) et sync-pairing.json (pairing, 3).
             "sync_folder_info", "sync_folder_choose", "sync_folder_forget", "sync_bind_device", "sync_key_status", "sync_key_create",
             "sync_pairing_open", "sync_pairing_payload", "sync_key_import", "sync_pairing_close", "sync_scan", "sync_read_journal",
             "sync_append_journal", "sync_write_state", "sync_snapshot_begin", "sync_snapshot_append", "sync_snapshot_commit",
             "sync_read_snapshot", "sync_delete_own", "sync_restore_marker_get", "sync_restore_marker_clear",
+            // Lot Y4 (ADR 0011 sections 11.1 et 18, étape 0) : Y-10 (oubli, suppression des fichiers d'un appareil oublié) et Y-11.
+            "sync_device_forget", "sync_forgotten_delete", "sync_reset_key",
         ])),
     )
     .expect("échec de la configuration de la compilation Tauri");

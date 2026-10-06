@@ -23,6 +23,8 @@ import { syncConflictsEn } from './en.syncConflicts';
 import { syncFieldEn } from './en.syncField';
 import { syncVersionEn } from './en.syncVersion';
 import { syncPairingEn } from './en.syncPairing';
+import { syncForgetEn } from './en.syncForget';
+import { syncResetEn } from './en.syncReset';
 
 /** Anglais (option, PRD section 8) : même forme que fr.ts, vérifiée par le typage. */
 export const en: Messages = {
@@ -57,7 +59,7 @@ export const en: Messages = {
   stats: statsEn,
   appearance: appearanceEn,
   calendars: calendarsEn,
-  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn, conflicts: syncConflictsEn, field: syncFieldEn, version: syncVersionEn, pairing: syncPairingEn },
+  sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn, conflicts: syncConflictsEn, field: syncFieldEn, version: syncVersionEn, pairing: syncPairingEn, forget: syncForgetEn, reset: syncResetEn },
   tasks: {
     newTask: 'New task',
     titleLabel: 'Title',

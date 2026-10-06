@@ -1,8 +1,8 @@
 /**
  * Contrat de la synchronisation par iCloud Drive (ADR 0011, section 11 ; Y-01 à Y-09).
  *
- * `SyncPlatform` est la seule porte vers les 21 commandes Rust `sync_*` (dossier, clé, appairage, fichiers chiffrés, marqueur de
- * restauration) : du texte clair JSON circule, jamais un chemin ; la clé seulement aux deux points de la section 2.1. `SyncService`
+ * `SyncPlatform` est la seule porte vers les 24 commandes Rust `sync_*` (dossier, clé, appairage, fichiers chiffrés, marqueur de
+ * restauration ; oubli d'un appareil et réinitialisation, lot Y4) : du texte clair JSON circule, jamais un chemin ; la clé seulement aux deux points de la section 2.1. `SyncService`
  * est le service exposé par le conteneur (`AppContainer.sync`), implémenté par `src/sync` (lot Y2).
  *
  * Couche platform : n'importe que `src/domain`.
@@ -212,6 +212,10 @@ export interface SyncCommandMap {
   sync_delete_own: { readonly args: { readonly files: readonly OwnFileRef[] }; readonly result: { readonly deleted: number } };
   sync_restore_marker_get: { readonly args: undefined; readonly result: RestoreMarker | null };
   sync_restore_marker_clear: { readonly args: undefined; readonly result: null };
+  // Lot Y4 (ADR 0011 sections 11.1 et 18) : déclarées à l'étape 0, `not-configured` jusqu'à Y-10 et Y-11.
+  sync_device_forget: { readonly args: { readonly deviceId: DeviceId }; readonly result: null };
+  sync_forgotten_delete: { readonly args: { readonly deviceId: DeviceId }; readonly result: ForgottenDeleteResult };
+  sync_reset_key: { readonly args: undefined; readonly result: { readonly kid: string } };
 }
 
 export type SyncCommand = keyof SyncCommandMap;
@@ -239,9 +243,12 @@ export const SYNC_COMMAND_WINDOWS: { readonly [C in SyncCommand]: 'main' | 'pair
   sync_delete_own: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
+  sync_device_forget: 'main',
+  sync_forgotten_delete: 'main',
+  sync_reset_key: 'main',
 };
 
-/** Les 21 commandes, dans l'ordre de la section 11.1 (même liste que `AppManifest::commands` de `build.rs`, lot Y1). */
+/** Les 24 commandes, dans l'ordre de la section 11.1 (même liste que `AppManifest::commands` de `build.rs` ; lot Y1, puis lot Y4). */
 export const SYNC_COMMANDS = Object.keys(SYNC_COMMAND_WINDOWS) as readonly SyncCommand[];
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -293,6 +300,24 @@ export interface SyncPlatform {
   /** Supprime ses propres fichiers ; renvoie le nombre supprimé (`current-epoch` pour le dossier de l'époque courante). */
   deleteOwn(files: readonly OwnFileRef[]): Promise<number>;
   readonly restoreMarker: { get(): Promise<RestoreMarker | null>; clear(): Promise<void> };
+  /** Lot Y4, Y-10 (ADR 0011 section 14.2). Étape 0 : les deux méthodes rejettent `not-configured`. */
+  readonly forget: {
+    /** Fenêtre main : confirmation native, puis déclaration dans `sync/forgotten.json`. */
+    device(deviceId: DeviceId): Promise<void>;
+    /** Fenêtre main, appelée par le cycle, sans boîte : conditions recalculées par Rust. */
+    deleteFiles(deviceId: DeviceId): Promise<ForgottenDeleteResult>;
+  };
+  /** Lot Y4, Y-11 (ADR 0011 section 14.3). Étape 0 : rejette `not-configured`. */
+  readonly reset: {
+    /** Fenêtre main : confirmation native, création ou reprise de K2. Ne renvoie que le kid. */
+    start(): Promise<{ readonly kid: string }>;
+  };
+}
+
+/** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */
+export interface ForgottenDeleteResult {
+  readonly deleted: number;
+  readonly complete: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

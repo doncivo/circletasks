@@ -1,0 +1,5 @@
+{
+  "description": "Table de cas commune Rust / Vitest de la validité et du gagnant des annonces de réinitialisation (ADR 0011 sections 14.3, 11.2 et 18 ; Y-11 critère 15). Lue par reset_winner de src-tauri/src/sync/reset.rs et par validReset et resetWinner de src/domain/sync/epoch.ts. Squelette posé à l'étape 0 du lot Y4 ; cas ajoutés par Y-11.",
+  "validReset": [],
+  "resetWinner": []
+}

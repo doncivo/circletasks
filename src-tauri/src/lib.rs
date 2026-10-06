@@ -43,13 +43,15 @@ pub fn run() {
         calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Mini-fenêtre Focus ouverte par Rust (correctif F-01, ADR 0011 section 2.1).
         focus_window::focus_window_open, focus_window::focus_window_bring_to_front, focus_window::focus_window_close,
-        // Synchronisation (ADR 0011 section 11.1) : 18 commandes pour `main`, 3 pour `pairing`.
+        // Synchronisation (ADR 0011 section 11.1) : 21 commandes pour `main`, 3 pour `pairing`.
         sync::commands::sync_folder_info, sync::commands::sync_folder_choose, sync::commands::sync_folder_forget, sync::commands::sync_bind_device,
         sync::commands::sync_key_status, sync::commands::sync_key_create, sync::commands::sync_pairing_open, sync::commands::sync_pairing_payload,
         sync::commands::sync_key_import, sync::commands::sync_pairing_close, sync::commands::sync_scan, sync::commands::sync_read_journal,
         sync::commands::sync_append_journal, sync::commands::sync_write_state, sync::commands::sync_snapshot_begin, sync::commands::sync_snapshot_append,
         sync::commands::sync_snapshot_commit, sync::commands::sync_read_snapshot, sync::commands::sync_delete_own, sync::commands::sync_restore_marker_get,
         sync::commands::sync_restore_marker_clear,
+        // Lot Y4 (ADR 0011 section 18, étape 0) : corps qui répondent `not-configured` jusqu'à Y-10 et Y-11.
+        sync::commands::sync_device_forget, sync::commands::sync_forgotten_delete, sync::commands::sync_reset_key,
     ]);
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);

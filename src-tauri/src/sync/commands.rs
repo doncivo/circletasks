@@ -1,4 +1,4 @@
-//! Les 21 commandes `sync_*` (ADR 0011 section 11.1), PC. Déclarées dans `build.rs` ; `capabilities/sync.json` en accorde 18 à la
+//! Les 24 commandes `sync_*` (ADR 0011 section 11.1), PC. Déclarées dans `build.rs` ; `capabilities/sync.json` en accorde 21 à la
 //! fenêtre `main`, `capabilities/sync-pairing.json` accorde `sync_pairing_payload`, `sync_key_import` et `sync_pairing_close` à la
 //! seule fenêtre `pairing`. Rejets : `{ code, message }` sans chemin, sans clé, sans recopie de l'entrée.
 //!
@@ -61,7 +61,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> SyncResult<T> + Send + 
     tauri::async_runtime::spawn_blocking(f).await.map_err(|_| SyncError::new(SyncCode::Io))?
 }
 
-/// Seule la fenêtre `main` appelle les 18 commandes qui lui sont accordées (la capability le garantit ; contrôle redondant).
+/// Seule la fenêtre `main` appelle les 21 commandes qui lui sont accordées (la capability le garantit ; contrôle redondant).
 fn require_main(window: &WebviewWindow) -> SyncResult<()> {
     if window.label() == MAIN_WINDOW {
         Ok(())
@@ -570,4 +570,43 @@ pub async fn sync_restore_marker_clear(app: AppHandle, window: WebviewWindow, st
     require_main(&window)?;
     let core = state.core(&app)?;
     blocking(move || core.clear_restore_marker()).await
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Lot Y4 (ADR 0011 sections 11.1, 14 et 18) : étape 0, commandes déclarées sans comportement
+// ------------------------------------------------------------------------------------------------------------------------------
+//
+// Corps provisoires : contrôle de la fenêtre appelante, puis `not-configured` (ADR 0011 section 13, ligne Y4 ; fiche Y-10, étape 0),
+// sans boîte, sans lecture ni écriture. `not-configured` est déjà le premier refus de chacune de ces commandes (section 11.1) et le
+// moteur le traite comme « rien à faire » sans nouvelle tentative ni échec bruyant ; aucun code nouveau (38 codes inchangés).
+// Région `sync_device_forget` et `sync_forgotten_delete` : Y-10 (`forget.rs`) ; région `sync_reset_key` : Y-11 (`reset.rs`).
+
+/// Sortie de `sync_forgotten_delete` (Y-10) : entrées supprimées par l'appel, et `complete` faux s'il en reste (10 000 au plus).
+#[derive(Serialize)]
+pub struct ForgottenDeleted {
+    deleted: u64,
+    complete: bool,
+}
+
+/// Y-10 : déclaration d'oubli d'un autre appareil (confirmation native, `sync/forgotten.json`). Étape 0 : `not-configured`.
+#[tauri::command]
+pub async fn sync_device_forget(window: WebviewWindow, device_id: String) -> SyncResult<()> {
+    require_main(&window)?;
+    let _ = device_id;
+    fail(SyncCode::NotConfigured)
+}
+
+/// Y-10 : suppression des fichiers d'un appareil oublié (sans boîte, conditions recalculées par Rust). Étape 0 : `not-configured`.
+#[tauri::command]
+pub async fn sync_forgotten_delete(window: WebviewWindow, device_id: String) -> SyncResult<ForgottenDeleted> {
+    require_main(&window)?;
+    let _ = device_id;
+    fail(SyncCode::NotConfigured)
+}
+
+/// Y-11 : réinitialisation avec une nouvelle clé (confirmation native, `K2` sous `.next`, seul le `kid` rendu). Étape 0 : `not-configured`.
+#[tauri::command]
+pub async fn sync_reset_key(window: WebviewWindow) -> SyncResult<KeyCreated> {
+    require_main(&window)?;
+    fail(SyncCode::NotConfigured)
 }
