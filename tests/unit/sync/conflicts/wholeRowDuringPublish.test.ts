@@ -110,4 +110,49 @@ describe('ligne « + » : entière ou pas du tout', () => {
     expect(await b.driver.select('SELECT reason FROM sync_parked')).toEqual([]);
     expect(b.logger.entries.filter((e) => e.event === 'apply-abandoned')).toEqual([]);
   });
+
+  it('ligne « + » réécrite pendant deux cycles de suite : retenue deux fois, publiée entière au troisième au-dessus de la tête, B converge', async () => {
+    const { a, b, taskId } = await purgedOnB();
+    const sync = a.data.repos.sync as { readRowsWithClocks: (t: SyncTable, ids: readonly string[]) => Promise<unknown> };
+    const real = sync.readRowsWithClocks.bind(sync);
+    let rewrites = 0;
+    let rewriting = true;
+    sync.readRowsWithClocks = async (t, ids) => {
+      if (rewriting && t.name === 'task' && ids.includes(taskId)) {
+        rewrites += 1;
+        a.clock.advance(1);
+        await a.updateTask(taskId as never, { title: `Réécrite ${String(rewrites)}` });
+      }
+      return real(t, ids);
+    };
+    const pendingWhole = () => a.driver.select("SELECT field FROM sync_outbox WHERE table_name = 'task' AND row_id = ? AND field = '+'", [taskId]);
+    const head = async (): Promise<string> => String((JSON.parse(String(await a.data.repos.sync.getMeta('head'))) as { hlc: string }).hlc);
+    for (let cycle = 1; cycle <= 2; cycle += 1) {
+      await a.cycle();
+      syncFolders(devices);
+      await b.cycle();
+      // Retenue : son entrée « + » reste, rien d'elle n'est arrivé chez B (ni partie mise de côté, ni champ abandonné).
+      expect(await pendingWhole(), `cycle ${String(cycle)}`).toEqual([{ field: '+' }]);
+      expect(await b.task(taskId as never), `cycle ${String(cycle)}`).toBeNull();
+      // Seul le rappel vivant (parti entier) attend sa tâche, encore une trace chez B : mis de côté, jamais abandonné (ADR 0011 §5.4).
+      expect(await b.driver.select('SELECT table_name, reason FROM sync_parked')).toEqual([{ table_name: 'reminder', reason: 'missing-parent' }]);
+    }
+    expect(rewrites).toBe(2);
+    rewriting = false;
+    const before = await head();
+    await a.cycle();
+    expect(await pendingWhole()).toEqual([]);
+    // Publiée à un rang au-dessus de la tête déjà publiée (l'ajout est refusé sinon, hlc-order) : aucune famine.
+    expect(await head() > before).toBe(true);
+    expect(a.logger.entries.filter((e) => e.event === 'publish-failed')).toEqual([]);
+    syncFolders(devices);
+    await settle();
+    const onB = await b.task(taskId as never);
+    expect(onB?.deletedAt).toBeNull();
+    expect(onB?.title).toBe('Réécrite 2');
+    expect(await b.driver.select('SELECT id, deleted_at FROM reminder')).toEqual([{ id: REMINDER, deleted_at: null }]);
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+    expect(await b.driver.select('SELECT reason FROM sync_parked')).toEqual([]);
+    expect(b.logger.entries.filter((e) => e.event === 'apply-abandoned')).toEqual([]);
+  });
 });
