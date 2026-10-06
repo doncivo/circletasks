@@ -118,6 +118,8 @@ const BLOCKED: readonly { name: string; patch: Partial<SyncStatus> }[] = [
   { name: 'needs-pairing', patch: { phase: 'needs-pairing' } },
   { name: 'restore-choice', patch: { phase: 'restore-choice' } },
   { name: 'waiting-icloud', patch: { phase: 'waiting-icloud', errorCode: 'cloud-provider-stopped' } },
+  // Y-10 : appareil local oublié.
+  { name: 'forgotten', patch: { phase: 'forgotten' } },
 ];
 
 describe('aucun échec silencieux : chaque phase bloquée (9 c, 9 e, 9 i)', () => {
@@ -160,7 +162,7 @@ describe('aucun échec silencieux : chaque phase bloquée (9 c, 9 e, 9 i)', () =
   it('chaque phase en échec ou bloquée (sauf l’attente) a un bouton « Voir » nommé', async () => {
     render(<AppStatusBanner />);
     await start().refreshed();
-    for (const phase of ['needs-pairing', 'restore-choice', 'key-mismatch', 'error', 'clock-ahead'] as const) {
+    for (const phase of ['needs-pairing', 'restore-choice', 'key-mismatch', 'error', 'clock-ahead', 'forgotten'] as const) {
       set({ phase });
       expect(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }), phase).toBeTruthy();
     }

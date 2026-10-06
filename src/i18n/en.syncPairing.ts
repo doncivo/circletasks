@@ -26,6 +26,7 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   joinProgressLabel: 'Receiving sync data',
   joinWaiting: 'Receiving your data, waiting: {done} / {total}',
   joinFailed: 'Receiving your data stopped at {done} / {total}: it will resume at the next sync',
+  joinFailedSnapshot: 'No up-to-date snapshot: open another paired device',
   joinFailedClock: 'Receiving your data is blocked: this device’s clock is behind. Set the time, it will resume afterwards',
   retry: 'Try again',
   retryLabel: 'Try receiving the data again',

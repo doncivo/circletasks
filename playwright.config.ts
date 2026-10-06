@@ -12,7 +12,8 @@ export default defineConfig({
   // Plafond mémoire (consigne d'Ali) : 2 workers, ou CT_TEST_WORKERS=1 pour la relance de secours.
   workers: Number(process.env['CT_TEST_WORKERS'] ?? 2),
   forbidOnly: !!process.env['CI'],
-  retries: process.env['CI'] ? 2 : 0,
+  // Consigne d'Ali : aucun nouvel essai, ni en local ni en CI ; un test instable se corrige, il ne se rejoue pas.
+  retries: 0,
   reporter: process.env['CI'] ? [['github'], ['html', { open: 'never' }]] : [['list']],
   use: {
     baseURL: BASE_URL,

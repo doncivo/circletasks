@@ -25,13 +25,15 @@ describe('lot Y4, étape 0', () => {
     expect(SYNC_COMMAND_WINDOWS.sync_reset_key).toBe('main');
   });
 
-  it('mémoire : forget.device, forget.deleteFiles et reset.start refusent en not-configured, avec ou sans dossier et clé', async () => {
+  it('mémoire : sans dossier, les trois refusent en not-configured ; Y-10 : sans liaison, forget refuse en not-bound ; reset.start reste not-configured (Y-11)', async () => {
     const platform = createMemorySyncPlatform();
     const all = () => [platform.forget.device(OTHER), platform.forget.deleteFiles(OTHER), platform.reset.start()];
     for (const p of all()) expect(await codeOf(p)).toBe('not-configured');
     await platform.folder.choose();
     await platform.key.create();
-    for (const p of all()) expect(await codeOf(p)).toBe('not-configured');
+    expect(await codeOf(platform.forget.device(OTHER))).toBe('not-bound');
+    expect(await codeOf(platform.forget.deleteFiles(OTHER))).toBe('not-bound');
+    expect(await codeOf(platform.reset.start())).toBe('not-configured');
     expect(await platform.key.status()).toMatchObject({ present: true });
   });
 

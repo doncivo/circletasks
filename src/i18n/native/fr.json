@@ -21,6 +21,20 @@
       "content": "Sans clé, cet appareil devra être associé de nouveau.",
       "confirm": "Oublier la clé",
       "cancel": "Annuler"
+    },
+    "forgetDevice": {
+      "title": "CircleTasks",
+      "instruction": "Oublier cet appareil ?",
+      "content": "Il ne sera plus synchronisé et ses fichiers seront supprimés d'iCloud. L'oubli ne s'annule pas : l'appareil devra être associé de nouveau.",
+      "confirm": "Oublier l'appareil",
+      "cancel": "Annuler"
     }
+  },
+  "forgetDetail": {
+    "$comment": "Détail de la boîte « Oublier cet appareil » (Y-10, audit e) : lu par Rust dans l'état authentifié de l'appareil visé, jamais fourni par la WebView.",
+    "detail": "{platform} · identifiant {id}… · dernière synchronisation le {date} à {time}",
+    "never": "Appareil jamais lu · identifiant {id}…",
+    "windows": "PC Windows",
+    "ios": "iPhone"
   }
 }

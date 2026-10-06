@@ -39,6 +39,7 @@ import {
   type DeviceAck,
   type EpochId,
   type FileHeader,
+  type ForgottenDevice,
   type PublishedDeviceState,
   type RecordCursor,
   type SyncDevicePlatform,
@@ -61,12 +62,15 @@ import {
   type ReadPage,
   type ReadSnapshotRequest,
   type ScanRequest,
+  type ForgottenDeleteResult,
+  type ForgottenRegistryView,
   type RestoreMarker,
   type SyncErrorCode,
   type SyncFolderInfo,
   type SyncPlatform,
 } from './types';
-import { parsePublishedStateText } from '../../domain/sync/parse';
+import { parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
+import { citedDevices, completedForgotten, declarationHlc, FORGET_DECLARE_LIMIT, forgetOrder, forgottenDeleteCheck, learnDeclarations, seenDevices, type ForgetKnownDevice, type SnapshotEndRead } from '../../domain/sync/retention';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -476,6 +480,16 @@ export interface MemorySyncTesting {
   setSealedRecords(count: number): void;
   /** Simule la perte de `own.json` (dossier de configuration effacé). */
   dropOwnState(): void;
+  /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
+  setResetInProgress(value: boolean): void;
+  /** Y-10 : déclarations de `sync/forgotten.json`. */
+  forgottenDeclarations(): readonly ForgottenDevice[];
+  /** Y-10 : simule la perte de `sync/forgotten.json`. */
+  dropForgottenFile(): void;
+  /** Y-10 : registre (liste maître, terminés), ou null. */
+  forgottenRegistry(): { readonly entries: readonly ForgottenDevice[]; readonly done: readonly DeviceId[] } | null;
+  /** Y-10 : registre illisible (`io`). */
+  setForgottenFileCorrupt(value: boolean): void;
 }
 
 export interface MemorySyncPlatform extends SyncPlatform {
@@ -485,6 +499,31 @@ export interface MemorySyncPlatform extends SyncPlatform {
 function fail(code: SyncErrorCode): never {
   throw new SyncPlatformError(code);
 }
+
+/** Entrées supprimées au plus par appel de `sync_forgotten_delete` (Y-10, `MAX_FORGOTTEN_DELETE_ENTRIES` de `forget.rs`). */
+const MAX_FORGOTTEN_DELETE_ENTRIES = 1_000;
+
+/** hlc connus d'un état authentifié (dernier cycle, tête, accusés, déclarations) : `state_hlcs` de `forget.rs`. */
+function stateHlcs(state: PublishedDeviceState): Hlc[] {
+  return [state.lastSyncHlc, ...(state.head.hlc ? [state.head.hlc] : []), ...[...state.acks.values()].flatMap((a) => (a.hlc ? [a.hlc] : [])), ...state.forgotten.map((f) => f.at)];
+}
+
+/** Registre de l'oubli tenu par « Rust » (`forgotten.json`). */
+interface MemRegistry {
+  readonly folderId: string;
+  readonly deviceId: DeviceId;
+  readonly entries: ForgottenDevice[];
+  readonly done: DeviceId[];
+  /** Arrêt définitif (§18 point 12), jamais effacé. */
+  readonly selfForgotten: Hlc | null;
+}
+
+/** `selfForgotten` posé si l'ordre total oublie l'appareil du registre (jamais effacé), comme `note_self_forgotten` de Rust. */
+const withSelfForgotten = (reg: MemRegistry): MemRegistry => {
+  if (reg.selfForgotten !== null) return reg;
+  const verdict = forgetOrder(reg.entries).get(reg.deviceId);
+  return verdict ? { ...reg, selfForgotten: verdict.at } : reg;
+};
 
 /** Écart maximal entre le stateSeq lu en clair dans l'en-tête de son propre état remplacé et les sources authentifiées (comme Rust). */
 const MAX_UNAUTHENTICATED_SEQ_JUMP = 1_000_000;
@@ -517,6 +556,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let scanResult: string | null = null;
   /** `pairedBy` mémorisé à l'import quand l'appareil n'est pas encore lié (reporté dans `own.json` à la liaison). */
   let pendingPairedBy: DeviceId | null = null;
+  /** `sync/forgotten.json` (Y-10, §18 point 3) : liste maître, terminés ; lié au dossier et à l'identité (l'anti-rejeu est `accepted`). */
+  let registry: MemRegistry | null = null;
+  /** Registre illisible (crochet de test) : `io`. */
+  let registryCorrupt = false;
+  /** Ouvertures de la boîte « Oublier cet appareil » (fenêtre de 10 minutes). */
+  let forgetOpenings: number[] = [];
+  /** Réinitialisation en cours (entrée `.next` au coffre, Y-11) : crochet de test. */
+  let resetPending = false;
 
   /** Dernier état accepté par appareil (anti-rejeu, section 1.4). */
   const accepted = new Map<string, AcceptedState>();
@@ -548,8 +595,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const f = requireFolder();
     const k = requireKey();
     const self = requireBound();
+    refuseIfSelfForgotten(f, self);
     if (!own || own.folderId !== f.id || own.kid !== k.kid) own = rebuildOwn(f, k.kid, self);
     return { folder: f, kid: k.kid, self, own };
+  };
+
+  /** Arrêt définitif (§18 point 12) : appareil qui s'est vu oublié → toute écriture refusée (`state-mismatch`). */
+  const refuseIfSelfForgotten = (f: MemorySyncFolder, self: DeviceId): void => {
+    if (loadRegistry(f, self)?.selfForgotten) fail('state-mismatch');
   };
 
   /**
@@ -794,12 +847,21 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const room = Math.max(0, MAX_DEVICE_FOLDERS - selfScan.length);
     const kept = [...selfScan, ...others.slice(0, room)];
     const dropped = Math.max(0, others.length - room);
+    // Y-10 (§18 point 3) : déclarations retenues des états authentifiés apprises dans la liste maître, gardée avant de rendre le scan.
+    let forgotten: ForgottenRegistryView = { entries: [], done: [], overflow: false, accepted: [], selfForgotten: null };
+    if (bound !== null) {
+      const reg = ensureRegistry(f, kid, bound);
+      const learned = learnDeclarations(reg.entries, kept.filter((d) => d.stateStatus === 'ok' && d.state).flatMap((d) => (d.state as PublishedDeviceState).forgotten));
+      registry = withSelfForgotten({ ...reg, entries: learned.entries });
+      forgotten = { entries: learned.entries, done: [...reg.done], overflow: learned.overflow, accepted: ([...accepted.keys()] as DeviceId[]).sort(), selfForgotten: registry.selfForgotten };
+    }
     return {
       devices: kept.sort((a, b) => (a.deviceId < b.deviceId ? -1 : 1)),
       ignored: ignored + dropped,
       totalBytes: folderBytes(f),
       tooManyDevices: dropped > 0,
       incomplete,
+      forgotten,
     };
   };
 
@@ -881,12 +943,23 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const { folder: f, kid } = requireReadable();
     const from: RecordCursor = { segment: r.seq, record: r.fromRecord };
     const state = authenticatedState(f, kid, r.deviceId);
+    if (r.tail === true) {
+      // Y-10 (§18 point 11) : fin de l'instantané annoncé seulement.
+      if (!state) return { records: [], next: from, status: 'cloud-pending' };
+      if (state.epoch !== r.epoch || state.snapshot?.seq !== r.seq) fail('state-mismatch');
+    }
     // Seuls les instantanés annoncés par l'état authentifié sont lus (le dernier annoncé et les plus anciens gardés).
     if (!state || state.epoch !== r.epoch || !state.snapshot || r.seq > state.snapshot.seq) return { records: [], next: from, status: 'cloud-pending' };
     const file = f.devices.get(r.deviceId)?.epochs.get(r.epoch)?.snapshots.get(r.seq);
     if (!file || file.availability !== 'local') return { records: [], next: from, status: 'cloud-pending' };
     checkFileForRead(file, kid, MAX_SNAPSHOT_BYTES);
     if (file.header.f !== 'ct-s' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== r.seq) fail('bad-header');
+    if (r.tail === true) {
+      const last = file.lines[file.lines.length - 1];
+      if (file.partialTail || !last) return { records: [], next: from, status: 'cloud-pending' };
+      if (last.corrupt) return { records: [], next: { segment: r.seq, record: file.lines.length - 1 }, status: 'truncated' };
+      return { records: [last.text], next: { segment: r.seq, record: file.lines.length }, status: 'complete' };
+    }
     const records: string[] = [];
     let bytes = 0;
     let index = r.fromRecord;
@@ -988,16 +1061,21 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const writeState = async (r: { readonly sv: number; readonly state: PublishedDeviceState }): Promise<void> => {
     const { folder: f, kid, self, own: o } = requireWritable();
     // Rust est maître de `pairedBy` (Y-06) : omis par le moteur, il est complété depuis `own.json` ; une valeur différente est refusée.
-    const s: PublishedDeviceState = r.state.pairedBy === undefined && o.pairedBy !== null ? { ...r.state, pairedBy: o.pairedBy } : r.state;
+    const paired: PublishedDeviceState = r.state.pairedBy === undefined && o.pairedBy !== null ? { ...r.state, pairedBy: o.pairedBy } : r.state;
     if (!isPositive(r.sv)) fail('bad-name');
-    if (s.acks.size > MAX_STATE_ACKS || s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
+    if (paired.acks.size > MAX_STATE_ACKS || paired.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
+    // Y-10 : Rust est maître de `forgotten` (liste de `forgotten.json`, ou son préfixe complété) ; toute autre liste est refusée.
+    const forgotten = completedForgotten(paired.forgotten, ensureRegistry(f, kid, self).entries);
+    if (forgotten === null) return fail('state-mismatch');
+    const s: PublishedDeviceState = { ...paired, forgotten };
+    if (s.forgotten.length > MAX_STATE_FORGOTTEN) fail('too-large');
     const text = JSON.stringify(publishedStateToJson(s));
     if (utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
     // État mal formé (sm ou sv à 0, hlc invalide, clé en trop…) : paramètre invalide, `bad-name` (avenant « Amorce »).
     if (!publishedStateFromJson(JSON.parse(text))) fail('bad-name');
     if (s.deviceId !== self || s.platform !== devicePlatform || s.sm !== SYNC_FORMAT_MAJOR || s.sv !== r.sv) fail('state-mismatch');
-    // Réservés jusqu'au lot Y4 (Y-10 et Y-11, section 14.4).
-    if (s.forgotten.length > 0 || s.reset !== null) fail('state-mismatch');
+    // `reset` réservé jusqu'à Y-11 (section 14.4) ; `forgotten` comparé ci-dessus (Y-10).
+    if (s.reset !== null) fail('state-mismatch');
     if ((s.pairedBy ?? null) !== o.pairedBy) fail('state-mismatch');
     if (s.stateSeq <= o.stateSeq) fail('state-mismatch');
     checkEpochNotOlder(o, s.epoch);
@@ -1081,9 +1159,172 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return deleted;
   };
 
+  // --- oubli d'un appareil (Y-10, forget.rs ; ADR 0011 §18 points 3 à 10) --------------------------------------------------------
+
+  /** Registre lu : absent (aucun, autre dossier, autre identité) → null ; illisible (crochet de test) → `io`. */
+  const loadRegistry = (f: MemorySyncFolder, self: DeviceId): MemRegistry | null => {
+    if (registryCorrupt) return fail('io');
+    return registry && registry.folderId === f.id && registry.deviceId === self ? registry : null;
+  };
+
+  /** États de tous les dossiers d'appareils (sans plafond de 16, anti-rejeu sans rien retenir). */
+  const readAllStates = (f: MemorySyncFolder, kid: string): Map<DeviceId, StateRead> => {
+    const reads = new Map<DeviceId, StateRead>();
+    for (const [name, dir] of f.devices) if (isSyncDeviceId(name)) reads.set(name, readState(name, dir, kid, false));
+    return reads;
+  };
+
+  const okStates = (reads: ReadonlyMap<DeviceId, StateRead>): [DeviceId, PublishedDeviceState][] =>
+    [...reads].filter(([, r]) => r.status === 'ok' && r.state !== null).map(([id, r]) => [id, r.state as PublishedDeviceState]);
+
+  /** Reconstruction (§18 point 7, cas (i), (ii), (iii)), sinon `cloud-pending`, `newer-format` ou `state-mismatch`. */
+  const rebuildRegistry = (f: MemorySyncFolder, kid: string, self: DeviceId): MemRegistry => {
+    const reads = readAllStates(f, kid);
+    const ok = okStates(reads);
+    const { entries } = learnDeclarations([], ok.flatMap(([, s]) => s.forgotten));
+    const order = forgetOrder(entries);
+    const acksOnSelf = ok.filter(([id]) => id !== self && !order.has(id)).flatMap(([, s]) => (s.acks.has(self) ? [(s.acks.get(self) as DeviceAck).stateSeq] : []));
+    const status = reads.get(self)?.status ?? 'missing';
+    const dir = f.devices.get(self);
+    const neverPublished = (!dir || (dir.state === null && dir.epochs.size === 0 && dir.strays === 0)) && !ok.some(([, s]) => s.acks.has(self));
+    const ownValid = own !== null && own.folderId === f.id && own.kid === kid ? own : null;
+    let allowed: boolean;
+    switch (status) {
+      case 'ok':
+        allowed = true;
+        break;
+      case 'cloud-pending':
+        return fail('cloud-pending');
+      case 'newer-format':
+        return fail('newer-format');
+      default:
+        allowed = (status === 'missing' && neverPublished) || (ownValid !== null && acksOnSelf.some((seq) => seq >= ownValid.stateSeq));
+    }
+    if (!allowed) return fail('state-mismatch');
+    return withSelfForgotten({ folderId: f.id, deviceId: self, entries, done: [], selfForgotten: null });
+  };
+
+  /** Registre valide pour le dossier et l'appareil liés : lu, sinon reconstruit et gardé avant toute écriture. */
+  const ensureRegistry = (f: MemorySyncFolder, kid: string, self: DeviceId): MemRegistry => {
+    const found = loadRegistry(f, self);
+    if (found) return found;
+    registry = rebuildRegistry(f, kid, self);
+    return registry;
+  };
+
+  const resetInProgress = (reads: ReadonlyMap<DeviceId, StateRead>): boolean => resetPending || okStates(reads).some(([, s]) => s.reset !== null);
+
+  const forgetContext = (): { readonly f: MemorySyncFolder; readonly kid: string; readonly self: DeviceId } => {
+    const f = requireFolder();
+    const k = requireKey();
+    const self = requireBound();
+    refuseIfSelfForgotten(f, self);
+    return { f, kid: k.kid, self };
+  };
+
+  /** Contrôles de `sync_device_forget` (avant et après la boîte) ; null : déjà oublié (sans boîte). */
+  const forgetDeclaration = (deviceId: DeviceId): ForgottenDevice[] | null => {
+    const { f, kid, self } = forgetContext();
+    if (deviceId === self) return fail('bad-name');
+    const reg = ensureRegistry(f, kid, self);
+    const reads = readAllStates(f, kid);
+    if (resetInProgress(reads)) return fail('state-mismatch');
+    const order = forgetOrder(reg.entries);
+    if (order.has(self)) return fail('state-mismatch');
+    if (order.has(deviceId)) return null;
+    const ok = okStates(reads);
+    const actives = ok.filter(([id]) => !order.has(id)).map(([, s]) => s);
+    const cited = citedDevices(actives);
+    const known = reads.has(deviceId) || cited.has(deviceId) || accepted.has(deviceId) || reg.entries.some((e) => e.deviceId === deviceId);
+    if (!known) return fail('bad-name');
+    if (reg.entries.length >= FORGET_DECLARE_LIMIT) return fail('too-large');
+    const seen = actives.filter((s) => s.deviceId !== deviceId).flatMap(stateHlcs);
+    const at = declarationHlc(now(), seen, self, PAIRING_CLOCK_TOLERANCE_MS);
+    if (at === null) return fail('hlc-order');
+    const ownState = ok.find(([id]) => id === self)?.[1] ?? null;
+    return [...reg.entries, { deviceId, at, lastAck: ownState?.acks.get(deviceId) ?? null }];
+  };
+
+  const deviceForget = async (deviceId: DeviceId): Promise<void> => {
+    if (!isSyncDeviceId(deviceId)) return fail('bad-name');
+    if (forgetDeclaration(deviceId) === null) return;
+    // Confirmation native : mêmes préconditions, compteur persisté (3 ouvertures par 10 minutes) et blocage que Y-08.
+    gate();
+    forgetOpenings = prune(forgetOpenings);
+    if (forgetOpenings.length >= CONSENT_MAX_SHOW) fail('rate-limited');
+    forgetOpenings.push(now());
+    askConsent();
+    const entries = forgetDeclaration(deviceId);
+    if (entries === null || registry === null) return;
+    registry = { ...registry, entries };
+  };
+
+  /** `sync_forgotten_delete` : conditions recalculées depuis le dossier et le registre, puis suppression des seuls fichiers de `devices/<id>/`. */
+  const forgottenDelete = async (deviceId: DeviceId): Promise<ForgottenDeleteResult> => {
+    if (!isSyncDeviceId(deviceId)) return fail('bad-name');
+    const { f, kid, self } = forgetContext();
+    if (deviceId === self) return fail('bad-name');
+    const reg = ensureRegistry(f, kid, self);
+    const reads = readAllStates(f, kid);
+    if (resetInProgress(reads)) return fail('state-mismatch');
+    const ok = okStates(reads);
+    const seen = seenDevices(accepted.keys() as Iterable<DeviceId>, ok.map(([, s]) => s), reg.entries);
+    const ids = new Set<DeviceId>([...reads.keys(), ...seen, ...reg.entries.map((e) => e.deviceId)]);
+    const known: ForgetKnownDevice[] = [...ids].map((id) => {
+      const read = reads.get(id);
+      const status = read?.status ?? 'missing';
+      return { deviceId: id, status, state: status === 'ok' ? (read?.state ?? null) : null, seen: seen.has(id) };
+    });
+    const check = forgottenDeleteCheck(deviceId, self, reg.entries, reg.done, known, ownSnapshotEnd(f, self, reads.get(self)));
+    if (check.kind !== 'ready') return fail(check.code);
+    const result = deleteDeviceFiles(f, deviceId);
+    if (result.complete && !reg.done.includes(deviceId)) registry = { ...reg, done: [...reg.done, deviceId] };
+    return result;
+  };
+
+  /** Condition (h) (§18 point 11) : fin de l'instantané annoncé par son propre état authentifié, lue comme `tail`. */
+  const ownSnapshotEnd = (f: MemorySyncFolder, self: DeviceId, read: StateRead | undefined): SnapshotEndRead => {
+    const state = read?.status === 'ok' ? read.state : null;
+    if (!state?.snapshot) return 'none';
+    const file = f.devices.get(self)?.epochs.get(state.epoch)?.snapshots.get(state.snapshot.seq);
+    if (!file || file.availability !== 'local') return 'cloud-pending';
+    const last = file.lines[file.lines.length - 1];
+    if (file.partialTail || !last) return 'cloud-pending';
+    const end = last.corrupt ? null : parseSnapshotRecord(last.text);
+    if (!end || end.k !== 'snap-end' || end.epoch !== state.epoch) return 'unreadable';
+    return { author: self, epoch: state.epoch, seq: state.snapshot.seq, endHlc: state.snapshot.endHlc, covers: end.covers };
+  };
+
+  /** Seuls les noms stricts (en mémoire : segments, instantanés, dossiers d'époque, état), `state.ctx` en dernier. */
+  const deleteDeviceFiles = (f: MemorySyncFolder, deviceId: DeviceId): ForgottenDeleteResult => {
+    const dir = f.devices.get(deviceId);
+    if (!dir) return { deleted: 0, complete: true };
+    let deleted = 0;
+    for (const [epoch, epochDir] of [...dir.epochs]) {
+      for (const map of [epochDir.segments, epochDir.snapshots]) {
+        for (const n of [...map.keys()]) {
+          if (deleted >= MAX_FORGOTTEN_DELETE_ENTRIES) return { deleted, complete: false };
+          map.delete(n);
+          deleted += 1;
+        }
+      }
+      if (deleted >= MAX_FORGOTTEN_DELETE_ENTRIES) return { deleted, complete: false };
+      dir.epochs.delete(epoch);
+      deleted += 1;
+    }
+    if (dir.state) {
+      if (deleted >= MAX_FORGOTTEN_DELETE_ENTRIES) return { deleted, complete: false };
+      dir.state = null;
+      deleted += 1;
+    }
+    // Noms étrangers : jamais supprimés, le dossier reste.
+    if (dir.strays === 0) f.devices.delete(deviceId);
+    return { deleted, complete: true };
+  };
+
   // --- clé et appairage ---------------------------------------------------------------------------------------------------------
 
-  const folderHasData = (f: MemorySyncFolder): boolean =>
+  const folderHasData =(f: MemorySyncFolder): boolean =>
     [...f.devices].some(([name, dir]) => isSyncDeviceId(name) && (dir.state !== null || [...dir.epochs.values()].some((e) => e.segments.size + e.snapshots.size > 0)));
 
   const folderKids = (f: MemorySyncFolder, only: DeviceId | null): { readonly readable: number; readonly kids: Set<string> } => {
@@ -1172,6 +1413,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (!own || own.folderId !== f.id || own.kid !== kid) own = bound ? rebuildOwn(f, kid, bound) : null;
     if (own && pairedBy !== null) own.pairedBy = pairedBy;
     pendingPairedBy = pairedBy;
+    // Y-10 : appareil déjà lié : registre créé avec la clé (sinon au premier scan, mêmes règles).
+    if (bound !== null) {
+      try {
+        ensureRegistry(f, kid, bound);
+      } catch {
+        // reporté au premier scan, qui applique les mêmes règles et le signale
+      }
+    }
     pairing = null; // la fenêtre est détruite à la réussite
     return { kid, pairedBy, epoch };
   };
@@ -1186,9 +1435,18 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         // Un dossier différent remet `own.json` à zéro (section 1.4).
         if (!folder || folder.id !== next.id) {
           own = null;
+          registry = null;
           accepted.clear(); // l'anti-rejeu vaut pour un dossier : les états d'un autre dossier ne comparent rien
         }
         folder = next;
+        // Y-10 : appareil lié et clé présente : registre du dossier créé dès le choix (sinon au premier scan, mêmes règles).
+        if (bound !== null && key && vaultAvailable) {
+          try {
+            ensureRegistry(next, key.kid, bound);
+          } catch {
+            // reporté au premier scan, qui applique les mêmes règles et le signale
+          }
+        }
         return { configured: true, label: next.label, kind: next.kind, pinned: next.kind === 'icloud' };
       },
       forget: async ({ eraseKey }) => {
@@ -1199,6 +1457,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         }
         folder = null;
         own = null;
+        registry = null;
         bound = null;
         pairing = null;
         pendingPairedBy = null;
@@ -1223,6 +1482,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         key = { raw, kid: await kidOf(raw) };
         own = null;
         sealed = 0;
+        // Y-10 : appareil déjà lié, dossier sans données : registre créé dès maintenant (rien n'a été publié).
+        if (bound !== null) ensureRegistry(f, key.kid, bound);
         return { kid: key.kid };
       },
       openPairing: async (mode) => {
@@ -1251,6 +1512,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       requireFolder();
       if (bound !== null && bound !== deviceId) return fail('already-bound');
       bound = deviceId;
+      // Y-10 : registre créé dès la liaison s'il manque (même règle que Rust ; sinon au premier scan).
+      if (key && vaultAvailable) {
+        try {
+          ensureRegistry(requireFolder(), key.kid, deviceId);
+        } catch {
+          // reporté au premier scan, qui applique les mêmes règles et le signale
+        }
+      }
       if (pendingPairedBy !== null) {
         const f = requireFolder();
         if (key && (!own || own.folderId !== f.id || own.kid !== key.kid)) own = rebuildOwn(f, key.kid, deviceId);
@@ -1271,11 +1540,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         marker = null;
       },
     },
-    // Lot Y4, étape 0 : mêmes refus que les corps provisoires de Rust (`not-configured`, sans effet) jusqu'à Y-10 et Y-11.
+    // Y-10 : mêmes contrôles que `sync_device_forget` et `sync_forgotten_delete` de Rust (`forget.rs`, `SyncCore`).
     forget: {
-      device: async () => fail('not-configured'),
-      deleteFiles: async () => fail('not-configured'),
+      device: deviceForget,
+      deleteFiles: forgottenDelete,
     },
+    // Lot Y4, étape 0 : même refus que le corps provisoire de Rust (`not-configured`, sans effet) jusqu'à Y-11.
     reset: {
       start: async () => fail('not-configured'),
     },
@@ -1309,6 +1579,17 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       },
       dropOwnState: () => {
         own = null;
+      },
+      setResetInProgress: (value) => {
+        resetPending = value;
+      },
+      forgottenDeclarations: () => registry?.entries ?? [],
+      forgottenRegistry: () => (registry ? { entries: [...registry.entries], done: [...registry.done] } : null),
+      dropForgottenFile: () => {
+        registry = null;
+      },
+      setForgottenFileCorrupt: (value) => {
+        registryCorrupt = value;
       },
     },
   };

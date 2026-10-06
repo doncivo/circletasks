@@ -35,9 +35,11 @@ export function formatSyncAge(lastSyncAt: string, nowMs: number): string {
 }
 
 /** Nom affiché d'un appareil. */
-export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
+export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'seen'>, all: readonly Pick<SyncDeviceStatus, 'platform' | 'seen'>[]): string {
+  // Y-10 (audit a) : appareil jamais lu, nom neutre et 8 caractères, jamais une plateforme inventée.
+  if (device.seen === false) return t('sync.forget.unseenName', { short: String(device.deviceId).slice(0, 8) });
   const platform = t(device.platform === 'ios' ? 'sync.status.deviceIphone' : 'sync.status.devicePc');
-  const twins = all.filter((d) => d.platform === device.platform).length > 1;
+  const twins = all.filter((d) => d.platform === device.platform && d.seen !== false).length > 1;
   return twins ? t('sync.status.deviceNamed', { platform, short: String(device.deviceId).slice(0, 4) }) : platform;
 }
 
@@ -132,6 +134,8 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return t('sync.status.keyMismatch');
     case 'error':
       return errorText(status.errorCode);
+    case 'forgotten':
+      return t('sync.forget.banner');
     case 'idle':
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
@@ -161,7 +165,7 @@ export function deviceStatusText(status: SyncDeviceStatus['status']): string {
 
 /** Le texte de la phase est-il une erreur (couleur d'alerte, `role="alert"` évité : jamais de boîte bloquante) ? */
 export function isTroublePhase(status: SyncStatus): boolean {
-  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || failureShown(status);
+  return status.phase === 'error' || status.phase === 'key-mismatch' || status.phase === 'clock-ahead' || status.phase === 'update-required' || status.phase === 'forgotten' || failureShown(status);
 }
 
 /**

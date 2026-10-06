@@ -1,4 +1,5 @@
-import { INITIAL_STATUS, type RemoteChanges, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
+import type { DeviceId } from '../../domain/types';
+import { INITIAL_STATUS, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 
 /** Faux service de synchro pour les tests d'écran : état posé à la main, appels enregistrés, cycle libéré à la demande. */
 export interface FakeSyncService extends SyncEngineService {
@@ -12,6 +13,12 @@ export interface FakeSyncService extends SyncEngineService {
   /** Le choix est exécuté (marqueur effacé : `restore` devient null) ; faux : refusé ou échoué, le marqueur reste. */
   choiceExecuted: boolean;
   emitChanges(change: RemoteChanges): void;
+  /** Y-10 : appareils dont l'oubli a été demandé, et issue rendue par `forgetDevice`. */
+  readonly forgets: DeviceId[];
+  forgetOutcome: ForgetOutcome;
+  /** Y-10 : appels de « Associer de nouveau » et issue rendue. */
+  rejoins: number;
+  rejoinOutcome: RejoinOutcome;
 }
 
 export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSyncService {
@@ -56,6 +63,18 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
     },
     restoreContext: async () => fake.restore,
     running: () => null,
+    forgets: [],
+    forgetOutcome: { kind: 'done' },
+    async forgetDevice(deviceId) {
+      fake.forgets.push(deviceId);
+      return fake.forgetOutcome;
+    },
+    rejoins: 0,
+    rejoinOutcome: { kind: 'restart' },
+    async rejoin() {
+      fake.rejoins += 1;
+      return fake.rejoinOutcome;
+    },
   };
   return fake;
 }

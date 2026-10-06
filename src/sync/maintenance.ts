@@ -1,6 +1,8 @@
 import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
-import { BLOCKED, canPurgeDeletion, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
+import { BLOCKED, canPurgeDeletion, coversForgotten, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
+import type { ForgetCoverage } from './eligible';
+import { revivedDone } from './forget';
 import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
@@ -39,7 +41,8 @@ export function knownDevices(rows: readonly SyncStateRow[]): KnownDevice[] {
  */
 export async function currentPurgeHorizon(repos: Repositories, self: DeviceId, nowMs: number): Promise<PurgeHorizon> {
   const rows = await repos.sync.getStates();
-  const horizon = purgeHorizon(knownDevices(rows), self, nowMs);
+  // Y-10 (§18 point 12) : un terminé dont l'oubli est annulé bloque toute purge, au démarrage aussi.
+  const horizon = purgeHorizon(knownDevices(rows), self, nowMs, await revivedDone(repos));
   if (horizon.kind !== 'limited') return horizon;
   const active = new Set<string>(horizon.readers.map((r) => r.deviceId));
   const unread = rows.some(
@@ -129,23 +132,36 @@ export interface MaintenanceInput {
   readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>;
   readonly ownScan: DeviceScan | null;
   readonly rows: readonly SyncStateRow[];
+  /** Y-10 (§18 point 11) : son instantané ne compte pour la purge des segments que s'il couvre chaque oublié retenu. */
+  readonly coverage?: ForgetCoverage;
+  /** Y-10 (§18 point 12) : terminés dont l'oubli est annulé (horizon `blocked`). */
+  readonly revived?: readonly DeviceId[];
+}
+
+/** Son dernier instantané couvre-t-il chaque oublié retenu (§18 point 11, éligibilité) ? Sans oublié retenu : toujours. */
+function ownSnapshotEligible(covers: Record<string, unknown> | undefined, coverage: ForgetCoverage | undefined): boolean {
+  if (!coverage || coverage.master.length === 0) return true;
+  if (covers === undefined) return false;
+  const map = new Map<DeviceId, DeviceAck>();
+  for (const [id, ack] of Object.entries(covers)) if (isDeviceAck(ack)) map.set(id as DeviceId, ack);
+  return coversForgotten(map, coverage.master, coverage.ackers) === null;
 }
 
 export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise<void> {
   const { data, platform, logger } = deps;
   const nowMs = deps.clock.nowMs();
   const devices = knownDevices(input.rows);
-  const horizon = purgeHorizon(devices, deps.deviceId, nowMs);
+  const horizon = purgeHorizon(devices, deps.deviceId, nowMs, input.revived ?? []);
 
   // Lignes supprimées : 30 jours ET lues par tous les appareils actifs.
   await purgeDeleted(deps, horizon, nowMs);
 
   // Ses segments : couverts par un instantané, accusés par tous, dernier enregistrement de plus de 30 jours.
-  const snapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc; coveredSegment?: number }>(data.repos, META.snapshot);
+  const snapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc; coveredSegment?: number; covers?: Record<string, unknown> }>(data.repos, META.snapshot);
   const covered = Math.max(
     0,
     ...[...input.accepted.values()].filter((s) => s.epoch === input.epoch).map((s) => s.acks.get(deps.deviceId)?.segment ?? 0),
-    snapshot?.epoch === input.epoch ? (snapshot.coveredSegment ?? 0) : 0,
+    snapshot?.epoch === input.epoch && ownSnapshotEligible(snapshot.covers, input.coverage) ? (snapshot.coveredSegment ?? 0) : 0,
   );
   const times = (await readJson<Record<string, number>>(data.repos, META.segments)) ?? {};
   const listed = input.ownScan?.epochs.find((e) => e.epoch === input.epoch)?.segments ?? [];

@@ -1,0 +1,10 @@
+/* Y-10 : textes de l'emplacement « forget » (échec persistant, appareil oublié) ; même couleur d'alerte que la ligne d'état (aucun élément
+   visuel nouveau). */
+.ct-sync__forgetText {
+  font-size: 13px;
+  color: var(--ct-color-achieved-text);
+}
+
+.ct-sync__forgetText[data-trouble='true'] {
+  color: var(--ct-color-icon-red);
+}

@@ -20,6 +20,8 @@ mod shortcut;
 mod sync_crypto;
 mod sync_fixes;
 mod sync_folder;
+mod sync_forget;
+mod sync_forget_qa;
 mod sync_key;
 mod sync_pairing;
 mod sync_pairing_qa;

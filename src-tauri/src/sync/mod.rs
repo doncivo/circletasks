@@ -17,6 +17,7 @@ pub mod limits;
 pub mod names;
 pub mod crypto;
 pub mod files;
+pub mod forget;
 pub mod folder;
 #[cfg(windows)]
 pub mod cloud_windows;

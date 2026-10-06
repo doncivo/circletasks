@@ -17,7 +17,7 @@ import { createSimFolder, propagate } from './syncCloudSim';
  *
  * Routes (JSON ; `Map` codées comme dans le client) :
  * - `POST /rpc` `{ room, device, role, platform, path, args }` : appel d'une méthode de `SyncPlatform` ;
- * - `POST /propagate` `{ room }` : recopie mutuelle des dossiers de l'espace ;
+ * - `POST /propagate` `{ room }` : recopie mutuelle des dossiers de l'espace (Y-10 : suppressions du dossier d'un appareil oublié comprises) ;
  * - `POST /fail` `{ room, device, method, after, code }` : la méthode échoue (code donné, avant toute écriture) après `after` appels réussis ;
  * - `POST /inspect` `{ room, device }` : identifiant lié, nombre d'ajouts, tâches publiées (nombre de fois par identifiant).
  */
@@ -48,6 +48,8 @@ interface SimSyncDevice {
 
 interface Room {
   readonly devices: Map<string, SimSyncDevice>;
+  /** Y-10 : dossiers d'appareils oubliés supprimés par un appareil actif, pas encore propagés (iCloud propage les suppressions). */
+  readonly deletedFolders: Set<string>;
   /** Création en cours d'un appareil (deux appels simultanés de la même page). */
   readonly creating: Map<string, Promise<SimSyncDevice>>;
 }
@@ -84,6 +86,10 @@ const METHODS: ReadonlySet<string> = new Set([
 
 /** Recopie mutuelle de tous les dossiers d'un espace (iCloud à jour partout). */
 function propagateRoom(room: Room): void {
+  // Y-10 : une suppression du dossier d'un appareil oublié atteint toutes les copies, la sienne comprise ; ce qu'il recrée ensuite
+  // (avant d'apprendre son oubli) repart normalement.
+  for (const id of room.deletedFolders) for (const device of room.devices.values()) device.folder.devices.delete(id);
+  room.deletedFolders.clear();
   for (const from of room.devices.values()) {
     for (const to of room.devices.values()) {
       if (from === to) continue;
@@ -120,7 +126,7 @@ async function createDevice(room: Room, name: string, role: SimRole, devicePlatf
 async function deviceOf(rooms: Map<string, Room>, roomId: string, name: string, role: SimRole, devicePlatform: 'windows' | 'ios'): Promise<SimSyncDevice> {
   let room = rooms.get(roomId);
   if (!room) {
-    room = { devices: new Map(), creating: new Map() };
+    room = { devices: new Map(), creating: new Map(), deletedFolders: new Set() };
     rooms.set(roomId, room);
   }
   const known = room.devices.get(name);
@@ -173,6 +179,11 @@ async function rpc(rooms: Map<string, Room>, request: SimRequest): Promise<SimRe
     const result = await fn.apply(target, body.path === 'writeSnapshot' ? [snapshotRequest(body.args[0])] : body.args);
     if (body.path === 'bindDevice') device.deviceId = String(body.args[0]);
     if (body.path === 'appendJournal') device.appends += 1;
+    if (body.path === 'forget.deleteFiles' && (result as { complete?: boolean } | null)?.complete === true && !device.folder.devices.has(String(body.args[0]))) {
+      const target = String(body.args[0]);
+      const room = rooms.get(body.room);
+      room?.deletedFolders.add(target);
+    }
     return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ ok: result ?? null }) };
   } catch (error) {
     if (error instanceof SyncPlatformError) return { status: 200, headers: { 'content-type': 'application/json' }, body: encode({ error: { code: error.code } }) };

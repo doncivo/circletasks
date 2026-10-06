@@ -73,7 +73,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
             {!device.self && (
               <span className="ct-sync__deviceRead">{device.lastReadAt ? t('sync.status.lastRead', { time: formatSyncTime(device.lastReadAt, nowMs) }) : t('sync.status.neverRead')}</span>
             )}
-            {!device.self && <span className="ct-settings__value ct-sync__deviceState">{deviceStatusText(device.status)}</span>}
+            {!device.self && <span className="ct-settings__value ct-sync__deviceState">{device.seen === false ? t('sync.forget.unseenState') : deviceStatusText(device.status)}</span>}
             {!device.self && <SyncDeviceForgetAction device={device} />}
           </li>
         ))}

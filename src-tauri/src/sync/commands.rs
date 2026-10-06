@@ -540,10 +540,12 @@ pub async fn sync_read_snapshot(
     seq: u64,
     from_record: u64,
     max_bytes: Option<u64>,
+    tail: Option<bool>,
 ) -> SyncResult<ReadPage> {
     require_main(&window)?;
     let core = state.core(&app)?;
-    blocking(move || core.read_snapshot(&device_id, &epoch, seq, from_record, max_bytes)).await
+    // tail (§18 point 11) : dernier enregistrement seul de l'instantané annoncé.
+    blocking(move || core.read_snapshot_with(&device_id, &epoch, seq, from_record, max_bytes, tail == Some(true))).await
 }
 
 #[derive(Serialize)]
@@ -573,13 +575,11 @@ pub async fn sync_restore_marker_clear(app: AppHandle, window: WebviewWindow, st
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
-// Lot Y4 (ADR 0011 sections 11.1, 14 et 18) : étape 0, commandes déclarées sans comportement
+// Lot Y4 (ADR 0011 sections 11.1, 14 et 18)
 // ------------------------------------------------------------------------------------------------------------------------------
 //
-// Corps provisoires : contrôle de la fenêtre appelante, puis `not-configured` (ADR 0011 section 13, ligne Y4 ; fiche Y-10, étape 0),
-// sans boîte, sans lecture ni écriture. `not-configured` est déjà le premier refus de chacune de ces commandes (section 11.1) et le
-// moteur le traite comme « rien à faire » sans nouvelle tentative ni échec bruyant ; aucun code nouveau (38 codes inchangés).
-// Région `sync_device_forget` et `sync_forgotten_delete` : Y-10 (`forget.rs`) ; région `sync_reset_key` : Y-11 (`reset.rs`).
+// Région `sync_device_forget` et `sync_forgotten_delete` : Y-10 (`forget.rs`, logique dans `SyncCore`) ; région `sync_reset_key` : Y-11
+// (`reset.rs`), corps provisoire `not-configured` jusqu'à Y-11. Aucun code nouveau (38 codes inchangés).
 
 /// Sortie de `sync_forgotten_delete` (Y-10) : entrées supprimées par l'appel, et `complete` faux s'il en reste (10 000 au plus).
 #[derive(Serialize)]
@@ -588,20 +588,24 @@ pub struct ForgottenDeleted {
     complete: bool,
 }
 
-/// Y-10 : déclaration d'oubli d'un autre appareil (confirmation native, `sync/forgotten.json`). Étape 0 : `not-configured`.
+/// Y-10 : déclaration d'oubli d'un autre appareil. Fenêtre `main` au premier plan, confirmation native (`ConsentKind::ForgetDevice`,
+/// « Annuler » par défaut), puis `sync/forgotten.json` ; seule entrée : l'identifiant.
 #[tauri::command]
-pub async fn sync_device_forget(window: WebviewWindow, device_id: String) -> SyncResult<()> {
+pub async fn sync_device_forget(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, device_id: String) -> SyncResult<()> {
     require_main(&window)?;
-    let _ = device_id;
-    fail(SyncCode::NotConfigured)
+    let core = state.core(&app)?;
+    let owner = hwnd_of(&window);
+    blocking(move || core.device_forget(&device_id, owner)).await
 }
 
-/// Y-10 : suppression des fichiers d'un appareil oublié (sans boîte, conditions recalculées par Rust). Étape 0 : `not-configured`.
+/// Y-10 : suppression des fichiers d'un appareil oublié, appelée par le cycle (sans boîte) ; conditions recalculées par Rust depuis
+/// les `state.ctx` authentifiés, seule entrée : l'identifiant.
 #[tauri::command]
-pub async fn sync_forgotten_delete(window: WebviewWindow, device_id: String) -> SyncResult<ForgottenDeleted> {
+pub async fn sync_forgotten_delete(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, device_id: String) -> SyncResult<ForgottenDeleted> {
     require_main(&window)?;
-    let _ = device_id;
-    fail(SyncCode::NotConfigured)
+    let core = state.core(&app)?;
+    let result = blocking(move || core.forgotten_delete(&device_id)).await?;
+    Ok(ForgottenDeleted { deleted: result.deleted, complete: result.complete })
 }
 
 /// Y-11 : réinitialisation avec une nouvelle clé (confirmation native, `K2` sous `.next`, seul le `kid` rendu). Étape 0 : `not-configured`.

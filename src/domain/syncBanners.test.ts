@@ -36,6 +36,8 @@ const EXPECTED: { readonly [P in SyncPhase]: PhaseBanner } = {
   'clock-ahead': { kind: 'trouble', code: 'clock-ahead' },
   'key-mismatch': { kind: 'trouble', code: 'key-mismatch' },
   error: { kind: 'trouble', code: 'error' },
+  // Y-10 : appareil local oublié.
+  forgotten: { kind: 'trouble', code: 'forgotten' },
 };
 
 describe('correspondance phase → bandeau (A-09 critère 9 b)', () => {
@@ -51,7 +53,7 @@ describe('correspondance phase → bandeau (A-09 critère 9 b)', () => {
   });
 
   it('une valeur hors liste (version plus récente) : repli visible, jamais une erreur ni « aucun bandeau » (revue 2)', () => {
-    expect(phaseBanner('forgotten' as SyncPhase)).toEqual({ kind: 'trouble', code: 'error' });
+    expect(phaseBanner('reset-required' as SyncPhase)).toEqual({ kind: 'trouble', code: 'error' });
     expect(deviceTrouble('lost' as DeviceState)).toBe('device-corrupt');
   });
 

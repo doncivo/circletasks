@@ -28,16 +28,20 @@ export const SYNC_PHASES = [
   'clock-ahead',
   'key-mismatch',
   'error',
+  // Y-10 : cet appareil a été oublié par un autre (« Associer de nouveau »).
+  'forgotten',
 ] as const;
 
 export type SyncPhase = (typeof SYNC_PHASES)[number];
 
 /** Phase qui produit un bandeau `syncTrouble` (texte : `statusLine`, D5). */
-export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead';
+export type PhaseTroubleCode = 'needs-pairing' | 'key-mismatch' | 'restore-choice' | 'error' | 'clock-ahead' | 'forgotten';
 /** Appareil nommé comme dans APPAREILS, avec son statut. */
 export type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-rollback';
 /** `state-unreadable` : l'état local de la synchro (`sync_meta`, `sync_state`) n'a pas pu être lu (revue A-09, point 1). */
-export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode;
+/** Y-10 : échec d'un oubli (`forgetFailure`) ; suppression des fichiers d'un appareil oublié en attente. */
+export type ForgetTroubleCode = 'forget-failed' | 'forget-pending';
+export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode;
 
 /**
  * Ordre d'urgence (D4) : le premier état actif de cette liste est montré, les autres comptent dans « (+N) ».
@@ -46,7 +50,8 @@ export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-fail
  * rappel des 30 jours à la fin.
  */
 export const SYNC_TROUBLE_ORDER = [
-  // Appareil à associer (Y-10 `forgotten`, Y-11 `reset-required` ici).
+  // Appareil à associer (Y-11 `reset-required` ici) : Y-10, cet appareil a été oublié.
+  'forgotten',
   'needs-pairing',
   // Clé différente.
   'key-mismatch',
@@ -64,6 +69,9 @@ export const SYNC_TROUBLE_ORDER = [
   'device-foreign',
   'device-corrupt',
   'device-rollback',
+  // Y-10 : oubli en échec, puis suppression des fichiers d'un appareil oublié en attente (Y-11 : rappel des 30 jours après).
+  'forget-failed',
+  'forget-pending',
 ] as const satisfies readonly SyncTroubleCode[];
 
 /** Décision de bandeau d'une phase. `none` porte sa raison (critère 9 b : aucune phase sans décision explicite). */
@@ -94,6 +102,8 @@ export function phaseBanner(phase: SyncPhase): PhaseBanner {
     case 'restore-choice':
     case 'error':
     case 'clock-ahead':
+    case 'forgotten':
+      // Y-10 `forgotten` : appareil local oublié, il ne lit ni ne publie plus tant qu'il n'est pas associé de nouveau.
       return { kind: 'trouble', code: phase };
     default:
       return unknownPhase(phase);
@@ -146,12 +156,22 @@ export interface SyncBannerDevice {
   readonly status: DeviceState;
 }
 
+/** Y-10 : échec d'un oubli et suppressions en attente (forme de `SyncStatus.forget`, gardés dans `sync_meta`). */
+export interface ForgetFacts {
+  readonly failure: { readonly deviceId: DeviceId; readonly code: string; readonly step: 'declare' | 'delete' | 'rejoin' | 'overflow' | 'revived' } | null;
+  readonly deletions: readonly { readonly deviceId: DeviceId; readonly state: 'waiting' | 'deleting' | 'finalizing' | 'no-snapshot' | 'strays' | 'done'; readonly waitingFor: DeviceId | null }[];
+  /** Oublis annulés (§18 point 12) : « oubli en échec » tant que l'appareil n'est pas oublié de nouveau. */
+  readonly revived?: readonly DeviceId[] | undefined;
+}
+
 /** Ce que la synchro expose (forme de `SyncStatus`). */
 export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice> {
   readonly phase: SyncPhase;
   readonly errorCode?: SyncErrorCode | null | undefined;
   readonly clockAheadDevice?: DeviceId | null | undefined;
   readonly devices: readonly D[];
+  /** Y-10, facultatif. */
+  readonly forget?: ForgetFacts | null | undefined;
 }
 
 /** Arrivée d'un nouvel appareil arrêtée par un échec (`sync_meta.join`, Y-06) : gardée par le moteur jusqu'à la réussite. */
@@ -180,12 +200,16 @@ export interface PersistedSyncFacts<D extends SyncBannerDevice = SyncBannerDevic
   readonly blocking: BlockingPhaseFact | null;
   /** La dernière lecture de ces états a échoué (les valeurs ci-dessus sont alors les précédentes). */
   readonly readFailed: boolean;
+  /** Y-10 : échec d'oubli et suppressions en attente gardés (`sync_meta`), tant qu'aucun cycle n'a conclu depuis le démarrage. */
+  readonly forget?: ForgetFacts | null;
 }
 
 export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
   | { readonly code: PhaseTroubleCode | 'state-unreadable' }
   | { readonly code: 'join-failed'; readonly join: JoinFailureFact }
-  | { readonly code: DeviceTroubleCode; readonly device: D };
+  | { readonly code: DeviceTroubleCode; readonly device: D }
+  | { readonly code: 'forget-failed'; readonly failure: NonNullable<ForgetFacts['failure']> }
+  | { readonly code: 'forget-pending'; readonly deletion: ForgetFacts['deletions'][number] };
 
 export interface SyncBanners<D extends SyncBannerDevice, S extends SyncBannerStatus<D>> {
   /** Du plus urgent au moins urgent (D4) ; vide : aucun `syncTrouble`. */
@@ -236,6 +260,12 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
     if (code === null || (keyMismatch && code === 'device-foreign')) continue;
     troubles.push({ code, device });
   }
+  // Y-10 (critère 15 d) : échec d'un oubli et suppression en attente, tant qu'ils durent (gardés avant le premier cycle).
+  const forget = persisted.forget ?? shown.forget ?? null;
+  if (forget?.failure) troubles.push({ code: 'forget-failed', failure: forget.failure });
+  for (const id of forget?.revived ?? []) troubles.push({ code: 'forget-failed', failure: { deviceId: id, code: 'state-mismatch', step: 'revived' } });
+  const pending = forget?.deletions.find((d) => d.state !== 'done');
+  if (pending) troubles.push({ code: 'forget-pending', deletion: pending });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 
   return {

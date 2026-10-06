@@ -23,6 +23,11 @@ pub trait SecretVault: Send + Sync {
     fn get(&self, token_ref: &str) -> Result<Option<String>, VaultError>;
     /// Idempotent.
     fn delete(&self, token_ref: &str) -> Result<(), VaultError>;
+    /// Présence d'une entrée, sans garder le secret (Y-10, audit : réinitialisation en cours). Par défaut : lu puis effacé aussitôt de
+    /// la mémoire ; le coffre en mémoire ne le copie jamais.
+    fn contains(&self, token_ref: &str) -> Result<bool, VaultError> {
+        Ok(self.get(token_ref)?.map(zeroize::Zeroizing::new).is_some())
+    }
 }
 
 /// Coffre en mémoire pour cargo test (même contrat que le coffre système).
@@ -44,6 +49,10 @@ impl SecretVault for MemoryVault {
     fn delete(&self, token_ref: &str) -> Result<(), VaultError> {
         self.entries.lock().map_err(|_| VaultError::Unavailable)?.remove(token_ref);
         Ok(())
+    }
+
+    fn contains(&self, token_ref: &str) -> Result<bool, VaultError> {
+        Ok(self.entries.lock().map_err(|_| VaultError::Unavailable)?.contains_key(token_ref))
     }
 }
 

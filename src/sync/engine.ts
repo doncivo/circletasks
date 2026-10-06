@@ -10,7 +10,10 @@ import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
-import { isJoining, joinFromSnapshot } from './join';
+import { cursorIds, isJoining, joinFromSnapshot } from './join';
+import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
+import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
+import { coversForgotten, eligibleSnapshot, forgetGaps, forgetOrder, forgottenDeleteCheck, snapshotInEpoch, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -87,12 +90,14 @@ function deviceStatusOf(scan: DeviceScan, previous: string | undefined): string 
 }
 
 /** Accepte les états authentifiés des autres appareils dans `sync_state` (anti-rejeu local, section 1.4). */
-async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string, SyncStateRow>): Promise<Map<DeviceId, PublishedDeviceState>> {
+async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string, SyncStateRow>, forgottenNow: ReadonlyMap<DeviceId, { readonly by: DeviceId }>): Promise<Map<DeviceId, PublishedDeviceState>> {
   const accepted = new Map<DeviceId, PublishedDeviceState>();
   for (const device of scan.devices) {
     if (device.deviceId === deps.deviceId) continue;
     const previous = known.get(device.deviceId);
-    let status = deviceStatusOf(device, previous?.status);
+    // Y-10 (§18 point 12) : le statut `forgotten` suit l'ordre total de la liste maître à chaque scan (un oubli annulé redevient actif).
+    let status = forgottenNow.has(device.deviceId) ? 'forgotten' : deviceStatusOf(device, previous?.status === 'forgotten' ? undefined : previous?.status);
+    if (status === 'forgotten' && previous?.status !== 'forgotten') deps.logger.log('forget-applied', { device: device.deviceId, by: forgottenNow.get(device.deviceId)?.by ?? null });
     const state = device.stateStatus === 'ok' ? device.state : null;
     if (state) {
       const text = publishedStateToText(state);
@@ -101,9 +106,12 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
         previous.stateSeq > 0 &&
         (state.stateSeq < previous.stateSeq || (state.stateSeq === previous.stateSeq && previous.stateDigest !== null && previous.stateDigest !== text) || (previous.stateEpoch !== null && compareEpochs(state.epoch, previous.stateEpoch as EpochId) < 0));
       if (rollback) {
-        status = 'rollback';
+        // État rejoué : refusé (non accepté) ; un appareil oublié le reste (Y-10).
+        if (status !== 'forgotten') status = 'rollback';
       } else {
-        if (hlcMs(state.lastSyncHlc) < deps.clock.nowMs() - DEVICE_EXPIRY_MS) status = 'expired';
+        if (status === 'forgotten') {
+          // Y-10 : état gardé (ses accusés et ses déclarations comptent pour l'ordre total), statut inchangé.
+        } else if (hlcMs(state.lastSyncHlc) < deps.clock.nowMs() - DEVICE_EXPIRY_MS) status = 'expired';
         // Corruption au milieu d'un segment sans instantané plus récent : l'appareil reste `corrupt` tant que sa tête ne bouge pas (section 5.5).
         else if (previous?.status === 'corrupt' && previous.headSegment === state.head.segment && previous.headRecord === state.head.record && previous.stateEpoch === state.epoch) status = 'corrupt';
         accepted.set(device.deviceId, state);
@@ -168,6 +176,18 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   let folderLabel: string | null = null;
   let folderKind: SyncFolderInfo['kind'] | null = null;
   try {
+    // Y-10 (D2) : « Associer de nouveau » interrompu avant que le dossier soit délié : terminé avant tout autre appel.
+    if (await rejoinPending(repos)) {
+      const rejoined = await finishRejoin(deps);
+      if (rejoined.kind === 'failed') return fail(rejoined.code as SyncErrorCode);
+    }
+    // Y-10 (revue, point 2) : « Associer de nouveau » a changé l'identité de l'appareil ; tant que l'app n'est pas relancée, ce service
+    // (ancienne identité) ne fait plus aucun cycle : il ne lierait jamais l'ancien identifiant à un dossier choisi de nouveau.
+    const storedId = await repos.settings.get('device.id');
+    if (storedId !== null && storedId !== self) {
+      logger.log('restart-required', {});
+      return { ...EMPTY, outcome: 'restart-required' };
+    }
     const folder = await platform.folder.info();
     if (!folder.configured) return { ...EMPTY, outcome: 'not-configured' };
     folderLabel = folder.label;
@@ -189,11 +209,24 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
   }
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
-  const accepted = await acceptStates(deps, scan, known);
+  const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries));
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
   const pending = new Set<string>(scan.devices.flatMap((d) => d.pending.map((p) => `${String(d.deviceId).slice(0, 8)}/${p.file}`)));
-  const keyMismatch = keyMismatchFromDevices(scan.devices.map((d) => ({ self: d.deviceId === self, foreign: d.stateStatus === 'foreign' })));
+
+  // Y-10 : ordre total des oublis (déclarations des seuls états authentifiés). Appareil local oublié : il ne lit ni ne publie plus.
+  let forgetView: ForgetView;
+  try {
+    forgetView = await evaluateForget(deps, { registry: scan.forgotten, rows: await repos.sync.getStates(), previousRows: [...known.values()] });
+  } catch (error) {
+    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+  }
+  if (forgetView.selfForgotten) {
+    logger.log('forgotten-self', { by: forgetView.order.get(self)?.by ?? null });
+    return { ...EMPTY, outcome: 'forgotten', folderLabel, folderKind, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
+  }
+  // Y-10 : un appareil oublié ne compte pas pour « aucun appareil ne partage la clé ».
+  const keyMismatch = keyMismatchFromDevices(scan.devices.filter((d) => !forgetView.order.has(d.deviceId)).map((d) => ({ self: d.deviceId === self, foreign: d.stateStatus === 'foreign' })));
 
   // 2. Règle 1 : bornes de sa propre publication.
   const acksOnSelf = [...accepted.values()].map((s) => s.acks.get(self)).filter((a): a is DeviceAck => a !== undefined);
@@ -217,21 +250,38 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     purgeHorizon,
     lastSyncHlc: deps.hlc.now(),
     ...(pairedBy ? { pairedBy } : {}),
-    forgotten: [],
+    // Y-10 (§18 point 3) : chaque appareil republie la liste maître entière rendue par le scan (Rust complète ce qu'il a appris depuis).
+    forgotten: [...forgetView.master],
     reset: null,
   });
 
+  /** Y-10 : déclaration confirmée à publier (intention posée avant l'appel à Rust). */
+  let publishForget = await forgetPublishPending(repos);
+  /** Dernier état écrit dans ce cycle (suppression des fichiers d'un appareil oublié : Rust relit son état sur le disque). */
+  let lastWritten: PublishedDeviceState | null = null;
+
   /** Écrit son `state.ctx` ; renvoie faux sur `state-mismatch` (hypothèse refusée par Rust). */
   const writeState = async (state: PublishedDeviceState, force: boolean): Promise<boolean> => {
-    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc });
-    if (!force && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
+    const comparable = publishedStateToText({ ...state, stateSeq: 0, head: { ...state.head, stateSeq: 0 }, lastSyncHlc: '000000000000000-0000-00000000-0000-4000-8000-000000000000' as Hlc, forgotten: [] });
+    if (state.acks.size > MAX_STATE_ACKS) {
+      // Plus de 64 accusés (oublis retenus au-delà des places, §14.2) : état refusé par Rust ; rien publié, « oubli en échec ».
+      logger.log('acks-overflow', { count: state.acks.size });
+      await recordForgetOverflow(deps);
+      return false;
+    }
+    const forced = force || publishForget;
+    if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
     try {
       await platform.writeState({ sv: deps.sv, state });
       stateSeq = state.stateSeq;
       await data.transaction(async (tx) => {
         await writeJson(tx, META.stateSeq, state.stateSeq);
         await writeJson(tx, META.lastState, { text: comparable, at: deps.clock.nowMs() });
+        if (publishForget) await writeJson(tx, FORGET_META.publish, null);
       });
+      if (publishForget) logger.log('forget-published', {});
+      publishForget = false;
+      lastWritten = state;
       work();
       return true;
     } catch (error) {
@@ -247,7 +297,15 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
 
   try {
     // 3. Époque.
-    const states = [...accepted.values()];
+    // Y-10 (seconde revue, point 1) : un appareil oublié ne fixe ni l'époque du dossier, ni la date du dernier instantané, ni la source d'un
+    // changement d'époque (son état reste accepté pour les curseurs et la coupure).
+    const live = new Map([...accepted].filter(([id]) => !forgetView.order.has(id)));
+    const states = [...live.values()];
+    /** Liste maître et accusés des actifs (le sien compris) : coupures, instantanés éligibles, trous (§18 point 11). */
+    const coverage = (): ForgetCoverage => {
+      const own = lastWritten ?? ownState;
+      return { master: forgetView.master, ackers: [...live.values(), ...(own ? [own] : [])], forgotten: forgetView.order };
+    };
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
     let epoch = localEpoch;
     let resume = options.forceResume === true || (await readJson<boolean>(repos, META.resume)) === true;
@@ -284,7 +342,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     } else if (epoch !== null && ((folderE !== null && compareEpochs(folderE, epoch) > 0) || switchState)) {
       const target = switchState?.target ?? (folderE as EpochId);
       work();
-      const switched = await switchEpoch(deps, target, accepted, ownState, hooks.onRemoteChanges);
+      const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges);
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
         // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse.
@@ -321,7 +379,9 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const rows = await repos.sync.getStates();
       const acks = new Map<DeviceId, DeviceAck>();
       for (const row of rows) {
-        if (row.isSelf || row.epoch !== currentEpoch || acks.size >= MAX_STATE_ACKS) continue;
+        // Y-10 (ADR 0011 §18 point 11) : l'accusé sur un appareil oublié reste publié, figé à sa position (il n'est plus lu), même une
+        // fois terminé : sans lui, un autre actif ne verrait jamais la coupure atteinte (finalisation bloquée, seconde revue point 5).
+        if (row.isSelf || row.epoch !== currentEpoch) continue;
         acks.set(row.deviceId as DeviceId, { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: row.stateSeq });
       }
       return acks;
@@ -346,9 +406,33 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       await writeJson(repos, META.resume, true);
       // Y-06 : un nouvel appareil (aucune époque suivie avant ce cycle, ou arrivée commencée) rejoint par tranches, avec progression,
       // reprise au même endroit et échec mémorisé (src/sync/join.ts) ; les autres reprises sont inchangées.
-      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
-      return resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending);
+      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
+      const outcome = await resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
+      if (outcome.kind === 'no-eligible') noEligible = outcome.uncovered;
+      return outcome.kind === 'done';
     };
+    /** Aucun instantané éligible trouvé par une reprise de ce cycle (§14.2) : oublié non couvert. */
+    let noEligible: DeviceId | null = null;
+    /** Trous sur les oubliés (§18 point 11) : curseur sous la coupure et journal disparu (terminé, ou `state.ctx` absent). */
+    const gaps = async (): Promise<readonly DeviceId[]> => {
+      if (forgetView.order.size === 0) return [];
+      const cursors = new Map<DeviceId, DeviceAck>();
+      for (const row of await repos.sync.getStates()) {
+        if (forgetView.order.has(row.deviceId as DeviceId) && row.epoch === currentEpoch) cursors.set(row.deviceId as DeviceId, { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: 0 });
+      }
+      const gone = new Set<DeviceId>(forgetView.done);
+      for (const id of forgetView.order.keys()) {
+        const listing = scan.devices.find((d) => d.deviceId === id);
+        if (!listing || listing.stateStatus === 'missing') gone.add(id);
+      }
+      const cov = coverage();
+      return forgetGaps(cov.master, cov.ackers, cursors, gone);
+    };
+    const gapsBefore = await gaps();
+    if (gapsBefore.length > 0 && !resume) {
+      logger.log('forget-gap', { device: gapsBefore[0] ?? null });
+      resume = true;
+    }
     if (resume) await doResume();
 
     let allRead = true;
@@ -357,14 +441,26 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const truncated: string[] = [];
       allRead = true;
       const rows = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
-      const targets: { id: DeviceId; head: DeviceAck; epochListing: DeviceScan['epochs'][number] | undefined }[] = [];
+      const targets: { id: DeviceId; head: DeviceAck; epochListing: DeviceScan['epochs'][number] | undefined; limit?: DeviceAck }[] = [];
       for (const [id, state] of accepted) {
+        // Y-10 (§18 point 12) : les fichiers d'un terminé ne sont jamais relus, même s'il en réapparaît ou si son oubli est annulé.
+        if (forgetView.done.has(id)) continue;
         const row = rows.get(id);
+        const epochListing = scan.devices.find((d) => d.deviceId === id)?.epochs.find((e) => e.epoch === currentEpoch);
+        if (forgetView.order.has(id)) {
+          // Y-10 : appareil oublié, lu jusqu'à la coupure (maximum des accusés des appareils actifs et de sa position locale), jamais au-delà.
+          const local: DeviceAck | null = row?.epoch === currentEpoch ? { epoch: currentEpoch, segment: row.cursorSegment, record: row.cursorRecord, hlc: row.ackHlc, stateSeq: 0 } : null;
+          const limit = readLimit(id, forgetView, accepted, ownState, local);
+          if (state.epoch !== currentEpoch || limit === null || limit.epoch !== currentEpoch) continue;
+          const head = compareCursors(state.head, limit) <= 0 ? state.head : { ...state.head, segment: limit.segment, record: limit.record };
+          targets.push({ id, head, epochListing, limit });
+          continue;
+        }
         if (state.epoch !== currentEpoch || row?.status === 'foreign' || row?.status === 'newer-major' || row?.status === 'rollback' || row?.status === 'corrupt') {
           if (state.epoch === currentEpoch && row?.status !== 'expired') allRead = false;
           continue;
         }
-        targets.push({ id, head: state.head, epochListing: scan.devices.find((d) => d.deviceId === id)?.epochs.find((e) => e.epoch === currentEpoch) });
+        targets.push({ id, head: state.head, epochListing });
       }
       // Soi-même : seulement après une reprise (ses écritures au-delà de l'instantané, base restaurée).
       const selfState = rows.get(self);
@@ -394,6 +490,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
           ackHlc: row?.epoch === currentEpoch ? row.ackHlc : null,
           knows,
           onBatch: hooks.onRemoteChanges,
+          ...(target.limit ? { limit: target.limit } : {}),
         });
         if (outcome.status !== 'complete') allRead = false;
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${currentEpoch}`);
@@ -404,7 +501,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
             truncated.push(target.id);
           }
         }
-        if (target.id !== self) {
+        if (target.id !== self && !forgetView.order.has(target.id)) {
           const status = outcome.status === 'truncated' ? (resumed ? 'corrupt' : undefined) : outcome.status === 'clock-ahead' ? 'clock-ahead' : outcome.status === 'newer-major' ? 'newer-major' : outcome.status === 'foreign' ? 'foreign' : row?.status === 'clock-ahead' ? 'active' : undefined;
           if (status) await repos.sync.saveState(target.id, { status });
         }
@@ -441,14 +538,17 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers).
     const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || ownState?.epoch !== currentEpoch;
     if (publishAllowed) await writeState(await nextState(head), forceState);
+    // Trous restants après la lecture (aucun instantané éligible) : attente visible, aucun instantané écrit (§18 point 11).
+    const gapsAfter = await gaps();
+    await setSnapshotWait(deps, gapsAfter[0] ?? noEligible);
 
     // 7. Entretien : instantané si dû, purges, plafonds.
     if (publishAllowed && allRead && publishError === null) {
-      const lastSnapshotMs = Math.max(
-        snapshotMeta ? hlcMs(snapshotMeta.endHlc) : 0,
-        ...states.filter((s) => s.epoch === currentEpoch && s.snapshot).map((s) => hlcMs((s.snapshot as { endHlc: Hlc }).endHlc)),
-      );
-      if (deps.clock.nowMs() - lastSnapshotMs >= SNAPSHOT_INTERVAL_MS) {
+      // Y-10 (§18 point 11) : avec des oubliés retenus, seuls les instantanés éligibles comptent (7 jours, purge) ; un instantané n'est
+      // écrit que s'il couvre chaque oublié retenu et sans trou ; hors règle des 7 jours quand aucun éligible n'existe ou que la
+      // condition (h) l'attend avant une suppression.
+      const due = await snapshotDue(deps, { epoch: currentEpoch, view: forgetView, coverage: coverage(), ackMap, snapshotMeta, states, gapsAfter, known: () => forgetKnownDevices(scan, forgetView, accepted, self, lastWritten ?? ownState), own: lastWritten ?? ownState });
+      if (due) {
         work();
         const listedSnapshots = listed?.snapshots ?? [];
         const seq = Math.max(snapshotMeta?.seq ?? 0, ...listedSnapshots) + 1;
@@ -457,19 +557,26 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         const endHlc = deps.hlc.now();
         await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
         snapshotMeta = { seq, endHlc };
-        await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment });
+        await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
         await writeState(await nextState(head), true);
         const old = [...listedSnapshots, seq].sort((a, b) => b - a).slice(SNAPSHOTS_KEPT_PER_EPOCH);
         if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch(() => 0);
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
       }
-      await maintain(deps, { epoch: currentEpoch, head, accepted, ownScan, rows: await repos.sync.getStates() });
+      await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId) });
+    }
+
+    // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte).
+    if (publishAllowed && forgetView.order.size > 0) {
+      const ownPublished = lastWritten ?? ownState;
+      const ownSnapshot: SnapshotEndRead = ownPublished && ownPublished.epoch === currentEpoch ? snapshotInEpoch(await readSnapshotEnd(deps, ownPublished), currentEpoch) : 'none';
+      await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished, ownSnapshot });
     }
 
     // 8. Heure de dernière synchro.
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
-    const devices = await deviceStatuses(repos, self, accepted, deps.sv);
+    const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv), scan, self, await readWaitingDevices(repos));
     if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch };
     return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked };
   } catch (error) {
@@ -486,6 +593,22 @@ async function knowsFrom(repos: Repositories): Promise<ApplyContext['knows']> {
     const ack = acks.get(deleter)?.get(device);
     return ack !== undefined && ack.hlc !== null && ack.hlc >= hlc;
   };
+}
+
+/**
+ * Y-10 (audit a, §18 point 8) : tout appareil du dossier jamais lu (dossier sans état authentifié accepté) et tout appareil qui bloque une
+ * suppression sont montrés dans APPAREILS, « jamais vu » (`seen: false`), pour pouvoir les oublier ; jamais une plateforme inventée.
+ */
+function withUnseenDevices(devices: SyncDeviceStatus[], scan: FolderScan, self: DeviceId, waiting: readonly DeviceId[]): SyncDeviceStatus[] {
+  const listed = new Set(devices.map((d) => d.deviceId));
+  const extra = [...scan.devices.map((d) => d.deviceId), ...waiting].filter((id) => id !== self && !listed.has(id));
+  const unseen = [...new Set(extra)].sort().map((deviceId): SyncDeviceStatus => ({ deviceId, platform: 'windows', self: false, lastReadAt: null, status: 'active', seen: false }));
+  return [...devices, ...unseen];
+}
+
+async function readWaitingDevices(repos: Repositories): Promise<DeviceId[]> {
+  const status = await readForgetStatus(repos);
+  return (status?.deletions ?? []).flatMap((d) => (d.waitingFor ? [d.waitingFor] : []));
 }
 
 /** Appareils affichés (APPAREILS) et leur version (Y-07 critère 11) : règle partagée avec les bandeaux A-09 (`deviceStatus.ts`). */
@@ -507,12 +630,22 @@ export async function resumeFromSnapshot(
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
   pending: Set<string>,
-): Promise<boolean> {
-  const candidates = [...accepted.entries(), ...(ownState ? [[deps.deviceId, ownState] as const] : [])]
-    .filter(([, s]) => s.epoch === epoch && s.snapshot !== null)
-    .sort(([, a], [, b]) => ((a.snapshot?.endHlc ?? '') < (b.snapshot?.endHlc ?? '') ? 1 : -1));
-  for (const [deviceId, state] of candidates) {
-    const loaded = await loadSnapshot(deps, deviceId, epoch, (state.snapshot as { seq: number }).seq);
+  coverage: ForgetCoverage,
+): Promise<ResumeOutcome> {
+  // (paramètre `accepted` : curseurs posés aussi pour chaque oublié retenu présent dans covers, `cursorIds`)
+  // Y-10 (§18 point 11, seconde revue point 1) : instantané éligible seulement (auteur non oublié, annoncé, couvrant chaque oublié retenu).
+  const candidates = await snapshotCandidates(deps, epoch, [...accepted.values(), ...(ownState ? [ownState] : [])], coverage);
+  for (const c of candidates) if (c.end === 'cloud-pending') pending.add(`${String(c.state.deviceId).slice(0, 8)}/${epoch}/snapshot`);
+  const excluded = new Set<DeviceId>();
+  for (;;) {
+    const pick = pickEligible(candidates, coverage, epoch, excluded);
+    if (pick.kind !== 'ok') {
+      deps.logger.log('resume-unavailable', { epoch });
+      return pick.kind === 'none' && pick.uncovered !== null ? { kind: 'no-eligible', uncovered: pick.uncovered } : { kind: 'unavailable' };
+    }
+    const { author: deviceId, seq } = pick.end;
+    excluded.add(deviceId);
+    const loaded = await loadSnapshot(deps, deviceId, epoch, seq);
     if (loaded === 'cloud-pending') {
       pending.add(`${String(deviceId).slice(0, 8)}/${epoch}/snapshot`);
       continue;
@@ -521,7 +654,7 @@ export async function resumeFromSnapshot(
     const now = iso(deps.clock.nowMs());
     const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, async (tx) => {
       // Curseurs aux positions couvertes (époque courante), sinon depuis le début.
-      for (const id of new Set<string>([...accepted.keys(), deps.deviceId])) {
+      for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
         const cover = loaded.end.covers.get(id as DeviceId);
         const inEpoch = cover && cover.epoch === epoch;
         await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
@@ -538,10 +671,59 @@ export async function resumeFromSnapshot(
     }
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
-    return true;
+    return { kind: 'done' };
   }
-  deps.logger.log('resume-unavailable', { epoch });
-  return false;
+}
+
+/** Résultat d'une reprise : `no-eligible` (§14.2) quand un candidat ne couvre pas un oublié retenu ; attente visible. */
+export type ResumeOutcome = { readonly kind: 'done' } | { readonly kind: 'unavailable' } | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId };
+
+/** Plus de 64 accusés à publier : échec « oubli en échec » (étape `overflow`), effacé quand le scan n'en signale plus. */
+async function recordForgetOverflow(deps: SyncDeps): Promise<void> {
+  const failure = await readJson<{ step?: string }>(deps.data.repos, FORGET_META.failure);
+  if (failure?.step === 'overflow') return;
+  await writeJson(deps.data.repos, FORGET_META.failure, { deviceId: deps.deviceId, code: 'too-large', at: iso(deps.clock.nowMs()), step: 'overflow' });
+}
+
+/**
+ * Instantané à écrire à l'étape 7 ? Sans oublié retenu : règle des 7 jours d'avant Y-10 (annonces des actifs et le sien). Avec des
+ * oubliés retenus (§18 point 11) : jamais tant qu'il reste un trou, ni si ses curseurs ne couvrent pas chaque oublié retenu ; sinon dû
+ * si aucun instantané éligible n'a moins de 7 jours, si aucun n'existe, ou si la condition (h) d'une suppression l'attend.
+ */
+async function snapshotDue(
+  deps: SyncDeps,
+  input: {
+    readonly epoch: EpochId;
+    readonly view: ForgetView;
+    readonly coverage: ForgetCoverage;
+    readonly ackMap: () => Promise<Map<DeviceId, DeviceAck>>;
+    readonly snapshotMeta: { readonly seq: number; readonly endHlc: Hlc } | null;
+    readonly states: readonly PublishedDeviceState[];
+    readonly gapsAfter: readonly DeviceId[];
+    readonly known: () => ReturnType<typeof forgetKnownDevices>;
+    readonly own: PublishedDeviceState | null;
+  },
+): Promise<boolean> {
+  const now = deps.clock.nowMs();
+  if (input.view.order.size === 0) {
+    const last = Math.max(input.snapshotMeta ? hlcMs(input.snapshotMeta.endHlc) : 0, ...input.states.filter((s) => s.epoch === input.epoch && s.snapshot).map((s) => hlcMs((s.snapshot as { endHlc: Hlc }).endHlc)));
+    return now - last >= SNAPSHOT_INTERVAL_MS;
+  }
+  if (input.gapsAfter.length > 0) return false;
+  const { master, ackers } = input.coverage;
+  if (coversForgotten(await input.ackMap(), master, ackers) !== null) return false;
+  const candidates = await snapshotCandidates(deps, input.epoch, [...input.states, ...(input.own ? [input.own] : [])], input.coverage);
+  const pick = eligibleSnapshot(candidates, master, ackers, input.epoch);
+  if (pick.kind === 'none') return true;
+  if (pick.kind === 'ok' && now - hlcMs(pick.end.endHlc) >= SNAPSHOT_INTERVAL_MS) return true;
+  // (h) : une suppression n'attend plus que son propre instantané couvrant.
+  const ownEnd = candidates.find((c) => c.state.deviceId === deps.deviceId)?.end ?? 'none';
+  const known = input.known();
+  return [...input.view.order.keys()].some((target) => {
+    if (target === deps.deviceId || input.view.done.has(target)) return false;
+    const check = forgottenDeleteCheck(target, deps.deviceId, master, [...input.view.done], known, ownEnd);
+    return check.kind === 'waiting' && check.reason === 'snapshot';
+  });
 }
 
 export { maxEpoch };

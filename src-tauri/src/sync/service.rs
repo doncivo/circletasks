@@ -5,7 +5,7 @@
 //! fichiers, confirmation native, horloge) : les tests l'exercent sans fenêtre ni iCloud. Les boîtes de confirmation sont ouvertes
 //! **hors** du verrou interne.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -21,8 +21,17 @@ use super::folder::{
 use super::limits::{NONCE_MAX_RECORDS, NONCE_WARN_RECORDS, PAIRING_CLOCK_TOLERANCE_MS};
 use super::marker::{self, RestoreMarker};
 use super::names::{is_uuid_v4, EpochId};
-use super::state::{OwnState, PublishedState, Usage};
-use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, Store};
+use super::files::{delete_forgotten_device_files, ForgottenDeletion};
+use super::files::Listing;
+use super::forget::{
+    cited_devices, completed_forgotten, declaration_author, forget_dialog_detail, parse_snapshot_end, snapshot_in_epoch, SnapshotEnd, SnapshotEndRead, forget_order, forgotten_delete_check, learn_declarations, local_offset_minutes, seen_devices,
+    next_declaration_hlc, state_hlcs, AcceptedRecord, DeleteCheck, ForgottenRegistry, ForgottenView, KnownDevice, KnownState, FORGET_DECLARE_LIMIT, FORGOTTEN_FILE,
+    MAX_FORGOTTEN_DELETE_ENTRIES, MAX_FORGOTTEN_ENTRIES, SYNC_NEXT_KEY_ACCOUNT,
+};
+use super::limits::MAX_SCAN_ENTRIES_PER_FOLDER;
+use super::names::DEVICES_DIR;
+use super::state::{ForgottenDevice, OwnState, PublishedState, Usage};
+use super::store::{Accepted, AppendResult, SnapshotEndKey, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, StateRead, StateStatus, Store};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 use crate::vault::{SecretVault, VaultError};
 
@@ -151,6 +160,10 @@ struct Inner {
     pending_paired_by: Option<String>,
     /// Dernier instantané lu par pages (revue 15) : relu du disque seulement quand un autre est demandé.
     snapshot_cache: Option<SnapshotCache>,
+    /// Fins d'instantané déjà lues (`tail`, §18 point 11) par (`kid`, appareil, époque, numéro) : un numéro n'est jamais réécrit sous un
+    /// état authentifié ; gardées toute la session (vidées seulement au changement de dossier ou de clé), l'annonce restant contrôlée à
+    /// chaque appel (Y-10, troisième revue point 1).
+    snapshot_ends: HashMap<SnapshotEndKey, String>,
 }
 
 pub type Clock = Arc<dyn Fn() -> u64 + Send + Sync>;
@@ -276,11 +289,13 @@ impl SyncCore {
         let mut inner = self.lock();
         // Autre dossier, ou le même rechoisi : aucun instantané en cache (revue B3).
         inner.snapshot_cache = None;
+        inner.snapshot_ends.clear();
         self.ensure_loaded(&mut inner);
         let folder_id = checked.folder_id();
         let previous_id = inner.record.as_ref().map(|r| CheckedFolder { path: PathBuf::from(&r.path), kind: FolderKind::Unknown, pinned: false }.folder_id());
         if previous_id.as_deref() != Some(folder_id.as_str()) {
             remove_config_file(&self.path(super::service::OWN_FILE))?;
+            remove_config_file(&self.path(FORGOTTEN_FILE))?;
             inner.own = None;
             inner.accepted.clear();
             inner.snapshots.clear();
@@ -292,6 +307,12 @@ impl SyncCore {
         inner.record = Some(record);
         inner.folder = Some(Bound { checked, fs, folder_id });
         log::event("folder-bound", "ok");
+        // Y-10 : appareil lié et clé présente : registre du dossier créé dès le choix (sinon au premier scan, mêmes règles).
+        if let (Some(id), Ok(key)) = (Self::bound_device(&inner), self.load_key(&mut inner)) {
+            if self.registry(&mut inner, &key, &id).is_err() {
+                log::event("forgotten-registry-deferred", "folder-choose");
+            }
+        }
         Ok(Self::info_of(inner.folder.as_ref().ok_or(SyncError::new(SyncCode::Io))?))
     }
 
@@ -307,8 +328,12 @@ impl SyncCore {
             }
         }
         let mut inner = self.lock();
+        inner.snapshot_ends.clear();
         remove_config_file(&self.path(FOLDER_FILE))?;
         remove_config_file(&self.path(OWN_FILE))?;
+        // Y-10 : les déclarations sont liées au dossier et à l'appareil ; reconstruites depuis son `state.ctx` si le même dossier est
+        // repris sous la même identité, jamais héritées par une nouvelle identité (« Associer de nouveau »).
+        remove_config_file(&self.path(FORGOTTEN_FILE))?;
         let loaded = Inner { loaded: true, ..Inner::default() };
         *inner = loaded;
         log::event("folder-forgotten", if erase_key { "key-erased" } else { "key-kept" });
@@ -330,6 +355,13 @@ impl SyncCore {
                 record.device_id = Some(device_id.to_owned());
                 let bytes = serde_json::to_vec(&*record).unwrap_or_default();
                 write_config_file(&self.path(FOLDER_FILE), &bytes)?;
+            }
+        }
+        // Y-10 (§18 point 7) : registre créé dès la liaison s'il manque (appareil qui n'a encore rien publié : cas (ii)), avant toute
+        // écriture ; sans clé ou s'il ne peut pas encore l'être, il l'est au premier scan, qui applique les mêmes règles et le dit.
+        if let Ok(key) = self.load_key(&mut inner) {
+            if self.registry(&mut inner, &key, device_id).is_err() {
+                log::event("forgotten-registry-deferred", "bind");
             }
         }
         // pairedBy reçu à l'import avant la liaison : reporté dès que own.json est disponible, jamais perdu (revue 17).
@@ -399,8 +431,15 @@ impl SyncCore {
         self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
         let kid = key.kid().to_owned();
         self.save_usage(&mut inner, Usage { kid: kid.clone(), sealed: 0 })?;
-        inner.key = Some(Arc::new(key));
+        let key = Arc::new(key);
+        inner.key = Some(key.clone());
         inner.own = None;
+        // Y-10 : appareil déjà lié, dossier sans données : registre créé dès maintenant (rien n'a été publié, cas (ii)).
+        if let Some(id) = Self::bound_device(&inner) {
+            if self.registry(&mut inner, &key, &id).is_err() {
+                log::event("forgotten-registry-deferred", "key-create");
+            }
+        }
         log::event("key-created", &kid);
         Ok(kid)
     }
@@ -483,15 +522,26 @@ impl SyncCore {
             return fail(SyncCode::BadName);
         }
         let mut inner = self.lock();
-        // Début de cycle : le cache de lecture d'instantané est vidé (revue B3).
+        // Début de cycle : le cache des octets d'instantané est vidé (revue B3) ; les fins lues restent pour la session (troisième revue
+        // Y-10, point 1 : sinon chaque cycle relirait en entier l'instantané annoncé de chaque actif).
         inner.snapshot_cache = None;
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
         let self_id = Self::bound_device(&inner);
-        let Inner { folder, accepted, .. } = &mut *inner;
-        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: bound.checked.kind == FolderKind::Icloud };
-        store.scan(self_id.as_deref(), keep, accepted)
+        // Y-10 (§18 points 3 et 7) : registre lu (anti-rejeu persistant versé avant la lecture des états) ou reconstruit.
+        if let Some(id) = self_id.as_deref() {
+            self.registry(&mut inner, &key, id)?;
+        }
+        let mut scan = {
+            let Inner { folder, accepted, .. } = &mut *inner;
+            let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+            let store = Store { fs: bound.fs.as_ref(), key: &key, pin: bound.checked.kind == FolderKind::Icloud };
+            store.scan(self_id.as_deref(), keep, accepted)?
+        };
+        if let Some(id) = self_id.as_deref() {
+            scan.forgotten = self.merge_scan(&mut inner, &key, id, &scan)?;
+        }
+        Ok(scan)
     }
 
     /// Identifiants des dossiers d'appareil listés dans `devices/` (noms UUID), sans lire ni hydrater aucun fichier : référence
@@ -530,14 +580,48 @@ impl SyncCore {
         Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_journal(device_id, epoch, from, max_bytes, accepted)
     }
 
-    /// `sync_read_snapshot`.
+    /// `sync_read_snapshot` ; `tail` : dernier enregistrement seul de l'instantané annoncé (§18 point 11).
     pub fn read_snapshot(&self, device_id: &str, epoch: &str, seq: u64, from_record: u64, max_bytes: Option<u64>) -> SyncResult<ReadPage> {
+        self.read_snapshot_with(device_id, epoch, seq, from_record, max_bytes, false)
+    }
+
+    pub fn read_snapshot_with(&self, device_id: &str, epoch: &str, seq: u64, from_record: u64, max_bytes: Option<u64>, tail: bool) -> SyncResult<ReadPage> {
         let mut inner = self.lock();
         self.require_folder(&mut inner)?;
         let key = self.load_key(&mut inner)?;
-        let Inner { folder, accepted, snapshot_cache, .. } = &mut *inner;
+        let Inner { folder, accepted, snapshot_cache, snapshot_ends, .. } = &mut *inner;
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
-        Store { fs: bound.fs.as_ref(), key: &key, pin: false }.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        if tail {
+            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends, Some(snapshot_cache));
+        }
+        store.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
+    }
+
+    /// Condition (h) (§18 point 11) : fin de l'instantané annoncé par son propre état authentifié, lue par Rust (même lecture que `tail`).
+    fn own_snapshot_end(
+        store: &Store<'_>,
+        self_id: &str,
+        own: Option<&PublishedState>,
+        current_epoch: Option<&str>,
+        accepted: &mut HashMap<String, Accepted>,
+        ends: &mut HashMap<SnapshotEndKey, String>,
+    ) -> SnapshotEndRead {
+        let Some(state) = own else { return SnapshotEndRead::None };
+        let Some(announced) = &state.snapshot else { return SnapshotEndRead::None };
+        // Troisième revue, point 2 : seul un instantané de l'époque courante compte (même filtre que le moteur).
+        if current_epoch.is_some_and(|e| e != state.epoch) {
+            return SnapshotEndRead::None;
+        }
+        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends, None) {
+            Ok(page) if page.status == "complete" => match page.records.first().and_then(|json| parse_snapshot_end(json, &state.epoch)) {
+                Some(covers) => SnapshotEndRead::End(SnapshotEnd { author: self_id.to_owned(), epoch: state.epoch.clone(), seq: announced.seq, end_hlc: announced.end_hlc.clone(), covers }),
+                None => SnapshotEndRead::Unreadable,
+            },
+            Ok(page) if page.status == "cloud-pending" => SnapshotEndRead::CloudPending,
+            Err(error) if error.code == SyncCode::CloudPending => SnapshotEndRead::CloudPending,
+            _ => SnapshotEndRead::Unreadable,
+        }
     }
 
     // --------------------------------------------------------------------------------------------------------------------------
@@ -549,6 +633,7 @@ impl SyncCore {
         self.require_folder(inner)?;
         let key = self.load_key(inner)?;
         let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
+        self.refuse_if_self_forgotten(inner, &self_id)?;
         let own = self.valid_own(inner, &key, &self_id)?;
         let own = self.apply_pending(inner, own)?;
         let usage = self.usage(inner, key.kid());
@@ -586,6 +671,14 @@ impl SyncCore {
         let state: PublishedState = serde_json::from_value(state).map_err(|_| SyncError::new(SyncCode::BadName))?;
         let mut inner = self.lock();
         let (key, self_id, mut own, mut usage) = self.writable(&mut inner)?;
+        // Y-10 (section 1.4, §18 point 3) : Rust est maître de `forgotten`. La liste du moteur doit être la liste maître du registre, ou
+        // son préfixe (Rust complète, comme `pairedBy`) ; sinon refus. Registre illisible : `io` ; non reconstructible : refus.
+        let master = self.registry(&mut inner, &key, &self_id)?.entries;
+        let Some(forgotten) = completed_forgotten(&state.forgotten, &master) else {
+            log::event("write-state-refused", "forgotten");
+            return fail(SyncCode::StateMismatch);
+        };
+        let state = PublishedState { forgotten, ..state };
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
         let digest = store.write_state(&mut own, &mut usage, self.options.nonce_max, &self_id, self.options.platform, sv, &state)?;
@@ -731,6 +824,7 @@ impl SyncCore {
         let mut inner = self.lock();
         // Nouvelle clé : aucun instantané lu avec l'ancienne ne reste en cache (revue B3).
         inner.snapshot_cache = None;
+        inner.snapshot_ends.clear();
         // Clé existante relue sous le verrou (revue 17) : une autre clé apparue pendant la boîte n'est jamais remplacée sans accord.
         let existing = self.read_vault_key()?;
         if replace != Some(true) && existing.as_ref().is_some_and(|e| !e.same_as(&key)) {
@@ -753,9 +847,324 @@ impl SyncCore {
             if let Ok(own) = self.valid_own(&mut inner, &key, &self_id) {
                 self.apply_pending(&mut inner, own)?;
             }
+            // Y-10 : registre créé avec la clé (sinon au premier scan, mêmes règles et refus visibles).
+            if self.registry(&mut inner, &key, &self_id).is_err() {
+                log::event("forgotten-registry-deferred", "key-import");
+            }
         }
         log::event("key-imported", &kid);
         Ok(KeyImportResult { kid, paired_by, epoch })
+    }
+
+    // --------------------------------------------------------------------------------------------------------------------------
+    // Oubli d'un appareil (Y-10 ; ADR 0011 sections 11.1, 14.2 et 18 points 3 à 10)
+    // --------------------------------------------------------------------------------------------------------------------------
+
+    /// Registre lu : absent (fichier manquant, autre dossier, autre identité) → `None` ; illisible (lecture, JSON, schéma, plus de 64
+    /// entrées) → `io`, jamais traité comme absent (§18 point 7).
+    fn load_registry(&self, folder_id: &str, self_id: &str) -> SyncResult<Option<ForgottenRegistry>> {
+        match read_config_file::<ForgottenRegistry>(&self.path(FORGOTTEN_FILE)) {
+            Ok(None) => Ok(None),
+            Ok(Some(reg)) if reg.is_valid() => Ok((reg.folder_id == folder_id && reg.device_id == self_id).then_some(reg)),
+            Ok(Some(_)) | Err(()) => {
+                log::event("forgotten-registry-unreadable", "io");
+                fail(SyncCode::Io)
+            }
+        }
+    }
+
+    fn save_registry(&self, reg: &ForgottenRegistry) -> SyncResult<()> {
+        write_config_file(&self.path(FORGOTTEN_FILE), &serde_json::to_vec(reg).unwrap_or_default())
+    }
+
+    /// Anti-rejeu persistant versé dans celui de la session (le plus récent l'emporte ; une tête inconnue vaut zéro).
+    fn seed_accepted(accepted: &mut HashMap<String, Accepted>, reg: &ForgottenRegistry) {
+        for (id, rec) in &reg.accepted {
+            let Some(epoch) = EpochId::parse(&rec.epoch) else { continue };
+            if accepted.get(id).is_some_and(|a| a.seq > rec.state_seq || (a.seq == rec.state_seq && a.digest == rec.digest)) {
+                continue;
+            }
+            accepted.insert(id.clone(), Accepted { epoch, seq: rec.state_seq, digest: rec.digest.clone(), head: RecordCursor { segment: 0, record: 0 } });
+        }
+    }
+
+    /// Anti-rejeu de la session versé dans le registre (ne décroît jamais) ; vrai s'il a changé.
+    fn absorb_accepted(reg: &mut ForgottenRegistry, accepted: &HashMap<String, Accepted>) -> bool {
+        let mut changed = false;
+        for (id, a) in accepted {
+            let newer = reg.accepted.get(id).map_or(true, |rec| a.seq > rec.state_seq);
+            if newer {
+                reg.accepted.insert(id.clone(), AcceptedRecord { epoch: a.epoch.name(), state_seq: a.seq, digest: a.digest.clone() });
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Registre valide pour le dossier et l'appareil liés : lu, sinon reconstruit (§18 point 7) et persisté avant toute écriture ; son
+    /// anti-rejeu est versé dans celui de la session.
+    fn registry(&self, inner: &mut Inner, key: &MasterKey, self_id: &str) -> SyncResult<ForgottenRegistry> {
+        let folder_id = self.require_folder(inner)?.folder_id.clone();
+        if let Some(reg) = self.load_registry(&folder_id, self_id)? {
+            Self::seed_accepted(&mut inner.accepted, &reg);
+            return Ok(reg);
+        }
+        let reg = self.rebuild_registry(inner, key, &folder_id, self_id)?;
+        self.save_registry(&reg)?;
+        Self::seed_accepted(&mut inner.accepted, &reg);
+        log::event("forgotten-registry-rebuilt", &reg.entries.len().to_string());
+        Ok(reg)
+    }
+
+    /// Reconstruction d'un registre absent (§18 point 7) : seulement si (i) son propre état est `ok`, (ii) il est absent et l'appareil
+    /// n'a jamais publié, ou (iii) il est absent ou illisible, `own.json` est valide et un actif non oublié publie un accusé authentifié
+    /// sur soi de `stateSeq` au moins égal à celui de `own.json` ; sinon `cloud-pending`, `newer-format` ou `state-mismatch`.
+    fn rebuild_registry(&self, inner: &Inner, key: &MasterKey, folder_id: &str, self_id: &str) -> SyncResult<ForgottenRegistry> {
+        let own_json = read_config_file::<OwnState>(&self.path(OWN_FILE)).ok().flatten().filter(|o| o.folder_id == folder_id && o.kid == key.kid());
+        let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key, pin: false };
+        let reads = Self::read_all_states(&store, &inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
+        let ok: Vec<(&str, &PublishedState)> = Self::ok_states(&reads);
+        let candidates: Vec<ForgottenDevice> = ok.iter().flat_map(|(_, s)| s.forgotten.iter().cloned()).collect();
+        let (entries, _) = learn_declarations(&[], &candidates, MAX_FORGOTTEN_ENTRIES);
+        let order = forget_order(&entries);
+        let acks_on_self: Vec<u64> = ok.iter().filter(|(id, _)| *id != self_id && !order.contains_key(*id)).filter_map(|(_, s)| s.acks.get(self_id).map(|a| a.state_seq)).collect();
+        let own_status = reads.get(self_id).map_or(StateStatus::Missing, |r| r.status);
+        let never_published = match store.fs.list(&[DEVICES_DIR, self_id], 1) {
+            Err(super::files::FsError::NotFound) => true,
+            Ok(Listing { entries, .. }) => entries.is_empty(),
+            Err(_) => false,
+        }
+            && !ok.iter().any(|(_, s)| s.acks.contains_key(self_id));
+        let allowed = match own_status {
+            StateStatus::Ok => true,
+            StateStatus::CloudPending => return fail(SyncCode::CloudPending),
+            StateStatus::NewerFormat => return fail(SyncCode::NewerFormat),
+            StateStatus::Missing if never_published => true,
+            StateStatus::Missing | StateStatus::Foreign | StateStatus::Corrupt | StateStatus::Rollback | StateStatus::TooLarge => {
+                own_json.as_ref().is_some_and(|o| acks_on_self.iter().any(|seq| *seq >= o.state_seq))
+            }
+        };
+        if !allowed {
+            log::event("forgotten-registry-rebuild-refused", own_status.as_str());
+            return fail(SyncCode::StateMismatch);
+        }
+        let mut reg = ForgottenRegistry::empty(folder_id, self_id);
+        reg.entries = entries;
+        for (id, read) in &reads {
+            if let (StateStatus::Ok, Some(state), Some(digest)) = (read.status, &read.state, &read.digest) {
+                reg.accepted.insert(id.clone(), AcceptedRecord { epoch: state.epoch.clone(), state_seq: state.state_seq, digest: digest.clone() });
+            }
+        }
+        // Registre reconstruit : un appareil oublié par la liste reconstruite est de nouveau arrêté (§18 point 12).
+        reg.note_self_forgotten();
+        Ok(reg)
+    }
+
+    /// Époque courante du dossier vue par Rust : la plus grande époque annoncée par un état authentifié d'un appareil non oublié (section 9 ;
+    /// un oublié ne fixe pas l'époque, comme chez le moteur).
+    fn current_epoch(reads: &BTreeMap<String, StateRead>, order: &BTreeMap<String, super::forget::Verdict>) -> Option<String> {
+        Self::ok_states(reads).into_iter().filter(|(id, _)| !order.contains_key(*id)).filter_map(|(_, s)| EpochId::parse(&s.epoch)).max().map(|e| e.name())
+    }
+
+    fn ok_states(reads: &BTreeMap<String, StateRead>) -> Vec<(&str, &PublishedState)> {
+        reads.iter().filter(|(_, r)| r.status == StateStatus::Ok).filter_map(|(id, r)| r.state.as_ref().map(|s| (id.as_str(), s))).collect()
+    }
+
+    /// Fusion au scan (§18 point 3) : déclarations retenues des états authentifiés apprises, anti-rejeu versé, registre persisté avant
+    /// que le scan rende son résultat ; renvoie la vue de `FolderScan.forgotten`.
+    fn merge_scan(&self, inner: &mut Inner, key: &MasterKey, self_id: &str, scan: &FolderScan) -> SyncResult<ForgottenView> {
+        let mut reg = self.registry(inner, key, self_id)?;
+        let candidates: Vec<ForgottenDevice> =
+            scan.devices.iter().filter(|d| d.state_status == "ok").filter_map(|d| d.state.as_ref()).flat_map(|s| s.forgotten.iter().cloned()).collect();
+        let (entries, overflow) = learn_declarations(&reg.entries, &candidates, MAX_FORGOTTEN_ENTRIES);
+        if overflow {
+            log::event("forgotten-overflow", &reg.entries.len().to_string());
+        }
+        let mut changed = entries.len() != reg.entries.len();
+        reg.entries = entries;
+        changed |= Self::absorb_accepted(&mut reg, &inner.accepted);
+        if reg.note_self_forgotten() {
+            log::event("self-forgotten", self_id);
+            changed = true;
+        }
+        if changed {
+            self.save_registry(&reg)?;
+        }
+        Ok(reg.view(overflow))
+    }
+
+    /// Réinitialisation en cours (section 14.3) : entrée `.next` au coffre (présence seule, secret jamais gardé), ou annonce `reset`
+    /// lue dans un état authentifié.
+    fn reset_in_progress(&self, reads: &BTreeMap<String, StateRead>) -> SyncResult<bool> {
+        if self.vault.contains(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)? {
+            return Ok(true);
+        }
+        Ok(reads.values().any(|r| r.status == StateStatus::Ok && r.state.as_ref().is_some_and(|s| s.reset.is_some())))
+    }
+
+    /// États de tous les dossiers d'appareils de `devices/` (liste complète exigée, 10 000 entrées ; le plafond de 16 dossiers ne
+    /// s'applique pas) : anti-rejeu de `accepted`, rien n'est retenu. `None` : liste coupée.
+    fn read_all_states(store: &Store<'_>, accepted: &HashMap<String, Accepted>) -> SyncResult<Option<BTreeMap<String, StateRead>>> {
+        let listing = match store.fs.list(&[DEVICES_DIR], MAX_SCAN_ENTRIES_PER_FOLDER) {
+            Ok(listing) => listing,
+            Err(super::files::FsError::NotFound) => return Ok(Some(BTreeMap::new())),
+            Err(error) => return Err(SyncError::new(error.code())),
+        };
+        if listing.truncated {
+            return Ok(None);
+        }
+        let mut reads = BTreeMap::new();
+        for entry in listing.entries.iter().filter(|e| e.is_dir && is_uuid_v4(&e.name)) {
+            reads.insert(entry.name.clone(), store.read_state(&entry.name, accepted));
+        }
+        Ok(Some(reads))
+    }
+
+    /// Préconditions communes : dossier, clé, appareil lié ; renvoie la clé et l'appareil local.
+    fn forget_context(&self, inner: &mut Inner) -> SyncResult<(Arc<MasterKey>, String)> {
+        let bound = self.require_folder(inner)?;
+        bound.fs.start_cycle().map_err(|e| SyncError::new(e.code()))?;
+        let key = self.load_key(inner)?;
+        let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
+        self.refuse_if_self_forgotten(inner, &self_id)?;
+        Ok((key, self_id))
+    }
+
+    /// Arrêt définitif (§18 point 12) : appareil qui s'est vu oublié (`selfForgotten` du registre) → toute écriture refusée
+    /// (`state-mismatch`), même si le verdict a changé depuis ; seuls `sync_folder_forget` et une nouvelle identité en sortent.
+    fn refuse_if_self_forgotten(&self, inner: &mut Inner, self_id: &str) -> SyncResult<()> {
+        let folder_id = self.require_folder(inner)?.folder_id.clone();
+        if self.load_registry(&folder_id, self_id)?.is_some_and(|reg| reg.self_forgotten.is_some()) {
+            log::event("self-forgotten-refused", self_id);
+            return fail(SyncCode::StateMismatch);
+        }
+        Ok(())
+    }
+
+    /// Contrôles de `sync_device_forget`, avant puis après la boîte (sous le verrou) : `Ok(None)` si l'appareil est déjà oublié
+    /// (idempotent, aucune boîte), sinon le registre avec la déclaration ajoutée et le détail de la boîte.
+    fn forget_declaration(&self, inner: &mut Inner, device_id: &str) -> SyncResult<Option<(ForgottenRegistry, String)>> {
+        let (key, self_id) = self.forget_context(inner)?;
+        if device_id == self_id {
+            return fail(SyncCode::BadName);
+        }
+        let mut reg = self.registry(inner, &key, &self_id)?;
+        let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        let reads = Self::read_all_states(&store, &inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
+        if self.reset_in_progress(&reads)? {
+            return fail(SyncCode::StateMismatch);
+        }
+        let order = forget_order(&reg.entries);
+        // Un appareil oublié ne déclare plus rien (sa déclaration serait sans effet dans l'ordre total).
+        if order.contains_key(&self_id) {
+            return fail(SyncCode::StateMismatch);
+        }
+        if order.contains_key(device_id) {
+            return Ok(None);
+        }
+        let ok = Self::ok_states(&reads);
+        let actives: Vec<&PublishedState> = ok.iter().filter(|(id, _)| !order.contains_key(*id)).map(|(_, s)| *s).collect();
+        let cited = cited_devices(actives.iter().copied());
+        let known = reads.contains_key(device_id) || cited.contains(device_id) || reg.accepted.contains_key(device_id) || reg.entries.iter().any(|e| e.device_id == device_id);
+        if !known {
+            return fail(SyncCode::BadName);
+        }
+        if reg.entries.len() >= FORGET_DECLARE_LIMIT {
+            return fail(SyncCode::TooLarge);
+        }
+        let seen = actives.iter().filter(|s| s.device_id != device_id).flat_map(|s| state_hlcs(s));
+        let at = next_declaration_hlc(self.now(), seen, &self_id, PAIRING_CLOCK_TOLERANCE_MS).ok_or(SyncError::new(SyncCode::HlcOrder))?;
+        let own_state = ok.iter().find(|(id, _)| *id == self_id).map(|(_, s)| *s);
+        reg.entries.push(ForgottenDevice { device_id: device_id.to_owned(), at, last_ack: own_state.and_then(|s| s.acks.get(device_id).cloned()) });
+        let target = ok.iter().find(|(id, _)| *id == device_id).map(|(_, s)| *s);
+        let detail = forget_dialog_detail(device_id, target, local_offset_minutes(self.now()));
+        Ok(Some((reg, detail)))
+    }
+
+    /// `sync_device_forget` : refus avant toute boîte (`bad-name`, `not-configured`, `key-missing`, `not-bound`, `state-mismatch`,
+    /// `too-large`, `hlc-order`, `io`), appareil déjà oublié sans boîte, puis confirmation native (détail lu par Rust ; `not-foreground`,
+    /// `rate-limited`, `consent-denied` : rien n'est écrit), puis déclaration ajoutée à la liste maître (`.tmp` + renommage).
+    pub fn device_forget(&self, device_id: &str, owner: isize) -> SyncResult<()> {
+        if !is_uuid_v4(device_id) {
+            return fail(SyncCode::BadName);
+        }
+        let Some((_, detail)) = self.forget_declaration(&mut self.lock(), device_id)? else {
+            log::event("forget-already", device_id);
+            return Ok(());
+        };
+        self.consent.confirm_forget(owner, &detail)?;
+        let mut inner = self.lock();
+        // Contrôles refaits après la boîte : l'état a pu changer pendant qu'elle était ouverte.
+        let Some((reg, _)) = self.forget_declaration(&mut inner, device_id)? else { return Ok(()) };
+        self.save_registry(&reg)?;
+        log::event("forget-declared", device_id);
+        Ok(())
+    }
+
+    /// `sync_forgotten_delete` : conditions recalculées depuis le dossier et le registre (section 14.2 (a) à (g)), puis suppression des
+    /// noms stricts de `devices/<device_id>/` (`state.ctx` en dernier) ; terminé : inscrit dans `done`. Aucune boîte.
+    pub fn forgotten_delete(&self, device_id: &str) -> SyncResult<ForgottenDeletion> {
+        if !is_uuid_v4(device_id) {
+            return fail(SyncCode::BadName);
+        }
+        let mut inner = self.lock();
+        let (key, self_id) = self.forget_context(&mut inner)?;
+        if device_id == self_id {
+            return fail(SyncCode::BadName);
+        }
+        let mut reg = self.registry(&mut inner, &key, &self_id)?;
+        let Inner { folder, accepted, snapshot_ends, .. } = &mut *inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        let Some(reads) = Self::read_all_states(&store, accepted)? else {
+            log::event("forgotten-delete-refused", "listing");
+            return fail(SyncCode::StateMismatch);
+        };
+        if self.reset_in_progress(&reads)? {
+            return fail(SyncCode::StateMismatch);
+        }
+        let order = forget_order(&reg.entries);
+        let ok = Self::ok_states(&reads);
+        let seen_set = seen_devices(reg.accepted.keys(), ok.iter().map(|(id, s)| (*id, &s.acks)), &reg.entries);
+        let mut ids: BTreeSet<String> = reads.keys().cloned().collect();
+        ids.extend(seen_set.iter().cloned());
+        ids.extend(reg.entries.iter().map(|f| f.device_id.clone()));
+        let authors: BTreeSet<&str> = reg.entries.iter().filter_map(declaration_author).collect();
+        let known: Vec<KnownDevice> = ids
+            .into_iter()
+            .map(|id| {
+                let read = reads.get(&id);
+                let status = read.map_or(StateStatus::Missing, |r| r.status);
+                let seen = seen_set.contains(&id);
+                if status != StateStatus::Ok && !seen && !authors.contains(id.as_str()) && !order.contains_key(&id) && id != self_id {
+                    log::event("forgotten-delete-phantom", &id);
+                }
+                KnownDevice { state: read.filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref()).map(KnownState::from), status, seen, device_id: id }
+            })
+            .collect();
+        let own_state = reads.get(&self_id).filter(|r| r.status == StateStatus::Ok).and_then(|r| r.state.as_ref());
+        let current_epoch = Self::current_epoch(&reads, &order);
+        let own_snapshot = snapshot_in_epoch(Self::own_snapshot_end(&store, &self_id, own_state, current_epoch.as_deref(), accepted, snapshot_ends), current_epoch.as_deref());
+        match forgotten_delete_check(device_id, &self_id, &reg.entries, &reg.done, &known, &own_snapshot) {
+            DeleteCheck::Ready { .. } => {}
+            DeleteCheck::Waiting { device, code, reason } => {
+                log::event("forgotten-delete-waiting", &format!("{device} {}", reason.as_str()));
+                return fail(code);
+            }
+            DeleteCheck::Refused(code) => {
+                log::event("forgotten-delete-refused", code.as_str());
+                return fail(code);
+            }
+        }
+        let result = delete_forgotten_device_files(bound.fs.as_ref(), device_id, MAX_FORGOTTEN_DELETE_ENTRIES).map_err(|e| SyncError::new(e.code()))?;
+        if result.complete && !reg.done.iter().any(|d| d == device_id) {
+            reg.done.push(device_id.to_owned());
+            self.save_registry(&reg)?;
+        }
+        log::event("forgotten-delete", &format!("{device_id} {} {}", result.deleted, if result.complete { "complete" } else { "more" }));
+        Ok(result)
     }
 
     // --------------------------------------------------------------------------------------------------------------------------

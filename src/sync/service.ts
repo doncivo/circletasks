@@ -6,7 +6,8 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import type { RemoteChanges, SyncEngineService, SyncPlatform, SyncReason, SyncStatus } from '../platform/sync/types';
+import type { ForgetOutcome, RejoinOutcome, RemoteChanges, SyncEngineService, SyncForgetStatus, SyncPlatform, SyncReason, SyncStatus } from '../platform/sync/types';
+import { declareForget, prepareRejoin, readForgetStatus } from './forget';
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
@@ -38,7 +39,11 @@ export interface SyncServiceOptions {
   /** Minuteur du seuil `SYNCING_BANNER_DELAY_MS` (tests : injecté). */
   readonly setTimeout?: (handler: () => void, ms: number) => unknown;
   readonly clearTimeout?: (handle: unknown) => void;
+  /** Y-10 (« Associer de nouveau ») : nouvel identifiant d'appareil (UUID v4 en minuscules) ; tests : injecté. */
+  readonly newDeviceId?: () => DeviceId;
 }
+
+const randomDeviceId = (): DeviceId => crypto.randomUUID().toLowerCase() as DeviceId;
 
 const WEEK_MS = 7 * 86_400_000;
 
@@ -65,7 +70,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    * cours ; le choix après restauration a sa propre place (le dernier choix demandé) et passe **avant** la synchro en attente. Un choix
    * n'est donc jamais absorbé par une synchro déjà programmée.
    */
-  type ActionKind = 'choice' | 'sync';
+  type ActionKind = 'choice' | 'forget' | 'sync';
   const waiting = new Map<ActionKind, { run: () => Promise<unknown>; done: () => void; promise: Promise<void> }>();
 
   const publish = (next: SyncStatus): void => {
@@ -113,6 +118,13 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     } catch {
       // base occupée : valeur précédente
     }
+    // Y-10 (exigence d'Ali) : échec d'un oubli et suppressions en attente, gardés dans sync_meta jusqu'à leur résolution.
+    let forget: SyncForgetStatus | null | undefined;
+    try {
+      forget = await readForgetStatus(options.data.repos);
+    } catch {
+      // base occupée : valeur précédente
+    }
     publish(
       statusFromFacts(withoutCycleStart(status), result, {
         folderLabel: result.folderLabel ?? status.folderLabel,
@@ -120,8 +132,20 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         lastSyncAt: result.lastSyncAt ?? status.lastSyncAt,
         conflictsThisWeek: conflicts,
         ...(reintegrationFailure === undefined ? {} : { reintegrationFailure }),
+        ...(forget === undefined ? {} : { forget }),
       }),
     );
+  };
+
+  /** Y-10 : état de l'oubli relu de sync_meta et publié sans cycle (échec d'une déclaration, visible aussitôt). */
+  const refreshForget = async (): Promise<void> => {
+    try {
+      const forget = await readForgetStatus(options.data.repos);
+      const { forget: _previous, ...rest } = status;
+      publish(forget ? { ...rest, forget } : rest);
+    } catch {
+      // base occupée : l'état sera relu à la fin du prochain cycle
+    }
   };
 
   const cycle = async (cycleOptions: CycleOptions = {}): Promise<CycleResult> => {
@@ -147,7 +171,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
 
   const pump = (): void => {
     if (current) return;
-    const kind: ActionKind | null = waiting.has('choice') ? 'choice' : waiting.has('sync') ? 'sync' : null;
+    const kind: ActionKind | null = waiting.has('choice') ? 'choice' : waiting.has('forget') ? 'forget' : waiting.has('sync') ? 'sync' : null;
     if (kind === null) return;
     const next = waiting.get(kind) as { run: () => Promise<unknown>; done: () => void };
     waiting.delete(kind);
@@ -167,8 +191,16 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
   const schedule = (kind: ActionKind, run: () => Promise<unknown>): Promise<void> => {
     const existing = waiting.get(kind);
     if (existing) {
-      // Synchro : la demande déjà en attente suffit. Choix : le plus récent remplace celui qui n'a pas encore commencé.
+      // Synchro : la demande déjà en attente suffit. Choix : le plus récent remplace celui qui n'a pas encore commencé. Oubli (Y-10) :
+      // les demandes s'enchaînent (aucune n'est absorbée).
       if (kind === 'choice') existing.run = run;
+      if (kind === 'forget') {
+        const before = existing.run;
+        existing.run = async () => {
+          await before();
+          await run();
+        };
+      }
       return existing.promise;
     }
     let done: () => void = () => undefined;
@@ -224,6 +256,29 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         }
       }).catch(() => undefined),
     running: () => current,
+    async forgetDevice(deviceId: DeviceId): Promise<ForgetOutcome> {
+      let outcome: ForgetOutcome = { kind: 'failed', code: 'io' };
+      await schedule('forget', async () => {
+        outcome = await declareForget(deps, deviceId).catch((): ForgetOutcome => ({ kind: 'failed', code: 'io' }));
+        if (outcome.kind !== 'done') {
+          // Échec gardé dans sync_meta : affiché sans attendre le prochain cycle.
+          await refreshForget();
+          return;
+        }
+        // Publication de la déclaration (Rust complète la liste), puis application de l'oubli (ordre total, coupure, suppression).
+        await cycle();
+        await cycle();
+      }).catch(() => undefined);
+      return outcome;
+    },
+    async rejoin(): Promise<RejoinOutcome> {
+      let outcome: RejoinOutcome = { kind: 'failed', code: 'io' };
+      await schedule('forget', async () => {
+        outcome = await prepareRejoin(deps, (options.newDeviceId ?? randomDeviceId)()).catch((): RejoinOutcome => ({ kind: 'failed', code: 'io' }));
+        if (outcome.kind === 'failed') await refreshForget();
+      }).catch(() => undefined);
+      return outcome;
+    },
   };
   return service;
 }

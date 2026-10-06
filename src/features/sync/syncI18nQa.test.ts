@@ -23,8 +23,8 @@ describe('Y-01 critère 19 : textes', () => {
     expect(source).not.toMatch(/>\s*[A-ZÉ][a-zéèêàç]+[^<{]*</);
   });
 
-  it('les trois boîtes natives ont titre, question, explication et deux boutons, « Annuler » en second', () => {
-    expect(Object.keys(native.consent).sort()).toEqual(['eraseKey', 'replaceKey', 'showKey']);
+  it('les boîtes natives (trois de Y-08, « Oublier cet appareil » de Y-10) ont titre, question, explication et deux boutons, « Annuler » en second', () => {
+    expect(Object.keys(native.consent).sort()).toEqual(['eraseKey', 'forgetDevice', 'replaceKey', 'showKey']);
     for (const [name, box] of Object.entries(native.consent)) {
       expect(Object.keys(box).sort(), name).toEqual(['cancel', 'confirm', 'content', 'instruction', 'title']);
       expect(box.cancel, name).toBe('Annuler');
@@ -33,5 +33,15 @@ describe('Y-01 critère 19 : textes', () => {
     }
     expect(native.consent.showKey.confirm).toBe('Afficher la clé');
     expect(native.consent.eraseKey.content).toContain('Sans clé, cet appareil devra être associé de nouveau');
+  });
+
+  it('Y-10 (sécurité, basse) : les quatre clés de forgetDetail existent et ne sont pas vides (sinon la boîte perdrait son détail sans le dire)', () => {
+    const detail = (native as unknown as { forgetDetail?: Record<string, unknown> }).forgetDetail ?? {};
+    for (const key of ['detail', 'never', 'windows', 'ios']) {
+      expect(typeof detail[key], key).toBe('string');
+      expect((detail[key] as string).trim().length, key).toBeGreaterThan(0);
+    }
+    for (const field of ['{platform}', '{id}', '{date}', '{time}']) expect(detail.detail as string).toContain(field);
+    expect(detail.never as string).toContain('{id}');
   });
 });

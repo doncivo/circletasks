@@ -158,7 +158,12 @@ pub struct FolderScan {
     pub total_bytes: u64,
     pub too_many_devices: bool,
     pub incomplete: bool,
+    /// Y-10 : registre de l'oubli après fusion des déclarations lues (§11.1, §18) ; rempli par `SyncCore::scan`.
+    pub forgotten: super::forget::ForgottenView,
 }
+
+/// Clé du cache des fins d'instantané : (kid, appareil, époque, numéro).
+pub type SnapshotEndKey = (String, String, String, u64);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ReadPage {
@@ -575,7 +580,7 @@ impl Store<'_> {
             log::event("folder-large", &total.to_string());
         }
         incomplete |= budget.cut.get();
-        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete })
+        Ok(FolderScan { devices: scans, ignored: ignored + dropped, total_bytes: total, too_many_devices: dropped > 0, incomplete, forgotten: Default::default() })
     }
 
     fn check_total(total: u64) -> SyncResult<()> {
@@ -822,6 +827,57 @@ impl Store<'_> {
         Ok(ReadPage { records, next: RecordCursor { segment: seq, record: index }, status })
     }
 
+    /// `sync_read_snapshot` `tail` (§18 point 11) : dernier enregistrement seul de l'instantané **annoncé** (`seq` égal à celui de l'état
+    /// authentifié, sinon `state-mismatch`) ; page `complete` à un enregistrement s'il se déchiffre, `cloud-pending` si la dernière ligne
+    /// est incomplète ou absente (ou le fichier dans le nuage), `truncated` si elle ne se déchiffre pas. L'index de la ligne entre dans les
+    /// données authentifiées (section 1.2) : le fichier est lu en entier pour le connaître ; `ends` garde le résultat par instantané (un
+    /// numéro n'est jamais réécrit), pour ne lire chaque instantané qu'une fois par session.
+    pub fn read_snapshot_tail(
+        &self,
+        dev: &str,
+        epoch: &str,
+        seq: u64,
+        accepted: &mut HashMap<String, Accepted>,
+        ends: &mut HashMap<SnapshotEndKey, String>,
+        bytes_cache: Option<&mut Option<SnapshotCache>>,
+    ) -> SyncResult<ReadPage> {
+        if !is_uuid_v4(dev) || !is_epoch_id(epoch) || !is_file_number(seq) {
+            return fail(SyncCode::BadName);
+        }
+        let pending = ReadPage { records: Vec::new(), next: RecordCursor { segment: seq, record: 0 }, status: "cloud-pending" };
+        let Some(state) = self.authenticated_state(dev, accepted)? else { return Ok(pending) };
+        if state.epoch != epoch || state.snapshot.as_ref().map(|s| s.seq) != Some(seq) {
+            return fail(SyncCode::StateMismatch);
+        }
+        let key = (self.key.kid().to_owned(), dev.to_owned(), epoch.to_owned(), seq);
+        if let Some(json) = ends.get(&key) {
+            return Ok(ReadPage { records: vec![json.clone()], next: RecordCursor { segment: seq, record: 0 }, status: "complete" });
+        }
+        let bytes = match self.fs.read(&[DEVICES_DIR, dev, epoch, &snapshot_name(seq as u32)], MAX_SNAPSHOT_BYTES, true) {
+            Ok(bytes) => Arc::new(bytes),
+            Err(FsError::NotFound | FsError::CloudPending | FsError::ProviderStopped | FsError::CloudError) => return Ok(pending),
+            Err(error) => return Err(fs_error(error)),
+        };
+        // Lecture complète déjà faite : gardée pour la lecture par pages qui suit souvent (reprise depuis cet instantané).
+        if let Some(cache) = bytes_cache {
+            *cache = Some(SnapshotCache { key: (dev.to_owned(), epoch.to_owned(), seq), bytes: bytes.clone() });
+        }
+        let file = match self.checked(&bytes, HeaderKind::Snapshot, dev, epoch, seq) {
+            Ok(file) => file,
+            Err(error) if error.code == SyncCode::CloudPending => return Ok(pending),
+            Err(error) => return Err(error),
+        };
+        if file.partial_tail || file.lines.is_empty() {
+            return Ok(pending);
+        }
+        let index = (file.lines.len() - 1) as u64;
+        let truncated = ReadPage { records: Vec::new(), next: RecordCursor { segment: seq, record: index }, status: "truncated" };
+        let Some(line) = file.lines.last().and_then(|l| line_str(l)) else { return Ok(truncated) };
+        let Ok(opened) = self.key.open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else { return Ok(truncated) };
+        ends.insert(key, opened.json.clone());
+        Ok(ReadPage { records: vec![opened.json], next: RecordCursor { segment: seq, record: index + 1 }, status: "complete" })
+    }
+
     // --------------------------------------------------------------------------------------------------------------------------
     // Écritures (seulement dans `devices/<appareil lié>/`)
     // --------------------------------------------------------------------------------------------------------------------------
@@ -979,8 +1035,8 @@ impl Store<'_> {
         if state.device_id != self_id || state.platform != platform || state.sm != u64::from(SYNC_FORMAT_MAJOR) || state.sv != sv {
             return fail(SyncCode::StateMismatch);
         }
-        // Réservés jusqu'au lot Y4 (Y-10 et Y-11, section 14.4).
-        if !state.forgotten.is_empty() || state.reset.is_some() {
+        // `forgotten` : comparé à la liste de Rust par l'appelant (`SyncCore::write_state`, Y-10). `reset` : réservé jusqu'à Y-11.
+        if state.reset.is_some() {
             return fail(SyncCode::StateMismatch);
         }
         if state.paired_by != own.paired_by || state.state_seq <= own.state_seq {
