@@ -979,8 +979,8 @@ impl Store<'_> {
         if state.device_id != self_id || state.platform != platform || state.sm != u64::from(SYNC_FORMAT_MAJOR) || state.sv != sv {
             return fail(SyncCode::StateMismatch);
         }
-        // Réservés jusqu'au lot Y4 (Y-10 et Y-11, section 14.4).
-        if !state.forgotten.is_empty() || state.reset.is_some() {
+        // `forgotten` : comparé à la liste de Rust par l'appelant (`SyncCore::write_state`, Y-10). `reset` : réservé jusqu'à Y-11.
+        if state.reset.is_some() {
             return fail(SyncCode::StateMismatch);
         }
         if state.paired_by != own.paired_by || state.state_seq <= own.state_seq {

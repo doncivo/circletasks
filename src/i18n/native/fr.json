@@ -21,6 +21,13 @@
       "content": "Sans clé, cet appareil devra être associé de nouveau.",
       "confirm": "Oublier la clé",
       "cancel": "Annuler"
+    },
+    "forgetDevice": {
+      "title": "CircleTasks",
+      "instruction": "Oublier cet appareil ?",
+      "content": "Il ne sera plus synchronisé et ses fichiers seront supprimés d'iCloud. L'oubli ne s'annule pas : l'appareil devra être associé de nouveau.",
+      "confirm": "Oublier l'appareil",
+      "cancel": "Annuler"
     }
   }
 }

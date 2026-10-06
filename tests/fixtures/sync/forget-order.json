@@ -1,5 +1,5 @@
 {
-  "description": "Table de cas commune Rust / Vitest de l'ordre total des déclarations d'oubli, de la coupure et des conditions de suppression des fichiers d'un appareil oublié (ADR 0011 sections 14.2, 11.2 et 18 ; Y-10 critères 7, 8, 11 et 12). Lue par forget_order, cutoff et forgotten_delete_check de src-tauri/src/sync/forget.rs et par forgetOrder, cutoff et forgottenDeleteCheck de src/domain/sync/retention.ts. Accusés sous forme JSON publiée (objets indexés par device_id). Générée par un script, relue à la main.",
+  "description": "Table de cas commune Rust / Vitest de l'ordre total des déclarations d'oubli, de la coupure et des conditions de suppression des fichiers d'un appareil oublié et de la comparaison de la liste forgotten par sync_write_state (ADR 0011 sections 14.2, 11.2 et 18 ; Y-10 critères 6, 7, 8, 11 et 12). Lue par forget_order, cutoff, forgotten_delete_check et completed_forgotten de src-tauri/src/sync/forget.rs et par forgetOrder, cutoff, forgottenDeleteCheck et completedForgotten de src/domain/sync/retention.ts (utilisé par memory.ts). Accusés sous forme JSON publiée (objets indexés par device_id). Générée par un script, relue à la main.",
   "forgetOrder": [
     {
       "name": "déclaration seule",
@@ -1774,6 +1774,228 @@
         "device": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "code": "state-mismatch"
       }
+    }
+  ],
+  "writeStateForgotten": [
+    {
+      "name": "deux listes vides",
+      "master": [],
+      "published": [],
+      "expected": []
+    },
+    {
+      "name": "liste égale à celle de Rust",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ]
+    },
+    {
+      "name": "déclarations confirmées pas encore publiées : Rust complète",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [],
+      "expected": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ]
+    },
+    {
+      "name": "préfixe déjà publié : Rust complète",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ]
+    },
+    {
+      "name": "déclaration ajoutée par la WebView",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "déclaration ajoutée sans déclaration de Rust",
+      "master": [],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "hlc modifié",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000150-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "dernier accusé modifié",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": {
+            "epoch": "e0001-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "segment": 3,
+            "record": 2,
+            "hlc": "001791000000032-0000-dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "stateSeq": 4
+          }
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "ordre changé",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": null
+    },
+    {
+      "name": "déclaration retirée au milieu",
+      "master": [
+        {
+          "deviceId": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+          "at": "001791000000100-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        },
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "published": [
+        {
+          "deviceId": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          "at": "001791000000200-0000-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          "lastAck": null
+        }
+      ],
+      "expected": null
     }
   ]
 }

@@ -4,6 +4,7 @@ import { isDeviceAck, type DeviceAck, type ForgottenDevice } from '../../../../s
 import {
   activeReaders,
   canPurgeDeletion,
+  completedForgotten,
   cutoff,
   forgetOrder,
   forgottenDeleteCheck,
@@ -47,6 +48,12 @@ describe('table de cas commune Rust / Vitest (forget-order.json)', () => {
     it(`cutoff : ${c.name}`, () => {
       const ackers = c.ackers.map((a) => ({ deviceId: a.deviceId as DeviceId, acks: toAcks(a.acks as JsonAcks) }));
       expect(cutoff(c.target as DeviceId, ackers)).toEqual(c.expected);
+    });
+  }
+
+  for (const c of table.writeStateForgotten) {
+    it(`completedForgotten (sync_write_state) : ${c.name}`, () => {
+      expect(completedForgotten(c.published as unknown as ForgottenDevice[], c.master as unknown as ForgottenDevice[])).toEqual(c.expected);
     });
   }
 

@@ -183,6 +183,23 @@ export function cutoff(target: DeviceId, ackers: readonly Pick<PublishedDeviceSt
   return best;
 }
 
+const sameEntry = (a: ForgottenDevice, b: ForgottenDevice): boolean =>
+  a.deviceId === b.deviceId &&
+  a.at === b.at &&
+  (a.lastAck === b.lastAck ||
+    (a.lastAck !== null && b.lastAck !== null && a.lastAck.epoch === b.lastAck.epoch && a.lastAck.segment === b.lastAck.segment && a.lastAck.record === b.lastAck.record && a.lastAck.hlc === b.lastAck.hlc && a.lastAck.stateSeq === b.lastAck.stateSeq));
+
+/**
+ * `sync_write_state` (section 1.4, lot Y4) : Rust est seul maître de `forgotten`. La liste publiée par le moteur doit être celle de
+ * Rust (`master`, `sync/forgotten.json`) ou son **préfixe** (déclarations confirmées et pas encore publiées : Rust complète, comme
+ * `pairedBy`) ; toute autre différence (entrée ajoutée, modifiée, retirée, ordre changé) : null (`state-mismatch`). Même fonction que
+ * `completed_forgotten` de `forget.rs` ; utilisée par `memory.ts`.
+ */
+export function completedForgotten(published: readonly ForgottenDevice[], master: readonly ForgottenDevice[]): readonly ForgottenDevice[] | null {
+  if (published.length > master.length) return null;
+  return published.every((entry, i) => sameEntry(entry, master[i] as ForgottenDevice)) ? [...master] : null;
+}
+
 /** Statut de lecture d'un `state.ctx` (même vocabulaire que `DeviceScan.stateStatus`). */
 export type ForgetStateStatus = 'ok' | 'missing' | 'cloud-pending' | 'foreign' | 'corrupt' | 'rollback' | 'too-large' | 'newer-format';
 

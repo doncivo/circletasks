@@ -151,6 +151,106 @@ pub fn is_safe_component(name: &str) -> bool {
     !reserved
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-10 : suppression des fichiers d'un appareil oublié (ADR 0011 sections 1.1 et 14.2, avenant à la règle d'écrivain unique)
+// ------------------------------------------------------------------------------------------------------------------------------
+//
+// Seule région du code qui supprime dans le dossier d'un **autre** appareil ; seul appelant : `SyncCore::forgotten_delete`
+// (`sync_forgotten_delete`), après les conditions de `forget::forgotten_delete_check`. Jamais d'écriture, de renommage ni de création ;
+// jamais d'hydratation (liste et suppression seulement) ; seuls les noms stricts de la section 1.1 sont supprimés : segments et
+// instantanés des dossiers d'époque, dossiers d'époque vidés, `state.next.ctx`, puis `state.ctx` **en dernier**, enfin le dossier
+// d'appareil s'il est vide. Un nom étranger (`.tmp`, copie de conflit, fichier déposé) n'est ni lu ni supprimé : le dossier reste.
+
+/// Résultat d'une passe de suppression.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ForgottenDeletion {
+    /// Entrées supprimées (fichiers et dossiers d'époque).
+    pub deleted: u64,
+    /// Plus aucun nom strict dans le dossier (des noms étrangers peuvent rester).
+    pub complete: bool,
+    /// Noms étrangers laissés en place.
+    pub strays: u64,
+}
+
+/// Supprime au plus `max_entries` entrées de noms stricts de `devices/<dev>/` (`dev` déjà validé par `names.rs`, différent de
+/// l'appareil local : contrôlé par l'appelant). Dossier absent ou fichier déjà supprimé : sans erreur (idempotent).
+pub fn delete_forgotten_device_files(fs: &dyn SyncFs, dev: &str, max_entries: usize) -> Result<ForgottenDeletion, FsError> {
+    use super::names::{parse_file_name, EpochId, SyncFileName, DEVICES_DIR, STATE_FILE, STATE_NEXT_FILE};
+    use super::limits::MAX_SCAN_ENTRIES_PER_FOLDER;
+
+    let mut out = ForgottenDeletion { deleted: 0, complete: false, strays: 0 };
+    if !super::names::is_uuid_v4(dev) || !is_safe_component(dev) {
+        return Err(FsError::Unsafe);
+    }
+    let top = match fs.list(&[DEVICES_DIR, dev], MAX_SCAN_ENTRIES_PER_FOLDER) {
+        Ok(listing) => listing,
+        Err(FsError::NotFound) => {
+            out.complete = true;
+            return Ok(out);
+        }
+        Err(error) => return Err(error),
+    };
+    let mut cut = top.truncated;
+    let mut has_state = false;
+    let mut has_next = false;
+    for entry in &top.entries {
+        if entry.is_dir && entry.availability != Availability::Error && EpochId::parse(&entry.name).is_some() {
+            let epoch = entry.name.as_str();
+            let files = match fs.list(&[DEVICES_DIR, dev, epoch], MAX_SCAN_ENTRIES_PER_FOLDER) {
+                Ok(listing) => listing,
+                Err(FsError::NotFound) => continue,
+                Err(error) => return Err(error),
+            };
+            cut |= files.truncated;
+            let mut left = 0u64;
+            for file in &files.entries {
+                if file.is_dir || !matches!(parse_file_name(&file.name), Some(SyncFileName::Segment(_) | SyncFileName::Snapshot(_))) {
+                    out.strays += 1;
+                    left += 1;
+                    continue;
+                }
+                if out.deleted as usize >= max_entries {
+                    return Ok(out);
+                }
+                if fs.remove_file(&[DEVICES_DIR, dev, epoch, &file.name])? {
+                    out.deleted += 1;
+                }
+            }
+            if left == 0 && !files.truncated {
+                if out.deleted as usize >= max_entries {
+                    return Ok(out);
+                }
+                fs.remove_empty_dir(&[DEVICES_DIR, dev, epoch])?;
+                out.deleted += 1;
+            }
+        } else if !entry.is_dir && entry.name == STATE_FILE {
+            has_state = true;
+        } else if !entry.is_dir && entry.name == STATE_NEXT_FILE {
+            has_next = true;
+        } else {
+            out.strays += 1;
+        }
+    }
+    if cut {
+        // Une liste coupée : des noms stricts peuvent rester ; `state.ctx` est gardé pour la passe suivante.
+        return Ok(out);
+    }
+    for (present, name) in [(has_next, STATE_NEXT_FILE), (has_state, STATE_FILE)] {
+        if !present {
+            continue;
+        }
+        if out.deleted as usize >= max_entries {
+            return Ok(out);
+        }
+        if fs.remove_file(&[DEVICES_DIR, dev, name])? {
+            out.deleted += 1;
+        }
+    }
+    fs.remove_empty_dir(&[DEVICES_DIR, dev])?;
+    out.complete = true;
+    Ok(out)
+}
+
 #[cfg(windows)]
 mod imp {
     use std::fs::File;

@@ -38,6 +38,8 @@ pub enum ConsentKind {
     ReplaceKey,
     /// Oublier le dossier et effacer la clé (`sync_folder_forget({ eraseKey: true })`).
     EraseKey,
+    /// Oublier un autre appareil (`sync_device_forget`, Y-10) : irréversible.
+    ForgetDevice,
 }
 
 impl ConsentKind {
@@ -46,6 +48,7 @@ impl ConsentKind {
             ConsentKind::ShowKey => "showKey",
             ConsentKind::ReplaceKey => "replaceKey",
             ConsentKind::EraseKey => "eraseKey",
+            ConsentKind::ForgetDevice => "forgetDevice",
         }
     }
 }
@@ -101,6 +104,9 @@ struct Counters {
     show: Vec<u64>,
     import: Vec<u64>,
     blocked_until: u64,
+    /// Y-10 : ouvertures de la boîte « Oublier cet appareil » (même plafond que l'affichage de la clé). Absent des fichiers antérieurs.
+    #[serde(default)]
+    forget: Vec<u64>,
 }
 
 /// Compteurs persistés et verrou « une seule boîte à la fois ».
@@ -198,6 +204,24 @@ impl ConsentGate {
             self.save(&counters);
         }
         self.ask(ConsentKind::ShowKey, owner)
+    }
+
+    /// Oubli d'un appareil (Y-10) : mêmes préconditions, compteur persisté (3 ouvertures par 10 minutes, refus compris), blocage et
+    /// verrou que l'affichage de la clé (Y-08), puis la boîte, « Annuler » par défaut.
+    pub fn confirm_forget(&self, owner: isize) -> SyncResult<()> {
+        {
+            let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
+            let now = (self.now)();
+            let mut counters = self.load(now);
+            self.gate(owner, &counters, now)?;
+            Self::prune(&mut counters.forget, now);
+            if counters.forget.len() >= CONSENT_MAX_SHOW {
+                return fail(SyncCode::RateLimited);
+            }
+            counters.forget.push(now);
+            self.save(&counters);
+        }
+        self.ask(ConsentKind::ForgetDevice, owner)
     }
 
     /// Appel d'import : 5 par 10 minutes, fenêtre appelante au premier plan (aucune boîte à ce stade).

@@ -5,7 +5,7 @@
 //! fichiers, confirmation native, horloge) : les tests l'exercent sans fenêtre ni iCloud. Les boîtes de confirmation sont ouvertes
 //! **hors** du verrou interne.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -21,8 +21,15 @@ use super::folder::{
 use super::limits::{NONCE_MAX_RECORDS, NONCE_WARN_RECORDS, PAIRING_CLOCK_TOLERANCE_MS};
 use super::marker::{self, RestoreMarker};
 use super::names::{is_uuid_v4, EpochId};
-use super::state::{OwnState, PublishedState, Usage};
-use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, Store};
+use super::files::{delete_forgotten_device_files, ForgottenDeletion};
+use super::forget::{
+    cited_devices, completed_forgotten, forgotten_by_states, forgotten_delete_check, next_declaration_hlc, state_hlcs, DeleteCheck, ForgottenFile, KnownDevice,
+    KnownState, FORGOTTEN_FILE, MAX_FORGOTTEN_DELETE_ENTRIES, SYNC_NEXT_KEY_ACCOUNT,
+};
+use super::limits::{MAX_SCAN_ENTRIES_PER_FOLDER, MAX_STATE_FORGOTTEN};
+use super::names::DEVICES_DIR;
+use super::state::{ForgottenDevice, OwnState, PublishedState, Usage};
+use super::store::{Accepted, AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor, SnapshotCache, SnapshotWriter, StateRead, StateStatus, Store};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
 use crate::vault::{SecretVault, VaultError};
 
@@ -281,6 +288,7 @@ impl SyncCore {
         let previous_id = inner.record.as_ref().map(|r| CheckedFolder { path: PathBuf::from(&r.path), kind: FolderKind::Unknown, pinned: false }.folder_id());
         if previous_id.as_deref() != Some(folder_id.as_str()) {
             remove_config_file(&self.path(super::service::OWN_FILE))?;
+            remove_config_file(&self.path(FORGOTTEN_FILE))?;
             inner.own = None;
             inner.accepted.clear();
             inner.snapshots.clear();
@@ -309,6 +317,9 @@ impl SyncCore {
         let mut inner = self.lock();
         remove_config_file(&self.path(FOLDER_FILE))?;
         remove_config_file(&self.path(OWN_FILE))?;
+        // Y-10 : les déclarations sont liées au dossier et à l'appareil ; reconstruites depuis son `state.ctx` si le même dossier est
+        // repris sous la même identité, jamais héritées par une nouvelle identité (« Associer de nouveau »).
+        remove_config_file(&self.path(FORGOTTEN_FILE))?;
         let loaded = Inner { loaded: true, ..Inner::default() };
         *inner = loaded;
         log::event("folder-forgotten", if erase_key { "key-erased" } else { "key-kept" });
@@ -586,6 +597,14 @@ impl SyncCore {
         let state: PublishedState = serde_json::from_value(state).map_err(|_| SyncError::new(SyncCode::BadName))?;
         let mut inner = self.lock();
         let (key, self_id, mut own, mut usage) = self.writable(&mut inner)?;
+        // Y-10 (section 1.4, lot Y4) : Rust est maître de `forgotten`. La liste du moteur doit être celle de `forgotten.json`, ou son
+        // préfixe déjà publié (Rust complète les déclarations confirmées et pas encore publiées, comme `pairedBy`) ; sinon refus.
+        let master = self.forgotten_master(&mut inner, &key, &self_id)?;
+        let Some(forgotten) = completed_forgotten(&state.forgotten, &master) else {
+            log::event("write-state-refused", "forgotten");
+            return fail(SyncCode::StateMismatch);
+        };
+        let state = PublishedState { forgotten, ..state };
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
         let digest = store.write_state(&mut own, &mut usage, self.options.nonce_max, &self_id, self.options.platform, sv, &state)?;
@@ -756,6 +775,179 @@ impl SyncCore {
         }
         log::event("key-imported", &kid);
         Ok(KeyImportResult { kid, paired_by, epoch })
+    }
+
+    // --------------------------------------------------------------------------------------------------------------------------
+    // Oubli d'un appareil (Y-10 ; ADR 0011 sections 11.1, 14.2 et 18)
+    // --------------------------------------------------------------------------------------------------------------------------
+
+    /// Liste `forgotten` dont Rust est maître : `forgotten.json` s'il correspond au dossier et à l'appareil liés, sinon reconstruite
+    /// depuis son propre `state.ctx` **authentifié** (un oubli ne décroît jamais), sinon vide.
+    fn forgotten_master(&self, inner: &mut Inner, key: &MasterKey, self_id: &str) -> SyncResult<Vec<ForgottenDevice>> {
+        let folder_id = self.require_folder(inner)?.folder_id.clone();
+        if let Ok(Some(file)) = read_config_file::<ForgottenFile>(&self.path(FORGOTTEN_FILE)) {
+            if file.folder_id == folder_id && file.device_id == self_id {
+                return Ok(file.entries);
+            }
+        }
+        let Inner { folder, accepted, .. } = &*inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let read = Store { fs: bound.fs.as_ref(), key, pin: false }.read_state(self_id, accepted);
+        Ok(match (read.status, read.state) {
+            (StateStatus::Ok, Some(state)) => state.forgotten,
+            _ => Vec::new(),
+        })
+    }
+
+    /// Réinitialisation en cours (section 14.3) : entrée `.next` au coffre, ou annonce `reset` lue dans un état authentifié.
+    fn reset_in_progress(&self, reads: &BTreeMap<String, StateRead>) -> SyncResult<bool> {
+        if self.vault.get(SYNC_NEXT_KEY_ACCOUNT).map_err(vault_error)?.map(Zeroizing::new).is_some() {
+            return Ok(true);
+        }
+        Ok(reads.values().any(|r| r.status == StateStatus::Ok && r.state.as_ref().is_some_and(|s| s.reset.is_some())))
+    }
+
+    /// États de tous les dossiers d'appareils de `devices/` (liste complète exigée, 10 000 entrées ; le plafond de 16 dossiers ne
+    /// s'applique pas) : anti-rejeu de `accepted`, rien n'est retenu. `None` : liste coupée.
+    fn read_all_states(store: &Store<'_>, accepted: &HashMap<String, Accepted>) -> SyncResult<Option<BTreeMap<String, StateRead>>> {
+        let listing = match store.fs.list(&[DEVICES_DIR], MAX_SCAN_ENTRIES_PER_FOLDER) {
+            Ok(listing) => listing,
+            Err(super::files::FsError::NotFound) => return Ok(Some(BTreeMap::new())),
+            Err(error) => return Err(SyncError::new(error.code())),
+        };
+        if listing.truncated {
+            return Ok(None);
+        }
+        let mut reads = BTreeMap::new();
+        for entry in listing.entries.iter().filter(|e| e.is_dir && is_uuid_v4(&e.name)) {
+            reads.insert(entry.name.clone(), store.read_state(&entry.name, accepted));
+        }
+        Ok(Some(reads))
+    }
+
+    /// Préconditions communes : dossier, clé, appareil lié ; renvoie la clé et l'appareil local.
+    fn forget_context(&self, inner: &mut Inner) -> SyncResult<(Arc<MasterKey>, String)> {
+        let bound = self.require_folder(inner)?;
+        bound.fs.start_cycle().map_err(|e| SyncError::new(e.code()))?;
+        let key = self.load_key(inner)?;
+        let self_id = Self::bound_device(inner).ok_or(SyncError::new(SyncCode::NotBound))?;
+        Ok((key, self_id))
+    }
+
+    /// Contrôles de `sync_device_forget` faits avant la boîte, puis de nouveau après elle (sous le verrou) : `Ok(None)` si l'appareil
+    /// est déjà oublié (idempotent, aucune boîte), sinon la déclaration à inscrire.
+    fn forget_declaration(&self, inner: &mut Inner, device_id: &str) -> SyncResult<Option<(ForgottenFile, ForgottenDevice)>> {
+        let (key, self_id) = self.forget_context(inner)?;
+        if device_id == self_id {
+            return fail(SyncCode::BadName);
+        }
+        let folder_id = self.require_folder(inner)?.folder_id.clone();
+        let master = self.forgotten_master(inner, &key, &self_id)?;
+        let own_max = inner.own.as_ref().and_then(|o| o.max_hlc.clone());
+        let Inner { folder, accepted, .. } = &*inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        let reads = Self::read_all_states(&store, accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
+        let ok: Vec<(&str, &PublishedState)> =
+            reads.iter().filter(|(_, r)| r.status == StateStatus::Ok).filter_map(|(id, r)| r.state.as_ref().map(|s| (id.as_str(), s))).collect();
+        if self.reset_in_progress(&reads)? {
+            return fail(SyncCode::StateMismatch);
+        }
+        let order = forgotten_by_states(ok.iter().copied());
+        // Un appareil oublié ne déclare plus rien (sa déclaration serait sans effet dans l'ordre total).
+        if order.contains_key(&self_id) {
+            return fail(SyncCode::StateMismatch);
+        }
+        if order.contains_key(device_id) || master.iter().any(|f| f.device_id == device_id) {
+            return Ok(None);
+        }
+        // Appareil inconnu : ni dossier dans `devices/`, ni cité dans un accusé authentifié.
+        if !reads.contains_key(device_id) && !ok.iter().any(|(_, s)| s.acks.contains_key(device_id)) {
+            return fail(SyncCode::BadName);
+        }
+        if master.len() >= MAX_STATE_FORGOTTEN {
+            return fail(SyncCode::TooLarge);
+        }
+        let own_state = ok.iter().find(|(id, _)| *id == self_id).map(|(_, s)| *s);
+        let seen = ok.iter().flat_map(|(_, s)| state_hlcs(s)).chain(master.iter().map(|f| f.at.as_str())).chain(own_max.as_deref());
+        let at = next_declaration_hlc(self.now(), seen, &self_id);
+        let entry = ForgottenDevice { device_id: device_id.to_owned(), at, last_ack: own_state.and_then(|s| s.acks.get(device_id).cloned()) };
+        let mut entries = master;
+        entries.push(entry.clone());
+        Ok(Some((ForgottenFile { folder_id, device_id: self_id, entries }, entry)))
+    }
+
+    /// `sync_device_forget` : refus avant toute boîte (`bad-name`, `not-configured`, `key-missing`, `not-bound`, `state-mismatch`,
+    /// `too-large`), appareil déjà oublié sans boîte, puis confirmation native (`not-foreground`, `rate-limited`, `consent-denied` : rien
+    /// n'est écrit), puis déclaration ajoutée à `sync/forgotten.json` (`.tmp` + renommage). Publiée par le prochain `sync_write_state`.
+    pub fn device_forget(&self, device_id: &str, owner: isize) -> SyncResult<()> {
+        if !is_uuid_v4(device_id) {
+            return fail(SyncCode::BadName);
+        }
+        if self.forget_declaration(&mut self.lock(), device_id)?.is_none() {
+            log::event("forget-already", device_id);
+            return Ok(());
+        }
+        self.consent.confirm_forget(owner)?;
+        let mut inner = self.lock();
+        // Contrôles refaits après la boîte : l'état a pu changer pendant qu'elle était ouverte.
+        let Some((file, _entry)) = self.forget_declaration(&mut inner, device_id)? else { return Ok(()) };
+        write_config_file(&self.path(FORGOTTEN_FILE), &serde_json::to_vec(&file).unwrap_or_default())?;
+        log::event("forget-declared", device_id);
+        Ok(())
+    }
+
+    /// `sync_forgotten_delete` : conditions recalculées depuis le dossier (section 14.2, (a) à (f)), puis suppression des noms stricts de
+    /// `devices/<device_id>/` (10 000 entrées au plus, `state.ctx` en dernier). Aucune boîte.
+    pub fn forgotten_delete(&self, device_id: &str) -> SyncResult<ForgottenDeletion> {
+        if !is_uuid_v4(device_id) {
+            return fail(SyncCode::BadName);
+        }
+        let mut inner = self.lock();
+        let (key, self_id) = self.forget_context(&mut inner)?;
+        if device_id == self_id {
+            return fail(SyncCode::BadName);
+        }
+        let master = self.forgotten_master(&mut inner, &key, &self_id)?;
+        let Inner { folder, accepted, .. } = &*inner;
+        let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+        let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false };
+        let Some(reads) = Self::read_all_states(&store, accepted)? else {
+            log::event("forgotten-delete-refused", "listing");
+            return fail(SyncCode::StateMismatch);
+        };
+        if self.reset_in_progress(&reads)? {
+            return fail(SyncCode::StateMismatch);
+        }
+        let ok_states = reads.values().filter(|r| r.status == StateStatus::Ok).filter_map(|r| r.state.as_ref());
+        let mut ids: BTreeSet<String> = cited_devices(ok_states);
+        ids.extend(reads.keys().cloned());
+        ids.extend(master.iter().map(|f| f.device_id.clone()));
+        let known: Vec<KnownDevice> = ids
+            .into_iter()
+            .map(|id| match reads.get(&id) {
+                Some(read) => KnownDevice {
+                    status: read.status,
+                    state: if read.status == StateStatus::Ok { read.state.as_ref().map(KnownState::from) } else { None },
+                    device_id: id,
+                },
+                None => KnownDevice { device_id: id, status: StateStatus::Missing, state: None },
+            })
+            .collect();
+        match forgotten_delete_check(device_id, &self_id, &known) {
+            DeleteCheck::Ready { .. } => {}
+            DeleteCheck::Waiting { device, code } => {
+                log::event("forgotten-delete-waiting", &device);
+                return fail(code);
+            }
+            DeleteCheck::Refused(code) => {
+                log::event("forgotten-delete-refused", code.as_str());
+                return fail(code);
+            }
+        }
+        let result = delete_forgotten_device_files(bound.fs.as_ref(), device_id, MAX_FORGOTTEN_DELETE_ENTRIES).map_err(|e| SyncError::new(e.code()))?;
+        log::event("forgotten-delete", &format!("{device_id} {} {}", result.deleted, if result.complete { "complete" } else { "more" }));
+        Ok(result)
     }
 
     // --------------------------------------------------------------------------------------------------------------------------
