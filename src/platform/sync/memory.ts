@@ -1406,10 +1406,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return registry && registry.folderId === f.id && registry.deviceId === self ? registry : null;
   };
 
-  /** États de tous les dossiers d'appareils (sans plafond de 16, anti-rejeu sans rien retenir). */
+  /** États de tous les dossiers d'appareils (sans plafond de 16) ; chaque état authentifié lu est retenu par l'anti-rejeu (Y-TECH-01, même règle que `read_all_states` de Rust). */
   const readAllStates = (f: MemorySyncFolder, kid: string): Map<DeviceId, StateRead> => {
     const reads = new Map<DeviceId, StateRead>();
-    for (const [name, dir] of f.devices) if (isSyncDeviceId(name)) reads.set(name, readState(name, dir, kid, false));
+    for (const [name, dir] of f.devices) if (isSyncDeviceId(name)) reads.set(name, readState(name, dir, kid, true));
     return reads;
   };
 

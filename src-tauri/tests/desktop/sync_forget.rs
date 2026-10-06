@@ -1153,7 +1153,9 @@ fn y_tech_01_cutoff_follows_an_ack_lowered_by_a_replacement_and_a_replayed_highe
     // Coupure recalculée sans mémoire : p_A ; condition (h) remplie par l'instantané de A.
     assert!(net.dev(DEV_A).d.core.forgotten_delete(DEV_X).unwrap().complete);
     assert!(net.files_of(DEV_X).is_empty());
-    // Un tiers remet l'ancien état de B (p_B) : rollback ; rien de plus n'est supprimé, X reste terminé.
+    // L'état de B lu par sync_forgotten_delete (sans scan entre-deux) fonde la suppression : il entre dans l'anti-rejeu persistant.
+    // Redémarrage de Rust chez A, puis un tiers remet l'ancien état de B (p_B) : rollback ; rien de plus n'est supprimé, X reste terminé.
+    net.dev_mut(DEV_A).d.restart();
     net.fs.put(&["devices", DEV_B, "state.ctx"], &old_b);
     let scan = net.dev(DEV_A).d.core.scan(&[]).unwrap();
     assert_eq!(scan.devices.iter().find(|d| d.device_id == DEV_B).unwrap().state_status, "rollback");

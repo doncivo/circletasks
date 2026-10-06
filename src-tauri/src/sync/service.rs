@@ -1059,7 +1059,7 @@ impl SyncCore {
         let forgotten: BTreeSet<String> = forget_order(&entries).into_keys().collect();
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store::new(bound.fs.as_ref(), key, false);
-        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+        let Some(reads) = Self::read_all_states(&store, &mut inner.accepted)? else {
             log::event("pairing-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
@@ -1322,7 +1322,7 @@ impl SyncCore {
         let next = self.active_next(inner)?;
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = store_for(bound, key, &next, false);
-        let reads = Self::read_all_states(&store, &inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
+        let reads = Self::read_all_states(&store, &mut inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
         let ok: Vec<(&str, &PublishedState)> = Self::ok_states(&reads);
         let candidates: Vec<ForgottenDevice> = ok.iter().flat_map(|(_, s)| s.forgotten.iter().cloned()).collect();
         let (entries, _) = learn_declarations(&[], &candidates, MAX_FORGOTTEN_ENTRIES);
@@ -1433,8 +1433,9 @@ impl SyncCore {
     }
 
     /// États de tous les dossiers d'appareils de `devices/` (liste complète exigée, 10 000 entrées ; le plafond de 16 dossiers ne
-    /// s'applique pas) : anti-rejeu de `accepted`, rien n'est retenu. `None` : liste coupée.
-    fn read_all_states(store: &Store<'_>, accepted: &HashMap<String, Accepted>) -> SyncResult<Option<BTreeMap<String, StateRead>>> {
+    /// s'applique pas) : anti-rejeu de `accepted` ; chaque état authentifié lu y est **retenu** (Y-TECH-01 : toute lecture authentifiée qui
+    /// fonde une décision met l'anti-rejeu à jour, sinon un ancien état remis ensuite passerait pour `ok`). `None` : liste coupée.
+    fn read_all_states(store: &Store<'_>, accepted: &mut HashMap<String, Accepted>) -> SyncResult<Option<BTreeMap<String, StateRead>>> {
         let listing = match store.fs.list(&[DEVICES_DIR], MAX_SCAN_ENTRIES_PER_FOLDER) {
             Ok(listing) => listing,
             Err(super::files::FsError::NotFound) => return Ok(Some(BTreeMap::new())),
@@ -1445,7 +1446,9 @@ impl SyncCore {
         }
         let mut reads = BTreeMap::new();
         for entry in listing.entries.iter().filter(|e| e.is_dir && is_uuid_v4(&e.name)) {
-            reads.insert(entry.name.clone(), store.read_state(&entry.name, accepted));
+            let read = store.read_state(&entry.name, accepted);
+            Store::remember(&entry.name, &read, accepted);
+            reads.insert(entry.name.clone(), read);
         }
         Ok(Some(reads))
     }
@@ -1482,7 +1485,7 @@ impl SyncCore {
         let next = self.active_next(inner)?;
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = store_for(bound, &key, &next, false);
-        let reads = Self::read_all_states(&store, &inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
+        let reads = Self::read_all_states(&store, &mut inner.accepted)?.ok_or(SyncError::new(SyncCode::StateMismatch))?;
         if self.reset_blocks_forget(inner, &reads, &self_id, device_id)? {
             log::event("forget-refused", "reset");
             return fail(SyncCode::StateMismatch);
@@ -1554,6 +1557,11 @@ impl SyncCore {
             log::event("forgotten-delete-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
+        // Y-TECH-01 : les états qui fondent la suppression entrent dans l'anti-rejeu persistant avant toute suppression (un ancien état
+        // remis ensuite, même après un redémarrage, est `rollback`).
+        if Self::absorb_accepted(&mut reg, accepted) {
+            self.save_registry(&reg)?;
+        }
         if self.reset_in_progress(&reads)? {
             return fail(SyncCode::StateMismatch);
         }
@@ -1708,7 +1716,7 @@ impl SyncCore {
         let forgotten: BTreeSet<String> = forget_order(&reg.entries).into_keys().collect();
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store::new(bound.fs.as_ref(), key, false);
-        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+        let Some(reads) = Self::read_all_states(&store, &mut inner.accepted)? else {
             log::event("epoch-open-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
@@ -1811,7 +1819,7 @@ impl SyncCore {
         // perdu sans gagnant (« relancez-la »), il est remplacé à la création.
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store::new(bound.fs.as_ref(), &key, false);
-        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+        let Some(reads) = Self::read_all_states(&store, &mut inner.accepted)? else {
             log::event("reset-refused", "listing");
             return fail(SyncCode::StateMismatch);
         };
@@ -2005,7 +2013,7 @@ impl SyncCore {
         let forgotten: BTreeSet<String> = order.keys().cloned().collect();
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = Store { fs: bound.fs.as_ref(), key: &key, pin: false, next: Some(NextKey { key: &next, epoch: &record.epoch }) };
-        let Some(reads) = Self::read_all_states(&store, &inner.accepted)? else {
+        let Some(reads) = Self::read_all_states(&store, &mut inner.accepted)? else {
             log::event("reset-pass-deferred", "listing");
             return Ok(Some(Self::view(&record, Vec::new(), false, false)));
         };

@@ -534,7 +534,7 @@ impl<'a> Store<'a> {
     }
 
     /// Retient l'état lu comme accepté.
-    fn remember(dev: &str, read: &StateRead, accepted: &mut HashMap<String, Accepted>) {
+    pub(crate) fn remember(dev: &str, read: &StateRead, accepted: &mut HashMap<String, Accepted>) {
         if let (Some(state), Some(digest)) = (&read.state, &read.digest) {
             if let Some(epoch) = EpochId::parse(&state.epoch) {
                 accepted.insert(dev.to_owned(), Accepted { epoch, seq: state.state_seq, digest: digest.clone(), head: RecordCursor { segment: state.head.segment, record: state.head.record } });
