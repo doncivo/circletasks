@@ -255,12 +255,6 @@ export interface SwitchOptions {
   readonly mode: 'replace' | 'merge';
   readonly knows?: ApplyContext['knows'];
   readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
-  /**
-   * Y-11 (§18 point 14) : appareils (oubliés retenus) dont la position est gardée telle quelle en (d) : leur accusé reste celui de
-   * l'époque où il a été lu (coupure), jamais remis au début de la nouvelle époque. **Fusion seulement** (ADR §20 point 3, « l'accusé
-   * suit la base ») : ignoré en remplacement, où la position sur un oublié devient `covers` de l'instantané (`positionAfterReplace`).
-   */
-  readonly keep?: ReadonlySet<DeviceId>;
 }
 
 /** Passe à l'époque `target` ; reprend à l'étape mémorisée. `uncovered` : instantané d'ouverture qui ne couvre pas un oublié retenu (Y-11). */
@@ -358,7 +352,7 @@ export async function switchEpoch(
       // l'époque visée » sur un appareil qui n'y a rien publié).
       const keep = !row.isSelf && row.epoch !== null && row.epoch !== target && options.mode === 'merge';
       if (keep) continue;
-      // Remplacement (ADR §9.1 (d), §20 point 3) : l'accusé suit la base, oubliés retenus et terminés compris (`keep` ignoré) ; position
+      // Remplacement (ADR §9.1 (d), §20 point 3) : l'accusé suit la base, oubliés retenus et terminés compris ; position
       // couverte par l'instantané (accusé hérité, §14.2), ou aucune ; jamais {`target`, 0, 0} sur un appareil qui n'y a rien publié.
       const replaced = !row.isSelf && options.mode === 'replace';
       await tx.sync.saveState(row.deviceId, replaced ? positionAfterReplace(row.stateEpoch, covers.get(row.deviceId as DeviceId), target) : { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });

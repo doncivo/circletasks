@@ -427,8 +427,6 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
-        // ADR §20 point 3 : accusés figés gardés en fusion seulement ; au remplacement, ils suivent la base.
-        ...(merge ? { keep: new Set(forgetView.order.keys()) } : {}),
       });
       if (switched !== 'done') {
         if (switched === 'cloud-pending') pending.add(`${target}/snapshot`);
