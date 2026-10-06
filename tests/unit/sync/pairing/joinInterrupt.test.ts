@@ -102,7 +102,7 @@ async function expectArrived(s: Scenario, b: SimDevice): Promise<void> {
 
 describe('arrivée interrompue à chaque écriture, reprise au même endroit (critère 13, QA)', () => {
   /** Écritures du premier cycle d'un nouvel appareil sans arrêt (mesure) ; chaque rang jusqu'à cette borne a son essai. */
-  const WRITES = 24; // 23 + l'entrée de départ de `sync_meta.join` (revue 1)
+  const WRITES = 23; // mesuré après la fusion de Y-04 (publisher.ts sans transaction tenue), entrée de départ de `sync_meta.join` comprise
 
   it('scénario : plusieurs tranches de lignes, et le premier cycle fait exactement WRITES écritures (sinon ajuster la borne)', async () => {
     const b = await newDevice(shared);

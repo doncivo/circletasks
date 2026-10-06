@@ -150,11 +150,12 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
    * précédente), repli « * » figé avant que le hlc de la ligne ne bouge, ligne entière remise dans la file (« + »).
    */
   const detachRow = async (t: SyncTable, column: string, id: string, rowHlc: Hlc): Promise<void> => {
-    const stamp = stamper.next();
     const clock = await db.select<{ hlc: string }>(
       `SELECT COALESCE((SELECT hlc FROM sync_field_clock WHERE table_name = ? AND row_id = ? AND field = ?), (SELECT hlc FROM sync_field_clock WHERE table_name = ? AND row_id = ? AND field = '*'), ?) AS hlc`,
       [t.name, id, column, t.name, id, rowHlc],
     );
+    // Tampon pris juste avant l'écriture, jamais avant une lecture (seconde revue de Y-04, point 2).
+    const stamp = stamper.next();
     await db.execute(`UPDATE ${t.name} SET ${column} = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE ${keyOf(t)} = ?`, [stamp.at, stamp.deviceId, stamp.hlc, id]);
     await db.execute("INSERT INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES (?, ?, '*', ?, NULL) ON CONFLICT (table_name, row_id, field) DO NOTHING", [t.name, id, rowHlc]);
     await upsertClocks(t, id, [{ field: column, hlc: stamp.hlc as Hlc, base: (clock[0]?.hlc ?? rowHlc) as Hlc }]);
@@ -205,7 +206,20 @@ export function createSyncRepository(db: SqlExecutor, stamper: WriteStamper): Sy
     async clearPublished(entries) {
       for (const entry of entries) {
         await db.execute('DELETE FROM sync_outbox WHERE seq = ?', [entry.seq]);
-        if (entry.field === '*') continue;
+        if (entry.field === '*') {
+          // Création publiée : un champ réécrit depuis la lecture (encore en file) a gardé une base nulle (le déclencheur reprend la base
+          // tant que « * » attend). Sa valeur remplace désormais celle de la création, dont l'horloge est celle de repli « * » (posée
+          // par le déclencheur à la première modification) : elle devient sa base. Sans cela, l'autre appareil verrait un faux conflit
+          // (Y-05 critère 4, défaut 1 de la QA de Y-05).
+          await db.execute(
+            `UPDATE sync_field_clock
+             SET base_hlc = (SELECT c.hlc FROM sync_field_clock c WHERE c.table_name = sync_field_clock.table_name AND c.row_id = sync_field_clock.row_id AND c.field = '*')
+             WHERE table_name = ? AND row_id = ? AND field NOT IN ('*', '+') AND base_hlc IS NULL
+               AND EXISTS (SELECT 1 FROM sync_outbox o WHERE o.table_name = sync_field_clock.table_name AND o.row_id = sync_field_clock.row_id AND o.field = sync_field_clock.field)`,
+            [entry.table, entry.rowId],
+          );
+          continue;
+        }
         // Champ réécrit depuis la lecture : sa prochaine publication remplace la valeur publiée, qui devient sa base.
         await db.execute(
           `UPDATE sync_field_clock SET base_hlc = ?

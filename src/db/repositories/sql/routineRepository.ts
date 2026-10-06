@@ -292,8 +292,10 @@ export function createRoutineLogRepository(db: SqlExecutor, stamper: WriteStampe
     },
 
     async markDone(routineId: RoutineId, date: LocalDate, doneAt: IsoDateTime, id: RoutineLogId) {
-      const stamp = stamper.next();
       const existing = await fetchByRoutineAndDate(routineId, date);
+      // Tampon pris juste avant l'écriture, jamais avant une lecture : une publication dont la coupure tomberait entre les deux
+      // retirerait cette écriture comme déjà publiée (seconde revue de Y-04, point 2).
+      const stamp = stamper.next();
       if (existing) {
         await db.execute(
           'UPDATE routine_log SET done_at = ?, deleted_at = NULL, updated_at = ?, device_id = ?, hlc = ? WHERE id = ?',
