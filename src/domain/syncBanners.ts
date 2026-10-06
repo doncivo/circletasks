@@ -45,7 +45,28 @@ export type DeviceTroubleCode = 'device-foreign' | 'device-corrupt' | 'device-ro
 export type ForgetTroubleCode = 'forget-failed' | 'forget-pending';
 /** Y-11 : réinitialisation en cours ou en échec (tant que la transition n'est pas terminée) ; rappel des 30 jours (appareils non réassociés). */
 export type ResetTroubleCode = 'reset-progress' | 'reset-reminder';
-export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode | ResetTroubleCode;
+/**
+ * Y-TECH-02 : avertissements du scan (jamais un blocage) : budget de nonces de la clé au-delà du seuil d'alerte (« réinitialisez la
+ * synchronisation »), dossier de plus de 1 Gio, plus de 16 dossiers d'appareil (les plus anciens ignorés), scan incomplet (dossier
+ * encombré). Du plus urgent au moins urgent.
+ */
+export const SYNC_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete'] as const;
+export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
+
+/** Avertissements d'un scan (`FolderScan`), dans l'ordre de `SYNC_WARNINGS`. */
+export function scanWarnings(scan: { readonly incomplete: boolean; readonly tooManyDevices: boolean; readonly folderLarge?: boolean | undefined; readonly nonceWarning?: boolean | undefined }): SyncWarningCode[] {
+  const on: Record<SyncWarningCode, boolean> = {
+    'nonce-budget': scan.nonceWarning === true,
+    'folder-large': scan.folderLarge === true,
+    'too-many-devices': scan.tooManyDevices,
+    'scan-incomplete': scan.incomplete,
+  };
+  return SYNC_WARNINGS.filter((code) => on[code]);
+}
+
+const isSyncWarning = (value: unknown): value is SyncWarningCode => (SYNC_WARNINGS as readonly unknown[]).includes(value);
+
+export type SyncTroubleCode = PhaseTroubleCode | 'state-unreadable' | 'join-failed' | DeviceTroubleCode | ForgetTroubleCode | ResetTroubleCode | SyncWarningCode;
 
 /**
  * Ordre d'urgence (D4) : le premier état actif de cette liste est montré, les autres comptent dans « (+N) ».
@@ -81,6 +102,8 @@ export const SYNC_TROUBLE_ORDER = [
   'forget-pending',
   // Y-11 : rappel des appareils pas encore réassociés après 30 jours (aucune action automatique).
   'reset-reminder',
+  // Y-TECH-02 : avertissements du scan, jamais un blocage (ordre de `SYNC_WARNINGS`).
+  ...SYNC_WARNINGS,
 ] as const satisfies readonly SyncTroubleCode[];
 
 /** Décision de bandeau d'une phase. `none` porte sa raison (critère 9 b : aucune phase sans décision explicite). */
@@ -204,6 +227,10 @@ export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice>
   readonly forget?: ForgetFacts | null | undefined;
   /** Y-11, facultatif. */
   readonly reset?: ResetFacts | null | undefined;
+  /** Y-TECH-02 : avertissements du dernier scan, facultatif. */
+  readonly warnings?: readonly SyncWarningCode[] | null | undefined;
+  /** Y-TECH-02 : une lecture de l'état local par le service a échoué (§19 point 7), facultatif. */
+  readonly stateUnreadable?: boolean | undefined;
 }
 
 /** Arrivée d'un nouvel appareil arrêtée par un échec (`sync_meta.join`, Y-06) : gardée par le moteur jusqu'à la réussite. */
@@ -239,7 +266,7 @@ export interface PersistedSyncFacts<D extends SyncBannerDevice = SyncBannerDevic
 }
 
 export type SyncTrouble<D extends SyncBannerDevice = SyncBannerDevice> =
-  | { readonly code: PhaseTroubleCode | 'state-unreadable' }
+  | { readonly code: PhaseTroubleCode | 'state-unreadable' | SyncWarningCode }
   | { readonly code: 'join-failed'; readonly join: JoinFailureFact }
   | { readonly code: DeviceTroubleCode; readonly device: D }
   | { readonly code: 'forget-failed'; readonly failure: NonNullable<ForgetFacts['failure']> }
@@ -292,7 +319,7 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
     troubles.push({ code: 'key-mismatch' });
     keyMismatch = true;
   }
-  if (persisted.readFailed) troubles.push({ code: 'state-unreadable' });
+  if (persisted.readFailed || shown.stateUnreadable === true) troubles.push({ code: 'state-unreadable' });
   if (persisted.join) troubles.push({ code: 'join-failed', join: persisted.join });
   for (const device of devices) {
     if (device.self) continue;
@@ -310,6 +337,8 @@ export function syncBannerFor<D extends SyncBannerDevice, S extends SyncBannerSt
   // Y-11 (critère 17) : réinitialisation en cours ou en échec, tant que la transition n'est pas terminée ; rappel des 30 jours.
   if (reset && reset.role !== 'required' && (reset.step !== 'superseded' || stoppedReset(reset)) && reset.step !== 'done') troubles.push({ code: 'reset-progress', reset });
   if (reset?.reminder) troubles.push({ code: 'reset-reminder', reset });
+  // Y-TECH-02 : avertissements du scan (une valeur inconnue, d'une version plus récente, est ignorée : ce n'est qu'un avertissement).
+  for (const code of new Set(shown.warnings ?? [])) if (isSyncWarning(code)) troubles.push({ code });
   troubles.sort((a, b) => rank(a.code) - rank(b.code));
 
   return {

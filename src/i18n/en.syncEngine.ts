@@ -56,6 +56,11 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     conflictsOne: '{count} conflict this week',
     conflictsMany: '{count} conflicts this week',
     noConflicts: 'No conflict this week',
+    sectionWarnings: 'WARNINGS',
+    warnNonceBudget: 'The sync key is nearing its usage limit: reset sync',
+    warnFolderLarge: 'The sync folder is over 1 GB: sync may slow down',
+    warnTooManyDevices: 'More than 16 devices in the sync folder: the oldest are ignored',
+    warnScanIncomplete: 'Cluttered sync folder: some files were not read',
     progress: 'Syncing: {done} of {total}',
   },
   restore: {
@@ -70,6 +75,8 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     resetFinish: 'A synchronization reset is in progress and a deletion more recent than this backup has already been permanently erased: finish it on the device that is resetting.',
     failed: 'The choice could not be applied ({reason}). Nothing was changed: you can try again.',
     failedReset: 'The choice was not applied: a synchronization reset is in progress. Nothing was changed.',
+    scanFailed: 'The sync folder could not be checked: “Apply this version on all my devices” will be offered once it can be reached.',
+    scanFailedNoOption: 'The sync folder could not be checked: try again once it can be reached.',
     backupWarning: 'This device is paired: you will be asked at the next sync',
   },
 };

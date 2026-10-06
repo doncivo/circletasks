@@ -5,6 +5,7 @@ import {
   CONSENT_MAX_SHOW,
   CONSENT_WINDOW_MS,
   FOLDER_STOP_BYTES,
+  FOLDER_WARN_BYTES,
   MAX_APPEND_CALL_BYTES,
   MAX_DEVICE_FOLDERS,
   MAX_IPC_PAGE_BYTES,
@@ -16,6 +17,7 @@ import {
   MAX_STATE_FILE_BYTES,
   MAX_STATE_FORGOTTEN,
   NONCE_MAX_RECORDS,
+  NONCE_WARN_RECORDS,
   PAIRING_CLOCK_TOLERANCE_MS,
   PAIRING_QR_PREFIX,
   PAIRING_VALIDITY_MS,
@@ -107,8 +109,8 @@ import { DEVICE_EXPIRY_MS } from '../../domain/sync/limits';
  * confirmations natives, bornes de la section 1.6, avec les mêmes codes d'erreur. Jamais utilisée dans l'app installée.
  *
  * Différences assumées avec Rust : aucun chiffrement (les enregistrements sont gardés en texte clair ; la taille sur disque est
- * calculée par `encryptedLineBytes`, bourrage compris) ; le `kid` est dérivé comme en Rust (HKDF-SHA256, Web Crypto) ; le codec de
- * référence et les vecteurs croisés arrivent avec les lots Y1 et Y2 (`tests/sim/syncCodec.ts`). Plusieurs plateformes peuvent
+ * calculée par `encryptedLineBytes`, bourrage compris) ; le `kid` est dérivé comme en Rust (HKDF-SHA256, Web Crypto). Le chiffrement
+ * réel est vérifié par le codec de référence et ses vecteurs croisés avec Rust (`tests/sim/syncCodec.ts`). Plusieurs plateformes peuvent
  * partager un même `MemorySyncFolder` (un « iCloud » qui propage tout immédiatement ; les retards se simulent par les crochets).
  */
 
@@ -942,11 +944,16 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         snapshots: snapshots.slice(0, Math.max(0, MAX_SCAN_ENTRIES_PER_FOLDER - segments.length)),
       });
     }
-    // Fichiers attendus et pas encore lisibles : `state.ctx`, puis ce que la tête authentifiée annonce (jamais au-delà).
+    // Fichiers attendus et pas encore lisibles : `state.ctx`, puis ce que la tête authentifiée annonce (jamais au-delà), plafonnés à
+    // 10 000 entrées, `incomplete` au-delà (même règle que `store.rs`, Y-TECH-02).
     const pending: { file: string; availability: FileAvailability }[] = [];
-    if (dir.state && dir.state.availability !== 'local') pending.push({ file: STATE_FILE, availability: dir.state.availability });
+    const push = (file: string, availability: FileAvailability): void => {
+      if (pending.length >= MAX_SCAN_ENTRIES_PER_FOLDER) incomplete = true;
+      else pending.push({ file, availability });
+    };
+    if (dir.state && dir.state.availability !== 'local') push(STATE_FILE, dir.state.availability);
     // Y-11 : `state.next.ctx` attendu seulement de l'appareil dont l'état présenté en vient.
-    if (read.fromNext === true && dir.nextState && dir.nextState.availability !== 'local') pending.push({ file: STATE_NEXT_FILE, availability: dir.nextState.availability });
+    if (read.fromNext === true && dir.nextState && dir.nextState.availability !== 'local') push(STATE_NEXT_FILE, dir.nextState.availability);
     const state = read.state;
     const epochDir = state ? dir.epochs.get(state.epoch) : undefined;
     if (state && state.head.segment >= 1) {
@@ -957,13 +964,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       for (let n = from; n <= state.head.segment; n += 1) {
         const file = epochDir?.segments.get(n);
         const availability: FileAvailability = file ? file.availability : 'cloud';
-        if (availability !== 'local') pending.push({ file: `${state.epoch}/${segmentFileName(n)}`, availability });
+        if (availability !== 'local') push(`${state.epoch}/${segmentFileName(n)}`, availability);
+        if (incomplete && pending.length >= MAX_SCAN_ENTRIES_PER_FOLDER) break;
       }
     }
     if (state && epochDir) {
       for (const [n, file] of [...epochDir.snapshots].sort(([a], [b]) => a - b)) {
         if (state.snapshot && n <= state.snapshot.seq && file.availability !== 'local') {
-          pending.push({ file: `${state.epoch}/${snapshotFileName(n)}`, availability: file.availability });
+          push(`${state.epoch}/${snapshotFileName(n)}`, file.availability);
         }
       }
     }
@@ -1029,6 +1037,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       totalBytes: folderBytes(f),
       tooManyDevices: dropped > 0,
       incomplete,
+      // Y-TECH-02 : avertissements (mêmes seuils que Rust) ; nonces : clé locale ou nouvelle clé d'une réinitialisation.
+      folderLarge: folderBytes(f) > FOLDER_WARN_BYTES,
+      nonceWarning: Math.max(sealed, sealedNext) > NONCE_WARN_RECORDS,
       forgotten,
       reset,
     };

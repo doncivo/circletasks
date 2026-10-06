@@ -1,3 +1,4 @@
+import type { SyncWarningCode } from '../../domain/syncBanners';
 import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatStamp, formatTime } from '../../i18n/format';
@@ -154,6 +155,20 @@ export function resetRequiredLine(reset: Pick<NonNullable<SyncStatus['reset']>, 
   const name = device ? deviceName(device, devices) : t('sync.forget.unseenName', { short: String(reset.by).slice(0, 8) });
   // §18 point 16 : perdue face à une restauration appliquée partout : rien à associer, à relancer.
   return reset.restore ? t('sync.reset.supersededRestore', { device: name }) : t('sync.reset.superseded', { device: name });
+}
+
+/** Y-TECH-02 : texte d'un avertissement du scan (bandeau et section AVERTISSEMENTS des détails, une seule formulation). */
+export function warningText(code: SyncWarningCode): string {
+  switch (code) {
+    case 'nonce-budget':
+      return t('sync.status.warnNonceBudget');
+    case 'folder-large':
+      return t('sync.status.warnFolderLarge');
+    case 'too-many-devices':
+      return t('sync.status.warnTooManyDevices');
+    case 'scan-incomplete':
+      return t('sync.status.warnScanIncomplete');
+  }
 }
 
 /** Libellé du statut d'un appareil (APPAREILS). */

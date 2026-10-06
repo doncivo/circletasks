@@ -58,6 +58,11 @@ export const syncEngineFr = {
     conflictsMany: '{count} conflits cette semaine',
     noConflicts: 'Aucun conflit cette semaine',
     progress: 'Synchronisation : {done} sur {total}',
+    sectionWarnings: 'AVERTISSEMENTS',
+    warnNonceBudget: 'La clé de synchronisation approche de sa limite d’usage : réinitialisez la synchronisation',
+    warnFolderLarge: 'Le dossier de synchro dépasse 1 Go : la synchronisation peut ralentir',
+    warnTooManyDevices: 'Plus de 16 appareils dans le dossier de synchro : les plus anciens sont ignorés',
+    warnScanIncomplete: 'Dossier de synchro encombré : certains fichiers n’ont pas été lus',
   },
   restore: {
     title: 'Restauration : que faire de la synchronisation ?',
@@ -72,6 +77,8 @@ export const syncEngineFr = {
       'Une réinitialisation de la synchronisation est en cours et une suppression plus récente que cette sauvegarde a déjà été effacée définitivement : terminez-la sur l’appareil qui réinitialise.',
     failed: 'Le choix n’a pas pu être appliqué ({reason}). Rien n’a été changé : vous pouvez réessayer.',
     failedReset: 'Le choix n’a pas été appliqué : une réinitialisation de la synchronisation est en cours. Rien n’a été changé.',
+    scanFailed: 'Le dossier de synchro n’a pas pu être vérifié : « Appliquer cette version sur tous mes appareils » sera proposé quand il sera joignable.',
+    scanFailedNoOption: 'Le dossier de synchro n’a pas pu être vérifié : réessayez quand il sera joignable.',
     backupWarning: 'Cet appareil est associé : le choix vous sera demandé à la prochaine synchro',
   },
 } as const;

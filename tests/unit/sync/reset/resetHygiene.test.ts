@@ -54,7 +54,8 @@ describe('aucun échec silencieux (critère 17)', () => {
     const engine = read('src/sync/engine.ts');
     const start = engine.indexOf('// Y-11 (§14.3, §18 point 2)');
     const block = engine.slice(start, engine.indexOf('const directive = resetDirective;'));
-    for (const body of catchBodies(block)) expect(body).toMatch(/return fail\(/);
+    // Y-TECH-02 : `failWith` (code réel et `stateUnreadable`) remplace `fail(syncErrorCodeOf(error))`.
+    for (const body of catchBodies(block)) expect(body).toMatch(/return fail(With)?\(/);
     const service = read('src/sync/service.ts');
     const run = service.slice(service.indexOf('const runReset = async'), service.indexOf('return service;', service.indexOf('const runReset = async')));
     for (const body of catchBodies(run)) expect(body.includes('recordResetFailure') || body.includes('dismissResetState'), body).toBe(true);

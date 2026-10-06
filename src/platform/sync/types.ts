@@ -11,7 +11,7 @@
 import type { ReintegrationFailure } from '../../domain/sync/compat';
 import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
 import type { RestoreOption } from '../../domain/sync/epoch';
-import type { SyncPhase as DomainSyncPhase } from '../../domain/syncBanners';
+import type { SyncPhase as DomainSyncPhase, SyncWarningCode } from '../../domain/syncBanners';
 import {
   isSyncErrorCode,
   type EpochId,
@@ -93,6 +93,10 @@ export interface FolderScan {
    * Champ absent de la section 11.2 : ajouté pour porter ce signal (écart à reporter dans l'ADR).
    */
   readonly incomplete: boolean;
+  /** Y-TECH-02 : dossier de plus de 1 Gio (`FOLDER_WARN_BYTES`), avertissement. Facultatif (anciens faux). */
+  readonly folderLarge?: boolean;
+  /** Y-TECH-02 : budget de nonces de la clé au-delà du seuil d'alerte (`NONCE_WARN_RECORDS`), avertissement. Facultatif (anciens faux). */
+  readonly nonceWarning?: boolean;
   /** Y-10 (ADR 0011 §11.2, §18 points 3 à 6) : registre de l'oubli de Rust après fusion des déclarations lues. */
   readonly forgotten: ForgottenRegistryView;
   /** Y-11 (ADR 0011 §14.3, §18 point 2) : réinitialisation en cours sur cet appareil, vue par Rust ; null : aucune. Facultatif (anciens faux). */
@@ -387,7 +391,7 @@ export interface ForgottenDeleteResult {
  * Y-11) s'y ajoute, et la compilation échoue tant que son bandeau (`phaseBanner`) et sa ligne de Réglages (`statusLine`) manquent.
  */
 export type SyncPhase = DomainSyncPhase;
-export { SYNC_PHASES } from '../../domain/syncBanners';
+export { SYNC_PHASES, SYNC_WARNINGS, type SyncWarningCode } from '../../domain/syncBanners';
 
 export type DeviceSyncStatus = 'active' | 'expired' | 'newer-major' | 'clock-ahead' | 'corrupt' | 'foreign' | 'rollback' | 'forgotten';
 
@@ -447,6 +451,13 @@ export interface SyncStatus {
    * (`sync_meta.resetState`), lue à la fin de chaque cycle ; absent ou null : rien. Facultatif.
    */
   readonly reset?: SyncResetStatus | null;
+  /**
+   * Y-TECH-02 : avertissements du dernier scan (budget de nonces, dossier de plus de 1 Gio, plus de 16 dossiers, scan incomplet), jamais
+   * un blocage ; gardés quand un cycle échoue avant le scan. Absent : aucun. Facultatif.
+   */
+  readonly warnings?: readonly SyncWarningCode[];
+  /** Y-TECH-02 (§19 point 7) : une lecture de l'état local de la synchro a échoué (`state-unreadable`) ; absent : non. Facultatif. */
+  readonly stateUnreadable?: boolean;
 }
 
 /** Y-11 : étape de la réinitialisation (`sync_meta.resetState`, critère 17). */
@@ -579,9 +590,10 @@ export interface RestoreContext {
   readonly options: readonly RestoreOption[];
   /**
    * Y-11 (§18 point 16) : réinitialisation en cours : « Appliquer partout » retiré (`reset-in-progress`) ; dans le cas de la règle 4, aucune
-   * option (`reset-finish` : « terminez-la sur l'appareil qui réinitialise »).
+   * option (`reset-finish` : « terminez-la sur l'appareil qui réinitialise »). Y-TECH-02 : `scan-failed` : le dossier n'a pas pu être
+   * vérifié (réinitialisation, purge plus récente) : « Appliquer partout » retiré par prudence.
    */
-  readonly notice?: 'reset-in-progress' | 'reset-finish' | null;
+  readonly notice?: 'reset-in-progress' | 'reset-finish' | 'scan-failed' | null;
   /** Dernier choix refusé ou en échec (code, heure, option), gardé jusqu'à un choix appliqué (aucun échec silencieux, QA-1). */
   readonly failure?: RestoreFailure | null;
 }

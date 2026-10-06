@@ -1,5 +1,6 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isDeviceAck, isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
+import { parseStoredAcks } from '../db/repositories/syncRepository';
+import { isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
 import { PAGE_ROWS } from '../domain/sync/limits';
 import { hlcDevice } from '../domain/sync/parse';
 import { compareAckPositions, cutoff, forgetOrder, forgottenDeleteCheck, publishedEpochs, seenDevices, withoutStaleAcks, type ForgetKnownDevice, type ForgetVerdict, type SnapshotEndRead } from '../domain/sync/retention';
@@ -386,15 +387,8 @@ export async function prepareRejoin(deps: SyncDeps, newId: DeviceId): Promise<Re
     const forgotten = new Set(rows.filter((r) => r.status === 'forgotten').map((r) => r.deviceId));
     const ackers = rows
       .filter((r) => !r.isSelf && !forgotten.has(r.deviceId))
-      .map((r) => {
-        const acks = new Map<DeviceId, DeviceAck>();
-        try {
-          for (const [id, ack] of Object.entries(JSON.parse(r.lastAcks) as Record<string, unknown>)) if (isDeviceAck(ack)) acks.set(id as DeviceId, ack);
-        } catch {
-          // accusés illisibles : aucun (la coupure ne peut que baisser : plus d'écritures republiées, jamais moins)
-        }
-        return { deviceId: r.deviceId as DeviceId, acks };
-      });
+      // Accusés illisibles : `state-unreadable`, « Associer de nouveau » en échec visible (jamais une coupure tirée d'accusés perdus).
+      .map((r) => ({ deviceId: r.deviceId as DeviceId, acks: parseStoredAcks(r.lastAcks, 'sync_state.last_acks', deps.logger) }));
     const cut = cutoff(self, ackers)?.hlc ?? null;
     let moved = 0;
     await guarded(deps.data, async (tx) => {

@@ -1,4 +1,6 @@
 import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories';
+import { parseStoredAcks, type StoredStateLog } from '../db/repositories/syncRepository';
+import { defaultSyncLogger } from './log';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { BLOCKED, canPurgeDeletion, coversForgotten, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
 import type { ForgetCoverage } from './eligible';
@@ -6,7 +8,7 @@ import { revivedDone } from './forget';
 import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
-import type { DeviceScan } from '../platform/sync/types';
+import { syncErrorCodeOf, type DeviceScan } from '../platform/sync/types';
 import { applyOps } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
@@ -20,18 +22,9 @@ import { purgeRows } from './purge';
  */
 
 /** Appareils connus (lignes de `sync_state`) sous la forme attendue par `retention.ts`. */
-export function knownDevices(rows: readonly SyncStateRow[]): KnownDevice[] {
-  return rows
-    .filter((row) => !row.isSelf)
-    .map((row) => {
-      const acks = new Map<DeviceId, DeviceAck>();
-      try {
-        for (const [id, ack] of Object.entries(JSON.parse(row.lastAcks) as Record<string, unknown>)) if (isDeviceAck(ack)) acks.set(id as DeviceId, ack);
-      } catch {
-        // accusés illisibles : aucun
-      }
-      return { deviceId: row.deviceId as DeviceId, status: row.status, lastSeenHlc: row.lastSeenHlc, acks };
-    });
+export function knownDevices(rows: readonly SyncStateRow[], log: StoredStateLog): KnownDevice[] {
+  // Accusés illisibles : `state-unreadable` (jamais « aucun » : une purge ne doit pas se fonder sur un accusé perdu).
+  return rows.filter((row) => !row.isSelf).map((row) => ({ deviceId: row.deviceId as DeviceId, status: row.status, lastSeenHlc: row.lastSeenHlc, acks: parseStoredAcks(row.lastAcks, 'sync_state.last_acks', log) }));
 }
 
 /**
@@ -39,10 +32,10 @@ export function knownDevices(rows: readonly SyncStateRow[]): KnownDevice[] {
  * appareil actif a des écritures publiées non lues (curseur avant sa tête dans `sync_state`, état invalide) : une suppression lue par
  * tous peut avoir été suivie d'une restauration encore dans le nuage.
  */
-export async function currentPurgeHorizon(repos: Repositories, self: DeviceId, nowMs: number): Promise<PurgeHorizon> {
+export async function currentPurgeHorizon(repos: Repositories, self: DeviceId, nowMs: number, log: StoredStateLog = defaultSyncLogger): Promise<PurgeHorizon> {
   const rows = await repos.sync.getStates();
   // Y-10 (§18 point 12) : un terminé dont l'oubli est annulé bloque toute purge, au démarrage aussi.
-  const horizon = purgeHorizon(knownDevices(rows), self, nowMs, await revivedDone(repos));
+  const horizon = purgeHorizon(knownDevices(rows, log), self, nowMs, await revivedDone(repos));
   if (horizon.kind !== 'limited') return horizon;
   const active = new Set<string>(horizon.readers.map((r) => r.deviceId));
   const unread = rows.some(
@@ -152,7 +145,7 @@ function ownSnapshotEligible(covers: Record<string, unknown> | undefined, covera
 export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise<void> {
   const { data, platform, logger } = deps;
   const nowMs = deps.clock.nowMs();
-  const devices = knownDevices(input.rows);
+  const devices = knownDevices(input.rows, logger);
   const horizon = purgeHorizon(devices, deps.deviceId, nowMs, input.revived ?? []);
 
   // Lignes supprimées : 30 jours ET lues par tous les appareils actifs.
@@ -172,16 +165,26 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
     segmentPurgeable(n, { headSegment: input.head.segment, coveredSegment: covered, readers, self: deps.deviceId, lastWriteMs: times[`${input.epoch}/${String(n)}`] ?? null, nowMs }),
   );
   if (removable.length > 0) {
-    await platform.deleteOwn(removable.map((n) => ({ epoch: input.epoch, kind: 'j' as const, n }))).catch((error: unknown) => logger.log('delete-own-failed', { code: String((error as { code?: string }).code ?? 'io') }));
-    logger.log('segments-purged', { count: removable.length });
+    try {
+      await platform.deleteOwn(removable.map((n) => ({ epoch: input.epoch, kind: 'j' as const, n })));
+      logger.log('segments-purged', { count: removable.length });
+    } catch (error) {
+      // Journalisé (aucun échec silencieux) ; retentée au cycle suivant.
+      logger.log('delete-own-failed', { kind: 'j', code: syncErrorCodeOf(error) });
+    }
   }
 
   // Anciennes époques : supprimées quand tous les appareils actifs annoncent l'époque courante.
   const older = (input.ownScan?.epochs ?? []).filter((e) => compareEpochs(e.epoch, input.epoch) < 0);
   const allMoved = readers.every((r) => input.accepted.get(r.deviceId)?.epoch === input.epoch);
   if (older.length > 0 && allMoved && input.keepOldEpochs !== true) {
-    await platform.deleteOwn(older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const }))).catch(() => 0);
-    logger.log('old-epochs-deleted', { count: older.length });
+    try {
+      await platform.deleteOwn(older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const })));
+      logger.log('old-epochs-deleted', { count: older.length });
+    } catch (error) {
+      // Journalisé (aucun échec silencieux) ; retentée au cycle suivant.
+      logger.log('delete-own-failed', { kind: 'epoch', code: syncErrorCodeOf(error) });
+    }
   }
 
   // Plafonds (section 1.6) ; abandons journalisés sans contenu.

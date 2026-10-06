@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
-import { SYNC_TROUBLE_ORDER } from '../../domain/syncBanners';
+import { SYNC_TROUBLE_ORDER, SYNC_WARNINGS } from '../../domain/syncBanners';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import type { SyncDeviceStatus, SyncResetStatus, SyncStatus } from '../../platform/sync/types';
@@ -74,7 +74,8 @@ describe('ordre (ADR 0011 §19 point 2, emplacements réservés à Y-11)', () =>
   it('à associer en tête (après « oublié ») ; en cours ou en échec après l’arrivée en échec ; rappel des 30 jours à la fin', () => {
     expect(SYNC_TROUBLE_ORDER.slice(0, 2)).toEqual(['forgotten', 'reset-required']);
     expect(SYNC_TROUBLE_ORDER.indexOf('reset-progress')).toBe(SYNC_TROUBLE_ORDER.indexOf('join-failed') + 1);
-    expect(SYNC_TROUBLE_ORDER.at(-1)).toBe('reset-reminder');
+    // Y-TECH-02 : seuls les avertissements du scan (jamais un blocage) viennent après le rappel.
+    expect(SYNC_TROUBLE_ORDER.filter((code) => !(SYNC_WARNINGS as readonly string[]).includes(code)).at(-1)).toBe('reset-reminder');
   });
 });
 

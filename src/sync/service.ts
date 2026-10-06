@@ -1,4 +1,5 @@
 import type { DataAccess } from '../db/repositories';
+import { isSyncStateUnreadable } from '../db/repositories/syncRepository';
 import type { Clock } from '../domain/clock';
 import type { HlcClock } from '../domain/hlc';
 import { parseReintegrationFailure, REINTEGRATION_FAILURE_META, type ReintegrationFailure } from '../domain/sync/compat';
@@ -94,7 +95,8 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       try {
         listener(change);
       } catch {
-        // un abonné en échec n'arrête pas la synchro
+        // Un abonné en échec n'arrête ni la synchro ni les autres abonnés ; journalisé comme `publish` (code seulement, jamais le message).
+        deps.logger.log('remote-listener-failed', { code: 'io' });
       }
     }
   };
@@ -106,34 +108,32 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     return rest;
   };
 
+  /**
+   * Lecture de l'état local (`sync_meta`, `conflict_log`) en échec (base occupée, valeur illisible) : journalisée, valeur précédente
+   * gardée et `state-unreadable` posé (§19 point 7) jusqu'à la fin de cycle suivante dont toutes les lectures réussissent.
+   */
+  const readFailed = (what: string, error: unknown): void => {
+    deps.logger.log('state-read-failed', { what, code: syncErrorCodeOf(error) });
+  };
+
   const finish = async (result: CycleResult): Promise<void> => {
-    let conflicts = status.conflictsThisWeek;
-    try {
-      conflicts = await options.data.repos.sync.countConflictsSince(new Date(options.clock.nowMs() - WEEK_MS).toISOString() as IsoDateTime);
-    } catch {
-      // base occupée : valeur précédente
-    }
+    let unreadable = false;
+    const read = async <T>(what: string, run: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await run();
+      } catch (error) {
+        readFailed(what, error);
+        unreadable = true;
+        return undefined;
+      }
+    };
+    const conflicts = (await read('conflicts', () => options.data.repos.sync.countConflictsSince(new Date(options.clock.nowMs() - WEEK_MS).toISOString() as IsoDateTime))) ?? status.conflictsThisWeek;
     // Y-07 (exigence d'Ali) : échec de réintégration du dernier démarrage, gardé dans sync_meta par la réintégration.
-    let reintegrationFailure: ReintegrationFailure | null | undefined;
-    try {
-      reintegrationFailure = parseReintegrationFailure(await options.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META));
-    } catch {
-      // base occupée : valeur précédente
-    }
+    const reintegrationFailure: ReintegrationFailure | null | undefined = await read('reintegration', async () => parseReintegrationFailure(await options.data.repos.sync.getMeta(REINTEGRATION_FAILURE_META)));
     // Y-10 (exigence d'Ali) : échec d'un oubli et suppressions en attente, gardés dans sync_meta jusqu'à leur résolution.
-    let forget: SyncForgetStatus | null | undefined;
-    try {
-      forget = await readForgetStatus(options.data.repos);
-    } catch {
-      // base occupée : valeur précédente
-    }
+    const forget: SyncForgetStatus | null | undefined = await read('forget', () => readForgetStatus(options.data.repos));
     // Y-11 (exigence d'Ali) : réinitialisation en cours, en échec, à réassocier ou terminée, gardée dans sync_meta.
-    let reset: SyncResetStatus | null | undefined;
-    try {
-      reset = await readResetStatus(options.data.repos, options.clock.nowMs());
-    } catch {
-      // base occupée : valeur précédente
-    }
+    const reset: SyncResetStatus | null | undefined = await read('reset', () => readResetStatus(options.data.repos, options.clock.nowMs()));
     publish(
       statusFromFacts(withoutCycleStart(status), result, {
         folderLabel: result.folderLabel ?? status.folderLabel,
@@ -143,6 +143,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         ...(reintegrationFailure === undefined ? {} : { reintegrationFailure }),
         ...(forget === undefined ? {} : { forget }),
         ...(reset === undefined ? {} : { reset }),
+        stateUnreadable: unreadable || result.stateUnreadable === true,
       }),
     );
   };
@@ -153,8 +154,10 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const reset = await readResetStatus(options.data.repos, options.clock.nowMs());
       const { reset: _previous, ...rest } = status;
       publish(reset ? { ...rest, reset } : rest);
-    } catch {
-      // base occupée : l'état sera relu à la fin du prochain cycle
+    } catch (error) {
+      // Valeur précédente gardée, `state-unreadable` visible aussitôt ; relue à la fin du prochain cycle.
+      readFailed('reset', error);
+      publish({ ...status, stateUnreadable: true });
     }
   };
 
@@ -164,8 +167,10 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const forget = await readForgetStatus(options.data.repos);
       const { forget: _previous, ...rest } = status;
       publish(forget ? { ...rest, forget } : rest);
-    } catch {
-      // base occupée : l'état sera relu à la fin du prochain cycle
+    } catch (error) {
+      // Valeur précédente gardée, `state-unreadable` visible aussitôt ; relue à la fin du prochain cycle.
+      readFailed('forget', error);
+      publish({ ...status, stateUnreadable: true });
     }
   };
 
@@ -188,10 +193,12 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       await finish(result);
       return result;
     } catch (error) {
-      deps.logger.log('cycle-crashed', { code: 'io' });
-      publish({ ...before, phase: 'error', errorCode: 'io' });
-      void error;
-      return { outcome: 'failed', errorCode: 'io', pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false };
+      // Code réel de l'erreur (`io` seulement à défaut) ; une valeur stockée illisible pose aussi `state-unreadable`.
+      const code = syncErrorCodeOf(error);
+      const unreadable = isSyncStateUnreadable(error);
+      deps.logger.log('cycle-crashed', { code });
+      publish({ ...before, phase: 'error', errorCode: code, ...(unreadable ? { stateUnreadable: true } : {}) });
+      return { outcome: 'failed', errorCode: code, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false, ...(unreadable ? { stateUnreadable: true } : {}) };
     } finally {
       clearTimer(timer);
     }
@@ -224,7 +231,11 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       .run()
       .then(
         () => undefined,
-        () => undefined,
+        (error: unknown) => {
+          // Action en échec (lecture ou écriture de l'état local hors cycle) : journalisée et visible (`state-unreadable`).
+          deps.logger.log('action-failed', { kind, code: syncErrorCodeOf(error) });
+          publish({ ...status, stateUnreadable: true });
+        },
       )
       .finally(() => {
         current = null;

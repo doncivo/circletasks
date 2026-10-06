@@ -2,7 +2,7 @@ import { SYNC_FORMAT_MAJOR, compareEpochs, isSyncErrorCode, type DeviceAck, type
 import { folderEpoch, maxEpoch, nextEpoch, openingCover, resetWinner, restoreCandidates, restoreOptions, type OpenedEpoch, type ResetCandidate, type RestoreOption } from '../domain/sync/epoch';
 import { forgetOrder } from '../domain/sync/retention';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
-import type { FolderScan, KeyStatus, RestoreContext, RestoreFailure, RestoreMarker, SyncErrorCode } from '../platform/sync/types';
+import { syncErrorCodeOf, type FolderScan, type KeyStatus, type RestoreContext, type RestoreFailure, type RestoreMarker, type SyncErrorCode } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
 import { positionAfterReplace } from './positions';
@@ -46,18 +46,22 @@ export function resetInProgress(scan: FolderScan, key: Pick<KeyStatus, 'kid' | '
 export async function restoreContext(deps: SyncDeps, marker: RestoreMarker): Promise<RestoreContext> {
   let horizons: (Hlc | null)[] = [];
   let inReset = false;
+  let unchecked = false;
   try {
     const scan = await deps.platform.scan({ keep: [] });
     horizons = scan.devices.filter((d) => d.stateStatus === 'ok' && d.state).map((d) => (d.state as PublishedDeviceState).purgeHorizon);
     inReset = resetInProgress(scan, await deps.platform.key.status(), deps.deviceId);
-  } catch {
-    // dossier injoignable : les horizons connus en base suffisent ; Rust refuse de toute façon une époque pendant une réinitialisation
+  } catch (error) {
+    // Dossier injoignable : horizons de la base seulement, réinitialisation inconnue. Journalisé, et « Appliquer partout » retiré par
+    // prudence (réinitialisation ou purge plus récente non vérifiée) ; la fenêtre le dit (`scan-failed`).
+    deps.logger.log('restore-scan-failed', { code: syncErrorCodeOf(error) });
+    unchecked = true;
   }
   for (const row of await deps.data.repos.sync.getStates()) horizons.push(row.purgeHorizon);
   horizons.push(await readJson<Hlc>(deps.data.repos, META.purgeHorizon));
   const all = restoreOptions(marker.backupTakenAt, horizons);
-  const options = inReset ? all.filter((o) => o !== 'apply-everywhere') : all;
-  const notice = inReset ? (options.length > 0 ? 'reset-in-progress' : 'reset-finish') : null;
+  const options = inReset || unchecked ? all.filter((o) => o !== 'apply-everywhere') : all;
+  const notice = unchecked ? 'scan-failed' : inReset ? (options.length > 0 ? 'reset-in-progress' : 'reset-finish') : null;
   return { marker, options, notice, failure: await readRestoreFailure(deps) };
 }
 

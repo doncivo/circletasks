@@ -1,4 +1,6 @@
 import type { Repositories } from '../db/repositories';
+import { parseStoredJson, type StoredStateLog } from '../db/repositories/syncRepository';
+import { defaultSyncLogger } from './log';
 
 /** Clés de `sync_meta` (état local du moteur, jamais publié). */
 export const META = {
@@ -26,14 +28,11 @@ export const META = {
   resume: 'resume',
 } as const;
 
-export async function readJson<T>(repos: Repositories, key: string): Promise<T | null> {
+/** Valeur JSON de `sync_meta` ; absente : null ; illisible : `SyncStateUnreadableError` journalisée (jamais lue comme absente). */
+export async function readJson<T>(repos: Repositories, key: string, log: StoredStateLog = defaultSyncLogger): Promise<T | null> {
   const raw = await repos.sync.getMeta(key);
   if (raw === null) return null;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return null;
-  }
+  return parseStoredJson(raw, `sync_meta.${key}`, log) as T;
 }
 
 export async function writeJson(repos: Repositories, key: string, value: unknown): Promise<void> {

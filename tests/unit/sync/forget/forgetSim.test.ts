@@ -324,7 +324,8 @@ describe('aucun échec silencieux : chemins d’erreur de forget.ts (critère 15
       }
       blocks.push(source.slice(start, i - 1));
     }
-    expect(blocks.length).toBeGreaterThanOrEqual(5);
+    // Y-TECH-02 : le catch « accusés illisibles : aucun » a disparu (analyse unique du repository, `state-unreadable`).
+    expect(blocks.length).toBeGreaterThanOrEqual(4);
     for (const body of blocks) {
       const handled = /recordFailure|kind: 'failed'|kind: 'cancelled'|throw |return \{ kind/.test(body) || /accusés illisibles/.test(body);
       expect(handled, body).toBe(true);

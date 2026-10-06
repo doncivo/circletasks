@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
-import { SYNC_TROUBLE_ORDER } from '../../domain/syncBanners';
+import { SYNC_TROUBLE_ORDER, SYNC_WARNINGS } from '../../domain/syncBanners';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
@@ -72,7 +72,8 @@ describe('ordre (ADR 0011 §19, emplacements réservés à Y-10)', () => {
   it('« oublié » en tête ; échec d’oubli puis suppression en attente à la fin', () => {
     expect(SYNC_TROUBLE_ORDER[0]).toBe('forgotten');
     // Y-11 : rappel des 30 jours après les états de Y-10 (§19 point 2).
-    expect(SYNC_TROUBLE_ORDER.slice(-3)).toEqual(['forget-failed', 'forget-pending', 'reset-reminder']);
+    // Y-TECH-02 : seuls les avertissements du scan (jamais un blocage) viennent après.
+    expect(SYNC_TROUBLE_ORDER.filter((code) => !(SYNC_WARNINGS as readonly string[]).includes(code)).slice(-3)).toEqual(['forget-failed', 'forget-pending', 'reset-reminder']);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
+import { isSyncStateUnreadable, parseStoredAcks, type StoredStateLog } from '../db/repositories/syncRepository';
+import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
@@ -21,6 +22,7 @@ import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
 import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish, openResetEpoch, recordResetFailure, republishWithoutNotice, resetActive, resetLagging, type ResetDirective } from './reset';
 import type { CycleFacts } from './status';
+import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
 
 /**
  * Cycle de synchronisation (ADR 0011, section 10.2 ; Y-02 critère 3) : 0 préconditions, 1 `scan({ keep })`, 2 règle 1, 3 époque,
@@ -57,17 +59,6 @@ const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [],
 const ZERO: RecordCursor = { segment: 0, record: 0 };
 
 export const iso = (ms: number): IsoDateTime => new Date(ms).toISOString() as IsoDateTime;
-
-function parseAcks(json: string): Map<DeviceId, DeviceAck> {
-  const out = new Map<DeviceId, DeviceAck>();
-  try {
-    const value = JSON.parse(json) as Record<string, unknown>;
-    for (const [id, ack] of Object.entries(value)) if (isDeviceAck(ack)) out.set(id as DeviceId, ack);
-  } catch {
-    // accusés illisibles : aucun
-  }
-  return out;
-}
 
 function acksToJson(acks: ReadonlyMap<DeviceId, DeviceAck>): string {
   const out: Record<string, DeviceAck> = {};
@@ -195,7 +186,25 @@ async function resolveInflight(deps: SyncDeps, writeOwnState: (head: DeviceAck) 
   deps.logger.log('inflight-resolved', { appended: ok });
 }
 
+/**
+ * Un cycle (voir le module). Y-TECH-02 : les avertissements du scan sont joints au résultat dès que le scan a réussi (même si le cycle
+ * échoue ensuite) ; une valeur stockée illisible (`SyncStateUnreadableError`) donne `stateUnreadable` (§19 point 7), jamais « aucune ».
+ */
 export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions = {}): Promise<CycleResult> {
+  const seen: { warnings?: SyncWarningCode[] } = {};
+  let result: CycleResult;
+  try {
+    result = await cycleSteps(deps, hooks, options, seen);
+  } catch (error) {
+    // Lecture hors des étapes gardées : seule l'illisibilité est convertie ici ; toute autre erreur remonte au service (code réel).
+    if (!isSyncStateUnreadable(error)) throw error;
+    deps.logger.log('cycle-failed', { code: 'io', unreadable: true });
+    result = { ...EMPTY, outcome: 'failed', errorCode: 'io', stateUnreadable: true };
+  }
+  return seen.warnings ? { ...result, warnings: seen.warnings } : result;
+}
+
+async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions, seen: { warnings?: SyncWarningCode[] }): Promise<CycleResult> {
   const { platform, data, deviceId: self, logger } = deps;
   const repos = data.repos;
   let worked = false;
@@ -207,6 +216,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     logger.log('cycle-failed', { code });
     return { ...EMPTY, ...extra, outcome: 'failed', errorCode: code, worked };
   };
+  /** Échec d'une étape : code réel, et `stateUnreadable` pour une valeur stockée illisible. */
+  const failWith = (error: unknown, extra: Partial<CycleResult> = {}): CycleResult => fail(syncErrorCodeOf(error), isSyncStateUnreadable(error) ? { ...extra, stateUnreadable: true } : extra);
 
   // 0. Préconditions.
   if (!platform.available()) return { ...EMPTY, outcome: 'not-configured' };
@@ -237,7 +248,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     if (!options.ignoreMarker && (await platform.restoreMarker.get())) return { ...EMPTY, folderLabel, folderKind, outcome: 'restore-choice' };
     await platform.bindDevice(self);
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+    return failWith(error, { folderLabel, folderKind });
   }
 
   // 1. scan.
@@ -246,8 +257,10 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   try {
     scan = await platform.scan({ keep: [...known.keys()].filter((id) => id !== self) as DeviceId[] });
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+    return failWith(error, { folderLabel, folderKind });
   }
+  seen.warnings = scanWarnings(scan);
+  if (seen.warnings.length > 0) logger.log('scan-warnings', { codes: seen.warnings.join(',') });
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
   const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries));
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
@@ -259,7 +272,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
   try {
     forgetView = await evaluateForget(deps, { registry: scan.forgotten, rows: await repos.sync.getStates(), previousRows: [...known.values()] });
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+    return failWith(error, { folderLabel, folderKind });
   }
   if (forgetView.selfForgotten) {
     logger.log('forgotten-self', { by: forgetView.order.get(self)?.by ?? null });
@@ -282,7 +295,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       return { ...EMPTY, outcome: 'reset-required', folderLabel, folderKind, keyMismatch: false, devices: await deviceStatuses(repos, self, accepted, deps.sv), pendingFiles: [...pending] };
     }
   } catch (error) {
-    return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+    return failWith(error, { folderLabel, folderKind });
   }
   const directive = resetDirective;
 
@@ -425,7 +438,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
       const merge = inReset && (directive.view.noticeEpoch ?? null) === epoch;
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
-        knows: await knowsFrom(repos),
+        knows: await knowsFrom(repos, logger),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
       });
       if (switched !== 'done') {
@@ -505,7 +518,7 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     }
 
     // 4. Lecture (avec reprise depuis l'instantané si demandée ou nécessaire, une fois par cycle).
-    const knows = await knowsFrom(repos);
+    const knows = await knowsFrom(repos, logger);
     let resumed = false;
     const doResume = async (): Promise<boolean> => {
       resumed = true;
@@ -700,7 +713,8 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
         await writeState(await nextState(head), true);
         const old = [...listedSnapshots, seq].sort((a, b) => b - a).slice(SNAPSHOTS_KEPT_PER_EPOCH);
-        if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch(() => 0);
+        // Échec journalisé (aucun échec silencieux) ; retentée au prochain instantané, les fichiers restants ne gênent aucune lecture.
+        if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch((error: unknown) => logger.log('delete-own-failed', { kind: 's', code: syncErrorCodeOf(error) }));
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
       }
       // Y-11 : anciennes époques gardées pendant une réinitialisation (supprimées par la bascule, ou relues si elle perd).
@@ -738,14 +752,14 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
         logger.log('reset-failure-unrecorded', { code });
       }
     }
-    return fail(code, { folderLabel, folderKind, pendingFiles: [...pending] });
+    return failWith(error, { folderLabel, folderKind, pendingFiles: [...pending] });
   }
 }
 
 /** Accusés publiés par chaque appareil : le suppresseur avait-il lu l'écriture `hlc` de `device` ? */
-async function knowsFrom(repos: Repositories): Promise<ApplyContext['knows']> {
+async function knowsFrom(repos: Repositories, log: StoredStateLog): Promise<ApplyContext['knows']> {
   const acks = new Map<string, Map<DeviceId, DeviceAck>>();
-  for (const row of await repos.sync.getStates()) acks.set(row.deviceId, parseAcks(row.lastAcks));
+  for (const row of await repos.sync.getStates()) acks.set(row.deviceId, parseStoredAcks(row.lastAcks, 'sync_state.last_acks', log));
   return (deleter, device, hlc) => {
     const ack = acks.get(deleter)?.get(device);
     return ack !== undefined && ack.hlc !== null && ack.hlc >= hlc;

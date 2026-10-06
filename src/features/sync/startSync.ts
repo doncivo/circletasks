@@ -14,7 +14,7 @@ import { useNavigationStore } from '../app/navigation';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, statusLine } from './syncText';
+import { deviceName, deviceStatusText, statusLine, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
 
@@ -82,6 +82,12 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
       return resetProgressBanner(trouble.reset, devices);
     case 'reset-reminder':
       return resetReminderText(trouble.reset.waiting, devices);
+    // Y-TECH-02 : avertissements du scan, même texte que la section AVERTISSEMENTS des détails.
+    case 'nonce-budget':
+    case 'folder-large':
+    case 'too-many-devices':
+    case 'scan-incomplete':
+      return warningText(trouble.code);
   }
 }
 

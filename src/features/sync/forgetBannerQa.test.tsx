@@ -136,10 +136,10 @@ describe('bandeau « forget-failed » : dès le démarrage, effacé à la réuss
     expect(trouble()).toBeUndefined();
   });
 
-  it('une valeur illisible de forgetFailure ne casse rien et n’invente aucun bandeau', async () => {
+  it('une valeur illisible de forgetFailure ne casse rien : état local illisible signalé (Y-TECH-02, jamais lue comme « aucune »)', async () => {
     await db.data.repos.sync.setMeta(FORGET_META.failure, '{pas du json');
     render(<AppStatusBanner />);
     await restart({ phase: 'syncing' });
-    expect(trouble()).toBeUndefined();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('state-unreadable');
   });
 });

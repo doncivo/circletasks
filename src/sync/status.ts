@@ -1,4 +1,5 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
+import type { SyncWarningCode } from '../domain/syncBanners';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 
@@ -17,6 +18,10 @@ export interface CycleFacts {
   readonly devices: readonly SyncDeviceStatus[];
   /** Aucun appareil connu ne partage la clé locale (tous `foreign`). */
   readonly keyMismatch: boolean;
+  /** Y-TECH-02 : avertissements du scan de ce cycle ; absent : scan pas atteint (avertissements connus gardés). */
+  readonly warnings?: readonly SyncWarningCode[];
+  /** Y-TECH-02 (§19 point 7) : une valeur stockée de l'état local était illisible pendant ce cycle. */
+  readonly stateUnreadable?: boolean;
 }
 
 /** Codes d'erreur qui signifient « en attente d'iCloud » plutôt qu'une erreur. */
@@ -65,12 +70,17 @@ export function statusFromFacts(
     readonly forget?: SyncForgetStatus | null;
     /** Y-11 (exigence d'Ali) : réinitialisation lue dans `sync_meta.resetState` ; undefined : lecture impossible, valeur gardée. */
     readonly reset?: SyncResetStatus | null;
+    /** Y-TECH-02 : une lecture de fin de cycle (conflits, réintégration, oubli, réinitialisation) a échoué. */
+    readonly stateUnreadable?: boolean;
   },
 ): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, ...rest } = previous;
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, stateUnreadable: _unreadable, ...rest } = previous;
+  void _unreadable;
+  const warnings = facts.warnings ?? keptWarnings ?? [];
+  const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
   const forget = extra.forget === undefined ? (keptForget ?? null) : extra.forget;
   const reset = extra.reset === undefined ? (keptReset ?? null) : extra.reset;
@@ -79,6 +89,8 @@ export function statusFromFacts(
     ...(failure ? { reintegrationFailure: failure } : {}),
     ...(forget ? { forget } : {}),
     ...(reset ? { reset } : {}),
+    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(unreadable ? { stateUnreadable: true } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

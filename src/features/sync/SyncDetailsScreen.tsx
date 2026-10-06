@@ -11,7 +11,7 @@ import { SyncDetailsReset } from './SyncDetailsReset';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, formatSyncTime } from './syncText';
+import { deviceName, deviceStatusText, formatSyncTime, warningText } from './syncText';
 import './SyncDetailsScreen.css';
 
 /** Remplacements facultatifs des emplacements (tests) ; par défaut, chaque story rend son composant d'emplacement. */
@@ -79,6 +79,23 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         ))}
       </ul>
       {slots.forget ?? <SyncDetailsForget />}
+      {(status.stateUnreadable === true || (status.warnings?.length ?? 0) > 0) && (
+        <>
+          <h2 className="ct-settings__section">{t('sync.status.sectionWarnings')}</h2>
+          <ul className="ct-sync__warnings">
+            {status.stateUnreadable === true && (
+              <li className="ct-settings__row" data-warning="state-unreadable">
+                {t('status.syncStateUnreadable')}
+              </li>
+            )}
+            {(status.warnings ?? []).map((code) => (
+              <li key={code} className="ct-settings__row" data-warning={code}>
+                {warningText(code)}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {status.pendingFiles.length > 0 && (
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionPending')}</h2>
