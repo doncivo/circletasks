@@ -1260,6 +1260,10 @@ fn p17_import_failure_is_persisted_and_cleared() {
     assert_eq!(code(net.core(DEV_B).key_import(KeyInput::RecoveryKey(stranger.recovery_key()), 1)), SyncCode::NotForeground);
     assert_eq!(net.import_failure(DEV_B).unwrap()["code"], "pairing-expired");
     net.dev(DEV_B).d.ui.ready(true);
+    // Contrôles de fenêtre et d'instance (commande) : aucune entrée légitime traitée, rien d'écrit.
+    net.core(DEV_B).record_import_failure(SyncCode::WrongWindow);
+    net.core(DEV_B).record_import_failure(SyncCode::WrongMode);
+    assert_eq!(net.import_failure(DEV_B).unwrap()["code"], "pairing-expired");
     // Refus de la boîte de remplacement : choix de l'utilisateur, rien d'écrit ; puis blocage : `rate-limited`, écrit.
     net.reset_and_open(DEV_A);
     net.read_all(DEV_B).unwrap();

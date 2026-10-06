@@ -170,6 +170,9 @@ describe('ADR 0011 §18 points 14, 16 et 17 sur la plateforme mémoire (mêmes c
   it('échec d’import persisté (importFailure) : écrit sur les refus, jamais sur not-foreground ni consent-denied ; effacé à la réussite et par l’oubli du dossier', async () => {
     const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
     expect((await b.platform.key.status()).importFailure ?? null).toBeNull();
+    // Fenêtre `pairing` absente (wrong-window) : aucune entrée légitime traitée, rien d'écrit.
+    expect(await codeOf(b.platform.key.import({ recoveryKey: 'CT1-AAAAA' }))).toBe('wrong-window');
+    expect((await b.platform.key.status()).importFailure ?? null).toBeNull();
     await openImport(b);
     expect(await codeOf(b.platform.key.import({ recoveryKey: 'CT1-AAAAA' }))).toBe('invalid-pairing');
     const first = (await b.platform.key.status()).importFailure;

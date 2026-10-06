@@ -208,3 +208,127 @@ describe('§18 point 17 : échec d’import persisté', () => {
     void A_ID;
   });
 });
+
+const D_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+
+describe('§18 point 18 : simulations complémentaires', () => {
+  it('(1) variante : l’oubli précède la lecture de C par B ; la coupure croît après la déclaration ; couverte avant l’arrivée de B', async () => {
+    const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
+    expect((await a.service.resetSync()).kind).toBe('started');
+    expect(await a.service.forgetDevice(C_ID as DeviceId)).toEqual({ kind: 'done' });
+    await c.createTask('C après l’oubli');
+    await c.cycle();
+    syncFolders([b, c]);
+    await b.cycle();
+    expect(await titles(b)).toContain('C après l’oubli');
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('reset-required');
+    await reassociate(a, b, [a, b]);
+    await b.cycle();
+    expect(b.service.status().reset?.failure).toMatchObject({ code: 'state-mismatch', step: 'joined' });
+    syncFolders(room.devices);
+    await settle([a, b], 4);
+    expect(a.service.status().reset?.step).toBe('done');
+    expect(b.service.status().reset?.step).toBe('done');
+    expect(await titles(a)).toContain('C après l’oubli');
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+  });
+
+  it('(1) variante : réassocié D dont le curseur sur C reste sous la coupure après la bascule : trou, reprise, bases identiques', async () => {
+    const [a, b, c, d] = (await setupRoom(room, [B_ID, C_ID, D_ID])) as [SimDevice, SimDevice, SimDevice, SimDevice];
+    expect((await a.service.resetSync()).kind).toBe('started');
+    a.clock.advance(11 * 60_000);
+    await c.createTask('C lu par B seulement');
+    await c.cycle();
+    syncFolders([b, c]);
+    await b.cycle();
+    expect(await a.service.forgetDevice(C_ID as DeviceId)).toEqual({ kind: 'done' });
+    // A rattrape C ; B et D se réassocient ; D ne reçoit jamais les fichiers de C avant la bascule.
+    syncFolders([a, b, c]);
+    for (const x of [a, b, d]) if (x !== a) propagate(a.folder, x.folder, a.id);
+    await reassociate(a, b, [a, b]);
+    propagate(b.folder, d.folder, b.id);
+    a.clock.advance(11 * 60_000);
+    await reassociate(a, d, [a, b, d]);
+    for (const x of [b, d]) await x.cycle();
+    const without = (list: readonly SimDevice[]): void => {
+      for (const from of list) for (const to of list) if (from !== to) propagate(from.folder, to.folder, from.id);
+    };
+    for (let r = 0; r < 4; r += 1) {
+      without([a, b, d]);
+      for (const x of [a, b, d]) await x.cycle();
+    }
+    expect(a.service.status().reset?.step).toBe('done');
+    expect(d.service.status().reset?.step).toBe('done');
+    // Les fichiers de C (sous l'ancienne clé, plus détenue) arrivent chez D : trou, reprise depuis l'instantané éligible de A.
+    propagate(c.folder, d.folder, c.id);
+    await settle([a, b, d], 3);
+    expect(await titles(d)).toContain('C lu par B seulement');
+    expect(await taskSnapshot(d)).toEqual(await taskSnapshot(a));
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+  });
+
+  it('(2) L (UUID jamais vu) annonce ; B oublie L et republie son état sous K ; A apprend l’oubli, l’annonce est sans effet, A relance', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    const l = await createSimDevice(L_ID, { name: 'L', clock: a.clock });
+    room.devices.push(l);
+    await pair(a, l);
+    propagate(b.folder, l.folder, b.id);
+    await l.cycle();
+    propagate(l.folder, a.folder, l.id);
+    await a.cycle();
+    propagate(a.folder, l.folder, a.id);
+    expect((await l.service.resetSync()).kind).toBe('started');
+    syncFolders(room.devices);
+    for (const x of [a, b]) {
+      expect((await x.cycle()).phase, x.name).toBe('reset-required');
+      expect(x.service.status().reset?.by, x.name).toBe(L_ID);
+    }
+    expect(await b.service.forgetDevice(L_ID as DeviceId)).toEqual({ kind: 'done' });
+    expect((await b.cycle()).phase).not.toBe('reset-required');
+    // B, suspendu, a republié son état sous K avec la liste maître : A l'apprend sans attendre de réassociation.
+    syncFolders([a, b]);
+    expect((await a.cycle()).phase).not.toBe('reset-required');
+    await settle([a, b], 2);
+    a.clock.advance(11 * 60_000);
+    expect((await a.service.resetSync()).kind).toBe('started');
+  });
+
+  it('(3) D restaure et applique partout avant de lire l’annonce, UUID plus petit : la réinitialisation l’emporte, D arrive par remplacement, rien de purgé ne renaît', async () => {
+    const [a, b] = (await setupRoom(room, [B_ID])) as [SimDevice, SimDevice];
+    const gone = await a.createTask('Supprimée');
+    await b.createTask('B avant');
+    await settle(room.devices, 2);
+    const copy = await backupOf(b);
+    const takenAt = new Date(b.clock.nowMs()).toISOString();
+    a.clock.advance(1_000);
+    await a.deleteTask(gone.id);
+    await settle(room.devices, 1);
+    for (const x of room.devices) x.clock.advance(31 * DAY);
+    // Purge, puis horizon de purge publié par chacun (règle 4).
+    await settle(room.devices, 2);
+    for (const x of room.devices) expect((await x.driver.select('SELECT id FROM task WHERE id = ?', [gone.id])).length, x.name).toBe(0);
+    // A réinitialise (dossier de A seul) ; B restaure une sauvegarde d'avant la purge et applique partout sans avoir vu l'annonce.
+    expect((await a.service.resetSync()).kind).toBe('started');
+    await restoreBackup(b, copy);
+    const marker = await b.platform.restoreMarker.get();
+    if (!marker) throw new Error('marqueur');
+    b.platform.testing.setRestoreMarker({ ...marker, backupTakenAt: takenAt as typeof marker.backupTakenAt });
+    expect((await b.service.restoreContext())?.options).toEqual(['apply-everywhere']);
+    await b.service.chooseRestoreOption('apply-everywhere');
+    expect(await b.platform.restoreMarker.get()).toBeNull();
+    syncFolders(room.devices);
+    await a.cycle();
+    expect(a.service.status().reset).toMatchObject({ role: 'initiator', superseded: false });
+    expect((await b.cycle()).phase).toBe('reset-required');
+    await reassociate(a, b, room.devices);
+    await b.cycle();
+    expect(b.logger.entries.some((e) => e.event === 'epoch-switched')).toBe(true);
+    syncFolders(room.devices);
+    await settle(room.devices, 4);
+    expect(a.service.status().reset?.step).toBe('done');
+    for (const x of room.devices) expect((await x.driver.select('SELECT id FROM task WHERE id = ?', [gone.id])).length, `${x.name} : purgée, jamais renée`).toBe(0);
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+    expect(await titles(a)).toEqual(['B avant']);
+  });
+});
