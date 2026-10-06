@@ -10,6 +10,7 @@ import type { SyncDeps } from './deps';
 import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
+import { positionFromCover } from './positions';
 import { cursorIds, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
@@ -794,11 +795,10 @@ export async function resumeFromSnapshot(
     if (!loaded) continue;
     const now = iso(deps.clock.nowMs());
     const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, async (tx) => {
-      // Curseurs aux positions couvertes (époque courante), sinon depuis le début.
+      // Curseurs aux positions couvertes, sinon depuis le début de l'époque.
       for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
-        const cover = loaded.end.covers.get(id as DeviceId);
-        const inEpoch = cover && cover.epoch === epoch;
-        await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
+        // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
+        await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId));
       }
       await writeJson(tx, META.resume, null);
       // Instantané admis : son écrivain, écarté plus tôt pour dérive, n'est plus en avance.

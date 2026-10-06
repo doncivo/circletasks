@@ -7,6 +7,7 @@ import type { SyncDeps } from './deps';
 import type { CycleHooks } from './engine';
 import { pickEligible, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { META, readJson, writeJson } from './meta';
+import { positionFromCover } from './positions';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
 /**
@@ -198,9 +199,8 @@ async function applyJoin(
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
   const finalize: SnapshotTxHook = async (tx) => {
     for (const id of cursorIds(accepted, deps.deviceId, loaded, coverage)) {
-      const cover = loaded.end.covers.get(id as DeviceId);
-      const inEpoch = cover && cover.epoch === epoch;
-      await tx.sync.saveState(id, { epoch, cursorSegment: inEpoch ? cover.segment : 0, cursorRecord: inEpoch ? cover.record : 0, ackHlc: inEpoch ? cover.hlc : null });
+      // Y-TECH-01 : position d'une époque antérieure gardée (accusé hérité), jamais ramenée au début de l'époque courante.
+      await tx.sync.saveState(id, positionFromCover(loaded.end.covers.get(id as DeviceId), epoch, id === deps.deviceId));
     }
     await writeJson(tx, META.resume, null);
     await writeJson(tx, JOIN_META, null);

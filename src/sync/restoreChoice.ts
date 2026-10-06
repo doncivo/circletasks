@@ -5,6 +5,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import type { FolderScan, KeyStatus, RestoreContext, RestoreFailure, RestoreMarker, SyncErrorCode } from '../platform/sync/types';
 import type { SyncDeps } from './deps';
 import { META, readJson, writeJson } from './meta';
+import { positionAfterReplace } from './positions';
 import { snapshotPages } from './snapshot';
 
 /** Dernier choix refusé ou en échec (`sync_meta`, local, jamais publié) : affiché dans la fenêtre de choix jusqu'à un choix appliqué. */
@@ -129,7 +130,13 @@ export async function applyEverywhere(deps: SyncDeps): Promise<EpochId> {
   });
   await data.transaction(async (tx) => {
     await tx.sync.clearOutbox(maxSeq);
-    for (const row of await tx.sync.getStates()) await tx.sync.saveState(row.deviceId, { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
+    // Y-TECH-01 : sur chaque autre appareil, la position couverte par l'instantané d'ouverture (ancienne époque : `covers`, maximum de la
+    // base restaurée et du dernier état publié, jamais en recul sur un accusé publié), ou aucune ; jamais {`target`, 0, 0} sur un appareil
+    // qui n'y a rien publié (même règle que le remplacement, `positionAfterReplace`). Sa propre ligne : début de `target`.
+    for (const row of await tx.sync.getStates()) {
+      const position = row.isSelf ? { epoch: target, cursorSegment: 0, cursorRecord: 0, ackHlc: null } : positionAfterReplace(null, covers.get(row.deviceId as DeviceId), target);
+      await tx.sync.saveState(row.deviceId, position);
+    }
     await writeJson(tx, META.epoch, target);
     await writeJson(tx, META.head, { epoch: target, segment: 0, record: 0, hlc: null, stateSeq: 0 } satisfies DeviceAck);
     await writeJson(tx, META.stateSeq, stateSeq);
