@@ -38,7 +38,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | A-05 | M2 | Je passe en mode édition | tasks-planning | fait |
 | A-06 | M2 | Je replie la liste en vue compacte | tasks-planning | fait |
 | A-08 | M2 | J'ouvre la fiche détail d'une tâche | tasks-planning | fait |
-| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | en revue (critère 9 livré ; lignes des états de Y-10 et Y-11 ajoutées avec ces stories) |
+| A-09 | M2 | Je vois toujours l'état de l'app | tasks-planning | fait (critère 9 soldé avec les bandeaux de Y-10 et Y-11) |
 | S-01 | M3 | Je vois ma semaine en 7 colonnes (PC) ou 7 sections (iPhone) | tasks-planning | fait |
 | S-02 | M3 | Je déplace une tâche d'un jour à l'autre | tasks-planning | fait |
 | S-03 | M3 | Je navigue entre semaines | tasks-planning | fait |
@@ -144,7 +144,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | Y-08 | M15 | Mes données dans iCloud sont chiffrées | sync-icloud | fait (parcours 11 vert, validation security-privacy du 2026-10-06) |
 | Y-09 | M15 | Un élément supprimé ne réapparaît jamais | sync-icloud | fait (lot Y2 ; vérifications manuelles d'Ali dans la fiche) |
 | Y-10 | M15 | J'oublie un appareil (audit ADR 0011 H7) | sync-icloud | fait (lot Y4 ; cas réel avec l'iPhone à l'ordre 5 ; texte du PRD M15 à ajouter par Ali) |
-| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | en cours (lot Y4) |
+| Y-11 | M15 | Je réinitialise la synchronisation avec une nouvelle clé (audit ADR 0011 H8) | sync-icloud | fait (lot Y4 ; cas réel avec l'iPhone à l'ordre 5 ; texte du PRD M15 à ajouter par Ali) |
 
 Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lot Y1 (Y-08 puis Y-01) en parallèle du lot Y2 (Y-02, Y-09, Y-05, Y-03), deux worktrees ; lot Y3 (Y-04, Y-07, Y-06, en parallèle) après la fusion de Y2 ; lot Y4 (Y-10, Y-11) ensuite. Écrans sans maquette relus par Ali en fin d'ordre 4.
 
