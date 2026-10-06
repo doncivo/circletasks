@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { DeviceId } from '../../../../src/domain/types';
 import type { StateFileCopy } from '../../../../src/platform/sync/memory';
 import { RESET_META } from '../../../../src/sync/reset';
 import { propagate } from '../../../sim/syncCloudSim';
-import { syncFolders, taskSnapshot, type SimDevice } from '../../../sim/syncDevice';
+import { syncFolders, taskSnapshot, warmSimDevices, type SimDevice } from '../../../sim/syncDevice';
 import { B_ID, C_ID, closeAll, DAY, meta, publishedState, reassociate, setupRoom, settle, titles, W_ID, type Room } from './resetKit';
 
 /**
@@ -13,6 +13,8 @@ import { B_ID, C_ID, closeAll, DAY, meta, publishedState, reassociate, setupRoom
  */
 
 const room: Room = { devices: [] };
+// Point 5 de l'audit : le premier test (critère 11) payait l'initialisation de SQLite Wasm et des migrations dans son propre budget.
+beforeAll(warmSimDevices);
 afterEach(() => closeAll(room));
 
 /** Sortie de chaque appareil vers « iCloud » interdite (hors ligne) : seul `online` se synchronise. */
@@ -24,15 +26,20 @@ describe('réinitialisation à trois appareils, B hors ligne, C éteint (critèr
   it('aucune perte : bases identiques (union, aucun doublon ni élément ressuscité), trace purgée avant jamais réapparue', async () => {
     const [a, b, c] = (await setupRoom(room, [B_ID, C_ID])) as [SimDevice, SimDevice, SimDevice];
     const iphone = c;
-    // Données communes, puis une suppression purgée partout (30 jours, lue par tous) avant la réinitialisation.
+    // Données communes, puis une suppression purgée partout (30 jours, lue par tous) avant la réinitialisation. Le coût de ce test est
+    // celui des cycles complets (base SQLite de chaque appareil) : seulement les tours nécessaires (création lue et accusée par tous : 2 ;
+    // suppression lue et accusée : 1 ; purge après 30 jours : 1), chacun vérifié.
     await a.createTask('Commun A');
     await b.createTask('Commun B');
     const gone = await a.createTask('Supprimée');
-    await settle(room.devices);
+    await settle(room.devices, 2);
+    for (const d of room.devices) expect(await titles(d), d.name).toEqual(['Commun A', 'Commun B', 'Supprimée']);
     await a.deleteTask(gone.id);
-    await settle(room.devices);
+    await settle(room.devices, 1);
+    for (const d of room.devices) expect(await titles(d), d.name).toEqual(['Commun A', 'Commun B']);
     for (const d of room.devices) d.clock.advance(31 * DAY);
-    await settle(room.devices, 4);
+    await settle(room.devices, 1);
+    for (const d of room.devices) expect((await d.driver.select('SELECT id FROM task WHERE id = ?', [gone.id])).length, `purgée chez ${d.name}`).toBe(0);
     expect((await a.driver.select('SELECT id FROM task WHERE id = ?', [gone.id])).length, 'purgée chez A').toBe(0);
 
     // B passe hors ligne et écrit ; C s'éteint.
@@ -94,7 +101,7 @@ describe('réinitialisation à trois appareils, B hors ligne, C éteint (critèr
     await a.cycle();
     expect(a.service.status().reset).toMatchObject({ step: 'done' });
     expect((await a.platform.key.status()).kid).toBe(k2);
-    await settle([a, b, iphone], 4);
+    await settle([a, b, iphone], 2);
     for (const d of [b, iphone]) {
       expect((await d.platform.key.status()).kid, d.name).toBe(k2);
       expect((await d.platform.key.status()).nextKid ?? null, d.name).toBeNull();

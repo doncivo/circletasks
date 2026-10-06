@@ -31,7 +31,7 @@ export async function setupRoom(room: Room, ids: readonly string[]): Promise<Sim
     expect((await d.cycle()).phase).toBe('idle');
     syncFolders(room.devices);
   }
-  await settle(room.devices);
+  await settle(room.devices, 2);
   return room.devices;
 }
 
