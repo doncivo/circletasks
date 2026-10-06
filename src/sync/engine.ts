@@ -102,7 +102,8 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
         previous.stateSeq > 0 &&
         (state.stateSeq < previous.stateSeq || (state.stateSeq === previous.stateSeq && previous.stateDigest !== null && previous.stateDigest !== text) || (previous.stateEpoch !== null && compareEpochs(state.epoch, previous.stateEpoch as EpochId) < 0));
       if (rollback) {
-        status = 'rollback';
+        // État rejoué : refusé (non accepté) ; un appareil oublié le reste (Y-10).
+        if (status !== 'forgotten') status = 'rollback';
       } else {
         if (status === 'forgotten') {
           // Y-10 : état gardé (ses accusés et ses déclarations comptent pour l'ordre total), statut inchangé.

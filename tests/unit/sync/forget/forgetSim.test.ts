@@ -177,6 +177,23 @@ describe('effets chez tous les appareils (critère 10)', () => {
   });
 });
 
+describe('un oubli ne s’annule pas', () => {
+  it('ancien état de X rejoué, ou état de A devenu illisible : X reste oublié partout (déclarations gardées)', async () => {
+    const [a, b, x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
+    const oldX = x.folder.takeState(x.id);
+    await x.createTask('X1');
+    await settle([a, b, x]);
+    expect(await a.service.forgetDevice(x.id as DeviceId)).toEqual({ kind: 'done' });
+    await settle([a, b]);
+    for (const d of [a, b]) d.folder.putState(oldX);
+    // L'état de A qui porte la déclaration est remplacé par un tiers chez B.
+    b.folder.putState({ deviceId: a.id, file: null });
+    await settle([b], 2);
+    await settle([a], 1);
+    for (const d of [a, b]) expect(d.service.status().devices.find((s) => s.deviceId === x.id)?.status, d.name).toBe('forgotten');
+  });
+});
+
 describe('aucun échec silencieux (critère 15)', () => {
   it('boîte refusée : « annulé », rien d’écrit ni gardé ; pas au premier plan : échec persistant, visible après redémarrage, effacé à la réussite', async () => {
     const [a, , x] = (await setup([B_ID, X_ID])) as [SimDevice, SimDevice, SimDevice];
