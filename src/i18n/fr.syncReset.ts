@@ -64,7 +64,7 @@ export const syncResetFr = {
     vaultUnavailable: 'coffre du système indisponible',
     cloudPending: 'un fichier attend encore iCloud',
     folderUnreachable: 'dossier de synchronisation introuvable',
-    keyExhausted: 'budget de la clé épuisé',
+    keyExhausted: 'limite d’utilisation de la clé atteinte',
     stateMismatch: 'les appareils ne sont pas encore à jour',
     notForeground: 'CircleTasks n’était pas au premier plan',
     rateLimited: 'trop de demandes, réessayez dans 10 minutes',

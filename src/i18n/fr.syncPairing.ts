@@ -73,7 +73,7 @@ export const syncPairingWindowFr = {
     loading: 'Préparation du code…',
     loadFailed: 'Le code n’a pas pu être affiché : fermez cette fenêtre et recommencez depuis Réglages',
     close: 'Fermer',
-    closeFailed: 'La fenêtre n’a pas pu se fermer : touchez « Fermer » pour réessayer',
+    closeFailed: 'La fenêtre n’a pas pu se fermer : cliquez sur « Fermer » pour réessayer',
     startFailed: 'La fenêtre d’association n’a pas pu démarrer : fermez-la et recommencez depuis Réglages',
   },
   import: {

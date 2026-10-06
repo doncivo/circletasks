@@ -28,7 +28,7 @@ export const syncForgetFr = {
   failedDeclare: 'L’oubli de {device} a échoué : {reason}',
   failedDelete: 'La suppression des fichiers de {device} a échoué : {reason}',
   failedRejoin: 'L’association de cet appareil a échoué : {reason}',
-  failedOverflow: 'Trop d’oublis dans ce dossier : une déclaration n’a pas pu être apprise. Réinitialisez la synchronisation.',
+  failedOverflow: 'Trop d’oublis dans ce dossier : l’un d’eux n’a pas pu être pris en compte. Réinitialisez la synchronisation.',
   failedRevived: 'Oubli de {device} annulé : l’appareil qui l’avait oublié a lui-même été oublié. Oubliez-le de nouveau',
   revivedLine: 'Oubli annulé : l’appareil qui l’avait oublié a lui-même été oublié',
   failedAt: 'Dernier essai : {time}',

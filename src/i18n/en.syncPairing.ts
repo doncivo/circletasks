@@ -31,7 +31,7 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   joinFailedSnapshot: 'No up-to-date snapshot: open another paired device',
   joinFailedClock: 'Receiving your data is blocked: this device’s clock is behind. Set the time, it will resume afterwards',
   retry: 'Try again',
-  retryLabel: 'Try receiving the data again',
+  retryLabel: 'Try again to receive the data',
 };
 
 /** Pairing window texts (`window`, `import`, `errors`), English. Same shape as `syncPairingWindowFr`. */
@@ -68,7 +68,7 @@ export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
     loading: 'Preparing the code…',
     loadFailed: 'The code could not be shown: close this window and start again from Settings',
     close: 'Close',
-    closeFailed: 'The window could not close: press “Close” to try again',
+    closeFailed: 'The window could not close: click “Close” to try again',
     startFailed: 'The pairing window could not start: close it and start again from Settings',
   },
   import: {

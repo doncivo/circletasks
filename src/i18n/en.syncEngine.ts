@@ -56,7 +56,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     conflictsOne: '{count} conflict this week',
     conflictsMany: '{count} conflicts this week',
     noConflicts: 'No conflict this week',
-    progress: '{done} of {total}',
+    progress: 'Syncing: {done} of {total}',
   },
   restore: {
     title: 'Restore: what about sync?',

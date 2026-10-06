@@ -9,7 +9,7 @@ export const syncFolderEn: Shape<typeof syncFolderFr> = {
   icloudLabel: 'iCloud Drive / {name}',
   notConfigured: 'Not set up',
   choose: 'Choose folder',
-  chooseLabel: 'Choose the sync folder',
+  chooseLabel: 'Choose folder for synchronization',
   choosing: 'Choosing folder…',
   chosen: 'Folder chosen',
   notIcloud: 'This folder is not in iCloud Drive: your devices will not share it',

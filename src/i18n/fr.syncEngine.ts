@@ -57,7 +57,7 @@ export const syncEngineFr = {
     conflictsOne: '{count} conflit cette semaine',
     conflictsMany: '{count} conflits cette semaine',
     noConflicts: 'Aucun conflit cette semaine',
-    progress: '{done} sur {total}',
+    progress: 'Synchronisation : {done} sur {total}',
   },
   restore: {
     title: 'Restauration : que faire de la synchronisation ?',
