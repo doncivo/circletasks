@@ -4,7 +4,7 @@
 // - fermeture par chaque chemin (Annuler, Échap, échéance, démontage, bouton « Fermer » d'une fenêtre en échec) : état vidé, une seule
 //   demande de destruction ;
 // - exigence d'Ali : une destruction refusée par Rust n'est jamais silencieuse.
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import qrcode from 'qrcode-generator';
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { PAIRING_VALIDITY_MS } from '../../../domain/sync/limits';
@@ -15,6 +15,7 @@ import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type Mem
 import { reducePairingPlatform, type PairingPlatform } from './pairingPlatform';
 import { PairingView, PairingWindow, createSecretSlot } from './PairingView';
 import { RecoveryKeyEntry } from './RecoveryKeyEntry';
+import { nextChange } from '../testKit';
 
 const A = '3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60' as DeviceId;
 const B = '7d4e1a2b-3c5f-4a6b-8d7e-9f0a1b2c3d4e' as DeviceId;
@@ -134,8 +135,12 @@ describe('exposition de la clé : appairage complet par la fenêtre (critère 16
     expect(screen.getByRole('img', { name: T.window.qrLabel }).getAttribute('aria-label')).not.toMatch(/CT1|CTPAIR/);
     // « Nouveau code ».
     nowMs += 1_000;
+    const renewed = nextChange(showSlot, () => showSlot.peek()?.qrText !== first.qrText);
     fireEvent.click(screen.getByRole('button', { name: T.window.renewLabel }));
-    await waitFor(() => expect(showSlot.peek()?.qrText).not.toBe(first.qrText));
+    // Nouveau code posé dans l'emplacement : l'événement lui-même (aucun sondage).
+    await act(async () => {
+      await renewed;
+    });
     const second = showSlot.peek();
     if (!second) throw new Error('second code absent');
     fireEvent.click(screen.getByRole('button', { name: T.window.cancelLabel }));

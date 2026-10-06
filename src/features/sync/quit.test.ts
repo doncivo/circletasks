@@ -37,15 +37,16 @@ afterEach(async () => {
 
 const fakeDocument = { visibilityState: 'visible', addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as Document;
 
-async function start(): Promise<void> {
+function start(): void {
   disposers.push(startSyncIntegration(container, { document: fakeDocument, setInterval: () => 0, clearInterval: () => undefined }).dispose);
   disposers.push(startDesktopIntegration(container).dispose);
-  await vi.waitFor(() => expect(desktop.quittingHandler).not.toBeNull());
+  // `onQuitting` est appelé de façon synchrone par `startDesktopIntegration` (le faux pose son gestionnaire aussitôt) : aucune attente par sondage.
+  expect(desktop.quittingHandler).not.toBeNull();
 }
 
 describe('« Quitter » : dernier cycle par le planificateur (revue Y2, point 17)', () => {
   it('cycle rapide : la sortie est confirmée sans attendre et aucun minuteur ne reste armé', async () => {
-    await start();
+    start();
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const before = vi.getTimerCount();
     await desktop.emitQuitting();
@@ -55,7 +56,7 @@ describe('« Quitter » : dernier cycle par le planificateur (revue Y2, point 17
   });
 
   it('cycle bloqué : la sortie est confirmée à 4,5 s, pas avant', async () => {
-    await start();
+    start();
     sync.hold = true;
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const quitting = desktop.emitQuitting();

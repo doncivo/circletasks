@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -13,7 +13,7 @@ import { trashStore } from '../tasks/trashStore';
 import { createMemoryBackup } from '../../platform/backup';
 import { applyRemoteChanges } from './remoteChanges';
 import { SyncStatusLine } from './SyncStatusLine';
-import { createFakeSyncService, type FakeSyncService } from './testKit';
+import { createFakeSyncService, nextChange, type FakeSyncService } from './testKit';
 
 /**
  * QA du lot Y2, côté écran (Y-02 critère 16, Y-03 critères 7 et 8, Y-05 critère 2) : tous les états d'erreur laissent le bouton actif
@@ -126,8 +126,11 @@ describe('rechargement après un lot reçu (Y-02 critère 18)', () => {
     await trash.getState().load('all');
     expect(trash.getState().tasks).toEqual([]);
     await db.data.repos.tasks.softDelete([task.id]);
+    // Attente : le changement du magasin de la corbeille lui-même (Y-TECH-02, aucun sondage).
+    const reloaded = nextChange(trash, () => trash.getState().tasks.length > 0);
     await applyRemoteChanges(container, { tables: new Set(['task']), ids: new Map([['task', new Set([task.id])]]) });
-    await waitFor(() => expect(trash.getState().tasks.map((x) => x.id)).toEqual([task.id]));
+    await reloaded;
+    expect(trash.getState().tasks.map((x) => x.id)).toEqual([task.id]);
   });
 
   it('corbeille jamais ouverte : aucun chargement inutile', async () => {

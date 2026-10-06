@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import type { DeviceId, Hlc, IsoDateTime, LocalDate, SpaceId, TaskId } from '../../domain/types';
@@ -14,6 +14,11 @@ import { createFakeSyncService, type FakeSyncService } from './testKit';
  * Bloc « JOURNAL DES CONFLITS » (Y-04 critères 1, 3, 4, 8 et 14 ; Synchro.html) : absent sans conflit, une ligne par conflit (titre ·
  * champ, date, valeur gardée et écartée avec appareil et heure, « Restaurer »), résultat annoncé dans la ligne, focus gardé, refus
  * affiché en permanence, lecture impossible dite, « Afficher plus », annulation par le bandeau T-13.
+ *
+ * Attentes (Y-TECH-02, consigne d'Ali : aucun sondage) : une transaction est attendue par sa propre promesse (`trackTransaction`) ; un
+ * texte ou une ligne qui apparaît, par `findBy…`, seulement parce qu'aucun délai réel n'est en jeu : la chaîne qui le produit (base
+ * SQLite en mémoire, avis de changement, relecture du journal) ne passe par aucun minuteur, et `findBy…` se résout sur la mutation du DOM
+ * qu'elle provoque (MutationObserver), jamais au bout d'une attente.
  */
 
 const SELF = '60000000-0000-4000-8000-0000000000e1' as DeviceId;
@@ -90,6 +95,19 @@ async function conflict(rowId: string, field: string, kept: unknown, discarded: 
 
 const list = () => screen.findByRole('list', { name: 'Journal des conflits' });
 
+/** Première transaction lancée après l'appel (un clic) : promesse résolue à sa fin, par le pilote lui-même ; `stop` rend le vrai pilote. */
+function trackTransaction(): { readonly finished: Promise<void>; stop(): void } {
+  const real = db.driver.transaction.bind(db.driver);
+  let finish: () => void = () => undefined;
+  const finished = new Promise<void>((resolve) => (finish = resolve));
+  db.driver.transaction = ((fn: Parameters<typeof real>[0]) => {
+    const run = real(fn);
+    void run.then(finish, finish);
+    return run;
+  }) as typeof db.driver.transaction;
+  return { finished, stop: () => void (db.driver.transaction = real as typeof db.driver.transaction) };
+}
+
 describe('journal des conflits (critères 1, 3 et 4)', () => {
   it('sans conflit : bloc absent, la ligne « Aucun conflit » suffit', async () => {
     sync.setStatus({ conflictsThisWeek: 0 });
@@ -129,7 +147,9 @@ describe('journal des conflits (critères 1, 3 et 4)', () => {
     const ul = await list();
     expect(within(ul).getAllByRole('listitem')).toHaveLength(50);
     fireEvent.click(screen.getByRole('button', { name: 'Afficher plus' }));
-    await waitFor(() => expect(within(ul).getAllByRole('listitem')).toHaveLength(52));
+    // Ordre par identifiant décroissant : la ligne « Courses, note » (première inscrite) n'arrive qu'avec la seconde page.
+    await within(ul).findByRole('listitem', { name: 'Conflit : Courses, note' });
+    expect(within(ul).getAllByRole('listitem')).toHaveLength(52);
     expect(screen.queryByRole('button', { name: 'Afficher plus' })).toBeNull();
     const notes = within(ul).getByRole('listitem', { name: 'Conflit : Courses, note' });
     expect(notes.textContent).toContain('« lait, œufs, café » gardée');
@@ -146,15 +166,15 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const button = within(item).getByRole('button', { name: /Restaurer la valeur écartée/ });
     button.focus();
     fireEvent.click(button);
-    await waitFor(() => expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure'));
-    await waitFor(() => expect(within(item).getByText('Restaurée le 5 oct.')).toBeTruthy());
+    await within(item).findByText('Restaurée le 5 oct.');
+    expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure');
     expect(within(item).queryByRole('button')).toBeNull();
     expect(document.activeElement).toBe(item);
     expect((await db.data.repos.tasks.getById(id))?.time).toBe('10:00');
     // Bandeau T-13 « Valeur restaurée · Annuler ».
     expect(screen.getByText('Valeur restaurée')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    await waitFor(() => expect(within(item).getByRole('button', { name: /Restaurer la valeur écartée/ })).toBeTruthy());
+    await within(item).findByRole('button', { name: /Restaurer la valeur écartée/ });
     expect((await db.data.repos.tasks.getById(id))?.time).toBe('09:00');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -170,21 +190,14 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     expect(within(item).getByRole('status').textContent).toBe(refusal);
     const button = within(item).getByRole('button', { name: /Restaurer/ });
     expect(button.getAttribute('aria-describedby')).toBe(within(item).getByRole('status').id);
-    // La restauration passe par une transaction : on attend qu'elle soit terminée (aucun délai).
-    const real = db.driver.transaction.bind(db.driver);
-    const done: Promise<unknown>[] = [];
-    db.driver.transaction = ((fn: Parameters<typeof real>[0]) => {
-      const run = real(fn);
-      done.push(run.catch(() => undefined));
-      return run;
-    }) as typeof db.driver.transaction;
+    // La restauration passe par une transaction : on attend sa fin, par sa propre promesse (aucun délai, aucun sondage).
+    const transaction = trackTransaction();
     button.focus();
     fireEvent.click(button);
-    await waitFor(() => expect(done).toHaveLength(1));
     await act(async () => {
-      await Promise.all(done);
+      await transaction.finished;
     });
-    db.driver.transaction = real as typeof db.driver.transaction;
+    transaction.stop();
     expect(await db.data.repos.sync.listConflicts('2020-01-01T00:00:00.000Z' as IsoDateTime, 5)).toMatchObject([{ restored: false }]);
     expect(within(item).getByRole('status').textContent).toBe(refusal);
     expect(document.activeElement).toBe(button);
@@ -200,7 +213,7 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
     const real = db.driver.transaction.bind(db.driver);
     db.driver.transaction = (() => Promise.reject(new Error('base verrouillée'))) as typeof db.driver.transaction;
     fireEvent.click(within(item).getByRole('button', { name: /Restaurer/ }));
-    await waitFor(() => expect(within(item).getByRole('status').textContent).toBe('La restauration a échoué. Rien n’a été modifié : réessayez.'));
+    await within(item).findByText('La restauration a échoué. Rien n’a été modifié : réessayez.');
     expect(within(item).getByRole('status').getAttribute('data-trouble')).toBe('true');
     db.driver.transaction = real as typeof db.driver.transaction;
     // Une relecture du journal (nouveau cycle) ne fait pas disparaître le message.
@@ -218,27 +231,15 @@ describe('restauration à l’écran (critères 5, 6, 8 et 14)', () => {
 });
 
 describe('messages de la ligne (revue 3) et lignes illisibles', () => {
-  /** Attend la fin de la transaction lancée par un clic (aucun délai : la promesse de la transaction elle-même). */
-  function trackTransactions(): Promise<unknown>[] {
-    const real = db.driver.transaction.bind(db.driver);
-    const done: Promise<unknown>[] = [];
-    db.driver.transaction = ((fn: Parameters<typeof real>[0]) => {
-      const run = real(fn);
-      done.push(run.catch(() => undefined));
-      return run;
-    }) as typeof db.driver.transaction;
-    return done;
-  }
-
   it('après « Annuler », le message « Valeur restaurée » disparaît de la ligne', async () => {
     const id = await task('Envoyer la facture');
     await conflict(id, 'time', '09:00', '10:00');
     renderScreen();
     const item = within(await list()).getByRole('listitem', { name: 'Conflit : Envoyer la facture, heure' });
     fireEvent.click(within(item).getByRole('button', { name: /Restaurer la valeur écartée/ }));
-    await waitFor(() => expect(within(item).getByRole('status').textContent).toBe('Valeur restaurée : Envoyer la facture, heure'));
+    await within(item).findByText('Valeur restaurée : Envoyer la facture, heure');
     fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
-    await waitFor(() => expect(within(item).getByRole('button', { name: /Restaurer la valeur écartée/ })).toBeTruthy());
+    await within(item).findByRole('button', { name: /Restaurer la valeur écartée/ });
     expect(within(item).getByRole('status').textContent).toBe('');
   });
 
@@ -255,13 +256,13 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     expect(within(item).getByRole('status').textContent).toBe('');
     // Le projet part à la corbeille sans que l'écran l'ait relu : « Restaurer » est refusé (parent disparu).
     await db.driver.execute('UPDATE project SET deleted_at = ? WHERE id = ?', [NOW, project]);
-    const done = trackTransactions();
+    const transaction = trackTransaction();
     fireEvent.click(within(item).getByRole('button', { name: /Restaurer/ }));
-    await waitFor(() => expect(done).toHaveLength(1));
     await act(async () => {
-      await Promise.all(done);
+      await transaction.finished;
     });
-    await waitFor(() => expect(within(item).getByRole('status').textContent).toBe('L’élément lié n’existe plus : la valeur ne peut pas être restaurée'));
+    transaction.stop();
+    await within(item).findByText('L’élément lié n’existe plus : la valeur ne peut pas être restaurée');
     // La tâche est purgée ensuite : le blocage recalculé à la lecture suivante est « n’existe plus », pas l'ancien refus.
     await db.driver.execute("INSERT INTO sync_tombstone (table_name, row_id, deleted_hlc, purged_at) VALUES ('task', ?, ?, ?)", [id, hlcAt(NOW, SELF), NOW]);
     await db.driver.execute('DELETE FROM reminder WHERE target_id = ?', [id]);
@@ -270,7 +271,7 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
       sync.setStatus({ lastSyncAt: '2026-10-05T16:10:00.000Z' as IsoDateTime });
     });
     const purged = within(await list()).getByRole('listitem', { name: 'Conflit : Élément supprimé, projet' });
-    await waitFor(() => expect(within(purged).getByRole('status').textContent).toBe('Cet élément n’existe plus : la valeur ne peut pas être restaurée'));
+    await within(purged).findByText('Cet élément n’existe plus : la valeur ne peut pas être restaurée');
   });
 
   it('bouton occupé pendant la restauration : désactivé et aria-busy', async () => {
@@ -282,7 +283,7 @@ describe('messages de la ligne (revue 3) et lignes illisibles', () => {
     fireEvent.click(button);
     expect(button.getAttribute('aria-busy')).toBe('true');
     expect((button as HTMLButtonElement).disabled).toBe(true);
-    await waitFor(() => expect(within(item).getByText('Restaurée le 5 oct.')).toBeTruthy());
+    await within(item).findByText('Restaurée le 5 oct.');
   });
 
   it('une ligne du journal illisible n’empêche pas d’afficher les autres ; elle est signalée', async () => {

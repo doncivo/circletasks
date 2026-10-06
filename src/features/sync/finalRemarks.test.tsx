@@ -16,6 +16,8 @@ import { syncErrorMessageKey } from './SyncSettingsSection';
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000e1');
 const T = syncPairingWindowFr;
+/** Horloge fixe (aucune horloge réelle, Y-TECH-02). */
+const NOW_MS = 1_790_000_000_000;
 
 afterEach(() => cleanup());
 
@@ -26,7 +28,7 @@ describe('remarques finales de Y-06', () => {
 
   it('2. « Nouveau code » refusé faute de premier plan : texte not-foreground, l’ancien code reste', async () => {
     let calls = 0;
-    const payload: PairingPayload = { qrText: 'CTPAIR1.abc', recoveryKey: 'CT1-AAAAA-BBBBB', expiresAt: Date.now() + 300_000 };
+    const payload: PairingPayload = { qrText: 'CTPAIR1.abc', recoveryKey: 'CT1-AAAAA-BBBBB', expiresAt: NOW_MS + 300_000 };
     const platform: PairingPlatform = {
       pairingPayload: () => {
         calls += 1;
@@ -35,7 +37,7 @@ describe('remarques finales de Y-06', () => {
       closePairing: () => Promise.resolve(),
       import: () => Promise.reject(new Error('jamais')) as Promise<KeyImportResult>,
     };
-    render(<PairingView platform={platform} loadQr={() => Promise.resolve(qrcode)} print={() => undefined} />);
+    render(<PairingView platform={platform} now={() => NOW_MS} loadQr={() => Promise.resolve(qrcode)} print={() => undefined} />);
     await screen.findByRole('img', { name: T.window.qrLabel });
     fireEvent.click(screen.getByRole('button', { name: T.window.renewLabel }));
     expect(await screen.findByText(T.errors.notForeground)).toBeTruthy();

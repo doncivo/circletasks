@@ -92,3 +92,38 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
   };
   return fake;
 }
+
+/**
+ * Prochain appel de `target[method]` (Y-TECH-02, consigne d'Ali : attendre l'événement réel, jamais par sondage ni délai) : promesse
+ * résolue quand la méthode a été appelée, que sa promesse est réglée **et** que la suite immédiate de l'appelant (`.then` ou `await` posé
+ * sur cette promesse) a tourné. La méthode en place (vraie méthode ou espion `vi.spyOn`, dont les appels restent comptés) est appelée telle
+ * quelle, puis remise en place.
+ */
+export function nextCall<T extends object>(target: T, method: keyof T & string): Promise<void> {
+  const slot = target as unknown as Record<string, (...args: unknown[]) => unknown>;
+  const current = slot[method] as (...args: unknown[]) => unknown;
+  return new Promise<void>((resolve) => {
+    slot[method] = (...args: unknown[]) => {
+      slot[method] = current;
+      const result = current.apply(target, args);
+      // Un tour de plus : la suite de l'appelant, posée sur la même promesse juste après ce retour, passe d'abord.
+      const settled = Promise.resolve(result).then(
+        () => undefined,
+        () => undefined,
+      );
+      void settled.then(() => resolve());
+      return result;
+    };
+  });
+}
+
+/** Prochain changement d'un magasin à abonnement (`subscribe`) qui vérifie `accept` : l'événement lui-même, jamais un sondage. */
+export function nextChange(store: { subscribe(listener: () => void): () => unknown }, accept: () => boolean = () => true): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const stop = store.subscribe(() => {
+      if (!accept()) return;
+      stop();
+      resolve();
+    });
+  });
+}

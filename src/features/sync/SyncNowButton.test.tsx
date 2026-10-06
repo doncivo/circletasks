@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -11,7 +11,7 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { RestoreChoiceDialog } from './RestoreChoiceDialog';
 import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncStatusLine } from './SyncStatusLine';
-import { createFakeSyncService, type FakeSyncService } from './testKit';
+import { createFakeSyncService, nextCall, type FakeSyncService } from './testKit';
 
 /** Je lance une synchro manuelle (ADR 0011, sections 10.1, 10.4, 11.2 ; Y-03 critères 1 à 8). */
 
@@ -64,7 +64,8 @@ describe('bouton « Synchroniser » (Y-03 critères 1, 2, 7, 8)', () => {
     expect(sync.calls).toEqual(['manual']);
     sync.setStatus({ phase: 'idle', lastSyncAt: NOW as IsoDateTime });
     sync.release();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Synchroniser' })).toHaveProperty('disabled', false));
+    // Libellé rendu à la fin du cycle (mutation du DOM, aucun minuteur en jeu).
+    expect(await screen.findByRole('button', { name: 'Synchroniser' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('status').textContent).toBe('À jour · à l’instant');
   });
 
@@ -72,7 +73,7 @@ describe('bouton « Synchroniser » (Y-03 critères 1, 2, 7, 8)', () => {
     renderIn(<SyncStatusLine />);
     fireEvent.click(screen.getByRole('button', { name: 'Synchroniser' }));
     sync.setStatus({ phase: 'error', errorCode: 'cloud-provider-stopped' });
-    await waitFor(() => expect(screen.getByRole('status').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour'));
+    await screen.findByText('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
     expect(screen.getByRole('button', { name: 'Synchroniser' })).toHaveProperty('disabled', false);
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
@@ -86,11 +87,11 @@ describe('bouton « Synchroniser » (Y-03 critères 1, 2, 7, 8)', () => {
       </>,
     );
     sync.setStatus({ phase: 'restore-choice' });
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     fireEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
     expect(screen.queryByRole('alertdialog')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Synchroniser' }));
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(sync.calls).toEqual([]);
   });
 });
@@ -99,12 +100,13 @@ describe('zone de notification (Y-03 critères 4 et 5)', () => {
   it('synchro configurée : libellé envoyé par set_tray_labels, syncEnabled vrai, l’entrée appelle syncNow(« tray ») sans changer d’écran', async () => {
     const desktop = createFakeDesktop();
     const c = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync, desktop });
+    // Libellés posés et écouteur branché par `startDesktopIntegration` lui-même, de façon synchrone (faux bureau) : aucune attente.
     const integration = startDesktopIntegration(c);
-    await vi.waitFor(() => expect(desktop.trayLabels?.syncEnabled).toBe(true));
+    expect(desktop.trayLabels?.syncEnabled).toBe(true);
     expect(desktop.trayLabels?.sync).toBe('Synchroniser maintenant');
-    await vi.waitFor(() => expect(desktop.traySyncListeners).toBe(1));
+    expect(desktop.traySyncListeners).toBe(1);
     desktop.emitTraySyncNow();
-    await vi.waitFor(() => expect(sync.calls).toEqual(['tray']));
+    expect(sync.calls).toEqual(['tray']);
     expect(useNavigationStore.getState().route).toEqual(INITIAL_NAVIGATION.route);
     integration.dispose();
   });
@@ -113,14 +115,18 @@ describe('zone de notification (Y-03 critères 4 et 5)', () => {
     const desktop = createFakeDesktop();
     sync.setStatus({ phase: 'not-configured' });
     const c = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync, desktop });
+    // Le désabonnement n'est gardé qu'à la résolution de l'enregistrement : attendu par sa propre promesse avant `dispose`.
+    const registered = nextCall(desktop, 'onTraySyncNow');
     const integration = startDesktopIntegration(c);
-    await vi.waitFor(() => expect(desktop.traySyncListeners).toBe(1));
+    expect(desktop.traySyncListeners).toBe(1);
     expect(desktop.trayLabels?.syncEnabled).toBe(false);
     desktop.emitTraySyncNow();
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'sync' });
     expect(sync.calls).toEqual([]);
+    // L'abonnement à l'état réécrit les libellés pendant `setStatus` (synchrone).
     sync.setStatus({ phase: 'idle' });
-    await vi.waitFor(() => expect(desktop.trayLabels?.syncEnabled).toBe(true));
+    expect(desktop.trayLabels?.syncEnabled).toBe(true);
+    await registered;
     integration.dispose();
     expect(desktop.traySyncListeners).toBe(0);
   });

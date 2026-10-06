@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -13,9 +13,15 @@ import { SyncStatusLine } from './SyncStatusLine';
 import { t } from '../../i18n';
 import { applyRemoteChanges } from './remoteChanges';
 import { startSyncIntegration } from './startSync';
-import { createFakeSyncService, type FakeSyncService } from './testKit';
+import { createFakeSyncService, nextCall, type FakeSyncService } from './testKit';
 
-/** Écrans de synchro sans maquette (ADR 0011 « Maquettes manquantes » ; Y-02 critères 13, 16 à 19, Y-09 critère 10). */
+/**
+ * Écrans de synchro sans maquette (ADR 0011 « Maquettes manquantes » ; Y-02 critères 13, 16 à 19, Y-09 critère 10).
+ *
+ * Attentes (Y-TECH-02, aucun sondage) : un appel au service par sa propre promesse (`nextCall`) ; une fenêtre qui apparaît ou disparaît par
+ * `findBy…` ou `waitForElementToBeRemoved`, seulement parce qu'aucun délai réel n'est en jeu (faux service, aucune minuterie) : ils se
+ * résolvent sur la mutation du DOM, jamais au bout d'une attente.
+ */
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000d1');
 const IPHONE = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' as DeviceId;
@@ -90,10 +96,14 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
     sync.restore = { marker: { backup: 'x', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 17 }, options: ['apply-everywhere', 'keep-synced'] };
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.getByText('Les modifications que cet appareil avait déjà reçues seront remplacées sur tous vos appareils')).toBeTruthy();
+    const chosen = nextCall(sync, 'chooseRestoreOption');
     fireEvent.click(screen.getByRole('button', { name: 'Garder les données synchronisées' }));
-    await waitFor(() => expect(sync.choices).toEqual(['keep-synced']));
+    await act(async () => {
+      await chosen;
+    });
+    expect(sync.choices).toEqual(['keep-synced']);
   });
 
   it('la fenêtre se ferme quand le choix est exécuté ; elle reste ouverte s’il ne l’a pas été (revue Y2, point 12)', async () => {
@@ -102,14 +112,20 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
     sync.choiceExecuted = false;
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
+    const chosen = nextCall(sync, 'chooseRestoreOption');
     fireEvent.click(screen.getByRole('button', { name: 'Garder les données synchronisées' }));
-    await waitFor(() => expect(sync.choices).toEqual(['keep-synced']));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Garder les données synchronisées' })).toBeTruthy());
+    await act(async () => {
+      await chosen;
+    });
+    expect(sync.choices).toEqual(['keep-synced']);
+    // Choix non exécuté : la fenêtre reste, relue (mutation du DOM, aucun minuteur en jeu).
+    await screen.findByRole('button', { name: 'Garder les données synchronisées' });
     expect(screen.getByRole('alertdialog')).toBeTruthy();
     sync.choiceExecuted = true;
+    const dialog = screen.getByRole('alertdialog');
     fireEvent.click(screen.getByRole('button', { name: 'Garder les données synchronisées' }));
-    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    await waitForElementToBeRemoved(dialog);
     expect(sync.choices).toEqual(['keep-synced', 'keep-synced']);
   });
 
@@ -117,7 +133,7 @@ describe('choix après restauration (Y-02 critère 13, Y-09 critère 8)', () => 
     sync.restore = { marker: { backup: 'x', backupTakenAt: NOW as IsoDateTime, restoredAt: NOW as IsoDateTime, schemaVersion: 17 }, options: ['apply-everywhere'] };
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.queryByRole('button', { name: 'Garder les données synchronisées' })).toBeNull();
     expect(screen.getByText(t('sync.restore.bodyOnlyApply'))).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Plus tard' }));
@@ -172,13 +188,13 @@ describe('choix après restauration pendant une réinitialisation (Y-11, ADR 001
     sync.restore = { marker, options: ['keep-synced'], notice: 'reset-in-progress' };
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.getByText(t('sync.restore.resetInProgress'))).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Appliquer cette version sur tous mes appareils' })).toBeNull();
     cleanup();
     sync.restore = { marker, options: [], notice: 'reset-finish' };
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.getByText(t('sync.restore.resetFinish'))).toBeTruthy();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Plus tard']);
   });
@@ -187,12 +203,12 @@ describe('choix après restauration pendant une réinitialisation (Y-11, ADR 001
     sync.restore = { marker, options: ['apply-everywhere', 'keep-synced'], failure: { code: 'io', at: NOW as IsoDateTime, option: 'keep-synced' } };
     sync.setStatus({ phase: 'restore-choice' });
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.getByText('Le choix n’a pas pu être appliqué (erreur d’écriture). Rien n’a été changé : vous pouvez réessayer.')).toBeTruthy();
     cleanup();
     sync.restore = { marker, options: ['keep-synced'], notice: 'reset-in-progress', failure: { code: 'state-mismatch', at: NOW as IsoDateTime, option: 'apply-everywhere' } };
     renderIn(<RestoreChoiceDialog />);
-    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeTruthy());
+    await screen.findByRole('alertdialog');
     expect(screen.getByText(t('sync.restore.failedReset'))).toBeTruthy();
   });
 });

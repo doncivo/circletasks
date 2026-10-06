@@ -136,7 +136,7 @@ describe('démarrage (bootstrap.ts, Y-07 critère 6)', () => {
     const status = container?.sync?.status();
     expect(status?.phase).toBe('not-configured');
     expect(status?.reintegrationFailure).toMatchObject({ fields: 2 });
-    expect(status && statusLine(status, Date.now())).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
+    expect(status && statusLine(status, 0)).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
     expect(status && isTroublePhase(status)).toBe(true);
   });
 

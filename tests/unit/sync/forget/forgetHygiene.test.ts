@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -42,6 +42,37 @@ const FORBIDDEN: readonly [RegExp, string][] = [
   [/\btest\.slow\s*\(|\btest\.fixme\s*\(|\btest\.skip\s*\(\s*\)|\bit\.skip\b|\bit\.todo\b|\bdescribe\.skip\b|\.only\s*\(/, 'test ralenti, désactivé ou isolé'],
   [/\bretries\s*:/, 'retries'],
 ];
+
+/** Fichiers de test (`*.test.ts`, `*.test.tsx`) sous un dossier, récursivement, en chemins relatifs à la racine. */
+function testFilesUnder(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(new URL(dir + '/', root))) {
+    const path = `${dir}/${name}`;
+    if (statSync(new URL(path, root)).isDirectory()) out.push(...testFilesUnder(path));
+    // Les garde-fous eux-mêmes citent les motifs interdits : exclus.
+    else if (/\.test\.tsx?$/.test(name) && !name.endsWith('Hygiene.test.ts')) out.push(path);
+  }
+  return out.sort();
+}
+
+/**
+ * Y-TECH-02 (consigne d'Ali) : le garde-fou couvre tous les tests de la synchro, `tests/unit/sync/**` et `src/features/sync/**`, pas
+ * seulement ceux de Y-10 : aucune attente par sondage (`waitFor`), aucun délai ni horloge réels, aucun nouvel essai, aucun test désactivé.
+ */
+export const SYNC_TEST_FILES = [...testFilesUnder('tests/unit/sync'), ...testFilesUnder('src/features/sync')];
+
+describe('Y-TECH-02 : mêmes interdits dans tous les tests de la synchro (tests/unit/sync/**, src/features/sync/**)', () => {
+  it('la liste couvre les deux arborescences', () => {
+    expect(SYNC_TEST_FILES.some((f) => f.startsWith('tests/unit/sync/reset/'))).toBe(true);
+    expect(SYNC_TEST_FILES.some((f) => f.startsWith('src/features/sync/pairing-window/'))).toBe(true);
+  });
+  for (const file of SYNC_TEST_FILES) {
+    it(`${file}`, () => {
+      const source = stripComments(read(file));
+      for (const [pattern, name] of FORBIDDEN) expect(source.match(pattern)?.[0] ?? null, `${file} : ${name}`).toBeNull();
+    });
+  }
+});
 
 describe('critère 20 : aucun délai réel, aucun nouvel essai, aucun test désactivé dans les tests de Y-10', () => {
   for (const file of TS_TESTS) {

@@ -1,6 +1,6 @@
 // Y-06 critères 5 à 8, 10 à 12, 16 et 22 : fenêtre dédiée `pairing` (affichage du QR et saisie de la clé de secours), sur
 // l'implémentation mémoire de SyncPlatform (mêmes règles que Rust : jeton à usage unique, mode lié à l'instance, confirmations).
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import qrcode from 'qrcode-generator';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PAIRING_VALIDITY_MS } from '../../../domain/sync/limits';
@@ -13,6 +13,7 @@ import { reducePairingPlatform, type PairingPlatform } from './pairingPlatform';
 import { pairingErrorText, pairingTexts } from './pairingText';
 import { PairingRoot, PairingView, PairingWindow, createSecretSlot, qrPath } from './PairingView';
 import { RecoveryKeyEntry } from './RecoveryKeyEntry';
+import { nextCall, nextChange } from '../testKit';
 
 const A = '3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60' as DeviceId;
 const B = '7d4e1a2b-3c5f-4a6b-8d7e-9f0a1b2c3d4e' as DeviceId;
@@ -124,8 +125,11 @@ describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16
     const { reduced } = await openShow();
     const slot = createSecretSlot();
     const seenAtClose: unknown[] = [];
+    let closed: () => void = () => undefined;
+    const closedOnce = new Promise<void>((resolve) => (closed = resolve));
     vi.mocked(reduced.closePairing).mockImplementation(async () => {
       seenAtClose.push(slot.peek());
+      closed();
     });
     render(<PairingView platform={reduced} now={now} slot={slot} loadQr={loadQr} print={() => undefined} />);
     await screen.findByRole('img', { name: T.window.qrLabel });
@@ -141,18 +145,28 @@ describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16
     expect(screen.queryByRole('img')).toBeNull();
     expect(screen.getByText(T.window.expired)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: T.window.close }));
-    await waitFor(() => expect(seenAtClose).toEqual([null]));
+    // Promesse résolue par le faux `closePairing` lui-même (aucun sondage).
+    await act(async () => {
+      await closedOnce;
+    });
+    expect(seenAtClose).toEqual([null]);
   });
 
   it('« Nouveau code » : nouvelle confirmation, nouveau code, minuteur remis à 5 minutes', async () => {
     const { platform, reduced } = await openShow();
-    render(<PairingView platform={reduced} now={now} loadQr={loadQr} print={() => undefined} />);
+    const slot = createSecretSlot();
+    render(<PairingView platform={reduced} now={now} slot={slot} loadQr={loadQr} print={() => undefined} />);
     await screen.findByRole('img', { name: T.window.qrLabel });
     const first = screen.getByTestId('pairing-recovery-key').textContent;
     await tick(4 * 60_000);
     const prompts = platform.testing.consentPrompts();
+    const renewed = nextChange(slot);
     fireEvent.click(screen.getByRole('button', { name: T.window.renewLabel }));
-    await waitFor(() => expect(screen.getByTestId('pairing-validity').textContent).toBe('Code valable 5 minutes'));
+    // Nouveau code posé dans l'emplacement : l'événement lui-même (aucun sondage).
+    await act(async () => {
+      await renewed;
+    });
+    expect(screen.getByTestId('pairing-validity').textContent).toBe('Code valable 5 minutes');
     expect(platform.testing.consentPrompts()).toBe(prompts + 1);
     expect(platform.testing.pairing()?.generation).toBe(2);
     expect(reduced.pairingPayload).toHaveBeenLastCalledWith({ renew: true });
@@ -202,10 +216,14 @@ describe('minuteur, nouveau code, impression, fermeture (critères 6, 7, 8 et 16
     render(<PairingView platform={reduced} now={now} slot={slot} loadQr={loadQr} print={() => undefined} />);
     await screen.findByRole('img', { name: T.window.qrLabel });
     expect(slot.peek()).not.toBeNull();
+    const closed = nextCall(reduced, 'closePairing');
     if (how === 'cancel') fireEvent.click(screen.getByRole('button', { name: T.window.cancelLabel }));
     else fireEvent.keyDown(document, { key: 'Escape' });
     expect(slot.peek()).toBeNull();
-    await waitFor(() => expect(reduced.closePairing).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await closed;
+    });
+    expect(reduced.closePairing).toHaveBeenCalledTimes(1);
     expect(platform.testing.pairing()).toBeNull();
     expect(screen.queryByTestId('pairing-recovery-key')).toBeNull();
   });
@@ -356,8 +374,12 @@ describe('démarrage de la fenêtre (QA, aucun échec silencieux)', () => {
 
   it('plateforme ouverte : la fenêtre normale', async () => {
     const { reduced } = await openShow();
+    const loaded = nextCall(reduced, 'pairingPayload');
     render(<PairingRoot open={() => Promise.resolve(reduced)} />);
     expect(await screen.findByRole('heading', { level: 1, name: T.window.title })).toBeTruthy();
-    await waitFor(() => expect(reduced.pairingPayload).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await loaded;
+    });
+    expect(reduced.pairingPayload).toHaveBeenCalledTimes(1);
   });
 });

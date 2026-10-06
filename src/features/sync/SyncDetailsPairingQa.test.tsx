@@ -1,6 +1,6 @@
 // Y-06 (QA) critères 4, 9 et 13 : fenêtre principale. Relance pendant l'affichage (une seule à la fois, aucune après un échec ou en mode
 // import), arrivée signalée une seule fois par événement, état `key-mismatch` (association proposée), échec d'arrivée gardé et visible.
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -10,10 +10,20 @@ import { createFakeDesktop, type FakeDesktop } from '../../platform/desktop/test
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startDesktopIntegration } from '../app/desktop';
-import { JOIN_STATE_META, arrivalWatchActive } from './pairingStatus';
+import { JOIN_STATE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { JoinProgress } from './JoinProgress';
-import { createFakeSyncService, type FakeSyncService } from './testKit';
+import { createFakeSyncService, nextCall, type FakeSyncService } from './testKit';
+
+/** Avis `onPairingChange` qui conclut une ouverture de la fenêtre `pairing` (l'événement réel, jamais un sondage). */
+function pairingSettled(container: Parameters<typeof onPairingChange>[0]): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const stop = onPairingChange(container, () => {
+      stop();
+      resolve();
+    });
+  });
+}
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000d2');
 const NOW = '2026-10-05T08:02:00.000Z';
@@ -70,8 +80,13 @@ describe('relance pendant l’affichage du QR (critère 9, QA)', () => {
     sync.setStatus({ phase: 'needs-pairing' });
     const importing = await make();
     renderIn(importing, <SyncDetailsPairing />);
+    // Attente : l'avis `onPairingChange` qui conclut l'ouverture (Y-TECH-02, aucun sondage).
+    const opened = pairingSettled(importing);
     fireEvent.click(screen.getByRole('button', { name: IMPORT }));
-    await waitFor(() => expect(platform.testing.pairing()?.mode).toBe('import'));
+    await act(async () => {
+      await opened;
+    });
+    expect(platform.testing.pairing()?.mode).toBe('import');
     expect(arrivalWatchActive(importing)).toBe(false);
     await advance(30_000);
     expect(timerCycles()).toBe(0);
@@ -82,8 +97,12 @@ describe('relance pendant l’affichage du QR (critère 9, QA)', () => {
     const integration = startDesktopIntegration(container);
     renderIn(container, <SyncDetailsPairing />);
     expect(desktop.syncPairedListeners).toBe(1);
+    const opened = pairingSettled(container);
     fireEvent.click(screen.getByRole('button', { name: SHOW }));
-    await waitFor(() => expect(arrivalWatchActive(container)).toBe(true));
+    await act(async () => {
+      await opened;
+    });
+    expect(arrivalWatchActive(container)).toBe(true);
     await act(async () => {
       desktop.emitSyncPaired();
       await Promise.resolve();
@@ -111,7 +130,9 @@ describe('échec d’arrivée visible (exigence d’Ali, critère 13, QA)', () =
     const failure = await screen.findByTestId('sync-join-failure');
     expect((failure.textContent ?? '').trim()).not.toBe('');
     expect(failure.textContent).not.toContain('disk-on-fire');
+    const retried = nextCall(sync, 'syncNow');
     fireEvent.click(screen.getByRole('button', { name: /réessayer/i }));
-    await waitFor(() => expect(sync.calls).toContain('manual'));
+    await retried;
+    expect(sync.calls).toContain('manual');
   });
 });

@@ -1,5 +1,5 @@
 // Y-01 critères 1, 5, 8, 10, 17 et 19 : section « SYNCHRONISATION » de Réglages, sur l'implémentation mémoire de SyncPlatform.
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createManualClock } from '../../domain/clock';
 import { createHlcClock } from '../../domain/hlc';
@@ -10,7 +10,7 @@ import { MemorySyncFolder, SyncPlatformError, createMemorySyncPlatform, type Syn
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer } from '../app/container';
 import { SyncSettingsSection } from './SyncSettingsSection';
-import { createFakeSyncService } from './testKit';
+import { createFakeSyncService, nextCall } from './testKit';
 
 const DEVICE = asEntityId<DeviceId>('60000000-0000-4000-8000-000000000007');
 const OTHER = '70000000-0000-4000-8000-000000000008' as DeviceId;
@@ -68,8 +68,14 @@ describe('SyncSettingsSection (Y-01)', () => {
     const platform = createMemorySyncPlatform();
     platform.testing.setChooser(null);
     renderSection(platform);
-    fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Choisir le dossier de synchronisation' })).not.toBeDisabled());
+    const button = await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' });
+    // Attente : la promesse du choix de dossier elle-même (Y-TECH-02, aucun sondage).
+    const chosen = nextCall(platform.folder, 'choose');
+    fireEvent.click(button);
+    await act(async () => {
+      await chosen;
+    });
+    expect(screen.getByRole('button', { name: 'Choisir le dossier de synchronisation' })).not.toBeDisabled();
     expect(state()).toHaveTextContent('Non configurée');
     expect((await platform.folder.info()).configured).toBe(false);
   });
@@ -164,8 +170,13 @@ describe('SyncSettingsSection branchée sur le service (Y-02 critère 16, branch
         <SyncSettingsSection />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
-    await waitFor(() => expect(sync.calls).toEqual(['open']));
+    const button = await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' });
+    const started = nextCall(sync, 'syncNow');
+    fireEvent.click(button);
+    await act(async () => {
+      await started;
+    });
+    expect(sync.calls).toEqual(['open']);
     expect((await platform.folder.info()).configured).toBe(true);
     expect(await screen.findByRole('button', { name: 'Détails' })).toBeInTheDocument();
     expect(screen.getByText('iCloud Drive / CircleTasks')).toBeInTheDocument();

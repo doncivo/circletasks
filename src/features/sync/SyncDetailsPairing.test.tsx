@@ -1,5 +1,5 @@
 // Y-06 critères 4, 9, 10, 12 et 13, et exigence d'Ali (échecs visibles, persistants, effacés à la réussite) : fenêtre principale.
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -11,7 +11,7 @@ import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startDesktopIntegration } from '../app/desktop';
 import { JoinProgress } from './JoinProgress';
-import { JOIN_STATE_META, PAIRING_FAILURE_META, arrivalWatchActive } from './pairingStatus';
+import { JOIN_STATE_META, PAIRING_FAILURE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { SyncSettingsSection } from './SyncSettingsSection';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
@@ -47,12 +47,36 @@ afterEach(async () => {
 
 const renderIn = (container: AppContainer, node: React.ReactNode) => render(<AppContainerProvider container={container}>{node}</AppContainerProvider>);
 
+/**
+ * Attentes (Y-TECH-02, consigne d'Ali : aucun sondage) : l'ouverture de la fenêtre est attendue par l'avis `onPairingChange` qui la conclut
+ * (`pairingSettled`), un appel au service par sa propre promesse (`nextCall`) ; un texte qui apparaît ou disparaît par `findBy…` ou
+ * `waitForElementToBeRemoved`, seulement parce qu'aucun délai réel n'est en jeu (base en mémoire, avis synchrones, minuteries simulées) :
+ * ils se résolvent sur la mutation du DOM (MutationObserver), jamais au bout d'une attente.
+ */
+function pairingSettled(container: AppContainer): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const stop = onPairingChange(container, () => {
+      stop();
+      resolve();
+    });
+  });
+}
+
+/** Clic qui ouvre la fenêtre `pairing`, attendu jusqu'à l'avis qui conclut l'ouverture (états de la plateforme et relance posés). */
+async function clickAndSettle(container: AppContainer, name: string): Promise<void> {
+  const settled = pairingSettled(container);
+  fireEvent.click(screen.getByRole('button', { name }));
+  await act(async () => {
+    await settled;
+  });
+}
+
 describe('« Associer l’iPhone » (critère 4)', () => {
   it('ouvre l’instance show après la confirmation native ; aucune boîte de notre côté', async () => {
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(platform.testing.pairing()).toEqual({ mode: 'show', generation: 1 }));
+    await clickAndSettle(container, 'Associer l’iPhone : afficher le code d’association');
+    expect(platform.testing.pairing()).toEqual({ mode: 'show', generation: 1 });
     expect(platform.testing.consentPrompts()).toBe(1);
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -83,8 +107,9 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     const restarted = await make();
     renderIn(restarted, <SyncDetailsPairing />);
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('Installation incomplète : réinstallez l’application');
+    const notice = screen.getByTestId('sync-pairing-notice');
     fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(screen.queryByTestId('sync-pairing-notice')).toBeNull());
+    await waitForElementToBeRemoved(notice);
     expect(await db.data.repos.sync.getMeta(PAIRING_FAILURE_META)).toBeNull();
     // Trop de demandes.
     cleanup();
@@ -124,8 +149,8 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     sync.setStatus({ phase: 'needs-pairing' });
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer cet appareil avec la clé de secours' }));
-    await waitFor(() => expect(platform.testing.pairing()?.mode).toBe('import'));
+    await clickAndSettle(container, 'Associer cet appareil avec la clé de secours');
+    expect(platform.testing.pairing()?.mode).toBe('import');
     expect(platform.testing.consentPrompts()).toBe(0);
   });
 
@@ -143,8 +168,9 @@ describe('aucun échec silencieux (revue, faibles)', () => {
     renderIn(container, <SyncDetailsPairing />);
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('L’état de l’association n’a pas pu être lu ou enregistré : réessayez');
     getMeta.mockRestore();
+    const notice = screen.getByTestId('sync-pairing-notice');
     fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(screen.queryByTestId('sync-pairing-notice')).toBeNull());
+    await waitForElementToBeRemoved(notice);
   });
 
   it('écriture de sync_meta impossible après un échec d’ouverture : le message le dit', async () => {
@@ -153,7 +179,7 @@ describe('aucun échec silencieux (revue, faibles)', () => {
     const container = await make(failing);
     renderIn(container, <SyncDetailsPairing />);
     fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(screen.getAllByRole('status').map((n) => n.textContent).join(' | ')).toContain('n’a pas pu être lu ou enregistré'));
+    expect(await screen.findByText(/n’a pas pu être lu ou enregistré/)).toBeTruthy();
   });
 
   it('appareil associé mais premier cycle en échec : « iPhone associé » ne masque pas l’échec', async () => {
@@ -179,8 +205,8 @@ describe('arrivée de l’appareil associé (critère 9)', () => {
     const container = await make();
     const integration = startDesktopIntegration(container);
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(arrivalWatchActive(container)).toBe(true));
+    await clickAndSettle(container, 'Associer l’iPhone : afficher le code d’association');
+    expect(arrivalWatchActive(container)).toBe(true);
     await act(async () => {
       vi.advanceTimersByTime(20_000);
       await Promise.resolve();
@@ -202,8 +228,8 @@ describe('arrivée de l’appareil associé (critère 9)', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
-    await waitFor(() => expect(arrivalWatchActive(container)).toBe(true));
+    await clickAndSettle(container, 'Associer l’iPhone : afficher le code d’association');
+    expect(arrivalWatchActive(container)).toBe(true);
     await act(async () => {
       vi.advanceTimersByTime(10 * 60_000);
       await Promise.resolve();
@@ -230,15 +256,16 @@ describe('ligne de Réglages, branche needsPairing (critères 10 et 12)', () => 
     startDesktopIntegration(container);
     renderIn(container, <SyncSettingsSection platform={joiner} />);
     expect(await screen.findByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Associer cet appareil avec la clé de secours' }));
-    await waitFor(() => expect(joiner.testing.pairing()?.mode).toBe('import'));
+    await clickAndSettle(container, 'Associer cet appareil avec la clé de secours');
+    expect(joiner.testing.pairing()?.mode).toBe('import');
     // L'import a réussi dans la fenêtre pairing (simulé : la clé est là), Rust émet sync-paired.
     vi.spyOn(joiner.key, 'status').mockResolvedValue({ present: true, kid: '0123456789abcdef' });
     await act(async () => {
       desktop.emitSyncPaired();
       await Promise.resolve();
     });
-    await waitFor(() => expect(screen.queryByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeNull());
+    // L'avis sync-paired relit l'état dans le même act (aucun minuteur) : le message est déjà retiré.
+    expect(screen.queryByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Associer cet appareil avec la clé de secours' })).toBeNull();
     expect(sync.calls).toContain('manual');
   });
@@ -258,8 +285,9 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     act(() => sync.setStatus({ phase: 'syncing', progress: { done: 1200, total: 5000 } }));
     expect(screen.getByRole('status').textContent).toBe('Réception de vos données… 1 200 / 5 000');
     expect(screen.getByLabelText('Réception des données de la synchronisation')).toBeTruthy();
+    // `setStatus` est synchrone et la ligne ne dépend que de `status.progress` : rien à attendre.
     act(() => sync.setStatus({ phase: 'idle', progress: null }));
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('échec mémorisé par le moteur : affiché en rouge avec « Réessayer », après un redémarrage aussi, effacé à la réussite', async () => {
@@ -274,8 +302,9 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     expect(await screen.findByTestId('sync-join-failure')).toBeTruthy();
     // Réussite : le moteur efface l'entrée ; la fin du cycle relit.
     await db.data.repos.sync.setMeta(JOIN_META, null);
+    const failure = screen.getByTestId('sync-join-failure');
     act(() => sync.setStatus({ phase: 'idle', lastSyncAt: NOW as IsoDateTime }));
-    await waitFor(() => expect(screen.queryByTestId('sync-join-failure')).toBeNull());
+    await waitForElementToBeRemoved(failure);
   });
 
   it('horloge en retard : texte dédié ; attente sans échec : affichage neutre', async () => {
