@@ -12,7 +12,8 @@ import { createSimFolder, propagate } from './syncCloudSim';
  *
  * Les appareils vivent dans un **espace** propre au test (`room`) : deux workers ne partagent jamais un état. Le premier appareil d'un
  * espace choisit son dossier et crée la clé ; le suivant reçoit le dossier du premier et importe sa clé de secours (Y-06 n'est pas
- * requis ici). Crochets : panne d'ajout au journal (cycle interrompu), comptage des opérations publiées (aucun doublon).
+ * requis ici). Rôle `bare` (Y-06, parcours 11) : l'appareil reçoit le dossier du premier et le choisit, **sans clé** : l'association
+ * se fait ensuite par l'app (« Associer cet appareil », fenêtre `pairing`). Crochets : panne d'ajout au journal (cycle interrompu), comptage des opérations publiées (aucun doublon).
  *
  * Routes (JSON ; `Map` codées comme dans le client) :
  * - `POST /rpc` `{ room, device, role, platform, path, args }` : appel d'une méthode de `SyncPlatform` ;
@@ -25,6 +26,9 @@ const MAP_TAG = '__ctMap';
 const encode = (value: unknown): string => JSON.stringify(value, (_key, v: unknown) => (v instanceof Map ? { [MAP_TAG]: [...(v as Map<unknown, unknown>)] } : v));
 const decode = (text: string): unknown =>
   JSON.parse(text, (_key, v: unknown) => (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && Array.isArray((v as Record<string, unknown>)[MAP_TAG]) ? new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG]) : v));
+
+/** `first` : dossier et clé créés ; `join` : associé au premier par sa clé de secours ; `bare` : dossier du premier, sans clé (Y-06). */
+type SimRole = 'first' | 'join' | 'bare';
 
 interface SimFailure {
   readonly method: string;
@@ -85,7 +89,7 @@ function propagateRoom(room: Room): void {
   }
 }
 
-async function createDevice(room: Room, name: string, role: 'first' | 'join', devicePlatform: 'windows' | 'ios'): Promise<SimSyncDevice> {
+async function createDevice(room: Room, name: string, role: SimRole, devicePlatform: 'windows' | 'ios'): Promise<SimSyncDevice> {
   const folder = createSimFolder();
   // Plateforme publiée par la page (agent du navigateur) : Rust la connaît, la plateforme mémoire la vérifie dans `writeState`.
   const platform = createMemorySyncPlatform({ folder, platform: devicePlatform });
@@ -99,6 +103,8 @@ async function createDevice(room: Room, name: string, role: 'first' | 'join', de
   if (!owner?.deviceId) throw new Error('aucun appareil lié dans cet espace : ouvrir d’abord le premier appareil et attendre sa synchro');
   propagate(owner.folder, folder, owner.deviceId);
   await platform.folder.choose();
+  // Dossier d'abord, clé ensuite : l'appareil `bare` s'associe lui-même par l'app.
+  if (role === 'bare') return device;
   await owner.platform.key.openPairing('show');
   const payload = await owner.platform.key.pairingPayload();
   await owner.platform.key.closePairing();
@@ -108,7 +114,7 @@ async function createDevice(room: Room, name: string, role: 'first' | 'join', de
   return device;
 }
 
-async function deviceOf(rooms: Map<string, Room>, roomId: string, name: string, role: 'first' | 'join', devicePlatform: 'windows' | 'ios'): Promise<SimSyncDevice> {
+async function deviceOf(rooms: Map<string, Room>, roomId: string, name: string, role: SimRole, devicePlatform: 'windows' | 'ios'): Promise<SimSyncDevice> {
   let room = rooms.get(roomId);
   if (!room) {
     room = { devices: new Map(), creating: new Map() };
@@ -145,7 +151,7 @@ function publishedTasks(device: SimSyncDevice): Record<string, number> {
 }
 
 async function rpc(rooms: Map<string, Room>, request: SimRequest): Promise<SimResponse> {
-  const body = decode(request.body) as { room: string; device: string; role: 'first' | 'join'; platform?: 'windows' | 'ios'; path: string; args: unknown[] };
+  const body = decode(request.body) as { room: string; device: string; role: SimRole; platform?: 'windows' | 'ios'; path: string; args: unknown[] };
   if (!METHODS.has(body.path)) return json(400, { error: { message: `méthode inconnue : ${body.path}` } });
   try {
     const device = await deviceOf(rooms, body.room, body.device, body.role, body.platform === 'ios' ? 'ios' : 'windows');
