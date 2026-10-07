@@ -13,7 +13,7 @@
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { compareEpochs, isStrictHlc, isSyncDeviceId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState } from './format';
-import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS, MAX_STATE_FORGOTTEN, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
+import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS, MAX_OWN_STATE_MARKS, MAX_STATE_FORGOTTEN, OWN_STATE_MARK_SPACING_MS, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
 import { hlcDevice, hlcMs } from './parse';
 
 /** Ce que la base locale sait d'un autre appareil (ligne de `sync_state`). */
@@ -110,22 +110,24 @@ export function purgeExplainsMissingSegment(
   writer: Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'>,
   ackHlc: Hlc | null,
   nowMs: number,
-  own?: { readonly self: DeviceId; readonly segment: number; readonly epoch: EpochId; readonly ownAck: DeviceAck | null },
+  own?: { readonly self: DeviceId; readonly segment: number; readonly epoch: EpochId; readonly ownAck: DeviceAck | null; readonly marks: readonly OwnStateMark[] },
 ): boolean {
   if (writer.snapshot === null) return false;
   // Troisième revue, point 2 (ADR 0011 §5.5) : la purge d'un segment exige un accusé au-delà de chaque lecteur que l'écrivain compte
   // (`segmentPurgeable`). Preuve qu'il ne peut pas avoir purgé `k` : notre accusé publié sur lui est de l'époque lue et au plus sur `k`,
-  // et son état accepté nous compte parmi ses lecteurs actifs (accusé sur nous de hlc non nul, de moins de 180 jours avec la marge de
-  // dérive de son horloge, aucun oubli de nous). Sinon, aucune preuve : règle des 30 jours (jamais une attente sans issue).
+  // et son état accepté nous compte parmi ses lecteurs actifs (accusé sur nous, aucun oubli de nous). Quatrième revue, point D
+  // (condition 3) : il ne peut pas nous avoir expirés, daté par l'état de nous qu'il a accepté (`acks[self].stateSeq`, borne basse de
+  // son `lastSyncHlc` par nos repères locaux), jamais par le hlc de l'accusé (nos journaux arrivent sans notre état). Sinon, aucune
+  // preuve : règle des 30 jours (jamais une attente sans issue).
   if (own) {
     const known = writer.acks.get(own.self);
+    const floor = known === undefined ? null : ownStateFloor(own.marks, known.stateSeq);
     const proof =
       own.ownAck !== null &&
       own.ownAck.epoch === own.epoch &&
       own.ownAck.segment <= own.segment &&
-      known !== undefined &&
-      known.hlc !== null &&
-      nowMs + HLC_MAX_DRIFT_MS - hlcMs(known.hlc) < DEVICE_EXPIRY_MS &&
+      floor !== null &&
+      nowMs + HLC_MAX_DRIFT_MS - hlcMs(floor) < DEVICE_EXPIRY_MS &&
       !forgetOrder(writer.forgotten).has(own.self);
     if (proof) return false;
   }
@@ -163,6 +165,32 @@ export function segmentPurgeable(segment: number, input: { readonly headSegment:
     const ack = reader.acks.get(input.self);
     return ack !== undefined && (compareEpochs(ack.epoch, input.epoch) > 0 || (ack.epoch === input.epoch && ack.segment > segment));
   });
+}
+/**
+ * Quatrième revue, point D (ADR 0011 §5.5, condition 3) : repère local `[stateSeq, lastSyncHlc]` d'un de ses états publiés
+ * (`sync_meta.ownStateHlcs`, liste croissante, jamais publiée).
+ */
+export type OwnStateMark = readonly [stateSeq: number, lastSyncHlc: Hlc];
+
+/**
+ * Borne basse du `lastSyncHlc` de son état de numéro `stateSeq` : celui du plus grand repère de `stateSeq` inférieur ou égal (`stateSeq`
+ * et `lastSyncHlc` croissent ensemble) ; null sans repère.
+ */
+export function ownStateFloor(marks: readonly OwnStateMark[], stateSeq: number): Hlc | null {
+  let floor: Hlc | null = null;
+  for (const [seq, hlc] of marks) if (seq <= stateSeq) floor = hlc;
+  return floor;
+}
+
+/**
+ * Repères après l'écriture réussie de l'état `stateSeq` (`lastSyncHlc`) : repères de plus de 180 jours + `HLC_MAX_DRIFT_MS` retirés ;
+ * ajouté si la liste est vide ou si le dernier repère a au moins un jour ; 182 au plus (les plus récents).
+ */
+export function addOwnStateMark(marks: readonly OwnStateMark[], stateSeq: number, lastSyncHlc: Hlc, nowMs: number): OwnStateMark[] {
+  const kept = marks.filter(([, hlc]) => nowMs - hlcMs(hlc) <= DEVICE_EXPIRY_MS + HLC_MAX_DRIFT_MS);
+  const last = kept.at(-1);
+  if (last === undefined || (stateSeq > last[0] && hlcMs(lastSyncHlc) - hlcMs(last[1]) >= OWN_STATE_MARK_SPACING_MS)) kept.push([stateSeq, lastSyncHlc]);
+  return kept.slice(-MAX_OWN_STATE_MARKS);
 }
 
 

@@ -81,6 +81,9 @@ export const SEGMENT_PURGE_AGE_MS = 30 * DAY_MS;
 export const DEVICE_EXPIRY_MS = 180 * DAY_MS;
 export const SNAPSHOT_INTERVAL_MS = 7 * DAY_MS;
 export const SNAPSHOTS_KEPT_PER_EPOCH = 2;
+/** Repères locaux de ses états publiés (section 5.5, condition 3) : un par jour au plus, 182 au plus. */
+export const OWN_STATE_MARK_SPACING_MS = DAY_MS;
+export const MAX_OWN_STATE_MARKS = 182;
 /** `state.ctx` réécrit pour le seul `lastSyncHlc` au plus toutes les 30 minutes (audit M1). */
 export const STATE_REFRESH_MS = 30 * 60_000;
 

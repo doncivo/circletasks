@@ -1,5 +1,5 @@
-import type { DeviceId, IsoDateTime } from '../types';
-import { isDeviceAck, type DeviceAck } from './format';
+import type { DeviceId, Hlc, IsoDateTime } from '../types';
+import { isDeviceAck, isStrictHlc, type DeviceAck } from './format';
 
 /**
  * Analyse des valeurs JSON stockées de l'état local de la synchro (`sync_meta`, `sync_state.last_acks`) : module pur (Y-TECH-02, point 4 ;
@@ -69,4 +69,25 @@ export function parseStoredIso(raw: string | null, where: string, log: StoredSta
   const ms = Date.parse(value);
   if (Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 19) !== value.slice(0, 19)) return unreadable(where, log);
   return value as IsoDateTime;
+}
+
+/**
+ * Quatrième revue, point D : seule analyse des repères de ses états publiés (`sync_meta.ownStateHlcs`) : absente → [] ; liste de
+ * `[stateSeq, lastSyncHlc]` (entier positif, hlc strict) à `stateSeq` strictement croissant → la liste ; sinon journalisée,
+ * `SyncStateUnreadableError` (l'appelant n'en tire alors aucune preuve et la réécrit à la prochaine écriture de son état).
+ */
+export function parseStoredOwnStateMarks(raw: string | null, where: string, log: StoredStateLog): Array<readonly [number, Hlc]> {
+  if (raw === null) return [];
+  const value = parseStoredJson(raw, where, log);
+  if (!Array.isArray(value)) return unreadable(where, log);
+  const out: Array<readonly [number, Hlc]> = [];
+  for (const entry of value as unknown[]) {
+    if (!Array.isArray(entry) || entry.length !== 2) return unreadable(where, log);
+    const [seq, hlc] = entry as [unknown, unknown];
+    if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0 || !isStrictHlc(hlc)) return unreadable(where, log);
+    const last = out.at(-1);
+    if (last !== undefined && seq <= last[0]) return unreadable(where, log);
+    out.push([seq, hlc]);
+  }
+  return out;
 }

@@ -28,6 +28,8 @@ export const META = {
   resume: 'resume',
   /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours (ISO), effacé quand elle cesse. */
   waitingSince: 'waitingSince',
+  /** Quatrième revue, point D : repères `[stateSeq, lastSyncHlc]` de ses états publiés (ADR 0011 §5.5, condition 3). */
+  ownStateHlcs: 'ownStateHlcs',
 } as const;
 
 /** Valeur JSON de `sync_meta` ; absente : null ; illisible : `SyncStateUnreadableError` journalisée (jamais lue comme absente). */

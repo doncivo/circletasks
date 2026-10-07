@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { epochId, type DeviceAck, type ForgottenDevice, type JournalRecord, type PublishedDeviceState } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
-import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS } from './limits';
-import { activeReaders, BLOCKED, canPurgeDeletion, coveredSegment, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
+import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS, MAX_OWN_STATE_MARKS } from './limits';
+import { activeReaders, addOwnStateMark, BLOCKED, canPurgeDeletion, coveredSegment, ownStateFloor, type OwnStateMark, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
  * Rétention et dérive (ADR 0011, sections 3.4, 4.4, 5.3 à 5.5 ; Y-09 critères 2, 6, 7 et 10). Règle validée par Ali : une trace est
@@ -133,45 +133,60 @@ describe('Y-TECH-02 (QA) : segment absent de la liste, purge possible ?', () => 
   });
 });
 
-describe('Y-TECH-02 (troisième revue, point 2) : segment absent, preuve par l’état accepté de l’écrivain (ADR 0011 §5.5)', () => {
+describe('Y-TECH-02 (troisième revue, point 2 ; quatrième revue, point D) : segment absent, preuve par l’état accepté de l’écrivain (ADR 0011 §5.5)', () => {
   const now = 400 * DAY;
   const k = 5;
   const old = h(now - 40 * DAY, B);
   const ownAck: DeviceAck = { epoch: E1, segment: k, record: 0, hlc: old, stateSeq: 3 };
   /** État accepté de l'écrivain B : instantané annoncé, ses accusés, ses oublis. */
   const writer = (acks: [DeviceId, DeviceAck][], forgotten: ForgottenDevice[] = []): Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'> => ({ snapshot: { seq: 1, endHlc: h(now - 50 * DAY, B) }, acks: new Map(acks), forgotten });
-  /** B nous connaît : accusé sur nous, hlc de notre enregistrement qu'il a lu (null : aucun). */
-  const knowsUs = (ms: number | null): [DeviceId, DeviceAck][] => [[SELF, { epoch: E1, segment: 2, record: 0, hlc: ms === null ? null : h(ms, SELF), stateSeq: 1 }]];
-  const own = (a: DeviceAck | null = ownAck) => ({ self: SELF, segment: k, epoch: E1, ownAck: a });
+  /** B nous connaît : accusé sur nous, état de nous accepté `stateSeq`, hlc de notre enregistrement lu (null : aucun). */
+  const knowsUs = (stateSeq = 7, hlcMs: number | null = now - DAY): [DeviceId, DeviceAck][] => [[SELF, { epoch: E1, segment: 2, record: 0, hlc: hlcMs === null ? null : h(hlcMs, SELF), stateSeq }]];
+  /** Nos repères : état 7 publié il y a `daysAgo` jours. */
+  const marks = (daysAgo = 2): OwnStateMark[] => [[3, h(now - 300 * DAY)], [7, h(now - daysAgo * DAY)], [9, h(now - DAY / 2)]];
+  const own = (a: DeviceAck | null = ownAck, m: readonly OwnStateMark[] = marks()) => ({ self: SELF, segment: k, epoch: E1, ownAck: a, marks: m });
   const explains = (w: Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'>, o = own()) => purgeExplainsMissingSegment(w, old, now, o);
 
   it('l’écrivain ne nous connaît pas (aucun accusé sur nous), dernier hlc lu de 40 jours, ownAck ≤ k : purge possible (reprise)', () => {
     expect(explains(writer([]))).toBe(true);
   });
 
-  it('accusé de l’écrivain sur nous sans hlc : aucune preuve, purge possible', () => {
-    expect(explains(writer(knowsUs(null)))).toBe(true);
+  it('point D : accusé sans hlc mais état de nous accepté récent : attente (le hlc de l’accusé n’est plus exigé)', () => {
+    expect(explains(writer(knowsUs(7, null)))).toBe(false);
   });
 
-  it('hlc de l’écrivain sur nous au-delà de 180 jours moins la marge : purge possible ; juste en deçà : attente', () => {
+  it('point D : état de nous accepté daté par nos repères, au-delà de 180 jours moins la marge : purge possible ; juste en deçà : attente', () => {
     const limit = now + HLC_MAX_DRIFT_MS - DEVICE_EXPIRY_MS;
-    expect(explains(writer(knowsUs(limit)))).toBe(true);
-    expect(explains(writer(knowsUs(limit + 1)))).toBe(false);
+    expect(explains(writer(knowsUs()), own(ownAck, [[7, h(limit)]]))).toBe(true);
+    expect(explains(writer(knowsUs()), own(ownAck, [[7, h(limit + 1)]]))).toBe(false);
+  });
+
+  it('point D : stateSeq accepté ancien avec un accusé de hlc récent (nos journaux arrivent, plus notre état) : purge possible', () => {
+    expect(explains(writer(knowsUs(3, now - DAY)))).toBe(true);
+  });
+
+  it('point D : stateSeq récent avec un hlc d’accusé ancien : attente', () => {
+    expect(explains(writer(knowsUs(8, now - 300 * DAY)))).toBe(false);
+  });
+
+  it('point D : aucun repère (illisible ou pas encore écrit) : aucune preuve, règle des 30 jours', () => {
+    expect(explains(writer(knowsUs()), own(ownAck, []))).toBe(true);
+    expect(purgeExplainsMissingSegment(writer(knowsUs()), h(now - DAY, B), now, own(ownAck, []))).toBe(false);
   });
 
   it('l’écrivain nous oublie : purge possible', () => {
     const forgotten: ForgottenDevice[] = [{ deviceId: SELF, at: h(now - DAY, B), lastAck: null }];
-    expect(explains(writer(knowsUs(now - DAY), forgotten))).toBe(true);
+    expect(explains(writer(knowsUs(), forgotten))).toBe(true);
   });
 
-  it('l’écrivain nous compte (accusé récent) et ownAck ≤ k : attente, quel que soit l’âge du dernier hlc lu', () => {
-    expect(explains(writer(knowsUs(now - DAY)))).toBe(false);
-    expect(explains(writer(knowsUs(now - DAY)), own({ ...ownAck, segment: k - 1 }))).toBe(false);
-    expect(purgeExplainsMissingSegment(writer(knowsUs(now - DAY)), null, now, own())).toBe(false);
+  it('l’écrivain nous compte (état accepté récent) et ownAck ≤ k : attente, quel que soit l’âge du dernier hlc lu', () => {
+    expect(explains(writer(knowsUs()))).toBe(false);
+    expect(explains(writer(knowsUs()), own({ ...ownAck, segment: k - 1 }))).toBe(false);
+    expect(purgeExplainsMissingSegment(writer(knowsUs()), null, now, own())).toBe(false);
   });
 
   it('ownAck d’une autre époque, au-delà de k ou absent : aucune preuve, purge possible', () => {
-    const w = writer(knowsUs(now - DAY));
+    const w = writer(knowsUs());
     expect(explains(w, own({ ...ownAck, epoch: epochId(2, SELF) }))).toBe(true);
     expect(explains(w, own({ ...ownAck, segment: k + 1 }))).toBe(true);
     expect(explains(w, own(null))).toBe(true);
@@ -180,6 +195,38 @@ describe('Y-TECH-02 (troisième revue, point 2) : segment absent, preuve par l�
   it('sans preuve, la règle des 30 jours reste : sans instantané ou dernier hlc lu récent, jamais', () => {
     expect(purgeExplainsMissingSegment({ ...writer([]), snapshot: null }, old, now, own())).toBe(false);
     expect(purgeExplainsMissingSegment(writer([]), h(now - DAY, B), now, own())).toBe(false);
+  });
+});
+
+describe('quatrième revue, point D : repères de ses états publiés (ownStateFloor, addOwnStateMark)', () => {
+  const at = (ms: number): Hlc => h(ms);
+  it('borne basse : plus grand repère de stateSeq inférieur ou égal ; aucun : null', () => {
+    const marks: OwnStateMark[] = [[3, at(NOW - 10 * DAY)], [7, at(NOW - 5 * DAY)], [12, at(NOW - DAY)]];
+    expect(ownStateFloor(marks, 2)).toBeNull();
+    expect(ownStateFloor(marks, 3)).toBe(at(NOW - 10 * DAY));
+    expect(ownStateFloor(marks, 11)).toBe(at(NOW - 5 * DAY));
+    expect(ownStateFloor(marks, 40)).toBe(at(NOW - DAY));
+    expect(ownStateFloor([], 40)).toBeNull();
+  });
+
+  it('espacement : un repère par jour au plus ; liste vide : ajouté', () => {
+    let marks = addOwnStateMark([], 1, at(NOW), NOW);
+    expect(marks).toEqual([[1, at(NOW)]]);
+    marks = addOwnStateMark(marks, 2, at(NOW + DAY - 1), NOW + DAY - 1);
+    expect(marks).toEqual([[1, at(NOW)]]);
+    marks = addOwnStateMark(marks, 3, at(NOW + DAY), NOW + DAY);
+    expect(marks).toEqual([[1, at(NOW)], [3, at(NOW + DAY)]]);
+  });
+
+  it('élagage : repères de plus de 180 jours + la marge retirés ; 182 au plus', () => {
+    const limit = DEVICE_EXPIRY_MS + HLC_MAX_DRIFT_MS;
+    const marks: OwnStateMark[] = [[1, at(NOW - limit - 1)], [2, at(NOW - limit)]];
+    expect(addOwnStateMark(marks, 3, at(NOW), NOW)).toEqual([[2, at(NOW - limit)], [3, at(NOW)]]);
+    const many: OwnStateMark[] = Array.from({ length: 182 }, (_, i) => [i + 1, at(NOW - (182 - i) * (DAY / 2))] as const);
+    const next = addOwnStateMark(many, 500, at(NOW + DAY), NOW + DAY);
+    expect(next).toHaveLength(MAX_OWN_STATE_MARKS);
+    expect(next[0]).toEqual(many[1]);
+    expect(next.at(-1)).toEqual([500, at(NOW + DAY)]);
   });
 });
 

@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isSyncStateUnreadable, parseStoredAcks, type StoredStateLog } from '../domain/sync/stored';
+import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
@@ -15,7 +15,7 @@ import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from
 import { finishResumeTx, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
+import { addOwnStateMark, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -306,6 +306,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await data.transaction(async (tx) => {
         await writeJson(tx, META.stateSeq, state.stateSeq);
         await writeJson(tx, META.lastState, { text: comparable, at: deps.clock.nowMs() });
+        // Quatrième revue, point D (§5.5, condition 3) : repère de cet état publié ; une liste illisible (journalisée) est réécrite.
+        await writeJson(tx, META.ownStateHlcs, addOwnStateMark(await readOwnStateMarks(tx, logger), state.stateSeq, state.lastSyncHlc, deps.clock.nowMs()));
         if (publishForget) await writeJson(tx, FORGET_META.publish, null);
       });
       if (publishForget) logger.log('forget-published', {});
@@ -468,6 +470,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
 
     // 4. Lecture (avec reprise depuis l'instantané si demandée ou nécessaire, une fois par cycle).
     const knows = await knowsFrom(repos, logger);
+    /** Repères de ses états publiés, lus au premier segment absent du cycle (quatrième revue, point D). */
+    let ownMarks: readonly OwnStateMark[] | undefined;
     let resumed = false;
     const doResume = async (): Promise<boolean> => {
       resumed = true;
@@ -559,7 +563,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           const ownPublished = lastWritten ?? ownState;
           // Troisième revue, point 2 (ADR 0011 §5.5) : preuve tirée de l'état accepté de l'écrivain (il nous compte parmi ses lecteurs
           // actifs), jamais de notre propre activité.
-          const own = { self: deps.deviceId, segment: cursor.segment, epoch: readEpoch, ownAck: ownPublished?.acks.get(target.id) ?? null };
+          const own = { self: deps.deviceId, segment: cursor.segment, epoch: readEpoch, ownAck: ownPublished?.acks.get(target.id) ?? null, marks: (ownMarks ??= await readOwnStateMarks(repos, logger)) };
           if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs(), own)) {
             needResume = true;
           } else {
@@ -717,6 +721,19 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       }
     }
     return failWith(error, { folderLabel, folderKind, pendingFiles: [...pending] });
+  }
+}
+
+/**
+ * Quatrième revue, point D : repères de ses états publiés (`sync_meta.ownStateHlcs`). Valeur illisible : journalisée (`state-unreadable`,
+ * sans contenu) et lue comme aucun repère : aucune preuve (règle des 30 jours), liste réécrite à la prochaine écriture de son état.
+ */
+async function readOwnStateMarks(repos: Repositories, log: StoredStateLog): Promise<OwnStateMark[]> {
+  try {
+    return parseStoredOwnStateMarks(await repos.sync.getMeta(META.ownStateHlcs), `sync_meta.${META.ownStateHlcs}`, log);
+  } catch (error) {
+    if (isSyncStateUnreadable(error)) return [];
+    throw error;
   }
 }
 

@@ -566,3 +566,90 @@ describe('quatrième revue, point A : entrée de l’auteur dans covers (ADR 001
     expect(meta?.covers ?? {}).not.toHaveProperty(a.id);
   });
 });
+
+describe('quatrième revue, point D : preuve datée par l’état de nous accepté par l’écrivain (ADR 0011 §5.5, condition 3)', () => {
+  function refuseNextAppend(d: SimDevice): void {
+    const real = d.platform.appendJournal.bind(d.platform);
+    let refused = false;
+    d.platform.appendJournal = async (request) => {
+      if (!refused) {
+        refused = true;
+        throw new SyncPlatformError('segment-full');
+      }
+      return real(request);
+    };
+  }
+  const ownSegments = (d: SimDevice): number[] => [...([...(d.folder.devices.get(d.id)?.epochs.values() ?? [])].at(-1)?.segments.keys() ?? [])];
+  const titlesOf = async (d: SimDevice): Promise<string[]> => (await d.driver.select<{ title: string }>('SELECT title FROM task WHERE deleted_at IS NULL ORDER BY title')).map((r) => r.title);
+
+  it('nos journaux arrivent chez A, plus notre état : attente tant que l’état accepté a moins de 180 jours, puis A nous expire, purge j-1, et B reprend', async () => {
+    const a = await first();
+    const b = await createSimDevice(B_ID, { name: 'B', clock: a.clock });
+    devices.push(b);
+    await pair(a, b);
+    await b.cycle();
+    await a.createTask('T1');
+    for (let r = 0; r < 2; r += 1) {
+      syncFolders([a, b]);
+      await a.cycle();
+      await b.cycle();
+    }
+    expect(await titlesOf(b)).toEqual(['T1']);
+    const accepted = a.clock.nowMs();
+    // Désormais, l'état de B n'arrive plus chez A (iCloud lui garde l'ancien) ; ses journaux, si.
+    const bToA = (): void => propagate(b.folder, a.folder, b.id, { staleState: true });
+    let n = 0;
+    const exchange = async (): Promise<void> => {
+      n += 1;
+      await b.createTask(`B${String(n)}`);
+      await b.cycle();
+      bToA();
+      await a.cycle();
+    };
+    // 100 jours de synchro complète des deux côtés (B lit tout de A).
+    for (let day = 0; day < 100; day += 20) {
+      a.clock.advance(20 * DAY);
+      await exchange();
+      propagate(a.folder, b.folder, a.id);
+      expect((await b.cycle()).phase).toBe('idle');
+    }
+    // A passe à j-2 ; j-1 n'arrive plus chez B (curseur de B dans j-1, dernier hlc lu de A vieux de 100 jours).
+    refuseNextAppend(a);
+    await a.createTask('T2');
+    await a.cycle();
+    const [epoch] = [...(a.folder.devices.get(a.id)?.epochs.keys() ?? [])];
+    const toB = (): void => propagate(a.folder, b.folder, a.id, { drop: [`${String(epoch)}/j-00000001.ctj`] });
+    toB();
+    const before = b.logger.entries.length;
+    expect((await b.cycle()).phase, 'état de B accepté par A il y a 100 jours : A ne peut pas avoir purgé j-1').toBe('waiting-icloud');
+    // Jusqu'à 180 jours (moins la marge) après l'état accepté : attente, sans reprise.
+    while (a.clock.nowMs() + 10 * DAY < accepted + 180 * DAY) {
+      a.clock.advance(10 * DAY);
+      await exchange();
+      toB();
+      expect((await b.cycle()).phase).toBe('waiting-icloud');
+    }
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(0);
+    // Au-delà : A expire B et purge j-1 ; B, sans preuve, applique la règle des 30 jours et reprend.
+    a.clock.advance(15 * DAY);
+    await exchange();
+    expect(ownSegments(a)).not.toContain(1);
+    toB();
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(1);
+    expect(await titlesOf(b)).toContain('T2');
+  });
+});
+
+describe('quatrième revue, point D : repères illisibles', () => {
+  it('sync_meta.ownStateHlcs illisible : journalisé sans contenu, réécrit à la prochaine écriture de l’état', async () => {
+    const a = await first();
+    await a.data.repos.sync.setMeta(META.ownStateHlcs, '{pas du json');
+    await a.createTask('T1');
+    await a.cycle();
+    expect(events(a, 'state-unreadable')).toContainEqual({ where: 'sync_meta.ownStateHlcs' });
+    const marks = await readJson<[number, string][]>(a.data.repos, META.ownStateHlcs);
+    expect(marks).toHaveLength(1);
+    expect(marks?.[0]?.[0]).toBeGreaterThan(0);
+  });
+});
