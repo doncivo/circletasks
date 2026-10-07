@@ -81,7 +81,11 @@ test.describe('S-06 — planifier depuis « Un jour » en glissant', () => {
     // Sans heure : la sous-ligne de la carte n'a pas d'horaire.
     await expect(dayOf(page, thursday)).not.toContainText(/\d\d:\d\d/);
     const status = page.getByRole('status');
-    await expect(status).toContainText(`« Préparer la présentation Q4 » planifiée au ${dayLabel(thursday)}`);
+    // Message relatif au jour courant (createTaskUseCases) : le jeudi visé peut être aujourd’hui ou demain.
+    const today = await browserToday(page);
+    const when =
+      thursday === today ? 'pour aujourd’hui' : thursday === addIsoDays(today, 1) ? 'pour demain' : `au ${dayLabel(thursday)}`;
+    await expect(status).toContainText(`« Préparer la présentation Q4 » planifiée ${when}`);
 
     await status.getByRole('button', { name: 'Annuler' }).click();
     await expect.poll(() => panelTitles(page)).toEqual(['Renouveler le passeport', 'Préparer la présentation Q4', 'Lire le rapport annuel']);

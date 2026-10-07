@@ -52,7 +52,11 @@ test('parcours 12 (Un jour) : ajouter sans date, planifier, annuler, renvoyer da
     await mouseDragTo(page, card, dayOf(page, target));
     await expect(dayOf(page, target)).toContainText('Renouveler le passeport');
     await expect(panel.getByRole('button', { name: 'Renouveler le passeport', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('status')).toContainText(`« Renouveler le passeport » planifiée au ${dayLabel(target)}`);
+    // Message relatif au jour courant (createTaskUseCases) : le jeudi visé peut être aujourd’hui ou demain.
+    const today = await browserToday(page);
+    const when =
+      target === today ? 'pour aujourd’hui' : target === addIsoDays(today, 1) ? 'pour demain' : `au ${dayLabel(target)}`;
+    await expect(page.getByRole('status')).toContainText(`« Renouveler le passeport » planifiée ${when}`);
   }
 
   // 3. Annuler remet la tâche dans « Un jour ».
