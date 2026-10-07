@@ -50,6 +50,8 @@ jobs:
         with:
           targets: aarch64-apple-ios
 
+      # Le dossier target contient des binaires qui embarquent l'identifiant Google iOS (non confidentiel, dépôt privé) ;
+      # le cache n'est lisible que par ce dépôt. Exclure les binaires finaux casserait la compilation incrémentale.
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -142,6 +144,11 @@ jobs:
           path: info/Info.plist
           if-no-files-found: error
           retention-days: 30
+
+      # Les journaux Xcode peuvent répéter l'environnement du build : toute ligne CT_GOOGLE est supprimée avant l'envoi.
+      - name: Filtrer les journaux de compilation
+        if: failure()
+        run: find src-tauri/gen/apple -type f \( -name '*.log' -o -name project.yml \) -exec sed -i '' '/CT_GOOGLE/d' {} +
 
       - name: Journaux de compilation en cas d'échec
         if: failure()

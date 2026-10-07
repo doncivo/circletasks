@@ -2,7 +2,7 @@
 // cohérence du guide d'installation avec le workflow et les scripts. Aucun secret, aucune commande iOS.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -369,7 +369,14 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     expect(workflow).not.toContain('CT_GOOGLE_CLIENT_SECRET');
     expect(workflow).not.toContain('CT_GOOGLE_CLIENT_ID');
     expect(win).not.toContain('CT_GOOGLE_IOS_CLIENT_ID');
-    expect(read('.github/workflows/tests.yml')).not.toContain('CT_GOOGLE');
+    for (const f of readdirSync(join(root, '.github/workflows'))) {
+      if (f !== 'build-windows.yml' && f !== 'build-ios.yml') expect(read(`.github/workflows/${f}`), f).not.toContain('CT_GOOGLE');
+    }
+    for (const yml of [win, workflow]) {
+      expect(yml).not.toMatch(/^\s*(pull_request|pull_request_target|workflow_run)\b/m);
+      // Pas d'env au niveau workflow ou job : aucune mention avant le premier `steps:`.
+      expect(yml.slice(0, yml.indexOf('steps:'))).not.toContain('CT_GOOGLE');
+    }
     expect(win.slice(win.indexOf('\n  publish:\n'))).not.toContain('CT_GOOGLE');
     expect(workflow.slice(workflow.indexOf('\n  publish:\n'))).not.toContain('CT_GOOGLE');
     expect(read('src-tauri/build.rs')).toContain('"CT_GOOGLE_IOS_CLIENT_ID"');

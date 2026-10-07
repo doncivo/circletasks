@@ -53,6 +53,8 @@ jobs:
       - name: Rust stable
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
 
+      # Le dossier target contient des binaires qui embarquent les identifiants Google (non confidentiels, dépôt privé) ;
+      # le cache n'est lisible que par ce dépôt. Exclure les binaires finaux casserait la compilation incrémentale.
       # Hors tag : cache lecture/écriture. Le dossier bundle est exclu (aucun .sig ni installeur résiduel).
       - name: Cache cargo
         if: github.ref_type != 'tag'
@@ -151,7 +153,7 @@ jobs:
           overwrite: true
 
   # Publication : uniquement sur push de tag vX.Y.Z. L'environnement « releases » porte le secret
-  # RELEASES_TOKEN, sans approbation manuelle (décision d'Ali du 2026-10-07, docs/decisions.md). Le secret RELEASES_TOKEN n'existe que dans cet environnement.
+  # RELEASES_TOKEN (lui seul l'a), sans approbation manuelle (décision d'Ali du 2026-10-07, docs/decisions.md).
   publish:
     needs: windows
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
