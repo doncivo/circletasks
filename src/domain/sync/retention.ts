@@ -13,7 +13,7 @@
 
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { compareEpochs, isStrictHlc, isSyncDeviceId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState } from './format';
-import { DEVICE_EXPIRY_MS, MAX_STATE_FORGOTTEN, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
+import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS, MAX_STATE_FORGOTTEN, SEGMENT_PURGE_AGE_MS, TOMBSTONE_GRACE_MS } from './limits';
 import { hlcDevice, hlcMs } from './parse';
 
 /** Ce que la base locale sait d'un autre appareil (ligne de `sync_state`). */
@@ -100,10 +100,6 @@ export function purgeBefore(nowMs: number): IsoDateTime {
 }
 
 /**
- * Un de ses propres segments peut-il être supprimé (section 5.3) ? Un instantané le couvre, tous les appareils actifs l'ont accusé
- * (position au-delà de sa fin), son dernier enregistrement a plus de 30 jours. Jamais le segment de tête.
- */
-/**
  * Y-TECH-02 (QA) : un segment nécessaire absent de la liste du dossier peut-il avoir été purgé par son écrivain ? La purge
  * (`segmentPurgeable`) exige un instantané qui le couvre et un dernier enregistrement de plus de 30 jours ; or tout enregistrement de ce
  * segment est postérieur au dernier hlc lu de cet appareil (`ackHlc`, hlc strictement croissants). Sans instantané publié dans
@@ -111,25 +107,44 @@ export function purgeBefore(nowMs: number): IsoDateTime {
  * visible), jamais une reprise depuis l'instantané à chaque cycle.
  */
 export function purgeExplainsMissingSegment(
-  writer: { readonly snapshot: unknown },
+  writer: Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'>,
   ackHlc: Hlc | null,
   nowMs: number,
-  own?: { readonly segment: number; readonly epoch: EpochId; readonly ownAck: DeviceAck | null; readonly ownActive: boolean },
+  own?: { readonly self: DeviceId; readonly segment: number; readonly epoch: EpochId; readonly ownAck: DeviceAck | null },
 ): boolean {
   if (writer.snapshot === null) return false;
-  // Seconde revue, point 7 : la purge d'un segment exige que chaque lecteur actif ait publié un accusé au-delà (`segmentPurgeable`) ;
-  // notre propre accusé publié sur l'écrivain, dans cette époque et au plus sur ce segment, l'interdit tant que nous sommes actifs
-  // pour lui (moins de 180 jours) : le fichier n'est pas encore arrivé, même si le dernier hlc lu est ancien.
-  if (own && own.ownActive && own.ownAck !== null && own.ownAck.epoch === own.epoch && own.ownAck.segment <= own.segment) return false;
+  // Troisième revue, point 2 (ADR 0011 §5.5) : la purge d'un segment exige un accusé au-delà de chaque lecteur que l'écrivain compte
+  // (`segmentPurgeable`). Preuve qu'il ne peut pas avoir purgé `k` : notre accusé publié sur lui est de l'époque lue et au plus sur `k`,
+  // et son état accepté nous compte parmi ses lecteurs actifs (accusé sur nous de hlc non nul, de moins de 180 jours avec la marge de
+  // dérive de son horloge, aucun oubli de nous). Sinon, aucune preuve : règle des 30 jours (jamais une attente sans issue).
+  if (own) {
+    const known = writer.acks.get(own.self);
+    const proof =
+      own.ownAck !== null &&
+      own.ownAck.epoch === own.epoch &&
+      own.ownAck.segment <= own.segment &&
+      known !== undefined &&
+      known.hlc !== null &&
+      nowMs + HLC_MAX_DRIFT_MS - hlcMs(known.hlc) < DEVICE_EXPIRY_MS &&
+      !forgetOrder(writer.forgotten).has(own.self);
+    if (proof) return false;
+  }
   return ackHlc === null || nowMs - hlcMs(ackHlc) >= SEGMENT_PURGE_AGE_MS;
 }
 
-export function segmentPurgeable(segment: number, input: { readonly headSegment: number; readonly coveredSegment: number; readonly readers: readonly KnownDevice[]; readonly self: DeviceId; readonly lastWriteMs: number | null; readonly nowMs: number }): boolean {
+/**
+ * Un de ses propres segments peut-il être supprimé (section 5.3) ? Un instantané le couvre, tous les appareils actifs l'ont accusé
+ * (position au-delà de sa fin), son dernier enregistrement a plus de 30 jours. Jamais le segment de tête.
+ *
+ * Troisième revue, point 2 (ADR 0011 §5.3) : un accusé ne vaut lecture du segment `segment` de l'époque `epoch` que s'il est de cette
+ * époque et au-delà du segment, ou d'une époque postérieure ; un accusé d'une époque antérieure (figé par une réinitialisation) ne vaut rien.
+ */
+export function segmentPurgeable(segment: number, input: { readonly headSegment: number; readonly coveredSegment: number; readonly readers: readonly KnownDevice[]; readonly self: DeviceId; readonly lastWriteMs: number | null; readonly nowMs: number; readonly epoch: EpochId }): boolean {
   if (segment >= input.headSegment || segment >= input.coveredSegment) return false;
   if (input.lastWriteMs === null || input.nowMs - input.lastWriteMs < SEGMENT_PURGE_AGE_MS) return false;
   return input.readers.every((reader) => {
     const ack = reader.acks.get(input.self);
-    return ack !== undefined && ack.segment > segment;
+    return ack !== undefined && (compareEpochs(ack.epoch, input.epoch) > 0 || (ack.epoch === input.epoch && ack.segment > segment));
   });
 }
 

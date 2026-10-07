@@ -557,12 +557,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           // d'iCloud) : attente visible, jamais une reprise à chaque cycle.
           const writer = accepted.get(target.id) ?? (target.id === self ? ownState : null);
           const ownPublished = lastWritten ?? ownState;
-          const own = {
-            segment: cursor.segment,
-            epoch: readEpoch,
-            ownAck: ownPublished?.acks.get(target.id) ?? null,
-            ownActive: ownPublished !== null && deps.clock.nowMs() - hlcMs(ownPublished.lastSyncHlc) < DEVICE_EXPIRY_MS,
-          };
+          // Troisième revue, point 2 (ADR 0011 §5.5) : preuve tirée de l'état accepté de l'écrivain (il nous compte parmi ses lecteurs
+          // actifs), jamais de notre propre activité.
+          const own = { self: deps.deviceId, segment: cursor.segment, epoch: readEpoch, ownAck: ownPublished?.acks.get(target.id) ?? null };
           if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs(), own)) {
             needResume = true;
           } else {

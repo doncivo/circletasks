@@ -6,6 +6,7 @@ import { SyncPlatformError, type FolderScan, type SyncPlatform } from '../../../
 import { knownDevices } from '../../../src/sync/maintenance';
 import { readJson } from '../../../src/sync/meta';
 import { createMemorySyncLogger } from '../../../src/sync';
+import { propagate } from '../../sim/syncCloudSim';
 import { createSimDevice, pair, setupFirst, syncFolders, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -319,5 +320,161 @@ describe('seconde revue, point 5 : analyse des valeurs stockées importée du do
   it('le repository ne réexporte plus l’analyse (une seule porte : src/domain/sync/stored.ts)', async () => {
     const repository = await import('../../../src/db/repositories/syncRepository');
     for (const name of ['parseStoredAcks', 'parseStoredJson', 'isSyncStateUnreadable', 'SyncStateUnreadableError']) expect(name in repository, name).toBe(false);
+  });
+});
+
+describe('troisième revue, point 2 : segment absent, preuve par l’état accepté de l’écrivain ; époque des accusés dans la purge', () => {
+  /** Le prochain ajout de `d` est refusé une fois (`segment-full`) : le moteur ouvre le segment suivant. */
+  function refuseNextAppend(d: SimDevice): void {
+    const real = d.platform.appendJournal.bind(d.platform);
+    let refused = false;
+    d.platform.appendJournal = async (request) => {
+      if (!refused) {
+        refused = true;
+        throw new SyncPlatformError('segment-full');
+      }
+      return real(request);
+    };
+  }
+  /** Segments de `d` dans chacune de ses époques, tels que son dossier les liste. */
+  const ownSegments = (d: SimDevice): number[][] => [...(d.folder.devices.get(d.id)?.epochs.values() ?? [])].map((dir) => [...dir.segments.keys()]);
+  const titlesOf = async (d: SimDevice): Promise<string[]> => (await d.driver.select<{ title: string }>('SELECT title FROM task WHERE deleted_at IS NULL ORDER BY title')).map((r) => r.title);
+  const resumes = (d: SimDevice, from: number): number => d.logger.entries.slice(from).filter((e) => e.event === 'resumed-from-snapshot').length;
+
+  async function couple(): Promise<[SimDevice, SimDevice]> {
+    const a = await createSimDevice(A_ID, { name: 'A' });
+    devices.push(a);
+    await setupFirst(a);
+    await a.cycle();
+    const b = await createSimDevice(B_ID, { name: 'B', clock: a.clock });
+    devices.push(b);
+    await pair(a, b);
+    await b.cycle();
+    return [a, b];
+  }
+  const settle = async (list: readonly SimDevice[], rounds = 2): Promise<void> => {
+    for (let r = 0; r < rounds; r += 1) {
+      for (const d of list) {
+        syncFolders(list);
+        d.clock.advance(1_000);
+        await d.cycle();
+      }
+    }
+  };
+  /** A passe à j-2 (T2), puis cycles hebdomadaires : instantané couvrant, purge de j-1 si aucun lecteur ne la retient. */
+  async function rotateAndAge(a: SimDevice, title: string): Promise<void> {
+    refuseNextAppend(a);
+    await a.createTask(title);
+    await a.cycle();
+    for (let i = 0; i < 3; i += 1) {
+      a.clock.advance(DAY);
+      await a.cycle();
+    }
+  }
+
+  it('état de B jamais arrivé chez A : A purge j-1 ; dernier hlc lu de plus de 30 jours → B reprend au cycle suivant, jamais d’attente sans fin', async () => {
+    const [a, b] = await couple();
+    await a.createTask('T1');
+    await a.cycle();
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('idle');
+    // Les fichiers de B n'arrivent jamais chez A : A ne le connaît pas.
+    a.clock.advance(40 * DAY);
+    await rotateAndAge(a, 'T2');
+    expect(ownSegments(a)).toEqual([[2]]);
+    propagate(a.folder, b.folder, a.id);
+    const before = b.logger.entries.length;
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(resumes(b, before)).toBe(1);
+    expect(await titlesOf(b)).toEqual(['T1', 'T2']);
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(resumes(b, before)).toBe(1);
+  });
+
+  it('A a accepté un état de B puis rien pendant plus de 180 jours : A expire B et purge j-1 → B reprend', async () => {
+    const [a, b] = await couple();
+    await a.createTask('T1');
+    await b.createTask('TB');
+    await settle([a, b]);
+    expect(await titlesOf(a)).toEqual(['T1', 'TB']);
+    // B reste actif (il lit A), mais ses fichiers n'arrivent plus chez A.
+    a.clock.advance(170 * DAY);
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('idle');
+    a.clock.advance(15 * DAY);
+    await rotateAndAge(a, 'T2');
+    expect(ownSegments(a)).toEqual([[2]]);
+    propagate(a.folder, b.folder, a.id);
+    const before = b.logger.entries.length;
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(resumes(b, before)).toBe(1);
+    expect(await titlesOf(b)).toEqual(['T1', 'T2', 'TB']);
+  });
+
+  it('A connaît B (accusé récent), j-1 arrive en retard alors que le dernier hlc lu a 40 jours : B attend, puis lit tout sans reprise', async () => {
+    const [a, b] = await couple();
+    await a.createTask('T1');
+    await settle([a, b]);
+    a.clock.advance(40 * DAY);
+    await b.createTask('TB');
+    await b.cycle();
+    propagate(b.folder, a.folder, b.id);
+    await a.cycle();
+    await a.createTask('T2');
+    await a.cycle();
+    refuseNextAppend(a);
+    await a.createTask('T3');
+    await a.cycle();
+    expect(ownSegments(a)).toEqual([[1, 2]]);
+    const [epoch] = [...(a.folder.devices.get(a.id)?.epochs.keys() ?? [])];
+    expect(a.folder.devices.get(a.id)?.epochs.get(epoch as never)?.snapshots.size, 'instantané annoncé : seule la preuve retient la reprise').toBeGreaterThan(0);
+    propagate(a.folder, b.folder, a.id, { drop: [`${String(epoch)}/j-00000001.ctj`] });
+    const before = b.logger.entries.length;
+    for (let i = 0; i < 3; i += 1) {
+      expect((await b.cycle()).phase, `cycle ${String(i)}`).toBe('waiting-icloud');
+      expect(await titlesOf(b)).toEqual(['T1', 'TB']);
+    }
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(await titlesOf(b)).toEqual(['T1', 'T2', 'T3', 'TB']);
+    expect(resumes(b, before)).toBe(0);
+  });
+
+  it('réinitialisation : accusé de B figé dans l’époque antérieure au-delà de k → A ne purge jamais j-k de la nouvelle époque', async () => {
+    const [a, b] = await couple();
+    await settle([a, b]);
+    await a.createTask('T0');
+    await a.cycle();
+    for (const title of ['T1', 'T2', 'T3']) {
+      refuseNextAppend(a);
+      await a.createTask(title);
+      await a.cycle();
+    }
+    await settle([a, b]);
+    await b.createTask('TB');
+    await b.cycle();
+    await settle([a, b]);
+    a.clock.advance(11 * 60_000);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    syncFolders([a, b]);
+    expect((await b.cycle()).phase).toBe('reset-required');
+    syncFolders([a, b]);
+    await a.cycle();
+    await a.createTask('N1');
+    await a.cycle();
+    refuseNextAppend(a);
+    await a.createTask('N2');
+    await a.cycle();
+    expect(ownSegments(a).at(-1)).toEqual([1, 2]);
+    // Accusé de B sur A : époque antérieure, segment 4 (> 1).
+    const row = (await a.data.repos.sync.getStates()).find((r) => r.deviceId === b.id);
+    expect(row?.lastAcks).toMatch(/"epoch":"e0001-[^"]+","segment":4/);
+    for (let i = 0; i < 6; i += 1) {
+      a.clock.advance(7 * DAY);
+      syncFolders([a, b]);
+      await a.cycle();
+    }
+    expect(events(a, 'snapshot-written').length).toBeGreaterThan(0);
+    expect(ownSegments(a).at(-1), 'j-1 de la nouvelle époque, jamais lu par B : gardé').toEqual([1, 2]);
   });
 });

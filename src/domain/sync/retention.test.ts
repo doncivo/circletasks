@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import { epochId, type DeviceAck, type EpochId, type JournalRecord } from './format';
+import { epochId, type DeviceAck, type ForgottenDevice, type JournalRecord, type PublishedDeviceState } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
-import { HLC_MAX_DRIFT_MS } from './limits';
+import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS } from './limits';
 import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
@@ -82,7 +82,7 @@ describe('appareils inactifs et sans état valide (Y-09 critère 2, section 3.4)
 
 describe('purge de ses segments (section 5.3)', () => {
   const readers = [device(B, [[SELF, ack(h(NOW), 4)]])];
-  const base = { headSegment: 5, coveredSegment: 4, readers, self: SELF, lastWriteMs: NOW - 31 * DAY, nowMs: NOW };
+  const base = { headSegment: 5, coveredSegment: 4, readers, self: SELF, lastWriteMs: NOW - 31 * DAY, nowMs: NOW, epoch: E1 };
   it('couvert par un instantané, accusé par tous, plus de 30 jours : supprimable ; jamais la tête', () => {
     expect(segmentPurgeable(3, base)).toBe(true);
     expect(segmentPurgeable(4, base)).toBe(false);
@@ -126,25 +126,74 @@ describe('Y-TECH-02 (QA) : segment absent de la liste, purge possible ?', () => 
   const DAY = 86_400_000;
   it('sans instantané publié : jamais ; hlc lu de moins de 30 jours : jamais ; au-delà, ou rien lu : possible', () => {
     const now = 100 * DAY;
-    expect(purgeExplainsMissingSegment({ snapshot: null }, null, now)).toBe(false);
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - DAY), now)).toBe(false);
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 30 * DAY), now)).toBe(true);
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, null, now)).toBe(true);
+    expect(purgeExplainsMissingSegment({ snapshot: null, acks: new Map<DeviceId, DeviceAck>(), forgotten: [] }, null, now)).toBe(false);
+    expect(purgeExplainsMissingSegment({ snapshot: { seq: 1, endHlc: at(0) }, acks: new Map<DeviceId, DeviceAck>(), forgotten: [] }, at(now - DAY), now)).toBe(false);
+    expect(purgeExplainsMissingSegment({ snapshot: { seq: 1, endHlc: at(0) }, acks: new Map<DeviceId, DeviceAck>(), forgotten: [] }, at(now - 30 * DAY), now)).toBe(true);
+    expect(purgeExplainsMissingSegment({ snapshot: { seq: 1, endHlc: at(0) }, acks: new Map<DeviceId, DeviceAck>(), forgotten: [] }, null, now)).toBe(true);
   });
 });
 
-describe('Y-TECH-02 (seconde revue, point 7) : notre propre accusé interdit la purge', () => {
-  const at = (ms: number) => `${String(ms).padStart(15, '0')}-0000-0f8fad5b-d9cb-469f-a165-70867728950e` as Hlc;
-  const DAY = 86_400_000;
-  const E = 'e0001-0f8fad5b-d9cb-469f-a165-70867728950e' as EpochId;
-  it('curseur en (k, 0), dernier hlc lu de k-1 vieux de 40 jours, k pas encore arrivé : notre accusé publié (segment ≤ k) interdit la purge de k', () => {
-    const now = 100 * DAY;
-    const ownAck = { epoch: E, segment: 5, record: 0, hlc: at(now - 40 * DAY), stateSeq: 3 };
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck, ownActive: true })).toBe(false);
-    // Notre accusé est déjà au-delà de k : purge possible (règle d'avant).
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck: { ...ownAck, segment: 6 }, ownActive: true })).toBe(true);
-    // Absent depuis plus de 180 jours (non compté par l'écrivain), ou aucun accusé publié : purge possible.
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck, ownActive: false })).toBe(true);
-    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck: null, ownActive: true })).toBe(true);
+describe('Y-TECH-02 (troisième revue, point 2) : segment absent, preuve par l’état accepté de l’écrivain (ADR 0011 §5.5)', () => {
+  const now = 400 * DAY;
+  const k = 5;
+  const old = h(now - 40 * DAY, B);
+  const ownAck: DeviceAck = { epoch: E1, segment: k, record: 0, hlc: old, stateSeq: 3 };
+  /** État accepté de l'écrivain B : instantané annoncé, ses accusés, ses oublis. */
+  const writer = (acks: [DeviceId, DeviceAck][], forgotten: ForgottenDevice[] = []): Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'> => ({ snapshot: { seq: 1, endHlc: h(now - 50 * DAY, B) }, acks: new Map(acks), forgotten });
+  /** B nous connaît : accusé sur nous, hlc de notre enregistrement qu'il a lu (null : aucun). */
+  const knowsUs = (ms: number | null): [DeviceId, DeviceAck][] => [[SELF, { epoch: E1, segment: 2, record: 0, hlc: ms === null ? null : h(ms, SELF), stateSeq: 1 }]];
+  const own = (a: DeviceAck | null = ownAck) => ({ self: SELF, segment: k, epoch: E1, ownAck: a });
+  const explains = (w: Pick<PublishedDeviceState, 'snapshot' | 'acks' | 'forgotten'>, o = own()) => purgeExplainsMissingSegment(w, old, now, o);
+
+  it('l’écrivain ne nous connaît pas (aucun accusé sur nous), dernier hlc lu de 40 jours, ownAck ≤ k : purge possible (reprise)', () => {
+    expect(explains(writer([]))).toBe(true);
+  });
+
+  it('accusé de l’écrivain sur nous sans hlc : aucune preuve, purge possible', () => {
+    expect(explains(writer(knowsUs(null)))).toBe(true);
+  });
+
+  it('hlc de l’écrivain sur nous au-delà de 180 jours moins la marge : purge possible ; juste en deçà : attente', () => {
+    const limit = now + HLC_MAX_DRIFT_MS - DEVICE_EXPIRY_MS;
+    expect(explains(writer(knowsUs(limit)))).toBe(true);
+    expect(explains(writer(knowsUs(limit + 1)))).toBe(false);
+  });
+
+  it('l’écrivain nous oublie : purge possible', () => {
+    const forgotten: ForgottenDevice[] = [{ deviceId: SELF, at: h(now - DAY, B), lastAck: null }];
+    expect(explains(writer(knowsUs(now - DAY), forgotten))).toBe(true);
+  });
+
+  it('l’écrivain nous compte (accusé récent) et ownAck ≤ k : attente, quel que soit l’âge du dernier hlc lu', () => {
+    expect(explains(writer(knowsUs(now - DAY)))).toBe(false);
+    expect(explains(writer(knowsUs(now - DAY)), own({ ...ownAck, segment: k - 1 }))).toBe(false);
+    expect(purgeExplainsMissingSegment(writer(knowsUs(now - DAY)), null, now, own())).toBe(false);
+  });
+
+  it('ownAck d’une autre époque, au-delà de k ou absent : aucune preuve, purge possible', () => {
+    const w = writer(knowsUs(now - DAY));
+    expect(explains(w, own({ ...ownAck, epoch: epochId(2, SELF) }))).toBe(true);
+    expect(explains(w, own({ ...ownAck, segment: k + 1 }))).toBe(true);
+    expect(explains(w, own(null))).toBe(true);
+  });
+
+  it('sans preuve, la règle des 30 jours reste : sans instantané ou dernier hlc lu récent, jamais', () => {
+    expect(purgeExplainsMissingSegment({ ...writer([]), snapshot: null }, old, now, own())).toBe(false);
+    expect(purgeExplainsMissingSegment(writer([]), h(now - DAY, B), now, own())).toBe(false);
+  });
+});
+
+describe('Y-TECH-02 (troisième revue, point 2) : segmentPurgeable, époque des accusés (ADR 0011 §5.3)', () => {
+  const E2 = epochId(2, SELF);
+  const E3 = epochId(3, SELF);
+  const base = { headSegment: 5, coveredSegment: 4, self: SELF, lastWriteMs: NOW - 31 * DAY, nowMs: NOW, epoch: E2 };
+  const reader = (a: DeviceAck) => [device(B, [[SELF, a]])];
+  it('accusé d’une époque antérieure au-delà du segment : ne vaut rien (réinitialisation, accusé figé)', () => {
+    expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 9), epoch: E1 }) })).toBe(false);
+  });
+  it('même époque au-delà du segment : lu ; époque postérieure : lu', () => {
+    expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 4), epoch: E2 }) })).toBe(true);
+    expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 1), epoch: E3 }) })).toBe(true);
+    expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 3), epoch: E2 }) })).toBe(false);
   });
 });

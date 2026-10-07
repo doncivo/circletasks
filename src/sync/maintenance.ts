@@ -162,7 +162,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   const listed = input.ownScan?.epochs.find((e) => e.epoch === input.epoch)?.segments ?? [];
   const readers = activeReaders(devices, deps.deviceId, nowMs);
   const removable = listed.filter((n) =>
-    segmentPurgeable(n, { headSegment: input.head.segment, coveredSegment: covered, readers, self: deps.deviceId, lastWriteMs: times[`${input.epoch}/${String(n)}`] ?? null, nowMs }),
+    segmentPurgeable(n, { headSegment: input.head.segment, coveredSegment: covered, readers, self: deps.deviceId, lastWriteMs: times[`${input.epoch}/${String(n)}`] ?? null, nowMs, epoch: input.epoch }),
   );
   if (removable.length > 0) {
     try {
