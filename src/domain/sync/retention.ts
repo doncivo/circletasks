@@ -133,6 +133,23 @@ export function purgeExplainsMissingSegment(
 }
 
 /**
+ * Quatrième revue, point C (ADR 0011 §5.3, calcul de la couverture) : segment jusqu'où ses segments sont couverts = maximum du
+ * `coveredSegment` de son dernier instantané s'il est de l'époque et éligible (`ownSnapshotSegment`, 0 sinon) et du segment des accusés sur
+ * soi publiés par les **lecteurs actifs** dont l'état accepté est de l'époque, **seulement si l'accusé est de l'époque**. Un accusé d'une
+ * autre époque, ou d'un appareil expiré ou oublié, n'entre jamais dans la couverture.
+ */
+export function coveredSegment(input: { readonly epoch: EpochId; readonly self: DeviceId; readonly readers: readonly KnownDevice[]; readonly accepted: ReadonlyMap<DeviceId, Pick<PublishedDeviceState, 'epoch' | 'acks'>>; readonly ownSnapshotSegment: number }): number {
+  const active = new Set(input.readers.map((r) => r.deviceId));
+  let covered = Math.max(0, input.ownSnapshotSegment);
+  for (const [id, state] of input.accepted) {
+    if (!active.has(id) || state.epoch !== input.epoch) continue;
+    const ack = state.acks.get(input.self);
+    if (ack !== undefined && ack.epoch === input.epoch) covered = Math.max(covered, ack.segment);
+  }
+  return covered;
+}
+
+/**
  * Un de ses propres segments peut-il être supprimé (section 5.3) ? Un instantané le couvre, tous les appareils actifs l'ont accusé
  * (position au-delà de sa fin), son dernier enregistrement a plus de 30 jours. Jamais le segment de tête.
  *

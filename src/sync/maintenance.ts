@@ -2,7 +2,7 @@ import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories'
 import { parseStoredAcks, type StoredStateLog } from '../domain/sync/stored';
 import { defaultSyncLogger } from './log';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
-import { BLOCKED, canPurgeDeletion, coversForgotten, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
+import { BLOCKED, canPurgeDeletion, coveredSegment, coversForgotten, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';
 import type { ForgetCoverage } from './eligible';
 import { revivedDone } from './forget';
 import { isStrictHlc } from '../domain/sync/format';
@@ -153,14 +153,17 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
 
   // Ses segments : couverts par un instantané, accusés par tous, dernier enregistrement de plus de 30 jours.
   const snapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc; coveredSegment?: number; covers?: Record<string, unknown> }>(data.repos, META.snapshot);
-  const covered = Math.max(
-    0,
-    ...[...input.accepted.values()].filter((s) => s.epoch === input.epoch).map((s) => s.acks.get(deps.deviceId)?.segment ?? 0),
-    snapshot?.epoch === input.epoch && ownSnapshotEligible(snapshot.covers, input.coverage) ? (snapshot.coveredSegment ?? 0) : 0,
-  );
+  const readers = activeReaders(devices, deps.deviceId, nowMs);
+  // Quatrième revue, point C (§5.3) : accusés de l'époque courante des lecteurs actifs seulement.
+  const covered = coveredSegment({
+    epoch: input.epoch,
+    self: deps.deviceId,
+    readers,
+    accepted: input.accepted,
+    ownSnapshotSegment: snapshot?.epoch === input.epoch && ownSnapshotEligible(snapshot.covers, input.coverage) ? (snapshot.coveredSegment ?? 0) : 0,
+  });
   const times = (await readJson<Record<string, number>>(data.repos, META.segments)) ?? {};
   const listed = input.ownScan?.epochs.find((e) => e.epoch === input.epoch)?.segments ?? [];
-  const readers = activeReaders(devices, deps.deviceId, nowMs);
   const removable = listed.filter((n) =>
     segmentPurgeable(n, { headSegment: input.head.segment, coveredSegment: covered, readers, self: deps.deviceId, lastWriteMs: times[`${input.epoch}/${String(n)}`] ?? null, nowMs, epoch: input.epoch }),
   );

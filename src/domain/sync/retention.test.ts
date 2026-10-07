@@ -3,7 +3,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { epochId, type DeviceAck, type ForgottenDevice, type JournalRecord, type PublishedDeviceState } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
 import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS } from './limits';
-import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
+import { activeReaders, BLOCKED, canPurgeDeletion, coveredSegment, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
  * Rétention et dérive (ADR 0011, sections 3.4, 4.4, 5.3 à 5.5 ; Y-09 critères 2, 6, 7 et 10). Règle validée par Ali : une trace est
@@ -195,5 +195,19 @@ describe('Y-TECH-02 (troisième revue, point 2) : segmentPurgeable, époque des 
     expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 4), epoch: E2 }) })).toBe(true);
     expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 1), epoch: E3 }) })).toBe(true);
     expect(segmentPurgeable(3, { ...base, readers: reader({ ...ack(h(NOW), 3), epoch: E2 }) })).toBe(false);
+  });
+});
+
+describe('quatrième revue, point C : coveredSegment (ADR 0011 §5.3)', () => {
+  const E2 = epochId(2, SELF);
+  const state = (epoch: typeof E1, a: DeviceAck) => ({ epoch, acks: new Map([[SELF, a]]) });
+  it('accusés de l’époque des lecteurs actifs seulement ; instantané éligible compté', () => {
+    const readers = [device(B, [])];
+    const base = { epoch: E2, self: SELF, readers, ownSnapshotSegment: 0 };
+    expect(coveredSegment({ ...base, accepted: new Map([[B, state(E2, { ...ack(h(NOW), 4), epoch: E2 })]]) })).toBe(4);
+    expect(coveredSegment({ ...base, accepted: new Map([[B, state(E2, { ...ack(h(NOW), 50), epoch: E1 })]]) }), 'accusé d’une autre époque').toBe(0);
+    expect(coveredSegment({ ...base, accepted: new Map([[C, state(E2, { ...ack(h(NOW), 50), epoch: E2 })]]) }), 'pas un lecteur actif').toBe(0);
+    expect(coveredSegment({ ...base, accepted: new Map([[B, state(E1, { ...ack(h(NOW), 50), epoch: E2 })]]) }), 'état d’une autre époque').toBe(0);
+    expect(coveredSegment({ ...base, readers: [], accepted: new Map<DeviceId, ReturnType<typeof state>>(), ownSnapshotSegment: 7 })).toBe(7);
   });
 });

@@ -1,13 +1,14 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FOLDER_WARN_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
+import type { DeviceAck, EpochId, PublishedDeviceState } from '../../../src/domain/sync/format';
 import { parseStoredAcks, parseStoredIso, SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { SyncPlatformError, type FolderScan, type SyncPlatform } from '../../../src/platform/sync/types';
-import { knownDevices } from '../../../src/sync/maintenance';
-import { readJson } from '../../../src/sync/meta';
+import { knownDevices, maintain } from '../../../src/sync/maintenance';
+import { META, readJson, writeJson } from '../../../src/sync/meta';
 import { createMemorySyncLogger } from '../../../src/sync';
 import { propagate } from '../../sim/syncCloudSim';
-import { createSimDevice, pair, setupFirst, syncFolders, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
+import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, syncFolders, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
 /**
  * Y-TECH-02 (revue d'ensemble de fin d'ordre 4) : avertissements du scan rendus visibles, échecs qui étaient avalés (abonnés, lectures de
@@ -476,5 +477,61 @@ describe('troisième revue, point 2 : segment absent, preuve par l’état accep
     }
     expect(events(a, 'snapshot-written').length).toBeGreaterThan(0);
     expect(ownSegments(a).at(-1), 'j-1 de la nouvelle époque, jamais lu par B : gardé').toEqual([1, 2]);
+  });
+});
+
+describe('quatrième revue, point C : covered ne compte que les accusés de l’époque courante des lecteurs actifs (ADR 0011 §5.3)', () => {
+  function refuseNextAppend(d: SimDevice): void {
+    const real = d.platform.appendJournal.bind(d.platform);
+    let refused = false;
+    d.platform.appendJournal = async (request) => {
+      if (!refused) {
+        refused = true;
+        throw new SyncPlatformError('segment-full');
+      }
+      return real(request);
+    };
+  }
+  const ownSegments = (d: SimDevice): number[] => [...([...(d.folder.devices.get(d.id)?.epochs.values() ?? [])].at(-1)?.segments.keys() ?? [])];
+
+  /** A seul, segments 1 à 5, dernier enregistrement de chacun vieux de plus de 30 jours, aucun instantané à lui retenu. */
+  async function aged(): Promise<{ a: SimDevice; epoch: EpochId; run: (accepted: Map<DeviceId, PublishedDeviceState>) => Promise<void> }> {
+    const a = await first();
+    await a.createTask('T0');
+    await a.cycle();
+    for (let i = 1; i <= 4; i += 1) {
+      refuseNextAppend(a);
+      await a.createTask(`T${String(i)}`);
+      await a.cycle();
+    }
+    expect(ownSegments(a)).toEqual([1, 2, 3, 4, 5]);
+    a.clock.advance(31 * DAY);
+    // Son instantané ne compte pas (non éligible) : seule la règle des accusés peut couvrir.
+    await writeJson(a.data.repos, META.snapshot, null);
+    const head = (await readJson<DeviceAck>(a.data.repos, META.head)) as DeviceAck;
+    const epoch = head.epoch;
+    const deps = { data: a.data, platform: a.platform, hlc: a.hlc, clock: a.clock, deviceId: a.id, devicePlatform: 'windows' as const, appVersion: '0.4.0', sv: SCHEMA_VERSION, logger: a.logger };
+    const run = async (accepted: Map<DeviceId, PublishedDeviceState>): Promise<void> => {
+      const scan = await a.platform.scan({ keep: [...accepted.keys()] });
+      await maintain(deps, { epoch, head, accepted, ownScan: scan.devices.find((d) => d.deviceId === a.id) ?? null, rows: await a.data.repos.sync.getStates() });
+    };
+    return { a, epoch, run };
+  }
+  const stateOf = (epoch: EpochId, acks: [DeviceId, DeviceAck][]): PublishedDeviceState => ({ epoch, acks: new Map(acks) }) as unknown as PublishedDeviceState;
+
+  it('sans lecteur actif, état d’un appareil expiré avec un accusé d’une époque antérieure au segment 50 : rien n’est purgé', async () => {
+    const { a, epoch, run } = await aged();
+    const older = 'e0001-cccccccc-cccc-4ccc-8ccc-cccccccccccc' as EpochId;
+    await a.data.repos.sync.saveState(C_ID, { epoch, status: 'expired', lastSeenHlc: `${String(a.clock.nowMs() - 200 * DAY).padStart(15, '0')}-0000-${C_ID}` as never });
+    await run(new Map([[C_ID, stateOf(epoch, [[a.id, { epoch: older, segment: 50, record: 0, hlc: null, stateSeq: 1 }]])]]));
+    expect(ownSegments(a)).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('accusé de l’époque courante venant d’un lecteur actif : segments au-delà desquels il a lu purgés', async () => {
+    const { a, epoch, run } = await aged();
+    const ack: DeviceAck = { epoch, segment: 4, record: 0, hlc: null, stateSeq: 1 };
+    await a.data.repos.sync.saveState(C_ID, { epoch, status: 'active', lastSeenHlc: `${String(a.clock.nowMs() - DAY).padStart(15, '0')}-0000-${C_ID}` as never, lastAcks: JSON.stringify({ [a.id]: ack }) });
+    await run(new Map([[C_ID, stateOf(epoch, [[a.id, ack]])]]));
+    expect(ownSegments(a)).toEqual([4, 5]);
   });
 });
