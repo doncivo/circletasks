@@ -4,8 +4,26 @@ import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { onPairingChange, readJoinView, type JoinView } from './pairingStatus';
 import { syncStore } from './syncStore';
-
 import { formatCount } from './syncText';
+
+/**
+ * Annonce aux lecteurs d'écran (région vivante polie toujours montée) le début et la fin de la reprise seulement : le compteur « 8 / 20 »
+ * change à chaque pas et n'est pas une région vivante (la barre <progress> et le texte restent visibles).
+ */
+function JoinAnnouncer() {
+  const container = useAppContainer();
+  const active = useFeatureStore(syncStore, (s) => s.status.progress != null);
+  const [text, setText] = useState('');
+  useEffect(() => {
+    setText((previous) => (active ? t('sync.pairing.joinStartAnnounce') : previous === '' ? '' : t('sync.pairing.joinDoneAnnounce')));
+  }, [active]);
+  if (!container.sync) return null;
+  return (
+    <span className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="sync-join-live">
+      {text}
+    </span>
+  );
+}
 
 /**
  * Arrivée du nouvel appareil (Y-06 critère 13 ; sans maquette, composée avec les lignes de Réglages) : « Réception de vos données…
@@ -14,6 +32,15 @@ import { formatCount } from './syncText';
  * après un redémarrage ; une arrivée en attente (iCloud) est affichée sans alarme. Rien n'est affiché sans arrivée en cours.
  */
 export function JoinProgress() {
+  return (
+    <>
+      <JoinAnnouncer />
+      <JoinBody />
+    </>
+  );
+}
+
+function JoinBody() {
   const container = useAppContainer();
   const status = useFeatureStore(syncStore, (s) => s.status);
   const busy = useFeatureStore(syncStore, (s) => s.busy);
@@ -40,7 +67,7 @@ export function JoinProgress() {
     return (
       <div className="ct-settings__row ct-sync__join">
         <span className="ct-settings__stack">
-          <span role="status">{t('sync.pairing.joinProgress', { done: formatCount(done), total: formatCount(total) })}</span>
+          <span data-testid="sync-join-count">{t('sync.pairing.joinProgress', { done: formatCount(done), total: formatCount(total) })}</span>
           <progress className="ct-sync__joinBar" aria-label={t('sync.pairing.joinProgressLabel')} max={Math.max(1, total)} value={Math.min(done, total)} />
         </span>
       </div>

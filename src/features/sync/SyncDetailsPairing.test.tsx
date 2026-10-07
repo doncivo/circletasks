@@ -282,11 +282,23 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     renderIn(await make(), <JoinProgress />);
     expect(screen.queryByRole('status')).toBeNull();
     act(() => sync.setStatus({ phase: 'syncing', progress: { done: 1200, total: 5000 } }));
-    expect(screen.getByRole('status').textContent).toBe('Réception de vos données… 1 200 / 5 000');
+    // Revue point 6 : le compteur visible n'est pas une région vivante ; seuls le début et la fin sont annoncés.
+    expect(screen.getByTestId('sync-join-count').textContent).toBe('Réception de vos données… 1 200 / 5 000');
+    expect(screen.queryByRole('status')).toBeNull();
+    const live = screen.getByTestId('sync-join-live');
+    expect(live.textContent).toBe('Réception de vos données…');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 2500, total: 5000 } }));
+    expect(screen.getByTestId('sync-join-count').textContent).toContain('2 500');
+    observer.disconnect();
+    expect(seen).toEqual([]);
     expect(screen.getByLabelText('Réception des données de la synchronisation')).toBeTruthy();
     // `setStatus` est synchrone et la ligne ne dépend que de `status.progress` : rien à attendre.
     act(() => sync.setStatus({ phase: 'idle', progress: null }));
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByTestId('sync-join-count')).toBeNull();
+    expect(screen.getByTestId('sync-join-live').textContent).toBe('Données reçues');
   });
 
   it('échec mémorisé par le moteur : affiché en rouge avec « Réessayer », après un redémarrage aussi, effacé à la réussite', async () => {

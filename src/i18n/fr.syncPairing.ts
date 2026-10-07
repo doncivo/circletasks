@@ -28,6 +28,8 @@ export const syncPairingFr = {
   stateUnavailable: 'L’état de l’association n’a pas pu être lu ou enregistré : réessayez',
   joinProgress: 'Réception de vos données… {done} / {total}',
   joinProgressLabel: 'Réception des données de la synchronisation',
+  joinStartAnnounce: 'Réception de vos données…',
+  joinDoneAnnounce: 'Données reçues',
   joinWaiting: 'Réception de vos données en attente : {done} / {total}',
   joinFailed: 'La réception de vos données s’est arrêtée à {done} / {total} : elle reprendra à la prochaine synchronisation',
   joinFailedSnapshot: 'Aucun instantané à jour : ouvrez un autre appareil associé',
