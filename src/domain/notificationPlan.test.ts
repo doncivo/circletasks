@@ -281,13 +281,13 @@ describe('routines (critères 12 à 14)', () => {
   it('14 : tous les 2 jours : la prochaine occurrence suit la règle', () => {
     const routine = at('07:00', { scheduleType: 'every_n_days', interval: 2, startDate: asLocalDate('2026-10-07') });
     const result = plan({ routines: [routine], reminders: [reminder('routine', routine, 0)] });
-    expect(result.items.map((item) => item.occurrenceDate)).toEqual(['2026-10-09']);
+    expect(result.items.map((item) => (item.kind === 'recap' ? null : item.occurrenceDate))).toEqual(['2026-10-09']);
   });
 
   it('14 : toutes les 2 semaines : la prochaine occurrence suit la règle', () => {
     const routine = at('07:00', { scheduleType: 'every_n_weeks', interval: 2, weekdays: [1], startDate: asLocalDate('2026-10-05') });
     const result = plan({ routines: [routine], reminders: [reminder('routine', routine, 0)] });
-    expect(result.items.map((item) => item.occurrenceDate)).toEqual(['2026-10-19']);
+    expect(result.items.map((item) => (item.kind === 'recap' ? null : item.occurrenceDate))).toEqual(['2026-10-19']);
   });
 
   it('une règle sans occurrence ne produit rien et ne lève pas', () => {
@@ -297,7 +297,7 @@ describe('routines (critères 12 à 14)', () => {
 });
 
 describe('événements (critères 15 à 17)', () => {
-  const ev = (over: Partial<CalendarEvent> & { startDate?: string; endDate?: string }): CalendarEvent => makeEvent({ spaceId: PERSO, ...over });
+  const ev = (over: Omit<Partial<CalendarEvent>, 'startDate' | 'endDate'> & { startDate?: string; endDate?: string }): CalendarEvent => makeEvent({ spaceId: PERSO, ...over });
 
   it('15 : anniversaire annuel du 12 mars, avances 10080, 1440, 0 : trois éléments pour le 12 mars 2027 à 09:00', () => {
     const birthday = ev({ startDate: '2026-03-12', repeat: 'yearly', kind: 'birthday' });

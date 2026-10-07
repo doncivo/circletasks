@@ -3,6 +3,7 @@ export { openDatabase } from './database';
 export { detectTimeZone } from './timeZone';
 export * from './calendars';
 export * from './focus';
+export * from './notifications';
 export * from './backup';
 export * from './files';
 export {
