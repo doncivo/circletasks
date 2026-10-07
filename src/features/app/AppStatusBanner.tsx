@@ -1,13 +1,19 @@
 import { pickAppStatus, type ActiveStatuses } from '../../domain/appStatus';
 import { t } from '../../i18n';
-import { StatusBanner } from '../../ui';
+import { StatusBanner, StatusBannerRegion } from '../../ui';
 import { useAppStatusStore } from './appStatus';
 
 /**
  * Bandeau d'état de l'app (A-09), monté en haut de la zone principale (App.tsx) : un seul bandeau, selon la priorité du domaine.
- * Toujours `role="status"` (`StatusBanner`), jamais `role="alert"` ni boîte bloquante, même pour un échec de synchro (critère 9 h).
+ * Le bandeau vit dans une région vivante polie (`aria-live`) toujours montée (`StatusBannerRegion`, annonce polie fiable), jamais `role="alert"` ni
+ * boîte bloquante, même pour un échec de synchro (critère 9 h).
  */
 export function AppStatusBanner() {
+  const banner = useCurrentBanner();
+  return <StatusBannerRegion>{banner}</StatusBannerRegion>;
+}
+
+function useCurrentBanner() {
   // Deux sélecteurs à valeur stable : l'état prioritaire (priorité du domaine), puis sa source.
   const kind = useAppStatusStore((state) => pickAppStatus(state.sources as ActiveStatuses));
   const source = useAppStatusStore((state) => (kind ? state.sources[kind] : undefined));

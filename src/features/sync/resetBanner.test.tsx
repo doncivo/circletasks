@@ -39,7 +39,7 @@ const settle = async (): Promise<void> => {
     await integration?.refreshed();
   });
 };
-const text = (): string | null => screen.queryByRole('status')?.textContent ?? null;
+const text = (): string | null => screen.queryByTestId('status-banner-region')?.textContent || null;
 const device = (deviceId: DeviceId, platform: 'ios' | 'windows', self = false): SyncDeviceStatus => ({ deviceId, platform, self, status: 'active', lastReadAt: null });
 const DEVICES = [device(SELF, 'windows', true), device(PHONE, 'ios')];
 const reset = (patch: Partial<SyncResetStatus>): SyncResetStatus => ({

@@ -73,7 +73,7 @@ function fireTimers(): void {
   for (const timer of timers.splice(0)) if (!timer.cleared) act(() => timer.handler());
 }
 
-const banner = (): HTMLElement | null => screen.queryByRole('status');
+const banner = (): HTMLElement | null => screen.queryByTestId('status-banner-region')?.querySelector<HTMLElement>('.ct-status-banner') ?? null;
 const set = (patch: Partial<SyncStatus>): void => act(() => sync.setStatus(patch));
 const device = (deviceId: DeviceId, platform: 'ios' | 'windows', status: SyncDeviceStatus['status'], self = false): SyncDeviceStatus => ({ deviceId, platform, self, status, lastReadAt: null });
 const sources = () => useAppStatusStore.getState().sources;
@@ -181,7 +181,7 @@ describe('aucun échec silencieux : chaque phase bloquée (9 c, 9 e, 9 i)', () =
         expect(banner()?.textContent, `${phase}/${errorCode}`).toContain(line);
         expect(line).not.toMatch(/[\\/]|[A-Za-z]:|\.ctx|\.jsonl|CT1-|CTPAIR/);
         expect(screen.queryByRole('alert')).toBeNull();
-        expect(screen.getAllByRole('status')).toHaveLength(1);
+        expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
       }
     }
   });
@@ -485,7 +485,7 @@ describe('accessibilité et textes (9 h, 9 j)', () => {
     await start().refreshed();
     for (const { name, patch } of BLOCKED) {
       set(patch);
-      expect(screen.getAllByRole('status'), name).toHaveLength(1);
+      expect(document.querySelectorAll('.ct-status-banner'), name).toHaveLength(1);
       expect(screen.queryByRole('alert')).toBeNull();
       expect(screen.queryByRole('dialog')).toBeNull();
       expect(screen.queryByRole('alertdialog')).toBeNull();

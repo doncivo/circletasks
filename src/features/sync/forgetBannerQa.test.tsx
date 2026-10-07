@@ -47,7 +47,7 @@ const restart = async (initial: Partial<SyncStatus> = {}): Promise<void> => {
   });
   await settle();
 };
-const text = (): string | null => screen.queryByRole('status')?.textContent ?? null;
+const text = (): string | null => screen.queryByTestId('status-banner-region')?.textContent || null;
 const trouble = (): unknown => useAppStatusStore.getState().sources.syncTrouble;
 
 beforeEach(async () => {
