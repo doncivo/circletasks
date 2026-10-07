@@ -313,7 +313,8 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     expect(workflow).toContain('TAG="ios-v${VERSION}"');
     expect(ipaUrlFor('1.2.3')).toContain('/download/ios-v1.2.3/CircleTasks.ipa');
     expect(guide).toContain('`ios-vX.Y.Z`');
-    expect(guide).not.toMatch(/ios-v(?!X\.Y\.Z)/);
+    // ios-vX.Y.Z (tag d'une version) ou ios-v* (motif de l'environnement releases) ; jamais un numéro réel.
+    expect(guide).not.toMatch(/ios-v(?!X\.Y\.Z|\*)/);
   });
 
   it('jamais de publication hors tag ios-v* : condition du job et seconde barrière', () => {
@@ -340,6 +341,15 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     const lines = workflow.split('\n').filter((l) => l.includes('dtolnay/rust-toolchain'));
     expect(lines.length).toBeGreaterThan(0);
     for (const l of lines) expect(l).toMatch(/dtolnay\/rust-toolchain@[0-9a-f]{40} # \S+/);
+  });
+
+  it('consigne de l’environnement releases : approbation d’Ali, tags ios-v* et v* seulement, sans main', () => {
+    const section = guide.slice(guide.indexOf('## Pour publier une version'), guide.indexOf('## Si ça se passe mal'));
+    expect(section).toContain('Settings > Environments');
+    expect(section).toContain('« Required reviewers »');
+    expect(section).toContain('`ios-v*`');
+    expect(section).toContain('`v*`');
+    expect(section).toContain('retire `main`');
   });
 
   it('garde la phrase de I-02 tant que I-02 n’est pas faite', () => {

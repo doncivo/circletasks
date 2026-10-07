@@ -66,7 +66,12 @@ Quand une nouvelle version est publiée, elle apparaît dans la source avec ses 
 
 ## Pour publier une version (une fois, côté GitHub)
 
-La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > New environment, nom `releases`, coche « Required reviewers » et ajoute-toi. Ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication attend ton bouton « Approve ». Seul un tag `ios-vX.Y.Z` publie (X.Y.Z = version de l'app) ; un lancement du workflow « Build iOS » sur une branche produit seulement l'IPA en artefact, même avec « publish » coché.
+La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > `releases` (New environment s'il n'existe pas) :
+
+1. Coche « Required reviewers » et ajoute-toi.
+2. Dans « Deployment branches and tags », garde seulement les tags `ios-v*` et `v*` : retire `main`.
+
+Ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication attend ton bouton « Approve ». Seul un tag `ios-vX.Y.Z` publie (X.Y.Z = version de l'app) ; un lancement du workflow « Build iOS » sur une branche produit seulement l'IPA en artefact, même avec « publish » coché.
 
 ## Si ça se passe mal
 

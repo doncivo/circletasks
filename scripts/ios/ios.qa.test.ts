@@ -228,7 +228,7 @@ describe('I-01 QA : cohérence du guide après modification d’une valeur', () 
     if (urls.length !== 1 || urls[0] !== SOURCE_URL) out.push('url');
     if (!g.includes(`\`${conf.identifier}\``)) out.push('bundle');
     if (!g.includes(`${conf.productName}.ipa`)) out.push('nom');
-    if (!g.includes('`ios-vX.Y.Z`') || /ios-v(?!X\.Y\.Z)/.test(g)) out.push('tag');
+    if (!g.includes('`ios-vX.Y.Z`') || /ios-v(?!X\.Y\.Z|\*)/.test(g)) out.push('tag');
     return out;
   }
 
