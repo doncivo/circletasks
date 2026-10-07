@@ -83,8 +83,25 @@ describe('ligne d’état de Réglages (Y-02 critère 16, Y-05 critère 2)', () 
     expect(live.textContent).toBe('À jour');
     act(() => sync.setStatus({ phase: 'idle', lastSyncAt: NOW as IsoDateTime }));
     expect(live.textContent).toBe('À jour');
+    seen.push(...observer.takeRecords().map((r) => r.type));
     observer.disconnect();
     expect(seen).toEqual([]);
+  });
+
+  it('seconde revue point B : error, syncing (lastSyncAt gardé), error : la région ne change jamais', () => {
+    sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
+    renderIn(<SyncStatusLine />);
+    const live = screen.getByTestId('sync-status-live');
+    expect(live.textContent).toBe('');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing' }));
+    act(() => sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' }));
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
+    expect(live.textContent).toBe('');
   });
 
   it('erreurs explicites, jamais de boîte bloquante', () => {

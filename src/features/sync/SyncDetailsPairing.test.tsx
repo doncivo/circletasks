@@ -292,6 +292,7 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     observer.observe(live, { childList: true, characterData: true, subtree: true });
     act(() => sync.setStatus({ phase: 'syncing', progress: { done: 2500, total: 5000 } }));
     expect(screen.getByTestId('sync-join-count').textContent).toContain('2 500');
+    seen.push(...observer.takeRecords().map((r) => r.type));
     observer.disconnect();
     expect(seen).toEqual([]);
     expect(screen.getByLabelText('Réception des données de la synchronisation')).toBeTruthy();
@@ -314,6 +315,7 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     await act(async () => {
       await Promise.resolve();
     });
+    seen.push(...observer.takeRecords().map((r) => r.type));
     observer.disconnect();
     expect(seen).not.toContain('Données reçues');
     expect(live.textContent).toBe('');

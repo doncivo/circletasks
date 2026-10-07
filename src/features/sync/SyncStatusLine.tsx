@@ -22,6 +22,11 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
     const timer = setInterval(() => setTick((n) => n + 1), 60_000);
     return () => clearInterval(timer);
   }, []);
+  // Texte annoncé : celui du dernier état stable, jamais recalculé pendant un cycle (« syncing » garde la valeur d'avant). Ajusté pendant
+  // le rendu, sans effet.
+  const [announced, setAnnounced] = useState('');
+  const next = status.phase === 'syncing' ? announced : status.phase === 'idle' && status.lastSyncAt && !isTroublePhase(status) ? t('sync.status.upToDateAnnounce') : '';
+  if (next !== announced) setAnnounced(next);
   const now = container.clock.nowMs();
   return (
     <div className="ct-sync__line">
@@ -33,7 +38,7 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
         {/* Région vivante séparée, sans âge relatif : annonce seulement la fin d'une synchro réussie. Les états en cours et les problèmes
             sont annoncés par le bandeau (StatusBanner) : pas de double annonce. */}
         <span className="ct-visually-hidden" role="status" data-testid="sync-status-live">
-          {(status.phase === 'idle' || status.phase === 'syncing') && status.lastSyncAt && !isTroublePhase(status) ? t('sync.status.upToDateAnnounce') : ''}
+          {announced}
         </span>
       </div>
       <div className="ct-sync__lineActions">
