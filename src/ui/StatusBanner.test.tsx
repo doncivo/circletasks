@@ -29,6 +29,8 @@ describe('StatusBannerRegion (revue d’accessibilité, ordre 4)', () => {
   it('reste montée quand elle est vide, puis reçoit le bandeau dans le même élément', () => {
     const { rerender } = render(<StatusBannerRegion />);
     const region = screen.getByTestId('status-banner-region');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toHaveAttribute('aria-atomic', 'true');
     expect(region).toBeEmptyDOMElement();
     rerender(
       <StatusBannerRegion>
