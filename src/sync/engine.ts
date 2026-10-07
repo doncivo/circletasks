@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
+import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredResumeTried, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
@@ -12,10 +12,10 @@ import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from '../domain/sync/ownState';
-import { finishResumeTx, isJoining, joinFromSnapshot } from './join';
+import { finishResumeTx, isJoining, joinFromSnapshot, triedTracker } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { addOwnStateMark, decideSegmentGap, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
+import { addOwnStateMark, decideSegmentGap, type ResumeTried, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -215,6 +215,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
   /** Quatrième revue, point B : trous mémorisés (illisibles : `state-unreadable`, jamais lus comme « aucun »). */
   const segmentGaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, logger);
+  /** Cinquième revue, point 1 : dernier instantané essayé par une reprise (`sync_meta.resumeTried`). */
+  let resumeTried: ResumeTried | null = parseStoredResumeTried(await repos.sync.getMeta(META.resumeTried), `sync_meta.${META.resumeTried}`, logger);
   const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries), segmentGaps);
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
@@ -477,8 +479,6 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     /** Repères de ses états publiés, lus au premier segment absent du cycle (quatrième revue, point D). */
     let ownMarks: readonly OwnStateMark[] | undefined;
     let resumed = false;
-    /** Instantané appliqué par la reprise de ce cycle (null : aucun), mémorisé avec un trou (quatrième revue, point B). */
-    let appliedSnapshot: SnapshotRef | null = null;
     const doResume = async (): Promise<boolean> => {
       resumed = true;
       work();
@@ -487,12 +487,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // Y-06 : un nouvel appareil (aucune époque suivie avant ce cycle, ou arrivée commencée) rejoint par tranches, avec progression,
       // reprise au même endroit et échec mémorisé (src/sync/join.ts) ; les autres reprises sont inchangées.
       if (await isJoining(repos, localEpoch)) {
-        appliedSnapshot = await joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
-        return appliedSnapshot !== null;
+        const joined = await joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
+        if (joined.tried) resumeTried = joined.tried;
+        return joined.applied;
       }
       const outcome = await resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
       if (outcome.kind === 'no-eligible') noEligible = outcome.uncovered;
-      if (outcome.kind === 'done') appliedSnapshot = { author: outcome.author, seq: outcome.seq };
+      // Cinquième revue, point 1 : instantané essayé (écrit par la reprise) ; inchangé si le premier choix attend iCloud.
+      if (outcome.tried) resumeTried = outcome.tried;
       return outcome.kind === 'done';
     };
     /**
@@ -560,9 +562,10 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       allRead = true;
       const rows = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
       /**
-       * Quatrième revue, point B : segment nécessaire tenu pour purgé sur `id` (jamais un cycle complet). Reprise de ce cycle : trou
-       * mémorisé, `corrupt` ; même instantané éligible que la dernière tentative : `corrupt`, aucune reprise ; sinon reprise. Un oublié
-       * suit sa propre règle (§18 point 11) : reprise.
+       * Quatrième revue, point B ; cinquième revue, point 1 (ADR 0011 §5.5) : segment nécessaire tenu pour purgé sur `id` (jamais un
+       * cycle complet). Instantané éligible le plus récent déjà essayé (`resumeTried`) : trou mémorisé, `corrupt`, aucune reprise ;
+       * sinon reprise (une par cycle ; si elle échoue, la règle est réévaluée sur l'instantané qu'elle a essayé). Un oublié suit sa propre
+       * règle (§18 point 11) : reprise.
        */
       const hole = async (id: DeviceId, epochRead: EpochId, segment: number): Promise<void> => {
         if (forgetView.order.has(id)) {
@@ -570,18 +573,20 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           return;
         }
         allRead = false;
-        const decision = decideSegmentGap({ existing: segmentGaps.get(id), epoch: epochRead, segment, resumed, applied: appliedSnapshot, latest: resumed ? null : await latestEligible(epochRead), now: iso(deps.clock.nowMs()) });
+        const decision = decideSegmentGap({ existing: segmentGaps.get(id), epoch: epochRead, segment, tried: resumeTried, latest: await latestEligible(epochRead), now: iso(deps.clock.nowMs()) });
         if (decision.kind === 'resume') {
-          needResume = true;
-          resumeHoles.push({ id, epoch: epochRead, segment });
+          if (!resumed) {
+            needResume = true;
+            resumeHoles.push({ id, epoch: epochRead, segment });
+          }
           return;
         }
-        if (decision.kind === 'record') {
+        if (decision.changed) {
           segmentGaps.set(id, decision.gap);
           logger.log('segment-gap', { device: id, segment, author: decision.gap.author, seq: decision.gap.seq });
         }
         await data.transaction(async (tx) => {
-          if (decision.kind === 'record') await persistGaps(tx);
+          if (decision.changed) await persistGaps(tx);
           await tx.sync.saveState(id, { status: 'corrupt' });
         });
       };
@@ -866,11 +871,15 @@ export async function resumeFromSnapshot(
   const candidates = await snapshotCandidates(deps, epoch, [...accepted.values(), ...(ownState ? [ownState] : [])], coverage);
   for (const c of candidates) if (c.end === 'cloud-pending') pending.add(`${String(c.state.deviceId).slice(0, 8)}/${epoch}/snapshot`);
   const excluded = new Set<DeviceId>();
+  // Cinquième revue, point 1 (§5.5) : instantané essayé = premier choix (le plus récent éligible), appliqué ou écarté définitivement.
+  const tried = triedTracker(candidates, coverage, epoch);
   for (;;) {
     const pick = pickEligible(candidates, coverage, epoch, excluded);
     if (pick.kind !== 'ok') {
       deps.logger.log('resume-unavailable', { epoch });
-      return pick.kind === 'none' && pick.uncovered !== null ? { kind: 'no-eligible', uncovered: pick.uncovered } : { kind: 'unavailable' };
+      await tried.save(deps.data.repos);
+      const value = tried.value();
+      return pick.kind === 'none' && pick.uncovered !== null ? { kind: 'no-eligible', uncovered: pick.uncovered, tried: value } : { kind: 'unavailable', tried: value };
     }
     const { author: deviceId, seq } = pick.end;
     excluded.add(deviceId);
@@ -879,25 +888,36 @@ export async function resumeFromSnapshot(
       pending.add(`${String(deviceId).slice(0, 8)}/${epoch}/snapshot`);
       continue;
     }
-    if (!loaded) continue;
+    if (!loaded) {
+      tried.discarded(pick.end);
+      continue;
+    }
+    tried.applying(pick.end);
     const now = iso(deps.clock.nowMs());
-    // Dernière transaction (même fonction que l'arrivée, join.ts) : curseurs aux positions couvertes, fin de la reprise.
+    // Dernière transaction (même fonction que l'arrivée, join.ts) : curseurs aux positions couvertes, fin de la reprise, instantané essayé.
     const result = await mergeSnapshot(deps, loaded, { localSv: deps.sv, remoteSv: loaded.end.sv, now, knows, logger: deps.logger }, hooks.onProgress, (tx) =>
-      finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage }),
+      finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage, tried: tried.value() }),
     );
     if (result === 'clock-ahead') {
       // Instantané trop en avance (section 4.4) : écarté ; l'appareil qui l'a écrit est signalé.
       if (deviceId !== deps.deviceId) await deps.data.repos.sync.saveState(deviceId, { status: 'clock-ahead' });
+      tried.discarded(pick.end);
       continue;
     }
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
-    return { kind: 'done', author: deviceId, seq };
+    return { kind: 'done', tried: tried.value() };
   }
 }
 
-/** Résultat d'une reprise : `no-eligible` (§14.2) quand un candidat ne couvre pas un oublié retenu ; attente visible. */
-export type ResumeOutcome = { readonly kind: 'done'; readonly author: DeviceId; readonly seq: number } | { readonly kind: 'unavailable' } | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId };
+/**
+ * Résultat d'une reprise : `no-eligible` (§14.2) quand un candidat ne couvre pas un oublié retenu ; attente visible. `tried` : instantané
+ * essayé désormais mémorisé (`sync_meta.resumeTried`), undefined s'il est inchangé (premier choix au corps en attente d'iCloud).
+ */
+export type ResumeOutcome =
+  | { readonly kind: 'done'; readonly tried: ResumeTried | undefined }
+  | { readonly kind: 'unavailable'; readonly tried: ResumeTried | undefined }
+  | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId; readonly tried: ResumeTried | undefined };
 
 /** Plus de 64 accusés à publier : échec « oubli en échec » (étape `overflow`), effacé quand le scan n'en signale plus. */
 async function recordForgetOverflow(deps: SyncDeps): Promise<void> {

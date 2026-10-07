@@ -259,21 +259,25 @@ describe('quatrième revue, point C : coveredSegment (ADR 0011 §5.3)', () => {
   });
 });
 
-describe('quatrième revue, point B : decideSegmentGap (ADR 0011 §5.5, trou impossible à combler)', () => {
+describe('cinquième revue, point 1 : decideSegmentGap sur l’instantané essayé (ADR 0011 §5.5)', () => {
   const now = '2026-10-07T08:00:00.000Z' as IsoDateTime;
-  const snap = { author: B, seq: 3 };
-  const base = { existing: undefined, epoch: E1, segment: 2, resumed: false, applied: null, latest: snap, now };
-  it('reprise dans ce cycle : trou mémorisé avec l’instantané appliqué, date de première constatation gardée', () => {
-    expect(decideSegmentGap({ ...base, resumed: true, applied: snap })).toEqual({ kind: 'record', gap: { epoch: E1, segment: 2, author: B, seq: 3, since: now } });
-    const existing = { epoch: E1, segment: 2, author: B, seq: 2, since: '2026-10-01T08:00:00.000Z' as IsoDateTime };
-    expect(decideSegmentGap({ ...base, existing, resumed: true, applied: null })).toEqual({ kind: 'record', gap: { epoch: E1, segment: 2, author: null, seq: null, since: existing.since } });
+  const latest = { author: B, seq: 3 };
+  const base = { existing: undefined, epoch: E1, segment: 2, tried: { epoch: E1, author: B, seq: 3 }, latest, now };
+  it('instantané éligible le plus récent déjà essayé : trou (à écrire s’il change), date de première constatation gardée', () => {
+    expect(decideSegmentGap(base)).toEqual({ kind: 'gap', gap: { epoch: E1, segment: 2, author: B, seq: 3, since: now }, changed: true });
+    const existing = { epoch: E1, segment: 2, author: B, seq: 3, since: '2026-10-01T08:00:00.000Z' as IsoDateTime };
+    expect(decideSegmentGap({ ...base, existing })).toEqual({ kind: 'gap', gap: existing, changed: false });
+    expect(decideSegmentGap({ ...base, existing: { ...existing, segment: 1 } })).toMatchObject({ kind: 'gap', changed: true, gap: { segment: 2, since: existing.since } });
   });
-  it('même instantané éligible que la dernière tentative : corrupt gardé, aucune reprise ; nouveau, autre époque ou aucun trou : reprise', () => {
-    const existing = { epoch: E1, segment: 2, author: B, seq: 3, since: now };
-    expect(decideSegmentGap({ ...base, existing })).toEqual({ kind: 'keep' });
-    expect(decideSegmentGap({ ...base, existing, latest: { author: B, seq: 4 } })).toEqual({ kind: 'resume' });
-    expect(decideSegmentGap({ ...base, existing: { ...existing, epoch: epochId(2, SELF) } })).toEqual({ kind: 'resume' });
-    expect(decideSegmentGap(base)).toEqual({ kind: 'resume' });
-    expect(decideSegmentGap({ ...base, existing: { ...existing, author: null, seq: null }, latest: null })).toEqual({ kind: 'keep' });
+  it('rien d’essayé, essai d’une autre époque, ou instantané plus récent que l’essai : reprise', () => {
+    expect(decideSegmentGap({ ...base, tried: null })).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap({ ...base, tried: { ...base.tried, epoch: epochId(2, SELF) } })).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap({ ...base, latest: { author: B, seq: 4 } })).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap({ ...base, latest: { author: C, seq: 3 } })).toEqual({ kind: 'resume' });
+  });
+  it('aucun éligible, essai « aucun » de la même époque : trou ; un éligible apparu depuis : reprise', () => {
+    const none = { epoch: E1, author: null, seq: null };
+    expect(decideSegmentGap({ ...base, tried: none, latest: null })).toMatchObject({ kind: 'gap', gap: { author: null, seq: null } });
+    expect(decideSegmentGap({ ...base, tried: none })).toEqual({ kind: 'resume' });
   });
 });

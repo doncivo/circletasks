@@ -195,9 +195,9 @@ export function addOwnStateMark(marks: readonly OwnStateMark[], stateSeq: number
 }
 
 /**
- * Quatrième revue, point B (ADR 0011 §5.5, « Trou impossible à combler ») : trou mémorisé sur un appareil lu (`sync_meta.segmentGaps`),
- * segment nécessaire tenu pour purgé que la reprise n'a pas comblé. `author` et `seq` : instantané appliqué par cette reprise (null si
- * aucun) ; `since` : première constatation.
+ * Quatrième revue, point B ; cinquième revue, point 1 (ADR 0011 §5.5, « Trou impossible à combler ») : trou mémorisé sur un appareil lu
+ * (`sync_meta.segmentGaps`), segment nécessaire tenu pour purgé alors que l'instantané éligible le plus récent a déjà été essayé.
+ * `author` et `seq` : instantané essayé (null si aucun éligible) ; `since` : première constatation.
  */
 export interface SegmentGap {
   readonly epoch: EpochId;
@@ -207,34 +207,41 @@ export interface SegmentGap {
   readonly since: IsoDateTime;
 }
 
-/** Instantané désigné par son auteur et son numéro (null : aucun). */
+/** Instantané désigné par son auteur et son numéro. */
 export interface SnapshotRef {
   readonly author: DeviceId;
   readonly seq: number;
 }
 
 /**
- * Décision devant un trou sur un appareil dans l'époque `epoch` au segment `segment` (le cycle ne sera jamais complet) :
- * - une reprise a eu lieu dans ce cycle : `record` (trou mémorisé avec l'instantané appliqué, appareil `corrupt`) ;
- * - sinon, trou déjà mémorisé dans cette époque et instantané éligible le plus récent identique à celui essayé : `keep` (`corrupt`, aucune
- *   reprise : rien de neuf ne peut combler le trou) ;
- * - sinon : `resume`.
+ * Cinquième revue, point 1 : dernier instantané **essayé** par une reprise (`sync_meta.resumeTried`) = premier choix de `pickEligible`
+ * (le plus récent éligible), appliqué ou écarté définitivement ; jamais l'instantané finalement appliqué. `author` et `seq` nuls : aucun
+ * éligible dans l'époque.
+ */
+export interface ResumeTried {
+  readonly epoch: EpochId;
+  readonly author: DeviceId | null;
+  readonly seq: number | null;
+}
+
+/**
+ * Décision devant un trou sur un appareil (ni soi, ni oublié) dans l'époque `epoch` au segment `segment` : si l'instantané éligible le
+ * plus récent (`latest`, null si aucun) est celui déjà essayé dans cette époque, trou mémorisé (`changed` : à écrire), appareil
+ * `corrupt`, aucune reprise ; sinon `resume`.
  */
 export function decideSegmentGap(input: {
   readonly existing: SegmentGap | undefined;
   readonly epoch: EpochId;
   readonly segment: number;
-  readonly resumed: boolean;
-  readonly applied: SnapshotRef | null;
+  readonly tried: ResumeTried | null;
   readonly latest: SnapshotRef | null;
   readonly now: IsoDateTime;
-}): { readonly kind: 'record'; readonly gap: SegmentGap } | { readonly kind: 'keep' } | { readonly kind: 'resume' } {
-  const { existing } = input;
-  if (input.resumed) {
-    return { kind: 'record', gap: { epoch: input.epoch, segment: input.segment, author: input.applied?.author ?? null, seq: input.applied?.seq ?? null, since: existing?.since ?? input.now } };
-  }
-  if (existing !== undefined && existing.epoch === input.epoch && (input.latest?.author ?? null) === existing.author && (input.latest?.seq ?? null) === existing.seq) return { kind: 'keep' };
-  return { kind: 'resume' };
+}): { readonly kind: 'gap'; readonly gap: SegmentGap; readonly changed: boolean } | { readonly kind: 'resume' } {
+  const { existing, tried } = input;
+  if (tried === null || tried.epoch !== input.epoch || tried.author !== (input.latest?.author ?? null) || tried.seq !== (input.latest?.seq ?? null)) return { kind: 'resume' };
+  const gap: SegmentGap = { epoch: input.epoch, segment: input.segment, author: tried.author, seq: tried.seq, since: existing?.since ?? input.now };
+  const changed = existing === undefined || existing.epoch !== gap.epoch || existing.segment !== gap.segment || existing.author !== gap.author || existing.seq !== gap.seq;
+  return { kind: 'gap', gap, changed };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

@@ -123,3 +123,24 @@ export function parseStoredSegmentGaps(raw: string | null, where: string, log: S
 function isCount(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
+
+/** Dernier instantané essayé (forme de `ResumeTried` de `retention.ts`). */
+export interface StoredResumeTried {
+  readonly epoch: EpochId;
+  readonly author: DeviceId | null;
+  readonly seq: number | null;
+}
+
+/**
+ * Cinquième revue, point 1 : seule analyse de `sync_meta.resumeTried` : absente → null ; `{epoch, author, seq}` (auteur et numéro tous
+ * deux nuls ou tous deux présents) ; sinon journalisée, `SyncStateUnreadableError`.
+ */
+export function parseStoredResumeTried(raw: string | null, where: string, log: StoredStateLog): StoredResumeTried | null {
+  if (raw === null) return null;
+  const value = parseStoredJson(raw, where, log);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return unreadable(where, log);
+  const { epoch, author, seq } = value as Record<string, unknown>;
+  const none = author === null && seq === null;
+  if (!isEpochId(epoch) || !(none || (isSyncDeviceId(author) && isCount(seq)))) return unreadable(where, log);
+  return { epoch, author: author as DeviceId | null, seq: seq as number | null };
+}

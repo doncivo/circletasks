@@ -200,3 +200,128 @@ describe('trous mémorisés illisibles', () => {
     expect(a.logger.entries.filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.segmentGaps' });
   });
 });
+
+describe('cinquième revue, point 1 : instantané essayé, jamais l’appliqué (ADR 0011 §5.5)', () => {
+  const C_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const R_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  type Body = 'corrupt' | 'pending' | 'local';
+
+  /**
+   * A écrit T0 (j-1) ; C écrit un instantané (A couvert en j-1) ; A écrit T1 (j-2) ; B écrit le plus récent (A couvert en j-2). 40 jours
+   * plus tard, R arrive ; chez lui j-1 de A manque (purgé), et le corps des instantanés `bodies` est illisible ou en attente.
+   */
+  async function room(bodies: Partial<Record<string, Body>>): Promise<{ a: SimDevice; b: SimDevice; c: SimDevice; r: SimDevice; deliver: () => void }> {
+    const a = await deviceA();
+    await a.createTask('T0');
+    await a.cycle();
+    const b = await deviceB(a);
+    const c = await createSimDevice(C_ID, { name: 'C', clock: a.clock });
+    devices.push(c);
+    await pair(a, c);
+    const all = [a, b, c];
+    const sync = (): void => {
+      for (const from of all) for (const to of all) if (from !== to) propagate(from.folder, to.folder, from.id);
+    };
+    for (let i = 0; i < 2; i += 1) {
+      sync();
+      for (const d of all) {
+        d.clock.advance(1_000);
+        await d.cycle();
+      }
+    }
+    a.clock.advance(8 * DAY);
+    sync();
+    await c.cycle();
+    expect(c.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(true);
+    // L'état de C (instantané annoncé) arrive partout : A n'en écrit pas un à lui.
+    sync();
+    a.clock.advance(DAY);
+    refuseNextAppend(a);
+    await a.createTask('T1');
+    await a.cycle();
+    a.clock.advance(8 * DAY);
+    sync();
+    await b.cycle();
+    expect(b.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(true);
+    expect(a.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(false);
+    sync();
+    a.clock.advance(40 * DAY);
+    const r = await createSimDevice(R_ID, { name: 'R', clock: a.clock });
+    devices.push(r);
+    await pair(a, r);
+    const deliver = (): void => {
+      dropFirstSegment(a, r);
+      propagate(b.folder, r.folder, b.id);
+      propagate(c.folder, r.folder, c.id);
+    };
+    deliver();
+    const real = r.platform.readSnapshot.bind(r.platform);
+    r.platform.readSnapshot = async (request) => {
+      const body = request.tail === true ? undefined : bodies[request.deviceId];
+      if (body === 'corrupt') return { records: [], next: { segment: request.seq, record: 0 }, status: 'truncated' };
+      if (body === 'pending') return { records: [], next: { segment: request.seq, record: 0 }, status: 'cloud-pending' };
+      return real(request);
+    };
+    return { a, b, c, r, deliver };
+  }
+  const attempts = (d: SimDevice): number => d.logger.entries.filter((e) => e.event === 'resumed-from-snapshot' || e.event === 'resume-unavailable').length;
+
+  it('corps de l’instantané de B illisible, celui de C appliqué : sur 5 cycles, une seule reprise, A corrupt', async () => {
+    const { a, b, r, deliver } = await room({ [B_ID]: 'corrupt' });
+    for (let i = 0; i < 5; i += 1) {
+      deliver();
+      r.clock.advance(60_000);
+      await r.cycle();
+      expect(statusOf(r, a.id), `cycle ${String(i)}`).toBe('corrupt');
+    }
+    expect(resumes(r)).toBe(1);
+    expect(attempts(r)).toBe(1);
+    expect(await readJson(r.data.repos, META.resumeTried)).toMatchObject({ author: b.id });
+    expect(await readJson<Record<string, unknown>>(r.data.repos, META.segmentGaps)).toMatchObject({ [a.id]: { segment: 1, author: b.id } });
+  });
+
+  it('corps de l’instantané de B en attente d’iCloud (attente visible), puis arrivé : une reprise de plus, lecture complète, puis aucune', async () => {
+    const bodies: Partial<Record<string, Body>> = { [B_ID]: 'pending' };
+    const { a, r, deliver } = await room(bodies);
+    deliver();
+    expect((await r.cycle()).phase).toBe('waiting-icloud');
+    expect(statusOf(r, a.id)).not.toBe('corrupt');
+    bodies[B_ID] = 'local';
+    const before = r.logger.entries.length;
+    deliver();
+    r.clock.advance(60_000);
+    expect((await r.cycle()).phase).toBe('idle');
+    expect(resumes(r, before)).toBe(1);
+    expect(statusOf(r, a.id)).toBe('active');
+    expect(await titlesOf(r)).toEqual(['T0', 'T1']);
+    for (let i = 0; i < 3; i += 1) {
+      deliver();
+      r.clock.advance(60_000);
+      await r.cycle();
+    }
+    expect(resumes(r, before)).toBe(1);
+  });
+
+  it('arrêt brutal après la fin de la reprise, avant l’enregistrement du trou : aucune seconde reprise', async () => {
+    const { a, r, deliver } = await room({ [B_ID]: 'corrupt' });
+    // Arrêt simulé : la reprise aboutit (sa dernière transaction écrit l'instantané essayé), le trou n'est pas encore enregistré.
+    const realSave = r.data.repos.sync.saveState.bind(r.data.repos.sync);
+    let armed = true;
+    r.data.repos.sync.saveState = async (id, patch) => {
+      if (armed && id === a.id && patch.status === 'corrupt') throw new Error('arrêt simulé');
+      return realSave(id, patch);
+    };
+    await r.cycle().catch(() => undefined);
+    armed = false;
+    expect(resumes(r)).toBe(1);
+    expect(await readJson(r.data.repos, META.resumeTried)).not.toBeNull();
+    await r.restart();
+    for (let i = 0; i < 3; i += 1) {
+      deliver();
+      r.clock.advance(60_000);
+      await r.cycle();
+    }
+    expect(resumes(r)).toBe(1);
+    expect(statusOf(r, a.id)).toBe('corrupt');
+  });
+});

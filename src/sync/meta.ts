@@ -30,6 +30,8 @@ export const META = {
   waitingSince: 'waitingSince',
   /** Quatrième revue, point B : trous impossibles à combler, par appareil lu (ADR 0011 §5.5). */
   segmentGaps: 'segmentGaps',
+  /** Cinquième revue, point 1 : dernier instantané essayé par une reprise, `{epoch, author, seq}` (ADR 0011 §5.5). */
+  resumeTried: 'resumeTried',
   /** Quatrième revue, point D : repères `[stateSeq, lastSyncHlc]` de ses états publiés (ADR 0011 §5.5, condition 3). */
   ownStateHlcs: 'ownStateHlcs',
 } as const;

@@ -9,7 +9,7 @@ import { pickEligible, snapshotCandidates, type ForgetCoverage } from './eligibl
 import { META, readJson, writeJson } from './meta';
 import { cursorIds } from '../domain/sync/ownState';
 import { positionFromCover } from '../domain/sync/positions';
-import type { SnapshotRef } from '../domain/sync/retention';
+import type { ResumeTried, SnapshotCandidate, SnapshotEnd } from '../domain/sync/retention';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
 /**
@@ -80,8 +80,8 @@ function rowPrefix(records: readonly SnapshotRecord[]): number {
 }
 
 /**
- * Reprise en fusion d'un nouvel appareil (voir le module). Mêmes paramètres que `resumeFromSnapshot` ; rend l'instantané appliqué en
- * entier (auteur et numéro, quatrième revue, point B), null sinon.
+ * Reprise en fusion d'un nouvel appareil (voir le module). Mêmes paramètres que `resumeFromSnapshot` ; rend si un instantané a été
+ * appliqué en entier, et l'instantané essayé mémorisé (cinquième revue, point 1 ; undefined : inchangé).
  */
 export async function joinFromSnapshot(
   deps: SyncDeps,
@@ -92,7 +92,7 @@ export async function joinFromSnapshot(
   hooks: CycleHooks,
   pending: Set<string>,
   coverage: ForgetCoverage,
-): Promise<SnapshotRef | null> {
+): Promise<{ readonly applied: boolean; readonly tried: ResumeTried | undefined }> {
   const repos = deps.data.repos;
   const saved = await readJson<JoinState>(repos, JOIN_META);
   // Y-10 (§18 point 11, seconde revue point 1) : instantané **éligible** seulement (auteur non oublié, annoncé, couvrant chaque oublié
@@ -102,7 +102,9 @@ export async function joinFromSnapshot(
     // Aucun instantané dans l'époque : rien à suivre, l'appareil lit les journaux.
     if (saved !== null) await writeJson(repos, JOIN_META, null);
     deps.logger.log('resume-unavailable', { epoch });
-    return null;
+    const none: ResumeTried = { epoch, author: null, seq: null };
+    await writeJson(repos, META.resumeTried, none);
+    return { applied: false, tried: none };
   }
   // Entrée de départ dès le premier cycle (revue 1) : une attente d'iCloud ou un arrêt avant la première tranche garde l'arrivée suivie.
   const start: JoinState = { epoch, from: deps.deviceId, seq: 0, done: 0, total: 0, failure: null };
@@ -110,6 +112,7 @@ export async function joinFromSnapshot(
   let failure: JoinFailure | null = null;
   let tracked: JoinState = saved ?? start;
   const excluded = new Set<DeviceId>();
+  const tried = triedTracker(candidates, coverage, epoch);
   for (const c of candidates) if (c.end === 'cloud-pending') pending.add(`${String(c.state.deviceId).slice(0, 8)}/${epoch}/snapshot`);
   for (;;) {
     const pick = pickEligible(candidates, coverage, epoch, excluded);
@@ -131,8 +134,12 @@ export async function joinFromSnapshot(
     }
     // Instantané incomplet ou illisible : écarté (comme la reprise ordinaire) ; l'appareil lit alors les journaux, ce n'est pas un
     // blocage. Il est retenté au cycle suivant (`sync_meta.resume` reste posé).
-    if (!loaded) continue;
+    if (!loaded) {
+      tried.discarded(pick.end);
+      continue;
+    }
     if (!admitSnapshot(deps, loaded)) {
+      tried.discarded(pick.end);
       // Instantané trop en avance (section 4.4) : écarté, son écrivain est signalé.
       if (deviceId !== deps.deviceId) await repos.sync.saveState(deviceId, { status: 'clock-ahead' });
       failure ??= 'clock-ahead';
@@ -141,8 +148,9 @@ export async function joinFromSnapshot(
     const same = saved !== null && saved.epoch === epoch && saved.from === deviceId && saved.seq === seq;
     tracked = { epoch, from: deviceId, seq, done: same ? Math.min(saved.done, loaded.records.length) : 0, total: loaded.end.count, failure: null };
     await writeJson(repos, JOIN_META, tracked);
+    tried.applying(pick.end);
     try {
-      await applyJoin(deps, deviceId, epoch, loaded, tracked, accepted, knows, hooks, coverage);
+      await applyJoin(deps, deviceId, epoch, loaded, tracked, accepted, knows, hooks, coverage, tried.value());
     } catch (error) {
       // Les tranches terminées ont mémorisé leur position : l'échec s'y ajoute sans la faire reculer.
       const reached = (await readJson<JoinState>(repos, JOIN_META)) ?? tracked;
@@ -156,11 +164,12 @@ export async function joinFromSnapshot(
       throw error;
     }
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
-    return { author: deviceId, seq };
+    return { applied: true, tried: tried.value() };
   }
   await writeJson(repos, JOIN_META, { ...tracked, failure } satisfies JoinState);
   deps.logger.log('resume-unavailable', { epoch });
-  return null;
+  await tried.save(repos);
+  return { applied: false, tried: tried.value() };
 }
 
 /**
@@ -172,15 +181,41 @@ export async function joinFromSnapshot(
 export async function finishResumeTx(
   tx: Repositories,
   deps: SyncDeps,
-  input: { readonly epoch: EpochId; readonly from: DeviceId; readonly loaded: LoadedSnapshot; readonly accepted: ReadonlyMap<DeviceId, unknown>; readonly coverage: ForgetCoverage },
+  input: { readonly epoch: EpochId; readonly from: DeviceId; readonly loaded: LoadedSnapshot; readonly accepted: ReadonlyMap<DeviceId, unknown>; readonly coverage: ForgetCoverage; readonly tried?: ResumeTried | undefined },
 ): Promise<void> {
   const local = new Map((await tx.sync.getStates()).map((r) => [r.deviceId, r]));
   for (const id of cursorIds(input.accepted, deps.deviceId, input.loaded.end.covers, input.coverage.forgotten)) {
     await tx.sync.saveState(id, positionFromCover(input.loaded.end.covers.get(id as DeviceId), input.epoch, id === deps.deviceId, local.get(id)));
   }
   await writeJson(tx, META.resume, null);
+  // Cinquième revue, point 1 : instantané essayé écrit avec la fin de la reprise (un arrêt brutal ensuite ne la rejoue pas pour un trou).
+  if (input.tried) await writeJson(tx, META.resumeTried, input.tried);
   const source = (await tx.sync.getStates()).find((row) => row.deviceId === input.from);
   if (input.from !== deps.deviceId && source?.status === 'clock-ahead') await tx.sync.saveState(input.from, { status: 'active' });
+}
+
+/**
+ * Cinquième revue, point 1 (ADR 0011 §5.5) : instantané **essayé** par une reprise = premier choix de `pickEligible` sans exclusion (le
+ * plus récent éligible), mémorisé s'il est appliqué ou écarté définitivement (illisible, en avance) ; aucun éligible : `{époque, null,
+ * null}` ; premier choix au corps en attente d'iCloud : inchangé (`value()` undefined). Jamais l'instantané finalement appliqué.
+ */
+export function triedTracker(candidates: readonly SnapshotCandidate[], coverage: ForgetCoverage, epoch: EpochId) {
+  const first = pickEligible(candidates, coverage, epoch, new Set());
+  let decided: ResumeTried | undefined = first.kind === 'none' ? { epoch, author: null, seq: null } : undefined;
+  const settle = (end: SnapshotEnd): void => {
+    if (first.kind === 'ok' && first.end.author === end.author && first.end.seq === end.seq) decided = { epoch, author: end.author, seq: end.seq };
+  };
+  return {
+    /** Corps illisible ou instantané en avance : écarté définitivement. */
+    discarded: settle,
+    /** Appliqué (écrit par `finishResumeTx`, dans la dernière transaction). */
+    applying: settle,
+    value: (): ResumeTried | undefined => decided,
+    /** Reprise sans instantané appliqué : écrit hors transaction de fin. */
+    save: async (repos: Repositories): Promise<void> => {
+      if (decided) await writeJson(repos, META.resumeTried, decided);
+    },
+  };
 }
 
 async function applyJoin(
@@ -193,6 +228,7 @@ async function applyJoin(
   knows: ApplyContext['knows'],
   hooks: CycleHooks,
   coverage: ForgetCoverage,
+  triedNow: ResumeTried | undefined,
 ): Promise<void> {
   const records = loaded.records;
   const rowsEnd = rowPrefix(records);
@@ -210,7 +246,7 @@ async function applyJoin(
   }
   // Dernière transaction : traces, champs inconnus, curseurs aux positions `covers`, fin de la reprise et de l'arrivée.
   const finalize: SnapshotTxHook = async (tx) => {
-    await finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage });
+    await finishResumeTx(tx, deps, { epoch, from: deviceId, loaded, accepted, coverage, tried: triedNow });
     await writeJson(tx, JOIN_META, null);
   };
   const result = await mergeSnapshot(deps, { records: records.slice(rowsEnd), end: loaded.end }, ctx, undefined, finalize);
