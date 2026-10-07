@@ -13,7 +13,7 @@ import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
-import { coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
+import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
 import { deviceName, deviceStatusText, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
@@ -413,7 +413,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
       stopStatus();
       stopPairing();
       stopChanges();
-      setReloadRetry(container, null);
+      clearReloadRetry(container, retryReload);
       stopSyncingTimer();
       for (const kind of SYNC_KINDS) useAppStatusStore.getState().setStatus(kind, null);
     },

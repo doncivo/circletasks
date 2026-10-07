@@ -135,6 +135,27 @@ describe('signal visible (startSync)', () => {
     integration.dispose();
   });
 
+  it('troisième revue, point M2 : la fin d’une ancienne intégration ne retire pas la relance de la nouvelle', async () => {
+    const id = await task();
+    const env = { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined };
+    const old = startSyncIntegration(container, env);
+    const integration = startSyncIntegration(container, env);
+    await integration.refreshed();
+    old.dispose();
+    const real = db.data.repos.tasks.getById.bind(db.data.repos.tasks);
+    failing(db.data.repos.tasks, 'getById');
+    await db.data.repos.tasks.update(id, { title: 'Renommée ailleurs' });
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reload-failed');
+    (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
+    await syncStore.get(container).getState().syncNow('manual');
+    await integration.reloaded();
+    expect(container.taskEntities.get(id)?.title).toBe('Renommée ailleurs');
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    integration.dispose();
+  });
+
   it('troisième revue, point 1 : un lot B rechargé ne retire pas le bandeau tant que le lot A en échec attend sa relance', async () => {
     const id1 = await task();
     const id2 = await task('13000000-0000-4000-8000-000000000002');

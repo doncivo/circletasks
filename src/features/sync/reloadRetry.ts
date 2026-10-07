@@ -7,9 +7,16 @@ import type { AppContainer } from '../app/container';
  */
 const retries = new WeakMap<AppContainer, () => Promise<void>>();
 
-export function setReloadRetry(container: AppContainer, retry: (() => Promise<void>) | null): void {
-  if (retry) retries.set(container, retry);
-  else retries.delete(container);
+export function setReloadRetry(container: AppContainer, retry: () => Promise<void>): void {
+  retries.set(container, retry);
+}
+
+/**
+ * Troisième revue, point M2 : retire la relance seulement si c'est celle de l'intégration qui se termine (une intégration plus récente
+ * du même conteneur garde la sienne).
+ */
+export function clearReloadRetry(container: AppContainer, retry: () => Promise<void>): void {
+  if (retries.get(container) === retry) retries.delete(container);
 }
 
 /** Relance les rechargements en échec (aucun : rien). Ne rejette jamais. */
