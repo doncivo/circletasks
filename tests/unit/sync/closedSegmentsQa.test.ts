@@ -145,6 +145,22 @@ describe('désordre d’iCloud à trois appareils (§21 point 2)', () => {
     expect(b.logger.entries.slice(before).filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(0);
   });
 
+  it('j-1 absent de la liste : aucune reprise depuis l’instantané sur 5 cycles, données figées, puis lecture complète à l’arrivée', async () => {
+    const [a, b] = (await group([A_ID, B_ID])) as [SimDevice, SimDevice];
+    await writeThenRotate(a, [b]);
+    const { epoch } = epochDirOf(a, a.id);
+    propagate(a.folder, b.folder, a.id, { drop: [`${epoch}/j-00000001.ctj`] });
+    const before = b.logger.entries.length;
+    for (let i = 0; i < 5; i += 1) {
+      expect((await b.cycle()).phase, `cycle ${String(i)}`).toBe('waiting-icloud');
+      expect(await titlesOf(b)).toEqual(['T1']);
+    }
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'resumed-from-snapshot')).toHaveLength(0);
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(await taskSnapshot(b)).toEqual(await taskSnapshot(a));
+  });
+
   it('j-1 resté dans le nuage (placeholder) : attente, jamais le segment suivant', async () => {
     const [a, b] = (await group([A_ID, B_ID])) as [SimDevice, SimDevice];
     await writeThenRotate(a, [b]);
