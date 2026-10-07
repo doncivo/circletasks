@@ -343,13 +343,36 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     for (const l of lines) expect(l).toMatch(/dtolnay\/rust-toolchain@[0-9a-f]{40} # \S+/);
   });
 
-  it('consigne de l’environnement releases : approbation d’Ali, tags ios-v* et v* seulement, sans main', () => {
+  it('consigne de l’environnement releases : sans approbation manuelle, limite des tags facultative', () => {
     const section = guide.slice(guide.indexOf('## Pour publier une version'), guide.indexOf('## Si ça se passe mal'));
     expect(section).toContain('Settings > Environments');
-    expect(section).toContain('« Required reviewers »');
+    expect(section).not.toContain('Required reviewers');
+    expect(section).not.toContain('Approve');
+    expect(section).toContain('Aucune approbation manuelle');
     expect(section).toContain('`ios-v*`');
     expect(section).toContain('`v*`');
-    expect(section).toContain('retire `main`');
+  });
+
+  it('secrets Google : seulement dans l’étape de compilation, client de bureau jamais dans le build iOS', () => {
+    const steps = (yml: string) => yml.split(/^ {6}- /m).slice(1);
+    const win = read('.github/workflows/build-windows.yml');
+    const withSecret = (yml: string, name: string) => steps(yml).filter((s) => s.includes(name));
+    for (const name of ['CT_GOOGLE_CLIENT_ID', 'CT_GOOGLE_CLIENT_SECRET']) {
+      const found = withSecret(win, name);
+      expect(found).toHaveLength(1);
+      expect(found[0]).toContain("name: Compiler l'installeur NSIS");
+      expect(found[0]).toContain(`${name}: \${{ secrets.${name} }}`);
+    }
+    const iosSteps = withSecret(workflow, 'CT_GOOGLE_IOS_CLIENT_ID');
+    expect(iosSteps).toHaveLength(1);
+    expect(iosSteps[0]).toContain("name: Compiler l'IPA sans signature");
+    expect(workflow).not.toContain('CT_GOOGLE_CLIENT_SECRET');
+    expect(workflow).not.toContain('CT_GOOGLE_CLIENT_ID');
+    expect(win).not.toContain('CT_GOOGLE_IOS_CLIENT_ID');
+    expect(read('.github/workflows/tests.yml')).not.toContain('CT_GOOGLE');
+    expect(win.slice(win.indexOf('\n  publish:\n'))).not.toContain('CT_GOOGLE');
+    expect(workflow.slice(workflow.indexOf('\n  publish:\n'))).not.toContain('CT_GOOGLE');
+    expect(read('src-tauri/build.rs')).toContain('"CT_GOOGLE_IOS_CLIENT_ID"');
   });
 
   it('garde la phrase de I-02 tant que I-02 n’est pas faite', () => {

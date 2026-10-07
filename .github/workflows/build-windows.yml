@@ -88,6 +88,12 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ github.event_name == 'push' && github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY || '' }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ github.event_name == 'push' && github.ref_type == 'tag' && secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+          # Client OAuth Google « Application de bureau » (K-01), lu à la compilation par src-tauri/build.rs (option_env!).
+          # Contrairement à la clé de signature, transmis aussi aux builds de branche : sans eux, l'installeur de test
+          # affiche « Google non configuré ». Google déclare ce client non confidentiel ; la valeur est de toute façon
+          # embarquée en clair dans l'exécutable livré. Uniquement cette étape : ni test, ni publication.
+          CT_GOOGLE_CLIENT_ID: ${{ secrets.CT_GOOGLE_CLIENT_ID }}
+          CT_GOOGLE_CLIENT_SECRET: ${{ secrets.CT_GOOGLE_CLIENT_SECRET }}
         run: |
           set -euo pipefail
           rm -rf src-tauri/target/release/bundle
@@ -144,8 +150,8 @@ jobs:
           retention-days: 30
           overwrite: true
 
-  # Publication : uniquement sur push de tag vX.Y.Z. L'environnement « releases » exige l'approbation d'Ali
-  # (réglage GitHub, voir docs/release-pc.md). Le secret RELEASES_TOKEN n'existe que dans cet environnement.
+  # Publication : uniquement sur push de tag vX.Y.Z. L'environnement « releases » porte le secret
+  # RELEASES_TOKEN, sans approbation manuelle (décision d'Ali du 2026-10-07, docs/decisions.md). Le secret RELEASES_TOKEN n'existe que dans cet environnement.
   publish:
     needs: windows
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')

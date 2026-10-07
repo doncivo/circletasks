@@ -4,7 +4,7 @@
 
 /// Identifiants client OAuth Google (ADR 0008 section 5, docs/stories/K-01.md) : variable d'environnement du build, sinon fichier `.env`
 /// local à la racine du dépôt (ignoré par git). Jamais commités ; absents : l'app affiche « non configuré ».
-const BUILD_SECRETS: [&str; 2] = ["CT_GOOGLE_CLIENT_ID", "CT_GOOGLE_CLIENT_SECRET"];
+const BUILD_SECRETS: [&str; 3] = ["CT_GOOGLE_CLIENT_ID", "CT_GOOGLE_CLIENT_SECRET", "CT_GOOGLE_IOS_CLIENT_ID"];
 
 fn forward_local_env() {
     let dotenv = std::path::Path::new(&std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR")).join("..").join(".env");

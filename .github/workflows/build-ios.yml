@@ -2,7 +2,7 @@
 # Déclenchement manuel ou sur tag ios-v* uniquement : les minutes macOS d'un dépôt privé coûtent 10 fois plus.
 # Lancement sur une branche de lot (I-01) : gh workflow run build-ios.yml --ref <branche> -f publish=false.
 # Publication seulement sur un tag ios-v* (push du tag, ou lancement manuel sur ce tag avec publish),
-# après approbation de l'environnement releases ; jamais depuis une branche, même avec publish coché.
+# avec l'environnement releases (sans approbation manuelle, décision d'Ali du 2026-10-07) ; jamais depuis une branche, même avec publish coché.
 # L'IPA n'est pas signée : SideStore la signe sur l'iPhone avec l'Apple ID gratuit.
 # Le tag iOS (ios-vX.Y.Z) est distinct du tag PC (vX.Y.Z) qui déclenche build-windows.yml.
 name: Build iOS
@@ -72,7 +72,11 @@ jobs:
       # Xcode « Build Rust Code » (tauri ios xcode-script), puis Products/Applications/CircleTasks.app est
       # zippé en Payload/ dans gen/apple/build/arm64/CircleTasks.ipa. beforeBuildCommand (npm run build)
       # compile le front, embarqué dans le binaire Rust. Pourquoi ce choix : ADR 0007, avenant POC-01.
+      # Client OAuth Google « iOS » (K-01), lu à la compilation par src-tauri/build.rs (BUILD_SECRETS).
+      # Identifiant public (non confidentiel) ; jamais le secret du client de bureau ici. Uniquement cette étape.
       - name: Compiler l'IPA sans signature
+        env:
+          CT_GOOGLE_IOS_CLIENT_ID: ${{ secrets.CT_GOOGLE_IOS_CLIENT_ID }}
         run: npx tauri ios build --ci --no-sign --target aarch64
 
       - name: Vérifier et copier CircleTasks.ipa
@@ -151,7 +155,7 @@ jobs:
 
   # Publication : tag ios-v* seulement (push du tag, ou lancement manuel sur le tag avec publish).
   # Une branche n'est jamais publiée, même avec publish coché (I-01). L'environnement « releases »
-  # porte l'approbation d'Ali (réglage GitHub, voir ADR 0007).
+  # porte RELEASES_TOKEN, sans approbation manuelle (décision d'Ali du 2026-10-07).
   publish:
     needs: ios
     if: startsWith(github.ref, 'refs/tags/ios-v') && (github.event_name == 'push' || inputs.publish == true)
