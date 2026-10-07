@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
-import { onPairingChange, readJoinView, type JoinView } from './pairingStatus';
+import { onPairingChange, readJoinFailure, readJoinView, type JoinView } from './pairingStatus';
+import { syncErrorCodeOf } from '../../platform/sync/types';
+import { defaultSyncLogger } from '../../sync';
 import { syncStore } from './syncStore';
 import { formatCount } from './syncText';
 
@@ -26,9 +28,16 @@ function JoinAnnouncer() {
   useEffect(() => {
     if (finished === 0) return;
     let cancelled = false;
-    void readJoinView(container).then((view) => {
-      if (!cancelled && !view?.failure) setText(t('sync.pairing.joinDoneAnnounce'));
-    });
+    // Annoncé seulement si la lecture a réussi, qu'aucun échec n'est gardé ET que le cycle conclut « à jour » (un échec non enregistré
+    // laisse la phase en erreur) ; sinon la région reste vide et le bandeau parle seul. Un rejet vide la région et est journalisé.
+    readJoinFailure(container)
+      .then(({ readable, failure }) => {
+        if (!cancelled && readable && !failure && container.sync?.status().phase === 'idle') setText(t('sync.pairing.joinDoneAnnounce'));
+      })
+      .catch((error: unknown) => {
+        defaultSyncLogger.log('join-announce-failed', { code: syncErrorCodeOf(error) });
+        if (!cancelled) setText('');
+      });
     return () => {
       cancelled = true;
     };
