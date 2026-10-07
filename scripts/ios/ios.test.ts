@@ -336,6 +336,12 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     expect(tail).toMatch(/exit 1/);
   });
 
+  it('dtolnay/rust-toolchain épinglé sur un SHA commenté, comme dans les autres workflows', () => {
+    const lines = workflow.split('\n').filter((l) => l.includes('dtolnay/rust-toolchain'));
+    expect(lines.length).toBeGreaterThan(0);
+    for (const l of lines) expect(l).toMatch(/dtolnay\/rust-toolchain@[0-9a-f]{40} # \S+/);
+  });
+
   it('garde la phrase de I-02 tant que I-02 n’est pas faite', () => {
     const row = read('docs/backlog.md').split('\n').find((l) => l.startsWith('| I-02 |')) ?? '';
     if (!/\|\s*fait/.test(row)) expect(guide).toContain('CircleTasks préviendra 24 h avant l\'expiration (à l\'ordre 5).');
