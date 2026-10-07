@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
@@ -47,7 +47,7 @@ const restart = async (initial: Partial<SyncStatus> = {}): Promise<void> => {
   });
   await settle();
 };
-const text = (): string | null => screen.queryByRole('status')?.textContent ?? null;
+const text = (): string | null => document.querySelector('.ct-status-banner')?.textContent ?? null;
 const trouble = (): unknown => useAppStatusStore.getState().sources.syncTrouble;
 
 beforeEach(async () => {

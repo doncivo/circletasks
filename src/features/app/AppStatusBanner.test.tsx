@@ -15,7 +15,7 @@ describe('bandeau d’état de l’app (A-09)', () => {
 
   it('aucun état : aucun bandeau', () => {
     render(<AppStatusBanner />);
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(document.querySelector('.ct-status-banner')).toBeNull();
   });
 
   it('les textes des quatre états existent (critère 6)', () => {
@@ -29,8 +29,80 @@ describe('bandeau d’état de l’app (A-09)', () => {
     for (const [kind, source, text] of cases) {
       for (const other of KINDS) set(other, null);
       act(() => set(kind, source));
-      expect(screen.getByRole('status')).toHaveTextContent(text);
+      expect(document.querySelector('.ct-status-banner')).toHaveTextContent(text);
     }
+  });
+
+  it('revue point 5 : la région est toujours montée, polie et atomique', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toHaveAttribute('aria-atomic', 'true');
+    act(() => set('offline', {}));
+    expect(screen.getByTestId('status-banner-region')).toBe(region);
+  });
+
+  it('revue point 3 : « Synchro en cours » reste visible mais hors de la région vivante (non annoncé) ; « Hors ligne » et les échecs y sont annoncés', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    act(() => set('syncing', {}));
+    expect(screen.getByText('Synchro en cours')).toBeVisible();
+    expect(region).not.toContainElement(screen.getByText('Synchro en cours'));
+    act(() => set('syncTrouble', { message: 'Échec' }));
+    expect(region).toHaveTextContent('Échec');
+    act(() => set('syncTrouble', null));
+    expect(region).toBeEmptyDOMElement();
+    act(() => set('offline', {}));
+    act(() => set('syncing', null));
+    expect(region).toHaveTextContent('Hors ligne');
+  });
+
+  it('seconde revue point C : offline, syncing, offline ne change pas le contenu de la région (« Hors ligne » non réannoncé)', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    act(() => set('offline', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    const seen: string[] = [];
+    const observer = new MutationObserver((records) => seen.push(...records.map((r) => r.type)));
+    observer.observe(region, { childList: true, characterData: true, subtree: true });
+    act(() => set('syncing', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    expect(screen.getByText('Synchro en cours')).toBeVisible();
+    act(() => set('syncing', null));
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
+    expect(region).toHaveTextContent('Hors ligne');
+  });
+
+  it('troisième revue point 2 : data-visually-empty présent sans bandeau visible dans la région (aucun état, hors ligne + synchro), absent avec un bandeau visible', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    expect(region).toHaveAttribute('data-visually-empty');
+    act(() => set('offline', {}));
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    act(() => set('syncing', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    expect(region).toHaveAttribute('data-visually-empty');
+    act(() => set('syncing', null));
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    act(() => set('offline', null));
+    expect(region).toHaveAttribute('data-visually-empty');
+  });
+
+  it('troisième revue point 4 : hors ligne + synchro, puis un échec survient : la région passe au texte de l’échec', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    act(() => {
+      set('offline', {});
+      set('syncing', {});
+    });
+    expect(region).toHaveTextContent('Hors ligne');
+    act(() => set('syncTrouble', { message: 'Échec de synchro' }));
+    expect(region).toHaveTextContent('Échec de synchro');
+    expect(region).not.toHaveTextContent('Hors ligne');
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
   });
 
   it('un seul bandeau, le plus prioritaire (critère 5)', () => {
@@ -39,12 +111,12 @@ describe('bandeau d’état de l’app (A-09)', () => {
       set('offline', {});
       set('syncing', {});
     });
-    expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Synchro en cours');
+    expect(document.querySelectorAll('.ct-status-banner:not(.ct-visually-hidden)')).toHaveLength(1);
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Synchro en cours');
     act(() => set('calendarDisconnected', { detail: 'Perso', onAction: () => undefined }));
-    expect(screen.getByRole('status')).toHaveTextContent('Agenda Perso déconnecté');
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Agenda Perso déconnecté');
     act(() => set('calendarDisconnected', null));
-    expect(screen.getByRole('status')).toHaveTextContent('Synchro en cours');
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Synchro en cours');
   });
 
   it('l’alerte d’agenda propose « Reconnecter » qui appelle l’action de sa source (critère 6)', () => {
@@ -59,11 +131,11 @@ describe('bandeau d’état de l’app (A-09)', () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
     const stop = startNetworkStatus();
     render(<AppStatusBanner />);
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(document.querySelector('.ct-status-banner')).toBeNull();
     act(() => void window.dispatchEvent(new Event('offline')));
-    expect(screen.getByRole('status')).toHaveTextContent('Hors ligne');
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Hors ligne');
     act(() => void window.dispatchEvent(new Event('online')));
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(document.querySelector('.ct-status-banner')).toBeNull();
     stop();
   });
 
@@ -74,16 +146,16 @@ describe('bandeau d’état de l’app (A-09)', () => {
     act(() => {
       stop = startNetworkStatus();
     });
-    expect(screen.getByRole('status')).toHaveTextContent('Hors ligne');
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Hors ligne');
     act(() => stop());
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(document.querySelector('.ct-status-banner')).toBeNull();
   });
 
   it('problème de synchro : texte de la source, « Voir » qui appelle son action, role="status" (critères 9 a, 9 c, 9 h)', () => {
     const onAction = vi.fn();
     render(<AppStatusBanner />);
     act(() => set('syncTrouble', { detail: 'key-mismatch', message: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil', more: 0, onAction }));
-    expect(screen.getByRole('status')).toHaveTextContent('Ce dossier a été chiffré avec une autre clé : associez cet appareil');
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Ce dossier a été chiffré avec une autre clé : associez cet appareil');
     expect(screen.queryByRole('alert')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(onAction).toHaveBeenCalledTimes(1);
@@ -92,7 +164,7 @@ describe('bandeau d’état de l’app (A-09)', () => {
   it('problème de synchro : « (+N) » quand d’autres états attendent ; texte seul sans action', () => {
     render(<AppStatusBanner />);
     act(() => set('syncTrouble', { detail: 'error', message: 'La synchronisation a échoué', more: 2 }));
-    expect(screen.getByRole('status').textContent).toBe('La synchronisation a échoué (+2)');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toBe('La synchronisation a échoué (+2)');
     expect(screen.queryByRole('button')).toBeNull();
   });
 
@@ -103,15 +175,15 @@ describe('bandeau d’état de l’app (A-09)', () => {
       set('syncing', {});
       set('syncTrouble', { detail: 'error', message: 'Échec' });
     });
-    expect(screen.getAllByRole('status')).toHaveLength(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Échec');
+    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Échec');
   });
 
   it('« En attente d’iCloud » : cause de la source si elle est donnée, sinon texte générique (critère 9 e)', () => {
     render(<AppStatusBanner />);
     act(() => set('waitingIcloud', { message: 'Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour' }));
-    expect(screen.getByRole('status').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
     act(() => set('waitingIcloud', {}));
-    expect(screen.getByRole('status').textContent).toBe('En attente d’iCloud');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toBe('En attente d’iCloud');
   });
 });

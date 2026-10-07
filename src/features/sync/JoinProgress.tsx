@@ -2,10 +2,53 @@ import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
-import { onPairingChange, readJoinView, type JoinView } from './pairingStatus';
+import { onPairingChange, readJoinFailure, readJoinView, type JoinView } from './pairingStatus';
+import { syncErrorCodeOf } from '../../platform/sync/types';
+import { defaultSyncLogger } from '../../sync';
 import { syncStore } from './syncStore';
+import { formatCount } from './syncText';
 
-const count = new Intl.NumberFormat('fr-FR');
+/**
+ * Annonce aux lecteurs d'écran (région vivante polie toujours montée) le début et la fin de la reprise seulement : le compteur « 8 / 20 »
+ * change à chaque pas et n'est pas une région vivante (la barre <progress> et le texte restent visibles).
+ */
+function JoinAnnouncer() {
+  const container = useAppContainer();
+  const active = useFeatureStore(syncStore, (s) => s.status.progress != null);
+  const [text, setText] = useState('');
+  const [wasActive, setWasActive] = useState(false);
+  const [finished, setFinished] = useState(0);
+  // Ajustement d'état pendant le rendu (début puis fin de la reprise) : pas d'effet, pas de rendu en cascade.
+  if (wasActive !== active) {
+    setWasActive(active);
+    setText(active ? t('sync.pairing.joinStartAnnounce') : '');
+    if (!active && text !== '') setFinished((n) => n + 1);
+  }
+  // Fin de la reprise : « Données reçues » seulement si aucun échec n'est gardé (sinon le bandeau join-failed parle seul).
+  useEffect(() => {
+    if (finished === 0) return;
+    let cancelled = false;
+    // Annoncé seulement si la lecture a réussi, qu'aucun échec n'est gardé ET que le cycle conclut « à jour » (un échec non enregistré
+    // laisse la phase en erreur) ; sinon la région reste vide et le bandeau parle seul. Un rejet vide la région et est journalisé.
+    readJoinFailure(container)
+      .then(({ readable, failure }) => {
+        if (!cancelled && readable && !failure && container.sync?.status().phase === 'idle') setText(t('sync.pairing.joinDoneAnnounce'));
+      })
+      .catch((error: unknown) => {
+        defaultSyncLogger.log('join-announce-failed', { code: syncErrorCodeOf(error) });
+        if (!cancelled) setText('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [finished, container]);
+  if (!container.sync) return null;
+  return (
+    <span className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="sync-join-live">
+      {text}
+    </span>
+  );
+}
 
 /**
  * Arrivée du nouvel appareil (Y-06 critère 13 ; sans maquette, composée avec les lignes de Réglages) : « Réception de vos données…
@@ -14,6 +57,15 @@ const count = new Intl.NumberFormat('fr-FR');
  * après un redémarrage ; une arrivée en attente (iCloud) est affichée sans alarme. Rien n'est affiché sans arrivée en cours.
  */
 export function JoinProgress() {
+  return (
+    <>
+      <JoinAnnouncer />
+      <JoinBody />
+    </>
+  );
+}
+
+function JoinBody() {
   const container = useAppContainer();
   const status = useFeatureStore(syncStore, (s) => s.status);
   const busy = useFeatureStore(syncStore, (s) => s.busy);
@@ -40,18 +92,18 @@ export function JoinProgress() {
     return (
       <div className="ct-settings__row ct-sync__join">
         <span className="ct-settings__stack">
-          <span role="status">{t('sync.pairing.joinProgress', { done: count.format(done), total: count.format(total) })}</span>
+          <span data-testid="sync-join-count">{t('sync.pairing.joinProgress', { done: formatCount(done), total: formatCount(total) })}</span>
           <progress className="ct-sync__joinBar" aria-label={t('sync.pairing.joinProgressLabel')} max={Math.max(1, total)} value={Math.min(done, total)} />
         </span>
       </div>
     );
   }
   if (!join) return null;
-  const params = { done: count.format(join.done), total: count.format(join.total) };
+  const params = { done: formatCount(join.done), total: formatCount(join.total) };
   if (join.failure) {
     return (
       <div className="ct-settings__row ct-sync__join" data-testid="sync-join-failure">
-        <span className="ct-settings__hint ct-settings__hint--danger" role="status">
+        <span className="ct-settings__hint ct-settings__hint--danger" data-testid="sync-join-failure-text">
           {join.failure === 'clock-ahead' ? t('sync.pairing.joinFailedClock') : join.failure === 'state-mismatch' ? t('sync.pairing.joinFailedSnapshot') : t('sync.pairing.joinFailed', params)}
         </span>
         <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.retryLabel')} disabled={busy} onClick={() => void syncNow('manual')}>

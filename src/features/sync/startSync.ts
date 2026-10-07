@@ -15,7 +15,7 @@ import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, statusLine, waitingLong, warningText } from './syncText';
+import { deviceName, deviceStatusText, formatCount, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
 
@@ -47,8 +47,6 @@ const SYNC_KINDS = ['syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing']
  */
 export const BLOCKING_PHASE_META = 'bannerBlockingPhase';
 
-const count = new Intl.NumberFormat('fr-FR');
-
 /**
  * Texte d'un état `syncTrouble` (A-09 D5 : une seule formulation par état) : ligne de Réglages (`statusLine`) de l'état qui le porte
  * (`textStatus` de `syncBannerFor`), texte de l'arrivée en échec de `JoinProgress` (Y-06), appareil nommé et statut comme dans APPAREILS.
@@ -58,7 +56,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'join-failed':
       return trouble.join.failure === 'clock-ahead'
         ? t('sync.pairing.joinFailedClock')
-        : t('sync.pairing.joinFailed', { done: count.format(trouble.join.done), total: count.format(trouble.join.total) });
+        : t('sync.pairing.joinFailed', { done: formatCount(trouble.join.done), total: formatCount(trouble.join.total) });
     case 'device-foreign':
     case 'device-corrupt':
     case 'device-rollback':

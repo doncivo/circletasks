@@ -26,6 +26,14 @@ describe('ChoiceDialog (T-10)', () => {
     expect(screen.getByText(DESCRIPTION)).toBeInTheDocument();
   });
 
+  it('le corps décrit la boîte (aria-describedby) ; sans corps, aucun lien', () => {
+    renderDialog();
+    expect(screen.getByRole('alertdialog', { name: TITLE })).toHaveAccessibleDescription(DESCRIPTION);
+    cleanup();
+    render(<ChoiceDialog title={TITLE} options={OPTIONS} onChoose={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByRole('alertdialog')).not.toHaveAttribute('aria-describedby');
+  });
+
   it('chaque option est transmise avec son identifiant', () => {
     const { onChoose } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Cette occurrence' }));

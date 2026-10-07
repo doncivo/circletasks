@@ -64,7 +64,7 @@ function fireTimers(): void {
   for (const timer of timers.splice(0)) if (!timer.cleared) act(() => timer.handler());
 }
 
-const banner = (): HTMLElement | null => screen.queryByRole('status');
+const banner = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-status-banner');
 const set = (patch: Partial<SyncStatus>): void => act(() => sync.setStatus(patch));
 const device = (deviceId: DeviceId, platform: 'ios' | 'windows', status: SyncDeviceStatus['status'], self = false): SyncDeviceStatus => ({ deviceId, platform, self, status, lastReadAt: null });
 const renderBanner = (): void => void render(<AppStatusBanner />);
@@ -146,7 +146,7 @@ describe('phases en échec ou bloquées (critère 9 c)', () => {
     await start().refreshed();
     set({ phase: 'update-required', devices: [device(SELF, 'windows', 'active', true), { ...device(PHONE, 'ios', 'newer-major'), newer: 'major' }] });
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
-    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
     expect(banner()?.textContent).toContain('Mettez à jour');
   });
 
@@ -355,7 +355,7 @@ describe('un seul bandeau, le plus urgent (critère 9 g) ; sobriété (9 h)', ()
     await start().refreshed();
     set({ phase: 'clock-ahead', clockAheadDevice: PHONE, devices: [device(SELF, 'windows', 'active', true), device(PHONE, 'ios', 'clock-ahead'), device(LAPTOP, 'windows', 'corrupt')] });
     await integration?.refreshed();
-    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
     expect(banner()?.textContent).toBe('L’horloge de iPhone est en avance : vérifiez sa date et son heure (+2)Voir');
   });
 

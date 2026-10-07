@@ -79,7 +79,7 @@ export async function openSyncDetails(page: Page): Promise<void> {
   await expect(heading).toBeVisible();
 }
 
-/** Ligne d'état de la synchro (sous-ligne `role="status"`). */
+/** Ligne d'état de la synchro (sous-ligne, sans rôle : l'annonce se fait par la région vivante séparée). */
 export const syncStatusLine = (page: Page): Locator => page.locator('.ct-sync__sub');
 
 /** « Synchroniser » depuis les détails, puis attend la fin du cycle (bouton revenu, état final). */

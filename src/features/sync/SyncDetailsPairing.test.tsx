@@ -10,6 +10,7 @@ import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startDesktopIntegration } from '../app/desktop';
 import { JoinProgress } from './JoinProgress';
+import * as pairingStatus from './pairingStatus';
 import { JOIN_META, PAIRING_FAILURE_META, arrivalWatchActive, onPairingChange } from './pairingStatus';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { SyncSettingsSection } from './SyncSettingsSection';
@@ -277,22 +278,97 @@ describe('ligne de Réglages, branche needsPairing (critères 10 et 12)', () => 
   });
 });
 
+/** Espionne les lectures de l'échec d'arrivée faites par la région d'annonce (promesses réelles, à attendre dans act). */
+function watchJoinReads(): Promise<unknown>[] {
+  const reads: Promise<unknown>[] = [];
+  const original = pairingStatus.readJoinFailure;
+  vi.spyOn(pairingStatus, 'readJoinFailure').mockImplementation((container) => {
+    const read = original(container);
+    reads.push(read);
+    return read;
+  });
+  return reads;
+}
+
+async function settleReads(reads: Promise<unknown>[]): Promise<void> {
+  await act(async () => {
+    await Promise.allSettled(reads);
+  });
+}
+
 describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)', () => {
   it('« Réception de vos données… 1 200 / 5 000 » pendant la reprise, puis rien', async () => {
     renderIn(await make(), <JoinProgress />);
     expect(screen.queryByRole('status')).toBeNull();
     act(() => sync.setStatus({ phase: 'syncing', progress: { done: 1200, total: 5000 } }));
-    expect(screen.getByRole('status').textContent).toBe('Réception de vos données… 1 200 / 5 000');
+    // Revue point 6 : le compteur visible n'est pas une région vivante ; seuls le début et la fin sont annoncés.
+    expect(screen.getByTestId('sync-join-count').textContent).toBe('Réception de vos données… 1 200 / 5 000');
+    expect(screen.queryByRole('status')).toBeNull();
+    const live = screen.getByTestId('sync-join-live');
+    expect(live.textContent).toBe('Réception de vos données…');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 2500, total: 5000 } }));
+    expect(screen.getByTestId('sync-join-count').textContent).toContain('2 500');
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
     expect(screen.getByLabelText('Réception des données de la synchronisation')).toBeTruthy();
     // `setStatus` est synchrone et la ligne ne dépend que de `status.progress` : rien à attendre.
     act(() => sync.setStatus({ phase: 'idle', progress: null }));
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByTestId('sync-join-count')).toBeNull();
+    expect(await screen.findByText('Données reçues')).toBe(screen.getByTestId('sync-join-live'));
+  });
+
+  it('seconde revue point A : progression puis arrêt en échec : « Données reçues » n’est jamais annoncé', async () => {
+    renderIn(await make(), <JoinProgress />);
+    const live = screen.getByTestId('sync-join-live');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 8, total: 20 } }));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e0001-x', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
+    const reads = watchJoinReads();
+    act(() => sync.setStatus({ phase: 'error', progress: null }));
+    expect(await screen.findByTestId('sync-join-failure')).toBeTruthy();
+    await settleReads(reads);
+    expect(reads.length).toBeGreaterThan(0);
+    seen.push(...observer.takeRecords().map(() => live.textContent ?? ''));
+    observer.disconnect();
+    expect(seen).not.toContain('Données reçues');
+    expect(live.textContent).toBe('');
+  });
+
+  it('troisième revue point 1 : base illisible à la fin de la reprise : jamais « Données reçues »', async () => {
+    renderIn(await make(), <JoinProgress />);
+    const live = screen.getByTestId('sync-join-live');
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 8, total: 20 } }));
+    vi.spyOn(db.data.repos.sync, 'getMeta').mockRejectedValue(new Error('base illisible'));
+    const reads = watchJoinReads();
+    act(() => sync.setStatus({ phase: 'idle', progress: null }));
+    await settleReads(reads);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(live.textContent).toBe('');
+  });
+
+  it('troisième revue point 1 : cycle en erreur sans échec enregistré : jamais « Données reçues »', async () => {
+    renderIn(await make(), <JoinProgress />);
+    const live = screen.getByTestId('sync-join-live');
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 8, total: 20 } }));
+    const reads = watchJoinReads();
+    act(() => sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable', progress: null }));
+    await settleReads(reads);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(live.textContent).toBe('');
   });
 
   it('échec mémorisé par le moteur : affiché en rouge avec « Réessayer », après un redémarrage aussi, effacé à la réussite', async () => {
     await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e0001-x', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
     renderIn(await make(), <JoinProgress />);
     expect((await screen.findByTestId('sync-join-failure')).textContent).toContain('La réception de vos données s’est arrêtée à 8 / 20 : elle reprendra à la prochaine synchronisation');
+    // Le bandeau join-failed annonce l'échec : le texte visible de la ligne n'est pas une seconde région vivante.
+    expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer la réception des données' }));
     expect(sync.calls).toContain('manual');
     cleanup();

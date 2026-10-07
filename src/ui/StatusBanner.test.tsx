@@ -1,12 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ListSkeleton } from './ListSkeleton';
-import { StatusBanner } from './StatusBanner';
+import { StatusBanner, StatusBannerRegion } from './StatusBanner';
 
 describe('StatusBanner (A-09)', () => {
-  it('est un statut annoncé poliment, sans bouton par défaut', () => {
+  it('affiche le message, sans bouton par défaut ni rôle propre (la région vivante est montée par l’appelant)', () => {
     render(<StatusBanner message="Hors ligne" />);
-    expect(screen.getByRole('status')).toHaveTextContent('Hors ligne');
+    expect(screen.getByText('Hors ligne')).toBeInTheDocument();
+    expect(screen.queryByTestId('status-banner-region')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
   });
 
@@ -21,6 +22,23 @@ describe('StatusBanner (A-09)', () => {
     render(<StatusBanner message="Échec" actionLabel="Voir" actionAriaLabel="Voir le problème de synchronisation" onAction={() => undefined} />);
     const button = screen.getByRole('button', { name: 'Voir le problème de synchronisation' });
     expect(button.textContent).toBe('Voir');
+  });
+});
+
+describe('StatusBannerRegion (revue d’accessibilité, ordre 4)', () => {
+  it('reste montée quand elle est vide, puis reçoit le bandeau dans le même élément', () => {
+    const { rerender } = render(<StatusBannerRegion />);
+    const region = screen.getByTestId('status-banner-region');
+    expect(region).toHaveAttribute('aria-live', 'polite');
+    expect(region).toHaveAttribute('aria-atomic', 'true');
+    expect(region).toBeEmptyDOMElement();
+    rerender(
+      <StatusBannerRegion>
+        <StatusBanner message="Hors ligne" />
+      </StatusBannerRegion>,
+    );
+    expect(screen.getByTestId('status-banner-region')).toBe(region);
+    expect(region).toHaveTextContent('Hors ligne');
   });
 });
 

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import './StatusBanner.css';
 
 export interface StatusBannerProps {
@@ -8,24 +9,40 @@ export interface StatusBannerProps {
   /** Nom accessible du bouton quand le libellé visible est court (« Voir » → « Voir le problème de synchronisation »). */
   actionAriaLabel?: string;
   onAction?: () => void;
+  /** Masqué à l'écran (reste lu par les lecteurs d'écran) : garde le contenu d'une région vivante stable pendant qu'un autre bandeau s'affiche. */
+  concealed?: boolean;
 }
 
 /**
- * Bandeau d'état discret sous l'en-tête (A-09) : texte secondaire sur fond #F3F1F6, hauteur réduite, `role="status"`
- * (annoncé poliment), marges de sécurité iOS comprises. Il ne masque ni le champ d'ajout ni le bouton « + » (placé dans le flux).
+ * Bandeau d'état discret sous l'en-tête (A-09) : texte secondaire sur fond #F3F1F6, hauteur réduite, marges de sécurité iOS
+ * comprises. Il ne masque ni le champ d'ajout ni le bouton « + » (placé dans le flux). Il n'est pas une région vivante par lui-même :
+ * un élément `role="status"` inséré avec son contenu est annoncé de façon peu fiable ; l'appelant le place dans une région déjà montée
+ * (`StatusBannerRegion`).
  *
  * @example
- * <StatusBanner message={t('status.offline')} />
+ * <StatusBannerRegion><StatusBanner message={t('status.offline')} /></StatusBannerRegion>
  */
-export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction }: StatusBannerProps) {
+export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction, concealed }: StatusBannerProps) {
   return (
-    <div role="status" className="ct-status-banner">
+    <div className={concealed ? 'ct-status-banner ct-visually-hidden' : 'ct-status-banner'}>
       <span>{message}</span>
       {actionLabel && onAction && (
         <button type="button" className="ct-status-banner__action" onClick={onAction} {...(actionAriaLabel ? { 'aria-label': actionAriaLabel } : {})}>
           {actionLabel}
         </button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Région vivante toujours montée (`aria-live="polite"`, l'équivalent de `role="status"` sans en prendre le rôle : les sélecteurs de rôle `status` restent réservés aux messages éphémères, comme « Annuler ») qui reçoit le bandeau : le contenu change dans une région déjà présente
+ * dans le DOM, ce que les lecteurs d'écran annoncent de façon fiable. Div ordinaire, sans marge ni remplissage. `visuallyEmpty` : rien de visible dedans (vide, ou bandeau masqué qui garde le contenu stable), pour compenser le gap du parent en CSS.
+ */
+export function StatusBannerRegion({ children, visuallyEmpty = false }: { children?: ReactNode; visuallyEmpty?: boolean }) {
+  return (
+    <div aria-live="polite" aria-atomic="true" className="ct-status-region" data-testid="status-banner-region" {...(visuallyEmpty ? { 'data-visually-empty': '' } : {})}>
+      {children}
     </div>
   );
 }

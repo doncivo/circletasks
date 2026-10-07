@@ -4,7 +4,7 @@ import { createTask, openToday, rowOf } from './helpers/today';
 /**
  * A-09 — Je vois toujours l'état de l'app (partielle à l'ordre 1).
  *
- * Couverture : bandeau « Hors ligne » (role="status") quand le réseau tombe, sans bloquer les actions locales
+ * Couverture : bandeau « Hors ligne » (région vivante polie toujours montée) quand le réseau tombe, sans bloquer les actions locales
  * (critère 3), disparition au retour du réseau en moins de 2 s (4), bandeau placé sous l'en-tête sans masquer le
  * champ d'ajout ni le bouton « + » (8). Exécuté sur `pc` et `iphone`.
  *
@@ -20,7 +20,7 @@ test.describe('A-09 — état de l’app', () => {
   test('« Hors ligne » apparaît sans bloquer l’app, puis disparaît au retour du réseau (critères 3, 4, 8)', async ({ page, context }, testInfo) => {
     await expect(page.getByText('Hors ligne')).toHaveCount(0);
     await context.setOffline(true);
-    const banner = page.getByRole('status').filter({ hasText: 'Hors ligne' });
+    const banner = page.locator('.ct-status-banner').filter({ hasText: 'Hors ligne' });
     await expect(banner).toBeVisible();
 
     // Les actions locales restent possibles, le bandeau ne masque ni le champ d'ajout ni le bouton « + ».

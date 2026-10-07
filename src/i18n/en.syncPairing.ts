@@ -26,6 +26,8 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
   stateUnavailable: 'The pairing state could not be read or saved: try again',
   joinProgress: 'Receiving your data… {done} / {total}',
   joinProgressLabel: 'Receiving sync data',
+  joinStartAnnounce: 'Receiving your data…',
+  joinDoneAnnounce: 'Data received',
   joinWaiting: 'Receiving your data, waiting: {done} / {total}',
   joinFailed: 'Receiving your data stopped at {done} / {total}: it will resume at the next sync',
   joinFailedSnapshot: 'No up-to-date snapshot: open another paired device',

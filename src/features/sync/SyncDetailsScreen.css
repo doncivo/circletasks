@@ -33,7 +33,7 @@
 }
 
 .ct-sync__sub[data-trouble='true'] {
-  color: var(--ct-color-icon-red);
+  color: var(--ct-color-danger);
 }
 
 .ct-sync__lineActions {
@@ -75,4 +75,19 @@
 
 .ct-sync__progress {
   font-size: 13px;
+}
+
+/* Zones de toucher >= 44 pt sur écran tactile (iPhone) ; l'aspect PC reste celui des maquettes. */
+@media (pointer: coarse) {
+  .ct-sync__back,
+  .ct-sync__details {
+    min-height: var(--ct-hit-target-min);
+    min-width: var(--ct-hit-target-min);
+  }
+
+  .ct-sync__back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
 }

@@ -66,7 +66,7 @@ describe('bouton « Synchroniser » (Y-03 critères 1, 2, 7, 8)', () => {
     sync.release();
     // Libellé rendu à la fin du cycle (mutation du DOM, aucun minuteur en jeu).
     expect(await screen.findByRole('button', { name: 'Synchroniser' })).toHaveProperty('disabled', false);
-    expect(screen.getByRole('status').textContent).toBe('À jour · à l’instant');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('À jour · à l’instant');
   });
 
   it('erreur : le bouton redevient actif, la sous-ligne reprend le message, aucune boîte bloquante', async () => {

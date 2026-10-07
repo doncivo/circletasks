@@ -50,20 +50,69 @@ describe('ligne d’état de Réglages (Y-02 critère 16, Y-05 critère 2)', () 
   it('« À jour · il y a 2 min », libellé du dossier, lien « Détails »', () => {
     renderIn(<SyncStatusLine />);
     expect(screen.getByText('iCloud Drive / CircleTasks')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe('À jour · il y a 2 min');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('À jour · il y a 2 min');
     fireEvent.click(screen.getByRole('button', { name: 'Détails' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'sync' });
+  });
+
+  it('la sous-ligne n’est pas une région vivante ; seule « À jour » (sans âge) est annoncée, rien pendant un problème (le bandeau l’annonce)', () => {
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByTestId('sync-status-text').closest('[role="status"]')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('À jour');
+    cleanup();
+    sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByRole('status').textContent).toBe('');
+  });
+
+  it('revue point 1 : idle avec une réintégration en échec (sous-ligne rouge) n’annonce pas « À jour »', () => {
+    sync.setStatus({ phase: 'idle', reintegrationFailure: { fields: 3, tables: ['task'], at: '2026-10-05T07:30:00.000Z' as IsoDateTime, errors: ['DbError'] } });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByTestId('sync-status-text')).toHaveAttribute('data-trouble', 'true');
+    expect(screen.getByTestId('sync-status-live').textContent).toBe('');
+  });
+
+  it('revue point 2 : idle, syncing, idle ne change pas le texte de la région (pas de réannonce à chaque cycle)', () => {
+    renderIn(<SyncStatusLine />);
+    const live = screen.getByTestId('sync-status-live');
+    expect(live.textContent).toBe('À jour');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing' }));
+    expect(live.textContent).toBe('À jour');
+    act(() => sync.setStatus({ phase: 'idle', lastSyncAt: NOW as IsoDateTime }));
+    expect(live.textContent).toBe('À jour');
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
+  });
+
+  it('seconde revue point B : error, syncing (lastSyncAt gardé), error : la région ne change jamais', () => {
+    sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
+    renderIn(<SyncStatusLine />);
+    const live = screen.getByTestId('sync-status-live');
+    expect(live.textContent).toBe('');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing' }));
+    act(() => sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' }));
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
+    expect(live.textContent).toBe('');
   });
 
   it('erreurs explicites, jamais de boîte bloquante', () => {
     sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Dossier de synchro introuvable : vos modifications seront envoyées au retour');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Dossier de synchro introuvable : vos modifications seront envoyées au retour');
     expect(screen.queryByRole('alertdialog')).toBeNull();
     cleanup();
     sync.setStatus({ phase: 'error', errorCode: 'cloud-provider-stopped' });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
   });
 });
 

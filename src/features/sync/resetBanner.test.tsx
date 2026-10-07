@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { SYNC_TROUBLE_ORDER, SYNC_WARNINGS } from '../../domain/syncBanners';
@@ -39,7 +39,7 @@ const settle = async (): Promise<void> => {
     await integration?.refreshed();
   });
 };
-const text = (): string | null => screen.queryByRole('status')?.textContent ?? null;
+const text = (): string | null => document.querySelector('.ct-status-banner')?.textContent ?? null;
 const device = (deviceId: DeviceId, platform: 'ios' | 'windows', self = false): SyncDeviceStatus => ({ deviceId, platform, self, status: 'active', lastReadAt: null });
 const DEVICES = [device(SELF, 'windows', true), device(PHONE, 'ios')];
 const reset = (patch: Partial<SyncResetStatus>): SyncResetStatus => ({
