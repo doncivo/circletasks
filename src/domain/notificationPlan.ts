@@ -147,17 +147,23 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
   const today = nowMinute.slice(0, 10) as LocalDate;
   const horizonEnd = addDays(today, NOTIFICATION_HORIZON_DAYS);
   const limit = clampLimit(input.limit);
+  const horizonLimit = `${horizonEnd}T23:59`;
 
   const quietBySpace = new Map(input.spaces.map((space) => [space.id as string, space.quietHours]));
   const candidates: PlannedItem[] = [];
 
   /** Applique les plages de l'espace et écarte l'échéance effective passée (critère 8) ; rend l'échéance effective ou null. */
-  const effectiveOf = (spaceId: SpaceId, scheduledAt: LocalDateTime): LocalDateTime | null => {
+  const effectiveOf = (spaceId: SpaceId, scheduledAt: LocalDateTime, bounded = false): LocalDateTime | null => {
     const fireAt = effectiveFireAt(scheduledAt, quietBySpace.get(spaceId) ?? []);
-    return fireAt.slice(0, 16) > nowMinute ? fireAt : null;
+    const minute = fireAt.slice(0, 16);
+    return minute > nowMinute && (!bounded || minute <= horizonLimit) ? fireAt : null;
   };
 
   const reminders = dedupReminders(input.reminders);
+  // L'horizon borne l'ÉCHÉANCE (routines, événements) : les occurrences sont cherchées jusqu'à la plus grande avance au-delà, puis
+  // filtrées sur l'échéance effective. Ainsi `complete` est exact. Les tâches n'ont pas d'horizon.
+  const maxLeadDays = Math.ceil(reminders.reduce((max, reminder) => Math.max(max, reminder.offsetMin), 0) / 1440);
+  const searchEnd = addDays(horizonEnd, maxLeadDays);
   const tasks = indexById(input.tasks);
   const routines = indexById(input.routines);
   const events = indexById(input.events);
@@ -174,7 +180,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     const done = doneByRoutine.get(routine.id) ?? new Set<LocalDate>();
     const dates: LocalDate[] = [];
     if (routine.deletedAt === null && !routine.archived && isLocalDate(routine.startDate)) {
-      for (let day = today; day <= horizonEnd; day = addDays(day, 1)) {
+      for (let day = today; day <= searchEnd; day = addDays(day, 1)) {
         if (!isActive(routine, day, rulePauses) || !isPlannedOn(routine, day, rulePauses) || done.has(day)) continue;
         if (isQuotaRule(routine) && quotaReached(routine, done, day, rulePauses)) continue;
         dates.push(day);
@@ -189,7 +195,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     if (known !== undefined) return known;
     const dates =
       event.deletedAt === null && isLocalDate(event.startDate) && isLocalDate(event.endDate)
-        ? occurrenceStarts(event, today, horizonEnd).filter((date) => date >= today && date <= horizonEnd)
+        ? occurrenceStarts(event, today, searchEnd).filter((date) => date >= today && date <= searchEnd)
         : [];
     eventDates.set(event.id, dates);
     return dates;
@@ -220,7 +226,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
       // Une seule occurrence par avance : la première dont l'échéance effective est à venir (critère 12).
       for (const date of routineEligibleDates(routine)) {
         const scheduledAt = fireAtOf(date, routine.time, offsetMin);
-        const fireAt = scheduledAt === null ? null : effectiveOf(routine.spaceId, scheduledAt);
+        const fireAt = scheduledAt === null ? null : effectiveOf(routine.spaceId, scheduledAt, true);
         if (scheduledAt === null || fireAt === null) continue;
         candidates.push({
           kind: 'routine',
@@ -241,7 +247,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
       // Une notification par occurrence et par avance, sans ligne `reminder` par occurrence (critères 15 à 17).
       for (const date of eventOccurrenceDates(event)) {
         const scheduledAt = fireAtOf(date, eventReminderTime(event), offsetMin);
-        const fireAt = scheduledAt === null ? null : effectiveOf(event.spaceId, scheduledAt);
+        const fireAt = scheduledAt === null ? null : effectiveOf(event.spaceId, scheduledAt, true);
         if (scheduledAt === null || fireAt === null) continue;
         candidates.push({
           kind: 'event',

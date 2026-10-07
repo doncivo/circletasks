@@ -45,7 +45,7 @@ Dépend de : R-02, R-05, N-02, N-04, ES-07, E-01 (données déjà livrées). Auc
 ### Événements (dette E-01)
 
 15. **Étant donné** un anniversaire annuel du 12 mars avec les avances 10080, 1440 et 0, et `now` au 7 octobre 2026, **alors** trois éléments pour l'occurrence du 12 mars 2027 (09:00 pour une journée entière, E-01 D3), chacun d'identifiant `event:{reminderId}:{dateOccurrence}` (une notification par occurrence et par avance, sans ligne `reminder` par occurrence).
-16. **Étant donné** un événement mensuel ou annuel (`EventRepeat` : `once`, `monthly`, `yearly` ; pas d'événement hebdomadaire), **alors** chaque occurrence à venir produit ses propres éléments, jusqu'à la date de fin ; fin de mois bornée (31 janvier → 28 février, `clampedDay`) ; horizon d'au plus 400 jours ; l'échéance stockée de la ligne `reminder` (une seule, sur la prochaine occurrence) n'est pas utilisée.
+16. **Étant donné** un événement mensuel ou annuel (`EventRepeat` : `once`, `monthly`, `yearly` ; pas d'événement hebdomadaire), **alors** chaque occurrence à venir produit ses propres éléments, jusqu'à la date de fin ; fin de mois bornée (31 janvier → 28 février, `clampedDay`) ; horizon d'au plus 400 jours sur l'échéance ; l'échéance stockée de la ligne `reminder` (une seule, sur la prochaine occurrence) n'est pas utilisée.
 17. **Étant donné** un événement demain à 08:00 avec l'avance « la veille » (1440 min) et `now` aujourd'hui avant 08:00, **alors** l'élément est gardé avec l'échéance d'aujourd'hui 08:00 ; avec `now` après 08:00 il est exclu. Un événement non répété et passé ne donne rien. (Une occurrence passée dont l'avance tombe dans le futur est impossible : les avances sont positives ou nulles.)
 
 ### Récapitulatifs

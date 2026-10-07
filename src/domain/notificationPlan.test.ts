@@ -580,3 +580,31 @@ describe('pureté et déterminisme (critères 22 à 24)', () => {
     expect(fires(result.items)).toEqual([...fires(result.items)].sort());
   });
 });
+
+describe('horizon borné sur l’échéance (revue)', () => {
+  const ev = (startDate: string) => makeEvent({ spaceId: PERSO, startDate });
+
+  it('événement à J+405 avec avance d’une semaine : planifié (échéance à J+398), complete exact', () => {
+    const far = ev('2027-11-16');
+    const result = plan({ events: [far], reminders: [reminder('event', far, 10080)] });
+    expect(fires(result.items)).toEqual(['2027-11-09T09:00']);
+    expect(result.coverage).toEqual({ state: 'complete' });
+  });
+
+  it('événement à J+420 avec avance d’une semaine : échéance à J+413, hors horizon', () => {
+    const far = ev('2027-12-01');
+    expect(plan({ events: [far], reminders: [reminder('event', far, 10080)] }).items).toEqual([]);
+  });
+
+  it('sans avance, la borne reste le jour + 400 ; avec la veille, J+401 est planifié', () => {
+    const edge = ev('2027-11-12'); // J+401
+    expect(plan({ events: [edge], reminders: [reminder('event', edge, 0)] }).items).toEqual([]);
+    expect(fires(plan({ events: [edge], reminders: [reminder('event', edge, 1440)] }).items)).toEqual(['2027-11-11T09:00']);
+  });
+
+  it('routine : une occurrence à J+401 avec la veille est planifiée', () => {
+    const routine = makeRoutine({ spaceId: PERSO, time: asLocalTime('07:00'), scheduleType: 'every_n_days', interval: 30, startDate: asLocalDate('2027-11-12') });
+    const result = plan({ routines: [routine], reminders: [reminder('routine', routine, 1440)] });
+    expect(fires(result.items)).toEqual(['2027-11-11T07:00']);
+  });
+});
