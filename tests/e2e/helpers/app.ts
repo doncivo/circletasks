@@ -3,10 +3,15 @@ import { expect, type Page } from '@playwright/test';
 /** Délai d'attente du démarrage de l'app : large, car plusieurs agents et workers Playwright tournent en parallèle sur la machine. */
 export const APP_READY_TIMEOUT_MS = 30_000;
 
-/** Ouvre l'app et attend qu'elle soit prête (base ouverte, onglets affichés). Point d'entrée commun de toutes les specs. */
+/**
+ * Ouvre l'app et attend qu'elle soit prête (base ouverte, onglets affichés, écrans à la demande arrivés). Point d'entrée commun de
+ * toutes les specs. Un bloc qui n'arrive pas ne passe pas inaperçu : le repère est posé aussi après un échec (journalisé), mais l'écran
+ * visé affiche alors « Impossible d'afficher cet écran » et l'assertion de la spec échoue.
+ */
 export async function openApp(page: Page): Promise<void> {
   await page.goto('/');
   await expect(page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
+  await waitForScreensLoaded(page);
 }
 
 /**

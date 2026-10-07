@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { waitForScreensLoaded } from './helpers/app';
 import { createTask, isPhone, openToday, todayTab } from './helpers/today';
 
 /**
@@ -15,8 +14,6 @@ const tab = (page: Page, name: string) => page.getByRole('navigation').getByRole
 test.describe('A-04 — Aujourd’hui en un geste', () => {
   test.beforeEach(async ({ page }) => {
     await openToday(page);
-    // Le rapport est un écran à la demande : on attend son bloc plutôt que de courir contre le serveur (voir waitForScreensLoaded).
-    await waitForScreensLoaded(page);
   });
 
   test('Alt+1 ramène à Aujourd’hui depuis Réglages et l’onglet est actif (critère 1)', async ({ page }) => {
@@ -100,7 +97,6 @@ test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machi
       await route.continue();
     });
     await openToday(page);
-    await waitForScreensLoaded(page);
     await page.getByRole('button', { name: 'Rapport mensuel' }).click();
     await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
     await page.keyboard.press('Alt+1');

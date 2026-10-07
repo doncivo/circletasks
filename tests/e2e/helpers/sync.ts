@@ -1,6 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { E2E_SYNC_SIM_PORT, simUrl } from '../../sim/ports';
-import { APP_READY_TIMEOUT_MS } from './app';
+import { APP_READY_TIMEOUT_MS, waitForScreensLoaded } from './app';
 
 /**
  * Aides e2e de la synchro (Y-04, parcours 10 à deux pages) : pages du navigateur de dev reliées au simulateur de dossier
@@ -48,6 +48,7 @@ export async function openSyncedPage(browser: Browser, room: string, device: str
   }, { url: SYNC_SIM_URL, room, device, role, platform: kind === 'pc' ? 'windows' : 'ios' });
   await page.goto('/');
   await expect(page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
+  await waitForScreensLoaded(page);
   return { page, context, device: kind };
 }
 
