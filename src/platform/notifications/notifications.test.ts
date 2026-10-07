@@ -222,3 +222,41 @@ describe('planificateur et contrat ensemble (critère 6)', () => {
     expect((await failureOf(() => fake.replace(toRequests(64)))).reason).toBe('over-limit');
   });
 });
+
+describe('QA : 65 candidats et notifications réservées en attente', () => {
+  const base = {
+    tasks: [],
+    routines: [],
+    routinePauses: [],
+    routineLogs: [],
+    events: [],
+    reminders: [],
+    spaces: [],
+    recaps: { morning: { enabled: true, time: asLocalTime('07:30') }, evening: { enabled: false, time: asLocalTime('21:00') } },
+  } as const;
+  const toRequests = (limit: number) =>
+    planNotifications({ ...base, now: asLocalDateTime('2026-10-07T10:00'), limit }).items.map((item) => req(item.id, item.fireAt, { kind: item.kind }));
+
+  it('3 et 6 : replanification avec une session Focus en attente : idempotente, puis refus à 64 sans rien modifier', async () => {
+    const fake = createFakeNotificationScheduler();
+    fake.setOutsidePlan(1);
+    expect(await fake.replace(toRequests(63))).toEqual({ scheduled: 63, cancelled: 0, kept: 0 });
+    expect(await fake.replace(toRequests(63))).toEqual({ scheduled: 0, cancelled: 0, kept: 63 });
+    expect((await failureOf(() => fake.replace(toRequests(64)))).reason).toBe('over-limit');
+    expect(await fake.pending()).toHaveLength(63);
+  });
+
+  it('4 : deux notifications réservées en attente : 62 acceptés, 63 refusés', async () => {
+    const fake = createFakeNotificationScheduler();
+    fake.setOutsidePlan(2);
+    expect(await fake.replace(toRequests(62))).toMatchObject({ scheduled: 62 });
+    expect((await failureOf(() => fake.replace(toRequests(63)))).ids).toHaveLength(1);
+  });
+
+  it('4 : liste vide acceptée même avec des notifications réservées ; l’implémentation vide refuse comme le faux', async () => {
+    const fake = createFakeNotificationScheduler();
+    fake.setOutsidePlan(64);
+    expect(await fake.replace([])).toEqual({ scheduled: 0, cancelled: 0, kept: 0 });
+    expect((await failureOf(() => createUnavailableNotificationScheduler().replace(many(65)))).reason).toBe('over-limit');
+  });
+});

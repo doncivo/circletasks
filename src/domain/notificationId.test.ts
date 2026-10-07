@@ -85,3 +85,42 @@ describe('attribution sans collision', () => {
     expect([...assignNumericIds(ids, forced)]).toEqual([...assignNumericIds([...ids].reverse(), forced)]);
   });
 });
+
+describe('QA : entrée vide, collisions en chaîne, bouclage', () => {
+  it('entrée vide : aucune attribution', () => {
+    expect(assignNumericIds([]).size).toBe(0);
+  });
+
+  it('identifiant stable vide : valeur dans la plage du plan', () => {
+    const value = notificationNumericId('');
+    expect(value).toBeGreaterThanOrEqual(NUMERIC_ID_MIN);
+    expect(value).toBeLessThanOrEqual(NUMERIC_ID_MAX);
+  });
+
+  it('collisions en chaîne avec bouclage : MAX, puis MIN, puis MIN + 1, sans doublon', () => {
+    const map = assignNumericIds(['c', 'a', 'b'], () => NUMERIC_ID_MAX);
+    expect([map.get('a'), map.get('b'), map.get('c')]).toEqual([NUMERIC_ID_MAX, NUMERIC_ID_MIN, NUMERIC_ID_MIN + 1]);
+  });
+
+  it('une valeur déjà prise par un identifiant précédent est sautée (suite occupée)', () => {
+    const hashes: Record<string, number> = { a: 70_000, b: 70_001, c: 70_000 };
+    const map = assignNumericIds(['a', 'b', 'c'], (id) => hashes[id] as number);
+    expect([map.get('a'), map.get('b'), map.get('c')]).toEqual([70_000, 70_001, 70_002]);
+  });
+
+  it('64 identifiants réalistes : valeurs toutes distinctes et dans la plage', () => {
+    const stable = Array.from({ length: 64 }, (_, i) => `recap:morning:2026-10-${String(i).padStart(2, '0')}`);
+    const values = [...assignNumericIds(stable).values()];
+    expect(new Set(values).size).toBe(64);
+    for (const value of values) {
+      expect(value).toBeGreaterThanOrEqual(NUMERIC_ID_MIN);
+      expect(value).toBeLessThanOrEqual(NUMERIC_ID_MAX);
+    }
+  });
+
+  it('ordre de collision en unités de code : majuscule avant minuscule', () => {
+    const map = assignNumericIds(['b', 'B'], () => 90_000);
+    expect(map.get('B')).toBe(90_000);
+    expect(map.get('b')).toBe(90_001);
+  });
+});
