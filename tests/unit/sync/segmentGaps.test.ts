@@ -588,3 +588,37 @@ describe('sixième revue, points 1 et 2 : reprise hors arrivée (demande effacé
     expect(await titlesOf(r)).toEqual(['T0', 'T1']);
   });
 });
+
+describe('sixième revue, point 4 : corrupt de l’audit M3 gardé à l’effacement d’un trou', () => {
+  it('trou au segment 0, j-1 arrivé en retard avec une ligne corrompue au milieu : corrupt M3 (« Fichiers illisibles ») gardé sur 2 cycles', async () => {
+    const a = await deviceA();
+    await a.createTask('T0');
+    await a.cycle();
+    await a.createTask('T0b');
+    await a.cycle();
+    expect(a.folder.devices.get(a.id)?.epochs.get(epochOf(a))?.segments.get(1)?.lines).toHaveLength(2);
+    refuseNextAppend(a);
+    await a.createTask('T1');
+    await a.cycle();
+    const b = await deviceB(a);
+    dropFirstSegment(a, b);
+    await b.cycle();
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    expect(b.service.status().devices.find((d) => d.deviceId === a.id)?.gapSince).toEqual(expect.any(String));
+    // j-1 arrive en retard, sa seconde ligne corrompue (corruption au milieu d'un segment, audit M3).
+    const late = (): void => {
+      propagate(a.folder, b.folder, a.id);
+      const line = b.folder.devices.get(a.id)?.epochs.get(epochOf(a))?.segments.get(1)?.lines[1];
+      if (line) line.corrupt = true;
+    };
+    for (let i = 0; i < 2; i += 1) {
+      late();
+      b.clock.advance(60_000);
+      await b.cycle();
+      const shown = b.service.status().devices.find((d) => d.deviceId === a.id);
+      expect(shown?.status, `cycle ${String(i)}`).toBe('corrupt');
+      expect(shown?.gapSince, `cycle ${String(i)}`).toBeUndefined();
+    }
+    expect(await readJson(b.data.repos, META.segmentGaps)).toBeNull();
+  });
+});

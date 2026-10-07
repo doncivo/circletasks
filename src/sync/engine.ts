@@ -673,14 +673,17 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           continue;
         }
         if (segmentGaps.has(target.id)) {
-          // Cinquième revue, point 3 : trou effacé seulement par une lecture au-delà (plus petit segment listé atteint) ; listage de
+          // Cinquième revue, point 3 : trou effacé seulement quand la lecture peut reprendre (listage fini, aucune condition de trou) ; listage de
           // l'époque absent : rien n'est effacé ni lu, fichier en attente visible.
           if (!Number.isFinite(minListed)) {
             allRead = false;
             pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
             continue;
           }
-          if (cursor.segment >= minListed) await clearGap(target.id, !forgetView.order.has(target.id));
+          // Sixième revue, point 4 : listage fini et aucune condition de trou (les branches de trou ci-dessus sont passées, y compris
+          // `cursor.segment === 0` avec `minListed <= 1`) : effacé AVANT la lecture, pour qu'une troncature lue ensuite pose un `corrupt`
+          // de l'audit M3 qu'aucun effacement ultérieur ne lève.
+          await clearGap(target.id, !forgetView.order.has(target.id));
         }
         work();
         const outcome = await readDevice(deps, {
