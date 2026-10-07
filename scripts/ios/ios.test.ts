@@ -1,6 +1,7 @@
 // Tests de la chaîne iPhone (I-01) : lecture du Info.plist, contrat des permissions, source SideStore,
 // cohérence du guide d'installation avec le workflow et les scripts. Aucun secret, aucune commande iOS.
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -187,7 +188,7 @@ describe('make-source-json (source SideStore)', () => {
         localizedDescription: 'Notes 1.2.3',
         downloadURL: 'https://github.com/doncivo/circletasks-releases/releases/download/ios-v1.2.3/CircleTasks.ipa',
         size: Buffer.byteLength('IPA 1.2.3'),
-        sha256: expect.stringMatching(/^[0-9a-f]{64}$/) as unknown as string,
+        sha256: createHash('sha256').update(Buffer.from('IPA 1.2.3')).digest('hex'),
         minOSVersion: '18.0',
       },
     ]);
