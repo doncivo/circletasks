@@ -511,17 +511,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * `corrupt` posé par la règle remis à `active` (sauf oubli, dont le statut suit l'ordre total).
      */
     const persistGaps = (tx: Repositories): Promise<void> => writeJson(tx, META.segmentGaps, segmentGaps.size === 0 ? null : Object.fromEntries(segmentGaps));
-    const clearGap = async (id: DeviceId, activate: boolean): Promise<void> => {
-      if (!segmentGaps.has(id)) return;
-      segmentGaps.delete(id);
-      await data.transaction(async (tx) => {
-        await persistGaps(tx);
-        // Cinquième revue, point 6 : `corrupt` remis à `active` seulement si l'appareil n'a pas été tronqué dans ce cycle (audit M3).
-        const current = (await tx.sync.getStates()).find((r) => r.deviceId === id);
-        if (activate && current?.status === 'corrupt' && !truncatedThisCycle.has(id)) await tx.sync.saveState(id, { status: 'active' });
-      });
-      logger.log('segment-gap-cleared', { device: id });
-    };
+    const clearGap = (id: DeviceId, activate: boolean): Promise<void> => clearSegmentGap(deps, segmentGaps, id, { activate, truncated: truncatedThisCycle });
     /** Instantané éligible le plus récent de l'époque (fins déjà lues, gardées par `readSnapshotEnd`). */
     const latestEligible = async (epochRead: EpochId): Promise<SnapshotRef | null> => {
       const cov = coverage();
@@ -848,6 +838,28 @@ async function readOwnStateMarks(repos: Repositories, log: StoredStateLog): Prom
     if (isSyncStateUnreadable(error)) return [];
     throw error;
   }
+}
+
+/**
+ * Effacement d'un trou mémorisé (ADR 0011 §5.5) : retiré de `gaps` et de `sync_meta.segmentGaps`, dans la même transaction que la ligne
+ * `sync_state` ; `corrupt` remis à `active` seulement si le trou était mémorisé (le `corrupt` vient de lui) et si l'appareil n'a pas été
+ * tronqué dans ce cycle (`truncated`, `corrupt` de l'audit M3 gardé). Cinquième revue, point 6 ; sixième revue, point 3 : garde de
+ * défense, inatteignable aujourd'hui (l'effacement précède toujours la lecture), gardée contre un réordonnancement futur.
+ */
+export async function clearSegmentGap(
+  deps: Pick<SyncDeps, 'data' | 'logger'>,
+  gaps: Map<DeviceId, StoredSegmentGap>,
+  id: DeviceId,
+  input: { readonly activate: boolean; readonly truncated: ReadonlySet<DeviceId> },
+): Promise<void> {
+  if (!gaps.has(id)) return;
+  gaps.delete(id);
+  await deps.data.transaction(async (tx) => {
+    await writeJson(tx, META.segmentGaps, gaps.size === 0 ? null : Object.fromEntries(gaps));
+    const current = (await tx.sync.getStates()).find((r) => r.deviceId === id);
+    if (input.activate && current?.status === 'corrupt' && !input.truncated.has(id)) await tx.sync.saveState(id, { status: 'active' });
+  });
+  deps.logger.log('segment-gap-cleared', { device: id });
 }
 
 /** Constats du cycle hors étapes : avertissements du scan, valeur locale illisible relue vide (cinquième revue, points 2 et 5). */

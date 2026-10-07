@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { EpochId } from '../../../src/domain/sync/format';
-import type { IsoDateTime } from '../../../src/domain/types';
+import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
+import { clearSegmentGap } from '../../../src/sync/engine';
 import { syncBannerFor } from '../../../src/domain/syncBanners';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
 import { storedDeviceStatuses } from '../../../src/sync';
@@ -620,5 +621,33 @@ describe('sixième revue, point 4 : corrupt de l’audit M3 gardé à l’efface
       expect(shown?.gapSince, `cycle ${String(i)}`).toBeUndefined();
     }
     expect(await readJson(b.data.repos, META.segmentGaps)).toBeNull();
+  });
+});
+
+describe('sixième revue, point 3 : garde de défense de l’effacement (clearSegmentGap)', () => {
+  const gapOf = (epoch: EpochId) => ({ epoch, segment: 0, author: null, seq: null, since: '2026-10-05T08:00:00.000Z' as IsoDateTime });
+
+  it('appareil tronqué dans ce cycle : trou effacé, corrupt (audit M3) gardé ; non tronqué : remis à active', async () => {
+    const a = await deviceA();
+    const epoch = epochOf(a);
+    for (const [truncated, expected] of [
+      [true, 'corrupt'],
+      [false, 'active'],
+    ] as const) {
+      await a.data.repos.sync.saveState(B_ID, { status: 'corrupt' });
+      const gaps = new Map([[B_ID as DeviceId, gapOf(epoch)]]);
+      await a.data.repos.sync.setMeta(META.segmentGaps, JSON.stringify(Object.fromEntries(gaps)));
+      await clearSegmentGap({ data: a.data, logger: a.logger }, gaps, B_ID as DeviceId, { activate: true, truncated: new Set(truncated ? [B_ID as DeviceId] : []) });
+      expect(gaps.size).toBe(0);
+      expect(await readJson(a.data.repos, META.segmentGaps)).toBeNull();
+      expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === B_ID)?.status, `tronqué : ${String(truncated)}`).toBe(expected);
+    }
+  });
+
+  it('sans trou mémorisé : rien (jamais une remise à active d’un corrupt qui ne vient pas du trou)', async () => {
+    const a = await deviceA();
+    await a.data.repos.sync.saveState(B_ID, { status: 'corrupt' });
+    await clearSegmentGap({ data: a.data, logger: a.logger }, new Map<DeviceId, ReturnType<typeof gapOf>>(), B_ID as DeviceId, { activate: true, truncated: new Set() });
+    expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === B_ID)?.status).toBe('corrupt');
   });
 });
