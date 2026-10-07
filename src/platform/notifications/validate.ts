@@ -1,3 +1,4 @@
+import { compareCodeUnits } from '../../domain/compareCodeUnits';
 import { isLocalDateTime } from '../../domain/types';
 import { NOTIFICATION_KINDS, NOTIFICATION_LIMIT, NotificationSchedulerError, type NotificationRequest } from './types';
 
@@ -28,7 +29,7 @@ export function validateRequests(requests: readonly NotificationRequest[], outsi
     if (seen.has(request.id)) duplicated.add(request.id);
     seen.add(request.id);
   }
-  if (duplicated.size > 0) throw new NotificationSchedulerError('duplicate-id', [...duplicated].sort());
+  if (duplicated.size > 0) throw new NotificationSchedulerError('duplicate-id', [...duplicated].sort(compareCodeUnits));
 
   const room = Math.max(0, NOTIFICATION_LIMIT - Math.max(0, outsidePlan));
   if (requests.length > room) throw new NotificationSchedulerError('over-limit', requests.slice(room).map((request) => request.id));
@@ -36,5 +37,5 @@ export function validateRequests(requests: readonly NotificationRequest[], outsi
 
 /** Tri de `pending()` : échéance, puis identifiant (unités de code). */
 export function sortRequests(requests: Iterable<NotificationRequest>): NotificationRequest[] {
-  return [...requests].sort((a, b) => (a.fireAt !== b.fireAt ? (a.fireAt < b.fireAt ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  return [...requests].sort((a, b) => (a.fireAt !== b.fireAt ? compareCodeUnits(a.fireAt, b.fireAt) : compareCodeUnits(a.id, b.id)));
 }

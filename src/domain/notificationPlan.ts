@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './compareCodeUnits';
 import { occurrenceStarts } from './eventOccurrences';
 import { eventReminderTime } from './eventReminders';
 import { addDays } from './localDate';
@@ -101,14 +102,13 @@ export interface NotificationPlan {
 
 const EMPTY_PLAN: NotificationPlan = { items: [], coverage: { state: 'empty' }, total: 0 };
 
-const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /** Tri du plan : échéance effective, puis rappel avant récapitulatif, puis identifiant (unités de code, jamais localeCompare). */
 function comparePlanned(a: PlannedItem, b: PlannedItem): number {
-  if (a.fireAt !== b.fireAt) return a.fireAt < b.fireAt ? -1 : 1;
+  if (a.fireAt !== b.fireAt) return compareCodeUnits(a.fireAt, b.fireAt);
   const rank = (item: PlannedItem): number => (item.kind === 'recap' ? 1 : 0);
   if (rank(a) !== rank(b)) return rank(a) - rank(b);
-  return byCodeUnits(a.id, b.id);
+  return compareCodeUnits(a.id, b.id);
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -134,7 +134,7 @@ function dedupReminders(reminders: readonly Reminder[]): Reminder[] {
     if (reminder.deletedAt !== null || !isOffset(reminder.targetType, reminder.offsetMin)) continue;
     const key = `${reminder.targetType}|${reminder.targetId}|${reminder.offsetMin}`;
     const known = kept.get(key);
-    if (known === undefined || byCodeUnits(reminder.id, known.id) < 0) kept.set(key, reminder);
+    if (known === undefined || compareCodeUnits(reminder.id, known.id) < 0) kept.set(key, reminder);
   }
   return [...kept.values()];
 }

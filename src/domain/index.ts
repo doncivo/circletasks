@@ -56,3 +56,4 @@ export * from './eventList';
 export * from './eventKinds';
 export * from './holidays';
 export * from './eventCountdown';
+export * from './compareCodeUnits';

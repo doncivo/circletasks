@@ -1,3 +1,4 @@
+import { compareCodeUnits } from './compareCodeUnits';
 import type { RecapKind } from './recap';
 import type { LocalDate, ReminderId } from './types';
 
@@ -33,7 +34,6 @@ export function notificationNumericId(stableId: string): number {
   return NUMERIC_ID_MIN + (fnv1a32(stableId) % NUMERIC_ID_SPAN);
 }
 
-const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 /**
  * Identifiants numériques d'un plan entier. En cas de collision, les identifiants stables sont parcourus dans l'ordre croissant
@@ -43,7 +43,7 @@ const byCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 
 export function assignNumericIds(stableIds: readonly string[], hash: (stableId: string) => number = notificationNumericId): Map<string, number> {
   const out = new Map<string, number>();
   const taken = new Set<number>();
-  for (const id of [...new Set(stableIds)].sort(byCodeUnits)) {
+  for (const id of [...new Set(stableIds)].sort(compareCodeUnits)) {
     let value = hash(id);
     while (taken.has(value)) value = value === NUMERIC_ID_MAX ? NUMERIC_ID_MIN : value + 1;
     taken.add(value);
