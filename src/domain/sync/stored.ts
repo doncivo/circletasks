@@ -58,6 +58,13 @@ export function parseStoredAcks(raw: string, where: string, log: StoredStateLog)
 /** Date ISO complète en UTC telle qu'écrite par `toISOString()`. */
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 
+/** Date ISO complète en UTC qui existe (aller-retour `toISOString` : une date impossible comme le 31 février est refusée). */
+function isStoredIso(value: unknown): value is IsoDateTime {
+  if (typeof value !== 'string' || !ISO_UTC.test(value)) return false;
+  const ms = Date.parse(value);
+  return !Number.isNaN(ms) && new Date(ms).toISOString().slice(0, 19) === value.slice(0, 19);
+}
+
 /**
  * Troisième revue, point M1 : seule analyse d'une date stockée (`sync_meta.waitingSince`) : absente → null ; chaîne ISO valide → la date ;
  * toute autre valeur (JSON corrompu, nombre, texte, date impossible) → journalisée, `SyncStateUnreadableError` (jamais lue comme absente).
@@ -65,10 +72,8 @@ const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 export function parseStoredIso(raw: string | null, where: string, log: StoredStateLog): IsoDateTime | null {
   if (raw === null) return null;
   const value = parseStoredJson(raw, where, log);
-  if (typeof value !== 'string' || !ISO_UTC.test(value)) return unreadable(where, log);
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 19) !== value.slice(0, 19)) return unreadable(where, log);
-  return value as IsoDateTime;
+  if (!isStoredIso(value)) return unreadable(where, log);
+  return value;
 }
 
 /**
@@ -113,9 +118,9 @@ export function parseStoredSegmentGaps(raw: string | null, where: string, log: S
   for (const [id, entry] of Object.entries(value as Record<string, unknown>)) {
     if (!isSyncDeviceId(id) || typeof entry !== 'object' || entry === null) return unreadable(where, log);
     const { epoch, segment, author, seq, since } = entry as Record<string, unknown>;
-    const validSince = typeof since === 'string' && ISO_UTC.test(since) && !Number.isNaN(Date.parse(since));
-    if (!isEpochId(epoch) || !isCount(segment) || !(author === null || isSyncDeviceId(author)) || !(seq === null || isCount(seq)) || !validSince) return unreadable(where, log);
-    out.set(id as DeviceId, { epoch, segment, author: author as DeviceId | null, seq: seq as number | null, since: since as IsoDateTime });
+    // Septième revue, point 2 (QA-6) : `since` validé comme `parseStoredIso` (une date impossible est illisible).
+    if (!isEpochId(epoch) || !isCount(segment) || !(author === null || isSyncDeviceId(author)) || !(seq === null || isCount(seq)) || !isStoredIso(since)) return unreadable(where, log);
+    out.set(id as DeviceId, { epoch, segment, author: author as DeviceId | null, seq: seq as number | null, since });
   }
   return out;
 }
