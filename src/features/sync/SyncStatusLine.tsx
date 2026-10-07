@@ -9,8 +9,8 @@ import './SyncDetailsScreen.css';
 
 /**
  * Ligne « iCloud Drive / CircleTasks » de Réglages (Reglages.html : sous-ligne « À jour · il y a 2 min » en 13 px vert, lien « Détails »),
- * avec le bouton « Synchroniser » (Y-03). Composant fourni au lot Y1 (`SyncSettingsSection`) et utilisé par l'écran de détails. L'état
- * « en cours » est annoncé aux lecteurs d'écran (`role="status"`) ; une erreur n'ouvre jamais de boîte bloquante.
+ * avec le bouton « Synchroniser » (Y-03). Composant fourni au lot Y1 (`SyncSettingsSection`) et utilisé par l'écran de détails. La
+ * sous-ligne n'est pas une région vivante (son âge change chaque minute) ; une erreur n'ouvre jamais de boîte bloquante.
  */
 export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetailsLink?: boolean }) {
   const container = useAppContainer();
@@ -27,8 +27,13 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
     <div className="ct-sync__line">
       <div className="ct-sync__lineText">
         <span className="ct-sync__folder">{status.folderLabel ? folderLabel({ label: status.folderLabel, kind: status.folderKind ?? 'unknown' }) : t('sync.status.folderFallback')}</span>
-        <span className="ct-sync__sub" role="status" data-trouble={isTroublePhase(status) ? 'true' : undefined}>
+        <span className="ct-sync__sub" data-testid="sync-status-text" data-trouble={isTroublePhase(status) ? 'true' : undefined}>
           {statusLine(status, now)}
+        </span>
+        {/* Région vivante séparée, sans âge relatif : annonce seulement la fin d'une synchro réussie. Les états en cours et les problèmes
+            sont annoncés par le bandeau (StatusBanner) : pas de double annonce. */}
+        <span className="ct-visually-hidden" role="status" data-testid="sync-status-live">
+          {status.phase === 'idle' && status.lastSyncAt ? t('sync.status.upToDateAnnounce') : ''}
         </span>
       </div>
       <div className="ct-sync__lineActions">

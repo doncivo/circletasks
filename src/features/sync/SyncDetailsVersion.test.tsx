@@ -102,13 +102,13 @@ describe('ligne de Réglages (Y-07 critère 8)', () => {
   it('lecture suspendue : « Mettez à jour l’app pour lire les données de iPhone »', () => {
     sync.setStatus({ phase: 'update-required', devices: [self, iphone({ status: 'newer-major', newer: 'major' })] });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Mettez à jour l’app pour lire les données de iPhone');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Mettez à jour l’app pour lire les données de iPhone');
   });
 
   it('sans appareil identifiable : le texte général', () => {
     sync.setStatus({ phase: 'update-required', devices: [self] });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Mettez à jour l’app pour lire les données de vos autres appareils');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Mettez à jour l’app pour lire les données de vos autres appareils');
   });
 });
 
@@ -176,7 +176,7 @@ describe('bandeau A-09 « Mettez à jour l’app » (Y-07 critère 9)', () => {
     sync.setStatus({ phase: 'idle', devices: [self, iphone({ newer: 'schema' })] });
     expect(banner()).toBeDefined();
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('À jour · il y a 2 min');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('À jour · il y a 2 min');
     integration.dispose();
   });
 });
@@ -229,17 +229,17 @@ describe('échec de réintégration visible (exigence d’Ali, 2026-10-05)', () 
   it('ligne de Réglages en état « problème » : « 3 éléments reçus d’une version plus récente n’ont pas pu être intégrés »', () => {
     sync.setStatus({ phase: 'idle', reintegrationFailure: failure });
     renderIn(<SyncStatusLine />);
-    const line = screen.getByRole('status');
+    const line = screen.getByTestId('sync-status-text');
     expect(line.textContent).toBe('3 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
     cleanup();
     sync.setStatus({ phase: 'idle', reintegrationFailure: { ...failure, fields: 1 } });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('1 élément reçu d’une version plus récente n’a pas pu être intégré');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('1 élément reçu d’une version plus récente n’a pas pu être intégré');
     // Une erreur de synchro garde son texte (plus urgente).
     cleanup();
     sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable', reintegrationFailure: failure });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toContain('Dossier de synchro introuvable');
+    expect(screen.getByTestId('sync-status-text').textContent).toContain('Dossier de synchro introuvable');
   });
 
   it('Détails, section VERSION : nombre, type d’élément, date du dernier essai, l’app réessaie à chaque démarrage ; annoncé, sans boîte', () => {
@@ -285,7 +285,7 @@ describe('synchro non configurée avec un échec enregistré (revue 2, point 4)'
     expect(screen.getByText('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés').getAttribute('role')).toBe('status');
     cleanup();
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('2 éléments reçus d’une version plus récente n’ont pas pu être intégrés');
   });
 
   it('bandeau : l’échec reste signalé sans synchro configurée ; un appareil plus récent, non', () => {

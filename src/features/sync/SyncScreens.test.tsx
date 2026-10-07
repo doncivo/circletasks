@@ -50,20 +50,30 @@ describe('ligne d’état de Réglages (Y-02 critère 16, Y-05 critère 2)', () 
   it('« À jour · il y a 2 min », libellé du dossier, lien « Détails »', () => {
     renderIn(<SyncStatusLine />);
     expect(screen.getByText('iCloud Drive / CircleTasks')).toBeTruthy();
-    expect(screen.getByRole('status').textContent).toBe('À jour · il y a 2 min');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('À jour · il y a 2 min');
     fireEvent.click(screen.getByRole('button', { name: 'Détails' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'sync' });
+  });
+
+  it('la sous-ligne n’est pas une région vivante ; seule « À jour » (sans âge) est annoncée, rien pendant un problème (le bandeau l’annonce)', () => {
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByTestId('sync-status-text').closest('[role="status"]')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('À jour');
+    cleanup();
+    sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('erreurs explicites, jamais de boîte bloquante', () => {
     sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Dossier de synchro introuvable : vos modifications seront envoyées au retour');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Dossier de synchro introuvable : vos modifications seront envoyées au retour');
     expect(screen.queryByRole('alertdialog')).toBeNull();
     cleanup();
     sync.setStatus({ phase: 'error', errorCode: 'cloud-provider-stopped' });
     renderIn(<SyncStatusLine />);
-    expect(screen.getByRole('status').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
+    expect(screen.getByTestId('sync-status-text').textContent).toBe('Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour');
   });
 });
 

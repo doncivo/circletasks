@@ -6,6 +6,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     title: 'Sync',
     folderFallback: 'iCloud Drive / CircleTasks',
     upToDate: 'Up to date · {age}',
+    upToDateAnnounce: 'Up to date',
     ageNow: 'just now',
     ageMinutes: '{n} min ago',
     ageHours: '{n} h ago',

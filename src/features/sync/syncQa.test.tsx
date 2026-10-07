@@ -62,7 +62,7 @@ describe('états d’erreur (Y-03 critère 7, Y-05 critère 2)', () => {
     const button = screen.getByRole('button', { name: 'Synchroniser' });
     expect(button).toHaveProperty('disabled', false);
     expect(button.getAttribute('aria-busy')).not.toBe('true');
-    const text = screen.getByRole('status').textContent ?? '';
+    const text = screen.getByTestId('sync-status-text').textContent ?? '';
     expect(text.length).toBeGreaterThan(3);
     expect(text).not.toMatch(/undefined|\{|\}/);
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -71,7 +71,7 @@ describe('états d’erreur (Y-03 critère 7, Y-05 critère 2)', () => {
 });
 
 describe('accessibilité du bouton (Y-03 critère 8)', () => {
-  it('bouton natif, atteignable au clavier (Tab, Entrée, Espace activent un bouton natif), état annoncé par role="status"', () => {
+  it('bouton natif, atteignable au clavier (Tab, Entrée, Espace activent un bouton natif), état annoncé par une région vivante séparée', () => {
     renderLine();
     const button = screen.getByRole('button', { name: 'Synchroniser' });
     expect(button.tagName).toBe('BUTTON');
@@ -79,7 +79,7 @@ describe('accessibilité du bouton (Y-03 critère 8)', () => {
     expect(button.getAttribute('tabindex')).not.toBe('-1');
     button.focus();
     expect(document.activeElement).toBe(button);
-    expect(screen.getByRole('status')).toBeTruthy();
+    expect(screen.getByTestId('sync-status-live')).toBeTruthy();
   });
 });
 

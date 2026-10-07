@@ -7,6 +7,7 @@ export const syncEngineFr = {
     title: 'Synchronisation',
     folderFallback: 'iCloud Drive / CircleTasks',
     upToDate: 'À jour · {age}',
+    upToDateAnnounce: 'À jour',
     ageNow: 'à l’instant',
     ageMinutes: 'il y a {n} min',
     ageHours: 'il y a {n} h',
