@@ -33,7 +33,7 @@
 }
 
 .ct-sync__sub[data-trouble='true'] {
-  color: var(--ct-color-icon-red);
+  color: var(--ct-color-danger);
 }
 
 .ct-sync__lineActions {
