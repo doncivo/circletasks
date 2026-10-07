@@ -9,6 +9,7 @@ import { pickEligible, snapshotCandidates, type ForgetCoverage } from './eligibl
 import { META, readJson, writeJson } from './meta';
 import { cursorIds } from '../domain/sync/ownState';
 import { positionFromCover } from '../domain/sync/positions';
+import type { SnapshotRef } from '../domain/sync/retention';
 import { admitSnapshot, loadSnapshot, mergeSnapshot, type LoadedSnapshot, type SnapshotTxHook } from './snapshot';
 
 /**
@@ -79,8 +80,8 @@ function rowPrefix(records: readonly SnapshotRecord[]): number {
 }
 
 /**
- * Reprise en fusion d'un nouvel appareil (voir le module). Mêmes paramètres et même résultat que `resumeFromSnapshot` : vrai si un
- * instantané a été appliqué en entier.
+ * Reprise en fusion d'un nouvel appareil (voir le module). Mêmes paramètres que `resumeFromSnapshot` ; rend l'instantané appliqué en
+ * entier (auteur et numéro, quatrième revue, point B), null sinon.
  */
 export async function joinFromSnapshot(
   deps: SyncDeps,
@@ -91,7 +92,7 @@ export async function joinFromSnapshot(
   hooks: CycleHooks,
   pending: Set<string>,
   coverage: ForgetCoverage,
-): Promise<boolean> {
+): Promise<SnapshotRef | null> {
   const repos = deps.data.repos;
   const saved = await readJson<JoinState>(repos, JOIN_META);
   // Y-10 (§18 point 11, seconde revue point 1) : instantané **éligible** seulement (auteur non oublié, annoncé, couvrant chaque oublié
@@ -101,7 +102,7 @@ export async function joinFromSnapshot(
     // Aucun instantané dans l'époque : rien à suivre, l'appareil lit les journaux.
     if (saved !== null) await writeJson(repos, JOIN_META, null);
     deps.logger.log('resume-unavailable', { epoch });
-    return false;
+    return null;
   }
   // Entrée de départ dès le premier cycle (revue 1) : une attente d'iCloud ou un arrêt avant la première tranche garde l'arrivée suivie.
   const start: JoinState = { epoch, from: deps.deviceId, seq: 0, done: 0, total: 0, failure: null };
@@ -155,11 +156,11 @@ export async function joinFromSnapshot(
       throw error;
     }
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
-    return true;
+    return { author: deviceId, seq };
   }
   await writeJson(repos, JOIN_META, { ...tracked, failure } satisfies JoinState);
   deps.logger.log('resume-unavailable', { epoch });
-  return false;
+  return null;
 }
 
 /**

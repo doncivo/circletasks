@@ -192,6 +192,48 @@ export function addOwnStateMark(marks: readonly OwnStateMark[], stateSeq: number
   if (last === undefined || (stateSeq > last[0] && hlcMs(lastSyncHlc) - hlcMs(last[1]) >= OWN_STATE_MARK_SPACING_MS)) kept.push([stateSeq, lastSyncHlc]);
   return kept.slice(-MAX_OWN_STATE_MARKS);
 }
+/**
+ * Quatrième revue, point B (ADR 0011 §5.5, « Trou impossible à combler ») : trou mémorisé sur un appareil lu (`sync_meta.segmentGaps`),
+ * segment nécessaire tenu pour purgé que la reprise n'a pas comblé. `author` et `seq` : instantané appliqué par cette reprise (null si
+ * aucun) ; `since` : première constatation.
+ */
+export interface SegmentGap {
+  readonly epoch: EpochId;
+  readonly segment: number;
+  readonly author: DeviceId | null;
+  readonly seq: number | null;
+  readonly since: IsoDateTime;
+}
+
+/** Instantané désigné par son auteur et son numéro (null : aucun). */
+export interface SnapshotRef {
+  readonly author: DeviceId;
+  readonly seq: number;
+}
+
+/**
+ * Décision devant un trou sur un appareil dans l'époque `epoch` au segment `segment` (le cycle ne sera jamais complet) :
+ * - une reprise a eu lieu dans ce cycle : `record` (trou mémorisé avec l'instantané appliqué, appareil `corrupt`) ;
+ * - sinon, trou déjà mémorisé dans cette époque et instantané éligible le plus récent identique à celui essayé : `keep` (`corrupt`, aucune
+ *   reprise : rien de neuf ne peut combler le trou) ;
+ * - sinon : `resume`.
+ */
+export function decideSegmentGap(input: {
+  readonly existing: SegmentGap | undefined;
+  readonly epoch: EpochId;
+  readonly segment: number;
+  readonly resumed: boolean;
+  readonly applied: SnapshotRef | null;
+  readonly latest: SnapshotRef | null;
+  readonly now: IsoDateTime;
+}): { readonly kind: 'record'; readonly gap: SegmentGap } | { readonly kind: 'keep' } | { readonly kind: 'resume' } {
+  const { existing } = input;
+  if (input.resumed) {
+    return { kind: 'record', gap: { epoch: input.epoch, segment: input.segment, author: input.applied?.author ?? null, seq: input.applied?.seq ?? null, since: existing?.since ?? input.now } };
+  }
+  if (existing !== undefined && existing.epoch === input.epoch && (input.latest?.author ?? null) === existing.author && (input.latest?.seq ?? null) === existing.seq) return { kind: 'keep' };
+  return { kind: 'resume' };
+}
 
 
 // ---------------------------------------------------------------------------------------------------------------------------------

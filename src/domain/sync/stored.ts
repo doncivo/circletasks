@@ -1,5 +1,5 @@
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import { isDeviceAck, isStrictHlc, type DeviceAck } from './format';
+import { isDeviceAck, isEpochId, isStrictHlc, isSyncDeviceId, type DeviceAck, type EpochId } from './format';
 
 /**
  * Analyse des valeurs JSON stockées de l'état local de la synchro (`sync_meta`, `sync_state.last_acks`) : module pur (Y-TECH-02, point 4 ;
@@ -90,4 +90,36 @@ export function parseStoredOwnStateMarks(raw: string | null, where: string, log:
     out.push([seq, hlc]);
   }
   return out;
+}
+
+/** Trou mémorisé (forme de `SegmentGap` de `retention.ts`). */
+export interface StoredSegmentGap {
+  readonly epoch: EpochId;
+  readonly segment: number;
+  readonly author: DeviceId | null;
+  readonly seq: number | null;
+  readonly since: IsoDateTime;
+}
+
+/**
+ * Quatrième revue, point B : seule analyse des trous mémorisés (`sync_meta.segmentGaps`) : absente → aucun ; objet d'entrées valides par
+ * appareil ; sinon journalisée, `SyncStateUnreadableError` (`state-unreadable` visible, jamais lue comme « aucun trou »).
+ */
+export function parseStoredSegmentGaps(raw: string | null, where: string, log: StoredStateLog): Map<DeviceId, StoredSegmentGap> {
+  const out = new Map<DeviceId, StoredSegmentGap>();
+  if (raw === null) return out;
+  const value = parseStoredJson(raw, where, log);
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return unreadable(where, log);
+  for (const [id, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (!isSyncDeviceId(id) || typeof entry !== 'object' || entry === null) return unreadable(where, log);
+    const { epoch, segment, author, seq, since } = entry as Record<string, unknown>;
+    const validSince = typeof since === 'string' && ISO_UTC.test(since) && !Number.isNaN(Date.parse(since));
+    if (!isEpochId(epoch) || !isCount(segment) || !(author === null || isSyncDeviceId(author)) || !(seq === null || isCount(seq)) || !validSince) return unreadable(where, log);
+    out.set(id as DeviceId, { epoch, segment, author: author as DeviceId | null, seq: seq as number | null, since: since as IsoDateTime });
+  }
+  return out;
+}
+
+function isCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }

@@ -3,7 +3,7 @@ import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import { epochId, type DeviceAck, type ForgottenDevice, type JournalRecord, type PublishedDeviceState } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
 import { DEVICE_EXPIRY_MS, HLC_MAX_DRIFT_MS, MAX_OWN_STATE_MARKS } from './limits';
-import { activeReaders, addOwnStateMark, BLOCKED, canPurgeDeletion, coveredSegment, ownStateFloor, type OwnStateMark, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
+import { activeReaders, addOwnStateMark, BLOCKED, canPurgeDeletion, coveredSegment, decideSegmentGap, ownStateFloor, type OwnStateMark, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
 
 /**
  * Rétention et dérive (ADR 0011, sections 3.4, 4.4, 5.3 à 5.5 ; Y-09 critères 2, 6, 7 et 10). Règle validée par Ali : une trace est
@@ -256,5 +256,24 @@ describe('quatrième revue, point C : coveredSegment (ADR 0011 §5.3)', () => {
     expect(coveredSegment({ ...base, accepted: new Map([[C, state(E2, { ...ack(h(NOW), 50), epoch: E2 })]]) }), 'pas un lecteur actif').toBe(0);
     expect(coveredSegment({ ...base, accepted: new Map([[B, state(E1, { ...ack(h(NOW), 50), epoch: E2 })]]) }), 'état d’une autre époque').toBe(0);
     expect(coveredSegment({ ...base, readers: [], accepted: new Map<DeviceId, ReturnType<typeof state>>(), ownSnapshotSegment: 7 })).toBe(7);
+  });
+});
+
+describe('quatrième revue, point B : decideSegmentGap (ADR 0011 §5.5, trou impossible à combler)', () => {
+  const now = '2026-10-07T08:00:00.000Z' as IsoDateTime;
+  const snap = { author: B, seq: 3 };
+  const base = { existing: undefined, epoch: E1, segment: 2, resumed: false, applied: null, latest: snap, now };
+  it('reprise dans ce cycle : trou mémorisé avec l’instantané appliqué, date de première constatation gardée', () => {
+    expect(decideSegmentGap({ ...base, resumed: true, applied: snap })).toEqual({ kind: 'record', gap: { epoch: E1, segment: 2, author: B, seq: 3, since: now } });
+    const existing = { epoch: E1, segment: 2, author: B, seq: 2, since: '2026-10-01T08:00:00.000Z' as IsoDateTime };
+    expect(decideSegmentGap({ ...base, existing, resumed: true, applied: null })).toEqual({ kind: 'record', gap: { epoch: E1, segment: 2, author: null, seq: null, since: existing.since } });
+  });
+  it('même instantané éligible que la dernière tentative : corrupt gardé, aucune reprise ; nouveau, autre époque ou aucun trou : reprise', () => {
+    const existing = { epoch: E1, segment: 2, author: B, seq: 3, since: now };
+    expect(decideSegmentGap({ ...base, existing })).toEqual({ kind: 'keep' });
+    expect(decideSegmentGap({ ...base, existing, latest: { author: B, seq: 4 } })).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap({ ...base, existing: { ...existing, epoch: epochId(2, SELF) } })).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap(base)).toEqual({ kind: 'resume' });
+    expect(decideSegmentGap({ ...base, existing: { ...existing, author: null, seq: null }, latest: null })).toEqual({ kind: 'keep' });
   });
 });

@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, type StoredStateLog } from '../domain/sync/stored';
+import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
@@ -15,7 +15,7 @@ import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from
 import { finishResumeTx, isJoining, joinFromSnapshot } from './join';
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
-import { addOwnStateMark, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
+import { addOwnStateMark, decideSegmentGap, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -67,7 +67,7 @@ function acksToJson(acks: ReadonlyMap<DeviceId, DeviceAck>): string {
 }
 
 /** Accepte les états authentifiés des autres appareils dans `sync_state` (anti-rejeu local, section 1.4). */
-async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string, SyncStateRow>, forgottenNow: ReadonlyMap<DeviceId, { readonly by: DeviceId }>): Promise<Map<DeviceId, PublishedDeviceState>> {
+async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string, SyncStateRow>, forgottenNow: ReadonlyMap<DeviceId, { readonly by: DeviceId }>, gaps: ReadonlyMap<DeviceId, StoredSegmentGap>): Promise<Map<DeviceId, PublishedDeviceState>> {
   const accepted = new Map<DeviceId, PublishedDeviceState>();
   for (const device of scan.devices) {
     if (device.deviceId === deps.deviceId) continue;
@@ -91,6 +91,8 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
         } else if (hlcMs(state.lastSyncHlc) < deps.clock.nowMs() - DEVICE_EXPIRY_MS) status = 'expired';
         // Corruption au milieu d'un segment sans instantané plus récent : l'appareil reste `corrupt` tant que sa tête ne bouge pas (section 5.5).
         else if (previous?.status === 'corrupt' && previous.headSegment === state.head.segment && previous.headRecord === state.head.record && previous.stateEpoch === state.epoch) status = 'corrupt';
+        // Quatrième revue, point B : trou mémorisé dans l'époque de l'état : `corrupt` gardé même si la tête bouge (seule la règle du trou le retire).
+        else if (gaps.get(device.deviceId)?.epoch === state.epoch) status = 'corrupt';
         accepted.set(device.deviceId, state);
         await deps.data.repos.sync.saveState(device.deviceId, {
           platform: state.platform,
@@ -211,7 +213,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   seen.warnings = scanWarnings(scan);
   if (seen.warnings.length > 0) logger.log('scan-warnings', { codes: seen.warnings.join(',') });
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
-  const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries));
+  /** Quatrième revue, point B : trous mémorisés (illisibles : `state-unreadable`, jamais lus comme « aucun »). */
+  const segmentGaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, logger);
+  const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries), segmentGaps);
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
   const pending = new Set<string>(scan.devices.flatMap((d) => d.pending.map((p) => `${String(d.deviceId).slice(0, 8)}/${p.file}`)));
@@ -473,6 +477,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     /** Repères de ses états publiés, lus au premier segment absent du cycle (quatrième revue, point D). */
     let ownMarks: readonly OwnStateMark[] | undefined;
     let resumed = false;
+    /** Instantané appliqué par la reprise de ce cycle (null : aucun), mémorisé avec un trou (quatrième revue, point B). */
+    let appliedSnapshot: SnapshotRef | null = null;
     const doResume = async (): Promise<boolean> => {
       resumed = true;
       work();
@@ -480,11 +486,45 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await writeJson(repos, META.resume, true);
       // Y-06 : un nouvel appareil (aucune époque suivie avant ce cycle, ou arrivée commencée) rejoint par tranches, avec progression,
       // reprise au même endroit et échec mémorisé (src/sync/join.ts) ; les autres reprises sont inchangées.
-      if (await isJoining(repos, localEpoch)) return joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
+      if (await isJoining(repos, localEpoch)) {
+        appliedSnapshot = await joinFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
+        return appliedSnapshot !== null;
+      }
       const outcome = await resumeFromSnapshot(deps, currentEpoch, accepted, ownState, knows, hooks, pending, coverage());
       if (outcome.kind === 'no-eligible') noEligible = outcome.uncovered;
+      if (outcome.kind === 'done') appliedSnapshot = { author: outcome.author, seq: outcome.seq };
       return outcome.kind === 'done';
     };
+    /**
+     * Quatrième revue, point B (ADR 0011 §5.5, « Trou impossible à combler ») : trous mémorisés (`sync_meta.segmentGaps`). Effacement
+     * dans la même transaction que la ligne `sync_state` : lecture au-delà du trou, changement d'époque, appareil oublié ou retiré ;
+     * `corrupt` posé par la règle remis à `active` (sauf oubli, dont le statut suit l'ordre total).
+     */
+    const persistGaps = (tx: Repositories): Promise<void> => writeJson(tx, META.segmentGaps, segmentGaps.size === 0 ? null : Object.fromEntries(segmentGaps));
+    const clearGap = async (id: DeviceId, row: SyncStateRow | undefined, activate: boolean): Promise<void> => {
+      if (!segmentGaps.has(id)) return;
+      segmentGaps.delete(id);
+      await data.transaction(async (tx) => {
+        await persistGaps(tx);
+        if (activate && row?.status === 'corrupt') await tx.sync.saveState(id, { status: 'active' });
+      });
+      logger.log('segment-gap-cleared', { device: id });
+    };
+    /** Instantané éligible le plus récent de l'époque (fins déjà lues, gardées par `readSnapshotEnd`). */
+    const latestEligible = async (epochRead: EpochId): Promise<SnapshotRef | null> => {
+      const cov = coverage();
+      const candidates = await snapshotCandidates(deps, epochRead, [...accepted.values(), ...(ownState ? [ownState] : [])], cov);
+      const pick = pickEligible(candidates, cov, epochRead, new Set());
+      return pick.kind === 'ok' ? { author: pick.end.author, seq: pick.end.seq } : null;
+    };
+    {
+      const rowsNow = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
+      for (const [id, gap] of [...segmentGaps]) {
+        const present = id === self || scan.devices.some((d) => d.deviceId === id);
+        const forgotten = forgetView.order.has(id);
+        if (gap.epoch !== currentEpoch || forgotten || !present) await clearGap(id, rowsNow.get(id), !forgotten);
+      }
+    }
     /** Aucun instantané éligible trouvé par une reprise de ce cycle (§14.2) : oublié non couvert. */
     let noEligible: DeviceId | null = null;
     /** Trous sur les oubliés (§18 point 11) : curseur sous la coupure et journal disparu (terminé, ou `state.ctx` absent). */
@@ -515,8 +555,36 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     for (let pass = 0; pass < 2; pass += 1) {
       let needResume = false;
       const truncated: string[] = [];
+      /** Trous de ce passage qui demandent une reprise (mémorisés si elle échoue). */
+      const resumeHoles: { id: DeviceId; epoch: EpochId; segment: number }[] = [];
       allRead = true;
       const rows = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
+      /**
+       * Quatrième revue, point B : segment nécessaire tenu pour purgé sur `id` (jamais un cycle complet). Reprise de ce cycle : trou
+       * mémorisé, `corrupt` ; même instantané éligible que la dernière tentative : `corrupt`, aucune reprise ; sinon reprise. Un oublié
+       * suit sa propre règle (§18 point 11) : reprise.
+       */
+      const hole = async (id: DeviceId, epochRead: EpochId, segment: number): Promise<void> => {
+        if (forgetView.order.has(id)) {
+          needResume = true;
+          return;
+        }
+        allRead = false;
+        const decision = decideSegmentGap({ existing: segmentGaps.get(id), epoch: epochRead, segment, resumed, applied: appliedSnapshot, latest: resumed ? null : await latestEligible(epochRead), now: iso(deps.clock.nowMs()) });
+        if (decision.kind === 'resume') {
+          needResume = true;
+          resumeHoles.push({ id, epoch: epochRead, segment });
+          return;
+        }
+        if (decision.kind === 'record') {
+          segmentGaps.set(id, decision.gap);
+          logger.log('segment-gap', { device: id, segment, author: decision.gap.author, seq: decision.gap.seq });
+        }
+        await data.transaction(async (tx) => {
+          if (decision.kind === 'record') await persistGaps(tx);
+          await tx.sync.saveState(id, { status: 'corrupt' });
+        });
+      };
       const targets: { id: DeviceId; head: DeviceAck; epochListing: DeviceScan['epochs'][number] | undefined; limit?: DeviceAck; epoch?: EpochId }[] = [];
       // §18 point 14 (rattrapage) : tant que cet appareil détient l'ancienne clé (appareil qui réinitialise, réassocié avant sa bascule),
       // chaque oublié retenu est lu dans l'époque de l'annonce `n`, jusqu'à sa coupure et jamais au-delà.
@@ -537,7 +605,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           continue;
         }
         const epochListing = scan.devices.find((d) => d.deviceId === id)?.epochs.find((e) => e.epoch === currentEpoch);
-        if (state.epoch !== currentEpoch || row?.status === 'foreign' || row?.status === 'newer-major' || row?.status === 'rollback' || row?.status === 'corrupt') {
+        // Quatrième revue, point B : un appareil `corrupt` par un trou mémorisé reste une cible (règle du trou réévaluée à chaque cycle).
+        if (state.epoch !== currentEpoch || row?.status === 'foreign' || row?.status === 'newer-major' || row?.status === 'rollback' || (row?.status === 'corrupt' && !segmentGaps.has(id))) {
           if (state.epoch === currentEpoch && row?.status !== 'expired') allRead = false;
           continue;
         }
@@ -553,7 +622,10 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         const readEpoch = target.epoch ?? currentEpoch;
         const cursor: RecordCursor = row?.epoch === readEpoch ? { segment: row.cursorSegment, record: row.cursorRecord } : ZERO;
         if (row?.epoch !== readEpoch) await repos.sync.saveState(target.id, { epoch: readEpoch, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
-        if (compareCursors(cursor, target.head) >= 0) continue;
+        if (compareCursors(cursor, target.head) >= 0) {
+          await clearGap(target.id, row, !forgetView.order.has(target.id));
+          continue;
+        }
         // Segment nécessaire disparu (purgé) : reprise depuis l'instantané.
         const minListed = Math.min(...(target.epochListing?.segments ?? [Infinity]));
         if (cursor.segment > 0 && Number.isFinite(minListed) && cursor.segment < minListed) {
@@ -565,7 +637,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           // actifs), jamais de notre propre activité.
           const own = { self: deps.deviceId, segment: cursor.segment, epoch: readEpoch, ownAck: ownPublished?.acks.get(target.id) ?? null, marks: (ownMarks ??= await readOwnStateMarks(repos, logger)) };
           if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs(), own)) {
-            needResume = true;
+            await hole(target.id, readEpoch, cursor.segment);
           } else {
             allRead = false;
             pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}/${segmentFileName(cursor.segment)}`);
@@ -574,9 +646,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           continue;
         }
         if (cursor.segment === 0 && Number.isFinite(minListed) && minListed > 1) {
-          needResume = true;
+          await hole(target.id, readEpoch, 0);
           continue;
         }
+        // Lecture au-delà d'un trou mémorisé : effacé (quatrième revue, point B).
+        await clearGap(target.id, row, !forgetView.order.has(target.id));
         work();
         const outcome = await readDevice(deps, {
           deviceId: target.id,
@@ -605,6 +679,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       if (!(await doResume())) {
         // Aucun instantané lisible : les appareils corrompus le restent, les autres sont lus normalement.
         for (const id of truncated) await repos.sync.saveState(id, { status: 'corrupt' });
+        // Quatrième revue, point B : trous que cette reprise devait combler, mémorisés sans instantané appliqué (jamais une reprise
+        // à chaque cycle avec le même instantané éligible).
+        for (const h of resumeHoles) await hole(h.id, h.epoch, h.segment);
         break;
       }
     }
@@ -815,12 +892,12 @@ export async function resumeFromSnapshot(
     }
     if (result.touched.size > 0) hooks.onRemoteChanges(result.touched);
     deps.logger.log('resumed-from-snapshot', { epoch, from: deviceId });
-    return { kind: 'done' };
+    return { kind: 'done', author: deviceId, seq };
   }
 }
 
 /** Résultat d'une reprise : `no-eligible` (§14.2) quand un candidat ne couvre pas un oublié retenu ; attente visible. */
-export type ResumeOutcome = { readonly kind: 'done' } | { readonly kind: 'unavailable' } | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId };
+export type ResumeOutcome = { readonly kind: 'done'; readonly author: DeviceId; readonly seq: number } | { readonly kind: 'unavailable' } | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId };
 
 /** Plus de 64 accusés à publier : échec « oubli en échec » (étape `overflow`), effacé quand le scan n'en signale plus. */
 async function recordForgetOverflow(deps: SyncDeps): Promise<void> {
