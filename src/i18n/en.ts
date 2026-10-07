@@ -330,6 +330,10 @@ export const en: Messages = {
     recapEveningTitleOne: '1 item not done',
     recapEveningTitle: '{count} items not done',
     recapEveningEmpty: 'All done',
+    coverageUntil: 'Scheduled until {date}',
+    coverageDateTime: '{day} at {time}',
+    coverageComplete: 'All reminders are scheduled',
+    coverageEmpty: 'No reminders to schedule',
   },
   settings: {
     title: 'Settings',
