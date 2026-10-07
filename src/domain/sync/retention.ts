@@ -166,6 +166,7 @@ export function segmentPurgeable(segment: number, input: { readonly headSegment:
     return ack !== undefined && (compareEpochs(ack.epoch, input.epoch) > 0 || (ack.epoch === input.epoch && ack.segment > segment));
   });
 }
+
 /**
  * Quatrième revue, point D (ADR 0011 §5.5, condition 3) : repère local `[stateSeq, lastSyncHlc]` d'un de ses états publiés
  * (`sync_meta.ownStateHlcs`, liste croissante, jamais publiée).
@@ -192,6 +193,7 @@ export function addOwnStateMark(marks: readonly OwnStateMark[], stateSeq: number
   if (last === undefined || (stateSeq > last[0] && hlcMs(lastSyncHlc) - hlcMs(last[1]) >= OWN_STATE_MARK_SPACING_MS)) kept.push([stateSeq, lastSyncHlc]);
   return kept.slice(-MAX_OWN_STATE_MARKS);
 }
+
 /**
  * Quatrième revue, point B (ADR 0011 §5.5, « Trou impossible à combler ») : trou mémorisé sur un appareil lu (`sync_meta.segmentGaps`),
  * segment nécessaire tenu pour purgé que la reprise n'a pas comblé. `author` et `seq` : instantané appliqué par cette reprise (null si
@@ -234,7 +236,6 @@ export function decideSegmentGap(input: {
   if (existing !== undefined && existing.epoch === input.epoch && (input.latest?.author ?? null) === existing.author && (input.latest?.seq ?? null) === existing.seq) return { kind: 'keep' };
   return { kind: 'resume' };
 }
-
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Y-10 : appareils oubliés (ADR 0011 sections 14.2, 11.2 et 18 points 3 à 10). Même table de cas que `forget.rs`
