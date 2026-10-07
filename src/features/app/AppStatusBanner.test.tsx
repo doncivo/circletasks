@@ -57,18 +57,36 @@ describe('bandeau d’état de l’app (A-09)', () => {
     expect(region).toHaveTextContent('Hors ligne');
   });
 
+  it('seconde revue point C : offline, syncing, offline ne change pas le contenu de la région (« Hors ligne » non réannoncé)', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    act(() => set('offline', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    const seen: string[] = [];
+    const observer = new MutationObserver((records) => seen.push(...records.map((r) => r.type)));
+    observer.observe(region, { childList: true, characterData: true, subtree: true });
+    act(() => set('syncing', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    expect(screen.getByText('Synchro en cours')).toBeVisible();
+    act(() => set('syncing', null));
+    seen.push(...observer.takeRecords().map((r) => r.type));
+    observer.disconnect();
+    expect(seen).toEqual([]);
+    expect(region).toHaveTextContent('Hors ligne');
+  });
+
   it('un seul bandeau, le plus prioritaire (critère 5)', () => {
     render(<AppStatusBanner />);
     act(() => {
       set('offline', {});
       set('syncing', {});
     });
-    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
-    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Synchro en cours');
+    expect(document.querySelectorAll('.ct-status-banner:not(.ct-visually-hidden)')).toHaveLength(1);
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Synchro en cours');
     act(() => set('calendarDisconnected', { detail: 'Perso', onAction: () => undefined }));
-    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Agenda Perso déconnecté');
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Agenda Perso déconnecté');
     act(() => set('calendarDisconnected', null));
-    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Synchro en cours');
+    expect(document.querySelector('.ct-status-banner:not(.ct-visually-hidden)')).toHaveTextContent('Synchro en cours');
   });
 
   it('l’alerte d’agenda propose « Reconnecter » qui appelle l’action de sa source (critère 6)', () => {

@@ -9,6 +9,8 @@ export interface StatusBannerProps {
   /** Nom accessible du bouton quand le libellé visible est court (« Voir » → « Voir le problème de synchronisation »). */
   actionAriaLabel?: string;
   onAction?: () => void;
+  /** Masqué à l'écran (reste lu par les lecteurs d'écran) : garde le contenu d'une région vivante stable pendant qu'un autre bandeau s'affiche. */
+  concealed?: boolean;
 }
 
 /**
@@ -20,9 +22,9 @@ export interface StatusBannerProps {
  * @example
  * <StatusBannerRegion><StatusBanner message={t('status.offline')} /></StatusBannerRegion>
  */
-export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction }: StatusBannerProps) {
+export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction, concealed }: StatusBannerProps) {
   return (
-    <div className="ct-status-banner">
+    <div className={concealed ? 'ct-status-banner ct-visually-hidden' : 'ct-status-banner'}>
       <span>{message}</span>
       {actionLabel && onAction && (
         <button type="button" className="ct-status-banner__action" onClick={onAction} {...(actionAriaLabel ? { 'aria-label': actionAriaLabel } : {})}>

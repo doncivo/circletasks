@@ -12,9 +12,13 @@ export function AppStatusBanner() {
   const banner = useCurrentBanner();
   // « Synchro en cours » revient toutes les quelques minutes : visible, mais hors de la région vivante (jamais annoncé).
   const silent = useAppStatusStore((state) => pickAppStatus(state.sources as ActiveStatuses) === 'syncing');
+  const offline = useAppStatusStore((state) => state.sources.offline !== undefined);
+  // Pendant « Synchro en cours » (qui passe devant « Hors ligne »), la région garde le texte masqué de l'état suivant : même élément,
+  // aucun changement de contenu, donc pas de réannonce à chaque cycle. La priorité du domaine ne change pas.
+  const kept = silent && offline ? <StatusBanner message={t('status.offline')} concealed /> : null;
   return (
     <>
-      <StatusBannerRegion>{silent ? null : banner}</StatusBannerRegion>
+      <StatusBannerRegion>{silent ? kept : banner}</StatusBannerRegion>
       {silent ? banner : null}
     </>
   );
