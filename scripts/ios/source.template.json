@@ -4,6 +4,7 @@
   "description": "Planificateur personnel CircleTasks pour iPhone.",
   "identifier": "fr.circletasks.source",
   "website": "https://github.com/doncivo/circletasks-releases",
+  "iconURL": "https://raw.githubusercontent.com/doncivo/circletasks-releases/main/icon.png",
   "apps": [
     {
       "name": "CircleTasks",
@@ -11,17 +12,9 @@
       "developerName": "Ali Cherif",
       "subtitle": "Planificateur personnel",
       "localizedDescription": "Tâches, routines, événements et checklists, synchronisés avec la version PC.",
+      "iconURL": "https://raw.githubusercontent.com/doncivo/circletasks-releases/main/icon.png",
       "tintColor": "#C2410C",
-      "versions": [
-        {
-          "version": "__VERSION__",
-          "date": "__DATE__",
-          "localizedDescription": "__NOTES__",
-          "downloadURL": "__IPA_URL__",
-          "size": 0,
-          "minOSVersion": "18.0"
-        }
-      ]
+      "versions": []
     }
   ],
   "news": []

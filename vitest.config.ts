@@ -16,7 +16,7 @@ export default mergeConfig(
             environment: 'node',
             // PERF-02 : analyseur des dates écrites posé d'emblée (chargé à la demande dans l'app).
             setupFiles: ['tests/setup/onDemand.ts'],
-            include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'scripts/release/**/*.test.ts'],
+            include: ['src/**/*.test.ts', 'tests/unit/**/*.test.ts', 'scripts/release/**/*.test.ts', 'scripts/ios/**/*.test.ts'],
             // Mesures de performance : hors de `npm run test` (script `test:perf`).
             exclude: ['**/*.perf.test.ts', '**/node_modules/**'],
           },
