@@ -10,7 +10,14 @@ import { useAppStatusStore } from './appStatus';
  */
 export function AppStatusBanner() {
   const banner = useCurrentBanner();
-  return <StatusBannerRegion>{banner}</StatusBannerRegion>;
+  // « Synchro en cours » revient toutes les quelques minutes : visible, mais hors de la région vivante (jamais annoncé).
+  const silent = useAppStatusStore((state) => pickAppStatus(state.sources as ActiveStatuses) === 'syncing');
+  return (
+    <>
+      <StatusBannerRegion>{silent ? null : banner}</StatusBannerRegion>
+      {silent ? banner : null}
+    </>
+  );
 }
 
 function useCurrentBanner() {

@@ -73,7 +73,7 @@ function fireTimers(): void {
   for (const timer of timers.splice(0)) if (!timer.cleared) act(() => timer.handler());
 }
 
-const banner = (): HTMLElement | null => screen.queryByTestId('status-banner-region')?.querySelector<HTMLElement>('.ct-status-banner') ?? null;
+const banner = (): HTMLElement | null => document.querySelector<HTMLElement>('.ct-status-banner');
 const set = (patch: Partial<SyncStatus>): void => act(() => sync.setStatus(patch));
 const device = (deviceId: DeviceId, platform: 'ios' | 'windows', status: SyncDeviceStatus['status'], self = false): SyncDeviceStatus => ({ deviceId, platform, self, status, lastReadAt: null });
 const sources = () => useAppStatusStore.getState().sources;

@@ -163,12 +163,12 @@ describe('bandeau A-09 « Mettez à jour l’app » (Y-07 critère 9)', () => {
       set('offline', {});
     });
     expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
-    expect(screen.getByTestId('status-banner-region').textContent).toBe('Mettez à jour l’app : un de vos appareils utilise une version plus récente');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toBe('Mettez à jour l’app : un de vos appareils utilise une version plus récente');
     expect(screen.queryByRole('button')).toBeNull();
     act(() => set('calendarDisconnected', { detail: 'Perso', onAction: () => undefined }));
-    expect(screen.getByTestId('status-banner-region').textContent).toContain('Agenda Perso déconnecté');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toContain('Agenda Perso déconnecté');
     act(() => set('calendarDisconnected', null));
-    expect(screen.getByTestId('status-banner-region').textContent).toContain('Mettez à jour l’app');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toContain('Mettez à jour l’app');
   });
 
   it('la phase update-required reste réservée à la lecture suspendue (D4) : un sv supérieur donne le bandeau, pas la phase', () => {
@@ -259,7 +259,7 @@ describe('échec de réintégration visible (exigence d’Ali, 2026-10-05)', () 
     sync.setStatus({ reintegrationFailure: failure });
     expect(banner()).toEqual({ detail: 'reintegration' });
     render(<AppStatusBanner />);
-    expect(screen.getByTestId('status-banner-region').textContent).toBe('Des éléments reçus n’ont pas pu être intégrés : voir Réglages › Synchronisation');
+    expect(document.querySelector('.ct-status-banner')?.textContent).toBe('Des éléments reçus n’ont pas pu être intégrés : voir Réglages › Synchronisation');
     act(() => sync.setStatus({ reintegrationFailure: null }));
     expect(banner()).toBeUndefined();
     integration.dispose();
