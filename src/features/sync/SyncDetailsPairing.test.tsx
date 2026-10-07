@@ -293,6 +293,8 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e0001-x', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
     renderIn(await make(), <JoinProgress />);
     expect((await screen.findByTestId('sync-join-failure')).textContent).toContain('La réception de vos données s’est arrêtée à 8 / 20 : elle reprendra à la prochaine synchronisation');
+    // Le bandeau join-failed annonce l'échec : le texte visible de la ligne n'est pas une seconde région vivante.
+    expect(screen.queryByRole('status')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer la réception des données' }));
     expect(sync.calls).toContain('manual');
     cleanup();

@@ -51,7 +51,7 @@ export function JoinProgress() {
   if (join.failure) {
     return (
       <div className="ct-settings__row ct-sync__join" data-testid="sync-join-failure">
-        <span className="ct-settings__hint ct-settings__hint--danger" role="status">
+        <span className="ct-settings__hint ct-settings__hint--danger" data-testid="sync-join-failure-text">
           {join.failure === 'clock-ahead' ? t('sync.pairing.joinFailedClock') : join.failure === 'state-mismatch' ? t('sync.pairing.joinFailedSnapshot') : t('sync.pairing.joinFailed', params)}
         </span>
         <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.retryLabel')} disabled={busy} onClick={() => void syncNow('manual')}>
