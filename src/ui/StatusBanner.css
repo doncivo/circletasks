@@ -29,7 +29,13 @@
   outline-offset: 2px;
 }
 
-/* Région vivante toujours montée (AppStatusBanner) : sans boîte propre, pour ne pas ajouter d'espacement quand elle est vide. */
+/* Région vivante toujours montée (AppStatusBanner) : div ordinaire (pas de display: contents, mal pris en charge par WebKit iOS), sans marge
+   ni remplissage. Vide, elle ajouterait au flux un espace égal au gap de .ct-app-shell__main : on le compense. */
 .ct-status-region {
-  display: contents;
+  margin: 0;
+  padding: 0;
+}
+
+.ct-status-region:empty {
+  margin-bottom: calc(-1 * var(--ct-shell-gap, 0px));
 }

@@ -35,7 +35,7 @@ export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction }
 
 /**
  * Région vivante toujours montée (`aria-live="polite"`, l'équivalent de `role="status"` sans en prendre le rôle : les sélecteurs de rôle `status` restent réservés aux messages éphémères, comme « Annuler ») qui reçoit le bandeau : le contenu change dans une région déjà présente
- * dans le DOM, ce que les lecteurs d'écran annoncent de façon fiable. Sans boîte propre (`display: contents`).
+ * dans le DOM, ce que les lecteurs d'écran annoncent de façon fiable. Div ordinaire, sans marge ni remplissage.
  */
 export function StatusBannerRegion({ children }: { children?: ReactNode }) {
   return (
