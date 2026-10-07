@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lazyScreen, preloadScreens } from './lazyScreens';
+import { lazyScreen, preloadScreens, SCREENS_LOADED_ATTRIBUTE } from './lazyScreens';
 
 /** Écrans à la demande (PERF-02) : repli neutre, voisin affiché, rendu direct une fois chargé, échec avec « Réessayer », préchargement. */
 function Content() {
@@ -129,6 +129,20 @@ describe('préchargement des écrans', () => {
     stop();
     expect(cancel).toHaveBeenCalledWith(2);
   });
+
+  it('A-04 : <html> n’est marqué qu’une fois tous les blocs arrivés (non-régression du clic sur le rapport avant son bloc)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    document.documentElement.removeAttribute(SCREENS_LOADED_ATTRIBUTE);
+    const pending: Array<() => void> = [];
+    Object.assign(window, { requestIdleCallback: (cb: () => void) => pending.push(cb), cancelIdleCallback: vi.fn() });
+    preloadScreens();
+    // Tous les écrans sont demandés, un par moment d'inactivité ; tant que le dernier pas n'a pas eu lieu, pas de repère.
+    while (pending.length > 0) {
+      expect(document.documentElement).not.toHaveAttribute(SCREENS_LOADED_ATTRIBUTE);
+      pending.shift()?.();
+    }
+    await vi.waitFor(() => expect(document.documentElement).toHaveAttribute(SCREENS_LOADED_ATTRIBUTE, 'true'), { timeout: 30_000 });
+  }, 40_000);
 
   it('sans requestIdleCallback (WebKit) : minuteur de 200 ms entre deux écrans, annulable', () => {
     vi.useFakeTimers();

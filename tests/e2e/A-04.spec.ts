@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForScreensLoaded } from './helpers/app';
 import { createTask, isPhone, openToday, todayTab } from './helpers/today';
 
 /**
@@ -14,6 +15,8 @@ const tab = (page: Page, name: string) => page.getByRole('navigation').getByRole
 test.describe('A-04 — Aujourd’hui en un geste', () => {
   test.beforeEach(async ({ page }) => {
     await openToday(page);
+    // Le rapport est un écran à la demande : on attend son bloc plutôt que de courir contre le serveur (voir waitForScreensLoaded).
+    await waitForScreensLoaded(page);
   });
 
   test('Alt+1 ramène à Aujourd’hui depuis Réglages et l’onglet est actif (critère 1)', async ({ page }) => {
@@ -86,5 +89,22 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('Titre')).toHaveValue('Saisie en cours');
     await expect(todayTab(page)).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machine chargée)', () => {
+  test('Alt+1 depuis le rapport reste correct quand son bloc arrive après 6 s (critère 4)', async ({ page }) => {
+    // Non-régression de l'instabilité : le bloc de ReportScreen (écran à la demande) mettait plus de 5 s, délai d'une assertion.
+    await page.route('**/src/features/stats/ReportScreen.tsx*', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      await route.continue();
+    });
+    await openToday(page);
+    await waitForScreensLoaded(page);
+    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
+    await page.keyboard.press('Alt+1');
+    await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
   });
 });

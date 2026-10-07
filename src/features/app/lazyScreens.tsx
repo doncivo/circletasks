@@ -105,15 +105,26 @@ export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/Cal
 export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })));
 export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })));
 
-/** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
+/** Attribut posé sur <html> quand tous les écrans sont arrivés (ou ont échoué) : repère de disponibilité pour les tests e2e. */
+export const SCREENS_LOADED_ATTRIBUTE = 'data-ct-screens-loaded';
+
+/**
+ * Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. Une fois le
+ * dernier bloc arrivé (ou refusé), `<html>` porte `data-ct-screens-loaded` : tant qu'il manque, un clic sur un écran attend son bloc
+ * (serveur de développement à froid, machine chargée) et un test ne peut pas supposer l'écran affiché dans un délai fixe.
+ */
 export function preloadScreens(): () => void {
   let cancel: () => void = () => undefined;
   let index = 0;
+  const pending: Array<Promise<unknown>> = [];
   const step = (): void => {
     const load = loaders[index];
     index += 1;
-    if (!load) return;
-    void load().catch((error: unknown) => logFailure('screen-preload', error));
+    if (!load) {
+      void Promise.allSettled(pending).then(() => document.documentElement.setAttribute(SCREENS_LOADED_ATTRIBUTE, 'true'));
+      return;
+    }
+    pending.push(load().catch((error: unknown) => logFailure('screen-preload', error)));
     cancel = whenIdle(step, 200);
   };
   cancel = whenIdle(step, 200);
