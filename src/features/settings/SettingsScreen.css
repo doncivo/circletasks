@@ -84,6 +84,13 @@
   font-weight: var(--ct-font-weight-semibold);
 }
 
+/* Zone de toucher >= 44 pt sur écran tactile (iPhone) ; l'aspect PC reste celui de la maquette. */
+@media (pointer: coarse) {
+  .ct-settings__link {
+    min-height: var(--ct-hit-target-min);
+  }
+}
+
 /* Valeur en lecture seule d'une ligne (.v de Reglages.html). */
 .ct-settings__value {
   font-weight: var(--ct-font-weight-medium);
