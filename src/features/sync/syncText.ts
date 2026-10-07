@@ -251,7 +251,6 @@ export function folderLabel(info: Pick<SyncFolderInfo, 'label' | 'kind'> | null)
   return info.kind === 'icloud' ? t('sync.folder.icloudLabel', { name: info.label }) : info.label;
 }
 
-
 /** Nombre groupé selon la langue courante (« 1 200 » en français, « 1,200 » en anglais). */
 export function formatCount(value: number): string {
   return new Intl.NumberFormat(getLocale() === 'fr' ? 'fr-FR' : 'en-US').format(value);
