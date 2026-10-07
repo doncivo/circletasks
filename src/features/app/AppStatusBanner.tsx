@@ -18,7 +18,7 @@ export function AppStatusBanner() {
   const kept = silent && offline ? <StatusBanner message={t('status.offline')} concealed /> : null;
   return (
     <>
-      <StatusBannerRegion>{silent ? kept : banner}</StatusBannerRegion>
+      <StatusBannerRegion visuallyEmpty={silent || banner === null}>{silent ? kept : banner}</StatusBannerRegion>
       {silent ? banner : null}
     </>
   );

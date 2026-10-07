@@ -37,11 +37,11 @@ export function StatusBanner({ message, actionLabel, actionAriaLabel, onAction, 
 
 /**
  * Région vivante toujours montée (`aria-live="polite"`, l'équivalent de `role="status"` sans en prendre le rôle : les sélecteurs de rôle `status` restent réservés aux messages éphémères, comme « Annuler ») qui reçoit le bandeau : le contenu change dans une région déjà présente
- * dans le DOM, ce que les lecteurs d'écran annoncent de façon fiable. Div ordinaire, sans marge ni remplissage.
+ * dans le DOM, ce que les lecteurs d'écran annoncent de façon fiable. Div ordinaire, sans marge ni remplissage. `visuallyEmpty` : rien de visible dedans (vide, ou bandeau masqué qui garde le contenu stable), pour compenser le gap du parent en CSS.
  */
-export function StatusBannerRegion({ children }: { children?: ReactNode }) {
+export function StatusBannerRegion({ children, visuallyEmpty = false }: { children?: ReactNode; visuallyEmpty?: boolean }) {
   return (
-    <div aria-live="polite" aria-atomic="true" className="ct-status-region" data-testid="status-banner-region">
+    <div aria-live="polite" aria-atomic="true" className="ct-status-region" data-testid="status-banner-region" {...(visuallyEmpty ? { 'data-visually-empty': '' } : {})}>
       {children}
     </div>
   );

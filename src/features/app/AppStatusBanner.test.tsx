@@ -75,6 +75,36 @@ describe('bandeau d’état de l’app (A-09)', () => {
     expect(region).toHaveTextContent('Hors ligne');
   });
 
+  it('troisième revue point 2 : data-visually-empty présent sans bandeau visible dans la région (aucun état, hors ligne + synchro), absent avec un bandeau visible', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    expect(region).toHaveAttribute('data-visually-empty');
+    act(() => set('offline', {}));
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    act(() => set('syncing', {}));
+    expect(region).toHaveTextContent('Hors ligne');
+    expect(region).toHaveAttribute('data-visually-empty');
+    act(() => set('syncing', null));
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    act(() => set('offline', null));
+    expect(region).toHaveAttribute('data-visually-empty');
+  });
+
+  it('troisième revue point 4 : hors ligne + synchro, puis un échec survient : la région passe au texte de l’échec', () => {
+    render(<AppStatusBanner />);
+    const region = screen.getByTestId('status-banner-region');
+    act(() => {
+      set('offline', {});
+      set('syncing', {});
+    });
+    expect(region).toHaveTextContent('Hors ligne');
+    act(() => set('syncTrouble', { message: 'Échec de synchro' }));
+    expect(region).toHaveTextContent('Échec de synchro');
+    expect(region).not.toHaveTextContent('Hors ligne');
+    expect(region).not.toHaveAttribute('data-visually-empty');
+    expect(document.querySelectorAll('.ct-status-banner')).toHaveLength(1);
+  });
+
   it('un seul bandeau, le plus prioritaire (critère 5)', () => {
     render(<AppStatusBanner />);
     act(() => {
