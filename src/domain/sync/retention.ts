@@ -110,8 +110,17 @@ export function purgeBefore(nowMs: number): IsoDateTime {
  * l'époque, ou avec un hlc lu de moins de 30 jours, la purge est impossible : le fichier n'est pas encore arrivé (attente d'iCloud
  * visible), jamais une reprise depuis l'instantané à chaque cycle.
  */
-export function purgeExplainsMissingSegment(writer: { readonly snapshot: unknown }, ackHlc: Hlc | null, nowMs: number): boolean {
+export function purgeExplainsMissingSegment(
+  writer: { readonly snapshot: unknown },
+  ackHlc: Hlc | null,
+  nowMs: number,
+  own?: { readonly segment: number; readonly epoch: EpochId; readonly ownAck: DeviceAck | null; readonly ownActive: boolean },
+): boolean {
   if (writer.snapshot === null) return false;
+  // Seconde revue, point 7 : la purge d'un segment exige que chaque lecteur actif ait publié un accusé au-delà (`segmentPurgeable`) ;
+  // notre propre accusé publié sur l'écrivain, dans cette époque et au plus sur ce segment, l'interdit tant que nous sommes actifs
+  // pour lui (moins de 180 jours) : le fichier n'est pas encore arrivé, même si le dernier hlc lu est ancien.
+  if (own && own.ownActive && own.ownAck !== null && own.ownAck.epoch === own.epoch && own.ownAck.segment <= own.segment) return false;
   return ackHlc === null || nowMs - hlcMs(ackHlc) >= SEGMENT_PURGE_AGE_MS;
 }
 

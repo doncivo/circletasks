@@ -556,7 +556,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           // Y-TECH-02 (QA) : une purge seulement si l'état publié la rend possible ; sinon le fichier n'est pas encore arrivé (désordre
           // d'iCloud) : attente visible, jamais une reprise à chaque cycle.
           const writer = accepted.get(target.id) ?? (target.id === self ? ownState : null);
-          if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs())) {
+          const ownPublished = lastWritten ?? ownState;
+          const own = {
+            segment: cursor.segment,
+            epoch: readEpoch,
+            ownAck: ownPublished?.acks.get(target.id) ?? null,
+            ownActive: ownPublished !== null && deps.clock.nowMs() - hlcMs(ownPublished.lastSyncHlc) < DEVICE_EXPIRY_MS,
+          };
+          if (writer && purgeExplainsMissingSegment(writer, row?.ackHlc ?? null, deps.clock.nowMs(), own)) {
             needResume = true;
           } else {
             allRead = false;

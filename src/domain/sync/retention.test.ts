@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
-import { epochId, type DeviceAck, type JournalRecord } from './format';
+import { epochId, type DeviceAck, type EpochId, type JournalRecord } from './format';
 import { isTooFarAhead, recordIsAhead, recordMaxHlc } from './drift';
 import { HLC_MAX_DRIFT_MS } from './limits';
 import { activeReaders, BLOCKED, canPurgeDeletion, isExpired, publishedAllRead, purgeBefore, purgeExplainsMissingSegment, purgeHorizon, readByAll, segmentPurgeable, UNBOUNDED, type KnownDevice } from './retention';
@@ -130,5 +130,21 @@ describe('Y-TECH-02 (QA) : segment absent de la liste, purge possible ?', () => 
     expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - DAY), now)).toBe(false);
     expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 30 * DAY), now)).toBe(true);
     expect(purgeExplainsMissingSegment({ snapshot: {} }, null, now)).toBe(true);
+  });
+});
+
+describe('Y-TECH-02 (seconde revue, point 7) : notre propre accusé interdit la purge', () => {
+  const at = (ms: number) => `${String(ms).padStart(15, '0')}-0000-0f8fad5b-d9cb-469f-a165-70867728950e` as Hlc;
+  const DAY = 86_400_000;
+  const E = 'e0001-0f8fad5b-d9cb-469f-a165-70867728950e' as EpochId;
+  it('curseur en (k, 0), dernier hlc lu de k-1 vieux de 40 jours, k pas encore arrivé : notre accusé publié (segment ≤ k) interdit la purge de k', () => {
+    const now = 100 * DAY;
+    const ownAck = { epoch: E, segment: 5, record: 0, hlc: at(now - 40 * DAY), stateSeq: 3 };
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck, ownActive: true })).toBe(false);
+    // Notre accusé est déjà au-delà de k : purge possible (règle d'avant).
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck: { ...ownAck, segment: 6 }, ownActive: true })).toBe(true);
+    // Absent depuis plus de 180 jours (non compté par l'écrivain), ou aucun accusé publié : purge possible.
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck, ownActive: false })).toBe(true);
+    expect(purgeExplainsMissingSegment({ snapshot: {} }, at(now - 40 * DAY), now, { segment: 5, epoch: E, ownAck: null, ownActive: true })).toBe(true);
   });
 });
