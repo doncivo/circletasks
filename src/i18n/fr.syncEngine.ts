@@ -52,6 +52,7 @@ export const syncEngineFr = {
     stateNewerMajor: 'Version plus récente : mettez à jour l’app',
     stateClockAhead: 'Horloge en avance',
     stateCorrupt: 'Fichiers illisibles',
+    stateGap: 'Journaux déjà supprimés, en attente d’un instantané récent',
     stateForeign: 'Clé différente',
     stateRollback: 'État ancien relivré',
     stateForgotten: 'Oublié',

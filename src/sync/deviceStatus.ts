@@ -3,7 +3,7 @@ import { compareVersions, newerKind } from '../domain/sync/compat';
 import { deviceStateOf } from '../domain/sync/devices';
 import { SYNC_FORMAT_MAJOR } from '../domain/sync/format';
 import { hlcIso } from '../domain/sync/parse';
-import type { DeviceId } from '../domain/types';
+import type { DeviceId, IsoDateTime } from '../domain/types';
 import type { SyncDeviceStatus } from '../platform/sync/types';
 
 /**
@@ -16,15 +16,18 @@ import type { SyncDeviceStatus } from '../platform/sync/types';
  */
 export function storedDeviceStatuses(
   rows: readonly SyncStateRow[],
-  options: { readonly self?: DeviceId; readonly accepted?: ReadonlySet<DeviceId>; readonly localSv?: number },
+  options: { readonly self?: DeviceId; readonly accepted?: ReadonlySet<DeviceId>; readonly localSv?: number; readonly gaps?: ReadonlyMap<DeviceId, { readonly since: IsoDateTime }> },
 ): SyncDeviceStatus[] {
-  const { self, accepted, localSv } = options;
+  const { self, accepted, localSv, gaps } = options;
   return rows
     .filter((row) => row.isSelf || accepted?.has(row.deviceId as DeviceId) === true || row.stateSeq > 0)
     .map((row): SyncDeviceStatus => {
       const isSelf = self === undefined ? row.isSelf : row.deviceId === self;
       const status = deviceStateOf(row.status);
+      // Cinquième revue, point 7 : trou impossible à combler (`sync_meta.segmentGaps`) : texte distinct.
+      const gap = isSelf ? undefined : gaps?.get(row.deviceId as DeviceId);
       const base = {
+        ...(gap ? { gapSince: gap.since } : {}),
         deviceId: row.deviceId as DeviceId,
         platform: row.platform === 'ios' ? ('ios' as const) : ('windows' as const),
         self: isSelf,

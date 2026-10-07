@@ -444,3 +444,18 @@ describe('cinquième revue, point 6 : entrée de l’auteur posée à l’annonc
     expect(meta?.covers ?? {}).not.toHaveProperty(a.id);
   });
 });
+
+describe('cinquième revue, point 7 : gapSince dans les appareils affichés', () => {
+  it('posé avec le trou (moteur et états persistés), retiré quand le trou est effacé', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    const since = (await readJson<Record<string, { since: string }>>(b.data.repos, META.segmentGaps))?.[a.id]?.since;
+    expect(since).toEqual(expect.any(String));
+    expect(b.service.status().devices.find((d) => d.deviceId === a.id)?.gapSince).toBe(since);
+    a.clock.advance(8 * DAY);
+    await a.cycle();
+    dropFirstSegment(a, b);
+    await b.cycle();
+    expect(b.service.status().devices.find((d) => d.deviceId === a.id)?.gapSince).toBeUndefined();
+  });
+});

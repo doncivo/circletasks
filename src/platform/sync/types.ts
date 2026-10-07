@@ -412,6 +412,11 @@ export interface SyncDeviceStatus {
    * l'oublier ; nom neutre (« Appareil » et 8 caractères), jamais une plateforme inventée. Facultatif.
    */
   readonly seen?: boolean;
+  /**
+   * Y-TECH-02 (cinquième revue, point 7 ; ADR 0011 §5.5) : statut `corrupt` posé par un trou impossible à combler (`sync_meta.segmentGaps`) :
+   * date de sa première constatation ; texte distinct (« Journaux déjà supprimés… »). Absent sinon.
+   */
+  readonly gapSince?: IsoDateTime;
 }
 
 export interface SyncStatus {

@@ -16,6 +16,7 @@ import { finishResumeTx, isJoining, joinFromSnapshot, triedTracker } from './joi
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { addOwnStateMark, decideSegmentGap, type ResumeTried, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
+import { defaultSyncLogger } from './log';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -925,7 +926,15 @@ async function readWaitingDevices(repos: Repositories): Promise<DeviceId[]> {
 
 /** Appareils affichés (APPAREILS) et leur version (Y-07 critère 11) : règle partagée avec les bandeaux A-09 (`deviceStatus.ts`). */
 async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, localSv: number): Promise<SyncDeviceStatus[]> {
-  return storedDeviceStatuses(await repos.sync.getStates(), { self, accepted: new Set(accepted.keys()), localSv });
+  // Cinquième revue, point 7 : trous mémorisés (texte distinct). Une valeur illisible est signalée et réécrite au début du cycle
+  // (`readSegmentGaps`) ; devenue illisible depuis, elle est journalisée ici et signalée au cycle suivant.
+  let gaps: ReadonlyMap<DeviceId, StoredSegmentGap> = new Map<DeviceId, StoredSegmentGap>();
+  try {
+    gaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, defaultSyncLogger);
+  } catch (error) {
+    if (!isSyncStateUnreadable(error)) throw error;
+  }
+  return storedDeviceStatuses(await repos.sync.getStates(), { self, accepted: new Set(accepted.keys()), localSv, gaps });
 }
 
 /**

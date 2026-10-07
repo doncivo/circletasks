@@ -7,7 +7,8 @@ import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
-import { readForgetStatus, readResetStatus, startSyncScheduler, storedDeviceStatuses, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { defaultSyncLogger, readForgetStatus, readResetStatus, SEGMENT_GAPS_META, startSyncScheduler, storedDeviceStatuses, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { parseStoredSegmentGaps } from '../../domain/sync/stored';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
@@ -62,7 +63,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'device-foreign':
     case 'device-corrupt':
     case 'device-rollback':
-      return t('status.syncDevice', { device: deviceName(trouble.device, devices), state: deviceStatusText(trouble.device.status) });
+      return t('status.syncDevice', { device: deviceName(trouble.device, devices), state: deviceStatusText(trouble.device) });
     case 'state-unreadable':
       return t('status.syncStateUnreadable');
     case 'reload-failed':
@@ -258,7 +259,9 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
       else failed = true;
       if (beforeFirstCycle) {
         try {
-          devices = storedDeviceStatuses(await repos.sync.getStates(), {});
+          // Cinquième revue, point 7 : trous mémorisés (texte distinct dès le démarrage) ; illisibles : `state-unreadable`.
+          const gaps = parseStoredSegmentGaps(await repos.sync.getMeta(SEGMENT_GAPS_META), `sync_meta.${SEGMENT_GAPS_META}`, defaultSyncLogger);
+          devices = storedDeviceStatuses(await repos.sync.getStates(), { gaps });
         } catch {
           failed = true;
         }

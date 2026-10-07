@@ -196,8 +196,13 @@ export function warningText(code: SyncWarningCode): string {
   }
 }
 
-/** Libellé du statut d'un appareil (APPAREILS). */
-export function deviceStatusText(status: SyncDeviceStatus['status']): string {
+/**
+ * Libellé du statut d'un appareil (APPAREILS, bandeau d'appareil). Cinquième revue, point 7 : `corrupt` posé par un trou impossible à
+ * combler (`gapSince`) a son propre texte, jamais « Fichiers illisibles ».
+ */
+export function deviceStatusText(device: Pick<SyncDeviceStatus, 'status' | 'gapSince'>): string {
+  const { status } = device;
+  if (status === 'corrupt' && device.gapSince !== undefined) return t('sync.status.stateGap');
   switch (status) {
     case 'active':
       return t('sync.status.stateActive');

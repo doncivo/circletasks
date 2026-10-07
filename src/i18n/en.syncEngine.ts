@@ -51,6 +51,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     stateNewerMajor: 'Newer version: update the app',
     stateClockAhead: 'Clock ahead',
     stateCorrupt: 'Unreadable files',
+    stateGap: 'Logs already deleted, waiting for a recent snapshot',
     stateForeign: 'Different key',
     stateRollback: 'Old state delivered again',
     stateForgotten: 'Forgotten',
