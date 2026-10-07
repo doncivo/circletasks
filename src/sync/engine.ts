@@ -486,6 +486,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     let resumed = false;
     /** Cinquième revue, point 6 : appareils tronqués dans ce cycle (leur `corrupt` de l'audit M3 n'est jamais levé par un trou effacé). */
     const truncatedThisCycle = new Set<DeviceId>();
+    /**
+     * Septième revue, point 1 (audit M3, ADR 0011 §5.5) : la reprise de ce cycle attend le corps du premier choix (instantané éligible le
+     * plus récent, qui peut couvrir au-delà du point corrompu) : une troncature n'est pas `corrupt`, l'attente d'iCloud est visible.
+     */
+    let resumeWaiting = false;
     const doResume = async (): Promise<boolean> => {
       resumed = true;
       work();
@@ -502,6 +507,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       if (outcome.kind === 'no-eligible') noEligible = outcome.uncovered;
       // Cinquième revue, point 1 : instantané essayé (écrit par la reprise) ; inchangé si le premier choix attend iCloud.
       if (outcome.tried) resumeTried = outcome.tried;
+      resumeWaiting = outcome.kind === 'waiting';
       return outcome.kind === 'done';
     };
     /**
@@ -688,21 +694,21 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
         if (outcome.status === 'truncated') {
           truncatedThisCycle.add(target.id);
-          if (resumed) await repos.sync.saveState(target.id, { status: 'corrupt' });
+          if (resumed && !resumeWaiting) await repos.sync.saveState(target.id, { status: 'corrupt' });
           else {
             needResume = true;
             truncated.push(target.id);
           }
         }
         if (target.id !== self && !forgetView.order.has(target.id)) {
-          const status = outcome.status === 'truncated' ? (resumed ? 'corrupt' : undefined) : outcome.status === 'clock-ahead' ? 'clock-ahead' : outcome.status === 'newer-major' ? 'newer-major' : outcome.status === 'foreign' ? 'foreign' : row?.status === 'clock-ahead' ? 'active' : undefined;
+          const status = outcome.status === 'truncated' ? (resumed && !resumeWaiting ? 'corrupt' : undefined) : outcome.status === 'clock-ahead' ? 'clock-ahead' : outcome.status === 'newer-major' ? 'newer-major' : outcome.status === 'foreign' ? 'foreign' : row?.status === 'clock-ahead' ? 'active' : undefined;
           if (status) await repos.sync.saveState(target.id, { status });
         }
       }
       if (!needResume || resumed) break;
       if (!(await doResume())) {
         // Aucun instantané lisible : les appareils corrompus le restent, les autres sont lus normalement.
-        for (const id of truncated) await repos.sync.saveState(id, { status: 'corrupt' });
+        if (!resumeWaiting) for (const id of truncated) await repos.sync.saveState(id, { status: 'corrupt' });
         // Quatrième revue, point B : trous que cette reprise devait combler, mémorisés sans instantané appliqué (jamais une reprise
         // à chaque cycle avec le même instantané éligible).
         for (const h of resumeHoles) await hole(h.id, h.epoch, h.segment);
@@ -992,7 +998,7 @@ export async function resumeFromSnapshot(
       // attente visible, demande de reprise gardée, réessayé seul au cycle suivant jusqu'à son arrivée.
       if (tried.isFirst(pick.end)) {
         deps.logger.log('resume-unavailable', { epoch });
-        return { kind: 'unavailable', tried: undefined };
+        return { kind: 'waiting', tried: undefined };
       }
       continue;
     }
@@ -1024,6 +1030,8 @@ export async function resumeFromSnapshot(
  */
 export type ResumeOutcome =
   | { readonly kind: 'done'; readonly tried: ResumeTried | undefined }
+  /** Septième revue, point 1 : corps du premier choix en attente d'iCloud (aucun repli ; demande gardée, fichier en attente visible). */
+  | { readonly kind: 'waiting'; readonly tried: undefined }
   | { readonly kind: 'unavailable'; readonly tried: ResumeTried | undefined }
   | { readonly kind: 'no-eligible'; readonly uncovered: DeviceId; readonly tried: ResumeTried | undefined };
 

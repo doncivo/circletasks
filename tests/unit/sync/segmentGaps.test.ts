@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import type { EpochId } from '../../../src/domain/sync/format';
-import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
-import { clearSegmentGap } from '../../../src/sync/engine';
+import type { EpochId, PublishedDeviceState } from '../../../src/domain/sync/format';
+import { forgetOrder } from '../../../src/domain/sync/retention';
+import type { DeviceId, Hlc, IsoDateTime } from '../../../src/domain/types';
+import { clearSegmentGap, resumeFromSnapshot } from '../../../src/sync/engine';
 import { syncBannerFor } from '../../../src/domain/syncBanners';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
 import { readStoredDeviceStatuses, storedDeviceStatuses } from '../../../src/sync';
@@ -9,7 +10,7 @@ import { SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { setSnapshotTestHooks } from '../../../src/sync/snapshot';
 import { META, readJson } from '../../../src/sync/meta';
 import { propagate } from '../../sim/syncCloudSim';
-import { createSimDevice, pair, setupFirst, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
+import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
 /**
  * Y-TECH-02, quatrième revue, point B (ADR 0011 §5.5, « Trou impossible à combler ») : un segment nécessaire tenu pour purgé que la
@@ -676,5 +677,67 @@ describe('sixième revue, point 6 : readStoredDeviceStatuses (lecture des états
     expect(devicesNow.find((d) => d.deviceId === a.id)).toMatchObject({ status: 'corrupt', gapSince: expect.any(String) as string });
     await b.data.repos.sync.setMeta(META.segmentGaps, '{pas du json');
     await expect(readStoredDeviceStatuses(b.data.repos)).rejects.toBeInstanceOf(SyncStateUnreadableError);
+  });
+});
+
+describe('septième revue, point 1 : troncature (audit M3) pendant l’attente du premier choix', () => {
+  it('ligne corrompue au milieu de j-1 de A, corps du premier choix en attente 2 cycles : attente visible, jamais corrupt ; arrivé : A relu depuis covers, actif', async () => {
+    const a = await deviceA();
+    await a.createTask('T0');
+    await a.cycle();
+    const b = await deviceB(a);
+    propagate(a.folder, b.folder, a.id);
+    await b.cycle();
+    expect(await titlesOf(b)).toEqual(['T0']);
+    await a.createTask('T0b');
+    await a.cycle();
+    a.clock.advance(8 * DAY);
+    await a.cycle();
+    expect(a.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(true);
+    // Chez B : seconde ligne de j-1 corrompue (corruption au milieu d'un segment) ; corps de l'instantané de A en attente d'iCloud.
+    const deliver = (): void => {
+      propagate(a.folder, b.folder, a.id);
+      const line = b.folder.devices.get(a.id)?.epochs.get(epochOf(a))?.segments.get(1)?.lines[1];
+      if (line) line.corrupt = true;
+    };
+    let pendingBody = true;
+    const real = b.platform.readSnapshot.bind(b.platform);
+    b.platform.readSnapshot = async (request) =>
+      pendingBody && request.tail !== true && request.deviceId === a.id ? { records: [], next: { segment: request.seq, record: 0 }, status: 'cloud-pending' } : real(request);
+    for (let i = 0; i < 2; i += 1) {
+      deliver();
+      b.clock.advance(60_000);
+      const waiting = await b.cycle();
+      expect(waiting.phase, `cycle ${String(i)}`).toBe('waiting-icloud');
+      expect(statusOf(b, a.id), `cycle ${String(i)}`).not.toBe('corrupt');
+      expect(await readJson(b.data.repos, META.resume)).toBe(true);
+    }
+    pendingBody = false;
+    deliver();
+    expect((await b.cycle()).phase).toBe('idle');
+    expect(statusOf(b, a.id)).toBe('active');
+    expect(await titlesOf(b)).toEqual(['T0', 'T0b']);
+    deliver();
+    await b.cycle();
+    expect(statusOf(b, a.id)).toBe('active');
+  });
+});
+
+describe('septième revue, point 1 : failDefinitively sur la sortie no-eligible', () => {
+  it('aucun instantané ne couvre un oublié retenu : no-eligible, instantané essayé {époque, null, null} et demande de reprise effacés ensemble', async () => {
+    const a = await deviceA();
+    const epoch = epochOf(a);
+    const scan = await a.platform.scan({ keep: [] });
+    const ownState = scan.devices.find((d) => d.deviceId === a.id)?.state ?? null;
+    expect(ownState?.snapshot).not.toBeNull();
+    const X = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee' as DeviceId;
+    const master = [{ deviceId: X, at: `${String(a.clock.nowMs()).padStart(15, '0')}-0000-${a.id}` as Hlc, lastAck: null }];
+    const acker = { deviceId: a.id, acks: new Map([[X, { epoch, segment: 3, record: 1, hlc: null, stateSeq: 1 }]]) } as unknown as PublishedDeviceState;
+    await a.data.repos.sync.setMeta(META.resume, 'true');
+    const deps = { data: a.data, platform: a.platform, hlc: a.hlc, clock: a.clock, deviceId: a.id, devicePlatform: 'windows' as const, appVersion: '0.4.0', sv: SCHEMA_VERSION, logger: a.logger };
+    const outcome = await resumeFromSnapshot(deps, epoch, new Map<DeviceId, PublishedDeviceState>(), ownState, () => false, { onRemoteChanges: () => undefined }, new Set(), { master, ackers: [acker], forgotten: forgetOrder(master) });
+    expect(outcome).toMatchObject({ kind: 'no-eligible', uncovered: X, tried: { epoch, author: null, seq: null } });
+    expect(await readJson(a.data.repos, META.resume)).toBeNull();
+    expect(await readJson(a.data.repos, META.resumeTried)).toEqual({ epoch, author: null, seq: null });
   });
 });
