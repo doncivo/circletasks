@@ -653,3 +653,15 @@ describe('quatrième revue, point D : repères illisibles', () => {
     expect(marks?.[0]?.[0]).toBeGreaterThan(0);
   });
 });
+
+describe('cinquième revue, point 5 : repères illisibles lus au début du cycle', () => {
+  it('sync_meta.ownStateHlcs illisible : stateUnreadable au premier cycle, réécrit vide dans ce cycle, second cycle propre', async () => {
+    const a = await first();
+    await a.data.repos.sync.setMeta(META.ownStateHlcs, '{pas du json');
+    const status = await a.cycle();
+    expect(status.stateUnreadable).toBe(true);
+    expect(events(a, 'state-unreadable')).toContainEqual({ where: 'sync_meta.ownStateHlcs' });
+    expect(await readJson<unknown[]>(a.data.repos, META.ownStateHlcs)).toEqual(expect.any(Array));
+    expect((await a.cycle()).stateUnreadable ?? false).toBe(false);
+  });
+});

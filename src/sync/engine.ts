@@ -210,6 +210,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   const segmentGaps = await readSegmentGaps(deps, seen);
   /** Cinquième revue, point 1 : dernier instantané essayé par une reprise (`sync_meta.resumeTried`). */
   let resumeTried: ResumeTried | null = await readResumeTried(deps, seen);
+  // Cinquième revue, point 5 : repères lus au début du cycle ; illisibles : visibles pour ce cycle, réécrits vides aussitôt.
+  await checkOwnStateMarks(deps, seen);
   const known = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
   let scan: FolderScan;
   try {
@@ -860,6 +862,20 @@ async function readSegmentGaps(deps: SyncDeps, seen: CycleSeen): Promise<Map<Dev
       for (const row of await tx.sync.getStates()) if (row.status === 'corrupt') await tx.sync.saveState(row.deviceId, { status: 'active' });
     });
     return new Map<DeviceId, StoredSegmentGap>();
+  }
+}
+
+/**
+ * Cinquième revue, point 5 (ADR 0011 §5.5, condition 3) : repères illisibles : journalisés, `stateUnreadable` pour ce cycle, réécrits vides
+ * dans ce cycle (aucune preuve, règle des 30 jours) ; le cycle suivant est propre.
+ */
+async function checkOwnStateMarks(deps: SyncDeps, seen: CycleSeen): Promise<void> {
+  try {
+    parseStoredOwnStateMarks(await deps.data.repos.sync.getMeta(META.ownStateHlcs), `sync_meta.${META.ownStateHlcs}`, deps.logger);
+  } catch (error) {
+    if (!isSyncStateUnreadable(error)) throw error;
+    seen.unreadable = true;
+    await writeJson(deps.data.repos, META.ownStateHlcs, []);
   }
 }
 
