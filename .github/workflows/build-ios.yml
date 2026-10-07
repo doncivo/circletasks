@@ -187,7 +187,7 @@ jobs:
           fi
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="ios-v${VERSION}"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then
+          if [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then
             echo "::error::Le tag ${GITHUB_REF_NAME} ne correspond pas à la version ${VERSION}"
             exit 1
           fi
@@ -209,4 +209,13 @@ jobs:
           git config user.email "ci@users.noreply.github.com"
           git add source.json icon.png
           git commit -m "source.json: iPhone ${VERSION}" || echo "Rien à valider"
-          git push
+          # Le dépôt public a pu bouger depuis le clone (publication PC) : rebase avant le push,
+          # une seule nouvelle tentative si le push est refusé, sinon échec visible du job.
+          git pull --rebase
+          if ! git push; then
+            echo "::warning::Push de source.json refusé, nouvelle tentative après rebase."
+            if ! { git pull --rebase && git push; }; then
+              echo "::error::Push de source.json impossible : l'IPA est publiée mais la source SideStore n'est pas à jour. Relancer la publication."
+              exit 1
+            fi
+          fi

@@ -324,6 +324,18 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     expect(workflow).toContain('node scripts/ios/check-plist-contract.mjs scripts/ios/plist-contract.json info/Info.plist');
   });
 
+  it('push de source.json : rebase avant, une seule nouvelle tentative, échec visible sinon', () => {
+    const publish = workflow.slice(workflow.indexOf('- name: Publier sur circletasks-releases'));
+    expect(publish).toContain('if [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then');
+    expect(publish).not.toContain('GITHUB_REF_TYPE');
+    const tail = publish.slice(publish.indexOf('git add source.json icon.png'));
+    expect(tail.match(/git pull --rebase/g)).toHaveLength(2);
+    expect(tail.match(/git push/g)).toHaveLength(2);
+    expect(tail.indexOf('git pull --rebase')).toBeLessThan(tail.indexOf('git push'));
+    expect(tail).toContain('::error::Push de source.json impossible');
+    expect(tail).toMatch(/exit 1/);
+  });
+
   it('garde la phrase de I-02 tant que I-02 n’est pas faite', () => {
     const row = read('docs/backlog.md').split('\n').find((l) => l.startsWith('| I-02 |')) ?? '';
     if (!/\|\s*fait/.test(row)) expect(guide).toContain('CircleTasks préviendra 24 h avant l\'expiration (à l\'ordre 5).');
