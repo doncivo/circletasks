@@ -103,5 +103,31 @@ fn y_tech_02_a_refusal_blocks_in_memory_when_it_cannot_be_written() {
     assert_eq!(code(consent.precheck(OWNER)), SyncCode::RateLimited);
     assert_eq!(inner.prompts(), 1);
     clock.advance(CONSENT_BLOCK_MS);
-    assert!(consent.precheck(OWNER).is_ok(), "blocage de 10 minutes, pas davantage");
+    // Audit (point bas 7) : tant que le blocage ne peut pas être écrit, le marqueur le redonne (échoue fermé) ; levé une fois écrit
+    // (y_tech_02_a_refusal_that_cannot_be_written_survives_a_restart).
+    assert_eq!(code(consent.precheck(OWNER)), SyncCode::RateLimited);
+    assert_eq!(inner.prompts(), 1);
+}
+
+/// Audit (point bas 7) : un refus dont l'écriture échoue n'est pas perdu à la relance (marqueur lu comme un fichier illisible : blocage).
+#[test]
+fn y_tech_02_a_refusal_that_cannot_be_written_survives_a_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let inner = FakeUi::new();
+    let clock = TestClock::new(NOW);
+    let ui = Arc::new(RefuseThenBreak { inner: inner.clone(), dir: dir.path().to_path_buf() });
+    let consent = ConsentGate::new(dir.path().to_path_buf(), ui, clock.clock());
+    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::ConsentDenied);
+    // Relance (nouvelle instance), écritures toujours impossibles : bloqué, aucune boîte.
+    let restarted = ConsentGate::new(dir.path().to_path_buf(), inner.clone(), clock.clock());
+    assert_eq!(code(restarted.confirm_show(OWNER)), SyncCode::RateLimited);
+    assert_eq!(inner.prompts(), 1);
+    // Le disque revient : le blocage est écrit (10 minutes depuis sa lecture), puis levé.
+    std::fs::remove_dir_all(dir.path().join("consent.json.tmp")).unwrap();
+    let again = ConsentGate::new(dir.path().to_path_buf(), inner.clone(), clock.clock());
+    assert_eq!(code(again.confirm_show(OWNER)), SyncCode::RateLimited);
+    clock.advance(CONSENT_BLOCK_MS);
+    let later = ConsentGate::new(dir.path().to_path_buf(), inner.clone(), clock.clock());
+    assert!(later.confirm_show(OWNER).is_ok());
+    assert_eq!(inner.prompts(), 2);
 }

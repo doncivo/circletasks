@@ -23,6 +23,9 @@ use super::limits::{CONSENT_BLOCK_MS, CONSENT_MAX_IMPORT, CONSENT_MAX_SHOW, CONS
 use super::{fail, log, SyncCode, SyncResult};
 
 pub const CONSENT_FILE: &str = "consent.json";
+/// Audit (point bas 7) : refus qui n'a pas pu être écrit ; lu comme un `consent.json` illisible (blocage de 10 minutes) jusqu'à ce que le
+/// blocage soit écrit.
+pub const CONSENT_REFUSED_MARKER: &str = "consent.refused";
 /// Identifiant du bouton de confirmation ; « Annuler » porte `IDCANCEL`.
 pub const ID_CONFIRM: i32 = 100;
 /// `IDCANCEL` (winuser.h).
@@ -143,6 +146,7 @@ struct Counters {
 /// Compteurs persistés et verrou « une seule boîte à la fois ».
 pub struct ConsentGate {
     path: PathBuf,
+    marker: PathBuf,
     ui: Arc<dyn ConsentUi>,
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
     busy: AtomicBool,
@@ -162,11 +166,21 @@ impl Drop for BusyGuard<'_> {
 impl ConsentGate {
     /// `config_dir` : dossier `sync/` du dossier de configuration.
     pub fn new(config_dir: PathBuf, ui: Arc<dyn ConsentUi>, now: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
-        Self { path: config_dir.join(CONSENT_FILE), ui, now, busy: AtomicBool::new(false), file: Mutex::new(()), blocked_until: AtomicU64::new(0) }
+        Self {
+            marker: config_dir.join(CONSENT_REFUSED_MARKER),
+            path: config_dir.join(CONSENT_FILE),
+            ui,
+            now,
+            busy: AtomicBool::new(false),
+            file: Mutex::new(()),
+            blocked_until: AtomicU64::new(0),
+        }
     }
 
     fn load(&self, now: u64) -> Counters {
-        match read_config_file::<Counters>(&self.path) {
+        // Refus non écrit (marqueur) : traité comme un fichier illisible.
+        let read = if self.marker.exists() { Err(()) } else { read_config_file::<Counters>(&self.path) };
+        match read {
             Ok(Some(counters)) => counters,
             Ok(None) => Counters::default(),
             Err(()) => {
@@ -174,10 +188,26 @@ impl ConsentGate {
                 log::event("consent-file-unreadable", "blocked");
                 let blocked = Counters { blocked_until: now + CONSENT_BLOCK_MS, ..Counters::default() };
                 self.block_in_memory(blocked.blocked_until);
-                // Échec d'écriture journalisé par `save` : le blocage reste en mémoire, et le fichier illisible le redonne au démarrage.
-                let _ = self.save(&blocked);
+                // Échec d'écriture journalisé par `save` : le blocage reste en mémoire, et le fichier illisible (ou le marqueur) le redonne
+                // au démarrage. Écrit : le marqueur a rempli son rôle.
+                if self.save(&blocked).is_ok() && std::fs::remove_file(&self.marker).is_err() && self.marker.exists() {
+                    log::event("consent-marker-not-removed", "io");
+                }
                 blocked
             }
+        }
+    }
+
+    /// Blocage après un refus (audit, point bas 7) : écrit, sinon réessayé une fois, sinon marqueur `consent.refused` que `load` lit comme
+    /// un fichier illisible : le refus n'est jamais perdu à la relance.
+    fn save_refusal(&self, counters: &Counters) {
+        if self.save(counters).is_ok() || self.save(counters).is_ok() {
+            return;
+        }
+        if std::fs::write(&self.marker, b"refused").is_err() {
+            log::event("consent-marker-write-failed", "io");
+        } else {
+            log::event("consent-refusal-marked", "blocked");
         }
     }
 
@@ -230,9 +260,10 @@ impl ConsentGate {
         let now = (self.now)();
         let mut counters = self.load(now);
         counters.blocked_until = now + CONSENT_BLOCK_MS;
-        // Blocage gardé en mémoire d'abord : un échec d'écriture (journalisé) ne le lève jamais pendant cette session.
+        // Blocage gardé en mémoire d'abord : un échec d'écriture (journalisé) ne le lève jamais pendant cette session, ni après une
+        // relance (marqueur).
         self.block_in_memory(counters.blocked_until);
-        let _ = self.save(&counters);
+        self.save_refusal(&counters);
         fail(SyncCode::ConsentDenied)
     }
 
