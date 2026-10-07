@@ -8,3 +8,8 @@ Chaque plugin est un crate Tauri avec son dossier `ios/` ; son contrat (commande
 entrées, sorties, erreurs) est défini par l'architecte avant implémentation et
 consommé côté TypeScript uniquement via `src/platform/`.
 Aucune compilation iOS locale : build par `.github/workflows/build-ios.yml`.
+
+Chaque plugin qui demande une autorisation déclare ses clés Info.plist dans
+`scripts/ios/plist-contract.json` (format décrit dans le fichier, ADR 0007 avenant I-01)
+et ajoute les textes français dans `src-tauri/Info.ios.plist` ; `build-ios.yml` échoue si une
+clé manque ou si une description d'usage est vide.
