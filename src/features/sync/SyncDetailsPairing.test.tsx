@@ -298,7 +298,25 @@ describe('progression et échec de l’arrivée (critère 13, exigence d’Ali)'
     // `setStatus` est synchrone et la ligne ne dépend que de `status.progress` : rien à attendre.
     act(() => sync.setStatus({ phase: 'idle', progress: null }));
     expect(screen.queryByTestId('sync-join-count')).toBeNull();
-    expect(screen.getByTestId('sync-join-live').textContent).toBe('Données reçues');
+    expect(await screen.findByText('Données reçues')).toBe(screen.getByTestId('sync-join-live'));
+  });
+
+  it('seconde revue point A : progression puis arrêt en échec : « Données reçues » n’est jamais annoncé', async () => {
+    renderIn(await make(), <JoinProgress />);
+    const live = screen.getByTestId('sync-join-live');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    act(() => sync.setStatus({ phase: 'syncing', progress: { done: 8, total: 20 } }));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    await db.data.repos.sync.setMeta(JOIN_META, JSON.stringify({ epoch: 'e0001-x', from: SELF, seq: 1, done: 8, total: 20, failure: 'io' }));
+    act(() => sync.setStatus({ phase: 'error', progress: null }));
+    expect(await screen.findByTestId('sync-join-failure')).toBeTruthy();
+    await act(async () => {
+      await Promise.resolve();
+    });
+    observer.disconnect();
+    expect(seen).not.toContain('Données reçues');
+    expect(live.textContent).toBe('');
   });
 
   it('échec mémorisé par le moteur : affiché en rouge avec « Réessayer », après un redémarrage aussi, effacé à la réussite', async () => {

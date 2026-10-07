@@ -15,11 +15,24 @@ function JoinAnnouncer() {
   const active = useFeatureStore(syncStore, (s) => s.status.progress != null);
   const [text, setText] = useState('');
   const [wasActive, setWasActive] = useState(false);
+  const [finished, setFinished] = useState(0);
   // Ajustement d'état pendant le rendu (début puis fin de la reprise) : pas d'effet, pas de rendu en cascade.
   if (wasActive !== active) {
     setWasActive(active);
-    setText(active ? t('sync.pairing.joinStartAnnounce') : text === '' ? '' : t('sync.pairing.joinDoneAnnounce'));
+    setText(active ? t('sync.pairing.joinStartAnnounce') : '');
+    if (!active && text !== '') setFinished((n) => n + 1);
   }
+  // Fin de la reprise : « Données reçues » seulement si aucun échec n'est gardé (sinon le bandeau join-failed parle seul).
+  useEffect(() => {
+    if (finished === 0) return;
+    let cancelled = false;
+    void readJoinView(container).then((view) => {
+      if (!cancelled && !view?.failure) setText(t('sync.pairing.joinDoneAnnounce'));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [finished, container]);
   if (!container.sync) return null;
   return (
     <span className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="sync-join-live">
