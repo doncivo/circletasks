@@ -668,7 +668,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         const listedSnapshots = listed?.snapshots ?? [];
         const seq = Math.max(snapshotMeta?.seq ?? 0, ...listedSnapshots) + 1;
         const covers = await snapshotCovers();
-        covers.set(self, { ...head, stateSeq: stateSeq });
+        // Entrée de l'auteur (ADR 0011 §5.1, quatrième revue, point A) : sa tête publiée, si elle désigne une écriture (hlc non nul) ;
+        // sans elle, un lecteur qui reprend depuis cet instantané repartirait du début de l'époque sur cet appareil.
+        if (head.hlc !== null) covers.set(self, { ...head, stateSeq });
         const endHlc = deps.hlc.now();
         await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
         snapshotMeta = { seq, endHlc };

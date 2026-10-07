@@ -535,3 +535,34 @@ describe('quatrième revue, point C : covered ne compte que les accusés de l’
     expect(ownSegments(a)).toEqual([4, 5]);
   });
 });
+
+describe('quatrième revue, point A : entrée de l’auteur dans covers (ADR 0011 §5.1)', () => {
+  it('reprise de C depuis l’instantané hebdomadaire de A : curseur sur A à la tête de A, jamais à 0', async () => {
+    const a = await first();
+    await a.createTask('T1');
+    await a.cycle();
+    await a.createTask('T2');
+    await a.cycle();
+    a.clock.advance(8 * DAY);
+    await a.cycle();
+    expect(events(a, 'snapshot-written').length).toBe(1);
+    const head = (await readJson<DeviceAck>(a.data.repos, META.head)) as DeviceAck;
+    expect(head.segment).toBeGreaterThan(0);
+    const c = await createSimDevice(C_ID, { name: 'C', clock: a.clock });
+    devices.push(c);
+    await pair(a, c);
+    await c.cycle();
+    expect(events(c, 'resumed-from-snapshot')).toHaveLength(1);
+    const row = (await c.data.repos.sync.getStates()).find((r) => r.deviceId === a.id);
+    expect([row?.cursorSegment, row?.cursorRecord, row?.ackHlc]).toEqual([head.segment, head.record, head.hlc]);
+  });
+
+  it('auteur sans aucune écriture publiée (tête sans hlc) : aucune entrée de l’auteur', async () => {
+    const a = await first();
+    a.clock.advance(8 * DAY);
+    await a.cycle();
+    expect(events(a, 'snapshot-written').length).toBe(1);
+    const meta = await readJson<{ covers: Record<string, unknown> }>(a.data.repos, META.snapshot);
+    expect(meta?.covers ?? {}).not.toHaveProperty(a.id);
+  });
+});
