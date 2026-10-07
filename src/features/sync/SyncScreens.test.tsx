@@ -65,6 +65,28 @@ describe('ligne d’état de Réglages (Y-02 critère 16, Y-05 critère 2)', () 
     expect(screen.getByRole('status').textContent).toBe('');
   });
 
+  it('revue point 1 : idle avec une réintégration en échec (sous-ligne rouge) n’annonce pas « À jour »', () => {
+    sync.setStatus({ phase: 'idle', reintegrationFailure: { fields: 3, tables: ['task'], at: '2026-10-05T07:30:00.000Z' as IsoDateTime, errors: ['DbError'] } });
+    renderIn(<SyncStatusLine />);
+    expect(screen.getByTestId('sync-status-text')).toHaveAttribute('data-trouble', 'true');
+    expect(screen.getByTestId('sync-status-live').textContent).toBe('');
+  });
+
+  it('revue point 2 : idle, syncing, idle ne change pas le texte de la région (pas de réannonce à chaque cycle)', () => {
+    renderIn(<SyncStatusLine />);
+    const live = screen.getByTestId('sync-status-live');
+    expect(live.textContent).toBe('À jour');
+    const seen: string[] = [];
+    const observer = new MutationObserver(() => seen.push(live.textContent ?? ''));
+    observer.observe(live, { childList: true, characterData: true, subtree: true });
+    act(() => sync.setStatus({ phase: 'syncing' }));
+    expect(live.textContent).toBe('À jour');
+    act(() => sync.setStatus({ phase: 'idle', lastSyncAt: NOW as IsoDateTime }));
+    expect(live.textContent).toBe('À jour');
+    observer.disconnect();
+    expect(seen).toEqual([]);
+  });
+
   it('erreurs explicites, jamais de boîte bloquante', () => {
     sync.setStatus({ phase: 'error', errorCode: 'folder-unreachable' });
     renderIn(<SyncStatusLine />);
