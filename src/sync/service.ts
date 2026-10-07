@@ -1,5 +1,5 @@
 import type { DataAccess } from '../db/repositories';
-import { isSyncStateUnreadable } from '../domain/sync/stored';
+import { isSyncStateUnreadable, parseStoredIso } from '../domain/sync/stored';
 import type { Clock } from '../domain/clock';
 import type { HlcClock } from '../domain/hlc';
 import { parseReintegrationFailure, REINTEGRATION_FAILURE_META, type ReintegrationFailure } from '../domain/sync/compat';
@@ -14,7 +14,7 @@ import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
 import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
-import { META, readJson, writeJson } from './meta';
+import { META, writeJson } from './meta';
 import { INITIAL_STATUS, phaseOf, statusFromFacts } from './status';
 
 /**
@@ -152,19 +152,30 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     // Seconde revue, point 6 : début de l'attente d'iCloud (sync_meta, survit au redémarrage) ; référence de l'attente prolongée quand
     // aucune synchro n'a jamais été complète.
     const waiting = phaseOf(result) === 'waiting-icloud';
+    // Troisième revue, point M1 : valeur stockée non ISO → `state-unreadable` visible pour ce cycle (journalisé), puis remplacée comme
+    // une valeur absente (début de l'attente : maintenant ; hors attente : effacée) ; le cycle suivant la relit valide et retire l'état.
     const waitingSince = await read('waiting', async () => {
-      const stored = await readJson<string>(options.data.repos, META.waitingSince, deps.logger);
+      const raw = await options.data.repos.sync.getMeta(META.waitingSince);
+      let stored: IsoDateTime | null = null;
+      let invalid = false;
+      try {
+        stored = parseStoredIso(raw, `sync_meta.${META.waitingSince}`, deps.logger);
+      } catch (error) {
+        if (!isSyncStateUnreadable(error)) throw error;
+        invalid = true;
+        unreadable = true;
+      }
       if (waiting && stored === null) {
-        const since = new Date(options.clock.nowMs()).toISOString();
+        const since = new Date(options.clock.nowMs()).toISOString() as IsoDateTime;
         await writeJson(options.data.repos, META.waitingSince, since);
         return since;
       }
-      if (!waiting && stored !== null) await writeJson(options.data.repos, META.waitingSince, null);
+      if (!waiting && (stored !== null || invalid)) await writeJson(options.data.repos, META.waitingSince, null);
       return waiting ? stored : null;
     });
     publish(
       statusFromFacts(withoutCycleStart(status), result, {
-        waitingSince: waitingSince === undefined ? (waiting ? (status.waitingSince ?? null) : null) : (waitingSince as IsoDateTime | null),
+        waitingSince: waitingSince === undefined ? (waiting ? (status.waitingSince ?? null) : null) : waitingSince,
         folderLabel: result.folderLabel ?? status.folderLabel,
         folderKind: result.folderKind ?? status.folderKind ?? null,
         lastSyncAt: result.lastSyncAt ?? status.lastSyncAt,

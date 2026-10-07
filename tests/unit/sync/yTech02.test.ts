@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FOLDER_WARN_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
-import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/domain/sync/stored';
+import { parseStoredAcks, parseStoredIso, SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { SyncPlatformError, type FolderScan, type SyncPlatform } from '../../../src/platform/sync/types';
 import { knownDevices } from '../../../src/sync/maintenance';
 import { readJson } from '../../../src/sync/meta';
@@ -275,6 +275,43 @@ describe('seconde revue, point 6 : début de l’attente d’iCloud', () => {
     platform['scan'] = realScan;
     expect((await a.cycle()).phase).toBe('idle');
     expect(a.service.status().waitingSince ?? null).toBeNull();
+  });
+});
+
+describe('troisième revue, point M1 : début de l’attente d’iCloud stocké invalide', () => {
+  it('analyse du domaine : date ISO valide lue, toute autre valeur illisible (journalisée, jamais lue comme absente)', () => {
+    const logger = createMemorySyncLogger();
+    expect(parseStoredIso(null, 'w', logger)).toBeNull();
+    expect(parseStoredIso(JSON.stringify('2026-10-06T08:00:00.000Z'), 'w', logger)).toBe('2026-10-06T08:00:00.000Z');
+    for (const raw of [JSON.stringify('pas une date'), JSON.stringify('2026-13-45T99:00:00.000Z'), '42', 'null', '{pas du json']) {
+      expect(() => parseStoredIso(raw, 'w', logger), raw).toThrow(SyncStateUnreadableError);
+    }
+    expect(logger.entries.every((e) => e.event === 'state-unreadable')).toBe(true);
+  });
+
+  it('valeur non ISO pendant l’attente : state-unreadable visible et journalisé, valeur remplacée, retiré au cycle suivant', async () => {
+    const a = await first();
+    await a.data.repos.sync.setMeta('waitingSince', JSON.stringify('pas une date'));
+    patchScan(a, (scan) => ({ ...scan, devices: scan.devices.map((d) => ({ ...d, pending: [{ file: 'state.ctx', availability: 'cloud' as const }] })) }));
+    const status = await a.cycle();
+    expect(status.phase).toBe('waiting-icloud');
+    expect(status.stateUnreadable).toBe(true);
+    expect(events(a, 'state-unreadable')).toContainEqual({ where: 'sync_meta.waitingSince' });
+    const now = new Date(a.clock.nowMs()).toISOString();
+    expect(await readJson<string>(a.data.repos, 'waitingSince')).toBe(now);
+    const next = await a.cycle();
+    expect(next.stateUnreadable ?? false).toBe(false);
+    expect(Number.isNaN(Date.parse(next.waitingSince ?? ''))).toBe(false);
+  });
+
+  it('valeur non ISO hors attente : state-unreadable visible, valeur effacée, retiré au cycle suivant', async () => {
+    const a = await first();
+    await a.data.repos.sync.setMeta('waitingSince', '42');
+    const status = await a.cycle();
+    expect(status.phase).toBe('idle');
+    expect(status.stateUnreadable).toBe(true);
+    expect(await a.data.repos.sync.getMeta('waitingSince')).toBeNull();
+    expect((await a.cycle()).stateUnreadable ?? false).toBe(false);
   });
 });
 

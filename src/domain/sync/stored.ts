@@ -1,4 +1,4 @@
-import type { DeviceId } from '../types';
+import type { DeviceId, IsoDateTime } from '../types';
 import { isDeviceAck, type DeviceAck } from './format';
 
 /**
@@ -55,3 +55,19 @@ export function parseStoredAcks(raw: string, where: string, log: StoredStateLog)
   return out;
 }
 
+
+/** Date ISO complète en UTC telle qu'écrite par `toISOString()`. */
+const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
+
+/**
+ * Troisième revue, point M1 : seule analyse d'une date stockée (`sync_meta.waitingSince`) : absente → null ; chaîne ISO valide → la date ;
+ * toute autre valeur (JSON corrompu, nombre, texte, date impossible) → journalisée, `SyncStateUnreadableError` (jamais lue comme absente).
+ */
+export function parseStoredIso(raw: string | null, where: string, log: StoredStateLog): IsoDateTime | null {
+  if (raw === null) return null;
+  const value = parseStoredJson(raw, where, log);
+  if (typeof value !== 'string' || !ISO_UTC.test(value)) return unreadable(where, log);
+  const ms = Date.parse(value);
+  if (Number.isNaN(ms) || new Date(ms).toISOString().slice(0, 19) !== value.slice(0, 19)) return unreadable(where, log);
+  return value as IsoDateTime;
+}
