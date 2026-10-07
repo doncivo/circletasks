@@ -1,5 +1,5 @@
 import type { Repositories } from '../db/repositories';
-import { parseStoredJson, type StoredStateLog } from '../db/repositories/syncRepository';
+import { parseStoredJson, type StoredStateLog } from '../domain/sync/stored';
 import { defaultSyncLogger } from './log';
 
 /** Clés de `sync_meta` (état local du moteur, jamais publié). */

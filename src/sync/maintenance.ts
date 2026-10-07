@@ -1,5 +1,5 @@
 import type { DeletedRow, Repositories, SyncStateRow } from '../db/repositories';
-import { parseStoredAcks, type StoredStateLog } from '../db/repositories/syncRepository';
+import { parseStoredAcks, type StoredStateLog } from '../domain/sync/stored';
 import { defaultSyncLogger } from './log';
 import { CONFLICT_LOG_RETENTION_MONTHS, MAX_CONFLICT_LOG_ROWS, MAX_PARKED_OPS, MAX_UNKNOWN_BYTES, MAX_UNKNOWN_FIELDS, PAGE_ROWS, compareEpochs, isDeviceAck, type DeviceAck, type EpochId, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
 import { BLOCKED, canPurgeDeletion, coversForgotten, publishedAllRead, purgeBefore, purgeHorizon, segmentPurgeable, activeReaders, type KnownDevice, type PurgeHorizon } from '../domain/sync/retention';

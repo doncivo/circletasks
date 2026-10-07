@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { isSyncStateUnreadable, parseStoredAcks, type StoredStateLog } from '../db/repositories/syncRepository';
+import { isSyncStateUnreadable, parseStoredAcks, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';

@@ -1,5 +1,5 @@
 import type { DataAccess } from '../db/repositories';
-import { isSyncStateUnreadable } from '../db/repositories/syncRepository';
+import { isSyncStateUnreadable } from '../domain/sync/stored';
 import type { Clock } from '../domain/clock';
 import type { HlcClock } from '../domain/hlc';
 import { parseReintegrationFailure, REINTEGRATION_FAILURE_META, type ReintegrationFailure } from '../domain/sync/compat';

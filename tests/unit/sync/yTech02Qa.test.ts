@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/db/repositories/syncRepository';
+import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { FOLDER_WARN_BYTES, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
 import type { DeviceId } from '../../../src/domain/types';
 import type { FolderScan, SyncPlatform } from '../../../src/platform/sync/types';

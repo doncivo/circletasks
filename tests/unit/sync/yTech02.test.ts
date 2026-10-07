@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { FOLDER_WARN_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, NONCE_WARN_RECORDS } from '../../../src/domain/sync/limits';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
-import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/db/repositories/syncRepository';
+import { parseStoredAcks, SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { SyncPlatformError, type FolderScan, type SyncPlatform } from '../../../src/platform/sync/types';
 import { knownDevices } from '../../../src/sync/maintenance';
 import { readJson } from '../../../src/sync/meta';
@@ -275,5 +275,12 @@ describe('seconde revue, point 6 : début de l’attente d’iCloud', () => {
     platform['scan'] = realScan;
     expect((await a.cycle()).phase).toBe('idle');
     expect(a.service.status().waitingSince ?? null).toBeNull();
+  });
+});
+
+describe('seconde revue, point 5 : analyse des valeurs stockées importée du domaine seulement', () => {
+  it('le repository ne réexporte plus l’analyse (une seule porte : src/domain/sync/stored.ts)', async () => {
+    const repository = await import('../../../src/db/repositories/syncRepository');
+    for (const name of ['parseStoredAcks', 'parseStoredJson', 'isSyncStateUnreadable', 'SyncStateUnreadableError']) expect(name in repository, name).toBe(false);
   });
 });

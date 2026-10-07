@@ -10,12 +10,6 @@ import type { Hlc, IsoDateTime } from '../../domain/types';
  * jamais concaténé à une requête : il n'est passé qu'en paramètre lié (`sync_unknown`, `sync_parked`, `conflict_log`).
  */
 
-/**
- * Valeurs JSON stockées de l'état local de la synchro : analyse pure dans `src/domain/sync/stored.ts` (revue, suggestion 12), réexportée
- * pour les appelants du repository ; l'accès à la base reste ici.
- */
-export { isSyncStateUnreadable, parseStoredAcks, parseStoredJson, SyncStateUnreadableError, type StoredStateLog } from '../../domain/sync/stored';
-
 /** Entrée de la file d'envoi (Y-05). */
 export interface OutboxEntry {
   readonly seq: number;

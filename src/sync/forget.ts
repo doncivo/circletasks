@@ -1,5 +1,5 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { parseStoredAcks } from '../db/repositories/syncRepository';
+import { parseStoredAcks } from '../domain/sync/stored';
 import { isSyncDeviceId, type DeviceAck, type ForgottenDevice, type PublishedDeviceState } from '../domain/sync/format';
 import { PAGE_ROWS } from '../domain/sync/limits';
 import { hlcDevice } from '../domain/sync/parse';
