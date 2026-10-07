@@ -31,9 +31,17 @@ describe('ligne de Réglages', () => {
     expect(statusLine(waiting({ lastSyncAt: null }), now)).toBe(t('sync.status.waitingIcloud'));
   });
 
-  it('les textes fr et en invitent à vérifier iCloud pour Windows et le dossier', () => {
-    expect(t('sync.status.waitingIcloudLong', { age: 'x' })).toMatch(/iCloud pour Windows/);
-    expect(t('sync.status.waitingIcloudLong', { age: 'x' })).toMatch(/dossier/);
+  it('seconde revue, point 2 : texte selon la plateforme de cet appareil (PC, iPhone), neutre si elle est inconnue', () => {
+    const now = last + WAITING_ICLOUD_LONG_MS;
+    const self = (platform: 'windows' | 'ios') => [{ deviceId: SELF, platform, self: true, lastReadAt: null, status: 'active' as const }];
+    const age = formatSyncAge(LAST, now);
+    expect(statusLine(waiting({ devices: self('windows') }), now)).toBe(t('sync.status.waitingIcloudLongWindows', { age }));
+    expect(statusLine(waiting({ devices: self('ios') }), now)).toBe(t('sync.status.waitingIcloudLongIos', { age }));
+    expect(t('sync.status.waitingIcloudLongWindows', { age })).toMatch(/iCloud pour Windows/);
+    expect(t('sync.status.waitingIcloudLongIos', { age })).toMatch(/Réglages/);
+    expect(t('sync.status.waitingIcloudLongIos', { age })).not.toMatch(/Windows/);
+    expect(t('sync.status.waitingIcloudLong', { age })).not.toMatch(/Windows/);
+    expect(t('sync.status.waitingIcloudLong', { age })).toMatch(/dossier/);
   });
 });
 
@@ -55,7 +63,7 @@ describe('bandeau', () => {
     const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined });
     await integration.refreshed();
     expect(useAppStatusStore.getState().sources.waitingIcloud?.message).toBe(statusLine(sync.status(), db.clock.nowMs()));
-    expect(useAppStatusStore.getState().sources.waitingIcloud?.message).toContain('iCloud pour Windows');
+    expect(useAppStatusStore.getState().sources.waitingIcloud?.message).toContain('24 h');
     integration.dispose();
   });
 });

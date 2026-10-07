@@ -114,6 +114,22 @@ export function waitingLong(status: Pick<SyncStatus, 'phase' | 'lastSyncAt'>, no
   return status.phase === 'waiting-icloud' && status.lastSyncAt !== null && nowMs - Date.parse(status.lastSyncAt) >= WAITING_ICLOUD_LONG_MS;
 }
 
+/**
+ * Seconde revue, point 2 : texte d'attente prolongée selon la plateforme de cet appareil (ligne `self` d'APPAREILS) : PC, iCloud pour
+ * Windows ; iPhone, iCloud Drive dans Réglages ; inconnue, texte neutre.
+ */
+function waitingLongText(status: SyncStatus, nowMs: number): string {
+  const age = formatSyncAge(status.lastSyncAt as string, nowMs);
+  switch (status.devices.find((d) => d.self)?.platform) {
+    case 'windows':
+      return t('sync.status.waitingIcloudLongWindows', { age });
+    case 'ios':
+      return t('sync.status.waitingIcloudLongIos', { age });
+    default:
+      return t('sync.status.waitingIcloudLong', { age });
+  }
+}
+
 /** Sous-ligne de la ligne « iCloud Drive / CircleTasks » de Réglages. */
 export function statusLine(status: SyncStatus, nowMs: number): string {
   if (failureShown(status) && status.reintegrationFailure) return failureLine(status.reintegrationFailure.fields);
@@ -126,7 +142,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return t('sync.status.syncingPhase');
     case 'waiting-icloud':
       // Audit (point bas 8) : une attente qui dure n'est pas un simple délai (référence : dernière synchro complète).
-      if (waitingLong(status, nowMs)) return t('sync.status.waitingIcloudLong', { age: formatSyncAge(status.lastSyncAt as string, nowMs) });
+      if (waitingLong(status, nowMs)) return waitingLongText(status, nowMs);
       return status.errorCode ? errorText(status.errorCode) : t('sync.status.waitingIcloud');
     case 'restore-choice':
       return t('sync.status.restoreChoice');
