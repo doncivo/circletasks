@@ -2,6 +2,8 @@
 
 Ce guide est pour l'iPhone 16 Pro Max (iOS 18 ou plus). Il ne demande ni Mac ni compte Apple Developer payant : un Apple ID gratuit suffit. L'installation de départ se fait une seule fois depuis le PC Windows ; ensuite tout se passe sur l'iPhone.
 
+Durée : 15 minutes environ, lecture comprise (iTunes et iloader déjà téléchargés). Ensuite, une mise à jour prend 2 minutes.
+
 Un Apple ID gratuit limite à 3 apps installées hors App Store. SideStore en occupe une, CircleTasks une autre. Les apps ainsi installées expirent au bout de 7 jours : SideStore les renouvelle (étape 8).
 
 ## Ce qu'il faut avoir
@@ -40,7 +42,7 @@ SideStore parle à l'iPhone lui-même par un VPN local. Installe **LocalDevVPN**
 
 1. Ouvre SideStore, onglet « Sources », bouton « + ».
 2. Colle l'adresse : `https://raw.githubusercontent.com/doncivo/circletasks-releases/main/source.json`
-3. Valide. CircleTasks apparaît dans la source.
+3. Valide. CircleTasks apparaît dans la source (identifiant `fr.circletasks.planner`).
 
 ## 6. Installer CircleTasks
 
@@ -64,7 +66,12 @@ Quand une nouvelle version est publiée, elle apparaît dans la source avec ses 
 
 ## Pour publier une version (une fois, côté GitHub)
 
-La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > New environment, nom `releases`, coche « Required reviewers » et ajoute-toi. Ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication (tag `ios-vX.Y.Z` ou lancement manuel avec « publish ») attend ton bouton « Approve ».
+La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > `releases` (New environment s'il n'existe pas) :
+
+1. Coche « Required reviewers » et ajoute-toi.
+2. Dans « Deployment branches and tags », garde seulement les tags `ios-v*` et `v*` : retire `main`.
+
+Ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication attend ton bouton « Approve ». Seul un tag `ios-vX.Y.Z` publie (X.Y.Z = version de l'app) ; un lancement du workflow « Build iOS » sur une branche produit seulement l'IPA en artefact, même avec « publish » coché.
 
 ## Si ça se passe mal
 

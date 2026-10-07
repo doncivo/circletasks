@@ -45,4 +45,8 @@
 
 ## Livraison
 
+- [ ] I-01 installation : en suivant `docs/install-iphone.md`, SideStore puis CircleTasks installés en moins de 15 minutes (chronomètre, iTunes et iloader déjà téléchargés).
+- [ ] I-01 premier lancement : après approbation du profil (Réglages > Général > VPN et gestion de l'appareil), CircleTasks s'ouvre sur l'écran Aujourd'hui.
+- [ ] I-01 mise à jour : créer une tâche, installer la version suivante par SideStore (« Mettre à jour »), la tâche est toujours là.
+- [ ] I-01 source : la source `https://raw.githubusercontent.com/doncivo/circletasks-releases/main/source.json` s'ajoute dans SideStore sans erreur et affiche l'icône et les notes de version.
 - [ ] I-01 à I-06 (installation SideStore, expiration hebdomadaire, Face ID, logs, autorisations, mise à jour) puis REL-01 à REL-03 : les parcours 10 et 11 verts sur PC et iPhone entrent dans REL-01.

@@ -1,5 +1,8 @@
 # Build iPhone sans Mac (PRD section 7, ADR 0007).
 # Déclenchement manuel ou sur tag ios-v* uniquement : les minutes macOS d'un dépôt privé coûtent 10 fois plus.
+# Lancement sur une branche de lot (I-01) : gh workflow run build-ios.yml --ref <branche> -f publish=false.
+# Publication seulement sur un tag ios-v* (push du tag, ou lancement manuel sur ce tag avec publish),
+# après approbation de l'environnement releases ; jamais depuis une branche, même avec publish coché.
 # L'IPA n'est pas signée : SideStore la signe sur l'iPhone avec l'Apple ID gratuit.
 # Le tag iOS (ios-vX.Y.Z) est distinct du tag PC (vX.Y.Z) qui déclenche build-windows.yml.
 name: Build iOS
@@ -8,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       publish:
-        description: "Publier l'IPA et source.json sur circletasks-releases (environnement releases + secret RELEASES_TOKEN)"
+        description: "Publier l'IPA et source.json sur circletasks-releases (sur un tag ios-v* seulement ; environnement releases + secret RELEASES_TOKEN)"
         type: boolean
         default: false
   push:
@@ -43,7 +46,7 @@ jobs:
           fi
 
       - name: Rust stable et cible iOS
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (branche stable au 2026-10-07)
         with:
           targets: aarch64-apple-ios
 
@@ -103,10 +106,36 @@ jobs:
           du -sh "$APP" "$APP/$EXE"
           ls "$APP"
 
+      # Contrat des permissions (I-01) : chaque plugin déclare ses clés dans scripts/ios/plist-contract.json.
+      # Le Info.plist de l'IPA est binaire : converti en XML, gardé en artefact pour source.json (appPermissions).
+      - name: Contrat des permissions Info.plist
+        run: |
+          set -euo pipefail
+          rm -rf info && mkdir -p info
+          plutil -convert xml1 -o info/Info.plist "$RUNNER_TEMP/check/Payload/CircleTasks.app/Info.plist"
+          node scripts/ios/check-plist-contract.mjs scripts/ios/plist-contract.json info/Info.plist
+          PB=/usr/libexec/PlistBuddy
+          USAGES=$( (grep -o '<key>NS[A-Za-z]*UsageDescription</key>' info/Info.plist || true) | sed 's/<[^>]*>//g' | tr '\n' ' ')
+          {
+            echo "### IPA CircleTasks (${GITHUB_REF_NAME})"
+            echo ""
+            echo "- Taille : $(stat -f%z ipa/CircleTasks.ipa) octets"
+            echo "- SHA-256 : $(shasum -a 256 ipa/CircleTasks.ipa | cut -d' ' -f1)"
+            echo "- Version : $($PB -c 'Print :CFBundleShortVersionString' info/Info.plist) ($($PB -c 'Print :CFBundleVersion' info/Info.plist))"
+            echo "- Descriptions d'usage : ${USAGES:-aucune}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: CircleTasks-ipa
           path: ipa/CircleTasks.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CircleTasks-info-plist
+          path: info/Info.plist
           if-no-files-found: error
           retention-days: 30
 
@@ -120,11 +149,12 @@ jobs:
             src-tauri/gen/apple/project.yml
           if-no-files-found: ignore
 
-  # Publication : demandée explicitement (input publish, faux par défaut) ou sur tag ios-v*.
-  # L'environnement « releases » exige l'approbation d'Ali (réglage GitHub, voir ADR 0007).
+  # Publication : tag ios-v* seulement (push du tag, ou lancement manuel sur le tag avec publish).
+  # Une branche n'est jamais publiée, même avec publish coché (I-01). L'environnement « releases »
+  # porte l'approbation d'Ali (réglage GitHub, voir ADR 0007).
   publish:
     needs: ios
-    if: inputs.publish == true || startsWith(github.ref, 'refs/tags/ios-v')
+    if: startsWith(github.ref, 'refs/tags/ios-v') && (github.event_name == 'push' || inputs.publish == true)
     runs-on: ubuntu-latest
     environment: releases
     permissions:
@@ -139,18 +169,25 @@ jobs:
           name: CircleTasks-ipa
           path: ipa
 
+      - uses: actions/download-artifact@v4
+        with:
+          name: CircleTasks-info-plist
+          path: info
+
       - name: Publier sur circletasks-releases
         env:
           GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
         run: |
           set -euo pipefail
+          # Seconde barrière, indépendante de la condition du job : jamais de publication hors tag ios-v*.
+          case "${GITHUB_REF}" in refs/tags/ios-v*) ;; *) echo "::error::Publication refusée hors tag ios-v* (${GITHUB_REF})"; exit 1;; esac
           if [ -z "${GH_TOKEN:-}" ]; then
             echo "::error::Secret RELEASES_TOKEN absent : publication impossible (l'IPA reste en artefact)."
             exit 1
           fi
           VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
           TAG="ios-v${VERSION}"
-          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then
+          if [ "${TAG}" != "${GITHUB_REF_NAME}" ]; then
             echo "::error::Le tag ${GITHUB_REF_NAME} ne correspond pas à la version ${VERSION}"
             exit 1
           fi
@@ -160,13 +197,25 @@ jobs:
           # Le jeton passe par le credential helper de gh, jamais dans l'URL ni dans .git/config.
           gh auth setup-git
           git clone "https://github.com/${REPO}.git" releases
-          node scripts/ios/make-source-json.mjs "$VERSION" "$IPA_URL" ipa/CircleTasks.ipa "$NOTES" releases/source.json > source.new.json
+          node scripts/ios/make-source-json.mjs --version "$VERSION" --ipa ipa/CircleTasks.ipa --info-plist info/Info.plist \
+            --url "$IPA_URL" --notes "$NOTES" --existing releases/source.json > source.new.json
           gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" --latest=false \
             || gh release upload "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --clobber
           cp source.new.json releases/source.json
+          # iconURL est obligatoire pour SideStore (StoreApp.swift) : icône servie par le dépôt public.
+          cp src-tauri/icons/icon.png releases/icon.png
           cd releases
           git config user.name "circletasks-ci"
           git config user.email "ci@users.noreply.github.com"
-          git add source.json
+          git add source.json icon.png
           git commit -m "source.json: iPhone ${VERSION}" || echo "Rien à valider"
-          git push
+          # Le dépôt public a pu bouger depuis le clone (publication PC) : rebase avant le push,
+          # une seule nouvelle tentative si le push est refusé, sinon échec visible du job.
+          git pull --rebase
+          if ! git push; then
+            echo "::warning::Push de source.json refusé, nouvelle tentative après rebase."
+            if ! { git pull --rebase && git push; }; then
+              echo "::error::Push de source.json impossible : l'IPA est publiée mais la source SideStore n'est pas à jour. Relancer la publication."
+              exit 1
+            fi
+          fi
