@@ -1,6 +1,6 @@
-import { isDeviceAck, type DeviceAck, type SyncValue } from '../../domain/sync/format';
+import type { SyncValue } from '../../domain/sync/format';
 import type { SyncTable } from '../../domain/sync/syncTables';
-import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
+import type { Hlc, IsoDateTime } from '../../domain/types';
 
 /**
  * Accès aux tables de la synchronisation (ADR 0011, sections 3, 4.3, 5.4, 7.2, 9.1 et 11.2 ; Y-02, Y-05, Y-09).
@@ -10,57 +10,11 @@ import type { DeviceId, Hlc, IsoDateTime } from '../../domain/types';
  * jamais concaténé à une requête : il n'est passé qu'en paramètre lié (`sync_unknown`, `sync_parked`, `conflict_log`).
  */
 
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Valeurs JSON stockées (Y-TECH-02, point 4 ; ADR 0011 §19 point 7)
-// ---------------------------------------------------------------------------------------------------------------------------------
-
-/** Journal des incidents de lecture (forme de `SyncLogger` de `src/sync/log.ts`) : codes et noms seulement, jamais la valeur lue. */
-export interface StoredStateLog {
-  log(event: string, detail?: Readonly<Record<string, string | number | boolean | null>>): void;
-}
-
 /**
- * Valeur stockée de l'état local de la synchro (`sync_meta`, `sync_state.last_acks`) illisible : état `state-unreadable` (ADR 0011 §19
- * point 7), jamais lue comme « aucune ». `code` : code de cycle (`io`, aucun code d'erreur nouveau) ; `where` : clé ou colonne, sans valeur.
+ * Valeurs JSON stockées de l'état local de la synchro : analyse pure dans `src/domain/sync/stored.ts` (revue, suggestion 12), réexportée
+ * pour les appelants du repository ; l'accès à la base reste ici.
  */
-export class SyncStateUnreadableError extends Error {
-  override readonly name = 'SyncStateUnreadableError';
-  readonly code = 'io';
-  constructor(readonly where: string) {
-    super(`état local de la synchro illisible : ${where}`);
-  }
-}
-
-/** Erreur d'un état local illisible (reconnue par sa classe, après un `throw` ou une promesse rejetée). */
-export function isSyncStateUnreadable(error: unknown): error is SyncStateUnreadableError {
-  return error instanceof SyncStateUnreadableError;
-}
-
-function unreadable(where: string, log: StoredStateLog): never {
-  log.log('state-unreadable', { where });
-  throw new SyncStateUnreadableError(where);
-}
-
-/** Seule analyse d'une valeur JSON stockée : JSON corrompu → journalisé, `SyncStateUnreadableError`. */
-export function parseStoredJson(raw: string, where: string, log: StoredStateLog): unknown {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return unreadable(where, log);
-  }
-}
-
-/** Seule analyse des accusés stockés (`sync_state.last_acks`) : objet d'accusés valides, sinon `SyncStateUnreadableError` journalisée. */
-export function parseStoredAcks(raw: string, where: string, log: StoredStateLog): Map<DeviceId, DeviceAck> {
-  const value = parseStoredJson(raw, where, log);
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) return unreadable(where, log);
-  const out = new Map<DeviceId, DeviceAck>();
-  for (const [id, ack] of Object.entries(value as Record<string, unknown>)) {
-    if (!isDeviceAck(ack)) return unreadable(where, log);
-    out.set(id as DeviceId, ack);
-  }
-  return out;
-}
+export { isSyncStateUnreadable, parseStoredAcks, parseStoredJson, SyncStateUnreadableError, type StoredStateLog } from '../../domain/sync/stored';
 
 /** Entrée de la file d'envoi (Y-05). */
 export interface OutboxEntry {

@@ -1,5 +1,6 @@
 import { readLimit } from '../../../../src/sync/forget';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
+import { SYNC_TEST_FILES } from '../syncTestFiles';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { migrations } from '../../../../src/db/migrations';
@@ -65,13 +66,7 @@ describe('aucun échec silencieux (critère 17)', () => {
 describe('aucun délai réel (critère 21)', () => {
   it('ni setTimeout, ni setInterval, ni sleep, ni attente temporisée dans reset.ts et les tests de la story', () => {
     // Y-TECH-02 : tous les tests de la synchro (tests/unit/sync/**, src/features/sync/**), plus seulement ceux de Y-11.
-    const under = (dir: string): string[] =>
-      readdirSync(join(root, dir)).flatMap((name) => {
-        const path = `${dir}/${name}`;
-        if (statSync(join(root, path)).isDirectory()) return under(path);
-        return /\.test\.tsx?$/.test(name) && !path.endsWith('Hygiene.test.ts') ? [path] : [];
-      });
-    const files = ['src/sync/reset.ts', ...under('tests/unit/sync'), ...under('src/features/sync')];
+    const files = ['src/sync/reset.ts', ...SYNC_TEST_FILES];
     expect(files.length).toBeGreaterThan(50);
     for (const file of files) {
       const text = read(file);

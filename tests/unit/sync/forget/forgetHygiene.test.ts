@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { SYNC_TEST_FILES } from '../syncTestFiles';
 
 /**
  * Y-10 critère 20 (exigence d'Ali) : aucun test de la story ne dépend d'un délai réel, aucun test instable n'est « réparé » par une attente
@@ -43,23 +44,6 @@ const FORBIDDEN: readonly [RegExp, string][] = [
   [/\bretries\s*:/, 'retries'],
 ];
 
-/** Fichiers de test (`*.test.ts`, `*.test.tsx`) sous un dossier, récursivement, en chemins relatifs à la racine. */
-function testFilesUnder(dir: string): string[] {
-  const out: string[] = [];
-  for (const name of readdirSync(new URL(dir + '/', root))) {
-    const path = `${dir}/${name}`;
-    if (statSync(new URL(path, root)).isDirectory()) out.push(...testFilesUnder(path));
-    // Les garde-fous eux-mêmes citent les motifs interdits : exclus.
-    else if (/\.test\.tsx?$/.test(name) && !name.endsWith('Hygiene.test.ts')) out.push(path);
-  }
-  return out.sort();
-}
-
-/**
- * Y-TECH-02 (consigne d'Ali) : le garde-fou couvre tous les tests de la synchro, `tests/unit/sync/**` et `src/features/sync/**`, pas
- * seulement ceux de Y-10 : aucune attente par sondage (`waitFor`), aucun délai ni horloge réels, aucun nouvel essai, aucun test désactivé.
- */
-export const SYNC_TEST_FILES = [...testFilesUnder('tests/unit/sync'), ...testFilesUnder('src/features/sync')];
 
 describe('Y-TECH-02 : mêmes interdits dans tous les tests de la synchro (tests/unit/sync/**, src/features/sync/**)', () => {
   it('la liste couvre les deux arborescences', () => {
