@@ -5,7 +5,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { onPairingChange, readJoinView, type JoinView } from './pairingStatus';
 import { syncStore } from './syncStore';
 
-const count = new Intl.NumberFormat('fr-FR');
+import { formatCount } from './syncText';
 
 /**
  * Arrivée du nouvel appareil (Y-06 critère 13 ; sans maquette, composée avec les lignes de Réglages) : « Réception de vos données…
@@ -40,14 +40,14 @@ export function JoinProgress() {
     return (
       <div className="ct-settings__row ct-sync__join">
         <span className="ct-settings__stack">
-          <span role="status">{t('sync.pairing.joinProgress', { done: count.format(done), total: count.format(total) })}</span>
+          <span role="status">{t('sync.pairing.joinProgress', { done: formatCount(done), total: formatCount(total) })}</span>
           <progress className="ct-sync__joinBar" aria-label={t('sync.pairing.joinProgressLabel')} max={Math.max(1, total)} value={Math.min(done, total)} />
         </span>
       </div>
     );
   }
   if (!join) return null;
-  const params = { done: count.format(join.done), total: count.format(join.total) };
+  const params = { done: formatCount(join.done), total: formatCount(join.total) };
   if (join.failure) {
     return (
       <div className="ct-settings__row ct-sync__join" data-testid="sync-join-failure">

@@ -1,7 +1,7 @@
 import type { SyncWarningCode } from '../../domain/syncBanners';
 import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
 import type { DeviceId } from '../../domain/types';
-import { t } from '../../i18n';
+import { getLocale, t } from '../../i18n';
 import { formatStamp, formatTime } from '../../i18n/format';
 import type { SyncDeviceStatus, SyncFolderInfo, SyncStatus } from '../../platform/sync/types';
 import { syncAge } from '../../sync';
@@ -251,3 +251,8 @@ export function folderLabel(info: Pick<SyncFolderInfo, 'label' | 'kind'> | null)
   return info.kind === 'icloud' ? t('sync.folder.icloudLabel', { name: info.label }) : info.label;
 }
 
+
+/** Nombre groupé selon la langue courante (« 1 200 » en français, « 1,200 » en anglais). */
+export function formatCount(value: number): string {
+  return new Intl.NumberFormat(getLocale() === 'fr' ? 'fr-FR' : 'en-US').format(value);
+}

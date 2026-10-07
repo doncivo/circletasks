@@ -13,6 +13,7 @@ import { trashStore } from '../tasks/trashStore';
 import { createMemoryBackup } from '../../platform/backup';
 import { applyRemoteChanges } from './remoteChanges';
 import { SyncStatusLine } from './SyncStatusLine';
+import { formatCount } from './syncText';
 import { createFakeSyncService, nextChange, type FakeSyncService } from './testKit';
 
 /**
@@ -91,6 +92,14 @@ describe('menu de la zone de notification et langue (Y-03 critères 4 et 8)', ()
     expect(english).toBe(t('desktop.tray.sync'));
     expect(english).not.toBe('Synchroniser maintenant');
     expect(english.length).toBeGreaterThan(3);
+  });
+});
+
+describe('nombres de l’arrivée selon la langue (Ordre 4)', () => {
+  it('groupement de milliers suivant la langue courante, pas une locale en dur', () => {
+    expect(formatCount(1200).replace(/\s/g, ' ')).toBe('1 200');
+    setLocale('en');
+    expect(formatCount(1200)).toBe('1,200');
   });
 });
 
