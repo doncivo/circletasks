@@ -25,6 +25,14 @@ describe('ConfirmDialog (T-08)', () => {
     expect(screen.getByText(DESCRIPTION)).toBeInTheDocument();
   });
 
+  it('le corps décrit la boîte (aria-describedby) ; sans corps, aucun lien', () => {
+    renderDialog();
+    expect(screen.getByRole('alertdialog', { name: QUESTION })).toHaveAccessibleDescription(DESCRIPTION);
+    cleanup();
+    render(<ConfirmDialog title={QUESTION} confirmLabel={DELETE} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.getByRole('alertdialog')).not.toHaveAttribute('aria-describedby');
+  });
+
   it('« Supprimer » confirme, « Annuler » annule', () => {
     const { onConfirm, onCancel } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));

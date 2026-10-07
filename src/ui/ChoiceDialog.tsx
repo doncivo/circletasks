@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../i18n';
 import { Button, type ButtonVariant } from './Button';
@@ -34,6 +34,7 @@ export interface ChoiceDialogProps<Id extends string> {
  * <ChoiceDialog title={t('tasks.seriesEditTitle', { title })} options={[{ id: 'occurrence', label: t('tasks.seriesScopeOccurrence') }]} onChoose={apply} onCancel={close} />
  */
 export function ChoiceDialog<Id extends string>({ title, description, options, optionVariant = 'primary', cancelLabel, onChoose, onCancel }: ChoiceDialogProps<Id>) {
+  const descriptionId = useId();
   const ref = useFocusTrap<HTMLDivElement>({ active: true, onEscape: onCancel });
   const cancelRef = useRef<HTMLDivElement>(null);
 
@@ -43,9 +44,9 @@ export function ChoiceDialog<Id extends string>({ title, description, options, o
 
   return createPortal(
     <div className="ct-choice__backdrop">
-      <div ref={ref} role="alertdialog" aria-modal="true" aria-label={title} tabIndex={-1} className="ct-choice">
+      <div ref={ref} role="alertdialog" aria-modal="true" aria-label={title} aria-describedby={description ? descriptionId : undefined} tabIndex={-1} className="ct-choice">
         <h2 className="ct-choice__title">{title}</h2>
-        {description && <p className="ct-choice__description">{description}</p>}
+        {description && <p id={descriptionId} className="ct-choice__description">{description}</p>}
         <div className="ct-choice__options">
           {options.map((option) => (
             <Button key={option.id} variant={optionVariant} fullWidth onClick={() => onChoose(option.id)}>

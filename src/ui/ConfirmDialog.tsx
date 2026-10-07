@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { t } from '../i18n';
 import { Button } from './Button';
@@ -29,6 +29,7 @@ export interface ConfirmDialogProps {
  * <ConfirmDialog title={t('tasks.deleteConfirmTitle', { title })} confirmLabel={t('tasks.deleteConfirm')} onConfirm={remove} onCancel={close} />
  */
 export function ConfirmDialog({ title, description, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmDialogProps) {
+  const descriptionId = useId();
   const ref = useFocusTrap<HTMLDivElement>({ active: true, onEscape: onCancel });
   const cancelRef = useRef<HTMLDivElement>(null);
 
@@ -40,9 +41,9 @@ export function ConfirmDialog({ title, description, confirmLabel, cancelLabel, o
 
   return createPortal(
     <div className="ct-confirm__backdrop">
-      <div ref={ref} role="alertdialog" aria-modal="true" aria-label={title} tabIndex={-1} className="ct-confirm">
+      <div ref={ref} role="alertdialog" aria-modal="true" aria-label={title} aria-describedby={description ? descriptionId : undefined} tabIndex={-1} className="ct-confirm">
         <h2 className="ct-confirm__title">{title}</h2>
-        {description && <p className="ct-confirm__description">{description}</p>}
+        {description && <p id={descriptionId} className="ct-confirm__description">{description}</p>}
         <div className="ct-confirm__actions">
           <div ref={cancelRef} className="ct-confirm__cancel">
             <Button variant="secondary" fullWidth onClick={onCancel}>
