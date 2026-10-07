@@ -400,3 +400,27 @@ describe('cinquième revue, point 3 : effacement du trou seulement à la lecture
     expect(await readJson(b.data.repos, META.segmentGaps)).toBeNull();
   });
 });
+
+describe('cinquième revue, point 4 : trou sur soi, hors règle', () => {
+  it('reprise demandée, son propre j-1 absent : une reprise sur 3 cycles, self-segment-gap journalisé, aucune entrée pour soi, soi actif', async () => {
+    const a = await deviceA();
+    await a.createTask('T0');
+    await a.cycle();
+    refuseNextAppend(a);
+    await a.createTask('T1');
+    await a.cycle();
+    a.folder.devices.get(a.id)?.epochs.get(epochOf(a))?.segments.delete(1);
+    await a.data.repos.sync.setMeta(META.segmentGaps, JSON.stringify({ [a.id]: { epoch: epochOf(a), segment: 0, author: null, seq: null, since: '2026-10-05T08:00:00.000Z' } }));
+    await a.data.repos.sync.setMeta(META.resume, 'true');
+    const before = a.logger.entries.length;
+    for (let i = 0; i < 3; i += 1) {
+      a.clock.advance(60_000);
+      await a.cycle();
+      expect(await readJson<Record<string, unknown>>(a.data.repos, META.segmentGaps) ?? {}, `cycle ${String(i)}`).not.toHaveProperty(a.id);
+    }
+    expect(resumes(a, before)).toBe(1);
+    expect(a.logger.entries.slice(before).filter((e) => e.event === 'self-segment-gap')).toHaveLength(1);
+    expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === a.id)?.status).toBe('active');
+    expect(await titlesOf(a)).toEqual(['T0', 'T1']);
+  });
+});

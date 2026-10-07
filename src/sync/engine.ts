@@ -527,7 +527,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       for (const [id, gap] of [...segmentGaps]) {
         // Cinquième revue, point 3 : changement d'époque, oubli, retrait (plus de ligne `sync_state`) ; une absence au scan ne l'efface pas.
         const forgotten = forgetView.order.has(id);
-        if (gap.epoch !== currentEpoch || forgotten || !rowsNow.has(id)) await clearGap(id, rowsNow.get(id), !forgotten);
+        // Cinquième revue, point 4 : une entrée sur soi (règle précédente) est effacée.
+        if (id === self || gap.epoch !== currentEpoch || forgotten || !rowsNow.has(id)) await clearGap(id, rowsNow.get(id), !forgotten);
       }
     }
     /** Aucun instantané éligible trouvé par une reprise de ce cycle (§14.2) : oublié non couvert. */
@@ -573,6 +574,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const hole = async (id: DeviceId, epochRead: EpochId, segment: number): Promise<void> => {
         if (forgetView.order.has(id)) {
           needResume = true;
+          return;
+        }
+        // Cinquième revue, point 4 : soi hors règle. Une reprise au plus par cycle ; ensuite la ligne est ignorée (l'étape 5 replace le
+        // curseur sur soi à sa tête ; ses écritures sont dans sa base ou dans l'instantané qui a permis leur purge).
+        if (id === self) {
+          if (!resumed) needResume = true;
+          else logger.log('self-segment-gap', { segment });
           return;
         }
         allRead = false;
