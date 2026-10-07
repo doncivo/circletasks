@@ -191,13 +191,42 @@ describe('effacement du trou', () => {
   });
 });
 
-describe('trous mémorisés illisibles', () => {
-  it('sync_meta.segmentGaps corrompu : state-unreadable visible, journalisé, jamais lu comme « aucun trou »', async () => {
+describe('cinquième revue, point 2 : valeurs locales du trou illisibles', () => {
+  it('sync_meta.segmentGaps corrompu : state-unreadable au premier cycle (journalisé), lu comme aucun trou, réécrit, lignes corrupt remises à active ; second cycle propre', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    await b.data.repos.sync.setMeta(META.segmentGaps, JSON.stringify({ [A_ID]: { epoch: 'pas une époque', segment: 1, author: null, seq: null, since: '2026-10-05T08:00:00.000Z' } }));
+    const before = b.logger.entries.length;
+    dropFirstSegment(a, b);
+    const first = await b.cycle();
+    expect(first.stateUnreadable).toBe(true);
+    expect(b.logger.entries.slice(before).filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.segmentGaps' });
+    dropFirstSegment(a, b);
+    const second = await b.cycle();
+    expect(second.stateUnreadable ?? false).toBe(false);
+    // Trou retrouvé par la règle (instantané essayé inchangé), jamais une reprise de plus.
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    expect(resumes(b)).toBe(1);
+  });
+
+  it('ligne corrupt remise à active quand segmentGaps est illisible', async () => {
     const a = await deviceA();
-    await a.data.repos.sync.setMeta(META.segmentGaps, JSON.stringify({ [B_ID]: { epoch: 'pas une époque', segment: 1, author: null, seq: null, since: '2026-10-05T08:00:00.000Z' } }));
-    const status = await a.cycle();
-    expect(status.stateUnreadable).toBe(true);
-    expect(a.logger.entries.filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.segmentGaps' });
+    await a.data.repos.sync.saveState(B_ID, { status: 'corrupt' });
+    await a.data.repos.sync.setMeta(META.segmentGaps, '{pas du json');
+    expect((await a.cycle()).stateUnreadable).toBe(true);
+    expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === B_ID)?.status).toBe('active');
+    expect(await readJson(a.data.repos, META.segmentGaps)).toBeNull();
+    expect((await a.cycle()).stateUnreadable ?? false).toBe(false);
+  });
+
+  it('sync_meta.resumeTried corrompu : state-unreadable au premier cycle, lu comme absent, réécrit ; second cycle propre', async () => {
+    const a = await deviceA();
+    await a.data.repos.sync.setMeta(META.resumeTried, '{"epoch":42}');
+    expect((await a.cycle()).stateUnreadable).toBe(true);
+    expect(a.logger.entries.filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.resumeTried' });
+    expect(await readJson(a.data.repos, META.resumeTried)).toBeNull();
+    expect((await a.cycle()).stateUnreadable ?? false).toBe(false);
   });
 });
 

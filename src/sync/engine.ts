@@ -142,7 +142,7 @@ async function resolveInflight(deps: SyncDeps, writeOwnState: (head: DeviceAck) 
  * échoue ensuite) ; une valeur stockée illisible (`SyncStateUnreadableError`) donne `stateUnreadable` (§19 point 7), jamais « aucune ».
  */
 export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions = {}): Promise<CycleResult> {
-  const seen: { warnings?: SyncWarningCode[] } = {};
+  const seen: CycleSeen = {};
   let result: CycleResult;
   try {
     result = await cycleSteps(deps, hooks, options, seen);
@@ -152,10 +152,12 @@ export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: Cycle
     deps.logger.log('cycle-failed', { code: 'io', unreadable: true });
     result = { ...EMPTY, outcome: 'failed', errorCode: 'io', stateUnreadable: true };
   }
-  return seen.warnings ? { ...result, warnings: seen.warnings } : result;
+  const withWarnings = seen.warnings ? { ...result, warnings: seen.warnings } : result;
+  // Cinquième revue, points 2 et 5 : valeur locale illisible relue vide et réécrite pendant ce cycle : visible pour ce cycle seulement.
+  return seen.unreadable ? { ...withWarnings, stateUnreadable: true } : withWarnings;
 }
 
-async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions, seen: { warnings?: SyncWarningCode[] }): Promise<CycleResult> {
+async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions, seen: CycleSeen): Promise<CycleResult> {
   const { platform, data, deviceId: self, logger } = deps;
   const repos = data.repos;
   let worked = false;
@@ -203,6 +205,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   }
 
   // 1. scan.
+  // Cinquième revue, point 2 : trous et instantané essayé lus avant les lignes connues (une valeur illisible remet les lignes `corrupt`
+  // à `active` avant l'acceptation des états).
+  const segmentGaps = await readSegmentGaps(deps, seen);
+  /** Cinquième revue, point 1 : dernier instantané essayé par une reprise (`sync_meta.resumeTried`). */
+  let resumeTried: ResumeTried | null = await readResumeTried(deps, seen);
   const known = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
   let scan: FolderScan;
   try {
@@ -213,10 +220,6 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   seen.warnings = scanWarnings(scan);
   if (seen.warnings.length > 0) logger.log('scan-warnings', { codes: seen.warnings.join(',') });
   await repos.sync.saveState(self, { isSelf: true, platform: deps.devicePlatform, appVersion: deps.appVersion, status: 'active' });
-  /** Quatrième revue, point B : trous mémorisés (illisibles : `state-unreadable`, jamais lus comme « aucun »). */
-  const segmentGaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, logger);
-  /** Cinquième revue, point 1 : dernier instantané essayé par une reprise (`sync_meta.resumeTried`). */
-  let resumeTried: ResumeTried | null = parseStoredResumeTried(await repos.sync.getMeta(META.resumeTried), `sync_meta.${META.resumeTried}`, logger);
   const accepted = await acceptStates(deps, scan, known, forgetOrder(scan.forgotten.entries), segmentGaps);
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
@@ -816,6 +819,43 @@ async function readOwnStateMarks(repos: Repositories, log: StoredStateLog): Prom
   } catch (error) {
     if (isSyncStateUnreadable(error)) return [];
     throw error;
+  }
+}
+
+/** Constats du cycle hors étapes : avertissements du scan, valeur locale illisible relue vide (cinquième revue, points 2 et 5). */
+interface CycleSeen {
+  warnings?: SyncWarningCode[];
+  unreadable?: boolean;
+}
+
+/**
+ * Cinquième revue, point 2 (ADR 0011 §5.5) : trous mémorisés. Illisible : journalisé (`state-unreadable`), `stateUnreadable` pour ce cycle,
+ * lu comme « aucun trou », réécrit vide et chaque ligne `corrupt` remise à `active` (un `corrupt` de l'audit M3 est retrouvé à la
+ * lecture suivante) ; jamais un `state-unreadable` à chaque cycle.
+ */
+async function readSegmentGaps(deps: SyncDeps, seen: CycleSeen): Promise<Map<DeviceId, StoredSegmentGap>> {
+  try {
+    return parseStoredSegmentGaps(await deps.data.repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, deps.logger);
+  } catch (error) {
+    if (!isSyncStateUnreadable(error)) throw error;
+    seen.unreadable = true;
+    await deps.data.transaction(async (tx) => {
+      await writeJson(tx, META.segmentGaps, null);
+      for (const row of await tx.sync.getStates()) if (row.status === 'corrupt') await tx.sync.saveState(row.deviceId, { status: 'active' });
+    });
+    return new Map<DeviceId, StoredSegmentGap>();
+  }
+}
+
+/** Cinquième revue, point 2 : instantané essayé ; illisible : même règle que les trous (lu comme absent, réécrit vide). */
+async function readResumeTried(deps: SyncDeps, seen: CycleSeen): Promise<ResumeTried | null> {
+  try {
+    return parseStoredResumeTried(await deps.data.repos.sync.getMeta(META.resumeTried), `sync_meta.${META.resumeTried}`, deps.logger);
+  } catch (error) {
+    if (!isSyncStateUnreadable(error)) throw error;
+    seen.unreadable = true;
+    await writeJson(deps.data.repos, META.resumeTried, null);
+    return null;
   }
 }
 
