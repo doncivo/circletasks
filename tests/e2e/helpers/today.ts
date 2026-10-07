@@ -43,7 +43,7 @@ export async function listTitles(page: Page): Promise<string[]> {
 export const todayTab = (page: Page): Locator => page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true });
 
 export async function openToday(page: Page): Promise<void> {
-  await waitForScreenLoaded(page, 'taskdetail');
   await openApp(page);
+  await waitForScreenLoaded(page, 'taskdetail');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
