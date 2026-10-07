@@ -1,13 +1,13 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
-import { parseStoredSegmentGaps, type StoredStateLog } from '../domain/sync/stored';
-import { defaultSyncLogger } from './log';
-import { META } from './meta';
 import { compareVersions, newerKind } from '../domain/sync/compat';
 import { deviceStateOf } from '../domain/sync/devices';
 import { SYNC_FORMAT_MAJOR } from '../domain/sync/format';
 import { hlcIso } from '../domain/sync/parse';
+import { parseStoredSegmentGaps, type StoredStateLog } from '../domain/sync/stored';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import type { SyncDeviceStatus } from '../platform/sync/types';
+import { defaultSyncLogger } from './log';
+import { META } from './meta';
 
 /**
  * Appareils affichés (APPAREILS) d'après `sync_state` : une seule règle pour le moteur (fin de cycle) et les bandeaux A-09 (avant le

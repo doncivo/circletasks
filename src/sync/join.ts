@@ -221,7 +221,10 @@ export function triedTracker(candidates: readonly SnapshotCandidate[], coverage:
     /**
      * Sixième revue, point 1 (ADR 0011 §5.5, « Reprise sûre ») : échec définitif d'une reprise hors arrivée (instantané essayé connu,
      * aucun premier choix en attente d'iCloud, aucune application commencée) : instantané essayé écrit et demande de reprise effacée dans
-     * la même transaction ; chaque cause est ensuite réévaluée par sa propre règle visible. Sans essai connu : rien (demande gardée).
+     * la même transaction ; chaque cause est ensuite réévaluée par sa propre règle visible. Sans essai connu (septième revue, point 4) :
+     * rien, la demande reste posée. Cas atteint quand aucune fin d'instantané éligible n'est encore lisible parce qu'elle attend iCloud
+     * (`pickEligible` rend `waiting` dès le premier choix) : ce n'est pas un échec définitif ; le corps d'un premier choix en attente,
+     * lui, arrête la reprise plus tôt (`waiting`, sixième revue, point 2).
      */
     failDefinitively: async (data: SyncDeps['data']): Promise<void> => {
       const value = decided;
