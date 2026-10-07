@@ -14,8 +14,8 @@ import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
 import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
-import { writeJson } from './meta';
-import { INITIAL_STATUS, statusFromFacts } from './status';
+import { META, readJson, writeJson } from './meta';
+import { INITIAL_STATUS, phaseOf, statusFromFacts } from './status';
 
 /**
  * Service de synchronisation exposé par le conteneur (`AppContainer.sync`, ADR 0011 section 11.2 ; Y-02, Y-03, Y-05).
@@ -149,8 +149,22 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     const forget: SyncForgetStatus | null | undefined = await read('forget', () => readForgetStatus(options.data.repos));
     // Y-11 (exigence d'Ali) : réinitialisation en cours, en échec, à réassocier ou terminée, gardée dans sync_meta.
     const reset: SyncResetStatus | null | undefined = await read('reset', () => readResetStatus(options.data.repos, options.clock.nowMs()));
+    // Seconde revue, point 6 : début de l'attente d'iCloud (sync_meta, survit au redémarrage) ; référence de l'attente prolongée quand
+    // aucune synchro n'a jamais été complète.
+    const waiting = phaseOf(result) === 'waiting-icloud';
+    const waitingSince = await read('waiting', async () => {
+      const stored = await readJson<string>(options.data.repos, META.waitingSince, deps.logger);
+      if (waiting && stored === null) {
+        const since = new Date(options.clock.nowMs()).toISOString();
+        await writeJson(options.data.repos, META.waitingSince, since);
+        return since;
+      }
+      if (!waiting && stored !== null) await writeJson(options.data.repos, META.waitingSince, null);
+      return waiting ? stored : null;
+    });
     publish(
       statusFromFacts(withoutCycleStart(status), result, {
+        waitingSince: waitingSince === undefined ? (waiting ? (status.waitingSince ?? null) : null) : (waitingSince as IsoDateTime | null),
         folderLabel: result.folderLabel ?? status.folderLabel,
         folderKind: result.folderKind ?? status.folderKind ?? null,
         lastSyncAt: result.lastSyncAt ?? status.lastSyncAt,

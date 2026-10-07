@@ -11,7 +11,7 @@ import { INITIAL_STATUS, type SyncStatus } from '../../platform/sync/types';
 import { useAppStatusStore } from '../app/appStatus';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { startSyncIntegration } from './startSync';
-import { formatSyncAge, statusLine } from './syncText';
+import { statusLine } from './syncText';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000f4');
@@ -24,24 +24,25 @@ describe('ligne de Réglages', () => {
   it('sous le seuil : « En attente d’iCloud » ; au seuil : attente prolongée, avec l’âge de la dernière synchro complète', () => {
     expect(statusLine(waiting(), last + WAITING_ICLOUD_LONG_MS - 1)).toBe(t('sync.status.waitingIcloud'));
     const now = last + WAITING_ICLOUD_LONG_MS;
-    expect(statusLine(waiting(), now)).toBe(t('sync.status.waitingIcloudLong', { age: formatSyncAge(LAST, now) }));
+    expect(statusLine(waiting(), now)).toBe(t('sync.status.waitingIcloudLong'));
     // Même avec une cause (iCloud en erreur), la durée prime.
-    expect(statusLine(waiting({ errorCode: 'cloud-pending' }), now)).toBe(t('sync.status.waitingIcloudLong', { age: formatSyncAge(LAST, now) }));
-    // Jamais synchronisé : aucune référence, texte ordinaire.
+    expect(statusLine(waiting({ errorCode: 'cloud-pending' }), now)).toBe(t('sync.status.waitingIcloudLong'));
+    // Seconde revue, point 6 : jamais synchronisé : repli sur le début de l'attente.
     expect(statusLine(waiting({ lastSyncAt: null }), now)).toBe(t('sync.status.waitingIcloud'));
+    expect(statusLine(waiting({ lastSyncAt: null, waitingSince: LAST }), now - 1)).toBe(t('sync.status.waitingIcloud'));
+    expect(statusLine(waiting({ lastSyncAt: null, waitingSince: LAST }), now)).toBe(t('sync.status.waitingIcloudLong'));
   });
 
   it('seconde revue, point 2 : texte selon la plateforme de cet appareil (PC, iPhone), neutre si elle est inconnue', () => {
     const now = last + WAITING_ICLOUD_LONG_MS;
     const self = (platform: 'windows' | 'ios') => [{ deviceId: SELF, platform, self: true, lastReadAt: null, status: 'active' as const }];
-    const age = formatSyncAge(LAST, now);
-    expect(statusLine(waiting({ devices: self('windows') }), now)).toBe(t('sync.status.waitingIcloudLongWindows', { age }));
-    expect(statusLine(waiting({ devices: self('ios') }), now)).toBe(t('sync.status.waitingIcloudLongIos', { age }));
-    expect(t('sync.status.waitingIcloudLongWindows', { age })).toMatch(/iCloud pour Windows/);
-    expect(t('sync.status.waitingIcloudLongIos', { age })).toMatch(/Réglages/);
-    expect(t('sync.status.waitingIcloudLongIos', { age })).not.toMatch(/Windows/);
-    expect(t('sync.status.waitingIcloudLong', { age })).not.toMatch(/Windows/);
-    expect(t('sync.status.waitingIcloudLong', { age })).toMatch(/dossier/);
+    expect(statusLine(waiting({ devices: self('windows') }), now)).toBe(t('sync.status.waitingIcloudLongWindows'));
+    expect(statusLine(waiting({ devices: self('ios') }), now)).toBe(t('sync.status.waitingIcloudLongIos'));
+    expect(t('sync.status.waitingIcloudLongWindows')).toMatch(/iCloud pour Windows/);
+    expect(t('sync.status.waitingIcloudLongIos')).toMatch(/Réglages/);
+    expect(t('sync.status.waitingIcloudLongIos')).not.toMatch(/Windows/);
+    expect(t('sync.status.waitingIcloudLong')).not.toMatch(/Windows/);
+    expect(t('sync.status.waitingIcloudLong')).toMatch(/dossier/);
   });
 });
 

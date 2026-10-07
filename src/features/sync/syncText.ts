@@ -110,23 +110,24 @@ export function failureKinds(tables: readonly string[]): string {
 }
 
 /** Attente d'iCloud prolongée (audit, point bas 8) : plus de `WAITING_ICLOUD_LONG_MS` depuis la dernière synchro complète. */
-export function waitingLong(status: Pick<SyncStatus, 'phase' | 'lastSyncAt'>, nowMs: number): boolean {
-  return status.phase === 'waiting-icloud' && status.lastSyncAt !== null && nowMs - Date.parse(status.lastSyncAt) >= WAITING_ICLOUD_LONG_MS;
+export function waitingLong(status: Pick<SyncStatus, 'phase' | 'lastSyncAt' | 'waitingSince'>, nowMs: number): boolean {
+  // Référence : dernière synchro complète, sinon (jamais synchronisé) début de l'attente (seconde revue, point 6).
+  const since = status.lastSyncAt ?? status.waitingSince ?? null;
+  return status.phase === 'waiting-icloud' && since !== null && nowMs - Date.parse(since) >= WAITING_ICLOUD_LONG_MS;
 }
 
 /**
  * Seconde revue, point 2 : texte d'attente prolongée selon la plateforme de cet appareil (ligne `self` d'APPAREILS) : PC, iCloud pour
  * Windows ; iPhone, iCloud Drive dans Réglages ; inconnue, texte neutre.
  */
-function waitingLongText(status: SyncStatus, nowMs: number): string {
-  const age = formatSyncAge(status.lastSyncAt as string, nowMs);
+function waitingLongText(status: SyncStatus): string {
   switch (status.devices.find((d) => d.self)?.platform) {
     case 'windows':
-      return t('sync.status.waitingIcloudLongWindows', { age });
+      return t('sync.status.waitingIcloudLongWindows');
     case 'ios':
-      return t('sync.status.waitingIcloudLongIos', { age });
+      return t('sync.status.waitingIcloudLongIos');
     default:
-      return t('sync.status.waitingIcloudLong', { age });
+      return t('sync.status.waitingIcloudLong');
   }
 }
 
@@ -142,7 +143,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return t('sync.status.syncingPhase');
     case 'waiting-icloud':
       // Audit (point bas 8) : une attente qui dure n'est pas un simple délai (référence : dernière synchro complète).
-      if (waitingLong(status, nowMs)) return waitingLongText(status, nowMs);
+      if (waitingLong(status, nowMs)) return waitingLongText(status);
       return status.errorCode ? errorText(status.errorCode) : t('sync.status.waitingIcloud');
     case 'restore-choice':
       return t('sync.status.restoreChoice');

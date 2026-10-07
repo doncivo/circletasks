@@ -26,6 +26,8 @@ export const META = {
   segments: 'segments',
   /** Reprise depuis l'instantané demandée (corruption, « Garder », 180 jours). */
   resume: 'resume',
+  /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours (ISO), effacé quand elle cesse. */
+  waitingSince: 'waitingSince',
 } as const;
 
 /** Valeur JSON de `sync_meta` ; absente : null ; illisible : `SyncStateUnreadableError` journalisée (jamais lue comme absente). */

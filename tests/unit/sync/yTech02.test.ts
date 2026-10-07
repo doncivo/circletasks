@@ -256,3 +256,24 @@ describe('revue, point 1 : fenêtre de restauration, état local illisible', () 
     expect(a.service.status().stateUnreadable ?? false).toBe(false);
   });
 });
+
+describe('seconde revue, point 6 : début de l’attente d’iCloud', () => {
+  it('posé au premier cycle en attente, gardé (même après un redémarrage), retiré quand l’attente cesse', async () => {
+    const a = await first();
+    expect(a.service.status().waitingSince ?? null).toBeNull();
+    const platform = a.platform as unknown as Record<string, unknown>;
+    const realScan = platform['scan'];
+    const waitOn = (): void => patchScan(a, (scan) => ({ ...scan, devices: scan.devices.map((d) => ({ ...d, pending: [{ file: 'state.ctx', availability: 'cloud' as const }] })) }));
+    const startedAt = a.clock.nowMs();
+    waitOn();
+    expect((await a.cycle()).phase).toBe('waiting-icloud');
+    expect(a.service.status().waitingSince).toBe(new Date(startedAt).toISOString());
+    a.clock.advance(60_000);
+    await a.restart();
+    await a.cycle();
+    expect(a.service.status().waitingSince, 'gardé après un redémarrage').toBe(new Date(startedAt).toISOString());
+    platform['scan'] = realScan;
+    expect((await a.cycle()).phase).toBe('idle');
+    expect(a.service.status().waitingSince ?? null).toBeNull();
+  });
+});

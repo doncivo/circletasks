@@ -73,12 +73,14 @@ export function statusFromFacts(
     readonly reset?: SyncResetStatus | null;
     /** Y-TECH-02 : une lecture de fin de cycle (conflits, réintégration, oubli, réinitialisation) a échoué. */
     readonly stateUnreadable?: boolean;
+    /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours ; null : aucune. */
+    readonly waitingSince?: IsoDateTime | null;
   },
 ): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(previous, 'stateUnreadable');
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince');
   const warnings = facts.warnings ?? keptWarnings ?? [];
   const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
@@ -91,6 +93,7 @@ export function statusFromFacts(
     ...(reset ? { reset } : {}),
     ...(warnings.length > 0 ? { warnings } : {}),
     ...(unreadable ? { stateUnreadable: true } : {}),
+    ...(extra.waitingSince ? { waitingSince: extra.waitingSince } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

@@ -460,6 +460,11 @@ export interface SyncStatus {
   readonly warnings?: readonly SyncWarningCode[];
   /** Y-TECH-02 (§19 point 7) : une lecture de l'état local de la synchro a échoué (`state-unreadable`) ; absent : non. Facultatif. */
   readonly stateUnreadable?: boolean;
+  /**
+   * Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours (gardé dans `sync_meta`), référence de l'attente prolongée
+   * quand aucune synchro n'a jamais été complète ; absent : aucune attente. Facultatif.
+   */
+  readonly waitingSince?: IsoDateTime | null;
 }
 
 /** Y-11 : étape de la réinitialisation (`sync_meta.resetState`, critère 17). */
