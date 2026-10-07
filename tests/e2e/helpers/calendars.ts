@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { startCaldavSim, startGoogleSim, type CaldavSim, type CaldavSimOptions, type GoogleSim, type GoogleSimOptions } from '../../sim';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e des agendas externes (K-01 à K-04) : simulateurs dédiés à un test, écran Agendas. Aucun compte réel. */
 
@@ -31,6 +32,8 @@ export async function attachSims(page: Page, sims: TestSims): Promise<void> {
 
 /** Ouvre Réglages › Agendas (ligne « Agendas · Rappels Apple »). */
 export async function openCalendarsScreen(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'settingsscreen');
+  await waitForScreenLoaded(page, 'calendarsscreen');
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   const row = page.getByRole('button', { name: /^Agendas · Rappels Apple :/ });
   const heading = page.getByRole('heading', { name: 'Agendas', exact: true });

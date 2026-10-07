@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lazyScreen, preloadScreens, SCREENS_LOADED_ATTRIBUTE } from './lazyScreens';
+import { lazyScreen, preloadScreens, SCREEN_LOADED_PREFIX } from './lazyScreens';
 
 /** Écrans à la demande (PERF-02) : repli neutre, voisin affiché, rendu direct une fois chargé, échec avec « Réessayer », préchargement. */
 function Content() {
@@ -55,6 +55,27 @@ describe('écran chargé à la demande', () => {
     expect(await screen.findByText('Contenu de l’écran')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(calls).toBe(2);
+  });
+});
+
+describe('repère de bloc arrivé (A-04)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('posé quand le bloc de CET écran arrive, pas avant ; posé aussi après un échec (l’écran affiche alors l’erreur)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const html = document.documentElement;
+    let resolve: (value: { default: typeof Content }) => void = () => undefined;
+    const Slow = lazyScreen<object>(() => new Promise((r) => (resolve = r)), 'lenta');
+    render(<Slow />);
+    expect(html).not.toHaveAttribute(SCREEN_LOADED_PREFIX + 'lenta');
+    resolve({ default: Content });
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'lenta', 'true'));
+
+    const Broken = lazyScreen<object>(() => Promise.reject(new Error('bloc illisible')), 'cassee');
+    render(<Broken />);
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'cassee', 'true'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’afficher cet écran.');
   });
 });
 
@@ -129,20 +150,6 @@ describe('préchargement des écrans', () => {
     stop();
     expect(cancel).toHaveBeenCalledWith(2);
   });
-
-  it('A-04 : <html> n’est marqué qu’une fois tous les blocs arrivés (non-régression du clic sur le rapport avant son bloc)', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    document.documentElement.removeAttribute(SCREENS_LOADED_ATTRIBUTE);
-    const pending: Array<() => void> = [];
-    Object.assign(window, { requestIdleCallback: (cb: () => void) => pending.push(cb), cancelIdleCallback: vi.fn() });
-    preloadScreens();
-    // Tous les écrans sont demandés, un par moment d'inactivité ; tant que le dernier pas n'a pas eu lieu, pas de repère.
-    while (pending.length > 0) {
-      expect(document.documentElement).not.toHaveAttribute(SCREENS_LOADED_ATTRIBUTE);
-      pending.shift()?.();
-    }
-    await vi.waitFor(() => expect(document.documentElement).toHaveAttribute(SCREENS_LOADED_ATTRIBUTE, 'true'), { timeout: 30_000 });
-  }, 40_000);
 
   it('sans requestIdleCallback (WebKit) : minuteur de 200 ms entre deux écrans, annulable', () => {
     vi.useFakeTimers();

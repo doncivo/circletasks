@@ -1,6 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { addIsoDays, browserToday } from './schedule';
 import { mondayOf } from './week';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e de l'objectif de la semaine (OB-01 à OB-06), communes aux projets `pc` et `iphone`. */
 
@@ -74,6 +75,7 @@ export const goalScreen = (page: Page): Locator => page.getByRole('heading', { l
 
 /** Ouvre l'écran Objectif depuis Aujourd'hui par l'icône cible. */
 export async function openGoalScreen(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'goalsscreen');
   await goalButton(page).click();
   await expect(goalScreen(page)).toBeVisible();
 }

@@ -1,5 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
 import { isPhone, rowOf } from './today';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e des espaces et projets (ES-01 à ES-05), communes aux projets `pc` et `iphone`. */
 
@@ -16,6 +17,8 @@ export const detailOf = (page: Page): Locator =>
 
 /** Ouvre Réglages › Espaces et projets. */
 export async function openSpacesScreen(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'settingsscreen');
+  await waitForScreenLoaded(page, 'spacesscreen');
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   // L'onglet Réglages rouvre son dernier écran : l'écran Espaces et projets peut déjà être affiché.
   const row = page.getByRole('button', { name: /^Espaces et projets :/ });

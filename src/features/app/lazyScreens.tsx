@@ -15,6 +15,13 @@ type Loader<P> = () => Promise<{ default: ComponentType<P> }>;
 
 const loaders: Array<() => Promise<unknown>> = [];
 
+/** Préfixe de l'attribut posé sur <html> quand le bloc d'un écran est arrivé ou a échoué : repère de disponibilité pour les tests e2e. */
+export const SCREEN_LOADED_PREFIX = 'data-ct-loaded-';
+
+function markLoaded(name: string | undefined): void {
+  if (name !== undefined) document.documentElement.setAttribute(SCREEN_LOADED_PREFIX + name, 'true');
+}
+
 /** Repli neutre : la zone vide de l'écran (même fond que la coquille, aucun texte, aucun saut de mise en page). */
 function Fallback(): ReactElement {
   return <div className="ct-app__placeholder" aria-hidden="true" />;
@@ -54,15 +61,17 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
  * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état). Le composant paresseux est
  * propre à chaque instance : un « Réessayer » n'en touche aucune autre.
  */
-export function lazyScreen<P extends object>(load: Loader<P>): ComponentType<P> {
+export function lazyScreen<P extends object>(load: Loader<P>, name?: string): ComponentType<P> {
   let loaded: ComponentType<P> | null = null;
   const remember = (): Promise<{ default: ComponentType<P> }> =>
     loaded
       ? Promise.resolve({ default: loaded })
-      : load().then((module) => {
-          loaded = module.default;
-          return module;
-        });
+      : load()
+          .then((module) => {
+            loaded = module.default;
+            return module;
+          })
+          .finally(() => markLoaded(name));
   loaders.push(remember);
   return function LazyScreen(props: P): ReactElement {
     const [direct] = useState(() => loaded);
@@ -84,47 +93,36 @@ export function lazyScreen<P extends object>(load: Loader<P>): ComponentType<P> 
   };
 }
 
-export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })));
-export const DoneTasksScreen = lazyScreen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })));
-export const TrashScreen = lazyScreen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })));
-export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })));
-export const SomedayScreen = lazyScreen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })));
-export const GoalsScreen = lazyScreen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })));
-export const WeekScreen = lazyScreen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })));
-export const RoutinesScreen = lazyScreen<object>(() => import('../routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen })));
-export const EventsScreen = lazyScreen<object>(() => import('../events/EventsScreen').then((m) => ({ default: m.EventsScreen })));
-export const ChecklistsScreen = lazyScreen<object>(() => import('../checklists/ChecklistsScreen').then((m) => ({ default: m.ChecklistsScreen })));
-export const SettingsScreen = lazyScreen<object>(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })));
-export const AppearanceScreen = lazyScreen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })));
-export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })));
-export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })));
-export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })));
-export const HolidaySettingsScreen = lazyScreen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })));
-export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })));
-export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })));
-export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })));
-export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })));
+export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })), 'reportscreen');
+export const DoneTasksScreen = lazyScreen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })), 'donetasksscreen');
+export const TrashScreen = lazyScreen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })), 'trashscreen');
+export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })), 'taskdetail');
+export const SomedayScreen = lazyScreen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })), 'somedayscreen');
+export const GoalsScreen = lazyScreen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })), 'goalsscreen');
+export const WeekScreen = lazyScreen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })), 'weekscreen');
+export const RoutinesScreen = lazyScreen<object>(() => import('../routines/RoutinesScreen').then((m) => ({ default: m.RoutinesScreen })), 'routinesscreen');
+export const EventsScreen = lazyScreen<object>(() => import('../events/EventsScreen').then((m) => ({ default: m.EventsScreen })), 'eventsscreen');
+export const ChecklistsScreen = lazyScreen<object>(() => import('../checklists/ChecklistsScreen').then((m) => ({ default: m.ChecklistsScreen })), 'checklistsscreen');
+export const SettingsScreen = lazyScreen<object>(() => import('../settings/SettingsScreen').then((m) => ({ default: m.SettingsScreen })), 'settingsscreen');
+export const AppearanceScreen = lazyScreen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })), 'appearancescreen');
+export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })), 'tabsscreen');
+export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })), 'importscreen');
+export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })), 'recapsettingsscreen');
+export const HolidaySettingsScreen = lazyScreen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })), 'holidaysettingsscreen');
+export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })), 'spacesscreen');
+export const CalendarsScreen = lazyScreen<object>(() => import('../calendars/CalendarsScreen').then((m) => ({ default: m.CalendarsScreen })), 'calendarsscreen');
+export const SyncDetailsScreen = lazyScreen<object>(() => import('../sync/SyncDetailsScreen').then((m) => ({ default: m.SyncDetailsScreen })), 'syncdetailsscreen');
+export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietHoursRoute').then((m) => ({ default: m.QuietHoursRoute })), 'quiethoursroute');
 
-/** Attribut posé sur <html> quand tous les écrans sont arrivés (ou ont échoué) : repère de disponibilité pour les tests e2e. */
-export const SCREENS_LOADED_ATTRIBUTE = 'data-ct-screens-loaded';
-
-/**
- * Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. Une fois le
- * dernier bloc arrivé (ou refusé), `<html>` porte `data-ct-screens-loaded` : tant qu'il manque, un clic sur un écran attend son bloc
- * (serveur de développement à froid, machine chargée) et un test ne peut pas supposer l'écran affiché dans un délai fixe.
- */
+/** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {
   let cancel: () => void = () => undefined;
   let index = 0;
-  const pending: Array<Promise<unknown>> = [];
   const step = (): void => {
     const load = loaders[index];
     index += 1;
-    if (!load) {
-      void Promise.allSettled(pending).then(() => document.documentElement.setAttribute(SCREENS_LOADED_ATTRIBUTE, 'true'));
-      return;
-    }
-    pending.push(load().catch((error: unknown) => logFailure('screen-preload', error)));
+    if (!load) return;
+    void load().catch((error: unknown) => logFailure('screen-preload', error));
     cancel = whenIdle(step, 200);
   };
   cancel = whenIdle(step, 200);

@@ -4,7 +4,7 @@ import { accountCard, attachSims, openCalendarsScreen, startTestSims, waitUpdate
 import { addIsoDays, browserToday } from './helpers/schedule';
 import { todayTab } from './helpers/today';
 import { browserMonday, dayOf, openWeek } from './helpers/week';
-import { APP_READY_TIMEOUT_MS, waitForScreensLoaded } from './helpers/app';
+import { APP_READY_TIMEOUT_MS } from './helpers/app';
 
 /**
  * K-03 — Mes événements externes se mettent à jour (simulateur Google, horloge du navigateur pilotée par `page.clock` : aucun `sleep` réel).
@@ -26,7 +26,6 @@ async function openWithClock(page: Page): Promise<void> {
   await page.clock.install({ time: FIXED_NOW });
   await page.goto('/');
   await expect(page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
-  await waitForScreensLoaded(page);
 }
 
 test.describe('K-03 — rafraîchissement des agendas externes', () => {
