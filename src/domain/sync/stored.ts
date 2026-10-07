@@ -55,7 +55,6 @@ export function parseStoredAcks(raw: string, where: string, log: StoredStateLog)
   return out;
 }
 
-
 /** Date ISO complète en UTC telle qu'écrite par `toISOString()`. */
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$/;
 

@@ -156,6 +156,25 @@ describe('signal visible (startSync)', () => {
     integration.dispose();
   });
 
+  it('quatrième revue, point E : un lot réussi qui couvre la file retire le bandeau (sans attendre la relance)', async () => {
+    const id1 = await task();
+    const id2 = await task('13000000-0000-4000-8000-000000000002');
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined });
+    await integration.refreshed();
+    const real = db.data.repos.tasks.getById.bind(db.data.repos.tasks);
+    failing(db.data.repos.tasks, 'getById');
+    await db.data.repos.tasks.update(id1, { title: 'Renommée ailleurs' });
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id1])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reload-failed');
+    (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
+    sync.emitChanges({ tables: new Set(['task', 'space']), ids: new Map([['task', new Set([id1, id2])]]) });
+    await integration.reloaded();
+    expect(container.taskEntities.get(id1)?.title).toBe('Renommée ailleurs');
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    integration.dispose();
+  });
+
   it('troisième revue, point 1 : un lot B rechargé ne retire pas le bandeau tant que le lot A en échec attend sa relance', async () => {
     const id1 = await task();
     const id2 = await task('13000000-0000-4000-8000-000000000002');

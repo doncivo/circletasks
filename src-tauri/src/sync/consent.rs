@@ -190,7 +190,10 @@ impl ConsentGate {
             }
             Ok(None) => Counters { blocked_until: marker.unwrap_or(0), ..Counters::default() },
             // Fichier illisible pendant le blocage du marqueur : comportement inchangé (compteurs vides, échéance du marqueur).
-            Err(()) if marker.is_some() => Counters { blocked_until: marker.unwrap_or(0), ..Counters::default() },
+            Err(()) if marker.is_some() => {
+                log::event("consent-file-unreadable", "blocked");
+                Counters { blocked_until: marker.unwrap_or(0), ..Counters::default() }
+            }
             Err(()) => {
                 // Fichier illisible : bloqué 10 minutes (et réécrit, pour que le blocage ne se prolonge pas à chaque lecture).
                 log::event("consent-file-unreadable", "blocked");

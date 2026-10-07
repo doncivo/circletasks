@@ -218,3 +218,19 @@ fn y_tech_02_a_refusal_during_a_marker_block_keeps_the_counters() {
     assert_eq!(written["import"], serde_json::json!([NOW - 3]), "imports gardés");
     assert_eq!(written["blockedUntil"], serde_json::json!(NOW + CONSENT_BLOCK_MS));
 }
+
+/// Quatrième revue, point E : `consent.json` illisible pendant le blocage du marqueur : blocage du marqueur gardé, illisibilité journalisée.
+#[test]
+fn y_tech_02_an_unreadable_file_during_a_marker_block_is_logged() {
+    use circletasks_lib::sync::consent::{CONSENT_FILE, CONSENT_REFUSED_MARKER};
+    let dir = tempfile::tempdir().unwrap();
+    let inner = FakeUi::new();
+    let clock = TestClock::new(NOW);
+    std::fs::write(dir.path().join(CONSENT_FILE), b"{pas du json").unwrap();
+    std::fs::write(dir.path().join(CONSENT_REFUSED_MARKER), (NOW + CONSENT_BLOCK_MS / 2).to_string()).unwrap();
+    let capture = circletasks_lib::sync::log::capture();
+    let consent = ConsentGate::new(dir.path().to_path_buf(), inner.clone(), clock.clock());
+    assert_eq!(code(consent.precheck(OWNER)), SyncCode::RateLimited);
+    assert!(capture.lines().iter().any(|l| l == "sync:consent-file-unreadable blocked"), "{:?}", capture.lines());
+    assert_eq!(inner.prompts(), 0);
+}
