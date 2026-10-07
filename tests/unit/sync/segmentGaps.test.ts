@@ -424,3 +424,23 @@ describe('cinquième revue, point 4 : trou sur soi, hors règle', () => {
     expect(await titlesOf(a)).toEqual(['T0', 'T1']);
   });
 });
+
+describe('cinquième revue, point 6 : entrée de l’auteur posée à l’annonce d’une réinitialisation', () => {
+  it('tête sans hlc (aucune écriture publiée) : aucune entrée de l’auteur dans covers de l’instantané de la nouvelle époque', async () => {
+    const a = await deviceA();
+    const b = await deviceB(a);
+    for (let i = 0; i < 3; i += 1) {
+      propagate(a.folder, b.folder, a.id);
+      propagate(b.folder, a.folder, b.id);
+      a.clock.advance(1_000);
+      await a.cycle();
+      await b.cycle();
+    }
+    a.clock.advance(11 * 60_000);
+    expect((await a.service.resetSync()).kind).toBe('started');
+    await a.cycle();
+    const meta = await readJson<{ epoch: string; covers: Record<string, unknown> }>(a.data.repos, META.snapshot);
+    expect(meta?.epoch).not.toBe(epochOf(b));
+    expect(meta?.covers ?? {}).not.toHaveProperty(a.id);
+  });
+});

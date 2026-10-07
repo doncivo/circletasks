@@ -484,6 +484,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     /** Repères de ses états publiés, lus au premier segment absent du cycle (quatrième revue, point D). */
     let ownMarks: readonly OwnStateMark[] | undefined;
     let resumed = false;
+    /** Cinquième revue, point 6 : appareils tronqués dans ce cycle (leur `corrupt` de l'audit M3 n'est jamais levé par un trou effacé). */
+    const truncatedThisCycle = new Set<DeviceId>();
     const doResume = async (): Promise<boolean> => {
       resumed = true;
       work();
@@ -508,12 +510,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * `corrupt` posé par la règle remis à `active` (sauf oubli, dont le statut suit l'ordre total).
      */
     const persistGaps = (tx: Repositories): Promise<void> => writeJson(tx, META.segmentGaps, segmentGaps.size === 0 ? null : Object.fromEntries(segmentGaps));
-    const clearGap = async (id: DeviceId, row: SyncStateRow | undefined, activate: boolean): Promise<void> => {
+    const clearGap = async (id: DeviceId, activate: boolean): Promise<void> => {
       if (!segmentGaps.has(id)) return;
       segmentGaps.delete(id);
       await data.transaction(async (tx) => {
         await persistGaps(tx);
-        if (activate && row?.status === 'corrupt') await tx.sync.saveState(id, { status: 'active' });
+        // Cinquième revue, point 6 : `corrupt` remis à `active` seulement si l'appareil n'a pas été tronqué dans ce cycle (audit M3).
+        const current = (await tx.sync.getStates()).find((r) => r.deviceId === id);
+        if (activate && current?.status === 'corrupt' && !truncatedThisCycle.has(id)) await tx.sync.saveState(id, { status: 'active' });
       });
       logger.log('segment-gap-cleared', { device: id });
     };
@@ -530,7 +534,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // Cinquième revue, point 3 : changement d'époque, oubli, retrait (plus de ligne `sync_state`) ; une absence au scan ne l'efface pas.
         const forgotten = forgetView.order.has(id);
         // Cinquième revue, point 4 : une entrée sur soi (règle précédente) est effacée.
-        if (id === self || gap.epoch !== currentEpoch || forgotten || !rowsNow.has(id)) await clearGap(id, rowsNow.get(id), !forgotten);
+        if (id === self || gap.epoch !== currentEpoch || forgotten || !rowsNow.has(id)) await clearGap(id, !forgotten);
       }
     }
     /** Aucun instantané éligible trouvé par une reprise de ce cycle (§14.2) : oublié non couvert. */
@@ -641,7 +645,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         const cursor: RecordCursor = row?.epoch === readEpoch ? { segment: row.cursorSegment, record: row.cursorRecord } : ZERO;
         if (row?.epoch !== readEpoch) await repos.sync.saveState(target.id, { epoch: readEpoch, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
         if (compareCursors(cursor, target.head) >= 0) {
-          await clearGap(target.id, row, !forgetView.order.has(target.id));
+          await clearGap(target.id, !forgetView.order.has(target.id));
           continue;
         }
         // Segment nécessaire disparu (purgé) : reprise depuis l'instantané.
@@ -675,7 +679,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
             pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
             continue;
           }
-          if (cursor.segment >= minListed) await clearGap(target.id, row, !forgetView.order.has(target.id));
+          if (cursor.segment >= minListed) await clearGap(target.id, !forgetView.order.has(target.id));
         }
         work();
         const outcome = await readDevice(deps, {
@@ -690,6 +694,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         if (outcome.status !== 'complete') allRead = false;
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
         if (outcome.status === 'truncated') {
+          truncatedThisCycle.add(target.id);
           if (resumed) await repos.sync.saveState(target.id, { status: 'corrupt' });
           else {
             needResume = true;
@@ -746,7 +751,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
       }
       const covers = await snapshotCovers();
-      covers.set(self, { ...head, stateSeq });
+      // Cinquième revue, point 6 (§5.1) : entrée de l'auteur seulement si sa tête désigne une écriture.
+      if (head.hlc !== null) covers.set(self, { ...head, stateSeq });
       const listedNext = ownScan?.epochs.find((e) => e.epoch === directive.view.epoch)?.snapshots ?? [];
       // §18 point 14 : l'état sous la nouvelle clé porte les accusés sur les oubliés retenus, à leur position de l'époque `n` (coupure).
       const forgottenAcks = new Map([...covers].filter(([id]) => forgetView.order.has(id)));
