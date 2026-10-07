@@ -115,6 +115,12 @@ describe('contrat des permissions Info.plist', () => {
     ]);
   });
 
+  it('ne prend pas une propriété héritée (constructor, toString) pour une clé présente', () => {
+    const c = { formatVersion: 1, plugins: { p: { story: 'X-01', keys: ['constructor', 'toString'] } } };
+    expect(checkPlistContract(c, {}).errors).toEqual(['constructor absente (plugin p, X-01)', 'toString absente (plugin p, X-01)']);
+    expect(checkPlistContract(c, { constructor: 'x', toString: 'y' }).errors).toEqual([]);
+  });
+
   it('échoue sur toute description d’usage vide, déclarée ou non ; avertit si elle n’est pas déclarée', () => {
     const plist = { NSCameraUsageDescription: '  ', NSMicrophoneUsageDescription: '', NSFaceIDUsageDescription: 'Déverrouiller CircleTasks.', BGTaskSchedulerPermittedIdentifiers: [], UIBackgroundModes: ['fetch'] };
     const { errors, warnings } = checkPlistContract(camera, plist);

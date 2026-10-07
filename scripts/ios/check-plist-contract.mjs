@@ -58,13 +58,13 @@ export function checkPlistContract(contract, plist) {
   for (const [name, entry] of Object.entries(contract.plugins)) {
     for (const key of entry.usageDescriptions ?? []) {
       declared.add(key);
-      if (!(key in plist)) errors.push(`${key} absente (plugin ${name}, ${entry.story})`);
+      if (!Object.hasOwn(plist, key)) errors.push(`${key} absente (plugin ${name}, ${entry.story})`);
     }
     for (const key of entry.keys ?? []) {
-      if (!(key in plist)) errors.push(`${key} absente (plugin ${name}, ${entry.story})`);
+      if (!Object.hasOwn(plist, key)) errors.push(`${key} absente (plugin ${name}, ${entry.story})`);
     }
     for (const [key, values] of Object.entries(entry.arrayIncludes ?? {})) {
-      const actual = plist[key];
+      const actual = Object.hasOwn(plist, key) ? plist[key] : undefined;
       if (!Array.isArray(actual)) {
         errors.push(`${key} absente ou n'est pas un tableau (plugin ${name}, ${entry.story})`);
         continue;
