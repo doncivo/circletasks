@@ -370,6 +370,9 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
         }
         lastWrite = storeBlocking(current);
         // Seconde revue, point 1 : fin de cycle, rechargements en échec retentés.
+        // Troisième revue, point M3 (limite connue) : la relance ne prend que la file présente à cet instant. Un rechargement encore en
+        // file (`enqueue`) qui échoue juste après n'est retenté qu'à la fin du cycle suivant (ou à « Synchroniser maintenant ») ; le
+        // bandeau `reload-failed` reste visible entre-temps, aucun lot n'est perdu (`failedChanges` le garde).
         if (failedChanges) void retryReload();
       }
       applyBanners();
