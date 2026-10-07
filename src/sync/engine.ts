@@ -525,9 +525,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     {
       const rowsNow = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
       for (const [id, gap] of [...segmentGaps]) {
-        const present = id === self || scan.devices.some((d) => d.deviceId === id);
+        // Cinquième revue, point 3 : changement d'époque, oubli, retrait (plus de ligne `sync_state`) ; une absence au scan ne l'efface pas.
         const forgotten = forgetView.order.has(id);
-        if (gap.epoch !== currentEpoch || forgotten || !present) await clearGap(id, rowsNow.get(id), !forgotten);
+        if (gap.epoch !== currentEpoch || forgotten || !rowsNow.has(id)) await clearGap(id, rowsNow.get(id), !forgotten);
       }
     }
     /** Aucun instantané éligible trouvé par une reprise de ce cycle (§14.2) : oublié non couvert. */
@@ -657,8 +657,16 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           await hole(target.id, readEpoch, 0);
           continue;
         }
-        // Lecture au-delà d'un trou mémorisé : effacé (quatrième revue, point B).
-        await clearGap(target.id, row, !forgetView.order.has(target.id));
+        if (segmentGaps.has(target.id)) {
+          // Cinquième revue, point 3 : trou effacé seulement par une lecture au-delà (plus petit segment listé atteint) ; listage de
+          // l'époque absent : rien n'est effacé ni lu, fichier en attente visible.
+          if (!Number.isFinite(minListed)) {
+            allRead = false;
+            pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
+            continue;
+          }
+          if (cursor.segment >= minListed) await clearGap(target.id, row, !forgetView.order.has(target.id));
+        }
         work();
         const outcome = await readDevice(deps, {
           deviceId: target.id,

@@ -354,3 +354,49 @@ describe('cinquième revue, point 1 : instantané essayé, jamais l’appliqué 
     expect(statusOf(r, a.id)).toBe('corrupt');
   });
 });
+
+describe('cinquième revue, point 3 : effacement du trou seulement à la lecture au-delà, au changement d’époque, à l’oubli ou au retrait', () => {
+  it('listage de l’époque de A absent : trou gardé, rien n’est lu, fichier en attente visible', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    dropFirstSegment(a, b);
+    b.folder.devices.get(a.id)?.epochs.clear();
+    const status = await b.cycle();
+    expect(status.phase).toBe('waiting-icloud');
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    expect(await readJson<Record<string, unknown>>(b.data.repos, META.segmentGaps)).toHaveProperty(a.id);
+  });
+
+  it('A absent d’un scan (ligne gardée) : trou gardé ; A revenu : toujours corrupt', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    b.folder.devices.delete(a.id);
+    await b.cycle();
+    expect(await readJson<Record<string, unknown>>(b.data.repos, META.segmentGaps)).toHaveProperty(a.id);
+    // A revenu : trou toujours là (B a pu écrire entre-temps un instantané à lui, éligible nouveau : une reprise de plus, permise).
+    dropFirstSegment(a, b);
+    await b.cycle();
+    expect(statusOf(b, a.id)).toBe('corrupt');
+    expect(await readJson<Record<string, unknown>>(b.data.repos, META.segmentGaps)).toHaveProperty(a.id);
+  });
+
+  it('A oublié : trou effacé', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    b.clock.advance(11 * 60_000);
+    expect(await b.service.forgetDevice(a.id)).toEqual({ kind: 'done' });
+    dropFirstSegment(a, b);
+    await b.cycle();
+    expect(await readJson(b.data.repos, META.segmentGaps)).toBeNull();
+  });
+
+  it('A retiré (plus de ligne sync_state, absent du dossier) : trou effacé', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    b.folder.devices.delete(a.id);
+    await b.driver.execute('DELETE FROM sync_state WHERE device_id = ?', [a.id]);
+    await b.cycle();
+    expect(await readJson(b.data.repos, META.segmentGaps)).toBeNull();
+  });
+});
