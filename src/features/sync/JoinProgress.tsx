@@ -14,9 +14,12 @@ function JoinAnnouncer() {
   const container = useAppContainer();
   const active = useFeatureStore(syncStore, (s) => s.status.progress != null);
   const [text, setText] = useState('');
-  useEffect(() => {
-    setText((previous) => (active ? t('sync.pairing.joinStartAnnounce') : previous === '' ? '' : t('sync.pairing.joinDoneAnnounce')));
-  }, [active]);
+  const [wasActive, setWasActive] = useState(false);
+  // Ajustement d'état pendant le rendu (début puis fin de la reprise) : pas d'effet, pas de rendu en cascade.
+  if (wasActive !== active) {
+    setWasActive(active);
+    setText(active ? t('sync.pairing.joinStartAnnounce') : text === '' ? '' : t('sync.pairing.joinDoneAnnounce'));
+  }
   if (!container.sync) return null;
   return (
     <span className="ct-visually-hidden" aria-live="polite" aria-atomic="true" data-testid="sync-join-live">
