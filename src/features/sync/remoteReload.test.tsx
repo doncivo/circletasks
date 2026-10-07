@@ -33,9 +33,9 @@ afterEach(async () => {
   await db.close();
 });
 
-async function task(): Promise<TaskId> {
+async function task(id = '13000000-0000-4000-8000-000000000001'): Promise<TaskId> {
   const created = await db.data.repos.tasks.create({
-    id: asEntityId<TaskId>('13000000-0000-4000-8000-000000000001'), spaceId: PRO, projectId: null, title: 'Vivante', note: '', date: null, time: null, status: 'todo', doneAt: null,
+    id: asEntityId<TaskId>(id), spaceId: PRO, projectId: null, title: 'Vivante', note: '', date: null, time: null, status: 'todo', doneAt: null,
     sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, externalEventId: null,
   });
   container.taskEntities.publish([created]);
@@ -131,6 +131,32 @@ describe('signal visible (startSync)', () => {
     (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
     await syncStore.get(container).getState().syncNow('manual');
     await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    integration.dispose();
+  });
+
+  it('troisième revue, point 1 : un lot B rechargé ne retire pas le bandeau tant que le lot A en échec attend sa relance', async () => {
+    const id1 = await task();
+    const id2 = await task('13000000-0000-4000-8000-000000000002');
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined });
+    await integration.refreshed();
+    const repo = db.data.repos.tasks as unknown as Record<string, unknown>;
+    const real = db.data.repos.tasks.getById.bind(db.data.repos.tasks);
+    // Seule la relecture de id1 échoue.
+    repo['getById'] = (id: TaskId, options?: { includeDeleted?: boolean }) => (id === id1 ? Promise.reject(new Error('base occupée')) : real(id, options));
+    await db.data.repos.tasks.update(id1, { title: 'Renommée ailleurs' });
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id1])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reload-failed');
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id2])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail, 'id1 attend encore sa relance').toBe('reload-failed');
+    expect(container.taskEntities.get(id1)?.title).toBe('Vivante');
+    repo['getById'] = real;
+    sync.setStatus({ phase: 'syncing' });
+    sync.setStatus({ phase: 'idle' });
+    await integration.reloaded();
+    expect(container.taskEntities.get(id1)?.title).toBe('Renommée ailleurs');
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
     integration.dispose();
   });

@@ -13,7 +13,7 @@ import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
-import { mergeChanges, setReloadRetry } from './reloadRetry';
+import { coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
 import { deviceName, deviceStatusText, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
@@ -336,9 +336,13 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
       logFailure('sync', 'remote-reload-failed {"code":"io"}');
       failed = true;
     }
+    // Troisième revue, point 1 : le bandeau suit la file des lots en échec, jamais le seul dernier lot. Un lot rechargé avec succès ne
+    // vide la file que s'il couvre tout ce qu'elle contient (mêmes tables, mêmes identifiants : tout y a été relu après l'échec).
     if (failed) failedChanges = mergeChanges(failedChanges, change);
-    if (failed === reloadFailed || disposed) return;
-    reloadFailed = failed;
+    else if (failedChanges && coversChanges(change, failedChanges)) failedChanges = null;
+    const stillFailed = failedChanges !== null;
+    if (stillFailed === reloadFailed || disposed) return;
+    reloadFailed = stillFailed;
     safely(applyBanners);
   };
   const enqueue = (run: () => Promise<void>): Promise<void> => (lastReload = lastReload.then(run));

@@ -24,3 +24,13 @@ export function mergeChanges(a: RemoteChanges | null, b: RemoteChanges): RemoteC
   for (const source of [a, b]) for (const [table, set] of source.ids) ids.set(table, new Set([...(ids.get(table) ?? []), ...set]));
   return { tables: new Set([...a.tables, ...b.tables]), ids };
 }
+
+/** `outer` contient-il tout `inner` (chaque table et chaque identifiant) ? Son rechargement réussi recharge alors tout `inner`. */
+export function coversChanges(outer: RemoteChanges, inner: RemoteChanges): boolean {
+  for (const table of inner.tables) if (!outer.tables.has(table)) return false;
+  for (const [table, set] of inner.ids) {
+    const covered = outer.ids.get(table);
+    for (const id of set) if (!covered?.has(id)) return false;
+  }
+  return true;
+}
