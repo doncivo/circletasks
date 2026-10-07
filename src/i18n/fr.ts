@@ -335,6 +335,10 @@ export const fr = {
     recapEveningTitleOne: '1 élément non fait',
     recapEveningTitle: '{count} éléments non faits',
     recapEveningEmpty: 'Tout est fait',
+    coverageUntil: 'Planifiés jusqu’au {date}',
+    coverageDateTime: '{day} à {time}',
+    coverageComplete: 'Tous les rappels sont planifiés',
+    coverageEmpty: 'Aucun rappel à planifier',
   },
   settings: {
     title: 'Réglages',

@@ -4,3 +4,4 @@ export { useDefaultReminderOffsets } from './useDefaultReminderOffsets';
 export { RecapSettingsScreen } from './RecapSettingsScreen';
 export { formatRecapSummary, formatRecapTitle } from './recapText';
 export { loadRecap } from './recapUseCases';
+export { formatCoverage } from './coverageText';
