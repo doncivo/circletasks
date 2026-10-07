@@ -142,7 +142,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
 
 Règles (les critères de la fiche s'appliquent ; seules les décisions sont écrites ici) :
 
-- **Échéance toujours recalculée** depuis la cible (date et heure actuelles de la tâche, occurrence de la routine ou de l'événement) ; `reminder.fire_at` et `reminder.delivered` ne sont **ni lus ni écrits** (aucune écriture synchronisée depuis le plan). Les avances stockées sont prises telles quelles.
+- **Échéance toujours recalculée** depuis la cible (date et heure actuelles de la tâche, occurrence de la routine ou de l'événement) ; `reminder.fire_at` et `reminder.delivered` ne sont **ni lus ni écrits** (aucune écriture synchronisée depuis le plan). Les avances stockées sont prises telles quelles, mais filtrées selon la cible comme le modèle (`isReminderOffset` pour tâche et routine, `isEventReminderOffset` pour événement) ; une avance non admise ne produit aucun élément.
 - **Exclusion « passé » sur l'échéance effective** : un élément est candidat si `fireAt` effectif > `now` (minute). Un rappel Pro de 20:00 décalé au lendemain 08:00 reste donc candidat à 21:00 ; un rappel dont l'échéance effective est passée n'est jamais rattrapé.
 - **Doublons** (même cible, même avance, même occurrence) : la ligne `reminder` d'identifiant le plus petit est gardée.
 - **Plages silencieuses** : `effectiveFireAt` avec les plages de l'espace de la cible, pour tâches, routines et événements ; jamais pour les récapitulatifs (ni pour la fin de Focus, hors plan). Plusieurs rappels décalés à la même heure restent des éléments distincts (regroupement d'ES-07 : hors N-TECH-01).

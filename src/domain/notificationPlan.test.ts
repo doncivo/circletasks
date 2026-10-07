@@ -608,3 +608,17 @@ describe('horizon borné sur l’échéance (revue)', () => {
     expect(fires(result.items)).toEqual(['2027-11-11T07:00']);
   });
 });
+
+describe('avances admises selon la cible (revue)', () => {
+  it('« 1 semaine avant » (10080) est refusée sur une tâche et une routine', () => {
+    const t = task();
+    const routine = makeRoutine({ spaceId: PERSO, time: asLocalTime('07:00') });
+    expect(plan({ tasks: [t], routines: [routine], reminders: [reminder('task', t, 10080), reminder('routine', routine, 10080)] }).items).toEqual([]);
+  });
+
+  it('une avance de tâche (30 min) est refusée sur un événement ; 10080, 1440 et 0 y sont admises', () => {
+    const e = makeEvent({ spaceId: PERSO, startDate: '2026-11-01', allDay: false, startTime: asLocalTime('10:00'), endTime: asLocalTime('11:00') });
+    const rs = [30, 5, 10080, 1440, 0].map((offset) => reminder('event', e, offset));
+    expect(fires(plan({ events: [e], reminders: rs }).items)).toEqual(['2026-10-25T10:00', '2026-10-31T10:00', '2026-11-01T10:00']);
+  });
+});

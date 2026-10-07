@@ -7,6 +7,7 @@ import {
   type CalendarEvent,
   type Reminder,
   type ReminderOffsetMin,
+  type ReminderTargetType,
   type Routine,
   type RoutineLog,
   type RoutinePause,
@@ -115,7 +116,9 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(NOTIFICATION_LIMIT_DEFAULT, Math.max(0, Math.floor(limit)));
 }
 
-const isOffset = (value: number): value is ReminderOffsetMin => isReminderOffset(value) || isEventReminderOffset(value);
+/** Avances admises selon la cible, comme le modèle (migration 0009) : événement = 10080, 1440, 0 ; tâche et routine = liste de N-02. */
+const isOffset = (targetType: ReminderTargetType, value: number): value is ReminderOffsetMin =>
+  targetType === 'event' ? isEventReminderOffset(value) : isReminderOffset(value);
 
 /** Échéance (heure locale flottante) ou null si la date ou l'heure sont mal formées. */
 function fireAtOf(date: LocalDate, time: string | null, offsetMin: number): LocalDateTime | null {
@@ -128,7 +131,7 @@ function fireAtOf(date: LocalDate, time: string | null, offsetMin: number): Loca
 function dedupReminders(reminders: readonly Reminder[]): Reminder[] {
   const kept = new Map<string, Reminder>();
   for (const reminder of reminders) {
-    if (reminder.deletedAt !== null || !isOffset(reminder.offsetMin)) continue;
+    if (reminder.deletedAt !== null || !isOffset(reminder.targetType, reminder.offsetMin)) continue;
     const key = `${reminder.targetType}|${reminder.targetId}|${reminder.offsetMin}`;
     const known = kept.get(key);
     if (known === undefined || byCodeUnits(reminder.id, known.id) < 0) kept.set(key, reminder);
