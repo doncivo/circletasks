@@ -16,7 +16,6 @@ import { finishResumeTx, isJoining, joinFromSnapshot, triedTracker } from './joi
 import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPublishPending, readForgetStatus, readLimit, rejoinPending, runForgetDeletions, setSnapshotWait, type ForgetView } from './forget';
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { addOwnStateMark, decideSegmentGap, type ResumeTried, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
-import { defaultSyncLogger } from './log';
 import { publishOutbox, readInflight } from './publisher';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
@@ -237,7 +236,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   }
   if (forgetView.selfForgotten) {
     logger.log('forgotten-self', { by: forgetView.order.get(self)?.by ?? null });
-    return { ...EMPTY, outcome: 'forgotten', folderLabel, folderKind, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
+    return { ...EMPTY, outcome: 'forgotten', folderLabel, folderKind, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger) };
   }
   // Y-10 : un appareil oublié ne compte pas pour « aucun appareil ne partage la clé ».
   const keyMismatch = keyMismatchFromDevices(scan.devices.filter((d) => !forgetView.order.has(d.deviceId)).map((d) => ({ self: d.deviceId === self, foreign: d.stateStatus === 'foreign' })));
@@ -253,7 +252,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const masterGrew = ownState !== null && forgetView.master.length > ownState.forgotten.length;
       if (resetDirective.republish || masterGrew) await republishWithoutNotice(deps, ownState, forgetView.master);
       logger.log('publish-suspended', { reason: 'reset-required' });
-      return { ...EMPTY, outcome: 'reset-required', folderLabel, folderKind, keyMismatch: false, devices: await deviceStatuses(repos, self, accepted, deps.sv), pendingFiles: [...pending] };
+      return { ...EMPTY, outcome: 'reset-required', folderLabel, folderKind, keyMismatch: false, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), pendingFiles: [...pending] };
     }
   } catch (error) {
     return failWith(error, { folderLabel, folderKind });
@@ -411,7 +410,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // 'clock-ahead' : l'ouvreur est signalé (phase « horloge en avance »), le changement attend que la condition cesse ; 'uncovered' :
         // attente visible d'un instantané couvrant (Y-10 « aucun instantané à jour »).
         const waiting = switched === 'cloud-pending' || switched === 'clock-ahead' || switched === 'uncovered';
-        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv) };
+        return { ...EMPTY, outcome: waiting ? 'done' : 'failed', errorCode: waiting ? null : 'io', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger) };
       }
       if (inReset) await clearResetFailure(deps, directive.kind === 'joined' ? 'joined' : 'waiting-devices', 'state-mismatch');
       epoch = target;
@@ -742,7 +741,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const announced = (lastWritten as PublishedDeviceState | null)?.reset ?? null;
       if (announced === null) {
         await recordResetFailure(deps, 'announced', publishAllowed ? 'state-mismatch' : 'cloud-pending');
-        return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
+        return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
       }
       const covers = await snapshotCovers();
       // Cinquième revue, point 6 (§5.1) : entrée de l'auteur seulement si sa tête désigne une écriture.
@@ -758,7 +757,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         buildState: (target, h, snapshot) => buildState(target, h, stateSeq + 1, snapshot, purgeHorizon, forgottenAcks),
       });
       logger.log('reset-announced', { epoch: directive.view.epoch });
-      return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked: true, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv), keyMismatch };
+      return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked: true, pendingFiles: [...pending], devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
     }
     // Trous restants après la lecture (aucun instantané éligible) : attente visible, aucun instantané écrit (§18 point 11).
     const gapsAfter = await gaps();
@@ -805,7 +804,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
     // Y-11 (revue 13) : un appareil attendu par la réinitialisation est toujours dans APPAREILS (« jamais vu » s'il n'a jamais été lu).
     const resetWaiting = directive.kind === 'initiator' ? directive.view.waiting : [];
-    const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv), scan, self, [...(await readWaitingDevices(repos)), ...resetWaiting]);
+    const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, [...(await readWaitingDevices(repos)), ...resetWaiting]);
     // Y-11 : précondition calculée sur ce qui vient d'être lu et publié (mêmes règles que Rust).
     const resetLag = options.resetCheck ? resetLagging(deps, { scan, forget: forgetView, accepted, own: lastWritten ?? ownState }) : undefined;
     const lag = resetLag === undefined ? {} : { resetLag };
@@ -940,12 +939,12 @@ async function readWaitingDevices(repos: Repositories): Promise<DeviceId[]> {
 }
 
 /** Appareils affichés (APPAREILS) et leur version (Y-07 critère 11) : règle partagée avec les bandeaux A-09 (`deviceStatus.ts`). */
-async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, localSv: number): Promise<SyncDeviceStatus[]> {
+async function deviceStatuses(repos: Repositories, self: DeviceId, accepted: ReadonlyMap<DeviceId, PublishedDeviceState>, localSv: number, log: StoredStateLog): Promise<SyncDeviceStatus[]> {
   // Cinquième revue, point 7 : trous mémorisés (texte distinct). Une valeur illisible est signalée et réécrite au début du cycle
   // (`readSegmentGaps`) ; devenue illisible depuis, elle est journalisée ici et signalée au cycle suivant.
   let gaps: ReadonlyMap<DeviceId, StoredSegmentGap> = new Map<DeviceId, StoredSegmentGap>();
   try {
-    gaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, defaultSyncLogger);
+    gaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, log);
   } catch (error) {
     if (!isSyncStateUnreadable(error)) throw error;
   }

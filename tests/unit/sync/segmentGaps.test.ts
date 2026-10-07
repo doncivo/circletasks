@@ -651,3 +651,18 @@ describe('sixième revue, point 3 : garde de défense de l’effacement (clearSe
     expect((await a.data.repos.sync.getStates()).find((r) => r.deviceId === B_ID)?.status).toBe('corrupt');
   });
 });
+
+describe('sixième revue, point 5 : journal du moteur pour la relecture des trous des appareils affichés', () => {
+  it('segmentGaps devenu illisible en cours de cycle : journalisé par deps.logger (jamais le journal par défaut)', async () => {
+    const a = await deviceA();
+    const realGet = a.data.repos.sync.getMeta.bind(a.data.repos.sync);
+    let reads = 0;
+    a.data.repos.sync.getMeta = async (key) => {
+      if (key !== META.segmentGaps) return realGet(key);
+      reads += 1;
+      return reads === 1 ? realGet(key) : '{pas du json';
+    };
+    await a.cycle();
+    expect(a.logger.entries.filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.segmentGaps' });
+  });
+});
