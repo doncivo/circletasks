@@ -4,6 +4,7 @@ import type { IsoDateTime } from '../../../src/domain/types';
 import { syncBannerFor } from '../../../src/domain/syncBanners';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
 import { storedDeviceStatuses } from '../../../src/sync';
+import { setSnapshotTestHooks } from '../../../src/sync/snapshot';
 import { META, readJson } from '../../../src/sync/meta';
 import { propagate } from '../../sim/syncCloudSim';
 import { createSimDevice, pair, setupFirst, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
@@ -457,5 +458,111 @@ describe('cinquième revue, point 7 : gapSince dans les appareils affichés', ()
     dropFirstSegment(a, b);
     await b.cycle();
     expect(b.service.status().devices.find((d) => d.deviceId === a.id)?.gapSince).toBeUndefined();
+  });
+});
+
+describe('sixième revue, points 1 et 2 : reprise hors arrivée (demande effacée sur échec définitif, aucun repli pendant l’attente)', () => {
+  const C_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const R_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  type Body = 'corrupt' | 'pending' | 'local';
+
+  /**
+   * R lit j-1 de A dès le début (son état n'arrive jamais chez A : aucune preuve). C écrit un instantané (A couvert en j-1), A écrit T1
+   * (j-2), B écrit le plus récent (A couvert en j-2). 40 jours plus tard, chez R, j-1 de A manque (purgé) : trou, reprise hors arrivée.
+   */
+  async function room(bodies: Partial<Record<string, Body>>): Promise<{ a: SimDevice; b: SimDevice; c: SimDevice; r: SimDevice; deliver: () => void }> {
+    const a = await deviceA();
+    await a.createTask('T0');
+    await a.cycle();
+    const b = await deviceB(a);
+    const c = await createSimDevice(C_ID, { name: 'C', clock: a.clock });
+    devices.push(c);
+    await pair(a, c);
+    const r = await createSimDevice(R_ID, { name: 'R', clock: a.clock });
+    devices.push(r);
+    await pair(a, r);
+    const all = [a, b, c];
+    const sync = (): void => {
+      for (const from of all) for (const to of all) if (from !== to) propagate(from.folder, to.folder, from.id);
+    };
+    const toR = (): void => {
+      for (const from of all) propagate(from.folder, r.folder, from.id);
+    };
+    for (let i = 0; i < 2; i += 1) {
+      sync();
+      toR();
+      for (const d of [...all, r]) {
+        d.clock.advance(1_000);
+        await d.cycle();
+      }
+    }
+    expect(await titlesOf(r)).toEqual(['T0']);
+    a.clock.advance(8 * DAY);
+    sync();
+    await c.cycle();
+    sync();
+    a.clock.advance(DAY);
+    refuseNextAppend(a);
+    await a.createTask('T1');
+    await a.cycle();
+    a.clock.advance(8 * DAY);
+    sync();
+    await b.cycle();
+    expect(b.logger.entries.some((e) => e.event === 'snapshot-written')).toBe(true);
+    expect(a.logger.entries.filter((e) => e.event === 'snapshot-written')).toHaveLength(0);
+    sync();
+    a.clock.advance(40 * DAY);
+    const deliver = (): void => {
+      toR();
+      dropFirstSegment(a, r);
+    };
+    deliver();
+    const real = r.platform.readSnapshot.bind(r.platform);
+    r.platform.readSnapshot = async (request) => {
+      const body = request.tail === true ? undefined : bodies[request.deviceId];
+      if (body === 'corrupt') return { records: [], next: { segment: request.seq, record: 0 }, status: 'truncated' };
+      if (body === 'pending') return { records: [], next: { segment: request.seq, record: 0 }, status: 'cloud-pending' };
+      return real(request);
+    };
+    return { a, b, c, r, deliver };
+  }
+  const attempts = (d: SimDevice, from = 0): number => d.logger.entries.slice(from).filter((e) => e.event === 'resumed-from-snapshot' || e.event === 'resume-unavailable').length;
+  const fromOf = (d: SimDevice, from = 0): unknown[] => d.logger.entries.slice(from).filter((e) => e.event === 'resumed-from-snapshot').map((e) => e.detail['from']);
+
+  it('point 1 : aucune reprise n’aboutit (tous les corps illisibles) : une seule tentative sur 5 cycles, demande effacée après le premier, A corrupt', async () => {
+    const { a, r, deliver } = await room({ [A_ID]: 'corrupt', [B_ID]: 'corrupt', [C_ID]: 'corrupt' });
+    const before = r.logger.entries.length;
+    for (let i = 0; i < 5; i += 1) {
+      deliver();
+      r.clock.advance(60_000);
+      await r.cycle();
+      expect(await readJson(r.data.repos, META.resume), `cycle ${String(i)}`).toBeNull();
+      expect(statusOf(r, a.id), `cycle ${String(i)}`).toBe('corrupt');
+    }
+    expect(attempts(r, before)).toBe(1);
+  });
+
+  it('point 1 : arrêt brutal entre deux lots de la fusion : demande gardée, reprise recommencée au cycle suivant', async () => {
+    const { r, deliver } = await room({});
+    let armed = true;
+    setSnapshotTestHooks({
+      beforeBatch: () => {
+        if (armed) {
+          armed = false;
+          throw new Error('arrêt simulé');
+        }
+      },
+    });
+    try {
+      const before = r.logger.entries.length;
+      expect((await r.cycle()).phase).toBe('error');
+      expect(await readJson(r.data.repos, META.resume)).toBe(true);
+      deliver();
+      await r.cycle();
+      expect(fromOf(r, before)).toEqual([B_ID]);
+      expect(await readJson(r.data.repos, META.resume)).toBeNull();
+    } finally {
+      setSnapshotTestHooks({});
+    }
   });
 });

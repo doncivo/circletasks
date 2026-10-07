@@ -964,7 +964,8 @@ export async function resumeFromSnapshot(
     const pick = pickEligible(candidates, coverage, epoch, excluded);
     if (pick.kind !== 'ok') {
       deps.logger.log('resume-unavailable', { epoch });
-      await tried.save(deps.data.repos);
+      // Sixième revue, point 1 : échec définitif (essai connu) : demande de reprise effacée avec l'instantané essayé.
+      await tried.failDefinitively(deps.data);
       const value = tried.value();
       return pick.kind === 'none' && pick.uncovered !== null ? { kind: 'no-eligible', uncovered: pick.uncovered, tried: value } : { kind: 'unavailable', tried: value };
     }

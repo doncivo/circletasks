@@ -211,9 +211,22 @@ export function triedTracker(candidates: readonly SnapshotCandidate[], coverage:
     /** Appliqué (écrit par `finishResumeTx`, dans la dernière transaction). */
     applying: settle,
     value: (): ResumeTried | undefined => decided,
-    /** Reprise sans instantané appliqué : écrit hors transaction de fin. */
+    /** Arrivée sans instantané appliqué : écrit hors transaction de fin (la demande de reprise reste posée, échec d'arrivée visible). */
     save: async (repos: Repositories): Promise<void> => {
       if (decided) await writeJson(repos, META.resumeTried, decided);
+    },
+    /**
+     * Sixième revue, point 1 (ADR 0011 §5.5, « Reprise sûre ») : échec définitif d'une reprise hors arrivée (instantané essayé connu,
+     * aucun premier choix en attente d'iCloud, aucune application commencée) : instantané essayé écrit et demande de reprise effacée dans
+     * la même transaction ; chaque cause est ensuite réévaluée par sa propre règle visible. Sans essai connu : rien (demande gardée).
+     */
+    failDefinitively: async (data: SyncDeps['data']): Promise<void> => {
+      const value = decided;
+      if (!value) return;
+      await data.transaction(async (tx) => {
+        await writeJson(tx, META.resumeTried, value);
+        await writeJson(tx, META.resume, null);
+      });
     },
   };
 }
