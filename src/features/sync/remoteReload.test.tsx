@@ -12,6 +12,7 @@ import { useAppStatusStore } from '../app/appStatus';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { applyRemoteChanges } from './remoteChanges';
 import { startSyncIntegration } from './startSync';
+import { syncStore } from './syncStore';
 import { createFakeSyncService, type FakeSyncService } from './testKit';
 
 const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000f3');
@@ -94,6 +95,41 @@ describe('signal visible (startSync)', () => {
     expect(useAppStatusStore.getState().sources.syncTrouble).toMatchObject({ detail: 'reload-failed', message: t('status.syncReloadFailed') });
     (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
     sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    integration.dispose();
+  });
+
+  it('seconde revue, point 1 : échec, puis cycle sans nouveau lot → rechargement retenté, tâche à jour, bandeau retiré', async () => {
+    const id = await task();
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined });
+    await integration.refreshed();
+    const real = db.data.repos.tasks.getById.bind(db.data.repos.tasks);
+    failing(db.data.repos.tasks, 'getById');
+    await db.data.repos.tasks.update(id, { title: 'Renommée ailleurs' });
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id])]]) });
+    await integration.reloaded();
+    expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('reload-failed');
+    (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
+    // Cycle sans nouveau lot : il passe par « syncing » et revient à l'état conclu.
+    sync.setStatus({ phase: 'syncing' });
+    sync.setStatus({ phase: 'idle' });
+    await integration.reloaded();
+    expect(container.taskEntities.get(id)?.title).toBe('Renommée ailleurs');
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    integration.dispose();
+  });
+
+  it('seconde revue, point 1 : « Synchroniser maintenant » retente aussi le rechargement', async () => {
+    const id = await task();
+    const integration = startSyncIntegration(container, { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined });
+    await integration.refreshed();
+    const real = db.data.repos.tasks.getById.bind(db.data.repos.tasks);
+    failing(db.data.repos.tasks, 'getById');
+    sync.emitChanges({ tables: new Set(['task']), ids: new Map([['task', new Set([id])]]) });
+    await integration.reloaded();
+    (db.data.repos.tasks as unknown as Record<string, unknown>)['getById'] = real;
+    await syncStore.get(container).getState().syncNow('manual');
     await integration.reloaded();
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
     integration.dispose();

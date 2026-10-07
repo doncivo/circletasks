@@ -6,13 +6,14 @@ import { phaseBanner, syncBannerFor, type BlockingPhaseFact, type PersistedSyncF
 import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
-import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
 import { readForgetStatus, readResetStatus, startSyncScheduler, storedDeviceStatuses, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
+import { mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
 import { deviceName, deviceStatusText, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
@@ -324,6 +325,31 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     if (!disposed) safely(applyBanners);
   };
 
+  // Y-TECH-02 (revue, point 2 ; seconde revue, point 1) : rechargement en échec journalisé (par `applyRemoteChanges`, ou ici s'il lève),
+  // signalé, et son lot gardé (`failedChanges`) : relancé à la fin de chaque cycle et à « Synchroniser maintenant », jusqu'à la réussite.
+  let failedChanges: RemoteChanges | null = null;
+  const reload = async (change: RemoteChanges): Promise<void> => {
+    let failed: boolean;
+    try {
+      failed = (await applyRemoteChanges(container, change)).failed.length > 0;
+    } catch {
+      logFailure('sync', 'remote-reload-failed {"code":"io"}');
+      failed = true;
+    }
+    if (failed) failedChanges = mergeChanges(failedChanges, change);
+    if (failed === reloadFailed || disposed) return;
+    reloadFailed = failed;
+    safely(applyBanners);
+  };
+  const enqueue = (run: () => Promise<void>): Promise<void> => (lastReload = lastReload.then(run));
+  const retryReload = (): Promise<void> =>
+    enqueue(async () => {
+      const pending = failedChanges;
+      if (!pending || disposed) return;
+      failedChanges = null;
+      await reload(pending);
+    });
+
   const onStatus = (): void => {
     if (disposed) return;
     let reread = false;
@@ -339,6 +365,8 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
           persisted = { ...persisted, devices: null, blocking: null, forget: null, reset: null };
         }
         lastWrite = storeBlocking(current);
+        // Seconde revue, point 1 : fin de cycle, rechargements en échec retentés.
+        if (failedChanges) void retryReload();
       }
       applyBanners();
     });
@@ -353,23 +381,8 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     if (activeReads > 0) rereadPending = true;
     else void refreshPersisted();
   });
-  // Y-TECH-02 (revue, point 2) : rechargement en échec journalisé (par `applyRemoteChanges`, ou ici s'il lève) et signalé jusqu'au
-  // rechargement réussi suivant.
-  const reload = async (change: Parameters<typeof applyRemoteChanges>[1]): Promise<void> => {
-    let failed: boolean;
-    try {
-      failed = (await applyRemoteChanges(container, change)).failed.length > 0;
-    } catch {
-      logFailure('sync', 'remote-reload-failed {"code":"io"}');
-      failed = true;
-    }
-    if (failed === reloadFailed) return;
-    reloadFailed = failed;
-    safely(applyBanners);
-  };
-  const stopChanges = sync.onRemoteChanges((change) => {
-    lastReload = lastReload.then(() => reload(change));
-  });
+  setReloadRetry(container, retryReload);
+  const stopChanges = sync.onRemoteChanges((change) => void enqueue(() => reload(change)));
   safely(() => {
     const initial = sync.status();
     lastPhase = initial.phase;
@@ -396,6 +409,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
       stopStatus();
       stopPairing();
       stopChanges();
+      setReloadRetry(container, null);
       stopSyncingTimer();
       for (const kind of SYNC_KINDS) useAppStatusStore.getState().setStatus(kind, null);
     },

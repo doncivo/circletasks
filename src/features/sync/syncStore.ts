@@ -2,6 +2,7 @@ import { createStore } from 'zustand';
 import type { RestoreOption } from '../../domain/sync/epoch';
 import { INITIAL_STATUS, type RestoreContext, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { retryFailedReloads } from './reloadRetry';
 
 /**
  * État de la synchronisation pour l'interface (Y-02 critères 16 et 17, Y-03) : reflet de `SyncService.status()`, bouton
@@ -44,6 +45,8 @@ export const syncStore = defineFeatureStore<SyncState>((container: AppContainer)
       set({ busy: true });
       try {
         await service.syncNow(reason);
+        // Y-TECH-02 (seconde revue, point 1) : rechargements d'écran en échec retentés.
+        await retryFailedReloads(container);
       } finally {
         set({ busy: false });
         if (service.status().phase === 'restore-choice' && reason === 'manual') await get().openRestore();
