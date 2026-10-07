@@ -216,6 +216,26 @@ describe('make-source-json (source SideStore)', () => {
     expect(cli('2.0.0', p3).json?.apps[0]?.versions).toHaveLength(13);
   });
 
+  it('trie les versions par numéro : une version plus ancienne publiée après reste derrière, une republication garde sa place', () => {
+    const v2 = cli('2.0.0', null);
+    const p1 = writeTmp('order-1.json', JSON.stringify(v2.json));
+    const v19 = cli('1.9.0', p1);
+    expect(v19.json?.apps[0]?.versions.map((v) => v.version)).toEqual(['2.0.0', '1.9.0']);
+    // Champs d'app hérités : ceux de la version la plus haute.
+    expect(v19.json?.apps[0]?.['version']).toBe('2.0.0');
+    expect(v19.json?.apps[0]?.['downloadURL']).toBe(ipaUrlFor('2.0.0'));
+    const p2 = writeTmp('order-2.json', JSON.stringify(v19.json));
+    const v110 = cli('1.10.0', p2);
+    expect(v110.json?.apps[0]?.versions.map((v) => v.version)).toEqual(['2.0.0', '1.10.0', '1.9.0']);
+    const p3 = writeTmp('order-3.json', JSON.stringify(v110.json));
+    const again = cli('1.10.0', p3, ['--notes', 'Correctif']);
+    expect(again.json?.apps[0]?.versions.map((v) => [v.version, v.localizedDescription])).toEqual([
+      ['2.0.0', 'Notes 2.0.0'],
+      ['1.10.0', 'Correctif'],
+      ['1.9.0', 'Notes 1.9.0'],
+    ]);
+  });
+
   it('reprend la source publiée avant I-01 (sans iconURL) et la complète', () => {
     const published = {
       name: 'CircleTasks',

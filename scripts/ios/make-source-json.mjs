@@ -32,7 +32,17 @@ export function minOSVersionFromConf(confPath = join(root, 'src-tauri', 'tauri.c
   return v;
 }
 
-const sameOS = (a, b) => String(a).replace(/(\.0)+$/, '') === String(b).replace(/(\.0)+$/, '');
+/** Compare deux numéros X.Y.Z ; un numéro illisible passe après tous les autres. */
+export function compareVersions(a, b) {
+  const parse = (v) => (/^\d+\.\d+\.\d+$/.test(String(v)) ? String(v).split('.').map(Number) : null);
+  const pa = parse(a);
+  const pb = parse(b);
+  if (!pa || !pb) return pa ? 1 : pb ? -1 : 0;
+  for (let i = 0; i < 3; i += 1) if (pa[i] !== pb[i]) return pa[i] - pb[i];
+  return 0;
+}
+
+const sameOS =(a, b) => String(a).replace(/(\.0)+$/, '') === String(b).replace(/(\.0)+$/, '');
 
 /**
  * Construit le source.json. `existing` : source.json publié (ou null) ; `info` : Info.plist de l'IPA (objet).
@@ -65,17 +75,22 @@ export function buildSource({ template, existing, info, version, downloadURL, si
   };
   const existingApp = existing?.apps?.find((a) => a.bundleIdentifier === tApp.bundleIdentifier);
   const previous = (existingApp?.versions ?? []).filter((v) => v && v.version !== version && v.version !== '__VERSION__');
+  // SideStore prend la première entrée pour la dernière version : tri par numéro décroissant, pas par date
+  // de publication (un correctif 1.9.1 publié après 2.0.0 reste derrière). Tri stable : une version
+  // republiée garde sa place.
+  const versions = [...previous, entry].sort((a, b) => compareVersions(b.version, a.version));
+  const latest = versions[0];
   const app = {
     ...tApp,
-    // Champs d'app hérités (anciennes versions de SideStore) : ceux de la dernière version.
-    version: entry.version,
-    versionDate: entry.date,
-    versionDescription: entry.localizedDescription,
-    downloadURL: entry.downloadURL,
-    size: entry.size,
+    // Champs d'app hérités (anciennes versions de SideStore) : ceux de la version la plus haute.
+    version: latest.version,
+    versionDate: latest.date,
+    versionDescription: latest.localizedDescription,
+    downloadURL: latest.downloadURL,
+    size: latest.size,
     // Informatif tant que la source reste au format 1 (SideStore ne vérifie les permissions qu'au format 2).
     appPermissions: { entitlements: [], privacy },
-    versions: [entry, ...previous],
+    versions,
   };
   return { ...template, apps: [app], news: Array.isArray(existing?.news) ? existing.news : template.news };
 }
