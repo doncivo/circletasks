@@ -181,3 +181,40 @@ fn y_tech_02_an_expired_marker_that_cannot_be_removed_answers_io() {
     assert!(consent.confirm_show(OWNER).is_ok());
     assert_eq!(inner.prompts(), 1);
 }
+
+/// Boîte refusée pendant laquelle un refus non écrit (marqueur `consent.refused`) apparaît.
+struct RefuseWithMarker {
+    inner: Arc<FakeUi>,
+    marker: std::path::PathBuf,
+    deadline: u64,
+}
+
+impl ConsentUi for RefuseWithMarker {
+    fn owner_ready(&self, owner: isize) -> bool {
+        self.inner.owner_ready(owner)
+    }
+    fn ask(&self, spec: &DialogSpec) -> bool {
+        self.inner.ask(spec);
+        std::fs::write(&self.marker, self.deadline.to_string()).unwrap();
+        false
+    }
+}
+
+/// Troisième revue, point 3 : avec un marqueur actif, `consent.json` lisible reste lu (blocage = le plus tardif des deux) ; un refus
+/// pendant le blocage garde les compteurs d'affichage et d'import, jamais un fichier réécrit vide.
+#[test]
+fn y_tech_02_a_refusal_during_a_marker_block_keeps_the_counters() {
+    use circletasks_lib::sync::consent::{CONSENT_FILE, CONSENT_REFUSED_MARKER};
+    let dir = tempfile::tempdir().unwrap();
+    let inner = FakeUi::new();
+    let clock = TestClock::new(NOW);
+    let file = dir.path().join(CONSENT_FILE);
+    std::fs::write(&file, serde_json::json!({ "show": [NOW - 2, NOW - 1], "import": [NOW - 3], "blockedUntil": 0 }).to_string()).unwrap();
+    let ui = Arc::new(RefuseWithMarker { inner: inner.clone(), marker: dir.path().join(CONSENT_REFUSED_MARKER), deadline: NOW + CONSENT_BLOCK_MS / 2 });
+    let consent = ConsentGate::new(dir.path().to_path_buf(), ui, clock.clock());
+    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::ConsentDenied);
+    let written: serde_json::Value = serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(written["show"], serde_json::json!([NOW - 2, NOW - 1, NOW]), "affichages gardés");
+    assert_eq!(written["import"], serde_json::json!([NOW - 3]), "imports gardés");
+    assert_eq!(written["blockedUntil"], serde_json::json!(NOW + CONSENT_BLOCK_MS));
+}

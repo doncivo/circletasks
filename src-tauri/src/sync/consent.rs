@@ -178,13 +178,19 @@ impl ConsentGate {
     }
 
     fn load(&self, now: u64) -> SyncResult<Counters> {
-        // Refus non écrit (marqueur) : blocage jusqu'à son échéance.
-        if let Some(blocked) = self.marker_block(now)? {
-            return Ok(blocked);
-        }
+        // Refus non écrit (marqueur) : blocage jusqu'à son échéance. Troisième revue, point 3 : `consent.json` lisible reste lu (le
+        // plus tardif des deux blocages), pour qu'un refus pendant le blocage ne réécrive jamais des compteurs vides.
+        let marker = self.marker_block(now)?;
         Ok(match read_config_file::<Counters>(&self.path) {
-            Ok(Some(counters)) => counters,
-            Ok(None) => Counters::default(),
+            Ok(Some(mut counters)) => {
+                if let Some(deadline) = marker {
+                    counters.blocked_until = counters.blocked_until.max(deadline);
+                }
+                counters
+            }
+            Ok(None) => Counters { blocked_until: marker.unwrap_or(0), ..Counters::default() },
+            // Fichier illisible pendant le blocage du marqueur : comportement inchangé (compteurs vides, échéance du marqueur).
+            Err(()) if marker.is_some() => Counters { blocked_until: marker.unwrap_or(0), ..Counters::default() },
             Err(()) => {
                 // Fichier illisible : bloqué 10 minutes (et réécrit, pour que le blocage ne se prolonge pas à chaque lecture).
                 log::event("consent-file-unreadable", "blocked");
@@ -199,7 +205,8 @@ impl ConsentGate {
 
     /// Seconde revue, point 4 : marqueur `consent.refused` (échéance du blocage, ms) : bloqué jusqu'à l'échéance, jamais prolongé à la
     /// lecture ; illisible : 10 minutes, échéance réécrite ; échu : retiré, et `io` s'il ne peut pas l'être (la cause est l'écriture).
-    fn marker_block(&self, now: u64) -> SyncResult<Option<Counters>> {
+    /// Rend l'échéance du blocage en cours (None : aucun marqueur, ou marqueur échu et retiré).
+    fn marker_block(&self, now: u64) -> SyncResult<Option<u64>> {
         let text = match std::fs::read_to_string(&self.marker) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -221,7 +228,7 @@ impl ConsentGate {
         };
         if now < deadline {
             self.block_in_memory(deadline);
-            return Ok(Some(Counters { blocked_until: deadline, ..Counters::default() }));
+            return Ok(Some(deadline));
         }
         if std::fs::remove_file(&self.marker).is_err() && self.marker.exists() {
             log::event("consent-marker-not-removed", "io");
