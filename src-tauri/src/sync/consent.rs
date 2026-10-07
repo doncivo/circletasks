@@ -23,8 +23,8 @@ use super::limits::{CONSENT_BLOCK_MS, CONSENT_MAX_IMPORT, CONSENT_MAX_SHOW, CONS
 use super::{fail, log, SyncCode, SyncResult};
 
 pub const CONSENT_FILE: &str = "consent.json";
-/// Audit (point bas 7) : refus qui n'a pas pu être écrit ; lu comme un `consent.json` illisible (blocage de 10 minutes) jusqu'à ce que le
-/// blocage soit écrit.
+/// Audit (point bas 7 ; seconde revue, point 4) : refus qui n'a pas pu être écrit ; contient l'échéance du blocage (ms), respectée à la
+/// relance, puis retiré.
 pub const CONSENT_REFUSED_MARKER: &str = "consent.refused";
 /// Identifiant du bouton de confirmation ; « Annuler » porte `IDCANCEL`.
 pub const ID_CONFIRM: i32 = 100;
@@ -177,10 +177,12 @@ impl ConsentGate {
         }
     }
 
-    fn load(&self, now: u64) -> Counters {
-        // Refus non écrit (marqueur) : traité comme un fichier illisible.
-        let read = if self.marker.exists() { Err(()) } else { read_config_file::<Counters>(&self.path) };
-        match read {
+    fn load(&self, now: u64) -> SyncResult<Counters> {
+        // Refus non écrit (marqueur) : blocage jusqu'à son échéance.
+        if let Some(blocked) = self.marker_block(now)? {
+            return Ok(blocked);
+        }
+        Ok(match read_config_file::<Counters>(&self.path) {
             Ok(Some(counters)) => counters,
             Ok(None) => Counters::default(),
             Err(()) => {
@@ -188,14 +190,44 @@ impl ConsentGate {
                 log::event("consent-file-unreadable", "blocked");
                 let blocked = Counters { blocked_until: now + CONSENT_BLOCK_MS, ..Counters::default() };
                 self.block_in_memory(blocked.blocked_until);
-                // Échec d'écriture journalisé par `save` : le blocage reste en mémoire, et le fichier illisible (ou le marqueur) le redonne
-                // au démarrage. Écrit : le marqueur a rempli son rôle.
-                if self.save(&blocked).is_ok() && std::fs::remove_file(&self.marker).is_err() && self.marker.exists() {
-                    log::event("consent-marker-not-removed", "io");
-                }
+                // Échec d'écriture journalisé par `save` : le blocage reste en mémoire, et le fichier illisible le redonne au démarrage.
+                let _ = self.save(&blocked);
                 blocked
             }
+        })
+    }
+
+    /// Seconde revue, point 4 : marqueur `consent.refused` (échéance du blocage, ms) : bloqué jusqu'à l'échéance, jamais prolongé à la
+    /// lecture ; illisible : 10 minutes, échéance réécrite ; échu : retiré, et `io` s'il ne peut pas l'être (la cause est l'écriture).
+    fn marker_block(&self, now: u64) -> SyncResult<Option<Counters>> {
+        let text = match std::fs::read_to_string(&self.marker) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => {
+                log::event("consent-marker-unreadable", "io");
+                return fail(SyncCode::Io);
+            }
+        };
+        let deadline = match text.trim().parse::<u64>() {
+            Ok(deadline) => deadline,
+            Err(_) => {
+                let deadline = now + CONSENT_BLOCK_MS;
+                if std::fs::write(&self.marker, deadline.to_string()).is_err() {
+                    log::event("consent-marker-write-failed", "io");
+                    return fail(SyncCode::Io);
+                }
+                deadline
+            }
+        };
+        if now < deadline {
+            self.block_in_memory(deadline);
+            return Ok(Some(Counters { blocked_until: deadline, ..Counters::default() }));
         }
+        if std::fs::remove_file(&self.marker).is_err() && self.marker.exists() {
+            log::event("consent-marker-not-removed", "io");
+            return fail(SyncCode::Io);
+        }
+        Ok(None)
     }
 
     /// Blocage après un refus (audit, point bas 7) : écrit, sinon réessayé une fois, sinon marqueur `consent.refused` que `load` lit comme
@@ -204,7 +236,7 @@ impl ConsentGate {
         if self.save(counters).is_ok() || self.save(counters).is_ok() {
             return;
         }
-        if std::fs::write(&self.marker, b"refused").is_err() {
+        if std::fs::write(&self.marker, counters.blocked_until.to_string()).is_err() {
             log::event("consent-marker-write-failed", "io");
         } else {
             log::event("consent-refusal-marked", "blocked");
@@ -258,7 +290,8 @@ impl ConsentGate {
         }
         let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
         let now = (self.now)();
-        let mut counters = self.load(now);
+        // Lecture impossible : compteurs vides, le blocage est posé quand même (mémoire, fichier ou marqueur).
+        let mut counters = self.load(now).unwrap_or_default();
         counters.blocked_until = now + CONSENT_BLOCK_MS;
         // Blocage gardé en mémoire d'abord : un échec d'écriture (journalisé) ne le lève jamais pendant cette session, ni après une
         // relance (marqueur).
@@ -272,7 +305,7 @@ impl ConsentGate {
         {
             let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
             let now = (self.now)();
-            let mut counters = self.load(now);
+            let mut counters = self.load(now)?;
             self.gate(owner, &counters, now)?;
             Self::prune(&mut counters.show, now);
             if counters.show.len() >= CONSENT_MAX_SHOW {
@@ -291,7 +324,7 @@ impl ConsentGate {
         {
             let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
             let now = (self.now)();
-            let mut counters = self.load(now);
+            let mut counters = self.load(now)?;
             self.gate(owner, &counters, now)?;
             Self::prune(&mut counters.forget, now);
             if counters.forget.len() >= CONSENT_MAX_SHOW {
@@ -310,7 +343,7 @@ impl ConsentGate {
         {
             let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
             let now = (self.now)();
-            let mut counters = self.load(now);
+            let mut counters = self.load(now)?;
             self.gate(owner, &counters, now)?;
             Self::prune(&mut counters.reset, now);
             if counters.reset.len() >= CONSENT_MAX_SHOW {
@@ -327,7 +360,7 @@ impl ConsentGate {
     pub fn count_import(&self, owner: isize) -> SyncResult<()> {
         let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
         let now = (self.now)();
-        let mut counters = self.load(now);
+        let mut counters = self.load(now)?;
         self.gate(owner, &counters, now)?;
         Self::prune(&mut counters.import, now);
         if counters.import.len() >= CONSENT_MAX_IMPORT {
@@ -342,7 +375,7 @@ impl ConsentGate {
         {
             let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
             let now = (self.now)();
-            let counters = self.load(now);
+            let counters = self.load(now)?;
             self.gate(owner, &counters, now)?;
         }
         self.ask(kind, owner)
@@ -352,7 +385,7 @@ impl ConsentGate {
     pub fn precheck(&self, owner: isize) -> SyncResult<()> {
         let _lock = self.file.lock().unwrap_or_else(|e| e.into_inner());
         let now = (self.now)();
-        let counters = self.load(now);
+        let counters = self.load(now)?;
         self.gate(owner, &counters, now)
     }
 
