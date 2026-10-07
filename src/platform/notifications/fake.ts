@@ -3,7 +3,7 @@ import {
   type NotificationPermission,
   type NotificationRequest,
   type NotificationScheduler,
-  type NotificationSchedulerError,
+  NotificationSchedulerError,
   type ReplaceReport,
 } from './types';
 import { sortRequests, validateRequests } from './validate';
@@ -70,6 +70,9 @@ export function createFakeNotificationScheduler(): FakeNotificationScheduler {
       calls.push({ type: 'replace', requests: [...requests] });
       try {
         validateRequests(requests, outsidePlan);
+        // Comme l'adaptateur réel : l'état du système est vérifié après la liste, avant tout effet.
+        if (availability === 'unavailable') throw new NotificationSchedulerError('unavailable');
+        if (permission !== 'granted') throw new NotificationSchedulerError('permission-denied');
         if (failure !== null) {
           const error = failure;
           failure = null;

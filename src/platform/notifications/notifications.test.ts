@@ -147,6 +147,8 @@ describe('faux : replace (critères 2 à 4)', () => {
     expect(await fake.requestPermission()).toBe('denied');
     fake.setAvailability('unavailable');
     expect(await fake.availability()).toBe('unavailable');
+    fake.setAvailability('available');
+    fake.setPermission('granted');
     fake.failNextReplace(new NotificationSchedulerError('verify-failed', ['task:a'], { scheduled: 1, cancelled: 0, kept: 0 }));
     const error = await failureOf(() => fake.replace([req('task:a')]));
     expect(error).toMatchObject({ reason: 'verify-failed', ids: ['task:a'] });
@@ -258,5 +260,33 @@ describe('QA : 65 candidats et notifications réservées en attente', () => {
     fake.setOutsidePlan(64);
     expect(await fake.replace([])).toEqual({ scheduled: 0, cancelled: 0, kept: 0 });
     expect((await failureOf(() => createUnavailableNotificationScheduler().replace(many(65)))).reason).toBe('over-limit');
+  });
+});
+
+describe('faux : état du système (revue)', () => {
+  it('autorisation refusée ou non décidée : replace rejette permission-denied, sans rien modifier', async () => {
+    for (const state of ['denied', 'undetermined'] as const) {
+      const fake = createFakeNotificationScheduler();
+      await fake.replace([req('task:keep')]);
+      fake.setPermission(state);
+      const error = await failureOf(() => fake.replace([req('task:a')]));
+      expect(error.reason).toBe('permission-denied');
+      expect((await fake.pending()).map((r) => r.id)).toEqual(['task:keep']);
+    }
+  });
+
+  it('indisponible : replace rejette unavailable (prioritaire sur l’autorisation)', async () => {
+    const fake = createFakeNotificationScheduler();
+    fake.setAvailability('unavailable');
+    fake.setPermission('denied');
+    expect((await failureOf(() => fake.replace([req('task:a')]))).reason).toBe('unavailable');
+  });
+
+  it('une liste invalide est refusée avant l’état du système ; l’autorisation rendue, replace réussit', async () => {
+    const fake = createFakeNotificationScheduler();
+    fake.setPermission('denied');
+    expect((await failureOf(() => fake.replace([req('task:a'), req('task:a')]))).reason).toBe('duplicate-id');
+    fake.setPermission('granted');
+    expect(await fake.replace([req('task:a')])).toEqual({ scheduled: 1, cancelled: 0, kept: 0 });
   });
 });
