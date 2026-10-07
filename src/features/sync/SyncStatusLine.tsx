@@ -33,7 +33,7 @@ export function SyncStatusLine({ showDetailsLink = true }: { readonly showDetail
         {/* Région vivante séparée, sans âge relatif : annonce seulement la fin d'une synchro réussie. Les états en cours et les problèmes
             sont annoncés par le bandeau (StatusBanner) : pas de double annonce. */}
         <span className="ct-visually-hidden" role="status" data-testid="sync-status-live">
-          {status.phase === 'idle' && status.lastSyncAt && !isTroublePhase(status) ? t('sync.status.upToDateAnnounce') : ''}
+          {(status.phase === 'idle' || status.phase === 'syncing') && status.lastSyncAt && !isTroublePhase(status) ? t('sync.status.upToDateAnnounce') : ''}
         </span>
       </div>
       <div className="ct-sync__lineActions">
