@@ -202,10 +202,13 @@ export async function finishResumeTx(
 export function triedTracker(candidates: readonly SnapshotCandidate[], coverage: ForgetCoverage, epoch: EpochId) {
   const first = pickEligible(candidates, coverage, epoch, new Set());
   let decided: ResumeTried | undefined = first.kind === 'none' ? { epoch, author: null, seq: null } : undefined;
+  const isFirst = (end: SnapshotEnd): boolean => first.kind === 'ok' && first.end.author === end.author && first.end.seq === end.seq;
   const settle = (end: SnapshotEnd): void => {
-    if (first.kind === 'ok' && first.end.author === end.author && first.end.seq === end.seq) decided = { epoch, author: end.author, seq: end.seq };
+    if (isFirst(end)) decided = { epoch, author: end.author, seq: end.seq };
   };
   return {
+    /** Est-ce le premier choix (le plus récent éligible) ? */
+    isFirst,
     /** Corps illisible ou instantané en avance : écarté définitivement. */
     discarded: settle,
     /** Appliqué (écrit par `finishResumeTx`, dans la dernière transaction). */

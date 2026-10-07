@@ -974,6 +974,12 @@ export async function resumeFromSnapshot(
     const loaded = await loadSnapshot(deps, deviceId, epoch, seq);
     if (loaded === 'cloud-pending') {
       pending.add(`${String(deviceId).slice(0, 8)}/${epoch}/snapshot`);
+      // Sixième revue, point 2 (§5.5) : premier choix au corps en attente d'iCloud : aucun repli sur un instantané inférieur ; fichier en
+      // attente visible, demande de reprise gardée, réessayé seul au cycle suivant jusqu'à son arrivée.
+      if (tried.isFirst(pick.end)) {
+        deps.logger.log('resume-unavailable', { epoch });
+        return { kind: 'unavailable', tried: undefined };
+      }
       continue;
     }
     if (!loaded) {

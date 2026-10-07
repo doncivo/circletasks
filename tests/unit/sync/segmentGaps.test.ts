@@ -565,4 +565,26 @@ describe('sixième revue, points 1 et 2 : reprise hors arrivée (demande effacé
       setSnapshotTestHooks({});
     }
   });
+
+  it('points 1 et 2 : corps de B en attente 3 cycles, C lisible : aucune fusion de C, fichier en attente, demande gardée ; arrivé : une reprise depuis B', async () => {
+    const bodies: Partial<Record<string, Body>> = { [B_ID]: 'pending' };
+    const { a, r, deliver } = await room(bodies);
+    const before = r.logger.entries.length;
+    for (let i = 0; i < 3; i += 1) {
+      deliver();
+      r.clock.advance(60_000);
+      const status = await r.cycle();
+      expect(status.phase, `cycle ${String(i)}`).toBe('waiting-icloud');
+      expect(status.pendingFiles.some((f) => f.startsWith(B_ID.slice(0, 8)))).toBe(true);
+      expect(await readJson(r.data.repos, META.resume)).toBe(true);
+    }
+    expect(fromOf(r, before)).toEqual([]);
+    bodies[B_ID] = 'local';
+    deliver();
+    r.clock.advance(60_000);
+    expect((await r.cycle()).phase).toBe('idle');
+    expect(fromOf(r, before)).toEqual([B_ID]);
+    expect(statusOf(r, a.id)).toBe('active');
+    expect(await titlesOf(r)).toEqual(['T0', 'T1']);
+  });
 });
