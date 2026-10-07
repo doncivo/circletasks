@@ -6,13 +6,14 @@ Workflow : `.github/workflows/build-windows.yml` (story D-03, critères 10 et 11
 
 1. Dépôt public `doncivo/circletasks-releases` créé.
 2. Secrets du dépôt CircleTasks (Settings > Secrets and variables > Actions) : `TAURI_SIGNING_PRIVATE_KEY` (contenu de la clé privée `tauri signer generate`) et `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
-3. Environnement `releases` (Settings > Environments), avec « Required reviewers » = toi, et son secret `RELEASES_TOKEN` (jeton limité à circletasks-releases, droit « Contents : écriture »). Le même environnement sert à la publication iPhone.
+3. Environnement `releases` (Settings > Environments), sans approbation manuelle (décision d'Ali du 2026-10-07), et son secret `RELEASES_TOKEN` (jeton limité à circletasks-releases, droit « Contents : écriture »). Le même environnement sert à la publication iPhone.
+   Secrets de dépôt Google (K-01, noms seulement) : `CT_GOOGLE_CLIENT_ID` et `CT_GOOGLE_CLIENT_SECRET` (client « Application de bureau »), transmis à la seule étape de compilation de `build-windows.yml`, builds de branche compris (Google déclare ce client non confidentiel ; la valeur figure en clair dans l'exécutable). `CT_GOOGLE_IOS_CLIENT_ID` va à `build-ios.yml`.
 4. La clé publique correspondante est déjà dans `plugins.updater.pubkey`.
 5. Étape ponctuelle : la release `ios-v0.1.0` existante ne doit pas rester « latest » (sinon l'endpoint de l'updater ne trouve plus `latest.json`) : `gh release edit ios-v0.1.0 --repo doncivo/circletasks-releases --latest=false`. Les releases iPhone suivantes sont créées avec `--latest=false` par `build-ios.yml`.
 
 ### Réglages recommandés (à faire par Ali)
 
-- Environnement `releases` : « Deployment branches and tags » limité aux tags `v*` et `ios-v*` et à la branche `main`.
+- Environnement `releases` : « Deployment branches and tags » limité aux tags `v*` et `ios-v*` (facultatif).
 - `RELEASES_TOKEN` uniquement en secret d'environnement `releases` (jamais en secret de dépôt).
 - Option : un environnement `signing`, limité aux tags `v*`, qui porte les deux secrets de signature à la place des secrets de dépôt (le job `windows` y ferait référence par `environment: signing`). Sans cela, les secrets de dépôt restent lisibles par tout workflow du dépôt.
 

@@ -66,12 +66,9 @@ Quand une nouvelle version est publiée, elle apparaît dans la source avec ses 
 
 ## Pour publier une version (une fois, côté GitHub)
 
-La publication de l'IPA sur circletasks-releases demande ton accord. Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > `releases` (New environment s'il n'existe pas) :
+Une seule fois : dans le dépôt CircleTasks sur GitHub, Settings > Environments > `releases` (New environment s'il n'existe pas), ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture »). Aucune approbation manuelle n'est demandée (décision du 2026-10-07). Recommandation facultative : dans « Deployment branches and tags », limite aux tags `ios-v*` et `v*`.
 
-1. Coche « Required reviewers » et ajoute-toi.
-2. Dans « Deployment branches and tags », garde seulement les tags `ios-v*` et `v*` : retire `main`.
-
-Ajoute le secret `RELEASES_TOKEN` (jeton limité au dépôt circletasks-releases, droit « Contents : écriture ») dans cet environnement. Ensuite, chaque publication attend ton bouton « Approve ». Seul un tag `ios-vX.Y.Z` publie (X.Y.Z = version de l'app) ; un lancement du workflow « Build iOS » sur une branche produit seulement l'IPA en artefact, même avec « publish » coché.
+Secrets de dépôt pour Google Agenda (noms seulement, valeurs dans GitHub) : `CT_GOOGLE_CLIENT_ID` et `CT_GOOGLE_CLIENT_SECRET` (client « Application de bureau », build PC), `CT_GOOGLE_IOS_CLIENT_ID` (client « iOS », build iPhone). Seul un tag `ios-vX.Y.Z` publie (X.Y.Z = version de l'app) ; un lancement du workflow « Build iOS » sur une branche produit seulement l'IPA en artefact, même avec « publish » coché.
 
 ## Si ça se passe mal
 
