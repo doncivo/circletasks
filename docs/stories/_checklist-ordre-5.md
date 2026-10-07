@@ -43,6 +43,52 @@
 - [ ] P-04-iOS : critère 11 de P-04, avenant à l'ADR 0009 (capability iOS, gestionnaire mobile, réouverture de la base sans `relaunch`), plugin Fichiers, règles 1 à 6 de l'ADR 0010 sur iPhone ; marqueur de restauration et fenêtre de choix de Y-02 sur iPhone (backlog, dettes).
 - [ ] P-07 sur iPhone : « Télécharger un modèle » et rapport des lignes rejetées tant que le plugin Fichiers n'existe pas (dettes ; hors synchro, à garder en vue).
 
+## Phase 1 : lot N1 (notifications), ajouté par le product-owner le 2026-10-08
+
+Sources : fiches N-01, N-03, N-05, N-06, N-07, compléments de F-04 et N-04. Rien de ceci n'est vérifiable sans l'iPhone ; les critères unitaires, e2e (projet `iphone`) et la CI verte sont dans les fiches.
+
+- [ ] N-01 A1 : rappel à 09:00 reçu à 09:00:xx (≤ 60 s), app fermée puis écran verrouillé.
+- [ ] N-01 A2 : autorisation refusée, bandeau visible ; rétablie dans Réglages iOS, bandeau disparu à la reprise.
+- [ ] N-01 A3 : nombre réel de notifications en attente ≤ 64 et texte « Planifiés jusqu'au » conforme.
+- [ ] N-05 A1 et A2 : redémarrage de l'iPhone puis fermeture forcée, les rappels planifiés sonnent, aucun doublon à la réouverture.
+- [ ] N-05 A3 : mise à jour par SideStore, notifications conservées ou replanifiées (noter lequel).
+- [ ] N-05 A4 et A5 : app non ouverte plusieurs jours (plafond, « planifiés jusqu'au »), réinstallation après expiration des 7 jours.
+- [ ] N-06 A1 à A3 : changement de fuseau avec réouverture ; **sans réouverture, noter si la notification sonne à l'ancien instant** (décide l'option de l'ADR 0012) ; heure d'été.
+- [ ] N-07 A1 à A3 : tâche créée sur le PC, sonne sur l'iPhone, rien sur le PC ; avertissement PC (rappel à moins de 2 h, iPhone ancien) sans fausse alerte ; récapitulatif du lendemain en texte générique puis réel.
+- [ ] **N-03 A2 (bloquant pour la clôture de N-03)** : notification planifiée, app tuée, appui sur « Fait » puis « +15 min » : l'app ne s'arrête pas (constat 6 de l'ADR 0012) ; idem après redémarrage et après mise à jour SideStore. Résultat noté dans l'ADR 0012.
+- [ ] N-03 A1, A4, A5 : « Fait » en premier plan, « +15 min » (sonne 15 min plus tard, tâche inchangée, rien reçu par le PC), « Fait » sur routine valide la bonne date.
+- [ ] F-04 (complément) : fin de session app fermée, une seule notification après pause et reprise, une seule alerte app ouverte, sonne pendant une plage silencieuse Pro, bandeau si l'autorisation est refusée.
+- [ ] N-04 (complément) : récapitulatif du soir à l'heure avec le contenu du jour ; changement d'heure dans Réglages sans ancienne notification.
+
+## Phase 1 : lot Y-IOS (synchro sur iPhone), ajouté par le product-owner le 2026-10-08
+
+Sources : fiches Y-IOS-01 et Y-IOS-02. Les cases de « Synchro, parcours réels » et « Plateforme iOS de la synchro » ci-dessus restent la liste de référence ; ces lignes ajoutent ce que les fiches exigent en plus.
+
+- [ ] Y-IOS-01 A1 à A3 : signet retenu après redémarrage ; hydratation d'un fichier « dans le nuage » ; lien symbolique refusé et visible.
+- [ ] Y-IOS-01 A4 : cycle au passage en arrière-plan, tâche créée sur l'iPhone arrive sur le PC écran verrouillé ; durée réelle de la tâche d'arrière-plan notée (cible ~25 s).
+- [ ] Y-IOS-01 A5 et A6 : signet après mise à jour SideStore (ou invitation visible à rechoisir) ; iPhone hors ligne, la file attend.
+- [ ] Y-IOS-02 A1 : parcours 11 réel (QR, caméra expliquée, dossier, tâche lisible, titre absent d'iCloud).
+- [ ] Y-IOS-02 A2 : attributs du Trousseau (`SecItemCopyMatching`), absence sur un second appareil du même Apple ID.
+- [ ] Y-IOS-02 A3 : alerte `UIAlertController` (« Annuler » par défaut, refus hors premier plan, compteurs après fermeture forcée, mode sombre).
+- [ ] Y-IOS-02 A4 : heure de la boîte d'oubli en heure locale.
+- [ ] Y-IOS-02 A5 et A6 : oubli, réinitialisation et version réelle avec l'iPhone ; saisie de la clé de secours, progression, assistant à 4 étapes.
+- [ ] Échec de réintégration visible sur l'iPhone (Y-07) et bandeaux A-09 : marges de sécurité iOS, thèmes clair et sombre.
+
+## Point de contrôle de 15 minutes après la phase 1 (demandé par Ali)
+
+Objectif : valider en une séance courte que la chaîne tient, avant d'empiler les phases 2 à 4. IPA produite par `build-ios.yml` sur la branche fusionnée de la phase 1 et signalée à Ali par l'agent de coordination. Chronomètre lancé à l'ouverture du guide `docs/install-iphone.md`.
+
+1. [ ] Installer l'IPA par SideStore (SideStore déjà installé, sinon compter le temps en plus) ; approuver le profil ; l'app s'ouvre sur Aujourd'hui.
+2. [ ] Accepter les notifications (explication affichée avant la fenêtre iOS) ; refuser une fois pour voir le bandeau, puis autoriser.
+3. [ ] Choisir le dossier `iCloud Drive/CircleTasks` avec le sélecteur ; redémarrer l'app, le dossier est retenu.
+4. [ ] Scanner le QR affiché sur le PC (caméra expliquée) ; la tâche du PC apparaît sur l'iPhone.
+5. [ ] Créer une tâche à +3 minutes avec « À l'heure » ; verrouiller l'écran ; la notification sonne ≤ 60 s après l'heure.
+6. [ ] Appuyer sur « +15 min » puis « Fait » (app ouverte, puis app tuée : N-03 A2) ; la tâche reste intacte après « +15 min ».
+7. [ ] Réglages > Rappels affiche « Planifiés jusqu'au… » ; Réglages > Synchronisation affiche « Dernière synchro ».
+8. [ ] Noter tout bandeau d'erreur vu, avec l'heure ; noter la durée totale (cible : 15 minutes hors installation de SideStore).
+
+Résultat à inscrire ici par Ali : date, durée, cases non cochées. Un blocage de ce point de contrôle arrête la phase 2.
+
 ## Livraison
 
 - [ ] I-01 installation : en suivant `docs/install-iphone.md`, SideStore puis CircleTasks installés en moins de 15 minutes (chronomètre, iTunes et iloader déjà téléchargés).
