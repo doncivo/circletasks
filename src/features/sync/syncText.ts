@@ -1,4 +1,5 @@
 import type { SyncWarningCode } from '../../domain/syncBanners';
+import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
 import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatStamp, formatTime } from '../../i18n/format';
@@ -108,6 +109,11 @@ export function failureKinds(tables: readonly string[]): string {
   return [...new Set(labels)].join(', ');
 }
 
+/** Attente d'iCloud prolongée (audit, point bas 8) : plus de `WAITING_ICLOUD_LONG_MS` depuis la dernière synchro complète. */
+export function waitingLong(status: Pick<SyncStatus, 'phase' | 'lastSyncAt'>, nowMs: number): boolean {
+  return status.phase === 'waiting-icloud' && status.lastSyncAt !== null && nowMs - Date.parse(status.lastSyncAt) >= WAITING_ICLOUD_LONG_MS;
+}
+
 /** Sous-ligne de la ligne « iCloud Drive / CircleTasks » de Réglages. */
 export function statusLine(status: SyncStatus, nowMs: number): string {
   if (failureShown(status) && status.reintegrationFailure) return failureLine(status.reintegrationFailure.fields);
@@ -119,6 +125,8 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'syncing':
       return t('sync.status.syncingPhase');
     case 'waiting-icloud':
+      // Audit (point bas 8) : une attente qui dure n'est pas un simple délai (référence : dernière synchro complète).
+      if (waitingLong(status, nowMs)) return t('sync.status.waitingIcloudLong', { age: formatSyncAge(status.lastSyncAt as string, nowMs) });
       return status.errorCode ? errorText(status.errorCode) : t('sync.status.waitingIcloud');
     case 'restore-choice':
       return t('sync.status.restoreChoice');

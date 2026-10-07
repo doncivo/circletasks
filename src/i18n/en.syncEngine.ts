@@ -15,6 +15,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     needsPairing: 'Pair this device to sync',
     syncingPhase: 'Syncing…',
     waitingIcloud: 'Waiting for iCloud',
+    waitingIcloudLong: 'Waiting for iCloud for more than 24 h (last complete sync {age}): check that iCloud for Windows is running and that the sync folder is available',
     restoreChoice: 'A choice is needed after the restore',
     updateRequired: 'Update the app to read the data of your other devices',
     updateRequiredDevice: 'Update the app to read the data of {device}',

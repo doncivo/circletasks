@@ -14,7 +14,7 @@ import { useNavigationStore } from '../app/navigation';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, statusLine, warningText } from './syncText';
+import { deviceName, deviceStatusText, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
 
@@ -202,7 +202,9 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     else put('syncTrouble', null);
 
     // Critère 9 e : cause connue, texte de la ligne de Réglages (sans l'échec de réintégration, montré par `updateRequired`).
-    put('waitingIcloud', banners.waitingIcloud ? (banners.waitingIcloud.cause ? { message: statusLine({ ...banners.textStatus, reintegrationFailure: null }, nowMs) } : {}) : null);
+    // Audit (point bas 8) : attente prolongée, même sans cause connue : texte de la ligne de Réglages (vérifier iCloud et le dossier).
+    const explained = banners.waitingIcloud && (banners.waitingIcloud.cause || waitingLong({ ...banners.textStatus, phase: 'waiting-icloud' }, nowMs));
+    put('waitingIcloud', banners.waitingIcloud ? (explained ? { message: statusLine({ ...banners.textStatus, phase: 'waiting-icloud', reintegrationFailure: null }, nowMs) } : {}) : null);
 
     // Critère 9 d : un seul seuil, compté depuis le début du cycle (`cycleStartedAt` du service) ; jamais deux délais cumulés.
     if (banners.syncing) {

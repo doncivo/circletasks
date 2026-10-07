@@ -16,6 +16,7 @@ export const syncEngineFr = {
     needsPairing: 'Associez cet appareil pour synchroniser',
     syncingPhase: 'Synchronisation en cours…',
     waitingIcloud: 'En attente d’iCloud',
+    waitingIcloudLong: 'En attente d’iCloud depuis plus de 24 h (dernière synchro complète {age}) : vérifiez qu’iCloud pour Windows est ouvert et que le dossier de synchro est disponible',
     restoreChoice: 'Un choix est à faire après la restauration',
     updateRequired: 'Mettez à jour l’app pour lire les données de vos autres appareils',
     updateRequiredDevice: 'Mettez à jour l’app pour lire les données de {device}',

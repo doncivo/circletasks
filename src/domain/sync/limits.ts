@@ -94,6 +94,11 @@ export const QUIT_HANDLER_SYNC_MS = 4_500;
  * d'un cycle sans travail à ce seuil, et le bandeau ne s'affiche qu'une fois le cycle plus vieux que ce seuil (compté depuis son début).
  */
 export const SYNCING_BANNER_DELAY_MS = 1_000;
+/**
+ * Y-TECH-02 (audit, point bas 8) : attente d'iCloud jugée prolongée au-delà de ce délai depuis la dernière synchro complète (fichier qui
+ * n'arrive jamais, segment clos tronqué par un tiers) : texte qui invite à vérifier iCloud pour Windows et le dossier.
+ */
+export const WAITING_ICLOUD_LONG_MS = 24 * 60 * 60_000;
 export const PAIRING_VALIDITY_MS = 5 * 60_000;
 export const PAIRING_CLOCK_TOLERANCE_MS = 2 * 60_000;
 export const PAIRING_RESCAN_MS = 10_000;
