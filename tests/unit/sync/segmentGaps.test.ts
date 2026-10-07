@@ -4,7 +4,8 @@ import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
 import { clearSegmentGap } from '../../../src/sync/engine';
 import { syncBannerFor } from '../../../src/domain/syncBanners';
 import { SyncPlatformError } from '../../../src/platform/sync/types';
-import { storedDeviceStatuses } from '../../../src/sync';
+import { readStoredDeviceStatuses, storedDeviceStatuses } from '../../../src/sync';
+import { SyncStateUnreadableError } from '../../../src/domain/sync/stored';
 import { setSnapshotTestHooks } from '../../../src/sync/snapshot';
 import { META, readJson } from '../../../src/sync/meta';
 import { propagate } from '../../sim/syncCloudSim';
@@ -664,5 +665,16 @@ describe('sixième revue, point 5 : journal du moteur pour la relecture des trou
     };
     await a.cycle();
     expect(a.logger.entries.filter((e) => e.event === 'state-unreadable').map((e) => e.detail)).toContainEqual({ where: 'sync_meta.segmentGaps' });
+  });
+});
+
+describe('sixième revue, point 6 : readStoredDeviceStatuses (lecture des états persistés par src/sync)', () => {
+  it('appareils persistés avec gapSince ; valeur illisible : rejet state-unreadable, jamais « aucun trou »', async () => {
+    const [a, b] = await openingSnapshotGap();
+    await b.cycle();
+    const devicesNow = await readStoredDeviceStatuses(b.data.repos);
+    expect(devicesNow.find((d) => d.deviceId === a.id)).toMatchObject({ status: 'corrupt', gapSince: expect.any(String) as string });
+    await b.data.repos.sync.setMeta(META.segmentGaps, '{pas du json');
+    await expect(readStoredDeviceStatuses(b.data.repos)).rejects.toBeInstanceOf(SyncStateUnreadableError);
   });
 });

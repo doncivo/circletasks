@@ -1,4 +1,7 @@
-import type { SyncStateRow } from '../db/repositories';
+import type { Repositories, SyncStateRow } from '../db/repositories';
+import { parseStoredSegmentGaps, type StoredStateLog } from '../domain/sync/stored';
+import { defaultSyncLogger } from './log';
+import { META } from './meta';
 import { compareVersions, newerKind } from '../domain/sync/compat';
 import { deviceStateOf } from '../domain/sync/devices';
 import { SYNC_FORMAT_MAJOR } from '../domain/sync/format';
@@ -41,4 +44,14 @@ export function storedDeviceStatuses(
       return { ...base, appVersion: stale ? null : row.appVersion, newer: status === 'newer-major' ? 'major' : newerKind(relation) };
     })
     .sort((a, b) => (a.self === b.self ? (a.deviceId < b.deviceId ? -1 : 1) : a.self ? -1 : 1));
+}
+
+/**
+ * Sixième revue, point 6 : appareils affichés d'après les états persistés (`sync_state` et trous `sync_meta.segmentGaps`, texte distinct),
+ * pour l'interface avant le premier cycle (`startSync.ts`), sans qu'elle lise ni analyse `sync_meta`. Valeur illisible :
+ * `SyncStateUnreadableError` journalisée (l'appelant signale `state-unreadable`), jamais lue comme « aucun trou ».
+ */
+export async function readStoredDeviceStatuses(repos: Repositories, log: StoredStateLog = defaultSyncLogger): Promise<SyncDeviceStatus[]> {
+  const gaps = parseStoredSegmentGaps(await repos.sync.getMeta(META.segmentGaps), `sync_meta.${META.segmentGaps}`, log);
+  return storedDeviceStatuses(await repos.sync.getStates(), { gaps });
 }
