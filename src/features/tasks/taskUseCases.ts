@@ -59,7 +59,7 @@ export type CreateTaskError =
   | 'recurrence-invalid';
 
 /** Définir une récurrence sur une tâche existante (T-09) ; modifier / arrêter une règle : T-10. */
-export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date' | 'invalid';
+export type SetRecurrenceError = 'not-found' | 'already-recurrent' | 'needs-date' | 'invalid' | 'apple-linked';
 
 /** N-02 : remplacer les rappels d'une tâche (la tâche doit avoir une date et une heure, QB-07). */
 export type SetRemindersError = 'not-found' | 'needs-time';

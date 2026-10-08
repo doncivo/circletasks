@@ -12,6 +12,7 @@ export const syncConflictsEn: Shape<typeof syncConflictsFr> = {
   discarded: '{value} discarded',
   side: '{device} · {time}',
   otherDevice: 'Other device',
+  appleReminders: 'Apple Reminders',
   restore: 'Restore',
   restoreLabel: 'Restore the discarded value: {title}, {field}',
   restoring: 'Restoring…',

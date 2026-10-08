@@ -24,8 +24,11 @@ export interface AppleReminderLink {
   readonly startedAt: IsoDateTime | null;
 }
 
-/** Horloges (hlc) des champs d'une tâche : champ, sinon `'*'`, sinon hlc de la ligne. */
-export type TaskFieldClocks = Readonly<Record<MergeField, Hlc>>;
+/**
+ * Horloges (hlc) des champs d'une tâche : champ, sinon `'*'`, sinon hlc de la ligne. `external_id` (K-07) : sa date dit quand la tâche a été
+ * détachée de Rappels (« Détachée de Rappels le 6 oct. »).
+ */
+export type TaskFieldClocks = Readonly<Record<MergeField | 'external_id', Hlc>>;
 
 export interface AppleReminderLinkRepository {
   listAll(): Promise<AppleReminderLink[]>;

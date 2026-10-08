@@ -73,9 +73,11 @@ export const appleRemindersFr = {
   createNoList: 'Affichez d’abord une liste de cet espace.',
   createListNotInSpace: 'Cette liste n’est pas affichée dans cet espace.',
   deleteTitle: 'Supprimer aussi dans Rappels ?',
-  deleteBody: 'Cette tâche est liée à un rappel : il sera aussi supprimé dans Rappels.',
+  deleteBody: '« {title} » est liée à un rappel : il sera aussi supprimé dans Rappels.',
   deleteConfirm: 'Supprimer',
+  deleteManyLinked: '{count} tâche(s) liée(s) à Rappels seront aussi supprimées dans Rappels.',
   recurringRefused: 'Modifiez ce rappel récurrent dans Rappels.',
+  noRepeat: 'Une tâche liée à Rappels ne peut pas être répétée dans CircleTasks.',
   // Tâches (badge, fiche)
   badge: 'Rappels',
   badgeRecurring: 'Récurrent dans Rappels',

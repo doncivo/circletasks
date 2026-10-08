@@ -28,7 +28,7 @@ function rowToLink(row: LinkRow): AppleReminderLink {
 }
 
 const CHUNK = 400;
-const FIELDS: readonly MergeField[] = ['title', 'date', 'time', 'status'];
+const FIELDS: readonly (MergeField | 'external_id')[] = ['title', 'date', 'time', 'status', 'external_id'];
 
 /**
  * Table locale `apple_reminder_link` (ADR 0008 §10.2) : aucune publication, aucune capture ; les horloges des champs d'une tâche sont lues
@@ -72,7 +72,7 @@ export function createAppleReminderLinkRepository(db: SqlExecutor): AppleReminde
         const marks = part.map(() => '?').join(', ');
         const tasks = await db.select<{ id: string; hlc: string }>(`SELECT id, hlc FROM task WHERE id IN (${marks})`, [...part]);
         const clocks = await db.select<{ row_id: string; field: string; hlc: string }>(
-          `SELECT row_id, field, hlc FROM sync_field_clock WHERE table_name = 'task' AND row_id IN (${marks}) AND field IN ('title', 'date', 'time', 'status', '*')`,
+          `SELECT row_id, field, hlc FROM sync_field_clock WHERE table_name = 'task' AND row_id IN (${marks}) AND field IN ('title', 'date', 'time', 'status', 'external_id', '*')`,
           [...part],
         );
         const byRow = new Map<string, Map<string, string>>();

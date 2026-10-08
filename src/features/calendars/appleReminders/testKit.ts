@@ -9,6 +9,8 @@ import { useAppStore } from '../../app/appStore';
 import { createAppContainer, type AppContainer } from '../../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../../app/navigation';
 import { appleRemindersState, appleRemindersStore } from './appleRemindersState';
+import { runRemindersPass, type PassReport } from './remindersPass';
+import { createSender } from './remindersWrites';
 
 /**
  * Banc d'essai des Rappels Apple (K-05 à K-07) : base SQLite en mémoire, conteneur d'iPhone installé (`tauri`, `ios`), faux magasin
@@ -24,6 +26,8 @@ export interface RemindersHarness {
   readonly reminders: FakeReminders;
   /** Choisit une liste (affichée dans l'espace donné) dans le réglage partagé. */
   showList(list: { readonly id: string; readonly name?: string; readonly spaceId: SpaceId | null; readonly shown?: boolean }): Promise<void>;
+  /** Passage avec envoi vers Rappels (comme le coordinateur de l'app) ; `full` par défaut. */
+  pass(kind?: 'full' | 'push'): Promise<PassReport>;
   tasks(): Promise<Task[]>;
   task(id: TaskId): Promise<Task | null>;
   taskByTitle(title: string): Promise<Task>;
@@ -70,6 +74,7 @@ export async function setupRemindersHarness(suffix: string, options: HarnessOpti
       const entry: AppleListSetting = { id: list.id, name: list.name ?? list.id, spaceId: list.spaceId, shown: list.shown ?? list.spaceId !== null };
       await state.setLists({ lists: [...current, entry] });
     },
+    pass: (kind = 'full') => runRemindersPass(container, kind, { send: createSender(container) }),
     tasks: () => container.data.repos.tasks.listAppleSourced(),
     task: (id) => container.data.repos.tasks.getById(id, { includeDeleted: true }),
     async taskByTitle(title) {

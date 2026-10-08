@@ -1,4 +1,4 @@
-import { MAX_APPLE_LISTS, type AppleListSetting, type AppleNoticeKind, type ReminderList } from '../../../domain/appleReminders';
+import { MAX_APPLE_LISTS, validateCreateRule, type AppleListSetting, type AppleNoticeKind, type ReminderList } from '../../../domain/appleReminders';
 import { defaultSpaceFor } from '../../../domain/spaceRules';
 import type { SpaceId } from '../../../domain/types';
 import { logFailure } from '../../../platform/desktop/log';
@@ -22,6 +22,11 @@ export interface AppleRemindersActions {
   loadPlatformLists(): Promise<void>;
   setShown(list: ReminderList, shown: boolean): Promise<void>;
   setSpace(list: ReminderList, spaceId: SpaceId): Promise<void>;
+  /**
+   * Réglage « Créer aussi dans Rappels » d'un espace (K-06 critère 6) : désactivé par défaut ; activer sans liste affichée de cet espace est
+   * refusé avec la raison (`message`). La liste de destination est choisie parmi les listes affichées de l'espace.
+   */
+  setCreateRule(spaceId: SpaceId, enabled: boolean, listId: string | null): Promise<void>;
   refresh(): Promise<PassReport>;
   dismissNotice(kind: AppleNoticeKind): Promise<void>;
   resolveHeld(listId: string, choice: HeldChoice): Promise<void>;
@@ -82,6 +87,17 @@ function createActions(container: AppContainer): AppleRemindersActions {
     }
   };
 
+  /**
+   * Décocher la liste de destination d'un espace (ou la changer d'espace) désactive le réglage de création de cet espace et le dit (K-06 critère 6).
+   */
+  const reconcileCreateRules = async (): Promise<void> => {
+    const { lists, create } = store.getState();
+    const broken = create.bySpace.filter((rule) => rule.enabled && validateCreateRule(rule.spaceId, rule.listId, lists) !== null);
+    if (broken.length === 0) return;
+    await state.setCreate({ bySpace: create.bySpace.map((rule) => (broken.includes(rule) ? { ...rule, enabled: false } : rule)) });
+    await state.addNotice({ kind: 'creation-off', count: broken.length });
+  };
+
   const writeList = async (list: ReminderList, change: (current: AppleListSetting) => AppleListSetting): Promise<boolean> => {
     await state.load();
     const lists = store.getState().lists.lists;
@@ -98,6 +114,7 @@ function createActions(container: AppContainer): AppleRemindersActions {
     }
     store.setState({ message: null });
     await state.setLists({ lists: [...lists.filter((entry) => entry.id !== list.id), next] });
+    await reconcileCreateRules();
     if (store.getState().persistFailed) store.setState({ message: 'save-failed' });
     return true;
   };
@@ -131,6 +148,21 @@ function createActions(container: AppContainer): AppleRemindersActions {
     async setSpace(list, spaceId) {
       const ok = await writeList(list, (current) => ({ ...current, spaceId }));
       if (ok) void run();
+    },
+    async setCreateRule(spaceId, enabled, listId) {
+      await state.load();
+      const { lists, create } = store.getState();
+      if (enabled) {
+        const issue = validateCreateRule(spaceId, listId, lists);
+        if (issue !== null) {
+          store.setState({ message: issue });
+          return;
+        }
+      }
+      store.setState({ message: null });
+      const others = create.bySpace.filter((rule) => rule.spaceId !== spaceId);
+      await state.setCreate({ bySpace: [...others, { spaceId, enabled, listId }] });
+      if (store.getState().persistFailed) store.setState({ message: 'save-failed' });
     },
     refresh: run,
     async dismissNotice(kind) {

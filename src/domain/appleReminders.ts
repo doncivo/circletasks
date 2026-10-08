@@ -13,6 +13,8 @@ import { isIsoDateTime, isLocalDate, isLocalTime } from './types';
 
 /** Appareil fictif des valeurs perdues côté Rappels dans le journal des conflits (UUID réservé, ADR 0008 §10.5). */
 export const APPLE_REMINDERS_PSEUDO_DEVICE = '00000000-0000-4000-8000-0000000000ae' as DeviceId;
+/** Identifiant d'appareil écrit dans le journal des conflits pour une valeur qui vient de Rappels (affiché « Rappels Apple »). */
+export const APPLE_REMINDERS_DEVICE = 'apple-reminders';
 export const MAX_APPLE_LISTS = 100;
 /** Rappels non terminés lus par liste et par passage (ADR 0008 §10.6). */
 export const MAX_REMINDERS_PER_LIST = 500;
@@ -378,7 +380,8 @@ export interface AppleNotice {
 }
 
 export interface AppleStatus {
-  readonly failure: { readonly code: string; readonly at: IsoDateTime } | null;
+  /** Échec persistant ; `write` : une écriture vers Rappels n'a pas pu partir (le bandeau compte les modifications non envoyées). */
+  readonly failure: { readonly code: string; readonly at: IsoDateTime; readonly write?: true } | null;
   readonly caps: readonly { readonly listId: string; readonly total: number; readonly imported: number }[];
   readonly held: readonly { readonly listId: string; readonly count: number; readonly at: IsoDateTime }[];
   readonly unknown: number;
@@ -437,7 +440,7 @@ export function parseAppleStatus(raw: unknown): AppleStatus {
   if (!isObject(raw)) return EMPTY_APPLE_STATUS;
   const failure =
     isObject(raw['failure']) && isShortText(raw['failure']['code'], 64) && typeof raw['failure']['at'] === 'string' && isIsoDateTime(raw['failure']['at'])
-      ? { code: raw['failure']['code'], at: raw['failure']['at'] }
+      ? { code: raw['failure']['code'], at: raw['failure']['at'], ...(raw['failure']['write'] === true ? { write: true as const } : {}) }
       : null;
   const caps = (Array.isArray(raw['caps']) ? (raw['caps'] as unknown[]) : [])
     .filter((entry): entry is Record<string, unknown> => isObject(entry) && isShortText(entry['listId'], MAX_LIST_ID_LENGTH) && isCount(entry['total']) && isCount(entry['imported']))
@@ -471,4 +474,49 @@ export function validateCreateRule(spaceId: SpaceId, listId: string | null, list
   if (listId === null) return 'no-list';
   const list = lists.lists.find((entry) => entry.id === listId);
   return list && list.shown && list.spaceId === spaceId ? null : 'list-not-in-space';
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// PC (K-07) : fraîcheur des Rappels lus par l'iPhone, modifications en attente d'envoi
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/** Au-delà de 24 h sans lecture réussie par l'iPhone, le PC avertit (K-07 D1). */
+export const STALE_AFTER_MS = 24 * 3_600_000;
+
+export type AppleFreshness = 'fresh' | 'stale' | 'never' | 'no-iphone';
+
+/**
+ * État de fraîcheur affiché sur le PC (K-07 critère 5, D1) : `no-iphone` : aucun iPhone associé (ou synchro non configurée) ; `never` :
+ * aucune lecture n'a encore eu lieu ; `stale` : plus de 24 h (24 h exactement n'avertit pas) ; sinon `fresh`. Fonction pure, sans horloge globale.
+ */
+export function appleFreshness(input: { readonly nowMs: number; readonly lastPassAt: IsoDateTime | null; readonly iphoneAssociated: boolean }): AppleFreshness {
+  if (!input.iphoneAssociated) return 'no-iphone';
+  if (input.lastPassAt === null) return 'never';
+  return input.nowMs - Date.parse(input.lastPassAt) > STALE_AFTER_MS ? 'stale' : 'fresh';
+}
+
+/**
+ * Une modification de titre, d'échéance ou de statut faite sur le PC attend-elle le prochain passage de l'iPhone (K-07 D2) ? Vrai si l'une
+ * des horloges de ces champs (ms) est plus récente que la dernière lecture publiée par l'iPhone. Une note ou un projet modifié ne compte pas.
+ */
+export function awaitsIphonePass(fieldClocksMs: readonly number[], lastPassAt: IsoDateTime | null): boolean {
+  if (lastPassAt === null) return false;
+  const last = Date.parse(lastPassAt);
+  return fieldClocksMs.some((ms) => ms > last);
+}
+
+/** Appareil tel que l'affiche la synchro (sous-ensemble de `SyncDeviceStatus`, comme `WarningDevice` de N-07). */
+export interface AssociationDevice {
+  readonly platform: 'windows' | 'ios';
+  readonly self: boolean;
+  readonly status: string;
+  readonly seen?: boolean | undefined;
+}
+
+/**
+ * Un iPhone est-il associé (K-07 critère 5) ? Un appareil iOS autre que soi, déjà lu, ni oublié ni expiré ; sans synchro configurée (liste
+ * vide) : non. Un iPhone dont la synchro est en erreur reste associé : c'est alors la fraîcheur qui avertit.
+ */
+export function hasAssociatedIphone(devices: readonly AssociationDevice[]): boolean {
+  return devices.some((device) => device.platform === 'ios' && !device.self && device.seen !== false && device.status !== 'forgotten' && device.status !== 'expired');
 }

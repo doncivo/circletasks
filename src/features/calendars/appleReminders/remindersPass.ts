@@ -1,4 +1,5 @@
 import {
+  APPLE_REMINDERS_DEVICE,
   appleLinkState,
   isFollowed,
   massDeletionBlocked,
@@ -33,7 +34,7 @@ import { logFailure } from '../../../platform/desktop/log';
 import { RemindersError } from '../../../platform/reminders';
 import type { AppContainer } from '../../app/container';
 import { applyRemoteChanges } from '../../sync/remoteChanges';
-import { syncTaskReminders } from '../../tasks/reminderSync';
+import { applyValuesToTask } from './appleTaskWrites';
 import { appleRemindersState } from './appleRemindersState';
 
 /**
@@ -149,7 +150,7 @@ export async function runRemindersPass(container: AppContainer, kind: PassKind, 
   } catch (error) {
     // Aucun échec silencieux : tout rejet du plugin et toute exception d'un passage sont écrits (code, heure ; jamais un titre).
     const code = error instanceof RemindersError ? error.code : 'pass-failed';
-    logFailure('apple-reminders', `pass-failed ${code}`);
+    logFailure(APPLE_REMINDERS_DEVICE, `pass-failed ${code}`);
     await state.fail(code);
     return { ...EMPTY_REPORT, status: 'failed', code };
   }
@@ -164,6 +165,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   const full = kind === 'full';
 
   const access = await platform.status();
+  state.setObserved(access);
   if (access === 'not-determined') return { ...EMPTY_REPORT, status: 'skipped', reason: 'not-determined' };
   if (access !== 'full') {
     await state.fail('access-denied');
@@ -179,6 +181,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
 
   // Noms lisibles : les listes connues gardent le nom que Rappels leur donne (le PC les affiche).
   const platformLists = await platform.lists();
+  state.setObserved(access, platformLists);
   const renamed = lists.lists.map((list) => {
     const live = platformLists.find((candidate) => candidate.id === list.id);
     return live && live.name !== list.name ? { ...list, name: live.name.slice(0, 200) } : list;
@@ -379,11 +382,13 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
       ...current,
       ...(caps === null ? {} : { caps, held, unknown, missingLists: [...missingLists] }),
       notices: notes,
-      failure: sendCode === null ? null : { code: sendCode, at: now },
+      failure: sendCode === null ? null : { code: sendCode, at: now, write: true as const },
     };
   });
   await state.setPending(report.pending);
-  if (full && !partial) await state.setLastPassAt(now, nowMs);
+  // Une écriture au plus tous les 15 minutes (K-05 critère 14), sauf quand le passage a envoyé des écritures vers Rappels (K-07 D2) ; un passage
+  // `push` qui a envoyé quelque chose compte aussi : le PC doit voir que ses modifications sont parties.
+  if ((full && !partial) || report.sent > 0) await state.setLastPassAt(now, nowMs, report.sent > 0);
   return { ...EMPTY_REPORT, ...report, status: 'done' };
 }
 
@@ -408,23 +413,8 @@ async function applyRead(container: AppContainer, task: Task, link: AppleReminde
     // La tâche a pu être modifiée depuis la lecture : on ne l'écrase pas, le passage suivant la reprendra.
     const current = await repos.tasks.getById(task.id);
     if (!current || current.hlc !== task.hlc) return { skipped: true, applied: null, changedTask: false, link };
-    let written: Task | null = null;
     const toTask = merged.toTask;
-    const patch: Parameters<typeof repos.tasks.update>[1] = {
-      ...(toTask.title !== undefined ? { title: toTask.title } : {}),
-      ...('date' in toTask || 'time' in toTask ? taskScheduleOf({ date: 'date' in toTask ? (toTask.date ?? null) : current.date, time: 'time' in toTask ? (toTask.time ?? null) : current.time }) : {}),
-      ...(toTask.carriedOver === false ? { carriedOver: false } : {}),
-    };
-    if (Object.keys(patch).length > 0) {
-      written = await repos.tasks.update(task.id, patch);
-      await syncTaskReminders(repos, written);
-    }
-    if (toTask.completed === true) {
-      written = await repos.tasks.complete(task.id, toTask.doneAt ?? now);
-      if (written.carriedOver) written = await repos.tasks.update(task.id, { carriedOver: false });
-    } else if (toTask.completed === false) {
-      written = await repos.tasks.reopen(task.id);
-    }
+    let written = await applyValuesToTask(repos, current, toTask, now);
     // Récurrence, liste d'origine et identifiant (changé par EventKit) suivent Rappels.
     if (current.appleRecurring !== item.recurring || current.appleListId !== item.listId || current.externalId !== item.id) {
       written = await repos.tasks.setAppleLink(task.id, { source: 'apple_reminders', externalId: item.id, appleListId: item.listId, appleRecurring: item.recurring });
@@ -444,8 +434,8 @@ async function applyRead(container: AppContainer, task: Task, link: AppleReminde
             field: conflict.field,
             keptValue: conflict.kept,
             discardedValue: conflict.discarded,
-            keptDevice: conflict.winner === 'apple' ? 'apple-reminders' : localDevice,
-            discardedDevice: conflict.winner === 'apple' ? localDevice : 'apple-reminders',
+            keptDevice: conflict.winner === 'apple' ? APPLE_REMINDERS_DEVICE : localDevice,
+            discardedDevice: conflict.winner === 'apple' ? localDevice : APPLE_REMINDERS_DEVICE,
             keptHlc: conflict.winner === 'apple' ? appleHlc : localHlc,
             discardedHlc: conflict.winner === 'apple' ? localHlc : appleHlc,
           };
@@ -483,7 +473,7 @@ async function removeAbsent(container: AppContainer, task: Task, link: AppleRemi
     if (localChanges) {
       // La suppression gagne ; la tâche reste restaurable 30 jours (ADR 0011 §4.2) : la trace dit qu'elle avait des changements locaux.
       await repos.sync.insertConflicts(
-        [{ table: 'task', rowId: task.id, field: 'deleted_at', keptValue: now, discardedValue: null, keptDevice: 'apple-reminders', discardedDevice: parseHlc(current.hlc).deviceId, keptHlc: syntheticHlc(Date.parse(now)), discardedHlc: current.hlc }],
+        [{ table: 'task', rowId: task.id, field: 'deleted_at', keptValue: now, discardedValue: null, keptDevice: APPLE_REMINDERS_DEVICE, discardedDevice: parseHlc(current.hlc).deviceId, keptHlc: syntheticHlc(Date.parse(now)), discardedHlc: current.hlc }],
         now,
       );
     }
@@ -596,7 +586,7 @@ export async function resolveHeldList(container: AppContainer, listId: string, c
     return { ...EMPTY_REPORT, deleted, detached };
   } catch (error) {
     const code = error instanceof RemindersError ? error.code : 'pass-failed';
-    logFailure('apple-reminders', `held-failed ${code}`);
+    logFailure(APPLE_REMINDERS_DEVICE, `held-failed ${code}`);
     await state.fail(code);
     return { ...EMPTY_REPORT, status: 'failed', code };
   }

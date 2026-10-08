@@ -1,5 +1,6 @@
 import type { AppContainer } from '../../app/container';
 import { EMPTY_REPORT, runRemindersPass, type PassKind, type PassReport } from './remindersPass';
+import { createSender } from './remindersWrites';
 
 /**
  * Coordinateur des passages (K-05 critère 11, ADR 0008 §10.8) sur le modèle de `NotificationRunner` (ADR 0012 N1.3) : au plus UN passage
@@ -115,7 +116,8 @@ const runners = new WeakMap<AppContainer, RemindersRunner>();
 export function getRemindersRunner(container: AppContainer): RemindersRunner {
   let known = runners.get(container);
   if (known === undefined) {
-    known = createRemindersRunner((kind, deadlineAt) => runRemindersPass(container, kind, deadlineAt === undefined ? {} : { deadlineAt }), systemTimers, () => container.clock.nowMs());
+    const send = createSender(container);
+    known = createRemindersRunner((kind, deadlineAt) => runRemindersPass(container, kind, { send, ...(deadlineAt === undefined ? {} : { deadlineAt }) }), systemTimers, () => container.clock.nowMs());
     runners.set(container, known);
   }
   return known;

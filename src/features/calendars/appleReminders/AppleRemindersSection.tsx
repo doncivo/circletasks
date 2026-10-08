@@ -5,10 +5,11 @@ import type { SpaceId } from '../../../domain/types';
 import { t } from '../../../i18n';
 import { formatTime } from '../../../i18n/format';
 import { detectTimeZone } from '../../../platform';
-import { Button, Checkbox, DropdownSelect } from '../../../ui';
+import { Button, Checkbox, DropdownSelect, Switch } from '../../../ui';
 import { useAppContainer, useFeatureStore } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
 import { appleRemindersActions } from './appleRemindersActions';
+import { AppleRemindersReadOnly } from './AppleRemindersReadOnly';
 import { appleRemindersStore, isWriteFailure } from './appleRemindersState';
 
 /** Heure locale « 09:30 » (format de l'appareil) d'un instant ISO ; l'instant brut n'est jamais affiché. */
@@ -43,6 +44,19 @@ export function noticeText(notice: AppleNotice): string {
   }
 }
 
+function messageText(message: 'space-required' | 'save-failed' | 'no-list' | 'list-not-in-space'): string {
+  switch (message) {
+    case 'space-required':
+      return t('appleReminders.spaceRequired');
+    case 'no-list':
+      return t('appleReminders.createNoList');
+    case 'list-not-in-space':
+      return t('appleReminders.createListNotInSpace');
+    case 'save-failed':
+      return t('appleReminders.saveFailed');
+  }
+}
+
 /**
  * Section « RAPPELS APPLE » de l'écran Agendas (K-05 critères 6 à 8, 12 à 14 ; ADR 0008 §10) : sur l'iPhone, l'accès (explication puis
  * « Autoriser l'accès aux Rappels », jamais au démarrage), les listes de Rappels avec « Afficher » et l'espace (prérempli Pro, une liste
@@ -57,6 +71,7 @@ export function AppleRemindersSection() {
   const access = useFeatureStore(appleRemindersStore, (s) => s.access);
   const platformLists = useFeatureStore(appleRemindersStore, (s) => s.platformLists);
   const lists = useFeatureStore(appleRemindersStore, (s) => s.lists);
+  const create = useFeatureStore(appleRemindersStore, (s) => s.create);
   const lastPassAt = useFeatureStore(appleRemindersStore, (s) => s.lastPassAt);
   const status = useFeatureStore(appleRemindersStore, (s) => s.status);
   const running = useFeatureStore(appleRemindersStore, (s) => s.running);
@@ -71,12 +86,14 @@ export function AppleRemindersSection() {
     void actions.refreshAccess();
   }, [actions]);
 
-  if (!loaded || !available) return null;
+  if (!loaded) return null;
+  // PC : lecture seule, ce que la synchro a apporté (K-05 critère 6, K-07).
+  if (!available) return <AppleRemindersReadOnly />;
 
   const spaceOptions = spaces.map((space) => ({ value: space.id, label: space.name }));
   const settingOf = (list: ReminderList) => lists.lists.find((entry) => entry.id === list.id);
   const nameOf = (listId: string): string => lists.lists.find((entry) => entry.id === listId)?.name ?? platformLists.find((entry) => entry.id === listId)?.name ?? '';
-  const writeIssue = status.failure !== null && isWriteFailure(status.failure.code);
+  const writeIssue = isWriteFailure(status.failure);
 
   return (
     <section className="ct-calendars__apple" aria-label={t('appleReminders.section')}>
@@ -111,7 +128,7 @@ export function AppleRemindersSection() {
       )}
       {message !== null && (
         <p className="ct-calendars__error" role="alert">
-          {message === 'space-required' ? t('appleReminders.spaceRequired') : t('appleReminders.saveFailed')}
+          {messageText(message)}
         </p>
       )}
 
@@ -149,6 +166,27 @@ export function AppleRemindersSection() {
             </Button>
             <span className="ct-calendars__updated">{lastPassAt === null ? t('appleReminders.neverRead') : t('appleReminders.updatedAt', { time: instantTime(lastPassAt, timeZone) })}</span>
           </div>
+
+          <h3 className="ct-calendars__caption">{t('appleReminders.createCaption')}</h3>
+          <p className="ct-calendars__appleText">{t('appleReminders.createHint')}</p>
+          {spaces.map((space) => {
+            const rule = create.bySpace.find((entry) => entry.spaceId === space.id);
+            const destinations = lists.lists.filter((list) => list.shown && list.spaceId === space.id);
+            return (
+              <div key={space.id} className="ct-calendars__calendar">
+                <Switch checked={rule?.enabled ?? false} label={t('appleReminders.createSwitch', { space: space.name })} onChange={(enabled) => void actions.setCreateRule(space.id, enabled, rule?.listId ?? destinations[0]?.id ?? null)} />
+                <span className="ct-calendars__name">{space.name}</span>
+                <DropdownSelect
+                  variant="pill"
+                  label={t('appleReminders.createList', { space: space.name })}
+                  options={destinations.map((list) => ({ value: list.id, label: list.name }))}
+                  value={rule?.listId ?? ''}
+                  display={destinations.find((list) => list.id === rule?.listId)?.name ?? t('appleReminders.createChoose')}
+                  onChange={(listId) => void actions.setCreateRule(space.id, rule?.enabled ?? false, listId)}
+                />
+              </div>
+            );
+          })}
 
           {status.caps.map((cap) => (
             <p key={cap.listId} className="ct-calendars__appleText" role="status">

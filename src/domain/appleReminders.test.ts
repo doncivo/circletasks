@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   APPLE_REMINDERS_PSEUDO_DEVICE,
+  appleFreshness,
   appleLinkState,
+  awaitsIphonePass,
   createTargetFor,
   encodeSynced,
+  hasAssociatedIphone,
   isAppleRecurringLocked,
   isFollowed,
   massDeletionBlocked,
@@ -316,5 +319,45 @@ describe('réglages venus de la synchro : validés', () => {
     });
     expect(parseAppleStatus('x')).toEqual(parseAppleStatus(null));
     expect(parseAppleStatus(null).failure).toBeNull();
+  });
+});
+
+describe('fraîcheur sur le PC (K-07 critère 5, D1)', () => {
+  const NOW = Date.parse('2026-10-08T12:00:00.000Z');
+  const at = (offsetMs: number): IsoDateTime => new Date(NOW - offsetMs).toISOString() as IsoDateTime;
+  const MINUTE = 60_000;
+  const DAY = 24 * 60 * MINUTE;
+
+  it('bornes à 24 h : 24 h moins une minute et 24 h exactement n’avertissent pas, 24 h plus une minute avertit', () => {
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: at(DAY - MINUTE), iphoneAssociated: true })).toBe('fresh');
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: at(DAY), iphoneAssociated: true })).toBe('fresh');
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: at(DAY + MINUTE), iphoneAssociated: true })).toBe('stale');
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: at(0), iphoneAssociated: true })).toBe('fresh');
+  });
+
+  it('aucune lecture : « jamais » ; aucun iPhone associé : prioritaire, même avec une lecture récente', () => {
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: null, iphoneAssociated: true })).toBe('never');
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: null, iphoneAssociated: false })).toBe('no-iphone');
+    expect(appleFreshness({ nowMs: NOW, lastPassAt: at(MINUTE), iphoneAssociated: false })).toBe('no-iphone');
+  });
+
+  it('iPhone associé : appareil iOS autre que soi, déjà lu, ni oublié ni expiré ; synchro non configurée : aucun', () => {
+    const ios = { platform: 'ios' as const, self: false, status: 'active' };
+    expect(hasAssociatedIphone([])).toBe(false);
+    expect(hasAssociatedIphone([ios])).toBe(true);
+    expect(hasAssociatedIphone([{ ...ios, status: 'corrupt' }])).toBe(true);
+    for (const status of ['forgotten', 'expired']) expect(hasAssociatedIphone([{ ...ios, status }])).toBe(false);
+    expect(hasAssociatedIphone([{ ...ios, seen: false }])).toBe(false);
+    expect(hasAssociatedIphone([{ ...ios, self: true }])).toBe(false);
+    expect(hasAssociatedIphone([{ platform: 'windows', self: true, status: 'active' }])).toBe(false);
+  });
+
+  it('modification en attente : une horloge de titre, d’échéance ou de statut plus récente que la dernière lecture', () => {
+    expect(awaitsIphonePass([NOW - 2 * MINUTE], at(MINUTE))).toBe(false);
+    expect(awaitsIphonePass([NOW - 2 * MINUTE, NOW], at(MINUTE))).toBe(true);
+    expect(awaitsIphonePass([NOW], at(0))).toBe(false);
+    expect(awaitsIphonePass([NOW + 1], at(0))).toBe(true);
+    expect(awaitsIphonePass([NOW], null)).toBe(false);
+    expect(awaitsIphonePass([], at(MINUTE))).toBe(false);
   });
 });

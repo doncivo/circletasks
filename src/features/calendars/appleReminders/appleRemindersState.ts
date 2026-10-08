@@ -79,8 +79,11 @@ export interface AppleRemindersController {
   reload(): Promise<void>;
   setLists(next: AppleListsSetting): Promise<void>;
   setCreate(next: AppleCreateSetting): Promise<void>;
-  setLastPassAt(at: IsoDateTime, nowMs: number): Promise<void>;
+  /** `force` : le passage a envoyé des écritures vers Rappels ; le PC en déduit que « sera envoyée au prochain passage » est levé (K-07 D2). */
+  setLastPassAt(at: IsoDateTime, nowMs: number, force?: boolean): Promise<void>;
   setPending(count: number): Promise<void>;
+  /** Accès du système et listes d'Apple lus par un passage : l'écran les montre sans relancer sa propre lecture. */
+  setObserved(access: RemindersAccess, platformLists?: readonly ReminderList[]): void;
   patchStatus(change: (current: AppleStatus) => AppleStatus): Promise<void>;
   fail(code: string): Promise<void>;
   clearFailure(): Promise<void>;
@@ -186,11 +189,11 @@ function createController(container: AppContainer): AppleRemindersController {
       store.setState({ create: next });
       await persist(() => settings().set('appleReminders.create', next));
     },
-    async setLastPassAt(at, nowMs) {
+    async setLastPassAt(at, nowMs, force = false) {
       await load();
       // Une écriture au plus tous les 15 minutes (K-05 critère 14) ; l'affichage de cette session suit toujours.
       store.setState({ lastPassAt: at });
-      if (writtenLastPassAt !== null && nowMs - Date.parse(writtenLastPassAt) < LAST_PASS_WRITE_INTERVAL_MS) return;
+      if (!force && writtenLastPassAt !== null && nowMs - Date.parse(writtenLastPassAt) < LAST_PASS_WRITE_INTERVAL_MS) return;
       writtenLastPassAt = at;
       await persist(() => settings().set('appleReminders.lastPassAt', at));
     },
@@ -205,6 +208,9 @@ function createController(container: AppContainer): AppleRemindersController {
       await persist(() => settings().set('appleReminders.pending', next));
     },
     patchStatus,
+    setObserved(access, platformLists) {
+      store.setState({ access, ...(platformLists === undefined ? {} : { platformLists }) });
+    },
     async fail(code) {
       await patchStatus((s) => ({ ...s, failure: { code, at: nowIso(container.clock) } }));
     },
@@ -221,9 +227,8 @@ function createController(container: AppContainer): AppleRemindersController {
   };
 }
 
-/** Codes d'échec d'une écriture vers Rappels (le bandeau parle alors de modifications non envoyées). */
-const WRITE_CODES: readonly string[] = ['write-failed', 'read-only-list', 'recurring-refused', 'not-found', 'list-not-found', 'invalid-input'];
-export const isWriteFailure = (code: string): boolean => WRITE_CODES.includes(code);
+/** L'échec persistant vient d'une écriture vers Rappels (le bandeau parle alors de modifications non envoyées). */
+export const isWriteFailure = (failure: AppleStatus['failure']): boolean => failure !== null && failure.write === true;
 
 /** Pose (ou retire) l'état A-09 `appleRemindersTrouble` : échec de lecture, accès refusé, ou modifications non envoyées. */
 export function applyBanner(container: AppContainer): void {
@@ -235,7 +240,7 @@ export function applyBanner(container: AppContainer): void {
     return;
   }
   const count = state.pending?.count ?? 0;
-  const message = failure.code === 'access-denied' ? t('appleReminders.bannerAccess') : isWriteFailure(failure.code) && count > 0 ? t('appleReminders.bannerWrite', { count }) : t('appleReminders.bannerRead');
+  const message = failure.code === 'access-denied' ? t('appleReminders.bannerAccess') : isWriteFailure(failure) && count > 0 ? t('appleReminders.bannerWrite', { count }) : t('appleReminders.bannerRead');
   setStatus('appleRemindersTrouble', { detail: failure.code, message, onAction: () => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'calendars' }) });
 }
 

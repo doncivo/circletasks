@@ -133,3 +133,46 @@ describe('section Rappels Apple de l’écran Agendas (K-05 critères 6, 7, 8, 1
     expect(h.reminders.calls).toEqual([]);
   });
 });
+
+describe('créer aussi dans Rappels (K-06 critère 6, ADR 0008 §10.7)', () => {
+  it('une ligne par espace avec interrupteur et liste de destination, désactivée par défaut ; activer sans liste affichée de cet espace est refusé avec la raison', async () => {
+    h = await setupRemindersHarness('13');
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    renderSection();
+    const perso = await screen.findByRole('switch', { name: 'Créer aussi dans Rappels · Perso' });
+    const pro = screen.getByRole('switch', { name: 'Créer aussi dans Rappels · Pro' });
+    expect(perso).toHaveAttribute('aria-checked', 'false');
+    expect(pro).toHaveAttribute('aria-checked', 'false');
+    // Pro n'a aucune liste affichée : refus avec la raison, rien n'est écrit.
+    fireEvent.click(pro);
+    expect(await screen.findByText('Affichez d’abord une liste de cet espace.')).toBeInTheDocument();
+    expect(appleRemindersStore.get(h.container).getState().create.bySpace).toEqual([]);
+    // Perso a « Courses » : activé avec cette liste de destination.
+    fireEvent.click(perso);
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Créer aussi dans Rappels · Perso' })).toHaveAttribute('aria-checked', 'true'));
+    expect(appleRemindersStore.get(h.container).getState().create.bySpace).toEqual([{ spaceId: PERSO, enabled: true, listId: 'L-courses' }]);
+    expect(await h.container.data.repos.settings.get('appleReminders.create')).toEqual({ bySpace: [{ spaceId: PERSO, enabled: true, listId: 'L-courses' }] });
+  });
+
+  it('décocher la liste de destination désactive le réglage et le dit', async () => {
+    h = await setupRemindersHarness('14');
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    renderSection();
+    fireEvent.click(await screen.findByRole('switch', { name: 'Créer aussi dans Rappels · Perso' }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Créer aussi dans Rappels · Perso' })).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Afficher Courses' }));
+    await waitFor(() => expect(screen.getByRole('switch', { name: 'Créer aussi dans Rappels · Perso' })).toHaveAttribute('aria-checked', 'false'));
+    expect(await screen.findByText('La création dans Rappels est désactivée : la liste de destination n’est plus affichée.')).toBeInTheDocument();
+  });
+
+  it('changer la liste de destination la mémorise ; une liste d’un autre espace n’est pas proposée', async () => {
+    h = await setupRemindersHarness('15');
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    await h.showList({ id: 'L-travail', name: 'Travail', spaceId: PRO });
+    renderSection();
+    const destination = await screen.findByRole('combobox', { name: 'Liste de destination · Perso' });
+    expect(within(destination).queryByRole('option', { name: 'Travail' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch', { name: 'Créer aussi dans Rappels · Perso' }));
+    await waitFor(() => expect(appleRemindersStore.get(h.container).getState().create.bySpace[0]).toMatchObject({ enabled: true, listId: 'L-courses' }));
+  });
+});
