@@ -372,6 +372,25 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     expect(await source.drain()).toMatchObject({ lines: 0, unreadable: 0, writeFailures: 0 });
   });
 
+  it('revue : acquittement en échec, passages successifs : le compteur des lignes perdues reste stable (compté après un ack réussi)', async () => {
+    source.addUnreadable(2);
+    source.failNext('ack');
+    await pass();
+    await pass(h.container, 'resume');
+    // Le deuxième passage a acquitté : les 2 lignes sont comptées une fois.
+    expect((await storedQueue(h.container)).lost).toBe(2);
+    await pass(h.container, 'resume');
+    await pass(h.container, 'resume');
+    expect((await storedQueue(h.container)).lost).toBe(2);
+  });
+
+  it('revue : acquittement en échec : rien n’est compté tant que le fichier n’est pas acquitté', async () => {
+    source.addUnreadable(3);
+    source.failNext('ack');
+    await pass();
+    expect(actionQueueController(h.container).get().lost).toBe(0);
+  });
+
   it('file illisible : jamais perdue en silence (lost = 1, visible)', async () => {
     await h.container.data.repos.settings.set('notifications.actionQueue', { v: 9 });
     await pass();
@@ -392,6 +411,30 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     await pass(h.container, 'resume');
     expect((await storedStatus(h.container)).actionsFailure).toBeNull();
     expect(banner()).toBeUndefined();
+  });
+
+  it('revue : délégué posé après le lancement (delegateAtLaunch faux) : état visible, effacé quand il est de nouveau à l’heure', async () => {
+    source.setDelegateAtLaunch(false);
+    await pass();
+    expect((await storedStatus(h.container)).actionsFailure?.reason).toBe('delegate-late');
+    expect(banner()).toBeDefined();
+    source.setDelegateAtLaunch(true);
+    await pass(h.container, 'resume');
+    expect((await storedStatus(h.container)).actionsFailure).toBeNull();
+  });
+
+  it('revue : status en échec n’empêche pas l’écoute du réveil (deux essais séparés)', async () => {
+    source.failNext('status');
+    const listeners = { addEventListener: vi.fn(), removeEventListener: vi.fn(), visibilityState: 'visible' as const };
+    const integration = startNotificationIntegration(h.container, { document: listeners });
+    await integration.opened();
+    expect((await storedStatus(h.container)).actionsFailure?.reason).toBe('source-failed');
+    const task = await seedTask();
+    const rid = await reminderOf(h.container, task.id);
+    source.push(line(h, `task:${rid}`, 'done'));
+    await getNotificationRunner(h.container).request('resume');
+    expect((await h.db.data.repos.tasks.getById(task.id))?.status).toBe('done');
+    integration.dispose();
   });
 
   it('catégories non enregistrées : visible, nouvel essai au passage suivant', async () => {

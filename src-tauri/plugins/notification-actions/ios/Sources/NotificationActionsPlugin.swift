@@ -138,11 +138,27 @@ private final class ActionStore {
         var line = try JSONSerialization.data(withJSONObject: entry, options: [])
         line.append(0x0A)
         let url = try directory().appendingPathComponent(queueFileName)
-        let fd = open(url.path, O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
+        let fd = open(url.path, O_RDWR | O_APPEND | O_CREAT | O_CLOEXEC, 0o600)
         if fd < 0 {
           throw Failure(code: .io)
         }
         defer { close(fd) }
+        // Une coupure a pu laisser une ligne partielle (sans saut de ligne final) : on la termine avant d'ajouter la nôtre, sinon les deux
+        // lignes n'en feraient qu'une, illisible. Lecture du dernier octet sur la file série (aucun autre écrivain).
+        var st = stat()
+        if fstat(fd, &st) != 0 {
+          throw Failure(code: .io)
+        }
+        if st.st_size > 0 {
+          var last: UInt8 = 0x0A
+          let got = pread(fd, &last, 1, st.st_size - 1)
+          if got != 1 {
+            throw Failure(code: .io)
+          }
+          if last != 0x0A {
+            line.insert(0x0A, at: 0)
+          }
+        }
         try writeAll(fd, line)
         return true
       } catch {
@@ -312,12 +328,17 @@ private final class ActionsDelegate: NSObject, UNUserNotificationCenterDelegate 
 
 class NotificationActionsPlugin: Plugin {
   private let actionsDelegate = ActionsDelegate()
+  /// Le plugin était le délégué à la fin du lancement (`didFinishLaunching`) : rendu par `status`, il rend l'essai A2 mesurable dans l'app.
+  private var delegateAtLaunch = false
 
   override init() {
     super.init()
     actionsDelegate.plugin = self
     applySavedCategories()
     claimDelegate()
+    NotificationCenter.default.addObserver(
+      self, selector: #selector(appDidFinishLaunching),
+      name: UIApplication.didFinishLaunchingNotification, object: nil)
     NotificationCenter.default.addObserver(
       self, selector: #selector(appDidBecomeActive),
       name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -329,6 +350,10 @@ class NotificationActionsPlugin: Plugin {
     if center.delegate !== actionsDelegate {
       center.delegate = actionsDelegate
     }
+  }
+
+  @objc private func appDidFinishLaunching() {
+    delegateAtLaunch = UNUserNotificationCenter.current().delegate === actionsDelegate
   }
 
   @objc private func appDidBecomeActive() {
@@ -417,8 +442,9 @@ class NotificationActionsPlugin: Plugin {
 
   @objc public func status(_ invoke: Invoke) {
     let isDelegate = UNUserNotificationCenter.current().delegate === actionsDelegate
+    let atLaunch = delegateAtLaunch
     UNUserNotificationCenter.current().getNotificationCategories { categories in
-      let result: JsonObject = ["delegate": isDelegate, "categories": categories.count]
+      let result: JsonObject = ["delegate": isDelegate, "delegateAtLaunch": atLaunch, "categories": categories.count]
       invoke.resolve(result)
     }
   }

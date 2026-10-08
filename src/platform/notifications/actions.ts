@@ -33,6 +33,8 @@ export interface ActionDrain {
 export interface ActionSourceStatus {
   /** Le plugin est bien le délégué du centre de notifications. */
   readonly delegate: boolean;
+  /** Le plugin était déjà le délégué à la fin du lancement de l'app (`didFinishLaunching`) ; faux : une action à froid a pu être perdue. */
+  readonly delegateAtLaunch: boolean;
   /** Catégories enregistrées. */
   readonly categories: number;
 }

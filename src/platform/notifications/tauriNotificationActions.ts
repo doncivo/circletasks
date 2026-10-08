@@ -78,8 +78,8 @@ export function createTauriNotificationActionSource(
     },
     status: async (): Promise<ActionSourceStatus> => {
       const value = await run('status');
-      if (!isRecord(value) || typeof value['delegate'] !== 'boolean' || !isCount(value['categories'])) throw new NotificationActionSourceError('bad-response');
-      return { delegate: value['delegate'], categories: value['categories'] };
+      if (!isRecord(value) || typeof value['delegate'] !== 'boolean' || typeof value['delegateAtLaunch'] !== 'boolean' || !isCount(value['categories'])) throw new NotificationActionSourceError('bad-response');
+      return { delegate: value['delegate'], delegateAtLaunch: value['delegateAtLaunch'], categories: value['categories'] };
     },
     onWake: async (listener) => {
       try {

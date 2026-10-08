@@ -29,7 +29,7 @@ export interface StatusReport {
 }
 
 /** Pannes des actions de notification (N-03, avenant N3.8). */
-export const ACTIONS_FAILURE_REASONS = ['delegate-lost', 'register-failed', 'source-failed', 'queue-write-failed'] as const;
+export const ACTIONS_FAILURE_REASONS = ['delegate-lost', 'register-failed', 'source-failed', 'queue-write-failed', 'delegate-late'] as const;
 export type ActionsFailureReason = (typeof ACTIONS_FAILURE_REASONS)[number];
 
 export interface NotificationStatusV1 {

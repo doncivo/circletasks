@@ -46,7 +46,7 @@ describe('adaptateur du plugin (faux invoke)', () => {
   });
 
   it('status : délégué et catégories, sinon réponse inattendue', async () => {
-    expect(await createTauriNotificationActionSource(vi.fn().mockResolvedValue({ delegate: true, categories: 3 })).status()).toEqual({ delegate: true, categories: 3 });
+    expect(await createTauriNotificationActionSource(vi.fn().mockResolvedValue({ delegate: true, delegateAtLaunch: true, categories: 3 })).status()).toEqual({ delegate: true, delegateAtLaunch: true, categories: 3 });
     await expect(createTauriNotificationActionSource(vi.fn().mockResolvedValue({ delegate: 'oui' })).status()).rejects.toMatchObject({ reason: 'bad-response' });
   });
 
@@ -112,7 +112,7 @@ describe('faux de la source (fichier natif en mémoire)', () => {
     await expect(source.drain()).rejects.toBeInstanceOf(NotificationActionSourceError);
     await expect(source.drain()).resolves.toMatchObject({ lines: 0 });
     source.setDelegate(false);
-    expect(await source.status()).toEqual({ delegate: false, categories: 0 });
+    expect(await source.status()).toEqual({ delegate: false, delegateAtLaunch: true, categories: 0 });
   });
 });
 

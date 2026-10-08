@@ -120,6 +120,9 @@ fn n03_file_format_keys_are_shared_by_swift_and_ts() {
         assert!(swift_code().contains(field), "{field}");
     }
     assert!(ADAPTER_TS.contains("count: lines, writeFailures"));
+    // Revue : `status` rend l'indicateur relevé sur didFinishLaunching, que l'adaptateur exige.
+    assert!(swift_code().contains("\"delegateAtLaunch\": atLaunch") && swift_code().contains("UIApplication.didFinishLaunchingNotification"));
+    assert!(ADAPTER_TS.contains("value['delegateAtLaunch']"));
 }
 
 /// Aucun texte d'interface en Swift (les titres viennent de `src/i18n` par le JS) : littéraux ASCII sans espace.
@@ -185,6 +188,11 @@ fn n03_swift_writes_the_action_before_the_completion_handler() {
     assert!(append_fn.contains("O_APPEND") && append_fn.contains("try writeAll(fd, line)"));
     let write_all = &code[code.find("private func writeAll(").expect("writeAll")..];
     assert!(write_all[..write_all.find("\n  }\n").unwrap()].contains("fsync(fd)"));
+    // Revue : une ligne partielle laissée par une coupure est terminée par un saut de ligne AVANT la nôtre (sinon deux lignes n'en feraient qu'une).
+    let last_byte = append_fn.find("pread(fd, &last, 1, st.st_size - 1)").expect("lecture du dernier octet");
+    let newline = append_fn.find("line.insert(0x0A, at: 0)").expect("saut de ligne ajouté");
+    assert!(append_fn.contains("O_RDWR | O_APPEND") && append_fn.contains("if last != 0x0A"));
+    assert!(last_byte < newline && newline < append_fn.find("try writeAll(fd, line)").unwrap(), "ordre : lecture du dernier octet, saut de ligne, écriture");
     // Écriture impossible : compteur visible, jamais un silence.
     assert!(append_fn.contains("writeFailuresKey"));
     // `ack` : fichier temporaire, fsync, renommage atomique.

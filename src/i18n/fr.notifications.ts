@@ -79,6 +79,7 @@ export const remindersStatusFr = {
   actionsDismissLabel: 'Ignorer les actions de notification en échec',
   actionsReason: {
     'delegate-lost': 'Le plugin n’est plus le gestionnaire des notifications',
+    'delegate-late': 'Le plugin est devenu gestionnaire après le lancement : une action reçue à froid a pu être perdue',
     'register-failed': 'Les boutons n’ont pas pu être enregistrés',
     'source-failed': 'Le fichier des actions n’a pas pu être lu',
     'queue-write-failed': 'Les actions reçues n’ont pas pu être enregistrées',

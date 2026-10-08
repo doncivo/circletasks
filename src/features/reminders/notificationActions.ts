@@ -25,7 +25,7 @@ import { actionQueueController } from './actionQueue';
 import { statusController } from './notificationStatus';
 
 /**
- * Actions « Fait » et « +15 min » des notifications (N-03, ADR 0012 avenant N3) : un étape au début de chaque passage de
+ * Actions « Fait » et « +15 min » des notifications (N-03, ADR 0012 avenant N3) : une étape au début de chaque passage de
  * `replanNotifications`. (1) catégories enregistrées une fois par processus, avant le premier envoi ; (2) état du délégué ;
  * (3) collecte : `drain` du fichier natif, écriture dans la file locale durable, puis `ack` (jamais l'inverse) ; (4) application par les
  * cas d'usage (T-04 pour une tâche, R-03 pour une routine à la date de la notification, jamais de SQL ici) ; « +15 min » ajoute une
@@ -92,7 +92,7 @@ async function ensureWake(container: AppContainer, source: NotificationActionSou
 // Étape du passage
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-const FAILURE_PRIORITY: readonly ActionsFailureReason[] = ['queue-write-failed', 'source-failed', 'register-failed', 'delegate-lost'];
+const FAILURE_PRIORITY: readonly ActionsFailureReason[] = ['queue-write-failed', 'source-failed', 'register-failed', 'delegate-lost', 'delegate-late'];
 
 /** Ne rejette jamais. Sans source (PC, navigateur) : rien à faire. */
 export async function runActionsStep(container: AppContainer): Promise<void> {
@@ -107,13 +107,23 @@ export async function runActionsStep(container: AppContainer): Promise<void> {
   }
   try {
     await ensureWake(container, source);
-    if (!(await source.status()).delegate) {
+  } catch {
+    failures.add('source-failed');
+    logFailure('notifications', 'actions wake-failed');
+  }
+  try {
+    const state = await source.status();
+    if (!state.delegate) {
       failures.add('delegate-lost');
       logFailure('notifications', 'actions delegate-lost');
+    } else if (!state.delegateAtLaunch) {
+      // A2 mesurable : le plugin est devenu délégué après la fin du lancement, une action à froid a pu être perdue.
+      failures.add('delegate-late');
+      logFailure('notifications', 'actions delegate-late');
     }
   } catch {
     failures.add('source-failed');
-    logFailure('notifications', 'actions source-failed');
+    logFailure('notifications', 'actions status-failed');
   }
   await collectActions(container, source, failures);
   await applyActions(container, failures);
@@ -140,19 +150,28 @@ async function collectActions(container: AppContainer, source: NotificationActio
   if (drained.lines === 0 && drained.writeFailures === 0) return;
   const nowMs = container.notificationClock.nowMs();
   try {
-    await actionQueueController(container).update((queue) => enqueueActions(queue, drained.entries, lost, nowMs).queue);
+    await actionQueueController(container).update((queue) => enqueueActions(queue, drained.entries, 0, nowMs).queue);
   } catch {
     failures.add('queue-write-failed');
     logFailure('notifications', 'actions queue-write-failed');
     return;
   }
-  if (lost > 0) logFailure('notifications', `actions lost ${String(lost)}`);
   try {
     await source.ack({ lines: drained.lines, writeFailures: drained.writeFailures });
   } catch {
-    // Les lignes seront relues au prochain `drain` et écartées par clé : aucune perte, aucun doublon.
+    // Les lignes seront relues au prochain `drain` et écartées par clé : aucune perte, aucun doublon. Les lignes perdues ne sont PAS
+    // comptées ici (elles le seraient à chaque passage tant que l'acquittement échoue).
     failures.add('source-failed');
     logFailure('notifications', 'actions ack-failed');
+    return;
+  }
+  if (lost === 0) return;
+  logFailure('notifications', `actions lost ${String(lost)}`);
+  try {
+    await actionQueueController(container).update((queue) => ({ ...queue, lost: queue.lost + lost }));
+  } catch {
+    failures.add('queue-write-failed');
+    logFailure('notifications', 'actions queue-write-failed');
   }
 }
 

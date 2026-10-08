@@ -19,6 +19,8 @@ export interface FakeNotificationActionSource extends NotificationActionSource {
   addUnreadable(count: number): void;
   addWriteFailures(count: number): void;
   setDelegate(value: boolean): void;
+  /** Le délégué n'était pas posé à la fin du lancement (A2). */
+  setDelegateAtLaunch(value: boolean): void;
   /** La prochaine commande de ce nom échoue (consommée par l'appel). */
   failNext(command: 'registerActionTypes' | 'drain' | 'ack' | 'status'): void;
 }
@@ -30,6 +32,7 @@ export function createFakeNotificationActionSource(): FakeNotificationActionSour
   let unreadable = 0;
   let writeFailures = 0;
   let delegate = true;
+  let delegateAtLaunch = true;
   const failing = new Set<string>();
 
   const maybeFail = (command: string): void => {
@@ -52,6 +55,9 @@ export function createFakeNotificationActionSource(): FakeNotificationActionSour
     },
     setDelegate: (value) => {
       delegate = value;
+    },
+    setDelegateAtLaunch: (value) => {
+      delegateAtLaunch = value;
     },
     failNext: (command) => {
       failing.add(command);
@@ -96,7 +102,7 @@ export function createFakeNotificationActionSource(): FakeNotificationActionSour
       } catch (error) {
         return Promise.reject(error as Error);
       }
-      return Promise.resolve({ delegate, categories: source.registered.length });
+      return Promise.resolve({ delegate, delegateAtLaunch, categories: source.registered.length });
     },
     onWake: (listener) => {
       listeners.add(listener);

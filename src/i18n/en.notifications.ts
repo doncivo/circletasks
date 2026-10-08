@@ -73,6 +73,7 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
   actionsDismissLabel: 'Dismiss the failed notification actions',
   actionsReason: {
     'delegate-lost': 'The plugin is no longer the notification handler',
+    'delegate-late': 'The plugin became the handler after launch: an action received from a cold start may have been lost',
     'register-failed': 'The buttons could not be registered',
     'source-failed': 'The actions file could not be read',
     'queue-write-failed': 'Received actions could not be saved',
