@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
-import { REMINDER_WARNING_WINDOW_MS, warnIphoneReminders, type WarnedReminders } from '../../domain/iphoneReminderWarning';
+import { REMINDER_WARNING_WINDOW_MS, keepOpenTaskReminders, warnIphoneReminders, type WarnedReminders } from '../../domain/iphoneReminderWarning';
+import type { TaskId } from '../../domain/types';
 import { t } from '../../i18n';
+import { logFailure } from '../../platform/desktop/log';
 import { useAppContainer } from '../app/AppContainerContext';
 import { createQuietHoursUseCases } from '../spaces/quietHoursUseCases';
 import { useWarningContext } from './IphoneReminderWarning';
@@ -14,6 +16,7 @@ export function PcReminderWarningSummary() {
   const container = useAppContainer();
   const context = useWarningContext();
   const [result, setResult] = useState<WarnedReminders>({ warning: 'none', count: 0 });
+  const [readFailed, setReadFailed] = useState(false);
   const { enabled, nowMs, devices, instantOf, localAt } = context;
 
   useEffect(() => {
@@ -22,15 +25,22 @@ export function PcReminderWarningSummary() {
     void (async () => {
       try {
         const effective = await createQuietHoursUseCases(container).listEffectiveReminders({ from: localAt(nowMs), to: localAt(nowMs + REMINDER_WARNING_WINDOW_MS) });
-        // Une tâche terminée ou supprimée n\u2019est plus à rappeler.
-        const taskIds = effective.filter((item) => item.reminder.targetType === 'task').map((item) => item.reminder.targetId as never);
+        // Une tâche terminée ou supprimée n’est plus à rappeler.
+        const taskIds = effective.filter((item) => item.reminder.targetType === 'task').map((item) => item.reminder.targetId as TaskId);
         const open = new Set((await container.data.repos.tasks.listByIds(taskIds)).filter((task) => task.status === 'todo').map((task) => task.id as string));
-        const live = effective.filter((item) => item.reminder.targetType !== 'task' || open.has(item.reminder.targetId));
+        const live = keepOpenTaskReminders(effective, open);
         const next = warnIphoneReminders({ nowMs, fireAtMs: live.map((item) => instantOf(item.effectiveFireAt)), devices });
-        if (!cancelled) setResult(next);
+        if (!cancelled) {
+          setResult(next);
+          setReadFailed(false);
+        }
       } catch {
-        // Lecture impossible : aucun nombre n\u2019est affiché, l\u2019avertissement par rappel (bloc Rappel, détail) reste calculé séparément.
-        if (!cancelled) setResult({ warning: 'none', count: 0 });
+        // Lecture impossible : journalisée et visible (aucun nombre affiché ne doit rassurer à tort).
+        logFailure('notifications', 'warning-read-failed');
+        if (!cancelled) {
+          setResult({ warning: 'none', count: 0 });
+          setReadFailed(true);
+        }
       }
     })();
     return () => {
@@ -38,6 +48,13 @@ export function PcReminderWarningSummary() {
     };
   }, [container, enabled, nowMs, devices, instantOf, localAt]);
 
+  if (enabled && readFailed) {
+    return (
+      <p className="ct-reminder-warning" role="status" data-warning="read-failed">
+        {t('reminders.status.warnReadFailed')}
+      </p>
+    );
+  }
   if (!enabled || result.warning === 'none') return null;
   const key =
     result.warning === 'stale'

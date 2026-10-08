@@ -48,5 +48,6 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
   summaryStaleOne: 'The iPhone has not synced for over 2 h: 1 reminder in the next 2 hours may not ring on time',
   summaryStaleMany: 'The iPhone has not synced for over 2 h: {n} reminders in the next 2 hours may not ring on time',
   summaryNoIphoneOne: 'No iPhone paired: 1 reminder in the next 2 hours will not ring',
+  warnReadFailed: 'Upcoming reminders could not be checked: the sync warning is unavailable',
   summaryNoIphoneMany: 'No iPhone paired: {n} reminders in the next 2 hours will not ring',
 };

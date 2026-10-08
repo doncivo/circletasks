@@ -182,6 +182,20 @@ describe('Réglages > Rappels sur le PC : nombre de rappels concernés dans les 
     await h.db.close();
   });
 
+  it('lecture impossible : journalisée (warning-read-failed) et ligne visible, jamais un silence', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.spyOn(h.container.data.repos.reminders, 'listBetween').mockRejectedValue(new Error('illisible'));
+    await replanNotifications(h.container, 'open');
+    render(
+      <AppContainerProvider container={h.container}>
+        <RecapSettingsScreen />
+      </AppContainerProvider>,
+    );
+    expect(await screen.findByText('Les rappels proches n’ont pas pu être vérifiés', { exact: false })).toBeInTheDocument();
+    expect(warn.mock.calls.flat().join(' ')).toContain('warning-read-failed');
+    warn.mockRestore();
+  });
+
   it('compte les rappels de tâches à faire des 2 prochaines heures ; une tâche terminée n’est pas comptée ; disparaît quand l’iPhone se synchronise', async () => {
     await seedReminderTask(h.container, { title: 'A', date: '2026-10-08', time: '10:30' });
     const done = await seedReminderTask(h.container, { title: 'B', date: '2026-10-08', time: '11:00' });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IPHONE_STALE_AFTER_MS, REMINDER_WARNING_WINDOW_MS, warnIphoneReminder, warnIphoneReminders, type WarningDevice } from './iphoneReminderWarning';
+import { keepOpenTaskReminders, IPHONE_STALE_AFTER_MS, REMINDER_WARNING_WINDOW_MS, warnIphoneReminder, warnIphoneReminders, type WarningDevice } from './iphoneReminderWarning';
 
 const NOW = Date.parse('2026-10-08T10:00:00.000Z');
 const MIN = 60_000;
@@ -83,5 +83,16 @@ describe('warnIphoneReminders (plusieurs rappels)', () => {
     expect(warnIphoneReminders({ nowMs: NOW, fireAtMs: [NOW + 5 * HOUR], devices })).toEqual({ warning: 'none', count: 0 });
     expect(warnIphoneReminders({ nowMs: NOW, fireAtMs: [NOW + MIN], devices: [pc] })).toEqual({ warning: 'no-iphone', count: 1 });
     expect(warnIphoneReminders({ nowMs: NOW, fireAtMs: [], devices: [pc] })).toEqual({ warning: 'none', count: 0 });
+  });
+});
+
+describe('keepOpenTaskReminders', () => {
+  it('écarte les rappels de tâches non à faire, garde ceux des routines et des événements', () => {
+    const items = [
+      { reminder: { targetType: 'task', targetId: 'a' } },
+      { reminder: { targetType: 'task', targetId: 'b' } },
+      { reminder: { targetType: 'routine', targetId: 'r' } },
+    ] as const;
+    expect(keepOpenTaskReminders(items, new Set(['a']))).toEqual([items[0], items[2]]);
   });
 });

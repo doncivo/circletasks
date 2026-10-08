@@ -52,5 +52,6 @@ export const remindersStatusFr = {
   summaryStaleOne: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : 1 rappel dans les 2 prochaines heures pourrait ne pas sonner à l’heure',
   summaryStaleMany: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : {n} rappels dans les 2 prochaines heures pourraient ne pas sonner à l’heure',
   summaryNoIphoneOne: 'Aucun iPhone associé : 1 rappel dans les 2 prochaines heures ne sonnera pas',
+  warnReadFailed: 'Les rappels proches n’ont pas pu être vérifiés : l’avertissement de synchro est indisponible',
   summaryNoIphoneMany: 'Aucun iPhone associé : {n} rappels dans les 2 prochaines heures ne sonneront pas',
 } as const;

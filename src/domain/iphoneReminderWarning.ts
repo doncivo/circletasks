@@ -76,3 +76,8 @@ export function warnIphoneReminders(input: { readonly nowMs: number; readonly fi
   }
   return { warning, count };
 }
+
+/** Écarte les rappels dont la tâche n'est plus à faire (terminée, supprimée) ; routines et événements restent. */
+export function keepOpenTaskReminders<T extends { readonly reminder: { readonly targetType: string; readonly targetId: string } }>(items: readonly T[], openTaskIds: ReadonlySet<string>): T[] {
+  return items.filter((item) => item.reminder.targetType !== 'task' || openTaskIds.has(item.reminder.targetId));
+}
