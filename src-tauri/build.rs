@@ -36,7 +36,7 @@ fn main() {
     }
 
     tauri_build::try_build(
-        tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&["set_tray_labels", "confirm_quit", "set_quick_capture_shortcut", "clear_quick_capture_shortcut", "get_quick_capture_shortcut", "backup_database_before_migration",
+        tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&["set_tray_labels", "confirm_quit", "set_quick_capture_shortcut", "clear_quick_capture_shortcut", "get_quick_capture_shortcut", "backup_database_before_migration", "db_diagnostics",
             // Sauvegarde quotidienne et restauration (P-04) : PC uniquement.
             "daily_backup", "list_backups", "check_backup", "restore_backup", "reveal_backups_folder",
             // Import CSV (P-07) : PC uniquement.

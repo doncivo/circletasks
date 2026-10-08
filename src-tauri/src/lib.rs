@@ -44,7 +44,7 @@ pub fn run() {
         export::export_save_file, export::reveal_exported_file, import::import_open_file,
         capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error,
         ocr::ocr_status, ocr::ocr_recognize,
-        backup::backup_database_before_migration, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder,
+        backup::backup_database_before_migration, backup::db_diagnostics, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder,
         calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Mini-fenêtre Focus ouverte par Rust (correctif F-01, ADR 0011 section 2.1).
         focus_window::focus_window_open, focus_window::focus_window_bring_to_front, focus_window::focus_window_close,
@@ -63,7 +63,7 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_vision::init()).plugin(tauri_plugin_speech::init()).manage(ocr::vision::VisionState::default()).manage(speech::SpeechState::default()).manage(sync::commands_ios::SyncState::default());
     #[cfg(target_os = "ios")]
-    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
+    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, backup::db_diagnostics, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : commandes de `main`, aucune de la fenêtre `pairing`.
         sync::commands_ios::sync_folder_info, sync::commands_ios::sync_folder_choose, sync::commands_ios::sync_folder_forget, sync::commands_ios::sync_bind_device,
         sync::commands_ios::sync_key_status, sync::commands_ios::sync_key_create, sync::commands_ios::sync_scan, sync::commands_ios::sync_read_journal,
