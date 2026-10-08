@@ -126,7 +126,12 @@ describe('contrat des permissions Info.plist', () => {
     const { errors, warnings } = checkPlistContract(camera, plist);
     expect(errors).toEqual(['NSCameraUsageDescription : description d\'usage vide', 'NSMicrophoneUsageDescription : description d\'usage vide']);
     expect(warnings).toEqual(['NSFaceIDUsageDescription présente mais absente de plist-contract.json']);
-    expect(checkPlistContract(contract, { NSCameraUsageDescription: true, NSFaceIDUsageDescription: 'Déverrouiller CircleTasks.' }).errors).toEqual(['NSCameraUsageDescription : description d\'usage vide']);
+    // Contrat versionné (CAP-IOS-01 y ajoute vision et speech) : la caméra non textuelle est refusée, le micro et la reconnaissance manquent.
+    expect(checkPlistContract(contract, { NSCameraUsageDescription: true, NSFaceIDUsageDescription: 'Déverrouiller CircleTasks.' }).errors).toEqual([
+      'NSMicrophoneUsageDescription absente (plugin speech, CAP-IOS-01)',
+      'NSSpeechRecognitionUsageDescription absente (plugin speech, CAP-IOS-01)',
+      'NSCameraUsageDescription : description d\'usage vide',
+    ]);
   });
 
   it('refuse un contrat mal écrit (champ inconnu, story absente, clé non NS…UsageDescription, version)', () => {

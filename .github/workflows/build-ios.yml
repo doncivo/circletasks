@@ -107,8 +107,8 @@ jobs:
           echo "$WINACT"
           if grep -q "tauri-plugin-notification-actions v" <<<"$WINACT"; then echo "::error::tauri-plugin-notification-actions présent dans la compilation Windows"; exit 1; fi
           # Lot M (ADR 0013 §5) : Face ID (I-03, officiel épinglé), retour haptique (A-07, plugin local) et cache de confidentialité
-          # (I-03, plugin local) : iPhone seulement.
-          for CRATE in tauri-plugin-biometric tauri-plugin-ct-haptics tauri-plugin-privacy-shield; do
+          # (I-03, plugin local) : iPhone seulement. CAP-IOS-01 (ADR 0015 §4.4) : plugins Swift vision et speech, appelés par Rust seul, iPhone seulement.
+          for CRATE in tauri-plugin-biometric tauri-plugin-ct-haptics tauri-plugin-privacy-shield tauri-plugin-vision tauri-plugin-speech; do
             IOS=$(cargo tree --target aarch64-apple-ios -i "$CRATE" 2>&1 || true)
             echo "$IOS"
             grep -q "$CRATE v" <<<"$IOS" || { echo "::error::$CRATE absent de la compilation iOS"; exit 1; }

@@ -647,8 +647,10 @@ dependencies = [
  "tauri-plugin-privacy-shield",
  "tauri-plugin-process",
  "tauri-plugin-single-instance",
+ "tauri-plugin-speech",
  "tauri-plugin-sql",
  "tauri-plugin-updater",
+ "tauri-plugin-vision",
  "tempfile",
  "tokio",
  "url",
@@ -5270,6 +5272,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-speech"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-sql"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5321,6 +5332,15 @@ dependencies = [
  "url",
  "windows-sys 0.61.2",
  "zip",
+]
+
+[[package]]
+name = "tauri-plugin-vision"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

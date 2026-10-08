@@ -5,6 +5,7 @@
 
 mod backup;
 mod capture;
+mod capture_ios;
 mod calendars;
 mod config;
 mod export;
@@ -13,11 +14,13 @@ mod import;
 mod logic;
 mod notification_actions;
 mod ocr;
+mod ocr_vision;
 mod quit;
 mod restore;
 mod restore_hardening;
 mod restore_recovery;
 mod shortcut;
+mod speech;
 mod support;
 mod sync_bookmark;
 mod sync_closed_segments;

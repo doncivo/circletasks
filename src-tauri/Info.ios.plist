@@ -4,9 +4,15 @@
 <dict>
 	<!-- Fusionné par Tauri dans l'Info.plist généré (tauri ios init). Chaque clé de permission est déclarée dans
 	     scripts/ios/plist-contract.json par le lot du plugin qui la demande (ADR 0007, avenant I-01). -->
-	<!-- Y-IOS-02 (ADR 0011 §23 point 2) : scan du QR d'association par barcode-scanner. CAP-IOS-01 réutilisera la clé. -->
+	<!-- Y-IOS-02 (ADR 0011 §23 point 2) : scan du QR d'association par barcode-scanner. CAP-IOS-01 (ADR 0015 §4.2) : la même clé sert au choix
+	     « Prendre une photo » du scan de tâches (sélecteur de WKWebView) ; Vision lui-même n'en demande aucune. -->
 	<key>NSCameraUsageDescription</key>
-	<string>CircleTasks utilise la caméra pour scanner le code d'association affiché sur votre PC.</string>
+	<string>CircleTasks utilise la caméra pour scanner le code d'association affiché sur votre PC et pour photographier une liste de tâches à lire.</string>
+	<!-- CAP-IOS-01 (ADR 0015 §4.2) : dictée de l'app (plugin speech). Sans ces deux clés, la demande d'autorisation termine l'app. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CircleTasks utilise le micro seulement pendant que vous dictez une tâche. Rien n'est enregistré.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>CircleTasks transforme votre dictée en texte sur l'iPhone, sans rien envoyer.</string>
 	<!-- I-03 (ADR 0013 §2.1) : verrouillage par Face ID (plugin biometric). Sans cette clé, Face ID est indisponible (constat 6). -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>CircleTasks utilise Face ID pour garder vos tâches privées.</string>

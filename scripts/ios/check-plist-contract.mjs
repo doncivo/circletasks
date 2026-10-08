@@ -1,7 +1,7 @@
 /* global process, console */
 // Contrôle du Info.plist contre scripts/ios/plist-contract.json (I-01, critère 2).
 // Usage : node scripts/ios/check-plist-contract.mjs <plist-contract.json> <Info.plist XML>
-// Échoue (code 1, lignes ::error::) si une clé exigée manque ou si une description d'usage est vide.
+// Échoue (code 1, lignes ::error::) si une clé exigée manque, si une description d'usage est vide ou si une clé interdite (forbiddenKeys) est présente.
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parsePlist } from './plist.mjs';
@@ -16,6 +16,7 @@ export function validateContract(contract) {
   const errors = [];
   if (!contract || typeof contract !== 'object' || Array.isArray(contract)) return ['Contrat : objet JSON attendu'];
   if (contract.formatVersion !== 1) errors.push(`Contrat : formatVersion 1 attendu (trouvé ${JSON.stringify(contract.formatVersion)})`);
+  if (contract.forbiddenKeys !== undefined && !isStringArray(contract.forbiddenKeys)) errors.push('Contrat : « forbiddenKeys » doit être une liste de clés');
   const plugins = contract.plugins;
   if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
     errors.push('Contrat : « plugins » doit être un objet');
@@ -71,6 +72,10 @@ export function checkPlistContract(contract, plist) {
       }
       for (const v of values) if (!actual.includes(v)) errors.push(`${key} ne contient pas « ${v} » (plugin ${name}, ${entry.story})`);
     }
+  }
+  // Clés interdites (CAP-IOS-01 critère 16, I-05 critère 8) : aucune clé superflue (mode d'arrière-plan, localisation, photothèque, contacts, suivi).
+  for (const key of contract.forbiddenKeys ?? []) {
+    if (Object.hasOwn(plist, key)) errors.push(`${key} interdite (aucune clé superflue)`);
   }
   for (const [key, value] of Object.entries(plist)) {
     if (!/UsageDescription$/.test(key)) continue;

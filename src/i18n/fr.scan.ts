@@ -91,5 +91,26 @@ export const scanFr = {
     useFallback: 'Lire quand même avec le moteur intégré',
     steps: 'Marche à suivre',
   },
+  // Moteur de lecture de l’iPhone (Vision, CAP-IOS-01) : indisponible ou lecture refusée. Jamais de repli automatique : le moteur intégré se choisit.
+  unavailableIos: {
+    title: 'Le moteur de lecture de l’iPhone est indisponible',
+    pluginHint: 'Le moteur de lecture de l’iPhone n’a pas répondu. Vous pouvez lire la photo avec le moteur intégré, plus lent.',
+    languageHint: 'Le moteur de lecture de l’iPhone ne sait pas lire le français sur cet appareil. Vous pouvez lire la photo avec le moteur intégré, plus lent.',
+    stillMissing: 'Le moteur de lecture de l’iPhone reste indisponible.',
+    useFallback: 'Lire avec le moteur intégré',
+  },
+  visionError: {
+    title: 'La lecture n’a pas abouti',
+    hint: 'Le moteur de lecture de l’iPhone n’a pas pu lire cette photo. Réessayez, ou lisez-la avec le moteur intégré, plus lent.',
+    retry: 'Réessayer',
+    useFallback: 'Lire avec le moteur intégré',
+  },
+  code: 'Code : {code}',
+  // Caméra du sélecteur de photo de l’iPhone (I-05 critère 10) : l’état de l’autorisation n’est pas lisible, la phrase ne dépend d’aucun état.
+  cameraHint: {
+    text: 'Pour photographier une liste, autorisez la caméra : iOS vous le demandera la première fois. Si rien ne se passe, ouvrez Réglages › CircleTasks › Caméra.',
+    openSettings: 'Ouvrir les réglages',
+    settingsFailed: 'Les réglages n’ont pas pu s’ouvrir. Ouvrez Réglages › CircleTasks › Caméra.',
+  },
   checking: 'Vérification du moteur de lecture',
 } as const;

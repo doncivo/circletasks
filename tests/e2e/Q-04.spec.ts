@@ -167,6 +167,31 @@ test.describe('Q-04 — scan de tâches', () => {
     await expect(dialog(page).getByRole('heading', { name: 'Relecture' })).toBeVisible();
   });
 
+  test('iPhone, Vision en échec : erreur persistante avec son code, aucun repli silencieux, « Lire avec le moteur intégré » mène à la relecture (CAP-IOS-01 critères 4 et 6)', async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Vision : iPhone seulement');
+    await fake(page, { lines: LINES, vision: { failure: 'failed' } });
+    await openScan(page);
+    await fileInput(page).setInputFiles(FIXTURE);
+    await expect(dialog(page).getByRole('heading', { name: 'La lecture n’a pas abouti' })).toBeVisible();
+    await expect(dialog(page).getByRole('alert')).toContainText('Code : ocr-engine');
+    await page.waitForTimeout(300);
+    await expect(dialog(page).getByRole('heading', { name: 'La lecture n’a pas abouti' })).toBeVisible();
+    await expect(dialog(page).getByRole('button', { name: 'Réessayer' })).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Lire avec le moteur intégré' }).click();
+    await expect(dialog(page).getByRole('heading', { name: 'Relecture' })).toBeVisible();
+  });
+
+  test('iPhone, Vision indisponible : écran avec son code, repli au choix (CAP-IOS-01 critère 17)', async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Vision : iPhone seulement');
+    await fake(page, { lines: LINES, vision: { unavailable: 'plugin-unavailable' } });
+    await openScan(page);
+    await expect(dialog(page).getByRole('heading', { name: 'Le moteur de lecture de l’iPhone est indisponible' })).toBeVisible();
+    await expect(dialog(page).getByRole('alert')).toContainText('vision-plugin-unavailable');
+    await dialog(page).getByRole('button', { name: 'Lire avec le moteur intégré' }).click();
+    await fileInput(page).setInputFiles(FIXTURE);
+    await expect(dialog(page).getByRole('heading', { name: 'Relecture' })).toBeVisible();
+  });
+
   test('glisser-déposer d’une image sur la fenêtre (PC)', async ({ page }, testInfo) => {
     test.skip(isPhone(testInfo), 'PC seulement');
     await fake(page, { lines: LINES });

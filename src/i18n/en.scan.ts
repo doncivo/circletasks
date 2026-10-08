@@ -87,5 +87,24 @@ export const scanEn: Messages['scan'] = {
     useFallback: 'Read anyway with the built-in engine',
     steps: 'Steps to follow',
   },
+  unavailableIos: {
+    title: 'The iPhone reading engine is unavailable',
+    pluginHint: 'The iPhone reading engine did not respond. You can read the photo with the built-in engine, which is slower.',
+    languageHint: 'The iPhone reading engine cannot read French on this device. You can read the photo with the built-in engine, which is slower.',
+    stillMissing: 'The iPhone reading engine is still unavailable.',
+    useFallback: 'Read with the built-in engine',
+  },
+  visionError: {
+    title: 'The reading did not succeed',
+    hint: 'The iPhone reading engine could not read this photo. Try again, or read it with the built-in engine, which is slower.',
+    retry: 'Try again',
+    useFallback: 'Read with the built-in engine',
+  },
+  code: 'Code: {code}',
+  cameraHint: {
+    text: 'To photograph a list, allow the camera: iOS will ask the first time. If nothing happens, open Settings › CircleTasks › Camera.',
+    openSettings: 'Open settings',
+    settingsFailed: 'Settings could not be opened. Open Settings › CircleTasks › Camera.',
+  },
   checking: 'Checking the reading engine',
 };

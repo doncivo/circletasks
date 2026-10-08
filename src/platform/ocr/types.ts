@@ -1,10 +1,10 @@
 /**
  * Contrat de la lecture de texte d'une image (Q-04, PRD sections 7 et 10). Trois moteurs derrière le même contrat : Windows.Media.Ocr
- * sur PC (commandes Rust), tesseract.js embarqué (repli PC et iPhone), Vision sur iPhone (plugin Swift, ordre 5) ; un faux pour les tests.
+ * sur PC (commandes Rust), Vision sur iPhone (plugin Swift appelé par Rust, CAP-IOS-01), tesseract.js embarqué (repli choisi, PC et iPhone) ; un faux pour les tests.
  * L'image n'est jamais enregistrée ni envoyée : elle passe en mémoire et est libérée à la fin de l'appel.
  */
 
-/** Une ligne reconnue. `confidence` (0 à 100) n'existe que pour tesseract.js ; Windows.Media.Ocr n'en donne pas (décision D2). */
+/** Une ligne reconnue. `confidence` (0 à 100) existe pour Vision et tesseract.js ; Windows.Media.Ocr n'en donne pas (décision D2). */
 export interface OcrLineResult {
   readonly text: string;
   readonly confidence?: number;
@@ -15,6 +15,8 @@ export interface OcrEngineStatus {
   readonly available: boolean;
   /** Langues de reconnaissance installées (étiquettes BCP 47) ; vide si inconnu. */
   readonly languages: readonly string[];
+  /** Pourquoi le moteur natif est indisponible (iPhone, Vision) : français absent, ou plugin absent, refusé ou muet. */
+  readonly reason?: 'language-missing' | 'plugin-unavailable';
 }
 
 export interface RecognizeOptions {
@@ -37,16 +39,19 @@ export type OcrFailure = 'language-missing' | 'unsupported-format' | 'too-large'
 
 export class OcrError extends Error {
   readonly reason: OcrFailure;
-  constructor(reason: OcrFailure, cause?: unknown) {
+  /** Code de la commande Rust (`ocr-engine`, `ocr-unavailable`…), affiché et journalisé ; jamais un texte reconnu. */
+  readonly code?: string;
+  constructor(reason: OcrFailure, cause?: unknown, code?: string) {
     super(`Lecture du texte impossible (${reason})`, { cause });
     this.name = 'OcrError';
     this.reason = reason;
+    if (code !== undefined) this.code = code;
   }
 }
 
 /** Moteur principal de l'appareil (Windows, Vision) et repli embarqué (tesseract.js). */
 export interface OcrEngines {
-  /** Moteur natif, `null` si l'appareil n'en a pas (navigateur, iPhone avant l'ordre 5). */
+  /** Moteur natif, `null` si l'appareil n'en a pas (navigateur). */
   readonly primary: OcrEngine | null;
   /** Repli hors ligne, toujours proposé quand le moteur natif manque (pack de langue absent). */
   readonly fallback: OcrEngine | null;
