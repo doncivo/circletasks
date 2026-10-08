@@ -63,6 +63,6 @@ export default defineConfig({
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google), VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav), VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com' },
+    env: { CT_DEV_PORT: String(E2E_DEV_PORT), VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google), VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav), VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com' },
   },
 });

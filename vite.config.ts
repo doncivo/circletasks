@@ -2,11 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'node:path';
 import { ocrAssets } from './vite.ocrAssets.ts';
-import { E2E_DEV_PORT } from './tests/sim/ports.ts';
-
-// Port partagé avec src-tauri/tauri.conf.json (devUrl, 1420) et playwright.config.ts (webServer). Les e2e le déplacent par
-// CT_E2E_PORT_BASE (tests/sim/ports.ts) ; `npm run dev` et `tauri dev` gardent 1420 tant que la variable n'est pas posée.
-export const DEV_PORT = E2E_DEV_PORT;
+// Port partagé avec src-tauri/tauri.conf.json (devUrl, 1420). Seul playwright.config.ts le déplace, par CT_DEV_PORT dans l'environnement
+// du serveur qu'il lance (webServer.env) : `npm run dev` et `tauri dev` restent sur 1420, même si CT_E2E_PORT_BASE est posée.
+export const DEV_PORT = Number(process.env['CT_DEV_PORT'] ?? 1420);
 
 export default defineConfig({
   plugins: [react(), ocrAssets()],

@@ -6,7 +6,7 @@
  * - `CT_E2E_PORT_BASE=<n>` : Vite sur n, Google n+1, CalDAV n+2, dossier iCloud n+3. Prendre des bases distantes d'au moins 10 par copie
  *   (ex. 41000, 41010) et libres (`netstat -ano | findstr :41000`).
  *
- * Lu par playwright.config.ts, vite.config.ts (port du serveur lancé par Playwright), tests/e2e/globalSetup.ts et les helpers e2e.
+ * Lu par playwright.config.ts (qui passe le port Vite au serveur par CT_DEV_PORT : vite.config.ts ne lit pas cette base), tests/e2e/globalSetup.ts et les helpers e2e.
  * Les simulateurs d'agendas sont lancés par `globalSetup` ; le serveur de développement les connaît par `VITE_CT_GOOGLE_SIM` et
  * `VITE_CT_CALDAV_SIM` (playwright.config.ts). Les tests qui modifient l'état d'un simulateur (révocation, erreur injectée,
  * événements) en démarrent un à eux sur un port libre (tests/e2e/helpers/calendars.ts) : deux workers ne partagent jamais un état modifiable.

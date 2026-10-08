@@ -12,7 +12,7 @@ import { ReportScreen } from '../stats';
 import { TaskDetail } from '../tasks/TaskDetail';
 import { FocusView } from './FocusView';
 import { focusStore } from './focusStore';
-import { settle } from './settle';
+import { settle } from '../../../tests/setup/settle';
 import { MIN, seedFocusTask, setupFocus, type FocusHarness } from './testKit';
 
 function mockViewport(width: number): void {
