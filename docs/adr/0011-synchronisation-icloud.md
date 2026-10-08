@@ -215,7 +215,7 @@ Règles côté interface (contrôlées par la revue et par des tests, section 12
 
 #### 2.3 Journaux techniques (audit B6)
 
-Les journaux techniques de la synchro (Rust et TypeScript) ne contiennent **ni texte clair** d'enregistrement, **ni clé**, **ni `qrText`**, **ni saisie de la clé de secours**, ni chemin complet : seulement codes, compteurs, noms de fichiers stricts, identifiants d'appareil et d'époque. Test dédié (section 12). **En production, le journal technique Rust de la synchro ne conserve rien** (lot Y1, avenant 16).
+Les journaux techniques de la synchro (Rust et TypeScript) ne contiennent **ni texte clair** d'enregistrement, **ni clé**, **ni `qrText`**, **ni saisie de la clé de secours**, ni chemin complet : seulement codes, compteurs, noms de fichiers stricts, identifiants d'appareil et d'époque. Test dédié (section 12). **En production, le journal technique Rust de la synchro ne conserve rien** (lot Y1, avenant 16). *Modifié par l'ADR 0014 (2026-10-08, I-04)* : en production, seul l'identifiant fixe de l'événement (`&'static str`) est inscrit au journal technique persistant (`applog::write("sync-rust", event)`), jamais son `detail` ; les journaux TS de la synchro y sont conservés, avec le contenu permis ci-dessus.
 
 ### 3. Contenu des journaux
 
