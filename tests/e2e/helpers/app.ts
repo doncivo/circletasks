@@ -19,9 +19,18 @@ export async function openApp(page: Page): Promise<void> {
 export async function waitForScreenLoaded(page: Page, name: ScreenName): Promise<void> {
   const attribute = SCREEN_LOADED_PREFIX + name;
   await expect
-    .poll(() => page.evaluate((a) => document.documentElement.hasAttribute(a), attribute), {
-      message: `bloc ${name} jamais chargé (préchargement des écrans à la demande ?)`,
+    .poll(
+      () =>
+        page.evaluate((a) => document.documentElement.hasAttribute(a), attribute).catch((error: unknown) => {
+          // Relance de l'app pendant l'attente (rechargement de la page, ex. « Associer de nouveau ») : le contexte détruit n'est pas un échec,
+          // l'attente reprend sur la nouvelle page et le délai ci-dessous reste le seul juge. Toute autre erreur est relancée.
+          if (error instanceof Error && error.message.includes('Execution context was destroyed')) return false;
+          throw error;
+          }),
+        {
+        message: `bloc ${name} jamais chargé (préchargement des écrans à la demande ?)`,
       timeout: APP_READY_TIMEOUT_MS,
-    })
+      },
+    )
     .toBe(true);
 }
