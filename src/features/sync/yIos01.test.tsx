@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Y-IOS-01 critères 8, 12 et 13 (ADR 0011 §22 points 7 et 8) : synchro visible sur iPhone, signet perdu visible et persistant (Réglages,
 // Détails, bandeau A-09, après un redémarrage), effacé au nouveau choix du dossier ; sélecteur annulé sans erreur ; actions qui demandent
-// une confirmation native de l'iPhone masquées jusqu'à Y-IOS-02.
+// une confirmation native : masquées jusqu'à Y-IOS-02, proposées depuis (`UIAlertController`, ADR 0011 §23 point 5).
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
@@ -140,8 +140,8 @@ describe('Y-IOS-01 critère 13 : sélecteur annulé', () => {
   });
 });
 
-describe('Y-IOS-01 (§22 point 7) : actions à confirmation native masquées sur iPhone', () => {
-  it('« Oublier » ne propose que le dossier ; pas d’« Oublier cet appareil »', async () => {
+describe('ADR 0011 §23 point 5 (Y-IOS-02) : actions à confirmation native proposées sur iPhone', () => {
+  it('« Oublier » propose le dossier, et le dossier et la clé ; « Oublier cet appareil » proposé', async () => {
     const platform = createMemorySyncPlatform({ platform: 'ios' });
     await platform.folder.choose();
     await platform.key.create();
@@ -155,8 +155,8 @@ describe('Y-IOS-01 (§22 point 7) : actions à confirmation native masquées sur
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Oublier le dossier de synchronisation' }));
     expect(screen.getByRole('button', { name: 'Oublier le dossier' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Oublier le dossier et la clé' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Oublier PC' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Oublier le dossier et la clé' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Oublier PC' })).toBeInTheDocument();
   });
 
   it('témoin : sur PC, « Oublier cet appareil » est proposé', () => {

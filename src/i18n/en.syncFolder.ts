@@ -26,6 +26,7 @@ export const syncFolderEn: Shape<typeof syncFolderFr> = {
   errorTooLarge: 'The sync folder is too large',
   errorProviderStopped: 'Open iCloud for Windows',
   errorVault: 'The Windows credential vault is unavailable',
+  errorVaultIos: 'The iPhone Keychain is unavailable: unlock the iPhone, sync will resume',
   errorDenied: 'Action cancelled',
   errorRateLimited: 'Too many attempts: try again in a few minutes',
   errorGeneric: 'Sync ran into an error',

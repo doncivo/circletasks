@@ -23,6 +23,7 @@ use crate::sync_support::{epoch, FakeUi, MemFs, SharedFs, DEV_A, NOW};
 
 const SWIFT: &str = include_str!("../../plugins/folder-bookmark/ios/Sources/FolderBookmarkPlugin.swift");
 const BOOKMARK_RS: &str = include_str!("../../src/sync/bookmark.rs");
+const CONSENT_IOS_RS: &str = include_str!("../../src/sync/consent_ios.rs");
 const PLUGIN_LIB: &str = include_str!("../../plugins/folder-bookmark/src/lib.rs");
 const PLUGIN_BUILD: &str = include_str!("../../plugins/folder-bookmark/build.rs");
 
@@ -101,6 +102,8 @@ fn y_ios_01_1_every_contract_command_exists_in_swift_and_rust_with_the_same_fiel
     let contract: Value = serde_json::from_str(CONTRACT).unwrap();
     let commands = contract["commands"].as_object().unwrap();
     let rust_commands: BTreeSet<&str> = PLUGIN_COMMANDS.iter().copied().collect();
+    // Appels Rust : fichiers (`bookmark.rs`) et confirmation native (`consent_ios.rs`, Y-IOS-02).
+    let rust = format!("{BOOKMARK_RS}\n{CONSENT_IOS_RS}");
     for (name, spec) in commands {
         // Swift : méthode exactement nommée (lowerCamelCase, aucune conversion), arguments décodés dans une structure aux champs du contrat.
         let body = swift_method(name);
@@ -119,9 +122,9 @@ fn y_ios_01_1_every_contract_command_exists_in_swift_and_rust_with_the_same_fiel
         }
         // Rust : commande appelée par son nom exact, avec les champs du contrat.
         assert!(rust_commands.contains(name.as_str()), "{name} absent de PLUGIN_COMMANDS");
-        assert!(BOOKMARK_RS.contains(&format!("\"{name}\"")) || name == "appState", "{name} : jamais appelé par bookmark.rs");
+        assert!(rust.contains(&format!("\"{name}\"")), "{name} : jamais appelé par Rust");
         for field in &input {
-            assert!(BOOKMARK_RS.contains(&format!("\"{field}\":")), "{name} : champ {field} absent de bookmark.rs");
+            assert!(rust.contains(&format!("\"{field}\":")), "{name} : champ {field} absent des appels Rust");
         }
     }
     // Aucune autre méthode `@objc public func … (_ invoke: Invoke)` que celles du contrat.

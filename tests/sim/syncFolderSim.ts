@@ -21,6 +21,9 @@ import { createSimFolder, propagate } from './syncCloudSim';
  * - `POST /fail` `{ room, device, method, after, code }` : la méthode échoue (code donné, avant toute écriture) après `after` appels réussis ;
  * - `POST /inspect` `{ room, device }` : identifiant lié, nombre d'ajouts, tâches publiées (nombre de fois par identifiant), budgets
  *   d'hydratation reçus par chaque scan (`hydrateBudgetMs`, null sans) ;
+ * - `POST /scan` `{ room, device, from }` (Y-IOS-02) : le prochain scan de l'iPhone `device` lit le QR affiché par l'appareil `from` (produit
+ *   ici, comme par la fenêtre `pairing` du PC), jamais un texte venu de la page ;
+ * - `POST /camera` `{ room, device, state, answer }` (Y-IOS-02) : autorisation de la caméra simulée de l'iPhone ;
  * - `POST /unreachable` `{ room, device, on }` (Y-IOS-01) : dossier injoignable (signet perdu) : toute méthode répond `folder-unreachable`
  *   jusqu'à `on: false` ou un nouveau choix du dossier. `on: false` remet aussi la liaison à neuf si la page s'est rechargée (la base du
  *   navigateur de dev n'est pas persistée : Rust, lui, retrouve l'appareil lié dans `folder.json`).
@@ -79,6 +82,11 @@ const METHODS: ReadonlySet<string> = new Set([
   'key.pairingPayload',
   'key.closePairing',
   'key.import',
+  // Y-IOS-02 : scan du QR de l'iPhone (texte fourni par le simulateur, jamais par la page).
+  'key.scanAndImport',
+  'key.cancelScan',
+  'key.cameraPermission',
+  'key.openCameraSettings',
   'bindDevice',
   'scan',
   'readJournal',
@@ -250,6 +258,25 @@ export async function startSyncFolderSim(port = 0): Promise<SyncFolderSim> {
         const target = rooms.get(room)?.devices.get(device);
         if (!target) return json(404, { ok: false });
         return json(200, { deviceId: target.deviceId, appends: target.appends, tasks: publishedTasks(target), failing: target.failure !== null, scanBudgets: target.scanBudgets });
+      }
+      case '/scan': {
+        const { room, device, from } = JSON.parse(request.body) as { room: string; device: string; from: string };
+        const found = rooms.get(room);
+        const target = found?.devices.get(device);
+        const owner = found?.devices.get(from);
+        if (!target || !owner) return json(404, { ok: false });
+        await owner.platform.key.openPairing('show');
+        const payload = await owner.platform.key.pairingPayload();
+        await owner.platform.key.closePairing();
+        target.platform.testing.setScanResult(payload.qrText);
+        return json(200, { ok: true });
+      }
+      case '/camera': {
+        const { room, device, state, answer } = JSON.parse(request.body) as { room: string; device: string; state: 'granted' | 'denied' | 'prompt'; answer?: 'granted' | 'denied' };
+        const target = rooms.get(room)?.devices.get(device);
+        if (!target) return json(404, { ok: false });
+        target.platform.testing.setCameraPermission(state, answer);
+        return json(200, { ok: true, opened: target.platform.testing.cameraSettingsOpened() });
       }
       case '/unreachable': {
         const { room, device, on } = JSON.parse(request.body) as { room: string; device: string; on: boolean };

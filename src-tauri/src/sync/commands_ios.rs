@@ -12,10 +12,12 @@ use std::sync::{Arc, OnceLock};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 
-use super::bookmark::{choose_with_picker, ios_core, BookmarkBackend, BookmarkTransport, PluginTransport};
-use super::consent::{ConsentUi, WindowsConsentUi};
+use super::bookmark::{choose_with_picker, import_ios, ios_core, BookmarkBackend, BookmarkTransport, PluginTransport};
+use super::consent::ConsentUi;
+use super::consent_ios::IosConsentUi;
+use crate::vault_ios::CachedVault;
 use super::marker::RestoreMarker;
-use super::service::{system_clock, AppendRequest, FolderInfo, KeyStatus, SyncCore};
+use super::service::{system_clock, AppendRequest, FolderInfo, KeyImportResult, KeyStatus, SyncCore};
 use super::store::{AppendResult, FolderScan, OwnFileRef, ReadPage, RecordCursor};
 use super::{fail, SyncCode, SyncError, SyncResult};
 
@@ -24,9 +26,8 @@ pub const MAIN_WINDOW: &str = "main";
 /// Propriétaire des confirmations natives sur iPhone (une seule fenêtre, §23 point 3).
 const OWNER: isize = 0;
 
-/// Commandes de l'iPhone (Y-IOS-01) : les 24 moins les trois de la fenêtre `pairing` et les trois qui demandent une confirmation native
-/// iOS (`sync_key_import`, `sync_device_forget`, `sync_reset_key`, ajoutées par Y-IOS-02).
-pub const IOS_SYNC_COMMANDS: [&str; 18] = [
+/// Commandes de l'iPhone (Y-IOS-01, Y-IOS-02) : les 24 moins les trois de la fenêtre `pairing`.
+pub const IOS_SYNC_COMMANDS: [&str; 21] = [
     "sync_folder_info",
     "sync_folder_choose",
     "sync_folder_forget",
@@ -45,6 +46,9 @@ pub const IOS_SYNC_COMMANDS: [&str; 18] = [
     "sync_restore_marker_get",
     "sync_restore_marker_clear",
     "sync_forgotten_delete",
+    "sync_key_import",
+    "sync_device_forget",
+    "sync_reset_key",
 ];
 
 /// Transport du plugin folder-bookmark, géré par son `init()` (`lib.rs`, bloc iOS).
@@ -53,10 +57,9 @@ fn plugin_transport<R: Runtime>(app: &AppHandle<R>) -> SyncResult<Arc<dyn Bookma
     Ok(Arc::new(PluginTransport(plugin.inner().clone())))
 }
 
-/// Confirmation native de l'iPhone : avant Y-IOS-02, une interface qui refuse (`owner_ready` faux : `not-foreground`, aucune boîte ;
-/// §22 point 7) ; l'interface masque les actions qui la demandent.
-fn consent_ui(_transport: &Arc<dyn BookmarkTransport>) -> Arc<dyn ConsentUi> {
-    Arc::new(WindowsConsentUi)
+/// Confirmation native de l'iPhone (§23 point 3) : `UIAlertController` du plugin folder-bookmark, textes lus par Rust.
+fn consent_ui(transport: &Arc<dyn BookmarkTransport>) -> Arc<dyn ConsentUi> {
+    Arc::new(IosConsentUi::new(transport.clone()))
 }
 
 /// État géré par Tauri : service et contrôle du dossier créés au premier appel (dossier de configuration et plugin connus).
@@ -73,7 +76,9 @@ impl SyncState {
         let base = app.path().app_config_dir().map_err(|_| SyncError::new(SyncCode::Io))?;
         let transport = plugin_transport(app)?;
         let ui = consent_ui(&transport);
-        let pair = ios_core(base, transport, Arc::from(crate::vault::sync_key_vault()), ui, system_clock());
+        // §23 point 1 : la clé lue reste en mémoire (cycle du passage en arrière-plan, écran verrouillé).
+        let vault = Arc::new(CachedVault::new(crate::vault::sync_key_vault()));
+        let pair = ios_core(base, transport, vault, ui, system_clock());
         Ok(self.core.get_or_init(|| pair).clone())
     }
 
@@ -288,4 +293,39 @@ pub async fn sync_forgotten_delete<R: Runtime>(app: AppHandle<R>, window: Webvie
     let core = state.core(&app)?;
     let result = blocking(move || core.forgotten_delete(&device_id)).await?;
     Ok(ForgottenDeleted { deleted: result.deleted, complete: result.complete })
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-IOS-02 (ADR 0011 §23) : clé importée depuis `main`, oubli d'un appareil, réinitialisation ; confirmations par `IosConsentUi`
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// `sync_key_import({ qrText } | { recoveryKey })` depuis `main`, au premier plan (`appState`) ; `{ scan: true }` refusé (`invalid-pairing`).
+#[tauri::command]
+pub async fn sync_key_import<R: Runtime>(
+    app: AppHandle<R>,
+    window: WebviewWindow<R>,
+    state: State<'_, SyncState>,
+    qr_text: Option<String>,
+    recovery_key: Option<String>,
+    scan: Option<bool>,
+) -> SyncResult<KeyImportResult> {
+    require_main(&window)?;
+    let core = state.core(&app)?;
+    blocking(move || import_ios(&core, qr_text, recovery_key, scan)).await
+}
+
+/// Y-10 : déclaration d'oubli d'un autre appareil, après la confirmation native de l'iPhone.
+#[tauri::command]
+pub async fn sync_device_forget<R: Runtime>(app: AppHandle<R>, window: WebviewWindow<R>, state: State<'_, SyncState>, device_id: String) -> SyncResult<()> {
+    require_main(&window)?;
+    let core = state.core(&app)?;
+    blocking(move || core.device_forget(&device_id, OWNER)).await
+}
+
+/// Y-11 : réinitialisation avec une nouvelle clé, après la confirmation native de l'iPhone ; seul le `kid` est rendu.
+#[tauri::command]
+pub async fn sync_reset_key<R: Runtime>(app: AppHandle<R>, window: WebviewWindow<R>, state: State<'_, SyncState>) -> SyncResult<KeyCreated> {
+    require_main(&window)?;
+    let core = state.core(&app)?;
+    blocking(move || core.reset_key(OWNER).map(|kid| KeyCreated { kid })).await
 }

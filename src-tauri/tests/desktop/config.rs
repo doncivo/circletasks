@@ -445,13 +445,19 @@ fn sync_6_focus_launcher_grants_only_the_three_focus_commands() {
 
 const SYNC_IOS_CAPABILITY: &str = include_str!("../../capabilities/sync-ios.json");
 
-/// Commandes de l'iPhone : les 24 moins les trois de la fenêtre `pairing`, et (jusqu'à Y-IOS-02) les trois qui demandent une confirmation
-/// native de l'iPhone.
-const IOS_PENDING_Y_IOS_02: [&str; 3] = ["sync_key_import", "sync_device_forget", "sync_reset_key"];
+/// Commandes de l'iPhone (ADR 0011 §23 point 5) : les 24 moins les trois de la fenêtre `pairing`.
 const PAIRING_WINDOW_COMMANDS: [&str; 3] = ["sync_pairing_open", "sync_pairing_payload", "sync_pairing_close"];
+/// Les cinq commandes du plugin barcode-scanner (scan du QR par le JS, §23 point 2), seules permissions de plugin de `sync-ios.json`.
+const BARCODE_PERMISSIONS: [&str; 5] = [
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-check-permissions",
+    "barcode-scanner:allow-request-permissions",
+    "barcode-scanner:allow-open-app-settings",
+];
 
 fn ios_sync_commands() -> Vec<&'static str> {
-    SYNC_COMMANDS.iter().copied().filter(|c| !PAIRING_WINDOW_COMMANDS.contains(c) && !IOS_PENDING_Y_IOS_02.contains(c)).collect()
+    SYNC_COMMANDS.iter().copied().filter(|c| !PAIRING_WINDOW_COMMANDS.contains(c)).collect()
 }
 
 /// Commandes du gestionnaire de l'iPhone (`generate_handler!` du bloc `cfg(target_os = "ios")`).
@@ -473,10 +479,16 @@ fn sync_7_ios_capability_grants_exactly_its_list_and_no_pairing_window_command()
     assert!(capability.get("webviews").is_none());
     let mut granted = permissions_of(SYNC_IOS_CAPABILITY);
     granted.sort();
-    let mut expected: Vec<String> = ios_sync_commands().iter().map(|c| permission_of(c)).collect();
+    let mut expected: Vec<String> = ios_sync_commands().iter().map(|c| permission_of(c)).chain(BARCODE_PERMISSIONS.iter().map(|p| (*p).to_owned())).collect();
     expected.sort();
-    assert_eq!(granted.len(), 18);
+    assert_eq!(granted.iter().filter(|p| p.starts_with("allow-sync-")).count(), 21);
     assert_eq!(granted, expected);
+    // Aucune autre capability n'accorde le scan (une seule fenêtre, iPhone).
+    for (name, text) in all_capabilities() {
+        if name != "sync-ios.json" {
+            assert!(!text.contains("barcode-scanner:"), "{name}");
+        }
+    }
     let handler = ios_handler_commands();
     let synced: std::collections::BTreeSet<String> = handler.iter().filter(|c| c.starts_with("sync_")).cloned().collect();
     assert_eq!(synced, ios_sync_commands().iter().map(|c| (*c).to_owned()).collect());

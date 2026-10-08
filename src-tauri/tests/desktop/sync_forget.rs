@@ -259,7 +259,7 @@ fn shared_table_seen_devices() {
 fn forget_detail_texts_are_all_present_in_the_compiled_file() {
     // Sécurité (basse) : une clé absente de native/fr.json donnerait un texte vide (unwrap_or_default) et une boîte sans détail.
     let texts = circletasks_lib::sync::consent::forget_detail_texts();
-    for (name, text) in [("detail", &texts.detail), ("never", &texts.never), ("windows", &texts.windows), ("ios", &texts.ios)] {
+    for (name, text) in [("detail", &texts.detail), ("never", &texts.never), ("windows", &texts.windows), ("ios", &texts.ios), ("utc", &texts.utc)] {
         assert!(!text.trim().is_empty(), "forgetDetail.{name} absent ou vide");
     }
     for field in ["{platform}", "{id}", "{date}", "{time}"] {

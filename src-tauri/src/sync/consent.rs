@@ -90,6 +90,9 @@ pub struct ForgetDetailTexts {
     pub never: String,
     pub windows: String,
     pub ios: String,
+    /// Heure suivie de « UTC » quand le fuseau local est inconnu (ADR 0011 §23 point 4) : jamais une heure fausse sans le dire.
+    #[serde(default)]
+    pub utc: String,
 }
 
 /// Textes du détail de la boîte d'oubli, lus dans le fichier compilé.

@@ -77,6 +77,8 @@ import {
   type SyncErrorCode,
   type SyncFolderInfo,
   type SyncPlatform,
+  type CameraPermission,
+  type ScanImportOutcome,
 } from './types';
 import { hlcMs, parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
 import {
@@ -513,8 +515,12 @@ export interface MemorySyncTesting {
   setChooser(next: MemorySyncFolder | null): void;
   setVaultAvailable(available: boolean): void;
   setRestoreMarker(marker: RestoreMarker | null): void;
-  /** iPhone : texte lu par le prochain scan du QR (null : scan annulé). */
+  /** iPhone : texte lu par le prochain scan du QR (null : scan annulé) ; consommé par `scanAndImport`. */
   setScanResult(text: string | null): void;
+  /** iPhone : autorisation de la caméra (`prompt` : demandée au prochain scan, `answer` : réponse de l'utilisateur). */
+  setCameraPermission(state: CameraPermission, answer?: 'granted' | 'denied'): void;
+  /** iPhone : ouvertures des réglages d'iOS demandées. */
+  cameraSettingsOpened(): number;
   /**
    * ADR 0011 §22 point 4 : téléchargement simulé des fichiers « dans le nuage » (durée en ms, null : jamais téléchargés). Un fichier lu est
    * téléchargé si sa durée tient dans 60 s et dans le reste du budget du cycle (3 minutes, ou `hydrateBudgetMs` du scan) ; le budget est
@@ -654,6 +660,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let blockedUntil = 0;
   let pairing: PairingInstance | null = null;
   let scanResult: string | null = null;
+  /** iPhone (§23 point 2) : autorisation de la caméra simulée, réponse à la demande, réglages ouverts. */
+  let camera: CameraPermission = 'granted';
+  let cameraAnswer: 'granted' | 'denied' = 'granted';
+  let settingsOpened = 0;
   /** Téléchargement simulé (§22 point 4) : durée, et reste du budget du cycle ouvert par le dernier scan. */
   let hydrationDelay: number | null = null;
   let hydrationLeft = HYDRATE_CYCLE_TIMEOUT_MS;
@@ -2168,10 +2178,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     requireVault();
     let text: { readonly qr: string } | { readonly recovery: string };
     if ('scan' in input) {
-      // Scan lancé par Rust : iPhone seulement (ordre 5).
-      if (devicePlatform !== 'ios' || input.scan !== true) return fail('invalid-pairing');
-      if (scanResult === null) return fail('consent-denied');
-      text = { qr: scanResult };
+      // ADR 0011 §23 point 2 : aucun scan lancé par Rust (l'API Rust du plugin n'existe pas) : refusé sur toutes les plateformes.
+      return fail('invalid-pairing');
     } else if ('qrText' in input) {
       text = { qr: input.qrText };
     } else {
@@ -2332,6 +2340,32 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         pairing = null;
       },
       import: importKey,
+      // ADR 0011 §23 point 2 : scan du QR par le JS, iPhone seulement (absent du PC) ; le texte lu (fourni par le test ou le simulateur,
+      // jamais par la page) est passé aussitôt à l'import et n'est jamais rendu.
+      ...(devicePlatform === 'ios'
+        ? {
+            scanAndImport: async (): Promise<ScanImportOutcome> => {
+              if (!foreground) return { kind: 'failed', code: 'not-foreground' };
+              if (camera === 'prompt') camera = cameraAnswer;
+              if (camera === 'denied') return { kind: 'camera-denied' };
+              const text = scanResult;
+              scanResult = null;
+              if (text === null) return { kind: 'cancelled' };
+              try {
+                return { kind: 'imported', result: await importKey({ qrText: text }) };
+              } catch (error) {
+                return { kind: 'failed', code: error instanceof SyncPlatformError ? error.code : 'io' };
+              }
+            },
+            cancelScan: async () => {
+              scanResult = null;
+            },
+            cameraPermission: async (): Promise<CameraPermission> => camera,
+            openCameraSettings: async () => {
+              settingsOpened += 1;
+            },
+          }
+        : {}),
     },
     bindDevice: async (deviceId) => {
       if (!isSyncDeviceId(deviceId)) return fail('bad-name');
@@ -2394,6 +2428,11 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       setScanResult: (text) => {
         scanResult = text;
       },
+      setCameraPermission: (state, answer) => {
+        camera = state;
+        if (answer) cameraAnswer = answer;
+      },
+      cameraSettingsOpened: () => settingsOpened,
       setHydrationDelay: (ms) => {
         hydrationDelay = ms;
       },

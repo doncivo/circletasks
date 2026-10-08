@@ -34,6 +34,9 @@ pub mod commands;
 /// iPhone (ADR 0011 §22) : `BookmarkFs` sur le plugin folder-bookmark ; présent dans les tests Windows (`test-hooks`), absent du PC livré.
 #[cfg(any(target_os = "ios", feature = "test-hooks"))]
 pub mod bookmark;
+/// iPhone (ADR 0011 §23 point 3) : confirmation native par `UIAlertController` (plugin folder-bookmark).
+#[cfg(any(target_os = "ios", feature = "test-hooks"))]
+pub mod consent_ios;
 /// iPhone (ADR 0011 §22 point 7) : les commandes `sync_*` de l'iPhone (mêmes noms, entrées et sorties), même `SyncCore`. iOS seulement :
 /// les macros de `#[tauri::command]` portent le nom de la commande à la racine du crate et ne peuvent pas coexister avec `commands` (PC) ;
 /// leur logique (`bookmark::ios_core`, `bookmark::choose_with_picker`) est testée sous Windows.

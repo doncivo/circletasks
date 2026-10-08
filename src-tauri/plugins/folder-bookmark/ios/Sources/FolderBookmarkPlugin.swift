@@ -84,6 +84,14 @@ struct PathArgs: Decodable {
   let path: [String]
 }
 
+/// Confirmation native (ADR 0011 §23 point 3) : tous les textes viennent de Rust (src/i18n/native/fr.json).
+struct ConfirmArgs: Decodable {
+  let title: String
+  let message: String
+  let confirm: String
+  let cancel: String
+}
+
 // MARK: - Sélecteur de dossier
 
 private final class PickerDelegate: NSObject, UIDocumentPickerDelegate {
@@ -121,6 +129,9 @@ class FolderBookmarkPlugin: Plugin {
   private let backgroundGuardSeconds: Double = 28
   /// Sondage de l'état de téléchargement (ms).
   private let downloadPollMs: Int = 250
+  /// Alerte de confirmation affichée et sa réponse (fil principal) : fermée et rendue comme refus au passage en arrière-plan.
+  private var pendingAlert: UIAlertController?
+  private var pendingAnswer: ((Bool) -> Void)?
 
   // MARK: Cycle de vie et tâche d'arrière-plan
 
@@ -132,6 +143,26 @@ class FolderBookmarkPlugin: Plugin {
     center.addObserver(
       self, selector: #selector(appDidBecomeActive),
       name: UIApplication.didBecomeActiveNotification, object: nil)
+    center.addObserver(
+      self, selector: #selector(appDidEnterBackground),
+      name: UIApplication.didEnterBackgroundNotification, object: nil)
+  }
+
+  /// Passage en arrière-plan : une alerte de confirmation ouverte est fermée et vaut refus (échec fermé).
+  @objc private func appDidEnterBackground() {
+    if Thread.isMainThread {
+      dismissPendingAlert()
+    } else {
+      DispatchQueue.main.async { self.dismissPendingAlert() }
+    }
+  }
+
+  private func dismissPendingAlert() {
+    guard let alert = pendingAlert, let answer = pendingAnswer else {
+      return
+    }
+    alert.dismiss(animated: false, completion: nil)
+    answer(false)
   }
 
   /// Passage en arrière-plan : la tâche est ouverte avant que la WebView soit suspendue ; le moteur borne son cycle à 25 s.
@@ -1000,6 +1031,52 @@ class FolderBookmarkPlugin: Plugin {
         }
         return [:]
       }
+    }
+  }
+
+  // MARK: Confirmation native
+
+  /// `UIAlertController` (style alerte) : « Annuler » en style `.cancel` et action préférée, action de confirmation en style `.default` ;
+  /// refusée hors du premier plan (`not-foreground`, aucune alerte) ; `{ confirmed }` vrai seulement pour l'action de confirmation.
+  @objc public func confirm(_ invoke: Invoke) {
+    guard let input = args(invoke, ConfirmArgs.self) else {
+      return
+    }
+    DispatchQueue.main.async {
+      if UIApplication.shared.applicationState != .active || self.pendingAlert != nil {
+        self.reject(invoke, .notForeground)
+        return
+      }
+      guard var presenter = self.manager.viewController else {
+        self.reject(invoke, .io)
+        return
+      }
+      while let next = presenter.presentedViewController {
+        presenter = next
+      }
+      var answered = false
+      let answer: (Bool) -> Void = { confirmed in
+        if answered {
+          return
+        }
+        answered = true
+        self.pendingAlert = nil
+        self.pendingAnswer = nil
+        invoke.resolve(["confirmed": confirmed])
+      }
+      let alert = UIAlertController(title: input.title, message: input.message, preferredStyle: .alert)
+      let cancelAction = UIAlertAction(title: input.cancel, style: .cancel) { _ in
+        answer(false)
+      }
+      let confirmAction = UIAlertAction(title: input.confirm, style: .default) { _ in
+        answer(true)
+      }
+      alert.addAction(cancelAction)
+      alert.addAction(confirmAction)
+      alert.preferredAction = cancelAction
+      self.pendingAlert = alert
+      self.pendingAnswer = answer
+      presenter.present(alert, animated: true, completion: nil)
     }
   }
 

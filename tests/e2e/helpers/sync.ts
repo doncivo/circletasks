@@ -57,6 +57,13 @@ export const propagate = (room: string): Promise<unknown> => post('/propagate', 
 /** La méthode de plateforme de l'appareil échouera (code donné, avant toute écriture) après `after` appels réussis. */
 export const failAfter = (room: string, device: string, method: string, after: number, code = 'io'): Promise<unknown> => post('/fail', { room, device, method, after, code });
 
+/** Y-IOS-02 : le prochain scan de l'iPhone `device` lira le QR affiché par `from` (texte produit par le simulateur, jamais par la page). */
+export const presentQr = (room: string, device: string, from: string): Promise<unknown> => post('/scan', { room, device, from });
+
+/** Y-IOS-02 : autorisation de la caméra simulée de l'iPhone (`answer` : réponse à la demande d'iOS) ; rend les ouvertures des réglages. */
+export const setCamera = (room: string, device: string, state: 'granted' | 'denied' | 'prompt', answer?: 'granted' | 'denied'): Promise<{ readonly opened: number }> =>
+  post('/camera', { room, device, state, ...(answer ? { answer } : {}) });
+
 /** Y-IOS-01 : dossier rendu injoignable (signet perdu) ou rétabli. */
 export const setUnreachable = (room: string, device: string, on: boolean): Promise<unknown> => post('/unreachable', { room, device, on });
 

@@ -429,6 +429,22 @@ pub fn choose_with_picker(core: &super::service::SyncCore, backend: &BookmarkBac
     core.choose_bookmarked_folder(&path, &bookmark).map(Some)
 }
 
+/// `sync_key_import` sur iPhone (ADR 0011 §23 points 2 et 5) : depuis `main` (une seule fenêtre, propriétaire 0), `{ qrText }` (texte du
+/// scan, passé aussitôt par le JS) ou `{ recoveryKey }` ; `{ scan: true }` (scan lancé par Rust, inexistant : aucune API Rust du plugin) et
+/// toute autre forme : `invalid-pairing`, inscrit dans `import-failure.json` comme sur PC. Mêmes contrôles que sur PC (`SyncCore::key_import`).
+pub fn import_ios(core: &super::service::SyncCore, qr_text: Option<String>, recovery_key: Option<String>, scan: Option<bool>) -> SyncResult<super::service::KeyImportResult> {
+    use zeroize::Zeroizing;
+    let input = match (qr_text.map(Zeroizing::new), recovery_key.map(Zeroizing::new), scan) {
+        (Some(text), None, None) => super::service::KeyInput::QrText(text),
+        (None, Some(text), None) => super::service::KeyInput::RecoveryKey(text),
+        _ => {
+            core.record_import_failure(SyncCode::InvalidPairing);
+            return fail(SyncCode::InvalidPairing);
+        }
+    };
+    core.key_import(input, 0)
+}
+
 /// Transport de production : le plugin Swift (`tauri-plugin-folder-bookmark`), appelé par `run_mobile_plugin` (bloquant : toujours depuis
 /// `spawn_blocking`).
 #[cfg(target_os = "ios")]

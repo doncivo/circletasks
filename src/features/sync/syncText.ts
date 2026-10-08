@@ -73,7 +73,8 @@ function errorText(code: string | null | undefined, platform: 'windows' | 'ios' 
     case 'folder-too-large':
       return t('sync.status.errorFolderTooLarge');
     case 'vault-unavailable':
-      return t('sync.status.errorVault');
+      // iPhone (§23 point 1) : Trousseau illisible tant que l'iPhone est verrouillé.
+      return platform === 'ios' ? t('sync.status.errorVaultIos') : t('sync.status.errorVault');
     case 'rollback':
       return t('sync.status.errorRollback');
     default:

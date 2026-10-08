@@ -5,6 +5,8 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { JoinProgress } from './JoinProgress';
 import { onPairingChange, openPairingWindow, pairingOpenErrorKey, pairingStorageFailed, readPairingFailure, type PairingFailure } from './pairingStatus';
 import { syncStore } from './syncStore';
+import { IosPairingRow } from './IosPairingRow';
+import { IosPairingScreen } from './IosPairingScreen';
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 
@@ -23,6 +25,7 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const [busy, setBusy] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
   const lastMode = useRef<'show' | 'import' | null>(null);
+  const [iosPairing, setIosPairing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +52,17 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' ? 'import' : 'show';
   // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
   if (showOnly && mode === 'import') return null;
+  // iPhone (ADR 0011 §23 point 7) : jamais le QR ni la fenêtre `pairing` ; « Associer au PC » quand une clé est à recevoir.
+  if (container.platform.os === 'ios') {
+    const platform = container.syncPlatform;
+    return (
+      <>
+        {mode === 'import' && !showOnly && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
+        {withProgress && <JoinProgress />}
+        {iosPairing && <IosPairingScreen platform={platform} onClose={() => setIosPairing(false)} />}
+      </>
+    );
+  }
 
   const open = async (): Promise<void> => {
     setBusy(true);

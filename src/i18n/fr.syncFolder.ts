@@ -27,6 +27,7 @@ export const syncFolderFr = {
   errorTooLarge: 'Le dossier de synchro est trop volumineux',
   errorProviderStopped: 'Ouvrez iCloud pour Windows',
   errorVault: 'Le coffre de Windows est indisponible',
+  errorVaultIos: 'Le Trousseau de l’iPhone est indisponible : déverrouillez l’iPhone, la synchro reprendra',
   errorDenied: 'Action annulée',
   errorRateLimited: 'Trop de tentatives : réessayez dans quelques minutes',
   errorGeneric: 'La synchronisation a rencontré une erreur',

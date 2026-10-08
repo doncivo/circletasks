@@ -10,6 +10,8 @@ import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
 import { nativeConfirmationAvailable } from './iosSync';
+import { IosPairingRow } from './IosPairingRow';
+import { IosPairingScreen } from './IosPairingScreen';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
@@ -48,7 +50,7 @@ export function syncErrorMessageKey(code: SyncErrorCode, ios = false): PlainMess
     case 'cloud-provider-stopped':
       return 'sync.folder.errorProviderStopped';
     case 'vault-unavailable':
-      return 'sync.folder.errorVault';
+      return ios ? 'sync.folder.errorVaultIos' : 'sync.folder.errorVault';
     case 'consent-denied':
       return 'sync.folder.errorDenied';
     case 'rate-limited':
@@ -105,6 +107,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const [pairingFailure, setPairingFailure] = useState<PairingFailure | null>(null);
   const [pairingNotice, setPairingNotice] = useState<PlainMessageKey | null>(null);
   const [pairingBusy, setPairingBusy] = useState(false);
+  // iPhone (§23 point 7) : écran « Associer au PC » ouvert ; il reste ouvert quand l'association change la ligne.
+  const [iosPairing, setIosPairing] = useState(false);
 
   useEffect(() => {
     if (!available) return;
@@ -256,7 +260,17 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           {forgetButton}
         </div>
       )}
-      {/* iPhone : l'association passe par l'écran « Associer au PC » (Y-IOS-02), jamais par la fenêtre `pairing` du PC. */}
+      {/* iPhone (ADR 0011 §23 point 7) : « Associer au PC » (dossier d'abord, clé ensuite), jamais la fenêtre `pairing` du PC. */}
+      {ios && (view.kind === 'not-configured' || (view.kind === 'bound' && view.needsPairing)) && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
+      {iosPairing && (
+        <IosPairingScreen
+          platform={platform}
+          onClose={() => {
+            setIosPairing(false);
+            void readView(platform).then(setView);
+          }}
+        />
+      )}
       {view.kind === 'bound' && view.needsPairing && !ios && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">

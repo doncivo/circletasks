@@ -19,6 +19,7 @@
     "createDir": { "input": ["path"], "output": [[]] },
     "remove": { "input": ["path"], "output": [["removed"]] },
     "removeEmptyDir": { "input": ["path"], "output": [[]] },
-    "appState": { "input": [], "output": [["state"]] }
+    "appState": { "input": [], "output": [["state"]] },
+    "confirm": { "input": ["title", "message", "confirm", "cancel"], "output": [["confirmed"]] }
   }
 }

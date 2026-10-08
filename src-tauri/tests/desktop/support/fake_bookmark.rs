@@ -51,6 +51,8 @@ pub struct FakeState {
     pub kind: &'static str,
     pub pick: Pick,
     pub app_state: &'static str,
+    /// Réponse de la prochaine alerte `confirm` (Ok : bouton choisi ; Err : code de rejet).
+    pub confirm_answer: Result<bool, &'static str>,
     /// Appels reçus (nom, arguments).
     pub calls: Vec<(String, Value)>,
 }
@@ -87,6 +89,7 @@ impl FakePlugin {
                 kind: "icloud",
                 pick: Pick::Folder,
                 app_state: "active",
+                confirm_answer: Ok(true),
                 calls: Vec::new(),
             }),
             clock,
@@ -228,6 +231,12 @@ impl FakePlugin {
                 ok(json!({ "path": state.root, "name": name, "kind": state.kind, "refreshed": refreshed }))
             }
             "appState" => ok(json!({ "state": state.app_state })),
+            // Swift : alerte refusée hors du premier plan, aucune alerte.
+            "confirm" if state.app_state != "active" => reject("not-foreground"),
+            "confirm" => match state.confirm_answer {
+                Ok(confirmed) => ok(json!({ "confirmed": confirmed })),
+                Err(code) => reject(code),
+            },
             _ => {
                 Self::session(&state)?;
                 self.file_command(&mut state, command, args)

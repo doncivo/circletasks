@@ -172,6 +172,19 @@ export interface KeyImportResult {
   readonly epoch: EpochId | null;
 }
 
+/**
+ * Issue du scan du QR d'association sur iPhone (ADR 0011 §23 point 2) : le texte lu n'en fait **jamais** partie (passé aussitôt à
+ * `sync_key_import({ qrText })`). `camera-denied` : accès à la caméra refusé dans les réglages d'iOS.
+ */
+export type ScanImportOutcome =
+  | { readonly kind: 'imported'; readonly result: KeyImportResult }
+  | { readonly kind: 'cancelled' }
+  | { readonly kind: 'camera-denied' }
+  | { readonly kind: 'failed'; readonly code: SyncErrorCode };
+
+/** État de l'autorisation de la caméra (lu du système à chaque affichage ; iOS le garde). */
+export type CameraPermission = 'granted' | 'denied' | 'prompt';
+
 export interface AppendJournalRequest {
   readonly epoch: EpochId;
   readonly segment: number;
@@ -311,9 +324,9 @@ export const SYNC_COMMAND_WINDOWS: { readonly [C in SyncCommand]: 'main' | 'pair
 export const SYNC_COMMANDS = Object.keys(SYNC_COMMAND_WINDOWS) as readonly SyncCommand[];
 
 /**
- * iPhone (ADR 0011 §22 point 7, capability `sync-ios.json`) : une seule fenêtre, `main` ; null : commande absente de l'iPhone. Les trois
- * commandes de la fenêtre `pairing` n'y existent pas (l'iPhone n'affiche jamais le QR) ; les trois qui demandent une confirmation native de
- * l'iPhone arrivent avec Y-IOS-02.
+ * iPhone (ADR 0011 §22 point 7, §23 point 5, capability `sync-ios.json`) : une seule fenêtre, `main` ; null : commande absente de l'iPhone.
+ * Les trois commandes de la fenêtre `pairing` n'y existent pas (l'iPhone n'affiche jamais le QR) ; `sync_key_import` est appelée depuis
+ * `main`.
  */
 export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | null } = {
   sync_folder_info: 'main',
@@ -324,7 +337,7 @@ export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | n
   sync_key_create: 'main',
   sync_pairing_open: null,
   sync_pairing_payload: null,
-  sync_key_import: null,
+  sync_key_import: 'main',
   sync_pairing_close: null,
   sync_scan: 'main',
   sync_read_journal: 'main',
@@ -337,9 +350,9 @@ export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | n
   sync_delete_own: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
-  sync_device_forget: null,
+  sync_device_forget: 'main',
   sync_forgotten_delete: 'main',
-  sync_reset_key: null,
+  sync_reset_key: 'main',
 };
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -367,6 +380,17 @@ export interface SyncPlatform {
     closePairing(): Promise<void>;
     /** PC : fenêtre `pairing` (instance `import`) ; iPhone : main. Entrée sensible : transmise telle quelle, jamais stockée. */
     import(input: KeyImportInput): Promise<KeyImportResult>;
+    /**
+     * iPhone seulement (absent ailleurs ; ADR 0011 §23 point 2) : page au premier plan exigée, autorisation de la caméra demandée si besoin,
+     * scan du QR, texte passé **aussitôt** à `sync_key_import({ qrText })`. Ne rejette jamais ; le texte n'est jamais rendu.
+     */
+    scanAndImport?(): Promise<ScanImportOutcome>;
+    /** Annule le scan en cours (« Annuler » de l'écran de visée) ; iPhone seulement. */
+    cancelScan?(): Promise<void>;
+    /** État de l'autorisation de la caméra, lu du système (iPhone seulement). */
+    cameraPermission?(): Promise<CameraPermission>;
+    /** Ouvre les réglages de l'app dans iOS (accès à la caméra refusé) ; iPhone seulement. */
+    openCameraSettings?(): Promise<void>;
   };
   /** Figé : un autre identifiant est refusé (`already-bound`) tant que le dossier n'est pas oublié. */
   bindDevice(deviceId: DeviceId): Promise<void>;

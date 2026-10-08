@@ -4,6 +4,8 @@ import {
   SyncPlatformError,
   syncErrorCodeOf,
   type AppendJournalResult,
+  type CameraPermission,
+  type ScanImportOutcome,
   type DeviceScan,
   type FolderScan,
   type FolderScanJson,
@@ -40,7 +42,27 @@ export interface TauriSyncOptions {
   /** Vrai sur PC et sur iPhone (capabilities `sync.json` et `sync-ios.json`). */
   readonly available: boolean;
   readonly invoke?: SyncInvoker;
+  /**
+   * iPhone (ADR 0011 §23 point 2) : plugin barcode-scanner chargé à la demande ; absent (PC) : aucune méthode de scan. Injectable (tests).
+   */
+  readonly scanner?: () => Promise<QrScanner>;
+  /** Document observé (premier plan, masquage pendant le scan) ; tests : injecté. */
+  readonly document?: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'>;
 }
+
+/** API du plugin barcode-scanner utilisée (JS seulement : aucune API Rust publique, ADR 0011 §23 point 2). */
+export interface QrScanner {
+  checkPermissions(): Promise<string>;
+  requestPermissions(): Promise<string>;
+  scan(options: { readonly windowed: true; readonly formats: readonly string[] }): Promise<{ readonly content: string }>;
+  cancel(): Promise<void>;
+  openAppSettings(): Promise<void>;
+  /** `Format.QRCode`. */
+  readonly qrFormat: string;
+}
+
+/** `prompt-with-rationale` (Android) et toute valeur inconnue : à demander. */
+const cameraState = (raw: string): CameraPermission => (raw === 'granted' ? 'granted' : raw === 'denied' ? 'denied' : 'prompt');
 
 /** Rejet Rust -> `SyncPlatformError` (code seul ; `io` pour une erreur inconnue). */
 export function toSyncError(error: unknown): SyncPlatformError {
@@ -70,6 +92,79 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
     }
   }
 
+  /** Scan en cours : annulation demandée (« Annuler », masquage de la page). */
+  let scanning: { cancelled: boolean; readonly scanner: QrScanner } | null = null;
+
+  /**
+   * ADR 0011 §23 point 2 (troisième point d'exposition de la section 2.1) : le texte lu ne vit que dans la variable locale `text`, passé
+   * **aussitôt** à `sync_key_import({ qrText })` puis remis à null ; il n'est jamais rendu, ni journalisé, ni recopié dans une erreur.
+   */
+  async function scanAndImport(load: () => Promise<QrScanner>): Promise<ScanImportOutcome> {
+    const doc = options.document ?? (typeof document === 'undefined' ? null : document);
+    if (!doc || doc.visibilityState === 'hidden' || scanning) return { kind: 'failed', code: 'not-foreground' };
+    let scanner: QrScanner;
+    try {
+      scanner = await load();
+      let permission = cameraState(await scanner.checkPermissions());
+      if (permission === 'prompt') permission = cameraState(await scanner.requestPermissions());
+      if (permission !== 'granted') return { kind: 'camera-denied' };
+    } catch {
+      return { kind: 'failed', code: 'io' };
+    }
+    const current = { cancelled: false, scanner };
+    scanning = current;
+    const onVisibility = (): void => {
+      if (doc.visibilityState !== 'hidden') return;
+      current.cancelled = true;
+      void scanner.cancel().catch(() => undefined);
+    };
+    doc.addEventListener('visibilitychange', onVisibility);
+    // Texte lu : seul porteur, vidé dès qu'il est passé à Rust (et dans tous les cas en sortie).
+    const held: { text: string | null } = { text: null };
+    try {
+      try {
+        held.text = (await scanner.scan({ windowed: true, formats: [scanner.qrFormat] })).content;
+      } catch {
+        return current.cancelled ? { kind: 'cancelled' } : { kind: 'failed', code: 'io' };
+      }
+      if (current.cancelled) return { kind: 'cancelled' };
+      const request = { qrText: held.text };
+      held.text = null;
+      try {
+        return { kind: 'imported', result: await call('sync_key_import', request) };
+      } catch (error) {
+        return { kind: 'failed', code: syncErrorCodeOf(error) };
+      }
+    } finally {
+      held.text = null;
+      doc.removeEventListener('visibilitychange', onVisibility);
+      if (scanning === current) scanning = null;
+    }
+  }
+
+  const scanner = options.scanner;
+  const scanMethods = scanner
+    ? {
+        scanAndImport: () => scanAndImport(scanner),
+        cancelScan: async (): Promise<void> => {
+          const current = scanning;
+          if (!current) return;
+          current.cancelled = true;
+          await current.scanner.cancel().catch(() => undefined);
+        },
+        cameraPermission: async (): Promise<CameraPermission> => {
+          try {
+            return cameraState(await (await scanner()).checkPermissions());
+          } catch {
+            return 'prompt';
+          }
+        },
+        openCameraSettings: async (): Promise<void> => {
+          await (await scanner()).openAppSettings();
+        },
+      }
+    : {};
+
   return {
     available: () => options.available,
     folder: {
@@ -93,6 +188,7 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
         await call('sync_pairing_close');
       },
       import: (input): Promise<KeyImportResult> => call('sync_key_import', input),
+      ...scanMethods,
     },
     bindDevice: async (deviceId: DeviceId) => {
       await call('sync_bind_device', { deviceId });

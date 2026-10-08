@@ -32,6 +32,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     errorUnsafeFolder: 'This folder cannot be used for sync: choose another one',
     errorFolderTooLarge: 'The sync folder is too large',
     errorVault: 'The Windows vault is unavailable: the sync key cannot be read',
+    errorVaultIos: 'The iPhone Keychain is unavailable: unlock the iPhone, sync will resume',
     errorRollback: 'The folder contains an old version of a device state',
     syncNow: 'Sync',
     syncing: 'Syncing…',
