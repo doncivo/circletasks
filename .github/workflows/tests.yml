@@ -1,47 +1,208 @@
 name: Tests
 
+# Suite complète de CircleTasks, exécutée sur GitHub Actions (dépôt public : minutes gratuites) et non plus en local.
+# Jobs parallèles ; le job « suite-verte » dépend de tous les autres et sert de statut requis.
+# Pas de build iOS ni Windows ici (build-ios.yml en lancement manuel, build-windows.yml sur tag). Aucun secret transmis.
+
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      e2e:
-        description: "Lancer aussi les tests Playwright (e2e)"
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
+# Un nouveau push sur la même branche annule le run précédent (sauf sur main : contrôle après fusion toujours mené à terme).
+# L'événement fait partie du groupe : un run « push » ne peut pas annuler le run « pull_request » de la même branche.
 concurrency:
-  group: tests-${{ github.ref }}
-  cancel-in-progress: true
+  group: tests-${{ github.event_name == 'pull_request' && 'pr' || 'push' }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NODE_VERSION: "22"
+  CI_COUNTS: ${{ github.workspace }}/counts
 
 jobs:
   qualite:
+    name: Lint et typecheck
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
       - name: Lint
         run: npm run lint
       - name: Typecheck
         run: npm run typecheck
-      - name: Vitest
-        run: npm test
-        env:
-          CT_TEST_WORKERS: "2"
 
-  # Audit des dépendances Rust (base RustSec) : étape séparée, un échec n'empêche pas les autres vérifications.
-  audit-rust:
+  # Vitest : projet node en 3 tranches, projet dom en 3 tranches. Chaque tranche écrit un rapport blob (avec sa couverture) ;
+  # le job vitest-couverture les fusionne et contrôle les seuils sur le résultat fusionné (CT_COVERAGE_SHARD retire les seuils des tranches).
+  vitest-node:
+    name: Vitest node (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      CT_COVERAGE_SHARD: "1"
+      CT_TEST_WORKERS: "4"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Vitest projet node, tranche ${{ matrix.shard }}/3
+        run: >
+          npx vitest run --project node --shard=${{ matrix.shard }}/3
+          --reporter=blob --outputFile.blob=.vitest/blob/blob-node-${{ matrix.shard }}.json
+          --reporter=json --outputFile.json=vitest-report.json
+      - name: Comptage
+        if: always() && hashFiles('vitest-report.json') != ''
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write vitest vitest-report.json "$CI_COUNTS/vitest-node-${{ matrix.shard }}.json" "Vitest node"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: blob-node-${{ matrix.shard }}
+          path: .vitest/blob/
+          if-no-files-found: ignore
+          retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: count-vitest-node-${{ matrix.shard }}
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  vitest-dom:
+    name: Vitest dom (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      CT_COVERAGE_SHARD: "1"
+      CT_TEST_WORKERS: "4"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Vitest projet dom, tranche ${{ matrix.shard }}/3
+        run: >
+          npx vitest run --project dom --shard=${{ matrix.shard }}/3
+          --reporter=blob --outputFile.blob=.vitest/blob/blob-dom-${{ matrix.shard }}.json
+          --reporter=json --outputFile.json=vitest-report.json
+      - name: Comptage
+        if: always() && hashFiles('vitest-report.json') != ''
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write vitest vitest-report.json "$CI_COUNTS/vitest-dom-${{ matrix.shard }}.json" "Vitest dom"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: blob-dom-${{ matrix.shard }}
+          path: .vitest/blob/
+          if-no-files-found: ignore
+          retention-days: 1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: count-vitest-dom-${{ matrix.shard }}
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  vitest-couverture:
+    name: Couverture fusionnée
+    needs: [vitest-node, vitest-dom]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: blob-*
+          path: .vitest/blob
+          merge-multiple: true
+      # Seuils de vitest.config.ts (src/domain : 80 %) contrôlés ici, sur la fusion des six tranches.
+      - name: Fusion des rapports et seuils de couverture
+        run: npx vitest run --merge-reports --reporter=default
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: couverture-html
+          path: coverage/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Tests Rust du PC : Windows exigé (manifeste comctl32 v6, windows-test.manifest, lié par build.rs aux seuls exécutables de test).
+  # --features test-hooks, exécutable tests/desktop ; les tests tournent avec les fils par défaut (aucun --test-threads imposé).
+  # Le passage en --release (URL du serveur Vite refusée hors debug pour la fenêtre pairing, ADR 0011 section 2.1) seulement sur main et à la demande.
+  cargo-test:
+    name: cargo test (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Cache des dépendances Rust
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        shell: bash
+        working-directory: src-tauri
+        run: cargo test --locked --features test-hooks --test desktop 2>&1 | tee "$RUNNER_TEMP/cargo.log"
+      - name: cargo test --release (fenêtre pairing)
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        shell: bash
+        working-directory: src-tauri
+        run: cargo test --locked --release --features test-hooks --test desktop sync_pairing 2>&1 | tee "$RUNNER_TEMP/cargo-release.log"
+      - name: Comptage
+        if: always() && hashFiles('src-tauri/Cargo.toml') != ''
+        shell: bash
+        run: |
+          mkdir -p "$CI_COUNTS"
+          if [ -f "$RUNNER_TEMP/cargo.log" ]; then node scripts/ci/test-counts.mjs write cargo "$RUNNER_TEMP/cargo.log" "$CI_COUNTS/cargo.json" "cargo test"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: count-cargo
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Audit des dépendances Rust (base RustSec).
+  audit-rust:
+    name: cargo audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       # RUSTSEC-2023-0071 (rsa, attaque Marvin, aucun correctif publié) : rsa n'est présent dans Cargo.lock que par sqlx-mysql,
       # que tauri-plugin-sql (fonction « sqlite » seule) ne compile jamais. L'exception tient tant que l'étape suivante le prouve :
       # si rsa entre un jour dans le graphe compilé, quelle que soit la cible, le job échoue.
@@ -50,61 +211,165 @@ jobs:
         run: |
           out="$(cargo tree --locked -i rsa --target all -e normal,build)"
           if [ -n "$out" ]; then echo "rsa est compilé : retirer l'exception RUSTSEC-2023-0071"; echo "$out"; exit 1; fi
+      - name: Cache de cargo-audit
+        id: cache-audit
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-${{ runner.os }}-v1
+      - name: Installer cargo-audit
+        if: steps.cache-audit.outputs.cache-hit != 'true'
+        run: cargo install cargo-audit --locked
       - name: cargo audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
+        run: cargo audit --file src-tauri/Cargo.lock --ignore RUSTSEC-2023-0071
 
-  # Tests Rust du PC (cargo test, exécutable tests/desktop) : seulement si src-tauri/ change (ou lancement manuel). Le passage en
-  # --release (URL du serveur Vite refusée hors debug pour la fenêtre pairing, ADR 0011 section 2.1) seulement sur main et à la demande.
-  # Cache des dépendances seulement (rust-cache), sauvegardé seulement depuis main.
-  rust-windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Fichiers Rust modifiés ?
-        id: changes
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if [ "${{ github.event_name }}" = "pull_request" ]; then base="${{ github.event.pull_request.base.sha }}"; else base="${{ github.event.before }}"; fi
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$base" 2>/dev/null; then echo "rust=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          if git diff --name-only "$base" HEAD -- src-tauri | grep -q .; then echo "rust=true" >> "$GITHUB_OUTPUT"; else echo "rust=false" >> "$GITHUB_OUTPUT"; fi
-      - name: Rust stable
-        if: steps.changes.outputs.rust == 'true'
-        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
-      - name: Cache des dépendances Rust
-        if: steps.changes.outputs.rust == 'true'
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: src-tauri -> target
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: cargo test
-        if: steps.changes.outputs.rust == 'true'
-        working-directory: src-tauri
-        run: cargo test --locked --features test-hooks --test desktop
-      - name: cargo test --release (fenêtre pairing)
-        if: steps.changes.outputs.rust == 'true' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
-        working-directory: src-tauri
-        run: cargo test --locked --release --features test-hooks --test desktop sync_pairing
-
+  # Playwright : projet pc en 4 tranches, projet iphone en 4 tranches (Chromium en émulation mobile).
   e2e:
-    if: github.event_name == 'workflow_dispatch' && inputs.e2e
+    name: e2e ${{ matrix.project }} (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [pc, iphone]
+        shard: [1, 2, 3, 4]
+    env:
+      CT_TEST_WORKERS: "4"
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: ${{ env.NODE_VERSION }}
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
-      - uses: actions/upload-artifact@v4
+      - name: Cache des navigateurs Playwright
+        id: pw-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Installer Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Dépendances système de Chromium
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Playwright projet ${{ matrix.project }}, tranche ${{ matrix.shard }}/4
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4 --reporter=github,html,json
+      - name: Comptage
+        if: always() && hashFiles('playwright-report.json') != ''
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/e2e-${{ matrix.project }}-${{ matrix.shard }}.json" "e2e ${{ matrix.project }}"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
-          name: playwright-report
-          path: playwright-report/
+          name: playwright-${{ matrix.project }}-${{ matrix.shard }}
+          path: |
+            playwright-report/
+            test-results/
           retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: count-e2e-${{ matrix.project }}-${{ matrix.shard }}
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Mesures de performance (budgets en ms, PRD section 8) : un job à part, sans autre charge sur la machine.
+  # Les étapes s'enchaînent même après un échec pour que toutes les mesures soient visibles.
+  perf:
+    name: Performance et bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Cache des navigateurs Playwright
+        id: pw-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Installer Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+      - name: Dépendances système de Chromium
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+      - name: Perf e2e
+        run: npx playwright test --project=perf --no-deps --reporter=github,html,json
+      - name: Perf Vitest
+        if: always()
+        run: npm run test:perf -- --reporter=default --reporter=json --outputFile.json=vitest-perf.json
+      - name: Taille du bundle
+        if: always()
+        run: npm run test:bundle
+      - name: Comptage
+        if: always()
+        run: |
+          mkdir -p "$CI_COUNTS"
+          if [ -f playwright-report.json ]; then node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/perf-e2e.json" "perf e2e"; fi
+          if [ -f vitest-perf.json ]; then node scripts/ci/test-counts.mjs write vitest vitest-perf.json "$CI_COUNTS/perf-vitest.json" "perf Vitest"; fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: playwright-perf
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: count-perf
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Statut requis : vert seulement si tous les jobs sont verts. Résumé du nombre de tests par job.
+  suite-verte:
+    name: suite verte
+    if: always()
+    needs: [qualite, vitest-node, vitest-dom, vitest-couverture, cargo-test, audit-rust, e2e, perf]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        continue-on-error: true
+        with:
+          pattern: count-*
+          path: counts
+          merge-multiple: true
+      - name: Résumé
+        run: |
+          {
+            echo "## Suite CircleTasks"
+            echo
+            echo "| Job | Résultat |"
+            echo "|---|---|"
+            echo '${{ toJSON(needs) }}' | node -e 'const n=JSON.parse(require("fs").readFileSync(0,"utf8"));for(const [k,v] of Object.entries(n))console.log(`| ${k} | ${v.result} |`)'
+            echo
+            echo "### Tests par job"
+            echo
+            if [ -d counts ]; then node scripts/ci/test-counts.mjs summary counts; else echo "Aucun comptage disponible."; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Contrôle
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for r in $RESULTS; do
+            if [ "$r" != "success" ]; then echo "Un job n'est pas vert ($RESULTS)"; exit 1; fi
+          done
+          echo "Suite verte"

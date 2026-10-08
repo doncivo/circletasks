@@ -39,10 +39,14 @@ export default mergeConfig(
         reporter: ['text-summary', 'html'],
         include: ['src/**/*.{ts,tsx}'],
         exclude: ['src/**/*.test.{ts,tsx}', 'src/main.tsx', 'src/**/*.d.ts'],
-        thresholds: {
-          // PRD section 8 : règles métier couvertes à 80 % minimum.
-          'src/domain/**': { lines: 80, functions: 80, branches: 80, statements: 80 },
-        },
+        // CI (suite.yml) : chaque tranche (--shard) ne voit qu'une partie des tests, le seuil n'a de sens que sur le rapport fusionné
+        // (--merge-reports) ; CT_COVERAGE_SHARD=1 le retire des tranches seulement. Sans cette variable, le seuil s'applique toujours.
+        thresholds: process.env['CT_COVERAGE_SHARD']
+          ? undefined
+          : {
+              // PRD section 8 : règles métier couvertes à 80 % minimum.
+              'src/domain/**': { lines: 80, functions: 80, branches: 80, statements: 80 },
+            },
       },
     },
   }),
