@@ -122,6 +122,7 @@ export function AppleRemindersReadOnly() {
         </p>
       )}
       {pending !== null && pending.count > 0 && <p className="ct-calendars__appleText">{t('appleReminders.pcPending', { count: pending.count })}</p>}
+      {pending !== null && pending.count > 0 && pending.held === true && <p className="ct-calendars__appleText">{t('appleReminders.pcPendingHeld')}</p>}
       {warning !== null && (
         <p className="ct-calendars__error" role="status">
           {warning}

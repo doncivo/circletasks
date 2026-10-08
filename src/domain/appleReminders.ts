@@ -368,6 +368,8 @@ export interface AppleCreateSetting {
 export interface ApplePending {
   readonly count: number;
   readonly at: IsoDateTime;
+  /** Des suppressions retenues par la garde attendent la confirmation de l'utilisateur sur l'iPhone (le PC le dit à côté du compteur). */
+  readonly held?: true;
 }
 
 export type AppleNoticeKind =
@@ -441,7 +443,7 @@ export function parseAppleCreate(raw: unknown): AppleCreateSetting {
 
 export function parseApplePending(raw: unknown): ApplePending | null {
   if (!isObject(raw) || !isCount(raw['count']) || typeof raw['at'] !== 'string' || !isIsoDateTime(raw['at'])) return null;
-  return { count: raw['count'], at: raw['at'] };
+  return { count: raw['count'], at: raw['at'], ...(raw['held'] === true ? { held: true as const } : {}) };
 }
 
 export function parseLastPassAt(raw: unknown): IsoDateTime | null {

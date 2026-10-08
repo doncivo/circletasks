@@ -17,6 +17,8 @@ export const appleRemindersEn: Messages['appleReminders'] = {
   pcNeverStale: 'The iPhone has not read Reminders yet: open CircleTasks on the iPhone to import them.',
   pcNoIphone: 'No iPhone is paired: Reminders cannot be refreshed.',
   pcLinkedCount: '{count} task(s) linked to Reminders',
+  bannerHeld: '{count} deletion(s) are waiting for your confirmation in the Calendars screen.',
+  pcPendingHeld: 'Deletions are waiting for your confirmation on the iPhone.',
   pcPending: '{count} change(s) waiting to be sent to Reminders at the iPhone’s next pass.',
   intro: 'CircleTasks can show your reminders as tasks and send your changes back. Nothing is read until you allow access; then you choose which lists to follow.',
   allow: 'Allow access to Reminders',

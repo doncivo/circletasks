@@ -81,7 +81,7 @@ export interface AppleRemindersController {
   setCreate(next: AppleCreateSetting): Promise<void>;
   /** `force` : le passage a envoyé des écritures vers Rappels ; le PC en déduit que « sera envoyée au prochain passage » est levé (K-07 D2). */
   setLastPassAt(at: IsoDateTime, nowMs: number, force?: boolean): Promise<void>;
-  setPending(count: number): Promise<void>;
+  setPending(count: number, held?: boolean): Promise<void>;
   /** Accès du système et listes d'Apple lus par un passage : l'écran les montre sans relancer sa propre lecture. */
   setObserved(access: RemindersAccess, platformLists?: readonly ReminderList[]): void;
   patchStatus(change: (current: AppleStatus) => AppleStatus): Promise<void>;
@@ -197,12 +197,12 @@ function createController(container: AppContainer): AppleRemindersController {
       writtenLastPassAt = at;
       await persist(() => settings().set('appleReminders.lastPassAt', at));
     },
-    async setPending(count) {
+    async setPending(count, held = false) {
       await load();
       const before = store.getState().pending;
       // Écrite seulement quand le nombre change (ADR 0008 §10.3) ; zéro : la valeur est retirée.
-      if ((before?.count ?? 0) === count) return;
-      const next: ApplePending | null = count === 0 ? null : { count, at: nowIso(container.clock) };
+      if ((before?.count ?? 0) === count && (before?.held === true) === (held && count > 0)) return;
+      const next: ApplePending | null = count === 0 ? null : { count, at: nowIso(container.clock), ...(held ? { held: true as const } : {}) };
       store.setState({ pending: next });
       applyBanner(container);
       await persist(() => settings().set('appleReminders.pending', next));
@@ -235,6 +235,12 @@ export function applyBanner(container: AppContainer): void {
   const state = appleRemindersStore.get(container).getState();
   const failure = state.status.failure;
   const setStatus = useAppStatusStore.getState().setStatus;
+  if (state.available && failure === null && state.status.held.length > 0) {
+    // Suppressions retenues par la garde : rien ne se fera sans le geste de l'utilisateur, il doit le savoir sans ouvrir l'écran.
+    const count = state.status.held.reduce((total, entry) => total + entry.count, 0);
+    setStatus('appleRemindersTrouble', { detail: 'held', message: t('appleReminders.bannerHeld', { count }), onAction: () => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'calendars' }) });
+    return;
+  }
   if (failure === null || !state.available) {
     setStatus('appleRemindersTrouble', null);
     return;

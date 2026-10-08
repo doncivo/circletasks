@@ -19,6 +19,8 @@ export const appleRemindersFr = {
   pcNeverStale: 'Les Rappels n’ont pas encore été lus par l’iPhone : ouvrez CircleTasks sur l’iPhone pour les importer.',
   pcNoIphone: 'Aucun iPhone n’est associé : les Rappels ne peuvent pas être actualisés.',
   pcLinkedCount: '{count} tâche(s) liée(s) à Rappels',
+  bannerHeld: '{count} suppression(s) attendent votre confirmation dans l’écran Agendas.',
+  pcPendingHeld: 'Des suppressions attendent votre confirmation sur l’iPhone.',
   pcPending: '{count} modification(s) en attente d’envoi vers Rappels au prochain passage de l’iPhone.',
   // Accès (K-05 critère 7)
   intro: 'CircleTasks peut afficher vos rappels comme tâches et y reporter vos changements. Rien n’est lu avant que vous autorisiez l’accès ; vous choisissez ensuite les listes à suivre.',

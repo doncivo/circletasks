@@ -37,7 +37,7 @@ import { RemindersError } from '../../../platform/reminders';
 import type { AppContainer } from '../../app/container';
 import { applyRemoteChanges } from '../../sync/remoteChanges';
 import { applyValuesToTask } from './appleTaskWrites';
-import { appleRemindersState } from './appleRemindersState';
+import { appleRemindersState, appleRemindersStore } from './appleRemindersState';
 
 /**
  * Passage des Rappels Apple (K-05 lecture, K-06 écriture ; ADR 0008 §10.5 à §10.8) : à l'ouverture, à la reprise, sur `changed`, après
@@ -453,7 +453,9 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
       failure: failureAfter(current.failure, full, sendCode, now),
     };
   });
-  await state.setPending(report.pending);
+  // Le compteur publié dit aussi (pour le PC) que des suppressions attendent la confirmation de l'utilisateur.
+  const heldSends = (sendHeld ?? appleRemindersStore.get(container).getState().status.held.filter((entry) => entry.send === true)).length > 0;
+  await state.setPending(report.pending, heldSends);
   // Une écriture au plus tous les 15 minutes (K-05 critère 14), sauf quand le passage a envoyé des écritures vers Rappels (K-07 D2) ; un passage
   // `push` qui a envoyé quelque chose compte aussi : le PC doit voir que ses modifications sont parties.
   // L'instant est pris APRÈS les écritures du passage : les valeurs que Rappels vient d'apporter ont une horloge antérieure, et le PC ne doit jamais

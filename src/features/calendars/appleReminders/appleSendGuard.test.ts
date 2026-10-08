@@ -134,3 +134,20 @@ describe('lien orphelin jamais silencieux (audit)', () => {
     expect(await h.pass('full')).toMatchObject({ created: 1, sent: 0 });
   });
 });
+
+describe('suppressions retenues signalées (revue, mineur)', () => {
+  it('un bandeau sur l’iPhone dit combien de suppressions attendent la confirmation ; le compteur publié le dit aussi pour le PC ; ils disparaissent à la résolution', async () => {
+    const { useAppStatusStore } = await import('../../app/appStatus');
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    const banner = useAppStatusStore.getState().sources['appleRemindersTrouble'];
+    expect(banner).toMatchObject({ detail: 'held' });
+    expect(banner?.message).toBe('11 suppression(s) attendent votre confirmation dans l’écran Agendas.');
+    expect(await h.container.data.repos.settings.get('appleReminders.pending')).toMatchObject({ count: 11, held: true });
+    h.db.clock.advance(1_000);
+    await resolveHeldSend(h.container, 'L-courses', 'delete', 11);
+    expect(useAppStatusStore.getState().sources['appleRemindersTrouble']).toBeUndefined();
+    expect(await h.container.data.repos.settings.get('appleReminders.pending')).toBeNull();
+  });
+});

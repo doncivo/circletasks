@@ -21,7 +21,7 @@ import { logFailure } from '../../../platform/desktop/log';
 import { RemindersError, type UpsertInput } from '../../../platform/reminders';
 import type { AppContainer } from '../../app/container';
 import { applyValuesToTask } from './appleTaskWrites';
-import { appleRemindersState } from './appleRemindersState';
+import { appleRemindersState, appleRemindersStore } from './appleRemindersState';
 import { applyRemoteChanges } from '../../sync/remoteChanges';
 import { EMPTY_REPORT, type DueWrite, type PassReport, type SendContext, type SendDue, type SendResult } from './remindersPass';
 
@@ -416,6 +416,9 @@ export async function resolveHeldSend(container: AppContainer, listId: string, c
       held: tally.pending === 0 ? current.held.filter((entry) => !(entry.send === true && entry.listId === listId)) : current.held,
       failure: tally.code === null ? current.failure : { code: tally.code, at: now, write: true as const },
     }));
+    // Compteur publié et bandeau suivent : les suppressions parties ne sont plus en attente.
+    const stillHeld = appleRemindersStore.get(container).getState().status.held.some((entry) => entry.send === true);
+    await state.setPending(Math.max(0, (appleRemindersStore.get(container).getState().pending?.count ?? 0) - tally.sent), stillHeld);
     return { ...EMPTY_REPORT, sent: tally.sent, pending: tally.pending, ...(tally.holdMs > 0 ? { holdMs: tally.holdMs } : {}), ...(tally.code === null ? {} : { status: 'failed' as const, code: tally.code }) };
   } catch (error) {
     const code = error instanceof RemindersError ? error.code : 'pass-failed';

@@ -211,3 +211,13 @@ describe('échecs de lecture rendus visibles (revue, mineur)', () => {
     expect(await screen.findByText('Origine Rappels illisible pour le moment.')).toBeInTheDocument();
   });
 });
+
+describe('suppressions à confirmer sur l’iPhone (revue, mineur)', () => {
+  it('à côté du compteur « en attente », une mention dit que des suppressions attendent la confirmation sur l’iPhone', async () => {
+    await configure({ lastPassAt: '2026-10-08T09:30:00.000Z' as IsoDateTime, pending: { count: 11, at: '2026-10-08T09:30:00.000Z' as IsoDateTime, held: true } as never });
+    await setDevices([IPHONE]);
+    renderSection();
+    expect(await screen.findByText(/11 modification\(s\) en attente d’envoi/)).toBeInTheDocument();
+    expect(screen.getByText('Des suppressions attendent votre confirmation sur l’iPhone.')).toBeInTheDocument();
+  });
+});
