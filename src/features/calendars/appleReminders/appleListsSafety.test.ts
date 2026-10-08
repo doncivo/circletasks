@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { appleRemindersState, appleRemindersStore } from './appleRemindersState';
+import { detachUnlisted, resetLists } from './appleListRepairs';
 import { PERSO, setupRemindersHarness, type RemindersHarness } from './testKit';
 
 /**
@@ -61,5 +62,40 @@ describe('réglage des listes illisible ou liste absente (audit M1, revue 6)', (
     expect(rows[0]?.n).toBeGreaterThanOrEqual(12);
     expect(await h.container.data.repos.appleLinks.listAll()).toEqual([]);
     expect(status().notices.some((notice) => notice.kind === 'detached')).toBe(true);
+  });
+});
+
+describe('aucune impasse : liste absente du réglage ET supprimée dans Rappels (revue)', () => {
+  it('les tâches sont détachées et gardées avec un message ; le passage réussit et ne s’interrompt plus', async () => {
+    await importMany(3);
+    await h.container.data.repos.settings.set('appleReminders.lists', { lists: [] } as never);
+    await appleRemindersState(h.container).reload();
+    h.reminders.removeList('L-courses');
+    const report = await h.pass();
+    expect(report).toMatchObject({ status: 'done', detached: 3, deleted: 0 });
+    expect(status().notices.some((notice) => notice.kind === 'detached')).toBe(true);
+    expect(status().failure).toBeNull();
+    const rows = await h.db.driver.select<{ n: number }>("SELECT COUNT(*) AS n FROM task WHERE deleted_at IS NULL AND source = 'local' AND external_id IS NULL AND title LIKE 'Rappel %'");
+    expect(rows[0]?.n).toBe(3);
+    expect(await h.pass()).toMatchObject({ status: 'done' });
+  });
+
+  it('réparation : « Détacher les tâches de ces listes » détache les tâches dont la liste n’est pas dans le réglage et efface l’échec', async () => {
+    await importMany(3);
+    await h.container.data.repos.settings.set('appleReminders.lists', { lists: [] } as never);
+    await appleRemindersState(h.container).reload();
+    expect(await h.pass()).toMatchObject({ status: 'failed', code: 'lists-setting-invalid' });
+    expect(await detachUnlisted(h.container)).toBe(3);
+    expect(status().failure).toBeNull();
+    expect(await h.container.data.repos.appleLinks.listAll()).toEqual([]);
+  });
+
+  it('réparation : « Réinitialiser le réglage des listes » réécrit un réglage lisible', async () => {
+    await importMany(2);
+    await h.container.data.repos.settings.set('appleReminders.lists', 'illisible' as never);
+    expect(await h.pass()).toMatchObject({ code: 'lists-setting-invalid' });
+    await resetLists(h.container);
+    expect(await h.container.data.repos.settings.get('appleReminders.lists')).toEqual({ lists: [] });
+    expect(status().failure).toBeNull();
   });
 });

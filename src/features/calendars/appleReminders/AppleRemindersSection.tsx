@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
+import { failureActions, isKnownFailure } from '../../../domain/appleFailures';
 import { utcToLocal } from '../../../domain/timeZone';
 import type { AppleNotice, ReminderList } from '../../../domain/appleReminders';
 import type { SpaceId } from '../../../domain/types';
@@ -83,6 +84,8 @@ export function AppleRemindersSection() {
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
   const actions = appleRemindersActions(container);
 
+  const listsRef = useRef<HTMLHeadingElement>(null);
+
   // Réglages lus, puis accès relu : à l'ouverture de l'écran et à la reprise de l'app, l'état d'accès refusé se rétablit tout seul.
   useEffect(() => {
     void actions.refreshAccess();
@@ -96,6 +99,7 @@ export function AppleRemindersSection() {
   const settingOf = (list: ReminderList) => lists.lists.find((entry) => entry.id === list.id);
   const nameOf = (listId: string): string => lists.lists.find((entry) => entry.id === listId)?.name ?? platformLists.find((entry) => entry.id === listId)?.name ?? '';
   const writeIssue = isWriteFailure(status.failure);
+  const failureCode = status.failure?.code ?? null;
 
   return (
     <section className="ct-calendars__apple" aria-label={t('appleReminders.section')}>
@@ -123,6 +127,44 @@ export function AppleRemindersSection() {
           {status.failure.code === 'access-denied' ? t('appleReminders.failureAccess') : writeIssue ? t('appleReminders.failureWrite', { code: status.failure.code }) : t('appleReminders.failure', { code: status.failure.code })}
         </p>
       )}
+      {failureCode !== null && access !== 'denied' && access !== 'restricted' && (
+        <div className="ct-calendars__appleBlock" role="group" aria-label={t('appleReminders.section')}>
+          <p className="ct-calendars__appleText">{isKnownFailure(failureCode) ? t(`appleReminders.failureCode.${failureCode}`) : t('appleReminders.failureUnknown', { code: failureCode })}</p>
+          <div className="ct-calendars__actions">
+            {failureActions(failureCode).map((action) => {
+              switch (action) {
+                case 'retry':
+                  return (
+                    <Button key={action} variant="secondary" disabled={running} onClick={() => void actions.refresh()}>
+                      {t('appleReminders.actionRetry')}
+                    </Button>
+                  );
+                case 'choose-lists':
+                  return (
+                    <Button key={action} variant="secondary" onClick={() => listsRef.current?.scrollIntoView?.({ block: 'start' })}>
+                      {t('appleReminders.actionChooseLists')}
+                    </Button>
+                  );
+                case 'detach-unlisted':
+                  return (
+                    <Button key={action} variant="secondary" disabled={running} onClick={() => void actions.detachUnlisted()}>
+                      {t('appleReminders.actionDetachUnlisted')}
+                    </Button>
+                  );
+                case 'reset-lists':
+                  return (
+                    <Button key={action} variant="secondary" disabled={running} onClick={() => void actions.resetLists()}>
+                      {t('appleReminders.actionResetLists')}
+                    </Button>
+                  );
+                case 'ios-settings':
+                case 'reopen-app':
+                  return null;
+              }
+            })}
+          </div>
+        </div>
+      )}
       {persistFailed && (
         <p className="ct-calendars__error" role="alert">
           {t('appleReminders.persistFailed')}
@@ -136,7 +178,9 @@ export function AppleRemindersSection() {
 
       {access === 'full' && (
         <>
-          <h3 className="ct-calendars__caption">{t('appleReminders.listsCaption')}</h3>
+          <h3 ref={listsRef} className="ct-calendars__caption">
+            {t('appleReminders.listsCaption')}
+          </h3>
           {platformLists.length === 0 && <p className="ct-calendars__empty">{t('appleReminders.noLists')}</p>}
           <ul className="ct-calendars__list">
             {platformLists.map((list) => {

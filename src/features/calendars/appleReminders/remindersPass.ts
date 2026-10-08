@@ -227,11 +227,20 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
     return link?.synced != null && differsFromSynced(task, link.synced);
   };
   // `push` : seulement les tâches dont une valeur locale diffère de l'empreinte ; `full` : toutes les tâches suivies.
-  const followed = linkedTasks.filter((task) => (full ? isFollowed(task, nowMs, lastPassAt) : localDiffers(task)));
-  // Liste absente du réglage (entrée disparue, réglage pas encore reçu) : on ne sait pas si elle est décochée ; le passage complet s'interrompt.
+  const wanted = linkedTasks.filter((task) => (full ? isFollowed(task, nowMs, lastPassAt) : localDiffers(task)));
+  // Liste absente du réglage (entrée disparue, réglage pas encore reçu) : si elle existe encore dans Rappels on ne sait pas si elle est décochée, le passage
+  // complet s'interrompt (gestes : choisir les listes, détacher, réinitialiser). Absente du réglage ET de Rappels (liste supprimée) : ses tâches sont
+  // détachées et gardées, avec un message ; jamais d'impasse.
+  const orphanListTasks: Task[] = [];
+  let followed = wanted;
   if (full) {
     const known = new Set(lists.lists.map((list) => list.id));
-    if (followed.some((task) => task.appleListId !== null && !known.has(task.appleListId))) throw new PassAbort('lists-setting-invalid');
+    const live = new Set(platformLists.map((list) => list.id));
+    const missing = wanted.filter((task) => task.appleListId !== null && !known.has(task.appleListId));
+    if (missing.some((task) => live.has(task.appleListId as string))) throw new PassAbort('lists-setting-invalid');
+    orphanListTasks.push(...missing);
+    const gone = new Set(missing.map((task) => task.id));
+    followed = wanted.filter((task) => !gone.has(task.id));
   }
 
   const result = await platform.fetch({
@@ -261,6 +270,14 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   const unticked = new Map<string, { task: Task; link: AppleReminderLink | null; item: ReminderItem | null }[]>();
   const untick = (listId: string, entry: { task: Task; link: AppleReminderLink | null; item: ReminderItem | null }): void => void unticked.set(listId, [...(unticked.get(listId) ?? []), entry]);
   let unknown = 0;
+  for (const task of orphanListTasks) {
+    const outcome = await unlinkTask(container, task, linkByTask.get(task.id) ?? null, null, false);
+    if (outcome === 'detached') {
+      report.detached += 1;
+      notice('detached');
+      touched.add(task.id);
+    }
+  }
   const matchedItemIds = new Set<string>();
   const late = (): boolean => options.deadlineAt !== undefined && container.clock.nowMs() > options.deadlineAt;
   let partial = false;

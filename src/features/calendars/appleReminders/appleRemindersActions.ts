@@ -7,6 +7,7 @@ import { useAppStore } from '../../app/appStore';
 import { appleRemindersState, appleRemindersStore, applyBanner } from './appleRemindersState';
 import { resolveHeldList, type HeldChoice, type PassReport } from './remindersPass';
 import { resolveHeldSend } from './remindersWrites';
+import { detachUnlisted, resetLists } from './appleListRepairs';
 import { getRemindersRunner } from './remindersRunner';
 
 /**
@@ -29,6 +30,9 @@ export interface AppleRemindersActions {
    */
   setCreateRule(spaceId: SpaceId, enabled: boolean, listId: string | null): Promise<void>;
   refresh(): Promise<PassReport>;
+  /** Gestes de l'échec `lists-setting-invalid` (aucune impasse). */
+  detachUnlisted(): Promise<void>;
+  resetLists(): Promise<void>;
   dismissNotice(kind: AppleNoticeKind): Promise<void>;
   /** `send` : retenue de suppressions vers Rappels (tâches supprimées ici) ; sinon retenue de rappels absents de Rappels. */
   resolveHeld(listId: string, choice: HeldChoice, send?: boolean): Promise<void>;
@@ -167,6 +171,22 @@ function createActions(container: AppContainer): AppleRemindersActions {
       if (store.getState().persistFailed) store.setState({ message: 'save-failed' });
     },
     refresh: run,
+    async detachUnlisted() {
+      setRunning(true);
+      try {
+        await detachUnlisted(container);
+      } finally {
+        setRunning(false);
+      }
+    },
+    async resetLists() {
+      setRunning(true);
+      try {
+        await resetLists(container);
+      } finally {
+        setRunning(false);
+      }
+    },
     async dismissNotice(kind) {
       await state.patchStatus((current) => ({ ...current, notices: current.notices.filter((entry) => entry.kind !== kind) }));
     },
