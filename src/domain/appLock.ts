@@ -46,7 +46,12 @@ export interface AppLockSetting {
   readonly unreadable: boolean;
 }
 
-/** Lecture du réglage local `security.appLock` (valeur brute) : booléen tel quel, absent ou null → désactivé, toute autre valeur → activé et illisible. */
+/**
+ * Lecture du réglage local `security.appLock` (valeur brute) : booléen tel quel, toute autre valeur → activé et illisible (échec fermé).
+ * Absent ou `null` → désactivé, sans être illisible : c'est l'état d'une installation neuve (aucune ligne en base, valeur par défaut
+ * `false`) ou d'une réinstallation (le réglage local disparaît avec l'app, I-03 A5). Seule l'app écrit ce réglage, toujours un booléen :
+ * un `null` ne résulte d'aucune écriture de l'app, et le verrou n'apporte rien sans réglage choisi par l'utilisateur.
+ */
 export function parseAppLockSetting(raw: unknown): AppLockSetting {
   if (raw === true || raw === false) return { enabled: raw, unreadable: false };
   if (raw === null || raw === undefined) return { enabled: false, unreadable: false };

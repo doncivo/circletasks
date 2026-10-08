@@ -390,6 +390,49 @@ describe('retour au premier plan et cache de confidentialité (critères 6, 8 et
   });
 });
 
+describe('revue : points mineurs', () => {
+  it('sortie « aucun code » retirée dès qu’un autre échec suit', async () => {
+    stored = true;
+    const lock = await start();
+    fake.enqueue('passcode-not-set', 'user-cancel');
+    await lock.unlock();
+    expect(state().noPasscodeExit).toBe(true);
+    await lock.unlock();
+    expect(state().noPasscodeExit).toBe(false);
+    await lock.disableWithoutPasscode();
+    expect(state().phase).toBe('locked');
+    expect(stored).toBe(true);
+  });
+
+  it('excursion consommée au retour même quand l’app est déjà verrouillée', async () => {
+    stored = true;
+    await start();
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
+    setVisibility('hidden');
+    setVisibility('visible');
+    const { currentExcursion } = await import('./excursion');
+    expect(currentExcursion()).toBeNull();
+  });
+
+  it('arrêt du contrôleur pendant la lecture de status : rien n’est écrit ni posé', async () => {
+    const lock = await start();
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const status = fake.status.bind(fake);
+    fake.status = async () => {
+      await gate;
+      return status();
+    };
+    const pending = lock.enable();
+    lock.dispose();
+    controller = null;
+    release();
+    await pending;
+    expect(fake.authenticateCount()).toBe(0);
+    expect(stored).toBe(false);
+  });
+});
+
 describe('audit B3 : authentification et passage en arrière-plan', () => {
   it('succès Face ID obtenu après un passage en arrière-plan pendant l’authentification : ignoré, reste verrouillé', async () => {
     stored = true;

@@ -117,7 +117,8 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
       unlocked();
       return;
     }
-    if (result.code === 'passcode-not-set') set({ noPasscodeExit: true });
+    // La sortie « aucun code » ne vaut que pour le DERNIER résultat : tout autre échec la retire (revue).
+    set({ noPasscodeExit: result.code === 'passcode-not-set' });
     if ((result.code === 'not-interactive' || result.code === 'system-cancel') && episode && !episode.focusRetried) episode.retryOnFocus = true;
     set({ busy: false, message: messageOf(result) });
   };
@@ -146,6 +147,8 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
     const atMono = backgroundedMono;
     backgroundedAt = null;
     backgroundedMono = null;
+    // Consommée à chaque retour, quel que soit l'état (une excursion ne survit jamais à un retour, revue).
+    const taken = takeExcursion();
     const state = store.getState();
     if (!state.enabled) {
       setPrivacyCover(doc, false);
@@ -157,7 +160,6 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
       return;
     }
     // Audit M1 : seule l'excursion vers Réglages iOS dispense du délai ; dossier, caméra et autorisation suivent la règle des 30 s.
-    const taken = takeExcursion();
     // Audit B2 : annulée si l'app n'est pas passée en arrière-plan dans les 3 s (heure système et horloge monotone).
     const reachedSettings =
       taken?.kind === 'system-settings' &&
@@ -187,6 +189,7 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
     }
     set({ busy: true, settingsMessage: null });
     const status = await deps.authenticator.status();
+    if (disposed) return;
     if (status.passcode === 'not-set') {
       set({ busy: false, settingsMessage: { main: 'notEnabled', detail: 'noPasscode', code: null } });
       return;
