@@ -163,6 +163,7 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | K-05 | M8 | Je vois mes Rappels Apple dans CircleTasks | calendar-integration | à faire |
 | K-06 | M8 | Je coche un rappel dans CircleTasks ou dans Rappels | calendar-integration | à faire |
 | K-07 | M8 | Je retrouve mes Rappels Apple sur le PC | calendar-integration | à faire |
+| K-TECH-01 | M8 | Story technique : connexion Google sur iPhone, plugin `web-auth` (ASWebAuthenticationSession), lecture `CT_GOOGLE_IOS_CLIENT_ID`, solde de K-01 côté iPhone (ADR 0008 §5 et §9) | calendar-integration + ios-mobile | à faire (fiche prête, 2026-10-08) |
 | Q-05 | M9 | Je capture vite depuis l'iPhone | quick-capture | à faire |
 | I-01 | M16 | J'installe l'app sur l'iPhone | ios-mobile | fait (2026-10-07, lot I0 ; build de contrôle après revue à relancer quand la facturation GitHub sera réglée ; installation réelle par Ali en fin d’ordre) |
 | I-02 | M16 | Je suis prévenu avant l'expiration hebdomadaire | ios-mobile | à faire |
@@ -179,7 +180,10 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en parallèle, un seul lot à la fois sur src/db et src/domain ; chaque lot à plugin Swift est accepté seulement si `build-ios.yml` lancé sur sa branche est vert) :
 - Phase 0, en parallèle : lot I0 (I-01, puis chaîne CI par branche et contrat des permissions Info.plist) et lot N0 (N-TECH-01).
 - Phase 1, en parallèle : lot N1 (N-01, N-05, N-06, N-07, N-03, envoi réel de F-04 et de N-04) et lot Y-IOS (Y-IOS-01, puis Y-IOS-02).
-- Phase 2, en parallèle : lot K (K-05, K-06, K-07 ; seul lot sur src/db) et lot M (A-07, Q-05, I-03, I-02).
+- Phase 2, en parallèle : lot K (K-TECH-01, K-05, K-06, K-07 ; seul lot sur src/db et src/domain) et lot M (A-07, Q-05, I-03, I-02). Fiches prêtes le 2026-10-08. Détail :
+  - Avant tout code : architecte, avenant ADR 0008 §9 (web-auth) et §10 (Rappels Apple) pour le lot K ; ADR 0013 (haptique, biométrie, expiration de signature) pour le lot M.
+  - Étape « M0 » : les pièces de `src/domain` du lot M (politique de verrou, calcul de l'alerte d'expiration, clés de réglage locales) sont écrites et fusionnées **avant** que le lot K ne touche `src/domain` ; ensuite le lot M ne touche ni `src/domain` ni `src/db`.
+  - Lot K : K-TECH-01 (sans base ni domaine, peut démarrer pendant la rédaction de l'avenant §10), puis K-05, K-06, K-07. Lot M : M0, I-03, A-07, I-02, Q-05. Fusion : lot M d'abord (plus court), lot K rebasé ensuite (fichiers partagés : `Cargo.toml`, `lib.rs`, capabilities iOS, `Info.ios.plist`, `plist-contract.json`, `build-ios.yml`, `container.ts`). Le plugin `notification-actions` de N-03 (décision d'Ali du 2026-10-08, développé en parallèle) touche les mêmes fichiers : le fusionner avant la phase 2 ou le rebaser avec elle.
 - Phase 3, en parallèle : lot F (ADR 0009 avenant, P-04-iOS, plugin Fichiers, P-07 iPhone, I-04) et lot C (CAP-IOS-01, I-05).
 - Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), IPA candidate, vérifications d'Ali sur l'iPhone, puis REL-01 à REL-03.
 

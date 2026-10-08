@@ -74,6 +74,21 @@ Sources : fiches Y-IOS-01 et Y-IOS-02. Les cases de « Synchro, parcours réels 
 - [ ] Y-IOS-02 A5 et A6 : oubli, réinitialisation et version réelle avec l'iPhone ; saisie de la clé de secours, progression, assistant à 4 étapes.
 - [ ] Échec de réintégration visible sur l'iPhone (Y-07) et bandeaux A-09 : marges de sécurité iOS, thèmes clair et sombre.
 
+## Phase 2 : lots K (calendriers et Rappels Apple) et M (iPhone), ajouté par le product-owner le 2026-10-08
+
+Sources : fiches K-TECH-01, K-05, K-06, K-07, A-07, Q-05, I-03, I-02. Les critères unitaires, e2e (projet `iphone`) et la CI verte sont dans les fiches. Prérequis d'Ali pour K-TECH-01 : ID client Google « iOS » (bundle `fr.circletasks.planner`) dans le secret GitHub `CT_GOOGLE_IOS_CLIENT_ID`.
+
+- [ ] K-TECH-01 A1 à A5 : connexion Google réelle sur l'iPhone, annulation, session Safari partagée, jeton révoqué (« Reconnecter »), compte créé sur le PC (« Reconnecter » sur l'iPhone).
+- [ ] K-05 A1 à A6 : fenêtre d'accès aux Rappels (refus puis rétablissement), vraies listes importées (rappels sans date dans « Un jour »), modification dans Rappels vue sans relancer, suppression et liste décochée, rappel récurrent (noter), plafond de 500.
+- [ ] K-06 A1 à A5 : terminer des deux côtés, modification croisée (gagnant noté, journal des conflits), réglage de création par espace (rappel dans la bonne liste), accès révoqué pendant une modification (bandeau et file).
+- [ ] K-07 A1 à A4 : rappel créé dans Rappels visible sur le PC (délai noté), tâche cochée sur le PC et état dans Rappels (arrière-plan ou ouverture, noter), heure de dernière mise à jour et avertissement après 24 h, trois états identiques après modifications croisées.
+- [ ] A-07 A1 à A5 : retours haptiques (un par geste), pas de déclenchement au défilement ni au bord gauche, VoiceOver (actions Reporter, Un jour, Supprimer), réduction des animations, Semaine (appui long = glisser, balayage de ligne sans changer de semaine).
+- [ ] Q-05 A1 à A4 : **le clavier apparaît au toucher du bouton +** (sinon le correctif du critère 3 est repris), bouton utilisable en moins de 1 s à froid (et derrière le verrou, I-03), dictée du clavier, clavier ouvert sans zone coupée.
+- [ ] I-03 A1 à A7 : Face ID réel à l'activation et au lancement, repli sur le code, **aperçu du sélecteur d'apps sans contenu**, 30 s de reverrouillage, excursion (caméra du scan) sans reverrouillage, synchro et notification pendant le verrou, mise à jour SideStore avec le verrou actif, texte de la demande.
+- [ ] I-02 A1 à A5 : date d'expiration lue (7 jours, noter l'écart avec SideStore), actualisation SideStore (alerte remplacée), alerte réelle (≤ 60 s, texte conforme), alerte après actualisation en arrière-plan (noter), réinstallation après expiration.
+- [ ] Contrat Info.plist de l'IPA de la phase 2 : `NSRemindersFullAccessUsageDescription` et `NSFaceIDUsageDescription` présentes et en français ; aucune clé en trop (notifications, haptique, web-auth, signature : aucune).
+- [ ] Règle d'Ali : parcourir les états d'échec créés par la phase 2 sur l'appareil (accès Rappels refusé, écritures en attente, Google non configuré, verrou impossible, date d'expiration inconnue) : chacun est visible dans Réglages, la fiche ou un bandeau, et disparaît à la résolution.
+
 ## Point de contrôle de 15 minutes après la phase 1 (demandé par Ali)
 
 Objectif : valider en une séance courte que la chaîne tient, avant d'empiler les phases 2 à 4. IPA produite par `build-ios.yml` sur la branche fusionnée de la phase 1 et signalée à Ali par l'agent de coordination. Chronomètre lancé à l'ouverture du guide `docs/install-iphone.md`.
