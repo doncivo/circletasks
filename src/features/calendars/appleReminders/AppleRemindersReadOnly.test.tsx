@@ -191,3 +191,23 @@ describe('fiche d’une tâche liée sur le PC (K-07 critères 2 et 8, D2)', () 
     expect(none.container).toBeEmptyDOMElement();
   });
 });
+
+describe('échecs de lecture rendus visibles (revue, mineur)', () => {
+  it('section PC : la lecture des tâches liées échoue → « Le nombre de tâches liées n’a pas pu être lu »', async () => {
+    await configure({ lastPassAt: '2026-10-08T09:30:00.000Z' as IsoDateTime });
+    await setDevices([IPHONE]);
+    h.container.data.repos.tasks.listAppleSourced = () => Promise.reject(new Error('base illisible'));
+    renderSection();
+    expect(await screen.findByText('Le nombre de tâches liées n’a pas pu être lu.')).toBeInTheDocument();
+  });
+
+  it('fiche : les horloges de champ illisibles → « Origine Rappels illisible pour le moment »', async () => {
+    h.container.data.repos.appleLinks.fieldClocks = () => Promise.reject(new Error('base illisible'));
+    render(
+      <AppContainerProvider container={h.container}>
+        <AppleSourceRow task={{ id: 't1' as never, source: 'apple_reminders', externalId: 'R1', appleListId: 'L1', appleRecurring: false, hlc: 'h' as never }} />
+      </AppContainerProvider>,
+    );
+    expect(await screen.findByText('Origine Rappels illisible pour le moment.')).toBeInTheDocument();
+  });
+});

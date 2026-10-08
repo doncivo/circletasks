@@ -5,6 +5,7 @@ import type { IsoDateTime } from '../../../domain/types';
 import { t } from '../../../i18n';
 import { formatDayMonth, formatTime } from '../../../i18n/format';
 import { detectTimeZone } from '../../../platform';
+import { logFailure } from '../../../platform/desktop/log';
 import { useAppContainer, useFeatureStore } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
 import { syncStore } from '../../sync/syncStore';
@@ -65,6 +66,7 @@ export function AppleRemindersReadOnly() {
   const nowMs = useMinuteClock(container.clock);
   const entities = useSyncExternalStore(container.taskEntities.subscribe, container.taskEntities.getSnapshot);
   const [linked, setLinked] = useState<number | null>(null);
+  const [linkedFailed, setLinkedFailed] = useState(false);
 
   // Les réglages partagés reçus par la synchro depuis l'ouverture de l'app sont relus à l'ouverture de l'écran.
   useEffect(() => {
@@ -74,8 +76,19 @@ export function AppleRemindersReadOnly() {
   useEffect(() => {
     let alive = true;
     container.data.repos.tasks.listAppleSourced().then(
-      (tasks) => alive && setLinked(tasks.filter((task) => appleLinkState(task) === 'linked').length),
-      () => alive && setLinked(null),
+      (tasks) => {
+        if (!alive) return;
+        setLinkedFailed(false);
+        setLinked(tasks.filter((task) => appleLinkState(task) === 'linked').length);
+      },
+      () => {
+        // Jamais un silence : le nombre est remplacé par un message.
+        logFailure('apple-reminders', 'linked-count-failed');
+        if (alive) {
+          setLinked(null);
+          setLinkedFailed(true);
+        }
+      },
     );
     return () => {
       alive = false;
@@ -103,6 +116,11 @@ export function AppleRemindersReadOnly() {
       </ul>
       {used && <p className="ct-calendars__appleText">{lastPassText(lastPassAt, nowMs, timeZone)}</p>}
       {linked !== null && linked > 0 && <p className="ct-calendars__appleText">{t('appleReminders.pcLinkedCount', { count: linked })}</p>}
+      {linkedFailed && (
+        <p className="ct-calendars__error" role="status">
+          {t('appleReminders.linkedCountUnreadable')}
+        </p>
+      )}
       {pending !== null && pending.count > 0 && <p className="ct-calendars__appleText">{t('appleReminders.pcPending', { count: pending.count })}</p>}
       {warning !== null && (
         <p className="ct-calendars__error" role="status">

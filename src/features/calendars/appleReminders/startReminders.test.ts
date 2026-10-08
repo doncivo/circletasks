@@ -117,3 +117,13 @@ describe('déclencheurs des passages (K-05 critère 11)', () => {
     await pc.close();
   });
 });
+
+describe('écoute impossible rendue visible (revue, mineur)', () => {
+  it('l’écoute des changements d’EventKit échoue : message dans l’écran Agendas, les passages à l’ouverture et à la reprise continuent', async () => {
+    vi.spyOn(h.reminders, 'onChanged').mockRejectedValue(new Error('écoute refusée'));
+    const integration = startRemindersIntegration(h.container, { document: documentStub() });
+    await integration.opened();
+    await vi.waitFor(() => expect(appleRemindersStore.get(h.container).getState().status.notices).toContainEqual(expect.objectContaining({ kind: 'listener-failed' })));
+    integration.dispose();
+  });
+});

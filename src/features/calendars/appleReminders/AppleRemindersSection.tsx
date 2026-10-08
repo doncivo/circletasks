@@ -41,6 +41,8 @@ export function noticeText(notice: AppleNotice): string {
       return t('appleReminders.noticeRecurringRefused', { count });
     case 'duplicate-created':
       return t('appleReminders.noticeDuplicateCreated', { count });
+    case 'listener-failed':
+      return t('appleReminders.noticeListenerFailed');
   }
 }
 

@@ -5,6 +5,7 @@ import { utcToLocal } from '../../../domain/timeZone';
 import { t } from '../../../i18n';
 import { formatDayMonth } from '../../../i18n/format';
 import { detectTimeZone } from '../../../platform';
+import { logFailure } from '../../../platform/desktop/log';
 import { useAppContainer, useFeatureStore } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
 import { DetailRow } from '../../tasks/DetailRow';
@@ -36,6 +37,7 @@ export function AppleSourceRow({ task }: { readonly task: Facts }) {
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
   const state = appleLinkState(task);
   const [clocks, setClocks] = useState<Clocks | null>(null);
+  const [unreadable, setUnreadable] = useState(false);
 
   useEffect(() => {
     if (state !== 'linked' && state !== 'detached') return undefined;
@@ -44,16 +46,22 @@ export function AppleSourceRow({ task }: { readonly task: Facts }) {
       (found) => {
         const fields = found.get(task.id);
         if (!alive || !fields) return;
+        setUnreadable(false);
         const ms = (hlc: string): number => Number(hlc.slice(0, 15));
         setClocks({ taskId: task.id, hlc: task.hlc, send: [fields.title, fields.date, fields.time, fields.status].map(ms), detachedAt: ms(fields.external_id) });
       },
-      () => undefined,
+      () => {
+        // Jamais un silence : la fiche le dit.
+        logFailure('apple-reminders', 'source-clocks-failed');
+        if (alive) setUnreadable(true);
+      },
     );
     return () => {
       alive = false;
     };
   }, [container, state, task.id, task.hlc]);
 
+  if (unreadable) return <DetailRow label={t('appleReminders.badge')}>{t('appleReminders.sourceUnreadable')}</DetailRow>;
   if (state === 'ordinary' || state === 'to-create') return state === 'to-create' ? <DetailRow label={t('appleReminders.badge')}>{t('appleReminders.willBeSent')}</DetailRow> : null;
   const ready = clocks !== null && clocks.taskId === task.id && clocks.hlc === task.hlc ? clocks : null;
   if (state === 'detached') {

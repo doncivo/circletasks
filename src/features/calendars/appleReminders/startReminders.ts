@@ -57,8 +57,11 @@ export function startRemindersIntegration(container: AppContainer, env: Reminder
       if (disposed) stop();
       else stopChanged = stop;
     },
-    // Écoute impossible : visible dans le journal, les passages à l'ouverture et à la reprise continuent.
-    () => logFailure('apple-reminders', 'listener-failed'),
+    // Écoute impossible : message dans l'écran Agendas (et journal), les passages à l'ouverture et à la reprise continuent.
+    () => {
+      logFailure('apple-reminders', 'listener-failed');
+      void state.addNotice({ kind: 'listener-failed', count: 1 });
+    },
   );
   const opened = loaded.then(() => request('open'));
   return {
