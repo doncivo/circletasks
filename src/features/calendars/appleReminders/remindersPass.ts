@@ -422,7 +422,9 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   await state.setPending(report.pending);
   // Une écriture au plus tous les 15 minutes (K-05 critère 14), sauf quand le passage a envoyé des écritures vers Rappels (K-07 D2) ; un passage
   // `push` qui a envoyé quelque chose compte aussi : le PC doit voir que ses modifications sont parties.
-  if ((full && !partial) || report.sent > 0) await state.setLastPassAt(now, nowMs, report.sent > 0);
+  // L'instant est pris APRÈS les écritures du passage : les valeurs que Rappels vient d'apporter ont une horloge antérieure, et le PC ne doit jamais
+  // y lire « sera envoyée au prochain passage » (K-07 D2) ; un passage qui a modifié des tâches ou envoyé quelque chose n'attend pas les 15 min.
+  if ((full && !partial) || report.sent > 0) await state.setLastPassAt(nowIso(container.clock), container.clock.nowMs(), report.sent > 0 || touched.size > 0);
   return { ...EMPTY_REPORT, ...report, ...(holdMs > 0 ? { holdMs } : {}), status: 'done' };
 }
 
