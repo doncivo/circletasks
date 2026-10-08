@@ -10,11 +10,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
  * gzip du JavaScript chargé AVANT toute interaction, c'est-à-dire le bloc d'entrée de `index.html` et tous ses imports STATIQUES,
  * récursivement. Les blocs sont repérés par le graphe du manifeste, jamais par leur nom (Rollup nomme automatiquement les blocs partagés,
  * par exemple « tokens », et ces noms peuvent changer). Les imports dynamiques (Recharts du rapport, tesseract.js, etc.) et les
- * ressources copiées telles quelles (/ocr/) n'en font pas partie. Seuil : 350 Ko gzip.
+ * ressources copiées telles quelles (/ocr/) n'en font pas partie. Seuil : 351 Ko gzip (350 Ko jusqu’à N-03 : planificateur des répétitions « +15 min » et états des actions, décision du 2026-10-08 dans docs/decisions.md).
  *
  * Hors de `npm run test` : lancé par `npm run test:bundle` (configuration vitest.bundle.config.ts).
  */
-const LIMIT_BYTES = 350 * 1024;
+const LIMIT_BYTES = 351 * 1024;
 
 interface ManifestChunk {
   readonly file: string;
@@ -59,7 +59,7 @@ describe('bundle de départ (index.html)', () => {
     return result;
   }
 
-  it('le JavaScript de départ pèse moins de 350 Ko en gzip, bloc par bloc affiché', () => {
+  it('le JavaScript de départ pèse moins de 351 Ko en gzip, bloc par bloc affiché', () => {
     const chunks = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
     const sizes = chunks.map((chunk) => ({ file: chunk.file, gzip: gzipSync(readFileSync(join(outDir, chunk.file))).length }));
     const total = sizes.reduce((sum, item) => sum + item.gzip, 0);

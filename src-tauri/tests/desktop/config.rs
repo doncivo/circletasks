@@ -148,33 +148,52 @@ const IOS_NOTIFICATIONS_CAPABILITY: &str = include_str!("../../capabilities/noti
 fn assert_notification_plugin_is_ios_only() {
     let mut section = String::new();
     let mut found = 0;
+    let mut actions = 0;
     for line in CARGO.lines() {
         let trimmed = line.trim();
         if trimmed.starts_with('[') && trimmed.ends_with(']') {
             section = trimmed.to_owned();
         }
-        if trimmed.starts_with("tauri-plugin-notification") {
+        if trimmed.starts_with("tauri-plugin-notification-actions") {
+            // N-03 : plugin Swift local, iPhone seulement lui aussi (chemin local, aucune version à épingler).
+            actions += 1;
+            assert_eq!(section, "[target.'cfg(target_os = \"ios\")'.dependencies]", "plugin d'actions hors de la section iOS");
+            assert!(trimmed.contains("path = \"plugins/notification-actions\""), "{trimmed}");
+        } else if trimmed.starts_with("tauri-plugin-notification") {
             found += 1;
             assert_eq!(section, "[target.'cfg(target_os = \"ios\")'.dependencies]", "plugin hors de la section iOS");
             assert!(trimmed.contains("\"=2.5.1\""), "version non épinglée : {trimmed}");
         }
     }
     assert_eq!(found, 1, "une seule déclaration du plugin");
+    assert_eq!(actions, 1, "une seule déclaration du plugin d'actions");
 }
 
 /// N-01 (N1.1) : le plugin n'est enregistré dans lib.rs que sous cfg(target_os = "ios"), jamais sous desktop.
 #[test]
 fn n01_notification_plugin_is_registered_for_ios_only() {
     let lines: Vec<&str> = LIB_SOURCE.lines().collect();
-    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_notification")).map(|(i, _)| i).collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_notification::")).map(|(i, _)| i).collect();
     assert_eq!(uses.len(), 1, "un seul enregistrement");
     assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
     assert!(!lines.iter().any(|l| l.contains("NotificationExt")));
 }
 
+/// N-03 (N3.1) : le plugin d'actions est enregistré sous cfg(target_os = "ios") seulement, APRÈS le plugin officiel (il prend sa place comme délégué).
+#[test]
+fn n03_actions_plugin_is_registered_for_ios_only_after_the_official_plugin() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_notification_actions::")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    let official = lines.iter().position(|l| l.contains("tauri_plugin_notification::init")).expect("plugin officiel");
+    assert!(official < uses[0], "le plugin d'actions doit venir après le plugin officiel");
+    assert!(!DESKTOP_SOURCE.contains("notification_actions"));
+}
+
 /// N-01 (N1.1) : liste EXACTE des permissions de la capability iOS ; fenêtre principale, iOS seulement ; aucune autre capability n'accorde notification:.
 #[test]
-fn n01_ios_notifications_capability_grants_exactly_the_eight_permissions() {
+fn n01_ios_notifications_capability_grants_exactly_the_listed_permissions() {
     let capability: Value = serde_json::from_str(IOS_NOTIFICATIONS_CAPABILITY).expect("capability valide");
     assert_eq!(capability["windows"], serde_json::json!(["main"]));
     assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
@@ -183,21 +202,30 @@ fn n01_ios_notifications_capability_grants_exactly_the_eight_permissions() {
     assert_eq!(
         names,
         [
+            // N-03 : actions, catégories et écoute par le plugin maison (un seul délégué ; le plugin officiel n'enregistre plus de catégories).
+            "notification-actions:allow-ack",
+            "notification-actions:allow-drain",
+            "notification-actions:allow-register-action-types",
+            "notification-actions:allow-register-listener",
+            "notification-actions:allow-remove-listener",
+            "notification-actions:allow-status",
             "notification:allow-cancel",
             "notification:allow-get-pending",
             "notification:allow-is-permission-granted",
-            "notification:allow-register-action-types",
-            "notification:allow-register-listener",
-            "notification:allow-remove-listener",
             "notification:allow-request-permission",
             "notification:allow-show",
         ]
     );
+    // Le plugin officiel ne touche plus aux catégories ni aux écouteurs : un second jeu de catégories remplacerait celui du plugin maison.
+    for retired in ["notification:allow-register-action-types", "notification:allow-register-listener", "notification:allow-remove-listener"] {
+        assert!(!names.iter().any(|name| name == retired), "{retired}");
+    }
     for forbidden in ["allow-notify", "allow-batch", "allow-get-active", "allow-remove-active", "allow-check-permissions", "allow-permission-state", ":default"] {
         assert!(!names.iter().any(|name| name.contains(forbidden)), "{forbidden}");
     }
     for other in other_capabilities("notifications-ios.json") {
         assert!(!other.contains("notification:"), "une autre capability accorde notification:");
+        assert!(!other.contains("notification-actions:"), "une autre capability accorde notification-actions:");
     }
 }
 

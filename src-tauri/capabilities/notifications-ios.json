@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "notifications-ios",
-  "description": "iPhone uniquement : notifications locales des rappels (N-01, ADR 0012 avenant lot N1). Liste exacte fixée par tests/desktop/config.rs ; aucune permission du chemin qui perd les erreurs ni de la lecture des notifications livrées (ADR 0012, constats 5 et 9).",
+  "description": "iPhone uniquement : notifications locales des rappels (N-01) et actions « Fait » / « +15 min » (N-03), ADR 0012 avenants lot N1 et N-03. Liste exacte fixée par tests/desktop/config.rs ; aucune permission du chemin qui perd les erreurs ni de la lecture des notifications livrées (ADR 0012, constats 5 et 9) ; catégories et écoute des actions par le plugin notification-actions seulement (un seul délégué existe).",
   "windows": ["main"],
   "platforms": ["iOS"],
   "permissions": [
@@ -10,8 +10,11 @@
     "notification:allow-show",
     "notification:allow-cancel",
     "notification:allow-get-pending",
-    "notification:allow-register-action-types",
-    "notification:allow-register-listener",
-    "notification:allow-remove-listener"
+    "notification-actions:allow-drain",
+    "notification-actions:allow-ack",
+    "notification-actions:allow-status",
+    "notification-actions:allow-register-action-types",
+    "notification-actions:allow-register-listener",
+    "notification-actions:allow-remove-listener"
   ]
 }

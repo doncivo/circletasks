@@ -15,6 +15,7 @@ import {
   type Space,
   type Task,
 } from './model';
+import { parseActionTarget, type SnoozeEntry } from './notificationActions';
 import { eventNotificationId, recapNotificationId, routineNotificationId, taskNotificationId } from './notificationId';
 import { effectiveFireAt } from './quietHours';
 import { buildRecap, type Recap, type RecapKind, type RecapSettings } from './recap';
@@ -59,6 +60,8 @@ export interface NotificationPlanInput {
   readonly reminders: readonly Reminder[];
   readonly spaces: readonly Pick<Space, 'id' | 'quietHours'>[];
   readonly recaps: RecapSettings;
+  /** N-03 : répétitions « +15 min » en file (ADR 0012 avenant N3.6) ; absent = aucune. */
+  readonly snoozes?: readonly SnoozeEntry[];
 }
 
 interface PlannedReminderBase {
@@ -79,6 +82,18 @@ export type PlannedItem =
   | (PlannedReminderBase & { readonly kind: 'routine'; readonly targetId: RoutineId })
   | (PlannedReminderBase & { readonly kind: 'event'; readonly targetId: EventId })
   | {
+      /** Répétition « +15 min » (N-03) : texte, catégorie et cible de l'origine ; aucune plage silencieuse (geste explicite). */
+      readonly kind: 'snooze';
+      readonly id: string;
+      readonly originId: string;
+      readonly originKind: 'task' | 'routine' | 'event';
+      readonly reminderId: ReminderId;
+      readonly offsetMin: ReminderOffsetMin;
+      readonly targetId: string;
+      readonly occurrenceDate: LocalDate | null;
+      readonly fireAt: LocalDateTime;
+    }
+  | {
       readonly kind: 'recap';
       readonly id: string;
       readonly recapKind: RecapKind;
@@ -98,9 +113,11 @@ export interface NotificationPlan {
   readonly coverage: PlanCoverage;
   /** Nombre de candidats avant le plafond. */
   readonly total: number;
+  /** Répétitions « +15 min » mortes ou passées (cible terminée, supprimée, archivée, validée, rappel retiré) : à purger de la file. */
+  readonly deadSnoozeIds: readonly string[];
 }
 
-const EMPTY_PLAN: NotificationPlan = { items: [], coverage: { state: 'empty' }, total: 0 };
+const EMPTY_PLAN: NotificationPlan = { items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] };
 
 
 /** Tri du plan : échéance effective, puis rappel avant récapitulatif, puis identifiant (unités de code, jamais localeCompare). */
@@ -193,6 +210,27 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     return dates;
   };
 
+  /** Élément du plan d'une répétition, ou null si elle est morte ou passée. */
+  const snoozeItem = (snooze: SnoozeEntry): PlannedItem | null => {
+    if (snooze.fireAt.slice(0, 16) <= nowMinute) return null;
+    const target = parseActionTarget(snooze.originId);
+    if (target === null || target.kind === 'none') return null;
+    const reminder = input.reminders.find((row) => row.id === target.reminderId && row.deletedAt === null);
+    if (reminder === undefined) return null;
+    const base = { kind: 'snooze' as const, id: snooze.id, originId: snooze.originId, reminderId: reminder.id, offsetMin: reminder.offsetMin, targetId: reminder.targetId as string, fireAt: snooze.fireAt };
+    if (target.kind === 'task') {
+      const task = tasks.get(reminder.targetId);
+      return reminder.targetType === 'task' && task !== undefined && task.deletedAt === null && task.status === 'todo' ? { ...base, originKind: 'task', occurrenceDate: null } : null;
+    }
+    if (target.kind === 'routine') {
+      const routine = routines.get(reminder.targetId);
+      const done = routine !== undefined && doneByRoutine.get(routine.id)?.has(target.date) === true;
+      return reminder.targetType === 'routine' && routine !== undefined && routine.deletedAt === null && !routine.archived && !done ? { ...base, originKind: 'routine', occurrenceDate: target.date } : null;
+    }
+    const event = events.get(reminder.targetId);
+    return reminder.targetType === 'event' && event !== undefined && event.deletedAt === null ? { ...base, originKind: 'event', occurrenceDate: target.date } : null;
+  };
+
   const eventOccurrenceDates = (event: CalendarEvent): readonly LocalDate[] => {
     const known = eventDates.get(event.id);
     if (known !== undefined) return known;
@@ -267,6 +305,14 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     }
   }
 
+  // Répétitions « +15 min » (N-03) : vivantes si l'échéance est à venir et la cible de l'origine l'est aussi.
+  const deadSnoozeIds: string[] = [];
+  for (const snooze of input.snoozes ?? []) {
+    const item = snoozeItem(snooze);
+    if (item === null) deadSnoozeIds.push(snooze.id);
+    else candidates.push(item);
+  }
+
   // Récapitulatifs : ni plage silencieuse ni filtre d'espace ; contenu pour aujourd'hui seulement (critères 11, 18, 19).
   const recapKinds: readonly RecapKind[] = ['morning', 'evening'];
   for (const recapKind of recapKinds) {
@@ -286,7 +332,7 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
     }
   }
 
-  if (candidates.length === 0) return EMPTY_PLAN;
+  if (candidates.length === 0) return { ...EMPTY_PLAN, deadSnoozeIds };
   candidates.sort(comparePlanned);
   const items = candidates.slice(0, limit);
   const last = items[items.length - 1];
@@ -295,5 +341,5 @@ export function planNotifications(input: NotificationPlanInput): NotificationPla
       ? { state: 'complete' }
       : // Plafond à 0 : rien n'est planifié, la couverture s'arrête à `now`.
         { state: 'until', until: last === undefined ? (nowMinute as LocalDateTime) : last.fireAt };
-  return { items, coverage, total: candidates.length };
+  return { items, coverage, total: candidates.length, deadSnoozeIds };
 }

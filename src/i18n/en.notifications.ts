@@ -19,6 +19,10 @@ export const notificationsEn: Messages['notifications'] = {
   focusEnd: {
     title: 'Session finished · {duration}',
   },
+  action: {
+    done: 'Done',
+    snooze: '+15 min',
+  },
 };
 
 export const remindersStatusEn: Messages['reminders']['status'] = {
@@ -58,6 +62,20 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
     'verify-failed': 'Notification missing after sending',
     'ledger-failed': 'Register not saved',
     'zone-unknown': 'Unreadable time zone',
+  },
+  actionFailed: 'A notification action could not be applied',
+  actionsUnavailable: 'The Done and +15 min buttons are unavailable',
+  actionsPending: 'Actions waiting: {n} (retried on opening)',
+  actionsDropped: 'Actions dropped (queue full): {n}',
+  actionsLost: 'Actions not saved: {n}',
+  actionsDismiss: 'Dismiss',
+  actionsDismissLabel: 'Dismiss the failed notification actions',
+  actionsReason: {
+    'delegate-lost': 'notification handler taken over',
+    'delegate-late': 'handler set after launch: a cold-start action may be lost',
+    'register-failed': 'buttons not registered',
+    'source-failed': 'actions file unreadable',
+    'queue-write-failed': 'received actions not saved',
   },
   warnReadFailed: 'Upcoming reminders could not be checked: the sync warning is unavailable',
   summaryNoIphoneMany: 'No iPhone paired: {n} reminders in the next 2 hours will not ring',

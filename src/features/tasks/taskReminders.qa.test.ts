@@ -88,7 +88,9 @@ describe('QA rappels (N-02)', () => {
     const declared = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8')
       .split(/\r?\n/)
       .filter((line) => !/^\s*#/.test(line) && /notification/i.test(line));
-    expect(declared).toHaveLength(1);
+    // N-03 : le plugin d'actions (chemin local) est lui aussi sous cfg(target_os = "ios") (consistency.test.ts).
+    expect(declared).toHaveLength(2);
     expect(declared[0]).toMatch(/^tauri-plugin-notification = "=2\.5\.1"$/);
+    expect(declared[1]).toMatch(/^tauri-plugin-notification-actions = \{ path = "plugins\/notification-actions" \}$/);
   });
 });

@@ -42,6 +42,11 @@ export function createReminderRepository(db: SqlExecutor, stamper: WriteStamper)
   }
 
   return {
+    async getById(id: ReminderId) {
+      const row = await fetchById(id);
+      return row === undefined ? null : rowToReminder(row);
+    },
+
     async listForTarget(target: ReminderTarget) {
       const rows = await fetchActiveForTarget(target);
       return rows.map(rowToReminder);
