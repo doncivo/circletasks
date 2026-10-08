@@ -9,6 +9,8 @@ import type { LocalDate, TaskId } from '../../domain/types';
 import { logFailure } from '../../platform/desktop/log';
 import { NotificationSchedulerError } from '../../platform/notifications';
 import type { AppContainer } from '../app/container';
+import { actionQueueController } from './actionQueue';
+import { purgeDeadSnoozes, runActionsStep } from './notificationActions';
 import { requestsFor } from './notificationTexts';
 import { failureOf, statusController } from './notificationStatus';
 
@@ -38,6 +40,8 @@ export async function replanNotifications(container: AppContainer, trigger: Repl
   const status = statusController(container);
   try {
     await status.load();
+    // N-03 : les actions déjà reçues (« Fait », « +15 min ») sont appliquées AVANT tout contrôle d'autorisation ou de disponibilité.
+    await runActionsStep(container);
     return await pass(container, trigger, status);
   } catch (error) {
     // Jamais d'avalement : l'exception inattendue devient un échec visible.
@@ -100,11 +104,15 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
     ]);
     const taskTargets = [...new Set(reminders.filter((reminder) => reminder.targetType === 'task').map((reminder) => reminder.targetId as unknown as TaskId))];
     const weekStart = mondayOf(today);
+    // Les validations de la veille comptent aussi : une répétition « +15 min » peut sonner après minuit pour l'occurrence d'hier.
+    const yesterday = addDays(today, -1);
+    const logsFrom = weekStart < yesterday ? weekStart : yesterday;
+    const queue = await actionQueueController(container).load();
     const [targetTasks, todayTasks, logs, events] = await Promise.all([
       repos.tasks.listByIds(taskTargets),
       repos.tasks.listForDay(today, 'all'),
-      repos.routineLogs.listForRange({ from: weekStart, to: addDays(today, EVENT_SEARCH_DAYS) }, 'all'),
-      repos.events.listCandidatesForRange({ from: today, to: addDays(today, EVENT_SEARCH_DAYS) }, 'all'),
+      repos.routineLogs.listForRange({ from: logsFrom, to: addDays(today, EVENT_SEARCH_DAYS) }, 'all'),
+      repos.events.listCandidatesForRange({ from: yesterday, to: addDays(today, EVENT_SEARCH_DAYS) }, 'all'),
     ]);
     const tasks = [...new Map([...targetTasks, ...todayTasks].map((task) => [task.id, task])).values()];
 
@@ -112,12 +120,15 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
     const limit = Math.max(0, NOTIFICATION_LIMIT_DEFAULT - (await scheduler.reservedCount()));
 
     // (6) et (7) Plan et textes.
-    const plan = planNotifications({ now, limit, tasks, routines, routinePauses: pauses, routineLogs: logs, events, reminders, spaces, recaps: { morning, evening } });
+    const plan = planNotifications({ now, limit, tasks, routines, routinePauses: pauses, routineLogs: logs, events, reminders, spaces, recaps: { morning, evening }, snoozes: queue.snoozes });
     const requests = requestsFor(plan, {
       tasks: new Map(tasks.map((task) => [task.id, task])),
       routines: new Map(routines.map((routine) => [routine.id, routine])),
       events: new Map(events.map((event) => [event.id, event])),
     });
+
+    // N-03 : les répétitions mortes ou passées sont retirées de la file (une répétition vivante coupée par le plafond reste).
+    await purgeDeadSnoozes(container, plan.deadSnoozeIds);
 
     // (8) et (9) Remplacement par différence ; la réussite efface l'échec.
     const report = await scheduler.replace(requests);

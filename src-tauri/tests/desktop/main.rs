@@ -11,6 +11,7 @@ mod export;
 mod focus;
 mod import;
 mod logic;
+mod notification_actions;
 mod ocr;
 mod quit;
 mod restore;

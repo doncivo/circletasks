@@ -1,3 +1,4 @@
+import { setActionWakeHandler } from './notificationActions';
 import { clearReminderBanner, statusController } from './notificationStatus';
 import { getNotificationRunner } from './notificationRunner';
 import type { AppContainer } from '../app/container';
@@ -28,6 +29,8 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
     if (!disposed) void runner.request(trigger);
   };
 
+  // N-03 : le plugin d'actions réveille l'app quand il écrit une ligne (course entre `didReceive` et le `drain` de la reprise) ; inscrit au premier passage.
+  const stopWake = setActionWakeHandler(container, () => request('action'));
   const stopEdit = container.onNotificationsPlanChanged(() => request('edit'));
   const stopSync = container.sync?.onRemoteChanges((change) => {
     if (SYNC_PLAN_TABLES.some((table) => change.tables.has(table))) request('sync');
@@ -44,6 +47,7 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
       if (disposed) return;
       disposed = true;
       stopEdit();
+      stopWake();
       stopSync?.();
       env.document.removeEventListener('visibilitychange', onVisibility);
       clearReminderBanner();

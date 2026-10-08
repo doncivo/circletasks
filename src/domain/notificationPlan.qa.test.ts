@@ -350,13 +350,13 @@ describe('64 et 65 candidats, notifications réservées (critère 6 et 20)', () 
 
 describe('entrée vide et totalité', () => {
   it('toutes entrées vides, récapitulatifs désactivés : plan vide, ne lève pas', () => {
-    expect(plan()).toEqual({ items: [], coverage: { state: 'empty' }, total: 0 });
+    expect(plan()).toEqual({ items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] });
   });
 
   it('rappels orphelins (cible supprimée, jamais fournie) et récapitulatif à l’heure mal formée : plan vide', () => {
     const t = task();
     const recaps = { morning: { enabled: true, time: '7h30' as LocalTime }, evening: { enabled: false, time: asLocalTime('21:00') } } as RecapSettings;
-    expect(plan({ reminders: [reminder('task', t, 0), reminder('routine', t, 0), reminder('event', t, 0)], recaps })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0 });
+    expect(plan({ reminders: [reminder('task', t, 0), reminder('routine', t, 0), reminder('event', t, 0)], recaps })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] });
   });
 
   it('now avec secondes : tronqué à la minute', () => {

@@ -25,10 +25,21 @@ export interface NotificationStatusState {
   readonly availability: NotificationAvailabilityState;
   /** Dernière écriture du réglage impossible : l'état n'est que dans la mémoire de cette session. */
   readonly persistFailed: boolean;
+  /** N-03 : état de la file d'actions (entrées en échec, écartées, perdues), posé par la file ; vide tant qu'elle n'est pas lue. */
+  readonly actions: ActionsSummary;
 }
 
+/** Résumé de la file d'actions de notification pour le bandeau et Réglages > Rappels (avenant N3.8). */
+export interface ActionsSummary {
+  readonly failing: number;
+  readonly dropped: number;
+  readonly lost: number;
+}
+
+export const NO_ACTIONS_TROUBLE: ActionsSummary = { failing: 0, dropped: 0, lost: 0 };
+
 export const notificationStatusStore = defineFeatureStore<NotificationStatusState>(() =>
-  createStore<NotificationStatusState>()(() => ({ status: EMPTY_NOTIFICATION_STATUS, loaded: false, availability: null, persistFailed: false })),
+  createStore<NotificationStatusState>()(() => ({ status: EMPTY_NOTIFICATION_STATUS, loaded: false, availability: null, persistFailed: false, actions: NO_ACTIONS_TROUBLE })),
 );
 
 /** Le téléphone installé : seul endroit où `unavailable` est une panne (sur le PC et en navigateur, c'est l'état normal). */
@@ -47,6 +58,8 @@ export interface StatusController {
   /** Remplace l'état par `change(état)`, l'écrit s'il a changé, met à jour le bandeau. Ne rejette jamais. */
   patch(change: (current: NotificationStatusV1) => NotificationStatusV1): Promise<void>;
   setAvailability(value: NotificationAvailabilityState): void;
+  /** N-03 : résumé de la file d'actions ; met à jour le bandeau. */
+  setActions(value: ActionsSummary): void;
 }
 
 const controllers = new WeakMap<AppContainer, StatusController>();
@@ -97,6 +110,12 @@ function createStatusController(container: AppContainer): StatusController {
       store.setState({ availability: value });
       syncBanner();
     },
+    setActions: (value) => {
+      const before = store.getState().actions;
+      if (before.failing === value.failing && before.dropped === value.dropped && before.lost === value.lost) return;
+      store.setState({ actions: value });
+      syncBanner();
+    },
     patch: (change) => {
       const run = chain.then(async () => {
         await load();
@@ -123,7 +142,7 @@ function createStatusController(container: AppContainer): StatusController {
 // Problèmes affichés (bandeau et Réglages > Rappels)
 // ---------------------------------------------------------------------------------------------------------------------------------
 
-export type ProblemCode = 'permission-denied' | 'undetermined' | 'unavailable' | 'plan-failed' | 'focus-end-failed' | 'zone-unknown';
+export type ProblemCode = 'permission-denied' | 'undetermined' | 'unavailable' | 'plan-failed' | 'focus-end-failed' | 'actions-failed' | 'actions-unavailable' | 'zone-unknown';
 
 export interface ReminderProblem {
   readonly code: ProblemCode;
@@ -135,8 +154,9 @@ export interface ReminderProblem {
  * indisponible sur iPhone, échec du plan, fin de Focus, fuseau illisible. Vide sur le PC et en navigateur (jamais de bandeau de
  * planification : « Les rappels sont envoyés par l'iPhone »).
  */
-export function reminderProblems(state: Pick<NotificationStatusState, 'status' | 'availability'>, iphone: boolean): ReminderProblem[] {
+export function reminderProblems(state: Pick<NotificationStatusState, 'status' | 'availability'> & { readonly actions?: ActionsSummary }, iphone: boolean): ReminderProblem[] {
   const { status, availability } = state;
+  const actions = state.actions ?? NO_ACTIONS_TROUBLE;
   // Avant le premier passage (redémarrage), les problèmes ENREGISTRÉS sont déjà montrés : le bandeau survit au redémarrage.
   if (availability === 'unavailable' && !iphone) return [];
   const out: ReminderProblem[] = [];
@@ -150,6 +170,9 @@ export function reminderProblems(state: Pick<NotificationStatusState, 'status' |
   const duplicate = failure !== null && ((failure.reason === 'permission-denied' && status.permission === 'denied') || (failure.reason === 'unavailable' && availability === 'unavailable'));
   if (failure !== null && failure.reason !== 'zone-unknown' && !duplicate) out.push({ code: 'plan-failed', text: t('reminders.status.planFailed') });
   if (status.focusEndFailure !== null) out.push({ code: 'focus-end-failed', text: t('reminders.status.focusEndFailed') });
+  // N-03 : une action reçue qui n'a pas pu être appliquée (entrée en échec, écartée, perdue), ou le plugin d'actions en panne.
+  if (actions.failing > 0 || actions.dropped > 0 || actions.lost > 0) out.push({ code: 'actions-failed', text: t('reminders.status.actionFailed') });
+  if (status.actionsFailure !== null) out.push({ code: 'actions-unavailable', text: t('reminders.status.actionsUnavailable') });
   if (failure !== null && failure.reason === 'zone-unknown') out.push({ code: 'zone-unknown', text: t('reminders.status.zoneUnknown') });
   return out;
 }

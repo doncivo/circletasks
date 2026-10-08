@@ -70,6 +70,9 @@ security-framework = { version = "3", default-features = false }
 # l'avenant lisent son code Swift ; toute montée exige une relecture et un avenant). Jamais sous cfg(desktop) : le PC n'envoie aucune
 # notification de rappel (consistency.test.ts, tests/desktop/config.rs et l'étape « Plugins iOS » de build-ios.yml le vérifient).
 tauri-plugin-notification = "=2.5.1"
+# Actions « Fait » et « +15 min » des notifications (N-03, ADR 0012 avenant N-03) : plugin Swift local qui prend la place du délégué des
+# notifications et écrit les actions reçues dans un fichier durable. iPhone seulement, comme le plugin officiel (jamais sous cfg(desktop)).
+tauri-plugin-notification-actions = { path = "plugins/notification-actions" }
 # Signet de sécurité du dossier iCloud Drive/CircleTasks et accès aux fichiers (ADR 0011 §22, Y-IOS-01) : plugin Swift local, appelé par Rust seul.
 tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
 # Scan du QR d'association (ADR 0011 §23 point 2, Y-IOS-02) : API du JS seulement (aucune API Rust publique), texte passé aussitôt à

@@ -5,6 +5,8 @@ import { planNotifications } from '../../domain/notificationPlan';
 import { notificationNumericId } from '../../domain/notificationId';
 import { useAppStatusStore } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
+import { startAppStartup } from '../app/startup';
+import { getNotificationRunner } from './notificationRunner';
 import { notificationStatusStore, statusController } from './notificationStatus';
 import { replanNotifications, type ReplanOutcome } from './replanNotifications';
 import { reopenReminders, seedReminderTask, setupReminders, type ReminderHarness } from './testKit';
@@ -236,8 +238,6 @@ describe('N-06 : mes rappels suivent mon changement de fuseau (option 3)', () =>
   });
 
   it('le changement de fuseau du système déclenche un passage `zone` (startup.ts)', async () => {
-    const { startAppStartup } = await import('../app/startup');
-    const { getNotificationRunner } = await import('./notificationRunner');
     const runner = getNotificationRunner(h.container);
     const request = vi.spyOn(runner, 'request');
     const handlers = new Map<string, () => void>();
