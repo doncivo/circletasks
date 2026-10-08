@@ -9,6 +9,7 @@ import { detectTimeZone } from '../../../platform';
 import { Button, Checkbox, DropdownSelect, Switch } from '../../../ui';
 import { useAppContainer, useFeatureStore } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
+import { appReload } from '../../security/lockLayer';
 import { appleRemindersActions } from './appleRemindersActions';
 import { AppleRemindersReadOnly } from './AppleRemindersReadOnly';
 import { appleRemindersStore, isWriteFailure } from './appleRemindersState';
@@ -116,6 +117,13 @@ export function AppleRemindersSection() {
           {t('appleReminders.denied')}
         </p>
       )}
+      {(access === 'denied' || access === 'restricted') && (
+        <div className="ct-calendars__actions">
+          <Button variant="secondary" onClick={() => void actions.openSettings()}>
+            {t('appleReminders.actionOpenSettings')}
+          </Button>
+        </div>
+      )}
       {access === 'restricted' && (
         <p className="ct-calendars__error" role="status">
           {t('appleReminders.restricted')}
@@ -158,8 +166,23 @@ export function AppleRemindersSection() {
                     </Button>
                   );
                 case 'ios-settings':
+                  return (
+                    <Button key={action} variant="secondary" onClick={() => void actions.openSettings()}>
+                      {t('appleReminders.actionOpenSettings')}
+                    </Button>
+                  );
                 case 'reopen-app':
-                  return null;
+                  return (
+                    <Button key={action} variant="secondary" onClick={() => appReload.run()}>
+                      {t('appleReminders.actionRelaunch')}
+                    </Button>
+                  );
+                case 'ignore':
+                  return (
+                    <Button key={action} variant="secondary" disabled={running} onClick={() => void actions.ignoreFailure()}>
+                      {t('appleReminders.actionIgnore')}
+                    </Button>
+                  );
               }
             })}
           </div>
@@ -255,7 +278,7 @@ export function AppleRemindersSection() {
                 {t(held.send === true ? 'appleReminders.heldSendMessage' : 'appleReminders.heldMessage', { count: held.count })} · {nameOf(held.listId)}
               </p>
               <div className="ct-calendars__actions">
-                <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'delete', held.send === true)}>
+                <Button variant={held.send === true ? 'danger' : 'secondary'} onClick={() => void actions.resolveHeld(held.listId, 'delete', held.send === true)}>
                   {t(held.send === true ? 'appleReminders.heldSendDelete' : 'appleReminders.heldDelete')}
                 </Button>
                 <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'keep', held.send === true)}>

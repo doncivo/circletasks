@@ -103,3 +103,18 @@ describe('écriture due non évaluée comptée (observation QA)', () => {
     expect(report.pending).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('échec déterministe : jamais de boucle (revue)', () => {
+  it('Rappels refuse la valeur (invalid-input) : la tâche est détachée et gardée avec un message, aucun échec ne revient à chaque passage', async () => {
+    h.reminders.add({ listId: 'L-courses', title: 'Pain' });
+    await h.pass();
+    const task = await h.taskByTitle('Pain');
+    h.db.clock.advance(60_000);
+    await h.container.data.repos.tasks.update(task.id, { title: 'Pain complet' });
+    h.reminders.failNext('upsert', 'invalid-input');
+    expect(await h.pass('push')).toMatchObject({ pending: 0 });
+    expect(await h.task(task.id)).toMatchObject({ source: 'local', externalId: null });
+    expect(await h.container.data.repos.appleLinks.get(task.id)).toBeNull();
+    expect(await h.pass('push')).toMatchObject({ sent: 0, pending: 0 });
+  });
+});

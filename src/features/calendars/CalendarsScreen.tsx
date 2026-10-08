@@ -11,6 +11,7 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { calendarsStore, FAILURE_KEYS } from './calendarsStore';
 import { AppleRemindersSection } from './appleReminders/AppleRemindersSection';
+import { appReload } from '../security/lockLayer';
 import { IcloudForm } from './IcloudForm';
 import { formatUpdated } from './updatedText';
 import { useMinuteClock } from './useMinuteClock';
@@ -57,6 +58,11 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
         {reconnect && (
           <Button ariaLabel={t('calendars.reconnectLabel', { label: name })} onClick={onReconnect}>
             {t('calendars.reconnect')}
+          </Button>
+        )}
+        {state?.kind === 'error' && state.error === 'unavailable' && (
+          <Button ariaLabel={t('calendars.relaunchLabel', { label: name })} onClick={() => appReload.run()}>
+            {t('calendars.relaunch')}
           </Button>
         )}
         <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: name })} onClick={onRefresh}>

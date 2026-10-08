@@ -22,6 +22,8 @@ export const calendarsFr = {
   stateConnected: 'Connecté',
   stateReconnect: 'Déconnecté',
   stateOffline: 'Hors ligne',
+  relaunch: 'Relancer',
+  relaunchLabel: 'Relancer l’app pour recharger {label}',
   stateUnavailable: 'Indisponible : rouvrez l’app',
   stateRateLimited: 'Réessai plus tard',
   neverUpdated: 'Pas encore mis à jour',

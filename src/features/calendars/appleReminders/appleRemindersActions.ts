@@ -6,6 +6,8 @@ import type { AppContainer } from '../../app/container';
 import { useAppStore } from '../../app/appStore';
 import { appleRemindersState, appleRemindersStore, applyBanner } from './appleRemindersState';
 import { resolveHeldList, type HeldChoice, type PassReport } from './remindersPass';
+import { withExcursion } from '../../security/excursion';
+import { openAppSettings } from '../../../platform/systemSettings';
 import { resolveHeldSend } from './remindersWrites';
 import { detachUnlisted, resetLists } from './appleListRepairs';
 import { getRemindersRunner } from './remindersRunner';
@@ -32,6 +34,10 @@ export interface AppleRemindersActions {
   refresh(): Promise<PassReport>;
   /** Gestes de l'échec `lists-setting-invalid` (aucune impasse). */
   detachUnlisted(): Promise<void>;
+  /** Réglages d'iOS (excursion gardée jusqu'au retour dans l'app). */
+  openSettings(): Promise<void>;
+  /** Efface l'échec persistant affiché (« Ignorer »). */
+  ignoreFailure(): Promise<void>;
   resetLists(): Promise<void>;
   dismissNotice(kind: AppleNoticeKind): Promise<void>;
   /** `send` : retenue de suppressions vers Rappels (tâches supprimées ici) ; sinon retenue de rappels absents de Rappels. */
@@ -171,6 +177,17 @@ function createActions(container: AppContainer): AppleRemindersActions {
       if (store.getState().persistFailed) store.setState({ message: 'save-failed' });
     },
     refresh: run,
+    async openSettings() {
+      try {
+        await withExcursion('system-settings', () => openAppSettings());
+      } catch {
+        logFailure('apple-reminders', 'open-settings-failed');
+        store.setState({ message: 'save-failed' });
+      }
+    },
+    async ignoreFailure() {
+      await state.clearFailure();
+    },
     async detachUnlisted() {
       setRunning(true);
       try {

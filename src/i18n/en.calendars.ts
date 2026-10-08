@@ -21,6 +21,8 @@ export const calendarsEn: Messages['calendars'] = {
   stateConnected: 'Connected',
   stateReconnect: 'Disconnected',
   stateOffline: 'Offline',
+  relaunch: 'Relaunch',
+  relaunchLabel: 'Relaunch the app to reload {label}',
   stateUnavailable: 'Unavailable: reopen the app',
   stateRateLimited: 'Retry later',
   neverUpdated: 'Not updated yet',

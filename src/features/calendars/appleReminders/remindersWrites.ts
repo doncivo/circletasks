@@ -118,8 +118,9 @@ async function sendDueFields(container: AppContainer, context: SendContext, tall
       tally.touched.add(write.task.id);
     } catch (error) {
       const code = error instanceof RemindersError ? error.code : '';
-      if (code === 'not-found') {
-        // Rappel disparu entre la lecture et l'écriture : la tâche est détachée (jamais supprimée), avec message.
+      if (code === 'not-found' || code === 'invalid-input') {
+        // Rappel disparu entre la lecture et l'écriture, ou valeur que Rappels refuse (elle se reproduirait à l'identique à chaque passage) : la tâche est
+        // détachée (jamais supprimée), avec message.
         await detach(container, write.task);
         note(tally, 'detached');
         tally.touched.add(write.task.id);
@@ -219,7 +220,12 @@ async function sendCreations(container: AppContainer, context: SendContext, tall
       tally.touched.add(task.id);
     } catch (error) {
       const code = error instanceof RemindersError ? error.code : '';
-      if (code === 'list-not-found') {
+      if (code === 'invalid-input') {
+        // Valeur refusée par Rappels : la tâche reste ordinaire (jamais de boucle), avec message.
+        await revertToOrdinary(container, task);
+        note(tally, 'detached');
+        tally.touched.add(task.id);
+      } else if (code === 'list-not-found') {
         disabledLists.add(destination);
         await revertToOrdinary(container, task);
         tally.touched.add(task.id);

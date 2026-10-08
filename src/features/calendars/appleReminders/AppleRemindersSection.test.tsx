@@ -226,3 +226,17 @@ describe('audit M2 : suppressions vers Rappels retenues, gestes de l’utilisate
     expect(h.reminders.all()).toHaveLength(2);
   });
 });
+
+describe('geste destructeur en rouge (revue)', () => {
+  it('« Supprimer dans Rappels » (garde de suppression massive) est en variante danger', async () => {
+    h = await setupRemindersHarness('73');
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    for (let i = 0; i < 14; i += 1) h.reminders.add({ id: `D-${String(i)}`, listId: 'L-courses', title: `D ${String(i)}` });
+    await h.pass();
+    await createTaskUseCases(h.container).remove((await h.tasks()).slice(0, 12).map((task) => task.id));
+    await h.pass();
+    renderSection();
+    const button = await screen.findByRole('button', { name: 'Supprimer dans Rappels' });
+    expect(button.className).toContain('ct-button--danger');
+  });
+});
