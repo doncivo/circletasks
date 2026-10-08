@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
+import { taskRequests } from './helpers/notifications';
 import { createTask, isPhone } from './helpers/today';
 
 /**
@@ -12,32 +13,14 @@ import { createTask, isPhone } from './helpers/today';
  * indisponible reçoit au plus la question de disponibilité, rien ne part, et « Les rappels sont envoyés par l'iPhone » est affiché.
  * Le bandeau après réouverture de la page est vérifié en Vitest : la base du navigateur de développement est en mémoire.
  */
-const NOW = new Date('2026-09-23T09:00:00+02:00');
-const TITLE = 'Appeler le notaire';
-
-interface Request {
-  readonly id: string;
-  readonly fireAt: string;
-  readonly title: string;
-  readonly body: string;
-  readonly kind: string;
-}
-interface Hooks {
-  readonly calls: { type: string; requests?: Request[] }[];
-  setPermission(value: string): void;
-}
 declare global {
   interface Window {
-    __ctNotifications?: Hooks;
     __pcCalls?: string[];
   }
 }
 
-const taskRequests = (page: Page): Promise<Request[]> =>
-  page.evaluate(() => {
-    const replaces = (window.__ctNotifications?.calls ?? []).filter((call) => call.type === 'replace');
-    return (replaces.at(-1)?.requests ?? []).filter((request) => request.kind === 'task');
-  });
+const NOW = new Date('2026-09-23T09:00:00+02:00');
+const TITLE = 'Appeler le notaire';
 
 const settingsRow = (page: Page) => page.getByRole('button', { name: /^Récapitulatifs :/ });
 

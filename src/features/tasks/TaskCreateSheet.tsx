@@ -164,6 +164,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
         <ReminderBlock
           time={choice.date === null ? null : choice.time}
           offsets={offsets}
+          warnFor={{ spaceId, date: choice.date }}
           onToggle={(offset) => {
             setOffsetsTouched(true);
             setOffsets((current) => toggleReminderOffset(current, offset));

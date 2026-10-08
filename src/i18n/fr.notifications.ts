@@ -46,4 +46,11 @@ export const remindersStatusFr = {
   zoneChanged: 'Fuseau modifié : rappels recalculés à {time}',
   ledgerRebuilt: 'Registre des rappels reconstruit à {time}',
   zoneLimit: 'Après un changement de fuseau, ouvrez CircleTasks : les rappels sont recalculés à l’ouverture.',
+  // N-07 : avertissement du PC (le PC n'envoie aucune notification, il avertit seulement).
+  warnStale: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : ce rappel pourrait ne pas sonner à l’heure',
+  warnNoIphone: 'Aucun iPhone associé : ce rappel ne sonnera pas',
+  summaryStaleOne: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : 1 rappel dans les 2 prochaines heures pourrait ne pas sonner à l’heure',
+  summaryStaleMany: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : {n} rappels dans les 2 prochaines heures pourraient ne pas sonner à l’heure',
+  summaryNoIphoneOne: 'Aucun iPhone associé : 1 rappel dans les 2 prochaines heures ne sonnera pas',
+  summaryNoIphoneMany: 'Aucun iPhone associé : {n} rappels dans les 2 prochaines heures ne sonneront pas',
 } as const;

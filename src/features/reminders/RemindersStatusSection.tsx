@@ -5,6 +5,7 @@ import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { formatCoverage } from './coverageText';
 import { isInstalledIphone, notificationStatusStore, reminderProblems } from './notificationStatus';
+import { PcReminderWarningSummary } from './PcReminderWarningSummary';
 import { requestPermissionOnGesture } from './requestPermission';
 
 /**
@@ -29,6 +30,7 @@ export function RemindersStatusSection() {
         <p className="ct-recap__statusLine" data-kind="pc">
           {t('reminders.status.pcInfo')}
         </p>
+        <PcReminderWarningSummary />
       </section>
     );
   }

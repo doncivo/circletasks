@@ -1,5 +1,6 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { openApp } from './helpers/app';
+import { resumeApp as resume, taskRequests } from './helpers/notifications';
 import { createTask, isPhone } from './helpers/today';
 
 /**
@@ -13,31 +14,8 @@ import { createTask, isPhone } from './helpers/today';
  */
 const NOW = new Date('2026-09-23T09:00:00+02:00');
 
-interface Request {
-  readonly id: string;
-  readonly fireAt: string;
-  readonly title: string;
-  readonly kind: string;
-}
-interface Hooks {
-  readonly calls: { type: string; requests?: Request[] }[];
-}
-declare global {
-  interface Window {
-    __ctNotifications?: Hooks;
-  }
-}
-
-const taskRequests = (page: Page): Promise<Request[]> =>
-  page.evaluate(() => {
-    const replaces = (window.__ctNotifications?.calls ?? []).filter((call) => call.type === 'replace');
-    return (replaces.at(-1)?.requests ?? []).filter((request) => request.kind === 'task');
-  });
-
-const resume = (page: Page): Promise<void> => page.evaluate(() => void document.dispatchEvent(new Event('visibilitychange')));
-
 test.describe('N-05 — survie au redémarrage (iPhone, planificateur injecté)', () => {
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach((_fixtures, testInfo) => {
     test.skip(!isPhone(testInfo), 'Le planificateur injecté représente l’iPhone.');
   });
 

@@ -43,4 +43,10 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
   zoneChanged: 'Time zone changed: reminders recomputed at {time}',
   ledgerRebuilt: 'Reminder register rebuilt at {time}',
   zoneLimit: 'After a time zone change, open CircleTasks: reminders are recomputed on opening.',
+  warnStale: 'The iPhone has not synced for over 2 h: this reminder may not ring on time',
+  warnNoIphone: 'No iPhone paired: this reminder will not ring',
+  summaryStaleOne: 'The iPhone has not synced for over 2 h: 1 reminder in the next 2 hours may not ring on time',
+  summaryStaleMany: 'The iPhone has not synced for over 2 h: {n} reminders in the next 2 hours may not ring on time',
+  summaryNoIphoneOne: 'No iPhone paired: 1 reminder in the next 2 hours will not ring',
+  summaryNoIphoneMany: 'No iPhone paired: {n} reminders in the next 2 hours will not ring',
 };

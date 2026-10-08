@@ -36,6 +36,9 @@ export function storedDeviceStatuses(
         self: isSelf,
         lastReadAt: isSelf ? row.lastSyncAt : row.ackHlc ? hlcIso(row.ackHlc) : null,
         status,
+        // N-07 (ADR 0012 avenant N1.6) : dernière synchro PUBLIÉE par l'autre appareil (`lastSyncHlc` du dernier état accepté, rafraîchi toutes les
+        // 30 minutes au plus). `lastReadAt` n'en tient pas lieu : pour un autre appareil c'est l'heure de sa dernière ÉCRITURE lue.
+        ...(isSelf ? {} : { publishedSyncAt: row.lastSeenHlc ? hlcIso(row.lastSeenHlc) : null }),
       };
       if (isSelf || localSv === undefined) return base;
       const relation = compareVersions({ sm: SYNC_FORMAT_MAJOR, sv: localSv }, { sm: row.formatMajor, sv: row.schemaVersion });
