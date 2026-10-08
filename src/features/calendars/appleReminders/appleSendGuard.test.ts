@@ -84,3 +84,38 @@ describe('suppressions vers Rappels sous garde (audit M2)', () => {
     expect(h.reminders.writes).toEqual([]);
   });
 });
+
+describe('confirmation : seulement ce qui a été affiché (audit)', () => {
+  it('le nombre a changé depuis l’affichage : rien n’est supprimé, la question est reposée avec le nouveau nombre', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    expect(status().held).toEqual([expect.objectContaining({ count: 11, send: true })]);
+    await uc().remove(ids.slice(11, 13));
+    h.db.clock.advance(6_000);
+    const report = await resolveHeldSend(h.container, 'L-courses', 'delete', 11);
+    expect(report).toMatchObject({ sent: 0 });
+    expect(h.reminders.all()).toHaveLength(14);
+    expect(h.reminders.writes).toEqual([]);
+    expect(status().held).toEqual([expect.objectContaining({ count: 13, send: true })]);
+    // Le nouveau nombre confirmé : tout part.
+    expect(await resolveHeldSend(h.container, 'L-courses', 'delete', 13)).toMatchObject({ sent: 13 });
+    expect(h.reminders.all()).toHaveLength(1);
+  });
+
+  it('geste dans la fenêtre de 5 s : la confirmation est gardée, le push reprogrammé envoie sans second toucher', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    h.db.clock.advance(6_000);
+    await h.pass();
+    // Une suppression de plus, juste avant le geste.
+    await uc().remove(ids.slice(11, 12));
+    const report = await resolveHeldSend(h.container, 'L-courses', 'delete', 12);
+    expect(report.holdMs).toBeGreaterThan(0);
+    expect(report.sent).toBe(11);
+    h.db.clock.advance(report.holdMs ?? 0);
+    expect(await h.pass('push', { settle: false })).toMatchObject({ sent: 1, pending: 0 });
+    expect(status().held).toEqual([]);
+    expect(h.reminders.all()).toHaveLength(2);
+  });
+});

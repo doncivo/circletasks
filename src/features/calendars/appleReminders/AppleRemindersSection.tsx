@@ -278,7 +278,7 @@ export function AppleRemindersSection() {
                 {t(held.send === true ? 'appleReminders.heldSendMessage' : 'appleReminders.heldMessage', { count: held.count })} · {nameOf(held.listId)}
               </p>
               <div className="ct-calendars__actions">
-                <Button variant={held.send === true ? 'danger' : 'secondary'} onClick={() => void actions.resolveHeld(held.listId, 'delete', held.send === true)}>
+                <Button variant={held.send === true ? 'danger' : 'secondary'} onClick={() => void actions.resolveHeld(held.listId, 'delete', held.send === true, held.count)}>
                   {t(held.send === true ? 'appleReminders.heldSendDelete' : 'appleReminders.heldDelete')}
                 </Button>
                 <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'keep', held.send === true)}>

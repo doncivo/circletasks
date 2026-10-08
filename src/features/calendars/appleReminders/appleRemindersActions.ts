@@ -41,7 +41,7 @@ export interface AppleRemindersActions {
   resetLists(): Promise<void>;
   dismissNotice(kind: AppleNoticeKind): Promise<void>;
   /** `send` : retenue de suppressions vers Rappels (tâches supprimées ici) ; sinon retenue de rappels absents de Rappels. */
-  resolveHeld(listId: string, choice: HeldChoice, send?: boolean): Promise<void>;
+  resolveHeld(listId: string, choice: HeldChoice, send?: boolean, expected?: number): Promise<void>;
 }
 
 const actions = new WeakMap<AppContainer, AppleRemindersActions>();
@@ -207,10 +207,17 @@ function createActions(container: AppContainer): AppleRemindersActions {
     async dismissNotice(kind) {
       await state.patchStatus((current) => ({ ...current, notices: current.notices.filter((entry) => entry.kind !== kind) }));
     },
-    async resolveHeld(listId, choice, send = false) {
+    async resolveHeld(listId, choice, send = false, expected) {
       setRunning(true);
       try {
-        if (send) await resolveHeldSend(container, listId, choice);
+        if (send) {
+          const report = await resolveHeldSend(container, listId, choice, expected);
+          // Écritures encore dans la fenêtre d'annulation de 5 s : le passage `push` est reprogrammé, aucun second geste n'est nécessaire.
+          if (report.holdMs !== undefined) {
+            const { getRemindersRunner } = await import('./remindersRunner');
+            void getRemindersRunner(container).request('edit');
+          }
+        }
         else await resolveHeldList(container, listId, choice);
       } finally {
         setRunning(false);

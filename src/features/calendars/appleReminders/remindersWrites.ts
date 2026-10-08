@@ -293,6 +293,9 @@ async function deletionCandidates(container: AppContainer, links: readonly Apple
   return out;
 }
 
+/** Suppressions confirmées par l'utilisateur (listId → nombre affiché) : la garde de suppression massive ne les retient plus tant qu'elles ne sont pas toutes parties. */
+const confirmedDeletions = new WeakMap<AppContainer, Map<string, number>>();
+
 async function sendDeletions(container: AppContainer, context: SendContext, tally: Tally): Promise<void> {
   const now = nowIso(container.clock);
   const alive = new Set(context.tasks.map((task) => task.id));
@@ -304,7 +307,8 @@ async function sendDeletions(container: AppContainer, context: SendContext, tall
   const heldLists: NonNullable<SendResult['held']>[number][] = [];
   for (const [listId, group] of byList) {
     const linkedHere = context.tasks.filter((task) => appleLinkState(task) === 'linked' && task.appleListId === listId).length;
-    if (massDeletionBlocked(linkedHere + group.length, group.length)) {
+    const confirmed = confirmedDeletions.get(container)?.get(listId) ?? 0;
+    if (massDeletionBlocked(linkedHere + group.length, group.length) && confirmed < group.length) {
       blocked.add(listId);
       heldLists.push({ listId, count: group.length, at: now, send: true });
       tally.pending += group.length;
@@ -353,7 +357,7 @@ async function deleteOne(container: AppContainer, { link, task }: DeletionCandid
  * tâches supprimées de la liste, « Garder les rappels » les laisse (les tâches supprimées sont détachées, rien n'est renvoyé). La retenue
  * est levée seulement quand tout est traité ; un échec reste visible (état persistant d'écriture).
  */
-export async function resolveHeldSend(container: AppContainer, listId: string, choice: 'delete' | 'keep'): Promise<PassReport> {
+export async function resolveHeldSend(container: AppContainer, listId: string, choice: 'delete' | 'keep', expected?: number): Promise<PassReport> {
   const state = appleRemindersState(container);
   if (!container.reminders.available) return { ...EMPTY_REPORT, status: 'skipped', reason: 'unavailable' };
   try {
@@ -362,12 +366,24 @@ export async function resolveHeldSend(container: AppContainer, listId: string, c
     const alive = new Set((await container.data.repos.tasks.listAppleSourced()).map((task) => task.id));
     const candidates = (await deletionCandidates(container, await container.data.repos.appleLinks.listAll(), alive)).filter((candidate) => candidate.link.listId === listId);
     const tally: Tally = { sent: 0, pending: 0, code: null, touched: new Set(), notices: new Map(), createOff: false, held: null, holdMs: 0, stop: false };
+    if (choice === 'delete' && expected !== undefined && candidates.length !== expected) {
+      // Le nombre a changé depuis l'affichage : rien n'est supprimé, la question est reposée avec le nouveau nombre.
+      await state.patchStatus((current) => ({
+        ...current,
+        held: [...current.held.filter((entry) => !(entry.send === true && entry.listId === listId)), ...(candidates.length === 0 ? [] : [{ listId, count: candidates.length, at: now, send: true as const }])],
+      }));
+      return { ...EMPTY_REPORT, pending: candidates.length };
+    }
     if (choice === 'delete') {
       if ((await container.reminders.status()) !== 'full') {
         await state.fail('access-denied');
         return { ...EMPTY_REPORT, status: 'failed', code: 'access-denied' };
       }
+      const confirmed = confirmedDeletions.get(container) ?? new Map<string, number>();
+      confirmed.set(listId, candidates.length);
+      confirmedDeletions.set(container, confirmed);
       for (const candidate of candidates) await deleteOne(container, candidate, tally, now);
+      if (tally.pending === 0) confirmed.delete(listId);
     } else {
       for (const candidate of candidates) {
         await finishDeletion(container, candidate.task, candidate.link);
@@ -380,7 +396,7 @@ export async function resolveHeldSend(container: AppContainer, listId: string, c
       held: tally.pending === 0 ? current.held.filter((entry) => !(entry.send === true && entry.listId === listId)) : current.held,
       failure: tally.code === null ? current.failure : { code: tally.code, at: now, write: true as const },
     }));
-    return { ...EMPTY_REPORT, sent: tally.sent, pending: tally.pending, ...(tally.code === null ? {} : { status: 'failed' as const, code: tally.code }) };
+    return { ...EMPTY_REPORT, sent: tally.sent, pending: tally.pending, ...(tally.holdMs > 0 ? { holdMs: tally.holdMs } : {}), ...(tally.code === null ? {} : { status: 'failed' as const, code: tally.code }) };
   } catch (error) {
     const code = error instanceof RemindersError ? error.code : 'pass-failed';
     logFailure('apple-reminders', `held-failed ${code}`);
