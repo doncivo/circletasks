@@ -42,12 +42,18 @@ const titled = (title: string | undefined): string => (title === undefined || ti
 /** Requête de notification d'un élément du plan. */
 export function requestFor(item: PlannedItem, lookup: TitleLookup): NotificationRequest {
   switch (item.kind) {
+    // N-03 : chaque rappel porte la catégorie de sa nature (boutons « Fait » / « +15 min » ; l'événement n'a que « +15 min »).
     case 'task':
-      return { id: item.id, fireAt: item.fireAt, kind: 'task', title: titled(lookup.tasks.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
+      return { id: item.id, fireAt: item.fireAt, kind: 'task', category: 'task', title: titled(lookup.tasks.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
     case 'routine':
-      return { id: item.id, fireAt: item.fireAt, kind: 'routine', title: titled(lookup.routines.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
+      return { id: item.id, fireAt: item.fireAt, kind: 'routine', category: 'routine', title: titled(lookup.routines.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
     case 'event':
-      return { id: item.id, fireAt: item.fireAt, kind: 'event', title: titled(lookup.events.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
+      return { id: item.id, fireAt: item.fireAt, kind: 'event', category: 'event', title: titled(lookup.events.get(item.targetId)?.title), body: reminderBody(item.offsetMin) };
+    case 'snooze': {
+      // Répétition « +15 min » : titre et corps de l'origine (mention du retard non ajoutée), catégorie de l'origine.
+      const title = item.originKind === 'task' ? lookup.tasks.get(item.targetId)?.title : item.originKind === 'routine' ? lookup.routines.get(item.targetId)?.title : lookup.events.get(item.targetId)?.title;
+      return { id: item.id, fireAt: item.fireAt, kind: 'snooze', category: item.originKind, title: titled(title), body: reminderBody(item.offsetMin) };
+    }
     case 'recap':
       // Jour courant : le contenu de buildRecap ; un autre jour : le texte générique qui invite à ouvrir l'app (N-07 critère 3).
       return item.content === null

@@ -21,6 +21,11 @@ export const notificationsFr = {
   focusEnd: {
     title: 'Session terminée · {duration}',
   },
+  // N-03 : boutons de la notification (titres passés au plugin, aucun texte en dur côté Swift).
+  action: {
+    done: 'Fait',
+    snooze: '+15 min',
+  },
 } as const;
 
 /** `reminders.status` : état des rappels (Réglages > Rappels, bandeau de l'app). */
@@ -62,6 +67,21 @@ export const remindersStatusFr = {
     'verify-failed': 'Notification absente après l’envoi',
     'ledger-failed': 'Registre non enregistré',
     'zone-unknown': 'Fuseau illisible',
+  },
+  // N-03 : actions « Fait » et « +15 min » des notifications.
+  actionFailed: 'Une action de notification n’a pas pu être appliquée',
+  actionsUnavailable: 'Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles',
+  actionsTitle: 'Actions des notifications',
+  actionsPending: 'Actions en attente d’application : {n} (nouvel essai à chaque ouverture)',
+  actionsDropped: 'Actions écartées faute de place : {n}',
+  actionsLost: 'Actions non enregistrées par iOS ou illisibles : {n}',
+  actionsDismiss: 'Ignorer',
+  actionsDismissLabel: 'Ignorer les actions de notification en échec',
+  actionsReason: {
+    'delegate-lost': 'Le plugin n’est plus le gestionnaire des notifications',
+    'register-failed': 'Les boutons n’ont pas pu être enregistrés',
+    'source-failed': 'Le fichier des actions n’a pas pu être lu',
+    'queue-write-failed': 'Les actions reçues n’ont pas pu être enregistrées',
   },
   warnReadFailed: 'Les rappels proches n’ont pas pu être vérifiés : l’avertissement de synchro est indisponible',
   summaryNoIphoneMany: 'Aucun iPhone associé : {n} rappels dans les 2 prochaines heures ne sonneront pas',

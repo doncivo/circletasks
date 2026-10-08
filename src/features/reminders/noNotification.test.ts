@@ -18,6 +18,8 @@ function sourcesOf(dir: string): string[] {
 
 /** Seul fichier autorisé à nommer le plugin (adaptateur iOS, N-01 ; avenant N1.9) : l'exception ne s'étend à aucun autre. */
 const IOS_ADAPTER = join('platform', 'notifications', 'tauriNotifications.ts');
+/** Plugin des actions « Fait » / « +15 min » (N-03) : second et dernier fichier autorisé, pour `plugin:notification-actions|` seulement. */
+const IOS_ACTIONS_ADAPTER = join('platform', 'notifications', 'tauriNotificationActions.ts');
 
 describe('Rappels : aucune notification émise hors adaptateur iOS (ordre 1, N-01)', () => {
   const src = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -30,7 +32,10 @@ describe('Rappels : aucune notification émise hors adaptateur iOS (ordre 1, N-0
     const exempt = files.filter((file) => file.endsWith(IOS_ADAPTER));
     expect(exempt).toHaveLength(1);
     expect(readFileSync(exempt[0] as string, 'utf8')).toContain('plugin:notification|');
-    for (const file of files.filter((candidate) => !candidate.endsWith(IOS_ADAPTER))) {
+    const actions = files.filter((file) => file.endsWith(IOS_ACTIONS_ADAPTER));
+    expect(actions).toHaveLength(1);
+    expect(readFileSync(actions[0] as string, 'utf8').replaceAll('plugin:notification-actions|', '')).not.toMatch(/plugin-notification|new Notification\(|Notification\.requestPermission|sendNotification|scheduleNotification|plugin:notification/);
+    for (const file of files.filter((candidate) => !candidate.endsWith(IOS_ADAPTER) && !candidate.endsWith(IOS_ACTIONS_ADAPTER))) {
       expect(readFileSync(file, 'utf8'), file).not.toMatch(/plugin-notification|new Notification\(|Notification\.requestPermission|sendNotification|scheduleNotification|plugin:notification/);
     }
   });

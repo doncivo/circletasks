@@ -13,6 +13,7 @@ import {
   createUnavailableNotificationScheduler,
   systemNotificationClock,
   type LedgerStore,
+  type NotificationActionSource,
   type NotificationClock,
   type NotificationScheduler,
 } from '../../platform/notifications';
@@ -61,6 +62,8 @@ export interface AppContainer {
   readonly notificationLedger: LedgerStore;
   /** Instant et fuseau de l'appareil pour la planification (injectables : tests, e2e). */
   readonly notificationClock: NotificationClock;
+  /** Actions « Fait » et « +15 min » des notifications (N-03, plugin Swift) ; null hors iPhone installé : le PC n'en reçoit aucune. */
+  readonly notificationActions: NotificationActionSource | null;
   /**
    * Déclencheur `edit` de la replanification (avenant N1.3) : appelé après toute écriture validée d'une tâche, routine, validation, événement,
    * rappel, espace (plages silencieuses) ou récapitulatif ; posé UNE fois ici par `observeWrites`, pas par chaque cas d'usage.
@@ -117,6 +120,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     notifications: parts.notifications ?? createUnavailableNotificationScheduler(),
     notificationLedger: parts.notificationLedger ?? createLedgerStore(hasRepositories ? createSettingsLedger(parts.data.repos.settings) : { load: () => Promise.resolve({ state: 'missing' }), save: () => Promise.resolve() }),
     notificationClock: parts.notificationClock ?? systemNotificationClock,
+    notificationActions: parts.notificationActions ?? null,
     notificationsPlanChanged: planChanged,
     onNotificationsPlanChanged: (listener) => {
       planListeners.add(listener);
