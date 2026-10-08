@@ -16,6 +16,7 @@ export const securityEn: Messages['security'] = {
     disableConfirmText: 'CircleTasks data will be readable again without protection',
     disableConfirm: 'Turn off',
     disableFailed: 'The lock could not be turned off: you can try again.',
+    loadFailed: 'The lock screen could not be loaded. Your data is intact: restart the app.',
   },
   reason: {
     unlock: 'Unlock CircleTasks',

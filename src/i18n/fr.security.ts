@@ -15,6 +15,7 @@ export const securityFr = {
     disableConfirmText: 'Les données de CircleTasks seront de nouveau lisibles sans protection',
     disableConfirm: 'Désactiver',
     disableFailed: 'Le verrouillage n’a pas pu être désactivé : nouvel essai possible.',
+    loadFailed: 'L’écran de verrou n’a pas pu être chargé. Vos données sont intactes : relancez l’app.',
   },
   /** Raisons affichées par iOS dans la fenêtre Face ID (jamais vides). */
   reason: {

@@ -431,6 +431,8 @@ describe('I-03-7 aucune donnée dans le DOM verrouillé', () => {
 
   it('I-03-7 rendu complet : aucune ligne de tâche dans le DOM au lancement à froid verrouillé', async () => {
     resetAppLockStore();
+    // Authentification automatique refusée : l'app reste verrouillée quel que soit le moment où l'écran de verrou (à la demande) arrive.
+    fake.setDefault('user-cancel');
     const lock = await start();
     render(
       <AppLockGate>

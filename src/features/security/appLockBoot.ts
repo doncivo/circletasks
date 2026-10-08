@@ -1,5 +1,6 @@
 import type { AppContainer } from '../app/container';
 import { useAppLockStore } from './appLockStore';
+import { applyLockToDocument } from './lockLayer';
 
 /**
  * Démarrage du verrou (I-03) appelé par App.tsx avant le premier rendu de la coquille. Hors iPhone (authentification non prise en charge) :
@@ -17,8 +18,9 @@ export async function bootAppLock(container: AppContainer): Promise<{ dispose():
     await controller.ready;
     return controller;
   } catch {
+    // Échec fermé : le contenu de body est masqué par le module léger de la couche (importé directement, jamais à la demande).
+    applyLockToDocument(document, true);
     useAppLockStore.setState({ phase: 'locked', enabled: true, shellReady: false, message: { kind: 'plugin', code: 'unavailable' } });
-    document.documentElement.dataset['appLock'] = 'locked';
     return { dispose: () => undefined };
   }
 }

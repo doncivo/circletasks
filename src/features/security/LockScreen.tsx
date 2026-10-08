@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import { t } from '../../i18n';
 import { Button, ConfirmDialog, Icon } from '../../ui';
 import { useAppLockStore, type LockMessage } from './appLockStore';
-import { ensureLockLayer } from './startAppLock';
+import { appReload, ensureLockLayer } from './lockLayer';
 
 function messageText(message: LockMessage): string {
   switch (message.kind) {
@@ -54,7 +54,7 @@ export function LockScreen() {
         </p>
       )}
       <div className="ct-lock__actions">
-        <Button fullWidth {...(retry ? {} : { ariaLabel: t('security.lock.unlockLabel') })} disabled={busy} ariaBusy={busy} onClick={() => void actions?.unlock()}>
+        <Button fullWidth {...(retry ? {} : { ariaLabel: t('security.lock.unlockLabel') })} disabled={busy} ariaBusy={busy} onClick={() => (actions ? void actions.unlock() : appReload.run())}>
           {retry ? t('security.lock.retry') : t('security.lock.unlock')}
         </Button>
         {noPasscodeExit && (
