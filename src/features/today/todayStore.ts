@@ -80,21 +80,23 @@ export interface TodayState {
    * (tri recalculé, terminées en bas, `sortTasksForDay`) sans recharger toute
    * la liste. Ignore un id absent de la liste affichée. Ne rejette jamais.
    */
-  toggleDone(id: TaskId): Promise<void>;
+  toggleDone(id: TaskId): Promise<boolean>;
   /**
    * Reporte une tâche de la liste (T-05 : « Demain », « Semaine prochaine », date ;
    * Ctrl+D = demain). Annulable (le cas d'usage pousse la commande). La tâche quitte
    * la liste aussitôt (`resolveTodayTasks` revérifie la date) sans recharger. Ne rejette jamais.
    */
-  postpone(id: TaskId, target: PostponeTarget): Promise<void>;
+  postpone(id: TaskId, target: PostponeTarget): Promise<boolean>;
   /** T-10 critère 4 : reporte une occurrence récurrente (Ctrl+D) pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
-  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<void>;
+  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<boolean>;
+  /** A-07 : bouton « Un jour » du balayage (SD-03, `moveToSomeday`) ; annulable. Rend vrai si la tâche est rangée ; sinon `actionErrorKey` est posé. Ne rejette jamais. */
+  sendToSomeday(id: TaskId): Promise<boolean>;
   /**
    * Supprime une tâche de la liste (T-08 : Suppr après confirmation) : corbeille, annulable 5 s.
    * La tâche quitte la liste aussitôt (retirée de `taskEntities`). `scope` : occurrence d'une série récurrente (T-10,
    * « cette occurrence » génère la suivante, « toutes les suivantes » arrête la série). Ne rejette jamais.
    */
-  remove(id: TaskId, scope?: SeriesScope): Promise<void>;
+  remove(id: TaskId, scope?: SeriesScope): Promise<boolean>;
   /**
    * T-12 : duplique une tâche de la liste (Ctrl+Maj+D après choix de la date) ; annulable. `date` null : « Un jour ».
    * La copie apparaît dans la liste si elle tombe sur le jour affiché (rechargement). Ne rejette jamais.
@@ -126,7 +128,7 @@ export interface TodayState {
   /** A-05, Q12 : déplace la sélection vers un espace (et un projet, ES-04), sans changer la date ; annulable en une fois. Ne rejette jamais. */
   moveSelected(spaceId: SpaceId, projectId?: ProjectId | null): Promise<void>;
   /** R-03 : valide ou annule la validation d'une routine du jour (via la source de routines) ; recharge les éléments du jour. Ne rejette jamais. */
-  toggleRoutine(id: RoutineId): Promise<void>;
+  toggleRoutine(id: RoutineId): Promise<boolean>;
   /** Relit les éléments des autres modules du jour affiché (une routine validée ou annulée ailleurs). Ne rejette jamais. */
   refreshExtras(): Promise<void>;
 }
@@ -249,9 +251,9 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     },
 
     async toggleDone(id) {
-      if (!get().taskIds.includes(id)) return; // pas dans la liste affichée
+      if (!get().taskIds.includes(id)) return false; // pas dans la liste affichée
       const current = container.taskEntities.get(id);
-      if (!current) return;
+      if (!current) return false;
       try {
         // Le cas d'usage publie la tâche écrite dans  : la ligne, la
         // fiche ouverte et le tri (terminées en bas) la reflètent sans autre copie.
@@ -264,29 +266,48 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
           const loaded = await fetchDay(date, filter);
           set({ taskIds: loaded.map((task) => task.id), recurrences: await loadRecurrences(loaded, get().recurrences) });
         }
+        return true;
       } catch {
         // Échec d'écriture : la liste reste affichée telle quelle, message dédié.
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       }
     },
 
     async postpone(id, target) {
-      if (!get().taskIds.includes(id)) return;
+      if (!get().taskIds.includes(id)) return false;
       try {
         await useCases.postpone([id], target);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+        return false;
       }
     },
 
     async postponeSeries(id, target, scope) {
-      if (!get().taskIds.includes(id)) return;
+      if (!get().taskIds.includes(id)) return false;
       try {
         const result = await series.postpone(id, target, scope);
         set({ actionErrorKey: result.ok ? null : 'tasks.postponeError' });
+        return result.ok;
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+        return false;
+      }
+    },
+
+    async sendToSomeday(id) {
+      if (!get().taskIds.includes(id)) return false;
+      try {
+        const moved = await useCases.moveToSomeday([id]);
+        // Tâche terminée, déjà rangée ou répétée : le cas d'usage ne fait rien (SD-03) ; jamais en silence.
+        set({ actionErrorKey: moved.length > 0 ? null : 'someday.sendError' });
+        return moved.length > 0;
+      } catch {
+        set({ actionErrorKey: 'someday.sendError' });
+        return false;
       }
     },
 
@@ -383,14 +404,16 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     async toggleRoutine(routineId) {
       const { date, filter, extras: current } = get();
       const entry = current.routines.find((candidate) => candidate.routine.id === routineId);
-      if (date === null || !entry || routinesBusy.has(routineId)) return;
+      if (date === null || !entry || routinesBusy.has(routineId)) return false;
       routinesBusy.add(routineId);
       try {
         await toggleRoutineViaSources(container, routineId, date, !entry.done);
         const { extras, failed } = await loadTodayExtras(container, date, filter);
         set({ extras, extrasFailed: failed, actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       } finally {
         routinesBusy.delete(routineId);
       }
@@ -408,18 +431,20 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
     },
 
     async remove(id, scope) {
-      if (!get().taskIds.includes(id)) return;
+      if (!get().taskIds.includes(id)) return false;
       try {
         if (scope) {
           const result = await series.remove(id, scope);
           if (!result.ok) {
             set({ actionErrorKey: 'tasks.deleteError' });
-            return;
+            return false;
           }
         } else await useCases.remove([id]);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.deleteError' });
+        return false;
       }
     },
   }));

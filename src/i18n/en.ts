@@ -1,6 +1,7 @@
 import { emptyEn } from './en.empty';
 import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
+import { gesturesEn } from './en.gestures';
 import { captureEn } from './en.capture';
 import { focusEn } from './en.focus';
 import { notificationsEn, remindersStatusEn } from './en.notifications';
@@ -633,6 +634,7 @@ export const en: Messages = {
   events: eventsEn,
   goals: goalsEn,
   someday: somedayEn,
+  gestures: gesturesEn,
   capture: captureEn,
   scan: scanEn,
   empty: emptyEn,

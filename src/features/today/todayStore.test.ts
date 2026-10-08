@@ -168,7 +168,7 @@ describe('todayStore (T-01)', () => {
   it('toggleDone ignore un id absent de la liste affichée', async () => {
     const store = todayStore.get(container);
     await store.getState().load(DAY, 'all');
-    await expect(store.getState().toggleDone(asEntityId<TaskId>('99999999-0000-4000-8000-000000000099'))).resolves.toBeUndefined();
+    await expect(store.getState().toggleDone(asEntityId<TaskId>('99999999-0000-4000-8000-000000000099'))).resolves.toBe(false);
     expect(store.getState().status).toBe('ready');
   });
 
@@ -180,7 +180,7 @@ describe('todayStore (T-01)', () => {
     if (!task) throw new Error('fixture manquante');
     vi.spyOn(container.data.repos.tasks, 'complete').mockRejectedValueOnce(new Error('boom'));
 
-    await expect(store.getState().toggleDone(task.id)).resolves.toBeUndefined();
+    await expect(store.getState().toggleDone(task.id)).resolves.toBe(false);
     expect(store.getState()).toMatchObject({ status: 'ready', actionErrorKey: 'tasks.completeError' });
     expect(shown(store)).toHaveLength(1); // la liste reste affichée
   });
@@ -219,7 +219,7 @@ describe('todayStore (T-01)', () => {
     if (!task) throw new Error('fixture manquante');
     vi.spyOn(container.data, 'transaction').mockRejectedValueOnce(new Error('boom'));
 
-    await expect(store.getState().postpone(task.id, 'tomorrow')).resolves.toBeUndefined();
+    await expect(store.getState().postpone(task.id, 'tomorrow')).resolves.toBe(false);
     expect(store.getState().actionErrorKey).toBe('tasks.postponeError');
     expect(shown(store)).toHaveLength(1);
   });

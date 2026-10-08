@@ -4,7 +4,7 @@ import type { Space } from '../../domain/model';
 import { rowIndexForDrop, type WeekDay } from '../../domain/week';
 import type { LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { ChoiceDialog, DragGhost, useZoneDrag } from '../../ui';
+import { ChoiceDialog, DragGhost, focusNeighborLater, useZoneDrag } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import type { ItemFilter } from '../../domain/itemFilter';
 import { selectSomedayTasks } from '../../domain/someday';
@@ -14,6 +14,7 @@ import { isListFocus, registerListNavigation } from '../app/listKeyboard';
 import { useNavigationStore } from '../app/navigation';
 import { useFocusShortcut } from '../focus/useFocusShortcut';
 import { somedayStore, useItemFilter, type SomedayZoneDnd } from '../someday';
+import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import { taskSubtitle } from '../tasks/taskLine';
 import type { WeekDropState, WeekItemDragProps } from './WeekDayView';
 import { weekStore } from './weekStore';
@@ -29,7 +30,11 @@ export interface WeekMoves {
   readonly dragging: boolean;
   /** Carte volante à rendre pendant le glisser. */
   readonly ghost: ReactNode;
-  /** Question de portée d'une tâche récurrente. */
+  /** Reporter à demain (Ctrl+D, balayage A-07) ; une occurrence de série pose d'abord la portée (T-10). */
+  readonly requestPostpone: (id: TaskId) => void;
+  /** Suppression depuis le balayage (A-07) : ouvre la confirmation habituelle (T-08). */
+  readonly requestDelete: (id: TaskId) => void;
+  /** Question de portée d'une tâche récurrente, confirmation de suppression. */
   readonly dialogs: ReactNode;
   /** Tâche « sélectionnée » au clavier : la dernière à avoir reçu le focus. */
   readonly setFocusedTaskId: (id: TaskId) => void;
@@ -57,6 +62,7 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
   const toggleDone = useFeatureStore(weekStore, (s) => s.toggleDone);
   const postpone = useFeatureStore(weekStore, (s) => s.postpone);
   const postponeSeries = useFeatureStore(weekStore, (s) => s.postponeSeries);
+  const remove = useFeatureStore(weekStore, (s) => s.remove);
   const moveRow = useFeatureStore(weekStore, (s) => s.moveRow);
   const scheduleSomeday = useFeatureStore(somedayStore, (s) => s.schedule);
   const moveSomedayRow = useFeatureStore(somedayStore, (s) => s.moveRow);
@@ -68,6 +74,7 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
   });
   const [focusedTaskId, setFocusedTaskId] = useState<TaskId | null>(null);
   const [scope, setScope] = useState<ScopeRequest | null>(null);
+  const [deleteId, setDeleteId] = useState<TaskId | null>(null);
   const [announcement, setAnnouncement] = useState<WeekMoves['announcement']>(null);
   const focusAfterMove = useRef<TaskId | null>(null);
   const daysRef = useRef(days);
@@ -207,7 +214,21 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
   }
 
   const scopeTask = scope ? container.taskEntities.get(scope.id) : undefined;
-  const dialogs = scope && scopeTask && (
+  const deleteTask = deleteId ? container.taskEntities.get(deleteId) : undefined;
+  const dialogs = (
+    <>
+      {deleteTask && (
+        <DeleteTaskConfirm
+          task={deleteTask}
+          onCancel={() => setDeleteId(null)}
+          onConfirm={(deleteScope) => {
+            setDeleteId(null);
+            const refocus = focusNeighborLater(deleteTask.id, true);
+            void remove(deleteTask.id, deleteScope).then((ok) => ok && refocus());
+          }}
+        />
+      )}
+      {scope && scopeTask && (
     <ChoiceDialog
       title={t('tasks.seriesPostponeTitle', { title: scopeTask.title })}
       description={t('tasks.seriesPostponeBody')}
@@ -221,6 +242,8 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
       }}
       onCancel={() => setScope(null)}
     />
+      )}
+    </>
   );
 
   return {
@@ -235,6 +258,8 @@ export function useWeekMoves(days: readonly WeekDay[], weekStart: LocalDate, spa
       />
     ),
     dialogs,
+    requestPostpone,
+    requestDelete: setDeleteId,
     setFocusedTaskId,
     announcement,
     somedayZone: {

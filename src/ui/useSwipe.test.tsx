@@ -28,6 +28,34 @@ function touch(zone: HTMLElement, type: 'pointerdown' | 'pointermove' | 'pointer
 
 afterEach(cleanup);
 
+const ROW_TEXT = 'ligne';
+
+describe('useSwipe et les lignes à geste (A-07 critère 11)', () => {
+  it('un geste parti d’une ligne [data-row-gesture] ne change pas de semaine ; sur une zone vide, si', () => {
+    const onSwipe = vi.fn();
+    function WithRow() {
+      const handlers = useSwipe({ onSwipe });
+      return (
+        <div data-testid="zone" {...handlers}>
+          <div data-testid="row" data-row-gesture="">
+            <span data-testid="inside">{ROW_TEXT}</span>
+          </div>
+          <div data-testid="empty" />
+        </div>
+      );
+    }
+    render(<WithRow />);
+    const zone = screen.getByTestId('zone');
+    zone.getBoundingClientRect = () => ({ width: 400, height: 800, top: 0, left: 0, right: 400, bottom: 800, x: 0, y: 0, toJSON: () => ({}) });
+    touch(screen.getByTestId('inside'), 'pointerdown', 350, 400, 0);
+    touch(screen.getByTestId('inside'), 'pointerup', 100, 400, 100);
+    expect(onSwipe).not.toHaveBeenCalled();
+    touch(screen.getByTestId('empty'), 'pointerdown', 350, 400, 200);
+    touch(screen.getByTestId('empty'), 'pointerup', 100, 400, 300);
+    expect(onSwipe).toHaveBeenCalledWith('left');
+  });
+});
+
 describe('useSwipe (S-03)', () => {
   it('un balayage lent d’au moins 30 % de la largeur change de semaine : vers la gauche, suivante', () => {
     const { zone, onSwipe } = setup();

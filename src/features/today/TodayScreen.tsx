@@ -16,6 +16,7 @@ import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { isListFocus, registerListNavigation } from '../app/listKeyboard';
 import { useQuickAddStore } from '../app/quickAdd';
+import { useRowGestureFeedback } from '../app/rowGestureFeedback';
 import { SearchButton } from '../search';
 import { SomedayButton, useSomedayTasks } from '../someday';
 import { SpaceFilterBar, useAnnounceCreation, useDefaultSpaceId, useEffectiveProjectFilter } from '../spaces';
@@ -24,7 +25,7 @@ import { TodayAddRow } from './TodayCreate';
 import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { TodayHeader } from './TodayHeader';
-import { TodayListView } from './TodayListView';
+import { TodayListView, type TodayGestures } from './TodayListView';
 import { GoalReviewCards } from '../goals/GoalReviewCards';
 import { TodayChecklists, TodayEmpty, TodayEventBands, TodayGoalCard } from './TodayParts';
 import { useTodayRowActions } from './TodayRowActions';
@@ -71,6 +72,7 @@ export function TodayScreen() {
   const addTask = useFeatureStore(todayStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(todayStore, (s) => s.toggleDone);
   const toggleRoutine = useFeatureStore(todayStore, (s) => s.toggleRoutine);
+  const sendToSomeday = useFeatureStore(todayStore, (s) => s.sendToSomeday);
   const refreshExtras = useFeatureStore(todayStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(todayStore, (s) => s.syncRecurrences);
   const openDetail = useNavigationStore((s) => s.openDetail);
@@ -110,6 +112,16 @@ export function TodayScreen() {
   const edit = useTodayEditMode(list);
   const rowActions = useTodayRowActions(edit);
   const reorder = useTodayReorder(list, rowActions.focusedTaskId);
+  // A-07 : gestes de ligne sur iPhone seulement ; mêmes cas d'usage que la case, Ctrl+D et Suppr (annulation 5 s comprise).
+  const rowFeedback = useRowGestureFeedback();
+  const gestures: TodayGestures | null =
+    layout === 'mobile'
+      ? {
+          api: { complete: toggleDone, postpone: rowActions.requestPostpone, sendToSomeday, requestDelete: rowActions.requestDelete },
+          toggleRoutine,
+          feedback: rowFeedback,
+        }
+      : null;
 
   // D-04 : ↑ / ↓ passent à la ligne précédente / suivante ; Entrée ouvre le détail de la ligne sélectionnée (si le focus est dans la liste).
   useEffect(
@@ -306,6 +318,7 @@ export function TodayScreen() {
               onToggleDone={(id) => void toggleDone(id)}
               onToggleRoutine={(id) => void toggleRoutine(id)}
               onOpen={(id) => openDetail({ type: 'task', id })}
+              gestures={gestures}
             />
             <TodayChecklists
               items={list.checklists}

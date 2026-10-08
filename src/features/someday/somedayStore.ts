@@ -37,12 +37,12 @@ export interface SomedayState {
    */
   create(input: SomedayNewTask): Promise<Result<Task, SomedayCreateError>>;
   /** SD-01 critère 8 : termine ou rouvre une tâche ; terminée, elle quitte la liste et le compteur baisse. Ne rejette jamais. */
-  toggleDone(id: TaskId): Promise<void>;
+  toggleDone(id: TaskId): Promise<boolean>;
   /**
    * SD-02, S-06 : planifie des tâches (« Aujourd'hui », « Demain » ou une date avec heure facultative) ; elles quittent la liste, le badge
    * baisse, un message « Annuler » de 5 s est posé (une seule annulation pour tout le lot). Ne rejette jamais.
    */
-  schedule(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<void>;
+  schedule(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<boolean>;
   /** A-06, SD-04 critère 7 : vue compacte de « Un jour » (`view.compact.someday`, local à l'appareil), lue au chargement. */
   readonly compact: boolean;
   /** A-05 : mode édition (suppression, poignées, sélection multiple) ; jamais mémorisé. */
@@ -123,14 +123,16 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
 
     async toggleDone(id) {
       const current = container.taskEntities.get(id);
-      if (!current) return;
+      if (!current) return false;
       try {
         // Le cas d'usage publie la tâche écrite dans la source unique : terminée, elle quitte la liste (`isInSomedayList`).
         if (current.status === 'done') await useCases.reopen(id);
         else await useCases.complete(id);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       }
     },
 
@@ -138,8 +140,10 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
       try {
         await useCases.scheduleSomeday(ids, target);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'someday.planError' });
+        return false;
       }
     },
 

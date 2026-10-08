@@ -1,11 +1,12 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { Fragment, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayEventEntry, type TodayRow } from '../../domain/todayList';
 import type { ChecklistId, LocalDate, RecurrenceId, RoutineId, TaskId } from '../../domain/types';
 import type { WeekDay } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatDayFull, formatDropDayLabel, formatWeekDayHeader } from '../../i18n/format';
-import { ListSkeleton, type Layout } from '../../ui';
+import { ListSkeleton, SwipeRow, type Layout, type RowGestureFeedback } from '../../ui';
+import { taskGestureProps, type TaskGestureApi } from '../tasks/taskGestures';
 import { bandCountdownTag } from '../events/bandCountdown';
 import type { CaptureInput } from '../capture';
 import { WeekDayAdd } from './WeekDayAdd';
@@ -18,6 +19,15 @@ export interface WeekItemDragProps {
   readonly 'data-drag-id': string;
   readonly 'data-dragging': 'true' | undefined;
   readonly onPointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
+}
+
+/** Gestes de ligne de l'iPhone (A-07) ; l'appui long reste le glisser entre jours (S-02, Q16), la fiche s'ouvre par un toucher. */
+export interface WeekGestures {
+  readonly api: TaskGestureApi;
+  readonly toggleRoutine: (id: RoutineId, date: LocalDate) => Promise<boolean>;
+  readonly feedback: RowGestureFeedback;
+  /** Glisser entre jours en cours : les lignes n'ont plus de geste. */
+  readonly disabled: boolean;
 }
 
 export interface WeekDayViewProps {
@@ -38,6 +48,8 @@ export interface WeekDayViewProps {
   readonly skeleton: boolean;
   /** Glisser (S-02) : propriétés de saisie d'une tâche ; absent : aucune carte n'est déplaçable. */
   readonly dragProps?: (id: TaskId) => WeekItemDragProps;
+  /** iPhone : gestes de ligne ; absent sur PC. */
+  readonly gestures?: WeekGestures | null;
   /** Glisser en cours au-dessus de ce jour. */
   readonly drop?: WeekDropState | null;
   readonly onFocusTask?: (id: TaskId) => void;
@@ -68,11 +80,11 @@ export function WeekDayView(props: WeekDayViewProps) {
   const taskIds = [...day.list.rows, ...day.list.doneRows].filter((row) => row.kind === 'task').map((row) => row.id);
   const insertBefore = drop?.kind === 'reorder' ? (taskIds.filter((id) => id !== drop.draggedId)[drop.index] ?? null) : null;
 
+  const gestures = layout === 'mobile' ? (props.gestures ?? null) : null;
   const renderRow = (row: TodayRow) => {
     if (row.kind === 'routine') {
-      return (
+      const item = (
         <WeekRoutineItem
-          key={row.id}
           routine={row.routine}
           time={rowTime(row)}
           done={row.done}
@@ -84,8 +96,29 @@ export function WeekDayView(props: WeekDayViewProps) {
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId, day.date)}
         />
       );
+      // Routine : valider ou rouvrir pour ce jour (D3) ; jour futur ou aucune source : aucun geste.
+      if (!gestures || !props.routinesCheckable || props.routinesDisabled) return <Fragment key={row.id}>{item}</Fragment>;
+      const routineId = row.routine.id as RoutineId;
+      const right = { label: t(row.done ? 'gestures.reopen' : 'gestures.complete'), tone: row.done ? ('reopen' as const) : ('complete' as const), onCommit: () => gestures.toggleRoutine(routineId, day.date) };
+      return (
+        <SwipeRow key={row.id} rowId={`${row.id}|${day.date}`} title={row.routine.title} right={right} left={[]} onLongPress={null} disabled={gestures.disabled} feedback={gestures.feedback}>
+          {item}
+        </SwipeRow>
+      );
     }
     const id = row.task.id;
+    const item = (
+      <WeekTaskItem
+        task={row.task}
+        layout={layout}
+        spaces={props.spaces}
+        showSpace={props.showSpace}
+        rule={row.task.recurrenceId ? props.recurrences.get(row.task.recurrenceId) : undefined}
+        opened={props.openedTaskId === id}
+        onToggleDone={() => props.onToggleDone(id)}
+        onOpen={() => props.onOpen(id)}
+      />
+    );
     return (
       <div
         key={row.id}
@@ -95,16 +128,13 @@ export function WeekDayView(props: WeekDayViewProps) {
         onFocus={() => props.onFocusTask?.(id)}
         {...props.dragProps?.(id)}
       >
-        <WeekTaskItem
-          task={row.task}
-          layout={layout}
-          spaces={props.spaces}
-          showSpace={props.showSpace}
-          rule={row.task.recurrenceId ? props.recurrences.get(row.task.recurrenceId) : undefined}
-          opened={props.openedTaskId === id}
-          onToggleDone={() => props.onToggleDone(id)}
-          onOpen={() => props.onOpen(id)}
-        />
+        {gestures ? (
+          <SwipeRow rowId={id} title={row.task.title} {...taskGestureProps(row.task, gestures.api)} onLongPress={null} disabled={gestures.disabled} feedback={gestures.feedback}>
+            {item}
+          </SwipeRow>
+        ) : (
+          item
+        )}
       </div>
     );
   };

@@ -2,11 +2,20 @@ import type { RecurrenceFields, Space } from '../../domain/model';
 import { rowTime, type TodayList, type TodayRow } from '../../domain/todayList';
 import type { RecurrenceId, RoutineId, SpaceFilter, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { DragHandle, ListSkeleton, type Layout } from '../../ui';
+import { DragHandle, ListSkeleton, SwipeRow, SwipeRowGroup, type Layout, type RowGestureFeedback } from '../../ui';
+import { taskGestureProps, type TaskGestureApi } from '../tasks/taskGestures';
 import { TodayRoutineRow, TodayTaskRow } from './TodayRows';
 import type { TodayRowActions } from './TodayRowActions';
 import type { TodayReorder } from './useTodayReorder';
 import type { TodayEditMode } from './useTodayEditMode';
+
+/** Gestes de ligne de l'iPhone (A-07) ; absents sur PC (les lignes ne sont alors pas enveloppées). */
+export interface TodayGestures {
+  readonly api: TaskGestureApi;
+  /** Valide ou rouvre une routine pour la date affichée (R-03) ; vrai si abouti. */
+  readonly toggleRoutine: (id: RoutineId) => Promise<boolean>;
+  readonly feedback: RowGestureFeedback;
+}
 
 export interface TodayListViewProps {
   readonly list: TodayList;
@@ -29,6 +38,7 @@ export interface TodayListViewProps {
   readonly onToggleDone: (id: TaskId) => void;
   readonly onToggleRoutine: (id: RoutineId) => void;
   readonly onOpen: (id: TaskId) => void;
+  readonly gestures: TodayGestures | null;
 }
 
 /**
@@ -46,9 +56,35 @@ export function TodayListView(props: TodayListViewProps) {
     else rowActions.setFocusedRoutineId(row.routine.id as RoutineId);
   }
 
+  /** iPhone : la ligne est enveloppée dans un `SwipeRow` ; mode édition ou glisser en cours : aucun geste. */
+  function swiped(row: TodayRow, content: JSX.Element): JSX.Element {
+    const gestures = props.gestures;
+    if (!gestures) return content;
+    const disabled = edit.editMode || reorder.sortable.drag !== null;
+    if (row.kind === 'routine') {
+      // Routine : valider ou rouvrir seulement (D3) ; jour futur ou aucune source : aucun geste.
+      if (!props.routinesCheckable || props.routinesDisabled) return content;
+      const id = row.routine.id as RoutineId;
+      const right = { label: t(row.done ? 'gestures.reopen' : 'gestures.complete'), tone: row.done ? ('reopen' as const) : ('complete' as const), onCommit: () => gestures.toggleRoutine(id) };
+      return (
+        <SwipeRow rowId={row.id} title={row.routine.title} right={right} left={[]} onLongPress={null} disabled={disabled} feedback={gestures.feedback}>
+          {content}
+        </SwipeRow>
+      );
+    }
+    const task = row.task;
+    const { right, left } = taskGestureProps(task, gestures.api);
+    return (
+      <SwipeRow rowId={row.id} title={task.title} right={right} left={left} onLongPress={() => props.onOpen(task.id)} disabled={disabled} feedback={gestures.feedback}>
+        {content}
+      </SwipeRow>
+    );
+  }
+
   function renderRow(row: TodayRow, movable: boolean) {
     if (row.kind === 'routine') {
-      return (
+      return swiped(
+        row,
         <TodayRoutineRow
           routine={row.routine}
           time={rowTime(row)}
@@ -61,12 +97,13 @@ export function TodayListView(props: TodayListViewProps) {
           checkable={props.routinesCheckable}
           disabled={props.routinesDisabled}
           onToggle={() => props.onToggleRoutine(row.routine.id as RoutineId)}
-        />
+        />,
       );
     }
     const task = row.task;
     const index = list.rows.findIndex((candidate) => candidate.id === row.id);
-    return (
+    return swiped(
+      row,
       <TodayTaskRow
         task={task}
         spaces={spaces}
@@ -92,7 +129,7 @@ export function TodayListView(props: TodayListViewProps) {
             />
           ) : null
         }
-      />
+      />,
     );
   }
 
@@ -109,6 +146,7 @@ export function TodayListView(props: TodayListViewProps) {
     edit.editMode && row.kind === 'task' ? { onClickCapture: (event: React.MouseEvent<HTMLElement>) => void edit.onRowClick(event, row.task.id) } : {};
 
   return (
+    <SwipeRowGroup>
     <div
       {...reorder.sortable.containerProps}
       className={`ct-today__list ${reorder.sortable.containerProps.className}`}
@@ -134,5 +172,6 @@ export function TodayListView(props: TodayListViewProps) {
         </div>
       ))}
     </div>
+    </SwipeRowGroup>
   );
 }

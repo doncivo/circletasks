@@ -11,10 +11,11 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { sourceNames } from '../calendars/sourceNames';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
-import { EmptyState, Fab, useDelayedFlag, useLayout, useSwipe } from '../../ui';
+import { EmptyState, Fab, SwipeRowGroup, useDelayedFlag, useLayout, useSwipe } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { useRowGestureFeedback } from '../app/rowGestureFeedback';
 import { isModalOpen } from '../app/tabShortcuts';
 import { WeekGoalBanners } from '../goals/WeekGoalBanners';
 import { SomedayButton, SomedayPanel } from '../someday';
@@ -24,7 +25,7 @@ import { scheduleOf } from '../tasks/TaskCreateSheet';
 import { AddSheet } from '../events';
 import { canToggleRoutines, subscribeToTodaySources } from '../today/todaySources';
 import { ExternalEventDetail } from './ExternalEventDetail';
-import { WeekDayView } from './WeekDayView';
+import { WeekDayView, type WeekGestures } from './WeekDayView';
 import { WeekHeader } from './WeekHeader';
 import { useWeekMoves } from './useWeekMoves';
 import { selectWeekTasks, weekStore } from './weekStore';
@@ -64,6 +65,7 @@ export function WeekScreen() {
   const addTask = useFeatureStore(weekStore, (s) => s.addTask);
   const toggleDone = useFeatureStore(weekStore, (s) => s.toggleDone);
   const toggleRoutine = useFeatureStore(weekStore, (s) => s.toggleRoutine);
+  const sendToSomeday = useFeatureStore(weekStore, (s) => s.sendToSomeday);
   const refreshExtras = useFeatureStore(weekStore, (s) => s.refreshExtras);
   const syncRecurrences = useFeatureStore(weekStore, (s) => s.syncRecurrences);
 
@@ -142,6 +144,18 @@ export function WeekScreen() {
   // Balayage horizontal (iPhone) : gauche = semaine suivante, droite = précédente ; abandonné si une carte est tenue pour un glisser (S-02).
   const swipe = useSwipe({ onSwipe: (way) => shiftWeek(way === 'left' ? 1 : -1), disabled: moves.dragging || layout !== 'mobile' });
 
+  // A-07 : gestes de ligne sur iPhone, mêmes cas d'usage que la case, Ctrl+D et le glisser ; l'appui long reste le glisser (Q16).
+  const rowFeedback = useRowGestureFeedback();
+  const gestures: WeekGestures | null =
+    layout === 'mobile'
+      ? {
+          api: { complete: toggleDone, postpone: (task) => moves.requestPostpone(task.id), sendToSomeday, requestDelete: moves.requestDelete },
+          toggleRoutine,
+          feedback: rowFeedback,
+          disabled: moves.dragging,
+        }
+      : null;
+
   // S-04 : « + Ajouter » d'un jour. Espace par défaut (T-01) : celui du filtre actif, sinon Pro ; jour passé permis.
   const addToDay = useCallback(
     async (date: LocalDate, capture: CaptureInput): Promise<boolean> => {
@@ -210,6 +224,7 @@ export function WeekScreen() {
           aria-busy={status === 'loading'}
           {...swipe}
         >
+          <SwipeRowGroup>
           {days.map((day) => (
             <WeekDayView
               key={day.date}
@@ -225,6 +240,7 @@ export function WeekScreen() {
               openedTaskId={openedTaskId}
               skeleton={showSkeleton}
               dragProps={moves.dragProps}
+              gestures={gestures}
               drop={moves.dropFor(day.date)}
               onFocusTask={moves.setFocusedTaskId}
               onOpenEvent={(entry) => openDetail(entry.calendarName !== null ? { type: 'externalEvent', id: entry.id as ExternalEventId } : { type: 'event', id: entry.id as EventId })}
@@ -235,6 +251,7 @@ export function WeekScreen() {
               onOpen={(id) => openDetail({ type: 'task', id })}
             />
           ))}
+          </SwipeRowGroup>
         </div>
       )}
       {/* Changement de semaine annoncé aux lecteurs d'écran (S-03 critère 8) : « Semaine 40, 28 sept. – 4 oct. ». */}
