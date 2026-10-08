@@ -47,6 +47,8 @@ export function createRemindersRunner(pass: (kind: PassKind, deadlineAt?: number
   let pushTimer: unknown = null;
   let pushPending: Promise<PassReport> | null = null;
   let pushResolve: ((report: PassReport) => void) | null = null;
+  /** Passage de masquage en cours : le cycle de synchro et l'écouteur de visibilité demandent le même (jamais deux). */
+  let hiding: Promise<PassReport> | null = null;
 
   /** (Re)programme le passage `push` : le minuteur repart de zéro, le délai court depuis la DERNIÈRE écriture. */
   const armPush = (ms: number): void => {
@@ -109,7 +111,13 @@ export function createRemindersRunner(pass: (kind: PassKind, deadlineAt?: number
         armPush(PUSH_DELAY_MS);
         return pushPending as Promise<PassReport>;
       }
-      return schedule('full', trigger === 'hide' ? nowMs() + HIDE_PASS_BUDGET_MS : undefined);
+      if (trigger === 'hide') {
+        hiding ??= schedule('full', nowMs() + HIDE_PASS_BUDGET_MS).finally(() => {
+          hiding = null;
+        });
+        return hiding;
+      }
+      return schedule('full');
     },
     dispose: () => {
       if (pushTimer !== null) timers.clearTimeout(pushTimer);
