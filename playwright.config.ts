@@ -1,12 +1,19 @@
 import { defineConfig } from '@playwright/test';
-import { E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
+import { E2E_DEV_PORT, E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
 
-const PORT = 1420;
-const BASE_URL = `http://localhost:${PORT}`;
+/**
+ * Ports de la suite e2e (voir tests/sim/ports.ts). Par défaut : Vite 1420, simulateurs 53701 (Google), 53702 (CalDAV), 53703 (dossier iCloud).
+ * Plusieurs copies de travail en même temps : poser une base distincte et libre par copie, par exemple
+ *   CT_E2E_PORT_BASE=41000 npx playwright test --project=pc     (Vite 41000, simulateurs 41001 à 41003)
+ *   $env:CT_E2E_PORT_BASE=41010; npx playwright test            (PowerShell)
+ * Le serveur de développement n'est JAMAIS réutilisé (reuseExistingServer: false, en local comme en CI) : si le port est déjà pris,
+ * Playwright s'arrête avec « already used » au lieu de tester le serveur d'une autre copie.
+ */
+const BASE_URL = `http://localhost:${String(E2E_DEV_PORT)}`;
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  // Simulateurs d'agendas Google et CalDAV (K-01 à K-03) sur ports fixes, arrêtés à la fin de la suite.
+  // Simulateurs d'agendas Google et CalDAV (K-01 à K-03) sur les ports de tests/sim/ports.ts, arrêtés à la fin de la suite.
   globalSetup: './tests/e2e/globalSetup.ts',
   fullyParallel: true,
   // Plafond mémoire (consigne d'Ali) : 2 workers, ou CT_TEST_WORKERS=1 pour la relance de secours.
@@ -54,7 +61,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run dev',
     url: BASE_URL,
-    reuseExistingServer: !process.env['CI'],
+    reuseExistingServer: false,
     timeout: 120_000,
     env: { VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google), VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav), VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com' },
   },
