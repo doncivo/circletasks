@@ -221,3 +221,40 @@ describe('suppressions à confirmer sur l’iPhone (revue, mineur)', () => {
     expect(screen.getByText('Des suppressions attendent votre confirmation sur l’iPhone.')).toBeInTheDocument();
   });
 });
+
+describe('mention « Sera envoyée » : horloges filtrées par appareil (revue, mineur)', () => {
+  const IPHONE_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  async function scenario(authorDevice: string) {
+    h.db.clock.set('2026-10-08T07:00:00.000Z');
+    await configure({ lastPassAt: '2026-10-08T09:30:00.000Z' as IsoDateTime });
+    await appleRemindersState(h.container).reload();
+    await setDevices([{ ...IPHONE, deviceId: IPHONE_ID }]);
+    h.db.clock.set('2026-10-08T08:00:00.000Z');
+    const task = await h.container.data.repos.tasks.create({
+      id: '95000000-0000-4000-8000-000000000009' as never, spaceId: PERSO, projectId: null, title: 'Appeler', note: '', date: '2026-10-09' as LocalDate, time: null, status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'apple_reminders', externalId: 'R-9', appleListId: 'L1', appleRecurring: false, externalEventId: null,
+    });
+    // Une valeur plus récente que la dernière lecture, écrite par `authorDevice` (horloge de champ).
+    const hlc = `${String(Date.parse('2026-10-08T09:45:00.000Z')).padStart(15, '0')}-0000-${authorDevice}`;
+    await h.db.driver.execute("INSERT OR REPLACE INTO sync_field_clock (table_name, row_id, field, hlc, base_hlc) VALUES ('task', ?, 'title', ?, NULL)", [task.id, hlc]);
+    return task;
+  }
+  const renderRow = (task: Awaited<ReturnType<typeof scenario>>) =>
+    render(
+      <AppContainerProvider container={h.container}>
+        <AppleSourceRow task={task} />
+      </AppContainerProvider>,
+    );
+
+  it('un titre écrit par l’iPhone (valeur venue de Rappels) n’allume pas la mention', async () => {
+    const task = await scenario(IPHONE_ID);
+    renderRow(task);
+    await screen.findByText('Source : Rappels · liste Courses');
+    expect(screen.queryByText('Sera envoyée vers Rappels au prochain passage de l’iPhone')).not.toBeInTheDocument();
+  });
+
+  it('le même titre écrit par un autre appareil (le PC) allume la mention', async () => {
+    const task = await scenario('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    renderRow(task);
+    expect(await screen.findByText('Sera envoyée vers Rappels au prochain passage de l’iPhone')).toBeInTheDocument();
+  });
+});

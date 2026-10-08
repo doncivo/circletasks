@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { appleLinkState, awaitsIphonePass } from '../../../domain/appleReminders';
 import type { Task } from '../../../domain/model';
+import { parseHlc } from '../../../domain/hlc';
 import { utcToLocal } from '../../../domain/timeZone';
 import { t } from '../../../i18n';
 import { formatDayMonth } from '../../../i18n/format';
@@ -8,6 +9,7 @@ import { detectTimeZone } from '../../../platform';
 import { logFailure } from '../../../platform/desktop/log';
 import { useAppContainer, useFeatureStore } from '../../app/AppContainerContext';
 import { useAppStore } from '../../app/appStore';
+import { syncStore } from '../../sync/syncStore';
 import { DetailRow } from '../../tasks/DetailRow';
 import { appleRemindersStore } from './appleRemindersState';
 
@@ -17,7 +19,7 @@ type Facts = Pick<Task, 'id' | 'source' | 'externalId' | 'appleListId' | 'appleR
 interface Clocks {
   readonly taskId: string;
   readonly hlc: string;
-  readonly send: readonly number[];
+  readonly send: readonly string[];
   readonly detachedAt: number | null;
 }
 
@@ -30,11 +32,21 @@ interface Clocks {
  * - tâche détachée (liste décochée, rappel supprimé, rappel disparu) : « Détachée de Rappels le {date} » (la date est celle du détachement).
  * Rien ne s'affiche pour une tâche ordinaire.
  */
+const hlcMs = (hlc: string): number => Number(hlc.slice(0, 15));
+const hlcDevice = (hlc: string): string => {
+  try {
+    return parseHlc(hlc).deviceId;
+  } catch {
+    return '';
+  }
+};
+
 export function AppleSourceRow({ task }: { readonly task: Facts }) {
   const container = useAppContainer();
   const lists = useFeatureStore(appleRemindersStore, (s) => s.lists);
   const lastPassAt = useFeatureStore(appleRemindersStore, (s) => s.lastPassAt);
   const timeZone = useAppStore((s) => s.timeZone) ?? detectTimeZone() ?? 'UTC';
+  const devices = useFeatureStore(syncStore, (s) => s.status.devices);
   const state = appleLinkState(task);
   const [clocks, setClocks] = useState<Clocks | null>(null);
   const [unreadable, setUnreadable] = useState(false);
@@ -48,7 +60,7 @@ export function AppleSourceRow({ task }: { readonly task: Facts }) {
         if (!alive || !fields) return;
         setUnreadable(false);
         const ms = (hlc: string): number => Number(hlc.slice(0, 15));
-        setClocks({ taskId: task.id, hlc: task.hlc, send: [fields.title, fields.date, fields.time, fields.status].map(ms), detachedAt: ms(fields.external_id) });
+        setClocks({ taskId: task.id, hlc: task.hlc, send: [fields.title, fields.date, fields.time, fields.status], detachedAt: ms(fields.external_id) });
       },
       () => {
         // Jamais un silence : la fiche le dit.
@@ -76,7 +88,10 @@ export function AppleSourceRow({ task }: { readonly task: Facts }) {
     return <DetailRow label={t('appleReminders.badge')}>{when === null ? t('appleReminders.detachedLine') : t('appleReminders.detachedLineOn', { date: when })}</DetailRow>;
   }
   const name = task.appleListId === null ? '' : (lists.lists.find((list) => list.id === task.appleListId)?.name ?? '');
-  const waiting = !container.reminders.available && ready !== null && awaitsIphonePass(ready.send, lastPassAt);
+  // Une valeur écrite par l'iPhone lui-même (venue de Rappels) n'attend rien : seules comptent les horloges des autres appareils.
+  const iphones = new Set(devices.filter((device) => device.platform === 'ios' && !device.self).map((device) => device.deviceId as string));
+  const own = ready === null ? [] : ready.send.filter((hlc) => !iphones.has(hlcDevice(hlc)));
+  const waiting = !container.reminders.available && ready !== null && awaitsIphonePass(own.map(hlcMs), lastPassAt);
   return (
     <>
       <DetailRow label={t('appleReminders.badge')}>

@@ -118,3 +118,19 @@ describe('échec déterministe : jamais de boucle (revue)', () => {
     expect(await h.pass('push')).toMatchObject({ sent: 0, pending: 0 });
   });
 });
+
+describe('reprise d’une création interrompue sur une très grosse liste (revue, mineur)', () => {
+  it('le rappel déjà créé, au-delà des 500 premiers de la liste, est adopté : aucun doublon', async () => {
+    await appleRemindersState(h.container).setCreate({ bySpace: [{ spaceId: PERSO, enabled: true, listId: 'L-courses' }] });
+    const created = await uc().create({ title: 'Interrompue', spaceId: PERSO, date: D('2026-12-24') });
+    if (!created.ok) throw new Error('création refusée');
+    for (let index = 0; index < 600; index += 1) h.reminders.add({ id: `BULK-${String(index)}`, listId: 'L-courses', title: `Bulk ${String(index)}`, due: { date: D('2026-10-12'), time: null } });
+    await h.container.data.repos.appleLinks.upsert({ taskId: created.value.id, reminderId: null, externalRef: null, listId: 'L-courses', state: 'creating', synced: null, appleModified: null, startedAt: new Date(h.db.clock.nowMs()).toISOString() as IsoDateTime });
+    h.db.clock.advance(1_000);
+    h.reminders.add({ id: 'ORPH', listId: 'L-courses', title: 'Interrompue', due: { date: D('2026-12-24'), time: null } });
+    h.db.clock.advance(6_000);
+    await h.pass('push');
+    expect(h.reminders.writes.filter((write) => write.kind === 'create')).toEqual([]);
+    expect(await h.task(created.value.id)).toMatchObject({ externalId: 'ORPH' });
+  });
+});

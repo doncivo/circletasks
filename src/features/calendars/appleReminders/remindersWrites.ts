@@ -251,8 +251,8 @@ async function adoptInterrupted(container: AppContainer, task: Task, link: Apple
   if (link === null || link.state !== 'creating' || link.reminderId !== null || link.startedAt === null) return null;
   const started = Date.parse(link.startedAt);
   const values = valuesOfTask(task);
-  const read = await container.reminders.fetch({ listIds: [listId], limitPerList: 500, includeCompleted: true, ids: [] });
-  // Créés après le début de la création, de même échéance, hors rappels déjà adoptés (terminés compris). Le titre a pu changer entre-temps (dans Rappels ou ici) :
+  const read = await container.reminders.fetch({ listIds: [listId], limitPerList: 5000, includeCompleted: true, ids: [] });
+  // Lecture jusqu'à 5 000 rappels (plafond du plugin), pas les 500 de l'import : le rappel déjà créé peut être au-delà des 500 premiers. Créés après le début de la création, de même échéance, hors rappels déjà adoptés (terminés compris). Le titre a pu changer entre-temps (dans Rappels ou ici) :
   // un titre identique est préféré ; sinon un seul candidat est adopté, jamais un choix au hasard parmi plusieurs.
   const created = (read.lists.find((entry) => entry.listId === listId)?.items ?? []).filter((item) => (item.due?.date ?? null) === values.date && (item.due?.time ?? null) === values.time && item.createdAt !== null && Date.parse(item.createdAt) >= started);
   // Un rappel déjà adopté par une autre tâche n'est pas un candidat.
