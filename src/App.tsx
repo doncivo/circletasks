@@ -53,7 +53,7 @@ import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from '
 import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
-import { startRemindersIntegration } from './features/calendars/appleReminders/startReminders';
+import { logFailure } from './platform/desktop/log';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
@@ -265,7 +265,18 @@ export function App() {
   // K-05 à K-07 : Rappels Apple (lecture et écriture sur l'iPhone, ouverture APRÈS le premier rendu, reprise, `changed`, synchro, écriture locale) ; sur PC, réglages relus seulement.
   useEffect(() => {
     if (!container) return undefined;
-    return startRemindersIntegration(container).dispose;
+    // Chargé à part : hors du bundle de départ (budget de 351 Ko), jamais avant le premier rendu.
+    let dispose: (() => void) | undefined;
+    let stopped = false;
+    import('./features/calendars/appleReminders/startReminders')
+      .then(({ startRemindersIntegration }) => {
+        if (!stopped) dispose = startRemindersIntegration(container).dispose;
+      })
+      .catch((error: unknown) => logFailure('apple-reminders-start', error));
+    return () => {
+      stopped = true;
+      dispose?.();
+    };
   }, [container]);
 
   // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).

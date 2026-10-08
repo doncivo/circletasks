@@ -43,8 +43,6 @@ export const syncFieldEn: Shape<typeof syncFieldFr> = {
     source: 'source',
     external_id: 'linked Apple reminder',
     external_event_id: 'linked calendar event',
-    apple_list_id: 'Reminders list',
-    apple_recurring: 'recurring in Reminders',
     deleted_at: 'deletion',
   },
   routine: {
