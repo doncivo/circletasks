@@ -1,5 +1,6 @@
 import { Check, Pencil, X } from 'lucide-react';
-import { useId, useState, type KeyboardEvent } from 'react';
+import { lazy, Suspense, useId, useState, type KeyboardEvent } from 'react';
+import { appleLinkState } from '../../domain/appleReminders';
 import { canMoveToSomeday } from '../../domain/someday';
 import type { RecurrenceFields, ReminderOffsetMin, Space, Task } from '../../domain/model';
 import type { SeriesScope } from '../../domain/recurrenceEdit';
@@ -7,7 +8,6 @@ import type { LocalDate } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import { formatStamp } from '../../i18n/format';
 import { Button, Icon, IconChooser, IconView, TextField, resolveIconRefColor } from '../../ui';
-import { AppleSourceRow } from '../calendars/appleReminders/AppleSourceRow';
 import { LinkedEventRow } from '../calendars/LinkedEventRow';
 import { FocusLaunchButton } from '../focus/FocusLaunchButton';
 import { FocusTaskTotalRow } from '../focus/FocusTaskTotalRow';
@@ -19,6 +19,9 @@ import { TaskDetailFields } from './TaskDetailFields';
 import { TaskEditSheet } from './TaskEditSheet';
 import type { InlineCancelRef } from './useInlineCancel';
 import { useTaskDetailEdits, type TaskDetailApi } from './useTaskDetailEdits';
+
+/** Chargée à la demande (budget du bundle de départ) : seules les tâches d'origine Rappels l'affichent. */
+const AppleSourceRow = lazy(() => import('../calendars/appleReminders/AppleSourceRow').then((m) => ({ default: m.AppleSourceRow })));
 
 export interface TaskDetailBodyProps {
   readonly task: Task;
@@ -183,7 +186,11 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
       {/* K-04 : lien en lecture seule vers l'événement d'agenda externe d'où vient la tâche. */}
       <LinkedEventRow task={task} />
       {/* K-05 : origine Rappels Apple (liste, récurrent, détachée), en lecture seule. */}
-      <AppleSourceRow task={task} />
+      {appleLinkState(task) !== 'ordinary' && (
+        <Suspense fallback={null}>
+          <AppleSourceRow task={task} />
+        </Suspense>
+      )}
       {/* M10 (F-03) : temps de concentration de la tâche, en lecture seule. */}
       <FocusTaskTotalRow taskId={task.id} />
 
