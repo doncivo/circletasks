@@ -268,7 +268,8 @@ async fn k_tech_01_2_a_google_token_error_after_a_good_return_writes_nothing() {
         Ok(target.to_string())
     }))
     .await;
-    assert_eq!(run.result, Err("cancelled".to_owned()));
+    // Code refusé : jamais présenté comme une annulation de l'utilisateur.
+    assert_eq!(run.result, Err("reauth-required".to_owned()));
     assert_eq!(run.vault.get("circletasks.calendar.google.a1").unwrap(), None);
 }
 
@@ -453,6 +454,7 @@ fn k_tech_01_3_swift_has_no_french_text_no_log_and_the_expected_session_settings
     }
     let code = swift_code();
     assert!(code.contains("prefersEphemeralWebBrowserSession = false"), "session partagée avec Safari");
+    assert!(!code.contains("import WebKit"), "aucun WebKit dans le plugin");
     assert!(code.contains("ASWebAuthenticationSession(url: url, callbackURLScheme: input.callbackScheme)"));
     assert!(code.contains("presentationContextProvider = presentation"));
     assert!(code.contains("self.manager.viewController?.view.window"), "ancre = fenêtre active de l'app");
@@ -513,5 +515,5 @@ fn k_tech_01_8_the_ios_client_id_is_read_with_option_env_and_mixed_with_no_secre
     assert!(WEB_AUTH_RS.contains("option_env!(\"CT_GOOGLE_IOS_CLIENT_ID\")"));
     assert!(include_str!("../../build.rs").contains("\"CT_GOOGLE_IOS_CLIENT_ID\""));
     let google = include_str!("../../src/calendars/google.rs");
-    assert!(google.contains("#[cfg(target_os = \"ios\")]\n        return super::web_auth::IosClientConfig::from_environment().map(super::web_auth::IosClientConfig::into_client);"));
+    assert!(google.contains("#[cfg(target_os = \"ios\")]\n    fn platform_environment() -> Option<Self> {\n        super::web_auth::IosClientConfig::from_environment().map(super::web_auth::IosClientConfig::into_client)"));
 }

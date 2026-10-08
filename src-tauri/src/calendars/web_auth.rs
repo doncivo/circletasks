@@ -220,7 +220,7 @@ pub async fn authorize_ios(env: &HttpEnv<'_>, token_ref: &str, runner: Arc<dyn W
     let verifier = google::random_verifier();
     let state = google::random_state();
     let auth_url = google::build_auth_url(env.google, &config.client_id, &redirect_uri, &state, &google::pkce_challenge(&verifier)).map_err(|code| failed(&code))?;
-    let parsed = Url::parse(&auth_url).map_err(|_| failed("network"))?;
+    let parsed = Url::parse(&auth_url).map_err(|_| failed("web-auth-failed"))?;
     if !hosts::url_allowed(&parsed) {
         return Err(failed("host-not-allowed"));
     }

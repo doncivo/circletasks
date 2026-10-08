@@ -394,6 +394,8 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         for (const key of [...cursors.keys()]) if (key.startsWith(`${accountId}|`)) cursors.delete(key);
         await reload();
         setStates({ [accountId]: null });
+        // L'échec de la feuille Google d'un compte supprimé n'a plus d'objet : « Réessayer » relancerait un compte disparu.
+        if (get().googleFailure?.accountId === accountId) set({ googleFailure: null });
         emitEventsChanged(container.data);
         return true;
       },

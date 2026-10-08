@@ -110,6 +110,18 @@ describe('connexion Google sur iPhone : échec de la feuille d’authentificatio
     await waitFor(() => expect(store().getState().googleFailure).toBeNull());
   });
 
+  it('supprimer le compte dont la reconnexion a échoué efface l’état d’échec', async () => {
+    renderScreen();
+    fireEvent.click(googleButton());
+    await screen.findByRole('region', { name: `Google Agenda · ${GOOGLE_ACCOUNT}` });
+    const accountId = store().getState().accounts[0]?.id as never;
+    h.failWebAuth('web-auth-failed');
+    await store().getState().reconnectGoogle(accountId);
+    expect(store().getState().googleFailure).not.toBeNull();
+    expect(await store().getState().removeAccount(accountId)).toBe(true);
+    expect(store().getState().googleFailure).toBeNull();
+  });
+
   it('l’état de l’interface ne contient ni URL, ni code d’autorisation, ni ID client', async () => {
     renderScreen();
     h.failWebAuth('web-auth-failed');

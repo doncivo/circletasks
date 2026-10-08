@@ -14,7 +14,6 @@ import AuthenticationServices
 import Foundation
 import Tauri
 import UIKit
-import WebKit
 
 // MARK: - Codes et arguments
 

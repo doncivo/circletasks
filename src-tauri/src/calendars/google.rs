@@ -71,16 +71,18 @@ impl ClientConfig {
     /// `CT_GOOGLE_CLIENT_ID` (et `CT_GOOGLE_CLIENT_SECRET` si Google l'exige) lus au build ; en debug, la variable d'environnement
     /// d'exécution l'emporte (essai contre le simulateur). Absent : `None` (code `config-missing`, « non configuré »).
     pub fn from_environment() -> Option<Self> {
-        // iPhone (ADR 0008 §9.2) : l'ID client « iOS » (sans secret) sert à l'autorisation, à l'échange, au rafraîchissement et à la
-        // révocation : un jeton de rafraîchissement n'est valable qu'avec le client qui l'a obtenu.
-        #[cfg(target_os = "ios")]
-        return super::web_auth::IosClientConfig::from_environment().map(super::web_auth::IosClientConfig::into_client);
-        #[cfg(not(target_os = "ios"))]
-        Self::from_desktop_environment()
+        Self::platform_environment()
+    }
+
+    /// iPhone (ADR 0008 §9.2) : l'ID client « iOS » (sans secret) sert à l'autorisation, à l'échange, au rafraîchissement et à la
+    /// révocation : un jeton de rafraîchissement n'est valable qu'avec le client qui l'a obtenu.
+    #[cfg(target_os = "ios")]
+    fn platform_environment() -> Option<Self> {
+        super::web_auth::IosClientConfig::from_environment().map(super::web_auth::IosClientConfig::into_client)
     }
 
     #[cfg(not(target_os = "ios"))]
-    fn from_desktop_environment() -> Option<Self> {
+    fn platform_environment() -> Option<Self> {
         let compiled_id = option_env!("CT_GOOGLE_CLIENT_ID");
         let compiled_secret = option_env!("CT_GOOGLE_CLIENT_SECRET");
         #[cfg(debug_assertions)]
@@ -268,7 +270,8 @@ pub async fn exchange_code(env: &HttpEnv<'_>, config: &ClientConfig, code: &str,
     let response = post_form(env, &env.google.token_url, &pairs).await?;
     let parsed: TokenResponse = serde_json::from_str(&response.body).map_err(|_| "network".to_owned())?;
     if response.status != 200 {
-        return Err(if parsed.error.as_deref() == Some("invalid_grant") { "cancelled" } else { "network" }.to_owned());
+        // Code refusé ou expiré : ce n'est pas une annulation de l'utilisateur (« Connexion annulée » serait faux).
+        return Err(if parsed.error.as_deref() == Some("invalid_grant") { "reauth-required" } else { "network" }.to_owned());
     }
     match (parsed.access_token, parsed.refresh_token) {
         (Some(access), Some(refresh)) => Ok(GoogleTokens { refresh, access, expires_at: now_secs() + parsed.expires_in.unwrap_or(3600) }),
