@@ -15,7 +15,9 @@ import { createTask, isPhone } from './helpers/today';
 const NOW = new Date('2026-09-23T09:00:00+02:00');
 
 test.describe('N-05 — survie au redémarrage (iPhone, planificateur injecté)', () => {
-  test.beforeEach((_fixtures, testInfo) => {
+  // Playwright exige le motif de déstructuration pour le premier argument.
+  // eslint-disable-next-line no-empty-pattern
+  test.beforeEach(({}, testInfo) => {
     test.skip(!isPhone(testInfo), 'Le planificateur injecté représente l’iPhone.');
   });
 
