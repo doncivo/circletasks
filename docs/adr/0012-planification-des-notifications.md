@@ -285,6 +285,8 @@ interface NotificationStatusV1 {
 
 `planFailure` est **effacé par le premier `replace` réussi** (un plan vide réussi compte) ; `permission` est relue à chaque passage (rétablie dans Réglages iOS → bandeau retiré à la reprise). Valeur illisible : journal `status-unreadable`, affichée comme `planFailure` `schedule-failed` jusqu'au passage réussi suivant, qui la réécrit. Écriture impossible : l'état reste dans le store pour la session (visible), nouvel essai au passage suivant.
 
+**Réalisation du déclencheur `edit` (revue du lot N1).** Il est posé par `observeWrites` (`src/db/repositories/observeWrites.ts`) dans `createAppContainer`, pas par chaque cas d'usage : toute écriture réussie des repositories surveillés (tâches, récurrences, routines, validations, événements, rappels, espaces, réglages `reminders.*` et `general.locale`) et toute transaction réussie, quelle qu'elle soit, déclenche `edit`. Les déclenchements sont coalescés par le coordinateur ; le coût d'un passage inutile sur l'iPhone (quelques lectures) est accepté, une replanification manquée ne l'est pas. Les réglages `notifications.*` ne déclenchent jamais (pas de boucle).
+
 ### N1.4 Actions de notification (N-03)
 
 **Types d'action.** Enregistrés à chaque démarrage, avant le premier `show` : `ct.task` et `ct.routine` = `done` « Fait » + `snooze15` « +15 min » ; `ct.event` = `snooze15` seul ; récapitulatif et fin de Focus : aucune catégorie. Toutes avec `foreground: true`.
