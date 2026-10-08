@@ -108,6 +108,8 @@ export const SettingsScreen = lazyScreen<object>(() => import('../settings/Setti
 export const AppearanceScreen = lazyScreen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })), 'appearancescreen');
 export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })), 'tabsscreen');
 export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })), 'importscreen');
+/** Écran Logs (I-04), ouvert depuis Réglages › À PROPOS. */
+export const LogsScreen = lazyScreen<object>(() => import('../settings/logs/LogsScreen').then((m) => ({ default: m.LogsScreen })), 'logsscreen');
 export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })), 'recapsettingsscreen');
 export const HolidaySettingsScreen = lazyScreen<object>(() => import('../events/HolidaySettingsScreen').then((m) => ({ default: m.HolidaySettingsScreen })), 'holidaysettingsscreen');
 export const SpacesScreen = lazyScreen<object>(() => import('../spaces/SpacesScreen').then((m) => ({ default: m.SpacesScreen })), 'spacesscreen');

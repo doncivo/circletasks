@@ -3,6 +3,7 @@
 //! Les tests sont ici et non dans `src/` pour cette raison (les tests unitaires de la lib sont
 //! désactivés dans Cargo.toml).
 
+mod applog;
 mod backup;
 mod capture;
 mod calendars;

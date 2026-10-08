@@ -925,10 +925,10 @@ pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Resu
     tauri::async_runtime::spawn_blocking(move || {
         let outcome = restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))?;
         // Échange abouti : marqueur de la synchro (aucun cycle ne partira avant le choix de l'utilisateur, ADR 0010 règle 3). Un échec
-        // d'écriture est journalisé sans bloquer la restauration déjà faite.
+        // d'écriture est inscrit au journal technique (I-04, ADR 0014) sans bloquer la restauration déjà faite.
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        if let Err(error) = write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version) {
-            eprintln!("[backup] marqueur de restauration non écrit : {}", error.code.as_str());
+        if write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version).is_err() {
+            crate::applog::write("backup", "restore-marker-failed");
         }
         Ok(outcome)
     })

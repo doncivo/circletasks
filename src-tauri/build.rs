@@ -55,6 +55,8 @@ fn main() {
             "sync_read_snapshot", "sync_delete_own", "sync_restore_marker_get", "sync_restore_marker_clear",
             // Lot Y4 (ADR 0011 sections 11.1 et 18, étape 0) : Y-10 (oubli, suppression des fichiers d'un appareil oublié) et Y-11.
             "sync_device_forget", "sync_forgotten_delete", "sync_reset_key",
+            // Journal technique persistant (I-04, ADR 0014 §2) : PC et iPhone, capabilities logs.json et logs-ios.json.
+            "log_append", "log_read", "log_clear",
         ])),
     )
     .expect("échec de la configuration de la compilation Tauri");

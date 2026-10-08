@@ -24,6 +24,7 @@ import {
   GoalsScreen,
   HolidaySettingsScreen,
   ImportScreen,
+  LogsScreen,
   preloadScreens,
   QuietHoursRoute,
   RecapSettingsScreen,
@@ -191,7 +192,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : route.screen === 'sync' ? <SyncDetailsScreen /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'logs' ? <LogsScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : route.screen === 'sync' ? <SyncDetailsScreen /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}

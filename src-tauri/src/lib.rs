@@ -6,6 +6,8 @@
 //! Les migrations de schéma sont gérées côté TypeScript (src/db/migrator.ts, ADR 0002) :
 //! aucune migration n'est déclarée dans tauri-plugin-sql.
 
+/// Journal technique persistant (I-04, ADR 0014) : PC et iPhone.
+pub mod applog;
 pub mod backup;
 pub mod backup_triggers;
 pub mod calendars;
@@ -24,7 +26,7 @@ pub mod export_common;
 pub mod export_ios;
 #[cfg(desktop)]
 pub mod import;
-/// Démarrage de l'iPhone (`setup`) : purge des temporaires d'export.
+/// Démarrage de l'iPhone (`setup`) : journal technique, purge des temporaires d'export.
 #[cfg(target_os = "ios")]
 mod ios_setup;
 #[cfg(desktop)]
@@ -60,6 +62,8 @@ pub fn run() {
         sync::commands::sync_restore_marker_clear,
         // Lot Y4 (ADR 0011 section 18, étape 0) : corps qui répondent `not-configured` jusqu'à Y-10 et Y-11.
         sync::commands::sync_device_forget, sync::commands::sync_forgotten_delete, sync::commands::sync_reset_key,
+        // Journal technique (I-04, ADR 0014 §2) : capability logs.json (fenêtre main).
+        applog::log_append, applog::log_read, applog::log_clear,
     ]);
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
@@ -81,6 +85,8 @@ pub fn run() {
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,
         // FILES-IOS-01 (ADR 0009 avenant lot F A3) : même commande et même permission qu'au PC, temporaire remis au plugin ct-files.
         export_ios::export_save_file,
+        // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
+        applog::log_append, applog::log_read, applog::log_clear,
     ]);
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]

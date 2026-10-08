@@ -239,8 +239,10 @@ pub async fn export_save_file(app: tauri::AppHandle, request: tauri::ipc::Reques
     result
 }
 
-/// Échec de suppression du temporaire : rattrapé par la purge au démarrage.
+/// Échec de suppression du temporaire : inscrit au journal technique (I-04, ADR 0014), rattrapé par la purge au démarrage.
 #[cfg(target_os = "ios")]
 fn note_cleanup(report: CleanupReport) {
-    let _ = report;
+    if report.remove_failed {
+        crate::applog::write("export", "temp-remove-failed");
+    }
 }

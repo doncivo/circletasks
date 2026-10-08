@@ -168,7 +168,7 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | I-01 | M16 | J'installe l'app sur l'iPhone | ios-mobile | fait (2026-10-07, lot I0 ; build de contrôle après revue à relancer quand la facturation GitHub sera réglée ; installation réelle par Ali en fin d’ordre) |
 | I-02 | M16 | Je suis prévenu avant l'expiration hebdomadaire | ios-mobile | à faire |
 | I-03 | M16 | Je protège l'app par Face ID | ios-mobile | à faire |
-| I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | à faire (fiche prête, 2026-10-08) |
+| I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | fait (branche lot-f-ios ; critères d'appareil dans la checklist de l'ordre 5) |
 | I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile + quick-capture | à faire (fiche prête, 2026-10-08) |
 | I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile | à faire |
 | P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |

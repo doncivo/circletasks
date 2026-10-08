@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
+import { startLogJournal } from './features/app/logJournalBoot';
 import { FocusWindowRoot } from './features/focus';
 import { setCatalogFailureReporter } from './i18n';
 import { logFailure } from './platform';
@@ -14,5 +15,8 @@ setCatalogFailureReporter((locale, error) => logFailure(`catalog-${locale}`, err
 
 // Mini-fenêtre Focus du PC (F-01) : même application, vue seule, sans base ni conteneur.
 const isFocusWindow = new URLSearchParams(window.location.search).get('window') === 'focus';
+
+// I-04 : journal technique persistant (fichier pour la fenêtre principale seulement), chargé à la demande.
+void startLogJournal(isFocusWindow ? 'focus' : 'main');
 
 createRoot(container).render(<StrictMode>{isFocusWindow ? <FocusWindowRoot /> : <App />}</StrictMode>);

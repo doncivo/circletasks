@@ -554,13 +554,18 @@ fn b3_snapshot_cache_is_dropped_at_the_start_of_a_scan() {
     assert_eq!(service.matches("inner.snapshot_cache = None;").count(), 4, "choose_folder, scan, key_import, bascule de Y-11 (changement de clé)");
 }
 
-/// Revue B5 : en production, aucun tampon de journal (événement vide) ; la capture n'existe qu'en développement ou sous `test-hooks` (jamais dans le binaire livré, qui n'active pas cette fonctionnalité) et voit tous les fils
+/// Revue B5 : en production, aucun tampon de journal (depuis l'ADR 0014, l'identifiant `event` seul est inscrit au journal persistant) ; la capture n'existe qu'en développement ou sous `test-hooks` (jamais dans le binaire livré, qui n'active pas cette fonctionnalité) et voit tous les fils
 /// (test des secrets : `sync_key.rs`, import fait depuis un fil annexe).
 #[test]
 fn b5_no_log_buffer_in_production() {
     let source = include_str!("../../src/sync/mod.rs");
     let log = &source[source.find("pub mod log {").unwrap()..];
-    assert!(log.contains("#[cfg(not(any(debug_assertions, feature = \"test-hooks\")))]\n    #[inline]\n    pub fn event(_event: &'static str, _detail: &str) {}"));
+    // ADR 0014 (« Conséquences », qui modifie l'ADR 0011 §2.3) : en production, le seul identifiant fixe va au journal persistant.
+    let production = &log[log.find("#[cfg(not(any(debug_assertions, feature = \"test-hooks\")))]\n    #[inline]").unwrap()..];
+    let body = &production[..production.find("\n    }\n").unwrap()];
+    assert!(body.contains("pub fn event(event: &'static str, _detail: &str) {"), "detail jamais utilisé en production");
+    assert!(body.contains("crate::applog::write(\"sync-rust\", event);"), "seul l'identifiant fixe est inscrit");
+    assert!(!body.contains("format!") && !body.contains("Vec"), "aucun texte dynamique ni tampon");
     let manifest = include_str!("../../Cargo.toml");
     let key_is = |line: &str, name: &str| line.split('=').next().is_some_and(|k| k.trim() == name);
     assert!(manifest.lines().filter(|l| key_is(l, "default")).all(|l| !l.contains("test-hooks")), "test-hooks n'est pas une fonctionnalité par défaut");

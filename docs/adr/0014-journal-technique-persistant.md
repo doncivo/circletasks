@@ -54,6 +54,14 @@ Le PRD (section 10) remplace l'inspecteur Safari par un écran de logs interne (
 
 Plantages natifs (Swift, WebKit, panique Rust hors `applog`) non capturés ; entrées des 2 dernières secondes perdues si l'app est tuée ; le journal est compris dans la sauvegarde d'appareil d'iOS (aucun contenu personnel) ; aucune verbosité réglable, aucun envoi automatique, aucune télémétrie (hors périmètre).
 
+## Mise en œuvre (I-04, 2026-10-08)
+
+- Installation : `src/features/app/logJournalBoot.ts` (`startLogJournal`), appelé par `src/main.tsx` dès le chargement (fenêtre `main`, ou `focus` : session seule), et non par `bootstrap.ts` : le journal existe avant la base et chargé à la demande (`import()`), il ne pèse pas sur le bundle de départ ; les entrées notées avant attendent dans `log.ts` (500 au plus). `whenLogJournal()` / `currentLogJournal()` servent l'écran et la ligne « Logs ».
+- Vidages enchaînés (`queue.then(flushOnce)`) : un vidage demandé pendant un autre part après lui, une entrée notée entre-temps n'attend pas le minuteur.
+- Rust : `applog::write_count(scope, code, n)` ajouté pour les compteurs (temporaires purgés, FILES-IOS-01) : toujours aucun texte dynamique. Résumé de débit : `log` / `suppressed`, `detail` = « scope code » (deux valeurs de forme stricte), `n` = entrées non écrites.
+- Entrée internes du lot : `backup` / `restore-marker-failed`, `backup-recovery` / <code>, `export` / `temp-remove-failed`, `temp-purged` (n), `temp-purge-failed`, `sync-rust` / <event> (production), `logs` / `no-data-dir`.
+- Écran : `src/features/settings/logs/LogsScreen.tsx` (écran à la demande `logsscreen`, route `{ tab: 'settings', screen: 'logs' }`), export `logExport.ts` (fins de ligne CRLF), textes `src/i18n/{fr,en}.logs.ts`. Sur PC, la ligne « Version … » porte « Logs » et « Rechercher une mise à jour ».
+
 ## Conséquences
 
 - **ADR 0011 §2.3 modifié par renvoi** : « En production, le journal technique Rust de la synchro ne conserve rien » devient : en production, `sync::log::event(event, detail)` inscrit **le seul `event`** (`&'static str`) par `applog::write("sync-rust", event)`, sans `detail` ; en développement et sous `test-hooks`, comportement actuel (sortie d'erreur via `applog`, captures). Les journaux TS de la synchro (`src/sync/log.ts`) sont désormais conservés : leur contenu reste celui permis par §2.3 (codes, compteurs, noms stricts, identifiants d'appareil et d'époque), revu par security-privacy.

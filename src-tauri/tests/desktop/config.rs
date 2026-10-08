@@ -777,3 +777,69 @@ fn files_ios_01_10_ios_workflow_checks_the_plugin_targets() {
     assert!(workflow.contains("cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-ct-files"));
     assert!(workflow.contains("tauri-plugin-dialog tauri-plugin-fs"), "dialog et fs refusés dans la cible iOS");
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// I-04 (ADR 0014 §2) : journal technique persistant
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const LOG_PERMISSIONS: [&str; 3] = ["allow-log-append", "allow-log-clear", "allow-log-read"];
+
+/// I-04 critères 9 et 13 : `logs.json` (PC) et `logs-ios.json` (iPhone) exacts, fenêtre `main` ; aucune autre capability (pairing, capture,
+/// focus…) ne porte ces commandes ; les trois commandes sont dans les deux gestionnaires et au manifeste.
+#[test]
+fn i04_9_log_capabilities_are_exact_and_only_for_the_main_window() {
+    for (file, platform) in [("logs.json", "windows"), ("logs-ios.json", "iOS")] {
+        let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities").join(file)).expect("capability");
+        let capability: Value = serde_json::from_str(&text).expect("capability valide");
+        assert_eq!(capability["windows"], serde_json::json!(["main"]), "{file}");
+        assert_eq!(capability["platforms"], serde_json::json!([platform]), "{file}");
+        assert!(capability.get("webviews").is_none(), "{file}");
+        let mut granted = permissions_of(&text);
+        granted.sort();
+        assert_eq!(granted, LOG_PERMISSIONS, "{file}");
+    }
+    for (name, text) in all_capabilities() {
+        if name != "logs.json" && name != "logs-ios.json" {
+            assert!(!permissions_of(&text).iter().any(|p| p.contains("-log-")), "{name} accorde une commande du journal");
+        }
+    }
+    let manifest = manifest_commands();
+    let ios = ios_handler_commands();
+    for command in ["log_append", "log_read", "log_clear"] {
+        assert!(manifest.contains(command), "{command} absent du manifeste");
+        assert!(ios.contains(command), "{command} absent du gestionnaire iOS");
+        assert!(LIB_SOURCE.contains(&format!("applog::{command}")), "{command}");
+    }
+}
+
+/// I-04 critère 9 (ADR 0014, « Conséquences ») : le seul `eprintln!` du code Rust est dans `applog.rs` ; le journal est initialisé au début
+/// du `setup` PC (avant la récupération) et iPhone (avant la purge).
+#[test]
+fn i04_9_the_only_eprintln_is_in_applog_and_the_journal_starts_first() {
+    fn visit(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).expect("dossier") {
+            let path = entry.expect("entrée").path();
+            if path.is_dir() {
+                visit(&path, out);
+            } else if path.extension().is_some_and(|x| x == "rs") {
+                out.push((path.to_string_lossy().into_owned(), std::fs::read_to_string(&path).expect("source")));
+            }
+        }
+    }
+    let mut sources = Vec::new();
+    visit(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
+    assert!(sources.len() > 20);
+    for (path, text) in &sources {
+        // Code seulement : les commentaires peuvent citer la macro.
+        let count = text.lines().filter(|l| !l.trim_start().starts_with("//")).map(|l| l.matches("eprintln!").count()).sum::<usize>();
+        if path.ends_with("applog.rs") {
+            assert_eq!(count, 1, "{path}");
+        } else {
+            assert_eq!(count, 0, "eprintln! hors d'applog : {path}");
+        }
+    }
+    let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
+    assert!(setup.find("crate::applog::init(").unwrap() < setup.find("recover_interrupted_restore").unwrap());
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(ios.find("crate::applog::init(").unwrap() < ios.find("purge_exports").unwrap());
+}

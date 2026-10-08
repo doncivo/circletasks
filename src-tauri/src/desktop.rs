@@ -312,8 +312,9 @@ pub fn recovery_failed_text(code: &str, identifier: &str) -> String {
 /// aucune WebView n'est vivante pendant la boîte, donc aucune base ne peut être ouverte ni créée. `setup` renvoie ensuite une erreur et
 /// `Builder::run` échoue. Une boîte système bloquante (`MessageBoxW`, sous Windows) montre le message d'abord ; seul le code d'erreur est journalisé,
 /// sans chemin. Les fichiers `.restore-old` restent intacts.
-fn abort_startup_after_failed_recovery(code: &str, identifier: &str) -> Box<dyn std::error::Error> {
-    eprintln!("[backup] récupération au démarrage impossible : {code}");
+fn abort_startup_after_failed_recovery(code: &'static str, identifier: &str) -> Box<dyn std::error::Error> {
+    // Journal technique (I-04, ADR 0014) : le code seul, sans chemin.
+    crate::applog::write("backup-recovery", code);
     #[cfg(windows)]
     {
         use windows::core::{w, HSTRING};
@@ -383,6 +384,8 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             let Ok(dir) = tauri::Manager::path(app).app_config_dir() else {
                 return Err(abort_startup_after_failed_recovery("no-data-dir", &app.config().identifier));
             };
+            // I-04 (ADR 0014 §2) : journal technique d'abord, pour garder la trace de la récupération.
+            crate::applog::init(dir.join(crate::applog::LOG_DIR));
             if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
                 return Err(abort_startup_after_failed_recovery(error.code, &app.config().identifier));
             }
