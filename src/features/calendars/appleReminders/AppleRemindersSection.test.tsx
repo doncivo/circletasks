@@ -176,3 +176,35 @@ describe('créer aussi dans Rappels (K-06 critère 6, ADR 0008 §10.7)', () => {
     await waitFor(() => expect(appleRemindersStore.get(h.container).getState().create.bySpace[0]).toMatchObject({ enabled: true, listId: 'L-courses' }));
   });
 });
+
+describe('QA K-05 : suppression retenue par la garde, gestes de l’utilisateur (ADR 0008 §10.6)', () => {
+  async function held(suffix: string) {
+    h = await setupRemindersHarness(suffix);
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    for (let i = 0; i < 20; i += 1) h.reminders.add({ id: `Z-${String(i)}`, listId: 'L-courses', title: `Z ${String(i)}` });
+    await h.pass();
+    for (let i = 0; i < 15; i += 1) h.reminders.remove(`Z-${String(i)}`);
+    await h.pass();
+  }
+
+  it('K-05 « 15 rappels sont absents de Rappels. Supprimer les tâches liées ? » : « Supprimer » met les tâches à la corbeille et la question disparaît', async () => {
+    await held('70');
+    renderSection();
+    expect(await screen.findByText(/15 rappels sont absents de Rappels\. Supprimer les tâches liées \?/)).toBeInTheDocument();
+    expect(await h.tasks()).toHaveLength(20);
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+    await waitFor(() => expect(screen.queryByText(/sont absents de Rappels/)).not.toBeInTheDocument());
+    expect((await h.tasks()).filter((task) => task.deletedAt === null)).toHaveLength(5);
+  });
+
+  it('K-05 « Garder et détacher » : aucune tâche supprimée, la question disparaît', async () => {
+    await held('71');
+    renderSection();
+    await screen.findByText(/sont absents de Rappels/);
+    fireEvent.click(screen.getByRole('button', { name: 'Garder et détacher' }));
+    await waitFor(() => expect(screen.queryByText(/sont absents de Rappels/)).not.toBeInTheDocument());
+    expect((await h.tasks()).filter((task) => task.deletedAt === null)).toHaveLength(5);
+    expect((await h.taskByTitle('Z 0')).deletedAt).toBeNull();
+    expect(await h.taskByTitle('Z 0')).toMatchObject({ source: 'local', externalId: null });
+  });
+});

@@ -144,3 +144,36 @@ describe('migration 0018 : Rappels Apple (K-05 critère 1, ADR 0008 §10.2)', ()
     await db.close();
   });
 });
+
+describe('QA K-05 : sauvegarde de version 17 restaurée puis migrée (ADR 0008 §10.2)', () => {
+  it('K-05 une base 17 réelle (tâches à faire, terminées, supprimées, avec note) est migrée sans perte, saine, et l’app continue d’y écrire et de publier', async () => {
+    const db = await dbAt(17);
+    await insertTask(db, 'a1', h(1), 'À faire');
+    await insertTask(db, 'a2', h(2), 'Terminée');
+    await db.execute("UPDATE task SET status = 'done', done_at = ?, hlc = ? WHERE id = 'a2'", [AT, h(3)]);
+    await insertTask(db, 'a3', h(4), 'Supprimée');
+    await db.execute("UPDATE task SET deleted_at = ?, hlc = ? WHERE id = 'a3'", [AT, h(5)]);
+    await db.execute("UPDATE task SET note = 'une note', hlc = ? WHERE id = 'a1'", [h(6)]);
+    const before = await db.select('SELECT id, title, status, note, deleted_at, done_at, hlc FROM task ORDER BY id');
+    const queued = await outbox(db);
+    // Ouverture de la sauvegarde restaurée par l'app de version 18.
+    expect((await migrate(db, migrations)).applied).toEqual([18]);
+    expect(await db.select('SELECT id, title, status, note, deleted_at, done_at, hlc FROM task ORDER BY id')).toEqual(before);
+    expect(await outbox(db)).toEqual(queued);
+    expect(await db.select('PRAGMA integrity_check')).toEqual([{ integrity_check: 'ok' }]);
+    expect(await db.select('PRAGMA foreign_key_check')).toEqual([]);
+    // Deuxième ouverture : rien à rejouer.
+    expect((await migrate(db, migrations)).applied).toEqual([]);
+    // L'app écrit dans la base migrée : le nouveau champ est capturé par les déclencheurs recréés, les anciens aussi.
+    const marker = (await outbox(db)).length;
+    await db.execute("UPDATE task SET apple_list_id = 'L1', source = 'apple_reminders', external_id = 'R1', hlc = ? WHERE id = 'a1'", [h(10)]);
+    await db.execute("UPDATE task SET title = 'À faire bis', hlc = ? WHERE id = 'a2'", [h(11)]);
+    const added = (await outbox(db)).slice(marker);
+    expect(added).toEqual(expect.arrayContaining([
+      { table_name: 'task', row_id: 'a1', field: 'apple_list_id' },
+      { table_name: 'task', row_id: 'a1', field: 'external_id' },
+      { table_name: 'task', row_id: 'a2', field: 'title' },
+    ]));
+    await db.close();
+  });
+});

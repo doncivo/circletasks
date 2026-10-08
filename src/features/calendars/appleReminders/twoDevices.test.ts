@@ -248,3 +248,76 @@ describe('aucune notification de rappel côté PC (K-07 critère 9)', () => {
     expect((await pcTask('Sans cloche'))?.source).toBe('apple_reminders');
   });
 });
+
+describe('QA : rappel récurrent refusé sur PC comme sur iPhone, synchro reçue pendant un passage', () => {
+  it('K-07 un rappel récurrent importé arrive sur le PC ; case, titre, date et suppression y sont refusés, comme sur l’iPhone ; rien ne voyage ni n’est écrit dans Rappels', async () => {
+    const reminder = reminders.add({ listId: 'L-travail', title: 'Poubelles', due: { date: D('2026-10-09'), time: null }, recurring: true });
+    await pass();
+    await sync();
+    const onPc = await pcTask('Poubelles');
+    expect(onPc).toMatchObject({ appleRecurring: true, status: 'todo', date: '2026-10-09' });
+    const { useNoticeStore } = await import('../../app/notice');
+    const refused = (): boolean => useNoticeStore.getState().notice?.text === 'Modifiez ce rappel récurrent dans Rappels.';
+    for (const [name, container, id] of [['PC', pcContainer, onPc?.id], ['iPhone', phoneContainer, onPc?.id]] as const) {
+      const uc = createTaskUseCases(container);
+      for (const act of [
+        () => uc.complete(id as never),
+        () => uc.update(id as never, { title: `Autre ${name}` }),
+        () => uc.update(id as never, { date: D('2026-10-25') }),
+        () => uc.remove([id as never]),
+      ]) {
+        useNoticeStore.getState().clear();
+        await act();
+        expect(refused(), name).toBe(true);
+      }
+    }
+    pc.clock.advance(60_000);
+    await sync();
+    expect(await pcTask('Poubelles')).toMatchObject({ title: 'Poubelles', status: 'todo', date: '2026-10-09', deletedAt: null });
+    expect(await iphone.task(onPc?.id as never)).toMatchObject({ title: 'Poubelles', status: 'todo', deletedAt: null });
+    await pass('full');
+    expect(reminders.writes).toEqual([]);
+    expect(reminders.get(reminder.id)).toMatchObject({ title: 'Poubelles', completed: false });
+    // Quand Rappels passe à l'échéance suivante, la tâche suit sur les deux appareils.
+    pc.clock.advance(60_000);
+    reminders.edit(reminder.id, { due: { date: D('2026-10-16'), time: null } });
+    await pass('full');
+    await sync();
+    expect(await pcTask('Poubelles')).toMatchObject({ date: '2026-10-16' });
+  });
+
+  it('K-07 une modification du PC reçue par la synchro pendant le passage n’est pas écrasée ; les deux champs différents sont gardés', async () => {
+    const reminder = reminders.add({ listId: 'L-travail', title: 'Dossier', due: { date: D('2026-10-09'), time: null } });
+    await pass();
+    await sync();
+    const task = await pcTask('Dossier');
+    pc.clock.advance(60_000);
+    reminders.edit(reminder.id, { title: 'Dossier Rappels' });
+    // Pendant la lecture de Rappels par l'iPhone, la date modifiée sur le PC arrive par la synchro.
+    const original = reminders.fetch.bind(reminders);
+    let hijacked = false;
+    reminders.fetch = async (input) => {
+      const out = await original(input);
+      if (!hijacked) {
+        hijacked = true;
+        pc.clock.advance(1_000);
+        await createTaskUseCases(pcContainer).update(task?.id as never, { date: D('2026-10-30') });
+        await sync();
+      }
+      return out;
+    };
+    await pass('full');
+    reminders.fetch = original;
+    // La date du PC est arrivée et n'a pas été remplacée ; aucune perte, aucun conflit sur des champs différents.
+    expect(await iphone.task(task?.id as never)).toMatchObject({ date: '2026-10-30' });
+    pc.clock.advance(60_000);
+    await pass('full');
+    await pass('full');
+    await sync();
+    expect(await iphone.task(task?.id as never)).toMatchObject({ title: 'Dossier Rappels', date: '2026-10-30' });
+    expect(reminders.get(reminder.id)).toMatchObject({ title: 'Dossier Rappels', due: { date: '2026-10-30', time: null } });
+    expect(await pcTask('Dossier Rappels')).toMatchObject({ date: '2026-10-30' });
+    expect(await iphone.driver.select('SELECT * FROM conflict_log')).toEqual([]);
+    expect(await pass('full')).toMatchObject({ sent: 0, updated: 0 });
+  });
+});
