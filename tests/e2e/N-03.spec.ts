@@ -89,7 +89,7 @@ test.describe('N-03 — actions de notification (iPhone, source injectée)', () 
     await pushAction(page, 'snooze15', request.id);
 
     // La ligne reste dans le fichier (tampon durable), la panne est visible, la répétition est déjà planifiée.
-    await expect(page.locator('.ct-status-banner')).toContainText('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
+    await expect(page.locator('.ct-status-banner')).toContainText('Les boutons « Fait » et « +15 min » sont indisponibles');
     await expect.poll(async () => (await requestsOfKind(page, 'snooze')).length).toBe(1);
     expect(await page.evaluate(() => window.__ctNotificationActions?.file.length)).toBe(1);
 
@@ -106,10 +106,10 @@ test.describe('N-03 — actions de notification (iPhone, source injectée)', () 
     await expect(banner).toContainText('Une action de notification n’a pas pu être appliquée');
 
     await banner.getByRole('button', { name: 'Voir le problème de rappels' }).click();
-    await expect(page.getByText('Actions en attente d’application : 1 (nouvel essai à chaque ouverture)')).toBeVisible();
+    await expect(page.getByText('Actions en attente : 1 (nouvel essai à l’ouverture)')).toBeVisible();
     await page.getByRole('button', { name: 'Ignorer les actions de notification en échec' }).click();
     await expect(banner).toHaveCount(0);
-    await expect(page.getByText(/Actions en attente d’application/)).toHaveCount(0);
+    await expect(page.getByText(/Actions en attente/)).toHaveCount(0);
   });
 });
 
