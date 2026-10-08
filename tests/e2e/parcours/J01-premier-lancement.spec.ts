@@ -44,9 +44,11 @@ test('parcours 1 : base neuve, assistant en trois étapes, données d’exemple,
   // Arrivée sur Aujourd'hui (A-01) avec les données d'exemple du jour.
   await todayTab(page).click();
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  // La routine « Revue de la semaine » (vendredi) est due le vendredi seulement : jour du navigateur, pas du processus de test.
+  const friday = await page.evaluate(() => new Date().getDay() === 5);
   await expect
     .poll(() => listTitles(page))
-    .toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois']);
+    .toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', ...(friday ? ['Revue de la semaine'] : []), 'Envoyer la facture du mois']);
 
   // L'assistant ne revient pas : l'app reste utilisable, la navigation est complète.
   await expect(page.getByRole('navigation')).toBeVisible();

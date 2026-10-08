@@ -97,7 +97,9 @@ test.describe('P-05 — premier lancement', () => {
     await dialog.getByRole('button', { name: 'Commencer' }).click();
     await expect(dialog).not.toBeVisible();
     await todayTab(page).click();
-    await expect.poll(() => listTitles(page)).toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois']);
+    // La routine « Revue de la semaine » (vendredi) est due le vendredi seulement : jour du navigateur, pas du processus de test.
+    const friday = await page.evaluate(() => new Date().getDay() === 5);
+    await expect.poll(() => listTitles(page)).toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', ...(friday ? ['Revue de la semaine'] : []), 'Envoyer la facture du mois']);
     await tab(page, 'Réglages').click();
     await page.getByRole('button', { name: 'Supprimer les données d’exemple' }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Supprimer les données d’exemple ?' });
