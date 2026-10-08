@@ -137,6 +137,8 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         source: 'local',
         externalId: null,
         // K-04 : tâche créée depuis un événement d'agenda externe.
+        appleListId: null,
+        appleRecurring: false,
         externalEventId: input.externalEventId ?? null,
       };
       // N-02 : une ligne `reminder` par avance choisie, seulement si la tâche a une date et une heure (QB-07).

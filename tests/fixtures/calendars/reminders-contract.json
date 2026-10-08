@@ -1,0 +1,141 @@
+{
+  "$comment": [
+    "Contrat des commandes du plugin Swift reminders (ADR 0008 §10.4 ; K-05 critère 5, K-06 critère 11).",
+    "Lu par le contrôle statique (src-tauri/tests/desktop/reminders.rs) contre src-tauri/plugins/reminders/ios/Sources/RemindersPlugin.swift, src-tauri/capabilities/reminders-ios.json et src/platform/reminders/tauriReminders.ts, et par le faux Vitest.",
+    "name : commande côté WebView (snake_case, permission reminders:allow-<name avec tirets>) ; swiftMethod : méthode Swift (lowerCamelCase) ; input : champs d'entrée de premier niveau ; output : clés de la réponse.",
+    "baseCommands : fournies par la classe Plugin de Tauri (écoute de l'événement changed), non écrites en Swift ici."
+  ],
+  "plugin": "reminders",
+  "commands": [
+    {
+      "name": "status",
+      "swiftMethod": "status",
+      "input": [],
+      "output": [
+        "access"
+      ]
+    },
+    {
+      "name": "request_access",
+      "swiftMethod": "requestAccess",
+      "input": [],
+      "output": [
+        "access"
+      ]
+    },
+    {
+      "name": "lists",
+      "swiftMethod": "lists",
+      "input": [],
+      "output": [
+        "lists"
+      ]
+    },
+    {
+      "name": "fetch",
+      "swiftMethod": "fetch",
+      "input": [
+        "listIds",
+        "limitPerList",
+        "ids"
+      ],
+      "output": [
+        "lists",
+        "byId",
+        "missing",
+        "missingLists"
+      ]
+    },
+    {
+      "name": "upsert",
+      "swiftMethod": "upsert",
+      "input": [
+        "id",
+        "listId",
+        "title",
+        "due",
+        "completed",
+        "completedAt"
+      ],
+      "output": [
+        "item"
+      ]
+    },
+    {
+      "name": "set_completed",
+      "swiftMethod": "setCompleted",
+      "input": [
+        "id",
+        "completed",
+        "completedAt"
+      ],
+      "output": [
+        "item"
+      ]
+    },
+    {
+      "name": "delete",
+      "swiftMethod": "delete",
+      "input": [
+        "id"
+      ],
+      "output": []
+    }
+  ],
+  "baseCommands": [
+    "register_listener",
+    "remove_listener"
+  ],
+  "shapes": {
+    "list": [
+      "id",
+      "name",
+      "writable"
+    ],
+    "item": [
+      "id",
+      "externalRef",
+      "listId",
+      "title",
+      "due",
+      "completed",
+      "completedAt",
+      "recurring",
+      "modifiedAt",
+      "createdAt"
+    ],
+    "due": [
+      "date",
+      "time"
+    ],
+    "fetchList": [
+      "listId",
+      "total",
+      "items"
+    ],
+    "idRef": [
+      "id",
+      "externalRef"
+    ]
+  },
+  "access": [
+    "not-determined",
+    "denied",
+    "restricted",
+    "full"
+  ],
+  "errors": [
+    "access-denied",
+    "store-unavailable",
+    "read-failed",
+    "write-failed",
+    "not-found",
+    "list-not-found",
+    "read-only-list",
+    "recurring-refused",
+    "invalid-input"
+  ],
+  "events": [
+    "changed"
+  ]
+}

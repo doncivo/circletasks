@@ -4,6 +4,7 @@
 //! désactivés dans Cargo.toml).
 
 mod backup;
+mod backup_versions;
 mod capture;
 mod calendars;
 mod config;

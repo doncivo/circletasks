@@ -211,3 +211,28 @@
 .ct-calendars__webAuthFailure p {
   margin: 0;
 }
+
+/* Section « Rappels Apple » (K-05 à K-07) : mêmes codes que les cartes d'agendas. */
+.ct-calendars__apple {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+.ct-calendars__appleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  align-items: flex-start;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border: 1px solid var(--ct-color-border);
+  border-radius: var(--ct-radius-md);
+}
+
+.ct-calendars__appleText,
+.ct-calendars__updated,
+.ct-calendars__readOnly {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}

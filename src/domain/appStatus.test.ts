@@ -19,7 +19,7 @@ describe('pickAppStatus (A-09 critère 5)', () => {
 
 describe('état syncTrouble (A-09 critère 9 a, D1)', () => {
   it('ordre fixe : agenda > problème de synchro > mise à jour > iCloud > synchro en cours > hors ligne', () => {
-    expect(APP_STATUS_PRIORITY).toEqual(['calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']);
+    expect(APP_STATUS_PRIORITY).toEqual(['calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'appleRemindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline']);
   });
 
   it('chaque paire d’états : le plus prioritaire gagne, quel que soit l’ordre de pose', () => {

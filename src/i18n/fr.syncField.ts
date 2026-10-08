@@ -44,6 +44,8 @@ export const syncFieldFr = {
     source: 'origine',
     external_id: 'rappel Apple lié',
     external_event_id: 'événement d’agenda lié',
+    apple_list_id: 'liste Rappels',
+    apple_recurring: 'récurrent dans Rappels',
     deleted_at: 'suppression',
   },
   routine: {

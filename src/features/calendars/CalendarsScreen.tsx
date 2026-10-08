@@ -10,6 +10,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { calendarsStore, FAILURE_KEYS } from './calendarsStore';
+import { AppleRemindersSection } from './appleReminders/AppleRemindersSection';
 import { IcloudForm } from './IcloudForm';
 import { formatUpdated } from './updatedText';
 import { useMinuteClock } from './useMinuteClock';
@@ -197,6 +198,7 @@ export function CalendarsScreen() {
             }}
           />
         )}
+        <AppleRemindersSection />
       </div>
       {removing && (
         <ConfirmDialog

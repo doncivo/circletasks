@@ -38,6 +38,8 @@ const DEFAULT_TASK_FIELDS = {
   someday: false,
   source: 'local',
   externalId: null,
+  appleListId: null,
+  appleRecurring: false,
   externalEventId: null,
 } satisfies Omit<NewTask, 'id' | 'title'>;
 

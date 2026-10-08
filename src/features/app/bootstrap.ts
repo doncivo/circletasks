@@ -14,6 +14,7 @@ import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler,
 import { createLedgerStore, openNotificationActionSource, openNotificationScheduler, systemNotificationClock, type NotificationActionSource, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
 import { composeFocusEndText } from '../reminders/focusEndText';
 import { createSettingsLedger } from '../reminders/settingsLedger';
+import { openRemindersPlatform, type RemindersPlatform } from '../../platform/reminders';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform, type MemoryPlatformOptions, type WebAuthFailureCode } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
@@ -82,6 +83,8 @@ export interface BootstrapAppOptions {
   readonly desktop?: DesktopPlatform | null;
   /** Agendas externes ; `openCalendarPlatform` par défaut (commandes Rust, ou mémoire + simulateurs en développement). */
   readonly calendars?: CalendarPlatform;
+  /** Rappels Apple (K-05) ; `openRemindersPlatform` par défaut (plugin EventKit sur l'iPhone installé, indisponible ailleurs). */
+  readonly reminders?: RemindersPlatform;
   /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
   readonly focusWindow?: FocusWindowPlatform | null;
   /** Notifications locales de rappel (N-01) ; `openNotificationScheduler` par défaut (adaptateur réel sur l'iPhone installé, vide ailleurs). */
@@ -176,6 +179,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
       backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
+      reminders: options.reminders ?? openRemindersPlatform(runtime, os),
     });
   } catch (error) {
     useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });

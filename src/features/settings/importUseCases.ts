@@ -140,6 +140,8 @@ export function createImportUseCases(deps: Deps): ImportUseCases {
               someday: draft.someday,
               source: 'local',
               externalId: null,
+              appleListId: null,
+              appleRecurring: false,
               externalEventId: null,
             }),
           );

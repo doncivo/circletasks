@@ -1,6 +1,6 @@
 /**
  * États de l'app affichés dans le bandeau (A-09). Un seul bandeau est affiché à la fois, selon une priorité fixe (critère 5 ; D1 du
- * solde du critère 9) : agenda déconnecté > problème de synchro > problème de rappels > mettez à jour l'app > en attente d'iCloud > synchro en cours >
+ * solde du critère 9) : agenda déconnecté > problème de synchro > problème de rappels > problème de Rappels Apple > mettez à jour l'app > en attente d'iCloud > synchro en cours >
  * hors ligne.
  *
  * Émetteurs : `offline` par la plateforme (réseau) ; `syncTrouble`, `syncing` et `waitingIcloud` par la synchro (`startSync.ts`, décision
@@ -9,9 +9,11 @@
  * l'agenda et derrière un échec de synchro, qui empêche la synchro alors qu'une version plus récente n'empêche pas la lecture).
  * `remindersTrouble` (N-01, ADR 0012 avenant N1.8) : posé par les rappels (`notificationStatus.ts`) quand les notifications ne peuvent pas partir
  * (autorisation refusée ou non décidée, échec de planification, fin de Focus, fuseau illisible) ; derrière la synchro, devant la mise à jour.
+ * `appleRemindersTrouble` (K-05 à K-07, ADR 0008 §10.8) : posé par les Rappels Apple (`appleRemindersState.ts`) quand ils n'ont pas pu être lus (accès
+ * refusé, échec du magasin) ou que des modifications n'ont pas pu être envoyées ; juste après `remindersTrouble`.
  * « Hors ligne » ne masque jamais un échec de synchro (critère 9 a).
  */
-export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
+export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'appleRemindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
 
 export type AppStatusKind = (typeof APP_STATUS_PRIORITY)[number];
 

@@ -77,6 +77,8 @@ tauri-plugin-notification-actions = { path = "plugins/notification-actions" }
 tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
 # Connexion Google sur iPhone (K-TECH-01, ADR 0008 §9) : session d'authentification web du système, plugin Swift local, appelé par Rust seul.
 tauri-plugin-web-auth = { path = "plugins/web-auth" }
+# Rappels Apple (K-05 à K-07, ADR 0008 §10.4) : EventKit, plugin Swift local appelé par la WebView (capability reminders-ios.json). Jamais sous cfg(desktop).
+tauri-plugin-reminders = { path = "plugins/reminders" }
 # Scan du QR d'association (ADR 0011 §23 point 2, Y-IOS-02) : API du JS seulement (aucune API Rust publique), texte passé aussitôt à
 # sync_key_import. Version exacte relue (2.5.1, revue audit), alignée sur @tauri-apps/plugin-barcode-scanner ~2.5.1 ; relire le code
 # (API Rust, permissions) à chaque montée de version.

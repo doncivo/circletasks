@@ -9,6 +9,7 @@ import { scanEn } from './en.scan';
 import { searchEn } from './en.search';
 import { appearanceEn } from './en.appearance';
 import { spacesEn } from './en.spaces';
+import { appleRemindersEn } from './en.appleReminders';
 import { calendarsEn } from './en.calendars';
 import { routinesEn } from './en.routines';
 import { checklistsEn } from './en.checklists';
@@ -59,6 +60,7 @@ export const en: Messages = {
   focus: focusEn,
   stats: statsEn,
   appearance: appearanceEn,
+  appleReminders: appleRemindersEn,
   calendars: calendarsEn,
   sync: { ...syncEngineEn, folder: syncFolderEn, key: syncKeyEn, conflicts: syncConflictsEn, field: syncFieldEn, version: syncVersionEn, pairing: syncPairingEn, forget: syncForgetEn, reset: syncResetEn },
   tasks: {

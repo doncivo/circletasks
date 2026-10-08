@@ -83,6 +83,9 @@ jobs:
           # ADR 0008 §9 (K-TECH-01) : session d'authentification web de la connexion Google, cible iOS seulement.
           echo "$ios" | grep -q '^tauri-plugin-web-auth ' || { echo "::error::tauri-plugin-web-auth absent de la cible iOS"; exit 1; }
           if echo "$windows" | grep -q '^tauri-plugin-web-auth '; then echo "::error::tauri-plugin-web-auth dans la cible Windows"; exit 1; fi
+          # ADR 0008 §10.4 (K-05) : Rappels Apple (EventKit), cible iOS seulement ; le PC ne les lit jamais.
+          echo "$ios" | grep -q '^tauri-plugin-reminders ' || { echo "::error::tauri-plugin-reminders absent de la cible iOS"; exit 1; }
+          if echo "$windows" | grep -q '^tauri-plugin-reminders '; then echo "::error::tauri-plugin-reminders dans la cible Windows"; exit 1; fi
 
       # Le projet Xcode (src-tauri/gen/apple) n'est pas versionné : il est régénéré à chaque build
       # depuis tauri.conf.json et src-tauri/Info.ios.plist.

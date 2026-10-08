@@ -530,3 +530,8 @@
   color: inherit;
   cursor: pointer;
 }
+
+/* Badge « Rappels » (K-05 critère 13) : texte de la sous-ligne, comme « reportée ». */
+.ct-task-appleBadge {
+  font-weight: var(--ct-font-weight-semibold);
+}

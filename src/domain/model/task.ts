@@ -47,7 +47,9 @@ export type TaskSource = 'local' | 'apple_reminders';
  * - `seriesIndex` : rang de l'occurrence dans sa récurrence (0 pour la première), sinon null ;
  * - `seriesTemplate` : non null seulement pour une occurrence modifiée « cette occurrence » (T-10) :
  *   valeurs de la série avant la modification, reprises par l'occurrence suivante ;
- * - `externalId` non null seulement si `source = 'apple_reminders'` ;
+ * - `externalId` non null seulement si `source = 'apple_reminders'` (identifiant EventKit du rappel lié, K-05) ; `appleListId` : liste Rappels
+ *   d'origine ou de destination (gardée quand la tâche est détachée), `appleRecurring` : rappel récurrent dans Rappels (aucune écriture vers
+ *   Rappels, ADR 0008 §10.6) ; états : `src/domain/appleReminders.ts` (`appleLinkState`) ;
  * - `externalEventId` : événement d'agenda externe dont la tâche vient (K-04), sans clé étrangère : la ligne `external_event` est
  *   locale à l'appareil et peut disparaître ; la tâche garde alors titre et date. Une tâche par événement (règle de l'interface).
  */
@@ -72,6 +74,8 @@ export interface Task extends SyncMeta {
   readonly someday: boolean;
   readonly source: TaskSource;
   readonly externalId: string | null;
+  readonly appleListId: string | null;
+  readonly appleRecurring: boolean;
   readonly externalEventId: ExternalEventId | null;
 }
 
@@ -84,5 +88,8 @@ export type TaskFields = Omit<Task, keyof SyncMeta>;
  */
 export type NewTask = TaskFields & { readonly id: TaskId };
 
-/** Modification partielle d'une tâche ; `id`, `source`, `externalId` et `externalEventId` sont immuables (le lien se pose à la création, K-04). */
-export type TaskPatch = Partial<Omit<TaskFields, 'source' | 'externalId' | 'externalEventId'>>;
+/**
+ * Modification partielle d'une tâche ; `id`, `source`, `externalId` et `externalEventId` sont immuables (le lien se pose à la création, K-04).
+ * Le lien à un rappel Apple (`externalId`, `source`, `appleListId`, `appleRecurring`) ne change que par `TaskRepository.setAppleLink` (K-05).
+ */
+export type TaskPatch = Partial<Omit<TaskFields, 'source' | 'externalId' | 'externalEventId' | 'appleListId' | 'appleRecurring'>>;

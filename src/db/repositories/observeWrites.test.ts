@@ -45,6 +45,8 @@ describe('observeWrites', () => {
     someday: false,
     source: 'local' as const,
     externalId: null,
+    appleListId: null,
+    appleRecurring: false,
     externalEventId: null,
   });
 

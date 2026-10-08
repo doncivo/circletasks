@@ -7,6 +7,7 @@ import type { LocalDate } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import { formatStamp } from '../../i18n/format';
 import { Button, Icon, IconChooser, IconView, TextField, resolveIconRefColor } from '../../ui';
+import { AppleSourceRow } from '../calendars/appleReminders/AppleSourceRow';
 import { LinkedEventRow } from '../calendars/LinkedEventRow';
 import { FocusLaunchButton } from '../focus/FocusLaunchButton';
 import { FocusTaskTotalRow } from '../focus/FocusTaskTotalRow';
@@ -181,6 +182,8 @@ export function TaskDetailBody(props: TaskDetailBodyProps) {
       />
       {/* K-04 : lien en lecture seule vers l'événement d'agenda externe d'où vient la tâche. */}
       <LinkedEventRow task={task} />
+      {/* K-05 : origine Rappels Apple (liste, récurrent, détachée), en lecture seule. */}
+      <AppleSourceRow task={task} />
       {/* M10 (F-03) : temps de concentration de la tâche, en lecture seule. */}
       <FocusTaskTotalRow taskId={task.id} />
 
