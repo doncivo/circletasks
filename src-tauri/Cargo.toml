@@ -1,6 +1,6 @@
 [package]
 name = "circletasks"
-version = "0.1.1"
+version = "0.2.0"
 description = "CircleTasks : planificateur personnel (PC Windows et iPhone)"
 authors = ["Ali Cherif"]
 edition = "2021"
