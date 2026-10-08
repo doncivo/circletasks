@@ -51,3 +51,25 @@
   font-size: var(--ct-font-size-heading-sm);
   font-weight: var(--ct-font-weight-bold);
 }
+
+/* Autorisations de la dictée (I-05) : explication avant les fenêtres d'iOS, refus persistant avec « Ouvrir les réglages ». */
+.ct-dictation__explain {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  font-size: var(--ct-font-size-text-sm);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.ct-dictation__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  align-self: stretch;
+}
+
+.ct-dictation__message {
+  margin: 0 0 var(--ct-space-2);
+}
