@@ -8,6 +8,8 @@ import { useLayout } from '../../ui/useLayout';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
+import { notificationStatusStore } from '../reminders/notificationStatus';
+import { t } from '../../i18n';
 import { FocusView } from './FocusView';
 import { focusStore } from './focusStore';
 import { buildWindowState } from './focusViewModel';
@@ -36,6 +38,8 @@ export function FocusHost() {
   const today = useFeatureStore(focusStore, (s) => s.today);
   const spaces = useAppStore((s) => s.spaces);
   const entities = useTaskEntities();
+  // F-04 critère 15 : la notification de fin n'a pas pu être planifiée (bandeau persistant sur l'écran Focus ; la session continue).
+  const endFailure = useFeatureStore(notificationStatusStore, (s) => s.status.focusEndFailure !== null);
   const { focusWindow } = container;
 
   // Démarrage : session ouverte reprise dans son état exact, ou close à son terme prévu (F-01 critère 9).
@@ -173,5 +177,14 @@ export function FocusHost() {
 
   if (!viewState) return null;
   if (focusWindow) return null;
-  return <FocusView state={viewState} variant={layout === 'mobile' ? 'screen' : 'panel'} clock={container.clock} onAction={handleAction} player={player} />;
+  return (
+    <>
+      <FocusView state={viewState} variant={layout === 'mobile' ? 'screen' : 'panel'} clock={container.clock} onAction={handleAction} player={player} />
+      {endFailure && (
+        <p className="ct-focus__endFailure" role="status">
+          {t('reminders.status.focusEndFailed')}
+        </p>
+      )}
+    </>
+  );
 }

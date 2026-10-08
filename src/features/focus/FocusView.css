@@ -378,3 +378,19 @@
   height: 44px;
   font-size: 14px;
 }
+
+/* F-04 critère 15 : la notification de fin n'a pas pu être planifiée (au-dessus de l'écran Focus, la session continue). */
+.ct-focus__endFailure {
+  position: fixed;
+  left: var(--ct-space-3);
+  right: var(--ct-space-3);
+  bottom: var(--ct-space-3);
+  z-index: 60;
+  margin: 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+  text-align: center;
+}
