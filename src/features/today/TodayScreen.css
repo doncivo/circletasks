@@ -145,13 +145,74 @@
 
 /* Feuille « Nouvelle tâche » (iPhone, Ajout.html) : l'ordre du DOM suit l'ordre
    visuel (en-tête, champ Titre, espace, bouton Enregistrer) ; le focus est posé
-   explicitement sur le champ Titre à l'ouverture (TodayScreen.tsx), sans recourir à
+   par `Sheet` (`initialFocusRef`, effet de mise en page) à l'ouverture, sans recourir à
    l'ordre CSS pour tromper le piège de focus de `Sheet`. */
 .ct-task-sheet {
   display: flex;
   flex-direction: column;
   gap: var(--ct-space-3);
-  height: 100%;
+  min-height: 100%;
+}
+
+/* Q-05 : bouton « Enregistrer » collé au bas de la feuille qui défile (clavier iOS qui réduit la fenêtre). */
+.ct-task-sheet__footer {
+  position: sticky;
+  bottom: calc(-28px - var(--ct-safe-area-bottom));
+  margin-bottom: calc(-28px - var(--ct-safe-area-bottom));
+  padding: var(--ct-space-2) 0 calc(28px + var(--ct-safe-area-bottom));
+  background: var(--ct-color-surface);
+}
+
+.ct-task-sheet__notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ct-space-2);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-task-sheet__retry {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--ct-space-2);
+  border: 0;
+  background: transparent;
+  color: var(--ct-color-accent);
+  font: inherit;
+  font-weight: var(--ct-font-weight-semibold);
+  cursor: pointer;
+}
+
+.ct-task-sheet__titleRow[data-shake='true'] {
+  animation: ct-task-sheet-shake 0.4s ease-in-out;
+}
+
+@keyframes ct-task-sheet-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-task-sheet__titleRow[data-shake='true'] {
+    animation: none;
+    outline: 2px solid var(--ct-color-danger);
+    outline-offset: 1px;
+  }
 }
 
 .ct-task-sheet__header {

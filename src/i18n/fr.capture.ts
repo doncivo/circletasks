@@ -8,6 +8,10 @@ export const captureFr = {
   projectOptionLabelIn: 'Projet {name}, espace {space}',
   previewLabel: 'Ce qui sera appliqué',
   removeToken: 'Retirer {label}',
+  // Feuille « Nouvelle tâche » de l'iPhone (Q-05) : base occupée ou création refusée, texte conservé.
+  sheetNotReady: 'La base n’est pas prête. Votre texte est conservé.',
+  sheetRetry: 'Réessayer',
+  sheetSaveError: 'La tâche n’a pas pu être enregistrée. Votre texte est conservé.',
   spaceAnnounce: 'Espace {space}',
   projectAnnounce: 'Projet {project}',
   spaceProjectAnnounce: 'Espace {space}, projet {project}',

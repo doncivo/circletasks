@@ -8,7 +8,16 @@ import { WheelPicker, type WheelItem } from './WheelPicker';
 
 const pad2 = (n: number): string => String(n).padStart(2, '0');
 /** Catégorie de pluriel de la langue courante (français : 0 et 1 au singulier), pour les valeurs annoncées. */
-const plural = (n: number): Intl.LDMLPluralRule => new Intl.PluralRules(getLocale()).select(n);
+const pluralRules = new Map<string, Intl.PluralRules>();
+const plural = (n: number): Intl.LDMLPluralRule => {
+  const locale = getLocale();
+  let rules = pluralRules.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRules.set(locale, rules);
+  }
+  return rules.select(n);
+};
 
 export interface TimeWheelColumnsProps {
   readonly value: LocalTime | null;

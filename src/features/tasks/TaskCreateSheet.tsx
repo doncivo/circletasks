@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
@@ -23,6 +23,13 @@ export function scheduleOf(choice: DateChoice | null): NewTaskSchedule {
   if (choice.date === null) return { someday: true };
   return { date: choice.date, ...(choice.time !== null ? { time: choice.time } : {}) };
 }
+
+/** Q-05 : une écriture qui n'aboutit pas dans ce délai (base occupée par une sauvegarde ou la synchro) affiche « La base n'est pas prête ». */
+export const CREATE_NOT_READY_MS = 2000;
+/** Durée de l'animation du champ qui tremble (titre vide refusé) ; sans animation si l'utilisateur la réduit (CSS). */
+const SHAKE_MS = 450;
+
+type SheetNotice = 'not-ready' | 'failed';
 
 export interface TaskCreateSheetProps {
   readonly viewedDate: LocalDate;
@@ -74,16 +81,39 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const [offsetsTouched, setOffsetsTouched] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const busy = useRef(false);
+  // Q-05 : création en cours (une seule à la fois, même après le message « base non prête » : « Réessayer » la reprend au lieu d'en lancer une seconde).
+  const pending = useRef<Promise<boolean> | null>(null);
+  const mounted = useRef(true);
+  const onCloseRef = useRef(onClose);
+  const [notice, setNotice] = useState<SheetNotice | null>(null);
+  const [shaking, setShaking] = useState(false);
   // Q-03 : le micro de l'app n'apparaît que si le plugin Speech existe (ordre 5) ; le micro du clavier iOS dicte dans le champ sans code.
   const dictation = useDictation({ layout: 'mobile', inputRef: titleRef, onText: (spoken) => setTitle(title === '' ? spoken : `${title} ${spoken}`) });
   const valid = validateTaskTitle(quick.parse.title).ok;
 
-  // Le piège de focus de `Sheet` pose d'abord le focus sur « Fermer » (premier élément focusable) ; le `setTimeout` s'exécute
-  // après ses effets pour poser le focus dans le champ Titre sans dépendre de l'ordre du DOM.
+  // Le focus du champ Titre est posé par `Sheet` (`initialFocusRef`) dans un effet de mise en page, donc dans le geste d'ouverture
+  // (Q-05 : sur iPhone, le clavier ne monte pas pour un focus posé dans une minuterie).
   useEffect(() => {
-    const id = window.setTimeout(() => titleRef.current?.focus(), 0);
-    return () => window.clearTimeout(id);
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
   }, []);
+  useEffect(() => {
+    if (!shaking) return undefined;
+    const id = window.setTimeout(() => setShaking(false), SHAKE_MS);
+    return () => window.clearTimeout(id);
+  }, [shaking]);
+
+  // Entrée sur un titre vide : le champ tremble et la feuille reste ouverte (T-01). Le bouton désactivé empêche l'envoi du formulaire.
+  function handleTitleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key !== 'Enter' || valid) return;
+    event.preventDefault();
+    setShaking(true);
+  }
 
   function changeChoice(next: DateChoice | null): void {
     const value = next ?? { date: today, time: null };
@@ -97,6 +127,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     // Un second Entrée pendant l'attente (chargement des dates, écriture) ne crée pas une seconde tâche.
     if (busy.current) return;
     busy.current = true;
+    setNotice(null);
     try {
       await create();
     } finally {
@@ -116,21 +147,48 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     const finalChoice: DateChoice = written ? { date: parsed.date, time: parsed.time } : choice;
     const finalOffsets = written ? offsetsAfterTimeChange(offsets, null, parsed.time, offsetsTouched, defaultOffsets) : offsets;
     const reminderOffsets = finalChoice.date === null || finalChoice.time === null ? [] : finalOffsets;
-    const created = await onCreate({
-      title: parsed.title,
-      spaceId: finalSpaceId,
-      projectId: finalProjectId,
-      choice: finalChoice,
-      recurrence: finalChoice.date === null ? null : recurrence,
-      icon,
-      reminderOffsets,
-      goalId,
-    });
-    if (created) onClose();
+    let run = pending.current;
+    if (!run) {
+      const started = (async (): Promise<boolean> => {
+        try {
+          return await onCreate({
+            title: parsed.title,
+            spaceId: finalSpaceId,
+            projectId: finalProjectId,
+            choice: finalChoice,
+            recurrence: finalChoice.date === null ? null : recurrence,
+            icon,
+            reminderOffsets,
+            goalId,
+          });
+        } catch {
+          return false;
+        }
+      })();
+      run = started;
+      pending.current = started;
+      // Fin de l'écriture, même tardive : réussie, la feuille se ferme ; refusée, l'erreur s'affiche et le texte reste.
+      void started.then((created) => {
+        if (pending.current === started) pending.current = null;
+        if (!mounted.current) return;
+        if (created) onCloseRef.current();
+        else setNotice('failed');
+      });
+    }
+    // Course contre le délai de Q-05 : au-delà, « La base n'est pas prête » (l'écriture reste attendue, rien n'est perdu).
+    let timer = 0;
+    const slow = await Promise.race([
+      run.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = window.setTimeout(() => resolve(true), CREATE_NOT_READY_MS);
+      }),
+    ]);
+    window.clearTimeout(timer);
+    if (slow && mounted.current && pending.current === run) setNotice('not-ready');
   }
 
   return (
-    <Sheet open onClose={onClose} label={t('tasks.newTask')}>
+    <Sheet open onClose={onClose} label={t('tasks.newTask')} initialFocusRef={titleRef}>
       <form className="ct-task-sheet" onSubmit={submit}>
         <div className="ct-task-sheet__header">
           <h2 className="ct-task-sheet__heading">{t('tasks.newTask')}</h2>
@@ -139,7 +197,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
           </button>
         </div>
         {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
-        <div className="ct-task-sheet__titleRow">
+        <div className="ct-task-sheet__titleRow" data-shake={shaking ? 'true' : undefined}>
           <QuickInputField
             ref={titleRef}
             label={t('tasks.titleLabel')}
@@ -147,6 +205,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             value={title}
             onChange={setTitle}
             maxLength={TASK_TITLE_MAX_LENGTH}
+            enterKeyHint="done"
+            onKeyDown={handleTitleKeyDown}
             context={quick.suggestionContext}
             {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
           />
@@ -187,9 +247,22 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
         {/* Rattacher à mon objectif (OB-03, Ajout.html) : la semaine de référence est celle de la date choisie. */}
         <GoalAttachSwitch variant="sheet" taskDate={choice.date} attachedGoalId={goalId} onChange={setGoalId} />
         <div className="ct-task-sheet__spacer" />
-        <Button type="submit" fullWidth disabled={!valid || !spaceId}>
-          {t('tasks.save')}
-        </Button>
+        {notice && (
+          <div className="ct-task-sheet__notice" role="alert">
+            <span>{notice === 'not-ready' ? t('capture.sheetNotReady') : t('capture.sheetSaveError')}</span>
+            {notice === 'not-ready' && (
+              <button type="button" className="ct-task-sheet__retry" onClick={(event) => void submit(event)}>
+                {t('capture.sheetRetry')}
+              </button>
+            )}
+          </div>
+        )}
+        {/* Collé en bas de la feuille : « Enregistrer » reste visible quand le clavier réduit la fenêtre (Q-05). */}
+        <div className="ct-task-sheet__footer">
+          <Button type="submit" fullWidth disabled={!valid || !spaceId}>
+            {t('tasks.save')}
+          </Button>
+        </div>
       </form>
     </Sheet>
   );

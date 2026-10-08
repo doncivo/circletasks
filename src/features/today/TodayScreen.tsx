@@ -10,7 +10,7 @@ import { buildTodayList } from '../../domain/todayList';
 import type { EventId, LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, useDelayedFlag, useLayout } from '../../ui';
+import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, openNow, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -182,7 +182,7 @@ export function TodayScreen() {
   const { count: somedayCount } = useSomedayTasks();
   const openCreate = useCallback((): void => {
     if (layout === 'pc') inlineInputRef.current?.focus();
-    else setSheetOpen(true);
+    else openNow(() => setSheetOpen(true));
   }, [layout]);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 

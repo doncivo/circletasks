@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { useFocusTrap } from './useFocusTrap';
 
@@ -7,6 +7,9 @@ const OUTSIDE = 'Dehors';
 const FIRST = 'Premier';
 const LAST = 'Dernier';
 const DEACTIVATE = 'Désactiver';
+const TARGET = 'Champ visé';
+const OTHER = 'Champ automatique';
+const ACTIVE = 'Déjà actif';
 
 function Harness({ onEscape }: { onEscape: () => void }) {
   const [active, setActive] = useState(true);
@@ -84,5 +87,43 @@ describe('useFocusTrap : rappel instable', () => {
     last.focus();
     fireEvent.click(last);
     expect(last).toHaveFocus();
+  });
+});
+
+function WithInitial({ autoFocusSecond = false }: { autoFocusSecond?: boolean }) {
+  const target = useRef<HTMLInputElement>(null);
+  const ref = useFocusTrap<HTMLDivElement>({ active: true, initialFocus: target });
+  return (
+    <div ref={ref} tabIndex={-1}>
+      <button type="button">{FIRST}</button>
+      <input ref={target} aria-label={TARGET} />
+      <input aria-label={OTHER} autoFocus={autoFocusSecond} />
+    </div>
+  );
+}
+
+describe('useFocusTrap : focus initial (Q-05)', () => {
+  it('place le focus sur l’élément demandé, avant tout temporisateur (effet de mise en page)', () => {
+    render(<WithInitial />);
+    expect(screen.getByLabelText(TARGET)).toHaveFocus();
+  });
+
+  it('sans élément demandé : premier élément focusable (comportement inchangé)', () => {
+    render(<Harness onEscape={() => undefined} />);
+    expect(screen.getByRole('button', { name: FIRST })).toHaveFocus();
+  });
+
+  it('ne vole pas le focus : un élément du conteneur déjà actif est conservé quand rien n’est demandé', () => {
+    function Keep() {
+      const ref = useFocusTrap<HTMLDivElement>({ active: true });
+      return (
+        <div ref={ref} tabIndex={-1}>
+          <button type="button">{FIRST}</button>
+          <input aria-label={ACTIVE} autoFocus />
+        </div>
+      );
+    }
+    render(<Keep />);
+    expect(screen.getByLabelText(ACTIVE)).toHaveFocus();
   });
 });
