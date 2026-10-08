@@ -32,7 +32,7 @@ test('parcours 5 : créer une tâche mensuelle, la terminer, vérifier l’occur
     await field.fill(title);
     await field.press('Enter');
     await expect(field).toHaveValue('');
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     const detail = page.getByLabel('Détail de la tâche');
     await detail.getByRole('button', { name: 'Rendre la tâche récurrente' }).click();
     await detail.getByRole('radio', { name: 'Mensuel' }).click();
@@ -48,6 +48,6 @@ test('parcours 5 : créer une tâche mensuelle, la terminer, vérifier l’occur
   await expect(page.getByRole('heading', { level: 1 })).toContainText('23');
   await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toBeVisible();
   await expect(page.getByRole('checkbox', { name: `Rouvrir : ${title}` })).toHaveCount(0);
-  await page.getByRole('button', { name: title }).click();
+  await page.getByRole('button', { name: title, exact: true }).click();
   await expect(page.getByLabel('Détail de la tâche').getByText('Mensuelle, le 23')).toBeVisible();
 });
