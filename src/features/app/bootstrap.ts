@@ -64,6 +64,7 @@ export async function bootstrapDatabase(
     setDbStatus('ready');
     return db;
   } catch (error) {
+    const journalMode = db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
     const message = describeError(error);
@@ -71,9 +72,20 @@ export async function bootstrapDatabase(
     setDbStatus('error', {
       detail: message,
       backupFailed: error instanceof MigrationBackupError,
-      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message },
+      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message, ...(journalMode === undefined ? {} : { journalMode }) },
     });
     return undefined;
+  }
+}
+
+/** Mode de journal effectif pour le diagnostic (0.2.2) ; null si la lecture échoue (elle ne masque jamais l'erreur d'origine). */
+async function readJournalMode(db: SqlDriver): Promise<string | null> {
+  try {
+    const rows = await db.select('PRAGMA journal_mode');
+    const mode = rows[0]?.journal_mode;
+    return typeof mode === 'string' ? mode : null;
+  } catch {
+    return null;
   }
 }
 

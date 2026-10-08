@@ -39,6 +39,7 @@ export function formatDbFailure(failure: DbFailure, env: DbEnvironment | null): 
     t('app.diag.error', { name: failure.errorName, message: failure.message }),
     t('app.diag.url', { url: DB_URL }),
   ];
+  if (failure.journalMode !== undefined) lines.push(t('app.diag.journalMode', { mode: failure.journalMode ?? t('app.diag.unknown') }));
   if (!env) {
     lines.push(t('app.diag.pathsPending'));
     return lines.join('\n');

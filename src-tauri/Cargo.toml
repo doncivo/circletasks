@@ -1,6 +1,6 @@
 [package]
 name = "circletasks"
-version = "0.2.1"
+version = "0.2.2"
 description = "CircleTasks : planificateur personnel (PC Windows et iPhone)"
 authors = ["Ali Cherif"]
 edition = "2021"
@@ -117,3 +117,11 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Pool SQLite a UNE connexion (correctif 0.2.2 base verrouillee). tauri-plugin-sql 2.5.0 ouvre un pool sqlx de 10 connexions et
+# ne permet pas de le regler ; la copie dans vendor/ ne differe de l amont que par src/wrapper.rs (open_sqlite_pool). Voir CHANGELOG 0.2.2.
+[patch.crates-io]
+tauri-plugin-sql = { path = "vendor/tauri-plugin-sql" }
+
+[workspace]
+members = [".", "vendor/tauri-plugin-sql"]

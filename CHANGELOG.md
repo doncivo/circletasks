@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.2.2
+
+- Correction : base de données verrouillée au premier lancement sur iPhone.
+- Le diagnostic d'ouverture affiche le mode de journal effectif de la base.
+
 ## 0.2.1
 
 - Diagnostic d'ouverture de la base affiché.

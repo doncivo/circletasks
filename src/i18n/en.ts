@@ -50,6 +50,7 @@ export const en: Messages = {
       configDirError: 'Folder not found: {message}',
       dbFile: 'File: {path} (exists: {exists}, size: {size})',
       wal: 'WAL journal present: {exists}',
+      journalMode: 'Effective journal mode: {mode}',
       pathsError: 'Paths unavailable: {message}',
       pathsPending: 'Paths: reading…',
       environment: 'Environment: {runtime}, system {os}, build {build}, version {version}',

@@ -53,6 +53,7 @@ export const fr = {
       configDirError: 'Dossier introuvable : {message}',
       dbFile: 'Fichier : {path} (existe : {exists}, taille : {size})',
       wal: 'Journal WAL présent : {exists}',
+      journalMode: 'Mode de journal effectif : {mode}',
       pathsError: 'Chemins indisponibles : {message}',
       pathsPending: 'Chemins : lecture en cours…',
       environment: 'Environnement : {runtime}, système {os}, build {build}, version {version}',
