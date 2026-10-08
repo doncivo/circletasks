@@ -64,7 +64,7 @@ jobs:
       - name: Vitest projet node, tranche ${{ matrix.shard }}/3
         run: >
           npx vitest run --project node --shard=${{ matrix.shard }}/3
-          --reporter=blob --outputFile.blob=.vitest/blob/blob-node-${{ matrix.shard }}.json
+          --reporter=default --reporter=blob --outputFile.blob=.vitest/blob/blob-node-${{ matrix.shard }}.json
           --reporter=json --outputFile.json=vitest-report.json
       - name: Comptage
         if: always() && hashFiles('vitest-report.json') != ''
@@ -107,7 +107,7 @@ jobs:
       - name: Vitest projet dom, tranche ${{ matrix.shard }}/3
         run: >
           npx vitest run --project dom --shard=${{ matrix.shard }}/3
-          --reporter=blob --outputFile.blob=.vitest/blob/blob-dom-${{ matrix.shard }}.json
+          --reporter=default --reporter=blob --outputFile.blob=.vitest/blob/blob-dom-${{ matrix.shard }}.json
           --reporter=json --outputFile.json=vitest-report.json
       - name: Comptage
         if: always() && hashFiles('vitest-report.json') != ''
