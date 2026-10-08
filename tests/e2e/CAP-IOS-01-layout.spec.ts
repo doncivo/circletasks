@@ -42,7 +42,7 @@ async function fakeOcr(page: Page, hook: Record<string, unknown>): Promise<void>
 const scan = (page: Page) => page.getByRole('dialog', { name: 'Scan tâches' });
 
 test.describe('CAP-IOS-01 / I-05 — écrans iPhone', () => {
-  test.beforeEach(({}, testInfo) => {
+  test.beforeEach((_fixtures, testInfo) => {
     test.skip(!isPhone(testInfo), 'iPhone seulement');
   });
 
