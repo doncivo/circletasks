@@ -71,6 +71,8 @@ describe('nativeOcr', () => {
       ['ocr-dimensions-too-large', 'dimensions'],
       ['ocr-language-missing', 'language-missing'],
       ['ocr-unsupported-format', 'unsupported-format'],
+      ['ocr-timeout', 'timeout'],
+      ['ocr-busy', 'busy'],
     ];
     for (const [code, reason] of cases) {
       refuse({ code, message: 'Engine("texte reconnu secret")' });
@@ -101,5 +103,14 @@ describe('openOcrService : moteurs de l’appareil', () => {
       expect(service.primary).toBeNull();
       expect(service.fallback?.id).toBe('tesseract');
     }
+  });
+});
+
+describe('nativeOcr : lignes tronquées par le moteur', () => {
+  it('truncated est transmis seulement quand il est vrai', async () => {
+    reply({ lines: [{ text: 'a', confidence: 90 }], truncated: true });
+    expect(await createNativeOcr('vision').recognize(image(), { lang: 'fra' })).toEqual({ lines: [{ text: 'a', confidence: 90 }], truncated: true });
+    reply({ lines: [{ text: 'a' }] });
+    expect(await createNativeOcr('windows').recognize(image(), { lang: 'fra' })).toEqual({ lines: [{ text: 'a' }] });
   });
 });

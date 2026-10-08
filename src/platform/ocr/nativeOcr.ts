@@ -12,6 +12,8 @@ const FAILURES: Readonly<Record<string, OcrFailure>> = {
   'ocr-too-large': 'too-large',
   'ocr-dimensions-too-large': 'dimensions',
   'ocr-unavailable': 'unavailable',
+  'ocr-timeout': 'timeout',
+  'ocr-busy': 'busy',
 };
 
 /** Transforme l'erreur `{ code, message }` d'une commande Rust en `OcrError` (le code Rust est gardé pour l'affichage et le journal). */
@@ -24,6 +26,7 @@ interface StatusJson {
   readonly available: boolean;
   readonly languages: string[];
   readonly reason?: string;
+  readonly cleanupFailed?: boolean;
 }
 
 /**
@@ -37,7 +40,7 @@ export function createNativeOcr(id: 'windows' | 'vision'): OcrEngine {
       try {
         const status = await invoke<StatusJson>(OCR_STATUS_COMMAND);
         const reason = status.reason === 'language-missing' || status.reason === 'plugin-unavailable' ? status.reason : undefined;
-        return { available: status.available, languages: status.languages, ...(reason ? { reason } : {}) };
+        return { available: status.available, languages: status.languages, ...(reason ? { reason } : {}), ...(status.cleanupFailed === true ? { cleanupFailed: true } : {}) };
       } catch {
         // `ocr_status` n'échoue jamais côté Rust : une erreur ici est une commande absente ou refusée (capability), à dire sur l'iPhone.
         return { available: false, languages: [], ...(id === 'vision' ? { reason: 'plugin-unavailable' as const } : {}) };
@@ -46,8 +49,9 @@ export function createNativeOcr(id: 'windows' | 'vision'): OcrEngine {
     recognize: async (image) => {
       try {
         const bytes = new Uint8Array(await image.arrayBuffer());
-        const result = await invoke<{ lines: Array<{ text: string; confidence?: number }> }>(OCR_RECOGNIZE_COMMAND, bytes);
+        const result = await invoke<{ lines: Array<{ text: string; confidence?: number }>; truncated?: boolean }>(OCR_RECOGNIZE_COMMAND, bytes);
         return {
+          ...(result.truncated === true ? { truncated: true } : {}),
           lines: result.lines.map((line): OcrLineResult => (typeof line.confidence === 'number' ? { text: line.text, confidence: line.confidence } : { text: line.text })),
         };
       } catch (error) {

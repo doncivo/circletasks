@@ -49,6 +49,7 @@ export const scanFr = {
     detected: '{count} lignes détectées',
     detectedOne: '1 ligne détectée',
     truncated: 'Seules les {max} premières lignes sur {count} sont gardées.',
+    engineTruncated: 'Le moteur de lecture n’a rendu que les 500 premières lignes de la photo, de haut en bas.',
     instructions: 'Corrigez le texte, décochez ce qu’il ne faut pas créer, puis validez.',
     retake: 'Reprendre la photo',
     lineLabel: 'Tâche {n}',
@@ -104,8 +105,16 @@ export const scanFr = {
     hint: 'Le moteur de lecture de l’iPhone n’a pas pu lire cette photo. Réessayez, ou lisez-la avec le moteur intégré, plus lent.',
     retry: 'Réessayer',
     useFallback: 'Lire avec le moteur intégré',
+    cause: {
+      timeout: 'La lecture a pris trop de temps. Réessayez, ou lisez la photo avec le moteur intégré, plus lent.',
+      busy: 'Une lecture est encore en cours. Réessayez dans un instant.',
+      unsupportedFormat: 'Ce format d’image n’est pas lu par le moteur de l’iPhone. Reprenez une photo, ou lisez-la avec le moteur intégré.',
+      tooLarge: 'Cette image est trop lourde pour le moteur de l’iPhone. Reprenez une photo, ou lisez-la avec le moteur intégré.',
+      dimensions: 'Cette image est trop grande pour le moteur de l’iPhone. Reprenez une photo, ou lisez-la avec le moteur intégré.',
+    },
   },
   code: 'Code : {code}',
+  cleanupFailed: 'Une copie temporaire d’une photo précédente n’a pas pu être supprimée de l’iPhone. Redémarrez l’application.',
   // Caméra du sélecteur de photo de l’iPhone (I-05 critère 10) : l’état de l’autorisation n’est pas lisible, la phrase ne dépend d’aucun état.
   cameraHint: {
     text: 'Pour photographier une liste, autorisez la caméra : iOS vous le demandera la première fois. Si rien ne se passe, ouvrez Réglages › CircleTasks › Caméra.',

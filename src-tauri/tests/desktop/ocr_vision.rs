@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use base64::{engine::general_purpose::STANDARD, Engine};
-use circletasks_lib::ocr::vision::{error_of_code, read_lines, recognize_with, status_with, VisionState, VisionTransport, PLUGIN_REJECT_CODES, VISION_LANGUAGES};
+use circletasks_lib::ocr::vision::{error_of_code, read_lines, read_result, recognize_with, MAX_RAW_LINES, status_with, VisionState, VisionTransport, PLUGIN_REJECT_CODES, VISION_LANGUAGES};
 use circletasks_lib::ocr::{declared_dimensions, validate_for_vision, ImageKind, OcrError, MAX_LINES, VISION_MAX_SIDE};
 use serde_json::{json, Value};
 
@@ -31,6 +31,8 @@ struct FakeVision {
     recognize: Mutex<Result<Value, String>>,
     delay: Mutex<Duration>,
     calls: AtomicUsize,
+    cleans: AtomicUsize,
+    clean_fails: std::sync::atomic::AtomicBool,
     last_args: Mutex<Option<Value>>,
 }
 
@@ -41,6 +43,8 @@ impl FakeVision {
             recognize: Mutex::new(Ok(json!({ "lines": [] }))),
             delay: Mutex::new(Duration::ZERO),
             calls: AtomicUsize::new(0),
+            cleans: AtomicUsize::new(0),
+            clean_fails: std::sync::atomic::AtomicBool::new(false),
             last_args: Mutex::new(None),
         })
     }
@@ -75,6 +79,14 @@ impl VisionTransport for FakeVision {
             assert!(shapes.iter().any(|shape| contract_keys(shape) == keys(value)), "forme de réponse hors contrat : {value}");
         }
         response
+    }
+
+    fn clean(&self) -> Result<Value, String> {
+        self.cleans.fetch_add(1, Ordering::SeqCst);
+        if self.clean_fails.load(Ordering::SeqCst) {
+            return Err("failed".to_owned());
+        }
+        Ok(json!({ "removed": 1 }))
     }
 
     fn recognize(&self, args: Value) -> Result<Value, String> {
@@ -163,7 +175,7 @@ fn cap_ios_01_2_serialized_lines_omit_confidence_for_windows_and_status_omits_re
     use circletasks_lib::ocr::{clean_lines, OcrStatus};
     // Windows : jamais de `confidence` ni de `reason` dans les réponses (additif, compatible avec le front existant).
     assert_eq!(serde_json::to_value(clean_lines(["Ligne"])).unwrap(), json!([{ "text": "Ligne" }]));
-    let status = OcrStatus { available: true, languages: vec!["fr-FR".to_owned()], reason: None };
+    let status = OcrStatus { available: true, languages: vec!["fr-FR".to_owned()], reason: None, cleanup_failed: false };
     assert_eq!(serde_json::to_value(status).unwrap(), json!({ "available": true, "languages": ["fr-FR"] }));
 }
 
@@ -194,6 +206,26 @@ fn cap_ios_01_blank_lines_are_dropped_and_the_count_is_capped() {
     assert_eq!(lines[0].text, "Ligne 0");
     // Réponse sans tableau `lines` : échec, jamais une liste vide silencieuse.
     assert_eq!(read_lines(&json!({})), Err(OcrError::Engine("failed".to_owned())));
+}
+
+#[test]
+fn cap_ios_01_the_cut_happens_after_the_sort_and_truncation_is_reported() {
+    // 700 lignes dans le désordre : les 500 gardées sont les plus HAUTES de la page, jamais les premières reçues.
+    let mut items: Vec<Value> = (0..700).map(|i| json!({ "text": format!("L{i}"), "confidence": 0.9, "x": (i as f64) / 10000.0, "y": 1.0 - (i as f64) / 1000.0 })).collect();
+    items.reverse();
+    let result = read_result(&json!({ "lines": items })).unwrap();
+    assert!(result.truncated);
+    assert_eq!(result.lines.len(), MAX_LINES);
+    assert_eq!(result.lines[0].text, "L0");
+    assert_eq!(result.lines[MAX_LINES - 1].text, "L499");
+    assert_eq!(serde_json::to_value(&result).unwrap()["truncated"], json!(true));
+    // Sous le plafond : le champ est absent (additif, réponses de Windows inchangées).
+    let small = read_result(&json!({ "lines": [{ "text": "a", "confidence": 0.9, "x": 0.0, "y": 0.5 }] })).unwrap();
+    assert!(!small.truncated);
+    assert!(serde_json::to_value(&small).unwrap().get("truncated").is_none());
+    // Réponse au plafond demandé à Vision : Swift a pu couper, le front est averti.
+    let at_cap: Vec<Value> = (0..MAX_RAW_LINES).map(|i| json!({ "text": format!("L{i}"), "confidence": 0.9, "x": 0.0, "y": 0.9 })).collect();
+    assert!(read_result(&json!({ "lines": at_cap })).unwrap().truncated);
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -280,7 +312,7 @@ fn cap_ios_01_3_the_plugin_receives_the_image_in_base64_with_french_first() {
     assert_eq!(args["languages"], json!(["fr-FR", "en-US"]));
     assert_eq!(VISION_LANGUAGES, ["fr-FR", "en-US"]);
     assert_eq!(args["maxSide"], json!(4096));
-    assert_eq!(args["maxLines"], json!(500));
+    assert_eq!(args["maxLines"], json!(MAX_RAW_LINES), "Vision rend jusqu'à 2 000 lignes : la coupe à 500 se fait après le tri");
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -309,7 +341,7 @@ fn cap_ios_01_every_swift_code_maps_to_the_documented_rust_code() {
 fn cap_ios_01_a_rejected_read_carries_the_code_and_never_text() {
     let fake = FakeVision::new();
     let state = VisionState::default();
-    for (swift, rust) in [("language-missing", "ocr-language-missing"), ("dimensions", "ocr-dimensions-too-large"), ("timeout", "ocr-engine"), ("failed", "ocr-engine")] {
+    for (swift, rust) in [("language-missing", "ocr-language-missing"), ("dimensions", "ocr-dimensions-too-large"), ("timeout", "ocr-timeout"), ("busy", "ocr-busy"), ("failed", "ocr-engine")] {
         fake.reject(swift);
         let error = recognize(&fake, &state, PRINTED).expect_err(swift);
         assert_eq!(error.0, rust);
@@ -370,8 +402,7 @@ fn cap_ios_01_only_one_read_at_a_time() {
     };
     wait_until(|| state.is_busy());
     let second = recognize(&fake, &state, PRINTED).expect_err("seconde lecture");
-    assert_eq!(second.0, "ocr-engine");
-    assert!(second.1.contains("busy"), "{}", second.1);
+    assert_eq!(second.0, "ocr-busy");
     assert!(first.join().unwrap().is_ok());
     assert!(!state.is_busy());
     assert_eq!(fake.calls(), 1, "la seconde lecture n'atteint jamais le plugin");
@@ -386,10 +417,10 @@ fn cap_ios_01_a_silent_plugin_cannot_freeze_the_caller_and_the_flag_follows_the_
     let start = Instant::now();
     let result = recognize_with(&transport(&fake), &state, PRINTED, Duration::from_millis(50));
     assert!(start.elapsed() < Duration::from_millis(500), "l'appelant n'attend que le délai");
-    assert_eq!(result.expect_err("délai").code, "ocr-unavailable");
+    assert_eq!(result.expect_err("délai").code, "ocr-timeout");
     // Swift n'a pas fini : une nouvelle lecture est refusée `busy` (visible), puis le drapeau est rendu à la vraie fin.
     assert!(state.is_busy());
-    assert_eq!(recognize(&fake, &state, PRINTED).expect_err("busy").0, "ocr-engine");
+    assert_eq!(recognize(&fake, &state, PRINTED).expect_err("busy").0, "ocr-busy");
     wait_until(|| !state.is_busy());
     assert!(recognize(&fake, &state, PRINTED).is_ok());
 }
@@ -406,4 +437,41 @@ fn cap_ios_01_5_the_ocr_modules_write_no_file_and_open_no_connection() {
             assert!(!code.contains(forbidden), "{name} : `{forbidden}` interdit (l'image reste en mémoire)");
         }
     }
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Photo non conservée : copies temporaires du sélecteur supprimées après chaque lecture
+// ------------------------------------------------------------------------------------------------------------------------------
+
+#[test]
+fn cap_ios_01_temporary_photo_copies_are_removed_after_every_read_and_a_failure_is_remembered() {
+    let fake = FakeVision::new();
+    fake.lines(json!([{ "text": "ok", "confidence": 0.9, "x": 0.0, "y": 0.5 }]));
+    let state = VisionState::default();
+    recognize(&fake, &state, PRINTED).expect("lecture");
+    assert_eq!(fake.cleans.load(Ordering::SeqCst), 1, "nettoyage après une lecture réussie");
+    fake.reject("failed");
+    recognize(&fake, &state, PRINTED).expect_err("échec");
+    assert_eq!(fake.cleans.load(Ordering::SeqCst), 2, "nettoyage aussi après un échec");
+    assert!(!state.cleanup_failed());
+    // Un nettoyage en échec est retenu (dit par ocr_status), puis effacé par le suivant.
+    fake.clean_fails.store(true, Ordering::SeqCst);
+    let _ = recognize(&fake, &state, PRINTED);
+    assert!(state.cleanup_failed());
+    fake.clean_fails.store(false, Ordering::SeqCst);
+    let _ = recognize(&fake, &state, PRINTED);
+    assert!(!state.cleanup_failed());
+    // Une entrée invalide n'atteint jamais le plugin, donc ne déclenche rien.
+    let before = fake.cleans.load(Ordering::SeqCst);
+    let _ = recognize(&fake, &state, b"pas une image");
+    assert_eq!(fake.cleans.load(Ordering::SeqCst), before);
+}
+
+#[test]
+fn cap_ios_01_status_serializes_cleanup_failure_only_when_true() {
+    use circletasks_lib::ocr::OcrStatus;
+    let mut status = OcrStatus { available: true, languages: vec!["fr-FR".to_owned()], reason: None, cleanup_failed: false };
+    assert!(serde_json::to_value(&status).unwrap().get("cleanupFailed").is_none());
+    status.cleanup_failed = true;
+    assert_eq!(serde_json::to_value(&status).unwrap()["cleanupFailed"], json!(true));
 }

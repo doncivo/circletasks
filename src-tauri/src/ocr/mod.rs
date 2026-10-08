@@ -46,8 +46,12 @@ pub enum OcrError {
     DimensionsTooLarge,
     /// Pack de langue français absent (PRD section 10).
     LanguageMissing,
-    /// Système non Windows.
+    /// Système non Windows, ou plugin Vision absent ou refusé (iPhone).
     Unavailable,
+    /// Une lecture est déjà en cours (iPhone) : à retenter dans un instant.
+    Busy,
+    /// Délai dépassé (iPhone) : la lecture n'a pas abouti à temps, à retenter.
+    Timeout,
     /// Échec du moteur ou du décodeur.
     Engine(String),
 }
@@ -62,6 +66,8 @@ impl OcrError {
             Self::DimensionsTooLarge => "ocr-dimensions-too-large",
             Self::LanguageMissing => "ocr-language-missing",
             Self::Unavailable => "ocr-unavailable",
+            Self::Busy => "ocr-busy",
+            Self::Timeout => "ocr-timeout",
             Self::Engine(_) => "ocr-engine",
         }
     }
@@ -91,12 +97,22 @@ pub struct OcrStatus {
     /// Pourquoi le moteur est indisponible (iPhone seulement, ADR 0015 §1.1) : `language-missing` ou `plugin-unavailable`. Absent sur PC.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reason: Option<&'static str>,
+    /// Vrai si la dernière suppression des copies temporaires de photos (sélecteur du système) a échoué : le front le dit (iPhone seulement).
+    #[serde(skip_serializing_if = "is_false", rename = "cleanupFailed")]
+    pub cleanup_failed: bool,
 }
 
 /// Lignes lues, dans l'ordre de la page.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct OcrResult {
     pub lines: Vec<OcrLine>,
+    /// Vrai si le moteur a rendu plus de lignes que `MAX_LINES` (les premières, de haut en bas, sont gardées) : le front le dit.
+    #[serde(skip_serializing_if = "is_false")]
+    pub truncated: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Une ligne lue. Windows.Media.Ocr ne donne aucune confiance (Q-04 décision D2) : le champ est absent ; Vision la donne (0 à 100).
@@ -246,7 +262,7 @@ fn status_blocking() -> OcrStatus {
     }
     #[cfg(not(windows))]
     {
-        OcrStatus { available: false, languages: Vec::new(), reason: None }
+        OcrStatus { available: false, languages: Vec::new(), reason: None, cleanup_failed: false }
     }
 }
 
@@ -275,7 +291,7 @@ pub async fn ocr_status<R: Runtime>(app: AppHandle<R>) -> OcrStatus {
         let _ = app;
         tauri::async_runtime::spawn_blocking(status_blocking)
             .await
-            .unwrap_or(OcrStatus { available: false, languages: Vec::new(), reason: None })
+            .unwrap_or(OcrStatus { available: false, languages: Vec::new(), reason: None, cleanup_failed: false })
     }
 }
 
@@ -300,14 +316,14 @@ pub async fn ocr_recognize<R: Runtime>(app: AppHandle<R>, request: Request<'_>) 
         let lines = tauri::async_runtime::spawn_blocking(move || recognize_blocking(&owned))
             .await
             .map_err(|e| OcrCommandError::from(OcrError::Engine(e.to_string())))??;
-        Ok(OcrResult { lines: clean_lines(lines) })
+        Ok(OcrResult { lines: clean_lines(lines), truncated: false })
     }
 }
 
 /// Lecture directe pour les tests d'intégration (même chemin que la commande, sans IPC).
 pub fn recognize_bytes(bytes: &[u8]) -> Result<OcrResult, OcrError> {
     validate_image(bytes)?;
-    recognize_blocking(bytes).map(|lines| OcrResult { lines: clean_lines(lines) })
+    recognize_blocking(bytes).map(|lines| OcrResult { lines: clean_lines(lines), truncated: false })
 }
 
 /// État du moteur pour les tests d'intégration.

@@ -8,7 +8,8 @@
 //   jamais le texte d'une erreur système, ni un texte reconnu ;
 // - chaque méthode résout ou rejette sur tous ses chemins, une seule fois (`Settle`) ;
 // - le travail tourne sur `visionQueue` (série, dédiée), jamais sur la file IPC partagée de Tauri ni sur le fil principal ;
-// - l'image reste en mémoire : rien n'est écrit, rien n'est envoyé (ni fichier, ni réseau).
+// - l'image reste en mémoire : rien n'est écrit, rien n'est envoyé (ni fichier, ni réseau) ; seule `cleanTemporaryUploads` supprime les
+//   copies temporaires du sélecteur de photos.
 
 import CoreGraphics
 import Foundation
@@ -121,6 +122,35 @@ class VisionPlugin: Plugin {
         invoke.resolve(["languages": languages])
       } catch {
         self.reject(invoke, .failed)
+      }
+    }
+  }
+
+  /// Supprime les copies temporaires des photos choisies dans le sélecteur du système (préfixe WKFileUpload du dossier temporaire de l'app) :
+  /// la photo d'une liste ne reste pas sur l'appareil après sa lecture. Appelée par Rust après chaque lecture et au lancement ; seul endroit
+  /// du plugin qui touche au système de fichiers (jamais d'écriture), sur la file des lectures (donc après la lecture en cours).
+  @objc public func cleanTemporaryUploads(_ invoke: Invoke) {
+    visionQueue.async {
+      let manager = FileManager.default
+      let directory = NSTemporaryDirectory()
+      guard let names = try? manager.contentsOfDirectory(atPath: directory) else {
+        self.reject(invoke, .failed)
+        return
+      }
+      var removed = 0
+      var failed = false
+      for name in names where name.hasPrefix("WKFileUpload") {
+        do {
+          try manager.removeItem(atPath: (directory as NSString).appendingPathComponent(name))
+          removed += 1
+        } catch {
+          failed = true
+        }
+      }
+      if failed {
+        self.reject(invoke, .failed)
+      } else {
+        invoke.resolve(["removed": removed])
       }
     }
   }

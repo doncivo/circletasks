@@ -17,6 +17,8 @@ export interface OcrEngineStatus {
   readonly languages: readonly string[];
   /** Pourquoi le moteur natif est indisponible (iPhone, Vision) : français absent, ou plugin absent, refusé ou muet. */
   readonly reason?: 'language-missing' | 'plugin-unavailable';
+  /** La suppression des copies temporaires des photos a échoué (iPhone) : dit à l'utilisateur, jamais silencieux. */
+  readonly cleanupFailed?: boolean;
 }
 
 export interface RecognizeOptions {
@@ -32,10 +34,10 @@ export interface OcrEngine {
   readonly id: OcrEngineId;
   status(): Promise<OcrEngineStatus>;
   /** Lit l'image ; rejette avec `OcrError`. */
-  recognize(image: Blob, options: RecognizeOptions): Promise<{ readonly lines: readonly OcrLineResult[] }>;
+  recognize(image: Blob, options: RecognizeOptions): Promise<{ readonly lines: readonly OcrLineResult[]; /** Le moteur a rendu plus de lignes qu'il n'en a transmis (Vision : 500 au plus, de haut en bas). */ readonly truncated?: boolean }>;
 }
 
-export type OcrFailure = 'language-missing' | 'unsupported-format' | 'too-large' | 'dimensions' | 'unavailable' | 'failed';
+export type OcrFailure = 'language-missing' | 'unsupported-format' | 'too-large' | 'dimensions' | 'unavailable' | 'timeout' | 'busy' | 'failed';
 
 export class OcrError extends Error {
   readonly reason: OcrFailure;

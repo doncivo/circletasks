@@ -37,7 +37,7 @@ pub fn status() -> OcrStatus {
     init_runtime();
     let languages = installed_tags();
     let available = pick_french(&languages).is_some();
-    OcrStatus { available, languages, reason: None }
+    OcrStatus { available, languages, reason: None, cleanup_failed: false }
 }
 
 fn french_engine() -> Result<OcrEngine, OcrError> {

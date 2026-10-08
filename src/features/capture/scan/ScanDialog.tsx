@@ -6,7 +6,7 @@ import { openOcrService, type OcrService } from '../../../platform/ocr';
 import { Button, ConfirmDialog, Icon, useFocusTrap, useLayout } from '../../../ui';
 import { ScanReview } from './ScanReview';
 import { ScanSource } from './ScanSource';
-import { useScan, type Scan, type ScanFailure, type UnavailableReason } from './useScan';
+import { isTransientFailure, useScan, type Scan, type ScanFailure, type UnavailableReason } from './useScan';
 import './ScanDialog.css';
 
 export interface ScanDialogProps {
@@ -35,25 +35,51 @@ function UnavailableIos({ scan, reason }: { readonly scan: Scan; readonly reason
   );
 }
 
+const CAUSES = {
+  failed: 'scan.visionError.hint',
+  unavailable: 'scan.visionError.hint',
+  timeout: 'scan.visionError.cause.timeout',
+  busy: 'scan.visionError.cause.busy',
+  'unsupported-format': 'scan.visionError.cause.unsupportedFormat',
+  'too-large': 'scan.visionError.cause.tooLarge',
+  dimensions: 'scan.visionError.cause.dimensions',
+  'language-missing': 'scan.visionError.hint',
+} as const;
+
 /** Lecture refusée par Vision : erreur persistante avec son code, « Réessayer » et « Lire avec le moteur intégré » (jamais de repli silencieux). */
 function VisionError({ scan, failure }: { readonly scan: Scan; readonly failure: ScanFailure }) {
+  // Erreur passagère : « Réessayer ». Erreur de l'image (format, poids, dimensions) : jamais de « Réessayer » qui reboucle.
+  const transient = isTransientFailure(failure.reason);
   return (
     <div className="ct-scan__step ct-scan__step--center">
       <h1 className="ct-scan__title">{t('scan.visionError.title')}</h1>
-      <p className="ct-scan__lead">{t('scan.visionError.hint')}</p>
+      <p className="ct-scan__lead">{t(CAUSES[failure.reason])}</p>
       <p className="ct-scan__alert" role="alert">
         {t('scan.code', { code: failure.code })}
       </p>
       <div className="ct-scan__actions">
-        <Button onClick={scan.retry}>{t('scan.visionError.retry')}</Button>
-        {scan.canUseFallback && (
-          <Button variant="secondary" onClick={scan.chooseFallbackEngine}>
-            {t('scan.visionError.useFallback')}
-          </Button>
+        {transient ? (
+          <>
+            <Button onClick={scan.retry}>{t('scan.visionError.retry')}</Button>
+            {scan.canUseFallback && (
+              <Button variant="secondary" onClick={scan.chooseFallbackEngine}>
+                {t('scan.visionError.useFallback')}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={scan.goToSource}>
+              {t('scan.review.retake')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={scan.goToSource}>{t('scan.review.retake')}</Button>
+            {scan.canUseFallback && (
+              <Button variant="secondary" onClick={scan.chooseFallbackEngine}>
+                {t('scan.visionError.useFallback')}
+              </Button>
+            )}
+          </>
         )}
-        <Button variant="secondary" onClick={scan.goToSource}>
-          {t('scan.review.retake')}
-        </Button>
       </div>
     </div>
   );

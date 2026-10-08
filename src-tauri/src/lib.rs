@@ -88,6 +88,12 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_ct_haptics::init());
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_privacy_shield::init());
+    // CAP-IOS-01 : au lancement, les copies temporaires de photos laissées par une session précédente sont supprimées (fil dédié, avec délai).
+    #[cfg(target_os = "ios")]
+    let builder = builder.setup(|app| {
+        ocr::vision::clean_on_launch(app.handle());
+        Ok(())
+    });
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

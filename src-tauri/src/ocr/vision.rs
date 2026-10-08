@@ -23,13 +23,14 @@ pub const VISION_LANGUAGES: [&str; 2] = ["fr-FR", "en-US"];
 pub const STATUS_DEADLINE: Duration = Duration::from_secs(5);
 /// Délai de `recognize` : Swift se garde à 15 s, Rust attend 5 s de plus (ADR 0015 §3.1).
 pub const RECOGNIZE_DEADLINE: Duration = Duration::from_secs(20);
-/// Les lignes lues au-delà de ce nombre sont ignorées avant même le tri (réponse anormale du plugin).
-const MAX_RAW_LINES: usize = MAX_LINES * 4;
+/// Nombre de lignes demandé à Vision (et lu au plus dans sa réponse) : la coupe à `MAX_LINES` se fait APRÈS le tri de haut en bas, jamais avant
+/// (Vision ne garantit aucun ordre : couper avant le tri pourrait perdre le haut de la page).
+pub const MAX_RAW_LINES: usize = MAX_LINES * 4;
 /// Largeur d'une bande de tri, en part de la hauteur de l'image : deux lignes dont le haut diffère de moins de 1 % se lisent de gauche à droite.
 const BAND: f64 = 0.01;
 
 /// Commandes du plugin Swift appelées par Rust (nom exact de la méthode Swift).
-pub const PLUGIN_COMMANDS: [&str; 2] = ["status", "recognize"];
+pub const PLUGIN_COMMANDS: [&str; 3] = ["status", "recognize", "cleanTemporaryUploads"];
 /// Codes que Swift peut rejeter (contrat `tests/fixtures/capture/vision-contract.json`).
 pub const PLUGIN_REJECT_CODES: [&str; 7] = ["invalid-argument", "unsupported-format", "dimensions", "language-missing", "busy", "timeout", "failed"];
 
@@ -37,12 +38,16 @@ pub const PLUGIN_REJECT_CODES: [&str; 7] = ["invalid-argument", "unsupported-for
 pub trait VisionTransport: Send + Sync {
     fn status(&self) -> Result<Value, String>;
     fn recognize(&self, args: Value) -> Result<Value, String>;
+    /// Supprime les copies temporaires des photos choisies par le sélecteur du système (WKFileUpload*).
+    fn clean(&self) -> Result<Value, String>;
 }
 
 /// Une lecture à la fois (seconde lecture : `ocr-engine`, détail `busy`).
 #[derive(Debug, Clone, Default)]
 pub struct VisionState {
     busy: Arc<AtomicBool>,
+    /// Dernière suppression des copies temporaires en échec (dit par `ocr_status`, jamais silencieux).
+    cleanup_failed: Arc<AtomicBool>,
 }
 
 /// Drapeau « occupé » : rendu quand l'appel de Swift s'est réellement terminé (il est déplacé dans le fil de l'appel).
@@ -59,6 +64,11 @@ impl VisionState {
         self.busy.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).ok().map(|_| BusyGuard(self.busy.clone()))
     }
 
+    /// Vrai si la dernière suppression des copies temporaires de photos a échoué.
+    pub fn cleanup_failed(&self) -> bool {
+        self.cleanup_failed.load(Ordering::SeqCst)
+    }
+
     /// Vrai pendant une lecture (tests).
     pub fn is_busy(&self) -> bool {
         self.busy.load(Ordering::SeqCst)
@@ -72,19 +82,21 @@ pub fn error_of_code(code: &str) -> OcrError {
         "dimensions" => OcrError::DimensionsTooLarge,
         "language-missing" => OcrError::LanguageMissing,
         "unavailable" => OcrError::Unavailable,
+        "busy" => OcrError::Busy,
+        "timeout" => OcrError::Timeout,
         other => OcrError::Engine(shaped_code(other).to_owned()),
     }
 }
 
 fn error_of_call(error: CallError) -> OcrError {
     match error {
-        CallError::Timeout => OcrError::Unavailable,
+        CallError::Timeout => OcrError::Timeout,
         CallError::Rejected(code) => error_of_code(&code),
     }
 }
 
 fn unavailable_status(reason: &'static str) -> OcrStatus {
-    OcrStatus { available: false, languages: Vec::new(), reason: Some(reason) }
+    OcrStatus { available: false, languages: Vec::new(), reason: Some(reason), cleanup_failed: false }
 }
 
 /// État de Vision (bloquant, délai `deadline`) : français disponible, ou raison. N'échoue jamais.
@@ -98,7 +110,7 @@ pub fn status_with(transport: &Arc<dyn VisionTransport>, deadline: Duration) -> 
     };
     let languages: Vec<String> = items.iter().filter_map(|tag| tag.as_str().map(str::to_owned)).collect();
     let available = pick_french(&languages).is_some();
-    OcrStatus { available, languages, reason: if available { None } else { Some("language-missing") } }
+    OcrStatus { available, languages, reason: if available { None } else { Some("language-missing") }, cleanup_failed: false }
 }
 
 /// Confiance de Vision (0 à 1) ramenée à 0 à 100 ; absente, `NaN` ou hors de 0..1 : pas de confiance (l'heuristique du front s'applique).
@@ -121,6 +133,11 @@ struct RawLine {
 /// Lit `{ lines: [{ text, confidence, x, y }] }` : triées de haut en bas (`y` décroissant par bandes de 1 %) puis de gauche à droite, nettoyées,
 /// 500 au plus. `y` est le haut de la ligne (`boundingBox.maxY`, origine en bas à gauche) : Vision ne garantit aucun ordre.
 pub fn read_lines(response: &Value) -> Result<Vec<OcrLine>, OcrError> {
+    read_result(response).map(|result| result.lines)
+}
+
+/// Comme `read_lines`, avec l'indication `truncated` (plus de `MAX_LINES` lignes rendues, ou réponse au plafond demandé à Vision).
+pub fn read_result(response: &Value) -> Result<OcrResult, OcrError> {
     let items = response.get("lines").and_then(Value::as_array).ok_or_else(|| OcrError::Engine("failed".to_owned()))?;
     let mut raw: Vec<RawLine> = items
         .iter()
@@ -136,14 +153,26 @@ pub fn read_lines(response: &Value) -> Result<Vec<OcrLine>, OcrError> {
         })
         .collect();
     raw.sort_by(|a, b| a.band.cmp(&b.band).then(a.x.total_cmp(&b.x)));
-    Ok(raw.into_iter().take(MAX_LINES).map(|line| OcrLine { text: line.text, confidence: line.confidence }).collect())
+    let truncated = raw.len() > MAX_LINES || items.len() >= MAX_RAW_LINES;
+    let lines = raw.into_iter().take(MAX_LINES).map(|line| OcrLine { text: line.text, confidence: line.confidence }).collect();
+    Ok(OcrResult { lines, truncated })
+}
+
+/// Délai de la suppression des copies temporaires.
+pub const CLEAN_DEADLINE: Duration = Duration::from_secs(5);
+
+/// Supprime les copies temporaires des photos (bloquant) et retient le résultat : un échec reste visible (`ocr_status`), un succès l'efface.
+pub fn clean_with(transport: &Arc<dyn VisionTransport>, state: &VisionState, deadline: Duration) {
+    let plugin = transport.clone();
+    let failed = call_with_deadline(move || plugin.clean(), deadline).is_err();
+    state.cleanup_failed.store(failed, Ordering::SeqCst);
 }
 
 /// Lecture d'une image (bloquant). Entrées contrôlées **avant** tout appel du plugin ; une seule lecture à la fois ; délai `deadline`.
 pub fn recognize_with(transport: &Arc<dyn VisionTransport>, state: &VisionState, bytes: &[u8], deadline: Duration) -> Result<OcrResult, OcrCommandError> {
     validate_for_vision(bytes)?;
-    let guard = state.acquire().ok_or_else(|| OcrError::Engine("busy".to_owned()))?;
-    let args = json!({ "image": STANDARD.encode(bytes), "languages": VISION_LANGUAGES, "maxSide": VISION_MAX_SIDE, "maxLines": MAX_LINES });
+    let guard = state.acquire().ok_or(OcrError::Busy)?;
+    let args = json!({ "image": STANDARD.encode(bytes), "languages": VISION_LANGUAGES, "maxSide": VISION_MAX_SIDE, "maxLines": MAX_RAW_LINES });
     let plugin = transport.clone();
     let response = call_with_deadline(
         move || {
@@ -153,8 +182,10 @@ pub fn recognize_with(transport: &Arc<dyn VisionTransport>, state: &VisionState,
         },
         deadline,
     )
-    .map_err(error_of_call)?;
-    Ok(OcrResult { lines: read_lines(&response)? })
+    .map_err(error_of_call);
+    // La photo ne reste pas dans le dossier temporaire de l'app, que la lecture ait réussi ou non.
+    clean_with(transport, state, CLEAN_DEADLINE.min(deadline));
+    Ok(read_result(&response?)?)
 }
 
 /// Transport de production : le plugin Swift `tauri-plugin-vision`.
@@ -170,6 +201,10 @@ impl<R: tauri::Runtime> VisionTransport for PluginTransport<R> {
     fn recognize(&self, args: Value) -> Result<Value, String> {
         self.0.call("recognize", args)
     }
+
+    fn clean(&self) -> Result<Value, String> {
+        self.0.call("cleanTemporaryUploads", json!({}))
+    }
 }
 
 #[cfg(target_os = "ios")]
@@ -183,16 +218,30 @@ fn plugin_transport<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<Arc<
 #[cfg(target_os = "ios")]
 pub async fn status_on_device<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> OcrStatus {
     let Some(transport) = plugin_transport(app) else { return unavailable_status("plugin-unavailable") };
-    tauri::async_runtime::spawn_blocking(move || status_with(&transport, STATUS_DEADLINE)).await.unwrap_or_else(|_| unavailable_status("plugin-unavailable"))
+    let state = app.try_state::<VisionState>().map(|s| s.inner().clone()).unwrap_or_default();
+    let mut status = tauri::async_runtime::spawn_blocking(move || status_with(&transport, STATUS_DEADLINE)).await.unwrap_or_else(|_| unavailable_status("plugin-unavailable"));
+    status.cleanup_failed = state.cleanup_failed();
+    status
+}
+
+/// Au lancement : supprime les copies temporaires laissées par une session précédente (fil dédié, jamais bloquant).
+#[cfg(target_os = "ios")]
+pub fn clean_on_launch<R: tauri::Runtime>(app: &tauri::AppHandle<R>) {
+    use tauri::Manager;
+    let Some(transport) = plugin_transport(app) else { return };
+    let state = app.try_state::<VisionState>().map(|s| s.inner().clone()).unwrap_or_default();
+    std::thread::spawn(move || clean_with(&transport, &state, CLEAN_DEADLINE));
 }
 
 /// `ocr_recognize` sur iPhone.
 #[cfg(target_os = "ios")]
 pub async fn recognize_on_device<R: tauri::Runtime>(app: &tauri::AppHandle<R>, bytes: Vec<u8>) -> Result<OcrResult, OcrCommandError> {
     use tauri::Manager;
-    // Contrôles d'abord : une entrée invalide ne dépend pas du plugin.
-    validate_for_vision(&bytes)?;
-    let Some(transport) = plugin_transport(app) else { return Err(OcrError::Unavailable.into()) };
+    // Les contrôles des entrées sont faits UNE fois, par `recognize_with` ; sans plugin, ils passent d'abord (entrée invalide = son code).
+    let Some(transport) = plugin_transport(app) else {
+        validate_for_vision(&bytes)?;
+        return Err(OcrError::Unavailable.into());
+    };
     let state = app.try_state::<VisionState>().map(|s| s.inner().clone()).unwrap_or_default();
     tauri::async_runtime::spawn_blocking(move || recognize_with(&transport, &state, &bytes, RECOGNIZE_DEADLINE))
         .await

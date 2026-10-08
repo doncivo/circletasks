@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { OcrService } from '../../../platform/ocr';
 import { createFakeOcr, type FakeOcr } from '../../../platform/ocr/testing';
-import { setSpeechRecognizer } from '../../../platform/speech';
-import { createFakeSpeech } from '../../../platform/speech/testing';
+import { setSystemSettings } from '../../../platform/systemSettings';
+import { createFakeSystemSettings } from '../../../platform/systemSettings/testing';
 import { AppContainerProvider } from '../../app/AppContainerContext';
 import { mockViewport, setupToday, teardownToday, type TodayHarness } from '../../today/testKit';
 import { ScanDialog } from './ScanDialog';
@@ -41,7 +41,7 @@ describe('scan de tâches : Vision sur iPhone', () => {
   });
   afterEach(async () => {
     cleanup();
-    setSpeechRecognizer(null);
+    setSystemSettings(null);
     await teardownToday(h);
   });
 
@@ -78,6 +78,52 @@ describe('scan de tâches : Vision sur iPhone', () => {
     expect(screen.getByRole('textbox', { name: 'Tâche 1' })).toHaveValue('Lu par le repli');
   });
 
+  it('erreur de l’image (format, poids, dimensions) : jamais de « Réessayer » qui reboucle ; la cause est dite ; autre photo ou moteur intégré', async () => {
+    const cases: Array<['unsupported-format' | 'too-large' | 'dimensions', string, string]> = [
+      ['unsupported-format', 'Ce format d’image', 'ocr-unsupported-format'],
+      ['too-large', 'trop lourde', 'ocr-too-large'],
+      ['dimensions', 'trop grande', 'ocr-dimensions-too-large'],
+    ];
+    for (const [failure, cause, code] of cases) {
+      vision.failure = failure;
+      const view = open();
+      await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
+      upload();
+      await screen.findByRole('heading', { name: 'La lecture n’a pas abouti' });
+      expect(screen.getByText(new RegExp(cause))).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(`Code : ${code}`);
+      expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reprendre la photo' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Lire avec le moteur intégré' })).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('copie temporaire d’une photo non supprimée : dit avec son code, jamais silencieux', async () => {
+    vision.cleanupFailed = true;
+    open();
+    await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Une copie temporaire d’une photo précédente n’a pas pu être supprimée');
+    expect(screen.getByRole('alert')).toHaveTextContent('Code : vision-cleanup-failed');
+  });
+
+  it('délai dépassé et lecture en cours : reconnaissables, « Réessayer » offert', async () => {
+    for (const [failure, text, code] of [
+      ['timeout', 'trop de temps', 'ocr-timeout'],
+      ['busy', 'encore en cours', 'ocr-busy'],
+    ] as const) {
+      vision.failure = failure;
+      const view = open();
+      await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
+      upload();
+      await screen.findByRole('heading', { name: 'La lecture n’a pas abouti' });
+      expect(screen.getByText(new RegExp(text))).toBeInTheDocument();
+      expect(screen.getByRole('alert')).toHaveTextContent(`Code : ${code}`);
+      expect(screen.getByRole('button', { name: 'Réessayer' })).toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
   it('critère 17 : plugin absent = indisponible AVEC son code, repli jamais masqué ni automatique', async () => {
     vision.available = false;
     vision.reason = 'plugin-unavailable';
@@ -107,24 +153,23 @@ describe('scan de tâches : Vision sur iPhone', () => {
   });
 
   it('I-05 critère 10 : indication de la caméra et « Ouvrir les réglages » (même appel natif que la dictée)', async () => {
-    const speech = createFakeSpeech();
-    setSpeechRecognizer(speech);
+    const settings = createFakeSystemSettings();
+    setSystemSettings(settings);
     open();
     await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
     expect(screen.getByText(/Pour photographier une liste, autorisez la caméra/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir les réglages' }));
-    await waitFor(() => expect(speech.calls).toContain('openSettings'));
-    expect(speech.calls).not.toContain('requestPermissions');
+    await waitFor(() => expect(settings.opened).toBe(1));
   });
 
   it('I-05 critère 10 : échec d’ouverture = message avec code ; sans le port (PC, navigateur) l’indication n’est pas affichée', async () => {
-    setSpeechRecognizer(createFakeSpeech({ settingsFail: true }));
+    setSystemSettings(createFakeSystemSettings(true));
     open();
     await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir les réglages' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Code : settings-open-failed');
     cleanup();
-    setSpeechRecognizer(null);
+    setSystemSettings(null);
     open();
     await screen.findByRole('button', { name: 'Prendre ou choisir une photo' });
     expect(screen.queryByText(/Pour photographier une liste/)).toBeNull();
@@ -132,7 +177,7 @@ describe('scan de tâches : Vision sur iPhone', () => {
 
   it('PC : aucune indication de caméra même avec le port', async () => {
     mockViewport(1440);
-    setSpeechRecognizer(createFakeSpeech());
+    setSystemSettings(createFakeSystemSettings());
     open();
     await screen.findByRole('button', { name: 'Importer une image' });
     expect(screen.queryByText(/Pour photographier une liste/)).toBeNull();

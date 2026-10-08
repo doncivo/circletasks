@@ -11,6 +11,8 @@ export interface FakeOcr extends OcrEngine {
   received: Array<{ readonly size: number; readonly type: string }>;
   /** Raison rendue par `status()` quand le moteur est indisponible (Vision). */
   reason: 'language-missing' | 'plugin-unavailable' | undefined;
+  /** `status()` signale l'échec de la suppression des copies temporaires de photos. */
+  cleanupFailed: boolean;
   statusCalls: number;
   disposed: number;
   dispose(): Promise<void>;
@@ -26,6 +28,7 @@ export function createFakeOcr(
     failure: initial.failure ?? null,
     delayMs: initial.delayMs ?? 0,
     reason: initial.reason,
+    cleanupFailed: false,
     received: [],
     statusCalls: 0,
     disposed: 0,
@@ -35,6 +38,7 @@ export function createFakeOcr(
         available: fake.available,
         languages: fake.available ? ['fr-FR'] : ['en-US'],
         ...(!fake.available && fake.reason ? { reason: fake.reason } : {}),
+        ...(fake.cleanupFailed ? { cleanupFailed: true } : {}),
       });
     },
     recognize: async (image: Blob, options: RecognizeOptions) => {

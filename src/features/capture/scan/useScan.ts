@@ -56,8 +56,15 @@ const DEFAULT_CODES: Readonly<Record<OcrFailure, string>> = {
   'too-large': 'ocr-too-large',
   dimensions: 'ocr-dimensions-too-large',
   unavailable: 'ocr-unavailable',
+  timeout: 'ocr-timeout',
+  busy: 'ocr-busy',
   failed: 'ocr-engine',
 };
+
+/** Erreurs passagères : « Réessayer » a un sens. Les autres tiennent à l'image (format, poids, dimensions) : seule une autre photo ou l'autre moteur aide. */
+export function isTransientFailure(reason: OcrFailure): boolean {
+  return reason === 'failed' || reason === 'unavailable' || reason === 'timeout' || reason === 'busy';
+}
 
 /**
  * Parcours du scan de tâches (Q-04) : vérification du moteur au premier scan, choix de l'image, lecture, relecture, création en lot.
@@ -83,6 +90,10 @@ export function useScan({ service, onClose }: UseScanOptions) {
   const [thumbnail, setThumbnail] = useState<string | null>(null);
   const [proposals, setProposals] = useState<readonly ScanProposal[]>([]);
   const [detected, setDetected] = useState(0);
+  // Le moteur a transmis moins de lignes qu'il n'en a lu (Vision : 500 au plus) : dit en relecture.
+  const [engineTruncated, setEngineTruncated] = useState(false);
+  // La copie temporaire d'une photo précédente n'a pas pu être supprimée (Vision, iPhone) : dit, jamais silencieux.
+  const [cleanupFailed, setCleanupFailed] = useState(false);
   // Espace choisi par l'utilisateur ; sans choix, l'espace par défaut suit le filtre (ES-02).
   const [chosenSpace, setChosenSpace] = useState<SpaceId | null>(null);
   const spaceId = chosenSpace ?? defaultSpaceFor(spaceFilter, spaces);
@@ -112,6 +123,10 @@ export function useScan({ service, onClose }: UseScanOptions) {
     primary.status().then(
       (status) => {
         if (cancelled) return;
+        if (status.cleanupFailed === true) {
+          logFailure('capture', 'vision-cleanup-failed');
+          setCleanupFailed(true);
+        }
         if (status.available) {
           setEngine(primary);
           setStep('source');
@@ -160,6 +175,7 @@ export function useScan({ service, onClose }: UseScanOptions) {
       const found = scanLinesToProposals(result.lines);
       prepared.current = null;
       setDetected(found.detected);
+      setEngineTruncated(result.truncated === true);
       setProposals(found.proposals);
       setDirty(false);
       setCreateFailed(false);
@@ -327,6 +343,8 @@ export function useScan({ service, onClose }: UseScanOptions) {
     proposals,
     detected,
     truncated: detected > MAX_SCAN_LINES,
+    engineTruncated,
+    cleanupFailed,
     spaceId,
     dateKind,
     picked,
