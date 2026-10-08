@@ -54,7 +54,9 @@ import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
-import { AppLockGate, isAppLocked, startAppLockFor, type AppLockController } from './features/security';
+import { AppLockGate } from './features/security/AppLockGate';
+import { bootAppLock } from './features/security/appLockBoot';
+import { isAppLocked } from './features/security/appLockStore';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
@@ -204,7 +206,7 @@ export function App() {
   const [container, setContainer] = useState<AppContainer | null>(null);
   const mounted = useRef(true);
   const startup = useRef<AppStartup | null>(null);
-  const appLock = useRef<AppLockController | null>(null);
+  const appLock = useRef<{ dispose(): void } | null>(null);
 
   useEffect(() => {
     if (useAppStore.getState().dbStatus === 'idle') {
@@ -229,9 +231,8 @@ export function App() {
         await restoreAppearance(created);
         // I-03 : verrouillage lu avant le premier rendu de la coquille (illisible : verrouillé). Le verrou couvre l'interface seulement :
         // la suite du démarrage (report, synchro, rappels) continue normalement.
-        const lock = startAppLockFor(created);
+        const lock = await bootAppLock(created);
         appLock.current = lock;
-        await lock.ready;
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
         const started = startAppStartup(created);

@@ -1,7 +1,10 @@
-import { useLayoutEffect, useRef, type ReactNode } from 'react';
+import { lazy, Suspense, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useAppLockStore } from './appLockStore';
-import { LockScreen } from './LockScreen';
 import './security.css';
+
+// Écran de verrou chargé à la demande (iPhone verrouillé seulement ; bundle de départ, PERF-02). Le contenu est déjà masqué par le
+// contrôleur pendant le chargement : rien n'est lisible entre-temps.
+const LockScreen = lazy(() => import('./LockScreen').then((module) => ({ default: module.LockScreen })));
 
 /**
  * Porte du verrouillage (I-03, ADR 0013 §2.4, écart 2) au-dessus de la coquille :
@@ -31,7 +34,11 @@ export function AppLockGate({ children }: { readonly children: ReactNode }) {
           {children}
         </div>
       )}
-      {phase === 'locked' && <LockScreen />}
+      {phase === 'locked' && (
+        <Suspense fallback={null}>
+          <LockScreen />
+        </Suspense>
+      )}
     </>
   );
 }

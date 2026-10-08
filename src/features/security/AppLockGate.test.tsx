@@ -85,9 +85,10 @@ describe('écran de verrou et coquille (critères 6, 7 et 11)', () => {
   it('lancement verrouillé : coquille non montée, écran de verrou seul, authentification automatique une fois ; réussite : coquille montée', async () => {
     fake.enqueue('user-cancel');
     await boot(true);
+    // Écran de verrou chargé à la demande : attendu, puis l'authentification automatique qu'il lance.
+    expect(await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' })).toBeInTheDocument();
     await flush();
     expect(screen.queryByText('Courses')).toBeNull();
-    expect(screen.getByRole('heading', { name: 'CircleTasks est verrouillée' })).toBeInTheDocument();
     expect(screen.getByText('CircleTasks', { selector: '.ct-lock__app' })).toBeInTheDocument();
     expect(fake.authenticateCount()).toBe(1);
     expect(screen.getByRole('alert')).toHaveTextContent('Déverrouillage annulé');
@@ -99,8 +100,7 @@ describe('écran de verrou et coquille (critères 6, 7 et 11)', () => {
 
   it('retour après 31 s : coquille montée mais hidden, inert, aria-hidden ; saisie retrouvée au déverrouillage', async () => {
     await boot(true);
-    await flush();
-    const input = screen.getByRole('textbox', { name: 'Saisie' });
+    const input = await screen.findByRole('textbox', { name: 'Saisie' });
     fireEvent.change(input, { target: { value: 'Acheter du pain' } });
     fake.enqueue('authentication-failed');
     setVisibility('hidden');
@@ -123,6 +123,7 @@ describe('écran de verrou et coquille (critères 6, 7 et 11)', () => {
   it('plugin en échec : message persistant avec le code et « Réessayer », jamais de déverrouillage', async () => {
     fake.setDefault('unavailable');
     await boot(true);
+    await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' });
     await flush();
     expect(screen.getByRole('alert')).toHaveTextContent('Le verrouillage ne répond pas (unavailable). Vos données sont intactes.');
     fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
@@ -134,6 +135,7 @@ describe('écran de verrou et coquille (critères 6, 7 et 11)', () => {
   it('aucun code sur l’iPhone : message, sortie « Désactiver le verrouillage » avec confirmation ; réglage écrit faux', async () => {
     fake.enqueue('passcode-not-set');
     const { container } = await boot(true);
+    await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' });
     await flush();
     expect(screen.getByRole('alert')).toHaveTextContent('Déverrouillage impossible : aucun code n’est défini sur l’iPhone');
     fireEvent.click(screen.getByRole('button', { name: 'Désactiver le verrouillage' }));
@@ -148,6 +150,7 @@ describe('écran de verrou et coquille (critères 6, 7 et 11)', () => {
   it('sans code, avant tout retour passcode-not-set : pas de sortie proposée', async () => {
     fake.enqueue('user-cancel');
     await boot(true);
+    await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' });
     await flush();
     expect(screen.queryByRole('button', { name: 'Désactiver le verrouillage' })).toBeNull();
   });
