@@ -619,3 +619,15 @@ impl BookmarkTransport for Never {
         panic!("appel inattendu")
     }
 }
+
+/// Revue (bloquant) : `Package.swift` en swift-tools-version 5.3 (comme les plugins Tauri) n'accepte que les versions d'iOS connues de
+/// cet outil (`.v14` au plus) ; iOS 14 suffit pour `UTType` et `UIDocumentPickerViewController(forOpeningContentTypes:)`.
+#[test]
+fn y_ios_01_package_swift_platform_exists_in_its_tools_version() {
+    let package = include_str!("../../plugins/folder-bookmark/ios/Package.swift");
+    assert!(package.starts_with("// swift-tools-version:5.3"));
+    assert!(package.contains(".iOS(.v14)"), "plateforme iOS 14 (disponible en 5.3)");
+    for unknown in [".v15", ".v16", ".v17", ".v18"] {
+        assert!(!package.contains(unknown), "{unknown} n'existe pas en swift-tools-version 5.3");
+    }
+}
