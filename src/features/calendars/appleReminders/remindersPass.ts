@@ -115,6 +115,8 @@ export interface SendResult {
   readonly createOff: boolean;
   /** Temps restant (ms) de la fenêtre d'annulation la plus longue parmi les écritures retenues ; 0 sans retenue. */
   readonly holdMs: number;
+  /** Retenues de la garde de suppression massive vers Rappels ; null : suppressions non évaluées (échec global avant), les retenues connues sont gardées. */
+  readonly held: readonly { readonly listId: string; readonly count: number; readonly at: IsoDateTime; readonly send: true }[] | null;
 }
 
 export type SendDue = (context: SendContext) => Promise<SendResult>;
@@ -384,12 +386,14 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   // Écritures dues vers Rappels (K-06) : confiées à `send` ; sans lui, elles restent dues et comptées.
   let sendCode: string | null = null;
   let holdMs = 0;
+  let sendHeld: SendResult['held'] = null;
   if (options.send) {
     const sent = await options.send({ kind, due: dueWrites, lists, create, platformLists, tasks, links, nowMs });
     report.sent += sent.sent;
     report.pending += sent.pending;
     sendCode = sent.code;
     holdMs = sent.holdMs;
+    sendHeld = sent.held;
     sent.touched.forEach((id) => touched.add(id));
     for (const entry of sent.notices) notice(entry.kind, entry.count);
     if (sent.createOff) notice('creation-off');
@@ -408,7 +412,9 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
     }
     return {
       ...current,
-      ...(caps === null ? {} : { caps, held, unknown, missingLists: [...missingLists] }),
+      ...(caps === null ? {} : { caps, unknown, missingLists: [...missingLists] }),
+      // Retenues : celles « absentes de Rappels » ne sont réévaluées que par un passage complet ; celles des suppressions vers Rappels, à chaque envoi évalué.
+      held: [...(caps === null ? current.held.filter((entry) => entry.send !== true) : held), ...(sendHeld ?? current.held.filter((entry) => entry.send === true))],
       notices: notes,
       failure: sendCode === null ? null : { code: sendCode, at: now, write: true as const },
     };

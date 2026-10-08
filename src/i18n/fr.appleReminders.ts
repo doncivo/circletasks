@@ -64,6 +64,9 @@ export const appleRemindersFr = {
   heldMessage: '{count} rappels sont absents de Rappels. Supprimer les tâches liées ?',
   heldDelete: 'Supprimer',
   heldKeep: 'Garder et détacher',
+  heldSendMessage: '{count} tâches supprimées vont aussi supprimer leur rappel dans Rappels. Supprimer aussi dans Rappels ?',
+  heldSendDelete: 'Supprimer dans Rappels',
+  heldSendKeep: 'Garder les rappels',
   // Création et suppression (K-06)
   createCaption: 'CRÉER AUSSI DANS RAPPELS',
   createHint: 'Désactivé par défaut. Ne concerne que les tâches créées ensuite : les tâches existantes ne sont jamais envoyées.',

@@ -1,3 +1,4 @@
+import { createTaskUseCases } from '../../tasks/createTaskUseCases';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { LocalDate } from '../../../domain/types';
@@ -206,5 +207,22 @@ describe('QA K-05 : suppression retenue par la garde, gestes de l’utilisateur 
     expect((await h.tasks()).filter((task) => task.deletedAt === null)).toHaveLength(5);
     expect((await h.taskByTitle('Z 0')).deletedAt).toBeNull();
     expect(await h.taskByTitle('Z 0')).toMatchObject({ source: 'local', externalId: null });
+  });
+});
+
+describe('audit M2 : suppressions vers Rappels retenues, gestes de l’utilisateur', () => {
+  it('« 12 tâches supprimées vont aussi supprimer leur rappel dans Rappels » : « Supprimer dans Rappels » les supprime et la question disparaît', async () => {
+    h = await setupRemindersHarness('72');
+    await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+    for (let i = 0; i < 14; i += 1) h.reminders.add({ id: `S-${String(i)}`, listId: 'L-courses', title: `S ${String(i)}` });
+    await h.pass();
+    await createTaskUseCases(h.container).remove((await h.tasks()).slice(0, 12).map((task) => task.id));
+    await h.pass();
+    renderSection();
+    expect(await screen.findByText(/12 tâches supprimées vont aussi supprimer leur rappel dans Rappels/)).toBeInTheDocument();
+    expect(h.reminders.all()).toHaveLength(14);
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer dans Rappels' }));
+    await waitFor(() => expect(screen.queryByText(/vont aussi supprimer leur rappel/)).not.toBeInTheDocument());
+    expect(h.reminders.all()).toHaveLength(2);
   });
 });

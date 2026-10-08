@@ -204,16 +204,16 @@ export function AppleRemindersSection() {
             </p>
           )}
           {status.held.map((held) => (
-            <div key={held.listId} className="ct-calendars__appleBlock" role="group" aria-label={nameOf(held.listId)}>
+            <div key={`${held.listId}:${held.send === true ? 'send' : 'absent'}`} className="ct-calendars__appleBlock" role="group" aria-label={nameOf(held.listId)}>
               <p className="ct-calendars__error" role="alert">
-                {t('appleReminders.heldMessage', { count: held.count })} · {nameOf(held.listId)}
+                {t(held.send === true ? 'appleReminders.heldSendMessage' : 'appleReminders.heldMessage', { count: held.count })} · {nameOf(held.listId)}
               </p>
               <div className="ct-calendars__actions">
-                <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'delete')}>
-                  {t('appleReminders.heldDelete')}
+                <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'delete', held.send === true)}>
+                  {t(held.send === true ? 'appleReminders.heldSendDelete' : 'appleReminders.heldDelete')}
                 </Button>
-                <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'keep')}>
-                  {t('appleReminders.heldKeep')}
+                <Button variant="secondary" onClick={() => void actions.resolveHeld(held.listId, 'keep', held.send === true)}>
+                  {t(held.send === true ? 'appleReminders.heldSendKeep' : 'appleReminders.heldKeep')}
                 </Button>
               </div>
             </div>

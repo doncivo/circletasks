@@ -383,7 +383,8 @@ export interface AppleStatus {
   /** Échec persistant ; `write` : une écriture vers Rappels n'a pas pu partir (le bandeau compte les modifications non envoyées). */
   readonly failure: { readonly code: string; readonly at: IsoDateTime; readonly write?: true } | null;
   readonly caps: readonly { readonly listId: string; readonly total: number; readonly imported: number }[];
-  readonly held: readonly { readonly listId: string; readonly count: number; readonly at: IsoDateTime }[];
+  /** Retenues de la garde de suppression massive ; `send` : suppressions de tâches ICI qui effaceraient des rappels (sinon : rappels absents de Rappels). */
+  readonly held: readonly { readonly listId: string; readonly count: number; readonly at: IsoDateTime; readonly send?: true }[];
   readonly unknown: number;
   readonly missingLists: readonly string[];
   readonly notices: readonly AppleNotice[];
@@ -449,7 +450,7 @@ export function parseAppleStatus(raw: unknown): AppleStatus {
   const held = (Array.isArray(raw['held']) ? (raw['held'] as unknown[]) : [])
     .filter((entry): entry is Record<string, unknown> => isObject(entry) && isShortText(entry['listId'], MAX_LIST_ID_LENGTH) && isCount(entry['count']) && typeof entry['at'] === 'string' && isIsoDateTime(entry['at']))
     .slice(0, MAX_APPLE_LISTS)
-    .map((entry) => ({ listId: entry['listId'] as string, count: entry['count'] as number, at: entry['at'] as IsoDateTime }));
+    .map((entry) => ({ listId: entry['listId'] as string, count: entry['count'] as number, at: entry['at'] as IsoDateTime, ...(entry['send'] === true ? { send: true as const } : {}) }));
   const missingLists = (Array.isArray(raw['missingLists']) ? (raw['missingLists'] as unknown[]) : []).filter((id): id is string => isShortText(id, MAX_LIST_ID_LENGTH)).slice(0, MAX_APPLE_LISTS);
   const kinds: readonly string[] = ['deleted', 'detached', 'detached-recurring', 'unlinked-list', 'creation-off', 'read-only-list', 'recurring-refused', 'duplicate-created'];
   const notices = (Array.isArray(raw['notices']) ? (raw['notices'] as unknown[]) : [])

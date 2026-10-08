@@ -6,6 +6,7 @@ import type { AppContainer } from '../../app/container';
 import { useAppStore } from '../../app/appStore';
 import { appleRemindersState, appleRemindersStore, applyBanner } from './appleRemindersState';
 import { resolveHeldList, type HeldChoice, type PassReport } from './remindersPass';
+import { resolveHeldSend } from './remindersWrites';
 import { getRemindersRunner } from './remindersRunner';
 
 /**
@@ -29,7 +30,8 @@ export interface AppleRemindersActions {
   setCreateRule(spaceId: SpaceId, enabled: boolean, listId: string | null): Promise<void>;
   refresh(): Promise<PassReport>;
   dismissNotice(kind: AppleNoticeKind): Promise<void>;
-  resolveHeld(listId: string, choice: HeldChoice): Promise<void>;
+  /** `send` : retenue de suppressions vers Rappels (tâches supprimées ici) ; sinon retenue de rappels absents de Rappels. */
+  resolveHeld(listId: string, choice: HeldChoice, send?: boolean): Promise<void>;
 }
 
 const actions = new WeakMap<AppContainer, AppleRemindersActions>();
@@ -168,10 +170,11 @@ function createActions(container: AppContainer): AppleRemindersActions {
     async dismissNotice(kind) {
       await state.patchStatus((current) => ({ ...current, notices: current.notices.filter((entry) => entry.kind !== kind) }));
     },
-    async resolveHeld(listId, choice) {
+    async resolveHeld(listId, choice, send = false) {
       setRunning(true);
       try {
-        await resolveHeldList(container, listId, choice);
+        if (send) await resolveHeldSend(container, listId, choice);
+        else await resolveHeldList(container, listId, choice);
       } finally {
         setRunning(false);
       }
