@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openSpeechRecognizer, setSpeechRecognizer, SpeechError, unavailableSpeech } from './index';
-import { createTauriSpeech, SETTINGS_OPEN_COMMAND, SPEECH_LISTEN_COMMAND, SPEECH_REQUEST_COMMAND, SPEECH_STATUS_COMMAND } from './tauriSpeech';
+import { createTauriSpeech, SPEECH_LISTEN_COMMAND, SPEECH_REQUEST_COMMAND, SPEECH_STATUS_COMMAND } from './tauriSpeech';
 
 type Reply = unknown | ((args?: Record<string, unknown>) => unknown);
 
@@ -122,13 +122,15 @@ describe('tauriSpeech : dictée sur l’appareil par les commandes Rust (CAP-IOS
     expect(r.calls).toEqual([]);
   });
 
-  it('openSettings : un échec ou un refus d’iOS est dit avec settings-open-failed', async () => {
-    const ok = rig({ [SETTINGS_OPEN_COMMAND]: { opened: true } });
-    await expect(ok.speech.openSettings?.()).resolves.toBeUndefined();
-    const refused = rig({ [SETTINGS_OPEN_COMMAND]: { opened: false } });
-    await expect(refused.speech.openSettings?.()).rejects.toMatchObject({ reason: 'failed', code: 'settings-open-failed' });
-    const failed = rig({ [SETTINGS_OPEN_COMMAND]: { code: 'settings-open-failed', message: 'failed' } });
-    await expect(failed.speech.openSettings?.()).rejects.toMatchObject({ code: 'settings-open-failed' });
+  it('availability : plugin muet = indisponible AVEC un code à dire (impasse corrigée)', async () => {
+    const mute = rig({ [SPEECH_STATUS_COMMAND]: status({ available: false, reason: 'plugin-unavailable' }) });
+    expect(await mute.speech.availability?.()).toEqual({ available: false, code: 'speech-plugin-unavailable' });
+    const noRecognizer = rig({ [SPEECH_STATUS_COMMAND]: status({ available: false, reason: 'recognizer-unavailable' }) });
+    expect(await noRecognizer.speech.availability?.()).toEqual({ available: false, code: 'speech-recognizer-unavailable' });
+    const refused = rig({ [SPEECH_STATUS_COMMAND]: new Error('not allowed') });
+    expect(await refused.speech.availability?.()).toEqual({ available: false, code: 'speech-plugin-unavailable' });
+    const ok = rig({ [SPEECH_STATUS_COMMAND]: status() });
+    expect(await ok.speech.availability?.()).toEqual({ available: true });
   });
 });
 
@@ -144,7 +146,7 @@ describe('openSpeechRecognizer : branchement au démarrage (CAP-IOS-01 critère 
     const speech = openSpeechRecognizer('tauri', 'ios', { log });
     expect(speech).not.toBe(unavailableSpeech);
     expect(typeof speech.requestPermissions).toBe('function');
-    expect(typeof speech.openSettings).toBe('function');
+    expect(typeof speech.availability).toBe('function');
     expect(log).not.toHaveBeenCalled();
   });
 });

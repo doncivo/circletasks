@@ -23,6 +23,7 @@ import { openHaptics, type Haptics } from '../../platform/haptics';
 import { openAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { openPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
 import { openSpeechRecognizer, setSpeechRecognizer, unavailableSpeech } from '../../platform/speech';
+import { openSystemSettings, setSystemSettings } from '../../platform/systemSettings';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
@@ -201,6 +202,9 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
     // gardent « indisponible » (Win + H).
     const speech = openSpeechRecognizer(runtime, os, { log: (code) => logFailure('capture', code) });
     if (speech !== unavailableSpeech) setSpeechRecognizer(speech);
+    // Réglages iOS : module commun (dictée, caméra du scan), aucun appel au démarrage.
+    const settings = openSystemSettings(runtime, os);
+    if (settings) setSystemSettings(settings);
     const deps: Parameters<typeof createAppContainer>[0] = {
       clock,
       ids,

@@ -9,7 +9,7 @@ import {
 } from './types';
 
 /** Un appel reçu par le faux, dans l'ordre (I-05 critères 7 et 11 : journal des demandes d'autorisation et des ouvertures de Réglages). */
-export type FakeSpeechCall = 'isAvailable' | 'permissions' | 'requestPermissions' | 'onDeviceReady' | 'listen' | 'openSettings';
+export type FakeSpeechCall = 'isAvailable' | 'permissions' | 'requestPermissions' | 'onDeviceReady' | 'listen' | 'availability';
 
 /** Faux `SpeechRecognizer` des tests : texte prédéfini, refus de permission possible, attente de « Terminer » possible, autorisations simulées. */
 export interface FakeSpeech extends SpeechRecognizer {
@@ -34,8 +34,8 @@ export interface FakeSpeech extends SpeechRecognizer {
   afterRequest: SpeechPermissions | null;
   /** Modèle hors ligne présent. */
   onDevice: boolean;
-  /** Échec de l'ouverture des Réglages (code `settings-open-failed`). */
-  settingsFail: boolean;
+  /** Code rendu par `availability()` quand le service est indisponible. */
+  unavailableCode: string | undefined;
   /** Lecture de l'état en échec (erreur de la commande). */
   permissionsFail: boolean;
   /** Appels reçus, dans l'ordre. */
@@ -45,7 +45,7 @@ export interface FakeSpeech extends SpeechRecognizer {
 type FakeSpeechInit = Partial<
   Pick<
     FakeSpeech,
-    'available' | 'transcript' | 'failure' | 'waitForStop' | 'deniedPermission' | 'failureCode' | 'stoppedBy' | 'onDevice' | 'afterRequest' | 'settingsFail' | 'permissionsFail'
+    'available' | 'transcript' | 'failure' | 'waitForStop' | 'deniedPermission' | 'failureCode' | 'stoppedBy' | 'onDevice' | 'afterRequest' | 'unavailableCode' | 'permissionsFail'
   >
 > & { state?: Partial<FakeSpeech['state']> };
 
@@ -65,7 +65,7 @@ export function createFakeSpeech(initial: FakeSpeechInit = {}): FakeSpeech {
     state: { microphone: 'granted', speechRecognition: 'granted', ...initial.state },
     afterRequest: initial.afterRequest ?? null,
     onDevice: initial.onDevice ?? true,
-    settingsFail: initial.settingsFail ?? false,
+    unavailableCode: initial.unavailableCode,
     permissionsFail: initial.permissionsFail ?? false,
     calls: [],
     isAvailable: () => {
@@ -86,9 +86,9 @@ export function createFakeSpeech(initial: FakeSpeechInit = {}): FakeSpeech {
       record('onDeviceReady');
       return Promise.resolve(fake.onDevice);
     },
-    openSettings: () => {
-      record('openSettings');
-      return fake.settingsFail ? Promise.reject(new SpeechError('failed', undefined, { code: 'settings-open-failed' })) : Promise.resolve();
+    availability: () => {
+      record('availability');
+      return Promise.resolve(fake.available ? { available: true } : { available: false, ...(fake.unavailableCode ? { code: fake.unavailableCode } : {}) });
     },
     listen: (options: ListenOptions) => {
       fake.listens += 1;

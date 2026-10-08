@@ -21,10 +21,6 @@ async function injectSpeech(page: Page, state: { microphone: string; speechRecog
           return Promise.resolve({ ...fake.state });
         },
         onDeviceReady: () => Promise.resolve(onDevice),
-        openSettings: () => {
-          calls.push('openSettings');
-          return Promise.resolve();
-        },
         listen: (options: { stopSignal?: AbortSignal }) => {
           calls.push('listen');
           return new Promise<string>((resolve) => {
@@ -33,6 +29,12 @@ async function injectSpeech(page: Page, state: { microphone: string; speechRecog
         },
       };
       (window as unknown as Record<string, unknown>)['__ctSpeech'] = fake;
+      (window as unknown as Record<string, unknown>)['__ctSystemSettings'] = {
+        openApp: () => {
+          calls.push('openSettings');
+          return Promise.resolve();
+        },
+      };
     },
     { initial: state, onDevice: options.onDevice ?? true },
   );

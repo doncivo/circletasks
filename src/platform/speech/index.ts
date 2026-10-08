@@ -52,7 +52,16 @@ function lazySpeech(load: () => Promise<SpeechRecognizer>, log: (code: string) =
     permissions: () => required((r) => r.permissions?.bind(r)),
     requestPermissions: () => required((r) => r.requestPermissions?.bind(r)),
     onDeviceReady: () => required((r) => r.onDeviceReady?.bind(r)),
-    openSettings: () => required((r) => r.openSettings?.bind(r)),
+    availability: async () => {
+      try {
+        const speech = await get();
+        return speech.availability ? await speech.availability() : { available: await speech.isAvailable() };
+      } catch {
+        loaded = null;
+        log('speech-plugin-unavailable');
+        return { available: false, code: 'speech-plugin-unavailable' };
+      }
+    },
   };
 }
 

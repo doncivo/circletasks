@@ -6,6 +6,7 @@ import { getSpeechRecognizer, SpeechError, type SpeechStopReason } from '../../p
 import { Button, Icon, Sheet, type Layout } from '../../ui';
 import { useAppLockStore } from '../security/appLockStore';
 import { withExcursion } from '../security/excursion';
+import { canOpenAppSettings, openAppSettingsAction } from '../security/systemSettingsAction';
 import { deniedTextKey, dictationGate, type DictationGate, type DictationPermission } from './dictationPermission';
 import './Dictation.css';
 
@@ -46,6 +47,10 @@ function logSpeech(code: string): void {
 export function useDictation({ layout, inputRef, onText }: UseDictationOptions) {
   const helpId = useId();
   const [speechAvailable, setSpeechAvailable] = useState(false);
+  // Service indisponible sur iPhone (plugin absent, refusé ou muet) : code à dire, jamais un micro qui disparaît sans explication.
+  const [unavailableCode, setUnavailableCode] = useState<string | null>(null);
+  // Modèle français hors ligne absent : dictée désactivée tant qu'il manque, relu au retour au premier plan.
+  const [offlineMissing, setOfflineMissing] = useState(false);
   const [helpVisible, setHelpVisible] = useState(false);
   const [listening, setListening] = useState(false);
   const [explaining, setExplaining] = useState(false);
@@ -68,14 +73,18 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
   useEffect(() => {
     if (layout === 'pc') return;
     let cancelled = false;
-    getSpeechRecognizer()
-      .isAvailable()
-      .then((available) => {
-        if (!cancelled) setSpeechAvailable(available);
+    const recognizer = getSpeechRecognizer();
+    const check = recognizer.availability ? recognizer.availability() : recognizer.isAvailable().then((available) => ({ available }));
+    check
+      .then((result) => {
+        if (cancelled) return;
+        setSpeechAvailable(result.available);
+        setUnavailableCode('code' in result && typeof result.code === 'string' && !result.available ? result.code : null);
       })
       .catch(() => {
-        // Le contrat ne rejette pas ; un rejet est un plugin muet : micro non affiché, échec au journal.
+        // Le contrat ne rejette pas ; un rejet est un plugin muet : micro non affiché mais DIT, échec au journal.
         logSpeech('speech-plugin-unavailable');
+        if (!cancelled) setUnavailableCode('speech-plugin-unavailable');
       });
     return () => {
       cancelled = true;
@@ -116,16 +125,6 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
   }, []);
 
   const listen = useCallback(async (): Promise<void> => {
-    // Décision d'Ali : sans le modèle français hors ligne, la dictée est désactivée (message persistant) et AUCUNE écoute n'est tentée.
-    const ready = await getSpeechRecognizer()
-      .onDeviceReady?.()
-      .catch(() => undefined);
-    if (!mounted.current) return;
-    if (ready === false) {
-      logSpeech('speech-on-device-unavailable');
-      setNotice({ kind: 'error', key: 'onDeviceUnavailable' });
-      return;
-    }
     const controller = new AbortController();
     stop.current = controller;
     setListening(true);
@@ -188,6 +187,18 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
     setSettingsCode(null);
     void (async () => {
       try {
+        // Décision d'Ali : sans le modèle français hors ligne, la dictée est DÉSACTIVÉE (message persistant) AVANT toute explication ou
+        // demande d'autorisation : aucune fenêtre d'iOS, aucune écoute.
+        const ready = await getSpeechRecognizer()
+          .onDeviceReady?.()
+          .catch(() => undefined);
+        if (!mounted.current) return;
+        if (ready === false) {
+          logSpeech('speech-on-device-unavailable');
+          setOfflineMissing(true);
+          setNotice({ kind: 'error', key: 'onDeviceUnavailable' });
+          return;
+        }
         const gate = await readGate();
         if (gate && mounted.current) await proceed(gate);
       } finally {
@@ -201,7 +212,12 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
     setExplaining(false);
     const recognizer = getSpeechRecognizer();
     const request = recognizer.requestPermissions?.bind(recognizer);
-    if (!request) return;
+    if (!request) {
+      // Contrat violé (reconnaisseur sans demande d'autorisation) : dit avec son code, jamais un « Continuer » muet.
+      logSpeech('speech-request-missing');
+      setNotice({ kind: 'error', key: 'unknownState', code: 'permission-request-missing' });
+      return;
+    }
     starting.current = true;
     void (async () => {
       try {
@@ -225,19 +241,11 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
 
   const dismissExplain = useCallback(() => setExplaining(false), []);
 
-  /** « Ouvrir les réglages » (excursion `system-settings`, aucun reverrouillage au retour) ; un échec est dit avec son code. */
+  /** « Ouvrir les réglages » (module commun, excursion `system-settings`) ; un échec est dit avec son code. */
   const openSettings = useCallback(async (): Promise<void> => {
-    const recognizer = getSpeechRecognizer();
-    const open = recognizer.openSettings?.bind(recognizer);
-    if (!open) return;
     setSettingsCode(null);
-    try {
-      await withExcursion('system-settings', open);
-    } catch (error: unknown) {
-      const code = error instanceof SpeechError && error.code ? error.code : 'settings-open-failed';
-      logSpeech(code);
-      if (mounted.current) setSettingsCode(code);
-    }
+    const code = await openAppSettingsAction();
+    if (code && mounted.current) setSettingsCode(code);
   }, []);
 
   // Retour au premier plan (après les Réglages) : l'état est relu du système ; autorisation rendue = message disparu, toujours refusée =
@@ -259,6 +267,24 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [layout, blocked, readGate]);
 
+  // Retour au premier plan : le modèle hors ligne est relu ; présent = message disparu et bouton rétabli.
+  useEffect(() => {
+    if (layout === 'pc' || !offlineMissing) return undefined;
+    const onVisible = (): void => {
+      if (document.visibilityState !== 'visible') return;
+      void (getSpeechRecognizer().onDeviceReady?.() ?? Promise.resolve(undefined)).then(
+        (ready) => {
+          if (!mounted.current || ready === false) return;
+          setOfflineMissing(false);
+          setNotice(null);
+        },
+        () => undefined,
+      );
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [layout, offlineMissing]);
+
   const finish = useCallback(() => stop.current?.abort(), []);
 
   return {
@@ -270,7 +296,9 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
     notice,
     noticeVisible: notice !== null,
     settingsCode,
-    canOpenSettings: layout !== 'pc' && getSpeechRecognizer().openSettings !== undefined,
+    canOpenSettings: layout !== 'pc' && canOpenAppSettings(),
+    disabled: offlineMissing,
+    unavailableCode: layout !== 'pc' && !speechAvailable ? unavailableCode : null,
     press,
     finish,
     continueExplain,
@@ -314,6 +342,7 @@ export function DictationButton({ dictation, className }: { readonly dictation: 
       className={['ct-dictation__button', className].filter(Boolean).join(' ')}
       aria-label={t('capture.dictation.button')}
       aria-describedby={dictation.helpVisible || dictation.noticeVisible ? dictation.helpId : undefined}
+      disabled={dictation.disabled}
       onClick={dictation.press}
     >
       <Icon icon={Mic} size={22} />
@@ -341,6 +370,13 @@ export function DictationHelp({ dictation, className }: { readonly dictation: Di
   const { notice } = dictation;
   const classes = ['ct-dictation__help', className].filter(Boolean).join(' ');
   if (notice === null) {
+    if (dictation.unavailableCode) {
+      return (
+        <p id={dictation.helpId} role="status" className={classes}>
+          {`${t('capture.dictation.pluginUnavailable')} ${t('capture.dictation.code', { code: dictation.unavailableCode })}`}
+        </p>
+      );
+    }
     if (!(dictation.helpVisible && dictation.layout === 'pc')) return <span id={dictation.helpId} hidden />;
     return (
       <p id={dictation.helpId} role="status" className={classes}>
@@ -360,7 +396,7 @@ export function DictationHelp({ dictation, className }: { readonly dictation: Di
   return (
     <div id={dictation.helpId} role="alert" className={classes}>
       <p className="ct-dictation__message">{code ? `${text} ${t('capture.dictation.code', { code })}` : text}</p>
-      {notice.kind === 'denied' && dictation.canOpenSettings && (
+      {notice.kind === 'denied' && !notice.restricted && dictation.canOpenSettings && (
         <Button variant="secondary" onClick={() => void dictation.openSettings()}>
           {t('capture.dictation.denied.openSettings')}
         </Button>

@@ -26,8 +26,9 @@ const CONTENTS = new Map(sources('src').map((file) => [file, read(file)] as cons
 const filesNaming = (needle: RegExp): string[] => [...CONTENTS].filter(([, text]) => needle.test(text)).map(([file]) => file);
 
 describe('commandes de la capture sur iPhone : un seul fichier les nomme', () => {
-  it('speech_* et app_settings_open : tauriSpeech.ts seul', () => {
-    expect(filesNaming(/['"](speech_[a-z_]+|app_settings_open)['"]/)).toEqual(['src/platform/speech/tauriSpeech.ts']);
+  it('speech_* : tauriSpeech.ts seul ; app_settings_open : tauriSystemSettings.ts seul', () => {
+    expect(filesNaming(/['"]speech_[a-z_]+['"]/)).toEqual(['src/platform/speech/tauriSpeech.ts']);
+    expect(filesNaming(/['"]app_settings_open['"]/)).toEqual(['src/platform/systemSettings/tauriSystemSettings.ts']);
   });
 
   it('ocr_status et ocr_recognize : nativeOcr.ts seul', () => {
@@ -35,7 +36,7 @@ describe('commandes de la capture sur iPhone : un seul fichier les nomme', () =>
   });
 
   it('les noms de commande du TypeScript = le manifeste Rust = la capability iOS', () => {
-    const adapter = read('src/platform/speech/tauriSpeech.ts');
+    const adapter = read('src/platform/speech/tauriSpeech.ts') + read('src/platform/systemSettings/tauriSystemSettings.ts');
     const ocr = read('src/platform/ocr/nativeOcr.ts');
     const build = read('src-tauri/build.rs');
     const capability = JSON.parse(read('src-tauri/capabilities/capture-ios.json')) as { permissions: string[] };

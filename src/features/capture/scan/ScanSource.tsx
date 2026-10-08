@@ -1,10 +1,8 @@
 import { Camera, ImagePlus } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { t } from '../../../i18n';
-import { logFailure } from '../../../platform';
-import { getSpeechRecognizer, SpeechError } from '../../../platform/speech';
 import { Button, Icon, type Layout } from '../../../ui';
-import { withExcursion } from '../../security/excursion';
+import { canOpenAppSettings, openAppSettingsAction } from '../../security/systemSettingsAction';
 import { captureFrame, startWebcam, stopWebcam, WebcamError, type WebcamFailure } from './prepareImage';
 import type { Scan } from './useScan';
 
@@ -92,19 +90,14 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
   }
 
   const pc = layout === 'pc';
-  // Réglages iOS par le même appel natif que la dictée (ADR 0015 §2.3, écart 6) : absent (PC, navigateur), l'indication n'est pas affichée.
-  const openSettings = pc ? undefined : getSpeechRecognizer().openSettings?.bind(getSpeechRecognizer());
+  // Réglages iOS par le module commun (ADR 0015 écart 6) : absent (PC, navigateur), l'indication n'est pas affichée.
+  const canOpenSettings = !pc && canOpenAppSettings();
   const [settingsError, setSettingsError] = useState<string | null>(null);
 
-  async function openCameraSettings(open: () => Promise<void>): Promise<void> {
+  async function openCameraSettings(): Promise<void> {
     setSettingsError(null);
-    try {
-      await withExcursion('system-settings', open);
-    } catch (error) {
-      const code = error instanceof SpeechError && error.code ? error.code : 'settings-open-failed';
-      logFailure('capture', code);
-      if (mounted.current) setSettingsError(code);
-    }
+    const code = await openAppSettingsAction();
+    if (code && mounted.current) setSettingsError(code);
   }
 
   return (
@@ -114,6 +107,11 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
       {scan.refusal && (
         <p className="ct-scan__alert" role="alert">
           {t(REFUSALS[scan.refusal])}
+        </p>
+      )}
+      {scan.cleanupFailed && (
+        <p className="ct-scan__alert" role="alert">
+          {`${t('scan.cleanupFailed')} ${t('scan.code', { code: 'vision-cleanup-failed' })}`}
         </p>
       )}
       {webcamError && (
@@ -156,10 +154,10 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
               </button>
             )}
           </div>
-          {!pc && openSettings && (
+          {canOpenSettings && (
             <div className="ct-scan__cameraHint">
               <p className="ct-scan__lead">{t('scan.cameraHint.text')}</p>
-              <Button variant="secondary" onClick={() => void openCameraSettings(openSettings)}>
+              <Button variant="secondary" onClick={() => void openCameraSettings()}>
                 {t('scan.cameraHint.openSettings')}
               </Button>
               {settingsError && (

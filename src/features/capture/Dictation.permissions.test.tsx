@@ -4,6 +4,8 @@ import type { Task } from '../../domain/model';
 import { addDays } from '../../domain/localDate';
 import { setSpeechRecognizer } from '../../platform/speech';
 import { createFakeSpeech, type FakeSpeech } from '../../platform/speech/testing';
+import { setSystemSettings } from '../../platform/systemSettings';
+import { createFakeSystemSettings, type FakeSystemSettings } from '../../platform/systemSettings/testing';
 import { currentExcursion, configureExcursions } from '../security/excursion';
 import { resetAppLockStore, useAppLockStore } from '../security/appLockStore';
 import { mockViewport, renderToday, setupToday, teardownToday, type TodayHarness } from '../today/testKit';
@@ -11,14 +13,18 @@ import { mockViewport, renderToday, setupToday, teardownToday, type TodayHarness
 /** Autorisations de la dictée sur iPhone (I-05 critères 1 à 5, 12 ; CAP-IOS-01 critères 7 à 9 et 12), avec le faux de CAP-IOS-01. */
 describe('dictée sur iPhone : autorisations et plugin (I-05, CAP-IOS-01)', () => {
   let h: TodayHarness;
+  let settings: FakeSystemSettings;
 
   beforeEach(async () => {
     h = await setupToday('b103');
     mockViewport(440);
     configureExcursions();
+    settings = createFakeSystemSettings();
+    setSystemSettings(settings);
   });
   afterEach(async () => {
     setSpeechRecognizer(null);
+    setSystemSettings(null);
     resetAppLockStore();
     await teardownToday(h);
   });
@@ -105,14 +111,14 @@ describe('dictée sur iPhone : autorisations et plugin (I-05, CAP-IOS-01)', () =
   it('critère 4 : « Ouvrir les réglages » passe par l’excursion « system-settings » ; au retour, autorisation rendue = message disparu', async () => {
     const speech = createFakeSpeech({ state: { microphone: 'denied' }, transcript: 'demain 9 h' });
     let kind: string | undefined;
-    const open = speech.openSettings as () => Promise<void>;
-    speech.openSettings = () => {
+    const open = settings.openApp;
+    settings.openApp = () => {
       kind = currentExcursion()?.kind;
       return open();
     };
     fireEvent.click(await setup(speech));
     fireEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Ouvrir les réglages' }));
-    await waitFor(() => expect(speech.calls).toContain('openSettings'));
+    await waitFor(() => expect(settings.opened).toBe(1));
     expect(kind).toBe('system-settings');
     // Toujours refusé au retour : message conservé.
     visibility('hidden');
@@ -153,23 +159,47 @@ describe('dictée sur iPhone : autorisations et plugin (I-05, CAP-IOS-01)', () =
   });
 
   it('critère 12 : ouverture des Réglages en échec = message avec code, jamais un bouton muet', async () => {
-    const speech = createFakeSpeech({ state: { microphone: 'denied' }, settingsFail: true });
+    settings.fail = true;
+    const speech = createFakeSpeech({ state: { microphone: 'denied' } });
     fireEvent.click(await setup(speech));
     fireEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Ouvrir les réglages' }));
     expect(await screen.findByText(/Les réglages n’ont pas pu s’ouvrir.*Code : settings-open-failed/)).toBeInTheDocument();
   });
 
-  it('CAP-IOS-01 critère 12 : sans modèle hors ligne, dictée désactivée, message persistant, AUCUNE tentative d’écoute', async () => {
-    const speech = createFakeSpeech({ onDevice: false });
+  it('CAP-IOS-01 critère 12 : sans modèle hors ligne, dictée désactivée AVANT toute explication ou demande, message persistant, aucune écoute', async () => {
+    const speech = createFakeSpeech({ onDevice: false, state: { microphone: 'prompt', speechRecognition: 'prompt' } });
     fireEvent.click(await setup(speech));
     const alert = await screen.findByRole('alert');
+    expect(screen.queryByRole('dialog', { name: 'Dicter une tâche' })).toBeNull();
+    expect(speech.calls).not.toContain('permissions');
+    expect(speech.calls).not.toContain('requestPermissions');
+    expect(screen.getByRole('button', { name: 'Dicter' })).toBeDisabled();
     expect(alert).toHaveTextContent('La dictée hors ligne en français n’est pas disponible sur cet iPhone');
     expect(alert).toHaveTextContent('Réglages › Général › Clavier › Dictée');
     expect(alert).toHaveTextContent('Le micro du clavier reste utilisable');
     expect(speech.listens).toBe(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Dicter' }));
-    await screen.findByRole('alert');
-    expect(speech.listens).toBe(0);
+    // Retour au premier plan avec le modèle installé : message disparu, bouton rétabli.
+    speech.onDevice = true;
+    visibility('hidden');
+    visibility('visible');
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+    expect(screen.getByRole('button', { name: 'Dicter' })).toBeEnabled();
+  });
+
+  it('restreint (Temps d’écran) : le texte dit la cause, aucun « Ouvrir les réglages » inutile', async () => {
+    const speech = createFakeSpeech({ state: { microphone: 'restricted' } });
+    fireEvent.click(await setup(speech));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Temps d’écran');
+    expect(within(alert).queryByRole('button', { name: 'Ouvrir les réglages' })).toBeNull();
+  });
+
+  it('service indisponible sur iPhone : mention visible avec son code, pas de micro qui disparaît en silence', async () => {
+    setSpeechRecognizer(createFakeSpeech({ available: false, unavailableCode: 'speech-plugin-unavailable' }));
+    renderToday(h.container);
+    await screen.findByRole('heading', { level: 1 });
+    expect(await screen.findByText(/Dictée indisponible sur cet iPhone.*Code : speech-plugin-unavailable/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dicter' })).toBeNull();
   });
 
   it('CAP-IOS-01 critère 12 : rejet on-device-unavailable du plugin = même message persistant', async () => {

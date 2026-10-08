@@ -25,12 +25,18 @@ async function injectSpeech(page: Page, state: { microphone: string; speechRecog
         permissions: () => Promise.resolve({ ...initial }),
         requestPermissions: () => Promise.resolve({ microphone: 'granted', speechRecognition: 'granted' }),
         onDeviceReady: () => Promise.resolve(ready),
-        openSettings: () => Promise.resolve(),
         listen: () => new Promise<string>(() => undefined),
       };
     },
     { initial: state, ready: onDevice },
   );
+  await injectSettings(page);
+}
+
+async function injectSettings(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    (window as unknown as Record<string, unknown>)['__ctSystemSettings'] = { openApp: () => Promise.resolve() };
+  });
 }
 
 async function fakeOcr(page: Page, hook: Record<string, unknown>): Promise<void> {
@@ -42,7 +48,7 @@ async function fakeOcr(page: Page, hook: Record<string, unknown>): Promise<void>
 const scan = (page: Page) => page.getByRole('dialog', { name: 'Scan tâches' });
 
 test.describe('CAP-IOS-01 / I-05 — écrans iPhone', () => {
-  test.beforeEach((_fixtures, testInfo) => {
+  test.beforeEach(({ page: _page }, testInfo) => {
     test.skip(!isPhone(testInfo), 'iPhone seulement');
   });
 
@@ -53,6 +59,31 @@ test.describe('CAP-IOS-01 / I-05 — écrans iPhone', () => {
     const explain = page.getByRole('dialog', { name: 'Dicter une tâche' });
     await expect(explain.getByRole('button', { name: 'Continuer' })).toBeVisible();
     await expect(explain.getByRole('button', { name: 'Pas maintenant' })).toBeVisible();
+    await noHorizontalScroll(page);
+  });
+
+  test('dictée restreinte (Temps d’écran) : la cause est dite, aucun bouton inutile, sans défilement horizontal', async ({ page }) => {
+    await injectSpeech(page, { microphone: 'restricted', speechRecognition: 'granted' });
+    await openToday(page);
+    await page.getByRole('button', { name: 'Dicter' }).click();
+    await expect(page.getByRole('alert')).toContainText('Temps d’écran');
+    await expect(page.getByRole('button', { name: 'Ouvrir les réglages' })).toHaveCount(0);
+    await noHorizontalScroll(page);
+  });
+
+  test('service de dictée absent : mention « Dictée indisponible » avec son code, sans défilement horizontal', async ({ page }) => {
+    await page.addInitScript(() => {
+      (window as unknown as Record<string, unknown>)['__ctSpeech'] = {
+        isAvailable: () => Promise.resolve(false),
+        availability: () => Promise.resolve({ available: false, code: 'speech-plugin-unavailable' }),
+        listen: () => Promise.reject(new Error('absent')),
+      };
+    });
+    await openToday(page);
+    await expect(page.getByText(/Dictée indisponible sur cet iPhone.*Code : speech-plugin-unavailable/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Dicter' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByText(/Dictée indisponible sur cet iPhone/)).toBeVisible();
     await noHorizontalScroll(page);
   });
 
@@ -75,6 +106,7 @@ test.describe('CAP-IOS-01 / I-05 — écrans iPhone', () => {
   test('scan : source avec indication de la caméra et « Ouvrir les réglages », sans défilement horizontal', async ({ page }) => {
     await injectSpeech(page, { microphone: 'granted', speechRecognition: 'granted' });
     await fakeOcr(page, { lines: LINES });
+    await injectSettings(page);
     await openToday(page);
     await page.getByRole('button', { name: 'Scan tâches' }).click();
     await expect(scan(page).getByRole('button', { name: 'Ouvrir les réglages' })).toBeVisible();
