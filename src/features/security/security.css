@@ -86,3 +86,8 @@ html[data-privacy='on'] #ct-privacy-cover {
 #ct-lock-layer .ct-confirm__backdrop {
   z-index: 2147483001;
 }
+
+/* Verrou : tout enfant de body autre que la couche du verrou et le cache est caché dès son insertion (complète l'observateur). */
+html[data-app-lock='locked'] body > :not(#ct-lock-layer):not(#ct-privacy-cover) {
+  display: none !important;
+}
