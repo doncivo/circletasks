@@ -248,6 +248,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   const ownScan = scan.devices.find((d) => d.deviceId === self) ?? null;
   const ownState = ownScan?.stateStatus === 'ok' ? ownScan.state : null;
   const pending = new Set<string>(scan.devices.flatMap((d) => d.pending.map((p) => `${String(d.deviceId).slice(0, 8)}/${p.file}`)));
+  /** Fichiers listés « dans le nuage » par le scan, élagués après la lecture (revue Y-IOS, QA : voir `pruneUnneeded`). */
+  const scanPending = scan.devices.flatMap((d) => d.pending.map((p) => ({ deviceId: d.deviceId, file: p.file, key: `${String(d.deviceId).slice(0, 8)}/${p.file}` })));
 
   // Y-10 : ordre total des oublis (déclarations des seuls états authentifiés). Appareil local oublié : il ne lit ni ne publie plus.
   let forgetView: ForgetView;
@@ -585,6 +587,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (resume) await doResume();
 
     let allRead = true;
+    /** Appareils lus jusqu'à leur tête dans ce cycle (leurs segments listés dans le nuage ont été téléchargés par la lecture). */
+    const readToHead = new Set<DeviceId>();
     for (let pass = 0; pass < 2; pass += 1) {
       let needResume = false;
       const truncated: string[] = [];
@@ -666,6 +670,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         const cursor: RecordCursor = row?.epoch === readEpoch ? { segment: row.cursorSegment, record: row.cursorRecord } : ZERO;
         if (row?.epoch !== readEpoch) await repos.sync.saveState(target.id, { epoch: readEpoch, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
         if (compareCursors(cursor, target.head) >= 0) {
+          readToHead.add(target.id);
           await clearGap(target.id, !forgetView.order.has(target.id));
           continue;
         }
@@ -716,6 +721,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           ...(target.limit ? { limit: target.limit } : {}),
         });
         if (outcome.status !== 'complete') allRead = false;
+        else readToHead.add(target.id);
         if (outcome.status === 'cloud-pending') pending.add(`${String(target.id).slice(0, 8)}/${readEpoch}`);
         if (outcome.status === 'truncated') {
           truncatedThisCycle.add(target.id);
@@ -738,6 +744,25 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // à chaque cycle avec le même instantané éligible).
         for (const h of resumeHoles) await hole(h.id, h.epoch, h.segment);
         break;
+      }
+    }
+
+    // Revue Y-IOS (QA) : seuls les fichiers dont ce lecteur a encore besoin le tiennent « en attente d'iCloud ». Un instantané listé dans le
+    // nuage n'est lu que par une reprise, qui l'ajoute elle-même s'il lui manque ; un segment sous le curseur, ou celui du curseur d'un
+    // appareil lu jusqu'à sa tête, est déjà lu. Sans épinglage (iPhone), iCloud ne télécharge jamais ces fichiers d'office : les compter
+    // tiendrait l'appareil « en attente » pour toujours.
+    {
+      const rowsNow = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
+      for (const entry of scanPending) {
+        if (/^(?:.+\/)?s-\d{8}\.cts$/.test(entry.file)) {
+          pending.delete(entry.key);
+          continue;
+        }
+        const segment = /^(.+)\/j-(\d{8})\.ctj$/.exec(entry.file);
+        const row = rowsNow.get(entry.deviceId);
+        if (!segment || !row || row.epoch !== segment[1]) continue;
+        const n = Number(segment[2]);
+        if (n < row.cursorSegment || (n === row.cursorSegment && readToHead.has(entry.deviceId))) pending.delete(entry.key);
       }
     }
 

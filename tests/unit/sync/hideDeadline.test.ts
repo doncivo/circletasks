@@ -308,5 +308,9 @@ describe('Y-IOS-01 QA : hydratation qui dépasse son budget (échéance moins 2 
     const reopened = await iphone.cycle();
     expect(reopened.phase).not.toBe('error');
     expect((await iphone.driver.select("SELECT id FROM task WHERE title = 'Arrivée tardive' AND deleted_at IS NULL")).length > 0).toBe(true);
+    // Revue (QA) : les instantanés du PC jamais lus (restés dans le nuage, aucun épinglage sur iPhone) ne tiennent pas l'iPhone « en attente
+    // d'iCloud » : seuls les fichiers dont le lecteur a besoin comptent.
+    expect(reopened.pendingFiles).toEqual([]);
+    expect(reopened.phase).toBe('idle');
   });
 });
