@@ -344,7 +344,7 @@ describe('N-03 QA : cas limites des actions de notification', () => {
     await dismissActionTrouble(h.container);
     expect((await storedQueue(h.container)).entries).toEqual([]);
     expect((await storedStatus(h.container)).actionsFailure?.reason).toBe('delegate-lost');
-    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
+    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » sont indisponibles');
     source.setDelegate(true);
     h.fake.setPermission('denied');
     await pass(h.container, 'resume');

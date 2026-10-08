@@ -1,5 +1,5 @@
 import type { OsFamily, Runtime } from '../runtime';
-import { NotificationActionSourceError, type NotificationActionSource } from './actions';
+import type { NotificationActionSource } from './actions';
 import { createFakeNotificationScheduler, type FakeNotificationScheduler } from './fake';
 import { createFakeNotificationActionSource, type FakeNotificationActionSource } from './fakeActions';
 import type { NotificationClock } from './notificationClock';
@@ -92,7 +92,7 @@ function createLazyActionSource(): NotificationActionSource {
       (module) => module.createTauriNotificationActionSource(),
       () => {
         loaded = null;
-        throw new NotificationActionSourceError('unavailable');
+        throw new Error('notification action source: unavailable');
       },
     );
     return loaded;

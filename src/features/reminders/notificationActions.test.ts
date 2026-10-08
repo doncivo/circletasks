@@ -322,7 +322,7 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     // La ligne est restée dans le fichier ; la file l'a déjà ; l'échec est visible.
     expect(source.file).toHaveLength(1);
     expect((await storedStatus(h.container)).actionsFailure?.reason).toBe('source-failed');
-    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
+    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » sont indisponibles');
     await pass(h.container, 'resume');
     expect(source.file).toEqual([]);
     expect((await storedQueue(h.container)).snoozes).toHaveLength(1);
@@ -406,7 +406,7 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     source.setDelegate(false);
     await pass();
     expect((await storedStatus(h.container)).actionsFailure?.reason).toBe('delegate-lost');
-    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
+    expect(banner()?.message).toBe('Les boutons « Fait » et « +15 min » sont indisponibles');
     source.setDelegate(true);
     await pass(h.container, 'resume');
     expect((await storedStatus(h.container)).actionsFailure).toBeNull();

@@ -144,7 +144,7 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     });
     const bannerElement = document.querySelector('.ct-status-banner') as HTMLElement;
     expect(bannerElement).toHaveTextContent('Une action de notification n’a pas pu être appliquée');
-    expect(screen.getByText('Actions en attente d’application : 1 (nouvel essai à chaque ouverture)')).toBeInTheDocument();
+    expect(screen.getByText('Actions en attente : 1 (nouvel essai à l’ouverture)')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ignorer les actions de notification en échec' }));
     await waitFor(() => expect(document.querySelector('.ct-status-banner')).toBeNull());
     expect(screen.queryByText(/Actions en attente d’application/)).toBeNull();
@@ -156,8 +156,8 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     await open({ parts: { notificationActions: source } }, async (harness) => {
       await replanNotifications(harness.container, 'open');
     });
-    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
-    expect(screen.getByText(/Le plugin n’est plus le gestionnaire des notifications/)).toBeInTheDocument();
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les boutons « Fait » et « +15 min » sont indisponibles');
+    expect(screen.getByText(/gestionnaire des notifications repris/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Ignorer les actions de notification en échec' })).toBeNull();
   });
 
