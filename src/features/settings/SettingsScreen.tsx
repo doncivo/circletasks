@@ -15,6 +15,7 @@ import { AboutSection } from './AboutSection';
 import { BackupRow } from './BackupRow';
 import { ImportRow } from './ImportRow';
 import { SampleDataRow } from './SampleDataRow';
+import { SecuritySection } from './SecuritySection';
 import { formatAppearanceParts } from './AppearanceScreen';
 import { formatTabsSummary, useVisibleTabCount } from './TabsScreen';
 import { settingsStore } from './settingsStore';
@@ -135,6 +136,8 @@ export function SettingsScreen() {
       {/* M15 (Y-01) : dossier de synchro ; section absente sur iPhone jusqu'à l'ordre 5. */}
       <SyncSettingsSection />
       <h2 className="ct-settings__section">{t('settings.sectionData')}</h2>
+      {/* I-03 : « Verrouillage Face ID » (Reglages.html), iPhone seulement. */}
+      <SecuritySection />
       {/* M12 (P-04) : sauvegarde automatique quotidienne et restauration. */}
       <BackupRow />
       <ImportRow />

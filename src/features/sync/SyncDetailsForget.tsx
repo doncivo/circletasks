@@ -9,6 +9,7 @@ import { syncStore } from './syncStore';
 import './SyncDetailsForget.css';
 import { forgetDeletionLine, forgetDeviceName, forgetFailureText } from './forgetText';
 import { deviceName, formatSyncTime } from './syncText';
+import { withExcursion } from '../security/excursion';
 
 /**
  * Y-10 « J'oublie un appareil » dans Réglages › Synchronisation › Détails (aucune maquette : composé avec les lignes de Réglages, les
@@ -45,7 +46,8 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
       const outcome = await sync.rejoin();
       if (outcome.kind !== 'restart') return;
       // Dossier délié : choisi de nouveau tout de suite (boîte système) ; annulé, il le sera depuis Réglages après la relance.
-      await container.syncPlatform?.folder.choose().catch(() => null);
+      const platform = container.syncPlatform;
+      if (platform) await withExcursion('folder-picker', () => platform.folder.choose()).catch(() => null);
       await (relaunch ?? (() => defaultRelaunch(container.platform.runtime)))();
     } finally {
       setBusy(false);

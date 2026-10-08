@@ -16,6 +16,7 @@ import { eventsEn } from './en.events';
 import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
+import { securityEn } from './en.security';
 import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
@@ -639,6 +640,7 @@ export const en: Messages = {
   shortcutsUi: shortcutsUiEn,
   backup: backupEn,
   importCsv: importCsvEn,
+  security: securityEn,
   onboarding: onboardingEn,
   shortcuts: {
     quickCapture: 'Quick capture',

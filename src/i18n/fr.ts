@@ -25,6 +25,7 @@ import { syncVersionFr } from './fr.syncVersion';
 import { syncPairingFr } from './fr.syncPairing';
 import { syncForgetFr } from './fr.syncForget';
 import { syncResetFr } from './fr.syncReset';
+import { securityFr } from './fr.security';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -651,6 +652,7 @@ export const fr = {
   shortcutsUi: shortcutsUiFr,
   backup: backupFr,
   importCsv: importCsvFr,
+  security: securityFr,
   onboarding: onboardingFr,
   shortcuts: {
     quickCapture: 'Capture rapide',

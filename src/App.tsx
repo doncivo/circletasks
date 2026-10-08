@@ -54,6 +54,7 @@ import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
+import { AppLockGate, isAppLocked, startAppLockFor, type AppLockController } from './features/security';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
@@ -203,6 +204,7 @@ export function App() {
   const [container, setContainer] = useState<AppContainer | null>(null);
   const mounted = useRef(true);
   const startup = useRef<AppStartup | null>(null);
+  const appLock = useRef<AppLockController | null>(null);
 
   useEffect(() => {
     if (useAppStore.getState().dbStatus === 'idle') {
@@ -225,6 +227,11 @@ export function App() {
         await restoreSpaceFilter(created);
         // Apparence (P-03) : premier jour et format d'heure lus avant le premier rendu.
         await restoreAppearance(created);
+        // I-03 : verrouillage lu avant le premier rendu de la coquille (illisible : verrouillé). Le verrou couvre l'interface seulement :
+        // la suite du démarrage (report, synchro, rappels) continue normalement.
+        const lock = startAppLockFor(created);
+        appLock.current = lock;
+        await lock.ready;
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
         const started = startAppStartup(created);
@@ -232,6 +239,8 @@ export function App() {
         await started.ready;
         if (!mounted.current) {
           started.dispose();
+          lock.dispose();
+          appLock.current = null;
           return;
         }
         setContainer(created);
@@ -246,6 +255,8 @@ export function App() {
       mounted.current = false;
       startup.current?.dispose();
       startup.current = null;
+      appLock.current?.dispose();
+      appLock.current = null;
     };
   }, []);
 
@@ -277,6 +288,8 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
+      // I-03 : aucun raccourci tant que l'app est verrouillée.
+      if (isAppLocked()) return;
       // Sous la liste des raccourcis (fenêtre modale), seuls Ctrl+/ et Échap agissent : Espace, Entrée ou Suppr ne touchent pas l'écran dessous.
       const underHelp = useNavigationStore.getState().overlays.at(-1)?.kind === 'shortcutsHelp';
       if (container.shortcuts.handle(toKeyInput(event), underHelp ? HELP_KEYS : undefined)) event.preventDefault();
@@ -291,9 +304,12 @@ export function App() {
       {dbStatus === 'error' && <p role="alert">{t(dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
       {container ? (
         <AppContainerProvider container={container}>
-          <AppShellContent />
-          {/* Bandeau « Annuler » et Ctrl+Z globaux (T-13) : au-dessus de tous les écrans. */}
-          <UndoToast />
+          {/* I-03 : écran de verrou ; coquille non montée au lancement verrouillé, masquée et inerte au retour. */}
+          <AppLockGate>
+            <AppShellContent />
+            {/* Bandeau « Annuler » et Ctrl+Z globaux (T-13) : au-dessus de tous les écrans. */}
+            <UndoToast />
+          </AppLockGate>
         </AppContainerProvider>
       ) : (
         dbStatus !== 'error' && <h1>{t('app.name')}</h1>

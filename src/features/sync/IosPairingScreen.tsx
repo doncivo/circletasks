@@ -11,6 +11,7 @@ import { handleSyncPaired } from './pairingStatus';
 import { RecoveryKeyEntry } from './pairing-window/RecoveryKeyEntry';
 import { pairingTexts } from './pairing-window/pairingText';
 import './IosPairingScreen.css';
+import { openCameraSettings, withExcursion } from '../security/excursion';
 
 /** Classe posée sur `<html>` pendant le scan : la WebView devient transparente, la caméra du plugin est derrière (ADR 0011 §23 point 7). */
 export const SCANNING_CLASS = 'ct-scanning';
@@ -116,7 +117,7 @@ export function IosPairingScreen({ platform, onClose, document: injected }: IosP
     setBusy(true);
     setMessage(null);
     try {
-      const info = await platform.folder.choose();
+      const info = await withExcursion('folder-picker', () => platform.folder.choose());
       if (!info) return;
       await platform.bindDevice(container.hlc.deviceId);
       setFolderReady(true);
@@ -139,7 +140,9 @@ export function IosPairingScreen({ platform, onClose, document: injected }: IosP
     if (!platform.key.scanAndImport) return;
     setMessage(null);
     setStage('scanning');
-    const outcome = await platform.key.scanAndImport();
+    const scanAndImport = platform.key.scanAndImport.bind(platform.key);
+    // I-03 : caméra (et sa demande d'autorisation) = excursion, pas de reverrouillage immédiat au retour.
+    const outcome = await withExcursion('camera', scanAndImport);
     if (!mounted.current) return;
     switch (outcome.kind) {
       case 'imported':
@@ -257,7 +260,7 @@ export function IosPairingScreen({ platform, onClose, document: injected }: IosP
                   {t('sync.pairing.ios.cameraDenied')}
                 </p>
                 <p className="ct-ios-pair__text">{t('sync.pairing.ios.cameraDeniedHint')}</p>
-                <Button ariaLabel={t('sync.pairing.ios.openSettingsLabel')} onClick={() => void platform.key.openCameraSettings?.()}>
+                <Button ariaLabel={t('sync.pairing.ios.openSettingsLabel')} onClick={() => void openCameraSettings(platform)}>
                   {t('sync.pairing.ios.openSettings')}
                 </Button>
               </>

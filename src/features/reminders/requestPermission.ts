@@ -1,6 +1,7 @@
 import { logFailure } from '../../platform/desktop/log';
 import type { AppContainer } from '../app/container';
 import { getNotificationRunner } from './notificationRunner';
+import { withExcursion } from '../security/excursion';
 
 /**
  * Demande l'autorisation, sur un GESTE de l'utilisateur seulement (bouton « Autoriser » du bandeau ou de Réglages > Rappels), puis lance un
@@ -8,7 +9,8 @@ import { getNotificationRunner } from './notificationRunner';
  */
 export async function requestPermissionOnGesture(container: AppContainer): Promise<void> {
   try {
-    await container.notifications.requestPermission();
+    // I-03 : fenêtre d'autorisation d'iOS = excursion (aucun reverrouillage à son retour).
+    await withExcursion('permission', () => container.notifications.requestPermission());
   } catch {
     logFailure('notifications', 'request-permission-failed');
   }
