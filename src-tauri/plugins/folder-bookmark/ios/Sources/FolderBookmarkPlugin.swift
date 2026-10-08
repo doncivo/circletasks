@@ -616,7 +616,10 @@ class FolderBookmarkPlugin: Plugin {
           return ["exists": true, "isDir": false, "size": NSNull(), "availability": "error"]
         }
         let directory = self.isDirectory(st.st_mode)
-        let size: Any = directory ? NSNull() : NSNumber(value: Int64(st.st_size))
+        var size: Any = NSNull()
+        if !directory {
+          size = NSNumber(value: Int64(st.st_size))
+        }
         return ["exists": true, "isDir": directory, "size": size, "availability": self.availability(url)]
       }
     }
@@ -677,7 +680,10 @@ class FolderBookmarkPlugin: Plugin {
             continue
           }
           let directory = self.isDirectory(st.st_mode)
-          let size: Any = directory ? NSNull() : NSNumber(value: Int64(st.st_size))
+          var size: Any = NSNull()
+          if !directory {
+            size = NSNumber(value: Int64(st.st_size))
+          }
           let state = directory ? "local" : self.availability(dirURL.appendingPathComponent(name))
           entries.append(["name": name, "isDir": directory, "size": size, "availability": state])
         }
