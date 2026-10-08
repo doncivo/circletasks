@@ -1,9 +1,10 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppContainer } from '../app/container';
 import { AppLockGate } from './AppLockGate';
 import { bootAppLock } from './appLockBoot';
 import { resetAppLockStore, useAppLockStore } from './appLockStore';
+import { appReload } from './lockLayer';
 
 /** I-03-6 / I-03-9 : chargement à la demande en échec (hors ligne de l'installation, bundle abîmé) : échec fermé, message visible. */
 
@@ -24,6 +25,12 @@ const flush = async (): Promise<void> => {
     for (let i = 0; i < 8; i += 1) await Promise.resolve();
   });
 };
+
+// Règle d'Ali : aucun délai allongé. Le bloc de l'écran de verrou (lazy) est préchargé explicitement : l'import est fait avant les
+// assertions, `findBy` garde sa durée normale.
+beforeAll(async () => {
+  await import('./LockScreen');
+});
 
 beforeEach(() => {
   resetAppLockStore();
@@ -54,7 +61,7 @@ describe('I-03 chargement à la demande du contrôleur en échec', () => {
         </ul>
       </AppLockGate>,
     );
-    expect(await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' }, { timeout: 20000 })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' })).toBeInTheDocument();
     await flush();
     expect(screen.getByRole('alert')).toHaveTextContent('unavailable');
     expect(screen.queryByText('Acheter du lait')).toBeNull();
@@ -68,11 +75,15 @@ describe('I-03 chargement à la demande du contrôleur en échec', () => {
         <p>{'Contenu'}</p>
       </AppLockGate>,
     );
-    const retry = await screen.findByRole('button', { name: 'Réessayer' }, { timeout: 20000 });
+    const reload = vi.spyOn(appReload, 'run').mockImplementation(() => undefined);
+    const retry = await screen.findByRole('button', { name: 'Réessayer' });
     retry.click();
     await flush();
+    // Import du contrôleur échoué, non réessayable : « Réessayer » relance l'app (revue 3).
+    expect(reload).toHaveBeenCalledTimes(1);
     expect(useAppLockStore.getState().phase).toBe('locked');
     expect(screen.queryByText('Contenu')).toBeNull();
+    reload.mockRestore();
   });
 
   it('I-03-3 PC et navigateur : contrôleur jamais chargé, déverrouillé', async () => {
