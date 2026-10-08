@@ -19,6 +19,8 @@ export interface QuickInputFieldProps {
   readonly placement?: 'above' | 'below';
   readonly className?: string;
   readonly autoFocus?: boolean;
+  /** Champ figé (écriture en cours) : lisible et focalisable, non modifiable. */
+  readonly readOnly?: boolean;
   readonly onBlur?: () => void;
   /** Touches propres à l'écran (Échap qui referme le champ…) ; appelée quand les suggestions n'ont pas consommé la touche. */
   readonly onKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void;
@@ -49,6 +51,7 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
   placement = 'below',
   className,
   autoFocus,
+  readOnly,
   onBlur,
   onKeyDown,
   enterKeyHint,
@@ -133,6 +136,7 @@ export const QuickInputField = forwardRef<HTMLInputElement, QuickInputFieldProps
           placeholder={placeholder}
           maxLength={maxLength}
           autoFocus={autoFocus}
+          readOnly={readOnly}
           autoComplete="off"
           aria-describedby={describedBy}
           enterKeyHint={enterKeyHint}

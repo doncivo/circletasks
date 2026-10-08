@@ -163,6 +163,11 @@
   background: var(--ct-color-surface);
 }
 
+/* Champs figés pendant l'écriture : le conteneur ne change pas la mise en page. */
+.ct-task-sheet__fields {
+  display: contents;
+}
+
 .ct-task-sheet__notice {
   display: flex;
   align-items: center;

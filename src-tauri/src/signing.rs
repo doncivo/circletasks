@@ -146,19 +146,35 @@ pub fn parse_provision(bytes: &[u8]) -> Result<SigningInfo, SigningError> {
     Ok(SigningInfo { expires_at: expires_text.to_owned(), issued_at: issued_text.map(str::to_owned) })
 }
 
-/// Lit le profil du dossier `dir` (celui de l'exécutable) : fichier ordinaire (jamais un lien), de 1 octet à 256 Kio.
+/// Ouvre le profil sans suivre de lien : `O_NOFOLLOW` sur unix (un lien symbolique est refusé à l'ouverture, sans fenêtre entre un contrôle
+/// et l'ouverture) ; hors unix (tests Windows), le contrôle par `symlink_metadata` précède l'ouverture.
+fn open_profile(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW);
+    }
+    #[cfg(not(unix))]
+    {
+        if std::fs::symlink_metadata(path)?.file_type().is_symlink() {
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "lien symbolique"));
+        }
+    }
+    options.open(path)
+}
+
+/// Lit le profil du dossier `dir` (celui de l'exécutable) : fichier ordinaire (jamais un lien), de 1 octet à 256 Kio. Le type et la taille
+/// sont contrôlés sur le descripteur déjà ouvert, pas sur le chemin.
 pub fn read_profile(dir: &Path) -> Result<SigningInfo, SigningError> {
     let path = dir.join(PROFILE_FILE);
-    let meta = match std::fs::symlink_metadata(&path) {
-        Ok(meta) => meta,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Err(SigningError::ProfileMissing),
-        Err(_) => return Err(SigningError::ProfileUnreadable),
-    };
+    let file = open_profile(&path).map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { SigningError::ProfileMissing } else { SigningError::ProfileUnreadable })?;
+    let meta = file.metadata().map_err(|_| SigningError::ProfileUnreadable)?;
     if !meta.file_type().is_file() || meta.len() == 0 || meta.len() > MAX_PROFILE_BYTES {
         return Err(SigningError::ProfileUnreadable);
     }
-    let file = std::fs::File::open(&path).map_err(|error| if error.kind() == std::io::ErrorKind::NotFound { SigningError::ProfileMissing } else { SigningError::ProfileUnreadable })?;
-    // Borne aussi la lecture : un fichier qui grossit entre le contrôle et l'ouverture n'est pas lu en entier.
+    // Borne aussi la lecture : un fichier qui grossit après le contrôle n'est pas lu en entier.
     let mut bytes = Vec::new();
     file.take(MAX_PROFILE_BYTES + 1).read_to_end(&mut bytes).map_err(|_| SigningError::ProfileUnreadable)?;
     if bytes.is_empty() || bytes.len() as u64 > MAX_PROFILE_BYTES {

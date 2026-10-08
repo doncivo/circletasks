@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { signingNotice } from '../../domain/signingNotice';
 import { isValidTimeZone } from '../../domain/timeZone';
 import { t } from '../../i18n';
@@ -17,6 +17,9 @@ import { aboutRemaining, wallText } from './signingText';
  * échec silencieux : date illisible ou absente, autorisation refusée et alerte non planifiée sont dits en toutes lettres.
  */
 
+/** La ligne « À propos » se recalcule chaque minute tant qu'elle est affichée. */
+export const SIGNING_ABOUT_TICK_MS = 60_000;
+
 const failureCodeText = (code: 'profile-missing' | 'profile-unreadable'): string => t(code === 'profile-missing' ? 'signing.about.codeMissing' : 'signing.about.codeUnreadable');
 
 function useSigningState() {
@@ -24,6 +27,13 @@ function useSigningState() {
   const state = useFeatureStore(signingStatusStore, (s) => s);
   useEffect(() => {
     if (container.signing.source.supported) void signingStatusController(container).load();
+  }, [container]);
+  // Rafraîchi tant que la ligne est affichée : « dans 6 jours » devient « dans 30 h » puis « dans 40 min » sans rouvrir l'écran.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!container.signing.source.supported) return undefined;
+    const timer = setInterval(() => setTick((n) => n + 1), SIGNING_ABOUT_TICK_MS);
+    return () => clearInterval(timer);
   }, [container]);
   const rawZone = container.notificationClock.zone();
   const zone = rawZone !== null && isValidTimeZone(rawZone) ? rawZone : null;

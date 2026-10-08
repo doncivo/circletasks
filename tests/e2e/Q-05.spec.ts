@@ -91,10 +91,10 @@ test.describe('Q-05 — capture rapide', () => {
 });
 
 /**
- * Critère 6 (PRD 8) — projet `perf` (tag @perf), émulation CPU 4× et écran de l'iPhone. Du toucher à la feuille ouverte et au champ focalisé :
- * médiane de cinq essais sous 300 ms. Le démarrage à froid est mesuré du début de la navigation à la présence du bouton + ; en
- * développement il inclut la transformation des modules par Vite : la valeur est consignée dans l'annotation « mesure » sans seuil de 1 s
- * (comme le premier affichage du rapport dans PERF-01) ; le seuil est vérifié sur l'appareil (contrôle A2 de la fiche).
+ * Critère 6 (PRD 8) — projet `perf` (tag @perf), émulation CPU 4× et écran de l'iPhone. Du toucher à la feuille AFFICHÉE (image suivante
+ * et minuterie passées) avec le champ déjà focalisé : médiane de cinq essais sous 300 ms, sur le build de production. Le démarrage à froid est
+ * mesuré du début de la navigation à la présence du bouton + (base en mémoire du navigateur) : valeur consignée dans l'annotation « mesure »
+ * sans seuil de 1 s ; ce seuil se contrôle sur l'appareil (A2 de la fiche).
  */
 test.describe('Q-05 — mesures iPhone @perf', () => {
   test.use({ viewport: { width: 440, height: 956 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 });
@@ -118,13 +118,19 @@ test.describe('Q-05 — mesures iPhone @perf', () => {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       // Mesure prise page au repos : les lectures de base lancées par la fermeture précédente sont terminées (attente d'un état, pas d'un délai).
       await page.evaluate(() => new Promise<void>((resolve) => requestIdleCallback(() => resolve())));
-      const elapsed = await page.evaluate(() => {
+      const elapsed = await page.evaluate(async () => {
         const button = document.querySelector<HTMLButtonElement>('.ct-fab');
         if (!button) throw new Error('bouton + introuvable');
         const begin = performance.now();
+        // Demandée AVANT le toucher : son rappel passe avant ceux que la feuille enregistre (calage et déploiement de la roue des jours), donc la
+        // minuterie qui clôt la mesure précède la leur. Image puis minuterie : la feuille est rendue, mise en page et peinte.
+        const shown = new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
         button.click();
+        // Le focus est posé dans le geste : vérifié dès le retour du clic, avant toute image.
         const active = document.activeElement;
         if (!(active instanceof HTMLInputElement) || !active.closest('[role="dialog"]')) throw new Error('champ non focalisé au retour du toucher');
+        // Feuille AFFICHÉE (revue I3) : fin de la mesure après l'image qui suit le toucher (rendu, mise en page et peinture faits), puis une minuterie.
+        await shown;
         return performance.now() - begin;
       });
       timings.push(elapsed);
@@ -134,11 +140,10 @@ test.describe('Q-05 — mesures iPhone @perf', () => {
     const sorted = [...timings].sort((a, b) => a - b);
     const median = sorted[Math.floor(sorted.length / 2)] ?? Number.NaN;
     testInfo.annotations.push({ type: 'mesure', description: `toucher jusqu’au champ focalisé : médiane ${String(Math.round(median))} ms (essais : ${timings.map((v) => String(Math.round(v))).join(' / ')} ms, CPU 4×)` });
-    // Le seuil vaut pour l'app installée (bundle de production). Le serveur de développement charge React en mode développement (rendu environ deux
-    // fois plus lent) : la mesure y est consignée sans seuil, comme le premier affichage du rapport dans PERF-01. Mesure de production : `vite build`
-    // puis `vite preview` (médiane 208 ms à CPU 4×, le 2026-10-08).
+    // Le projet `perf` sert le BUNDLE DE PRODUCTION (playwright.config.ts : dist-perf, React en mode production) : le seuil vaut pour l'app
+    // installée et s'applique sans condition. Un projet qui retomberait sur le serveur de développement (script /@vite/client) fait échouer le test.
     const development = await page.evaluate(() => document.querySelector('script[src*="/@vite/client"]') !== null);
-    if (!development) expect(median).toBeLessThan(300);
-    expect(timings.every((value) => Number.isFinite(value))).toBe(true);
+    expect(development, 'le projet perf doit tourner sur le bundle de production').toBe(false);
+    expect(median).toBeLessThan(300);
   });
 });

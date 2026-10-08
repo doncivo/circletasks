@@ -52,7 +52,7 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
       stopSync?.();
       env.document.removeEventListener('visibilitychange', onVisibility);
       clearReminderBanner();
-      clearSigningBanner();
+      clearSigningBanner(container);
     },
   };
 }

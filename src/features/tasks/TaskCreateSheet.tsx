@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { startTransition, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
@@ -87,6 +87,12 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const onCloseRef = useRef(onClose);
   const [notice, setNotice] = useState<SheetNotice | null>(null);
   const [shaking, setShaking] = useState(false);
+  // Écriture en cours (revue QA D1) : le formulaire est figé tant qu'elle n'est pas terminée, pour qu'aucune modification ne soit perdue en silence
+  // (la reprise par « Réessayer » porte le texte déjà envoyé).
+  const [waiting, setWaiting] = useState(false);
+  const fieldsRef = useRef<HTMLDivElement>(null);
+  // Bas de la feuille rendu après le premier affichage (transition) : l'ouverture ne paie que l'en-tête, le champ Titre et l'aperçu (Q-05, mesure @perf).
+  const [rest, setRest] = useState(false);
   // Q-03 : le micro de l'app n'apparaît que si le plugin Speech existe (ordre 5) ; le micro du clavier iOS dicte dans le champ sans code.
   const dictation = useDictation({ layout: 'mobile', inputRef: titleRef, onText: (spoken) => setTitle(title === '' ? spoken : `${title} ${spoken}`) });
   const valid = validateTaskTitle(quick.parse.title).ok;
@@ -96,6 +102,16 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  // `inert` n'est pas typé par React 18 : posé sur le DOM, comme l'écran de verrou.
+  useEffect(() => {
+    const element = fieldsRef.current;
+    if (!element) return;
+    if (waiting) element.setAttribute('inert', '');
+    else element.removeAttribute('inert');
+  }, [waiting]);
+  useEffect(() => {
+    startTransition(() => setRest(true));
+  }, []);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -167,10 +183,12 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
       })();
       run = started;
       pending.current = started;
+      setWaiting(true);
       // Fin de l'écriture, même tardive : réussie, la feuille se ferme ; refusée, l'erreur s'affiche et le texte reste.
       void started.then((created) => {
         if (pending.current === started) pending.current = null;
         if (!mounted.current) return;
+        setWaiting(false);
         if (created) onCloseRef.current();
         else setNotice('failed');
       });
@@ -188,7 +206,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   }
 
   return (
-    <Sheet open onClose={onClose} label={t('tasks.newTask')} initialFocusRef={titleRef}>
+    <Sheet open onClose={onClose} label={t('tasks.newTask')} initialFocusRef={titleRef} className="ct-sheet--tall">
       <form className="ct-task-sheet" onSubmit={submit}>
         <div className="ct-task-sheet__header">
           <h2 className="ct-task-sheet__heading">{t('tasks.newTask')}</h2>
@@ -196,56 +214,67 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             <Icon icon={X} />
           </button>
         </div>
-        {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
-        <div className="ct-task-sheet__titleRow" data-shake={shaking ? 'true' : undefined}>
-          <QuickInputField
-            ref={titleRef}
-            label={t('tasks.titleLabel')}
-            placeholder={t('tasks.addPlaceholderPc')}
-            value={title}
-            onChange={setTitle}
-            maxLength={TASK_TITLE_MAX_LENGTH}
-            enterKeyHint="done"
-            onKeyDown={handleTitleKeyDown}
-            context={quick.suggestionContext}
-            {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
-          />
-          <DictationButton dictation={dictation} />
+        <div ref={fieldsRef} className="ct-task-sheet__fields">
+          {onSegmentChange && <AddSegments value="task" onChange={(segment) => onSegmentChange(segment, title)} />}
+          <div className="ct-task-sheet__titleRow" data-shake={shaking ? 'true' : undefined}>
+            <QuickInputField
+              ref={titleRef}
+              label={t('tasks.titleLabel')}
+              placeholder={t('tasks.addPlaceholderPc')}
+              value={title}
+              onChange={(value) => {
+                if (!pending.current) setTitle(value);
+              }}
+              readOnly={waiting}
+              maxLength={TASK_TITLE_MAX_LENGTH}
+              enterKeyHint="done"
+              onKeyDown={handleTitleKeyDown}
+              context={quick.suggestionContext}
+              {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
+            />
+            <DictationButton dictation={dictation} />
+          </div>
+          <DictationHelp dictation={dictation} />
+          <ListeningSheet dictation={dictation} />
+          <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
+          {/* Q-05 : le bas de la feuille (icône, date, répétition, rappels, espace, objectif) se rend dans une transition, après le premier affichage :
+              le champ Titre est utilisable et focalisé dans le geste, les roues et sélecteurs arrivent à l'image suivante. */}
+          {rest && (
+            <>
+              {/* Choix Icône / Emoji (T-03, Ajout.html). */}
+              <IconChooser value={icon} onChange={setIcon} />
+              {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}
+              <DatePicker value={choice} today={today} onChange={changeChoice} />
+              <RecurrencePicker value={recurrence} onChange={setRecurrence} startDate={choice.date ?? viewedDate} />
+              {/* Rappels (N-02, Ajout.html) : grisés sans heure (QB-07) ; « À l'heure » cochée d'office à la première heure (QB-08). */}
+              <ReminderBlock
+                time={choice.date === null ? null : choice.time}
+                offsets={offsets}
+                warnFor={{ spaceId, date: choice.date }}
+                onToggle={(offset) => {
+                  setOffsetsTouched(true);
+                  setOffsets((current) => toggleReminderOffset(current, offset));
+                }}
+              />
+              {/* Espace puis projet (Ajout.html) : changer d'espace remet « Projet : aucun » (ES-04 critère 4). */}
+              <div className="ct-task-sheet__spaceRow">
+                <SpaceSegmented
+                  layout="compact"
+                  items={spaces}
+                  value={spaceId}
+                  onChange={(id) => {
+                    if (id !== spaceId) setProjectId(null);
+                    setSpaceId(id);
+                  }}
+                  label={t('detail.spaceChoiceLabel')}
+                />
+                <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
+              </div>
+              {/* Rattacher à mon objectif (OB-03, Ajout.html) : la semaine de référence est celle de la date choisie. */}
+              <GoalAttachSwitch variant="sheet" taskDate={choice.date} attachedGoalId={goalId} onChange={setGoalId} />
+            </>
+          )}
         </div>
-        <DictationHelp dictation={dictation} />
-        <ListeningSheet dictation={dictation} />
-        <QuickPreview parse={quick.parse} spaces={quick.spaces} projects={quick.projects} today={today} onDismiss={quick.dismiss} />
-        {/* Choix Icône / Emoji (T-03, Ajout.html). */}
-        <IconChooser value={icon} onChange={setIcon} />
-        {/* Puces et roues jour / heure / minutes (T-14, Ajout.html). */}
-        <DatePicker value={choice} today={today} onChange={changeChoice} />
-        <RecurrencePicker value={recurrence} onChange={setRecurrence} startDate={choice.date ?? viewedDate} />
-        {/* Rappels (N-02, Ajout.html) : grisés sans heure (QB-07) ; « À l'heure » cochée d'office à la première heure (QB-08). */}
-        <ReminderBlock
-          time={choice.date === null ? null : choice.time}
-          offsets={offsets}
-          warnFor={{ spaceId, date: choice.date }}
-          onToggle={(offset) => {
-            setOffsetsTouched(true);
-            setOffsets((current) => toggleReminderOffset(current, offset));
-          }}
-        />
-        {/* Espace puis projet (Ajout.html) : changer d'espace remet « Projet : aucun » (ES-04 critère 4). */}
-        <div className="ct-task-sheet__spaceRow">
-          <SpaceSegmented
-            layout="compact"
-            items={spaces}
-            value={spaceId}
-            onChange={(id) => {
-              if (id !== spaceId) setProjectId(null);
-              setSpaceId(id);
-            }}
-            label={t('detail.spaceChoiceLabel')}
-          />
-          <ProjectSelect spaceId={spaceId} value={projectId} onChange={setProjectId} />
-        </div>
-        {/* Rattacher à mon objectif (OB-03, Ajout.html) : la semaine de référence est celle de la date choisie. */}
-        <GoalAttachSwitch variant="sheet" taskDate={choice.date} attachedGoalId={goalId} onChange={setGoalId} />
         <div className="ct-task-sheet__spacer" />
         {notice && (
           <div className="ct-task-sheet__notice" role="alert">

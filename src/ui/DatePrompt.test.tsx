@@ -24,6 +24,12 @@ const props = {
 describe('DatePrompt (T-05, T-12, T-14)', () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it('iPhone (Q-05) : la feuille est ouverte avec le focus dedans, et le piège ne déplace pas un focus déjà posé dans le formulaire', () => {
+    mockViewport(440);
+    render(<DatePrompt {...props} onConfirm={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole('dialog', { name: 'Choisir une date' })).toContainElement(document.activeElement as HTMLElement);
+  });
+
   it('PC : le champ est rempli avec la date proposée ; valider renvoie la date ; saisie libre comprise (critères 7, 10)', () => {
     mockViewport(1440);
     const onConfirm = vi.fn();

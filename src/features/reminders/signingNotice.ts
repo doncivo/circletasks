@@ -1,6 +1,7 @@
 import { signingNotice } from '../../domain/signingNotice';
 import type { IsoDateTime } from '../../domain/types';
 import type { PlanFailureReason } from '../../domain/notificationStatus';
+import { isValidTimeZone } from '../../domain/timeZone';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { NotificationPermission } from '../../platform/notifications';
@@ -37,14 +38,19 @@ interface ProcessMemory {
   sent: string | null;
   /** Échec de l'alerte à la dernière étape : réinscrit dans `planFailure` par chaque passage jusqu'à la prochaine étape. */
   failure: PlanFailureReason | null;
+  /** Minuterie qui tient le bandeau à jour tant que l'app est ouverte (revue I-02) ; arrêtée sans échéance connue et au démontage. */
+  ticker: ReturnType<typeof setInterval> | null;
 }
+
+/** Le bandeau « expire dans … » se recalcule chaque minute tant que l'app est affichée. */
+export const SIGNING_BANNER_TICK_MS = 60_000;
 
 const memories = new WeakMap<AppContainer, ProcessMemory>();
 
 function memoryOf(container: AppContainer): ProcessMemory {
   let known = memories.get(container);
   if (known === undefined) {
-    known = { sent: null, failure: null };
+    known = { sent: null, failure: null, ticker: null };
     memories.set(container, known);
   }
   return known;
@@ -57,9 +63,35 @@ export function signingAlertFailure(container: AppContainer): PlanFailureReason 
 
 const setBanner = (state: { readonly detail: 'soon' | 'expired'; readonly message: string } | null): void => useAppStatusStore.getState().setStatus('signingExpiry', state);
 
-/** Retire le bandeau (démontage de l'intégration). */
-export function clearSigningBanner(): void {
+/** Retire le bandeau et arrête sa minuterie (démontage de l'intégration). */
+export function clearSigningBanner(container?: AppContainer): void {
+  if (container !== undefined) stopTicker(memoryOf(container));
   setBanner(null);
+}
+
+function stopTicker(memory: ProcessMemory): void {
+  if (memory.ticker !== null) clearInterval(memory.ticker);
+  memory.ticker = null;
+}
+
+/** Bandeau selon l'échéance et l'heure courante : aucun (plus de 24 h), « expire dans … » ou « expirée ». Rend vrai tant qu'il peut encore changer. */
+function showBanner(container: AppContainer, expiresAt: number): boolean {
+  const clock = container.notificationClock;
+  const zoneName = clock.zone();
+  const notice = signingNotice({ expiresAt, now: clock.nowMs(), zone: zoneName !== null && isValidTimeZone(zoneName) ? zoneName : null });
+  if (notice.state === 'soon') setBanner({ detail: 'soon', message: bannerSoonText(notice.remainingMs) });
+  else if (notice.state === 'expired') setBanner({ detail: 'expired', message: t('status.signingExpired') });
+  else setBanner(null);
+  return notice.state !== 'expired';
+}
+
+/** Tient le bandeau à jour (durée restante, passage sous 24 h, expiration) tant que l'app est ouverte ; une seule minuterie par conteneur. */
+function keepBannerFresh(container: AppContainer, memory: ProcessMemory, expiresAt: number): void {
+  stopTicker(memory);
+  if (!showBanner(container, expiresAt)) return;
+  memory.ticker = setInterval(() => {
+    if (!showBanner(container, expiresAt)) stopTicker(memory);
+  }, SIGNING_BANNER_TICK_MS);
 }
 
 export interface SigningStepInput {
@@ -94,6 +126,7 @@ async function step(container: AppContainer, input: SigningStepInput, memory: Pr
     const code = read.code === 'profile-missing' ? 'profile-missing' : 'profile-unreadable';
     logFailure('signing', read.code);
     memory.failure = null;
+    stopTicker(memory);
     setBanner(null);
     await controller.patch((current) => ({ ...current, failure: { at, code } }));
     return;
@@ -104,7 +137,7 @@ async function step(container: AppContainer, input: SigningStepInput, memory: Pr
   const lastRead = { at, expiresAt: read.expiresAt, issuedAt: read.issuedAt };
 
   if (notice.state === 'ok') {
-    setBanner(null);
+    keepBannerFresh(container, memory, expiresAt);
     let scheduled = controller.get().scheduled;
     memory.failure = null;
     if (permission === 'granted' && notice.alertInstant - nowMs > SEND_MARGIN_MS) {
@@ -142,6 +175,6 @@ async function step(container: AppContainer, input: SigningStepInput, memory: Pr
       memory.failure = 'schedule-failed';
     }
   }
-  setBanner(notice.state === 'soon' ? { detail: 'soon', message: bannerSoonText(notice.remainingMs) } : { detail: 'expired', message: t('status.signingExpired') });
+  keepBannerFresh(container, memory, expiresAt);
   await controller.patch((current) => ({ ...current, lastRead, failure: null, scheduled: memory.failure === null ? null : current.scheduled }));
 }

@@ -5,7 +5,7 @@ import { createTauriSigningAlert } from '../../platform/signing/tauriSigningAler
 import { useAppStatusStore } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { replanNotifications } from './replanNotifications';
-import { SIGNING_TRIGGERS } from './signingNotice';
+import { clearSigningBanner, SIGNING_TRIGGERS } from './signingNotice';
 import { reopenReminders, seedReminderTask, setupReminders, type ReminderHarness } from './testKit';
 
 /**
@@ -312,5 +312,70 @@ describe('I-02 : PC et navigateur', () => {
     expect(banner()).toBeUndefined();
     expect(await h.container.data.repos.settings.get('notifications.signing')).toBeNull();
     await h.db.close();
+  });
+});
+
+describe('I-02 : bandeau tenu à jour tant que l’app est ouverte (revue)', () => {
+  let r: Rig;
+  beforeEach(async () => {
+    r = await rig();
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
+  afterEach(async () => {
+    clearSigningBanner(r.h.container);
+    vi.useRealTimers();
+    await r.h.db.close();
+  });
+
+  const tick = (minutes: number): void => {
+    r.h.db.clock.advance(minutes * 60_000);
+    vi.advanceTimersByTime(minutes * 60_000);
+  };
+
+  it('la durée restante suit l’heure : 10 h, puis 9 h une heure plus tard, puis « expirée »', async () => {
+    r.source.expireAt('2026-10-08T18:00:00Z');
+    await replanNotifications(r.h.container, 'open');
+    expect(banner()?.message).toBe('CircleTasks expire dans 10 h : actualisez-la dans SideStore');
+    tick(60);
+    expect(banner()?.message).toBe('CircleTasks expire dans 9 h : actualisez-la dans SideStore');
+    tick(9 * 60);
+    expect(banner()).toMatchObject({ detail: 'expired', message: 'La signature est expirée : réinstallez l’app' });
+    // Plus de minuterie une fois expirée.
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('plus de 24 h : le bandeau apparaît quand l’échéance passe sous 24 h, app ouverte', async () => {
+    r.source.expireAt('2026-10-09T09:00:00Z');
+    await replanNotifications(r.h.container, 'open');
+    expect(banner()).toBeUndefined();
+    tick(30);
+    expect(banner()).toBeUndefined();
+    tick(60);
+    expect(banner()).toMatchObject({ detail: 'soon' });
+  });
+
+  it('une lecture en échec ou le démontage arrête la minuterie et retire le bandeau', async () => {
+    r.source.expireAt('2026-10-08T18:00:00Z');
+    await replanNotifications(r.h.container, 'open');
+    expect(vi.getTimerCount()).toBe(1);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    r.source.fail('profile-unreadable');
+    await replanNotifications(r.h.container, 'resume');
+    expect(vi.getTimerCount()).toBe(0);
+    expect(banner()).toBeUndefined();
+    r.source.expireAt('2026-10-08T18:00:00Z');
+    await replanNotifications(r.h.container, 'resume');
+    expect(vi.getTimerCount()).toBe(1);
+    clearSigningBanner(r.h.container);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(banner()).toBeUndefined();
+  });
+
+  it('une nouvelle lecture ne cumule pas les minuteries', async () => {
+    r.source.expireAt('2026-10-08T18:00:00Z');
+    await replanNotifications(r.h.container, 'open');
+    await replanNotifications(r.h.container, 'resume');
+    await replanNotifications(r.h.container, 'resume');
+    expect(vi.getTimerCount()).toBe(1);
   });
 });

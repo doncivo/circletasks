@@ -88,3 +88,131 @@ describe('WheelPicker (T-14, critère 6)', () => {
     expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 3);
   });
 });
+
+/** Roues longues (Q-05, revue I1) : rendu par fenêtre, premier calage à l'image suivante, fenêtre qui suit le défilement. Faux rAF, aucune horloge réelle. */
+describe('WheelPicker : roue longue (rendu par fenêtre)', () => {
+  const COUNT = 200;
+  const INDEX = 100;
+  const RADIUS = 40;
+  const longItems: WheelItem[] = Array.from({ length: COUNT }, (_, i) => ({ label: `J${String(i)}`, spoken: `Jour ${String(i)}` }));
+  let frames: (() => void)[];
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    frames = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => frames.push(() => callback(0)));
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation((id) => {
+      frames[id - 1] = () => undefined;
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+  });
+
+  const runFrames = (): void => {
+    act(() => {
+      const pending = frames;
+      frames = [];
+      for (const frame of pending) frame();
+    });
+  };
+  const viewport = (): HTMLElement => document.querySelector('.ct-wheel__viewport') as HTMLElement;
+  const rendered = (): number => viewport().querySelectorAll('.ct-wheel__item').length;
+  /** Hauteur de la liste telle que la voit le défilement : éléments rendus et espaceurs. */
+  const totalHeight = (): number =>
+    ([...viewport().children] as HTMLElement[]).reduce((sum, child) => sum + (child.classList.contains('ct-wheel__item') ? WHEEL_ITEM_HEIGHT : Number.parseInt(child.style.height, 10)), 0);
+
+  it('au montage : 81 éléments autour du choix et deux espaceurs qui gardent la hauteur de la liste complète', () => {
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    expect(rendered()).toBe(2 * RADIUS + 1);
+    const children = [...viewport().children] as HTMLElement[];
+    expect(children).toHaveLength(2 * RADIUS + 3);
+    expect(children[0]?.style.height).toBe(`${String((INDEX - RADIUS) * WHEEL_ITEM_HEIGHT)}px`);
+    expect(children[0]?.getAttribute('aria-hidden')).toBe('true');
+    expect(children.at(-1)?.style.height).toBe(`${String((COUNT - 1 - (INDEX + RADIUS)) * WHEEL_ITEM_HEIGHT)}px`);
+    expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
+  });
+
+  it('la roue annonce le bon choix sur toute la plage, fenêtre ou non', () => {
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    const wheel = screen.getByRole('spinbutton', { name: 'Jours' });
+    expect(wheel).toHaveAttribute('aria-valuetext', 'Jour 100');
+    expect(wheel).toHaveAttribute('aria-valuenow', '100');
+    expect(wheel).toHaveAttribute('aria-valuemax', String(COUNT - 1));
+    expect(wheel).toHaveAttribute('aria-valuemin', '0');
+    expect(screen.getByText('J100')).toHaveAttribute('data-selected', 'true');
+  });
+
+  it('première image : le défilement est calé sur le choix (scrollTop final) ; la fenêtre reste la même, jamais la liste complète', () => {
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    expect(viewport().scrollTop).toBe(0);
+    runFrames();
+    expect(viewport().scrollTop).toBe(INDEX * WHEEL_ITEM_HEIGHT);
+    act(() => void vi.advanceTimersByTime(1000));
+    expect(rendered()).toBe(2 * RADIUS + 1);
+    expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
+  });
+
+  it('un défilement du doigt avant la première image l’emporte sur le calage initial', () => {
+    const onChange = vi.fn();
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={onChange} />);
+    viewport().scrollTop = 90 * WHEEL_ITEM_HEIGHT;
+    fireEvent.scroll(viewport());
+    runFrames();
+    expect(viewport().scrollTop).toBe(90 * WHEEL_ITEM_HEIGHT);
+    act(() => void vi.advanceTimersByTime(120));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(90);
+  });
+
+  it('la fenêtre suit le défilement : loin du centre elle se recentre, la hauteur totale ne change pas', () => {
+    render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    runFrames();
+    // Petit écart : la fenêtre ne bouge pas.
+    viewport().scrollTop = 105 * WHEEL_ITEM_HEIGHT;
+    fireEvent.scroll(viewport());
+    expect(screen.queryByText('J60')).toBeInTheDocument();
+    // Grand écart : la fenêtre rejoint la position du doigt.
+    viewport().scrollTop = 20 * WHEEL_ITEM_HEIGHT;
+    fireEvent.scroll(viewport());
+    expect(screen.getByText('J20')).toBeInTheDocument();
+    expect(screen.getByText('J0')).toBeInTheDocument();
+    expect(screen.queryByText('J100')).toBeNull();
+    expect(rendered()).toBe(2 * RADIUS + 1);
+    expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
+    expect(viewport().scrollTop).toBe(20 * WHEEL_ITEM_HEIGHT);
+  });
+
+  it('aux extrémités : fenêtre bornée à la liste, sans espaceur du côté du bord', () => {
+    render(<WheelPicker label="Jours" items={longItems} index={0} onChange={() => undefined} />);
+    const children = [...viewport().children] as HTMLElement[];
+    expect(children[0]?.classList.contains('ct-wheel__item')).toBe(true);
+    expect(rendered()).toBe(RADIUS + 1);
+    expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
+  });
+
+  it('un changement de choix venu de l’extérieur se cale aussitôt et la fenêtre le rejoint', () => {
+    const { rerender } = render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    rerender(<WheelPicker label="Jours" items={longItems} index={150} onChange={() => undefined} />);
+    expect(viewport().scrollTop).toBe(150 * WHEEL_ITEM_HEIGHT);
+    expect(screen.getByText('J150')).toHaveAttribute('data-selected', 'true');
+    expect(screen.getByRole('spinbutton', { name: 'Jours' })).toHaveAttribute('aria-valuetext', 'Jour 150');
+    // L'image en attente ne ramène pas la roue à l'ancien choix.
+    runFrames();
+    expect(viewport().scrollTop).toBe(150 * WHEEL_ITEM_HEIGHT);
+    expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
+  });
+
+  it('démontage avant la première image : image annulée, aucune écriture tardive', () => {
+    const { unmount } = render(<WheelPicker label="Jours" items={longItems} index={INDEX} onChange={() => undefined} />);
+    unmount();
+    expect(() => runFrames()).not.toThrow();
+    expect(window.cancelAnimationFrame).toHaveBeenCalled();
+  });
+
+  it('une roue courte (moins de 100 éléments) est complète dès le montage, sans espaceur', () => {
+    render(<WheelPicker label="Heures" items={items} index={1} onChange={() => undefined} />);
+    expect(screen.getByText('02').parentElement?.children).toHaveLength(items.length);
+  });
+});

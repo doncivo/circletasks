@@ -26,12 +26,15 @@ export interface WheelPickerProps {
 export const WHEEL_ITEM_HEIGHT = 32;
 const SETTLE_MS = 90;
 /**
- * Roues longues (la roue des jours : 791 éléments) : au montage, seuls les éléments proches du choix sont rendus, le reste est un espaceur
- * de même hauteur ; la liste complète suit juste après le premier affichage. Rendre 800 éléments dans le toucher du bouton + coûtait
- * l'essentiel du délai d'ouverture de la feuille « Nouvelle tâche » (Q-05, mesure @perf). La géométrie ne change pas.
+ * Roues longues (la roue des jours : 791 éléments), rendues par fenêtre : seuls les éléments proches du centre de la fenêtre existent dans le
+ * DOM, deux espaceurs de même hauteur gardent la géométrie de la liste complète (hauteur totale, `scrollTop`, `scroll-snap` inchangés). La
+ * fenêtre suit le défilement (elle se recentre dès que le doigt s'éloigne de son centre) et le choix venu de l'extérieur. Rendre 800 éléments
+ * coûtait l'essentiel du délai d'ouverture de la feuille « Nouvelle tâche », puis 2 s de mise en page à CPU 4× (Q-05, mesure @perf).
  */
 const LONG_WHEEL_MIN_ITEMS = 100;
-const LONG_WHEEL_RADIUS = 30;
+const LONG_WHEEL_RADIUS = 40;
+/** Écart (en éléments) entre le centre de la fenêtre et la position qui déclenche son recentrage. */
+const LONG_WHEEL_RECENTER = 12;
 
 /**
  * Roue de choix iPhone (T-14, Ajout.html) : colonne défilante qui se cale sur un élément
@@ -46,18 +49,15 @@ const LONG_WHEEL_RADIUS = 30;
  */
 export function WheelPicker({ label, items, index, onChange, disabled = false, pageStep = 5, className }: WheelPickerProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const [full, setFull] = useState(items.length < LONG_WHEEL_MIN_ITEMS);
-  useEffect(() => {
-    if (full) return undefined;
-    let timer = 0;
-    const frame = window.requestAnimationFrame(() => {
-      timer = window.setTimeout(() => setFull(true), 0);
-    });
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-    };
-  }, [full]);
+  const long = items.length >= LONG_WHEEL_MIN_ITEMS;
+  const [center, setCenter] = useState(index);
+  // Choix qui change (puce, clavier, fin de défilement) hors de la zone sûre de la fenêtre : elle le rejoint dans le même rendu. Seul un
+  // changement du choix recentre ainsi : pendant un défilement, le choix reste l'ancien et la fenêtre suit le doigt (handleScroll).
+  const [seenIndex, setSeenIndex] = useState(index);
+  if (index !== seenIndex) {
+    setSeenIndex(index);
+    if (long && Math.abs(index - center) > LONG_WHEEL_RECENTER) setCenter(index);
+  }
   const settleTimer = useRef<number | null>(null);
   const indexRef = useRef(index);
   const onChangeRef = useRef(onChange);
@@ -108,6 +108,11 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
   function handleScroll(): void {
     userScrolled.current = true;
     if (disabled) return;
+    if (long) {
+      const viewport = viewportRef.current;
+      const near = viewport ? Math.min(Math.max(Math.round(viewport.scrollTop / WHEEL_ITEM_HEIGHT), 0), items.length - 1) : center;
+      if (Math.abs(near - center) > LONG_WHEEL_RECENTER) setCenter(near);
+    }
     if (settleTimer.current !== null) window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => {
       settleTimer.current = null;
@@ -135,9 +140,8 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
   }
 
   const current = items[index];
-  const windowed = !full && items.length >= LONG_WHEEL_MIN_ITEMS;
-  const firstShown = windowed ? Math.max(0, index - LONG_WHEEL_RADIUS) : 0;
-  const lastShown = windowed ? Math.min(items.length - 1, index + LONG_WHEEL_RADIUS) : items.length - 1;
+  const firstShown = long ? Math.max(0, center - LONG_WHEEL_RADIUS) : 0;
+  const lastShown = long ? Math.min(items.length - 1, center + LONG_WHEEL_RADIUS) : items.length - 1;
   return (
     <div
       role="spinbutton"

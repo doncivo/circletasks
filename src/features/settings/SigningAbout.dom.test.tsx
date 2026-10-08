@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeSigningAlert, createFakeSigningSource, type FakeSigningSource } from '../../platform/signing';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -6,6 +6,7 @@ import { AppStatusBanner } from '../app/AppStatusBanner';
 import { useAppStatusStore } from '../app/appStatus';
 import { RemindersStatusSection } from '../reminders/RemindersStatusSection';
 import { replanNotifications } from '../reminders/replanNotifications';
+import { clearSigningBanner } from '../reminders/signingNotice';
 import { setupReminders, type ReminderHarness } from '../reminders/testKit';
 import { AboutSection } from './AboutSection';
 
@@ -135,5 +136,32 @@ describe('À propos : expiration de la signature (I-02)', () => {
     );
     expect(screen.queryByText(/Expire le|Date d’expiration|Lecture de la date/)).toBeNull();
     await pc.db.close();
+  });
+});
+
+describe('À propos : ligne rafraîchie tant qu’elle est affichée (revue I-02)', () => {
+  it('« dans 2 jours » devient « dans 31 h » sans rouvrir l’écran', async () => {
+    mockViewport(440);
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const source = createFakeSigningSource();
+    const h = await setupReminders({ parts: { signing: { source, alert: createFakeSigningAlert() } } });
+    source.expireAt('2026-10-10T09:00:00Z');
+    await replanNotifications(h.container, 'open');
+    render(
+      <AppContainerProvider container={h.container}>
+        <AboutSection />
+      </AppContainerProvider>,
+    );
+    expect(await screen.findByText(/· dans 2 jours$/)).toBeInTheDocument();
+    h.db.clock.advance(18 * 3_600_000);
+    act(() => void vi.advanceTimersByTime(60_000));
+    expect(screen.getByText(/· dans 31 h$/)).toBeInTheDocument();
+    cleanup();
+    clearSigningBanner(h.container);
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    useAppStatusStore.setState({ sources: {} });
+    await h.db.close();
   });
 });

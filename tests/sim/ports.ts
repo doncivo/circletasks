@@ -24,6 +24,12 @@ const BASE = portBase();
 /** Port du serveur de développement Vite lancé par Playwright (1420 par défaut, comme `devUrl` de src-tauri/tauri.conf.json). */
 export const E2E_DEV_PORT = BASE ?? 1420;
 
+/**
+ * Port du serveur de prévisualisation du build de production (projet `perf`, tests @perf) : 4173 par défaut (port de `vite preview`),
+ * `CT_E2E_PORT_BASE` + 4 sinon (après Vite n, les simulateurs n+1 à n+3).
+ */
+export const E2E_PREVIEW_PORT = BASE === null ? 4173 : BASE + 4;
+
 /** Ports des simulateurs d'agendas Google et CalDAV (ADR 0008). */
 export const E2E_SIM_PORTS = BASE === null ? ({ google: 53701, caldav: 53702 } as const) : ({ google: BASE + 1, caldav: BASE + 2 } as const);
 

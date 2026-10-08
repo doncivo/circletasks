@@ -6,7 +6,13 @@ import { ocrAssets } from './vite.ocrAssets.ts';
 // du serveur qu'il lance (webServer.env) : `npm run dev` et `tauri dev` restent sur 1420, même si CT_E2E_PORT_BASE est posée.
 export const DEV_PORT = Number(process.env['CT_DEV_PORT'] ?? 1420);
 
+// Build des mesures de performance (@perf, projet Playwright `perf`) : bundle de PRODUCTION (React en mode production, code minifié) auquel on
+// rend les accroches de test de développement (`import.meta.env.DEV` : faux des plateformes, `__ctTest`…). Posé SEULEMENT par la commande de
+// build de playwright.config.ts ; jamais dans `npm run build`, `tauri build` ni les workflows de livraison (tests/bundle/e2eHooks.test.ts).
+const E2E_HOOKS = process.env['VITE_CT_E2E_HOOKS'] === '1';
+
 export default defineConfig({
+  define: E2E_HOOKS ? { 'import.meta.env.DEV': 'true', 'import.meta.env.PROD': 'false' } : {},
   plugins: [react(), ocrAssets()],
   clearScreen: false,
   server: {

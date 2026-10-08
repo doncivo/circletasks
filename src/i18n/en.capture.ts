@@ -8,7 +8,7 @@ export const captureEn: Messages['capture'] = {
   projectOptionLabelIn: 'Project {name}, space {space}',
   previewLabel: 'What will be applied',
   removeToken: 'Remove {label}',
-  sheetNotReady: 'The database is not ready. Your text is kept.',
+  sheetNotReady: 'The database is not ready. Your text is kept; the form is frozen until saving ends.',
   sheetRetry: 'Retry',
   sheetSaveError: 'The task could not be saved. Your text is kept.',
   spaceAnnounce: 'Space {space}',
