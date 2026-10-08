@@ -40,6 +40,11 @@ export interface FetchRef {
 
 export interface FetchInput {
   readonly listIds: readonly string[];
+  /**
+   * Listes suivies : le détail (titre, échéance, statut) d'un élément relu par identifiant n'est rendu que s'il est dans l'une d'elles ; ailleurs seuls
+   * son identifiant et sa liste (audit B1). Absent : `listIds`.
+   */
+  readonly scopeListIds?: readonly string[];
   readonly limitPerList: number;
   /** Éléments à relire par identifiant (liens suivis), terminés compris. */
   readonly ids: readonly FetchRef[];

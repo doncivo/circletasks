@@ -68,7 +68,7 @@ describe('adaptateur Tauri : réponses analysées strictement (K-05 critère 5)'
     await platform.setCompleted({ id: 'R1', completed: true, completedAt: AT as IsoDateTime });
     await platform.delete({ id: 'R1' });
     expect(calls.map((call) => call.command)).toEqual(['plugin:reminders|status', 'plugin:reminders|request_access', 'plugin:reminders|lists', 'plugin:reminders|fetch', 'plugin:reminders|upsert', 'plugin:reminders|set_completed', 'plugin:reminders|delete']);
-    expect(calls[3]?.args).toEqual({ listIds: ['L1'], limitPerList: 500, ids: [{ id: 'R1', externalRef: null }] });
+    expect(calls[3]?.args).toEqual({ listIds: ['L1'], scopeListIds: ['L1'], limitPerList: 500, ids: [{ id: 'R1', externalRef: null }] });
     expect(calls[4]?.args).toEqual({ id: null, listId: 'L1', title: 'T', due: { date: '2026-10-09', time: null }, completed: false, completedAt: null });
     expect(calls[5]?.args).toEqual({ id: 'R1', completed: true, completedAt: AT });
     expect(calls[6]?.args).toEqual({ id: 'R1' });
@@ -209,5 +209,33 @@ describe('faux EventKit (même règles que le plugin Swift)', () => {
     await expect(fake.lists()).rejects.toMatchObject({ code: 'store-unavailable' });
     expect(await fake.lists()).toHaveLength(2);
     expect(fake.calls.map((call) => call.name)).toEqual(['upsert', 'lists', 'lists', 'lists']);
+  });
+});
+
+describe('relecture par identifiant : rien au-delà de la liste et de l’identifiant hors des listes suivies (audit B1)', () => {
+  it('l’adaptateur envoie les listes suivies (« scopeListIds ») et lit un élément minimal sans valeur par défaut trompeuse', async () => {
+    const calls: Record<string, unknown>[] = [];
+    const platform = createTauriReminders((_command, args) => {
+      calls.push(args ?? {});
+      return Promise.resolve({ lists: [], byId: [{ id: 'R9', listId: 'L-privee' }, item({ id: 'R2' })], missing: [], missingLists: [] });
+    });
+    const result = await platform.fetch({ listIds: [], scopeListIds: ['L1'], limitPerList: 500, ids: [{ id: 'R9', externalRef: null }, { id: 'R2', externalRef: null }] });
+    expect(calls[0]).toMatchObject({ listIds: [], scopeListIds: ['L1'] });
+    expect(result.byId[0]).toEqual({ id: 'R9', listId: 'L-privee', externalRef: null, title: '', due: null, completed: false, completedAt: null, recurring: false, modifiedAt: null, createdAt: null });
+    expect(result.byId[1]?.title).toBe('Courses');
+    // Un élément partiel autre que {id, listId} reste un échec de lecture.
+    expect(() => parseFetch({ lists: [], byId: [{ id: 'R9', listId: 'L', title: 'x' }], missing: [], missingLists: [] })).toThrowError(new RemindersError('read-failed'));
+  });
+
+  it('le faux ne rend que l’identifiant et la liste d’un élément hors des listes suivies, et tout pour un élément suivi', async () => {
+    const fake = createFakeReminders();
+    fake.addList({ id: 'L1', name: 'Suivie', writable: true });
+    fake.addList({ id: 'L2', name: 'Privée', writable: true });
+    const followed = fake.add({ listId: 'L1', title: 'Visible' });
+    const hidden = fake.add({ listId: 'L2', title: 'Secret' });
+    const result = await fake.fetch({ listIds: [], scopeListIds: ['L1'], limitPerList: 10, ids: [{ id: followed.id, externalRef: null }, { id: hidden.id, externalRef: null }] });
+    expect(result.byId.find((entry) => entry.id === followed.id)?.title).toBe('Visible');
+    expect(result.byId.find((entry) => entry.id === hidden.id)).toEqual({ id: hidden.id, listId: 'L2', externalRef: null, title: '', due: null, completed: false, completedAt: null, recurring: false, modifiedAt: null, createdAt: null });
+    expect(JSON.stringify(result)).not.toContain('Secret');
   });
 });

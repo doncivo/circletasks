@@ -59,6 +59,14 @@ export function parseItem(value: unknown): ReminderItem {
   return { id, externalRef, listId, title, due: parsedDue, completed, completedAt: nullableInstant(completedAt), recurring, modifiedAt: nullableInstant(modifiedAt), createdAt: nullableInstant(createdAt) };
 }
 
+/** Élément relu par identifiant hors des listes suivies : identifiant et liste seulement (audit B1) ; les autres champs prennent des valeurs neutres. */
+function parseOutside(value: unknown): ReminderItem {
+  if (isRecord(value) && Object.keys(value).length === 2 && typeof value['id'] === 'string' && value['id'] !== '' && typeof value['listId'] === 'string') {
+    return { id: value['id'], listId: value['listId'], externalRef: null, title: '', due: null, completed: false, completedAt: null, recurring: false, modifiedAt: null, createdAt: null };
+  }
+  return parseItem(value);
+}
+
 export function parseFetch(value: unknown): FetchResult {
   if (!isRecord(value) || !Array.isArray(value['lists']) || !Array.isArray(value['byId']) || !Array.isArray(value['missing']) || !Array.isArray(value['missingLists'])) throw bad();
   const lists = (value['lists'] as unknown[]).map((entry) => {
@@ -70,7 +78,7 @@ export function parseFetch(value: unknown): FetchResult {
       if (typeof entry !== 'string') throw bad();
       return entry;
     });
-  return { lists, byId: (value['byId'] as unknown[]).map(parseItem), missing: strings(value['missing'] as unknown[]), missingLists: strings(value['missingLists'] as unknown[]) };
+  return { lists, byId: (value['byId'] as unknown[]).map(parseOutside), missing: strings(value['missing'] as unknown[]), missingLists: strings(value['missingLists'] as unknown[]) };
 }
 
 function parseWritten(value: unknown): ReminderItem {
@@ -102,7 +110,7 @@ export function createTauriReminders(
       return (value['lists'] as unknown[]).map(parseList);
     },
     fetch: async (input) =>
-      parseFetch(await run('fetch', { listIds: input.listIds, limitPerList: input.limitPerList, ids: input.ids.map((ref) => ({ id: ref.id, externalRef: ref.externalRef })) })),
+      parseFetch(await run('fetch', { listIds: input.listIds, scopeListIds: input.scopeListIds ?? input.listIds, limitPerList: input.limitPerList, ids: input.ids.map((ref) => ({ id: ref.id, externalRef: ref.externalRef })) })),
     upsert: async (input) =>
       parseWritten(await run('upsert', { id: input.id, listId: input.listId, title: input.title, due: input.due === null ? null : { date: input.due.date, time: input.due.time }, completed: input.completed, completedAt: input.completedAt })),
     setCompleted: async (input) => parseWritten(await run('set_completed', { id: input.id, completed: input.completed, completedAt: input.completedAt })),

@@ -180,9 +180,10 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
         }
         const byId: ReminderItem[] = [];
         const missing: string[] = [];
+        const scope = new Set(input.scopeListIds ?? input.listIds);
         for (const ref of input.ids) {
           const found = items.get(ref.id) ?? (ref.externalRef === null ? undefined : [...items.values()].find((item) => item.externalRef === ref.externalRef));
-          if (found) byId.push(found);
+          if (found) byId.push(scope.has(found.listId) ? found : { id: found.id, listId: found.listId, externalRef: null, title: '', due: null, completed: false, completedAt: null, recurring: false, modifiedAt: null, createdAt: null });
           else missing.push(ref.id);
         }
         const value: FetchResult = { lists: result, byId, missing, missingLists };

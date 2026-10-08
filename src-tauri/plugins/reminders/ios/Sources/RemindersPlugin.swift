@@ -18,7 +18,6 @@
 import EventKit
 import Foundation
 import Tauri
-import UIKit
 import WebKit
 
 // MARK: - Codes et arguments
@@ -46,6 +45,7 @@ private struct IdRef: Decodable {
 
 private struct FetchArgs: Decodable {
   let listIds: [String]
+  let scopeListIds: [String]
   let limitPerList: Int
   let ids: [IdRef]
 }
@@ -298,8 +298,12 @@ class RemindersPlugin: Plugin {
     if #available(iOS 17.0, *) {
       work.async {
         self.store().requestFullAccessToReminders { _, _ in
-          let result: JsonObject = ["access": self.accessState()]
-          invoke.resolve(result)
+          // Après l'accord, le magasin est remis à zéro pour qu'il relise les listes et les rappels désormais accessibles (documentation EventKit).
+          self.work.async {
+            self.store().reset()
+            let result: JsonObject = ["access": self.accessState()]
+            invoke.resolve(result)
+          }
         }
       }
     } else {
@@ -395,9 +399,16 @@ class RemindersPlugin: Plugin {
         }
         var byId: [JsonObject] = []
         var missing: [String] = []
+        let scope = Set(input.scopeListIds)
         for ref in input.ids {
           if let reminder = self.findReminder(store, ref.id, ref.externalRef) {
-            byId.append(itemJSON(reminder))
+            // Hors des listes suivies : l'identifiant et la liste seulement (le rappel a pu être déplacé dans une liste que l'utilisateur ne partage pas).
+            let listId = reminder.calendar?.calendarIdentifier ?? ""
+            if scope.contains(listId) {
+              byId.append(itemJSON(reminder))
+            } else {
+              byId.append(["id": reminder.calendarItemIdentifier, "listId": listId])
+            }
           } else {
             missing.append(ref.id)
           }

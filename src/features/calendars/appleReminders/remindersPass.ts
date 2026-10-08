@@ -234,6 +234,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
 
   const result = await platform.fetch({
     listIds: full ? shown.map((list) => list.id) : [],
+    scopeListIds: shown.map((list) => list.id),
     limitPerList: MAX_REMINDERS_PER_LIST,
     ids: followed.map((task) => ({ id: task.externalId as string, externalRef: linkByTask.get(task.id)?.externalRef ?? null })),
   });

@@ -36,6 +36,7 @@
       "swiftMethod": "fetch",
       "input": [
         "listIds",
+        "scopeListIds",
         "limitPerList",
         "ids"
       ],
