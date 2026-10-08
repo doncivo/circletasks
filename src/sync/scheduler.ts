@@ -1,4 +1,5 @@
 import type { Clock } from '../domain/clock';
+import { isPermanentSyncError } from '../domain/sync/errorFamily';
 import { QUIT_SYNC_BUDGET_MS, SYNC_INTERVAL_MS } from '../domain/sync/limits';
 import type { SyncNowOptions, SyncReason, SyncService } from '../platform/sync/types';
 
@@ -35,7 +36,15 @@ export interface SyncScheduler {
   dispose(): void;
 }
 
-export function startSyncScheduler(service: Pick<SyncService, 'syncNow'>, env: SyncSchedulerEnv): SyncScheduler {
+/**
+ * Y-IOS-02 (point de contrôle d'Ali, 0.2.1) : appareil sans clé (phase `needs-pairing`) : seule l'association le débloque. Les cycles
+ * périodiques et de masquage ne tournent pas (aucune boucle sans issue) ; l'ouverture, « Synchroniser » et l'association (cycle `manual`
+ * de `handleSyncPaired`) relisent l'état. Un Trousseau indisponible (`vault-unavailable`, iPhone verrouillé) n'est pas concerné : il se
+ * résout seul, l'erreur reste visible et le cycle suivant relit la clé.
+ */
+const WAITS_FOR_PAIRING: ReadonlySet<string> = new Set(['needs-pairing']);
+
+export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Partial<Pick<SyncService, 'status'>>, env: SyncSchedulerEnv): SyncScheduler {
   const setTimer = env.setInterval ?? ((handler, ms) => setInterval(handler, ms));
   const clearTimer = env.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
   let disposed = false;
@@ -48,15 +57,25 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'>, env: S
     return (options ? service.syncNow(reason, options) : service.syncNow(reason)).catch(() => undefined);
   };
 
+  const waitsForPairing = (): boolean => WAITS_FOR_PAIRING.has(service.status?.().phase ?? '');
+
+  /** Audit des impasses : erreur permanente (`isPermanentSyncError`) : aucun cycle périodique en boucle ; texte et action dits par l'écran. */
+  const stopped = (): boolean => {
+    const status = service.status?.();
+    return status !== undefined && status.phase === 'error' && isPermanentSyncError(status.errorCode);
+  };
+
   const tick = async (): Promise<void> => {
-    if (disposed || !visible()) return;
+    if (disposed || !visible() || waitsForPairing() || stopped()) return;
     if (env.clock.nowMs() - lastStart >= SYNC_INTERVAL_MS) await run('timer');
   };
 
   const bounded = env.hideDeadlineMs;
   const onVisibility = (): void => {
     // Masquage de la fenêtre (PC : fermeture vers la zone de notification) : un cycle, puis rien en arrière-plan. iPhone : cycle borné.
-    if (!visible()) void run('hide', bounded === undefined ? undefined : { deadlineAt: env.clock.nowMs() + bounded });
+    if (!visible()) {
+      if (!waitsForPairing()) void run('hide', bounded === undefined ? undefined : { deadlineAt: env.clock.nowMs() + bounded });
+    }
     // Retour au premier plan : iPhone, un cycle d'ouverture (reprise d'un cycle `hide` interrompu) ; PC, le sondage des 5 minutes.
     else if (bounded !== undefined) void run('open');
     else void tick();

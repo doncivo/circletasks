@@ -442,6 +442,22 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    * attendu (appareil seul : au premier cycle). Refus de la boîte : annulation, rien n'est gardé ; tout autre échec : gardé et rendu.
    */
   const runReset = async (): Promise<ResetOutcome> => {
+    // Y-IOS-02 (point de contrôle d'Ali) : un appareil sans clé ne réinitialise jamais (nouvelle clé et nouvelle époque : les autres
+    // appareils devraient tout recevoir de lui). Refus `key-missing` gardé et rendu, avant tout cycle et toute boîte native. Trousseau
+    // illisible : son code réel (`vault-unavailable`), jamais lu comme « présente ».
+    let keyPresent: boolean;
+    try {
+      keyPresent = (await options.platform.key.status()).present;
+    } catch (error) {
+      const code = syncErrorCodeOf(error);
+      await recordResetFailure(deps, 'start', code);
+      return { kind: 'failed', code };
+    }
+    if (!keyPresent) {
+      deps.logger.log('reset-refused', { code: 'key-missing' });
+      await recordResetFailure(deps, 'start', 'key-missing');
+      return { kind: 'failed', code: 'key-missing' };
+    }
     const checked = await cycle({ resetCheck: true });
     if (checked.outcome !== 'done') {
       const code = checked.errorCode ?? 'state-mismatch';

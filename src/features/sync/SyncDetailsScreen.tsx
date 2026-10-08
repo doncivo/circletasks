@@ -11,7 +11,7 @@ import { SyncDetailsReset } from './SyncDetailsReset';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
-import { deviceName, deviceStatusText, formatSyncTime, warningText } from './syncText';
+import { deviceName, deviceStatusText, formatSyncTime, ownPlatform, warningText } from './syncText';
 import './SyncDetailsScreen.css';
 
 /** Remplacements facultatifs des emplacements (tests) ; par défaut, chaque story rend son composant d'emplacement. */
@@ -78,6 +78,18 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
           </li>
         ))}
       </ul>
+      {/* Y-IOS-02 (point de contrôle d'Ali) : sans clé, les états des autres appareils sont illisibles ; jamais une liste vide sans mot. */}
+      {status.phase === 'needs-pairing' ? (
+        <p className="ct-settings__hint ct-sync__devicesEmpty" data-testid="sync-devices-empty">
+          {ownPlatform(status) === 'ios' ? t('sync.status.devicesNeedPairingIos') : t('sync.status.devicesNeedPairing')}
+        </p>
+      ) : (
+        status.devices.length === 0 && (
+          <p className="ct-settings__hint ct-sync__devicesEmpty" data-testid="sync-devices-empty">
+            {t('sync.status.devicesNone')}
+          </p>
+        )
+      )}
       {slots.forget ?? <SyncDetailsForget />}
       {(status.stateUnreadable === true || (status.warnings?.length ?? 0) > 0) && (
         <>

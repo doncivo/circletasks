@@ -11,6 +11,7 @@ import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
+import { SyncDetailsPairing } from './SyncDetailsPairing';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
@@ -64,6 +65,11 @@ export function syncErrorMessageKey(code: SyncErrorCode, ios = false): PlainMess
     default:
       return 'sync.folder.errorGeneric';
   }
+}
+
+/** Le texte d'erreur demande de choisir un dossier (de nouveau, ou un autre) : « Choisir le dossier » proposé à côté. */
+function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
+  return code === 'unsafe-folder' || code === 'not-local' || (ios && code === 'folder-unreachable');
 }
 
 /** État de la section, lu sur la plateforme : dossier, puis présence de la clé. */
@@ -133,6 +139,11 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     };
   }, [available, container, platform]);
 
+  // Y-IOS-02 (point de contrôle d'Ali, 0.2.1) : l'état de la ligne (dossier, clé) est relu à chaque changement de phase du service : une
+  // ligne lue avant un cycle ne contredit jamais le moteur (« Associer au PC » toujours proposé tant que la clé manque).
+  // Audit des impasses : relue aussi sur « Réessayer » et au retour au premier plan (iPhone déverrouillé, iCloud pour Windows rouvert).
+  const phase = useFeatureStore(syncStore, (s) => s.status.phase);
+  const [reread, setReread] = useState(0);
   useEffect(() => {
     if (!available) return;
     let cancelled = false;
@@ -142,9 +153,31 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     return () => {
       cancelled = true;
     };
-  }, [available, platform]);
+  }, [available, platform, phase, reread]);
+  useEffect(() => {
+    if (!available) return;
+    const onVisibility = (): void => {
+      if (document.visibilityState !== 'hidden') setReread((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [available]);
+
+  // Clé lue présente alors que le dernier cycle l'a trouvée absente (association faite depuis) : un cycle relit l'état, la ligne suit.
+  const keyArrived = view.kind === 'bound' && !view.needsPairing && phase === 'needs-pairing';
+  const sync = container.sync;
+  useEffect(() => {
+    if (keyArrived) void sync?.syncNow('manual');
+  }, [keyArrived, sync]);
 
   if (!available) return null;
+  const retry = async (): Promise<void> => {
+    setReread((n) => n + 1);
+    // Une erreur relue au cycle : le service relit aussi l'état (sans clé : `needs-pairing`, aucun cycle de plus).
+    await container.sync?.syncNow('manual');
+  };
+  // Clé absente d'après le coffre, ou d'après le dernier cycle du moteur (phase `needs-pairing`) : à associer.
+  const needsPairing = view.kind === 'bound' && (view.needsPairing || phase === 'needs-pairing');
 
   /** Choix du dossier, puis clé (créée seulement si le dossier n'a pas de données chiffrées) et liaison de l'appareil (critère 10). */
   const choose = async () => {
@@ -166,8 +199,9 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       }
       await platform.bindDevice(container.hlc.deviceId);
       setView({ kind: 'bound', info, needsPairing });
-      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes.
-      if (!needsPairing) void container.sync?.syncNow('open');
+      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes. Sans clé (Y-IOS-02) :
+      // ce cycle s'arrête aussitôt sur `needs-pairing` (aucune lecture du dossier) et le bandeau A-09 dit d'associer cet appareil.
+      void container.sync?.syncNow('open');
     } catch (error) {
       // Dossier refusé par le contrôle : rien n'a été lié, « Choisir le dossier » reste proposé ; un dossier lié puis un échec de
       // clé ou de liaison : « Oublier » (revue 6).
@@ -241,8 +275,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       {view.kind === 'bound' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
-            {container.sync && !view.needsPairing ? <SyncStatusLine /> : folderLabel(view.info)}
-            {container.sync && !view.needsPairing ? null : view.needsPairing ? (
+            {container.sync && !needsPairing ? <SyncStatusLine /> : folderLabel(view.info)}
+            {container.sync && !needsPairing ? null : needsPairing ? (
               <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
                 {t('sync.key.needsPairing')}
               </span>
@@ -261,7 +295,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
         </div>
       )}
       {/* iPhone (ADR 0011 §23 point 7) : « Associer au PC » (dossier d'abord, clé ensuite), jamais la fenêtre `pairing` du PC. */}
-      {ios && (view.kind === 'not-configured' || (view.kind === 'bound' && view.needsPairing)) && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
+      {ios && (view.kind === 'not-configured' || (view.kind === 'bound' && needsPairing)) && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
       {iosPairing && (
         <IosPairingScreen
           platform={platform}
@@ -271,7 +305,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           }}
         />
       )}
-      {view.kind === 'bound' && view.needsPairing && !ios && (
+      {view.kind === 'bound' && needsPairing && !ios && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
             {t('sync.pairing.importLabel')}
@@ -286,7 +320,13 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           </Button>
         </div>
       )}
-      {view.kind === 'bound' && !view.needsPairing && <JoinProgress />}
+      {view.kind === 'bound' && !needsPairing && (
+        <>
+          {/* Y-IOS-02 (point de contrôle d'Ali) : « Associer l'iPhone » directement ici sur le PC (chemin dit par l'iPhone), aussi dans Détails. */}
+          {!ios && <SyncDetailsPairing showOnly withProgress={false} />}
+          <JoinProgress />
+        </>
+      )}
       {view.kind === 'error' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
@@ -295,8 +335,15 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
               {t(syncErrorMessageKey(view.code, ios))}
             </span>
           </span>
-          {/* iPhone (§22 point 8) : signet perdu ou dossier déplacé : « Choisir le dossier » de nouveau (même dossier : rien n'est perdu). */}
-          {view.configured && ios && view.code === 'folder-unreachable' && chooseButton}
+          {/* Y-IOS-02 (audit des impasses) : erreur du dossier lié relue à la demande (et au retour au premier plan), jamais figée. */}
+          {view.configured && (
+            <Button variant="secondary" ariaLabel={t('sync.folder.retryLabel')} onClick={() => void retry()} className="ct-settings__link" disabled={busy}>
+              {t('sync.folder.retry')}
+            </Button>
+          )}
+          {/* iPhone (§22 point 8) : signet perdu ou dossier déplacé : « Choisir le dossier » de nouveau (même dossier : rien n'est perdu) ;
+              dossier inutilisable : le texte demande d'en choisir un autre. */}
+          {view.configured && asksForFolder(view.code, ios) && chooseButton}
           {view.configured ? forgetButton : chooseButton}
         </div>
       )}

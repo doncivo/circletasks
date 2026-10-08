@@ -77,6 +77,46 @@
   font-size: 13px;
 }
 
+.ct-sync__devicesEmpty {
+  margin: 0;
+  padding: 8px 0;
+}
+
+/*
+ * Y-IOS-02 (point de contrôle d'Ali, 0.2.1) : écran étroit (iPhone 440 pt) : jamais de défilement horizontal ni de titre rogné. Titre
+ * réduit à la largeur (« Synchronisation » dépasse 52 px sur 440 pt), lignes et actions qui passent à la ligne, aucun élément plus large
+ * que l'écran ; marges latérales de la zone sûre (iPhone en paysage).
+ */
+.ct-sync {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .ct-sync {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .ct-sync .ct-settings__title {
+    font-size: clamp(2rem, 9.5vw, var(--ct-font-size-display-mobile));
+    overflow-wrap: anywhere;
+  }
+
+  .ct-sync .ct-settings__row,
+  .ct-sync__line,
+  .ct-sync__lineActions {
+    flex-wrap: wrap;
+  }
+
+  .ct-sync .ct-settings__row > *,
+  .ct-sync__lineText {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
 /* Zones de toucher >= 44 pt sur écran tactile (iPhone) ; l'aspect PC reste celui des maquettes. */
 @media (pointer: coarse) {
   .ct-sync__back,
