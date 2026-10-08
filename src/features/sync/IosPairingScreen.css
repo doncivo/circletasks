@@ -186,7 +186,7 @@
   position: absolute;
   width: 44px;
   height: 44px;
-  border-color: #ffffff;
+  border-color: var(--ct-ios-pair-text);
   border-style: solid;
 }
 
@@ -232,4 +232,27 @@ html.ct-scanning body {
 
 html.ct-scanning body > *:not(.ct-ios-pair--scan) {
   visibility: hidden;
+}
+
+/* Écran de scan sombre dans les deux thèmes (maquette Appairage.html) : mêmes valeurs en thème sombre, choix explicite (P-02 critère 5). */
+:root[data-theme='dark'] .ct-ios-pair {
+  --ct-ios-pair-bg: #15101f;
+  --ct-ios-pair-text: #ffffff;
+  --ct-ios-pair-muted: #c9bee6;
+  --ct-ios-pair-panel: #231b36;
+  --ct-ios-pair-line: #5a4f78;
+  --ct-ios-pair-done: #8fcb9f;
+  --ct-ios-pair-accent: #f2a7a0;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ct-ios-pair {
+    --ct-ios-pair-bg: #15101f;
+    --ct-ios-pair-text: #ffffff;
+    --ct-ios-pair-muted: #c9bee6;
+    --ct-ios-pair-panel: #231b36;
+    --ct-ios-pair-line: #5a4f78;
+    --ct-ios-pair-done: #8fcb9f;
+    --ct-ios-pair-accent: #f2a7a0;
+  }
 }
