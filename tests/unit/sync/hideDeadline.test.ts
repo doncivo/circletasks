@@ -243,3 +243,70 @@ describe('planificateur de l’iPhone (ADR 0011 §22 point 6)', () => {
     scheduler.dispose();
   });
 });
+
+describe('Y-IOS-01 QA : cycles `hide` successifs, chacun coupé à une frontière différente', () => {
+  it('aucune perte, aucun doublon : la file ne grossit jamais, la dernière synchro n’avance pas, le cycle suivant reprend', async () => {
+    const { iphone } = await scenario();
+    const before = await lastSyncRow(iphone);
+    let queued = await iphone.data.repos.sync.outboxCount();
+    expect(queued).toBeGreaterThan(0);
+    // Une coupure par frontière, dans l'ordre, sans cycle complet entre elles (l'iPhone repasse en arrière-plan à chaque fois).
+    for (let index = 0; index < BOUNDARIES.length; index += 1) {
+      const units: DeadlineUnit[] = [];
+      boundedService(iphone, index, units);
+      await hide(iphone);
+      const status = iphone.service.status();
+      expect(status.phase, `coupure ${String(index)}`).not.toBe('error');
+      expect(status.errorCode ?? null).toBeNull();
+      // Le travail déjà publié raccourcit le cycle : au-delà de sa dernière frontière il va à son terme (légitime, et seulement là).
+      if (units.length !== index + 1) {
+        expect(index, 'un cycle ne finit plus tôt que si le travail précédent l’a raccourci').toBeGreaterThan(0);
+        break;
+      }
+      expect(await lastSyncRow(iphone), `coupure ${String(index)} : aucun cycle complet marqué`).toBe(before);
+      const left = await iphone.data.repos.sync.outboxCount();
+      expect(left, `coupure ${String(index)} : la file ne grossit pas`).toBeLessThanOrEqual(queued);
+      queued = left;
+      syncFolders(devices);
+    }
+    await settle();
+    expect(await converged()).toEqual(BASELINE);
+  });
+
+  it('même coupure à chaque passage en arrière-plan (3 unités par cycle) : le travail publié s’accumule, le cycle d’ouverture conclut sans doublon', async () => {
+    const { iphone } = await scenario();
+    for (let round = 0; round < 4; round += 1) {
+      boundedService(iphone, 3, []);
+      await hide(iphone);
+      expect(iphone.service.status().phase).not.toBe('error');
+      syncFolders(devices);
+    }
+    await settle();
+    expect(await converged()).toEqual(BASELINE);
+  });
+});
+
+describe('Y-IOS-01 QA : hydratation qui dépasse son budget (échéance moins 2 s)', () => {
+  it('fichiers du PC encore dans le nuage, téléchargement de 30 s pour 23 s de budget : attente visible, pas de panne, rien de perdu ; l’ouverture suivante lit', async () => {
+    const { pc, iphone } = await scenario();
+    await pc.createTask('Arrivée tardive');
+    await pc.cycle();
+    syncFolders(devices, { placeholder: true });
+    iphone.platform.testing.setHydrationDelay(30_000);
+    boundedService(iphone, null, []);
+    await hide(iphone);
+    const status = iphone.service.status();
+    expect(status.phase).not.toBe('error');
+    expect(status.errorCode ?? null).toBeNull();
+    expect(iphone.platform.testing.hydrationBudgetLeft(), 'budget du cycle épuisé, jamais dépassé').toBe(0);
+    expect(status.pendingFiles.length, 'les fichiers attendus sont listés (« En attente d’iCloud »)').toBeGreaterThan(0);
+    expect((await iphone.driver.select("SELECT id FROM task WHERE title = 'Arrivée tardive' AND deleted_at IS NULL")).length > 0).toBe(false);
+    // L'écriture de l'iPhone n'a pas été perdue par l'attente.
+    expect(await iphone.data.repos.sync.getMeta('inflight')).toBeNull();
+    // Cycle d'ouverture (3 minutes de budget) : le téléchargement tient, la tâche arrive.
+    iphone.platform.testing.setHydrationDelay(1_000);
+    const reopened = await iphone.cycle();
+    expect(reopened.phase).not.toBe('error');
+    expect((await iphone.driver.select("SELECT id FROM task WHERE title = 'Arrivée tardive' AND deleted_at IS NULL")).length > 0).toBe(true);
+  });
+});
