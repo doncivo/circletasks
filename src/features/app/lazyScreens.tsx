@@ -3,6 +3,7 @@ import { t } from '../../i18n';
 import { logFailure } from '../../platform';
 import { Button } from '../../ui';
 import { whenIdle } from './idle';
+import { SCREEN_LOADED_PREFIX, type ScreenName } from './screenNames';
 import './lazyScreens.css';
 
 /**
@@ -13,12 +14,12 @@ import './lazyScreens.css';
  */
 type Loader<P> = () => Promise<{ default: ComponentType<P> }>;
 
+export { SCREEN_LOADED_PREFIX, type ScreenName };
+
 const loaders: Array<() => Promise<unknown>> = [];
 
-/** Préfixe de l'attribut posé sur <html> quand le bloc d'un écran est arrivé ou a échoué : repère de disponibilité pour les tests e2e. */
-export const SCREEN_LOADED_PREFIX = 'data-ct-loaded-';
 
-function markLoaded(name: string | undefined): void {
+function markLoaded(name: ScreenName | undefined): void {
   if (name !== undefined) document.documentElement.setAttribute(SCREEN_LOADED_PREFIX + name, 'true');
 }
 
@@ -61,7 +62,7 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
  * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état). Le composant paresseux est
  * propre à chaque instance : un « Réessayer » n'en touche aucune autre.
  */
-export function lazyScreen<P extends object>(load: Loader<P>, name?: string): ComponentType<P> {
+export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName): ComponentType<P> {
   let loaded: ComponentType<P> | null = null;
   const remember = (): Promise<{ default: ComponentType<P> }> =>
     loaded

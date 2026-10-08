@@ -66,15 +66,15 @@ describe('repère de bloc arrivé (A-04)', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const html = document.documentElement;
     let resolve: (value: { default: typeof Content }) => void = () => undefined;
-    const Slow = lazyScreen<object>(() => new Promise((r) => (resolve = r)), 'lenta');
+    const Slow = lazyScreen<object>(() => new Promise((r) => (resolve = r)), 'trashscreen');
     render(<Slow />);
-    expect(html).not.toHaveAttribute(SCREEN_LOADED_PREFIX + 'lenta');
+    expect(html).not.toHaveAttribute(SCREEN_LOADED_PREFIX + 'trashscreen');
     resolve({ default: Content });
-    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'lenta', 'true'));
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'trashscreen', 'true'));
 
-    const Broken = lazyScreen<object>(() => Promise.reject(new Error('bloc illisible')), 'cassee');
+    const Broken = lazyScreen<object>(() => Promise.reject(new Error('bloc illisible')), 'tabsscreen');
     render(<Broken />);
-    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'cassee', 'true'));
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'tabsscreen', 'true'));
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’afficher cet écran.');
   });
 });

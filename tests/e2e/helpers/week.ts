@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { addIsoDays, browserToday } from './schedule';
 import { waitForScreenLoaded } from './app';
+import { addIsoDays, browserToday } from './schedule';
 
 /** Aides e2e de la Semaine (S-01 à S-05), communes aux projets `pc` et `iphone`. */
 

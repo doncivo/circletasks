@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { isPhone } from './today';
 import { waitForScreenLoaded } from './app';
+import { isPhone } from './today';
 
 /** Aides e2e de « Un jour » (SD-01 à SD-04, S-06), communes aux projets `pc` et `iphone`. */
 

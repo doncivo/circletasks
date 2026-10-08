@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 import { addIsoDays } from './schedule';
 import { isPhone } from './today';
-import { waitForScreenLoaded } from './app';
 
 /** Aides e2e de l'onglet Routines (R-01 à R-07), communes aux projets `pc` et `iphone`. */
 

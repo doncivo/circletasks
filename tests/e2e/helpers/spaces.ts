@@ -1,6 +1,6 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { isPhone, rowOf } from './today';
 import { waitForScreenLoaded } from './app';
+import { isPhone, rowOf } from './today';
 
 /** Aides e2e des espaces et projets (ES-01 à ES-05), communes aux projets `pc` et `iphone`. */
 

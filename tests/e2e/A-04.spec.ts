@@ -94,9 +94,11 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
 });
 
 test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machine chargée)', () => {
-  test('Alt+1 depuis le rapport reste correct quand son bloc arrive après 6 s (critère 4)', async ({ page }) => {
+  test('l’aide d’ouverture attend un bloc de rapport lent (6 s) : Alt+1 revient ensuite à Aujourd’hui (critère 4)', async ({ page }) => {
     // Non-régression de l'instabilité : le bloc de ReportScreen (écran à la demande) mettait plus de 5 s, délai d'une assertion.
+    let hits = 0;
     await page.route('**/src/features/stats/ReportScreen.tsx*', async (route) => {
+      hits += 1;
       await new Promise((resolve) => setTimeout(resolve, 6000));
       await route.continue();
     });
@@ -107,5 +109,7 @@ test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machi
     await page.keyboard.press('Alt+1');
     await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    // Le ralentissement a bien eu lieu : sans cela le test ne prouverait rien.
+    expect(hits).toBeGreaterThan(0);
   });
 });
