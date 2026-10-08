@@ -8,7 +8,7 @@ import { isOnline, watchOnline } from '../../platform/network';
  * synchro (`startSync.ts`), `calendarDisconnected` (avec son action « Reconnecter ») par les agendas (K-01 à K-03).
  */
 export interface StatusSource {
-  /** Nom de l'agenda (`calendarDisconnected`) ; code de l'état (`syncTrouble`, `SyncTroubleCode`). */
+  /** Nom de l'agenda (`calendarDisconnected`) ; code de l'état (`syncTrouble`, `SyncTroubleCode`) ; `remindersTrouble` : `undetermined` pour l'invitation « Autoriser ». */
   readonly detail?: string;
   /**
    * Texte déjà composé par la source (`syncTrouble`, `waitingIcloud` avec cause) : celui de la ligne de Réglages (A-09 D5), jamais

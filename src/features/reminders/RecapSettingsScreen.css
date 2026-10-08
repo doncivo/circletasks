@@ -72,3 +72,23 @@
   color: var(--ct-color-danger);
   font-size: var(--ct-font-size-text-sm);
 }
+
+/* État des rappels (N-01, avenant N1.8) : lignes d'information et d'échec sous les récapitulatifs. */
+.ct-recap__status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+}
+
+.ct-recap__statusLine {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-recap__statusLine[data-kind='problem'] {
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+}

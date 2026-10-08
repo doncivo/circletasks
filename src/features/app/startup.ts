@@ -6,6 +6,7 @@ import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
 import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
+import { getNotificationRunner } from '../reminders/notificationRunner';
 import { createTimeZoneWatcher } from './timeZoneWatcher';
 
 export interface AppStartup {
@@ -57,7 +58,11 @@ export function startAppStartup(
   const timeZone = createTimeZoneWatcher(container, {
     ...(env.detectTimeZone ? { detect: env.detectTimeZone } : {}),
     onCurrent: (tz) => useAppStore.getState().setTimeZone(tz),
-    ...(env.onTimeZoneChange ? { onChange: env.onTimeZoneChange } : {}),
+    // N-06 : un changement de fuseau replanifie les rappels (l'instant de chacun change, le déclencheur iOS est relatif).
+    onChange: async (change) => {
+      await env.onTimeZoneChange?.(change);
+      void getNotificationRunner(container).request('zone');
+    },
   });
   const calendars = startCalendarScheduler(container, { document: env.document, ...(env.timers ?? {}) });
   // P-04 : sauvegarde quotidienne à l'ouverture, au retour au premier plan et après minuit (sans bloquer le démarrage).

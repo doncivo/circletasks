@@ -16,8 +16,8 @@ function sourcesOf(dir: string): string[] {
 }
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), '..');
-/** Calcul de fuseau (T-11) : lit les composantes horaires d'un instant, n'affiche rien. */
-const ALLOWED_INTL = new Set(['domain/timeFormat.ts', 'domain/timeZone.ts']);
+/** Calcul de fuseau (T-11, N-01 : conversion d'une échéance en instant) : lit les composantes horaires d'un instant, n'affiche rien. */
+const ALLOWED_INTL = new Set(['domain/timeFormat.ts', 'domain/timeZone.ts', 'domain/notificationInstant.ts']);
 
 describe('Formateur d’heure unique (P-03 critère 7)', () => {
   const files = sourcesOf(SRC).map((file) => ({ file, name: relative(SRC, file).split(sep).join('/') }));
