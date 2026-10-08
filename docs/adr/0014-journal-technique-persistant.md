@@ -47,7 +47,7 @@ Le PRD (section 10) remplace l'inspecteur Safari par un écran de logs interne (
 ### 4. Écran (I-04, `src/features/settings/logs/`)
 
 - Accès : lien « Logs » de la ligne « Version … » de Réglages › À PROPOS, **PC et iPhone** (code partagé ; décision du 2026-10-08, à valider par Ali). Filtres Tout / Synchro / Notifications / Erreurs ; 500 entrées au plus ; heure locale 24 h.
-- Export par **`container.files.save`** (FILES-IOS-01 sur iPhone : panneau de partage ; PC : « Enregistrer sous ») : `circletasks-logs-AAAAMMJJ-HHMM.txt`, `text/plain`, en-tête et lignes de la fiche ; annulation = rien ; échec = message visible avec le code.
+- Export par **`container.files.save`** (FILES-IOS-01 sur iPhone : sélecteur « Enregistrer dans Fichiers », décision du 2026-10-08 ; PC : « Enregistrer sous ») : `circletasks-logs-AAAAMMJJ-HHMM.txt`, `text/plain`, en-tête et lignes de la fiche ; annulation = rien ; échec = message visible avec le code.
 - **Aucun échec silencieux** : `writeError` ou `readError` → « Le journal n'a pas pu être écrit » (ou l'échec de lecture) avec le code, en rouge, sur l'écran **et** sur la ligne « Logs » de Réglages ; les entrées de la session restent lisibles depuis le tampon ; le message disparaît à la prochaine écriture réussie.
 
 ### 5. Limites assumées

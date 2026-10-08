@@ -1,0 +1,21 @@
+[package]
+name = "tauri-plugin-ct-files"
+version = "0.1.0"
+description = "CircleTasks : enregistrer un fichier dans Fichiers sur iPhone (FILES-IOS-01, ADR 0009 avenant lot F). Appelé par Rust seulement."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Exigé par tauri-plugin (nom identique au paquet) : le plugin Swift est lié par le script de compilation. Aucune commande n'est déclarée
+# (build.rs) : le préfixe des permissions est sans objet, aucune permission `ct-files:` n'existe.
+links = "tauri-plugin-ct-files"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+serde_json = "1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

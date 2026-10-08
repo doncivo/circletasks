@@ -1,0 +1,25 @@
+{
+  "$comment": [
+    "Contrat du plugin Swift ct-files (FILES-IOS-01 critère 4 ; ADR 0009 avenant lot F point A2, décision du 2026-10-08 : sélecteur « Enregistrer dans Fichiers », pas de panneau de partage).",
+    "Lu par le contrôle statique src-tauri/tests/desktop/export_ios.rs contre src-tauri/plugins/files/ios/Sources/CtFilesPlugin.swift et src-tauri/src/export_ios.rs.",
+    "path : chemin absolu du fichier temporaire écrit par Rust (<cache de l'app>/exports/<16 hex>/<nom>), jamais une valeur venue de la WebView. mime : dérivé par Rust de l'extension (mimeByExtension), revérifié par Swift.",
+    "output : formes de réponse possibles (ensembles exacts de clés). completed faux = annulation, pas une erreur. rejectCodes : codes de rejet Swift, connus de Rust (PLUGIN_REJECT_CODES) ; tout autre code devient failed."
+  ],
+  "plugin": "ct-files",
+  "swiftClass": "CtFilesPlugin",
+  "binding": "init_plugin_ct_files",
+  "rejectCodes": ["not-foreground", "failed"],
+  "commands": {
+    "present": { "input": ["path", "mime"], "output": [["completed"]] }
+  },
+  "mimeByExtension": {
+    "csv": "text/csv",
+    "json": "application/json",
+    "pdf": "application/pdf",
+    "png": "image/png",
+    "txt": "text/plain"
+  },
+  "fallbackMime": "application/octet-stream",
+  "exportsFolder": "exports",
+  "rustErrorCodes": ["too-large", "bad-name", "busy", "unsafe-folder", "io", "not-foreground", "failed"]
+}

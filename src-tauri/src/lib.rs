@@ -17,8 +17,16 @@ pub mod capture;
 pub mod desktop;
 #[cfg(desktop)]
 pub mod export;
+/// Règles d'export communes au PC et à l'iPhone (taille, nom, extension, type ; ADR 0009 avenant lot F A3).
+pub mod export_common;
+/// Export sur iPhone par le plugin ct-files (FILES-IOS-01) ; compilé aussi sous `test-hooks` pour les tests Windows (faux transport).
+#[cfg(any(target_os = "ios", feature = "test-hooks"))]
+pub mod export_ios;
 #[cfg(desktop)]
 pub mod import;
+/// Démarrage de l'iPhone (`setup`) : purge des temporaires d'export.
+#[cfg(target_os = "ios")]
+mod ios_setup;
 #[cfg(desktop)]
 pub mod ocr;
 #[cfg(desktop)]
@@ -57,6 +65,10 @@ pub fn run() {
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
+    // FILES-IOS-01 : plugin ct-files (sélecteur « Enregistrer dans Fichiers », appelé par Rust seul) et état de l'export ; purge des
+    // temporaires restants au démarrage (`ios_setup`).
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_ct_files::init()).manage(export_ios::ExportIosState::default()).setup(ios_setup::setup);
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : commandes de `main`, aucune de la fenêtre `pairing`.
@@ -67,6 +79,8 @@ pub fn run() {
         sync::commands_ios::sync_restore_marker_clear, sync::commands_ios::sync_forgotten_delete,
         // Y-IOS-02 (ADR 0011 §23 point 5) : clé reçue dans `main`, oubli, réinitialisation (confirmations natives de l'iPhone).
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,
+        // FILES-IOS-01 (ADR 0009 avenant lot F A3) : même commande et même permission qu'au PC, temporaire remis au plugin ct-files.
+        export_ios::export_save_file,
     ]);
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]

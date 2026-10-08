@@ -3,8 +3,11 @@ import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { ExportKind } from '../../domain/historyExport';
 import { t } from '../../i18n';
+import { logFailure } from '../../platform';
 import type { FileService } from '../../platform/files';
 import { Button, Icon, Sheet, useFocusTrap, useLayout } from '../../ui';
+import { FileSaveFailure } from '../app/FileSaveFailure';
+import { saveFile } from '../app/saveFile';
 import { createExportFile, type ExportContext } from './exportActions';
 import type { ExportPeriod } from './exportHistory';
 import './ExportDialog.css';
@@ -57,6 +60,8 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
   const [kind, setKind] = useState<ExportKind>('csv');
   const [period, setPeriod] = useState<ExportPeriod>('all');
   const [status, setStatus] = useState<'idle' | 'busy' | 'error'>('idle');
+  // Code de l'échec (FILES-IOS-01 critère 9) : affiché avec « Réessayer » jusqu'au prochain essai.
+  const [failure, setFailure] = useState<{ readonly code: string; readonly tooLarge: boolean }>({ code: 'write-failed', tooLarge: false });
   const history = kind === 'csv' || kind === 'json';
   // Fermer pendant l'export abandonne la suite : ni « Enregistrer sous », ni message de réussite.
   const abandoned = useRef(false);
@@ -70,15 +75,26 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
     try {
       const request = await createExportFile(kind, period, context);
       if (abandoned.current) return;
-      const result = await files.save(request);
+      // Sélecteur « Enregistrer dans Fichiers » sur iPhone (excursion du verrou), « Enregistrer sous » sur PC ; échec journalisé avec son code.
+      const outcome = await saveFile(files, request, 'export-save');
       if (abandoned.current) return;
-      if (!result.saved) {
+      if (outcome.status === 'cancelled') {
         setStatus('idle');
         return;
       }
-      onDone(result.path);
-    } catch {
-      if (!abandoned.current) setStatus('error');
+      if (outcome.status === 'failed') {
+        setFailure({ code: outcome.code, tooLarge: outcome.tooLarge });
+        setStatus('error');
+        return;
+      }
+      onDone(outcome.path);
+    } catch (error) {
+      // Préparation du fichier (lecture, rendu du rapport) : même message visible, code générique.
+      logFailure('export-prepare', error);
+      if (!abandoned.current) {
+        setFailure({ code: 'write-failed', tooLarge: false });
+        setStatus('error');
+      }
     }
   }
 
@@ -115,11 +131,7 @@ export function ExportDialog({ files, context, onClose, onDone }: ExportDialogPr
       )}
       <p className="ct-export__note">{t('stats.exportFilter', { filter: context.filterLabel })}</p>
       {history && <p className="ct-export__note">{t('stats.exportUnencrypted')}</p>}
-      {status === 'error' && (
-        <p className="ct-export__error" role="alert">
-          {t('stats.exportError')}
-        </p>
-      )}
+      {status === 'error' && <FileSaveFailure message={t('stats.exportError')} code={failure.code} tooLarge={failure.tooLarge} onRetry={() => void run()} />}
       {status === 'busy' && (
         <p className="ct-export__note" role="status">
           {t('stats.exportBusy')}

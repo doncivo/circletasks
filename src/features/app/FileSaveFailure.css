@@ -1,0 +1,24 @@
+/* Échec d'enregistrement d'un fichier (FILES-IOS-01 critère 9) : rouge des erreurs (#9E3F33), bouton « Réessayer » de 44 px au moins. */
+.ct-file-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+}
+
+.ct-file-failure__text {
+  margin: 0;
+  flex: 1 1 220px;
+  color: var(--ct-color-missed-text);
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.ct-file-failure__code {
+  white-space: nowrap;
+}
+
+.ct-file-failure .ct-button {
+  min-height: 44px;
+}

@@ -46,6 +46,11 @@ export const en: Messages = {
     add: 'Add',
     cancel: 'Cancel',
   },
+  files: {
+    errorCode: 'Code: {code}',
+    retry: 'Try again',
+    tooLarge: 'File too large.',
+  },
   nav: {
     primaryLabel: 'Main navigation',
     tabs: {

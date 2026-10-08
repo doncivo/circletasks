@@ -86,6 +86,9 @@ tauri-plugin-biometric = "=2.4.1"
 tauri-plugin-ct-haptics = { path = "plugins/haptics" }
 # Cache de confidentialité natif (I-03, ADR 0013 §2.5, décision d'Ali du 2026-10-08) : vue opaque quand l'app devient inactive.
 tauri-plugin-privacy-shield = { path = "plugins/privacy-shield" }
+# Enregistrer un fichier dans Fichiers (FILES-IOS-01, ADR 0009 avenant lot F) : plugin Swift local (sélecteur « Enregistrer dans Fichiers »),
+# appelé par Rust seul (export_ios.rs) ; aucune permission pour la WebView. iPhone seulement.
+tauri-plugin-ct-files = { path = "plugins/files" }
 
 # Fuseau local de la boîte « Oublier cet appareil » (ADR 0011 §23 point 4) : localtime_r. Même version que celle déjà tirée.
 [target.'cfg(unix)'.dependencies]

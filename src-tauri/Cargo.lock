@@ -637,6 +637,7 @@ dependencies = [
  "tauri-plugin-autostart",
  "tauri-plugin-barcode-scanner",
  "tauri-plugin-biometric",
+ "tauri-plugin-ct-files",
  "tauri-plugin-ct-haptics",
  "tauri-plugin-dialog",
  "tauri-plugin-folder-bookmark",
@@ -5110,6 +5111,15 @@ dependencies = [
  "tauri",
  "tauri-plugin",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "tauri-plugin-ct-files"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

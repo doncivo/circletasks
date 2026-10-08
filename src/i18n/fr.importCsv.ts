@@ -79,5 +79,5 @@ export const importCsvFr = {
   errorTooLarge: 'Le fichier dépasse 2 Mo : réduisez-le puis réessayez.',
   errorUnreadable: 'Impossible de lire ce fichier.',
   errorFailed: 'L’import a échoué. Aucune tâche n’a été créée.',
-  errorSave: 'Impossible d’enregistrer le fichier.',
+  errorSave: 'L’enregistrement n’a pas abouti.',
 } as const;

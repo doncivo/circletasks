@@ -723,3 +723,57 @@ fn lot_m_local_plugins_acl_prefix_matches_runtime_name() {
     // Aucune commande Rust : seules les méthodes Swift répondent (pas de invoke_handler dans ces plugins).
     assert!(!HAPTICS_LIB.contains("invoke_handler") && !SHIELD_LIB.contains("invoke_handler"));
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Lot F (ADR 0009 avenant lot F) : plugin ct-files et export sur iPhone (FILES-IOS-01)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// FILES-IOS-01 critère 4 : `export-ios.json` n'accorde que `allow-export-save-file` (fenêtre `main`, iOS) ; `export.json` (PC) inchangé ;
+/// aucune capability ne contient `ct-files:` (Rust seul appelle le plugin).
+#[test]
+fn files_ios_01_4_export_ios_capability_is_exact_and_no_capability_grants_the_plugin() {
+    assert_exact_ios_capability("export-ios.json", "allow-export-save-file\"]", &["allow-export-save-file"]);
+    let mut pc = permissions_of(include_str!("../../capabilities/export.json"));
+    pc.sort();
+    assert_eq!(pc, ["allow-export-save-file", "allow-reveal-exported-file"]);
+    for (name, text) in all_capabilities() {
+        assert!(!text.contains("ct-files:"), "{name}");
+        let capability: Value = serde_json::from_str(&text).unwrap();
+        let ios = capability["platforms"].as_array().is_some_and(|p| p.iter().any(|x| x == "iOS"));
+        if ios {
+            for permission in permissions_of(&text) {
+                assert!(!["fs:", "dialog:", "opener:"].iter().any(|prefix| permission.starts_with(prefix)), "{name} : {permission}");
+                assert!(permission != "allow-reveal-exported-file" && permission != "allow-import-open-file", "{name} : {permission}");
+            }
+        }
+    }
+}
+
+/// FILES-IOS-01 critères 4 et 10 : le crate est une dépendance de la cible iOS seulement, enregistré une fois dans le bloc iOS ;
+/// `export_save_file` est dans les deux gestionnaires (PC et iPhone), `reveal_exported_file` et `import_open_file` jamais sur iPhone ;
+/// ni dialog ni fs dans la section iOS.
+#[test]
+fn files_ios_01_4_plugin_is_ios_only_and_the_ios_handler_has_only_the_save_command() {
+    assert_eq!(cargo_sections_of("tauri-plugin-ct-files"), [(IOS_SECTION.to_owned(), "tauri-plugin-ct-files = { path = \"plugins/files\" }".to_owned())]);
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_ct_files::init()")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1);
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    assert!(!DESKTOP_SOURCE.contains("ct_files"));
+    let ios = ios_handler_commands();
+    assert!(ios.contains("export_save_file"));
+    assert!(!ios.contains("reveal_exported_file") && !ios.contains("import_open_file"));
+    assert!(LIB_SOURCE.contains("export_ios::export_save_file"));
+    for krate in ["tauri-plugin-dialog", "tauri-plugin-fs"] {
+        assert!(cargo_sections_of(krate).iter().all(|(section, _)| section != IOS_SECTION), "{krate} dans la section iOS");
+    }
+}
+
+/// FILES-IOS-01 critère 10 : `build-ios.yml` vérifie par `cargo tree` le plugin ct-files (iOS oui, Windows non) et l'absence de dialog / fs.
+#[test]
+fn files_ios_01_10_ios_workflow_checks_the_plugin_targets() {
+    let workflow = include_str!("../../../.github/workflows/build-ios.yml");
+    assert!(workflow.contains("cargo tree --target aarch64-apple-ios -i tauri-plugin-ct-files"));
+    assert!(workflow.contains("cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-ct-files"));
+    assert!(workflow.contains("tauri-plugin-dialog tauri-plugin-fs"), "dialog et fs refusés dans la cible iOS");
+}

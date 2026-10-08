@@ -1,10 +1,11 @@
 /**
  * Export et fichiers (H-03 D4) : contrat commun à l'export de l'historique (H-03), à la copie d'une sauvegarde (P-04) et à l'import
- * CSV (P-07). Implémentations : Tauri PC (boîte « Enregistrer sous » système, écriture du seul fichier choisi), navigateur (téléchargement,
- * développement et tests), mémoire (faux des tests), indisponible (iPhone avant l'ordre 5).
+ * CSV (P-07). Implémentations : Tauri PC (boîte « Enregistrer sous » système, écriture du seul fichier choisi), iPhone (sélecteur
+ * « Enregistrer dans Fichiers » du plugin ct-files, FILES-IOS-01), navigateur (téléchargement, développement et tests), mémoire (faux des
+ * tests), indisponible.
  */
 
-/** Taille maximale d'un fichier exporté (64 Mio), la même que `MAX_EXPORT_BYTES` de `src-tauri/src/export.rs`. */
+/** Taille maximale d'un fichier exporté (64 Mio), la même que `MAX_EXPORT_BYTES` de `src-tauri/src/export_common.rs`. */
 export const MAX_EXPORT_BYTES = 64 * 1024 * 1024;
 
 export interface SaveRequest {
@@ -35,7 +36,7 @@ export class FileExportError extends Error {
 }
 
 export interface FileExporter {
-  /** Cette plateforme sait-elle enregistrer un fichier ? Faux sur iPhone tant que le plugin Fichiers (ordre 5) n'existe pas. */
+  /** Cette plateforme sait-elle enregistrer un fichier ? Vrai sur PC, sur iPhone (plugin ct-files) et dans le navigateur. */
   canSave(): boolean;
   /** Propose l'enregistrement ; `{ saved: false }` si l'utilisateur annule ; `FileExportError` en cas d'échec. */
   save(request: SaveRequest): Promise<SaveResult>;
@@ -61,3 +62,17 @@ export interface FilePicker {
 }
 
 export interface FileService extends FileExporter, FilePicker {}
+
+const CODE_PATTERN = /^[a-z0-9][a-z0-9-]{0,39}$/;
+
+/**
+ * Code court d'un échec de fichier, affiché à l'utilisateur et inscrit au journal (FILES-IOS-01 critère 9, aucun échec silencieux) : le code
+ * de Rust porté par la cause (`{ code }`, par exemple `io`, `unsafe-folder`) s'il a la forme d'un code, sinon la raison du contrat.
+ */
+export function fileErrorCode(error: unknown): string {
+  const candidate = typeof error === 'object' && error !== null ? (error as { reason?: unknown; cause?: unknown }) : {};
+  const cause = typeof candidate.cause === 'object' && candidate.cause !== null ? (candidate.cause as { code?: unknown }).code : undefined;
+  if (typeof cause === 'string' && CODE_PATTERN.test(cause)) return cause;
+  if (typeof candidate.reason === 'string' && CODE_PATTERN.test(candidate.reason)) return candidate.reason;
+  return 'write-failed';
+}

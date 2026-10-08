@@ -5,6 +5,7 @@ import { t } from '../../i18n';
 import { formatDayLabel, formatTime } from '../../i18n/format';
 import { Button, Icon, SegmentedControl, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { FileSaveFailure } from '../app/FileSaveFailure';
 import { useNavigationStore } from '../app/navigation';
 import { importStore, rejectReasonText } from './importStore';
 import './ImportScreen.css';
@@ -41,6 +42,7 @@ export function ImportScreen() {
   const importedCount = useFeatureStore(importStore, (s) => s.importedCount);
   const errorKey = useFeatureStore(importStore, (s) => s.errorKey);
   const savedKey = useFeatureStore(importStore, (s) => s.savedKey);
+  const saveFailure = useFeatureStore(importStore, (s) => s.saveFailure);
   const choose = useFeatureStore(importStore, (s) => s.choose);
   const setUndated = useFeatureStore(importStore, (s) => s.setUndated);
   const run = useFeatureStore(importStore, (s) => s.run);
@@ -88,6 +90,15 @@ export function ImportScreen() {
             ? [plural(validCount, 'importCsv.toImportOne', 'importCsv.toImport'), plural(rejectedCount, 'importCsv.rejectedOne', 'importCsv.rejected'), plural(warningCount, 'importCsv.warningsOne', 'importCsv.warnings')].join(' · ')
             : ''}
         </p>
+        {saveFailure && (
+          <FileSaveFailure
+            message={t('importCsv.errorSave')}
+            code={saveFailure.code}
+            tooLarge={saveFailure.tooLarge}
+            disabled={busy}
+            onRetry={() => void (saveFailure.retry === 'template' ? downloadTemplate() : downloadReport())}
+          />
+        )}
         {savedKey && (
           <p className="ct-import__note" role="status">
             {t(savedKey)}
