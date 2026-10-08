@@ -23,6 +23,7 @@ export const appleRemindersEn: Messages['appleReminders'] = {
   denied: 'Access to Reminders is denied. Allow it in iOS Settings, Privacy & Security, Reminders.',
   restricted: 'Access to Reminders is restricted on this iPhone.',
   bannerAccess: 'Access to Reminders is denied',
+  bannerLoad: 'Apple Reminders could not start. Reopen the app to retry.',
   bannerRead: 'Apple Reminders could not be read',
   bannerWrite: '{count} change(s) could not be sent to Reminders',
   bannerViewLabel: 'View the state of Apple Reminders',

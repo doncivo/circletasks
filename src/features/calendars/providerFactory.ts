@@ -23,16 +23,17 @@ export function createProviderFor(account: Pick<CalendarAccount, 'provider' | 't
         return (await import('./providers/caldav')).createCaldavProvider(platform.http, platform.endpoints, account.tokenRef, account.username, { timeZone, nowMs });
     }
   };
-  // Un chargement impossible est un échec de lecture visible (réseau, nouvel essai au passage suivant), jamais un silence.
-  const failed = (error: unknown): Result<never, ProviderError> => {
-    logFailure('calendar-provider-load', error);
-    return { ok: false, error: { kind: 'network' } };
+  // Un chargement impossible est un échec visible (état « Indisponible » du compte, nouvel essai au passage suivant), jamais un silence ni « réseau » ; le
+  // journal reçoit un code fixe (jamais le message de l'erreur, qui peut nommer une URL).
+  const failed = (): Result<never, ProviderError> => {
+    logFailure('calendars', 'provider-load-failed');
+    return { ok: false, error: { kind: 'unavailable' } };
   };
   const load = async (): Promise<CalendarProvider | Result<never, ProviderError>> => {
     try {
       return await real();
-    } catch (error) {
-      return failed(error);
+    } catch {
+      return failed();
     }
   };
   const isProvider = (value: CalendarProvider | Result<never, ProviderError>): value is CalendarProvider => 'listCalendars' in value;

@@ -19,6 +19,7 @@ import './CalendarsScreen.css';
 function stateLabelKey(state: CalendarAccountState | undefined): PlainMessageKey {
   if (!state || state.kind === 'connected') return 'calendars.stateConnected';
   if (state.kind === 'reconnect-required') return 'calendars.stateReconnect';
+  if (state.error === 'unavailable') return 'calendars.stateUnavailable';
   return state.error === 'rate-limited' ? 'calendars.stateRateLimited' : 'calendars.stateOffline';
 }
 

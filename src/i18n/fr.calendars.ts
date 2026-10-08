@@ -22,6 +22,7 @@ export const calendarsFr = {
   stateConnected: 'Connecté',
   stateReconnect: 'Déconnecté',
   stateOffline: 'Hors ligne',
+  stateUnavailable: 'Indisponible : rouvrez l’app',
   stateRateLimited: 'Réessai plus tard',
   neverUpdated: 'Pas encore mis à jour',
   updatedNow: 'Mis à jour à l’instant',
