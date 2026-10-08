@@ -98,6 +98,14 @@ jobs:
           WIN=$(cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-notification 2>&1 || true)
           echo "$WIN"
           if grep -q "tauri-plugin-notification v" <<<"$WIN"; then echo "::error::tauri-plugin-notification présent dans la compilation Windows"; exit 1; fi
+          # N-03 (ADR 0012 avenant N-03) : le plugin Swift des actions de notification (délégué, catégories, fichier des actions) est dans la
+          # cible iPhone et JAMAIS dans la cible Windows.
+          ACT=$(cargo tree --target aarch64-apple-ios -i tauri-plugin-notification-actions 2>&1 || true)
+          echo "$ACT"
+          grep -q "tauri-plugin-notification-actions v" <<<"$ACT" || { echo "::error::tauri-plugin-notification-actions absent de la compilation iOS"; exit 1; }
+          WINACT=$(cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-notification-actions 2>&1 || true)
+          echo "$WINACT"
+          if grep -q "tauri-plugin-notification-actions v" <<<"$WINACT"; then echo "::error::tauri-plugin-notification-actions présent dans la compilation Windows"; exit 1; fi
 
       # Option officielle du CLI Tauri `--no-sign` (crates/tauri-cli/src/mobile/ios/build.rs, v2.12.1) :
       # `xcodebuild archive` avec CODE_SIGNING_ALLOWED=NO pendant que le CLI sert ses options à la phase
