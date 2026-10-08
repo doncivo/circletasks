@@ -84,7 +84,8 @@ fn pc_never_sends_a_notification_for_focus() {
                 continue;
             }
             let ios_only = index > 0 && lines[index - 1].trim() == "#[cfg(target_os = \"ios\")]";
-            let registration = line.trim() == "let builder = builder.plugin(tauri_plugin_notification::init());";
+            // N-03 : le plugin d'actions (délégué des notifications de l'iPhone) est lui aussi enregistré sous le même cfg.
+            let registration = line.trim() == "let builder = builder.plugin(tauri_plugin_notification::init());" || line.trim() == "let builder = builder.plugin(tauri_plugin_notification_actions::init());";
             assert!(ios_only && registration, "notification hors de l'enregistrement iOS : {}", line.trim());
         }
     }

@@ -22,6 +22,7 @@ import type { AppContainer } from '../app/container';
 import { createRoutineUseCases } from '../routines/routineUseCases';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { actionQueueController } from './actionQueue';
+import { wakes } from './actionWake';
 import { statusController } from './notificationStatus';
 
 /**
@@ -58,28 +59,6 @@ function ensureActionTypes(container: AppContainer, source: NotificationActionSo
     known.catch(() => registered.delete(container));
   }
   return known;
-}
-
-// ---------------------------------------------------------------------------------------------------------------------------------
-// Réveil (événement `action` du plugin)
-// ---------------------------------------------------------------------------------------------------------------------------------
-
-interface Wake {
-  readonly handler: () => void;
-  stop: (() => void) | null;
-}
-
-const wakes = new WeakMap<AppContainer, Wake>();
-
-/** Demande un passage `action` quand le plugin écrit une ligne (course entre `didReceive` et le `drain` de la reprise). */
-export function setActionWakeHandler(container: AppContainer, handler: () => void): () => void {
-  const wake: Wake = { handler, stop: null };
-  wakes.set(container, wake);
-  return () => {
-    wake.stop?.();
-    wake.stop = null;
-    if (wakes.get(container) === wake) wakes.delete(container);
-  };
 }
 
 async function ensureWake(container: AppContainer, source: NotificationActionSource): Promise<void> {

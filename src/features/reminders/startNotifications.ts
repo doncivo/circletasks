@@ -1,4 +1,4 @@
-import { setActionWakeHandler } from './notificationActions';
+import { setActionWakeHandler } from './actionWake';
 import { clearReminderBanner, statusController } from './notificationStatus';
 import { getNotificationRunner } from './notificationRunner';
 import type { AppContainer } from '../app/container';
