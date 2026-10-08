@@ -13,6 +13,7 @@ import { useNoticeStore } from '../app/notice';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
+import type { Haptics } from '../../platform/haptics';
 import { TodayScreen } from './TodayScreen';
 
 /** Aides des tests d'écran d'Aujourd'hui (A-01 à A-09) : base en mémoire, conteneur, rendu, jeu de tâches. */
@@ -31,10 +32,10 @@ export function mockViewport(width: number): void {
   }));
 }
 
-export async function setupToday(deviceSuffix: string, startAt = '2026-10-02T10:00:00.000Z'): Promise<TodayHarness> {
+export async function setupToday(deviceSuffix: string, startAt = '2026-10-02T10:00:00.000Z', haptics?: Haptics): Promise<TodayHarness> {
   const device = asEntityId<DeviceId>(`60000000-0000-4000-8000-0000000${deviceSuffix.padStart(5, '0')}`);
   const db = await openTestDb(device, startAt);
-  const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: device }), data: db.data });
+  const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: device }), data: db.data, ...(haptics ? { haptics } : {}) });
   useAppStore.getState().setSpaces(await container.data.repos.spaces.listAll());
   return { db, container, today: todayLocal(db.clock) };
 }

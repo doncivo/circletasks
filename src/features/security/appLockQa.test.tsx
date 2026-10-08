@@ -443,6 +443,7 @@ describe('I-03-7 aucune donnée dans le DOM verrouillé', () => {
       </AppLockGate>,
     );
     await flush();
+    await screen.findByRole('heading', { name: 'CircleTasks est verrouillée' });
     expect(document.body.innerHTML).not.toContain('Acheter du lait');
     expect(document.body.innerHTML).not.toContain('notaire');
     expect(screen.queryAllByRole('listitem')).toHaveLength(0);

@@ -24,7 +24,7 @@ test.describe('SD-02 — planifier une tâche « Un jour »', () => {
     await expect(page.getByRole('button', { name: 'Planifier demain : Renouveler le passeport' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Choisir une date pour : Renouveler le passeport' })).toBeVisible();
     await somedayList(page).getByRole('button', { name: 'Lire le rapport annuel', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Planifier demain : Renouveler le passeport' })).toHaveCount(0);
+    await expect(page.locator('.ct-someday__schedule').getByRole('button', { name: 'Planifier demain : Renouveler le passeport' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Planifier demain : Lire le rapport annuel' })).toBeVisible();
   });
 

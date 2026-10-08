@@ -53,7 +53,7 @@ async function createTask(page: Page, info: Info, title: string, repeat: 'Une fo
 }
 
 async function openDetail(page: Page, title: string): Promise<Locator> {
-  await page.getByRole('button', { name: title }).click();
+  await page.getByRole('button', { name: title, exact: true }).click();
   const detail = page.getByLabel('Détail de la tâche');
   await expect(detail).toBeVisible();
   return detail;

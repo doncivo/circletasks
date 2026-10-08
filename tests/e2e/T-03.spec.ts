@@ -23,7 +23,7 @@ import { openApp } from './helpers/app';
 
 /** Ouvre la fiche détail de la tâche visible `title` et renvoie son conteneur (panneau PC ou feuille iPhone). */
 function openDetail(page: Page, title: string) {
-  return page.getByRole('button', { name: title }).click();
+  return page.getByRole('button', { name: title, exact: true }).click();
 }
 
 function detailLocator(page: Page, testInfo: { project: { name: string } }) {

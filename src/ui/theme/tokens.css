@@ -141,6 +141,19 @@
   --ct-focus-on: #ffffff;
   --ct-focus-ink: #2e2150;
   --ct-focus-launch-bg: #3a2a66;
+
+  /* Gestes de ligne (A-07, Gestes.html) : couleurs des actions, identiques en clair et en sombre (chaque fond porte son texte). */
+  --ct-swipe-complete-bg: #3e7c5a;
+  --ct-swipe-complete-on: #ffffff;
+  --ct-swipe-reopen-bg: var(--ct-color-surface-input);
+  --ct-swipe-reopen-on: var(--ct-color-text);
+  --ct-swipe-soft-bg: #c9bee6;
+  --ct-swipe-soft-on: #2e2150;
+  --ct-swipe-accent-bg: #5b43a8;
+  --ct-swipe-accent-on: #ffffff;
+  --ct-swipe-danger-bg: #a1271c;
+  --ct-swipe-danger-on: #ffffff;
+  --ct-swipe-shadow: rgba(46, 33, 80, 0.15);
 }
 
 /* Thème sombre, dérivé de Main-Sombre.html : appliqué automatiquement si le système
@@ -188,6 +201,7 @@
     --ct-edit-track: #c9bee6;
 --ct-edit-idle-knob: #1c1630;
 --ct-edit-ink: #f1eef8;
+--ct-swipe-shadow: rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -234,6 +248,7 @@
   --ct-edit-track: #c9bee6;
   --ct-edit-idle-knob: #1c1630;
   --ct-edit-ink: #f1eef8;
+  --ct-swipe-shadow: rgba(0, 0, 0, 0.7);
 }
 
 :root[data-theme='light'] {

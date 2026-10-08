@@ -81,18 +81,22 @@ export interface WeekState {
    */
   moveToDay(id: TaskId, date: LocalDate): Promise<void>;
   /** S-02 critère 9 : Ctrl+D, reporte la tâche choisie (T-05) ; annulable. Ne rejette jamais. */
-  postpone(id: TaskId, target: PostponeTarget): Promise<void>;
+  postpone(id: TaskId, target: PostponeTarget): Promise<boolean>;
   /** S-02, T-10 : report d'une occurrence récurrente pour « cette occurrence » ou « toutes les suivantes ». Ne rejette jamais. */
-  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<void>;
+  postponeSeries(id: TaskId, target: PostponeTarget, scope: SeriesScope): Promise<boolean>;
+  /** A-07 : bouton « Un jour » du balayage (SD-03) ; annulable. Rend vrai si la tâche est rangée, sinon `actionErrorKey` est posé. Ne rejette jamais. */
+  sendToSomeday(id: TaskId): Promise<boolean>;
+  /** A-07 : suppression confirmée depuis le balayage (T-08, T-10 pour une série) ; annulable. Ne rejette jamais. */
+  remove(id: TaskId, scope?: SeriesScope): Promise<boolean>;
   /**
    * S-02 critère 10 : réordonne dans un même jour (A-02, Q11) : seul l'ordre entre tâches sans heure (ou de même heure) change.
    * Renvoie le résultat (null : élément non déplaçable ou échec). Ne rejette jamais.
    */
   moveRow(rows: readonly TodayRow[], id: string, toIndex: number): Promise<MoveOutcome | null>;
   /** Termine ou rouvre une tâche (T-04, case de la carte). Ne rejette jamais. */
-  toggleDone(id: TaskId): Promise<void>;
+  toggleDone(id: TaskId): Promise<boolean>;
   /** R-03 : valide ou annule la validation d'une routine d'un jour de la semaine. Ne rejette jamais. */
-  toggleRoutine(id: RoutineId, date: LocalDate): Promise<void>;
+  toggleRoutine(id: RoutineId, date: LocalDate): Promise<boolean>;
   /** Relit les éléments des autres modules des sept jours (une routine validée ou annulée ailleurs). Ne rejette jamais. */
   refreshExtras(): Promise<void>;
   /** T-09 : lit les règles des séries affichées pas encore connues. Ne rejette jamais. */
@@ -224,8 +228,10 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       try {
         await useCases.postpone([id], target);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+        return false;
       }
     },
 
@@ -233,8 +239,37 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       try {
         const result = await series.postpone(id, target, scope);
         set({ actionErrorKey: result.ok ? null : 'tasks.postponeError' });
+        return result.ok;
       } catch {
         set({ actionErrorKey: 'tasks.postponeError' });
+        return false;
+      }
+    },
+
+    async sendToSomeday(id) {
+      try {
+        const moved = await useCases.moveToSomeday([id]);
+        set({ actionErrorKey: moved.length > 0 ? null : 'someday.sendError' });
+        return moved.length > 0;
+      } catch {
+        set({ actionErrorKey: 'someday.sendError' });
+        return false;
+      }
+    },
+
+    async remove(id, scope) {
+      try {
+        if (scope) {
+          const result = await series.remove(id, scope);
+          set({ actionErrorKey: result.ok ? null : 'tasks.deleteError' });
+          return result.ok;
+        }
+        await useCases.remove([id]);
+        set({ actionErrorKey: null });
+        return true;
+      } catch {
+        set({ actionErrorKey: 'tasks.deleteError' });
+        return false;
       }
     },
 
@@ -254,14 +289,16 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
 
     async toggleDone(id) {
       const current = container.taskEntities.get(id);
-      if (!current) return;
+      if (!current) return false;
       try {
         // Le cas d'usage publie la tâche écrite (et l'occurrence suivante d'une série, T-09) dans la source unique.
         if (current.status === 'done') await useCases.reopen(id);
         else await useCases.complete(id);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       }
     },
 
@@ -269,18 +306,20 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
       const { weekStart, filter } = get();
       const entry = get().extras.get(date)?.routines?.find((candidate) => candidate.routine.id === routineId);
       const busyKey = `${routineId}|${date}`;
-      if (weekStart === null || !entry || routinesBusy.has(busyKey)) return;
+      if (weekStart === null || !entry || routinesBusy.has(busyKey)) return false;
       routinesBusy.add(busyKey);
       try {
         await toggleRoutineViaSources(container, routineId, date, !entry.done);
         // Toute la semaine est relue : valider peut atteindre le quota d'une routine « X fois par semaine » (QB-01) et la retirer des autres jours.
         const loaded = await Promise.all(weekDays(weekStart).map(async (day) => ({ day, ...(await loadTodayExtras(container, day, filter, 'week')) })));
-        if (get().weekStart !== weekStart) return;
+        if (get().weekStart !== weekStart) return true;
         const extras = new Map<LocalDate, WeekDayExtras>();
         for (const { day, extras: dayExtras } of loaded) if (dayExtras !== EMPTY_TODAY_EXTRAS) extras.set(day, dayExtras);
         set({ extras, extrasFailed: loaded.some((day) => day.failed), actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       } finally {
         routinesBusy.delete(busyKey);
       }

@@ -40,7 +40,7 @@ function detailOf(page: Page, testInfo: Info): Locator {
 
 /** Ouvre la fiche, choisit une action du menu Reporter. Sur iPhone, ferme ensuite la fiche (le message « Annuler » est dessous). */
 async function postponeVia(page: Page, testInfo: Info, title: string, action: string): Promise<void> {
-  await page.getByRole('button', { name: title }).click();
+  await page.getByRole('button', { name: title, exact: true }).click();
   const detail = detailOf(page, testInfo);
   await detail.getByRole('button', { name: 'Reporter' }).click();
   const menu = testInfo.project.name === 'iphone' ? page.getByRole('dialog', { name: 'Reporter la tâche' }) : page.getByRole('menu', { name: 'Reporter la tâche' });
@@ -62,7 +62,7 @@ test.describe('T-05 — reporter une tâche', () => {
   test('le menu propose exactement Demain, Semaine prochaine, Choisir une date ; Échap / Fermer n’applique rien (critère 1)', async ({ page }, testInfo) => {
     const title = `Menu ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     const detail = detailOf(page, testInfo);
     await detail.getByRole('button', { name: 'Reporter' }).click();
 
@@ -126,7 +126,7 @@ test.describe('T-05 — reporter une tâche', () => {
   test('« Choisir une date » : Fermer n’applique rien, Valider reporte à la date choisie (critère 4)', async ({ page }, testInfo) => {
     const title = `Date ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     const detail = detailOf(page, testInfo);
     const menuOf = () =>
       testInfo.project.name === 'iphone' ? page.getByRole('dialog', { name: 'Reporter la tâche' }) : page.getByRole('menu', { name: 'Reporter la tâche' });
@@ -162,7 +162,7 @@ test.describe('T-05 — reporter une tâche', () => {
     const title = `Raccourci ${Date.now()}`;
     await createTask(page, testInfo, title);
 
-    await page.getByRole('button', { name: title }).focus();
+    await page.getByRole('button', { name: title, exact: true }).focus();
     await page.keyboard.press('Control+d');
     await expect(page.getByRole('status')).toContainText(`« ${title} » reportée à demain`);
     await expect(page.getByRole('checkbox', { name: `Terminer : ${title}` })).toHaveCount(0);
@@ -174,7 +174,7 @@ test.describe('T-05 — reporter une tâche', () => {
   test('une tâche terminée n’a pas de bouton Reporter (critère 9)', async ({ page }, testInfo) => {
     const title = `Terminée ${testInfo.project.name} ${Date.now()}`;
     await createTask(page, testInfo, title);
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     const detail = detailOf(page, testInfo);
     await expect(detail.getByRole('button', { name: 'Reporter' })).toBeVisible();
 

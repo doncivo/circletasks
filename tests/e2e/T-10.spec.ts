@@ -51,7 +51,7 @@ async function createMonthly(page: Page, info: Info, title: string): Promise<voi
 }
 
 async function openDetail(page: Page, title: string): Promise<Locator> {
-  await page.getByRole('button', { name: title }).click();
+  await page.getByRole('button', { name: title, exact: true }).click();
   const detail = page.getByLabel('Détail de la tâche');
   await expect(detail).toBeVisible();
   return detail;
@@ -280,7 +280,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     await expect(question.getByRole('button', { name: 'Annuler' })).toBeFocused();
     await question.getByRole('button', { name: 'Cette occurrence' }).click();
     await expect(detail).not.toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByRole('status')).toContainText(`« ${title} » supprimée`);
 
     await advanceDays(page, 30);
@@ -296,9 +296,9 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
 
     await detail.getByRole('button', { name: deleteLabel, exact: true }).click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Toutes les suivantes' }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
 
     detail = await openDetail(page, title);
     await detail.getByRole('button', { name: deleteLabel, exact: true }).click();
@@ -319,7 +319,7 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     await question.getByRole('button', { name: 'Cette occurrence' }).click();
     await expect(question).not.toBeVisible();
     await closeDetail(page, detail);
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
   });
 
   test('PC : Ctrl+D sur une ligne récurrente propose la même question (critère 4)', async ({ page }, info) => {
@@ -331,9 +331,9 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     const question = page.getByRole('alertdialog', { name: `Reporter « ${title} » ?` });
     await expect(question).toBeVisible();
     await question.getByRole('button', { name: 'Toutes les suivantes' }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await page.keyboard.press('Control+z');
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('PC : touche Suppr sur une ligne récurrente propose la même question (critère 7)', async ({ page }, info) => {
@@ -345,8 +345,8 @@ test.describe('T-10 : modifier ou arrêter une récurrence', () => {
     const question = page.getByRole('alertdialog', { name: `Supprimer « ${title} » ?` });
     await expect(question.getByRole('button', { name: 'Cette occurrence' })).toBeVisible();
     await question.getByRole('button', { name: 'Cette occurrence' }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await page.keyboard.press('Control+z');
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 });

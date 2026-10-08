@@ -1,0 +1,139 @@
+/* SwipeRow (A-07, Gestes.html) : ligne de 66 px de haut au plus, rayon 12 ; fond vert à droite, trois boutons de 62 px à gauche. */
+.ct-swipe-row {
+  position: relative;
+  /* Le défilement vertical reste au navigateur ; l'horizontal est lu par la ligne. */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ct-swipe-row[data-reveal] {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.ct-swipe-row__front {
+  position: relative;
+  will-change: transform;
+}
+
+.ct-swipe-row__front[data-animate='true'] {
+  transition: transform 180ms ease-out;
+}
+
+/* Pendant la révélation, la ligne est opaque et projette une ombre à gauche (Gestes.html). */
+.ct-swipe-row[data-reveal] .ct-swipe-row__front {
+  background: var(--ct-swipe-front-bg, var(--ct-color-bg));
+  box-shadow: -2px 0 8px var(--ct-swipe-shadow);
+}
+
+.ct-swipe-row__under {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+}
+
+.ct-swipe-row__under--right {
+  gap: 8px;
+  padding-left: 16px;
+  font-family: var(--ct-font-text);
+  font-size: 15px;
+  font-weight: var(--ct-font-weight-bold);
+  background: var(--ct-swipe-complete-bg);
+  color: var(--ct-swipe-complete-on);
+}
+
+.ct-swipe-row__under--right[data-tone='reopen'] {
+  background: var(--ct-swipe-reopen-bg);
+  color: var(--ct-swipe-reopen-on);
+}
+
+.ct-swipe-row__under--left {
+  justify-content: flex-end;
+  background: var(--ct-color-surface-input);
+}
+
+.ct-swipe-row__button {
+  width: 62px;
+  align-self: stretch;
+  border: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  font-family: var(--ct-font-text);
+  font-size: 12px;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-swipe-row__button[data-tone='soft'] {
+  background: var(--ct-swipe-soft-bg);
+  color: var(--ct-swipe-soft-on);
+}
+
+.ct-swipe-row__button[data-tone='accent'] {
+  background: var(--ct-swipe-accent-bg);
+  color: var(--ct-swipe-accent-on);
+}
+
+.ct-swipe-row__button[data-tone='danger'] {
+  background: var(--ct-swipe-danger-bg);
+  color: var(--ct-swipe-danger-on);
+}
+
+/* Équivalent VoiceOver : masqué visuellement, exposé à la technologie d'assistance, visible dès qu'il reçoit le focus. */
+.ct-swipe-row__a11y {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ct-swipe-row__a11y:focus-within {
+  inset: 0 0 0 auto;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  display: flex;
+  z-index: 1;
+  background: var(--ct-color-surface-input);
+  border-radius: 12px;
+}
+
+.ct-swipe-row__a11yButton {
+  min-width: var(--ct-hit-target-min);
+  border: 0;
+  padding: 0 10px;
+  font-family: var(--ct-font-text);
+  font-size: 12px;
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-swipe-row__a11yButton[data-tone='soft'] {
+  background: var(--ct-swipe-soft-bg);
+  color: var(--ct-swipe-soft-on);
+}
+
+.ct-swipe-row__a11yButton[data-tone='accent'] {
+  background: var(--ct-swipe-accent-bg);
+  color: var(--ct-swipe-accent-on);
+}
+
+.ct-swipe-row__a11yButton[data-tone='danger'] {
+  background: var(--ct-swipe-danger-bg);
+  color: var(--ct-swipe-danger-on);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ct-swipe-row__front[data-animate='true'] {
+    transition: none;
+  }
+}

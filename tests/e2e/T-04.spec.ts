@@ -93,7 +93,7 @@ test.describe('T-04 — terminer une tâche', () => {
     const title = `Espace ${Date.now()}`;
     await createTask(page, testInfo, title);
 
-    await page.getByRole('button', { name: title }).focus();
+    await page.getByRole('button', { name: title, exact: true }).focus();
     await page.keyboard.press('Space');
 
     await expect(page.getByRole('checkbox', { name: `Rouvrir : ${title}` })).toBeVisible();

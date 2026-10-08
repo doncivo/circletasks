@@ -58,7 +58,7 @@ test.describe('T-06 — report automatique à minuit', () => {
   test('à minuit la tâche non faite passe au 24 avec le badge « reportée », terminer l’efface (critères 1, 3, 4)', async ({ page }, testInfo) => {
     const title = `Rapport ${testInfo.project.name}`;
     await createTask(page, testInfo, title);
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1 })).toContainText('23');
     await expect(page.getByText('reportée')).toHaveCount(0);
 
@@ -66,7 +66,7 @@ test.describe('T-06 — report automatique à minuit', () => {
 
     // Le jour affiché est passé au 24 et la tâche (datée du 23) y figure avec le badge.
     await expect(page.getByRole('heading', { level: 1 })).toContainText('24');
-    const row = page.getByRole('button', { name: title });
+    const row = page.getByRole('button', { name: title, exact: true });
     await expect(row).toBeVisible();
     await expect(page.getByText('reportée')).toBeVisible();
 
@@ -86,12 +86,12 @@ test.describe('T-06 — report automatique à minuit', () => {
 
     await openTasks(page);
     await createTask(page, testInfo, title);
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
 
     await page.clock.fastForward(AFTER_MIDNIGHT_MS);
 
     await expect(page.getByRole('heading', { level: 1 })).toContainText('24');
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByText('reportée')).toHaveCount(0);
     await expect(page.getByText(/en retard/i)).toHaveCount(0);
   });

@@ -141,6 +141,8 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
 
 - **Synchro, version publiée par l'iPhone (revue de Y-IOS, hors lot)** : `src/features/app/bootstrap.ts` (vers la ligne 141) ne lit la version de l'application que sur le PC (`desktop.getVersion()`) ; sur l'iPhone, le service de synchro publie `appVersion: '0.0.0'`. Le PC peut alors annoncer à tort une version plus récente requise (fausse alerte Y-07) ou ne jamais la signaler. À traiter avec I-06 : lire la version par l'API Tauri commune aux deux plateformes, test sur l'iPhone simulé (version publiée égale à celle du paquet).
 
+- **B1 résiduel (audit I-03)** : reculer l'heure après une veille de l'iPhone ; à fermer par `NSSystemClockDidChange` / `significantTimeChangeNotification` dans `privacy-shield` ou `mach_continuous_time`.
+
 ## Livraison
 
 - D-03, critères 10-11 : workflow de release et secrets GitHub (PREP-01).
