@@ -137,8 +137,68 @@ fn d03_10_real_public_key_is_in_place_and_well_formed() {
 #[test]
 fn d01_9_tooltip_and_no_notification_plugin() {
     assert_eq!(circletasks_lib::desktop::TRAY_TOOLTIP, "CircleTasks");
-    assert!(!CARGO.contains("tauri-plugin-notification"));
+    // N-01 (ADR 0012 avenant lot N1) : le plugin existe, mais sous cfg(target_os = "ios") seulement ; le PC n'envoie aucune notification.
+    assert_notification_plugin_is_ios_only();
     assert!(!DESKTOP_SOURCE.contains("tauri_plugin_notification") && !DESKTOP_SOURCE.contains("NotificationExt"));
+}
+
+const IOS_NOTIFICATIONS_CAPABILITY: &str = include_str!("../../capabilities/notifications-ios.json");
+
+/// Chaque déclaration du plugin dans Cargo.toml est épinglée (=2.5.1) et sous la section des dépendances iOS.
+fn assert_notification_plugin_is_ios_only() {
+    let mut section = String::new();
+    let mut found = 0;
+    for line in CARGO.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed.to_owned();
+        }
+        if trimmed.starts_with("tauri-plugin-notification") {
+            found += 1;
+            assert_eq!(section, "[target.'cfg(target_os = \"ios\")'.dependencies]", "plugin hors de la section iOS");
+            assert!(trimmed.contains("\"=2.5.1\""), "version non épinglée : {trimmed}");
+        }
+    }
+    assert_eq!(found, 1, "une seule déclaration du plugin");
+}
+
+/// N-01 (N1.1) : le plugin n'est enregistré dans lib.rs que sous cfg(target_os = "ios"), jamais sous desktop.
+#[test]
+fn n01_notification_plugin_is_registered_for_ios_only() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_notification")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    assert!(!lines.iter().any(|l| l.contains("NotificationExt")));
+}
+
+/// N-01 (N1.1) : liste EXACTE des permissions de la capability iOS ; fenêtre principale, iOS seulement ; aucune autre capability n'accorde notification:.
+#[test]
+fn n01_ios_notifications_capability_grants_exactly_the_eight_permissions() {
+    let capability: Value = serde_json::from_str(IOS_NOTIFICATIONS_CAPABILITY).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    let mut names = permissions_of(IOS_NOTIFICATIONS_CAPABILITY);
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "notification:allow-cancel",
+            "notification:allow-get-pending",
+            "notification:allow-is-permission-granted",
+            "notification:allow-register-action-types",
+            "notification:allow-register-listener",
+            "notification:allow-remove-listener",
+            "notification:allow-request-permission",
+            "notification:allow-show",
+        ]
+    );
+    for forbidden in ["allow-notify", "allow-batch", "allow-get-active", "allow-remove-active", "allow-check-permissions", "allow-permission-state", ":default"] {
+        assert!(!names.iter().any(|name| name.contains(forbidden)), "{forbidden}");
+    }
+    for other in other_capabilities("notifications-ios.json") {
+        assert!(!other.contains("notification:"), "une autre capability accorde notification:");
+    }
 }
 
 /// D-02 critère 2 : l'entrée de démarrage porte l'argument de démarrage réduit.

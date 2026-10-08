@@ -16,15 +16,22 @@ function sourcesOf(dir: string): string[] {
   });
 }
 
-describe('Rappels : aucune notification émise (ordre 1)', () => {
+/** Seul fichier autorisé à nommer le plugin (adaptateur iOS, N-01 ; avenant N1.9) : l'exception ne s'étend à aucun autre. */
+const IOS_ADAPTER = join('platform', 'notifications', 'tauriNotifications.ts');
+
+describe('Rappels : aucune notification émise hors adaptateur iOS (ordre 1, N-01)', () => {
   const src = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const dirs = ['features/reminders', 'features/tasks', 'features/settings', 'domain', 'platform'].map((d) => join(src, d));
 
   it('aucun fichier n’importe un plugin de notification ni n’appelle l’API Notification', () => {
     const files = dirs.flatMap(sourcesOf);
     expect(files.length).toBeGreaterThan(50);
-    for (const file of files) {
-      expect(readFileSync(file, 'utf8'), file).not.toMatch(/plugin-notification|new Notification\(|Notification\.requestPermission|sendNotification|scheduleNotification/);
+    // Jamais supprimé : l'exception porte sur un fichier qui existe, le seul à nommer le plugin.
+    const exempt = files.filter((file) => file.endsWith(IOS_ADAPTER));
+    expect(exempt).toHaveLength(1);
+    expect(readFileSync(exempt[0] as string, 'utf8')).toContain('plugin:notification|');
+    for (const file of files.filter((candidate) => !candidate.endsWith(IOS_ADAPTER))) {
+      expect(readFileSync(file, 'utf8'), file).not.toMatch(/plugin-notification|new Notification\(|Notification\.requestPermission|sendNotification|scheduleNotification|plugin:notification/);
     }
   });
 

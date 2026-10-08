@@ -55,6 +55,9 @@ pub fn run() {
     ]);
     #[cfg(mobile)]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
+    // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_notification::init());
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

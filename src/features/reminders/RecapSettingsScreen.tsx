@@ -8,6 +8,7 @@ import { Button, Icon, Switch, TextField, useLayout } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { settingsStore } from '../settings/settingsStore';
+import { RemindersStatusSection } from './RemindersStatusSection';
 import './RecapSettingsScreen.css';
 
 interface Draft {
@@ -102,6 +103,7 @@ export function RecapSettingsScreen() {
         <Button type="submit" fullWidth>
           {t('reminders.recapSave')}
         </Button>
+        <RemindersStatusSection />
       </form>
     </div>
   );

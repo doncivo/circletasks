@@ -3,6 +3,7 @@ import { goalsEn } from './en.goals';
 import { somedayEn } from './en.someday';
 import { captureEn } from './en.capture';
 import { focusEn } from './en.focus';
+import { notificationsEn, remindersStatusEn } from './en.notifications';
 import { statsEn } from './en.stats';
 import { scanEn } from './en.scan';
 import { searchEn } from './en.search';
@@ -334,7 +335,9 @@ export const en: Messages = {
     coverageDateTime: '{day} at {time}',
     coverageComplete: 'All reminders are scheduled',
     coverageEmpty: 'No reminders to schedule',
+    status: remindersStatusEn,
   },
+  notifications: notificationsEn,
   settings: {
     title: 'Settings',
     sectionGeneral: 'GENERAL',

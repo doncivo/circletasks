@@ -40,6 +40,8 @@ export interface ReminderRepository {
   restoreForTarget(target: ReminderTarget, deletion: ReminderDeletionMark): Promise<Reminder[]>;
   /** Fenêtre glissante (ordre 5) et avertissement N-07 : `from` inclus, `to` exclu. */
   listBetween(from: LocalDateTime, to: LocalDateTime): Promise<Reminder[]>;
+  /** N-01 : tous les rappels vivants (le planificateur recalcule les échéances depuis les cibles, `fire_at` n'est pas lu). */
+  listLive(): Promise<Reminder[]>;
   /** Ordre 5 (iPhone uniquement). */
   markDelivered(id: ReminderId): Promise<Reminder>;
 }

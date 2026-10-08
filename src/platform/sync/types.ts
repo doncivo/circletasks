@@ -402,6 +402,12 @@ export interface SyncDeviceStatus {
   readonly platform: SyncDevicePlatform;
   readonly self: boolean;
   readonly lastReadAt: IsoDateTime | null;
+  /**
+   * N-07 (ADR 0012 avenant N1.6) : instant de la dernière synchro PUBLIÉE par cet appareil (`lastSyncHlc` de son dernier `state.ctx` accepté),
+   * rafraîchi toutes les 30 minutes au plus ; pour les AUTRES appareils seulement, null si inconnu. Sert à l'avertissement du PC (un rappel
+   * proche que l'iPhone n'a peut-être pas encore reçu). Champ facultatif : le format publié ne change pas.
+   */
+  readonly publishedSyncAt?: IsoDateTime | null;
   readonly status: DeviceSyncStatus;
   /** Y-07 : numéro d'application publié par l'appareil (« 1.4.0 »), si connu. Facultatif. */
   readonly appVersion?: string | null;

@@ -53,3 +53,55 @@ test.describe('N-04 — récapitulatifs matin et soir', () => {
     await expect(row(page)).toContainText('Désactivés');
   });
 });
+
+/**
+ * N-04 critères 10, 12, 13 et 14 (complément ordre 5) : récapitulatifs envoyés sur l'iPhone, avec le FAUX planificateur injecté en
+ * développement seulement (`__ctNotificationsFake`). Horloge Playwright : mer. 23 sept. 2026, 09:00 Paris. Projet `iphone`.
+ */
+test.describe('N-04 — récapitulatifs envoyés sur l’iPhone (planificateur injecté)', () => {
+  const NOW = new Date('2026-09-23T09:00:00+02:00');
+  async function openSettings(page: Page): Promise<void> {
+    await openApp(page);
+    await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Réglages' })).toBeVisible();
+  }
+  const row = (page: Page) => page.getByRole('button', { name: /^Récapitulatifs :/ });
+  const recapRequests = (page: Page) =>
+    page.evaluate(() => {
+      const hooks = (window as unknown as { __ctNotifications?: { calls: { type: string; requests?: { id: string; fireAt: string; title: string; kind: string }[] }[] } }).__ctNotifications;
+      const replaces = (hooks?.calls ?? []).filter((call) => call.type === 'replace');
+      return (replaces.at(-1)?.requests ?? []).filter((request) => request.kind === 'recap').map((request) => ({ id: request.id, fireAt: request.fireAt, title: request.title }));
+    });
+
+  test('réglages par défaut : le soir d’aujourd’hui puis matin et soir des jours suivants ; changer l’heure du soir replanifie (critères 10 et 13)', async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Le planificateur injecté représente l’iPhone.');
+    await page.addInitScript(() => {
+      (globalThis as { __ctNotificationsFake?: boolean }).__ctNotificationsFake = true;
+    });
+    await page.clock.install({ time: NOW });
+    await openSettings(page);
+    await expect.poll(async () => (await recapRequests(page)).slice(0, 3).map((request) => request.id)).toEqual(['recap:evening:2026-09-23', 'recap:morning:2026-09-24', 'recap:evening:2026-09-24']);
+    expect((await recapRequests(page)).find((request) => request.id === 'recap:evening:2026-09-23')).toMatchObject({ fireAt: '2026-09-23T21:00', title: 'Tout est fait' });
+    // Critère 12 : espace Pro avec plages 20:00–08:00 par défaut, le récapitulatif du soir reste à 21:00.
+    await row(page).click();
+    await page.getByLabel('Heure du récapitulatif du soir (HH:MM)').fill('22:00');
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect.poll(async () => (await recapRequests(page)).find((request) => request.id === 'recap:evening:2026-09-23')?.fireAt).toBe('2026-09-23T22:00');
+    // Aucun doublon : un seul récapitulatif du soir pour ce jour.
+    expect((await recapRequests(page)).filter((request) => request.id === 'recap:evening:2026-09-23')).toHaveLength(1);
+  });
+
+  test('désactiver le soir : plus aucun récapitulatif du soir envoyé (critère 10)', async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Le planificateur injecté représente l’iPhone.');
+    await page.addInitScript(() => {
+      (globalThis as { __ctNotificationsFake?: boolean }).__ctNotificationsFake = true;
+    });
+    await page.clock.install({ time: NOW });
+    await openSettings(page);
+    await row(page).click();
+    await page.getByRole('switch', { name: 'Récapitulatif du soir' }).click();
+    await page.getByRole('button', { name: 'Enregistrer' }).click();
+    await expect.poll(async () => (await recapRequests(page)).some((request) => request.id.startsWith('recap:evening'))).toBe(false);
+    expect((await recapRequests(page)).length).toBeGreaterThan(0);
+  });
+});

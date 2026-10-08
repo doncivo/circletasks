@@ -77,6 +77,13 @@ export interface SettingsValues {
   'focus.windowPosition': { readonly x: number; readonly y: number } | null;
   /** ADR 0005 : identifiant de cet appareil, créé au premier lancement. */
   'device.id': DeviceId | null;
+  /**
+   * N-01 (ADR 0012 avenant N1.2) : registre local des notifications planifiées sur cet iPhone (identifiants, instants, empreintes, aucun
+   * titre). Valeur BRUTE : lue par `parseNotificationLedger` (une valeur illisible fait tout replanifier une fois) ; jamais synchronisée.
+   */
+  'notifications.ledger': unknown;
+  /** N-01 (avenant N1.3) : état persistant des rappels (autorisation, dernière planification, échecs). Valeur BRUTE lue par `parseNotificationStatus` ; locale. */
+  'notifications.status': unknown;
 }
 
 export type SettingKey = keyof SettingsValues;
@@ -116,6 +123,8 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'focus.endSound': { scope: 'local', defaultValue: true },
   'focus.windowPosition': { scope: 'local', defaultValue: null },
   'device.id': { scope: 'local', defaultValue: null },
+  'notifications.ledger': { scope: 'local', defaultValue: null },
+  'notifications.status': { scope: 'local', defaultValue: null },
 };
 
 /** Valeur par défaut d'un réglage. */

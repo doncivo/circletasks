@@ -31,7 +31,7 @@ export interface FakeNotificationScheduler extends NotificationScheduler {
 }
 
 const same = (a: NotificationRequest, b: NotificationRequest): boolean =>
-  a.fireAt === b.fireAt && a.title === b.title && a.body === b.body && a.kind === b.kind;
+  a.fireAt === b.fireAt && a.title === b.title && a.body === b.body && a.kind === b.kind && a.category === b.category;
 
 export function createFakeNotificationScheduler(): FakeNotificationScheduler {
   const calls: FakeNotificationCall[] = [];
@@ -101,5 +101,6 @@ export function createFakeNotificationScheduler(): FakeNotificationScheduler {
       return Promise.resolve();
     },
     pending: () => Promise.resolve(sortRequests(plan.values())),
+    reservedCount: () => Promise.resolve(outsidePlan),
   };
 }

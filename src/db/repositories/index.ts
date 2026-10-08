@@ -6,6 +6,7 @@
  */
 export * from './common';
 export * from './dataAccess';
+export * from './observeWrites';
 export type * from './spaceRepository';
 export type * from './taskRepository';
 export type * from './routineRepository';

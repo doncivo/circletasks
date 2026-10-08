@@ -3,6 +3,7 @@ import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
 import { captureFr } from './fr.capture';
 import { focusFr } from './fr.focus';
+import { notificationsFr, remindersStatusFr } from './fr.notifications';
 import { statsFr } from './fr.stats';
 import { scanFr } from './fr.scan';
 import { searchFr } from './fr.search';
@@ -339,7 +340,9 @@ export const fr = {
     coverageDateTime: '{day} à {time}',
     coverageComplete: 'Tous les rappels sont planifiés',
     coverageEmpty: 'Aucun rappel à planifier',
+    status: remindersStatusFr,
   },
+  notifications: notificationsFr,
   settings: {
     title: 'Réglages',
     sectionGeneral: 'GÉNÉRAL',

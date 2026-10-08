@@ -164,6 +164,11 @@ export function createReminderRepository(db: SqlExecutor, stamper: WriteStamper)
       return rows.map(rowToReminder);
     },
 
+    async listLive() {
+      const rows = await db.select<ReminderRow>('SELECT * FROM reminder WHERE deleted_at IS NULL ORDER BY id');
+      return rows.map(rowToReminder);
+    },
+
     async markDelivered(id: ReminderId) {
       const stamp = stamper.next();
       await db.execute(

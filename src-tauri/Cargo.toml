@@ -66,6 +66,10 @@ keyring = { version = "3", default-features = false, features = ["apple-native"]
 # Clé de synchro au Trousseau avec kSecAttrAccessibleWhenUnlockedThisDeviceOnly et non synchronisée (ADR 0011 section 2.2, vault_ios.rs) :
 # keyring ne règle pas ces attributs. Même version que celle déjà tirée par keyring.
 security-framework = { version = "3", default-features = false }
+# Rappels (N-01, ADR 0012 avenant lot N1 section N1.1) : notifications locales iOS seulement, version ÉPINGLÉE (les constats 7 à 12 de
+# l'avenant lisent son code Swift ; toute montée exige une relecture et un avenant). Jamais sous cfg(desktop) : le PC n'envoie aucune
+# notification de rappel (consistency.test.ts, tests/desktop/config.rs et l'étape « Plugins iOS » de build-ios.yml le vérifient).
+tauri-plugin-notification = "=2.5.1"
 
 # Plugins PC uniquement (absents du build iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
