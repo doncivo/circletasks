@@ -1,4 +1,5 @@
 import { systemClock, type Clock } from '../domain/clock';
+import { describeError } from './errorText';
 import type { MigrateOptions } from './migrator';
 
 /**
@@ -45,7 +46,7 @@ export function createBackupBeforeMigration(
     try {
       await port.backup({ fromVersion: info.fromVersion, toVersion: last.version, stamp: backupStamp(clock) });
     } catch (error) {
-      throw new MigrationBackupError(`Sauvegarde avant migration impossible : ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+      throw new MigrationBackupError(`Sauvegarde avant migration impossible : ${describeError(error)}`, { cause: error });
     }
   };
 }

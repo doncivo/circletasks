@@ -44,7 +44,16 @@ export interface MigrateOptions {
    * déjà appliquées le restent (chacune dans sa transaction).
    */
   readonly afterApply?: (db: SqlDriver, report: MigrateReport) => Promise<void>;
+  /** Étape en cours (diagnostic d'ouverture affiché sous app.dbError) : appelé avant chaque étape. */
+  readonly onStep?: (step: MigrateStep) => void;
 }
+
+/** Étapes de `migrate()`, dans l'ordre : lecture du schéma, sauvegarde, chaque migration, crochet final. */
+export type MigrateStep =
+  | { readonly kind: 'schema' }
+  | { readonly kind: 'backup' }
+  | { readonly kind: 'migration'; readonly version: number }
+  | { readonly kind: 'afterApply' };
 
 export interface MigrateReport {
   readonly applied: readonly number[];
@@ -116,7 +125,9 @@ export async function migrate(
 ): Promise<MigrateReport> {
   validateMigrations(migrations);
   const clock = options.clock ?? systemClock;
+  const onStep = options.onStep ?? (() => undefined);
 
+  onStep({ kind: 'schema' });
   await ensureMigrationsTable(db);
   const applied = await readAppliedMigrations(db);
   const known = new Map(migrations.map((m) => [m.version, m]));
@@ -133,9 +144,13 @@ export async function migrate(
 
   const done = new Set(applied.map((row) => row.version));
   const pending = migrations.filter((m) => !done.has(m.version));
-  if (pending.length > 0 && options.beforeApply) await options.beforeApply(pending, { fromVersion: applied.at(-1)?.version ?? 0 });
+  if (pending.length > 0 && options.beforeApply) {
+    onStep({ kind: 'backup' });
+    await options.beforeApply(pending, { fromVersion: applied.at(-1)?.version ?? 0 });
+  }
 
   for (const migration of pending) {
+    onStep({ kind: 'migration', version: migration.version });
     await db.transaction(async (tx) => {
       for (const statement of migration.statements) await tx.execute(statement);
       await tx.execute(
@@ -150,6 +165,9 @@ export async function migrate(
     applied: pending.map((m) => m.version),
     currentVersion: last ? last.version : 0,
   };
-  if (options.afterApply) await options.afterApply(db, report);
+  if (options.afterApply) {
+    onStep({ kind: 'afterApply' });
+    await options.afterApply(db, report);
+  }
   return report;
 }
