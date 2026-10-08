@@ -95,7 +95,11 @@ pub fn keychain_get(ops: &dyn KeychainOps, account: &str) -> Result<Option<Strin
         return Err(VaultError::Unavailable);
     }
     match ops.copy(account) {
-        Ok(bytes) => String::from_utf8(bytes).map(Some).map_err(|_| VaultError::Unavailable),
+        // Revue (audit) : octets effacés sur tous les chemins, y compris quand ils ne sont pas de l'UTF-8.
+        Ok(bytes) => {
+            let bytes = Zeroizing::new(bytes);
+            std::str::from_utf8(&bytes).map(|text| Some(text.to_owned())).map_err(|_| VaultError::Unavailable)
+        }
         Err(code) => read_outcome(code).map(|_| None),
     }
 }

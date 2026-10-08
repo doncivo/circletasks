@@ -427,3 +427,15 @@ fn y_ios_02_barcode_scanner_is_pinned_like_the_npm_package() {
     let package = include_str!("../../../package.json");
     assert!(package.contains("\"@tauri-apps/plugin-barcode-scanner\": \"~2.5.1\""));
 }
+
+/// Revue (audit, bas) : les octets lus du trousseau sont effacés de la mémoire même quand ils ne sont pas de l'UTF-8 (l'erreur de
+/// `String::from_utf8` les rendrait sans effacement).
+#[test]
+fn y_ios_02_keychain_bytes_are_zeroized_on_every_path() {
+    let ios = include_str!("../../src/vault_ios.rs");
+    let body = &ios[ios.find("pub fn keychain_get(").unwrap()..];
+    let body = &body[..body.find("\n}\n").unwrap()];
+    assert!(body.contains("Zeroizing::new(bytes)"), "octets enveloppés avant la conversion");
+    assert!(body.contains("std::str::from_utf8(&bytes)"), "conversion par emprunt, jamais par valeur");
+    assert!(!body.contains("String::from_utf8(bytes)"));
+}
