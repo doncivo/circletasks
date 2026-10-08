@@ -220,21 +220,21 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
 /// en développement seulement ; les tests le capturent par `take_log`.
 pub mod log {
     //! En production, aucun journal n'est gardé : un événement n'est ni écrit ni conservé (pas de tampon inutilisé, revue B5). En
-    //! développement et dans les tests (`debug_assertions`), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par
+    //! développement et dans les tests (`debug_assertions`, ou fonctionnalité `test-hooks` y compris en release), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par
     //! `capture()` : une capture voit les événements de **tous** les fils (fils de `spawn_blocking`, hydratation), sans plafond, et
     //! seulement pendant sa durée de vie ; deux tests parallèles ont chacun la leur.
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     use std::sync::{Arc, Mutex};
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     type Sink = Arc<Mutex<Vec<String>>>;
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     static SINKS: Mutex<Vec<Sink>> = Mutex::new(Vec::new());
 
     /// `event` : identifiant fixe (`folder-ignored`, `pin-failed`…) ; `detail` : nom strict, code, compteur ou identifiant d'appareil.
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     pub fn event(event: &'static str, detail: &str) {
         let line = format!("sync:{event} {detail}");
         eprintln!("{line}");
@@ -246,15 +246,15 @@ pub mod log {
         }
     }
 
-    #[cfg(not(debug_assertions))]
+    #[cfg(not(any(debug_assertions, feature = "test-hooks")))]
     #[inline]
     pub fn event(_event: &'static str, _detail: &str) {}
 
     /// Capture des événements de tous les fils jusqu'à sa destruction (tests de développement seulement).
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     pub struct Capture(Sink);
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     impl Capture {
         /// Lignes reçues depuis l'ouverture de la capture.
         pub fn lines(&self) -> Vec<String> {
@@ -262,7 +262,7 @@ pub mod log {
         }
     }
 
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     impl Drop for Capture {
         fn drop(&mut self) {
             if let Ok(mut sinks) = SINKS.lock() {
@@ -272,7 +272,7 @@ pub mod log {
     }
 
     /// Ouvre une capture (voir le module).
-    #[cfg(debug_assertions)]
+    #[cfg(any(debug_assertions, feature = "test-hooks"))]
     pub fn capture() -> Capture {
         let sink: Sink = Arc::new(Mutex::new(Vec::new()));
         if let Ok(mut sinks) = SINKS.lock() {
