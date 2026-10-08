@@ -124,6 +124,9 @@ Sources : fiches FILES-IOS-01, I-04, P-04-iOS, CAP-IOS-01, I-05. Les critères u
 - [ ] I-05 A2 : **caméra du scan de tâches refusée**, « Prendre une photo » : noter ce que voit l'utilisateur ; si le refus ressemble à une annulation, ouvrir un avenant.
 - [ ] I-05 A3 à A5 : micro refusé puis rétabli (message persistant puis disparu sans relancer l'app), reconnaissance vocale refusée seule, relecture des textes d'usage et d'explication en français, VoiceOver sur la feuille d'explication.
 - [ ] Écart 5 de l'ADR 0015 (à valider par Ali ; l'écart 4 est tranché : texte de la fiche conservé) : retour des Réglages possiblement par lancement à froid (I-05 critère 4, A3).
+- [ ] CAP-IOS-01 (à confirmer sur l'appareil, revue) : **dictée en mode avion** avec le modèle français installé : `SFSpeechRecognizer.isAvailable` peut être faux hors ligne ; le plugin ne le teste plus (seul `supportsOnDeviceRecognition` décide) ; vérifier que l'écoute démarre et que rien ne part sur le réseau.
+- [ ] CAP-IOS-01 A1 (revue) : **seuil de confiance de 60** : sur les photos de test, noter les confiances rendues par Vision (paliers ?) et vérifier que le seuil décoche les bonnes lignes ; ajuster sinon.
+- [ ] CAP-IOS-01 (audit) : après lecture d'une photo, aucun fichier `WKFileUpload*` ne reste dans le dossier temporaire de l'app (Fichiers, sauvegarde de l'appareil).
 - [ ] Contrat Info.plist de l'IPA de la phase 3 : cinq descriptions d'usage présentes et en français (caméra, micro, reconnaissance vocale, Rappels, Face ID) ; aucune clé en trop (localisation, photothèque, contacts, suivi, arrière-plan).
 - [ ] Règle d'Ali : parcourir les états d'échec créés par la phase 3 (journal non écrit, enregistrement de fichier refusé, marqueur de restauration non écrit, sauvegarde échouée, micro ou reconnaissance refusés, Vision en échec) : chacun est visible dans Réglages, la fiche ou un bandeau et disparaît à la résolution.
 
