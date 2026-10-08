@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { compareCodeUnits } from '../../domain/compareCodeUnits';
+import { ACTION_TYPE_ID } from '../../domain/notificationActions';
 import type { LedgerEntry, NotificationLedgerV1 } from '../../domain/notificationLedger';
 import { fireAtInstant, fireAtInstantLocal, localDateTimeAt, pluginDate } from '../../domain/notificationInstant';
 import { fnv1a32, NUMERIC_ID_MAX, NUMERIC_ID_MIN, notificationNumericId } from '../../domain/notificationId';
@@ -147,7 +148,7 @@ export function assignPlanIds(stableIds: readonly string[], preferred: ReadonlyM
   return out;
 }
 
-const ACTION_TYPE: Readonly<Record<NotificationCategory, string>> = { task: 'ct.task', routine: 'ct.routine', event: 'ct.event' };
+const ACTION_TYPE: Readonly<Record<NotificationCategory, string>> = ACTION_TYPE_ID;
 
 interface PlannedSend {
   readonly request: NotificationRequest;

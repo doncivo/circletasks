@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NotificationSchedulerError } from '../../platform/notifications';
+import { createFakeNotificationActionSource, NotificationSchedulerError } from '../../platform/notifications';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { useAppStatusStore } from '../app/appStatus';
@@ -134,6 +134,31 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     });
     expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les rappels n’ont pas pu être planifiés (+1)');
     expect(screen.getByText(/La notification de fin de session n’a pas pu être planifiée/)).toBeInTheDocument();
+  });
+
+  it('N-03 critère 8 : action non appliquée : bandeau persistant, détail et « Ignorer » dans Réglages ; le geste efface les deux', async () => {
+    const source = createFakeNotificationActionSource();
+    await open({ parts: { notificationActions: source } }, async (harness) => {
+      source.push({ numericId: 99_999, actionId: 'done', receivedAtMs: harness.db.clock.nowMs(), sid: null, deliveredAt: null });
+      await replanNotifications(harness.container, 'open');
+    });
+    const bannerElement = document.querySelector('.ct-status-banner') as HTMLElement;
+    expect(bannerElement).toHaveTextContent('Une action de notification n’a pas pu être appliquée');
+    expect(screen.getByText('Actions en attente d’application : 1 (nouvel essai à chaque ouverture)')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Ignorer les actions de notification en échec' }));
+    await waitFor(() => expect(document.querySelector('.ct-status-banner')).toBeNull());
+    expect(screen.queryByText(/Actions en attente d’application/)).toBeNull();
+  });
+
+  it('N-03 : plugin d’actions en panne (délégué repris) : ligne dédiée dans Réglages et bandeau, sans bouton « Ignorer »', async () => {
+    const source = createFakeNotificationActionSource();
+    source.setDelegate(false);
+    await open({ parts: { notificationActions: source } }, async (harness) => {
+      await replanNotifications(harness.container, 'open');
+    });
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Les boutons « Fait » et « +15 min » des notifications ne sont pas disponibles');
+    expect(screen.getByText(/Le plugin n’est plus le gestionnaire des notifications/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Ignorer les actions de notification en échec' })).toBeNull();
   });
 
   it('critère 13 : PC : « Les rappels sont envoyés par l’iPhone », aucun bandeau d’échec, aucun appel de planification', async () => {

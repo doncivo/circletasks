@@ -55,7 +55,12 @@ Sources : fiches N-01, N-03, N-05, N-06, N-07, compléments de F-04 et N-04. Rie
 - [ ] N-05 A4 et A5 : app non ouverte plusieurs jours (plafond, « planifiés jusqu'au »), réinstallation après expiration des 7 jours.
 - [ ] N-06 A1 à A3 : changement de fuseau avec réouverture ; **sans réouverture, noter si la notification sonne à l'ancien instant** (décide l'option de l'ADR 0012) ; heure d'été.
 - [ ] N-07 A1 à A3 : tâche créée sur le PC, sonne sur l'iPhone, rien sur le PC ; avertissement PC (rappel à moins de 2 h, iPhone ancien) sans fausse alerte ; récapitulatif du lendemain en texte générique puis réel.
-- [ ] **N-03 A2 (bloquant pour la clôture de N-03)** : notification planifiée, app tuée, appui sur « Fait » puis « +15 min » : l'app ne s'arrête pas (constat 6 de l'ADR 0012) ; idem après redémarrage et après mise à jour SideStore. Résultat noté dans l'ADR 0012.
+- [ ] **N-03 A2 étendu (bloquant pour la clôture de N-03 ; plugin Swift `notification-actions`, décision d'Ali du 2026-10-08)**, notification planifiée à +2 min, app tuée par balayage, quatre essais :
+  - [ ] (a) **action à froid** : « Fait » sur une notification, « +15 min » sur une autre : l'app s'ouvre sans s'arrêter, la première tâche est terminée (message « Annuler »), la seconde garde son heure et sa répétition sonne 15 min plus tard ; aucun bandeau ;
+  - [ ] (b) **appui simple app tuée** (sur le corps de la notification, sans bouton) : l'app s'ouvre sans s'arrêter, rien n'est appliqué, aucun bandeau ;
+  - [ ] (c) **réception app ouverte après relance** : app tuée, relancée par l'icône, puis notification reçue avant toute modification (bannière, son, boutons visibles) ; appui dessus : l'app ne s'arrête pas (cas qui plantait avec le plugin officiel) ;
+  - [ ] (d) (a) à (c) répétés **après redémarrage de l'iPhone** et **après mise à jour par SideStore** ;
+  - [ ] Réglages > Rappels : aucune ligne d'erreur d'action ; relever tout bandeau vu et l'heure ; résultat noté dans l'ADR 0012 (avenant N-03, N3.9). Si une action à froid est perdue sans bandeau (délégué posé trop tard après `didFinishLaunching`), nouvel avenant.
 - [ ] N-03 A1, A4, A5 : « Fait » en premier plan, « +15 min » (sonne 15 min plus tard, tâche inchangée, rien reçu par le PC), « Fait » sur routine valide la bonne date.
 - [ ] F-04 (complément) : fin de session app fermée, une seule notification après pause et reprise, une seule alerte app ouverte, sonne pendant une plage silencieuse Pro, bandeau si l'autorisation est refusée.
 - [ ] N-04 (complément) : récapitulatif du soir à l'heure avec le contenu du jour ; changement d'heure dans Réglages sans ancienne notification.
@@ -100,7 +105,7 @@ Objectif : valider en une séance courte que la chaîne tient, avant d'empiler l
 3. [ ] Choisir le dossier `iCloud Drive/CircleTasks` avec le sélecteur ; redémarrer l'app, le dossier est retenu.
 4. [ ] Scanner le QR affiché sur le PC (caméra expliquée) ; la tâche du PC apparaît sur l'iPhone.
 5. [ ] Créer une tâche à +3 minutes avec « À l'heure » ; verrouiller l'écran ; la notification sonne ≤ 60 s après l'heure.
-6. [ ] Appuyer sur « +15 min » puis « Fait » (app ouverte, puis app tuée : N-03 A2) ; la tâche reste intacte après « +15 min ».
+6. [ ] Appuyer sur « +15 min » puis « Fait » (app ouverte, puis app tuée : N-03 A2 étendu) ; la tâche reste intacte après « +15 min ».
 7. [ ] Réglages > Rappels affiche « Planifiés jusqu'au… » ; Réglages > Synchronisation affiche « Dernière synchro ».
 8. [ ] Noter tout bandeau d'erreur vu, avec l'heure ; noter la durée totale (cible : 15 minutes hors installation de SideStore).
 

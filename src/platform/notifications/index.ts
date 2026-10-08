@@ -1,11 +1,15 @@
 import type { OsFamily, Runtime } from '../runtime';
+import { NotificationActionSourceError, type NotificationActionSource } from './actions';
 import { createFakeNotificationScheduler, type FakeNotificationScheduler } from './fake';
+import { createFakeNotificationActionSource, type FakeNotificationActionSource } from './fakeActions';
 import type { NotificationClock } from './notificationClock';
 import type { LedgerStore } from './notificationLedger';
 import { NotificationSchedulerError, type NotificationScheduler } from './types';
 import { createUnavailableNotificationScheduler } from './unavailable';
 
 export * from './types';
+export * from './actions';
+export { createFakeNotificationActionSource, type FakeNotificationActionSource } from './fakeActions';
 export { createFakeNotificationScheduler, type FakeNotificationCall, type FakeNotificationScheduler } from './fake';
 export { createUnavailableNotificationScheduler } from './unavailable';
 export { sortRequests, validateRequests } from './validate';
@@ -61,5 +65,43 @@ function createLazyScheduler(load: () => Promise<NotificationScheduler>): Notifi
     cancelAll: () => real().then((scheduler) => scheduler.cancelAll(), unavailable),
     pending: () => real().then((scheduler) => scheduler.pending(), unavailable),
     reservedCount: () => real().then((scheduler) => scheduler.reservedCount(), unavailable),
+  };
+}
+
+/**
+ * Source des actions de notification (N-03, avenant N3.2) : le plugin Swift pour (`tauri`, `ios`) seulement, chargé à la demande ; `null`
+ * partout ailleurs (le PC n'a ni notification ni action). En développement seulement, un test de bout en bout peut poser
+ * `globalThis.__ctNotificationActions` (source injectée) ou `globalThis.__ctNotificationActionsFake = true` (le faux testé, exposé
+ * ensuite en `globalThis.__ctNotificationActions`), avant le chargement de la page.
+ */
+export function openNotificationActionSource(runtime: Runtime, os: OsFamily): NotificationActionSource | null {
+  if (import.meta.env.DEV) {
+    const scope = globalThis as { __ctNotificationActions?: NotificationActionSource | FakeNotificationActionSource; __ctNotificationActionsFake?: boolean };
+    if (!scope.__ctNotificationActions && scope.__ctNotificationActionsFake === true) scope.__ctNotificationActions = createFakeNotificationActionSource();
+    if (scope.__ctNotificationActions) return scope.__ctNotificationActions;
+  }
+  if (runtime === 'tauri' && os === 'ios') return createLazyActionSource();
+  return null;
+}
+
+/** Charge l'adaptateur à la première utilisation ; un chargement impossible rejette `unavailable` (visible), jamais un silence. */
+function createLazyActionSource(): NotificationActionSource {
+  let loaded: Promise<NotificationActionSource> | null = null;
+  const real = (): Promise<NotificationActionSource> => {
+    loaded ??= import('./tauriNotificationActions').then(
+      (module) => module.createTauriNotificationActionSource(),
+      () => {
+        loaded = null;
+        throw new NotificationActionSourceError('unavailable');
+      },
+    );
+    return loaded;
+  };
+  return {
+    registerActionTypes: (types) => real().then((source) => source.registerActionTypes(types)),
+    drain: () => real().then((source) => source.drain()),
+    ack: (done) => real().then((source) => source.ack(done)),
+    status: () => real().then((source) => source.status()),
+    onWake: (listener) => real().then((source) => source.onWake(listener)),
   };
 }

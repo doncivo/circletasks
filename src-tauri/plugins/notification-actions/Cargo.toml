@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-notification-actions"
+version = "0.1.0"
+description = "CircleTasks : actions « Fait » et « +15 min » des notifications sur iPhone (ADR 0012 avenant N-03). Délégué des notifications, catégories, fichier durable des actions reçues."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Exigé par tauri-plugin (nom identique au paquet) : le plugin Swift est lié par le script de compilation.
+links = "tauri-plugin-notification-actions"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

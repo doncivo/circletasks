@@ -16,6 +16,8 @@ export interface ReminderDeletionMark {
 }
 
 export interface ReminderRepository {
+  /** N-03 : un rappel par identifiant, SUPPRIMÉ COMPRIS (une action de notification peut viser un rappel retiré depuis) ; null s'il n'existe pas. */
+  getById(id: ReminderId): Promise<Reminder | null>;
   /** Rappels d'un élément, triés par `fire_at`. */
   listForTarget(target: ReminderTarget): Promise<Reminder[]>;
   /**

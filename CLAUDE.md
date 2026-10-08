@@ -28,3 +28,12 @@ npm run dev | npm run tauri dev | npm run test | npm run lint | npm run typechec
 
 ## Délégation
 Toujours passer par product-owner pour choisir la story, puis l'agent du module, puis qa-test et code-reviewer.
+
+## Méthode (depuis le 2026-10-08)
+- Suite complète dans la CI, plus en local : unitaires, Rust, e2e pc et iphone, perf et bundle sur des runners parallèles
+  (.github/workflows/suite.yml ou tests.yml), à chaque push de branche de lot. En local : seulement les tests du module en cours.
+- Une fusion dans main attend la CI verte sur la branche (statut « suite verte »), jamais une suite locale.
+- Pendant qu'un lot est en QA ou en revue, le développement du lot suivant démarre s'il ne touche pas les mêmes dossiers.
+- Une seule compilation iPhone (build-ios.yml) par lot terminé, pas une par essai.
+- Inchangé : pas de « fait » sans tests verts, lint, typage et revue approuvée ; jamais de test désactivé ou allongé ;
+  aucun échec silencieux.

@@ -46,6 +46,7 @@ describe('parseNotificationStatus (N-01 critère 12)', () => {
     focusEndFailure: { at: '2026-10-08T10:00:00.000Z', sessionId: 's', reason: 'permission-denied' },
     zoneChange: { at: '2026-10-08T10:00:00.000Z', from: 'Europe/Paris', to: 'America/New_York' },
     ledgerRebuiltAt: '2026-10-08T10:00:00.000Z',
+    actionsFailure: { at: '2026-10-08T10:00:00.000Z', reason: 'delegate-lost' },
   };
 
   it('jamais écrit : état vide valide', () => {
@@ -58,8 +59,17 @@ describe('parseNotificationStatus (N-01 critère 12)', () => {
     expect(parseNotificationStatus(valid)).toEqual({ state: 'valid', status: valid });
   });
 
+  it('un état écrit avant N-03 (sans actionsFailure) reste lisible : champ nul', () => {
+    const { actionsFailure: _omitted, ...older } = valid;
+    const read = parseNotificationStatus(older);
+    expect(read.state).toBe('valid');
+    if (read.state === 'valid') expect(read.status.actionsFailure).toBeNull();
+  });
+
   it.each([
     ['version', { ...valid, v: 9 }],
+    ['panne des actions inconnue', { ...valid, actionsFailure: { at: '2026-10-08T10:00:00.000Z', reason: 'bizarre' } }],
+    ['panne des actions sans date', { ...valid, actionsFailure: { at: 'x', reason: 'delegate-lost' } }],
     ['autorisation', { ...valid, permission: 'peut-être' }],
     ['code d’échec inconnu', { ...valid, planFailure: { ...valid.planFailure, reason: 'bizarre' } }],
     ['couverture fausse', { ...valid, lastSuccess: { ...valid.lastSuccess, coverage: { state: 'until', until: 'demain' } } }],

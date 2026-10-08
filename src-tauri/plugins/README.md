@@ -1,7 +1,7 @@
 # Plugins Swift iOS
 
 Emplacement réservé aux plugins Tauri iOS écrits en Swift (PRD 11.4) :
-`vision` (OCR), `speech`, `folder-bookmark` (signet iCloud Drive), `reminders` (EventKit),
+`vision` (OCR), `speech`, `folder-bookmark` (signet iCloud Drive), `notification-actions` (actions des notifications), `reminders` (EventKit),
 `web-auth` (ASWebAuthenticationSession, connexion Google, ADR 0008).
 
 Chaque plugin est un crate Tauri avec son dossier `ios/` ; son contrat (commandes,
@@ -17,6 +17,8 @@ clé manque ou si une description d'usage est vide.
 Livrés : `folder-bookmark` (Y-IOS-01, ADR 0011 §22) : aucune commande exposée à la WebView, Rust seul l'appelle
 (`FolderBookmark::call`) ; contrat dans `tests/fixtures/sync/folder-bookmark-contract.json`, contrôlé statiquement contre le Swift et
 `src-tauri/src/sync/bookmark.rs`, et joué par le faux du plugin (`src-tauri/tests/desktop/support/fake_bookmark.rs`).
+
+`notification-actions` (N-03, ADR 0012 avenant N-03) : prend la place du délégué `UNUserNotificationCenterDelegate` du plugin officiel `tauri-plugin-notification` (envoi, annulation, lecture des en attente restent à ce dernier), enregistre les catégories « Fait » / « +15 min » et écrit chaque action reçue dans `Library/Application Support/ct-notification-actions/queue.jsonl`. Commandes `drain`, `ack`, `status`, `register_action_types` (+ écoute de l'événement `action`) appelées par la WebView, transmises à Swift par Tauri (aucune commande Rust) ; contrôlé statiquement par `src-tauri/tests/desktop/notification_actions.rs`, adaptateur TS unique `src/platform/notifications/tauriNotificationActions.ts`. Aucune clé Info.plist.
 
 Lot M (ADR 0013 et son avenant I-03) :
 - `haptics` (A-07, §1.1) : crate `tauri-plugin-ct-haptics`, **`links = "tauri-plugin-haptics"`** (le préfixe des permissions vient de `links`), trois

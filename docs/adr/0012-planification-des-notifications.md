@@ -1,7 +1,7 @@
 # ADR 0012 — Planification des notifications : planificateur pur et `NotificationScheduler`
 
 - Statut : accepté (contrat ; implémentation par l'agent notifications, story N-TECH-01, puis N-01)
-- Date : 2026-10-07
+- Date : 2026-10-07 (avenants du 2026-10-08 : lot N1, N-03)
 - Stories : N-TECH-01 (lot N0) ; prépare N-01, N-03, N-05, N-06, N-07, I-02 et l'envoi réel de F-04 et N-04 (lot N1)
 - Complète : ADR 0001 (couches), 0004 (modèle `reminder`, avenants R-05 et E-01), 0005 (heure locale flottante), 0007 (build iOS sans Mac). Décisions du 2026-10-07 (« Ordre 5 ») dans `docs/decisions.md`
 
@@ -365,6 +365,107 @@ Avec deux appareils (PC et iPhone, cas du PRD) le cas de `docs/dettes.md` (lot Y
 7. N-03 point 3 : le fichier d'actions du repli est lu par les commandes Swift `drain` / `ack`, pas par Rust ; le plugin de repli doit **remplacer le délégué** (constat 11) et couvre aussi l'appui simple de N-01 ; la checklist doit ajouter les cas (a), (d), (e) de N1.4.
 8. Contrat N-TECH-01 complété : `kind: 'snooze'`, `category`, `reservedCount()`, raison `ledger-failed`.
 9. Décision du 2026-10-07 (plugin maison sur constat) : la lecture du code prévoit l'échec (constats 9, 10, 12) ; à Ali de dire s'il valide le repli dès maintenant pour éviter un cycle CI et un passage sur l'appareil.
+
+## Avenant N-03 (2026-10-08) — plugin Swift `notification-actions`, file d'actions, « +15 min »
+
+- Statut : accepté (décision d'Ali du 2026-10-08, option A : le repli de N1.4 est appliqué dès maintenant, sans essai préalable du plugin officiel)
+- Story : N-03 ; complète N1.4 (qui reste la référence pour le reste) et N1.2 (envoi). Aucune contradiction de fond avec l'avenant N1 ; trois précisions : (1) le port `NotificationActionSource` est tiré (`drain`/`ack`) et non poussé (`start(onAction)`), parce que le fichier est la source de vérité ; (2) l'enregistrement des catégories passe par le plugin maison, les permissions `notification:allow-register-action-types`, `allow-register-listener` et `allow-remove-listener` du plugin officiel sont retirées (N3.7) ; (3) `receivedAt` de la file est un entier en ms UTC (pas une chaîne ISO), comme `at` du registre.
+
+### N3.1 Rôles et cohabitation avec `tauri-plugin-notification` (=2.5.1)
+
+| Rôle | Porteur |
+| --- | --- |
+| Envoi (`show`), annulation (`cancel`), lecture des en attente (`get_pending`), autorisation | plugin officiel, inchangé (N1.2) |
+| Délégué `UNUserNotificationCenterDelegate`, catégories et actions, réception des réponses, fichier d'actions | plugin maison `notification-actions` |
+
+- Un seul délégué existe (constat 11) : le plugin maison **prend la place** du délégué du plugin officiel. Il est enregistré **après** lui dans `lib.rs` (son `init` Swift s'exécute donc en second) et réaffirme le délégué à chaque `didBecomeActive` ; `status().delegate` dit si `UNUserNotificationCenter.current().delegate` est bien le sien. Le `NotificationManager` officiel ne reçoit plus rien : `willPresent`, `didReceive` et `getActive` du plugin officiel (constat 9, dépliage forcé de `notificationsMap`) ne sont **plus jamais atteints**, quel que soit le processus qui a planifié. La « réaffirmation par processus » de N1.2 est conservée sans changement (défense en profondeur si le délégué venait à être repris) ; elle pourra être retirée par un avenant après A2.
+- Le contenu envoyé par `show` est inchangé : `actionTypeId` (`ct.task`, `ct.routine`, `ct.event`) devient la `categoryIdentifier` de la notification, et `extra` (`sid`, `at`) arrive dans `userInfo["__EXTRA__"]` (code Swift officiel relu). Les catégories sont globales au centre de notifications : le plugin maison est le **seul** à appeler `setNotificationCategories` (un second appel remplace l'ensemble).
+- Le PC n'a ni le crate ni la capability : mêmes preuves que N1.1 (crate sous `cfg(target_os = "ios")`, enregistrement sous le même `cfg`, `platforms: ["iOS"]`, `cargo tree` en CI). `src/platform/notifications/tauriNotificationActions.ts` est le **seul** fichier de `src` qui nomme `plugin:notification-actions|`.
+
+### N3.2 Contrat du plugin
+
+Crate `src-tauri/plugins/notification-actions` (modèle : folder-bookmark ; `links = "tauri-plugin-notification-actions"`). `build.rs` : `COMMANDS = [drain, ack, status, register_action_types, register_listener, remove_listener]`. Le crate ne déclare **aucune** commande Rust : sur mobile, Tauri transmet à Swift (`lowerCamelCase`) toute commande de plugin sans gestionnaire Rust (tauri 2.12.1, `webview/mod.rs`, comme le plugin officiel pour `show`) ; les permissions générées sont `notification-actions:allow-<commande>`. Rejet Swift = code seul (`invoke.reject(code, code: code)`) : `bad-args` ou `io`. Aucun texte d'interface en Swift : les titres des actions viennent du JS (`src/i18n`).
+
+| Commande | Entrée | Sortie |
+| --- | --- | --- |
+| `registerActionTypes` | `{ types: [{ id, actions: [{ id, title, foreground }] }] }` | `{ registered: n }` : construit **uniquement** ces catégories, `setNotificationCategories`, copie la définition dans `categories.json` (même dossier), relue au chargement du plugin |
+| `drain` | aucune | `{ entries: [{ n, a, t, sid, at }], lines, unreadable, writeFailures }` : lit le fichier sans l'effacer |
+| `ack` | `{ count, writeFailures }` | `{ removed }` : retire les `count` premières lignes physiques (fichier temporaire, `fsync`, renommage) et soustrait `writeFailures` du compteur |
+| `status` | aucune | `{ delegate: bool, categories: n }` |
+| `registerListener` / `removeListener` | méthodes de la classe `Plugin` de Tauri | événement `action` (corps `{ lines }`), émis après chaque ligne écrite : simple **réveil** du JS (N3.5), jamais la source de vérité |
+
+Délégué (classe privée du plugin) : `willPresent` : `[.banner, .list, .sound]` (aucune table, aucune lecture) ; `didReceive` : pour `done` et `snooze15`, ligne ajoutée au fichier (`fsync`) **avant** d'appeler le gestionnaire de fin, puis événement `action` ; pour l'appui simple, le rejet et toute autre action : gestionnaire de fin seulement (l'app s'ouvre ; rien à appliquer). Écriture impossible : compteur `writeFailures` (UserDefaults) incrémenté, jamais un silence. Le plugin n'envoie, n'annule ni ne lit aucune notification.
+
+### N3.3 Fichier d'actions
+
+`Library/Application Support/ct-notification-actions/queue.jsonl` (dossier créé avec la protection `completeUntilFirstUserAuthentication` : écriture possible écran verrouillé après le premier déverrouillage), une ligne JSON par action reçue, terminée par `\n`, UTF-8 :
+
+`{"v":1,"n":<entier>,"a":"done"|"snooze15","t":<ms UTC de la réponse>,"sid":<chaîne|null>,"at":<ms UTC de l'échéance planifiée|null>}`
+
+`n` = `Int(request.identifier) ?? -1`, `sid` et `at` lus dans `userInfo["__EXTRA__"]` (`at` est une chaîne décimale dans `extra`). Fichier en ajout seulement (`O_APPEND`) ; toutes les opérations sur une file série du plugin. `drain` compte les lignes **physiques** (`lines`) ; une ligne qui n'est pas du JSON de ce format, de version inconnue ou d'action inconnue compte dans `unreadable` et n'apparaît pas dans `entries` ; `ack({ count: lines })` la retire quand même (elle est alors signalée par la file JS : `lost`, N3.4). Une coupure entre l'écriture JS de la file et `ack` laisse les lignes : le prochain `drain` les rend, la file JS les écarte par clé.
+
+### N3.4 File locale durable `notifications.actionQueue` (réglage local, jamais synchronisé)
+
+```ts
+interface NotificationActionQueueV1 {
+  readonly v: 1;
+  readonly entries: readonly { key: string; sid: string | null; numericId: number; action: 'done' | 'snooze15'; receivedAt: number; tries: number; lastError: ActionError | null }[]; // 100 au plus
+  readonly applied: readonly { key: string; at: number }[];   // mémoire d'idempotence : 200 au plus, 30 jours
+  readonly snoozes: readonly { id: string; originId: string; fireAt: LocalDateTime }[];   // répétitions vivantes, 100 au plus
+  readonly dropped: number;   // entrées écartées faute de place (visible)
+  readonly lost: number;      // lignes illisibles ou écritures impossibles côté Swift (visible)
+}
+type ActionError = 'target-not-found' | 'apply-failed';
+```
+
+- **Clé d'idempotence** = `{sid, sinon "n:" + numericId}|{action}|{at, sinon t}` : l'identifiant stable, l'action et l'instant de la notification livrée. Une action dont la clé est déjà dans `entries` ou dans `applied` est écartée à l'entrée (relecture après coupure, double appui) ; une clé appliquée est mise dans `applied` **dans la même écriture** que le retrait de l'entrée.
+- **Collecte** (premier temps de chaque passage, avant l'application) : `drain`, écriture de la file (réglage), `ack`. Si l'écriture échoue, pas d'`ack` : les lignes restent dans le fichier, l'échec est visible (N3.8). La file n'est jamais lue avant l'ouverture de la base : tant qu'elle n'est pas ouverte, **le fichier natif est le tampon durable**.
+- **File pleine** (100) : l'entrée la plus ancienne est écartée, `dropped` + 1. `applied` : au-delà de 200 ou de 30 jours, les plus anciennes sont purgées.
+- **Ordre d'application** : `receivedAt`, puis clé.
+
+### N3.5 Application au démarrage par les cas d'usage
+
+`applyNotificationActions` (features/reminders) s'exécute **au début de chaque passage** de `replanNotifications` (déclencheurs `open`, `resume`, `hide`, `sync`, `edit`, `zone`, `permission` et `action`), **avant** les contrôles d'autorisation : une permission retirée n'empêche pas d'appliquer les actions déjà reçues. Le réveil `action` du plugin (écouteur inscrit au démarrage) demande un passage `action` ; il comble la course où `didReceive` écrit après le `drain` de la reprise. Le `drain` d'un passage `open` couvre l'app tuée puis lancée par l'action.
+
+Résolution de la cible : `sid` du fichier, sinon le registre (`numericId` vers `sid`) ; ni l'un ni l'autre : `target-not-found`. Un `sid` `snooze:{origine}` se résout sur `{origine}`. Puis `reminderId` vers la ligne `reminder` (nouvelle méthode `ReminderRepository.getById`, **lignes supprimées comprises** : un rappel retiré après la notification laisse la cible agissable), d'où `targetType` et `targetId`.
+
+| Action | Cible | Effet |
+| --- | --- | --- |
+| `done` | tâche | `createTaskUseCases.complete(id)` (T-04, annulation 5 s : le message « Annuler » s'affiche car l'app est au premier plan) ; tâche absente, supprimée ou déjà terminée : succès sans effet |
+| `done` | routine, date de l'identifiant | `createRoutineUseCases.setDone(id, date, true)` (R-03) ; `ignored` (déjà validée, jour non validable, routine absente) : succès sans effet |
+| `done` | événement, récapitulatif, fin de Focus | jamais proposé (pas de catégorie) ; reçu quand même : succès sans effet |
+| `snooze15` | tâche, routine, événement | ajoute ou remplace `snooze:{origine}` dans `snoozes` (N3.6) ; aucune écriture de données |
+
+Journal technique : codes et nombres seulement.
+
+### N3.6 « +15 min » = entrée `snooze` du plan ; aucune écriture synchronisée
+
+- Identifiant stable `snooze:{identifiant d'origine}` (origine d'une répétition = l'origine première : un appui sur une répétition remplace la même entrée). `fireAt` = heure locale de `receivedAt + 15 min`, arrondie à la **minute suivante** (jamais plus tôt que demandé) ; si ce `fireAt` n'est plus à venir à l'application (app ouverte longtemps après), `fireAt` = maintenant + 2 min (jamais une action perdue en silence).
+- `NotificationPlanInput.snoozes` (facultatif) ; `planNotifications` rend un `PlannedItem` `kind: 'snooze'` si `fireAt` est à venir **et** la cible de l'origine est vivante : tâche à faire et non supprimée ; routine ni archivée ni supprimée et occurrence de l'origine non validée ; événement non supprimé ; ligne `reminder` d'origine non supprimée. Les plages silencieuses ne s'appliquent pas (geste explicite de l'utilisateur). Tri avec les rappels (avant les récapitulatifs), compté dans les 64 sans réserve : avec 64 entrées plus proches, une répétition plus lointaine n'est pas planifiée ; plus proche, elle remplace la dernière du plan (coupe naturelle du plafond). `NotificationPlan.deadSnoozeIds` liste les répétitions mortes ou passées : le passage les purge de la file (une répétition vivante coupée par le plafond reste).
+- Texte : celui de l'origine (titre de la cible, corps de l'avance), mention du retard non ajoutée ; catégorie de l'origine (`ct.task`…), `kind: 'snooze'`. La répétition d'un événement n'offre que « +15 min ».
+- **Aucune écriture de données** : ni la tâche, ni le rappel, ni `sync_outbox` ne changent (test sur la base de test). Seuls les réglages locaux `notifications.*` sont écrits.
+
+### N3.7 Autorisations et Info.plist
+
+- `notifications-ios.json` : retire `notification:allow-register-action-types`, `allow-register-listener` et `allow-remove-listener` (plus aucun usage : catégories et écoute passent par le plugin maison) ; garde les cinq permissions d'envoi ; ajoute `notification-actions:allow-drain`, `allow-ack`, `allow-status`, `allow-register-action-types`, `allow-register-listener`, `allow-remove-listener`. Aucune autre capability n'accorde `notification-actions:`. Jamais `allow-get-active` ni `allow-notify`.
+- Info.plist : **aucune clé**, aucune entrée dans `scripts/ios/plist-contract.json` (délégué et catégories n'exigent ni droit ni description d'usage).
+- Pas de `UIBackgroundModes` : l'app n'est jamais réveillée par une notification locale ; l'action `foreground` ouvre l'app.
+
+### N3.8 Aucun échec silencieux
+
+`NotificationStatusV1.actionsFailure` (facultatif à la lecture : absent = null) : `{ at, reason: 'delegate-lost' | 'delegate-late' | 'register-failed' | 'source-failed' | 'queue-write-failed' }`, posé par le passage et **effacé au premier passage où la cause a disparu** (délégué retrouvé, catégories enregistrées, `drain` et écriture réussis). Le bandeau `remindersTrouble` (code `actions-failed`, « Une action de notification n'a pas pu être appliquée ») apparaît dès qu'une entrée a `lastError`, que `dropped` ou `lost` est non nul, ou que `actionsFailure` est posé ; Réglages > Rappels le détaille et propose « Ignorer » (retire les entrées en échec, remet `dropped` et `lost` à zéro). Il disparaît quand la file ne contient plus d'entrée en échec et que les compteurs sont à zéro. Un essai a lieu à chaque passage (donc à l'ouverture suivante).
+
+### N3.9 Tests et CI
+
+- **TS** : domaine (clés, file, plafonds, snooze, résolution de cible) ; cas d'usage sur la base de test et le faux de la source (action à froid = fichier rempli avant l'ouverture ; coupure entre écriture de la file et `ack` ; double application ; cible terminée ; routine pour la date de la notification ; permission retirée ; cible introuvable puis résolue ; bandeau persistant) ; `notificationPlan` (snoozes) ; adaptateur de la source avec un faux `invoke` ; `consistency.test.ts` durci.
+- **Statiques Swift** (`src-tauri/tests/desktop/notification_actions.rs`, comme folder-bookmark) : commandes du contrat présentes en Swift et dans `build.rs`, aucun texte français, ni `.add(`, ni `removePending`, ni `getDelivered`, `fsync` avant `completionHandler`, délégué réaffirmé ; capability (liste exacte) ; crate sous `cfg(target_os = "ios")` seulement.
+- **e2e** projet `iphone` : planificateur et source d'actions injectés en développement seulement (`__ctNotifications`, `__ctNotificationActions`).
+- **CI** : `build-ios.yml` étend l'étape « Plugins iOS » : `cargo tree --target aarch64-apple-ios -i tauri-plugin-notification-actions` réussit, la cible Windows ne le trouve pas ; le Swift ne compile qu'en CI (une compilation pour le lot).
+- **Appareil** (checklist) : A2 étendu : (a) « Fait » puis « +15 min » app tuée, (b) appui simple app tuée, (c) notification reçue app ouverte après relance, (d) après redémarrage et mise à jour SideStore. **Ordre d'initialisation (revue)** : le délégué est posé avant `didFinishLaunching` (vérifié dans Tauri 2.12.1 : `initialize_plugins` précède `run`, et `register_ios_plugin` appelle aussitôt la fonction d'initialisation Swift, dont l'`init` pose le délégué). Pour le mesurer dans l'app, le plugin relève sur `UIApplication.didFinishLaunchingNotification` si le délégué était déjà le sien et le rend par `status().delegateAtLaunch` ; faux : état visible `delegate-late` (une action reçue à froid a pu être perdue). Le compteur `writeFailures` est dans `UserDefaults` : avant le premier déverrouillage suivant un redémarrage, ce stockage peut être illisible, donc l'échec d'une écriture à ce moment ne serait pas compté (limite acceptée : le fichier, lui, reste protégé `completeUntilFirstUserAuthentication` et la file ne se remplit qu'après déverrouillage, l'action `foreground` exigeant un appareil déverrouillé). Le fichier : une ligne partielle laissée par une coupure est terminée par un saut de ligne avant l'ajout suivant. Les lignes perdues (`lost`) ne sont comptées qu'après un `ack` réussi.
+
+### Fichiers impactés
+
+`src-tauri/plugins/notification-actions/` (nouveau), `src-tauri/{Cargo.toml,Cargo.lock,src/lib.rs}`, `capabilities/notifications-ios.json`, `tests/desktop/{config,notification_actions,main}.rs`, `.github/workflows/build-ios.yml` ; `src/domain/{notificationActions,notificationPlan,notificationStatus}.ts`, `model/settings.ts` ; `src/db/repositories/{reminderRepository,sql/reminderRepository}.ts` (`getById`) ; `src/platform/notifications/{actions,tauriNotificationActions,fakeActions,index}.ts` ; `src/features/reminders/*` ; `src/features/app/{container,bootstrap}.ts` ; `src/i18n/{fr,en}.*` ; `tests/e2e/N-03.spec.ts`.
 
 ## Avenant lot M (2026-10-08) — identifiant réservé 2
 

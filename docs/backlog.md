@@ -53,7 +53,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | R-06 | M4 | Je consulte le rapport de routine | routines | fait |
 | R-07 | M4 | Je planifie une routine tous les N jours ou toutes les N semaines | routines | fait |
 | N-02 | M5 | Je choisis une avance (0, 5, 15, 30, 60 min, 1 jour) | notifications | fait |
-| N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | fait |
+| N-04 | M5 | Je règle un récapitulatif matin et soir | notifications | fait (envoi réel sur l'iPhone ajouté le 2026-10-08, phase 1 de l'ordre 5) |
 | ES-01 | M13 | J'ai deux espaces Pro et Perso | spaces-goals | fait |
 | ES-02 | M13 | Chaque élément appartient à un espace | spaces-goals | fait |
 | ES-03 | M13 | Je filtre Pro / Perso / Tout | spaces-goals | fait |
@@ -116,7 +116,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | F-01 | M10 | Je lance une session sur une tâche | focus-time | fait |
 | F-02 | M10 | Je fais une pause | focus-time | fait |
 | F-03 | M10 | Je vois mon temps de concentration | focus-time | fait |
-| F-04 | M10 | La fin de session me notifie | focus-time | fait |
+| F-04 | M10 | La fin de session me notifie | focus-time | fait (envoi réel sur l'iPhone ajouté le 2026-10-08, phase 1 de l'ordre 5) |
 | H-01 | M11 | Je vois ce que j'ai accompli ce mois-ci | stats-history | fait |
 | H-02 | M11 | Je vois mon taux de complétion | stats-history | fait |
 | H-03 | M11 | J'exporte mon historique | stats-history | fait |
@@ -155,11 +155,11 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | ID | Module | User story | Agent | Statut |
 | --- | --- | --- | --- | --- |
 | A-07 | M2 | J'agis d'un geste sur iPhone | tasks-planning | à faire |
-| N-01 | M5 | Je reçois un rappel à l'heure d'une tâche | notifications | à faire |
+| N-01 | M5 | Je reçois un rappel à l'heure d'une tâche | notifications | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
 | N-03 | M5 | Je termine ou reporte depuis la notification | notifications | à faire |
-| N-05 | M5 | Les rappels survivent au redémarrage | notifications | à faire |
-| N-06 | M5 | Mes rappels suivent mon changement de fuseau | notifications | à faire |
-| N-07 | M5 | Un rappel créé sur le PC sonne sur l'iPhone | notifications | à faire |
+| N-05 | M5 | Les rappels survivent au redémarrage | notifications | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
+| N-06 | M5 | Mes rappels suivent mon changement de fuseau | notifications | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
+| N-07 | M5 | Un rappel créé sur le PC sonne sur l'iPhone | notifications | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
 | K-05 | M8 | Je vois mes Rappels Apple dans CircleTasks | calendar-integration | à faire |
 | K-06 | M8 | Je coche un rappel dans CircleTasks ou dans Rappels | calendar-integration | à faire |
 | K-07 | M8 | Je retrouve mes Rappels Apple sur le PC | calendar-integration | à faire |
@@ -173,8 +173,8 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile | à faire |
 | P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire |
 | N-TECH-01 | M5 | Story technique : interface `NotificationScheduler` dans src/platform/notifications (faux, noop PC) et planificateur pur dans src/domain (échéance effective, routines actives, prochaine occurrence, plafond iOS de 64) | notifications | fait (2026-10-07, lot N0, ADR 0012) |
-| Y-IOS-01 | M15 | Story technique : plugin folder-bookmark (signet, hydratation, lecture à partir d'un octet), `BookmarkFs`, cycle de synchro au passage en arrière-plan | sync-icloud + ios-mobile | à faire |
-| Y-IOS-02 | M15 | Story technique : Trousseau iOS relu, scan du QR lancé par Rust, confirmations natives iOS, décalage horaire local iOS, échec de réintégration visible | sync-icloud + ios-mobile | à faire |
+| Y-IOS-01 | M15 | Story technique : plugin folder-bookmark (signet, hydratation, lecture à partir d'un octet), `BookmarkFs`, cycle de synchro au passage en arrière-plan | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
+| Y-IOS-02 | M15 | Story technique : Trousseau iOS relu, scan du QR lancé par Rust, confirmations natives iOS, décalage horaire local iOS, échec de réintégration visible | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
 | CAP-IOS-01 | M9 | Story technique : plugins Vision (OCR, Q-04) et Speech (Q-03) sur iPhone derrière les contrats existants, avec I-05 caméra et micro | quick-capture + ios-mobile | à faire |
 
 Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en parallèle, un seul lot à la fois sur src/db et src/domain ; chaque lot à plugin Swift est accepté seulement si `build-ios.yml` lancé sur sa branche est vert) :

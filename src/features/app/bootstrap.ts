@@ -11,7 +11,7 @@ import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } fr
 import { openBackupService, type BackupService } from '../../platform/backup';
 import { openFileService, type FileService } from '../../platform/files';
 import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler, type FocusWindowPlatform } from '../../platform/focus';
-import { createLedgerStore, openNotificationScheduler, systemNotificationClock, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
+import { createLedgerStore, openNotificationActionSource, openNotificationScheduler, systemNotificationClock, type NotificationActionSource, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
 import { composeFocusEndText } from '../reminders/focusEndText';
 import { createSettingsLedger } from '../reminders/settingsLedger';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
@@ -93,6 +93,8 @@ export interface BootstrapAppOptions {
   readonly focusEndScheduler?: FocusEndScheduler;
   /** Instant et fuseau de la planification des rappels ; l'horloge du système par défaut. */
   readonly notificationClock?: NotificationClock;
+  /** Source des actions de notification (tests, e2e) ; sinon le plugin Swift sur l'iPhone installé, aucune ailleurs. */
+  readonly notificationActions?: NotificationActionSource | null;
   /** Enregistrement de fichiers (H-03) ; `openFileService` par défaut. */
   readonly files?: FileService;
   /** Sauvegardes locales (P-04) ; `openBackupService` par défaut. */
@@ -176,6 +178,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       syncPlatform,
       notificationLedger,
       notificationClock,
+      notificationActions: options.notificationActions === undefined ? openNotificationActionSource(runtime, os) : options.notificationActions,
       notifications: options.notifications ?? openNotificationScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, log: (code, counts) => logFailure('notifications', `${code} ${JSON.stringify(counts ?? {})}`) }),
       focusEndScheduler: options.focusEndScheduler ?? openFocusEndScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, compose: composeFocusEndText }),
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
