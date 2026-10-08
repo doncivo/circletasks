@@ -72,4 +72,15 @@ describe('ReminderRepository (SQL)', () => {
     const delivered = await db.data.repos.reminders.markDelivered(r1);
     expect(delivered.delivered).toBe(true);
   });
+
+  it('getById rend un rappel supprimé comme un rappel vivant, et null pour un inconnu (N-03)', async () => {
+    const id = asEntityId<ReminderId>('b0000000-0000-4000-8000-000000000006');
+    await db.data.repos.reminders.replaceForTarget(target, [{ id, targetType: 'task', targetId: taskId, offsetMin: 0, fireAt: '2026-10-05T09:00' as never }]);
+    expect((await db.data.repos.reminders.getById(id))?.targetId).toBe(taskId);
+    await db.data.repos.reminders.softDeleteForTarget(target);
+    const removed = await db.data.repos.reminders.getById(id);
+    expect(removed?.id).toBe(id);
+    expect(removed?.deletedAt).not.toBeNull();
+    expect(await db.data.repos.reminders.getById(asEntityId<ReminderId>('b0000000-0000-4000-8000-0000000000ff'))).toBeNull();
+  });
 });

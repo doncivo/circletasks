@@ -152,11 +152,11 @@ describe('rappels de tâches (critères 7 à 9)', () => {
     const t = task();
     const bad = task({ time: '25:99' as never });
     const result = plan({ tasks: [t, bad], reminders: [reminder('task', t, 7), reminder('task', bad, 0)] });
-    expect(result).toEqual({ items: [], coverage: { state: 'empty' }, total: 0 });
+    expect(result).toEqual({ items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] });
   });
 
   it('un now mal formé rend un plan vide sans lever', () => {
-    expect(plan({ now: 'hier' as never })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0 });
+    expect(plan({ now: 'hier' as never })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] });
   });
 });
 
@@ -380,7 +380,7 @@ describe('récapitulatifs (critères 18 et 19)', () => {
   it('18 : un récapitulatif désactivé n’apparaît jamais', () => {
     const eveningOnly = plan({ recaps: { ...DEFAULT_RECAPS, morning: { enabled: false, time: asLocalTime('07:30') } } });
     expect(eveningOnly.items.every((item) => item.kind === 'recap' && item.recapKind === 'evening')).toBe(true);
-    expect(plan({ recaps: NO_RECAPS })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0 });
+    expect(plan({ recaps: NO_RECAPS })).toEqual({ items: [], coverage: { state: 'empty' }, total: 0, deadSnoozeIds: [] });
   });
 
   it('18 : le plan couvre l’horizon (401 jours, deux récapitulatifs moins celui du matin passé)', () => {

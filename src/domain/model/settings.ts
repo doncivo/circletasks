@@ -84,6 +84,8 @@ export interface SettingsValues {
   'notifications.ledger': unknown;
   /** N-01 (avenant N1.3) : état persistant des rappels (autorisation, dernière planification, échecs). Valeur BRUTE lue par `parseNotificationStatus` ; locale. */
   'notifications.status': unknown;
+  /** N-03 (avenant N3.4) : file durable des actions « Fait » et « +15 min » reçues de la notification, répétitions vivantes. Valeur BRUTE lue par `parseActionQueue` ; locale, jamais synchronisée. */
+  'notifications.actionQueue': unknown;
 }
 
 export type SettingKey = keyof SettingsValues;
@@ -125,6 +127,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'device.id': { scope: 'local', defaultValue: null },
   'notifications.ledger': { scope: 'local', defaultValue: null },
   'notifications.status': { scope: 'local', defaultValue: null },
+  'notifications.actionQueue': { scope: 'local', defaultValue: null },
 };
 
 /** Valeur par défaut d'un réglage. */

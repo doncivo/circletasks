@@ -28,6 +28,10 @@ export interface StatusReport {
   readonly kept: number;
 }
 
+/** Pannes des actions de notification (N-03, avenant N3.8). */
+export const ACTIONS_FAILURE_REASONS = ['delegate-lost', 'register-failed', 'source-failed', 'queue-write-failed'] as const;
+export type ActionsFailureReason = (typeof ACTIONS_FAILURE_REASONS)[number];
+
 export interface NotificationStatusV1 {
   readonly v: 1;
   readonly permission: StatusPermission | null;
@@ -36,6 +40,8 @@ export interface NotificationStatusV1 {
   readonly focusEndFailure: { readonly at: IsoDateTime; readonly sessionId: string; readonly reason: PlanFailureReason } | null;
   readonly zoneChange: { readonly at: IsoDateTime; readonly from: string; readonly to: string } | null;
   readonly ledgerRebuiltAt: IsoDateTime | null;
+  /** N-03 : panne du plugin d'actions (absent à la lecture d'un état ancien = null). Effacée au premier passage où la cause a disparu. */
+  readonly actionsFailure: { readonly at: IsoDateTime; readonly reason: ActionsFailureReason } | null;
 }
 
 export const EMPTY_NOTIFICATION_STATUS: NotificationStatusV1 = {
@@ -46,6 +52,7 @@ export const EMPTY_NOTIFICATION_STATUS: NotificationStatusV1 = {
   focusEndFailure: null,
   zoneChange: null,
   ledgerRebuiltAt: null,
+  actionsFailure: null,
 };
 
 export type StatusRead = { readonly state: 'valid'; readonly status: NotificationStatusV1 } | { readonly state: 'unreadable' };
@@ -114,5 +121,12 @@ export function parseNotificationStatus(raw: unknown): StatusRead {
   const rebuilt = raw['ledgerRebuiltAt'];
   if (rebuilt !== null && !isIso(rebuilt)) return { state: 'unreadable' };
 
-  return { state: 'valid', status: { v: 1, permission, lastSuccess, planFailure, focusEndFailure, zoneChange, ledgerRebuiltAt: rebuilt as IsoDateTime | null } };
+  let actionsFailure: NotificationStatusV1['actionsFailure'] = null;
+  const af = raw['actionsFailure'];
+  if (af !== null && af !== undefined) {
+    if (!isRecord(af) || !isIso(af['at']) || typeof af['reason'] !== 'string' || !(ACTIONS_FAILURE_REASONS as readonly string[]).includes(af['reason'])) return { state: 'unreadable' };
+    actionsFailure = { at: af['at'], reason: af['reason'] as ActionsFailureReason };
+  }
+
+  return { state: 'valid', status: { v: 1, permission, lastSuccess, planFailure, focusEndFailure, zoneChange, ledgerRebuiltAt: rebuilt as IsoDateTime | null, actionsFailure } };
 }
