@@ -9,6 +9,7 @@ use circletasks_lib::calendars::google::{self, pkce_challenge, GoogleEndpoints};
 use circletasks_lib::calendars::http::HttpEnv;
 use circletasks_lib::calendars::vault::{MemoryVault, SecretVault};
 use circletasks_lib::calendars::web_auth::{self, authorize_ios, ios_redirect, parse_redirect, IosClientConfig, TransportWebAuth, WebAuthError, WebAuthRunner, WebAuthSession};
+#[cfg(debug_assertions)]
 use circletasks_lib::sync::log;
 use serde_json::Value;
 
@@ -307,6 +308,8 @@ async fn k_tech_01_2_only_one_session_at_a_time() {
 // Critère 5 : ni l'URL, ni le code, ni l'ID client dans les journaux, les erreurs ou l'état
 // ------------------------------------------------------------------------------------------------------------------------------
 
+// Le journal technique n'existe qu'en debug (sync::log::capture) : ce test ne compile pas en --release.
+#[cfg(debug_assertions)]
 #[tokio::test]
 async fn k_tech_01_5_neither_url_nor_code_nor_client_id_leaks_into_errors_or_the_technical_log() {
     let capture = log::capture();
