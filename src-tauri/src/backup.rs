@@ -852,6 +852,46 @@ fn join_error(e: tauri::Error) -> BackupError {
     BackupError::new("io", e.to_string())
 }
 
+/// Diagnostic d'ouverture de la base (0.2.1), affiché sous « Impossible d'ouvrir la base de données. » : chemins résolus et existence.
+/// Lecture seule, aucun argument venu de la WebView : seuls le dossier de configuration et `circletasks.db` y sont examinés.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DbDiagnostics {
+    pub config_dir: Option<String>,
+    pub config_dir_error: Option<String>,
+    pub dir_exists: bool,
+    pub db_path: Option<String>,
+    pub file_exists: bool,
+    pub file_bytes: Option<u64>,
+    pub wal_exists: bool,
+}
+
+/// Diagnostic du dossier `dir` (celui que tauri-plugin-sql résout pour `sqlite:circletasks.db`).
+pub fn diagnose_db_dir(dir: Result<PathBuf, String>) -> DbDiagnostics {
+    match dir {
+        Ok(dir) => {
+            let db = dir.join(DB_FILE);
+            let meta = fs::metadata(&db).ok().filter(|m| m.is_file());
+            DbDiagnostics {
+                config_dir: Some(dir.to_string_lossy().into_owned()),
+                config_dir_error: None,
+                dir_exists: dir.is_dir(),
+                db_path: Some(db.to_string_lossy().into_owned()),
+                file_exists: meta.is_some(),
+                file_bytes: meta.map(|m| m.len()),
+                wal_exists: dir.join(format!("{DB_FILE}-wal")).is_file(),
+            }
+        }
+        Err(error) => DbDiagnostics { config_dir: None, config_dir_error: Some(error), dir_exists: false, db_path: None, file_exists: false, file_bytes: None, wal_exists: false },
+    }
+}
+
+/// Commande de diagnostic (PC et iPhone), appelée seulement quand l'ouverture de la base a échoué.
+#[tauri::command]
+pub fn db_diagnostics(app: AppHandle) -> DbDiagnostics {
+    diagnose_db_dir(app.path().app_config_dir().map_err(|e| e.to_string()))
+}
+
 /// Commande appelée par le front avant d'appliquer des migrations sur une base existante.
 #[tauri::command]
 pub fn backup_database_before_migration(

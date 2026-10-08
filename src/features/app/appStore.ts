@@ -6,6 +6,19 @@ import type { LocalDate, ProjectId, SpaceFilter } from '../../domain/types';
 export type DbStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 /**
+ * Diagnostic de l'échec de démarrage (0.2.1), affiché sous le message d'erreur et copiable.
+ * - phase 'open' : ouverture de la base (étape fine, numéro de migration) ;
+ * - phase 'start' : suite du démarrage, base déjà ouverte (étape = nom du module en cours).
+ */
+export interface DbFailure {
+  readonly phase: 'open' | 'start';
+  readonly step: string;
+  readonly migration?: number | undefined;
+  readonly errorName: string;
+  readonly message: string;
+}
+
+/**
  * Store global minimal de l'app (Zustand). Les features ajoutent leurs propres
  * stores ; celui-ci ne garde que l'état transverse.
  */
@@ -15,6 +28,8 @@ export interface AppState {
   readonly dbErrorDetail: string | null;
   /** La sauvegarde avant migration a échoué : migrations non appliquées, message dédié (app.dbBackupError). */
   readonly dbBackupFailed: boolean;
+  /** Étape et erreur exactes du dernier échec de démarrage (null hors erreur). */
+  readonly dbFailure: DbFailure | null;
   /** Filtre Pro / Perso / Tout appliqué à tous les écrans (CLAUDE.md). */
   readonly spaceFilter: SpaceFilter;
   /**
@@ -46,7 +61,7 @@ export interface AppState {
   /** T-11 : fuseau IANA courant de l'appareil (détecté au démarrage et au retour au premier plan). */
   readonly timeZone: string | null;
   setTimeZone(timeZone: string): void;
-  setDbStatus(status: DbStatus, options?: { readonly detail?: string; readonly backupFailed?: boolean }): void;
+  setDbStatus(status: DbStatus, options?: { readonly detail?: string; readonly backupFailed?: boolean; readonly failure?: DbFailure }): void;
   setDay(day: LocalDate): void;
   setCarryOverFailed(failed: boolean): void;
   setRecurrenceFailed(failed: boolean): void;
@@ -60,6 +75,7 @@ export const useAppStore = create<AppState>()((set) => ({
   dbStatus: 'idle',
   dbErrorDetail: null,
   dbBackupFailed: false,
+  dbFailure: null,
   spaceFilter: 'all',
   spaces: [],
   projects: [],
@@ -69,7 +85,7 @@ export const useAppStore = create<AppState>()((set) => ({
   recurrenceFailed: false,
   timeZone: null,
   setTimeZone: (timeZone) => set({ timeZone }),
-  setDbStatus: (dbStatus, options) => set({ dbStatus, dbErrorDetail: options?.detail ?? null, dbBackupFailed: options?.backupFailed ?? false }),
+  setDbStatus: (dbStatus, options) => set({ dbStatus, dbErrorDetail: options?.detail ?? null, dbBackupFailed: options?.backupFailed ?? false, dbFailure: options?.failure ?? null }),
   setDay: (day) => set({ day }),
   setCarryOverFailed: (carryOverFailed) => set({ carryOverFailed }),
   setRecurrenceFailed: (recurrenceFailed) => set({ recurrenceFailed }),

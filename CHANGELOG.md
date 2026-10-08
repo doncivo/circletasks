@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 0.2.1
+
+- Diagnostic d'ouverture de la base affiché.
+
 ## 0.2.0
 
 - Rappels envoyés par notifications sur l'iPhone, avec les actions « Fait » et « +15 min » directement depuis la notification.
