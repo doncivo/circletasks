@@ -365,3 +365,7 @@ Avec deux appareils (PC et iPhone, cas du PRD) le cas de `docs/dettes.md` (lot Y
 7. N-03 point 3 : le fichier d'actions du repli est lu par les commandes Swift `drain` / `ack`, pas par Rust ; le plugin de repli doit **remplacer le délégué** (constat 11) et couvre aussi l'appui simple de N-01 ; la checklist doit ajouter les cas (a), (d), (e) de N1.4.
 8. Contrat N-TECH-01 complété : `kind: 'snooze'`, `category`, `reservedCount()`, raison `ledger-failed`.
 9. Décision du 2026-10-07 (plugin maison sur constat) : la lecture du code prévoit l'échec (constats 9, 10, 12) ; à Ali de dire s'il valide le repli dès maintenant pour éviter un cycle CI et un passage sur l'appareil.
+
+## Avenant lot M (2026-10-08) — identifiant réservé 2
+
+- Plage réservée [1 ; 65 535] : **2 = alerte d'expiration de la signature** (I-02, ADR 0013 section 3), une seule en attente, sans catégorie, envoyée par le pont `createIosNotificationBridge` dans le passage du `NotificationRunner` (déclencheurs `open`, `resume`, `permission`), **avant** le calcul `limit = 64 − reservedCount()` ; `replace` et `cancelAll` du plan ne la touchent jamais. État local `notifications.signing`, distinct de `notifications.status`.
