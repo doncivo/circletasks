@@ -105,3 +105,23 @@ describe('memory.ts, corrections du lot Y1', () => {
     expect(scan.devices[0]?.kid).toBe((await a.key.status()).kid);
   });
 });
+
+// Revue Y-IOS (bloquant) : un instantané dont les pages sont coupées par l'appelant laisse l'écrivain ouvert (comme dans Rust) ; le cycle
+// suivant, même époque et même numéro, l'abandonne au lieu de rendre `segment-mismatch` à chaque cycle. Jumeau de `r5` (sync_fixes.rs).
+describe('écrivain d’instantané resté ouvert (revue Y-IOS)', () => {
+  it('pages coupées, puis même numéro : l’ancien écrivain est abandonné, l’instantané est écrit', async () => {
+    const p = createMemorySyncPlatform({ folder: new MemorySyncFolder(), nowMs: now });
+    await p.folder.choose();
+    await p.bindDevice(A);
+    await p.key.create();
+    const cut = (async function* () {
+      yield ['{"k":"snap-rows"}'];
+      throw new Error('cycle interrompu');
+    })();
+    expect(await codeOf(p.writeSnapshot({ epoch: E1, seq: 1, sv: 14, records: cut }))).toBe('Error: cycle interrompu');
+    const whole = (async function* () {
+      yield ['{"k":"snap-rows"}', '{"k":"snap-end"}'];
+    })();
+    expect(await codeOf(p.writeSnapshot({ epoch: E1, seq: 1, sv: 14, records: whole }))).toBe('resolved');
+  });
+});

@@ -651,6 +651,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let own: OwnState | null = null;
   let marker: RestoreMarker | null = null;
   let sealed = 0;
+  /**
+   * Écrivains d'instantané ouverts (`sync_snapshot_begin` sans `commit`), comme `SyncCore.snapshots` de Rust : un écrivain dont les pages
+   * ont été coupées par l'appelant (cycle interrompu) reste ouvert jusqu'à l'abandon ; au plus `MAX_OPEN_SNAPSHOTS`.
+   */
+  const openWriters = new Map<number, { readonly epoch: EpochId; readonly seq: number }>();
+  let nextWriter = 0;
+  const MAX_OPEN_SNAPSHOTS = 4;
 
   let consentAnswer = true;
   let foreground = true;
@@ -1434,21 +1441,37 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const existing = f.devices.get(self)?.epochs.get(r.epoch);
     // Numéro d'instantané jamais réutilisé dans une époque (choix conservateur, code le plus proche).
     if (existing && r.seq <= maxKey(existing.snapshots)) fail('segment-mismatch');
+    // Même époque et même numéro resté ouvert (pages coupées par l'appelant) : abandonné au lieu d'un refus à chaque cycle (revue).
+    for (const [id, w] of openWriters) if (w.epoch === r.epoch && w.seq === r.seq) openWriters.delete(id);
+    while (openWriters.size >= MAX_OPEN_SNAPSHOTS) openWriters.delete(Math.min(...openWriters.keys()));
+    nextWriter += 1;
+    const handle = nextWriter;
+    openWriters.set(handle, { epoch: r.epoch, seq: r.seq });
     const header: FileHeader = { f: 'ct-s', sm: SYNC_FORMAT_MAJOR, kid, dev: self, e: r.epoch, n: r.seq };
     const lines: MemLine[] = [];
     let bytes = headerBytes(header);
-    // sync_snapshot_append : le fichier `.tmp` est abandonné à la première erreur.
-    for await (const page of r.records) {
-      for (const text of page) {
-        if (typeof text !== 'string' || utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
-        const line = makeLine(text, SYNC_FORMAT_MAJOR, r.sv);
-        bytes += line.bytes;
-        if (bytes > MAX_SNAPSHOT_BYTES) fail('too-large');
-        lines.push(line);
+    // Pages fournies par l'appelant : une erreur de sa part (cycle interrompu) laisse l'écrivain ouvert, comme dans Rust (aucun appel).
+    const pages = r.records[Symbol.asyncIterator]();
+    for (;;) {
+      const next = await pages.next();
+      if (next.done === true) break;
+      // sync_snapshot_append : le fichier `.tmp` est abandonné à la première erreur.
+      try {
+        for (const text of next.value) {
+          if (typeof text !== 'string' || utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
+          const line = makeLine(text, SYNC_FORMAT_MAJOR, r.sv);
+          bytes += line.bytes;
+          if (bytes > MAX_SNAPSHOT_BYTES) fail('too-large');
+          lines.push(line);
+        }
+        checkBudget(lines.length, toNext);
+      } catch (error) {
+        openWriters.delete(handle);
+        throw error;
       }
-      checkBudget(lines.length, toNext);
     }
     // sync_snapshot_commit : renommage atomique.
+    openWriters.delete(handle);
     epochDirOf(f, self, r.epoch).snapshots.set(r.seq, { header, lines, partialTail: false, availability: 'local', extraBytes: 0 });
     addSealed(lines.length, toNext);
   };

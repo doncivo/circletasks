@@ -127,7 +127,7 @@ let BASELINE: unknown = null;
 
 describe('Y-IOS-01 critère 9 : arrêt à chaque frontière du cycle borné, puis cycle complet', () => {
   it('le cycle passe par chaque type d’unité atomique', () => {
-    for (const unit of ['scan', 'read-page', 'append', 'write-state', 'snapshot-page', 'finish'] satisfies DeadlineUnit[]) {
+    for (const unit of ['scan', 'read-page', 'append', 'write-state', 'snapshot', 'finish'] satisfies DeadlineUnit[]) {
       expect(BOUNDARIES, unit).toContain(unit);
     }
   });

@@ -1038,14 +1038,19 @@ impl SyncCore {
         let (key, self_id, own, _) = self.writable(&mut inner)?;
         self.refuse_frozen_epoch(&mut inner, &self_id, epoch)?;
         self.refuse_epoch_open(&mut inner, &key, &self_id, &own, epoch)?;
-        // Instantané de même époque et même numéro déjà en cours d'écriture : même code qu'un numéro pris (revue 5).
-        if inner.snapshots.values().any(|w| w.epoch == epoch && u64::from(w.seq) == seq) {
-            return fail(SyncCode::SegmentMismatch);
-        }
         let next = self.active_next(&mut inner)?;
         let Inner { folder, snapshots, .. } = &mut *inner;
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = store_for(bound, &key, &next, false);
+        // Même époque et même numéro resté ouvert (pages coupées par le moteur, revue) : abandonné (`.tmp` supprimé), jamais un refus à
+        // chaque cycle jusqu'au redémarrage ; un seul écrivain par numéro (revue 5).
+        let stale: Vec<u32> = snapshots.iter().filter(|(_, w)| w.epoch == epoch && u64::from(w.seq) == seq).map(|(handle, _)| *handle).collect();
+        for handle in stale {
+            if let Some(old) = snapshots.remove(&handle) {
+                store.snapshot_discard(&old);
+                log::event("snapshot-abandoned", &old.seq.to_string());
+            }
+        }
         let writer = store.snapshot_begin(&own, &self_id, epoch, seq, sv)?;
         // Plafond des écrivains ouverts (moteur interrompu sans validation) : le plus ancien est abandonné, son .tmp supprimé.
         while snapshots.len() >= MAX_OPEN_SNAPSHOTS {

@@ -22,7 +22,7 @@ import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
 import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish, openResetEpoch, recordResetFailure, republishWithoutNotice, resetActive, resetLagging, type ResetDirective } from './reset';
 import type { CycleFacts } from './status';
-import { createCycleDeadline, isCycleInterrupted, pagesBefore, type DeadlineUnit } from './deadline';
+import { createCycleDeadline, isCycleInterrupted, type DeadlineUnit } from './deadline';
 import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
 
 /**
@@ -393,7 +393,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       work();
       const maxSeq = await repos.sync.maxOutboxSeq();
       const endHlc = deps.hlc.now();
-      await platform.writeSnapshot({ epoch, seq: 1, sv: deps.sv, records: pagesBefore(deps.deadline, snapshotPages(repos, epoch, new Map<DeviceId, DeviceAck>(), deps.sv)) });
+      // Revue : l'instantané est une seule unité (de `begin` à `commit`), jamais coupé entre deux pages.
+      deps.deadline?.check('snapshot');
+      await platform.writeSnapshot({ epoch, seq: 1, sv: deps.sv, records: snapshotPages(repos, epoch, new Map<DeviceId, DeviceAck>(), deps.sv) });
       const head: DeviceAck = { epoch, segment: 0, record: 0, hlc: null, stateSeq: 0 };
       await data.transaction(async (tx) => {
         await tx.sync.clearOutbox(maxSeq);
@@ -807,7 +809,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // sans elle, un lecteur qui reprend depuis cet instantané repartirait du début de l'époque sur cet appareil.
         if (head.hlc !== null) covers.set(self, { ...head, stateSeq });
         const endHlc = deps.hlc.now();
-        await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: pagesBefore(deps.deadline, snapshotPages(repos, currentEpoch, covers, deps.sv)) });
+        deps.deadline?.check('snapshot');
+        await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
         snapshotMeta = { seq, endHlc };
         await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
         await writeState(await nextState(head), true);
