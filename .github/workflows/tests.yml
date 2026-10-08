@@ -14,11 +14,11 @@ on:
 permissions:
   contents: read
 
-# Un nouveau push sur la même branche annule le run précédent (sauf sur main : contrôle après fusion toujours mené à terme).
-# L'événement fait partie du groupe : un run « push » ne peut pas annuler le run « pull_request » de la même branche.
+# Un nouveau push sur la même branche annule le run précédent. Sur main, le SHA fait partie du groupe : aucun commit de main n'est
+# jamais annulé avant d'avoir été testé. L'événement fait partie du groupe : push, pull_request et lancement manuel ne s'annulent pas entre eux.
 concurrency:
-  group: tests-${{ github.event_name == 'pull_request' && 'pr' || 'push' }}-${{ github.head_ref || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: tests-${{ github.event_name }}-${{ github.head_ref || github.ref }}${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
 
 env:
   NODE_VERSION: "22"
@@ -67,19 +67,19 @@ jobs:
           --reporter=default --reporter=blob --outputFile.blob=.vitest/blob/blob-node-${{ matrix.shard }}.json
           --reporter=json --outputFile.json=vitest-report.json
       - name: Comptage
-        if: always() && hashFiles('vitest-report.json') != ''
+        if: ${{ !cancelled() && hashFiles('vitest-report.json') != '' }}
         run: |
           mkdir -p "$CI_COUNTS"
           node scripts/ci/test-counts.mjs write vitest vitest-report.json "$CI_COUNTS/vitest-node-${{ matrix.shard }}.json" "Vitest node"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: blob-node-${{ matrix.shard }}
           path: .vitest/blob/
           if-no-files-found: ignore
           retention-days: 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: count-vitest-node-${{ matrix.shard }}
           path: counts/
@@ -110,19 +110,19 @@ jobs:
           --reporter=default --reporter=blob --outputFile.blob=.vitest/blob/blob-dom-${{ matrix.shard }}.json
           --reporter=json --outputFile.json=vitest-report.json
       - name: Comptage
-        if: always() && hashFiles('vitest-report.json') != ''
+        if: ${{ !cancelled() && hashFiles('vitest-report.json') != '' }}
         run: |
           mkdir -p "$CI_COUNTS"
           node scripts/ci/test-counts.mjs write vitest vitest-report.json "$CI_COUNTS/vitest-dom-${{ matrix.shard }}.json" "Vitest dom"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: blob-dom-${{ matrix.shard }}
           path: .vitest/blob/
           if-no-files-found: ignore
           retention-days: 1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: count-vitest-dom-${{ matrix.shard }}
           path: counts/
@@ -148,9 +148,12 @@ jobs:
           merge-multiple: true
       # Seuils de vitest.config.ts (src/domain : 80 %) contrôlés ici, sur la fusion des huit tranches.
       - name: Fusion des rapports et seuils de couverture
-        run: npx vitest run --merge-reports --reporter=default
+        run: |
+          n=$(ls .vitest/blob/*.json 2>/dev/null | wc -l)
+          if [ "$n" -ne 8 ]; then echo "::error::$n rapports blob au lieu de 8 (5 tranches node + 3 tranches dom) : fusion refusée"; ls -la .vitest/blob || true; exit 1; fi
+          npx vitest run --merge-reports --reporter=default
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: couverture-html
           path: coverage/
@@ -183,13 +186,13 @@ jobs:
         working-directory: src-tauri
         run: cargo test --locked --release --features test-hooks --test desktop sync_pairing 2>&1 | tee "$RUNNER_TEMP/cargo-release.log"
       - name: Comptage
-        if: always() && hashFiles('src-tauri/Cargo.toml') != ''
+        if: ${{ !cancelled() && hashFiles('src-tauri/Cargo.toml') != '' }}
         shell: bash
         run: |
           mkdir -p "$CI_COUNTS"
           if [ -f "$RUNNER_TEMP/cargo.log" ]; then node scripts/ci/test-counts.mjs write cargo "$RUNNER_TEMP/cargo.log" "$CI_COUNTS/cargo.json" "cargo test"; fi
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: count-cargo
           path: counts/
@@ -211,12 +214,16 @@ jobs:
         run: |
           out="$(cargo tree --locked -i rsa --target all -e normal,build)"
           if [ -n "$out" ]; then echo "rsa est compilé : retirer l'exception RUSTSEC-2023-0071"; echo "$out"; exit 1; fi
+      # Clé mensuelle : cargo-audit est réinstallé (dernière version) au plus une fois par mois.
+      - name: Mois courant
+        id: mois
+        run: echo "mois=$(date -u +%Y-%m)" >> "$GITHUB_OUTPUT"
       - name: Cache de cargo-audit
         id: cache-audit
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/.cargo/bin/cargo-audit
-          key: cargo-audit-${{ runner.os }}-v1
+          key: cargo-audit-${{ runner.os }}-${{ steps.mois.outputs.mois }}
       - name: Installer cargo-audit
         if: steps.cache-audit.outputs.cache-hit != 'true'
         run: cargo install cargo-audit --locked
@@ -259,7 +266,7 @@ jobs:
       - name: Playwright projet ${{ matrix.project }}, tranche ${{ matrix.shard }}/4
         run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4 --reporter=github,html,json
       - name: Comptage
-        if: always() && hashFiles('playwright-report.json') != ''
+        if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}
         run: |
           mkdir -p "$CI_COUNTS"
           node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/e2e-${{ matrix.project }}-${{ matrix.shard }}.json" "e2e ${{ matrix.project }}"
@@ -272,7 +279,7 @@ jobs:
             test-results/
           retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: count-e2e-${{ matrix.project }}-${{ matrix.shard }}
           path: counts/
@@ -310,13 +317,13 @@ jobs:
       - name: Perf e2e
         run: npx playwright test --project=perf --no-deps --reporter=github,html,json
       - name: Perf Vitest
-        if: always()
+        if: ${{ !cancelled() }}
         run: npm run test:perf -- --reporter=default --reporter=json --outputFile.json=vitest-perf.json
       - name: Taille du bundle
-        if: always()
+        if: ${{ !cancelled() }}
         run: npm run test:bundle
       - name: Comptage
-        if: always()
+        if: ${{ !cancelled() }}
         run: |
           mkdir -p "$CI_COUNTS"
           if [ -f playwright-report.json ]; then node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/perf-e2e.json" "perf e2e"; fi
@@ -330,7 +337,7 @@ jobs:
             test-results/
           retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        if: always()
+        if: ${{ !cancelled() }}
         with:
           name: count-perf
           path: counts/
@@ -353,13 +360,15 @@ jobs:
           path: counts
           merge-multiple: true
       - name: Résumé
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
           {
             echo "## Suite CircleTasks"
             echo
             echo "| Job | Résultat |"
             echo "|---|---|"
-            echo '${{ toJSON(needs) }}' | node -e 'const n=JSON.parse(require("fs").readFileSync(0,"utf8"));for(const [k,v] of Object.entries(n))console.log(`| ${k} | ${v.result} |`)'
+            printf '%s' "$NEEDS" | node -e 'const n=JSON.parse(require("fs").readFileSync(0,"utf8"));for(const [k,v] of Object.entries(n))console.log(`| ${k} | ${v.result} |`)'
             echo
             echo "### Tests par job"
             echo

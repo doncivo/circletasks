@@ -40,8 +40,8 @@ export default mergeConfig(
         include: ['src/**/*.{ts,tsx}'],
         exclude: ['src/**/*.test.{ts,tsx}', 'src/main.tsx', 'src/**/*.d.ts'],
         // CI (tests.yml) : chaque tranche (--shard) ne voit qu'une partie des tests, le seuil n'a de sens que sur le rapport fusionné
-        // (--merge-reports) ; CT_COVERAGE_SHARD=1 le retire des tranches seulement. Sans cette variable, le seuil s'applique toujours.
-        ...(process.env['CT_COVERAGE_SHARD']
+        // (--merge-reports) ; CT_COVERAGE_SHARD=1 le retire des tranches seulement, et seulement en CI (CI=true). Sans cette variable, le seuil s'applique toujours.
+        ...(process.env['CT_COVERAGE_SHARD'] === '1' && process.env['CI'] === 'true'
           ? {}
           : {
               thresholds: {

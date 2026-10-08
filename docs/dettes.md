@@ -143,6 +143,7 @@ Audits de sécurité de l'ADR 0011 (trois audits et une vérification ciblée, l
 
 - D-03, critères 10-11 : workflow de release et secrets GitHub (PREP-01).
 - Test d'installation réelle N → N+1 sur le PC, à faire par Ali.
+- **Tests de synchro lents sous charge** (relevé à la mise en place de la suite en CI, 2026-10-08) : `tests/unit/sync/stateRewrites.test.ts` (« trois appareils inactifs : même borne » ; 72 cycles, 3 appareils, chiffrement) frôle le délai de 5 s sous charge : 4 244 ms pour le fichier entier (13 tests) sur un runner à 2 workers, délai dépassé à 4 workers sur 4 cœurs et sur la machine locale chargée. Même cas pour `tests/unit/sync/forget/forgetSecondReview.test.ts` (test : « (5) arrêts autour de la condition (h) > référence sans arrêt, puis arrêt avant chaque écriture de A ») : 3 764 ms le fichier (8 tests) en CI. Vus aussi en retard en local : `stateRewritesRules.test.ts` (« A et B attendent C pendant 2 heures ») et `forget/forgetSim.test.ts`. `stateRewritesQa.test.ts` prend 13 s pour 12 tests. En attendant, `vitest-node` tourne à 2 workers en 5 tranches (tests.yml). À traiter à la racine : chiffrement injecté dans le simulateur, nombre de cycles, découpage. Aucun délai allongé.
 
 ## Sécurité
 
