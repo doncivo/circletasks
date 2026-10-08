@@ -71,9 +71,14 @@ export interface AppState {
   setSpaces(spaces: readonly Space[]): void;
   setProjects(projects: readonly Project[]): void;
   setProjectFilter(projectId: ProjectId | null): void;
+  /** Étape d'ouverture en cours (lue par le chien de garde du démarrage) ; null hors ouverture. */
+  readonly dbProgress: { readonly step: string; readonly migration?: number | undefined } | null;
+  setDbProgress(progress: AppState['dbProgress']): void;
 }
 
 export const useAppStore = create<AppState>()((set) => ({
+  dbProgress: null,
+  setDbProgress: (dbProgress) => set({ dbProgress }),
   dbStatus: 'idle',
   dbErrorDetail: null,
   dbBackupFailed: false,

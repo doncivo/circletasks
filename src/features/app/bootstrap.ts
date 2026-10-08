@@ -49,9 +49,12 @@ export async function bootstrapDatabase(
   // 0.2.1 : étape en cours, mise à jour avant chaque appel (diagnostic affiché sous app.dbError).
   let step: DbOpenStep = 'load';
   let migration: number | undefined;
+  const { setDbProgress } = useAppStore.getState();
+  setDbProgress({ step });
   try {
     db = await open();
     step = 'backup';
+    setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
     await migrate(db, migrations, {
       beforeApply: createBackupBeforeMigration(port, options.clock),
@@ -59,11 +62,14 @@ export async function bootstrapDatabase(
       onStep: (current) => {
         step = current.kind;
         migration = current.kind === 'migration' ? current.version : undefined;
+        setDbProgress({ step, migration });
       },
     });
+    setDbProgress(null);
     setDbStatus('ready');
     return db;
   } catch (error) {
+    setDbProgress(null);
     const journalMode = db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
@@ -158,7 +164,9 @@ const readOnlyStamper: WriteStamper = {
  * (dbStatus = 'error'). Appelé par App.tsx ; le conteneur est fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
-  const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });
+  // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
+  const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
+  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup });
   if (!driver) return undefined;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;
