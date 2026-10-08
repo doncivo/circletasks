@@ -213,6 +213,11 @@ export interface ReadSnapshotRequest {
 /** Entrée de `sync_scan` : appareils déjà connus (`sync_state`), jamais écartés par le plafond de dossiers (section 1.1). */
 export interface ScanRequest {
   readonly keep: readonly DeviceId[];
+  /**
+   * ADR 0011 §22 point 4 : budget d'hydratation réduit du cycle (entier de 1 à 180 000 ms, sinon `bad-name`) ; absent : 3 minutes. Posé par le
+   * cycle `hide` de l'iPhone (échéance moins 2 s) : une hydratation ne dépasse pas l'échéance.
+   */
+  readonly hydrateBudgetMs?: number;
 }
 
 export interface OwnFileRef {
@@ -305,12 +310,44 @@ export const SYNC_COMMAND_WINDOWS: { readonly [C in SyncCommand]: 'main' | 'pair
 /** Les 24 commandes, dans l'ordre de la section 11.1 (même liste que `AppManifest::commands` de `build.rs` ; lot Y1, puis lot Y4). */
 export const SYNC_COMMANDS = Object.keys(SYNC_COMMAND_WINDOWS) as readonly SyncCommand[];
 
+/**
+ * iPhone (ADR 0011 §22 point 7, capability `sync-ios.json`) : une seule fenêtre, `main` ; null : commande absente de l'iPhone. Les trois
+ * commandes de la fenêtre `pairing` n'y existent pas (l'iPhone n'affiche jamais le QR) ; les trois qui demandent une confirmation native de
+ * l'iPhone arrivent avec Y-IOS-02.
+ */
+export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | null } = {
+  sync_folder_info: 'main',
+  sync_folder_choose: 'main',
+  sync_folder_forget: 'main',
+  sync_bind_device: 'main',
+  sync_key_status: 'main',
+  sync_key_create: 'main',
+  sync_pairing_open: null,
+  sync_pairing_payload: null,
+  sync_key_import: null,
+  sync_pairing_close: null,
+  sync_scan: 'main',
+  sync_read_journal: 'main',
+  sync_append_journal: 'main',
+  sync_write_state: 'main',
+  sync_snapshot_begin: 'main',
+  sync_snapshot_append: 'main',
+  sync_snapshot_commit: 'main',
+  sync_read_snapshot: 'main',
+  sync_delete_own: 'main',
+  sync_restore_marker_get: 'main',
+  sync_restore_marker_clear: 'main',
+  sync_device_forget: null,
+  sync_forgotten_delete: 'main',
+  sync_reset_key: null,
+};
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Contrat de la plateforme
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 export interface SyncPlatform {
-  /** Faux sur iOS jusqu'à l'ordre 5. */
+  /** Vrai dans l'app installée sur PC et sur iPhone (ADR 0011 §22 point 7), faux dans le navigateur sans simulateur. */
   available(): boolean;
   readonly folder: {
     info(): Promise<SyncFolderInfo>;
@@ -550,6 +587,11 @@ export type RejoinOutcome = { readonly kind: 'restart' } | { readonly kind: 'fai
 
 export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';
 
+/** Options de `syncNow` (ADR 0011 §22 point 6). */
+export interface SyncNowOptions {
+  readonly deadlineAt?: number;
+}
+
 export interface RemoteChanges {
   readonly tables: ReadonlySet<string>;
   readonly ids: ReadonlyMap<string, ReadonlySet<string>>;
@@ -559,8 +601,11 @@ export interface SyncService {
   status(): SyncStatus;
   /** Pour `useSyncExternalStore`. */
   subscribe(listener: () => void): () => void;
-  /** Ne rejette jamais. */
-  syncNow(reason: SyncReason): Promise<void>;
+  /**
+   * Ne rejette jamais. `deadlineAt` (ADR 0011 §22 point 6 : cycle `hide` de l'iPhone seulement) : échéance (horloge du service, ms) comparée
+   * avant chaque unité atomique du cycle ; atteinte, le cycle s'arrête proprement (issue `interrupted`, rien de perdu, aucune erreur).
+   */
+  syncNow(reason: SyncReason, options?: SyncNowOptions): Promise<void>;
   onRemoteChanges(listener: (c: RemoteChanges) => void): () => void;
   chooseRestoreOption(option: 'apply-everywhere' | 'keep-synced'): Promise<void>;
 }

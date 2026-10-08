@@ -4,6 +4,7 @@ import { t, type PlainMessageKey } from '../../i18n';
 import type { SyncDeviceStatus, SyncResetStatus } from '../../platform/sync/types';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { nativeConfirmationAvailable } from './iosSync';
 import { forgetDeviceName } from './forgetText';
 import { openPairingWindow, pairingOpenErrorKey } from './pairingStatus';
 import { ResetSyncDialog } from './ResetSyncDialog';
@@ -47,7 +48,8 @@ export function SyncDetailsReset() {
   const required = phase === 'reset-required' || reset?.role === 'required' || (reset?.step === 'superseded' && !stopped);
   const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten';
   const running = reset !== null && IN_PROGRESS.has(reset.step);
-  const canStart = configured && !required && !running;
+  // Confirmation native requise : masqué tant qu'elle n'existe pas sur cet appareil (ADR 0011 §22 point 7).
+  const canStart = configured && !required && !running && nativeConfirmationAvailable(container.platform.os);
   if (!configured && !required && !reset) return null;
   const nowMs = container.clock.nowMs();
   const devices = status.devices;

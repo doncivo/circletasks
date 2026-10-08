@@ -14,7 +14,7 @@ use super::crypto::{parse_line_prefix, sha256_hex, FileHeader, HeaderKind, Maste
 use super::files::{AppendMode, Availability, FsEntry, FsError, Listing, SyncFs};
 use super::limits::{
     encrypted_line_bytes, FOLDER_STOP_BYTES, FOLDER_WARN_BYTES, MAX_APPEND_CALL_BYTES, MAX_DEVICE_FOLDERS, MAX_EPOCHS_PER_DEVICE, MAX_SCAN_ENTRIES_TOTAL, MAX_STATE_CANDIDATES, MAX_HEADER_BYTES, MAX_IPC_PAGE_BYTES,
-    MAX_RECORD_PLAINTEXT_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, MAX_SEGMENT_BYTES, MAX_SNAPSHOT_BYTES, MAX_STATE_ACKS, MAX_STATE_FILE_BYTES,
+    MAX_PLUGIN_CHUNK_BYTES, MAX_RECORD_LINE_BYTES, MAX_RECORD_PLAINTEXT_BYTES, MAX_SCAN_ENTRIES_PER_FOLDER, MAX_SEGMENT_BYTES, MAX_SNAPSHOT_BYTES, MAX_STATE_ACKS, MAX_STATE_FILE_BYTES,
     MAX_STATE_FORGOTTEN, SEGMENT_ROTATE_BYTES,
 };
 use super::names::{
@@ -65,6 +65,103 @@ pub fn parse_file(bytes: &[u8]) -> Result<ParsedFile<'_>, ParseError> {
         rest = &rest[pos + 1..];
     }
     Ok(ParsedFile { header, lines, partial_tail: !rest.is_empty() })
+}
+
+/// En-tête d'un fichier lu en flux.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StreamHeader {
+    Ok(FileHeader),
+    /// Aucun `\n` dans un fichier de 1 Kio au plus : en transfert (comme `ParseError::Partial`).
+    Partial,
+    /// En-tête invalide ou de plus de 1 Kio (comme `ParseError::BadHeader`).
+    Bad,
+}
+
+/// Fin d'un fichier lu en flux : en-tête, nombre de lignes complètes, dernière ligne complète (None : ligne de plus de
+/// `MAX_RECORD_LINE_BYTES`, jamais gardée en mémoire), dernière ligne incomplète présente.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamTail {
+    pub header: StreamHeader,
+    pub lines: u64,
+    pub last: Option<Vec<u8>>,
+    pub partial_tail: bool,
+}
+
+/// Lecture en flux (ADR 0011 §22 point 4) par blocs de 1 Mio (`MAX_PLUGIN_CHUNK_BYTES`) : voir `stream_last_line_with`.
+pub fn stream_last_line(fs: &dyn SyncFs, file: &[&str], limit: u64) -> Result<StreamTail, FsError> {
+    stream_last_line_with(fs, file, limit, MAX_PLUGIN_CHUNK_BYTES)
+}
+
+/// En-tête, nombre de lignes et dernière ligne complète d'un fichier, lu par `read_from` en blocs de `chunk` octets (hydratation
+/// demandée) ; mémoire bornée à un bloc et une ligne de `MAX_RECORD_LINE_BYTES`. Même découpage que `parse_file` (en-tête jusqu'au premier
+/// `\n`, 1 Kio au plus ; lignes terminées par `\n`). Taille annoncée au-delà de `limit` : `TooLarge` ; un bloc vide avant la fin
+/// annoncée (fichier en cours de transfert) : `CloudPending`.
+pub fn stream_last_line_with(fs: &dyn SyncFs, file: &[&str], limit: u64, chunk: usize) -> Result<StreamTail, FsError> {
+    let chunk = chunk.max(1);
+    let mut offset = 0u64;
+    let mut header_buf: Vec<u8> = Vec::new();
+    let mut header: Option<StreamHeader> = None;
+    let mut current: Vec<u8> = Vec::new();
+    let mut overlong = false;
+    let mut lines = 0u64;
+    let mut last: Option<Vec<u8>> = None;
+    loop {
+        let block = fs.read_from(file, offset, chunk, true)?;
+        if block.size > limit {
+            return Err(FsError::TooLarge);
+        }
+        let mut rest: &[u8] = &block.bytes;
+        if header.is_none() {
+            match rest.iter().position(|&b| b == b'\n') {
+                Some(pos) if header_buf.len() + pos <= MAX_HEADER_BYTES => {
+                    header_buf.extend_from_slice(&rest[..pos]);
+                    header = Some(FileHeader::parse(&header_buf).map_or(StreamHeader::Bad, StreamHeader::Ok));
+                    rest = &rest[pos + 1..];
+                }
+                Some(_) => header = Some(StreamHeader::Bad),
+                None => {
+                    header_buf.extend_from_slice(rest);
+                    if header_buf.len() > MAX_HEADER_BYTES {
+                        header = Some(StreamHeader::Bad);
+                    }
+                    rest = &[];
+                }
+            }
+            if header == Some(StreamHeader::Bad) {
+                return Ok(StreamTail { header: StreamHeader::Bad, lines: 0, last: None, partial_tail: false });
+            }
+        }
+        if header.is_some() {
+            while let Some(pos) = rest.iter().position(|&b| b == b'\n') {
+                let piece = &rest[..pos];
+                if !overlong && current.len() + piece.len() <= MAX_RECORD_LINE_BYTES {
+                    current.extend_from_slice(piece);
+                    last = Some(std::mem::take(&mut current));
+                } else {
+                    last = None;
+                    current.clear();
+                }
+                overlong = false;
+                lines += 1;
+                rest = &rest[pos + 1..];
+            }
+            if !overlong && current.len() + rest.len() <= MAX_RECORD_LINE_BYTES {
+                current.extend_from_slice(rest);
+            } else if !rest.is_empty() {
+                overlong = true;
+                current.clear();
+            }
+        }
+        offset += block.bytes.len() as u64;
+        if block.eof {
+            break;
+        }
+        if block.bytes.is_empty() {
+            return Err(FsError::CloudPending);
+        }
+    }
+    let header = header.unwrap_or(StreamHeader::Partial);
+    Ok(StreamTail { header, lines, last, partial_tail: overlong || !current.is_empty() })
 }
 
 /// En-tête analysé depuis les premiers octets d'un fichier (jusqu'au premier saut de ligne, 1 Kio au plus).
@@ -563,7 +660,16 @@ impl<'a> Store<'a> {
 
     /// `sync_scan({ keep })` : appareils, états (anti-rejeu), fichiers listés, fichiers en attente, plafonds.
     pub fn scan(&self, self_id: Option<&str>, keep: &[String], accepted: &mut HashMap<String, Accepted>) -> SyncResult<FolderScan> {
-        self.fs.start_cycle().map_err(fs_error)?;
+        self.scan_within(self_id, keep, accepted, None)
+    }
+
+    /// `sync_scan({ keep, hydrateBudgetMs })` : `budget` réduit le budget d'hydratation du cycle (ADR 0011 §22 point 4) ; None : 3 minutes.
+    pub fn scan_within(&self, self_id: Option<&str>, keep: &[String], accepted: &mut HashMap<String, Accepted>, budget: Option<std::time::Duration>) -> SyncResult<FolderScan> {
+        match budget {
+            Some(budget) => self.fs.start_cycle_within(budget),
+            None => self.fs.start_cycle(),
+        }
+        .map_err(fs_error)?;
         let budget = Budget::new();
         let protected: BTreeSet<&str> = keep.iter().map(String::as_str).chain(self_id).filter(|id| is_uuid_v4(id)).collect();
         let mut ignored = 0u64;
@@ -784,16 +890,22 @@ impl<'a> Store<'a> {
             Err(ParseError::Partial) => return fail(SyncCode::CloudPending),
             Err(ParseError::BadHeader) => return fail(SyncCode::BadHeader),
         };
-        if file.header.kid != self.key_for(epoch).kid() {
+        self.check_header(&file.header, kind, dev, epoch, n)?;
+        Ok(file)
+    }
+
+    /// En-tête d'un fichier lu : `kid`, majeure et correspondance au chemin (mêmes règles pour la lecture complète et la lecture en flux).
+    fn check_header(&self, header: &FileHeader, kind: HeaderKind, dev: &str, epoch: &str, n: u64) -> SyncResult<()> {
+        if header.kid != self.key_for(epoch).kid() {
             return fail(SyncCode::KeyMismatch);
         }
-        if file.header.sm > SYNC_FORMAT_MAJOR {
+        if header.sm > SYNC_FORMAT_MAJOR {
             return fail(SyncCode::NewerFormat);
         }
-        if file.header.kind() != Some(kind) || file.header.dev != dev || file.header.e != epoch || file.header.n != n {
+        if header.kind() != Some(kind) || header.dev != dev || header.e != epoch || header.n != n {
             return fail(SyncCode::BadHeader);
         }
-        Ok(file)
+        Ok(())
     }
 
     /// Page de texte clair, jamais au-delà de la tête authentifiée (section 1.4, cas limites de l'avenant « Amorce »).
@@ -956,8 +1068,10 @@ impl<'a> Store<'a> {
     /// `sync_read_snapshot` `tail` (§18 point 11) : dernier enregistrement seul de l'instantané **annoncé** (`seq` égal à celui de l'état
     /// authentifié, sinon `state-mismatch`) ; page `complete` à un enregistrement s'il se déchiffre, `cloud-pending` si la dernière ligne
     /// est incomplète ou absente (ou le fichier dans le nuage), `truncated` si elle ne se déchiffre pas. L'index de la ligne entre dans les
-    /// données authentifiées (section 1.2) : le fichier est lu en entier pour le connaître ; `ends` garde le résultat par instantané (un
-    /// numéro n'est jamais réécrit), pour ne lire chaque instantané qu'une fois par session.
+    /// données authentifiées (section 1.2) : les lignes sont comptées **en flux** (ADR 0011 §22 point 4, toutes plateformes) par
+    /// `read_from`, blocs de 1 Mio, seule la dernière ligne complète gardée : mémoire bornée à un bloc et une ligne, quelle que soit la
+    /// taille de l'instantané. `ends` garde le résultat par instantané (un numéro n'est jamais réécrit), pour ne lire chaque instantané
+    /// qu'une fois par session ; le cache d'octets de la lecture par pages n'est plus rempli ici.
     pub fn read_snapshot_tail(
         &self,
         dev: &str,
@@ -965,7 +1079,6 @@ impl<'a> Store<'a> {
         seq: u64,
         accepted: &mut HashMap<String, Accepted>,
         ends: &mut HashMap<SnapshotEndKey, String>,
-        bytes_cache: Option<&mut Option<SnapshotCache>>,
     ) -> SyncResult<ReadPage> {
         if !is_uuid_v4(dev) || !is_epoch_id(epoch) || !is_file_number(seq) {
             return fail(SyncCode::BadName);
@@ -979,26 +1092,24 @@ impl<'a> Store<'a> {
         if let Some(json) = ends.get(&key) {
             return Ok(ReadPage { records: vec![json.clone()], next: RecordCursor { segment: seq, record: 0 }, status: "complete" });
         }
-        let bytes = match self.fs.read(&[DEVICES_DIR, dev, epoch, &snapshot_name(seq as u32)], MAX_SNAPSHOT_BYTES, true) {
-            Ok(bytes) => Arc::new(bytes),
+        let path = [DEVICES_DIR, dev, epoch, &snapshot_name(seq as u32)];
+        let tail = match stream_last_line(self.fs, &path, MAX_SNAPSHOT_BYTES) {
+            Ok(tail) => tail,
             Err(FsError::NotFound | FsError::CloudPending | FsError::ProviderStopped | FsError::CloudError) => return Ok(pending),
             Err(error) => return Err(fs_error(error)),
         };
-        // Lecture complète déjà faite : gardée pour la lecture par pages qui suit souvent (reprise depuis cet instantané).
-        if let Some(cache) = bytes_cache {
-            *cache = Some(SnapshotCache { key: (dev.to_owned(), epoch.to_owned(), seq), bytes: bytes.clone() });
-        }
-        let file = match self.checked(&bytes, HeaderKind::Snapshot, dev, epoch, seq) {
-            Ok(file) => file,
-            Err(error) if error.code == SyncCode::CloudPending => return Ok(pending),
-            Err(error) => return Err(error),
+        let header = match tail.header {
+            StreamHeader::Partial => return Ok(pending),
+            StreamHeader::Bad => return fail(SyncCode::BadHeader),
+            StreamHeader::Ok(header) => header,
         };
-        if file.partial_tail || file.lines.is_empty() {
+        self.check_header(&header, HeaderKind::Snapshot, dev, epoch, seq)?;
+        if tail.partial_tail || tail.lines == 0 {
             return Ok(pending);
         }
-        let index = (file.lines.len() - 1) as u64;
+        let index = tail.lines - 1;
         let truncated = ReadPage { records: Vec::new(), next: RecordCursor { segment: seq, record: index }, status: "truncated" };
-        let Some(line) = file.lines.last().and_then(|l| line_str(l)) else { return Ok(truncated) };
+        let Some(line) = tail.last.as_deref().and_then(line_str) else { return Ok(truncated) };
         let Ok(opened) = self.key_for(epoch).open(&Place::Snapshot { dev, epoch, seq: seq as u32, index }, line) else { return Ok(truncated) };
         ends.insert(key, opened.json.clone());
         Ok(ReadPage { records: vec![opened.json], next: RecordCursor { segment: seq, record: index + 1 }, status: "complete" })

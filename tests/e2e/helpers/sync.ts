@@ -57,9 +57,14 @@ export const propagate = (room: string): Promise<unknown> => post('/propagate', 
 /** La méthode de plateforme de l'appareil échouera (code donné, avant toute écriture) après `after` appels réussis. */
 export const failAfter = (room: string, device: string, method: string, after: number, code = 'io'): Promise<unknown> => post('/fail', { room, device, method, after, code });
 
+/** Y-IOS-01 : dossier rendu injoignable (signet perdu) ou rétabli. */
+export const setUnreachable = (room: string, device: string, on: boolean): Promise<unknown> => post('/unreachable', { room, device, on });
+
 export interface SimInspection {
   readonly deviceId: string | null;
   readonly appends: number;
+  /** Y-IOS-01 : `hydrateBudgetMs` reçu par chaque scan (null : absent). */
+  readonly scanBudgets: readonly (number | null)[];
   /** Tâches publiées par l'appareil : nombre de créations complètes par identifiant. */
   readonly tasks: Readonly<Record<string, number>>;
   readonly failing: boolean;

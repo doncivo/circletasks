@@ -1,6 +1,6 @@
 # Y-IOS-01 — Plugin folder-bookmark, `BookmarkFs` et cycle de synchro en arrière-plan
 
-Module : M15 Synchronisation · Ordre de construction : 5 (lot Y-IOS, phase 1, **premier** du lot, avant Y-IOS-02) · Agents : **sync-icloud** (Rust `SyncFs`/`BookmarkFs`, moteur, contrat) et **ios-mobile** (Swift du plugin, capability iOS, CI) · Relectures : qa-test, code-reviewer, **security-privacy (obligatoire : accès fichiers sous signet, liens symboliques)** · Statut : à faire
+Module : M15 Synchronisation · Ordre de construction : 5 (lot Y-IOS, phase 1, **premier** du lot, avant Y-IOS-02) · Agents : **sync-icloud** (Rust `SyncFs`/`BookmarkFs`, moteur, contrat) et **ios-mobile** (Swift du plugin, capability iOS, CI) · Relectures : qa-test, code-reviewer, **security-privacy (obligatoire : accès fichiers sous signet, liens symboliques)** · Statut : codé (build-ios.yml et relectures à faire)
 Story technique, sans équivalent au PRD (écart noté dans docs/decisions.md, 2026-10-07, validée par Ali). Rend vraies sur iPhone les stories Y-01, Y-02, Y-03, Y-05 (dossier, cycle, bouton, hors ligne).
 Dépend de : I-01 (chaîne `build-ios.yml` par branche, contrat Info.plist), Y-01 à Y-03, Y-TECH-01, Y-TECH-02 (livrés). Précède Y-IOS-02.
 
@@ -75,3 +75,11 @@ Clé, Trousseau, scan du QR, confirmations natives, fuseau local, échec de réi
 
 - Ce lot ne touche ni `src/domain` ni `src/db` (lot N1 en parallèle) ; si le critère 11 exige finalement un avertissement nouveau (`SyncWarningCode`), il attend la fin du lot N1 ou passe en story séparée.
 - Fichiers communs avec le lot N1 : `src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`, capabilities iOS, `build.rs` : fusionner N1 d'abord ou résoudre à la main ; un seul `build-ios.yml` par branche à la fois si les minutes macOS sont comptées.
+
+## Corrections apportées par l'ADR 0011 §22 (font foi sur cette fiche)
+
+- Contrat : commandes Swift en lowerCamelCase des deux côtés (`pickFolder`, `resolve`, `status`, `list`, `readFrom`, `download`, `append`, `writeAtomic`, `rename`, `createDir`, `remove`, `removeEmptyDir`, `appState`) ; `delete` devient `remove` et `removeEmptyDir` ; chemins en composants relatifs à la racine ; rejets limités aux codes existants (`not-configured`, `folder-unreachable`, `unsafe-folder`, `cloud-pending`, `cloud-error`, `too-large`, `io`) ; aucune commande du plugin exposée à la WebView (aucune permission `folder-bookmark:`).
+- Aucune commande nouvelle (24) : `sync_scan` gagne seulement l'entrée facultative `hydrateBudgetMs` (1 à 180 000, sinon `bad-name`). Aucune phase ni aucun code nouveaux : le critère 12 se lit « phase `error` » (pas de `needs-folder`), texte iOS propre choisi par `syncText.ts`.
+- Capability `sync-ios.json` : 18 permissions à ce lot (les 24 moins les trois de la fenêtre `pairing` et les trois qui demandent une confirmation native, ajoutées par Y-IOS-02) ; d'ici là, l'interface masque sur iPhone « Oublier le dossier et la clé », « Oublier cet appareil » et « Réinitialiser » (échec fermé).
+- Arrière-plan : tâche ouverte par Swift à `willResignActive` (aucune commande de fin, garde de 28 s), échéance de 25 s passée par `syncNow('hide', { deadlineAt })`, retour au premier plan = cycle `open`. Issue `interrupted` sans phase ni bandeau (critère 11).
+- Lecture de la fin d'un instantané en flux sur toutes les plateformes (`read_from`) : le cache d'octets de la lecture par pages n'est plus rempli par `tail` (test `snapshot_end_read_then_paged_read_reads_the_file_once_each`).

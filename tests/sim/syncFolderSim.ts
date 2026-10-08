@@ -19,7 +19,11 @@ import { createSimFolder, propagate } from './syncCloudSim';
  * - `POST /rpc` `{ room, device, role, platform, path, args }` : appel d'une méthode de `SyncPlatform` ;
  * - `POST /propagate` `{ room }` : recopie mutuelle des dossiers de l'espace (Y-10 : suppressions du dossier d'un appareil oublié comprises) ;
  * - `POST /fail` `{ room, device, method, after, code }` : la méthode échoue (code donné, avant toute écriture) après `after` appels réussis ;
- * - `POST /inspect` `{ room, device }` : identifiant lié, nombre d'ajouts, tâches publiées (nombre de fois par identifiant).
+ * - `POST /inspect` `{ room, device }` : identifiant lié, nombre d'ajouts, tâches publiées (nombre de fois par identifiant), budgets
+ *   d'hydratation reçus par chaque scan (`hydrateBudgetMs`, null sans) ;
+ * - `POST /unreachable` `{ room, device, on }` (Y-IOS-01) : dossier injoignable (signet perdu) : toute méthode répond `folder-unreachable`
+ *   jusqu'à `on: false` ou un nouveau choix du dossier. `on: false` remet aussi la liaison à neuf si la page s'est rechargée (la base du
+ *   navigateur de dev n'est pas persistée : Rust, lui, retrouve l'appareil lié dans `folder.json`).
  */
 
 const MAP_TAG = '__ctMap';
@@ -44,6 +48,12 @@ interface SimSyncDevice {
   deviceId: string | null;
   appends: number;
   failure: SimFailure | null;
+  /** Y-IOS-01 : dossier injoignable (signet perdu). */
+  unreachable: boolean;
+  /** Y-IOS-01 : liaison remise à neuf au prochain `bindDevice` d'un autre identifiant (page rechargée). */
+  rebind: boolean;
+  /** Y-IOS-01 : `hydrateBudgetMs` de chaque scan (null : absent). */
+  scanBudgets: (number | null)[];
 }
 
 interface Room {
@@ -102,7 +112,7 @@ async function createDevice(room: Room, name: string, role: SimRole, devicePlatf
   const folder = createSimFolder();
   // Plateforme publiée par la page (agent du navigateur) : Rust la connaît, la plateforme mémoire la vérifie dans `writeState`.
   const platform = createMemorySyncPlatform({ folder, platform: devicePlatform });
-  const device: SimSyncDevice = { name, folder, platform, deviceId: null, appends: 0, failure: null };
+  const device: SimSyncDevice = { name, folder, platform, deviceId: null, appends: 0, failure: null, unreachable: false, rebind: false, scanBudgets: [] };
   if (role === 'first') {
     await platform.folder.choose();
     await platform.key.create();
@@ -165,6 +175,19 @@ async function rpc(rooms: Map<string, Room>, request: SimRequest): Promise<SimRe
   try {
     const device = await deviceOf(rooms, body.room, body.device, body.role, body.platform === 'ios' ? 'ios' : 'windows');
     const [group, name] = body.path.includes('.') ? (body.path.split('.') as [string, string]) : [null, body.path];
+    if (device.unreachable) {
+      if (body.path !== 'folder.choose') throw new SyncPlatformError('folder-unreachable');
+      device.unreachable = false;
+    }
+    if (body.path === 'bindDevice' && device.rebind && device.deviceId !== null && device.deviceId !== String(body.args[0])) {
+      device.rebind = false;
+      await device.platform.folder.forget({ eraseKey: false });
+      await device.platform.folder.choose();
+    }
+    if (body.path === 'scan') {
+      const budget = (body.args[0] as { hydrateBudgetMs?: unknown } | undefined)?.hydrateBudgetMs;
+      device.scanBudgets.push(typeof budget === 'number' ? budget : null);
+    }
     const failure = device.failure;
     if (failure && failure.method === body.path) {
       if (failure.remaining === 0) {
@@ -226,7 +249,15 @@ export async function startSyncFolderSim(port = 0): Promise<SyncFolderSim> {
         const { room, device } = JSON.parse(request.body) as { room: string; device: string };
         const target = rooms.get(room)?.devices.get(device);
         if (!target) return json(404, { ok: false });
-        return json(200, { deviceId: target.deviceId, appends: target.appends, tasks: publishedTasks(target), failing: target.failure !== null });
+        return json(200, { deviceId: target.deviceId, appends: target.appends, tasks: publishedTasks(target), failing: target.failure !== null, scanBudgets: target.scanBudgets });
+      }
+      case '/unreachable': {
+        const { room, device, on } = JSON.parse(request.body) as { room: string; device: string; on: boolean };
+        const target = rooms.get(room)?.devices.get(device);
+        if (!target) return json(404, { ok: false });
+        target.unreachable = on;
+        if (!on) target.rebind = true;
+        return json(200, { ok: true });
       }
       case '/close-room': {
         const { room } = JSON.parse(request.body) as { room: string };

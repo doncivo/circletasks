@@ -120,6 +120,8 @@ export async function readDevice(deps: SyncDeps, request: ReadRequest): Promise<
   for (;;) {
     if (limit !== undefined && carry.length === 0 && compareCursors(from, limit) >= 0) return finish('complete');
     let page;
+    // ADR 0011 §22 point 6 : échéance comparée avant chaque page (lue puis appliquée dans sa transaction, jamais coupée).
+    deps.deadline?.check('read-page');
     try {
       page = await deps.platform.readJournal({ deviceId: request.deviceId, epoch: request.epoch, from, ...(limit !== undefined ? { maxBytes: 1 } : {}) });
     } catch (error) {

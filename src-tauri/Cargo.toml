@@ -66,6 +66,8 @@ keyring = { version = "3", default-features = false, features = ["apple-native"]
 # Clé de synchro au Trousseau avec kSecAttrAccessibleWhenUnlockedThisDeviceOnly et non synchronisée (ADR 0011 section 2.2, vault_ios.rs) :
 # keyring ne règle pas ces attributs. Même version que celle déjà tirée par keyring.
 security-framework = { version = "3", default-features = false }
+# Signet de sécurité du dossier iCloud Drive/CircleTasks et accès aux fichiers (ADR 0011 §22, Y-IOS-01) : plugin Swift local, appelé par Rust seul.
+tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
 
 # Plugins PC uniquement (absents du build iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

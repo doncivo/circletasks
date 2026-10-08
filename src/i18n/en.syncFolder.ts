@@ -22,6 +22,7 @@ export const syncFolderEn: Shape<typeof syncFolderFr> = {
   forgetFolderAndKey: 'Forget folder and key',
   errorUnsafe: 'This folder cannot be used for sync',
   errorUnreachable: 'The sync folder cannot be found',
+  errorUnreachableIos: 'iCloud Drive folder unreachable: choose the iCloud Drive / CircleTasks folder again',
   errorTooLarge: 'The sync folder is too large',
   errorProviderStopped: 'Open iCloud for Windows',
   errorVault: 'The Windows credential vault is unavailable',

@@ -27,6 +27,8 @@ export const syncEngineFr = {
     keyMismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',
     errorFolderUnreachable: 'Dossier de synchro introuvable : vos modifications seront envoyées au retour',
+    // ADR 0011 §22 point 8 : signet du dossier perdu sur l'iPhone (réinstallation, dossier supprimé ou déplacé).
+    errorFolderUnreachableIos: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks',
     errorCloudProviderStopped: 'Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour',
     errorCloud: 'iCloud ne répond pas : vos modifications seront envoyées au retour',
     errorUnsafeFolder: 'Ce dossier ne peut pas servir à la synchronisation : choisissez-en un autre',

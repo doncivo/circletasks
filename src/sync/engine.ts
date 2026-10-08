@@ -22,6 +22,7 @@ import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
 import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish, openResetEpoch, recordResetFailure, republishWithoutNotice, resetActive, resetLagging, type ResetDirective } from './reset';
 import type { CycleFacts } from './status';
+import { createCycleDeadline, isCycleInterrupted, pagesBefore, type DeadlineUnit } from './deadline';
 import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
 
 /**
@@ -43,6 +44,13 @@ export interface CycleOptions {
   readonly forceResume?: boolean;
   /** Y-11 : calculer à la fin du cycle la précondition de la réinitialisation (« Synchronisez d'abord »). */
   readonly resetCheck?: boolean;
+  /**
+   * ADR 0011 §22 point 6 : échéance du cycle `hide` de l'iPhone (horloge injectée, ms), comparée avant chaque unité atomique ; atteinte, le
+   * cycle s'arrête (issue `interrupted`) : file gardée, aucun cycle complet marqué, aucune erreur.
+   */
+  readonly deadlineAt?: number;
+  /** Tests : appelé avant chaque comparaison à l'échéance (arrêt à une frontière choisie). */
+  readonly deadlineProbe?: (unit: DeadlineUnit) => void;
 }
 
 export interface CycleResult extends CycleFacts {
@@ -141,12 +149,20 @@ async function resolveInflight(deps: SyncDeps, writeOwnState: (head: DeviceAck) 
  * Un cycle (voir le module). Y-TECH-02 : les avertissements du scan sont joints au résultat dès que le scan a réussi (même si le cycle
  * échoue ensuite) ; une valeur stockée illisible (`SyncStateUnreadableError`) donne `stateUnreadable` (§19 point 7), jamais « aucune ».
  */
-export async function runCycle(deps: SyncDeps, hooks: CycleHooks, options: CycleOptions = {}): Promise<CycleResult> {
+export async function runCycle(baseDeps: SyncDeps, hooks: CycleHooks, options: CycleOptions = {}): Promise<CycleResult> {
   const seen: CycleSeen = {};
+  const deadline = options.deadlineAt === undefined ? undefined : createCycleDeadline(baseDeps.clock, options.deadlineAt, options.deadlineProbe);
+  const deps: SyncDeps = deadline ? { ...baseDeps, deadline } : baseDeps;
   let result: CycleResult;
   try {
     result = await cycleSteps(deps, hooks, options, seen);
   } catch (error) {
+    // ADR 0011 §22 point 6 : arrêt à l'échéance, entre deux unités : la file garde ce qui n'est pas publié, `lastSyncAt` n'avance pas,
+    // aucune phase d'erreur ; le cycle d'ouverture suivant reprend (journal du code seulement).
+    if (isCycleInterrupted(error)) {
+      deps.logger.log('cycle-interrupted', { unit: error.unit });
+      return { ...EMPTY, outcome: 'interrupted' };
+    }
     // Lecture hors des étapes gardées : seule l'illisibilité est convertie ici ; toute autre erreur remonte au service (code réel).
     if (!isSyncStateUnreadable(error)) throw error;
     deps.logger.log('cycle-failed', { code: 'io', unreadable: true });
@@ -169,8 +185,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     logger.log('cycle-failed', { code });
     return { ...EMPTY, ...extra, outcome: 'failed', errorCode: code, worked };
   };
-  /** Échec d'une étape : code réel, et `stateUnreadable` pour une valeur stockée illisible. */
-  const failWith = (error: unknown, extra: Partial<CycleResult> = {}): CycleResult => fail(syncErrorCodeOf(error), isSyncStateUnreadable(error) ? { ...extra, stateUnreadable: true } : extra);
+  /** Échec d'une étape : code réel, et `stateUnreadable` pour une valeur stockée illisible ; un arrêt à l'échéance n'est pas un échec. */
+  const failWith = (error: unknown, extra: Partial<CycleResult> = {}): CycleResult => {
+    if (isCycleInterrupted(error)) throw error;
+    return fail(syncErrorCodeOf(error), isSyncStateUnreadable(error) ? { ...extra, stateUnreadable: true } : extra);
+  };
 
   // 0. Préconditions.
   if (!platform.available()) return { ...EMPTY, outcome: 'not-configured' };
@@ -214,8 +233,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   await checkOwnStateMarks(deps, seen);
   const known = new Map((await repos.sync.getStates()).map((row) => [row.deviceId, row]));
   let scan: FolderScan;
+  // ADR 0011 §22 points 4 et 6 : cycle borné : scan seulement avant l'échéance, hydratation bornée par elle (moins 2 s).
+  deps.deadline?.check('scan');
   try {
-    scan = await platform.scan({ keep: [...known.keys()].filter((id) => id !== self) as DeviceId[] });
+    const keep = [...known.keys()].filter((id) => id !== self) as DeviceId[];
+    scan = await platform.scan(deps.deadline ? { keep, hydrateBudgetMs: deps.deadline.hydrateBudgetMs() } : { keep });
   } catch (error) {
     return failWith(error, { folderLabel, folderKind });
   }
@@ -311,6 +333,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // rejoué : c'est la borne qu'il attend pour republier (règle 1, reconstruction (iii) de `forgotten.json`).
     const forced = force || publishForget || ackSeqAwaited(state, lastWritten ?? ownState, awaitingAckSeq);
     if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
+    deps.deadline?.check('write-state');
     try {
       await platform.writeState({ sv: deps.sv, state });
       stateSeq = state.stateSeq;
@@ -370,7 +393,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       work();
       const maxSeq = await repos.sync.maxOutboxSeq();
       const endHlc = deps.hlc.now();
-      await platform.writeSnapshot({ epoch, seq: 1, sv: deps.sv, records: snapshotPages(repos, epoch, new Map<DeviceId, DeviceAck>(), deps.sv) });
+      await platform.writeSnapshot({ epoch, seq: 1, sv: deps.sv, records: pagesBefore(deps.deadline, snapshotPages(repos, epoch, new Map<DeviceId, DeviceAck>(), deps.sv)) });
       const head: DeviceAck = { epoch, segment: 0, record: 0, hlc: null, stateSeq: 0 };
       await data.transaction(async (tx) => {
         await tx.sync.clearOutbox(maxSeq);
@@ -784,12 +807,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         // sans elle, un lecteur qui reprend depuis cet instantané repartirait du début de l'époque sur cet appareil.
         if (head.hlc !== null) covers.set(self, { ...head, stateSeq });
         const endHlc = deps.hlc.now();
-        await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: snapshotPages(repos, currentEpoch, covers, deps.sv) });
+        await platform.writeSnapshot({ epoch: currentEpoch, seq, sv: deps.sv, records: pagesBefore(deps.deadline, snapshotPages(repos, currentEpoch, covers, deps.sv)) });
         snapshotMeta = { seq, endHlc };
         await writeJson(repos, META.snapshot, { epoch: currentEpoch, ...snapshotMeta, coveredSegment: head.segment, covers: Object.fromEntries(covers) });
         await writeState(await nextState(head), true);
         const old = [...listedSnapshots, seq].sort((a, b) => b - a).slice(SNAPSHOTS_KEPT_PER_EPOCH);
         // Échec journalisé (aucun échec silencieux) ; retentée au prochain instantané, les fichiers restants ne gênent aucune lecture.
+        if (old.length > 0) deps.deadline?.check('delete-own');
         if (old.length > 0) await platform.deleteOwn(old.map((n) => ({ epoch: currentEpoch, kind: 's' as const, n }))).catch((error: unknown) => logger.log('delete-own-failed', { kind: 's', code: syncErrorCodeOf(error) }));
         logger.log('snapshot-written', { epoch: currentEpoch, seq });
       }
@@ -805,7 +829,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await runForgetDeletions(deps, { view: forgetView, scan, accepted, ownPublished, ownSnapshot });
     }
 
-    // 8. Heure de dernière synchro.
+    // 8. Heure de dernière synchro (jamais après l'échéance d'un cycle borné : le cycle n'est pas complet).
+    deps.deadline?.check('finish');
     const lastSyncAt = iso(deps.clock.nowMs());
     if (publishError === null && pending.size === 0) await repos.sync.saveState(self, { lastSyncAt });
     // Y-11 (revue 13) : un appareil attendu par la réinitialisation est toujours dans APPAREILS (« jamais vu » s'il n'a jamais été lu).
@@ -817,6 +842,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (publishError !== null) return { ...EMPTY, outcome: 'failed', errorCode: publishError as SyncErrorCode, pendingFiles: [...pending], devices, folderLabel, folderKind, worked, keyMismatch, ...lag };
     return { outcome: 'done', errorCode: null, pendingFiles: [...pending], devices, keyMismatch, folderLabel, folderKind, lastSyncAt: pending.size === 0 ? lastSyncAt : (selfRow?.lastSyncAt ?? null), worked, ...lag };
   } catch (error) {
+    if (isCycleInterrupted(error)) throw error;
     const code = syncErrorCodeOf(error);
     logger.log('cycle-error', { code });
     // Y-11 : un échec pendant une réinitialisation est gardé avec son étape (jamais seulement journalisé).

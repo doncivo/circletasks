@@ -3,6 +3,7 @@ import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
 import type { DeviceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { formatStamp, formatTime } from '../../i18n/format';
+import { detectOs } from '../../platform/runtime';
 import type { SyncDeviceStatus, SyncFolderInfo, SyncStatus } from '../../platform/sync/types';
 import { syncAge } from '../../sync';
 
@@ -45,9 +46,21 @@ export function deviceName(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform
   return twins ? t('sync.status.deviceNamed', { platform, short: String(device.deviceId).slice(0, 4) }) : platform;
 }
 
-function errorText(code: string | null | undefined): string {
+/**
+ * Plateforme de cet appareil : sa ligne d'APPAREILS (`self`), sinon le système détecté (avant le premier cycle conclu). Choisit les textes
+ * propres à l'iPhone (ADR 0011 §22 point 8, §23 point 1).
+ */
+export function ownPlatform(status: Pick<SyncStatus, 'devices'>): 'windows' | 'ios' {
+  const own = status.devices.find((d) => d.self)?.platform;
+  if (own === 'ios' || own === 'windows') return own;
+  return detectOs() === 'ios' ? 'ios' : 'windows';
+}
+
+function errorText(code: string | null | undefined, platform: 'windows' | 'ios' = 'windows'): string {
   switch (code) {
     case 'folder-unreachable':
+      // iPhone : signet perdu ou dossier déplacé : le dossier est à choisir de nouveau (bouton « Choisir le dossier » de Réglages).
+      return platform === 'ios' ? t('sync.status.errorFolderUnreachableIos') : t('sync.status.errorFolderUnreachable');
     case 'not-local':
       return t('sync.status.errorFolderUnreachable');
     case 'cloud-provider-stopped':
@@ -144,7 +157,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'waiting-icloud':
       // Audit (point bas 8) : une attente qui dure n'est pas un simple délai (référence : dernière synchro complète).
       if (waitingLong(status, nowMs)) return waitingLongText(status);
-      return status.errorCode ? errorText(status.errorCode) : t('sync.status.waitingIcloud');
+      return status.errorCode ? errorText(status.errorCode, ownPlatform(status)) : t('sync.status.waitingIcloud');
     case 'restore-choice':
       return t('sync.status.restoreChoice');
     case 'update-required': {
@@ -159,7 +172,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'key-mismatch':
       return t('sync.status.keyMismatch');
     case 'error':
-      return errorText(status.errorCode);
+      return errorText(status.errorCode, ownPlatform(status));
     case 'forgotten':
       return t('sync.forget.banner');
     case 'reset-required':

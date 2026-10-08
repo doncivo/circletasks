@@ -1,0 +1,27 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sync-ios",
+  "description": "iPhone : synchronisation par iCloud Drive (ADR 0011 §22 point 7, Y-IOS-01). Les commandes sync_* de la fenêtre principale, sauf les trois de la fenêtre pairing (sync_pairing_open, sync_pairing_payload, sync_pairing_close), qui n'existent pas sur iPhone : l'iPhone n'affiche jamais le QR. Dossier tenu par Rust sous le signet du plugin folder-bookmark (jamais de chemin dans la WebView) ; aucune permission du plugin folder-bookmark (il n'expose aucune commande à la WebView).",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": [
+    "allow-sync-folder-info",
+    "allow-sync-folder-choose",
+    "allow-sync-folder-forget",
+    "allow-sync-bind-device",
+    "allow-sync-key-status",
+    "allow-sync-key-create",
+    "allow-sync-scan",
+    "allow-sync-read-journal",
+    "allow-sync-append-journal",
+    "allow-sync-write-state",
+    "allow-sync-snapshot-begin",
+    "allow-sync-snapshot-append",
+    "allow-sync-snapshot-commit",
+    "allow-sync-read-snapshot",
+    "allow-sync-delete-own",
+    "allow-sync-restore-marker-get",
+    "allow-sync-restore-marker-clear",
+    "allow-sync-forgotten-delete"
+  ]
+}

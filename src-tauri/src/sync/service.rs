@@ -49,6 +49,20 @@ pub const USAGE_FILE: &str = "usage.json";
 pub trait FolderBackend: Send + Sync {
     fn check(&self, path: &Path) -> SyncResult<CheckedFolder>;
     fn open(&self, folder: &CheckedFolder) -> Box<dyn SyncFs>;
+    /// Contrôle du dossier enregistré dans `folder.json` (chemin et, sur iPhone, signet ; ADR 0011 §22 point 5) ; rend aussi le signet
+    /// rafraîchi s'il était obsolète (réécrit par le service, sans action de l'utilisateur). Par défaut (PC) : `check(path)`.
+    fn check_record(&self, record: &FolderRecord) -> SyncResult<(CheckedFolder, Option<String>)> {
+        self.check(Path::new(&record.path)).map(|checked| (checked, None))
+    }
+    /// Accès aux fichiers du dossier enregistré ; par défaut (PC) : `open(folder)`.
+    fn open_record(&self, folder: &CheckedFolder, record: &FolderRecord) -> Box<dyn SyncFs> {
+        let _ = record;
+        self.open(folder)
+    }
+    /// Signet rafraîchi pendant une opération de fichier (`resolve` d'un recontrôle), à réécrire dans `folder.json` ; PC : jamais.
+    fn take_refreshed(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Production : `check_sync_path` et `StdFs`.
@@ -351,22 +365,46 @@ impl SyncCore {
         self.ensure_loaded(inner);
         if inner.folder.is_none() {
             let Some(record) = &inner.record else { return fail(SyncCode::NotConfigured) };
-            let checked = self.backend.check(Path::new(&record.path))?;
+            let (checked, refreshed) = self.backend.check_record(record)?;
             // Windows ignore la casse : un dossier renommé en ne changeant que la casse reste le même (QA-Y1-3) ; son chemin final est
             // enregistré de nouveau.
             if checked.path.to_string_lossy().to_lowercase() != record.path.to_lowercase() {
                 return fail(SyncCode::UnsafeFolder);
             }
-            if checked.path != Path::new(&record.path) {
-                let updated = FolderRecord { path: checked.path.to_string_lossy().into_owned(), ..record.clone() };
+            // iPhone (§22 point 5) : signet obsolète rafraîchi, réécrit sans action de l'utilisateur.
+            let bookmark = refreshed.or_else(|| record.bookmark.clone());
+            if checked.path != Path::new(&record.path) || bookmark != record.bookmark {
+                let updated = FolderRecord { path: checked.path.to_string_lossy().into_owned(), bookmark, ..record.clone() };
                 write_config_file(&self.path(FOLDER_FILE), &serde_json::to_vec(&updated).unwrap_or_default())?;
+                if updated.bookmark != record.bookmark {
+                    log::event("bookmark-refreshed", "folder-json");
+                }
                 inner.record = Some(updated);
             }
-            let fs = self.backend.open(&checked);
+            let record = inner.record.clone().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+            let fs = self.backend.open_record(&checked, &record);
             let folder_id = checked.folder_id();
             inner.folder = Some(Bound { checked, fs, folder_id });
         }
         inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))
+    }
+
+    /// iPhone (§22 point 5) : signet rafraîchi par un recontrôle de la racine pendant une opération (`resolve`), réécrit dans
+    /// `folder.json` ; un échec d'écriture est journalisé (l'ancien signet reste résoluble), jamais une erreur de l'opération.
+    fn persist_refreshed(&self, inner: &mut Inner) {
+        let Some(bookmark) = self.backend.take_refreshed() else { return };
+        let Some(record) = inner.record.as_ref() else { return };
+        if record.bookmark.as_deref() == Some(bookmark.as_str()) {
+            return;
+        }
+        let updated = FolderRecord { bookmark: Some(bookmark), ..record.clone() };
+        match write_config_file(&self.path(FOLDER_FILE), &serde_json::to_vec(&updated).unwrap_or_default()) {
+            Ok(()) => {
+                log::event("bookmark-refreshed", "folder-json");
+                inner.record = Some(updated);
+            }
+            Err(error) => log::event("bookmark-refresh-unsaved", error.code.as_str()),
+        }
     }
 
     fn info_of(bound: &Bound) -> FolderInfo {
@@ -382,14 +420,31 @@ impl SyncCore {
         }
         let bound = self.require_folder(&mut inner)?;
         // Racine recontrôlée à chaque lecture (revue 1) : un dossier devenu jonction ou démonté est signalé aussitôt.
-        bound.fs.check_root().map_err(|e| SyncError::new(e.code()))?;
-        Ok(Self::info_of(bound))
+        let checked = bound.fs.check_root().map_err(|e| SyncError::new(e.code()));
+        let info = Self::info_of(bound);
+        self.persist_refreshed(&mut inner);
+        checked.map(|()| info)
     }
 
     /// Liaison du dossier choisi dans la boîte système (`sync_folder_choose`) : contrôle, `folder.json`, `own.json` remis à zéro si
     /// le dossier change.
     pub fn choose_folder(&self, path: &Path) -> SyncResult<FolderInfo> {
         let checked = self.backend.check(path)?;
+        self.bind_checked(checked, None)
+    }
+
+    /// iPhone (ADR 0011 §22 point 5) : dossier choisi par le sélecteur du plugin (`pickFolder`) : contrôlé par son signet (`resolve`),
+    /// puis lié comme sur PC (même `folderId` pour le même dossier : `own.json` gardé) ; le signet est gardé dans `folder.json`.
+    pub fn choose_bookmarked_folder(&self, path: &str, bookmark: &str) -> SyncResult<FolderInfo> {
+        let probe = FolderRecord { v: 1, path: path.to_owned(), device_id: None, bookmark: Some(bookmark.to_owned()) };
+        let (checked, refreshed) = self.backend.check_record(&probe)?;
+        if checked.path != Path::new(path) {
+            return fail(SyncCode::FolderUnreachable);
+        }
+        self.bind_checked(checked, Some(refreshed.unwrap_or_else(|| bookmark.to_owned())))
+    }
+
+    fn bind_checked(&self, checked: CheckedFolder, bookmark: Option<String>) -> SyncResult<FolderInfo> {
         let mut inner = self.lock();
         // Autre dossier, ou le même rechoisi : aucun instantané en cache (revue B3).
         inner.snapshot_cache = None;
@@ -408,9 +463,9 @@ impl SyncCore {
             inner.snapshots.clear();
         }
         let device_id = inner.record.as_ref().and_then(|r| r.device_id.clone());
-        let record = FolderRecord { v: 1, path: checked.path.to_string_lossy().into_owned(), device_id };
+        let record = FolderRecord { v: 1, path: checked.path.to_string_lossy().into_owned(), device_id, bookmark };
         write_config_file(&self.path(FOLDER_FILE), &serde_json::to_vec(&record).unwrap_or_default())?;
-        let fs = self.backend.open(&checked);
+        let fs = self.backend.open_record(&checked, &record);
         inner.record = Some(record);
         inner.folder = Some(Bound { checked, fs, folder_id });
         log::event("folder-bound", "ok");
@@ -718,9 +773,27 @@ impl SyncCore {
 
     /// `sync_scan({ keep })`.
     pub fn scan(&self, keep: &[String]) -> SyncResult<FolderScan> {
+        self.scan_within(keep, None)
+    }
+
+    /// `sync_scan({ keep, hydrateBudgetMs })` (ADR 0011 §22 point 4) : `hydrate_budget_ms` (1 à 180 000, sinon `bad-name`) réduit le budget
+    /// d'hydratation du cycle ; absent : 3 minutes.
+    pub fn scan_within(&self, keep: &[String], hydrate_budget_ms: Option<u64>) -> SyncResult<FolderScan> {
         if keep.iter().any(|id| !is_uuid_v4(id)) {
             return fail(SyncCode::BadName);
         }
+        let budget = match hydrate_budget_ms {
+            None => None,
+            Some(ms) if (1..=super::limits::HYDRATE_CYCLE_TIMEOUT_MS).contains(&ms) => Some(std::time::Duration::from_millis(ms)),
+            Some(_) => return fail(SyncCode::BadName),
+        };
+        let result = self.scan_inner(keep, budget);
+        let mut inner = self.lock();
+        self.persist_refreshed(&mut inner);
+        result
+    }
+
+    fn scan_inner(&self, keep: &[String], budget: Option<std::time::Duration>) -> SyncResult<FolderScan> {
         let mut inner = self.lock();
         // Début de cycle : le cache des octets d'instantané est vidé (revue B3) ; les fins lues restent pour la session (troisième revue
         // Y-10, point 1 : sinon chaque cycle relirait en entier l'instantané annoncé de chaque actif).
@@ -744,7 +817,7 @@ impl SyncCore {
             let Inner { folder, accepted, .. } = &mut *inner;
             let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
             let store = store_for(bound, &key, &next, bound.checked.kind == FolderKind::Icloud);
-            store.scan(self_id.as_deref(), keep, accepted)?
+            store.scan_within(self_id.as_deref(), keep, accepted, budget)?
         };
         if let Some(id) = self_id.as_deref() {
             scan.forgotten = self.merge_scan(&mut inner, &key, id, &scan)?;
@@ -811,7 +884,7 @@ impl SyncCore {
         let bound = folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let store = store_for(bound, &key, &next, false);
         if tail {
-            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends, Some(snapshot_cache));
+            return store.read_snapshot_tail(device_id, epoch, seq, accepted, snapshot_ends);
         }
         store.read_snapshot(device_id, epoch, seq, from_record, max_bytes, accepted, snapshot_cache)
     }
@@ -831,7 +904,7 @@ impl SyncCore {
         if current_epoch.is_some_and(|e| e != state.epoch) {
             return SnapshotEndRead::None;
         }
-        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends, None) {
+        match store.read_snapshot_tail(self_id, &state.epoch, announced.seq, accepted, ends) {
             Ok(page) if page.status == "complete" => match page.records.first().and_then(|json| parse_snapshot_end(json, &state.epoch)) {
                 Some(covers) => SnapshotEndRead::End(SnapshotEnd { author: self_id.to_owned(), epoch: state.epoch.clone(), seq: announced.seq, end_hlc: announced.end_hlc.clone(), covers }),
                 None => SnapshotEndRead::Unreadable,

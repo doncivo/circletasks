@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use circletasks_lib::sync::consent::{ConsentGate, ConsentUi, DialogSpec};
-use circletasks_lib::sync::files::{AppendMode, Availability, FsEntry, FsError, Listing, SyncFs};
+use circletasks_lib::sync::files::{AppendMode, Availability, Chunk, FsEntry, FsError, Listing, SyncFs};
 use circletasks_lib::sync::folder::{CheckedFolder, FolderKind};
 use circletasks_lib::sync::service::{FolderBackend, SyncCore, SyncOptions};
 use circletasks_lib::sync::{fail, SyncCode, SyncResult};
@@ -203,6 +203,35 @@ impl SyncFs for SharedFs {
             Availability::Local => {}
         }
         Ok(bytes.clone())
+    }
+
+    /// Lecture positionnée (ADR 0011 §22 point 4) : mêmes règles que `read` (taille annoncée, nuage, hydratation, erreur injectée). Une
+    /// lecture qui commence à l'octet 0 compte comme une lecture du fichier (`reads`, `read_log`).
+    fn read_from(&self, file: &[&str], offset: u64, max: usize, hydrate: bool) -> Result<Chunk, FsError> {
+        if offset == 0 {
+            self.0.reads.fetch_add(1, Ordering::SeqCst);
+            self.0.read_log.lock().unwrap().push(key(file));
+        }
+        let mut nodes = self.0.nodes.lock().unwrap();
+        let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&key(file)) else { return Err(FsError::NotFound) };
+        match *availability {
+            Availability::Error => return Err(FsError::Unsafe),
+            Availability::Cloud if !hydrate => return Err(FsError::CloudPending),
+            Availability::Cloud => {
+                self.0.hydrations.fetch_add(1, Ordering::SeqCst);
+                if let Some(error) = self.0.hydrate_error.lock().unwrap().take() {
+                    return Err(error);
+                }
+                *availability = Availability::Local;
+            }
+            Availability::Local => {}
+        }
+        let size = bytes.len() as u64 + *extra;
+        let start = (offset as usize).min(bytes.len());
+        let end = start.saturating_add(max).min(bytes.len());
+        let out = bytes[start..end].to_vec();
+        let eof = out.len() < max || offset + out.len() as u64 >= size;
+        Ok(Chunk { bytes: out, size, eof })
     }
 
     fn append(&self, file: &[&str], data: &[u8], mode: AppendMode) -> Result<(), FsError> {

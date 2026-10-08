@@ -97,6 +97,7 @@ export async function loadSnapshot(deps: SyncDeps, deviceId: DeviceId, epoch: Ep
   const texts: string[] = [];
   let from = 0;
   for (;;) {
+    deps.deadline?.check('snapshot-read');
     const page = await deps.platform.readSnapshot({ deviceId, epoch, seq, fromRecord: from });
     texts.push(...page.records);
     from = page.next.record;

@@ -53,8 +53,18 @@ pub fn run() {
         // Lot Y4 (ADR 0011 section 18, étape 0) : corps qui répondent `not-configured` jusqu'à Y-10 et Y-11.
         sync::commands::sync_device_forget, sync::commands::sync_forgotten_delete, sync::commands::sync_reset_key,
     ]);
-    #[cfg(mobile)]
-    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http]);
+    // iPhone (ADR 0011 §22 point 7) : plugin folder-bookmark (appelé par Rust seul) et service de synchro de l'iPhone.
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).manage(sync::commands_ios::SyncState::default());
+    #[cfg(target_os = "ios")]
+    let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
+        // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : 18 commandes de `main`, aucune de la fenêtre `pairing`.
+        sync::commands_ios::sync_folder_info, sync::commands_ios::sync_folder_choose, sync::commands_ios::sync_folder_forget, sync::commands_ios::sync_bind_device,
+        sync::commands_ios::sync_key_status, sync::commands_ios::sync_key_create, sync::commands_ios::sync_scan, sync::commands_ios::sync_read_journal,
+        sync::commands_ios::sync_append_journal, sync::commands_ios::sync_write_state, sync::commands_ios::sync_snapshot_begin, sync::commands_ios::sync_snapshot_append,
+        sync::commands_ios::sync_snapshot_commit, sync::commands_ios::sync_read_snapshot, sync::commands_ios::sync_delete_own, sync::commands_ios::sync_restore_marker_get,
+        sync::commands_ios::sync_restore_marker_clear, sync::commands_ios::sync_forgotten_delete,
+    ]);
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

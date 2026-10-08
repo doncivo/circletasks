@@ -8,7 +8,8 @@
 //! Modules : `limits` (bornes), `names` (noms stricts), `crypto` (chiffrement, clé de secours, QR), `files` (trait `SyncFs`,
 //! `StdFs`), `folder` (contrôle du dossier, `folder.json`), `cloud_windows` (fichiers à la demande), `store` (journaux, état,
 //! instantanés, `own.json`), `consent` (confirmation native et compteurs), `pairing` (fenêtre dédiée), `reset` (réinitialisation avec une nouvelle clé, Y-11), `marker` (marqueur de
-//! restauration), `service` (service commun aux commandes et aux tests), `state` (état publié, `own.json`), `commands` (24 commandes Tauri, PC).
+//! restauration), `service` (service commun aux commandes et aux tests), `state` (état publié, `own.json`), `commands` (24 commandes Tauri, PC),
+//! `bookmark` et `commands_ios` (iPhone, ADR 0011 §22 : plugin folder-bookmark, 21 commandes).
 //!
 //! Journal technique : codes, compteurs, noms stricts, identifiants d'appareil et d'époque seulement ; jamais de clé, de texte
 //! clair, de `qrText`, de saisie ni de chemin complet (section 2.3).
@@ -30,6 +31,14 @@ pub mod service;
 pub mod state;
 #[cfg(desktop)]
 pub mod commands;
+/// iPhone (ADR 0011 §22) : `BookmarkFs` sur le plugin folder-bookmark ; présent dans les tests Windows (`test-hooks`), absent du PC livré.
+#[cfg(any(target_os = "ios", feature = "test-hooks"))]
+pub mod bookmark;
+/// iPhone (ADR 0011 §22 point 7) : les commandes `sync_*` de l'iPhone (mêmes noms, entrées et sorties), même `SyncCore`. iOS seulement :
+/// les macros de `#[tauri::command]` portent le nom de la commande à la racine du crate et ne peuvent pas coexister avec `commands` (PC) ;
+/// leur logique (`bookmark::ios_core`, `bookmark::choose_with_picker`) est testée sous Windows.
+#[cfg(target_os = "ios")]
+pub mod commands_ios;
 
 use serde::Serialize;
 

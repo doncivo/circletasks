@@ -26,6 +26,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     keyMismatch: 'This folder was encrypted with another key: pair this device',
     errorGeneric: 'Sync failed: it will retry at the next cycle',
     errorFolderUnreachable: 'Sync folder not found: your changes will be sent when it is back',
+    errorFolderUnreachableIos: 'iCloud Drive folder unreachable: choose the iCloud Drive / CircleTasks folder again',
     errorCloudProviderStopped: 'Open iCloud for Windows: your changes will be sent when it is back',
     errorCloud: 'iCloud is not responding: your changes will be sent when it is back',
     errorUnsafeFolder: 'This folder cannot be used for sync: choose another one',

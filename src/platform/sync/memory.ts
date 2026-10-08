@@ -104,7 +104,7 @@ import {
   type ResetKnownDevice,
   type ResetPreconditionDevice,
 } from '../../domain/sync/epoch';
-import { DEVICE_EXPIRY_MS } from '../../domain/sync/limits';
+import { DEVICE_EXPIRY_MS, HYDRATE_CYCLE_TIMEOUT_MS, HYDRATE_FILE_TIMEOUT_MS } from '../../domain/sync/limits';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -515,6 +515,14 @@ export interface MemorySyncTesting {
   setRestoreMarker(marker: RestoreMarker | null): void;
   /** iPhone : texte lu par le prochain scan du QR (null : scan annulé). */
   setScanResult(text: string | null): void;
+  /**
+   * ADR 0011 §22 point 4 : téléchargement simulé des fichiers « dans le nuage » (durée en ms, null : jamais téléchargés). Un fichier lu est
+   * téléchargé si sa durée tient dans 60 s et dans le reste du budget du cycle (3 minutes, ou `hydrateBudgetMs` du scan) ; le budget est
+   * consommé comme le ferait Rust (durée, ou délai accordé s'il est dépassé).
+   */
+  setHydrationDelay(ms: number | null): void;
+  /** Reste du budget d'hydratation du cycle en cours (ms). */
+  hydrationBudgetLeft(): number;
   /** Instance `pairing` ouverte (mode, génération), ou null. */
   pairing(): { readonly mode: PairingMode; readonly generation: number } | null;
   /** Nombre de confirmations natives affichées. */
@@ -646,6 +654,22 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let blockedUntil = 0;
   let pairing: PairingInstance | null = null;
   let scanResult: string | null = null;
+  /** Téléchargement simulé (§22 point 4) : durée, et reste du budget du cycle ouvert par le dernier scan. */
+  let hydrationDelay: number | null = null;
+  let hydrationLeft = HYDRATE_CYCLE_TIMEOUT_MS;
+  /** Fichier lisible localement, après un téléchargement simulé s'il est dans le nuage et que le budget le permet. */
+  const hydrated = (file: MemFile): boolean => {
+    if (file.availability === 'cloud' && hydrationDelay !== null) {
+      const allowed = Math.min(HYDRATE_FILE_TIMEOUT_MS, hydrationLeft);
+      if (allowed > 0 && hydrationDelay <= allowed) {
+        file.availability = 'local';
+        hydrationLeft -= hydrationDelay;
+      } else {
+        hydrationLeft -= allowed;
+      }
+    }
+    return file.availability === 'local';
+  };
   /** `pairedBy` mémorisé à l'import quand l'appareil n'est pas encore lié (reporté dans `own.json` à la liaison). */
   let pendingPairedBy: DeviceId | null = null;
   /** `sync/forgotten.json` (Y-10, §18 point 3) : liste maître, terminés ; lié au dossier et à l'identité (l'anti-rejeu est `accepted`). */
@@ -876,7 +900,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const fromNext = which === 'next';
     const file = fromNext ? dir.nextState : dir.state;
     if (!file) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'missing', fromNext };
-    if (file.availability !== 'local') return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
+    if (!hydrated(file)) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
     const read = readFileState(deviceId, file, kids, remember, replay);
     return { ...read, fromNext };
   };
@@ -997,6 +1021,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const scan = async (r: ScanRequest): Promise<FolderScan> => {
     const keepList: unknown = (r as Partial<ScanRequest> | undefined)?.keep;
     if (!Array.isArray(keepList) || !keepList.every((id) => isSyncDeviceId(id))) return fail('bad-name');
+    // ADR 0011 §22 point 4 : budget d'hydratation réduit (entier de 1 à 180 000), sinon `bad-name` ; il ouvre le cycle d'hydratation.
+    const budget: unknown = (r as Partial<ScanRequest> | undefined)?.hydrateBudgetMs;
+    if (budget !== undefined && (typeof budget !== 'number' || !Number.isInteger(budget) || budget < 1 || budget > HYDRATE_CYCLE_TIMEOUT_MS)) return fail('bad-name');
+    hydrationLeft = typeof budget === 'number' ? budget : HYDRATE_CYCLE_TIMEOUT_MS;
     requireReadable();
     // Y-11 : perte constatée et bascule (et sa reprise) faites avant la lecture du dossier, qui reflète alors les clés en vigueur.
     let reset: ResetView | null = null;
@@ -1108,7 +1136,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const file = epochDir?.segments.get(segment);
       // Segment annoncé absent ou dans le nuage : en attente d'iCloud. Un numéro manquant n'est jamais sauté (choix conservateur :
       // un fichier pas encore arrivé ne se distingue pas d'un trou).
-      if (!file || file.availability !== 'local') {
+      if (!file || !hydrated(file)) {
         status = 'cloud-pending';
         break;
       }
@@ -1159,7 +1187,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // Seuls les instantanés annoncés par l'état authentifié sont lus (le dernier annoncé et les plus anciens gardés).
     if (!state || state.epoch !== r.epoch || !state.snapshot || r.seq > state.snapshot.seq) return { records: [], next: from, status: 'cloud-pending' };
     const file = f.devices.get(r.deviceId)?.epochs.get(r.epoch)?.snapshots.get(r.seq);
-    if (!file || file.availability !== 'local') return { records: [], next: from, status: 'cloud-pending' };
+    if (!file || !hydrated(file)) return { records: [], next: from, status: 'cloud-pending' };
     checkFileForRead(file, kid, MAX_SNAPSHOT_BYTES);
     if (file.header.f !== 'ct-s' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== r.seq) fail('bad-header');
     if (r.tail === true) {
@@ -1597,7 +1625,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const state = read?.status === 'ok' ? read.state : null;
     if (!state?.snapshot) return 'none';
     const file = f.devices.get(self)?.epochs.get(state.epoch)?.snapshots.get(state.snapshot.seq);
-    if (!file || file.availability !== 'local') return 'cloud-pending';
+    if (!file || !hydrated(file)) return 'cloud-pending';
     const last = file.lines[file.lines.length - 1];
     if (file.partialTail || !last) return 'cloud-pending';
     const end = last.corrupt ? null : parseSnapshotRecord(last.text);
@@ -2366,6 +2394,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       setScanResult: (text) => {
         scanResult = text;
       },
+      setHydrationDelay: (ms) => {
+        hydrationDelay = ms;
+      },
+      hydrationBudgetLeft: () => hydrationLeft,
       pairing: () => {
         const instance = livePairing();
         return instance ? { mode: instance.mode, generation: instance.generation } : null;

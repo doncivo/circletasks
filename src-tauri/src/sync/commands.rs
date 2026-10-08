@@ -446,11 +446,12 @@ pub async fn sync_pairing_close(app: AppHandle, window: WebviewWindow, state: St
 // ------------------------------------------------------------------------------------------------------------------------------
 
 #[tauri::command]
-pub async fn sync_scan(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, keep: Vec<String>) -> SyncResult<FolderScan> {
+pub async fn sync_scan(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, keep: Vec<String>, hydrate_budget_ms: Option<u64>) -> SyncResult<FolderScan> {
     require_main(&window)?;
     let core = state.core(&app)?;
     let scan_core = core.clone();
-    let scan = blocking(move || scan_core.scan(&keep)).await?;
+    // ADR 0011 §22 point 4 : `hydrateBudgetMs` facultatif réduit le budget d'hydratation du cycle (1 à 180 000, sinon `bad-name`).
+    let scan = blocking(move || scan_core.scan_within(&keep, hydrate_budget_ms)).await?;
     // Arrivée de l'appareil associé pendant l'affichage du QR (Y-06 critère 9) : fenêtre détruite, `sync-paired` vers `main`, sans clé.
     if let Some(hwnd) = state.pairing.observe_paired(&core.paired_with_self(&scan)) {
         let handle = app.clone();

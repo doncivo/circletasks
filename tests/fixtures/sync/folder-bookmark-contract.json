@@ -1,0 +1,24 @@
+{
+  "$comment": [
+    "Contrat des commandes Swift du plugin folder-bookmark (ADR 0011 §22 point 2 ; Y-IOS-01 critère 1).",
+    "Lu par le contrôle statique (src-tauri/tests/desktop/sync_bookmark.rs) contre src-tauri/plugins/folder-bookmark/ios/Sources/FolderBookmarkPlugin.swift et src-tauri/src/sync/bookmark.rs, et par le faux du plugin (src-tauri/tests/desktop/support/fake_bookmark.rs), qui refuse tout champ d'entrée absent de ce fichier.",
+    "path et dir : composants relatifs à la racine (tableau de chaînes), jamais un chemin absolu. Octets en base64, 1 Mio au plus par appel.",
+    "output : formes de réponse possibles (ensembles exacts de clés). rejectCodes : codes de rejet (tous des SyncErrorCode existants)."
+  ],
+  "rejectCodes": ["not-configured", "folder-unreachable", "unsafe-folder", "cloud-pending", "cloud-error", "too-large", "not-foreground", "io"],
+  "commands": {
+    "pickFolder": { "input": [], "output": [["cancelled"], ["bookmark", "path", "name", "kind"]] },
+    "resolve": { "input": ["bookmark"], "output": [["path", "name", "kind", "refreshed"]] },
+    "status": { "input": ["path"], "output": [["exists", "isDir", "size", "availability"]] },
+    "list": { "input": ["path", "max"], "output": [["missing"], ["entries", "truncated"]], "entry": ["name", "isDir", "size", "availability"] },
+    "readFrom": { "input": ["path", "offset", "max", "limit"], "output": [["missing"], ["data", "size", "eof"]] },
+    "download": { "input": ["path", "timeoutMs", "limit"], "output": [[]] },
+    "append": { "input": ["path", "data", "createNew"], "output": [[], ["missing"], ["exists"]] },
+    "writeAtomic": { "input": ["path", "data"], "output": [[]] },
+    "rename": { "input": ["dir", "from", "to"], "output": [[]] },
+    "createDir": { "input": ["path"], "output": [[]] },
+    "remove": { "input": ["path"], "output": [["removed"]] },
+    "removeEmptyDir": { "input": ["path"], "output": [[]] },
+    "appState": { "input": [], "output": [["state"]] }
+  }
+}

@@ -23,6 +23,7 @@ export const syncFolderFr = {
   forgetFolderAndKey: 'Oublier le dossier et la clé',
   errorUnsafe: 'Ce dossier ne peut pas servir à la synchronisation',
   errorUnreachable: 'Le dossier de synchro est introuvable',
+  errorUnreachableIos: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks',
   errorTooLarge: 'Le dossier de synchro est trop volumineux',
   errorProviderStopped: 'Ouvrez iCloud pour Windows',
   errorVault: 'Le coffre de Windows est indisponible',

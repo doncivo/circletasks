@@ -37,7 +37,7 @@ export function loadTauriSyncInvoker(): SyncInvoker {
 }
 
 export interface TauriSyncOptions {
-  /** Faux sur iOS jusqu'à l'ordre 5 (les commandes ne sont accordées qu'au PC). */
+  /** Vrai sur PC et sur iPhone (capabilities `sync.json` et `sync-ios.json`). */
   readonly available: boolean;
   readonly invoke?: SyncInvoker;
 }
@@ -98,7 +98,8 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
       await call('sync_bind_device', { deviceId });
     },
     scan: async (r): Promise<FolderScan> => {
-      const raw = await call('sync_scan', { keep: r.keep });
+      // ADR 0011 §22 point 4 : budget d'hydratation réduit transmis seulement s'il est donné (cycle `hide` de l'iPhone).
+      const raw = await call('sync_scan', r.hydrateBudgetMs === undefined ? { keep: r.keep } : { keep: r.keep, hydrateBudgetMs: r.hydrateBudgetMs });
       return { ...raw, devices: raw.devices.map(deviceFromJson) };
     },
     readJournal: (r): Promise<ReadPage> => call('sync_read_journal', r),

@@ -13,7 +13,8 @@ export { INITIAL_STATUS };
 
 /** Ce qu'un cycle a constaté. */
 export interface CycleFacts {
-  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten' | 'restart-required' | 'reset-required';
+  /** `interrupted` (ADR 0011 §22 point 6) : cycle `hide` arrêté à son échéance ; le service garde l'état précédent (aucune phase nouvelle). */
+  readonly outcome: 'not-configured' | 'needs-pairing' | 'restore-choice' | 'done' | 'failed' | 'forgotten' | 'restart-required' | 'reset-required' | 'interrupted';
   readonly errorCode: SyncErrorCode | null;
   readonly pendingFiles: readonly string[];
   readonly devices: readonly SyncDeviceStatus[];
@@ -48,6 +49,7 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
       if (facts.errorCode === 'key-mismatch') return 'key-mismatch';
       return facts.errorCode !== null && WAITING_CODES.has(facts.errorCode) ? 'waiting-icloud' : 'error';
     case 'done':
+    case 'interrupted':
       break;
   }
   if (facts.keyMismatch) return 'key-mismatch';

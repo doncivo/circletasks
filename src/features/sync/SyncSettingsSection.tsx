@@ -9,6 +9,7 @@ import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFai
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
+import { nativeConfirmationAvailable } from './iosSync';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
@@ -34,14 +35,14 @@ type View =
 
 type ForgetChoice = 'folder' | 'folder-and-key';
 
-/** Texte affiché pour un code d'erreur (jamais le message technique de Rust). */
-export function syncErrorMessageKey(code: SyncErrorCode): PlainMessageKey {
+/** Texte affiché pour un code d'erreur (jamais le message technique de Rust) ; `ios` : textes de l'iPhone (ADR 0011 §22 point 8). */
+export function syncErrorMessageKey(code: SyncErrorCode, ios = false): PlainMessageKey {
   switch (code) {
     case 'unsafe-folder':
     case 'not-local':
       return 'sync.folder.errorUnsafe';
     case 'folder-unreachable':
-      return 'sync.folder.errorUnreachable';
+      return ios ? 'sync.folder.errorUnreachableIos' : 'sync.folder.errorUnreachable';
     case 'folder-too-large':
       return 'sync.folder.errorTooLarge';
     case 'cloud-provider-stopped':
@@ -94,6 +95,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   // Même plateforme que le service de synchro (conteneur), pour que le cycle voie le dossier et la clé choisis ici.
   const platform = injected ?? container.syncPlatform ?? platformOf(container);
   const available = platform.available();
+  const ios = container.platform.os === 'ios';
   const [view, setView] = useState<View>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
   const [forgetOpen, setForgetOpen] = useState(false);
@@ -254,7 +256,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           {forgetButton}
         </div>
       )}
-      {view.kind === 'bound' && view.needsPairing && (
+      {/* iPhone : l'association passe par l'écran « Associer au PC » (Y-IOS-02), jamais par la fenêtre `pairing` du PC. */}
+      {view.kind === 'bound' && view.needsPairing && !ios && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
             {t('sync.pairing.importLabel')}
@@ -275,9 +278,11 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           <span className="ct-settings__stack">
             {folderLabel(view.info)}
             <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
-              {t(syncErrorMessageKey(view.code))}
+              {t(syncErrorMessageKey(view.code, ios))}
             </span>
           </span>
+          {/* iPhone (§22 point 8) : signet perdu ou dossier déplacé : « Choisir le dossier » de nouveau (même dossier : rien n'est perdu). */}
+          {view.configured && ios && view.code === 'folder-unreachable' && chooseButton}
           {view.configured ? forgetButton : chooseButton}
         </div>
       )}
@@ -287,7 +292,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           description={t('sync.folder.forgetDescription')}
           options={[
             { id: 'folder', label: t('sync.folder.forgetFolder') },
-            { id: 'folder-and-key', label: t('sync.folder.forgetFolderAndKey') },
+            // Effacer la clé demande une confirmation native : masqué tant qu'elle n'existe pas sur cet appareil (§22 point 7).
+            ...(nativeConfirmationAvailable(container.platform.os) ? [{ id: 'folder-and-key' as const, label: t('sync.folder.forgetFolderAndKey') }] : []),
           ]}
           optionVariant="danger"
           onChoose={(choice) => void forget(choice)}
