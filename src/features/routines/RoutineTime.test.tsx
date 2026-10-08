@@ -67,6 +67,20 @@ describe('Routines : heure et rappel (R-02), PC', () => {
     expect(box('30 min')).toHaveAttribute('aria-checked', 'false');
   });
 
+  it('N-07 critère 7 : le bloc Rappel du formulaire avertit sur le PC quand un rappel sonne dans moins de 2 h sans iPhone associé', async () => {
+    h.db.clock.set(new Date(2026, 9, 2, 10, 0).getTime());
+    renderRoutines(h.container);
+    await openCreate();
+    fireEvent.click(timeButton());
+    const input = screen.getByLabelText('Heure (HH:MM)');
+    fireEvent.change(input, { target: { value: '10:30' } });
+    fireEvent.blur(input);
+    expect(await screen.findByText('Aucun iPhone associé : ce rappel ne sonnera pas')).toBeInTheDocument();
+    fireEvent.change(input, { target: { value: '14:30' } });
+    fireEvent.blur(input);
+    await waitFor(() => expect(screen.queryByText('Aucun iPhone associé : ce rappel ne sonnera pas')).toBeNull());
+  });
+
   it('heure invalide : message, l’heure précédente est gardée', async () => {
     renderRoutines(h.container);
     await openCreate();
