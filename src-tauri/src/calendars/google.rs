@@ -71,6 +71,16 @@ impl ClientConfig {
     /// `CT_GOOGLE_CLIENT_ID` (et `CT_GOOGLE_CLIENT_SECRET` si Google l'exige) lus au build ; en debug, la variable d'environnement
     /// d'exécution l'emporte (essai contre le simulateur). Absent : `None` (code `config-missing`, « non configuré »).
     pub fn from_environment() -> Option<Self> {
+        // iPhone (ADR 0008 §9.2) : l'ID client « iOS » (sans secret) sert à l'autorisation, à l'échange, au rafraîchissement et à la
+        // révocation : un jeton de rafraîchissement n'est valable qu'avec le client qui l'a obtenu.
+        #[cfg(target_os = "ios")]
+        return super::web_auth::IosClientConfig::from_environment().map(super::web_auth::IosClientConfig::into_client);
+        #[cfg(not(target_os = "ios"))]
+        Self::from_desktop_environment()
+    }
+
+    #[cfg(not(target_os = "ios"))]
+    fn from_desktop_environment() -> Option<Self> {
         let compiled_id = option_env!("CT_GOOGLE_CLIENT_ID");
         let compiled_secret = option_env!("CT_GOOGLE_CLIENT_SECRET");
         #[cfg(debug_assertions)]

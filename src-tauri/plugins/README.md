@@ -17,3 +17,8 @@ clé manque ou si une description d'usage est vide.
 Livrés : `folder-bookmark` (Y-IOS-01, ADR 0011 §22) : aucune commande exposée à la WebView, Rust seul l'appelle
 (`FolderBookmark::call`) ; contrat dans `tests/fixtures/sync/folder-bookmark-contract.json`, contrôlé statiquement contre le Swift et
 `src-tauri/src/sync/bookmark.rs`, et joué par le faux du plugin (`src-tauri/tests/desktop/support/fake_bookmark.rs`).
+
+Livré : `web-auth` (K-TECH-01, ADR 0008 §9) : `ASWebAuthenticationSession` pour la connexion Google de l'iPhone, une seule commande
+`authenticate({ url, callbackScheme }) -> { callbackUrl }`, aucune permission pour la WebView (Rust seul l'appelle, `TransportWebAuth` dans
+`src-tauri/src/calendars/web_auth.rs`) ; contrat dans `tests/fixtures/calendars/web-auth-contract.json`, contrôlé statiquement contre le Swift
+et `web_auth.rs`, et joué par le faux du plugin (`src-tauri/tests/desktop/support/fake_web_auth.rs`). Aucune clé Info.plist.

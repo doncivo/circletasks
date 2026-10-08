@@ -72,6 +72,8 @@ security-framework = { version = "3", default-features = false }
 tauri-plugin-notification = "=2.5.1"
 # Signet de sécurité du dossier iCloud Drive/CircleTasks et accès aux fichiers (ADR 0011 §22, Y-IOS-01) : plugin Swift local, appelé par Rust seul.
 tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
+# Connexion Google sur iPhone (K-TECH-01, ADR 0008 §9) : session d'authentification web du système, plugin Swift local, appelé par Rust seul.
+tauri-plugin-web-auth = { path = "plugins/web-auth" }
 # Scan du QR d'association (ADR 0011 §23 point 2, Y-IOS-02) : API du JS seulement (aucune API Rust publique), texte passé aussitôt à
 # sync_key_import. Version exacte relue (2.5.1, revue audit), alignée sur @tauri-apps/plugin-barcode-scanner ~2.5.1 ; relire le code
 # (API Rust, permissions) à chaque montée de version.

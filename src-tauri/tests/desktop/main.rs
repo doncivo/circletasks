@@ -39,4 +39,5 @@ mod sync_support;
 mod sync_tz;
 mod sync_y_tech_02;
 mod updater;
+mod web_auth;
 mod window;
