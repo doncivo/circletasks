@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e de l'onglet Événements (E-01 à E-04), communes aux projets `pc` et `iphone`. */
 
@@ -6,6 +7,7 @@ export const eventsTab = (page: Page): Locator => page.getByRole('navigation', {
 
 /** Ouvre l'onglet Événements et attend la liste. */
 export async function openEvents(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'eventsscreen');
   await eventsTab(page).click();
   await expect(page.locator('.ct-events')).toBeVisible();
 }

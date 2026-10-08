@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e de l'onglet Checklists (C-01 à C-05), communes aux projets `pc` et `iphone`. */
 
@@ -6,6 +7,7 @@ export const checklistsTab = (page: Page): Locator => page.getByRole('navigation
 
 /** Ouvre l'onglet Checklists (iPhone : titre de la checklist affichée ou « Checklists » ; PC : volet gauche). */
 export async function openChecklists(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'checklistsscreen');
   await checklistsTab(page).click();
   await expect(page.locator('.ct-checklists')).toBeVisible();
 }

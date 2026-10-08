@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 
 /** Aides e2e des statistiques (H-01 à H-03, ES-08), communes aux projets `pc` et `iphone`. */
 
@@ -54,6 +55,7 @@ export const reportButton = (page: Page): Locator => page.getByRole('button', { 
 
 /** Ouvre le rapport depuis Aujourd'hui et attend son titre. */
 export async function openReport(page: Page, month: string): Promise<void> {
+  await waitForScreenLoaded(page, 'reportscreen');
   await reportButton(page).click();
   await expect(page.getByRole('heading', { level: 1, name: month, exact: true })).toBeVisible();
 }

@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 import { isPhone } from './today';
 
 /** Aides e2e de « Un jour » (SD-01 à SD-04, S-06), communes aux projets `pc` et `iphone`. */
@@ -53,6 +54,7 @@ export async function somedayTitles(page: Page): Promise<string[]> {
 
 /** Ouvre « Un jour » depuis Aujourd'hui : écran plein (iPhone) ou panneau à droite (PC). */
 export async function openSomeday(page: Page, testInfo: { project: { name: string } }): Promise<void> {
+  await waitForScreenLoaded(page, 'somedayscreen');
   await somedayButton(page).click();
   if (isPhone(testInfo)) await expect(page.getByRole('heading', { level: 1, name: 'Un jour' })).toBeVisible();
   else await expect(page.getByRole('complementary', { name: 'Un jour' })).toBeVisible();

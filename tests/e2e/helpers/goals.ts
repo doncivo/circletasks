@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 import { addIsoDays, browserToday } from './schedule';
 import { mondayOf } from './week';
 
@@ -74,6 +75,7 @@ export const goalScreen = (page: Page): Locator => page.getByRole('heading', { l
 
 /** Ouvre l'écran Objectif depuis Aujourd'hui par l'icône cible. */
 export async function openGoalScreen(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'goalsscreen');
   await goalButton(page).click();
   await expect(goalScreen(page)).toBeVisible();
 }

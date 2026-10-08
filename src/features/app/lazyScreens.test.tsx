@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { lazyScreen, preloadScreens } from './lazyScreens';
+import { lazyScreen, preloadScreens, SCREEN_LOADED_PREFIX } from './lazyScreens';
 
 /** Écrans à la demande (PERF-02) : repli neutre, voisin affiché, rendu direct une fois chargé, échec avec « Réessayer », préchargement. */
 function Content() {
@@ -55,6 +55,27 @@ describe('écran chargé à la demande', () => {
     expect(await screen.findByText('Contenu de l’écran')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(calls).toBe(2);
+  });
+});
+
+describe('repère de bloc arrivé (A-04)', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('posé quand le bloc de CET écran arrive, pas avant ; posé aussi après un échec (l’écran affiche alors l’erreur)', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const html = document.documentElement;
+    let resolve: (value: { default: typeof Content }) => void = () => undefined;
+    const Slow = lazyScreen<object>(() => new Promise((r) => (resolve = r)), 'trashscreen');
+    render(<Slow />);
+    expect(html).not.toHaveAttribute(SCREEN_LOADED_PREFIX + 'trashscreen');
+    resolve({ default: Content });
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'trashscreen', 'true'));
+
+    const Broken = lazyScreen<object>(() => Promise.reject(new Error('bloc illisible')), 'tabsscreen');
+    render(<Broken />);
+    await vi.waitFor(() => expect(html).toHaveAttribute(SCREEN_LOADED_PREFIX + 'tabsscreen', 'true'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’afficher cet écran.');
   });
 });
 

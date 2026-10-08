@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 import { addIsoDays } from './schedule';
 import { isPhone } from './today';
 
@@ -8,6 +9,7 @@ export const routinesTab = (page: Page): Locator => page.getByRole('navigation')
 
 /** Ouvre l'onglet Routines et attend son titre. */
 export async function openRoutines(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'routinesscreen');
   await routinesTab(page).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Routines' })).toBeVisible();
 }

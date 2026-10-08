@@ -1,6 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { E2E_SYNC_SIM_PORT, simUrl } from '../../sim/ports';
-import { APP_READY_TIMEOUT_MS } from './app';
+import { APP_READY_TIMEOUT_MS, waitForScreenLoaded } from './app';
 
 /**
  * Aides e2e de la synchro (Y-04, parcours 10 à deux pages) : pages du navigateur de dev reliées au simulateur de dossier
@@ -83,6 +83,8 @@ export const closeRoom = (room: string): Promise<unknown> => post('/close-room',
 
 /** Réglages › Synchronisation › Détails (l'onglet Réglages rouvre le dernier écran visité : les détails, ou l'accueil de Réglages). */
 export async function openSyncDetails(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'settingsscreen');
+  await waitForScreenLoaded(page, 'syncdetailsscreen');
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   const heading = page.getByRole('heading', { name: 'Synchronisation', level: 1 });
   const details = page.getByRole('button', { name: 'Détails', exact: true });
