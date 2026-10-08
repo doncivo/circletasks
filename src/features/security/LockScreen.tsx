@@ -68,6 +68,7 @@ export function LockScreen() {
           title={t('security.lock.disableConfirmTitle')}
           description={t('security.lock.disableConfirmText')}
           confirmLabel={t('security.lock.disableConfirm')}
+          container={ensureLockLayer()}
           onCancel={() => setConfirming(false)}
           onConfirm={() => {
             setConfirming(false);

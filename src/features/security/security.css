@@ -81,3 +81,8 @@ html[data-privacy='on'] #ct-privacy-cover {
   width: min(320px, 100%);
   margin-top: var(--ct-space-3);
 }
+
+/* Confirmation « Désactiver le verrouillage » rendue dans la couche du verrou : au-dessus de l'écran de verrou (revue I-03, H1). */
+#ct-lock-layer .ct-confirm__backdrop {
+  z-index: 2147483001;
+}

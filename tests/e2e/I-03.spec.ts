@@ -103,6 +103,25 @@ test.describe('I-03 — verrouillage Face ID (iPhone, biométrie injectée)', ()
     await expect(page.getByText(TITLE)).toBeVisible();
   });
 
+  test('aucun code sur l’iPhone : « Désactiver le verrouillage » puis la confirmation, touchée par un vrai clic (revue H1)', async ({ page }) => {
+    await openSettings(page);
+    const toggle = page.getByRole('switch', { name: 'Verrouillage Face ID' });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await setVisibility(page, 'hidden');
+    await page.clock.fastForward(31_000);
+    await page.evaluate(() => window.__ctBiometric?.enqueue('passcode-not-set'));
+    await setVisibility(page, 'visible');
+    await expect(page.getByRole('alert')).toHaveText('Déverrouillage impossible : aucun code n’est défini sur l’iPhone');
+    await page.getByRole('button', { name: 'Désactiver le verrouillage' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Désactiver le verrouillage ?' });
+    await expect(dialog).toContainText('Les données de CircleTasks seront de nouveau lisibles sans protection');
+    // Vrai clic : Playwright échoue si un autre élément (l'écran de verrou) intercepte le pointeur.
+    await dialog.getByRole('button', { name: 'Désactiver', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'CircleTasks est verrouillée' })).toHaveCount(0);
+    await expect(page.getByRole('switch', { name: 'Verrouillage Face ID' })).toHaveAttribute('aria-checked', 'false');
+  });
+
   test('désactivation : authentification exigée ; ensuite, plus aucun verrou', async ({ page }) => {
     await openSettings(page);
     const toggle = page.getByRole('switch', { name: 'Verrouillage Face ID' });
