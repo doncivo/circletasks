@@ -40,4 +40,5 @@ mod sync_tz;
 mod sync_y_tech_02;
 mod updater;
 mod web_auth;
+mod web_auth_qa;
 mod window;
