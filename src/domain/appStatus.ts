@@ -10,8 +10,10 @@
  * `remindersTrouble` (N-01, ADR 0012 avenant N1.8) : posé par les rappels (`notificationStatus.ts`) quand les notifications ne peuvent pas partir
  * (autorisation refusée ou non décidée, échec de planification, fin de Focus, fuseau illisible) ; derrière la synchro, devant la mise à jour.
  * « Hors ligne » ne masque jamais un échec de synchro (critère 9 a).
+ * `signingExpiry` (I-02, ADR 0013 §3.3) : moins de 24 h avant l'expiration de la signature SideStore, ou signature expirée (`detail` =
+ * `soon` | `expired`) ; en tête : la fenêtre est courte et l'app cesse ensuite de s'ouvrir.
  */
-export const APP_STATUS_PRIORITY = ['calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
+export const APP_STATUS_PRIORITY = ['signingExpiry', 'calendarDisconnected', 'syncTrouble', 'remindersTrouble', 'updateRequired', 'waitingIcloud', 'syncing', 'offline'] as const;
 
 export type AppStatusKind = (typeof APP_STATUS_PRIORITY)[number];
 

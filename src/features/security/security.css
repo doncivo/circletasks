@@ -1,0 +1,93 @@
+/* Verrouillage de l'app (I-03, ADR 0013 §2.4). Écran sans maquette : jetons et composants existants. */
+
+/* Cache de confidentialité JS (couche de index.html) : opaque, au-dessus de tout, posé par écriture DOM directe. */
+#ct-privacy-cover {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: var(--ct-color-bg);
+}
+
+html[data-privacy='on'] #ct-privacy-cover {
+  display: block;
+}
+
+/* Coquille enveloppée sans changer la mise en page ; `hidden` garde l'affichage nul (sélecteur :not). */
+.ct-lock-content:not([hidden]) {
+  display: contents;
+}
+
+.ct-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ct-space-3);
+  padding: calc(var(--ct-space-6) + var(--ct-safe-area-top)) calc(var(--ct-space-5) + var(--ct-safe-area-right))
+    calc(var(--ct-space-6) + var(--ct-safe-area-bottom)) calc(var(--ct-space-5) + var(--ct-safe-area-left));
+  overflow-y: auto;
+  background: var(--ct-color-bg);
+  color: var(--ct-color-text);
+  font-family: var(--ct-font-text);
+  text-align: center;
+}
+
+.ct-lock__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--ct-radius-round);
+  background: var(--ct-color-surface-input);
+  color: var(--ct-color-icon-purple);
+}
+
+.ct-lock__app {
+  margin: 0;
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-lock__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+  font-weight: var(--ct-font-weight-semibold);
+  line-height: 1.25;
+}
+
+.ct-lock__message {
+  margin: 0;
+  max-width: 34rem;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+  font-weight: var(--ct-font-weight-medium);
+}
+
+.ct-lock__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ct-space-2);
+  width: min(320px, 100%);
+  margin-top: var(--ct-space-3);
+}
+
+/* Confirmation « Désactiver le verrouillage » rendue dans la couche du verrou : au-dessus de l'écran de verrou (revue I-03, H1). */
+#ct-lock-layer .ct-confirm__backdrop {
+  z-index: 2147483001;
+}
+
+/* Verrou : tout enfant de body autre que la couche du verrou et le cache est caché dès son insertion (complète l'observateur). */
+html[data-app-lock='locked'] body > :not(#ct-lock-layer):not(#ct-privacy-cover) {
+  display: none !important;
+}

@@ -19,3 +19,11 @@ Livrés : `folder-bookmark` (Y-IOS-01, ADR 0011 §22) : aucune commande exposée
 `src-tauri/src/sync/bookmark.rs`, et joué par le faux du plugin (`src-tauri/tests/desktop/support/fake_bookmark.rs`).
 
 `notification-actions` (N-03, ADR 0012 avenant N-03) : prend la place du délégué `UNUserNotificationCenterDelegate` du plugin officiel `tauri-plugin-notification` (envoi, annulation, lecture des en attente restent à ce dernier), enregistre les catégories « Fait » / « +15 min » et écrit chaque action reçue dans `Library/Application Support/ct-notification-actions/queue.jsonl`. Commandes `drain`, `ack`, `status`, `register_action_types` (+ écoute de l'événement `action`) appelées par la WebView, transmises à Swift par Tauri (aucune commande Rust) ; contrôlé statiquement par `src-tauri/tests/desktop/notification_actions.rs`, adaptateur TS unique `src/platform/notifications/tauriNotificationActions.ts`. Aucune clé Info.plist.
+
+Lot M (ADR 0013 et son avenant I-03) :
+- `haptics` (A-07, §1.1) : crate `tauri-plugin-ct-haptics`, **`links = "tauri-plugin-haptics"`** (le préfixe des permissions vient de `links`), trois
+  commandes appelées par le JS (`src/platform/haptics/tauriHaptics.ts`), générateurs UIKit sur le fil principal, aucune clé Info.plist ;
+- `privacy-shield` (I-03, §2.5) : une commande `set_enabled`, vue opaque quand l'app devient inactive (sélecteur d'apps), aucune clé Info.plist.
+Capabilities iOS à liste exacte (`haptics-ios.json`, `privacy-shield-ios.json`), contrôlées par `tests/desktop/config.rs` et
+`src/platform/lotM.consistency.test.ts` (qui relit aussi le Swift : méthodes, point d'entrée, fil principal). Plugin officiel du lot :
+`tauri-plugin-biometric` =2.4.1 (I-03), capability `biometric-ios.json`, clé `NSFaceIDUsageDescription` au contrat Info.plist.

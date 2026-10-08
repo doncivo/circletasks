@@ -1,0 +1,41 @@
+import type { Messages } from './types';
+
+export const securityEn: Messages['security'] = {
+  lock: {
+    title: 'CircleTasks is locked',
+    unlock: 'Unlock',
+    unlockLabel: 'Unlock CircleTasks',
+    retry: 'Try again',
+    cancelled: 'Unlock cancelled',
+    failed: 'Unable to unlock ({code})',
+    noPasscode: 'Unable to unlock: no passcode is set on the iPhone',
+    pluginFailed: 'The lock is not responding ({code}). Your data is intact.',
+    settingUnreadable: 'The lock setting is unreadable: unlock to continue.',
+    disable: 'Turn off the lock',
+    disableConfirmTitle: 'Turn off the lock?',
+    disableConfirmText: 'CircleTasks data will be readable again without protection',
+    disableConfirm: 'Turn off',
+    disableFailed: 'The lock could not be turned off: you can try again.',
+    loadFailed: 'The lock screen could not be loaded. Your data is intact: restart the app.',
+  },
+  reason: {
+    unlock: 'Unlock CircleTasks',
+    enable: 'Turn on the CircleTasks lock',
+    disable: 'Turn off the CircleTasks lock',
+  },
+  cancel: 'Cancel',
+  settings: {
+    rowFaceId: 'Face ID lock',
+    rowBiometry: 'Biometric lock',
+    rowPasscode: 'iPhone passcode lock',
+    fallback: 'Falls back to the iPhone passcode',
+    notificationsNote: 'Protects the app, not the text of notifications (iOS Settings › Notifications).',
+    relockNote: 'Locked at launch and after 30 s in the background.',
+    notEnabled: 'The lock was not turned on',
+    notDisabled: 'The lock was not turned off',
+    noPasscode: 'No passcode is set on the iPhone: set one in iOS Settings › Face ID & Passcode.',
+    unsupported: 'The lock is not available on this device ({code}).',
+    saveFailed: 'The lock setting could not be saved.',
+    shieldFailed: 'The privacy cover could not be turned on ({code}): the app switcher preview may show your tasks.',
+  },
+};

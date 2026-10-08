@@ -16,6 +16,7 @@ import { eventsEn } from './en.events';
 import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
+import { securityEn } from './en.security';
 import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
@@ -511,6 +512,8 @@ export const en: Messages = {
     syncReloadFailed: 'Some received changes are not shown yet: retrying at the next sync',
     syncDevice: '{device}: {state}',
     loading: 'Loading',
+    signingSoon: 'CircleTasks expires soon: refresh it in SideStore',
+    signingExpired: 'The signature has expired: reinstall the app',
   },
   today: {
     dayPrevious: 'Previous day',
@@ -637,6 +640,7 @@ export const en: Messages = {
   shortcutsUi: shortcutsUiEn,
   backup: backupEn,
   importCsv: importCsvEn,
+  security: securityEn,
   onboarding: onboardingEn,
   shortcuts: {
     quickCapture: 'Quick capture',

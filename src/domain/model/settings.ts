@@ -86,6 +86,13 @@ export interface SettingsValues {
   'notifications.status': unknown;
   /** N-03 (avenant N3.4) : file durable des actions « Fait » et « +15 min » reçues de la notification, répétitions vivantes. Valeur BRUTE lue par `parseActionQueue` ; locale, jamais synchronisée. */
   'notifications.actionQueue': unknown;
+  /**
+   * I-03 (ADR 0013 §2.3) : verrouillage de l'app par Face ID ou code de l'iPhone. Valeur BRUTE lue par `parseAppLockSetting` (illisible :
+   * verrouillé, échec fermé) ; locale, jamais synchronisée ni observée par la replanification.
+   */
+  'security.appLock': unknown;
+  /** I-02 (ADR 0013 §3.3) : dernière date d'expiration lue, échec, alerte en attente. Valeur BRUTE lue par `parseSigningStatus` ; locale. */
+  'notifications.signing': unknown;
 }
 
 export type SettingKey = keyof SettingsValues;
@@ -128,6 +135,8 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'notifications.ledger': { scope: 'local', defaultValue: null },
   'notifications.status': { scope: 'local', defaultValue: null },
   'notifications.actionQueue': { scope: 'local', defaultValue: null },
+  'security.appLock': { scope: 'local', defaultValue: false },
+  'notifications.signing': { scope: 'local', defaultValue: null },
 };
 
 /** Valeur par défaut d'un réglage. */

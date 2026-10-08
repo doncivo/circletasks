@@ -25,6 +25,7 @@ import { syncVersionFr } from './fr.syncVersion';
 import { syncPairingFr } from './fr.syncPairing';
 import { syncForgetFr } from './fr.syncForget';
 import { syncResetFr } from './fr.syncReset';
+import { securityFr } from './fr.security';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -521,6 +522,10 @@ export const fr = {
     /** A-09 critère 9 f : appareil nommé et statut comme dans APPAREILS. */
     syncDevice: '{device} : {state}',
     loading: 'Chargement',
+    /** I-02 (ADR 0013 §3.3) : moins de 24 h avant l'expiration de la signature (texte précis composé par I-02 dans `message`). */
+    signingSoon: 'CircleTasks expire bientôt : actualisez-la dans SideStore',
+    /** I-02 : signature expirée. */
+    signingExpired: 'La signature est expirée : réinstallez l’app',
   },
   today: {
     dayPrevious: 'Jour précédent',
@@ -647,6 +652,7 @@ export const fr = {
   shortcutsUi: shortcutsUiFr,
   backup: backupFr,
   importCsv: importCsvFr,
+  security: securityFr,
   onboarding: onboardingFr,
   shortcuts: {
     quickCapture: 'Capture rapide',

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "privacy-shield-ios",
+  "description": "iPhone uniquement : cache de confidentialité natif (I-03, ADR 0013 §2.5), plugin local privacy-shield. Liste exacte fixée par tests/desktop/config.rs.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": ["privacy-shield:allow-set-enabled"]
+}

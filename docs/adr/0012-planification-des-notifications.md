@@ -466,3 +466,7 @@ Journal technique : codes et nombres seulement.
 ### Fichiers impactés
 
 `src-tauri/plugins/notification-actions/` (nouveau), `src-tauri/{Cargo.toml,Cargo.lock,src/lib.rs}`, `capabilities/notifications-ios.json`, `tests/desktop/{config,notification_actions,main}.rs`, `.github/workflows/build-ios.yml` ; `src/domain/{notificationActions,notificationPlan,notificationStatus}.ts`, `model/settings.ts` ; `src/db/repositories/{reminderRepository,sql/reminderRepository}.ts` (`getById`) ; `src/platform/notifications/{actions,tauriNotificationActions,fakeActions,index}.ts` ; `src/features/reminders/*` ; `src/features/app/{container,bootstrap}.ts` ; `src/i18n/{fr,en}.*` ; `tests/e2e/N-03.spec.ts`.
+
+## Avenant lot M (2026-10-08) — identifiant réservé 2
+
+- Plage réservée [1 ; 65 535] : **2 = alerte d'expiration de la signature** (I-02, ADR 0013 section 3), une seule en attente, sans catégorie, envoyée par le pont `createIosNotificationBridge` dans le passage du `NotificationRunner` (déclencheurs `open`, `resume`, `permission`), **avant** le calcul `limit = 64 − reservedCount()` ; `replace` et `cancelAll` du plan ne la touchent jamais. État local `notifications.signing`, distinct de `notifications.status`.
