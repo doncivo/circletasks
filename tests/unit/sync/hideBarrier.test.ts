@@ -10,6 +10,7 @@ import { BEFORE_HIDE_BUDGET_MS, HIDE_SYNC_DEADLINE_MS, startSyncScheduler } from
 afterEach(() => vi.useRealTimers());
 
 function setup() {
+  vi.useFakeTimers();
   const clock = createManualClock('2026-10-05T08:00:00.000Z');
   const calls: [SyncReason, SyncNowOptions | undefined][] = [];
   const listeners = new Set<() => void>();
@@ -38,13 +39,13 @@ describe('cycle `hide` après le passage des Rappels (revue 3)', () => {
     expect(calls).toHaveLength(openCalls);
     clock.advance(3_000);
     finish();
-    await vi.waitFor(() => expect(calls).toHaveLength(openCalls + 1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(openCalls + 1);
     expect(calls.at(-1)).toEqual(['hide', { deadlineAt: hiddenAt + HIDE_SYNC_DEADLINE_MS }]);
     scheduler.dispose();
   });
 
   it('un passage qui ne finit pas ne retient le cycle que 8 s', async () => {
-    vi.useFakeTimers();
     const { clock, calls, doc, service } = setup();
     const scheduler = startSyncScheduler(service, { document: doc as unknown as Document, clock, setInterval: () => 0, clearInterval: () => undefined, hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, beforeHide: () => new Promise(() => undefined) });
     const openCalls = calls.length;
@@ -63,7 +64,8 @@ describe('cycle `hide` après le passage des Rappels (revue 3)', () => {
     const scheduler = startSyncScheduler(service, { document: doc as unknown as Document, clock, setInterval: () => 0, clearInterval: () => undefined, hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, beforeHide: () => Promise.reject(new Error('panne')) });
     const openCalls = calls.length;
     doc.hide();
-    await vi.waitFor(() => expect(calls).toHaveLength(openCalls + 1));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveLength(openCalls + 1);
     scheduler.dispose();
   });
 
