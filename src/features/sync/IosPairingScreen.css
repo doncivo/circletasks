@@ -1,0 +1,235 @@
+/* Écran « Associer au PC » de l'iPhone (Appairage.html : fond #15101F, textes #FFFFFF et #C9BEE6, cadre #2A2140, étapes #231B36). */
+.ct-ios-pair {
+  --ct-ios-pair-bg: #15101f;
+  --ct-ios-pair-text: #ffffff;
+  --ct-ios-pair-muted: #c9bee6;
+  --ct-ios-pair-panel: #231b36;
+  --ct-ios-pair-line: #5a4f78;
+  --ct-ios-pair-done: #8fcb9f;
+  --ct-ios-pair-accent: #f2a7a0;
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  background: var(--ct-ios-pair-bg);
+  color: var(--ct-ios-pair-text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+
+.ct-ios-pair__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px 0;
+}
+
+.ct-ios-pair__close {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--ct-ios-pair-text);
+}
+
+.ct-ios-pair__spacer {
+  width: 44px;
+}
+
+.ct-ios-pair__section {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ct-ios-pair-muted);
+}
+
+.ct-ios-pair__title {
+  margin: 24px 28px 0;
+  font-family: Fraunces, Georgia, serif;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.ct-ios-pair__hint,
+.ct-ios-pair__text {
+  margin: 10px 28px 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ct-ios-pair-muted);
+}
+
+.ct-ios-pair__text--danger {
+  color: var(--ct-ios-pair-accent);
+}
+
+.ct-ios-pair__text--ok {
+  color: var(--ct-ios-pair-done);
+}
+
+.ct-ios-pair__steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 28px 28px 0;
+  padding: 16px;
+  border-radius: 16px;
+  background: var(--ct-ios-pair-panel);
+  list-style: none;
+}
+
+.ct-ios-pair__step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--ct-ios-pair-muted);
+}
+
+.ct-ios-pair__step[data-current='true'],
+.ct-ios-pair__step[data-done='true'] {
+  color: var(--ct-ios-pair-text);
+}
+
+.ct-ios-pair__dot {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  box-sizing: border-box;
+  border-radius: 13px;
+  border: 2px solid var(--ct-ios-pair-line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--ct-ios-pair-bg);
+}
+
+.ct-ios-pair__step[data-current='true'] .ct-ios-pair__dot {
+  border-color: var(--ct-ios-pair-muted);
+}
+
+.ct-ios-pair__step[data-done='true'] .ct-ios-pair__dot {
+  border: 0;
+  background: var(--ct-ios-pair-done);
+}
+
+.ct-ios-pair__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ct-ios-pair__body > .ct-button {
+  margin: 8px 28px 0;
+}
+
+.ct-ios-pair__progress {
+  margin: 0 28px;
+}
+
+.ct-ios-pair__grow {
+  flex-grow: 1;
+}
+
+.ct-ios-pair__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 24px 28px 40px;
+}
+
+.ct-ios-pair__outline {
+  height: 52px;
+  border: 1.5px solid var(--ct-ios-pair-line);
+  border-radius: 26px;
+  background: transparent;
+  color: var(--ct-ios-pair-text);
+  font: 600 15px 'DM Sans', sans-serif;
+}
+
+.ct-ios-pair__recovery {
+  margin: 16px 12px 0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* Écran de visée : la WebView est transparente, la caméra du plugin est derrière ; seul le cadre et « Annuler » restent visibles. */
+.ct-ios-pair--scan {
+  background: transparent;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ct-ios-pair__aim {
+  margin: 72px 28px 0;
+  padding: 10px 16px;
+  border-radius: 12px;
+  background: rgba(21, 16, 31, 0.72);
+  font-size: 15px;
+  text-align: center;
+}
+
+.ct-ios-pair__frame {
+  position: relative;
+  width: 280px;
+  height: 280px;
+}
+
+.ct-ios-pair__corner {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  border-color: #ffffff;
+  border-style: solid;
+}
+
+.ct-ios-pair__corner--tl {
+  left: 0;
+  top: 0;
+  border-width: 4px 0 0 4px;
+  border-radius: 10px 0 0 0;
+}
+
+.ct-ios-pair__corner--tr {
+  right: 0;
+  top: 0;
+  border-width: 4px 4px 0 0;
+  border-radius: 0 10px 0 0;
+}
+
+.ct-ios-pair__corner--bl {
+  left: 0;
+  bottom: 0;
+  border-width: 0 0 4px 4px;
+  border-radius: 0 0 0 10px;
+}
+
+.ct-ios-pair__corner--br {
+  right: 0;
+  bottom: 0;
+  border-width: 0 4px 4px 0;
+  border-radius: 0 0 10px 0;
+}
+
+.ct-ios-pair--scan .ct-ios-pair__outline {
+  width: calc(100% - 56px);
+  margin-bottom: 40px;
+  background: rgba(21, 16, 31, 0.72);
+}
+
+/* Pendant le scan : tout le reste de l'app est transparent et masqué (la caméra est derrière la WebView). */
+html.ct-scanning,
+html.ct-scanning body {
+  background: transparent !important;
+}
+
+html.ct-scanning body > *:not(.ct-ios-pair--scan) {
+  visibility: hidden;
+}

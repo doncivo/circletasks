@@ -4,6 +4,7 @@ import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId } from '../domain/types';
 import type { DataAccess } from '../db/repositories';
 import type { SyncPlatform } from '../platform/sync/types';
+import type { CycleDeadline } from './deadline';
 import type { SyncLogger } from './log';
 
 /** Dépendances du moteur de synchro (injectées : base, plateforme, horloges, identité, journal). */
@@ -19,4 +20,6 @@ export interface SyncDeps {
   /** `schema_version` local = numéro de la dernière migration. */
   readonly sv: number;
   readonly logger: SyncLogger;
+  /** ADR 0011 §22 point 6 : échéance du cycle `hide` de l'iPhone (comparée avant chaque unité atomique) ; absente : cycle non borné. */
+  readonly deadline?: CycleDeadline;
 }

@@ -133,9 +133,10 @@ describe('tauriSync (Y-01 critère 18)', () => {
     expect((unknown as SyncPlatformError).code).toBe('io');
   });
 
-  it('openSyncPlatform : Rust dans Tauri (indisponible sur iPhone), mémoire dans le navigateur', () => {
+  it('openSyncPlatform : Rust dans Tauri (PC et iPhone, Y-IOS-01 critère 8), mémoire dans le navigateur', () => {
     expect(openSyncPlatform('tauri', 'windows').available()).toBe(true);
-    expect(openSyncPlatform('tauri', 'ios').available()).toBe(false);
+    expect(openSyncPlatform('tauri', 'ios').available()).toBe(true);
+    expect(openSyncPlatform('tauri', 'other').available()).toBe(false);
     const web = openSyncPlatform('web', 'other') as { testing?: unknown };
     expect(web.testing).toBeDefined();
   });

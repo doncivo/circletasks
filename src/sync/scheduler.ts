@@ -1,12 +1,19 @@
 import type { Clock } from '../domain/clock';
 import { QUIT_SYNC_BUDGET_MS, SYNC_INTERVAL_MS } from '../domain/sync/limits';
-import type { SyncReason, SyncService } from '../platform/sync/types';
+import type { SyncNowOptions, SyncReason, SyncService } from '../platform/sync/types';
 
 /**
  * Déclenchement des cycles (ADR 0011, section 10.1 ; Y-02 critère 1) : à l'ouverture, toutes les 5 minutes tant que la fenêtre est
  * visible, au masquage de la fenêtre (fermeture vers la zone de notification sur PC), avant « Quitter » (5 s au plus). Jamais en
  * arrière-plan. Le minuteur sonde : l'échéance est décidée par l'horloge injectée (4 min 59 s : pas de cycle ; 5 min : un cycle).
+ *
+ * iPhone (ADR 0011 §22 point 6, Y-IOS-01) : `hideDeadlineMs` posé par `startSync.ts` : au passage en arrière-plan, le cycle `hide` est
+ * lancé **dans le gestionnaire même** avec une échéance (`HIDE_SYNC_DEADLINE_MS`), pendant la tâche d'arrière-plan ouverte par le plugin
+ * Swift ; au retour au premier plan, un cycle `open` reprend ce qu'un cycle `hide` interrompu a laissé. PC : aucune échéance.
  */
+
+/** Échéance du cycle lancé au passage de l'iPhone en arrière-plan (la tâche iOS est fermée au plus tard 28 s après son ouverture). */
+export const HIDE_SYNC_DEADLINE_MS = 25_000;
 
 /** Période de sondage du minuteur (l'échéance de 5 min est décidée par l'horloge). */
 export const SYNC_POLL_MS = 15_000;
@@ -16,6 +23,8 @@ export interface SyncSchedulerEnv {
   readonly clock: Clock;
   readonly setInterval?: (handler: () => void, ms: number) => unknown;
   readonly clearInterval?: (handle: unknown) => void;
+  /** iPhone : échéance du cycle `hide` (ms après le masquage) ; absente (PC) : cycle `hide` non borné, aucun cycle au retour. */
+  readonly hideDeadlineMs?: number;
 }
 
 export interface SyncScheduler {
@@ -33,10 +42,10 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'>, env: S
   let lastStart = env.clock.nowMs();
   const visible = (): boolean => env.document.visibilityState !== 'hidden';
 
-  const run = (reason: SyncReason): Promise<void> => {
+  const run = (reason: SyncReason, options?: SyncNowOptions): Promise<void> => {
     if (disposed) return Promise.resolve();
     lastStart = env.clock.nowMs();
-    return service.syncNow(reason).catch(() => undefined);
+    return (options ? service.syncNow(reason, options) : service.syncNow(reason)).catch(() => undefined);
   };
 
   const tick = async (): Promise<void> => {
@@ -44,9 +53,12 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'>, env: S
     if (env.clock.nowMs() - lastStart >= SYNC_INTERVAL_MS) await run('timer');
   };
 
+  const bounded = env.hideDeadlineMs;
   const onVisibility = (): void => {
-    // Masquage de la fenêtre (PC : fermeture vers la zone de notification) : un cycle, puis rien en arrière-plan.
-    if (!visible()) void run('hide');
+    // Masquage de la fenêtre (PC : fermeture vers la zone de notification) : un cycle, puis rien en arrière-plan. iPhone : cycle borné.
+    if (!visible()) void run('hide', bounded === undefined ? undefined : { deadlineAt: env.clock.nowMs() + bounded });
+    // Retour au premier plan : iPhone, un cycle d'ouverture (reprise d'un cycle `hide` interrompu) ; PC, le sondage des 5 minutes.
+    else if (bounded !== undefined) void run('open');
     else void tick();
   };
 

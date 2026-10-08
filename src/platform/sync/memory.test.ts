@@ -494,15 +494,18 @@ describe('appairage (Y-06, sections 2.1 et 10.3)', () => {
     }
   });
 
-  it('iPhone : pas de fenêtre pairing, scan lancé par Rust ; le PC refuse le scan', async () => {
+  it('iPhone : pas de fenêtre pairing, scan du QR par le JS (ADR 0011 §23 point 2) ; `{ scan: true }` refusé partout', async () => {
     await a.key.openPairing('show');
     const { qrText } = await a.key.pairingPayload();
     const phone = createMemorySyncPlatform({ folder, platform: 'ios', nowMs: clock });
     await phone.folder.choose();
     expect(await codeOf(phone.key.openPairing('show'))).toBe('wrong-window');
-    expect(await codeOf(phone.key.import({ scan: true }))).toBe('consent-denied'); // scan annulé
+    expect(await codeOf(phone.key.import({ scan: true }))).toBe('invalid-pairing');
+    expect(await phone.key.scanAndImport?.()).toEqual({ kind: 'cancelled' }); // scan annulé
     phone.testing.setScanResult(qrText);
-    expect((await phone.key.import({ scan: true })).pairedBy).toBe(A);
+    const outcome = await phone.key.scanAndImport?.();
+    expect(outcome?.kind === 'imported' && outcome.result.pairedBy).toBe(A);
+    expect(JSON.stringify(outcome)).not.toContain(qrText);
     const pc = createMemorySyncPlatform({ folder, nowMs: clock });
     await pc.folder.choose();
     await pc.key.openPairing('import');

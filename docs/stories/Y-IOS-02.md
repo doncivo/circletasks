@@ -1,6 +1,6 @@
-# Y-IOS-02 — Trousseau, scan du QR par Rust, confirmations natives et fuseau local sur iPhone
+# Y-IOS-02 — Trousseau, scan du QR (par le JS, ADR 0011 §23), confirmations natives et fuseau local sur iPhone
 
-Module : M15 Synchronisation · Ordre de construction : 5 (lot Y-IOS, phase 1, **après** Y-IOS-01) · Agents : **sync-icloud** (Rust, TypeScript) et **ios-mobile** (Swift de l'alerte, plist, CI) · Relectures : qa-test, code-reviewer, **security-privacy (obligatoire : exposition de la clé, Trousseau, scan)** · Statut : à faire
+Module : M15 Synchronisation · Ordre de construction : 5 (lot Y-IOS, phase 1, **après** Y-IOS-01) · Agents : **sync-icloud** (Rust, TypeScript) et **ios-mobile** (Swift de l'alerte, plist, CI) · Relectures : qa-test, code-reviewer, **security-privacy (obligatoire : exposition de la clé, Trousseau, scan)** · Statut : codé (build-ios.yml et relectures à faire)
 Story technique (écart noté dans docs/decisions.md, 2026-10-07, validée par Ali). Rend vraies sur iPhone Y-06, Y-08, Y-10, Y-11 et la partie iPhone de Y-07.
 Dépend de : Y-IOS-01 (plugin folder-bookmark, `BookmarkFs`, capability iOS, `available()` vrai sur iOS), Y-06, Y-08, Y-10, Y-11 (livrés côté PC).
 
@@ -80,3 +80,14 @@ Plugin folder-bookmark et cycle d'arrière-plan : Y-IOS-01. Caméra pour l'OCR (
 - **Écart au backlog (à valider par Ali)** : les écrans iPhone « Associer au PC », saisie de la clé de secours, progression d'arrivée et étape de l'assistant n'appartiennent à aucune story de l'ordre 5 (Y-06 est `fait` côté PC, avec « scan réel à l'ordre 5 »). Le product-owner les place ici (critères 7 et 8) ; sinon créer Y-IOS-03.
 - Le lot ne touche ni `src/domain` ni `src/db` (lot N1 en parallèle) ; si un texte d'avertissement nouveau est nécessaire (`SyncWarningCode`), il attend la fin de N1.
 - Texte de la caméra : unique pour barcode-scanner et vision si CAP-IOS-01 arrive avec le même texte ; sinon deux entrées au contrat.
+
+## Corrections apportées par l'ADR 0011 §23 (font foi sur cette fiche)
+
+- **Scan par le JS** (critères 5, 6 et 10) : l'API Rust de `tauri-plugin-barcode-scanner` 2.5.1 n'existe pas (constat du code, §23 point 2) ; le chemin est tranché sans attendre la compilation. `key.scanAndImport()` (`tauriSync.ts`) : page au premier plan, autorisation de la caméra, `scan({ windowed: true, formats: [QRCode] })`, texte passé **aussitôt** à `sync_key_import({ qrText })`, jamais rendu ni gardé ; `{ scan: true }` refusé (`invalid-pairing`, inscrit dans `import-failure.json`). Le trait `QrScanner` de Rust est seulement réservé (non implémenté).
+- **Codes existants seulement** (critères 4 et 6) : `vault-unavailable` (et non `vault-locked`), `invalid-pairing` (et non `invalid-key`), `key-mismatch` (et non `kid-mismatch`), `pairing-expired` (et non `expired`), `not-foreground`, `rate-limited`, `consent-denied`, `not-configured`, `cloud-pending`.
+- **Caméra refusée** (critère 6) : **pas de bandeau nouveau** (il toucherait `src/domain/syncBanners.ts`) : état lu du système (`checkPermissions`) à l'affichage de « Associer au PC » et à chaque retour au premier plan, dit dans l'écran d'association et sur la ligne de Réglages › Synchronisation (« L'accès à la caméra est refusé », « Ouvrir les réglages ») ; le bandeau persistant reste celui de `needs-pairing`.
+- **Ordre dossier puis clé** (critère 7, section 10.3) : choix du dossier d'abord (s'il n'est pas lié), puis explication de la caméra, scan, réception de la clé, progression de l'arrivée ; la maquette Appairage.html montre l'ordre inverse, la section 10.3 fait foi.
+- **Capability** (section « ADR requis », point 3) : `sync-ios.json` accorde 21 permissions `allow-sync-*` (les 24 moins les trois de la fenêtre `pairing`) et les cinq commandes de barcode-scanner (`scan`, `cancel`, `check-permissions`, `request-permissions`, `open-app-settings`) ; aucune permission `folder-bookmark:`.
+- **Confirmations sur iPhone** : remplacement de clé, « Oublier le dossier et la clé », oubli d'un appareil, réinitialisation ; **jamais « Afficher la clé »** (aucune commande de la fenêtre `pairing` sur iPhone).
+- **Fuseau** (critère 15) : `local_offset_minutes` rend `Option` ; None : heure UTC suivie de « UTC » (`forgetDetail.utc`), journal `tz-unknown` ; un fuseau inconnu de la bibliothèque C est lu comme UTC (décalage 0, jamais une erreur).
+- **Clé en mémoire** : la clé lue au Trousseau reste en mémoire (`CachedVault`, relue seulement après une écriture ou une suppression faite par l'app) : le cycle du passage en arrière-plan, écran verrouillé, garde la clé déjà chargée.

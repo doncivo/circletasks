@@ -1,15 +1,17 @@
 import type { OsFamily, Runtime } from '../runtime';
 import { createMemorySyncPlatform } from './memory';
+import { loadBarcodeScanner } from './barcodeScanner';
 import { createTauriSync } from './tauriSync';
 import { SyncPlatformError, type SyncErrorCode, type SyncPlatform } from './types';
 
 export * from './types';
 export { MemorySyncFolder, createMemorySyncPlatform, type MemorySyncOptions, type MemorySyncPlatform, type MemorySyncTesting, type StateFileCopy } from './memory';
-export { createTauriSync, loadTauriSyncInvoker, toSyncError, type SyncInvoker, type TauriSyncOptions } from './tauriSync';
+export { createTauriSync, loadTauriSyncInvoker, toSyncError, type QrScanner, type SyncInvoker, type TauriSyncOptions } from './tauriSync';
+export { loadBarcodeScanner } from './barcodeScanner';
 
 /**
- * Plateforme de synchronisation courante (ADR 0011, section 11 ; Y-01 critère 18) : app installée -> commandes Rust (`tauriSync`,
- * indisponible sur iPhone jusqu'à l'ordre 5) ; navigateur de développement, Vitest et Playwright -> implémentation mémoire. En
+ * Plateforme de synchronisation courante (ADR 0011, section 11 ; Y-01 critère 18, Y-IOS-01 critère 8) : app installée (PC et iPhone) ->
+ * commandes Rust (`tauriSync`) ; navigateur de développement, Vitest et Playwright -> implémentation mémoire. En
  * développement, un test de bout en bout peut poser `globalThis.__ctSync` (faux) avant le chargement de la page, ou annoncer le
  * simulateur de dossier (`globalThis.__ctSyncSim`, Y-04 : parcours 10 à deux pages) : `__ctSync` est alors installé ici, **seulement si
  * `import.meta.env.DEV`** (un build ne contient ni le client ni l'affectation).
@@ -22,7 +24,8 @@ export function openSyncPlatform(runtime: Runtime, os: OsFamily): SyncPlatform {
     if (override) return override;
   }
   if (runtime === 'web') return createMemorySyncPlatform();
-  return createTauriSync({ available: os === 'windows' });
+  // ADR 0011 §22 point 7 (Y-IOS-01) : l'iPhone a ses commandes `sync_*` (capability `sync-ios.json`, plugin folder-bookmark).
+  return createTauriSync({ available: os === 'windows' || os === 'ios', ...(os === 'ios' ? { scanner: loadBarcodeScanner() } : {}) });
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -74,6 +77,9 @@ function createSyncSimClient(config: SyncSimConfig): SyncPlatform {
       pairingPayload: method('key.pairingPayload'),
       closePairing: method('key.closePairing'),
       import: method('key.import'),
+      ...(config.platform === 'ios'
+        ? { scanAndImport: method('key.scanAndImport'), cancelScan: method('key.cancelScan'), cameraPermission: method('key.cameraPermission'), openCameraSettings: method('key.openCameraSettings') }
+        : {}),
     },
     bindDevice: method('bindDevice'),
     scan: method('scan'),

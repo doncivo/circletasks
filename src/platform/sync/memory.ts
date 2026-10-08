@@ -77,6 +77,8 @@ import {
   type SyncErrorCode,
   type SyncFolderInfo,
   type SyncPlatform,
+  type CameraPermission,
+  type ScanImportOutcome,
 } from './types';
 import { hlcMs, parsePublishedStateText, parseSnapshotRecord } from '../../domain/sync/parse';
 import {
@@ -104,7 +106,7 @@ import {
   type ResetKnownDevice,
   type ResetPreconditionDevice,
 } from '../../domain/sync/epoch';
-import { DEVICE_EXPIRY_MS } from '../../domain/sync/limits';
+import { DEVICE_EXPIRY_MS, HYDRATE_CYCLE_TIMEOUT_MS, HYDRATE_FILE_TIMEOUT_MS } from '../../domain/sync/limits';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -513,8 +515,20 @@ export interface MemorySyncTesting {
   setChooser(next: MemorySyncFolder | null): void;
   setVaultAvailable(available: boolean): void;
   setRestoreMarker(marker: RestoreMarker | null): void;
-  /** iPhone : texte lu par le prochain scan du QR (null : scan annulé). */
+  /** iPhone : texte lu par le prochain scan du QR (null : scan annulé) ; consommé par `scanAndImport`. */
   setScanResult(text: string | null): void;
+  /** iPhone : autorisation de la caméra (`prompt` : demandée au prochain scan, `answer` : réponse de l'utilisateur). */
+  setCameraPermission(state: CameraPermission, answer?: 'granted' | 'denied'): void;
+  /** iPhone : ouvertures des réglages d'iOS demandées. */
+  cameraSettingsOpened(): number;
+  /**
+   * ADR 0011 §22 point 4 : téléchargement simulé des fichiers « dans le nuage » (durée en ms, null : jamais téléchargés). Un fichier lu est
+   * téléchargé si sa durée tient dans 60 s et dans le reste du budget du cycle (3 minutes, ou `hydrateBudgetMs` du scan) ; le budget est
+   * consommé comme le ferait Rust (durée, ou délai accordé s'il est dépassé).
+   */
+  setHydrationDelay(ms: number | null): void;
+  /** Reste du budget d'hydratation du cycle en cours (ms). */
+  hydrationBudgetLeft(): number;
   /** Instance `pairing` ouverte (mode, génération), ou null. */
   pairing(): { readonly mode: PairingMode; readonly generation: number } | null;
   /** Nombre de confirmations natives affichées. */
@@ -637,6 +651,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let own: OwnState | null = null;
   let marker: RestoreMarker | null = null;
   let sealed = 0;
+  /**
+   * Écrivains d'instantané ouverts (`sync_snapshot_begin` sans `commit`), comme `SyncCore.snapshots` de Rust : un écrivain dont les pages
+   * ont été coupées par l'appelant (cycle interrompu) reste ouvert jusqu'à l'abandon ; au plus `MAX_OPEN_SNAPSHOTS`.
+   */
+  const openWriters = new Map<number, { readonly epoch: EpochId; readonly seq: number }>();
+  let nextWriter = 0;
+  const MAX_OPEN_SNAPSHOTS = 4;
 
   let consentAnswer = true;
   let foreground = true;
@@ -646,6 +667,26 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let blockedUntil = 0;
   let pairing: PairingInstance | null = null;
   let scanResult: string | null = null;
+  /** iPhone (§23 point 2) : autorisation de la caméra simulée, réponse à la demande, réglages ouverts. */
+  let camera: CameraPermission = 'granted';
+  let cameraAnswer: 'granted' | 'denied' = 'granted';
+  let settingsOpened = 0;
+  /** Téléchargement simulé (§22 point 4) : durée, et reste du budget du cycle ouvert par le dernier scan. */
+  let hydrationDelay: number | null = null;
+  let hydrationLeft = HYDRATE_CYCLE_TIMEOUT_MS;
+  /** Fichier lisible localement, après un téléchargement simulé s'il est dans le nuage et que le budget le permet. */
+  const hydrated = (file: MemFile): boolean => {
+    if (file.availability === 'cloud' && hydrationDelay !== null) {
+      const allowed = Math.min(HYDRATE_FILE_TIMEOUT_MS, hydrationLeft);
+      if (allowed > 0 && hydrationDelay <= allowed) {
+        file.availability = 'local';
+        hydrationLeft -= hydrationDelay;
+      } else {
+        hydrationLeft -= allowed;
+      }
+    }
+    return file.availability === 'local';
+  };
   /** `pairedBy` mémorisé à l'import quand l'appareil n'est pas encore lié (reporté dans `own.json` à la liaison). */
   let pendingPairedBy: DeviceId | null = null;
   /** `sync/forgotten.json` (Y-10, §18 point 3) : liste maître, terminés ; lié au dossier et à l'identité (l'anti-rejeu est `accepted`). */
@@ -876,7 +917,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const fromNext = which === 'next';
     const file = fromNext ? dir.nextState : dir.state;
     if (!file) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'missing', fromNext };
-    if (file.availability !== 'local') return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
+    if (!hydrated(file)) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
     const read = readFileState(deviceId, file, kids, remember, replay);
     return { ...read, fromNext };
   };
@@ -997,6 +1038,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   const scan = async (r: ScanRequest): Promise<FolderScan> => {
     const keepList: unknown = (r as Partial<ScanRequest> | undefined)?.keep;
     if (!Array.isArray(keepList) || !keepList.every((id) => isSyncDeviceId(id))) return fail('bad-name');
+    // ADR 0011 §22 point 4 : budget d'hydratation réduit (entier de 1 à 180 000), sinon `bad-name` ; il ouvre le cycle d'hydratation.
+    const budget: unknown = (r as Partial<ScanRequest> | undefined)?.hydrateBudgetMs;
+    if (budget !== undefined && (typeof budget !== 'number' || !Number.isInteger(budget) || budget < 1 || budget > HYDRATE_CYCLE_TIMEOUT_MS)) return fail('bad-name');
+    hydrationLeft = typeof budget === 'number' ? budget : HYDRATE_CYCLE_TIMEOUT_MS;
     requireReadable();
     // Y-11 : perte constatée et bascule (et sa reprise) faites avant la lecture du dossier, qui reflète alors les clés en vigueur.
     let reset: ResetView | null = null;
@@ -1108,7 +1153,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const file = epochDir?.segments.get(segment);
       // Segment annoncé absent ou dans le nuage : en attente d'iCloud. Un numéro manquant n'est jamais sauté (choix conservateur :
       // un fichier pas encore arrivé ne se distingue pas d'un trou).
-      if (!file || file.availability !== 'local') {
+      if (!file || !hydrated(file)) {
         status = 'cloud-pending';
         break;
       }
@@ -1159,7 +1204,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // Seuls les instantanés annoncés par l'état authentifié sont lus (le dernier annoncé et les plus anciens gardés).
     if (!state || state.epoch !== r.epoch || !state.snapshot || r.seq > state.snapshot.seq) return { records: [], next: from, status: 'cloud-pending' };
     const file = f.devices.get(r.deviceId)?.epochs.get(r.epoch)?.snapshots.get(r.seq);
-    if (!file || file.availability !== 'local') return { records: [], next: from, status: 'cloud-pending' };
+    if (!file || !hydrated(file)) return { records: [], next: from, status: 'cloud-pending' };
     checkFileForRead(file, kid, MAX_SNAPSHOT_BYTES);
     if (file.header.f !== 'ct-s' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== r.seq) fail('bad-header');
     if (r.tail === true) {
@@ -1396,21 +1441,37 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const existing = f.devices.get(self)?.epochs.get(r.epoch);
     // Numéro d'instantané jamais réutilisé dans une époque (choix conservateur, code le plus proche).
     if (existing && r.seq <= maxKey(existing.snapshots)) fail('segment-mismatch');
+    // Même époque et même numéro resté ouvert (pages coupées par l'appelant) : abandonné au lieu d'un refus à chaque cycle (revue).
+    for (const [id, w] of openWriters) if (w.epoch === r.epoch && w.seq === r.seq) openWriters.delete(id);
+    while (openWriters.size >= MAX_OPEN_SNAPSHOTS) openWriters.delete(Math.min(...openWriters.keys()));
+    nextWriter += 1;
+    const handle = nextWriter;
+    openWriters.set(handle, { epoch: r.epoch, seq: r.seq });
     const header: FileHeader = { f: 'ct-s', sm: SYNC_FORMAT_MAJOR, kid, dev: self, e: r.epoch, n: r.seq };
     const lines: MemLine[] = [];
     let bytes = headerBytes(header);
-    // sync_snapshot_append : le fichier `.tmp` est abandonné à la première erreur.
-    for await (const page of r.records) {
-      for (const text of page) {
-        if (typeof text !== 'string' || utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
-        const line = makeLine(text, SYNC_FORMAT_MAJOR, r.sv);
-        bytes += line.bytes;
-        if (bytes > MAX_SNAPSHOT_BYTES) fail('too-large');
-        lines.push(line);
+    // Pages fournies par l'appelant : une erreur de sa part (cycle interrompu) laisse l'écrivain ouvert, comme dans Rust (aucun appel).
+    const pages = r.records[Symbol.asyncIterator]();
+    for (;;) {
+      const next = await pages.next();
+      if (next.done === true) break;
+      // sync_snapshot_append : le fichier `.tmp` est abandonné à la première erreur.
+      try {
+        for (const text of next.value) {
+          if (typeof text !== 'string' || utf8Bytes(text) > MAX_RECORD_PLAINTEXT_BYTES) fail('too-large');
+          const line = makeLine(text, SYNC_FORMAT_MAJOR, r.sv);
+          bytes += line.bytes;
+          if (bytes > MAX_SNAPSHOT_BYTES) fail('too-large');
+          lines.push(line);
+        }
+        checkBudget(lines.length, toNext);
+      } catch (error) {
+        openWriters.delete(handle);
+        throw error;
       }
-      checkBudget(lines.length, toNext);
     }
     // sync_snapshot_commit : renommage atomique.
+    openWriters.delete(handle);
     epochDirOf(f, self, r.epoch).snapshots.set(r.seq, { header, lines, partialTail: false, availability: 'local', extraBytes: 0 });
     addSealed(lines.length, toNext);
   };
@@ -1597,7 +1658,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const state = read?.status === 'ok' ? read.state : null;
     if (!state?.snapshot) return 'none';
     const file = f.devices.get(self)?.epochs.get(state.epoch)?.snapshots.get(state.snapshot.seq);
-    if (!file || file.availability !== 'local') return 'cloud-pending';
+    if (!file || !hydrated(file)) return 'cloud-pending';
     const last = file.lines[file.lines.length - 1];
     if (file.partialTail || !last) return 'cloud-pending';
     const end = last.corrupt ? null : parseSnapshotRecord(last.text);
@@ -2140,10 +2201,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     requireVault();
     let text: { readonly qr: string } | { readonly recovery: string };
     if ('scan' in input) {
-      // Scan lancé par Rust : iPhone seulement (ordre 5).
-      if (devicePlatform !== 'ios' || input.scan !== true) return fail('invalid-pairing');
-      if (scanResult === null) return fail('consent-denied');
-      text = { qr: scanResult };
+      // ADR 0011 §23 point 2 : aucun scan lancé par Rust (l'API Rust du plugin n'existe pas) : refusé sur toutes les plateformes.
+      return fail('invalid-pairing');
     } else if ('qrText' in input) {
       text = { qr: input.qrText };
     } else {
@@ -2304,6 +2363,32 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         pairing = null;
       },
       import: importKey,
+      // ADR 0011 §23 point 2 : scan du QR par le JS, iPhone seulement (absent du PC) ; le texte lu (fourni par le test ou le simulateur,
+      // jamais par la page) est passé aussitôt à l'import et n'est jamais rendu.
+      ...(devicePlatform === 'ios'
+        ? {
+            scanAndImport: async (): Promise<ScanImportOutcome> => {
+              if (!foreground) return { kind: 'failed', code: 'not-foreground' };
+              if (camera === 'prompt') camera = cameraAnswer;
+              if (camera === 'denied') return { kind: 'camera-denied' };
+              const text = scanResult;
+              scanResult = null;
+              if (text === null) return { kind: 'cancelled' };
+              try {
+                return { kind: 'imported', result: await importKey({ qrText: text }) };
+              } catch (error) {
+                return { kind: 'failed', code: error instanceof SyncPlatformError ? error.code : 'io' };
+              }
+            },
+            cancelScan: async () => {
+              scanResult = null;
+            },
+            cameraPermission: async (): Promise<CameraPermission> => camera,
+            openCameraSettings: async () => {
+              settingsOpened += 1;
+            },
+          }
+        : {}),
     },
     bindDevice: async (deviceId) => {
       if (!isSyncDeviceId(deviceId)) return fail('bad-name');
@@ -2366,6 +2451,15 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       setScanResult: (text) => {
         scanResult = text;
       },
+      setCameraPermission: (state, answer) => {
+        camera = state;
+        if (answer) cameraAnswer = answer;
+      },
+      cameraSettingsOpened: () => settingsOpened,
+      setHydrationDelay: (ms) => {
+        hydrationDelay = ms;
+      },
+      hydrationBudgetLeft: () => hydrationLeft,
       pairing: () => {
         const instance = livePairing();
         return instance ? { mode: instance.mode, generation: instance.generation } : null;

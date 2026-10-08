@@ -7,7 +7,7 @@ import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
-import { readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
@@ -397,7 +397,9 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     applyBanners();
   });
   void refreshPersisted();
-  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}) });
+  // ADR 0011 §22 point 6 : sur iPhone, le cycle du passage en arrière-plan est borné à 25 s (tâche d'arrière-plan iOS).
+  const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS } : {};
+  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide });
   schedulers.set(container, scheduler);
   return {
     reloaded: () => lastReload,

@@ -8,5 +8,12 @@
     "Apple ID gratuit : aucune clé ni capacité payante (iCloud, push, App Groups, extensions)."
   ],
   "formatVersion": 1,
-  "plugins": {}
+  "plugins": {
+    "barcode-scanner": {
+      "story": "Y-IOS-02",
+      "usageDescriptions": [
+        "NSCameraUsageDescription"
+      ]
+    }
+  }
 }

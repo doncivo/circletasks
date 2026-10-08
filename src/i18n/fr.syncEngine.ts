@@ -27,11 +27,15 @@ export const syncEngineFr = {
     keyMismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',
     errorFolderUnreachable: 'Dossier de synchro introuvable : vos modifications seront envoyées au retour',
+    // ADR 0011 §22 point 8 : signet du dossier perdu sur l'iPhone (réinstallation, dossier supprimé ou déplacé).
+    errorFolderUnreachableIos: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks',
     errorCloudProviderStopped: 'Ouvrez iCloud pour Windows : vos modifications seront envoyées au retour',
     errorCloud: 'iCloud ne répond pas : vos modifications seront envoyées au retour',
     errorUnsafeFolder: 'Ce dossier ne peut pas servir à la synchronisation : choisissez-en un autre',
     errorFolderTooLarge: 'Le dossier de synchro est trop volumineux',
     errorVault: 'Le coffre de Windows est indisponible : la clé de synchronisation ne peut pas être lue',
+    // ADR 0011 §23 point 1 : Trousseau de l'iPhone illisible (appareil verrouillé) : jamais une clé recréée en silence.
+    errorVaultIos: 'Le Trousseau de l’iPhone est indisponible : déverrouillez l’iPhone, la synchro reprendra',
     errorRollback: 'Le dossier contient une version ancienne de l’état d’un appareil',
     syncNow: 'Synchroniser',
     syncing: 'Synchronisation…',

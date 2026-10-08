@@ -47,6 +47,7 @@ export function SyncDetailsReset() {
   const required = phase === 'reset-required' || reset?.role === 'required' || (reset?.step === 'superseded' && !stopped);
   const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten';
   const running = reset !== null && IN_PROGRESS.has(reset.step);
+  // Confirmation native requise : masqué tant qu'elle n'existe pas sur cet appareil (ADR 0011 §22 point 7).
   const canStart = configured && !required && !running;
   if (!configured && !required && !reset) return null;
   const nowMs = container.clock.nowMs();

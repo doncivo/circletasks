@@ -2,21 +2,80 @@
 //! `pairing` (instance créée par Rust, URL exacte, HWND, jeton à usage unique, génération, mode, minuteur). Les garanties de la
 //! fenêtre sont testées sur le registre avec des fenêtres « de test » (même libellé, autre URL, autre HWND).
 
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
-use circletasks_lib::sync::consent::{dialog_spec, dialog_texts, ConsentGate, ConsentKind, IDCANCEL, ID_CONFIRM};
+use circletasks_lib::sync::consent::{dialog_spec, dialog_texts, ConsentGate, ConsentKind, ConsentUi, IDCANCEL, ID_CONFIRM};
+use circletasks_lib::sync::consent_ios::IosConsentUi;
 use circletasks_lib::sync::limits::{CONSENT_BLOCK_MS, PAIRING_VALIDITY_MS};
 use circletasks_lib::sync::pairing::{is_pairing_url, Caller, PairingMode, PairingRegistry, PAIRING_WINDOW};
 use circletasks_lib::sync::SyncCode;
 
+use crate::support::fake_bookmark::{FakePlugin, SharedPlugin};
 use crate::sync_support::{FakeUi, TestClock, NOW};
 
 const OWNER: isize = 0x1234;
 const URL: &str = "http://tauri.localhost/pairing.html";
 
-fn gate(dir: &std::path::Path, ui: &Arc<FakeUi>, clock: &Arc<TestClock>) -> ConsentGate {
-    ConsentGate::new(dir.to_path_buf(), ui.clone(), clock.clock())
+/// Interface de confirmation et ses commandes de test : la suite de `ConsentGate` est jouée avec l'interface de Windows (faux) et avec
+/// `IosConsentUi` sur le faux du plugin folder-bookmark (ADR 0011 §23 point 3 ; Y-IOS-02 critère 12).
+trait Rig {
+    fn name(&self) -> &'static str;
+    fn ui(&self) -> Arc<dyn ConsentUi>;
+    fn answer(&self, value: bool);
+    fn ready(&self, value: bool);
+    fn prompts(&self) -> usize;
+}
+
+impl Rig for Arc<FakeUi> {
+    fn name(&self) -> &'static str {
+        "Windows (faux)"
+    }
+    fn ui(&self) -> Arc<dyn ConsentUi> {
+        self.clone()
+    }
+    fn answer(&self, value: bool) {
+        FakeUi::answer(self, value);
+    }
+    fn ready(&self, value: bool) {
+        FakeUi::ready(self, value);
+    }
+    fn prompts(&self) -> usize {
+        FakeUi::prompts(self)
+    }
+}
+
+struct IosRig {
+    plugin: Arc<FakePlugin>,
+    ui: Arc<IosConsentUi>,
+}
+
+impl Rig for IosRig {
+    fn name(&self) -> &'static str {
+        "iPhone (IosConsentUi)"
+    }
+    fn ui(&self) -> Arc<dyn ConsentUi> {
+        self.ui.clone()
+    }
+    fn answer(&self, value: bool) {
+        self.plugin.with(|s| s.confirm_answer = Ok(value));
+    }
+    fn ready(&self, value: bool) {
+        self.plugin.with(|s| s.app_state = if value { "active" } else { "background" });
+    }
+    fn prompts(&self) -> usize {
+        self.plugin.calls("confirm").len()
+    }
+}
+
+fn rigs() -> Vec<Box<dyn Rig>> {
+    let plugin = FakePlugin::new(Arc::new(AtomicU64::new(NOW)));
+    let ios = IosRig { ui: Arc::new(IosConsentUi::new(Arc::new(SharedPlugin(plugin.clone())))), plugin };
+    vec![Box::new(FakeUi::new()), Box::new(ios)]
+}
+
+fn gate(dir: &std::path::Path, rig: &dyn Rig, clock: &Arc<TestClock>) -> ConsentGate {
+    ConsentGate::new(dir.to_path_buf(), rig.ui(), clock.clock())
 }
 
 fn code(result: Result<impl Sized, circletasks_lib::sync::SyncError>) -> SyncCode {
@@ -47,68 +106,72 @@ fn y08_10_dialog_config_has_two_buttons_cancel_by_default_and_compiled_texts() {
 
 #[test]
 fn y08_10_refusal_returns_consent_denied_and_blocks_ten_minutes() {
-    let dir = tempfile::tempdir().unwrap();
-    let ui = FakeUi::new();
-    let clock = TestClock::new(NOW);
-    let consent = gate(dir.path(), &ui, &clock);
-    ui.answer(false);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::ConsentDenied);
-    ui.answer(true);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited);
-    // Blocage persistant : un redémarrage (nouvelle instance) le relit.
-    let restarted = gate(dir.path(), &ui, &clock);
-    assert_eq!(code(restarted.confirm_show(OWNER)), SyncCode::RateLimited);
-    clock.advance(CONSENT_BLOCK_MS);
-    assert!(restarted.confirm_show(OWNER).is_ok());
+    for rig in rigs() {
+        let dir = tempfile::tempdir().unwrap();
+        let clock = TestClock::new(NOW);
+        let consent = gate(dir.path(), rig.as_ref(), &clock);
+        rig.answer(false);
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::ConsentDenied, "{}", rig.name());
+        rig.answer(true);
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited, "{}", rig.name());
+        // Blocage persistant : un redémarrage (nouvelle instance) le relit.
+        let restarted = gate(dir.path(), rig.as_ref(), &clock);
+        assert_eq!(code(restarted.confirm_show(OWNER)), SyncCode::RateLimited, "{}", rig.name());
+        clock.advance(CONSENT_BLOCK_MS);
+        assert!(restarted.confirm_show(OWNER).is_ok(), "{}", rig.name());
+    }
 }
 
 #[test]
 fn y08_11_preconditions_without_dialog() {
-    let dir = tempfile::tempdir().unwrap();
-    let ui = FakeUi::new();
-    let clock = TestClock::new(NOW);
-    let consent = gate(dir.path(), &ui, &clock);
-    ui.ready(false);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::NotForeground);
-    assert_eq!(code(consent.confirm(ConsentKind::EraseKey, OWNER)), SyncCode::NotForeground);
-    assert_eq!(ui.prompts(), 0, "aucune boîte si la fenêtre n'est pas au premier plan");
+    for rig in rigs() {
+        let dir = tempfile::tempdir().unwrap();
+        let clock = TestClock::new(NOW);
+        let consent = gate(dir.path(), rig.as_ref(), &clock);
+        rig.ready(false);
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::NotForeground, "{}", rig.name());
+        assert_eq!(code(consent.confirm(ConsentKind::EraseKey, OWNER)), SyncCode::NotForeground, "{}", rig.name());
+        assert_eq!(rig.prompts(), 0, "{} : aucune boîte si la fenêtre n'est pas au premier plan", rig.name());
+    }
 }
 
 #[test]
 fn y08_11_three_openings_per_ten_minutes_refusals_included_persisted() {
-    let dir = tempfile::tempdir().unwrap();
-    let ui = FakeUi::new();
-    let clock = TestClock::new(NOW);
-    let consent = gate(dir.path(), &ui, &clock);
-    for _ in 0..3 {
-        consent.confirm_show(OWNER).unwrap();
-        clock.advance(60_000);
+    for rig in rigs() {
+        let dir = tempfile::tempdir().unwrap();
+        let clock = TestClock::new(NOW);
+        let consent = gate(dir.path(), rig.as_ref(), &clock);
+        for _ in 0..3 {
+            consent.confirm_show(OWNER).unwrap();
+            clock.advance(60_000);
+        }
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited, "{}", rig.name());
+        assert_eq!(rig.prompts(), 3, "{}", rig.name());
+        let restarted = gate(dir.path(), rig.as_ref(), &clock);
+        assert_eq!(code(restarted.confirm_show(OWNER)), SyncCode::RateLimited, "{} : process:allow-restart ne remet rien à zéro", rig.name());
+        clock.advance(8 * 60_000);
+        assert!(restarted.confirm_show(OWNER).is_ok(), "{} : fenêtre glissante de 10 minutes", rig.name());
+        // Cinq imports par 10 minutes.
+        for _ in 0..5 {
+            restarted.count_import(OWNER).unwrap();
+        }
+        assert_eq!(code(restarted.count_import(OWNER)), SyncCode::RateLimited, "{}", rig.name());
     }
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited);
-    assert_eq!(ui.prompts(), 3);
-    let restarted = gate(dir.path(), &ui, &clock);
-    assert_eq!(code(restarted.confirm_show(OWNER)), SyncCode::RateLimited, "process:allow-restart ne remet rien à zéro");
-    clock.advance(8 * 60_000);
-    assert!(restarted.confirm_show(OWNER).is_ok(), "fenêtre glissante de 10 minutes");
-    // Cinq imports par 10 minutes.
-    for _ in 0..5 {
-        restarted.count_import(OWNER).unwrap();
-    }
-    assert_eq!(code(restarted.count_import(OWNER)), SyncCode::RateLimited);
 }
 
 #[test]
 fn y08_11_unreadable_file_blocks_ten_minutes() {
-    let dir = tempfile::tempdir().unwrap();
-    std::fs::write(dir.path().join("consent.json"), b"{pas du json").unwrap();
-    let ui = FakeUi::new();
-    let clock = TestClock::new(NOW);
-    let consent = gate(dir.path(), &ui, &clock);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited);
-    clock.advance(CONSENT_BLOCK_MS - 1);
-    assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited, "le blocage ne se prolonge pas à chaque lecture");
-    clock.advance(1);
-    assert!(consent.confirm_show(OWNER).is_ok());
+    for rig in rigs() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("consent.json"), b"{pas du json").unwrap();
+        let clock = TestClock::new(NOW);
+        let consent = gate(dir.path(), rig.as_ref(), &clock);
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited, "{}", rig.name());
+        clock.advance(CONSENT_BLOCK_MS - 1);
+        assert_eq!(code(consent.confirm_show(OWNER)), SyncCode::RateLimited, "{} : le blocage ne se prolonge pas à chaque lecture", rig.name());
+        clock.advance(1);
+        assert!(consent.confirm_show(OWNER).is_ok(), "{}", rig.name());
+    }
 }
 
 /// Boîte qui reste ouverte jusqu'au signal du test : un appel pendant ce temps est refusé (`rate-limited`).
