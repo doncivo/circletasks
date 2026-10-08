@@ -75,4 +75,24 @@ test.describe('K-05 — Rappels Apple (iPhone)', () => {
     await expect(section(page).getByText(/store-unavailable/)).toHaveCount(0);
     await expect(page.locator('.ct-status-banner').filter({ hasText: 'Les Rappels Apple n’ont pas pu être lus' })).toHaveCount(0);
   });
+
+  test('iPhone 440 × 956 : l’écran Agendas avec Rappels (listes aux noms longs, échec et gestes) ne défile pas à l’horizontale et montre ses titres en entier', async ({ page }) => {
+    const reminders = await openRemindersScreen(page);
+    await reminders.addList('L-longue', 'Courses de la semaine pour la grande famille et les invités du week-end');
+    await reminders.addList('L-travail', 'Travail');
+    await openCalendarsScreen(page);
+    await section(page).getByRole('checkbox', { name: /Afficher Courses de la semaine/ }).click();
+    await expect(section(page).getByText(/^Mis à jour à/)).toBeVisible();
+    await reminders.failNext('lists', 'store-unavailable');
+    await section(page).getByRole('button', { name: 'Actualiser les Rappels' }).click();
+    await expect(section(page).getByRole('button', { name: 'Réessayer' })).toBeVisible();
+    const sizes = await page.evaluate(() => {
+      const root = document.scrollingElement;
+      const titles = [...document.querySelectorAll<HTMLElement>('.ct-calendars__apple h2, .ct-calendars__apple h3, .ct-calendars__apple .ct-calendars__name')];
+      return { scroll: root?.scrollWidth ?? 0, client: root?.clientWidth ?? 0, cut: titles.filter((el) => el.scrollWidth > el.clientWidth + 1).map((el) => el.textContent ?? '') };
+    });
+    expect(sizes.client).toBe(440);
+    expect(sizes.scroll).toBeLessThanOrEqual(sizes.client);
+    expect(sizes.cut).toEqual([]);
+  });
 });
