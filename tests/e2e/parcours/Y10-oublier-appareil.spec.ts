@@ -100,7 +100,11 @@ test('Y-10 : oublier l’iPhone depuis le PC, suppression des fichiers en attent
   await iphone.page.getByRole('button', { name: 'Associer de nouveau cet appareil' }).click();
   const rejoin = iphone.page.getByRole('alertdialog', { name: 'Associer de nouveau cet appareil ?' });
   await expect(rejoin).toContainText('Rien n’est effacé');
+  // La relance (rechargement de la page) arrive après le choix du dossier : attendre l'événement load, pas la barre d'onglets, encore
+  // visible sur l'ancienne page (sous charge, le rechargement détruisait le contexte pendant openSyncDetails).
+  const reloaded = iphone.page.waitForEvent('load', { timeout: APP_READY_TIMEOUT_MS });
   await rejoin.getByRole('button', { name: 'Associer de nouveau' }).click();
+  await reloaded;
   await expect(iphone.page.getByRole('navigation')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
   await openSyncDetails(iphone.page);
   await syncNow(iphone.page);
