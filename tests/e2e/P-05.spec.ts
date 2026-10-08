@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { E2E_DEV_PORT } from '../sim/ports';
 import { openApp } from './helpers/app';
 import { isPhone, listTitles, todayTab } from './helpers/today';
 
@@ -153,7 +154,7 @@ test.describe('P-05 — premier lancement', () => {
   test('critère 11 : aucune demande de compte, de réseau ni de permission', async ({ page }) => {
     const requests: string[] = [];
     page.on('request', (request) => {
-      if (!request.url().startsWith('http://localhost:1420')) requests.push(request.url());
+      if (!request.url().startsWith(`http://localhost:${String(E2E_DEV_PORT)}`)) requests.push(request.url());
     });
     const dialog = await openFirstLaunch(page);
     await dialog.getByRole('button', { name: 'Continuer' }).click();
