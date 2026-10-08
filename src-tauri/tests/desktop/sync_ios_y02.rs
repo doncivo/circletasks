@@ -418,3 +418,12 @@ fn y_ios_02_11_qa_alert_closed_by_going_to_background_is_a_refusal_that_blocks_t
     assert_eq!(plugin.calls("confirm").len(), asked + 1);
     assert_ne!(iphone.core.key_status().unwrap().kid, other);
 }
+
+/// Revue (audit, bas) : barcode-scanner épinglé à la version exacte lue (2.5.1), alignée sur le paquet npm (`~2.5.1`).
+#[test]
+fn y_ios_02_barcode_scanner_is_pinned_like_the_npm_package() {
+    let cargo = include_str!("../../Cargo.toml");
+    assert!(cargo.contains("tauri-plugin-barcode-scanner = \"=2.5.1\""));
+    let package = include_str!("../../../package.json");
+    assert!(package.contains("\"@tauri-apps/plugin-barcode-scanner\": \"~2.5.1\""));
+}
