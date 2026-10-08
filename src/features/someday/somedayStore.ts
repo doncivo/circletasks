@@ -37,12 +37,12 @@ export interface SomedayState {
    */
   create(input: SomedayNewTask): Promise<Result<Task, SomedayCreateError>>;
   /** SD-01 critère 8 : termine ou rouvre une tâche ; terminée, elle quitte la liste et le compteur baisse. Ne rejette jamais. */
-  toggleDone(id: TaskId): Promise<void>;
+  toggleDone(id: TaskId): Promise<boolean>;
   /**
    * SD-02, S-06 : planifie des tâches (« Aujourd'hui », « Demain » ou une date avec heure facultative) ; elles quittent la liste, le badge
    * baisse, un message « Annuler » de 5 s est posé (une seule annulation pour tout le lot). Ne rejette jamais.
    */
-  schedule(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<void>;
+  schedule(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<boolean>;
   /** A-06, SD-04 critère 7 : vue compacte de « Un jour » (`view.compact.someday`, local à l'appareil), lue au chargement. */
   readonly compact: boolean;
   /** A-05 : mode édition (suppression, poignées, sélection multiple) ; jamais mémorisé. */
@@ -64,7 +64,7 @@ export interface SomedayState {
   /** SD-04 critère 6 : planifie la sélection (« Planifier » de la barre), un seul message « Annuler », puis la vide. Ne rejette jamais. */
   scheduleSelected(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<void>;
   /** SD-04 critère 8 : supprime des tâches vers la corbeille (T-08, un seul message « Annuler »), puis vide la sélection. Ne rejette jamais. */
-  remove(ids: readonly TaskId[]): Promise<void>;
+  remove(ids: readonly TaskId[]): Promise<boolean>;
   /** SD-04 critère 5, Q12 : déplace des tâches vers un espace (et un projet), sans changer la date ; annulable en une fois. Ne rejette jamais. */
   moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null): Promise<void>;
 }
@@ -123,14 +123,16 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
 
     async toggleDone(id) {
       const current = container.taskEntities.get(id);
-      if (!current) return;
+      if (!current) return false;
       try {
         // Le cas d'usage publie la tâche écrite dans la source unique : terminée, elle quitte la liste (`isInSomedayList`).
         if (current.status === 'done') await useCases.reopen(id);
         else await useCases.complete(id);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.completeError' });
+        return false;
       }
     },
 
@@ -138,8 +140,10 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
       try {
         await useCases.scheduleSomeday(ids, target);
         set({ actionErrorKey: null });
+        return true;
       } catch {
         set({ actionErrorKey: 'someday.planError' });
+        return false;
       }
     },
 
@@ -196,12 +200,14 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
     },
 
     async remove(ids) {
-      if (ids.length === 0) return;
+      if (ids.length === 0) return false;
       try {
         await useCases.remove(ids);
         set({ actionErrorKey: null, selection: without(get().selection, ids) });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.deleteError' });
+        return false;
       }
     },
 

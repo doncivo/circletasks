@@ -30,7 +30,7 @@ async function createTask(page: Page, testInfo: Info, title: string): Promise<vo
 
 /** Ouvre la fiche détail et renvoie le bouton de suppression (libellé propre à l'appareil). */
 async function openDetail(page: Page, testInfo: Info, title: string) {
-  await page.getByRole('button', { name: title }).click();
+  await page.getByRole('button', { name: title, exact: true }).click();
   const detail = page.getByLabel('Détail de la tâche');
   await expect(detail).toBeVisible();
   const label = testInfo.project.name === 'iphone' ? 'Supprimer la tâche' : 'Supprimer';
@@ -65,11 +65,11 @@ test.describe('T-08 : supprimer une tâche', () => {
     await confirmation.getByRole('button', { name: 'Supprimer', exact: true }).click();
     await expect(confirmation).not.toBeVisible();
     await expect(detail).not.toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByRole('status')).toHaveText(new RegExp(`« ${title} » supprimée`));
 
     await page.getByRole('status').getByRole('button', { name: 'Annuler' }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('« Annuler » dans la confirmation et Échap ne suppriment rien (critère 4)', async ({ page }, testInfo) => {
@@ -91,7 +91,7 @@ test.describe('T-08 : supprimer une tâche', () => {
     await expect(page.getByRole('status')).toHaveCount(0);
 
     await page.keyboard.press('Escape'); // referme la fiche
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('touche Suppr sur la ligne sélectionnée, puis Ctrl+Z (PC, critères 1, 3)', async ({ page }, testInfo) => {
@@ -104,10 +104,10 @@ test.describe('T-08 : supprimer une tâche', () => {
     const confirmation = page.getByRole('alertdialog', { name: `Supprimer « ${title} » ?` });
     await expect(confirmation).toBeVisible();
     await confirmation.getByRole('button', { name: 'Supprimer', exact: true }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 
     await page.keyboard.press('Control+z');
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('la corbeille, ouverte depuis Réglages, liste la tâche supprimée et la restaure (critères 5, 6)', async ({ page }, testInfo) => {
@@ -117,7 +117,7 @@ test.describe('T-08 : supprimer une tâche', () => {
     const { deleteButton } = await openDetail(page, testInfo, title);
     await deleteButton.click();
     await page.getByRole('alertdialog').getByRole('button', { name: 'Supprimer', exact: true }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 
     await openTrash(page);
     const row = page.getByRole('listitem').filter({ hasText: title });
@@ -130,7 +130,7 @@ test.describe('T-08 : supprimer une tâche', () => {
 
     await page.getByRole('button', { name: 'Retour' }).click();
     await page.getByRole('navigation').getByText('Tâches', { exact: true }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('une suppression de plus de 30 jours n’est plus dans la corbeille (critère 7)', async ({ page }, testInfo) => {

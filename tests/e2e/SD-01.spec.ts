@@ -84,6 +84,6 @@ test.describe('SD-01 — ajouter une tâche sans date dans « Un jour »', () =>
     await dialog.getByLabel('Titre').fill('Sans date depuis la feuille');
     await dialog.getByRole('button', { name: 'Enregistrer' }).click();
     await expect(dialog).toBeHidden();
-    await expect(somedayList(page).getByRole('button', { name: 'Sans date depuis la feuille' })).toBeVisible();
+    await expect(somedayList(page).getByRole('button', { name: 'Sans date depuis la feuille', exact: true })).toBeVisible();
   });
 });

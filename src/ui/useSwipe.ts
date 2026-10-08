@@ -9,6 +9,7 @@ import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react
  * - Un défilement vertical ne déclenche rien : dès que le geste est surtout vertical il est abandonné, et le navigateur qui prend
  *   la main (`pointercancel`) l'annule aussi. La zone doit déclarer `touch-action: pan-y` pour que le navigateur ne
  *   garde que le défilement vertical.
+ * - Un geste dont le départ est dans une ligne `[data-row-gesture]` (A-07, SwipeRow) est ignoré : seule la ligne réagit ; sur l'en-tête et les zones vides la semaine change.
  * - `disabled` (ex. une carte tenue pour un glisser-déposer, S-02) abandonne le geste en cours.
  *
  * `onSwipe('left')` : le doigt est allé vers la gauche (semaine suivante) ; `'right'` : vers la droite (semaine précédente).
@@ -49,6 +50,8 @@ export function useSwipe({ onSwipe, disabled = false, distanceRatio = 0.3 }: Use
   return {
     onPointerDown: (event) => {
       if (event.pointerType === 'mouse') return;
+      // A-07 : un geste parti d'une ligne appartient à la ligne (SwipeRow), la semaine ne change pas.
+      if (event.target instanceof Element && event.target.closest('[data-row-gesture]')) return;
       gesture.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp, cancelled: false };
     },
     onPointerMove: (event) => {

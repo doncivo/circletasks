@@ -1,6 +1,7 @@
 import { emptyFr } from './fr.empty';
 import { goalsFr } from './fr.goals';
 import { somedayFr } from './fr.someday';
+import { gesturesFr } from './fr.gestures';
 import { captureFr } from './fr.capture';
 import { focusFr } from './fr.focus';
 import { notificationsFr, remindersStatusFr } from './fr.notifications';
@@ -647,6 +648,7 @@ export const fr = {
   events: eventsFr,
   goals: goalsFr,
   someday: somedayFr,
+  gestures: gesturesFr,
   capture: captureFr,
   scan: scanFr,
   empty: emptyFr,

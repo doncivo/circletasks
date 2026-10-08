@@ -80,6 +80,8 @@ export function useSomedayView() {
     addInline,
     subtitleOf,
     toggleDone: (id: TaskId) => void toggleDone(id),
+    /** Terminer d'un geste (A-07) : vrai si le cas d'usage a abouti. */
+    complete: (id: TaskId) => toggleDone(id),
     schedule: (ids: readonly TaskId[], target: ScheduleSomedayTarget) => schedule(ids, target),
     openTask: (id: TaskId) => openDetail({ type: 'task', id }),
   };

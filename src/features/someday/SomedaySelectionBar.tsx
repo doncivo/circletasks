@@ -3,7 +3,7 @@ import { useState } from 'react';
 import type { Space } from '../../domain/model';
 import type { ScheduleSomedayTarget } from '../../domain/someday';
 import { t } from '../../i18n';
-import { ActionMenu, DatePrompt, Icon, SelectionBar, SelectionBarButton, type ActionMenuItem } from '../../ui';
+import { ActionMenu, DatePrompt, Icon, focusNeighborLater, SelectionBar, SelectionBarButton, type ActionMenuItem } from '../../ui';
 import { useFeatureStore } from '../app/AppContainerContext';
 import { DeleteTaskConfirm } from '../tasks/DeleteTaskConfirm';
 import { SelectionDialogs, type ListEditMode } from '../tasks/listEditMode';
@@ -83,7 +83,8 @@ export function SomedaySelectionDialogs({ edit, view, spaces }: { edit: ListEdit
           onCancel={() => edit.setDeleteTargetId(null)}
           onConfirm={() => {
             edit.setDeleteTargetId(null);
-            void remove([target.id]);
+            const refocus = focusNeighborLater(target.id, true);
+            void remove([target.id]).then((ok) => ok && refocus());
           }}
         />
       )}

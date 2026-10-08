@@ -58,7 +58,7 @@ test.describe('T-07 : tâches terminées', () => {
     await openDoneScreen(page);
     await expect(page.getByRole('group', { name: 'Période' }).getByRole('button', { name: 'Jour', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText('23 sept.', { exact: true })).toBeVisible();
-    const row = page.locator('.ct-list-row', { has: page.getByRole('button', { name: title }) });
+    const row = page.locator('.ct-list-row', { has: page.getByRole('button', { name: title, exact: true }) });
     await expect(row).toBeVisible();
     await expect(row).toContainText(/terminée à \d\d:\d\d/);
     await expect(row).toContainText(/Pro|Perso/);
@@ -72,19 +72,19 @@ test.describe('T-07 : tâches terminées', () => {
 
     await page.getByRole('group', { name: 'Période' }).getByRole('button', { name: 'Semaine' }).click();
     await expect(page.getByText('21 – 27 sept.', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
 
     await page.getByRole('group', { name: 'Période' }).getByRole('button', { name: 'Mois' }).click();
     await expect(page.getByText('septembre 2026', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Période suivante' }).click();
     await expect(page.getByText('octobre 2026', { exact: true })).toBeVisible();
     await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Période précédente' }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
 
     await page.getByRole('group', { name: 'Période' }).getByRole('button', { name: 'Jour', exact: true }).click();
     await page.getByRole('button', { name: 'Période précédente' }).click();
@@ -101,7 +101,7 @@ test.describe('T-07 : tâches terminées', () => {
     await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Période précédente' }).click();
     await expect(page.getByText('23 sept.', { exact: true })).toBeVisible();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('filtre d’espace Pro / Perso / Tout (critère 5)', async ({ page }, testInfo) => {
@@ -111,12 +111,12 @@ test.describe('T-07 : tâches terminées', () => {
     await completeTask(page, title);
     await openDoneScreen(page);
 
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Pro', exact: true }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Tout', exact: true }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('décocher rouvre la tâche, « Annuler » la remet dans la liste (critère 6)', async ({ page }, testInfo) => {
@@ -126,12 +126,12 @@ test.describe('T-07 : tâches terminées', () => {
     await openDoneScreen(page);
 
     await page.getByRole('checkbox', { name: `Rouvrir : ${title}` }).click();
-    await expect(page.getByRole('button', { name: title })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: title, exact: true })).toHaveCount(0);
     await expect(page.getByText('Aucune tâche terminée sur cette période', { exact: true })).toBeVisible();
     await expect(page.getByText(`« ${title} » rouverte`)).toBeVisible();
 
     await page.getByRole('button', { name: 'Annuler' }).click();
-    await expect(page.getByRole('button', { name: title })).toBeVisible();
+    await expect(page.getByRole('button', { name: title, exact: true })).toBeVisible();
   });
 
   test('toucher une tâche ouvre sa fiche détail (critère 7)', async ({ page }, testInfo) => {
@@ -139,7 +139,7 @@ test.describe('T-07 : tâches terminées', () => {
     await createTask(page, testInfo, title);
     await completeTask(page, title);
     await openDoneScreen(page);
-    await page.getByRole('button', { name: title }).click();
+    await page.getByRole('button', { name: title, exact: true }).click();
     await expect(page.getByLabel('Détail de la tâche')).toBeVisible();
   });
 });

@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import type { Task } from '../../domain/model';
 import type { RoutineId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { ChoiceDialog } from '../../ui';
+import { ChoiceDialog, focusNeighborLater } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useFocusShortcut } from '../focus/useFocusShortcut';
 import { DuplicatePrompt } from '../tasks';
@@ -16,6 +17,10 @@ export interface TodayRowActions {
   /** Routine « sélectionnée » au clavier (R-03 critère 8) : Espace la valide ou la rouvre. */
   readonly focusedRoutineId: RoutineId | null;
   readonly setFocusedRoutineId: (id: RoutineId) => void;
+  /** Reporter à demain (Ctrl+D, balayage A-07) : une occurrence de série pose d'abord « Cette occurrence / Toutes les suivantes » (T-10). */
+  readonly requestPostpone: (task: Task) => void;
+  /** Suppression (Suppr, balayage A-07) : ouvre la confirmation habituelle (T-08). */
+  readonly requestDelete: (id: TaskId) => void;
   /** Fenêtres ouvertes par les raccourcis et le « − » : report d'une série, copie, suppression. */
   readonly dialogs: ReactNode;
 }
@@ -41,6 +46,13 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
   const setFocusedRoutineId = (id: RoutineId): void => setFocus({ task: null, routine: id });
   const [postponeSeriesId, setPostponeSeriesId] = useState<TaskId | null>(null);
   const [duplicateTargetId, setDuplicateTargetId] = useState<TaskId | null>(null);
+  const requestPostpone = useCallback(
+    (task: Task): void => {
+      if (task.recurrenceId && task.status === 'todo') setPostponeSeriesId(task.id);
+      else void postpone(task.id, 'tomorrow');
+    },
+    [postpone],
+  );
   const { editMode, selectedIds, toggle, requestDeleteSelection, deleteTargetId, setDeleteTargetId } = edit;
 
   useEffect(() => {
@@ -60,10 +72,9 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
     if (!focusedTaskId) return undefined;
     return container.shortcuts.register('list.postponeTomorrow', () => {
       const task = container.taskEntities.get(focusedTaskId);
-      if (task?.recurrenceId && task.status === 'todo') setPostponeSeriesId(focusedTaskId);
-      else void postpone(focusedTaskId, 'tomorrow');
+      if (task) requestPostpone(task);
     });
-  }, [container, focusedTaskId, postpone]);
+  }, [container, focusedTaskId, requestPostpone]);
 
   // Suppr (T-08) : confirmation d'abord ; en mode édition avec une sélection, c'est la sélection qui est supprimée (A-05).
   useEffect(() => {
@@ -122,12 +133,13 @@ export function useTodayRowActions(edit: TodayEditMode): TodayRowActions {
           onCancel={() => setDeleteTargetId(null)}
           onConfirm={(scope) => {
             setDeleteTargetId(null);
-            void remove(deleteTarget.id, scope);
+            const refocus = focusNeighborLater(deleteTarget.id, true);
+            void remove(deleteTarget.id, scope).then((ok) => ok && refocus());
           }}
         />
       )}
     </>
   );
 
-  return { focusedTaskId, setFocusedTaskId, focusedRoutineId, setFocusedRoutineId, dialogs };
+  return { focusedTaskId, setFocusedTaskId, focusedRoutineId, setFocusedRoutineId, requestPostpone, requestDelete: setDeleteTargetId, dialogs };
 }
