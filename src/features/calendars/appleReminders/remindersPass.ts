@@ -1,5 +1,6 @@
 import {
   APPLE_REMINDERS_DEVICE,
+  appleListsReadable,
   appleLinkState,
   isFollowed,
   massDeletionBlocked,
@@ -147,6 +148,13 @@ function toLink(task: Task, item: ReminderItem, synced: AppleValues | null, prev
 const sameLink = (a: AppleReminderLink | null, b: AppleReminderLink): boolean =>
   a !== null && a.state === b.state && a.reminderId === b.reminderId && a.externalRef === b.externalRef && a.listId === b.listId && a.appleModified === b.appleModified && JSON.stringify(a.synced) === JSON.stringify(b.synced);
 
+/** Interruption d'un passage qui ne peut pas conclure sans risque (réglage illisible, liste inconnue) : le code est écrit dans l'état persistant. */
+class PassAbort extends Error {
+  constructor(readonly code: string) {
+    super(code);
+  }
+}
+
 export async function runRemindersPass(container: AppContainer, kind: PassKind, options: PassOptions = {}): Promise<PassReport> {
   if (!container.reminders.available) return { ...EMPTY_REPORT, status: 'skipped', reason: 'unavailable' };
   const state = appleRemindersState(container);
@@ -155,7 +163,7 @@ export async function runRemindersPass(container: AppContainer, kind: PassKind, 
     return await passBody(container, kind, options);
   } catch (error) {
     // Aucun échec silencieux : tout rejet du plugin et toute exception d'un passage sont écrits (code, heure ; jamais un titre).
-    const code = error instanceof RemindersError ? error.code : 'pass-failed';
+    const code = error instanceof RemindersError || error instanceof PassAbort ? error.code : 'pass-failed';
     logFailure(APPLE_REMINDERS_DEVICE, `pass-failed ${code}`);
     await state.fail(code);
     return { ...EMPTY_REPORT, status: 'failed', code };
@@ -179,7 +187,10 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   }
 
   const settings = repos.settings;
-  const lists = parseAppleLists(await settings.get('appleReminders.lists'));
+  const rawLists = await settings.get('appleReminders.lists');
+  // Réglage illisible : jamais lu comme « aucune liste » (ce serait décocher toutes les listes et mettre les tâches à la corbeille).
+  if (!appleListsReadable(rawLists)) throw new PassAbort('lists-setting-invalid');
+  const lists = parseAppleLists(rawLists);
   const create = parseAppleCreate(await settings.get('appleReminders.create'));
   const lastPassAt = parseLastPassAt(await settings.get('appleReminders.lastPassAt'));
   const shown = lists.lists.filter((list): list is AppleListSetting & { spaceId: SpaceId } => list.shown && list.spaceId !== null);
@@ -204,6 +215,11 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   };
   // `push` : seulement les tâches dont une valeur locale diffère de l'empreinte ; `full` : toutes les tâches suivies.
   const followed = linkedTasks.filter((task) => (full ? isFollowed(task, nowMs, lastPassAt) : localDiffers(task)));
+  // Liste absente du réglage (entrée disparue, réglage pas encore reçu) : on ne sait pas si elle est décochée ; le passage complet s'interrompt.
+  if (full) {
+    const known = new Set(lists.lists.map((list) => list.id));
+    if (followed.some((task) => task.appleListId !== null && !known.has(task.appleListId))) throw new PassAbort('lists-setting-invalid');
+  }
 
   const result = await platform.fetch({
     listIds: full ? shown.map((list) => list.id) : [],
@@ -227,6 +243,9 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   const notice = (kind: AppleNoticeKind, count = 1): void => void notices.set(kind, (notices.get(kind) ?? 0) + count);
   const absentByList = new Map<string, Task[]>();
   const dueWrites: DueWrite[] = [];
+  /** Tâches dont la liste est décochée (ou le rappel déplacé hors des listes affichées) : traitées par liste, sous la garde de suppression massive. */
+  const unticked = new Map<string, { task: Task; link: AppleReminderLink | null; item: ReminderItem | null }[]>();
+  const untick = (listId: string, entry: { task: Task; link: AppleReminderLink | null; item: ReminderItem | null }): void => void unticked.set(listId, [...(unticked.get(listId) ?? []), entry]);
   let unknown = 0;
   const matchedItemIds = new Set<string>();
   const late = (): boolean => options.deadlineAt !== undefined && container.clock.nowMs() > options.deadlineAt;
@@ -250,15 +269,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
     // Liste décochée ou espace retiré (lecture complète seulement) : règle de la liste décochée.
     if (owning === undefined) {
       if (!full || missingLists.has(listId)) continue;
-      const outcome = await unlinkTask(container, task, link, item ?? null);
-      if (outcome === 'deleted') {
-        report.deleted += 1;
-        notice('unlinked-list');
-      } else if (outcome === 'detached') {
-        report.detached += 1;
-        notice('detached');
-      }
-      if (outcome !== 'skipped') touched.add(task.id);
+      untick(listId, { task, link, item: item ?? null });
       if (item) matchedItemIds.add(item.id);
       continue;
     }
@@ -281,15 +292,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
     // Rappel déplacé dans une liste non affichée : règle de la liste décochée.
     if (item.listId !== listId && !shownById.has(item.listId)) {
       if (!full) continue;
-      const outcome = await unlinkTask(container, task, link, item);
-      if (outcome === 'deleted') {
-        report.deleted += 1;
-        notice('unlinked-list');
-      } else if (outcome === 'detached') {
-        report.detached += 1;
-        notice('detached');
-      }
-      if (outcome !== 'skipped') touched.add(task.id);
+      untick(listId, { task, link, item });
       continue;
     }
 
@@ -322,6 +325,23 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
 
   const held: { listId: string; count: number; at: IsoDateTime }[] = [];
   if (full && !partial) {
+    // Listes décochées : au-delà de max(10, 25 %) des tâches liées de la liste, rien n'est mis à la corbeille (tout est détaché et gardé).
+    for (const [listId, entries] of unticked) {
+      const total = linkedTasks.filter((task) => task.appleListId === listId).length;
+      const allowDelete = !massDeletionBlocked(total, entries.length);
+      for (const entry of entries) {
+        const outcome = await unlinkTask(container, entry.task, entry.link, entry.item, allowDelete);
+        if (outcome === 'deleted') {
+          report.deleted += 1;
+          notice('unlinked-list');
+        } else if (outcome === 'detached') {
+          report.detached += 1;
+          notice('detached');
+        }
+        if (outcome !== 'skipped') touched.add(entry.task.id);
+      }
+    }
+
     // Rappels absents : suppression douce et détachement, sous la garde de suppression massive.
     for (const [listId, absent] of absentByList) {
       const total = linkedTasks.filter((task) => task.appleListId === listId).length;
@@ -456,12 +476,12 @@ async function applyRead(container: AppContainer, task: Task, link: AppleReminde
 }
 
 /** Liste décochée : tâche non modifiée localement depuis le dernier passage → corbeille et détachement ; sinon détachée et gardée. */
-async function unlinkTask(container: AppContainer, task: Task, link: AppleReminderLink | null, item: ReminderItem | null): Promise<'deleted' | 'detached' | 'skipped'> {
+async function unlinkTask(container: AppContainer, task: Task, link: AppleReminderLink | null, item: ReminderItem | null, allowDelete: boolean): Promise<'deleted' | 'detached' | 'skipped'> {
   return container.data.transaction(async (repos) => {
     const current = await repos.tasks.getById(task.id);
     if (!current || current.hlc !== task.hlc) return 'skipped';
     // « Non modifiée localement » : l'empreinte du dernier passage est connue et égale aux valeurs de la tâche.
-    const unchanged = link?.synced != null && sameAppleValues(valuesOfTask(current), link.synced);
+    const unchanged = allowDelete && link?.synced != null && sameAppleValues(valuesOfTask(current), link.synced);
     await repos.tasks.setAppleLink(task.id, { source: 'local', externalId: null, appleListId: current.appleListId ?? item?.listId ?? null, appleRecurring: false });
     if (unchanged) await repos.tasks.softDelete([task.id]);
     await repos.appleLinks.remove(task.id);

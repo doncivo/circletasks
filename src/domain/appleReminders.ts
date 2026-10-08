@@ -530,3 +530,8 @@ export function holdRemainingMs(at: IsoDateTime | null, nowMs: number): number {
   const age = nowMs - Date.parse(at);
   return Number.isFinite(age) && age >= 0 && age < UNDO_WINDOW_MS ? UNDO_WINDOW_MS - age : 0;
 }
+
+/** Le réglage partagé des listes est-il exploitable ? Une valeur absente (jamais écrite) ou de la bonne forme l'est ; tout autre contenu non (ne jamais le lire comme « aucune liste »). */
+export function appleListsReadable(raw: unknown): boolean {
+  return raw === null || raw === undefined || (isObject(raw) && Array.isArray(raw['lists']));
+}
