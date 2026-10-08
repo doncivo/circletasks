@@ -81,3 +81,45 @@ test('Y-IOS-02 : caméra refusée visible, puis « Associer au PC » par le scan
   await expect(taskRow(page, TITLE)).toBeVisible();
   await expect(page.locator('.ct-status-banner').filter({ hasText: 'Associez cet appareil pour synchroniser' })).toHaveCount(0);
 });
+
+test('Y-IOS-02 QA : écrans d’association de l’iPhone, dossier d’abord, puis caméra expliquée et scan', async ({ browser }) => {
+  const info = test.info();
+  test.skip(info.project.name !== 'iphone', 'iPhone seulement');
+  test.setTimeout(BUDGET_MS);
+  room = `yios02f-${String(info.workerIndex)}-${info.testId}-${String(info.repeatEachIndex)}`;
+
+  const pc = await openSyncedPage(browser, room, 'pc', 'first', 'pc');
+  opened.push(pc);
+  await openSyncDetails(pc.page);
+  await syncNow(pc.page);
+  await openTasks(pc.page);
+  await createTask(pc.page, PC, { title: TITLE, time: '08:00' });
+  await openSyncDetails(pc.page);
+  await syncNow(pc.page);
+  await propagate(room);
+
+  // iPhone sans dossier ni clé : Réglages propose d'abord le dossier.
+  const phone = await openSyncedPage(browser, room, 'iphone', 'nofolder', 'iphone');
+  opened.push(phone);
+  const page = phone.page;
+  await presentQr(room, 'iphone', 'pc');
+  await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
+  await page.getByRole('button', { name: 'Associer cet iPhone au PC : scanner le code d’association' }).click({ timeout: APP_READY_TIMEOUT_MS });
+  const dialog = page.getByRole('dialog', { name: 'Scannez le code affiché sur le PC' });
+  await expect(dialog).toBeVisible();
+  // Étape 1 : le dossier, rien d'autre (ni caméra, ni scan, ni QR).
+  await expect(dialog.getByText('Choisissez d’abord le même dossier iCloud Drive / CircleTasks que sur le PC.')).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Ouvrir la caméra et scanner le code d’association' })).toHaveCount(0);
+  await expect(page.getByRole('img', { name: /QR/ })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Choisir le dossier iCloud Drive / CircleTasks' }).click();
+  // Étape 2 : la caméra expliquée, puis le scan.
+  await expect(dialog.getByText(/CircleTasks utilise la caméra pour scanner le code d’association/)).toBeVisible();
+  await expect(dialog.getByText('Choisissez d’abord le même dossier iCloud Drive / CircleTasks que sur le PC.')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Ouvrir la caméra et scanner le code d’association' }).click();
+  await expect(page.getByText('Cet iPhone est associé au PC')).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
+  await page.getByRole('button', { name: 'Fermer', exact: true }).click();
+  await openSyncDetails(page);
+  await syncNow(page);
+  await openTasks(page);
+  await expect(taskRow(page, TITLE)).toBeVisible();
+});

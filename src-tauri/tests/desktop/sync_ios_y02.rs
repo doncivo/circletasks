@@ -337,3 +337,84 @@ fn y_ios_02_6_import_needs_the_foreground_and_replacing_another_key_asks_first()
     assert_eq!(iphone.core.key_status().unwrap().kid, other, "clé inchangée");
     let _ = FakeUi::new();
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// QA (Y-IOS-02) : Trousseau verrouillé puis déverrouillé, alerte fermée par l'arrière-plan
+// ------------------------------------------------------------------------------------------------------------------------------
+
+struct SharedLockable(Arc<LockableVault>);
+
+impl SecretVault for SharedLockable {
+    fn set(&self, a: &str, s: &str) -> Result<(), VaultError> {
+        self.0.set(a, s)
+    }
+    fn get(&self, a: &str) -> Result<Option<String>, VaultError> {
+        self.0.get(a)
+    }
+    fn delete(&self, a: &str) -> Result<(), VaultError> {
+        self.0.delete(a)
+    }
+}
+
+#[test]
+fn y_ios_02_4_qa_locked_keychain_is_visible_never_a_new_key_then_unlocked_resumes_with_the_same_key() {
+    let clock = Arc::new(AtomicU64::new(NOW));
+    let plugin = FakePlugin::new(clock.clone());
+    let (_pc, _qr, recovery) = first_device(&plugin, &clock);
+    let lockable = Arc::new(LockableVault { inner: MemoryVault::default(), locked: AtomicBool::new(false), reads: AtomicU64::new(0) });
+    let iphone = phone(&plugin, &clock, Arc::new(SharedLockable(lockable.clone())));
+    choose_with_picker(&iphone.core, &iphone.backend).unwrap().unwrap();
+    iphone.core.bind_device(DEV_B).unwrap();
+    import_ios(&iphone.core, None, Some(recovery), None).unwrap();
+    let kid = iphone.core.key_status().unwrap().kid.expect("clé importée");
+    let stored = lockable.inner.get(SYNC_KEY_ACCOUNT).unwrap().expect("clé au coffre");
+
+    // Écran verrouillé après un redémarrage de l'app (aucune clé en mémoire) : indisponible, jamais « absente ».
+    let now = clock.clone();
+    let transport = Arc::new(SharedPlugin(plugin.clone()));
+    let ui: Arc<dyn ConsentUi> = Arc::new(IosConsentUi::new(transport.clone()));
+    let (core, _backend) = ios_core(iphone.base.path().to_path_buf(), transport, Arc::new(SharedLockable(lockable.clone())), ui, Arc::new(move || now.load(Ordering::SeqCst)));
+    let restarted = Phone { core, backend: iphone.backend.clone(), base: tempfile::tempdir().unwrap() };
+    lockable.locked.store(true, Ordering::SeqCst);
+    assert_eq!(code(restarted.core.key_status()), SyncCode::VaultUnavailable);
+    assert_eq!(code(restarted.core.key_create()), SyncCode::VaultUnavailable, "ne recrée jamais une clé en silence");
+    assert_eq!(code(restarted.core.scan(&[])), SyncCode::VaultUnavailable, "la synchro attend, erreur visible");
+    assert_eq!(lockable.inner.get(SYNC_KEY_ACCOUNT).unwrap().as_deref(), Some(stored.as_str()), "clé du coffre intacte");
+
+    // Déverrouillé : la même clé, la synchro reprend sans nouvelle association.
+    lockable.locked.store(false, Ordering::SeqCst);
+    let status = restarted.core.key_status().unwrap();
+    assert!(status.present);
+    assert_eq!(status.kid.as_deref(), Some(kid.as_str()));
+    assert!(restarted.core.scan(&[]).is_ok());
+}
+
+#[test]
+fn y_ios_02_11_qa_alert_closed_by_going_to_background_is_a_refusal_that_blocks_the_next_attempt_for_ten_minutes() {
+    let clock = Arc::new(AtomicU64::new(NOW));
+    let plugin = FakePlugin::new(clock.clone());
+    let (_pc, _qr, recovery) = first_device(&plugin, &clock);
+    let vault = Arc::new(MemoryVault::default());
+    vault.set(SYNC_KEY_ACCOUNT, &circletasks_lib::sync::crypto::MasterKey::generate().unwrap().to_vault_value()).unwrap();
+    let iphone = phone(&plugin, &clock, vault.clone());
+    choose_with_picker(&iphone.core, &iphone.backend).unwrap().unwrap();
+    iphone.core.bind_device(DEV_B).unwrap();
+    let other = iphone.core.key_status().unwrap().kid;
+    // `dismissPendingAlert` répond `confirmed: false` : l'alerte fermée par le passage en arrière-plan vaut « Annuler ».
+    plugin.with(|s| s.confirm_answer = Ok(false));
+    assert_eq!(code(import_ios(&iphone.core, None, Some(recovery.clone()), None)), SyncCode::ConsentDenied);
+    assert_eq!(iphone.core.key_status().unwrap().kid, other, "clé inchangée");
+    // Retour au premier plan, l'utilisateur voudrait confirmer : encore bloqué pendant 10 minutes, aucune nouvelle alerte.
+    plugin.with(|s| s.confirm_answer = Ok(true));
+    let asked = plugin.calls("confirm").len();
+    clock.fetch_add(5 * 60_000, Ordering::SeqCst);
+    let blocked = code(import_ios(&iphone.core, None, Some(recovery.clone()), None));
+    assert!(matches!(blocked, SyncCode::ConsentDenied | SyncCode::RateLimited), "{blocked:?}");
+    assert_eq!(plugin.calls("confirm").len(), asked, "pas de nouvelle alerte pendant le blocage");
+    assert_eq!(iphone.core.key_status().unwrap().kid, other);
+    // Après 10 minutes : l'alerte est de nouveau proposée et la confirmation remplace la clé.
+    clock.fetch_add(6 * 60_000, Ordering::SeqCst);
+    import_ios(&iphone.core, None, Some(recovery), None).unwrap();
+    assert_eq!(plugin.calls("confirm").len(), asked + 1);
+    assert_ne!(iphone.core.key_status().unwrap().kid, other);
+}

@@ -35,7 +35,7 @@ const decode = (text: string): unknown =>
   JSON.parse(text, (_key, v: unknown) => (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 1 && Array.isArray((v as Record<string, unknown>)[MAP_TAG]) ? new Map((v as Record<string, [unknown, unknown][]>)[MAP_TAG]) : v));
 
 /** `first` : dossier et clé créés ; `join` : associé au premier par sa clé de secours ; `bare` : dossier du premier, sans clé (Y-06). */
-type SimRole = 'first' | 'join' | 'bare';
+type SimRole = 'first' | 'join' | 'bare' | 'nofolder';
 
 interface SimFailure {
   readonly method: string;
@@ -129,6 +129,8 @@ async function createDevice(room: Room, name: string, role: SimRole, devicePlatf
   const owner = [...room.devices.values()].find((d) => d.deviceId !== null);
   if (!owner?.deviceId) throw new Error('aucun appareil lié dans cet espace : ouvrir d’abord le premier appareil et attendre sa synchro');
   propagate(owner.folder, folder, owner.deviceId);
+  // `nofolder` : le dossier du premier est celui que rendra le sélecteur, mais il n'est pas encore choisi (l'utilisateur le choisit dans l'app).
+  if (role === 'nofolder') return device;
   await platform.folder.choose();
   // Dossier d'abord, clé ensuite : l'appareil `bare` s'associe lui-même par l'app.
   if (role === 'bare') return device;

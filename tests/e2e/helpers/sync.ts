@@ -40,7 +40,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * Ouvre l'app dans un nouveau contexte (base neuve) relié au simulateur : `first` choisit le dossier et crée la clé ; `join` est associé
  * au premier (qui doit déjà avoir synchronisé une fois) ; `bare` reçoit le dossier du premier sans clé (association par l'app, Y-06).
  */
-export async function openSyncedPage(browser: Browser, room: string, device: string, role: 'first' | 'join' | 'bare', kind: 'pc' | 'iphone' = device === 'iphone' ? 'iphone' : 'pc'): Promise<SyncedPage> {
+export async function openSyncedPage(browser: Browser, room: string, device: string, role: 'first' | 'join' | 'bare' | 'nofolder', kind: 'pc' | 'iphone' = device === 'iphone' ? 'iphone' : 'pc'): Promise<SyncedPage> {
   const context = await browser.newContext({ ...(kind === 'pc' ? PC_CONTEXT : IPHONE_CONTEXT), locale: 'fr-FR', timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   await page.addInitScript((config) => {
