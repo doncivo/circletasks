@@ -275,23 +275,35 @@ interface DeletionCandidate {
   readonly task: Task | null;
 }
 
+interface DeletionScan {
+  readonly candidates: DeletionCandidate[];
+  /** Liens dont la tâche est absente de la base sans suppression connue : jamais une suppression dans Rappels. */
+  readonly orphans: AppleReminderLink[];
+}
+
 /**
  * Liens dont le rappel doit être supprimé : tâche supprimée (ici ou reçue de la synchro) ou lien « suppression en cours » (écrit par ce
  * module après avoir vu la tâche supprimée). Une tâche ABSENTE de la base sans lien « suppression en cours » n'est jamais une suppression
  * connue (pas de pierre tombale vue ici) : rien n'est supprimé dans Rappels.
  */
-async function deletionCandidates(container: AppContainer, links: readonly AppleReminderLink[], alive: ReadonlySet<TaskId>): Promise<DeletionCandidate[]> {
+async function scanDeletions(container: AppContainer, links: readonly AppleReminderLink[], alive: ReadonlySet<TaskId>): Promise<DeletionScan> {
   const out: DeletionCandidate[] = [];
+  const orphans: AppleReminderLink[] = [];
   for (const link of links) {
     if (link.state === 'creating') continue;
     if (link.state === 'linked' && alive.has(link.taskId)) continue;
     const task = await container.data.repos.tasks.getById(link.taskId, { includeDeleted: true });
     if (task !== null && task.deletedAt === null) continue; // tâche vivante hors de la liste (écartée) : rien à envoyer
-    if (task === null && link.state !== 'deleting') continue;
+    if (task === null && link.state !== 'deleting') {
+      orphans.push(link);
+      continue;
+    }
     out.push({ link, task });
   }
-  return out;
+  return { candidates: out, orphans };
 }
+
+const deletionCandidates = async (container: AppContainer, links: readonly AppleReminderLink[], alive: ReadonlySet<TaskId>): Promise<DeletionCandidate[]> => (await scanDeletions(container, links, alive)).candidates;
 
 /** Suppressions confirmées par l'utilisateur (listId → nombre affiché) : la garde de suppression massive ne les retient plus tant qu'elles ne sont pas toutes parties. */
 const confirmedDeletions = new WeakMap<AppContainer, Map<string, number>>();
@@ -299,7 +311,15 @@ const confirmedDeletions = new WeakMap<AppContainer, Map<string, number>>();
 async function sendDeletions(container: AppContainer, context: SendContext, tally: Tally): Promise<void> {
   const now = nowIso(container.clock);
   const alive = new Set(context.tasks.map((task) => task.id));
-  const candidates = await deletionCandidates(container, context.links, alive);
+  const { candidates, orphans } = await scanDeletions(container, context.links, alive);
+  if (orphans.length > 0) {
+    // Lien sans tâche et sans suppression connue : jamais un silence ni une suppression dans Rappels. Le lien est retiré avec un message ; le rappel, resté dans Rappels,
+    // est réimporté (ou relié si la tâche arrive de la synchro).
+    await container.data.transaction(async (tx) => {
+      for (const link of orphans) await tx.appleLinks.remove(link.taskId);
+    });
+    note(tally, 'orphan-link', orphans.length);
+  }
   // Garde symétrique par liste : au-delà de max(10, 25 %) des tâches liées de la liste, rien n'est envoyé sans confirmation (écran Agendas).
   const byList = new Map<string, DeletionCandidate[]>();
   for (const candidate of candidates) byList.set(candidate.link.listId, [...(byList.get(candidate.link.listId) ?? []), candidate]);

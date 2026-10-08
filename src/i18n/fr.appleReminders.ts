@@ -83,6 +83,7 @@ export const appleRemindersFr = {
   noticeReadOnlyList: '{count} modification(s) refusée(s) : liste de Rappels en lecture seule.',
   noticeRecurringRefused: '{count} modification(s) locale(s) remplacée(s) : rappel récurrent, à modifier dans Rappels.',
   noticeDuplicateCreated: '{count} rappel(s) en double trouvé(s) après une interruption : le plus ancien a été gardé, les autres sont dans Rappels.',
+  noticeOrphanLink: '{count} lien(s) vers un rappel dont la tâche est introuvable ont été retirés : le rappel reste dans Rappels et sera réimporté.',
   noticeListenerFailed: 'Les changements faits dans Rappels ne sont vus qu’à l’ouverture et à la reprise de l’app.',
   linkedCountUnreadable: 'Le nombre de tâches liées n’a pas pu être lu.',
   sourceUnreadable: 'Origine Rappels illisible pour le moment.',

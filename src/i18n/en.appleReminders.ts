@@ -77,6 +77,7 @@ export const appleRemindersEn: Messages['appleReminders'] = {
   noticeReadOnlyList: '{count} change(s) refused: Reminders list is read-only.',
   noticeRecurringRefused: '{count} local change(s) replaced: recurring reminder, edit it in Reminders.',
   noticeDuplicateCreated: '{count} duplicate reminder(s) found after an interruption: the oldest was kept, the others are in Reminders.',
+  noticeOrphanLink: '{count} link(s) to a reminder whose task cannot be found were removed: the reminder stays in Reminders and will be imported again.',
   noticeListenerFailed: 'Changes made in Reminders are only seen when the app opens or resumes.',
   linkedCountUnreadable: 'The number of linked tasks could not be read.',
   sourceUnreadable: 'Reminders origin unreadable for now.',

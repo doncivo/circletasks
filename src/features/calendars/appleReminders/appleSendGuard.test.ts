@@ -119,3 +119,18 @@ describe('confirmation : seulement ce qui a été affiché (audit)', () => {
     expect(h.reminders.all()).toHaveLength(2);
   });
 });
+
+describe('lien orphelin jamais silencieux (audit)', () => {
+  it('lien dont la tâche est absente sans suppression connue : le lien est retiré avec un message, le rappel reste et est réimporté', async () => {
+    const ids = await importMany(2);
+    const first = ids[0];
+    if (first === undefined) throw new Error('aucune tâche');
+    await h.db.driver.execute('DELETE FROM task WHERE id = ?', [first]);
+    await h.pass('push');
+    expect(await h.container.data.repos.appleLinks.get(first)).toBeNull();
+    expect(status().notices).toContainEqual(expect.objectContaining({ kind: 'orphan-link', count: 1 }));
+    expect(h.reminders.all()).toHaveLength(2);
+    expect(h.reminders.writes).toEqual([]);
+    expect(await h.pass('full')).toMatchObject({ created: 1, sent: 0 });
+  });
+});

@@ -379,7 +379,8 @@ export type AppleNoticeKind =
   | 'read-only-list'
   | 'recurring-refused'
   | 'duplicate-created'
-  | 'listener-failed';
+  | 'listener-failed'
+  | 'orphan-link';
 
 /** Message à afficher dans l'écran Agendas ; jamais de titre. */
 export interface AppleNotice {
@@ -462,7 +463,7 @@ export function parseAppleStatus(raw: unknown): AppleStatus {
     .slice(0, MAX_APPLE_LISTS)
     .map((entry) => ({ listId: entry['listId'] as string, count: entry['count'] as number, at: entry['at'] as IsoDateTime, ...(entry['send'] === true ? { send: true as const } : {}) }));
   const missingLists = (Array.isArray(raw['missingLists']) ? (raw['missingLists'] as unknown[]) : []).filter((id): id is string => isShortText(id, MAX_LIST_ID_LENGTH)).slice(0, MAX_APPLE_LISTS);
-  const kinds: readonly string[] = ['deleted', 'detached', 'detached-recurring', 'unlinked-list', 'creation-off', 'read-only-list', 'recurring-refused', 'duplicate-created', 'listener-failed'];
+  const kinds: readonly string[] = ['deleted', 'detached', 'detached-recurring', 'unlinked-list', 'creation-off', 'read-only-list', 'recurring-refused', 'duplicate-created', 'listener-failed', 'orphan-link'];
   const notices = (Array.isArray(raw['notices']) ? (raw['notices'] as unknown[]) : [])
     .filter((entry): entry is Record<string, unknown> => isObject(entry) && typeof entry['kind'] === 'string' && kinds.includes(entry['kind']) && isCount(entry['count']) && typeof entry['at'] === 'string' && isIsoDateTime(entry['at']))
     .slice(0, MAX_NOTICES)
