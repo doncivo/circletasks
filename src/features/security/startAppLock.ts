@@ -5,7 +5,7 @@ import { logFailure } from '../../platform/desktop/log';
 import type { PrivacyShield } from '../../platform/privacyShield';
 import type { AppContainer } from '../app/container';
 import { useAppLockStore, type AppLockActions, type LockMessage, type SettingsLockMessage } from './appLockStore';
-import { takeExcursion } from './excursion';
+import { SYSTEM_SETTINGS_BACKGROUND_WINDOW_MS, takeExcursion } from './excursion';
 import { applyLockToDocument, stopLockObserver } from './lockLayer';
 import { installPrivacyCover, setPrivacyCover } from './privacyCover';
 
@@ -73,6 +73,8 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
   let removeCover: (() => void) | null = null;
   let backgroundedAt: number | null = null;
   let backgroundedMono: number | null = null;
+  /** Passages masqués depuis le lancement (audit B3 : un succès obtenu après un passage en arrière-plan est ignoré). */
+  let hiddenCount = 0;
   /** Épisode de verrou en cours (lancement ou retour) : une authentification automatique, un seul nouvel essai au `focus`. */
   let episode: { autoTried: boolean; retryOnFocus: boolean; focusRetried: boolean } | null = null;
 
@@ -102,8 +104,15 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
   const unlock = async (): Promise<void> => {
     if (store.getState().phase !== 'locked' || store.getState().busy) return;
     set({ busy: true });
+    const hiddenBefore = hiddenCount;
     const result = await deps.authenticator.authenticate(t('security.reason.unlock'), t('security.cancel'));
     if (disposed || store.getState().phase !== 'locked') return;
+    // Audit B3 : l'app est passée en arrière-plan pendant l'authentification : le succès est ignoré, un nouvel essai est nécessaire.
+    if (result.ok && hiddenCount !== hiddenBefore) {
+      log('unlock-ignored-background');
+      set({ busy: false, message: { kind: 'cancelled' } });
+      return;
+    }
     if (result.ok) {
       unlocked();
       return;
@@ -127,6 +136,7 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
   };
 
   const onHidden = (): void => {
+    hiddenCount += 1;
     backgroundedAt ??= now();
     backgroundedMono ??= mono();
   };
@@ -148,12 +158,19 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
     }
     // Audit M1 : seule l'excursion vers Réglages iOS dispense du délai ; dossier, caméra et autorisation suivent la règle des 30 s.
     const taken = takeExcursion();
-    const excursion = taken?.kind === 'system-settings' ? { startedAt: taken.startedAt } : null;
+    // Audit B2 : annulée si l'app n'est pas passée en arrière-plan dans les 3 s (heure système et horloge monotone).
+    const reachedSettings =
+      taken?.kind === 'system-settings' &&
+      at !== null &&
+      atMono !== null &&
+      at - taken.startedAt <= SYSTEM_SETTINGS_BACKGROUND_WINDOW_MS &&
+      atMono - taken.startedMono <= SYSTEM_SETTINGS_BACKGROUND_WINDOW_MS;
+    const excursion = reachedSettings ? { startedAt: taken.startedAt } : null;
     const wallLock = shouldLock({ enabled: true, state: 'resume', now: now(), backgroundedAt: at, excursion });
     // Audit B1 : même règle sur l'horloge monotone (excursion : sa durée maximale ; sinon : le délai de reverrouillage).
     const monoNow = mono();
     const monoLock =
-      excursion !== null && taken !== null ? monoNow - taken.startedMono >= APP_LOCK_EXCURSION_MAX_MS : atMono === null || monoNow - atMono >= APP_LOCK_RELOCK_MS;
+      excursion !== null && taken ? monoNow - taken.startedMono >= APP_LOCK_EXCURSION_MAX_MS : atMono === null || monoNow - atMono >= APP_LOCK_RELOCK_MS;
     const relock = wallLock || monoLock;
     // Verrou posé AVANT le retrait du cache : le contenu n'est jamais repeint entre les deux.
     if (relock) lock(null);

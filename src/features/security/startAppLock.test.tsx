@@ -339,6 +339,30 @@ describe('retour au premier plan et cache de confidentialité (critères 6, 8 et
     expect(state().phase).toBe('locked');
   });
 
+  it('audit B2 : Réglages iOS sans passage en arrière-plan dans les 3 s : excursion annulée, règle des 30 s', async () => {
+    await unlockedApp();
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
+    clock += 3_001;
+    monoClock += 3_001;
+    setVisibility('hidden');
+    clock += 60_000;
+    monoClock += 60_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
+  });
+
+  it('audit B2 : Réglages iOS atteints en 3 s : pas de verrou au retour', async () => {
+    await unlockedApp();
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
+    clock += 3_000;
+    monoClock += 3_000;
+    setVisibility('hidden');
+    clock += 60_000;
+    monoClock += 60_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('unlocked');
+  });
+
   it('horloge qui recule : verrouille', async () => {
     await unlockedApp();
     setVisibility('hidden');
@@ -363,6 +387,23 @@ describe('retour au premier plan et cache de confidentialité (critères 6, 8 et
     controller = null;
     setVisibility('hidden');
     expect(isPrivacyCoverOn(document)).toBe(false);
+  });
+});
+
+describe('audit B3 : authentification et passage en arrière-plan', () => {
+  it('succès Face ID obtenu après un passage en arrière-plan pendant l’authentification : ignoré, reste verrouillé', async () => {
+    stored = true;
+    const lock = await start();
+    fake.hold();
+    const pending = lock.unlock();
+    setVisibility('hidden');
+    setVisibility('visible');
+    fake.release();
+    await pending;
+    expect(state()).toMatchObject({ phase: 'locked', message: { kind: 'cancelled' } });
+    expect(log).toHaveBeenCalledWith('unlock-ignored-background');
+    await lock.unlock();
+    expect(state().phase).toBe('unlocked');
   });
 });
 

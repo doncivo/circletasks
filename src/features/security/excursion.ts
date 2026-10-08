@@ -8,6 +8,9 @@
  * d'autorisation affichés dans l'app, sans passage en arrière-plan) est effacée aussitôt, pour qu'un passage en arrière-plan ultérieur
  * reste soumis aux 30 s. Sauf `system-settings`, gardée jusqu'au retour.
  */
+/** Audit B2 : l'excursion vers Réglages iOS ne vaut que si l'app passe en arrière-plan dans les 3 s qui suivent son départ. */
+export const SYSTEM_SETTINGS_BACKGROUND_WINDOW_MS = 3_000;
+
 export type ExcursionKind = 'folder-picker' | 'camera' | 'system-settings' | 'permission';
 
 export interface Excursion {
