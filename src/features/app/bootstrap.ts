@@ -14,7 +14,7 @@ import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler,
 import { createLedgerStore, openNotificationScheduler, systemNotificationClock, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
 import { composeFocusEndText } from '../reminders/focusEndText';
 import { createSettingsLedger } from '../reminders/settingsLedger';
-import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
+import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform, type MemoryPlatformOptions, type WebAuthFailureCode } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
 import { openSyncPlatform } from '../../platform/sync';
@@ -184,12 +184,14 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
  * Points d'accès et ID client des simulateurs d'agendas, en développement seulement (variables VITE_CT_GOOGLE_SIM, VITE_CT_CALDAV_SIM,
  * VITE_CT_GOOGLE_SIM_CLIENT_ID posées par Playwright) : un build de production n'en lit jamais.
  */
-function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, { googleClientId?: string }] {
+function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, MemoryPlatformOptions] {
   const env = import.meta.env;
   if (!env.DEV) return [PRODUCTION_ENDPOINTS, undefined, {}];
   // Playwright : un test qui modifie l'état d'un simulateur en démarre un à lui et l'annonce avant le chargement de la page.
   const override = (globalThis as { __ctCalendarSims?: { google: string; caldav: string; clientId?: string } }).__ctCalendarSims;
-  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, override.clientId ? { googleClientId: override.clientId } : {}];
+  // K-TECH-01 (e2e iphone) : échec de la feuille de connexion Google posé par le test (`window.__ctWebAuthFailure`), relu à chaque connexion.
+  const webAuthFailure = (): WebAuthFailureCode | null => (globalThis as { __ctWebAuthFailure?: WebAuthFailureCode }).__ctWebAuthFailure ?? null;
+  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, { ...(override.clientId ? { googleClientId: override.clientId } : {}), webAuthFailure }];
   if (!env.VITE_CT_GOOGLE_SIM || !env.VITE_CT_CALDAV_SIM) return [PRODUCTION_ENDPOINTS, undefined, {}];
   return [simulatorEndpoints(env.VITE_CT_GOOGLE_SIM, env.VITE_CT_CALDAV_SIM), undefined, env.VITE_CT_GOOGLE_SIM_CLIENT_ID ? { googleClientId: env.VITE_CT_GOOGLE_SIM_CLIENT_ID } : {}];
 }

@@ -7,7 +7,7 @@ import type { CalendarAccount, CalendarProviderKind, CalendarRef } from '../../d
 import type { CalendarAccountId, IsoDateTime } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
 import { detectTimeZone } from '../../platform';
-import { CalendarPlatformError } from '../../platform/calendars';
+import { CalendarPlatformError, isWebAuthFailure, type WebAuthFailureCode } from '../../platform/calendars';
 import { useAppStatusStore } from '../app/appStatus';
 import { useAppStore } from '../app/appStore';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -25,7 +25,7 @@ import { refreshAccount } from './refreshUseCase';
  * dans ce store : seule une référence du coffre (`tokenRef`) existe côté interface.
  */
 
-export type ConnectFailure = 'cancelled' | 'not-configured' | 'failed' | 'duplicate' | 'icloud-invalid' | 'icloud-unreachable' | 'google-unreachable' | 'icloud-choose-account';
+export type ConnectFailure = 'cancelled' | 'not-configured' | 'failed' | 'duplicate' | 'icloud-invalid' | 'icloud-unreachable' | 'google-unreachable' | 'icloud-choose-account' | 'web-auth-failed';
 export type ConnectOutcome = { readonly ok: true; readonly accountId: CalendarAccountId } | { readonly ok: false; readonly failure: ConnectFailure };
 
 /** Message (clé i18n) d'un échec de connexion. */
@@ -38,7 +38,17 @@ export const FAILURE_KEYS: Readonly<Record<ConnectFailure, PlainMessageKey>> = {
   'icloud-unreachable': 'calendars.errorIcloudUnreachable',
   'google-unreachable': 'calendars.errorGoogleUnreachable',
   'icloud-choose-account': 'calendars.errorIcloudChooseAccount',
+  'web-auth-failed': 'calendars.errorWebAuth',
 };
+
+/**
+ * Échec persistant de la session d'authentification web de l'iPhone (K-TECH-01 critère 6) : affiché avec son code et « Réessayer »
+ * jusqu'à la connexion réussie ou l'annulation volontaire ; `accountId` : compte à reconnecter (null : nouveau compte Google).
+ */
+export interface GoogleWebAuthFailure {
+  readonly code: WebAuthFailureCode;
+  readonly accountId: CalendarAccountId | null;
+}
 
 export type CalendarsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -57,6 +67,8 @@ export interface CalendarsState {
   readonly refreshing: readonly CalendarAccountId[];
   /** Flux OAuth en cours (page de consentement ouverte dans le navigateur). */
   readonly connecting: boolean;
+  /** Échec de la feuille de connexion Google (iPhone) ; null : aucun. Ne dépend d'aucun texte libre ni d'aucune URL. */
+  readonly googleFailure: GoogleWebAuthFailure | null;
   readonly errorKey: PlainMessageKey | null;
   /** Dernier message d'une action de l'écran (connexion annulée, enregistrement refusé…) ; null : aucun. */
   readonly messageKey: PlainMessageKey | null;
@@ -99,6 +111,7 @@ function connectionFailure(error: unknown): ConnectFailure {
   if (error instanceof CalendarPlatformError) {
     if (error.code === 'cancelled') return 'cancelled';
     if (error.code === 'config-missing') return 'not-configured';
+    if (isWebAuthFailure(error.code)) return 'web-auth-failed';
   }
   return 'failed';
 }
@@ -157,8 +170,17 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
     };
 
     const report = (outcome: ConnectOutcome): ConnectOutcome => {
-      set({ messageKey: outcome.ok ? null : FAILURE_KEYS[outcome.failure] });
+      // L'échec de la feuille Google a son propre état persistant (code et « Réessayer ») : pas de message passager en double.
+      set({ messageKey: outcome.ok || outcome.failure === 'web-auth-failed' ? null : FAILURE_KEYS[outcome.failure] });
       return outcome;
+    };
+
+    /** Échec d'une autorisation Google : retient le code de la feuille web (iPhone) ou efface l'état précédent (réussite, annulation, autre échec). */
+    const reportAuthorization = (error: unknown, accountId: CalendarAccountId | null): ConnectOutcome => {
+      const failure = connectionFailure(error);
+      const code = error instanceof CalendarPlatformError && isWebAuthFailure(error.code) ? error.code : null;
+      set({ googleFailure: code === null ? null : { code, accountId } });
+      return report({ ok: false, failure });
     };
 
     /** Crée le compte (agendas tous affichés, espace par défaut) puis lance son premier rafraîchissement (K-01 critère 6). */
@@ -202,6 +224,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       states: {},
       refreshing: [],
       connecting: false,
+      googleFailure: null,
       errorKey: null,
       messageKey: null,
       icloudForm: null,
@@ -229,8 +252,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           try {
             await platform.oauth.authorizeGoogle(tokenRef);
           } catch (error) {
-            return report({ ok: false, failure: connectionFailure(error) });
+            return reportAuthorization(error, null);
           }
+          set({ googleFailure: null });
           const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
           if (!listed.ok) {
             await discard('google', tokenRef);
@@ -290,8 +314,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           try {
             await platform.oauth.authorizeGoogle(account.tokenRef);
           } catch (error) {
-            return report({ ok: false, failure: connectionFailure(error) });
+            return reportAuthorization(error, accountId);
           }
+          set({ googleFailure: null });
           markConnected(accountId);
           return report({ ok: true, accountId });
         } finally {

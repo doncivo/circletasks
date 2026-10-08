@@ -80,6 +80,9 @@ jobs:
           sf=$(cargo tree --locked --target aarch64-apple-ios -e normal -i security-framework@3.7.0 --prefix none)
           echo "$sf" | grep -q '^circletasks ' || { echo "::error::security-framework 3.7.0 n'est pas une dépendance directe de l'app iOS"; exit 1; }
           echo "$ios" | grep -q '^tauri-plugin-barcode-scanner ' || { echo "::error::tauri-plugin-barcode-scanner absent de la cible iOS"; exit 1; }
+          # ADR 0008 §9 (K-TECH-01) : session d'authentification web de la connexion Google, cible iOS seulement.
+          echo "$ios" | grep -q '^tauri-plugin-web-auth ' || { echo "::error::tauri-plugin-web-auth absent de la cible iOS"; exit 1; }
+          if echo "$windows" | grep -q '^tauri-plugin-web-auth '; then echo "::error::tauri-plugin-web-auth dans la cible Windows"; exit 1; fi
 
       # Le projet Xcode (src-tauri/gen/apple) n'est pas versionné : il est régénéré à chaque build
       # depuis tauri.conf.json et src-tauri/Info.ios.plist.
@@ -160,6 +163,22 @@ jobs:
             echo "- Version : $($PB -c 'Print :CFBundleShortVersionString' info/Info.plist) ($($PB -c 'Print :CFBundleVersion' info/Info.plist))"
             echo "- Descriptions d'usage : ${USAGES:-aucune}"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # ADR 0008 §9.3 (K-TECH-01) : l'ID client Google de type iOS est-il compilé dans le binaire de l'IPA ? Résultat réduit à présent / absent :
+      # la valeur n'est ni affichée ni gardée. Absent : avertissement et ligne du résumé (jamais un échec : l'app affiche alors « non configuré »).
+      - name: ID client Google iOS compilé
+        run: |
+          set -euo pipefail
+          PB=/usr/libexec/PlistBuddy
+          APP="$RUNNER_TEMP/check/Payload/CircleTasks.app"
+          EXE=$($PB -c "Print :CFBundleExecutable" "$APP/Info.plist")
+          if grep -aEq '[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com' "$APP/$EXE"; then
+            STATE="présent"
+          else
+            STATE="absent"
+            echo "::warning::ID client Google iOS absent de l'IPA : la connexion à Google affichera « non configuré » (secret du dépôt à renseigner)"
+          fi
+          echo "- ID client Google iOS compilé : ${STATE}" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
