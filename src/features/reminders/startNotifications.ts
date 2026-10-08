@@ -1,6 +1,7 @@
 import { setActionWakeHandler } from './actionWake';
 import { clearReminderBanner, statusController } from './notificationStatus';
 import { getNotificationRunner } from './notificationRunner';
+import { clearSigningBanner } from './signingNotice';
 import type { AppContainer } from '../app/container';
 
 /** Tables synchronisées dont une modification reçue change le plan (avenant N1.3) : réglages = récapitulatifs et langue. */
@@ -51,6 +52,7 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
       stopSync?.();
       env.document.removeEventListener('visibilitychange', onVisibility);
       clearReminderBanner();
+      clearSigningBanner();
     },
   };
 }

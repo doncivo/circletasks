@@ -10,6 +10,7 @@ import { formatCoverage } from './coverageText';
 import { isInstalledIphone, notificationStatusStore, reminderProblems } from './notificationStatus';
 import { PcReminderWarningSummary } from './PcReminderWarningSummary';
 import { requestPermissionOnGesture } from './requestPermission';
+import { SigningRemindersLine } from './SigningAbout';
 
 /**
  * État des rappels dans Réglages > Rappels (N-01 critères 10 à 13, N-06, avenant N1.8) : couverture (« Planifiés jusqu'au… »), autorisation
@@ -104,6 +105,8 @@ export function RemindersStatusSection() {
           {t('reminders.status.actionsUnavailable')} · {t(`reminders.status.actionsReason.${status.actionsFailure.reason}` as 'reminders.status.actionsReason.delegate-lost')}
         </p>
       )}
+      {/* I-02 : lecture de la date d'expiration de la signature en échec (iPhone installé seulement). */}
+      <SigningRemindersLine />
       {status.zoneChange !== null && <p className="ct-recap__statusLine">{t('reminders.status.zoneChanged', { time: clockTime(status.zoneChange.at) })}</p>}
       {status.ledgerRebuiltAt !== null && <p className="ct-recap__statusLine">{t('reminders.status.ledgerRebuilt', { time: clockTime(status.ledgerRebuiltAt) })}</p>}
       {availability === 'available' && status.permission === 'granted' && problems.length === 0 && (

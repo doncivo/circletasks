@@ -382,9 +382,13 @@ describe('cohérence du guide, du workflow et des scripts', () => {
     expect(read('src-tauri/build.rs')).toContain('"CT_GOOGLE_IOS_CLIENT_ID"');
   });
 
-  it('garde la phrase de I-02 tant que I-02 n’est pas faite', () => {
-    const row = read('docs/backlog.md').split('\n').find((l) => l.startsWith('| I-02 |')) ?? '';
-    if (!/\|\s*fait/.test(row)) expect(guide).toContain('CircleTasks préviendra 24 h avant l\'expiration (à l\'ordre 5).');
+  it('annonce l’alerte de I-02 avec la phrase définitive, la même que le comportement livré', () => {
+    // I-02 critère 9 : « préviendra … (à l'ordre 5) » est remplacée ; l'alerte part 24 h avant l'expiration (SIGNING_ALERT_LEAD_MS) et le texte
+    // d'alerte renvoie à SideStore (src/i18n/fr.signing.ts).
+    expect(guide).toContain("CircleTasks vous prévient 24 h avant l'expiration ; actualisez-la alors dans SideStore.");
+    expect(guide).not.toContain("à l'ordre 5");
+    expect(read('src/domain/signingNotice.ts')).toContain('SIGNING_ALERT_LEAD_MS = 24 * 3_600_000');
+    expect(read('src/i18n/fr.signing.ts')).toContain('Vérifiez dans SideStore que l’app a été actualisée');
   });
 
   it('tient en 15 minutes : durée annoncée, 8 étapes, lecture courte', () => {

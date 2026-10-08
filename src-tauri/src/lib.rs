@@ -23,6 +23,8 @@ pub mod import;
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Expiration de la signature SideStore (I-02, ADR 0013 section 3) : analyse compilée partout, commande iOS seulement.
+pub mod signing;
 /// Synchronisation par iCloud Drive (ADR 0011, lot Y1 : Y-08, Y-01).
 pub mod sync;
 /// Coffre système (agendas, clé de synchro), déplacé de `calendars/vault.rs` au lot Y1.
@@ -67,6 +69,8 @@ pub fn run() {
         sync::commands_ios::sync_restore_marker_clear, sync::commands_ios::sync_forgotten_delete,
         // Y-IOS-02 (ADR 0011 §23 point 5) : clé reçue dans `main`, oubli, réinitialisation (confirmations natives de l'iPhone).
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,
+        // I-02 (ADR 0013 section 3.1) : dates du profil de signature (lecture de embedded.mobileprovision), iOS seulement.
+        signing::app_signing_info,
     ]);
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]

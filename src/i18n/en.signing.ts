@@ -1,0 +1,26 @@
+import type { Messages } from './types';
+
+export const signingEn: Messages['signing'] = {
+  alertTitle: 'CircleTasks is about to expire',
+  alertBody: 'Check in SideStore that the app has been refreshed (expires on {date} at {time})',
+  bannerSoon: 'CircleTasks expires in {duration}: refresh it in SideStore',
+  durationHours: '{n} h',
+  durationMinutes: '{n} min',
+  about: {
+    expires: 'Expires on {date} at {time} · {remaining}',
+    expired: 'Signature expired on {date} at {time}',
+    remainingDays: 'in {n} days',
+    remainingHours: 'in {n} h',
+    remainingMinutes: 'in {n} min',
+    alertAt: 'Alert planned on {date} at {time}',
+    alertSoon: 'Less than 24 h left: refresh CircleTasks in SideStore',
+    unknown: 'Expiry date unknown: the alert before expiry is turned off',
+    unknownAt: 'Last read gave no result at {time} ({code})',
+    codeMissing: 'signing profile missing',
+    codeUnreadable: 'signing profile unreadable',
+    notificationsDenied: 'Notifications are denied: you will not be warned',
+    notificationsUndetermined: 'Notifications are not allowed: you will not be warned',
+    alertFailed: 'The alert could not be scheduled: you may not be warned',
+    reading: 'Reading the expiry date…',
+  },
+};

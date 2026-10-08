@@ -21,6 +21,7 @@ import { openSyncPlatform } from '../../platform/sync';
 import { openHaptics, type Haptics } from '../../platform/haptics';
 import { openAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { openPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
+import { openSigning, type SigningPlatform } from '../../platform/signing';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
@@ -112,6 +113,8 @@ export interface BootstrapAppOptions {
   readonly authenticator?: AppAuthenticator;
   /** Cache de confidentialité natif (I-03) ; `openPrivacyShield` par défaut. */
   readonly privacyShield?: PrivacyShield;
+  /** Expiration de la signature (I-02) ; `openSigning` par défaut. */
+  readonly signing?: SigningPlatform;
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -188,6 +191,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       haptics: options.haptics ?? openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) }),
       authenticator: options.authenticator ?? openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) }),
       privacyShield: options.privacyShield ?? openPrivacyShield(runtime, os),
+      signing: options.signing ?? openSigning(runtime, os),
     });
   } catch (error) {
     useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });

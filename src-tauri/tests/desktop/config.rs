@@ -723,3 +723,26 @@ fn lot_m_local_plugins_acl_prefix_matches_runtime_name() {
     // Aucune commande Rust : seules les méthodes Swift répondent (pas de invoke_handler dans ces plugins).
     assert!(!HAPTICS_LIB.contains("invoke_handler") && !SHIELD_LIB.contains("invoke_handler"));
 }
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// I-02 (ADR 0013 §3.1) : commande app_signing_info, iPhone seulement
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// I-02 critère 3 : exactement `allow-app-signing-info`, fenêtre `main`, iOS ; aucune autre capability (donc aucune capability Windows).
+#[test]
+fn i02_signing_capability_grants_exactly_the_one_command() {
+    assert_exact_ios_capability("signing-ios.json", "allow-app-signing-info", &["allow-app-signing-info"]);
+}
+
+/// I-02 critère 3 : la commande est sous cfg(target_os = "ios"), dans le gestionnaire de l'iPhone et pas dans celui du PC.
+#[test]
+fn i02_signing_command_exists_for_ios_only() {
+    const SIGNING: &str = include_str!("../../src/signing.rs");
+    assert!(SIGNING.contains("#[cfg(target_os = \"ios\")]\n#[tauri::command]\npub async fn app_signing_info()"));
+    assert_eq!(SIGNING.matches("#[tauri::command]").count(), 1);
+    assert!(ios_handler_commands().contains("app_signing_info"));
+    let desktop_start = LIB_SOURCE.find("#[cfg(desktop)]\n    let builder = desktop::configure(builder)").expect("bloc PC");
+    let desktop_block = &LIB_SOURCE[desktop_start..desktop_start + LIB_SOURCE[desktop_start..].find("\n    ]);").expect("fin du bloc PC")];
+    assert!(!desktop_block.contains("app_signing_info"), "commande iOS dans le gestionnaire du PC");
+    assert!(manifest_commands().contains("app_signing_info"));
+}

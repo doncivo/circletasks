@@ -18,6 +18,7 @@ mod restore;
 mod restore_hardening;
 mod restore_recovery;
 mod shortcut;
+mod signing;
 mod support;
 mod sync_bookmark;
 mod sync_closed_segments;
