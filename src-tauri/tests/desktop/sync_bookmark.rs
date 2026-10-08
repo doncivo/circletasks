@@ -631,3 +631,27 @@ fn y_ios_01_package_swift_platform_exists_in_its_tools_version() {
         assert!(!package.contains(unknown), "{unknown} n'existe pas en swift-tools-version 5.3");
     }
 }
+
+/// Revue (audit, bas) : durcissements du Swift relus statiquement (aucune compilation locale).
+#[test]
+fn y_ios_01_swift_hardening_from_the_security_audit() {
+    let code = swift_code();
+    let open_directory = &code[code.find("private func openDirectory(").unwrap()..];
+    let open_directory = &open_directory[..open_directory.find("\n  }\n").unwrap()];
+    assert!(open_directory.contains("open(rootPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)"), "racine ouverte sans suivre de lien");
+    assert!(open_directory.contains("fstat(fd, &rootStat)"), "racine contrôlée sur le descripteur");
+    let read_from = swift_method("readFrom");
+    assert!(read_from.contains("st.st_nlink > 1"), "fichier à plusieurs liens physiques refusé en lecture");
+    let check_chain = &code[code.find("private func checkChain(").unwrap()..];
+    let check_chain = &check_chain[..check_chain.find("
+  }
+").unwrap()];
+    assert!(check_chain.contains("openDirectory(rootPath, dir, create: false)") && check_chain.contains("AT_SYMLINK_NOFOLLOW") && check_chain.contains("st.st_nlink > 1"));
+    assert!(read_from.find("self.checkChain(").unwrap() < read_from.find("self.availability(").unwrap(), "chaîne validée avant l'état iCloud");
+    let download = swift_method("download");
+    assert!(download.find("self.checkChain(").unwrap() < download.find("resourceValues(").unwrap(), "chaîne validée avant l'état iCloud");
+    assert!(download.find("self.checkChain(").unwrap() < download.find("startDownloadingUbiquitousItem").unwrap(), "chaîne validée avant le téléchargement");
+    let rename = swift_method("rename");
+    assert!(rename.contains("coordinatedMove("), "source et destination coordonnées");
+    assert!(code.contains("options: .forMoving") && code.contains("options: .forReplacing"));
+}

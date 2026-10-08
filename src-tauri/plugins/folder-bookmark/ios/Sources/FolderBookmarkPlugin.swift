@@ -303,9 +303,15 @@ class FolderBookmarkPlugin: Plugin {
   /// Ouvre la racine, puis chaque dossier de `parts` par rapport au précédent, sans suivre de lien ; `create` : dossiers créés au
   /// besoin. Rend le descripteur du dernier dossier (à fermer), ou nil s'il manque un dossier.
   private func openDirectory(_ rootPath: String, _ parts: [String], create: Bool) throws -> Int32? {
-    var fd = open(rootPath, O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+    // Revue (audit) : la racine elle-même n'est jamais un lien suivi ; son type est contrôlé sur le descripteur ouvert.
+    var fd = open(rootPath, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
     if fd < 0 {
       throw Failure(code: .folderUnreachable)
+    }
+    var rootStat = stat()
+    if fstat(fd, &rootStat) != 0 || !isDirectory(rootStat.st_mode) {
+      close(fd)
+      throw Failure(code: .unsafeFolder)
     }
     for part in parts {
       do {
@@ -365,6 +371,20 @@ class FolderBookmarkPlugin: Plugin {
     return nil
   }
 
+  /// Revue (audit) : valide la chaîne de dossiers (`openDirectory`, sans lien) et le dernier composant (jamais un lien ni un fichier à
+  /// plusieurs liens physiques) avant un appel par URL, qui suivrait les liens. Faux si un dossier de la chaîne manque.
+  private func checkChain(_ rootPath: String, _ dir: [String], _ name: String) throws -> Bool {
+    guard let dirFd = try openDirectory(rootPath, dir, create: false) else {
+      return false
+    }
+    defer { close(dirFd) }
+    var st = stat()
+    if fstatat(dirFd, name, &st, AT_SYMLINK_NOFOLLOW) == 0 && (!isRegular(st.st_mode) || st.st_nlink > 1) {
+      throw Failure(code: .unsafeFolder)
+    }
+    return true
+  }
+
   /// Disponibilité locale d'un élément : `cloud` si iCloud ne l'a pas encore téléchargé, `error` si l'état est illisible.
   private func availability(_ url: URL) -> String {
     var item = url
@@ -411,6 +431,29 @@ class FolderBookmarkPlugin: Plugin {
     let options: NSFileCoordinator.WritingOptions = replacing ? [.forReplacing] : []
     coordinator.coordinate(writingItemAt: url, options: options, error: &coordinationError) { _ in
       outcome = Result<T, Error>(catching: { try body() })
+    }
+    if coordinationError != nil {
+      throw Failure(code: .io)
+    }
+    guard let result = outcome else {
+      throw Failure(code: .io)
+    }
+    return try result.get()
+  }
+
+  /// Renommage coordonné (revue, audit) : source `forMoving`, destination `forReplacing`, le coordinateur prévenu du déplacement.
+  private func coordinatedMove<T>(_ from: URL, _ to: URL, _ body: @escaping () throws -> T) throws -> T {
+    let coordinator = NSFileCoordinator(filePresenter: nil)
+    var coordinationError: NSError?
+    var outcome: Result<T, Error>?
+    coordinator.coordinate(
+      writingItemAt: from, options: .forMoving, writingItemAt: to, options: .forReplacing, error: &coordinationError
+    ) { source, destination in
+      coordinator.item(at: source, willMoveTo: destination)
+      outcome = Result<T, Error>(catching: { try body() })
+      if case .success = outcome {
+        coordinator.item(at: source, didMoveTo: destination)
+      }
     }
     if coordinationError != nil {
       throw Failure(code: .io)
@@ -706,6 +749,9 @@ class FolderBookmarkPlugin: Plugin {
       }
       let (dir, name) = try self.split(input.path)
       let url = self.itemURL(root, input.path)
+      if try !self.checkChain(rootPath, dir, name) {
+        return ["missing": true]
+      }
       if self.availability(url) == "cloud" {
         throw Failure(code: .cloudPending)
       }
@@ -728,7 +774,8 @@ class FolderBookmarkPlugin: Plugin {
         }
         defer { close(fd) }
         var st = stat()
-        if fstat(fd, &st) != 0 || !self.isRegular(st.st_mode) {
+        // Revue (audit) : un fichier à plusieurs liens physiques est refusé en lecture comme en écriture.
+        if fstat(fd, &st) != 0 || !self.isRegular(st.st_mode) || st.st_nlink > 1 {
           throw Failure(code: .unsafeFolder)
         }
         let size = Int64(st.st_size)
@@ -773,9 +820,11 @@ class FolderBookmarkPlugin: Plugin {
       return
     }
     onFiles(invoke) {
-      let (root, _) = try self.sessionRoot()
-      for part in input.path {
-        try self.checkComponent(part)
+      let (root, rootPath) = try self.sessionRoot()
+      let (dir, name) = try self.split(input.path)
+      // Revue (audit) : chaîne de dossiers et fichier validés avant tout appel par URL ; dossier absent : rien à télécharger.
+      if try !self.checkChain(rootPath, dir, name) {
+        return [:]
       }
       let url = self.itemURL(root, input.path)
       var item = url
@@ -926,8 +975,9 @@ class FolderBookmarkPlugin: Plugin {
       for part in input.dir {
         try self.checkComponent(part)
       }
-      let url = self.itemURL(root, input.dir + [input.to])
-      return try self.coordinatedWrite(url, replacing: true) { () throws -> JsonObject in
+      let source = self.itemURL(root, input.dir + [input.from])
+      let destination = self.itemURL(root, input.dir + [input.to])
+      return try self.coordinatedMove(source, destination) { () throws -> JsonObject in
         guard let dirFd = try self.openDirectory(rootPath, input.dir, create: false) else {
           throw Failure(code: .io)
         }
