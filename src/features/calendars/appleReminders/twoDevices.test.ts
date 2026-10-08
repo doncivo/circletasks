@@ -29,7 +29,11 @@ let pcContainer: AppContainer;
 let phoneContainer: AppContainer;
 let reminders: FakeReminders;
 
-const pass = (kind: 'full' | 'push' = 'full') => runRemindersPass(phoneContainer, kind, { send: createSender(phoneContainer) });
+/** Passage de l'iPhone 6 s après l'écriture (coordinateur) : la fenêtre d'annulation de 5 s est écoulée. */
+const pass = (kind: 'full' | 'push' = 'full') => {
+  iphone.clock.advance(5_000);
+  return runRemindersPass(phoneContainer, kind, { send: createSender(phoneContainer) });
+};
 
 /** Un tour de synchro complet dans les deux sens (l'iPhone publie, le PC lit, le PC publie, l'iPhone lit). */
 async function sync(): Promise<void> {

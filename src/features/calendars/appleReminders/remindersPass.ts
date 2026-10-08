@@ -70,6 +70,8 @@ export interface PassReport {
   readonly sent: number;
   /** Écritures dues vers Rappels non faites. */
   readonly pending: number;
+  /** Temps restant (ms) avant la fin de la fenêtre d'annulation de la plus récente écriture retenue : le coordinateur reprogramme un passage `push`. */
+  readonly holdMs?: number;
 }
 
 export const EMPTY_REPORT: PassReport = { status: 'done', created: 0, updated: 0, deleted: 0, detached: 0, sent: 0, pending: 0 };
@@ -81,6 +83,8 @@ export interface DueWrite {
   readonly item: ReminderItem;
   readonly toApple: MergeResult['toApple'];
   readonly next: AppleValues;
+  /** Instant de la dernière écriture locale de la tâche (avant ce passage) : fenêtre d'annulation de 5 s. */
+  readonly localAt: IsoDateTime;
 }
 
 /** Ce que le passage donne à l'écrivain : écritures de champs dues, réglages, listes d'Apple, tâches et liens lus. */
@@ -108,6 +112,8 @@ export interface SendResult {
   readonly notices: readonly { readonly kind: AppleNoticeKind; readonly count: number }[];
   /** La création dans Rappels a été désactivée pour ces espaces (liste de destination disparue). */
   readonly createOff: boolean;
+  /** Temps restant (ms) de la fenêtre d'annulation la plus longue parmi les écritures retenues ; 0 sans retenue. */
+  readonly holdMs: number;
 }
 
 export type SendDue = (context: SendContext) => Promise<SendResult>;
@@ -311,7 +317,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
       if (change.changedTask) report.updated += 1;
     }
     if (item.recurring && merged.conflicts.length > 0) notice('recurring-refused');
-    if (!item.recurring && Object.keys(merged.toApple).length > 0) dueWrites.push({ task: change.applied ?? task, link: change.link, item, toApple: merged.toApple, next: merged.next });
+    if (!item.recurring && Object.keys(merged.toApple).length > 0) dueWrites.push({ task: change.applied ?? task, link: change.link, item, toApple: merged.toApple, next: merged.next, localAt: task.updatedAt });
   }
 
   const held: { listId: string; count: number; at: IsoDateTime }[] = [];
@@ -357,11 +363,13 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
 
   // Écritures dues vers Rappels (K-06) : confiées à `send` ; sans lui, elles restent dues et comptées.
   let sendCode: string | null = null;
+  let holdMs = 0;
   if (options.send) {
     const sent = await options.send({ kind, due: dueWrites, lists, create, platformLists, tasks, links, nowMs });
     report.sent += sent.sent;
     report.pending += sent.pending;
     sendCode = sent.code;
+    holdMs = sent.holdMs;
     sent.touched.forEach((id) => touched.add(id));
     for (const entry of sent.notices) notice(entry.kind, entry.count);
     if (sent.createOff) notice('creation-off');
@@ -389,7 +397,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   // Une écriture au plus tous les 15 minutes (K-05 critère 14), sauf quand le passage a envoyé des écritures vers Rappels (K-07 D2) ; un passage
   // `push` qui a envoyé quelque chose compte aussi : le PC doit voir que ses modifications sont parties.
   if ((full && !partial) || report.sent > 0) await state.setLastPassAt(now, nowMs, report.sent > 0);
-  return { ...EMPTY_REPORT, ...report, status: 'done' };
+  return { ...EMPTY_REPORT, ...report, ...(holdMs > 0 ? { holdMs } : {}), status: 'done' };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

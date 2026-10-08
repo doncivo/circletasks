@@ -38,12 +38,32 @@ const systemTimers: RunnerTimers = { setTimeout: (handler, ms) => setTimeout(han
 /** Passage borné au masquage (iPhone) : au-delà de cette durée il n'entame plus de paquet (rien n'est perdu, la reprise est à l'ouverture suivante). */
 export const HIDE_PASS_BUDGET_MS = 8_000;
 
+/** Marge ajoutée au temps restant d'une fenêtre d'annulation avant le passage reprogrammé. */
+export const HOLD_MARGIN_MS = 100;
+
 export function createRemindersRunner(pass: (kind: PassKind, deadlineAt?: number) => Promise<PassReport>, timers: RunnerTimers = systemTimers, nowMs: () => number = () => Date.now()): RemindersRunner {
   let running = false;
   let waiting: Waiting | null = null;
   let pushTimer: unknown = null;
   let pushPending: Promise<PassReport> | null = null;
   let pushResolve: ((report: PassReport) => void) | null = null;
+
+  /** (Re)programme le passage `push` : le minuteur repart de zéro, le délai court depuis la DERNIÈRE écriture. */
+  const armPush = (ms: number): void => {
+    if (pushTimer !== null) timers.clearTimeout(pushTimer);
+    if (pushPending === null) {
+      pushPending = new Promise<PassReport>((resolve) => {
+        pushResolve = resolve;
+      });
+    }
+    pushTimer = timers.setTimeout(() => {
+      const resolve = pushResolve;
+      pushTimer = null;
+      pushPending = null;
+      pushResolve = null;
+      void schedule('push').then((report) => resolve?.(report));
+    }, ms);
+  };
 
   const execute = async (kind: PassKind, deadlineAt?: number): Promise<PassReport> => {
     running = true;
@@ -54,6 +74,8 @@ export function createRemindersRunner(pass: (kind: PassKind, deadlineAt?: number
       // `pass` ne rejette pas (il enregistre ses échecs) ; garde-fou : le passage suivant repart.
       report = { ...EMPTY_REPORT, status: 'failed', code: 'pass-failed' };
     }
+    // Écritures retenues par la fenêtre d'annulation (T-13) : un passage `push` est reprogrammé quand elle sera écoulée.
+    if (report.holdMs !== undefined && report.holdMs > 0) armPush(report.holdMs + HOLD_MARGIN_MS);
     const next = waiting;
     waiting = null;
     if (next === null) {
@@ -83,20 +105,9 @@ export function createRemindersRunner(pass: (kind: PassKind, deadlineAt?: number
   return {
     request: (trigger) => {
       if (trigger === 'edit') {
-        // Écriture locale : un seul passage `push` programmé, quelle que soit la rafale.
-        if (pushPending === null) {
-          pushPending = new Promise<PassReport>((resolve) => {
-            pushResolve = resolve;
-          });
-          pushTimer = timers.setTimeout(() => {
-            const resolve = pushResolve;
-            pushTimer = null;
-            pushPending = null;
-            pushResolve = null;
-            void schedule('push').then((report) => resolve?.(report));
-          }, PUSH_DELAY_MS);
-        }
-        return pushPending;
+        // Écriture locale : un seul passage `push` programmé ; le minuteur repart à chaque écriture (délai depuis la DERNIÈRE).
+        armPush(PUSH_DELAY_MS);
+        return pushPending as Promise<PassReport>;
       }
       return schedule('full', trigger === 'hide' ? nowMs() + HIDE_PASS_BUDGET_MS : undefined);
     },

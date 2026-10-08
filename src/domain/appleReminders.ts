@@ -520,3 +520,13 @@ export interface AssociationDevice {
 export function hasAssociatedIphone(devices: readonly AssociationDevice[]): boolean {
   return devices.some((device) => device.platform === 'ios' && !device.self && device.seen !== false && device.status !== 'forgotten' && device.status !== 'expired');
 }
+
+/** Fenêtre d'annulation (T-13, 5 s) : aucune écriture vers Rappels pour une tâche dont la dernière écriture locale est plus récente. */
+export const UNDO_WINDOW_MS = 5_000;
+
+/** Temps restant (ms) de la fenêtre d'annulation après une écriture locale à `at` ; 0 : la fenêtre est écoulée (ou aucune écriture connue). */
+export function holdRemainingMs(at: IsoDateTime | null, nowMs: number): number {
+  if (at === null) return 0;
+  const age = nowMs - Date.parse(at);
+  return Number.isFinite(age) && age >= 0 && age < UNDO_WINDOW_MS ? UNDO_WINDOW_MS - age : 0;
+}

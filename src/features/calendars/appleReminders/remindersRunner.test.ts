@@ -9,7 +9,7 @@ interface Timer {
   cleared: boolean;
 }
 
-function setup(options: { readonly failFirst?: boolean } = {}) {
+function setup(options: { readonly failFirst?: boolean; readonly holdMsFirst?: number } = {}) {
   const started: { kind: PassKind; deadlineAt: number | undefined }[] = [];
   const gates: (() => void)[] = [];
   let concurrent = 0;
@@ -32,7 +32,7 @@ function setup(options: { readonly failFirst?: boolean } = {}) {
         gates.push(() => {
           concurrent -= 1;
           if (options.failFirst === true && started.length === 1) reject(new Error('boom'));
-          else resolve({ ...EMPTY_REPORT, created: started.length });
+          else resolve({ ...EMPTY_REPORT, created: started.length, ...(options.holdMsFirst !== undefined && started.length === 1 ? { holdMs: options.holdMsFirst } : {}) });
         });
       }),
   );
@@ -79,16 +79,43 @@ describe('coordinateur des passages (K-05 critère 11)', () => {
     const a = runner.request('edit');
     const b = runner.request('edit');
     expect(started).toEqual([]);
-    expect(timers).toHaveLength(1);
-    expect(timers[0]?.ms).toBe(PUSH_DELAY_MS);
+    // Le minuteur repart à chaque écriture (délai depuis la DERNIÈRE) : un seul reste actif.
+    expect(timers.filter((timer) => !timer.cleared)).toHaveLength(1);
+    expect(timers[timers.length - 1]?.ms).toBe(PUSH_DELAY_MS);
     expect(PUSH_DELAY_MS).toBeGreaterThan(5_000);
-    timers[0]?.handler();
+    timers[timers.length - 1]?.handler();
     expect(started.map((entry) => entry.kind)).toEqual(['push']);
     await release();
     expect(await Promise.all([a, b])).toHaveLength(2);
     // Une nouvelle écriture reprogramme.
+    const before = timers.length;
     void runner.request('edit');
-    expect(timers).toHaveLength(2);
+    expect(timers).toHaveLength(before + 1);
+  });
+
+  it('rafale d’écritures : chaque écriture annule le minuteur précédent, le passage push part 6 s après la DERNIÈRE seulement', async () => {
+    const { runner, started, release, timers } = setup();
+    const all = [runner.request('edit'), runner.request('edit'), runner.request('edit')];
+    expect(timers).toHaveLength(3);
+    expect(timers.map((timer) => timer.cleared)).toEqual([true, true, false]);
+    expect(started).toEqual([]);
+    timers[2]?.handler();
+    expect(started.map((entry) => entry.kind)).toEqual(['push']);
+    await release();
+    expect(await Promise.all(all)).toHaveLength(3);
+  });
+
+  it('un passage qui retient des écritures dans la fenêtre d’annulation reprogramme un push après le temps restant', async () => {
+    const { runner, started, release, timers } = setup({ holdMsFirst: 3_000 });
+    const done = runner.request('open');
+    await release();
+    await done;
+    expect(timers).toHaveLength(1);
+    expect(timers[0]?.ms).toBeGreaterThanOrEqual(3_000);
+    expect(timers[0]?.ms).toBeLessThan(PUSH_DELAY_MS);
+    timers[0]?.handler();
+    expect(started.map((entry) => entry.kind)).toEqual(['full', 'push']);
+    await release();
   });
 
   it('un passage complet en attente absorbe un push ; un push en attente devient complet quand un complet arrive', async () => {

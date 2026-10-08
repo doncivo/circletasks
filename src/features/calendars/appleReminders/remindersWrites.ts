@@ -6,13 +6,14 @@ import {
   valuesOfTask,
   type AppleNoticeKind,
   type AppleValues,
+  holdRemainingMs,
   type MergeResult,
   type ReminderItem,
   type ReminderList,
 } from '../../../domain/appleReminders';
 import { nowIso } from '../../../domain/clock';
 import type { Task } from '../../../domain/model';
-import type { TaskId } from '../../../domain/types';
+import type { IsoDateTime, TaskId } from '../../../domain/types';
 import type { AppleReminderLink } from '../../../db/repositories';
 import { t } from '../../../i18n';
 import { logFailure } from '../../../platform/desktop/log';
@@ -38,6 +39,8 @@ interface Tally {
   readonly touched: Set<TaskId>;
   readonly notices: Map<AppleNoticeKind, number>;
   createOff: boolean;
+  /** Fenêtre d'annulation (T-13) : plus long temps restant parmi les écritures retenues. */
+  holdMs: number;
   /** Échec qui vaudra pour tous les envois suivants (accès, magasin) : on n'insiste pas. */
   stop: boolean;
 }
@@ -49,13 +52,22 @@ const dueOf = (values: Pick<AppleValues, 'date' | 'time'>): UpsertInput['due'] =
 
 export function createSender(container: AppContainer): SendDue {
   return async (context) => {
-    const tally: Tally = { sent: 0, pending: 0, code: null, touched: new Set(), notices: new Map(), createOff: false, stop: false };
+    const tally: Tally = { sent: 0, pending: 0, code: null, touched: new Set(), notices: new Map(), createOff: false, holdMs: 0, stop: false };
     await sendDueFields(container, context, tally);
     if (!tally.stop) await sendCreations(container, context, tally);
     if (!tally.stop) await sendDeletions(container, context, tally);
-    const result: SendResult = { sent: tally.sent, pending: tally.pending, code: tally.code, touched: [...tally.touched], notices: [...tally.notices].map(([kind, count]) => ({ kind, count })), createOff: tally.createOff };
+    const result: SendResult = { sent: tally.sent, pending: tally.pending, code: tally.code, touched: [...tally.touched], notices: [...tally.notices].map(([kind, count]) => ({ kind, count })), createOff: tally.createOff, holdMs: tally.holdMs };
     return result;
   };
+}
+
+/** Écriture retenue : la dernière écriture locale date de moins de 5 s (« Annuler » reste possible) ; elle reste due et un nouveau passage est demandé. */
+function held(container: AppContainer, tally: Tally, at: IsoDateTime | null): boolean {
+  const remaining = holdRemainingMs(at, container.clock.nowMs());
+  if (remaining === 0) return false;
+  tally.pending += 1;
+  tally.holdMs = Math.max(tally.holdMs, remaining);
+  return true;
 }
 
 const note = (tally: Tally, kind: AppleNoticeKind, count = 1): void => void tally.notices.set(kind, (tally.notices.get(kind) ?? 0) + count);
@@ -83,6 +95,7 @@ async function sendDueFields(container: AppContainer, context: SendContext, tall
       tally.pending += 1;
       continue;
     }
+    if (held(container, tally, write.localAt)) continue;
     try {
       const item = onlyStatus(write.toApple)
         ? await platform.setCompleted({ id: write.item.id, completed: write.next.completed, completedAt: write.next.doneAt })
@@ -173,6 +186,7 @@ async function sendCreations(container: AppContainer, context: SendContext, tall
       tally.touched.add(task.id);
       continue;
     }
+    if (held(container, tally, task.updatedAt)) continue;
     const now = nowIso(container.clock);
     try {
       const adopted = await adoptInterrupted(container, task, linkOf.get(task.id) ?? null, destination, tally);
@@ -250,6 +264,7 @@ async function sendDeletions(container: AppContainer, context: SendContext, tall
       tally.pending += 1;
       continue;
     }
+    if (task !== null && held(container, tally, task.deletedAt)) continue;
     if (link.reminderId === null || task?.appleRecurring === true) {
       // Création interrompue puis tâche supprimée : rien n'existe. Rappel récurrent : jamais supprimé d'ici.
       await finishDeletion(container, task, link);
