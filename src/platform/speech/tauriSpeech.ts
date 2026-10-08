@@ -1,7 +1,7 @@
 import { SpeechError, type ListenOptions, type SpeechPermissions, type SpeechPermissionState, type SpeechRecognizer, type SpeechStopReason } from './types';
 
 /**
- * Dictée sur l'iPhone par les commandes Rust `speech_*` et `app_settings_open` (CAP-IOS-01, ADR 0015 §2.3) : **seul** fichier qui les nomme.
+ * Dictée sur l'iPhone par les commandes Rust `speech_*` (CAP-IOS-01, ADR 0015 §2.3) : **seul** fichier qui les nomme (les Réglages iOS ont leur module, `platform/systemSettings`).
  * Le plugin Swift reconnaît le français SUR L'APPAREIL (aucun audio n'est envoyé) et n'est appelé que par Rust. Rien n'est gardé ici : ni
  * texte reconnu, ni état d'autorisation. Aucune demande d'autorisation n'est faite ailleurs que dans `requestPermissions`, appelée par
  * « Continuer » (I-05) ; `isAvailable` et `permissions` LISENT seulement (aucune fenêtre d'iOS).
@@ -12,7 +12,6 @@ export const SPEECH_STATUS_COMMAND = 'speech_status';
 export const SPEECH_REQUEST_COMMAND = 'speech_request_permissions';
 export const SPEECH_LISTEN_COMMAND = 'speech_listen';
 export const SPEECH_STOP_COMMAND = 'speech_stop';
-export const SETTINGS_OPEN_COMMAND = 'app_settings_open';
 
 export type SpeechInvoker = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -40,7 +39,7 @@ function toState(value: unknown): SpeechPermissionState {
 }
 
 function toStopReason(value: unknown): SpeechStopReason {
-  return value === 'user' || value === 'time-limit' || value === 'background' ? value : 'interrupted';
+  return value === 'user' || value === 'time-limit' || value === 'background' || value === 'ended' ? value : 'interrupted';
 }
 
 /** Code `{ code, message }` d'une commande Rust ; jamais le message (il ne porte qu'un code, mais rien n'est recopié). */
@@ -90,6 +89,19 @@ export function createTauriSpeech(options: TauriSpeechOptions = {}): SpeechRecog
   }
 
   return {
+    availability: async () => {
+      try {
+        const current = await status();
+        if (current.available === true) return { available: true };
+        const code = current.reason === 'plugin-unavailable' ? 'speech-plugin-unavailable' : 'speech-recognizer-unavailable';
+        log(code);
+        return { available: false, code };
+      } catch {
+        log('speech-plugin-unavailable');
+        return { available: false, code: 'speech-plugin-unavailable' };
+      }
+    },
+
     isAvailable: async () => {
       try {
         const current = await status();
@@ -127,16 +139,6 @@ export function createTauriSpeech(options: TauriSpeechOptions = {}): SpeechRecog
         return { microphone: toState(result.microphone), speechRecognition: toState(result.speechRecognition) };
       } catch (error) {
         throw new SpeechError('unavailable', error, { code: codeOf(error) || 'speech-unavailable' });
-      }
-    },
-
-    openSettings: async () => {
-      try {
-        const result = (await invoke(SETTINGS_OPEN_COMMAND)) as { opened?: unknown };
-        if (result.opened !== true) throw new SpeechError('failed', undefined, { code: 'settings-open-failed' });
-      } catch (error) {
-        if (error instanceof SpeechError) throw error;
-        throw new SpeechError('failed', error, { code: 'settings-open-failed' });
       }
     },
 

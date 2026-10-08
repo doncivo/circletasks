@@ -14,7 +14,7 @@ export interface SpeechPermissions {
 }
 
 /** Cause de la fin d'une écoute. */
-export type SpeechStopReason = 'user' | 'time-limit' | 'background' | 'interrupted';
+export type SpeechStopReason = 'user' | 'time-limit' | 'background' | 'interrupted' | 'ended';
 
 export interface SpeechErrorDetails {
   /** Autorisation refusée (`permission-denied` seulement). */
@@ -56,6 +56,6 @@ export interface SpeechRecognizer {
   requestPermissions?(): Promise<SpeechPermissions>;
   /** Vrai si le modèle français hors ligne est présent. */
   onDeviceReady?(): Promise<boolean>;
-  /** Ouvre la page de l'app dans Réglages iOS ; rejette `SpeechError('failed', …, { code: 'settings-open-failed' })`. */
-  openSettings?(): Promise<void>;
+  /** Disponibilité avec, si le service est indisponible, le code à dire à l'utilisateur ; absent : seul `isAvailable` existe (aucun code à dire). */
+  availability?(): Promise<{ readonly available: boolean; readonly code?: string }>;
 }

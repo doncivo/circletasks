@@ -231,9 +231,9 @@ fn cap_ios_01_11_dictation_is_on_device_only_and_nothing_is_written_or_sent() {
     let body = &code[start..];
     assert!(body.find("supportsOnDeviceRecognition").unwrap() < body.find("recognitionTask(with:").unwrap(), "le modèle hors ligne est vérifié avant toute tâche");
     assert!(body.contains("reject(invoke, .onDeviceUnavailable)"));
-    // Décision d'Ali : aucun chemin ne peut envoyer l'audio à Apple. Ordre dans `startListening` : reconnaisseur disponible, modèle hors ligne
+    // Décision d'Ali : aucun chemin ne peut envoyer l'audio à Apple. Ordre dans `startListening` : reconnaisseur français non nul, modèle hors ligne
     // présent, PUIS création de la requête, affectation de `requiresOnDeviceRecognition = true`, PUIS seulement la tâche.
-    let order = ["recognizer.isAvailable", "supportsOnDeviceRecognition", "Listening(invoke:", "requiresOnDeviceRecognition = true", "recognitionTask(with:"];
+    let order = ["frenchRecognizer()", "supportsOnDeviceRecognition", "Listening(invoke:", "requiresOnDeviceRecognition = true", "recognitionTask(with:"];
     let positions: Vec<usize> = order.iter().map(|needle| body.find(needle).unwrap_or_else(|| panic!("{needle} absent de startListening"))).collect();
     assert!(positions.windows(2).all(|w| w[0] < w[1]), "ordre des garde-fous : {positions:?}");
     assert!(body.contains("reject(invoke, .recognizerUnavailable)"));
@@ -254,13 +254,18 @@ fn cap_ios_01_11_dictation_is_on_device_only_and_nothing_is_written_or_sent() {
     for needle in ["didEnterBackgroundNotification", "interruptionNotification", "routeChangeNotification", "mediaServicesWereResetNotification"] {
         assert!(code.contains(needle), "{needle} absent");
     }
+    // Reconnaissance sans parole : domaine ET code vérifiés ; fin typée `ended`, jamais `interrupted`.
+    assert!(code.contains("nsError.domain == noSpeechErrorDomain && nsError.code == noSpeechErrorCode"));
+    assert!(code.contains("finish(session, \"ended\", immediate: true)"));
+    // `background` n'est pas une cause de `stop` (seul l'observateur natif l'émet).
+    let stop = methods_of(&code).into_iter().find(|(name, _)| name == "stop").unwrap().1;
+    assert!(stop.contains("[\"user\", \"time-limit\"]") && !stop.contains("background"));
     assert!(!code.contains("willResignActive"), "le Centre de contrôle et les bannières n'arrêtent pas la dictée");
     for plugin in PLUGINS {
         let code = code_of(plugin.swift);
         for forbidden in [
             "AVAudioRecorder",
             "AVAudioFile",
-            "FileManager",
             "write(to:",
             "URLSession",
             "URLRequest",
@@ -277,6 +282,15 @@ fn cap_ios_01_11_dictation_is_on_device_only_and_nothing_is_written_or_sent() {
         ] {
             assert!(!code.contains(forbidden), "{} : `{forbidden}` interdit", plugin.name);
         }
+    }
+    // FileManager : interdit dans speech ; dans vision, seulement dans `cleanTemporaryUploads` (suppression des copies WKFileUpload, aucune écriture).
+    assert!(!code.contains("FileManager"), "speech : FileManager interdit");
+    let vision = code_of(VISION_SWIFT);
+    assert_eq!(vision.matches("FileManager").count(), 1, "vision : une seule utilisation de FileManager");
+    let cleanup = methods_of(&vision).into_iter().find(|(name, _)| name == "cleanTemporaryUploads").expect("méthode de nettoyage").1;
+    assert!(cleanup.contains("FileManager.default") && cleanup.contains("hasPrefix(\"WKFileUpload\")") && cleanup.contains("removeItem(atPath:"));
+    for forbidden in ["createFile", "write(", "copyItem", ".moveItem(", "createDirectory", "contentsOfFile"] {
+        assert!(!vision.contains(forbidden), "vision : {forbidden} interdit");
     }
     // Pas de mode d'arrière-plan demandé par le code.
     assert!(!code.contains("beginBackgroundTask"));

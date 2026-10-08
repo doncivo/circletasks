@@ -70,7 +70,8 @@ class SpeechPlugin: Plugin {
   private let speechQueue = DispatchQueue(label: "fr.circletasks.speech.state", qos: .userInitiated)
   /// Attente du résultat final après la fin de l'audio (s), puis la tâche est annulée.
   private let finalResultWaitSeconds: Double = 1.5
-  /// Code d'erreur de la reconnaissance pour « aucune parole détectée ».
+  /// Erreur de la reconnaissance pour « aucune parole détectée » : domaine ET code (un autre domaine avec le même code n'est pas cette erreur).
+  private let noSpeechErrorDomain = "kAFAssistantErrorDomain"
   private let noSpeechErrorCode = 1110
   private var current: Listening?
   private var observers: [NSObjectProtocol] = []
@@ -231,7 +232,8 @@ class SpeechPlugin: Plugin {
         invoke.resolve(["stopped": false])
         return
       }
-      let allowed = ["user", "time-limit", "background"]
+      // `background` ne passe jamais par `stop` : seul l'observateur natif (passage en arrière-plan) l'émet.
+      let allowed = ["user", "time-limit"]
       self.finish(session, allowed.contains(input.reason) ? input.reason : "user", immediate: false)
       invoke.resolve(["stopped": true])
     }
@@ -266,11 +268,6 @@ class SpeechPlugin: Plugin {
       return
     }
     guard let recognizer = frenchRecognizer() else {
-      reject(invoke, .recognizerUnavailable)
-      return
-    }
-    // Reconnaisseur indisponible : refus, aucune requête créée.
-    if !recognizer.isAvailable {
       reject(invoke, .recognizerUnavailable)
       return
     }
@@ -337,9 +334,9 @@ class SpeechPlugin: Plugin {
     if let result = result {
       session.text = result.bestTranscription.formattedString
       if result.isFinal {
-        // Le texte final est arrivé : fin de la dictée.
+        // Le texte final est arrivé : fin de la dictée. Sans demande d'arrêt, c'est le reconnaisseur qui a conclu (`ended`).
         if !session.finishing {
-          finish(session, "user", immediate: true)
+          finish(session, "ended", immediate: true)
         } else {
           complete(session)
         }
@@ -354,7 +351,13 @@ class SpeechPlugin: Plugin {
       complete(session)
       return
     }
-    if !session.text.isEmpty || (failure as NSError).code == noSpeechErrorCode {
+    let nsError = failure as NSError
+    if nsError.domain == noSpeechErrorDomain && nsError.code == noSpeechErrorCode {
+      // Aucune parole détectée : fin normale, texte vide (l'écran le dit).
+      finish(session, "ended", immediate: true)
+      return
+    }
+    if !session.text.isEmpty {
       finish(session, "interrupted", immediate: true)
       return
     }

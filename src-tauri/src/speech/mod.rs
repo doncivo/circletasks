@@ -157,6 +157,7 @@ fn stopped_by(value: Option<&Value>) -> &'static str {
         Some("user") => "user",
         Some("time-limit") => "time-limit",
         Some("background") => "background",
+        Some("ended") => "ended",
         _ => "interrupted",
     }
 }
