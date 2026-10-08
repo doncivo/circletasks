@@ -47,6 +47,7 @@ private struct FetchArgs: Decodable {
   let listIds: [String]
   let scopeListIds: [String]
   let limitPerList: Int
+  let includeCompleted: Bool?
   let ids: [IdRef]
 }
 
@@ -358,7 +359,10 @@ class RemindersPlugin: Plugin {
       let group = DispatchGroup()
       for (listId, calendar) in wanted {
         group.enter()
-        let predicate = store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: [calendar])
+        // Non terminés seulement, sauf reprise d'une création interrompue (le rappel créé a pu l'être déjà terminé).
+        let predicate = input.includeCompleted == true
+          ? store.predicateForReminders(in: [calendar])
+          : store.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: [calendar])
         _ = store.fetchReminders(matching: predicate) { reminders in
           lock.lock()
           if let reminders = reminders {

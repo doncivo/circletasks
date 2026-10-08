@@ -45,6 +45,8 @@ interface Tally {
   held: SendResult['held'];
   /** Fenêtre d'annulation (T-13) : plus long temps restant parmi les écritures retenues. */
   holdMs: number;
+  /** Échéance du passage (masquage de l'iPhone) ; absente : aucune. */
+  deadlineAt?: number;
   /** Échec qui vaudra pour tous les envois suivants (accès, magasin) : on n'insiste pas. */
   stop: boolean;
 }
@@ -56,13 +58,20 @@ const dueOf = (values: Pick<AppleValues, 'date' | 'time'>): UpsertInput['due'] =
 
 export function createSender(container: AppContainer): SendDue {
   return async (context) => {
-    const tally: Tally = { sent: 0, pending: 0, code: null, touched: new Set(), notices: new Map(), createOff: false, held: null, holdMs: 0, stop: false };
+    const tally: Tally = { sent: 0, pending: 0, code: null, touched: new Set(), notices: new Map(), createOff: false, held: null, holdMs: 0, stop: false, ...(context.deadlineAt === undefined ? {} : { deadlineAt: context.deadlineAt }) };
     await sendDueFields(container, context, tally);
     if (!tally.stop) await sendCreations(container, context, tally);
     if (!tally.stop) await sendDeletions(container, context, tally);
     const result: SendResult = { sent: tally.sent, pending: tally.pending, code: tally.code, touched: [...tally.touched], notices: [...tally.notices].map(([kind, count]) => ({ kind, count })), createOff: tally.createOff, holdMs: tally.holdMs, held: tally.held };
     return result;
   };
+}
+
+/** Passage borné (masquage de l'iPhone) : plus aucune écriture n'est entamée après l'échéance ; elle reste due et comptée, la reprise est à l'ouverture suivante. */
+function late(container: AppContainer, tally: Tally): boolean {
+  if (tally.deadlineAt === undefined || container.clock.nowMs() <= tally.deadlineAt) return false;
+  tally.pending += 1;
+  return true;
 }
 
 /** Écriture retenue : la dernière écriture locale date de moins de 5 s (« Annuler » reste possible) ; elle reste due et un nouveau passage est demandé. */
@@ -99,7 +108,7 @@ async function sendDueFields(container: AppContainer, context: SendContext, tall
       tally.pending += 1;
       continue;
     }
-    if (held(container, tally, write.localAt)) continue;
+    if (late(container, tally) || held(container, tally, write.localAt)) continue;
     try {
       const item = onlyStatus(write.toApple)
         ? await platform.setCompleted({ id: write.item.id, completed: write.next.completed, completedAt: write.next.doneAt })
@@ -190,7 +199,7 @@ async function sendCreations(container: AppContainer, context: SendContext, tall
       tally.touched.add(task.id);
       continue;
     }
-    if (held(container, tally, task.updatedAt)) continue;
+    if (late(container, tally) || held(container, tally, task.updatedAt)) continue;
     const now = nowIso(container.clock);
     try {
       const adopted = await adoptInterrupted(container, task, linkOf.get(task.id) ?? null, destination, tally);
@@ -236,14 +245,16 @@ async function adoptInterrupted(container: AppContainer, task: Task, link: Apple
   if (link === null || link.state !== 'creating' || link.reminderId !== null || link.startedAt === null) return null;
   const started = Date.parse(link.startedAt);
   const values = valuesOfTask(task);
-  const read = await container.reminders.fetch({ listIds: [listId], limitPerList: 500, ids: [] });
-  const candidates = (read.lists.find((entry) => entry.listId === listId)?.items ?? [])
-    .filter((item) => item.title.trim() === task.title.trim() && (item.due?.date ?? null) === values.date && (item.due?.time ?? null) === values.time && item.createdAt !== null && Date.parse(item.createdAt) >= started)
-    .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id));
+  const read = await container.reminders.fetch({ listIds: [listId], limitPerList: 500, includeCompleted: true, ids: [] });
+  // Créés après le début de la création, de même échéance, hors rappels déjà adoptés (terminés compris). Le titre a pu changer entre-temps (dans Rappels ou ici) :
+  // un titre identique est préféré ; sinon un seul candidat est adopté, jamais un choix au hasard parmi plusieurs.
+  const created = (read.lists.find((entry) => entry.listId === listId)?.items ?? []).filter((item) => (item.due?.date ?? null) === values.date && (item.due?.time ?? null) === values.time && item.createdAt !== null && Date.parse(item.createdAt) >= started);
   // Un rappel déjà adopté par une autre tâche n'est pas un candidat.
   const taken = new Set((await container.data.repos.appleLinks.listAll()).map((entry) => entry.reminderId));
-  const free = candidates.filter((item) => !taken.has(item.id));
-  const [first, ...others] = free;
+  const free = created.filter((item) => !taken.has(item.id));
+  const exact = free.filter((item) => item.title.trim() === task.title.trim());
+  const pool = (exact.length > 0 ? exact : free.length === 1 ? free : []).sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '') || a.id.localeCompare(b.id));
+  const [first, ...others] = pool;
   if (first === undefined) return null;
   if (others.length > 0) note(tally, 'duplicate-created', others.length);
   return first;
@@ -306,6 +317,7 @@ async function deleteOne(container: AppContainer, { link, task }: DeletionCandid
     tally.pending += 1;
     return;
   }
+  if (late(container, tally)) return;
   if (task !== null && held(container, tally, task.deletedAt)) return;
   if (link.reminderId === null || task?.appleRecurring === true) {
     // Création interrompue puis tâche supprimée : rien n'existe. Rappel récurrent : jamais supprimé d'ici.

@@ -38,6 +38,7 @@
         "listIds",
         "scopeListIds",
         "limitPerList",
+        "includeCompleted",
         "ids"
       ],
       "output": [

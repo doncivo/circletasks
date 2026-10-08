@@ -110,7 +110,7 @@ export function createTauriReminders(
       return (value['lists'] as unknown[]).map(parseList);
     },
     fetch: async (input) =>
-      parseFetch(await run('fetch', { listIds: input.listIds, scopeListIds: input.scopeListIds ?? input.listIds, limitPerList: input.limitPerList, ids: input.ids.map((ref) => ({ id: ref.id, externalRef: ref.externalRef })) })),
+      parseFetch(await run('fetch', { listIds: input.listIds, scopeListIds: input.scopeListIds ?? input.listIds, includeCompleted: input.includeCompleted === true, limitPerList: input.limitPerList, ids: input.ids.map((ref) => ({ id: ref.id, externalRef: ref.externalRef })) })),
     upsert: async (input) =>
       parseWritten(await run('upsert', { id: input.id, listId: input.listId, title: input.title, due: input.due === null ? null : { date: input.due.date, time: input.due.time }, completed: input.completed, completedAt: input.completedAt })),
     setCompleted: async (input) => parseWritten(await run('set_completed', { id: input.id, completed: input.completed, completedAt: input.completedAt })),

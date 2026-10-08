@@ -113,9 +113,9 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
     if (access !== 'full') throw new RemindersError('access-denied');
   };
   const sortKey = (item: ReminderItem): string => (item.due ? `0|${item.due.date}|${item.due.time ?? '00:00'}` : '1|');
-  const ordered = (listId: string): ReminderItem[] =>
+  const ordered = (listId: string, includeCompleted = false): ReminderItem[] =>
     [...items.values()]
-      .filter((item) => item.listId === listId && !item.completed)
+      .filter((item) => item.listId === listId && (includeCompleted || !item.completed))
       .sort((a, b) => {
         const byDue = sortKey(a).localeCompare(sortKey(b));
         if (byDue !== 0) return byDue;
@@ -175,7 +175,7 @@ export function createFakeReminders(options: FakeRemindersOptions = {}): FakeRem
             missingLists.push(listId);
             continue;
           }
-          const all = ordered(listId);
+          const all = ordered(listId, input.includeCompleted === true);
           result.push({ listId, total: all.length, items: all.slice(0, Math.min(input.limitPerList, MAX_REMINDERS_PER_LIST * 10)) });
         }
         const byId: ReminderItem[] = [];

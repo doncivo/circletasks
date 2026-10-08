@@ -68,7 +68,7 @@ describe('adaptateur Tauri : réponses analysées strictement (K-05 critère 5)'
     await platform.setCompleted({ id: 'R1', completed: true, completedAt: AT as IsoDateTime });
     await platform.delete({ id: 'R1' });
     expect(calls.map((call) => call.command)).toEqual(['plugin:reminders|status', 'plugin:reminders|request_access', 'plugin:reminders|lists', 'plugin:reminders|fetch', 'plugin:reminders|upsert', 'plugin:reminders|set_completed', 'plugin:reminders|delete']);
-    expect(calls[3]?.args).toEqual({ listIds: ['L1'], scopeListIds: ['L1'], limitPerList: 500, ids: [{ id: 'R1', externalRef: null }] });
+    expect(calls[3]?.args).toEqual({ listIds: ['L1'], scopeListIds: ['L1'], includeCompleted: false, limitPerList: 500, ids: [{ id: 'R1', externalRef: null }] });
     expect(calls[4]?.args).toEqual({ id: null, listId: 'L1', title: 'T', due: { date: '2026-10-09', time: null }, completed: false, completedAt: null });
     expect(calls[5]?.args).toEqual({ id: 'R1', completed: true, completedAt: AT });
     expect(calls[6]?.args).toEqual({ id: 'R1' });

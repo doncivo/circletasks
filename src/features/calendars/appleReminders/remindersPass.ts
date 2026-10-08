@@ -2,6 +2,7 @@ import {
   APPLE_REMINDERS_DEVICE,
   appleListsReadable,
   appleLinkState,
+  differsFromSynced,
   isFollowed,
   massDeletionBlocked,
   MAX_NOTICES,
@@ -10,7 +11,6 @@ import {
   parseAppleCreate,
   parseAppleLists,
   parseLastPassAt,
-  sameAppleValues,
   syntheticHlc,
   taskScheduleOf,
   valuesOfItem,
@@ -99,6 +99,8 @@ export interface SendContext {
   readonly tasks: readonly Task[];
   readonly links: readonly AppleReminderLink[];
   readonly nowMs: number;
+  /** Échéance du passage (ms, horloge du conteneur) : aucune écriture n'est entamée au-delà. */
+  readonly deadlineAt?: number;
 }
 
 export interface SendResult {
@@ -222,7 +224,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   const linkedTasks = tasks.filter((task) => appleLinkState(task) === 'linked');
   const localDiffers = (task: Task): boolean => {
     const link = linkByTask.get(task.id);
-    return link?.synced != null && !sameAppleValues(valuesOfTask(task), link.synced);
+    return link?.synced != null && differsFromSynced(task, link.synced);
   };
   // `push` : seulement les tâches dont une valeur locale diffère de l'empreinte ; `full` : toutes les tâches suivies.
   const followed = linkedTasks.filter((task) => (full ? isFollowed(task, nowMs, lastPassAt) : localDiffers(task)));
@@ -326,7 +328,11 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
     });
 
     const change = await applyRead(container, task, link, item, merged, fieldClocks, now);
-    if (change.skipped) continue;
+    if (change.skipped) {
+      // Tâche modifiée pendant la lecture : rien n'est écrit, la différence est reprise au passage suivant mais reste une écriture due, comptée.
+      if (localDiffers(task)) report.pending += 1;
+      continue;
+    }
     if (change.applied !== null) {
       touched.add(task.id);
       if (change.changedTask) report.updated += 1;
@@ -398,7 +404,7 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
   let holdMs = 0;
   let sendHeld: SendResult['held'] = null;
   if (options.send) {
-    const sent = await options.send({ kind, due: dueWrites, lists, create, platformLists, tasks, links, nowMs });
+    const sent = await options.send({ kind, due: dueWrites, lists, create, platformLists, tasks, links, nowMs, ...(options.deadlineAt === undefined ? {} : { deadlineAt: options.deadlineAt }) });
     report.sent += sent.sent;
     report.pending += sent.pending;
     sendCode = sent.code;
@@ -500,7 +506,7 @@ async function unlinkTask(container: AppContainer, task: Task, link: AppleRemind
     const current = await repos.tasks.getById(task.id);
     if (!current || current.hlc !== task.hlc) return 'skipped';
     // « Non modifiée localement » : l'empreinte du dernier passage est connue et égale aux valeurs de la tâche.
-    const unchanged = allowDelete && link?.synced != null && sameAppleValues(valuesOfTask(current), link.synced);
+    const unchanged = allowDelete && link?.synced != null && !differsFromSynced(current, link.synced);
     await repos.tasks.setAppleLink(task.id, { source: 'local', externalId: null, appleListId: current.appleListId ?? item?.listId ?? null, appleRecurring: false });
     if (unchanged) await repos.tasks.softDelete([task.id]);
     await repos.appleLinks.remove(task.id);
@@ -513,7 +519,7 @@ async function removeAbsent(container: AppContainer, task: Task, link: AppleRemi
   return container.data.transaction(async (repos) => {
     const current = await repos.tasks.getById(task.id);
     if (!current || current.hlc !== task.hlc) return false;
-    const localChanges = link?.synced != null && !sameAppleValues(valuesOfTask(current), link.synced);
+    const localChanges = link?.synced != null && differsFromSynced(current, link.synced);
     await repos.tasks.setAppleLink(task.id, { source: 'local', externalId: null, appleListId: current.appleListId, appleRecurring: false });
     await repos.tasks.softDelete([task.id]);
     await repos.appleLinks.remove(task.id);

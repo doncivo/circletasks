@@ -46,6 +46,8 @@ export interface FetchInput {
    */
   readonly scopeListIds?: readonly string[];
   readonly limitPerList: number;
+  /** Lecture des listes AVEC les rappels terminés (reprise d'une création interrompue) ; absent : non terminés seulement. */
+  readonly includeCompleted?: boolean;
   /** Éléments à relire par identifiant (liens suivis), terminés compris. */
   readonly ids: readonly FetchRef[];
 }

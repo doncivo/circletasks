@@ -132,6 +132,15 @@ export function sameAppleValues(a: AppleValues, b: AppleValues): boolean {
   return a.title === b.title && a.date === b.date && a.time === b.time && a.completed === b.completed;
 }
 
+/**
+ * La tâche porte-t-elle une modification LOCALE par rapport à la dernière empreinte ? La date d'une tâche reportée par T-06 (`carriedOver`) n'en est pas
+ * une (même règle que `mergeLinked`) : elle ne repart jamais vers Rappels et ne compte pas comme « modifiée localement ».
+ */
+export function differsFromSynced(task: TaskValuesSource & { readonly carriedOver: boolean }, synced: AppleValues): boolean {
+  const local = valuesOfTask(task);
+  return !sameAppleValues(task.carriedOver ? { ...local, date: synced.date } : local, synced);
+}
+
 export function encodeSynced(values: AppleValues): string {
   return JSON.stringify(values);
 }
