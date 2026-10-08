@@ -4,7 +4,7 @@ import { startNetworkStatus, useAppStatusStore } from './appStatus';
 import { AppStatusBanner } from './AppStatusBanner';
 
 const set = useAppStatusStore.getState().setStatus;
-const KINDS = ['offline', 'syncing', 'waitingIcloud', 'calendarDisconnected', 'syncTrouble', 'updateRequired'] as const;
+const KINDS = ['offline', 'syncing', 'waitingIcloud', 'calendarDisconnected', 'syncTrouble', 'updateRequired', 'signingExpiry'] as const;
 
 describe('bandeau d’état de l’app (A-09)', () => {
   afterEach(() => {
@@ -31,6 +31,21 @@ describe('bandeau d’état de l’app (A-09)', () => {
       act(() => set(kind, source));
       expect(document.querySelector('.ct-status-banner')).toHaveTextContent(text);
     }
+  });
+
+  it('I-02 (M0) : « signingExpiry » passe devant tous les autres états ; texte générique selon detail, ou message composé', () => {
+    render(<AppStatusBanner />);
+    act(() => {
+      set('calendarDisconnected', { detail: 'Perso' });
+      set('signingExpiry', { detail: 'soon' });
+    });
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('CircleTasks expire bientôt : actualisez-la dans SideStore');
+    act(() => set('signingExpiry', { detail: 'expired' }));
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('La signature est expirée : réinstallez l’app');
+    act(() => set('signingExpiry', { detail: 'soon', message: 'CircleTasks expire dans 5 h' }));
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('CircleTasks expire dans 5 h');
+    act(() => set('signingExpiry', null));
+    expect(document.querySelector('.ct-status-banner')).toHaveTextContent('Agenda Perso déconnecté');
   });
 
   it('revue point 5 : la région est toujours montée, polie et atomique', () => {

@@ -14,6 +14,7 @@ import { IosPairingScreen } from './IosPairingScreen';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
+import { withExcursion } from '../security/excursion';
 
 /** Une plateforme par conteneur : le dossier choisi en mémoire (navigateur de développement) survit à la navigation. */
 const platforms = new WeakMap<AppContainer, SyncPlatform>();
@@ -151,7 +152,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     let info: SyncFolderInfo | null = null;
     const wasConfigured = view.kind === 'bound' || (view.kind === 'error' && view.configured);
     try {
-      info = await platform.folder.choose();
+      info = await withExcursion('folder-picker', () => platform.folder.choose());
       if (!info) return;
       let needsPairing = false;
       const key = await platform.key.status();

@@ -20,6 +20,12 @@
       "usageDescriptions": [
         "NSRemindersFullAccessUsageDescription"
       ]
+    },
+    "biometric": {
+      "story": "I-03",
+      "usageDescriptions": [
+        "NSFaceIDUsageDescription"
+      ]
     }
   }
 }

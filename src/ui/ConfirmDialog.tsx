@@ -17,6 +17,11 @@ export interface ConfirmDialogProps {
   onConfirm: () => void;
   /** Bouton « Annuler » ou Échap : rien n'est fait. */
   onCancel: () => void;
+  /**
+   * Élément où la fenêtre est rendue ; `document.body` par défaut. L'écran de verrou (I-03) y passe sa propre couche : sous le verrou,
+   * tout autre enfant de `body` est masqué et la couche du verrou passe au-dessus du reste.
+   */
+  container?: HTMLElement;
 }
 
 /**
@@ -28,7 +33,7 @@ export interface ConfirmDialogProps {
  * @example
  * <ConfirmDialog title={t('tasks.deleteConfirmTitle', { title })} confirmLabel={t('tasks.deleteConfirm')} onConfirm={remove} onCancel={close} />
  */
-export function ConfirmDialog({ title, description, confirmLabel, cancelLabel, onConfirm, onCancel }: ConfirmDialogProps) {
+export function ConfirmDialog({ title, description, confirmLabel, cancelLabel, onConfirm, onCancel, container }: ConfirmDialogProps) {
   const descriptionId = useId();
   const ref = useFocusTrap<HTMLDivElement>({ active: true, onEscape: onCancel });
   const cancelRef = useRef<HTMLDivElement>(null);
@@ -56,6 +61,6 @@ export function ConfirmDialog({ title, description, confirmLabel, cancelLabel, o
         </div>
       </div>
     </div>,
-    document.body,
+    container ?? document.body,
   );
 }

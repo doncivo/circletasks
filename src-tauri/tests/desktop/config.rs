@@ -606,6 +606,124 @@ fn sync_8_no_capability_grants_the_folder_bookmark_plugin() {
     assert!(LIB_SOURCE.contains("#[cfg(target_os = \"ios\")]\n    let builder = builder.plugin(tauri_plugin_folder_bookmark::init())"));
 }
 
+// ------------------------------------------------------------------------------------------------------------------------------
+// Lot M (ADR 0013 §1.1, §2.1, §2.5 et §5) : Face ID (I-03), retour haptique (A-07), cache de confidentialité natif (I-03)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// Section `[...]` de Cargo.toml où chaque ligne commençant par `crate` est déclarée (une seule déclaration attendue).
+fn cargo_sections_of(krate: &str) -> Vec<(String, String)> {
+    let mut section = String::new();
+    let mut out = Vec::new();
+    for line in CARGO.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed.to_owned();
+        }
+        if trimmed.starts_with(&format!("{krate} ")) || trimmed.starts_with(&format!("{krate}=")) {
+            out.push((section.clone(), trimmed.to_owned()));
+        }
+    }
+    out
+}
+
+const IOS_SECTION: &str = "[target.'cfg(target_os = \"ios\")'.dependencies]";
+
+/// I-03 critère 3, A-07 critère 15 : dépendances sous cfg(target_os = "ios") seulement ; biometric épinglé à =2.4.1 ; plugins locaux par chemin.
+#[test]
+fn lot_m_plugins_are_ios_only_dependencies() {
+    let biometric = cargo_sections_of("tauri-plugin-biometric");
+    assert_eq!(biometric.len(), 1, "une seule déclaration de tauri-plugin-biometric");
+    assert_eq!(biometric[0].0, IOS_SECTION);
+    assert!(biometric[0].1.contains("\"=2.4.1\""), "version non épinglée : {}", biometric[0].1);
+    let haptics = cargo_sections_of("tauri-plugin-ct-haptics");
+    assert_eq!(haptics, [(IOS_SECTION.to_owned(), "tauri-plugin-ct-haptics = { path = \"plugins/haptics\" }".to_owned())]);
+    let shield = cargo_sections_of("tauri-plugin-privacy-shield");
+    assert_eq!(shield, [(IOS_SECTION.to_owned(), "tauri-plugin-privacy-shield = { path = \"plugins/privacy-shield\" }".to_owned())]);
+    // Le plugin officiel tauri-plugin-haptics n'est pas ajouté (constat 2 de l'ADR : générateurs hors du fil principal).
+    assert!(cargo_sections_of("tauri-plugin-haptics").is_empty());
+}
+
+/// I-03 critère 3, A-07 critère 15 : chaque plugin est enregistré une fois, sous cfg(target_os = "ios"), jamais sous desktop.
+#[test]
+fn lot_m_plugins_are_registered_for_ios_only() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    for krate in ["tauri_plugin_biometric", "tauri_plugin_ct_haptics", "tauri_plugin_privacy_shield"] {
+        let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains(krate)).map(|(i, _)| i).collect();
+        assert_eq!(uses.len(), 1, "{krate} : un seul enregistrement");
+        assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]", "{krate}");
+        assert!(lines[uses[0]].contains(&format!("{krate}::init()")), "{krate}");
+        assert!(!DESKTOP_SOURCE.contains(krate), "{krate} dans desktop.rs");
+    }
+}
+
+/// Liste exacte d'une capability iOS du lot M ; fenêtre `main`, iOS seulement, aucune autre capability n'accorde le préfixe.
+fn assert_exact_ios_capability(file: &str, prefix: &str, expected: &[&str]) {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities").join(file);
+    let text = std::fs::read_to_string(path).expect("capability");
+    let capability: Value = serde_json::from_str(&text).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]), "{file}");
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]), "{file}");
+    assert!(capability.get("webviews").is_none(), "{file}");
+    let mut granted = permissions_of(&text);
+    granted.sort();
+    let mut wanted: Vec<String> = expected.iter().map(|p| (*p).to_owned()).collect();
+    wanted.sort();
+    assert_eq!(granted, wanted, "{file}");
+    assert!(!granted.iter().any(|p| p.ends_with(":default")), "{file}");
+    for (name, other) in all_capabilities() {
+        if name != file {
+            assert!(!other.contains(prefix), "{name} accorde {prefix}");
+        }
+    }
+}
+
+/// I-03 critère 3 (ADR 0013 §2.1) : exactement status et authenticate, jamais biometric:default.
+#[test]
+fn i03_biometric_capability_grants_exactly_status_and_authenticate() {
+    assert_exact_ios_capability("biometric-ios.json", "biometric:", &["biometric:allow-status", "biometric:allow-authenticate"]);
+}
+
+/// A-07 critère 15 (ADR 0013 §1.1) : exactement les trois commandes du plugin local haptics.
+#[test]
+fn a07_haptics_capability_grants_exactly_the_three_commands() {
+    assert_exact_ios_capability(
+        "haptics-ios.json",
+        "haptics:",
+        &["haptics:allow-impact-feedback", "haptics:allow-notification-feedback", "haptics:allow-selection-feedback"],
+    );
+}
+
+/// I-03 (ADR 0013 §2.5) : exactement set_enabled du plugin local privacy-shield.
+#[test]
+fn i03_privacy_shield_capability_grants_exactly_set_enabled() {
+    assert_exact_ios_capability("privacy-shield-ios.json", "privacy-shield:", &["privacy-shield:allow-set-enabled"]);
+}
+
+const HAPTICS_CARGO: &str = include_str!("../../plugins/haptics/Cargo.toml");
+const HAPTICS_BUILD: &str = include_str!("../../plugins/haptics/build.rs");
+const HAPTICS_LIB: &str = include_str!("../../plugins/haptics/src/lib.rs");
+const SHIELD_CARGO: &str = include_str!("../../plugins/privacy-shield/Cargo.toml");
+const SHIELD_BUILD: &str = include_str!("../../plugins/privacy-shield/build.rs");
+const SHIELD_LIB: &str = include_str!("../../plugins/privacy-shield/src/lib.rs");
+
+/// Le préfixe ACL d'un plugin est tiré de `links` (tauri-utils `read_permissions`, « tauri-plugin- » retiré) : il doit être égal au nom
+/// passé à `Builder::new`, sinon tout appel `plugin:<nom>|…` est refusé à l'exécution (avenant lot M de l'ADR 0013).
+#[test]
+fn lot_m_local_plugins_acl_prefix_matches_runtime_name() {
+    assert!(HAPTICS_CARGO.contains("name = \"tauri-plugin-ct-haptics\""));
+    assert!(HAPTICS_CARGO.contains("links = \"tauri-plugin-haptics\""));
+    assert!(HAPTICS_LIB.contains("Builder::new(\"haptics\")"));
+    assert!(HAPTICS_LIB.contains("tauri::ios_plugin_binding!(init_plugin_ct_haptics);"));
+    assert!(HAPTICS_BUILD.contains("const COMMANDS: &[&str] = &[\"impact_feedback\", \"notification_feedback\", \"selection_feedback\"];"));
+    assert!(SHIELD_CARGO.contains("name = \"tauri-plugin-privacy-shield\""));
+    assert!(SHIELD_CARGO.contains("links = \"tauri-plugin-privacy-shield\""));
+    assert!(SHIELD_LIB.contains("Builder::new(\"privacy-shield\")"));
+    assert!(SHIELD_LIB.contains("tauri::ios_plugin_binding!(init_plugin_privacy_shield);"));
+    assert!(SHIELD_BUILD.contains("const COMMANDS: &[&str] = &[\"set_enabled\"];"));
+    // Aucune commande Rust : seules les méthodes Swift répondent (pas de invoke_handler dans ces plugins).
+    assert!(!HAPTICS_LIB.contains("invoke_handler") && !SHIELD_LIB.contains("invoke_handler"));
+}
+
 const IOS_REMINDERS_CAPABILITY: &str = include_str!("../../capabilities/reminders-ios.json");
 
 /// K-05 (ADR 0008 §10.4) : liste EXACTE des permissions de la capability iOS des Rappels Apple ; fenêtre principale, iOS seulement ; aucune

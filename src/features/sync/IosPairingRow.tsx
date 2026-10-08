@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
 import type { CameraPermission, SyncPlatform } from '../../platform/sync/types';
 import { Button } from '../../ui';
+import { openCameraSettings } from '../security/excursion';
 
 /**
  * Ligne « Associer au PC » de Réglages › Synchronisation sur l'iPhone (ADR 0011 §23 points 2 et 7 ; Y-IOS-02 critères 6 et 7) : ouvre
@@ -43,7 +44,7 @@ export function IosPairingRow({ platform, onOpen }: { readonly platform: SyncPla
           )}
         </span>
         {camera === 'denied' && platform.key.openCameraSettings && (
-          <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.ios.openSettingsLabel')} onClick={() => void platform.key.openCameraSettings?.()}>
+          <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.ios.openSettingsLabel')} onClick={() => void openCameraSettings(platform)}>
             {t('sync.pairing.ios.openSettings')}
           </Button>
         )}

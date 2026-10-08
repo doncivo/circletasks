@@ -1,0 +1,41 @@
+/** Verrouillage de l'app par Face ID ou code de l'iPhone (I-03, ADR 0013 §2). Écran sans maquette : composé avec les composants existants. */
+export const securityFr = {
+  lock: {
+    title: 'CircleTasks est verrouillée',
+    unlock: 'Déverrouiller',
+    unlockLabel: 'Déverrouiller CircleTasks',
+    retry: 'Réessayer',
+    cancelled: 'Déverrouillage annulé',
+    failed: 'Déverrouillage impossible ({code})',
+    noPasscode: 'Déverrouillage impossible : aucun code n’est défini sur l’iPhone',
+    pluginFailed: 'Le verrouillage ne répond pas ({code}). Vos données sont intactes.',
+    settingUnreadable: 'Le réglage du verrouillage est illisible : déverrouillez pour continuer.',
+    disable: 'Désactiver le verrouillage',
+    disableConfirmTitle: 'Désactiver le verrouillage ?',
+    disableConfirmText: 'Les données de CircleTasks seront de nouveau lisibles sans protection',
+    disableConfirm: 'Désactiver',
+    disableFailed: 'Le verrouillage n’a pas pu être désactivé : nouvel essai possible.',
+    loadFailed: 'L’écran de verrou n’a pas pu être chargé. Vos données sont intactes : relancez l’app.',
+  },
+  /** Raisons affichées par iOS dans la fenêtre Face ID (jamais vides). */
+  reason: {
+    unlock: 'Déverrouiller CircleTasks',
+    enable: 'Activer le verrouillage de CircleTasks',
+    disable: 'Désactiver le verrouillage de CircleTasks',
+  },
+  cancel: 'Annuler',
+  settings: {
+    rowFaceId: 'Verrouillage Face ID',
+    rowBiometry: 'Verrouillage par biométrie',
+    rowPasscode: 'Verrouillage par code de l’iPhone',
+    fallback: 'Repli sur le code de l’iPhone',
+    notificationsNote: 'Protège l’app, pas le texte des notifications (Réglages iOS › Notifications).',
+    relockNote: 'Verrouillée au lancement et après 30 s en arrière-plan.',
+    notEnabled: 'Le verrouillage n’a pas été activé',
+    notDisabled: 'Le verrouillage n’a pas été désactivé',
+    noPasscode: 'Aucun code n’est défini sur l’iPhone : définissez-en un dans Réglages iOS › Face ID et code.',
+    unsupported: 'Le verrouillage n’est pas disponible sur cet appareil ({code}).',
+    saveFailed: 'Le réglage du verrouillage n’a pas pu être enregistré.',
+    shieldFailed: 'Le cache de confidentialité n’a pas pu être activé ({code}) : l’aperçu du sélecteur d’apps peut montrer vos tâches.',
+  },
+} as const;

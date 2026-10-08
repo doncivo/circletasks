@@ -140,6 +140,17 @@ describe('tauriSync (Y-01 critère 18)', () => {
     const web = openSyncPlatform('web', 'other') as { testing?: unknown };
     expect(web.testing).toBeDefined();
   });
+
+  it('openSyncPlatform : le build livré (hors DEV) sans plateforme mémoire : un navigateur reçoit une synchro indisponible (budget du bundle de départ)', () => {
+    vi.stubEnv('DEV', false);
+    try {
+      const web = openSyncPlatform('web', 'other');
+      expect((web as { testing?: unknown }).testing).toBeUndefined();
+      expect(web.available()).toBe(false);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });
 
 describe('frontière des commandes (Y-01 critères 3 et 18)', () => {

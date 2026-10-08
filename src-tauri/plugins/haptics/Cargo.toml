@@ -1,0 +1,22 @@
+[package]
+name = "tauri-plugin-ct-haptics"
+version = "0.1.0"
+description = "CircleTasks : retour haptique iOS (A-07, ADR 0013 §1.1), générateurs UIKit sur le fil principal. Plugin Tauri « haptics »."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Le préfixe des permissions (ACL) est tiré de `links` (tauri-utils, acl::build::read_permissions : DEP_TAURI_PLUGIN_<NOM>_PERMISSION_FILES_PATH,
+# préfixe « tauri-plugin- » retiré) : `links = "tauri-plugin-haptics"` donne `haptics:allow-*`, égal au nom du plugin à l'exécution
+# (`Builder::new("haptics")`). Avec `tauri-plugin-ct-haptics`, l'ACL serait `ct-haptics:` et tout appel `plugin:haptics|…` serait refusé
+# (avenant lot M de l'ADR 0013). Le plugin officiel tauri-plugin-haptics n'est jamais une dépendance (même `links`, refusé par Cargo).
+links = "tauri-plugin-haptics"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

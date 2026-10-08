@@ -10,6 +10,9 @@
 	<!-- K-05 (ADR 0008 §10.4) : lecture et écriture des Rappels Apple par EventKit (accès complet, iOS 17+). Pas de NSRemindersUsageDescription : iOS 18 minimum. -->
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>CircleTasks lit les listes Rappels que vous choisissez pour les afficher comme tâches, et y reporte vos changements.</string>
+	<!-- I-03 (ADR 0013 §2.1) : verrouillage par Face ID (plugin biometric). Sans cette clé, Face ID est indisponible (constat 6). -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>CircleTasks utilise Face ID pour garder vos tâches privées.</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>
