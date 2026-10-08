@@ -503,6 +503,11 @@ export interface SyncStatus {
    * la ligne de Réglages (Y-05 critère 2). Ajout du lot Y2, facultatif.
    */
   readonly errorCode?: SyncErrorCode | null;
+  /**
+   * Y-IOS-02 : cycles consécutifs en échec avec ce même `errorCode` (absent : aucun, ou un seul). `io` reste passagère (iCloud occupe un
+   * fichier un instant) jusqu'à `IO_STOP_AFTER` échecs de suite, puis est dite permanente ; remis à zéro par un cycle réussi.
+   */
+  readonly errorStreak?: number;
   /** Appareil dont l'horloge est en avance (phase `clock-ahead`, Y-09 critère 10). Ajout du lot Y2, facultatif. */
   readonly clockAheadDevice?: DeviceId | null;
   /**

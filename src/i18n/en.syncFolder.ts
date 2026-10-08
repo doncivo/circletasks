@@ -37,4 +37,13 @@ export const syncFolderEn: Shape<typeof syncFolderFr> = {
 export const syncKeyEn: Shape<typeof syncKeyFr> = {
   needsPairing: 'This folder already contains encrypted data: pair this device',
   mismatch: 'This folder was encrypted with another key: pair this device',
+  needsPairingIos: 'This iPhone does not have the encryption key: pair it with the PC',
+  startNew: 'New sync',
+  startNewHint: 'Only if no other device syncs in this folder yet',
+  startNewAction: 'Start',
+  startNewLabel: 'Start a new sync on this iPhone',
+  startNewTitle: 'Start a new sync on this iPhone?',
+  startNewDescription:
+    'This iPhone will create its own encryption key. If your PC already syncs in this folder, iCloud may not have downloaded it yet: your devices would no longer see each other. In that case, cancel, wait for iCloud to download the folder and choose “Pair with the PC”.',
+  startNewConfirm: 'Start anyway',
 };

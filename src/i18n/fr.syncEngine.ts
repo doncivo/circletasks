@@ -51,6 +51,7 @@ export const syncEngineFr = {
     back: 'Retour à Réglages',
     sectionState: 'ÉTAT',
     sectionDevices: 'APPAREILS',
+    keyId: 'Clé de chiffrement (identifiant)',
     // Y-IOS-02 : sans clé, les états des autres appareils ne peuvent pas être lus ; jamais une liste vide sans explication.
     devicesNeedPairing: 'Associez cet appareil pour voir les autres appareils',
     devicesNeedPairingIos: 'Associez cet iPhone pour voir les autres appareils',

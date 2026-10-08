@@ -39,4 +39,14 @@ export const syncFolderFr = {
 export const syncKeyFr = {
   needsPairing: 'Ce dossier contient déjà des données chiffrées : associez cet appareil',
   mismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
+  // Y-IOS-02 (ADR 0011 §23 point 9) : l'iPhone ne crée jamais de clé au choix du dossier.
+  needsPairingIos: 'Cet iPhone n’a pas la clé de chiffrement : associez-le au PC',
+  startNew: 'Nouvelle synchronisation',
+  startNewHint: 'Seulement si aucun autre appareil ne synchronise encore dans ce dossier',
+  startNewAction: 'Commencer',
+  startNewLabel: 'Commencer une nouvelle synchronisation sur cet iPhone',
+  startNewTitle: 'Commencer une nouvelle synchronisation sur cet iPhone ?',
+  startNewDescription:
+    'Cet iPhone créera sa propre clé de chiffrement. Si votre PC synchronise déjà dans ce dossier, iCloud ne l’a peut-être pas encore téléchargé : vos appareils ne se verraient plus. Dans ce cas, annulez, attendez qu’iCloud ait téléchargé le dossier et choisissez « Associer au PC ».',
+  startNewConfirm: 'Commencer quand même',
 } as const;

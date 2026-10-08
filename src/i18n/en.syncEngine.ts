@@ -46,6 +46,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     back: 'Back to Settings',
     sectionState: 'STATUS',
     sectionDevices: 'DEVICES',
+    keyId: 'Encryption key (identifier)',
     devicesNeedPairing: 'Pair this device to see your other devices',
     devicesNeedPairingIos: 'Pair this iPhone to see your other devices',
     devicesNone: 'No device read yet',

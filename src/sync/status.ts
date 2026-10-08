@@ -59,6 +59,15 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
   return 'idle';
 }
 
+/**
+ * Y-IOS-02 : échecs consécutifs avec le même code (`errorStreak`) : un cycle en échec avec le code de l'échec précédent l'augmente, tout
+ * autre code le remet à 1 ; un cycle sans échec le retire. Sert à `io`, passagère puis permanente après `IO_STOP_AFTER` échecs de suite.
+ */
+export function nextErrorStreak(previous: Pick<SyncStatus, 'errorCode' | 'errorStreak'>, code: SyncErrorCode | null): number | undefined {
+  if (code === null) return undefined;
+  return previous.errorCode === code ? (previous.errorStreak ?? 1) + 1 : 1;
+}
+
 export function statusFromFacts(
   previous: SyncStatus,
   facts: CycleFacts,
@@ -82,7 +91,8 @@ export function statusFromFacts(
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince');
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince'), 'errorStreak');
+  const streak = facts.outcome === 'failed' ? nextErrorStreak(previous, facts.errorCode) : undefined;
   const warnings = facts.warnings ?? keptWarnings ?? [];
   const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
@@ -96,6 +106,7 @@ export function statusFromFacts(
     ...(warnings.length > 0 ? { warnings } : {}),
     ...(unreadable ? { stateUnreadable: true } : {}),
     ...(extra.waitingSince ? { waitingSince: extra.waitingSince } : {}),
+    ...(streak !== undefined && streak > 1 ? { errorStreak: streak } : {}),
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

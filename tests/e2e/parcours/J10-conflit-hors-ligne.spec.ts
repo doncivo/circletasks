@@ -211,8 +211,8 @@ test('Y-05 : 5 000 opérations publiées sans tâche longue de plus de 250 ms ; 
   const before = await inspect(room, 'pc');
   await failAfter(room, 'pc', 'appendJournal', 2, 'io');
   const interruptedStart = Date.now();
-  // Y-IOS-02 (audit des impasses) : `io` est une erreur permanente : code et action dits, jamais « nouvel essai au prochain cycle ».
-  await syncNow(page, /^La synchronisation est arrêtée \(code io\)/);
+  // Y-IOS-02 : un premier échec `io` est passager (iCloud occupe un fichier un instant) : nouvel essai au cycle suivant.
+  await syncNow(page, /^La synchronisation a échoué : nouvel essai au prochain cycle/);
   const interruptedMs = Date.now() - interruptedStart;
   const partial = await inspect(room, 'pc');
   const seeded = (tasks: Readonly<Record<string, number>>) => Object.entries(tasks).filter(([id]) => id.startsWith('30000000-'));

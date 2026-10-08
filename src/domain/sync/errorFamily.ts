@@ -55,14 +55,21 @@ const FAMILIES: { readonly [C in SyncErrorCode]: SyncErrorFamily } = {
   'not-bound': 'folder',
   'already-bound': 'folder',
   'current-epoch': 'details',
-  io: 'details',
+  // Sur PC, iCloud occupe souvent un fichier un instant : passagère, puis permanente après `IO_STOP_AFTER` échecs de suite.
+  io: 'transient',
 };
 
-export function syncErrorFamily(code: SyncErrorCode | null | undefined): SyncErrorFamily {
-  return code ? (FAMILIES[code] ?? 'details') : 'transient';
+/** Échecs `io` consécutifs au-delà desquels l'erreur est dite permanente (action, code, plus de cycle périodique). */
+export const IO_STOP_AFTER = 3;
+
+/** `streak` : cycles consécutifs en échec avec ce code (1 par défaut). */
+export function syncErrorFamily(code: SyncErrorCode | null | undefined, streak = 1): SyncErrorFamily {
+  if (!code) return 'transient';
+  if (code === 'io' && streak >= IO_STOP_AFTER) return 'details';
+  return FAMILIES[code] ?? 'details';
 }
 
 /** Erreur qu'un cycle périodique ne résoudra pas (aucune relance en boucle). */
-export function isPermanentSyncError(code: SyncErrorCode | null | undefined): boolean {
-  return code !== null && code !== undefined && syncErrorFamily(code) !== 'transient';
+export function isPermanentSyncError(code: SyncErrorCode | null | undefined, streak = 1): boolean {
+  return code !== null && code !== undefined && syncErrorFamily(code, streak) !== 'transient';
 }

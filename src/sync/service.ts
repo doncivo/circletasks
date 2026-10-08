@@ -16,7 +16,8 @@ import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
 import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
 import { META, writeJson } from './meta';
-import { INITIAL_STATUS, phaseOf, statusFromFacts } from './status';
+import { INITIAL_STATUS, nextErrorStreak, phaseOf, statusFromFacts } from './status';
+import { omitKey } from '../domain/omitKey';
 
 /**
  * Service de synchronisation exposé par le conteneur (`AppContainer.sync`, ADR 0011 section 11.2 ; Y-02, Y-03, Y-05).
@@ -248,7 +249,8 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const code = syncErrorCodeOf(error);
       const unreadable = isSyncStateUnreadable(error);
       deps.logger.log('cycle-crashed', { code });
-      publish({ ...before, phase: 'error', errorCode: code, ...(unreadable ? { stateUnreadable: true } : {}) });
+      const streak = nextErrorStreak(before, code) ?? 1;
+      publish({ ...omitKey(before, 'errorStreak'), phase: 'error', errorCode: code, ...(streak > 1 ? { errorStreak: streak } : {}), ...(unreadable ? { stateUnreadable: true } : {}) });
       return { outcome: 'failed', errorCode: code, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false, ...(unreadable ? { stateUnreadable: true } : {}) };
     } finally {
       clearTimer(timer);

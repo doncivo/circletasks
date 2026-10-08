@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Y-IOS-02 (point de contrôle d'Ali, IPA 0.2.1) : un appareil sans clé propose toujours l'association, jamais « Synchroniser » ni
 // « Réinitialiser la synchronisation » ; APPAREILS expliqué ; sur le PC, « Associer l'iPhone » est directement dans Réglages › Synchronisation.
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import type { DeviceAck, EpochId } from '../../domain/sync/format';
@@ -27,7 +27,7 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { startSyncIntegration } from './startSync';
 import { SyncDetailsScreen } from './SyncDetailsScreen';
 import { SyncSettingsSection } from './SyncSettingsSection';
-import { createFakeSyncService } from './testKit';
+import { createFakeSyncService, type FakeSyncService } from './testKit';
 
 const PHONE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000c1');
 const PC = '70000000-0000-4000-8000-00000000000a' as DeviceId;
@@ -37,6 +37,8 @@ const IPHONE_AGENT = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) App
 const ASSOCIATE_PC = 'Associer cet iPhone au PC : scanner le code d’association';
 const RESET = 'Réinitialiser la synchronisation avec une nouvelle clé';
 const SHOW_QR = 'Associer l’iPhone : afficher le code d’association';
+const NEEDS_KEY_IOS = 'Cet iPhone n’a pas la clé de chiffrement : associez-le au PC';
+const START_NEW = 'Commencer une nouvelle synchronisation sur cet iPhone';
 
 let db: TestDb;
 
@@ -68,7 +70,15 @@ async function folderFromPc(kind: 'ios' | 'windows'): Promise<MemorySyncPlatform
   });
   const other = createMemorySyncPlatform({ folder, platform: kind, nowMs: () => db.clock.nowMs() });
   other.testing.setChooser(folder);
+  lastPcFolder = folder;
   return other;
+}
+
+/** Dossier du PC du dernier `folderFromPc`. */
+let lastPcFolder: MemorySyncFolder | null = null;
+function folderFromPcFolder(): MemorySyncFolder {
+  if (!lastPcFolder) throw new Error('folderFromPc d’abord');
+  return lastPcFolder;
 }
 
 /** `sync_meta` illisible (« database is locked », base de 0.2.1 sur l'iPhone) pendant les cycles. */
@@ -105,7 +115,7 @@ describe('iPhone sans clé : « Associer au PC » ne disparaît jamais (constat 
       choose.click();
       await Promise.resolve();
     });
-    expect(await screen.findByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeInTheDocument();
+    expect(await screen.findByText(NEEDS_KEY_IOS)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
 
     // Cycles d'ouverture et manuel : l'état reste « à associer », jamais « La synchronisation a échoué ».
@@ -116,7 +126,7 @@ describe('iPhone sans clé : « Associer au PC » ne disparaît jamais (constat 
     });
     expect(container.sync?.status().phase).toBe('needs-pairing');
     expect(screen.getByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
-    expect(screen.getByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeInTheDocument();
+    expect(screen.getByText(NEEDS_KEY_IOS)).toBeInTheDocument();
     expect(screen.queryByText('La synchronisation a échoué : nouvel essai au prochain cycle')).toBeNull();
     expect(useAppStatusStore.getState().sources.syncTrouble?.message).toBe('Associez cet iPhone au PC pour synchroniser');
     cleanup();
@@ -204,7 +214,7 @@ describe('erreurs permanentes : jamais « nouvel essai au prochain cycle » (aud
       expect(lineFor(code), code).not.toBe(GENERIC);
       expect(lineFor(code), code).not.toContain('nouvel essai');
     }
-    for (const code of ['io', 'decrypt-failed', 'key-exhausted', 'not-bound', 'segment-full', 'hlc-order'] as const) {
+    for (const code of ['decrypt-failed', 'key-exhausted', 'not-bound', 'segment-full', 'hlc-order'] as const) {
       expect(isPermanentSyncError(code), code).toBe(true);
       expect(lineFor(code), code).toContain(`code ${code}`);
     }
@@ -217,7 +227,7 @@ describe('erreurs permanentes : jamais « nouvel essai au prochain cycle » (aud
   it('planificateur : erreur permanente, aucun cycle des 5 minutes ; passagère, cycles maintenus', async () => {
     const clock = createManualClock(NOW);
     const reasons: SyncReason[] = [];
-    let status: Partial<SyncStatus> = { phase: 'error', errorCode: 'io' };
+    let status: Partial<SyncStatus> = { phase: 'error', errorCode: 'decrypt-failed' };
     const doc = { visibilityState: 'visible', addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as Document;
     const scheduler = startSyncScheduler({ syncNow: async (r) => void reasons.push(r), status: () => ({ ...INITIAL_STATUS, ...status }) }, { document: doc, clock, setInterval: () => 0, clearInterval: () => undefined });
     clock.advance(10 * 60_000);
@@ -227,6 +237,153 @@ describe('erreurs permanentes : jamais « nouvel essai au prochain cycle » (aud
     await scheduler.tick();
     expect(reasons).toEqual(['open', 'timer']);
     scheduler.dispose();
+  });
+});
+
+describe('iPhone : jamais de clé créée au choix du dossier (point 1, ADR 0011 §23 point 9)', () => {
+  async function chooseOn(platform: MemorySyncPlatform, os: 'ios' | 'windows'): Promise<FakeSyncService> {
+    const sync = createFakeSyncService({ phase: 'not-configured' });
+    const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), data: db.data, sync, syncPlatform: platform, platform: { runtime: 'tauri', os } });
+    renderIn(container, <SyncSettingsSection />);
+    const choose = await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' });
+    await act(async () => {
+      choose.click();
+      await Promise.resolve();
+    });
+    return sync;
+  }
+
+  it('dossier vide (ou pas encore listé par iCloud) : aucune clé ; « Associer au PC » et « Commencer… » ; confirmation qui dit le risque', async () => {
+    const phone = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud'), platform: 'ios' });
+    await chooseOn(phone, 'ios');
+    expect(await screen.findByText(NEEDS_KEY_IOS)).toBeInTheDocument();
+    expect((await phone.key.status()).present).toBe(false);
+    expect(screen.getByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
+    // Annuler : rien n'est créé.
+    fireEvent.click(screen.getByRole('button', { name: START_NEW }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Commencer une nouvelle synchronisation sur cet iPhone ?' });
+    expect(dialog.textContent).toContain('iCloud ne l’a peut-être pas encore téléchargé');
+    expect(document.activeElement?.textContent).toBe('Annuler');
+    fireEvent.click(screen.getByRole('button', { name: 'Annuler' }));
+    expect((await phone.key.status()).present).toBe(false);
+    // Confirmé : clé créée (dossier vraiment vide).
+    fireEvent.click(screen.getByRole('button', { name: START_NEW }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Commencer quand même' }));
+    });
+    expect((await phone.key.status()).present).toBe(true);
+    expect(await screen.findByRole('button', { name: 'Détails' })).toBeInTheDocument();
+  });
+
+  it('dossier qui contient les données du PC : « Commencer » confirmé est refusé (folder-has-data), dit ; aucune clé', async () => {
+    const phone = await folderFromPc('ios');
+    await chooseOn(phone, 'ios');
+    expect(await screen.findByText(NEEDS_KEY_IOS)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: START_NEW }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Commencer quand même' }));
+    });
+    expect(await screen.findByTestId('sync-start-notice')).toHaveTextContent('Ce dossier contient déjà des données chiffrées : associez cet appareil');
+    expect((await phone.key.status()).present).toBe(false);
+    expect(screen.getByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
+  });
+
+  it('PC (premier appareil) : comportement inchangé, clé créée au choix d’un dossier vide, ni « Commencer » ni « Associer au PC »', async () => {
+    const pc = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud') });
+    const sync = await chooseOn(pc, 'windows');
+    expect(await screen.findByRole('button', { name: 'Détails' })).toBeInTheDocument();
+    expect((await pc.key.status()).present).toBe(true);
+    expect(screen.queryByRole('button', { name: START_NEW })).toBeNull();
+    expect(sync.calls).toEqual(['open']);
+  });
+});
+
+describe('clé présente mais pas celle du dossier (point 2)', () => {
+  it('Trousseau gardé d’une installation précédente : key-mismatch (pas error), « Associer au PC » dans Réglages et Détails, jamais « Réinitialiser » ; identifiant court affiché', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(IPHONE_AGENT);
+    const phone = await folderFromPc('ios');
+    // Ancienne clé de l'iPhone : créée sur un autre dossier (vide), puis le dossier du PC choisi.
+    const shared = phone.testing;
+    const old = new MemorySyncFolder('icloud');
+    shared.setChooser(old);
+    await phone.folder.choose();
+    await phone.key.create();
+    const kid = (await phone.key.status()).kid ?? '';
+    expect(kid.length).toBeGreaterThan(8);
+    const pcFolder = folderFromPcFolder();
+    shared.setChooser(pcFolder);
+    await phone.folder.choose();
+    await phone.bindDevice(PHONE);
+    expect((await phone.key.status()).present).toBe(true);
+    const container = realContainer(phone, 'ios');
+    await act(async () => {
+      await container.sync?.syncNow('open');
+    });
+    expect(container.sync?.status().phase).toBe('key-mismatch');
+    renderIn(container, <SyncSettingsSection />);
+    expect(await screen.findByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
+    expect(screen.getByTestId('sync-status-text')).toHaveTextContent('Ce dossier a été chiffré avec une autre clé : associez cet appareil');
+    cleanup();
+    renderIn(container, <SyncDetailsScreen />);
+    expect(await screen.findByRole('button', { name: ASSOCIATE_PC })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: RESET })).toBeNull();
+    expect(await screen.findByTestId('sync-key-id')).toHaveTextContent(kid.slice(0, 8));
+    expect(screen.getByTestId('sync-key-id').textContent).not.toContain(kid.slice(0, 9));
+  });
+
+  it('PC : identifiant court de la clé dans Détails (comparaison avec l’iPhone)', async () => {
+    const pc = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud') });
+    await pc.folder.choose();
+    await pc.key.create();
+    await pc.bindDevice(PHONE);
+    const kid = (await pc.key.status()).kid ?? '';
+    const sync = createFakeSyncService({ phase: 'idle', folderLabel: 'CircleTasks', folderKind: 'icloud', lastSyncAt: '2026-10-08T07:59:00.000Z' as IsoDateTime });
+    const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), data: db.data, sync, syncPlatform: pc });
+    renderIn(container, <SyncDetailsScreen />);
+    expect(await screen.findByTestId('sync-key-id')).toHaveTextContent(`Clé de chiffrement (identifiant)${kid.slice(0, 8)}`);
+  });
+});
+
+describe('io : passagère, puis permanente après 3 échecs consécutifs (point 3)', () => {
+  it('1er et 2e échecs : nouvel essai ; 3e : code et action, plus de cycle périodique ; réussite : compteur remis à zéro', async () => {
+    const pc = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud') });
+    await pc.folder.choose();
+    await pc.key.create();
+    await pc.bindDevice(PHONE);
+    let failing = true;
+    const scan = pc.scan.bind(pc);
+    const flaky: SyncPlatform = { ...pc, scan: (r) => (failing ? Promise.reject(new SyncPlatformError('io')) : scan(r)) };
+    const service = createSyncService({ data: db.data, platform: flaky, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: 'windows', sv: 14, logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
+    const line = (): string => statusLine(service.status(), db.clock.nowMs());
+    const GENERIC = 'La synchronisation a échoué : nouvel essai au prochain cycle';
+    await service.syncNow('timer');
+    expect(service.status()).toMatchObject({ phase: 'error', errorCode: 'io' });
+    expect(line()).toBe(GENERIC);
+    await service.syncNow('timer');
+    expect(service.status().errorStreak).toBe(2);
+    expect(line()).toBe(GENERIC);
+    await service.syncNow('timer');
+    expect(service.status().errorStreak).toBe(3);
+    expect(line()).toBe('La synchronisation est arrêtée (code io) : ouvrez Détails, puis « Synchroniser » pour réessayer');
+    expect(isPermanentSyncError('io', service.status().errorStreak)).toBe(true);
+    // Planificateur : plus de cycle des 5 minutes tant que l'erreur est permanente.
+    const clock = createManualClock(NOW);
+    const reasons: SyncReason[] = [];
+    const doc = { visibilityState: 'visible', addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as Document;
+    const scheduler = startSyncScheduler({ syncNow: async (r) => void reasons.push(r), status: () => service.status() }, { document: doc, clock, setInterval: () => 0, clearInterval: () => undefined });
+    clock.advance(10 * 60_000);
+    await scheduler.tick();
+    expect(reasons).toEqual(['open']);
+    scheduler.dispose();
+    // « Synchroniser » (Réessayer) réussit : compteur remis à zéro.
+    failing = false;
+    await service.syncNow('manual');
+    expect(service.status().phase).toBe('idle');
+    expect(service.status().errorStreak).toBeUndefined();
+    failing = true;
+    await service.syncNow('timer');
+    expect(service.status().errorStreak).toBeUndefined();
+    expect(line()).toBe(GENERIC);
   });
 });
 

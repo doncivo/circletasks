@@ -17,10 +17,19 @@ import { syncStore } from './syncStore';
 export type KeyPresence = 'present' | 'absent' | 'unknown';
 
 export function useKeyPresence(): KeyPresence {
+  return useKeyInfo().presence;
+}
+
+/** Nombre de caractères du `kid` montrés dans Détails (comparaison PC / iPhone ; le `kid` n'est pas la clé, il est publié en clair). */
+export const SHORT_KID_CHARS = 8;
+
+/** Présence et identifiant court (`kid`) de la clé de cet appareil ; jamais la clé. */
+export function useKeyInfo(): { readonly presence: KeyPresence; readonly shortKid: string | null } {
   const container = useAppContainer();
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
   const platform = container.syncPlatform;
   const [value, setValue] = useState<KeyPresence>('unknown');
+  const [kid, setKid] = useState<string | null>(null);
 
   const readable = platform !== null && phase !== 'not-configured';
   useEffect(() => {
@@ -29,11 +38,15 @@ export function useKeyPresence(): KeyPresence {
     const read = (): void => {
       platform.key.status().then(
         (key) => {
-          if (!cancelled) setValue(key.present ? 'present' : 'absent');
+          if (cancelled) return;
+          setValue(key.present ? 'present' : 'absent');
+          setKid(key.present && key.kid ? key.kid.slice(0, SHORT_KID_CHARS) : null);
         },
         () => {
           // Coffre illisible : ni présente ni absente ; la phase du service dit l'erreur (jamais silencieux).
-          if (!cancelled) setValue('unknown');
+          if (cancelled) return;
+          setValue('unknown');
+          setKid(null);
         },
       );
     };
@@ -45,6 +58,6 @@ export function useKeyPresence(): KeyPresence {
     };
   }, [container, platform, phase, readable]);
 
-  if (!readable) return 'unknown';
-  return phase === 'needs-pairing' ? 'absent' : value;
+  if (!readable) return { presence: 'unknown', shortKid: null };
+  return phase === 'needs-pairing' ? { presence: 'absent', shortKid: null } : { presence: value, shortKid: kid };
 }

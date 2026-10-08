@@ -62,7 +62,7 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Parti
   /** Audit des impasses : erreur permanente (`isPermanentSyncError`) : aucun cycle périodique en boucle ; texte et action dits par l'écran. */
   const stopped = (): boolean => {
     const status = service.status?.();
-    return status !== undefined && status.phase === 'error' && isPermanentSyncError(status.errorCode);
+    return status !== undefined && status.phase === 'error' && isPermanentSyncError(status.errorCode, status.errorStreak ?? 1);
   };
 
   const tick = async (): Promise<void> => {

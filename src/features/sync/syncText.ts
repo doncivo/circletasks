@@ -58,7 +58,7 @@ export function ownPlatform(status: Pick<SyncStatus, 'devices'>): 'windows' | 'i
   return detectOs() === 'ios' ? 'ios' : 'windows';
 }
 
-function errorText(code: string | null | undefined, platform: 'windows' | 'ios' = 'windows'): string {
+function errorText(code: string | null | undefined, platform: 'windows' | 'ios' = 'windows', streak = 1): string {
   switch (code) {
     case 'folder-unreachable':
       // iPhone : signet perdu ou dossier déplacé : le dossier est à choisir de nouveau (bouton « Choisir le dossier » de Réglages).
@@ -80,7 +80,7 @@ function errorText(code: string | null | undefined, platform: 'windows' | 'ios' 
     case 'rollback':
       return t('sync.status.errorRollback');
     default:
-      return stoppedText(code);
+      return stoppedText(code, streak);
   }
 }
 
@@ -88,9 +88,9 @@ function errorText(code: string | null | undefined, platform: 'windows' | 'ios' 
  * Y-IOS-02 (audit des impasses) : « nouvel essai au prochain cycle » seulement pour une erreur passagère ; une erreur permanente dit son
  * action et son code (le planificateur ne la relance plus en boucle).
  */
-function stoppedText(code: string | null | undefined): string {
+function stoppedText(code: string | null | undefined, streak: number): string {
   if (!isSyncErrorCode(code)) return code ? t('sync.status.errorStopped', { code }) : t('sync.status.errorGeneric');
-  switch (syncErrorFamily(code)) {
+  switch (syncErrorFamily(code, streak)) {
     case 'transient':
       return t('sync.status.errorGeneric');
     case 'pairing':
@@ -198,7 +198,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'key-mismatch':
       return t('sync.status.keyMismatch');
     case 'error':
-      return errorText(status.errorCode, ownPlatform(status));
+      return errorText(status.errorCode, ownPlatform(status), status.errorStreak ?? 1);
     case 'forgotten':
       return t('sync.forget.banner');
     case 'reset-required':

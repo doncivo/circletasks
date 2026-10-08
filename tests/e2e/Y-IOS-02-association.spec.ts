@@ -76,7 +76,8 @@ test('Y-IOS-02 : iPhone sans clé, « Associer au PC » toujours proposé après
   });
   await expect(banner).toBeVisible();
   await expect(page.getByRole('button', { name: ASSOCIATE_PC })).toBeVisible();
-  await expect(page.getByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeVisible();
+  await expect(page.getByText('Cet iPhone n’a pas la clé de chiffrement : associez-le au PC')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Commencer une nouvelle synchronisation sur cet iPhone' })).toBeVisible();
   await expect(page.getByText('La synchronisation a échoué : nouvel essai au prochain cycle')).toHaveCount(0);
 
   // Détails (par le bandeau) : association seulement.
