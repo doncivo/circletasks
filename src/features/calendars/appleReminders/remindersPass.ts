@@ -19,6 +19,7 @@ import {
   type AppleListSetting,
   type AppleListsSetting,
   type AppleNoticeKind,
+  type AppleStatus,
   type AppleValues,
   type MergeResult,
   type ReminderItem,
@@ -145,6 +146,14 @@ function withDueKept(next: AppleValues, toApple: MergeResult['toApple'], item: A
 
 function toLink(task: Task, item: ReminderItem, synced: AppleValues | null, previous: AppleReminderLink | null): AppleReminderLink {
   return { taskId: task.id, reminderId: item.id, externalRef: item.externalRef, listId: item.listId, state: 'linked', synced, appleModified: item.modifiedAt, startedAt: previous?.startedAt ?? null };
+}
+
+/** Échec persistant après un passage (`full` : tout lu ; `push` : seuls les échecs d'écriture peuvent être effacés ou posés). */
+function failureAfter(current: AppleStatus['failure'], full: boolean, sendCode: string | null, now: IsoDateTime): AppleStatus['failure'] {
+  if (full) return sendCode === null ? null : { code: sendCode, at: now, write: true };
+  const readFailure = current !== null && current.write !== true ? current : null;
+  if (readFailure !== null) return readFailure;
+  return sendCode === null ? null : { code: sendCode, at: now, write: true };
 }
 
 const sameLink = (a: AppleReminderLink | null, b: AppleReminderLink): boolean =>
@@ -416,7 +425,8 @@ async function passBody(container: AppContainer, kind: PassKind, options: PassOp
       // Retenues : celles « absentes de Rappels » ne sont réévaluées que par un passage complet ; celles des suppressions vers Rappels, à chaque envoi évalué.
       held: [...(caps === null ? current.held.filter((entry) => entry.send !== true) : held), ...(sendHeld ?? current.held.filter((entry) => entry.send === true))],
       notices: notes,
-      failure: sendCode === null ? null : { code: sendCode, at: now, write: true as const },
+      // Un passage complet a tout lu : il efface tout échec. Un `push` ne lit pas les listes : il n'efface que les échecs d'écriture et ne masque pas un échec de lecture.
+      failure: failureAfter(current.failure, full, sendCode, now),
     };
   });
   await state.setPending(report.pending);
