@@ -23,7 +23,9 @@ export function openSyncPlatform(runtime: Runtime, os: OsFamily): SyncPlatform {
     const override = scope.__ctSync;
     if (override) return override;
   }
-  if (runtime === 'web') return createMemorySyncPlatform();
+  // Plateforme mémoire : navigateur de développement et tests seulement (`import.meta.env.DEV`). Le build livré ne la contient pas (hors
+  // du JavaScript de départ, budget 350 Ko) ; un navigateur sans l'app installée reçoit une synchro indisponible (`available()` faux).
+  if (runtime === 'web') return import.meta.env.DEV ? createMemorySyncPlatform() : createTauriSync({ available: false });
   // ADR 0011 §22 point 7 (Y-IOS-01) : l'iPhone a ses commandes `sync_*` (capability `sync-ios.json`, plugin folder-bookmark).
   return createTauriSync({ available: os === 'windows' || os === 'ios', ...(os === 'ios' ? { scanner: loadBarcodeScanner() } : {}) });
 }
