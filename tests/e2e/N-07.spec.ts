@@ -83,12 +83,17 @@ test.describe('N-07 — avertissement du PC', () => {
     await expect(pc.pc.page.getByText(/Aucun iPhone associé|ne s’est pas synchronisé/)).toHaveCount(0);
 
     // L'horloge du PC avance de 3 h : l'iPhone n'a rien publié depuis (sa valeur publiée a 3 h) ; un rappel proche avertit.
+    const shownDay = (await inMinutes(pc.pc.page, 0)).date;
     await pc.pc.page.clock.install({ time: new Date() });
     await pc.pc.page.clock.fastForward('03:00:00');
     await pc.pc.page.keyboard.press('Escape');
+    // La date est toujours donnée : après l'avance de 3 h l'horloge peut avoir passé minuit alors que l'écran affiche encore le jour d'avant (sans date, la tâche
+    // serait créée la veille, dans le passé, et l'avertissement ne s'afficherait pas ; test passé entre 21 h et minuit, heure de Paris).
     const later = await inMinutes(pc.pc.page, 30);
     await openTasks(pc.pc.page);
-    await createTask(pc.pc.page, { project: { name: 'pc' } }, { title: 'Dans une demi-heure', time: later.time, ...(later.date === (await inMinutes(pc.pc.page, 0)).date ? {} : { date: later.date }) });
+    // L'écran garde le jour affiché avant l'avance : s'il est passé minuit, on se place sur le jour de l'échéance pour retrouver la ligne.
+    if (later.date !== shownDay) await pc.pc.page.getByRole('button', { name: 'Jour suivant' }).click();
+    await createTask(pc.pc.page, { project: { name: 'pc' } }, { title: 'Dans une demi-heure', time: later.time, date: later.date });
     await pc.pc.page.getByRole('button', { name: 'Dans une demi-heure', exact: true }).click();
     await expect(detail(pc.pc.page).getByText('L’iPhone ne s’est pas synchronisé depuis plus de 2 h : ce rappel pourrait ne pas sonner à l’heure')).toBeVisible();
   });
