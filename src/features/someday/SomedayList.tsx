@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent, type PointerEvent as Reac
 import type { Task } from '../../domain/model';
 import type { TaskId } from '../../domain/types';
 import { t } from '../../i18n';
-import { CalendarDays, CalendarPlus, Trash2, Sun } from 'lucide-react';
+import { CalendarDays, CalendarPlus, Sun, X } from 'lucide-react';
 import { DatePrompt, DragHandle, EmptyState, Icon, ListSkeleton, SwipeRow, SwipeRowGroup, type SwipeRowAction } from '../../ui';
 import { useRowGestureFeedback } from '../app/rowGestureFeedback';
 import { useAppContainer } from '../app/AppContainerContext';
@@ -106,7 +106,7 @@ export function SomedayList({ view, state, openedTaskId, showSkeleton, zone, onA
     { id: 'today', label: t('gestures.today'), ariaLabel: t('gestures.planTodayLabel', { title: task.title }), icon: <Icon icon={Sun} size={20} />, tone: 'soft', onSelect: () => void view.schedule([task.id], 'today') },
     { id: 'tomorrow', label: t('gestures.tomorrow'), ariaLabel: t('gestures.planTomorrowLabel', { title: task.title }), icon: <Icon icon={CalendarPlus} size={20} />, tone: 'accent', onSelect: () => void view.schedule([task.id], 'tomorrow') },
     { id: 'pick', label: t('gestures.pickDate'), ariaLabel: t('gestures.pickDateLabel', { title: task.title }), icon: <Icon icon={CalendarDays} size={20} />, tone: 'accent', onSelect: () => setPickTask(task) },
-    { id: 'delete', label: t('gestures.delete'), icon: <Icon icon={Trash2} size={20} />, tone: 'danger', onSelect: () => edit.setDeleteTargetId(task.id) },
+    { id: 'delete', label: t('gestures.delete'), icon: <Icon icon={X} size={20} />, tone: 'danger', onSelect: () => edit.setDeleteTargetId(task.id) },
   ];
   const swiped = (task: Task, content: JSX.Element): JSX.Element =>
     pc ? (

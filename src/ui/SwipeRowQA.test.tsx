@@ -230,8 +230,8 @@ describe('A-07 QA : ligne ouverte et groupe', () => {
     expect(b).not.toHaveAttribute('data-open');
     expect(c).toHaveAttribute('data-open', 'true');
     expect(document.querySelectorAll('[data-open="true"]')).toHaveLength(1);
-    expect(screen.getByRole('group', { name: 'Actions : Tâche c' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('group', { name: 'Actions : Tâche a' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('group', { name: 'Actions : Tâche c' })).not.toHaveAttribute('aria-expanded');
+    expect(screen.getByRole('group', { name: 'Actions : Tâche a' })).not.toHaveAttribute('aria-expanded');
   });
 
   it('A-07 critère 3 : un simple toucher sur une autre ligne referme la ligne ouverte', () => {

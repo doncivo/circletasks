@@ -143,7 +143,7 @@ export function focusNeighborLater(rowId: string, force = false): () => void {
   return () => {
     if (!concerned || !neighbor?.isConnected) return;
     const target = neighbor.querySelector<HTMLElement>('button.ct-list-row__title, button.ct-week-item__title, button:not([tabindex="-1"])');
-    target?.focus();
+    target?.focus({ preventScroll: true });
   };
 }
 
@@ -269,6 +269,7 @@ export function SwipeRow({ rowId, title, right, left, onLongPress, disabled, fee
     if (state.disabled || (event.pointerType !== 'touch' && event.pointerType !== 'pen')) return;
     if ((event.target as HTMLElement).closest(IGNORED_TARGETS)) return;
     if (gesture.current) return; // un seul doigt
+    if (busy.current) return; // cas d'usage du balayage précédent en cours : pas de second geste (double validation)
     longFired.current = false;
     const width = event.currentTarget.getBoundingClientRect().width;
     const base = state.open ? -SWIPE_ROW_RULES.actionWidthPx * state.left.length : 0;
@@ -469,7 +470,7 @@ export function SwipeRow({ rowId, title, right, left, onLongPress, disabled, fee
         {children}
       </div>
       {active && left.length > 0 && (
-        <div role="group" aria-label={t('gestures.actionsGroup', { title })} aria-expanded={open} className="ct-swipe-row__a11y">
+        <div role="group" aria-label={t('gestures.actionsGroup', { title })} className="ct-swipe-row__a11y">
           {left.map((action) => (
             <button
               key={action.id}
