@@ -217,6 +217,7 @@ fn plugin_transport<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<Arc<
 /// `ocr_status` sur iPhone. Plugin absent : indisponible avec la raison `plugin-unavailable`.
 #[cfg(target_os = "ios")]
 pub async fn status_on_device<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> OcrStatus {
+    use tauri::Manager;
     let Some(transport) = plugin_transport(app) else { return unavailable_status("plugin-unavailable") };
     let state = app.try_state::<VisionState>().map(|s| s.inner().clone()).unwrap_or_default();
     let mut status = tauri::async_runtime::spawn_blocking(move || status_with(&transport, STATUS_DEADLINE)).await.unwrap_or_else(|_| unavailable_status("plugin-unavailable"));
