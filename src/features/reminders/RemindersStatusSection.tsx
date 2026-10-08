@@ -1,4 +1,6 @@
+import { isValidTimeZone } from '../../domain/timeZone';
 import { localDateTimeAt } from '../../domain/notificationInstant';
+import type { PlanFailureReason } from '../../domain/notificationStatus';
 import { t } from '../../i18n';
 import { formatTime } from '../../i18n/format';
 import { Button } from '../../ui';
@@ -14,12 +16,16 @@ import { requestPermissionOnGesture } from './requestPermission';
  * reconstruit. PC : « Les rappels sont envoyés par l'iPhone », jamais un état d'échec de planification. Écran sans maquette, composé avec les
  * styles de l'écran des récapitulatifs.
  */
+/** Libellé lisible d'une raison d'échec (jamais le code technique). */
+const reasonLabel = (reason: PlanFailureReason): string => t(`reminders.status.reason.${reason}` as 'reminders.status.reason.unavailable');
+
 export function RemindersStatusSection() {
   const container = useAppContainer();
   const state = useFeatureStore(notificationStatusStore, (s) => s);
   const { status, availability } = state;
   const iphone = isInstalledIphone(container);
-  const zoneName = container.notificationClock.zone();
+  const rawZone = container.notificationClock.zone();
+  const zoneName = rawZone !== null && isValidTimeZone(rawZone) ? rawZone : null;
   const clockTime = (iso: string): string => formatTime(localDateTimeAt(Date.parse(iso), zoneName).slice(11, 16));
   const nowLocal = localDateTimeAt(container.clock.nowMs(), zoneName);
 
@@ -63,13 +69,13 @@ export function RemindersStatusSection() {
       )}
       {failure !== null && failure.reason !== 'zone-unknown' && (
         <p className="ct-recap__statusLine" data-kind="problem">
-          {t('reminders.status.planFailed')} · {t('reminders.status.planFailedAt', { time: clockTime(failure.at), code: failure.reason })}
+          {t('reminders.status.planFailed')} · {t('reminders.status.planFailedAt', { time: clockTime(failure.at), code: reasonLabel(failure.reason) })}
           {failure.partial !== null && ` · ${t('reminders.status.planFailedPartial', failure.partial)}`}
         </p>
       )}
       {status.focusEndFailure !== null && (
         <p className="ct-recap__statusLine" data-kind="problem">
-          {t('reminders.status.focusEndFailed')} · {t('reminders.status.planFailedAt', { time: clockTime(status.focusEndFailure.at), code: status.focusEndFailure.reason })}
+          {t('reminders.status.focusEndFailed')} · {t('reminders.status.planFailedAt', { time: clockTime(status.focusEndFailure.at), code: reasonLabel(status.focusEndFailure.reason) })}
         </p>
       )}
       {failure !== null && failure.reason === 'zone-unknown' && (

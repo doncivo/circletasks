@@ -112,7 +112,7 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
     });
     const banner = document.querySelector('.ct-status-banner') as HTMLElement;
     expect(banner).toHaveTextContent('Les rappels n’ont pas pu être planifiés');
-    expect(screen.getByText(/code verify-failed/)).toBeInTheDocument();
+    expect(screen.getByText(/Notification absente après l’envoi/)).toBeInTheDocument();
     expect(screen.getByText(/3 planifiés, 1 annulés, 4 conservés/)).toBeInTheDocument();
     useNavigationStore.getState().navigate({ tab: 'settings', screen: 'home' });
     fireEvent.click(within(banner).getByRole('button', { name: 'Voir le problème de rappels' }));
@@ -122,7 +122,7 @@ describe('Réglages > Rappels : état des rappels (N-01)', () => {
       await replanNotifications(h?.container as never, 'open');
     });
     expect(document.querySelector('.ct-status-banner')).toBeNull();
-    expect(screen.queryByText(/code verify-failed/)).toBeNull();
+    expect(screen.queryByText(/Notification absente après l’envoi/)).toBeNull();
   });
 
   it('plusieurs états : le plus important avec « (+N) » dans le bandeau', async () => {
