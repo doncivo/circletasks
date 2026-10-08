@@ -30,6 +30,9 @@ function useCurrentBanner() {
   const source = useAppStatusStore((state) => (kind ? state.sources[kind] : undefined));
   if (!kind || !source) return null;
   switch (kind) {
+    case 'signingExpiry':
+      // I-02 (ADR 0013 §3.3) : texte composé par l'alerte d'expiration (durée restante) ; à défaut, texte générique selon `detail`.
+      return <StatusBanner message={source.message ?? t(source.detail === 'expired' ? 'status.signingExpired' : 'status.signingSoon')} />;
     case 'calendarDisconnected':
       return (
         <StatusBanner
