@@ -554,16 +554,18 @@ fn b3_snapshot_cache_is_dropped_at_the_start_of_a_scan() {
     assert_eq!(service.matches("inner.snapshot_cache = None;").count(), 4, "choose_folder, scan, key_import, bascule de Y-11 (changement de clé)");
 }
 
-/// Revue B5 : en production, aucun tampon de journal (événement vide) ; la capture n'existe qu'en développement et voit tous les fils
+/// Revue B5 : en production, aucun tampon de journal (événement vide) ; la capture n'existe qu'en développement ou sous `test-hooks` (jamais dans le binaire livré, qui n'active pas cette fonctionnalité) et voit tous les fils
 /// (test des secrets : `sync_key.rs`, import fait depuis un fil annexe).
 #[test]
 fn b5_no_log_buffer_in_production() {
     let source = include_str!("../../src/sync/mod.rs");
     let log = &source[source.find("pub mod log {").unwrap()..];
-    assert!(log.contains("#[cfg(not(debug_assertions))]\n    #[inline]\n    pub fn event(_event: &'static str, _detail: &str) {}"));
+    assert!(log.contains("#[cfg(not(any(debug_assertions, feature = \"test-hooks\")))]\n    #[inline]\n    pub fn event(_event: &'static str, _detail: &str) {}"));
+    let manifest = include_str!("../../Cargo.toml");
+    assert!(manifest.contains("test-hooks = []") && !manifest.contains("default = ["), "test-hooks n'est pas une fonctionnalité par défaut");
     for item in ["static SINKS", "pub fn capture()", "pub struct Capture"] {
         let at = log.find(item).unwrap();
-        assert!(log[..at].trim_end().ends_with("#[cfg(debug_assertions)]"), "{item} réservé au développement");
+        assert!(log[..at].trim_end().ends_with("#[cfg(any(debug_assertions, feature = \"test-hooks\"))]"), "{item} réservé au développement");
     }
 }
 
