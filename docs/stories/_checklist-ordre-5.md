@@ -104,6 +104,28 @@ Sources : fiches K-TECH-01, K-05, K-06, K-07, A-07, Q-05, I-03, I-02. Les critè
 - [ ] Contrat Info.plist de l'IPA de la phase 2 : `NSRemindersFullAccessUsageDescription` et `NSFaceIDUsageDescription` présentes et en français ; aucune clé en trop (notifications, haptique, web-auth, signature : aucune).
 - [ ] Règle d'Ali : parcourir les états d'échec créés par la phase 2 sur l'appareil (accès Rappels refusé, écritures en attente, Google non configuré, verrou impossible, date d'expiration inconnue) : chacun est visible dans Réglages, la fiche ou un bandeau, et disparaît à la résolution.
 
+## Phase 3 : lots F (fichiers, sauvegarde, logs) et C (capture et autorisations), ajouté par le product-owner le 2026-10-08
+
+Sources : fiches FILES-IOS-01, I-04, P-04-iOS, CAP-IOS-01, I-05. Les critères unitaires, e2e (projet `iphone`) et la CI verte sont dans les fiches. Aucune clé Info.plist nouvelle côté lot F ; le lot C ajoute `NSMicrophoneUsageDescription` et `NSSpeechRecognitionUsageDescription` et élargit `NSCameraUsageDescription`. Deux IPA de contrôle (une par lot) avant la fusion, une IPA après.
+
+- [ ] FILES-IOS-01 A1 et A2 : modèle CSV et rapport des rejets enregistrés par la feuille de partage, ouverts dans Fichiers puis Numbers ou Excel (accents, « ; ») ; import d'un CSV choisi dans Fichiers (iCloud Drive et « Sur mon iPhone »), refus d'un fichier de plus de 2 Mo.
+- [ ] FILES-IOS-01 A3 : export H-03 (PDF, image) lisible ; **mémoire du canvas de WKWebView** sur un mois chargé, durée notée (le bouton « Exporter » apparaît désormais sur iPhone).
+- [ ] FILES-IOS-01 A4 à A6 : annulation de la feuille sans erreur, envoi par Mail et AirDrop, aucun fichier temporaire resté, reverrouillage après plus de 30 s hors de l'app.
+- [ ] I-04 A1 à A5 : entrée visible avec l'heure locale et conservée après fermeture forcée, export par Mail ou AirDrop lisible et **sans titre de tâche** après une journée d'usage, journal conservé après une restauration, rotation du journal.
+- [ ] **P-04-iOS A3 (bloquant, cas destructif)** : restauration interrompue par fermeture forcée au plus près du remplacement, 5 essais, jamais une base vide ; noter chaque résultat.
+- [ ] P-04-iOS A1 et A2 : restauration réelle d'une version contenant une tâche, durée notée ; sauvegarde du jour à la première ouverture, aucune en arrière-plan, app tuée pendant une sauvegarde.
+- [ ] P-04-iOS A4 : verrou Face ID activé et version restaurée à verrou désactivé : l'app se recharge verrouillée.
+- [ ] P-04-iOS A5 : appareil associé, restauration d'une version ancienne, fenêtre de choix, aucun cycle avant le choix, puis les deux choix donnent le résultat attendu sur le PC (parcours 10 et 11 relus).
+- [ ] P-04-iOS A6 à A8 : rappels replanifiés après restauration (« Planifiés jusqu'au… »), iPhone presque plein (échec visible, aucune modification), VoiceOver (focus sur « Annuler », annonce de fin).
+- [ ] CAP-IOS-01 A1 : Vision sur une page imprimée et une liste manuscrite (temps < 5 s, comparaison avec tesseract), aucune image conservée.
+- [ ] CAP-IOS-01 A2 et A3 : dictée française correcte **en mode avion** (preuve du traitement sur l'appareil) ; modèle hors ligne absent ou dictée désactivée dans iOS : message persistant, aucun envoi réseau.
+- [ ] CAP-IOS-01 A4 et A5 : écoute interrompue par l'arrière-plan, le verrouillage ou un appel (indicateur orange éteint, texte déjà reconnu conservé).
+- [ ] I-05 A1 : app neuve, ouvrir tous les écrans sans geste : **aucune fenêtre d'autorisation** ; ensuite chaque fenêtre après son explication (notifications, caméra du QR, micro puis reconnaissance vocale, Rappels, Face ID).
+- [ ] I-05 A2 : **caméra du scan de tâches refusée**, « Prendre une photo » : noter ce que voit l'utilisateur ; si le refus ressemble à une annulation, ouvrir un avenant.
+- [ ] I-05 A3 à A5 : micro refusé puis rétabli (message persistant puis disparu sans relancer l'app), reconnaissance vocale refusée seule, relecture des textes d'usage et d'explication en français, VoiceOver sur la feuille d'explication.
+- [ ] Contrat Info.plist de l'IPA de la phase 3 : cinq descriptions d'usage présentes et en français (caméra, micro, reconnaissance vocale, Rappels, Face ID) ; aucune clé en trop (localisation, photothèque, contacts, suivi, arrière-plan).
+- [ ] Règle d'Ali : parcourir les états d'échec créés par la phase 3 (journal non écrit, enregistrement de fichier refusé, marqueur de restauration non écrit, sauvegarde échouée, micro ou reconnaissance refusés, Vision en échec) : chacun est visible dans Réglages, la fiche ou un bandeau et disparaît à la résolution.
+
 ## Point de contrôle de 15 minutes après la phase 1 (demandé par Ali)
 
 Objectif : valider en une séance courte que la chaîne tient, avant d'empiler les phases 2 à 4. IPA produite par `build-ios.yml` sur la branche fusionnée de la phase 1 et signalée à Ali par l'agent de coordination. Chronomètre lancé à l'ouverture du guide `docs/install-iphone.md`.
