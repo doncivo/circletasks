@@ -95,8 +95,8 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | E-02 | M7 | Je crée un anniversaire ou une date importante | checklists-events | fait |
 | E-03 | M7 | J'affiche les jours fériés | checklists-events | fait |
 | E-04 | M7 | Je vois un compte à rebours | checklists-events | fait |
-| K-01 | M8 | Je connecte Google Calendar | calendar-integration | en cours (vérifié sur simulateur ; connexion réelle : ID client OAuth d'Ali) |
-| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | en cours (vérifié sur simulateur ; connexion réelle : mot de passe d'application iCloud d'Ali) |
+| K-01 | M8 | Je connecte Google Calendar | calendar-integration | fait (2026-10-08 : connexion réelle validée par Ali sur PC, agendas, Événements, Semaine, filtre Pro/Perso/Tout, fériés FR et TN ; iPhone avec le plugin web-auth au lot des calendriers) |
+| K-02 | M8 | Je connecte Apple Calendar | calendar-integration | fait (2026-10-08 : connexion réelle validée par Ali sur PC, 4 agendas iCloud, Événements, Semaine, filtre Pro/Perso/Tout) |
 | K-03 | M8 | Mes événements externes se mettent à jour | calendar-integration | fait |
 | K-04 | M8 | Je crée une tâche depuis un événement externe | calendar-integration | fait |
 | RC-01 | M14 | Je cherche n'importe quel élément | spaces-goals | fait |
