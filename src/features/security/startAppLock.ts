@@ -1,4 +1,4 @@
-import { parseAppLockSetting, shouldLock } from '../../domain/appLock';
+import { APP_LOCK_EXCURSION_MAX_MS, APP_LOCK_RELOCK_MS, parseAppLockSetting, shouldLock } from '../../domain/appLock';
 import { t } from '../../i18n';
 import type { AppAuthenticator, AuthFailureCode, AuthResult } from '../../platform/biometric';
 import { logFailure } from '../../platform/desktop/log';
@@ -27,6 +27,12 @@ export interface AppLockDeps {
   readonly readSetting: () => Promise<unknown>;
   readonly writeSetting: (enabled: boolean) => Promise<void>;
   readonly now?: () => number;
+  /**
+   * Horloge monotone (audit B1), `performance.now()` par défaut : WebKit la tire de `mach_absolute_time()` (MonotonicTime::now, comme
+   * `ProcessInfo.systemUptime`) ; elle avance pendant la suspension de l'app et ne s'arrête que pendant la veille de l'appareil, que l'heure
+   * système couvre alors. Verrou si l'une OU l'autre indique le délai écoulé : changer l'heure de l'iPhone ne contourne pas le verrou.
+   */
+  readonly mono?: () => number;
   readonly log?: (code: string) => void;
   readonly doc?: Document;
   readonly win?: Window;
@@ -58,6 +64,7 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
   const doc = deps.doc ?? document;
   const win = deps.win ?? window;
   const now = deps.now ?? (() => Date.now());
+  const mono = deps.mono ?? (() => performance.now());
   const log = deps.log ?? ((code: string) => logFailure('security', code));
   const store = useAppLockStore;
   const set = (patch: Partial<ReturnType<typeof store.getState>>): void => store.setState(patch);
@@ -65,6 +72,7 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
   let disposed = false;
   let removeCover: (() => void) | null = null;
   let backgroundedAt: number | null = null;
+  let backgroundedMono: number | null = null;
   /** Épisode de verrou en cours (lancement ou retour) : une authentification automatique, un seul nouvel essai au `focus`. */
   let episode: { autoTried: boolean; retryOnFocus: boolean; focusRetried: boolean } | null = null;
 
@@ -120,11 +128,14 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
 
   const onHidden = (): void => {
     backgroundedAt ??= now();
+    backgroundedMono ??= mono();
   };
 
   const onVisible = (): void => {
     const at = backgroundedAt;
+    const atMono = backgroundedMono;
     backgroundedAt = null;
+    backgroundedMono = null;
     const state = store.getState();
     if (!state.enabled) {
       setPrivacyCover(doc, false);
@@ -138,7 +149,12 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
     // Audit M1 : seule l'excursion vers Réglages iOS dispense du délai ; dossier, caméra et autorisation suivent la règle des 30 s.
     const taken = takeExcursion();
     const excursion = taken?.kind === 'system-settings' ? { startedAt: taken.startedAt } : null;
-    const relock = shouldLock({ enabled: true, state: 'resume', now: now(), backgroundedAt: at, excursion });
+    const wallLock = shouldLock({ enabled: true, state: 'resume', now: now(), backgroundedAt: at, excursion });
+    // Audit B1 : même règle sur l'horloge monotone (excursion : sa durée maximale ; sinon : le délai de reverrouillage).
+    const monoNow = mono();
+    const monoLock =
+      excursion !== null && taken !== null ? monoNow - taken.startedMono >= APP_LOCK_EXCURSION_MAX_MS : atMono === null || monoNow - atMono >= APP_LOCK_RELOCK_MS;
+    const relock = wallLock || monoLock;
     // Verrou posé AVANT le retrait du cache : le contenu n'est jamais repeint entre les deux.
     if (relock) lock(null);
     setPrivacyCover(doc, false);

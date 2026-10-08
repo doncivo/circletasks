@@ -10,6 +10,8 @@ import { startAppLock, type AppLockController } from './startAppLock';
 
 let visibility: DocumentVisibilityState = 'visible';
 let clock = 1_000_000;
+/** Horloge monotone injectée (audit B1) : n'avance que si le test le dit. */
+let monoClock = 0;
 let fake: FakeAuthenticator;
 let shield: FakePrivacyShield;
 let stored: unknown;
@@ -39,6 +41,7 @@ async function start(options: { readonly read?: () => Promise<unknown>; readonly
       return Promise.resolve();
     },
     now: () => clock,
+    mono: () => monoClock,
     log,
   });
   await controller.ready;
@@ -51,12 +54,13 @@ beforeEach(() => {
   visibility = 'visible';
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => visibility });
   clock = 1_000_000;
+  monoClock = 0;
   fake = createFakeAuthenticator();
   shield = createFakePrivacyShield();
   stored = false;
   writeFails = false;
   log = vi.fn<(code: string) => void>();
-  configureExcursions({ now: () => clock, isVisible: () => visibility !== 'hidden' });
+  configureExcursions({ now: () => clock, mono: () => monoClock, isVisible: () => visibility !== 'hidden' });
   document.body.innerHTML = '<div id="root"><p>contenu</p></div><div id="ct-privacy-cover" aria-hidden="true"></div>';
 });
 
@@ -293,6 +297,46 @@ describe('retour au premier plan et cache de confidentialité (critères 6, 8 et
     clock += 120_000;
     setVisibility('visible');
     expect(state().phase).toBe('unlocked');
+  });
+
+  it('audit B1 : heure système reculée pendant l’arrière-plan (10 s affichées, 60 s écoulées) : l’horloge monotone verrouille', async () => {
+    await unlockedApp();
+    setVisibility('hidden');
+    clock += 10_000;
+    monoClock += 60_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
+  });
+
+  it('audit B1 : 29 s sur les deux horloges : pas de verrou ; 30 s sur la seule horloge monotone : verrou', async () => {
+    await unlockedApp();
+    setVisibility('hidden');
+    clock += 29_000;
+    monoClock += 29_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('unlocked');
+    setVisibility('hidden');
+    monoClock += 30_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
+  });
+
+  it('audit B1 : veille de l’iPhone (horloge monotone arrêtée, heure système +10 min) : l’heure système verrouille', async () => {
+    await unlockedApp();
+    setVisibility('hidden');
+    clock += 600_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
+  });
+
+  it('audit B1 : excursion vers Réglages iOS de 6 min à l’horloge monotone, 1 min à l’heure système : verrou', async () => {
+    await unlockedApp();
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
+    setVisibility('hidden');
+    clock += 60_000;
+    monoClock += 6 * 60_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
   });
 
   it('horloge qui recule : verrouille', async () => {

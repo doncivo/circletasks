@@ -10,17 +10,20 @@
  */
 export type ExcursionKind = 'folder-picker' | 'camera' | 'system-settings' | 'permission';
 
-interface Excursion {
+export interface Excursion {
   readonly kind: ExcursionKind;
   readonly startedAt: number;
+  /** Horloge monotone (`performance.now()`) au départ : insensible à un changement de l'heure système (audit B1). */
+  readonly startedMono: number;
 }
 
 let current: Excursion | null = null;
 let now: () => number = () => Date.now();
+let mono: () => number = () => performance.now();
 let isVisible: () => boolean = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
 
 export function withExcursion<T>(kind: ExcursionKind, run: () => Promise<T>): Promise<T> {
-  const token: Excursion = { kind, startedAt: now() };
+  const token: Excursion = { kind, startedAt: now(), startedMono: mono() };
   current = token;
   const settle = (): void => {
     // Réglages iOS : la promesse se résout AVANT le passage en arrière-plan ; l'excursion attend le retour (ou ses 5 min).
@@ -37,16 +40,17 @@ export function withExcursion<T>(kind: ExcursionKind, run: () => Promise<T>): Pr
 }
 
 /** Retour au premier plan : rend l'excursion en cours (ou null) et l'efface. */
-export function takeExcursion(): { readonly kind: ExcursionKind; readonly startedAt: number } | null {
+export function takeExcursion(): Excursion | null {
   const taken = current;
   current = null;
   return taken;
 }
 
 /** Tests : horloge et visibilité injectées, état effacé. */
-export function configureExcursions(options: { readonly now?: () => number; readonly isVisible?: () => boolean } = {}): void {
+export function configureExcursions(options: { readonly now?: () => number; readonly mono?: () => number; readonly isVisible?: () => boolean } = {}): void {
   current = null;
   now = options.now ?? (() => Date.now());
+  mono = options.mono ?? (() => performance.now());
   isVisible = options.isVisible ?? (() => typeof document === 'undefined' || document.visibilityState !== 'hidden');
 }
 
