@@ -86,8 +86,10 @@ export function createTauriFocusEndScheduler(deps: FocusEndDeps): FocusEndSchedu
 
     async cancel(sessionId) {
       const read = await ledger.read();
-      // Ne retire que la notification de CETTE session (une autre session a pu la remplacer).
-      if (read.state !== 'valid' || read.ledger.focusEnd?.sessionId !== sessionId) return;
+      // Ne sort sans annuler que si le registre est valide ET porte une AUTRE session (elle a pris la place). Registre absent, illisible ou
+      // non écrit après l'envoi : on ne sait pas, l'identifiant 1 est annulé (une notification de fin qui sonnerait à tort est pire).
+      const other = read.state === 'valid' ? read.ledger.focusEnd : null;
+      if (other !== null && other.sessionId !== sessionId) return;
       await cancelPlugin();
       await writeLedger(null);
     },

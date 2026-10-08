@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NotificationLedgerV1 } from '../../domain/notificationLedger';
+import type { LedgerRead, NotificationLedgerV1 } from '../../domain/notificationLedger';
 import { createLedgerStore } from '../notifications/notificationLedger';
 import type { IosNotificationBridge, PendingItem, ShowPayload } from '../notifications/tauriNotifications';
 import { NotificationSchedulerError, type NotificationPermission } from '../notifications/types';
@@ -31,8 +31,9 @@ function setup() {
     requestPermission: () => Promise.resolve('granted'),
   };
   let ledger: NotificationLedgerV1 | null = null;
+  let forced: LedgerRead | null = null;
   const store = createLedgerStore({
-    load: () => Promise.resolve(ledger === null ? { state: 'missing' } : { state: 'valid', ledger }),
+    load: () => Promise.resolve(forced ?? (ledger === null ? { state: 'missing' } : { state: 'valid', ledger })),
     save: (next) => {
       if (state.ledgerFails) return Promise.reject(new Error('écriture impossible'));
       ledger = next;
@@ -45,7 +46,7 @@ function setup() {
     clock: { nowMs: () => state.now, zone: () => 'Europe/Paris' },
     compose: (title, minutes) => ({ title: `Session terminée · ${String(minutes)} min`, body: title }),
   });
-  return { scheduler, pending, shown, cancels, state, ledger: () => ledger, store };
+  return { scheduler, pending, shown, cancels, state, ledger: () => ledger, store, setRead: (read: LedgerRead) => void (forced = read) };
 }
 
 /** F-04 critères 11 à 16 : notification de fin de session, identifiant réservé 1. */
@@ -88,8 +89,9 @@ describe('notification de fin de Focus, adaptateur iOS (F-04 critères 11 et 12)
     await scheduler.cancel('s1');
     expect(pending.size).toBe(0);
     expect(cancels).toEqual([[1]]);
+    // Sans autre session au registre, l'annulation est répétée (sans effet : rien n'est en attente).
     await scheduler.cancel('s1');
-    expect(cancels).toHaveLength(1);
+    expect(pending.size).toBe(0);
   });
 
   it('une session plus récente a pris la place : l’annulation de l’ancienne est sans effet', async () => {
@@ -138,6 +140,27 @@ describe('notification de fin de Focus, adaptateur iOS (F-04 critères 11 et 12)
     await t.scheduler.schedule('s1', END, 'T', 25);
     t.state.failCancel = true;
     await expect(t.scheduler.cancel('s1')).rejects.toMatchObject({ reason: 'schedule-failed' });
+  });
+
+  it('registre non écrit après l’envoi (ledger-failed) : cancel(sessionId) annule quand même l’identifiant 1', async () => {
+    const t = setup();
+    t.state.ledgerFails = true;
+    await expect(t.scheduler.schedule('s1', END, 'T', 25)).rejects.toMatchObject({ reason: 'ledger-failed' });
+    expect(t.pending.size).toBe(1);
+    t.state.ledgerFails = false;
+    await t.scheduler.cancel('s1');
+    expect(t.pending.size).toBe(0);
+  });
+
+  it('registre illisible : cancel(sessionId) annule l’identifiant 1 ; registre valide d’une AUTRE session : rien n’est annulé', async () => {
+    const t = setup();
+    await t.scheduler.schedule('s1', END, 'T', 25);
+    await t.store.update(() => ({ v: 1, zone: null, entries: [], focusEnd: { sessionId: 'autre', at: 1 } }));
+    await t.scheduler.cancel('s1');
+    expect(t.pending.size).toBe(1);
+    t.setRead({ state: 'unreadable' });
+    await t.scheduler.cancel('s1');
+    expect(t.pending.size).toBe(0);
   });
 
   it('la fin de Focus écrite dans le registre survit à une mise à jour du plan (même registre partagé)', async () => {
