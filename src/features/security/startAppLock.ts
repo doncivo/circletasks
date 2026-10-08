@@ -135,7 +135,9 @@ export function startAppLock(deps: AppLockDeps): AppLockController {
       requestAutoUnlock();
       return;
     }
-    const excursion = takeExcursion();
+    // Audit M1 : seule l'excursion vers Réglages iOS dispense du délai ; dossier, caméra et autorisation suivent la règle des 30 s.
+    const taken = takeExcursion();
+    const excursion = taken?.kind === 'system-settings' ? { startedAt: taken.startedAt } : null;
     const relock = shouldLock({ enabled: true, state: 'resume', now: now(), backgroundedAt: at, excursion });
     // Verrou posé AVANT le retrait du cache : le contenu n'est jamais repeint entre les deux.
     if (relock) lock(null);

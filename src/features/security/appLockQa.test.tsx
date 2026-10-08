@@ -336,7 +336,7 @@ describe('I-03-1 retour au premier plan : 29,9 s, 30 s, horloge', () => {
 describe('I-03-10 excursions', () => {
   it('I-03-10 excursion utilisée deux fois : la seconde sortie en arrière-plan reverrouille', async () => {
     await unlockedApp();
-    void withExcursion('permission', () => new Promise<void>(() => undefined));
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 60_000;
     setVisibility('visible');
@@ -349,7 +349,7 @@ describe('I-03-10 excursions', () => {
 
   it('I-03-10 excursion expirée : arrière-plan de 10 min pendant l’excursion, reverrouillage au retour', async () => {
     await unlockedApp();
-    void withExcursion('camera', () => new Promise<void>(() => undefined));
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 10 * 60_000;
     setVisibility('visible');
@@ -359,12 +359,12 @@ describe('I-03-10 excursions', () => {
 
   it('I-03-10 excursion de 4 min 59 s : pas de verrou ; juste au-delà de 5 min : verrou', async () => {
     await unlockedApp();
-    void withExcursion('folder-picker', () => new Promise<void>(() => undefined));
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 5 * 60_000 - 1_000;
     setVisibility('visible');
     expect(state().phase).toBe('unlocked');
-    void withExcursion('folder-picker', () => new Promise<void>(() => undefined));
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 5 * 60_000 + 1;
     setVisibility('visible');

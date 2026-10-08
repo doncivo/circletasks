@@ -1,6 +1,7 @@
 /**
- * Excursions voulues par l'app (I-03, ADR 0013 §2.4) : le sélecteur de dossier, la caméra du scan, Réglages iOS et les demandes
- * d'autorisation ne déclenchent pas de reverrouillage au retour. L'excursion est notée AVANT l'appel et consommée une seule fois, au
+ * Excursions voulues par l'app (I-03, ADR 0013 §2.4 et avenant, audit M1) : seule `system-settings` (Réglages iOS, l'app passe en
+ * arrière-plan) dispense du délai de 30 s au retour. Le sélecteur de dossier, la caméra du scan et les demandes d'autorisation
+ * s'affichent dans l'app : un VRAI passage en arrière-plan pendant l'une d'elles suit la règle des 30 s. L'excursion est notée AVANT l'appel et consommée une seule fois, au
  * premier retour au premier plan qui suit (`takeExcursion`) ; la politique (`shouldLock`) l'ignore après 5 min.
  *
  * Complément plus strict que l'ADR : une excursion terminée alors que le document est visible (sélecteur, caméra ou fenêtre
@@ -36,10 +37,10 @@ export function withExcursion<T>(kind: ExcursionKind, run: () => Promise<T>): Pr
 }
 
 /** Retour au premier plan : rend l'excursion en cours (ou null) et l'efface. */
-export function takeExcursion(): { readonly startedAt: number } | null {
+export function takeExcursion(): { readonly kind: ExcursionKind; readonly startedAt: number } | null {
   const taken = current;
   current = null;
-  return taken ? { startedAt: taken.startedAt } : null;
+  return taken;
 }
 
 /** Tests : horloge et visibilité injectées, état effacé. */

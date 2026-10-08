@@ -240,16 +240,27 @@ describe('retour au premier plan et cache de confidentialité (critères 6, 8 et
     expect(fake.authenticateCount()).toBe(2);
   });
 
-  it('excursion (caméra du scan) : pas de reverrouillage au retour, même après 30 s ; consommée une fois', async () => {
+  it('excursion vers Réglages iOS : pas de reverrouillage au retour, même après 30 s ; consommée une fois', async () => {
     await unlockedApp();
-    let finish = (): void => undefined;
-    const scan = withExcursion('camera', () => new Promise<void>((resolve) => (finish = resolve)));
+    void withExcursion('system-settings', () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 60_000;
     setVisibility('visible');
     expect(state().phase).toBe('unlocked');
-    finish();
-    await scan;
+    setVisibility('hidden');
+    clock += 30_000;
+    setVisibility('visible');
+    expect(state().phase).toBe('locked');
+  });
+
+  it.each(['camera', 'folder-picker', 'permission'] as const)('audit M1 : excursion %s et VRAI passage en arrière-plan : règle des 30 s', async (kind) => {
+    await unlockedApp();
+    void withExcursion(kind, () => new Promise<void>(() => undefined));
+    setVisibility('hidden');
+    clock += 29_999;
+    setVisibility('visible');
+    expect(state().phase).toBe('unlocked');
+    void withExcursion(kind, () => new Promise<void>(() => undefined));
     setVisibility('hidden');
     clock += 30_000;
     setVisibility('visible');
