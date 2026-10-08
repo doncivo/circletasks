@@ -1,9 +1,10 @@
-// Comptage des tests par job pour le résumé de suite.yml.
+// Comptage des tests par job pour le résumé de tests.yml.
 //   node scripts/ci/test-counts.mjs write <vitest|playwright|cargo> <fichier de rapport> <sortie.json> <étiquette>
 //   node scripts/ci/test-counts.mjs summary <dossier de sorties>   (Markdown sur la sortie standard)
 // Aucune dépendance : s'exécute avant ou sans `npm ci`.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import process from 'node:process';
 
 const [mode, ...args] = process.argv.slice(2);
 
@@ -47,7 +48,7 @@ if (mode === 'write') {
   const lines = ['| Job | Tranches | Tests | Réussis | Échoués | Ignorés |', '|---|---:|---:|---:|---:|---:|'];
   for (const [label, t] of rows) lines.push(`| ${label} | ${t.shards} | ${t.total} | ${t.passed} | ${t.failed} | ${t.skipped} |`);
   lines.push(`| **Total** | ${rows.reduce((n, [, t]) => n + t.shards, 0)} | **${sum('total')}** | ${sum('passed')} | ${sum('failed')} | ${sum('skipped')} |`);
-  console.log(lines.join('\n'));
+  process.stdout.write(lines.join('\n') + '\n');
 } else {
   throw new Error('usage : write|summary');
 }
