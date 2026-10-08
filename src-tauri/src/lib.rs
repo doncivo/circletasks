@@ -71,6 +71,13 @@ pub fn run() {
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_notification::init());
+    // Lot M (ADR 0013) : Face ID (I-03), retour haptique (A-07), cache de confidentialité natif (I-03). iOS seulement.
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_biometric::init());
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_ct_haptics::init());
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_privacy_shield::init());
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

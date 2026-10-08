@@ -98,6 +98,15 @@ jobs:
           WIN=$(cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-notification 2>&1 || true)
           echo "$WIN"
           if grep -q "tauri-plugin-notification v" <<<"$WIN"; then echo "::error::tauri-plugin-notification présent dans la compilation Windows"; exit 1; fi
+          # Lot M (ADR 0013 §5) : Face ID (I-03, officiel épinglé), retour haptique (A-07, plugin local) et cache de confidentialité
+          # (I-03, plugin local) : iPhone seulement.
+          for CRATE in tauri-plugin-biometric tauri-plugin-ct-haptics tauri-plugin-privacy-shield; do
+            IOS=$(cargo tree --target aarch64-apple-ios -i "$CRATE" 2>&1 || true)
+            echo "$IOS"
+            grep -q "$CRATE v" <<<"$IOS" || { echo "::error::$CRATE absent de la compilation iOS"; exit 1; }
+            WIN=$(cargo tree --target x86_64-pc-windows-msvc -i "$CRATE" 2>&1 || true)
+            if grep -q "$CRATE v" <<<"$WIN"; then echo "::error::$CRATE présent dans la compilation Windows"; exit 1; fi
+          done
 
       # Option officielle du CLI Tauri `--no-sign` (crates/tauri-cli/src/mobile/ios/build.rs, v2.12.1) :
       # `xcodebuild archive` avec CODE_SIGNING_ALLOWED=NO pendant que le CLI sert ses options à la phase

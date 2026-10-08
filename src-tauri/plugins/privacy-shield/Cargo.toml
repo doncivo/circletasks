@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-privacy-shield"
+version = "0.1.0"
+description = "CircleTasks : cache de confidentialité natif iOS (I-03, ADR 0013 §2.5), vue opaque sur la fenêtre quand l'app devient inactive."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Exigé par tauri-plugin ; donne aussi le préfixe des permissions (`privacy-shield:`), égal au nom du plugin à l'exécution.
+links = "tauri-plugin-privacy-shield"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

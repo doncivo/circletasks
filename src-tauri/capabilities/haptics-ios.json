@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "haptics-ios",
+  "description": "iPhone uniquement : retour haptique des gestes (A-07, ADR 0013 §1.1), plugin local haptics. Liste exacte fixée par tests/desktop/config.rs.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": ["haptics:allow-impact-feedback", "haptics:allow-notification-feedback", "haptics:allow-selection-feedback"]
+}

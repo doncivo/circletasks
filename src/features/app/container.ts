@@ -17,6 +17,9 @@ import {
   type NotificationScheduler,
 } from '../../platform/notifications';
 import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
+import { createNoopHaptics, type Haptics } from '../../platform/haptics';
+import { createUnavailableAuthenticator, type AppAuthenticator } from '../../platform/biometric';
+import { createNoopPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
 import { createSettingsLedger } from '../reminders/settingsLedger';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
@@ -79,6 +82,12 @@ export interface AppContainer {
   readonly sync: SyncEngineService | null;
   /** Plateforme de synchro du service (`openSyncPlatform`), partagée avec la section Réglages ; null sans synchro. */
   readonly syncPlatform: SyncPlatform | null;
+  /** Retour haptique (A-07, ADR 0013 §1.2) : plugin local sur l'iPhone installé, vide ailleurs ; cosmétique, ne rejette jamais. */
+  readonly haptics: Haptics;
+  /** Face ID ou code de l'iPhone (I-03, ADR 0013 §2.2) : plugin officiel sur l'iPhone installé, non pris en charge ailleurs. */
+  readonly authenticator: AppAuthenticator;
+  /** Cache de confidentialité natif (I-03, ADR 0013 §2.5) : plugin local sur l'iPhone installé, vide ailleurs. */
+  readonly privacyShield: PrivacyShield;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -126,6 +135,9 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     backups: parts.backups ?? createUnavailableBackup(),
     sync: parts.sync ?? null,
     syncPlatform: parts.syncPlatform ?? null,
+    haptics: parts.haptics ?? createNoopHaptics(),
+    authenticator: parts.authenticator ?? createUnavailableAuthenticator(),
+    privacyShield: parts.privacyShield ?? createNoopPrivacyShield(),
   };
 }
 

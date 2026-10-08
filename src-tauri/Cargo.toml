@@ -76,6 +76,13 @@ tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
 # sync_key_import. Version exacte relue (2.5.1, revue audit), alignée sur @tauri-apps/plugin-barcode-scanner ~2.5.1 ; relire le code
 # (API Rust, permissions) à chaque montée de version.
 tauri-plugin-barcode-scanner = "=2.5.1"
+# Verrouillage par Face ID ou code de l'iPhone (I-03, ADR 0013 §2.1) : version ÉPINGLÉE (les constats 3 à 6 de l'ADR lisent son code Swift ;
+# toute montée exige une relecture et un avenant). iOS seulement ; aucune commande Rust, permissions accordées par biometric-ios.json.
+tauri-plugin-biometric = "=2.4.1"
+# Retour haptique (A-07, ADR 0013 §1.1) : plugin Swift local (générateurs UIKit sur le fil principal), nom Tauri « haptics ».
+tauri-plugin-ct-haptics = { path = "plugins/haptics" }
+# Cache de confidentialité natif (I-03, ADR 0013 §2.5, décision d'Ali du 2026-10-08) : vue opaque quand l'app devient inactive.
+tauri-plugin-privacy-shield = { path = "plugins/privacy-shield" }
 
 # Fuseau local de la boîte « Oublier cet appareil » (ADR 0011 §23 point 4) : localtime_r. Même version que celle déjà tirée.
 [target.'cfg(unix)'.dependencies]

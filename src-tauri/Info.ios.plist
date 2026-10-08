@@ -7,6 +7,9 @@
 	<!-- Y-IOS-02 (ADR 0011 §23 point 2) : scan du QR d'association par barcode-scanner. CAP-IOS-01 réutilisera la clé. -->
 	<key>NSCameraUsageDescription</key>
 	<string>CircleTasks utilise la caméra pour scanner le code d'association affiché sur votre PC.</string>
+	<!-- I-03 (ADR 0013 §2.1) : verrouillage par Face ID (plugin biometric). Sans cette clé, Face ID est indisponible (constat 6). -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>CircleTasks utilise Face ID pour garder vos tâches privées.</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>

@@ -18,6 +18,9 @@ import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type Ca
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
 import { openSyncPlatform } from '../../platform/sync';
+import { openHaptics, type Haptics } from '../../platform/haptics';
+import { openAuthenticator, type AppAuthenticator } from '../../platform/biometric';
+import { openPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
@@ -101,6 +104,12 @@ export interface BootstrapAppOptions {
    * navigateur de développement) ; null, ou une plateforme indisponible (iPhone jusqu'à l'ordre 5) : pas de synchro, aucun coût.
    */
   readonly syncPlatform?: SyncPlatform | null;
+  /** Retour haptique (A-07) ; `openHaptics` par défaut. */
+  readonly haptics?: Haptics;
+  /** Face ID (I-03) ; `openAuthenticator` par défaut. */
+  readonly authenticator?: AppAuthenticator;
+  /** Cache de confidentialité natif (I-03) ; `openPrivacyShield` par défaut. */
+  readonly privacyShield?: PrivacyShield;
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -173,6 +182,9 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
       backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),
       calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
+      haptics: options.haptics ?? openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) }),
+      authenticator: options.authenticator ?? openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) }),
+      privacyShield: options.privacyShield ?? openPrivacyShield(runtime, os),
     });
   } catch (error) {
     useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });
