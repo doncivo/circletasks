@@ -54,6 +54,7 @@ pub fn run() {
         sync::commands::sync_device_forget, sync::commands::sync_forgotten_delete, sync::commands::sync_reset_key,
     ]);
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
+    // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
     #[cfg(target_os = "ios")]

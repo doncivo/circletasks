@@ -9,7 +9,6 @@ import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFai
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
-import { nativeConfirmationAvailable } from './iosSync';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
 
@@ -307,7 +306,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           options={[
             { id: 'folder', label: t('sync.folder.forgetFolder') },
             // Effacer la clé demande une confirmation native : masqué tant qu'elle n'existe pas sur cet appareil (§22 point 7).
-            ...(nativeConfirmationAvailable(container.platform.os) ? [{ id: 'folder-and-key' as const, label: t('sync.folder.forgetFolderAndKey') }] : []),
+            { id: 'folder-and-key' as const, label: t('sync.folder.forgetFolderAndKey') },
           ]}
           optionVariant="danger"
           onChoose={(choice) => void forget(choice)}

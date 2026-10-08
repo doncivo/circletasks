@@ -8,7 +8,6 @@ import { ForgetDeviceDialog } from './ForgetDeviceDialog';
 import { syncStore } from './syncStore';
 import './SyncDetailsForget.css';
 import { forgetDeletionLine, forgetDeviceName, forgetFailureText } from './forgetText';
-import { nativeConfirmationAvailable } from './iosSync';
 import { deviceName, formatSyncTime } from './syncText';
 
 /**
@@ -162,12 +161,9 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
         </span>
       )}
       <span className="ct-sync__deviceRead">{t('sync.forget.shortId', { id: String(device.deviceId).slice(0, 8) })}</span>
-      {/* Confirmation native requise : masqué tant qu'elle n'existe pas sur cet appareil (ADR 0011 §22 point 7). */}
-      {nativeConfirmationAvailable(container.platform.os) && (
-        <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
-          {t('sync.forget.action')}
-        </Button>
-      )}
+      <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
+        {t('sync.forget.action')}
+      </Button>
       {notice && (
         <span role="status" className="ct-sync__deviceRead">
           {notice}
