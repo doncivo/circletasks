@@ -217,7 +217,7 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
 }
 
 /// Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3). Écrit sur la sortie d'erreur
-/// en développement seulement ; les tests le capturent par `take_log`.
+/// en développement ou sous `test-hooks` seulement ; les tests le capturent par `take_log`.
 pub mod log {
     //! En production, aucun journal n'est gardé : un événement n'est ni écrit ni conservé (pas de tampon inutilisé, revue B5). En
     //! développement et dans les tests (`debug_assertions`, ou fonctionnalité `test-hooks` y compris en release), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par

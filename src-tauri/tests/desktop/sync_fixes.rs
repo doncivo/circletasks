@@ -562,7 +562,9 @@ fn b5_no_log_buffer_in_production() {
     let log = &source[source.find("pub mod log {").unwrap()..];
     assert!(log.contains("#[cfg(not(any(debug_assertions, feature = \"test-hooks\")))]\n    #[inline]\n    pub fn event(_event: &'static str, _detail: &str) {}"));
     let manifest = include_str!("../../Cargo.toml");
-    assert!(manifest.contains("test-hooks = []") && !manifest.contains("default = ["), "test-hooks n'est pas une fonctionnalité par défaut");
+    let key_is = |line: &str, name: &str| line.split('=').next().is_some_and(|k| k.trim() == name);
+    assert!(manifest.lines().filter(|l| key_is(l, "default")).all(|l| !l.contains("test-hooks")), "test-hooks n'est pas une fonctionnalité par défaut");
+    assert!(manifest.lines().any(|l| key_is(l, "test-hooks")), "fonctionnalité test-hooks déclarée");
     for item in ["static SINKS", "pub fn capture()", "pub struct Capture"] {
         let at = log.find(item).unwrap();
         assert!(log[..at].trim_end().ends_with("#[cfg(any(debug_assertions, feature = \"test-hooks\"))]"), "{item} réservé au développement");
