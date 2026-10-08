@@ -137,8 +137,68 @@ fn d03_10_real_public_key_is_in_place_and_well_formed() {
 #[test]
 fn d01_9_tooltip_and_no_notification_plugin() {
     assert_eq!(circletasks_lib::desktop::TRAY_TOOLTIP, "CircleTasks");
-    assert!(!CARGO.contains("tauri-plugin-notification"));
+    // N-01 (ADR 0012 avenant lot N1) : le plugin existe, mais sous cfg(target_os = "ios") seulement ; le PC n'envoie aucune notification.
+    assert_notification_plugin_is_ios_only();
     assert!(!DESKTOP_SOURCE.contains("tauri_plugin_notification") && !DESKTOP_SOURCE.contains("NotificationExt"));
+}
+
+const IOS_NOTIFICATIONS_CAPABILITY: &str = include_str!("../../capabilities/notifications-ios.json");
+
+/// Chaque déclaration du plugin dans Cargo.toml est épinglée (=2.5.1) et sous la section des dépendances iOS.
+fn assert_notification_plugin_is_ios_only() {
+    let mut section = String::new();
+    let mut found = 0;
+    for line in CARGO.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed.to_owned();
+        }
+        if trimmed.starts_with("tauri-plugin-notification") {
+            found += 1;
+            assert_eq!(section, "[target.'cfg(target_os = \"ios\")'.dependencies]", "plugin hors de la section iOS");
+            assert!(trimmed.contains("\"=2.5.1\""), "version non épinglée : {trimmed}");
+        }
+    }
+    assert_eq!(found, 1, "une seule déclaration du plugin");
+}
+
+/// N-01 (N1.1) : le plugin n'est enregistré dans lib.rs que sous cfg(target_os = "ios"), jamais sous desktop.
+#[test]
+fn n01_notification_plugin_is_registered_for_ios_only() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_notification")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    assert!(!lines.iter().any(|l| l.contains("NotificationExt")));
+}
+
+/// N-01 (N1.1) : liste EXACTE des permissions de la capability iOS ; fenêtre principale, iOS seulement ; aucune autre capability n'accorde notification:.
+#[test]
+fn n01_ios_notifications_capability_grants_exactly_the_eight_permissions() {
+    let capability: Value = serde_json::from_str(IOS_NOTIFICATIONS_CAPABILITY).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    let mut names = permissions_of(IOS_NOTIFICATIONS_CAPABILITY);
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "notification:allow-cancel",
+            "notification:allow-get-pending",
+            "notification:allow-is-permission-granted",
+            "notification:allow-register-action-types",
+            "notification:allow-register-listener",
+            "notification:allow-remove-listener",
+            "notification:allow-request-permission",
+            "notification:allow-show",
+        ]
+    );
+    for forbidden in ["allow-notify", "allow-batch", "allow-get-active", "allow-remove-active", "allow-check-permissions", "allow-permission-state", ":default"] {
+        assert!(!names.iter().any(|name| name.contains(forbidden)), "{forbidden}");
+    }
+    for other in other_capabilities("notifications-ios.json") {
+        assert!(!other.contains("notification:"), "une autre capability accorde notification:");
+    }
 }
 
 /// D-02 critère 2 : l'entrée de démarrage porte l'argument de démarrage réduit.
@@ -298,7 +358,7 @@ fn manifest_commands() -> std::collections::BTreeSet<String> {
         .collect()
 }
 
-/// (1) `generate_handler!` = `AppManifest::commands`.
+/// (1) Union des `generate_handler!` (PC et iPhone) = `AppManifest::commands` (ADR 0011 §22 point 7).
 #[test]
 fn sync_1_handlers_equal_the_build_manifest() {
     let handlers = handler_commands();
@@ -342,7 +402,7 @@ fn sync_3_pairing_capability_grants_exactly_three_commands_and_no_core_permissio
 #[test]
 fn sync_4_no_other_capability_grants_sync_permissions() {
     for (name, text) in all_capabilities() {
-        if name == "sync.json" || name == "sync-pairing.json" {
+        if name == "sync.json" || name == "sync-pairing.json" || name == "sync-ios.json" {
             continue;
         }
         assert!(!permissions_of(&text).iter().any(|p| p.contains("sync-")), "{name}");
@@ -437,4 +497,83 @@ fn sync_6_focus_launcher_grants_only_the_three_focus_commands() {
     let mut granted = permissions_of(FOCUS_LAUNCHER_CAPABILITY);
     granted.sort();
     assert_eq!(granted, ["allow-focus-window-bring-to-front", "allow-focus-window-close", "allow-focus-window-open"]);
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// iPhone (ADR 0011 §22 point 7, Y-IOS-01)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const SYNC_IOS_CAPABILITY: &str = include_str!("../../capabilities/sync-ios.json");
+
+/// Commandes de l'iPhone (ADR 0011 §23 point 5) : les 24 moins les trois de la fenêtre `pairing`.
+const PAIRING_WINDOW_COMMANDS: [&str; 3] = ["sync_pairing_open", "sync_pairing_payload", "sync_pairing_close"];
+/// Les cinq commandes du plugin barcode-scanner (scan du QR par le JS, §23 point 2), seules permissions de plugin de `sync-ios.json`.
+const BARCODE_PERMISSIONS: [&str; 5] = [
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-check-permissions",
+    "barcode-scanner:allow-request-permissions",
+    "barcode-scanner:allow-open-app-settings",
+];
+
+fn ios_sync_commands() -> Vec<&'static str> {
+    SYNC_COMMANDS.iter().copied().filter(|c| !PAIRING_WINDOW_COMMANDS.contains(c)).collect()
+}
+
+/// Commandes du gestionnaire de l'iPhone (`generate_handler!` du bloc `cfg(target_os = "ios")`).
+fn ios_handler_commands() -> std::collections::BTreeSet<String> {
+    let marker = "#[cfg(target_os = \"ios\")]\n    let builder = builder.invoke_handler(tauri::generate_handler![";
+    let start = LIB_SOURCE.find(marker).expect("gestionnaire iOS") + marker.len();
+    let body = &LIB_SOURCE[start..start + LIB_SOURCE[start..].find(']').unwrap()];
+    let body: String = body.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join(" ");
+    body.split(',').map(str::trim).filter(|i| !i.is_empty()).map(|i| i.rsplit("::").next().unwrap().to_owned()).collect()
+}
+
+/// (7) `sync-ios.json` : exactement sa liste, fenêtre `main`, iOS seulement ; aucune commande de la fenêtre `pairing` accordée à une
+/// capability iOS ni présente dans le gestionnaire de l'iPhone, qui contient exactement les commandes accordées.
+#[test]
+fn sync_7_ios_capability_grants_exactly_its_list_and_no_pairing_window_command() {
+    let capability: Value = serde_json::from_str(SYNC_IOS_CAPABILITY).expect("sync-ios.json valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    assert!(capability.get("webviews").is_none());
+    let mut granted = permissions_of(SYNC_IOS_CAPABILITY);
+    granted.sort();
+    let mut expected: Vec<String> = ios_sync_commands().iter().map(|c| permission_of(c)).chain(BARCODE_PERMISSIONS.iter().map(|p| (*p).to_owned())).collect();
+    expected.sort();
+    assert_eq!(granted.iter().filter(|p| p.starts_with("allow-sync-")).count(), 21);
+    assert_eq!(granted, expected);
+    // Aucune autre capability n'accorde le scan (une seule fenêtre, iPhone).
+    for (name, text) in all_capabilities() {
+        if name != "sync-ios.json" {
+            assert!(!text.contains("barcode-scanner:"), "{name}");
+        }
+    }
+    let handler = ios_handler_commands();
+    let synced: std::collections::BTreeSet<String> = handler.iter().filter(|c| c.starts_with("sync_")).cloned().collect();
+    assert_eq!(synced, ios_sync_commands().iter().map(|c| (*c).to_owned()).collect());
+    for (name, text) in all_capabilities() {
+        let capability: Value = serde_json::from_str(&text).unwrap();
+        let ios = capability["platforms"].as_array().is_some_and(|p| p.iter().any(|x| x == "iOS"));
+        for command in PAIRING_WINDOW_COMMANDS {
+            assert!(!handler.contains(command), "{command} dans le gestionnaire de l'iPhone");
+            if ios {
+                assert!(!permissions_of(&text).contains(&permission_of(command)), "{name} accorde {command} sur iPhone");
+            }
+        }
+    }
+}
+
+/// (8) Aucune capability ne contient `folder-bookmark:` : la WebView ne peut appeler aucune commande du plugin (Rust seul l'appelle).
+#[test]
+fn sync_8_no_capability_grants_the_folder_bookmark_plugin() {
+    for (name, text) in all_capabilities() {
+        assert!(!text.contains("folder-bookmark:"), "{name}");
+    }
+    // Le plugin est une dépendance de la cible iOS seulement, enregistré dans le bloc iOS de lib.rs.
+    let ios_deps = &CARGO[CARGO.find("[target.'cfg(target_os = \"ios\")'.dependencies]").unwrap()..];
+    let ios_deps = &ios_deps[..ios_deps[1..].find("\n[").map_or(ios_deps.len(), |i| i + 1)];
+    assert!(ios_deps.contains("tauri-plugin-folder-bookmark = { path = \"plugins/folder-bookmark\" }"));
+    assert_eq!(CARGO.matches("tauri-plugin-folder-bookmark").count(), 1, "aucune autre cible");
+    assert!(LIB_SOURCE.contains("#[cfg(target_os = \"ios\")]\n    let builder = builder.plugin(tauri_plugin_folder_bookmark::init())"));
 }

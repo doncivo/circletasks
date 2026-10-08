@@ -1,4 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './app';
 import { addIsoDays, browserToday } from './schedule';
 
 /** Aides e2e de la Semaine (S-01 à S-05), communes aux projets `pc` et `iphone`. */
@@ -18,6 +19,7 @@ export const weekTab = (page: Page): Locator => page.getByRole('navigation').get
 
 /** Ouvre l'onglet Semaine (clic sur l'onglet) et attend les sept jours. */
 export async function openWeek(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'weekscreen');
   await weekTab(page).click();
   await expect(page.locator('.ct-week-day')).toHaveCount(7);
 }

@@ -553,13 +553,15 @@ pub fn completed_forgotten(published: &[ForgottenDevice], master: &[ForgottenDev
 
 /// Détail de la boîte native (audit Y-10 e) : plateforme, dernière synchro et 8 premiers caractères de l'identifiant, lus par Rust
 /// dans l'état authentifié de la cible (textes de `src/i18n/native/fr.json`, section `forgetDetail`).
-pub fn forget_dialog_detail(device_id: &str, state: Option<&PublishedState>, local_offset_minutes: i64) -> String {
+/// `local_offset_minutes` : décalage du fuseau local (None : inconnu : heure UTC, suivie de « UTC », ADR 0011 §23 point 4).
+pub fn forget_dialog_detail(device_id: &str, state: Option<&PublishedState>, local_offset_minutes: Option<i64>) -> String {
     let texts = super::consent::forget_detail_texts();
     let short: String = device_id.chars().take(8).collect();
     let Some(state) = state else { return texts.never.replace("{id}", &short) };
     let platform = if state.platform == "ios" { texts.ios.clone() } else { texts.windows.clone() };
-    let ms = split_hlc(&state.last_sync_hlc).map_or(0, |(ms, _)| ms) as i64 + local_offset_minutes * 60_000;
+    let ms = split_hlc(&state.last_sync_hlc).map_or(0, |(ms, _)| ms) as i64 + local_offset_minutes.unwrap_or(0) * 60_000;
     let (date, time) = local_date_time(ms);
+    let time = if local_offset_minutes.is_none() { texts.utc.replace("{time}", &time) } else { time };
     texts.detail.replace("{platform}", &platform).replace("{id}", &short).replace("{date}", &date).replace("{time}", &time)
 }
 
@@ -580,8 +582,19 @@ pub fn local_date_time(local_ms: i64) -> (String, String) {
     (format!("{day:02}/{month:02}/{year:04}"), format!("{:02}:{:02}", minutes / 60, minutes % 60))
 }
 
-/// Décalage de l'heure locale (minutes) à l'instant donné (ms Unix) : fuseau du système sur Windows, UTC ailleurs.
-pub fn local_offset_minutes(utc_ms: u64) -> i64 {
+/// Décalage de l'heure locale (minutes) à l'instant donné (ms Unix) : fuseau du système (Windows : `SystemTimeToTzSpecificLocalTime` ;
+/// iOS et autres Unix : `tzset` puis `localtime_r`, `tm_gmtoff`). None : fuseau illisible (journal `tz-unknown`, code seulement) ;
+/// l'appelant affiche alors l'heure UTC en le disant (ADR 0011 §23 point 4).
+pub fn local_offset_minutes(utc_ms: u64) -> Option<i64> {
+    let offset = system_offset_minutes(utc_ms);
+    if offset.is_none() {
+        super::log::event("tz-unknown", "utc");
+    }
+    offset
+}
+
+#[cfg(windows)]
+fn system_offset_minutes(utc_ms: u64) -> Option<i64> {
     #[cfg(windows)]
     {
         use windows::Win32::Foundation::{FILETIME, SYSTEMTIME};
@@ -596,14 +609,34 @@ pub fn local_offset_minutes(utc_ms: u64) -> i64 {
             FileTimeToSystemTime(&utc_ft, &mut utc).is_ok() && SystemTimeToTzSpecificLocalTime(None, &utc, &mut local).is_ok() && SystemTimeToFileTime(&local, &mut local_ft).is_ok()
         };
         if !ok {
-            return 0;
+            return None;
         }
         let local_ticks = (u64::from(local_ft.dwHighDateTime) << 32) | u64::from(local_ft.dwLowDateTime);
-        (local_ticks as i64 - ticks as i64) / 600_000_000
+        Some((local_ticks as i64 - ticks as i64) / 600_000_000)
     }
-    #[cfg(not(windows))]
-    {
-        let _ = utc_ms;
-        0
+}
+
+/// iOS et Unix : `tzset()` (fuseau relu, `TZ` compris) puis `localtime_r` ; `tm_gmtoff` en secondes. Échec : None.
+#[cfg(unix)]
+fn system_offset_minutes(utc_ms: u64) -> Option<i64> {
+    extern "C" {
+        fn tzset();
     }
+    let seconds = libc::time_t::try_from(utc_ms / 1_000).ok()?;
+    // SAFETY: `tm` est une structure C ordinaire (zéros valides) ; `localtime_r` écrit dans la mémoire possédée et rend null en cas
+    // d'échec ; `tzset` relit le fuseau du système (aucun argument).
+    let tm = unsafe {
+        tzset();
+        let mut tm: libc::tm = std::mem::zeroed();
+        if libc::localtime_r(&seconds, &mut tm).is_null() {
+            return None;
+        }
+        tm
+    };
+    Some(i64::from(tm.tm_gmtoff) / 60)
+}
+
+#[cfg(not(any(windows, unix)))]
+fn system_offset_minutes(_utc_ms: u64) -> Option<i64> {
+    None
 }

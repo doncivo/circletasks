@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
+import type { FakeFocusEndCall } from './helpers/notifications';
 import { createTask, isPhone } from './helpers/today';
 
 /**
@@ -130,5 +131,58 @@ test.describe('F-04 — fin de session', () => {
     await expect(session(page).getByRole('timer')).toHaveText(/^1:30:0[0-9]$/);
     await expect(session(page).getByRole('alert')).toHaveCount(0);
     expect(await page.evaluate(() => window.__plays)).toBe(0);
+  });
+});
+
+/**
+ * F-04 critère 17 (complément ordre 5) : notification de fin planifiée sur l'iPhone, avec le FAUX `FocusEndScheduler` injecté en
+ * développement seulement (`__ctFocusEndFake`). Lancement : appel `schedule` à début + 25 min ; pause : `cancel` ; reprise : `schedule`
+ * au nouveau terme ; « Terminer la tâche » : `cancel` ; un échec de planification donne le bandeau de l'écran Focus et la session continue.
+ * Le bandeau persistant après rechargement est vérifié en Vitest (la base du navigateur de développement est en mémoire).
+ */
+test.describe('F-04 — notification de fin planifiée (iPhone, planificateur injecté)', () => {
+  const calls = (page: Page): Promise<FakeFocusEndCall[]> =>
+    page.evaluate(() => (window.__ctFocusEnd?.calls ?? []).map((call) => ({ type: call.type, sessionId: call.sessionId, ...(call.fireAt ? { fireAt: new Date(call.fireAt).toISOString() } : {}) })));
+
+  /** L'horloge de Playwright court depuis son installation : l'échéance est comparée à la minute. */
+  const lateBy = (call: FakeFocusEndCall | undefined, target: string): number | null => (call?.fireAt ? Date.parse(call.fireAt) - Date.parse(target) : null);
+
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Le planificateur injecté représente l’iPhone.');
+    await page.addInitScript(() => {
+      (globalThis as { __ctFocusEndFake?: boolean }).__ctFocusEndFake = true;
+    });
+    await page.clock.install({ time: NOW });
+    await openApp(page);
+    await createTask(page, testInfo, { title: TITLE, time: '09:00' });
+  });
+
+  test('lancement, pause, reprise, terminer : schedule à début + 25 min, cancel, schedule au nouveau terme, cancel (critère 17)', async ({ page }, testInfo) => {
+    await launch(page, testInfo);
+    await expect.poll(async () => (await calls(page)).map((call) => call.type)).toEqual(['schedule']);
+    expect(lateBy((await calls(page))[0], '2026-09-23T07:25:00.000Z')).toBeGreaterThanOrEqual(0);
+    expect(lateBy((await calls(page))[0], '2026-09-23T07:25:00.000Z')).toBeLessThan(60_000);
+    await page.clock.fastForward('05:00');
+    await session(page).getByRole('button', { name: 'Mettre en pause' }).click();
+    await expect.poll(async () => (await calls(page)).at(-1)?.type).toBe('cancel');
+    await page.clock.fastForward('10:00');
+    await session(page).getByRole('button', { name: 'Reprendre la session' }).click();
+    // Début 09:00 + 25 min + 10 min de pause = 09:35 à Paris.
+    await expect.poll(async () => (await calls(page)).at(-1)?.type).toBe('schedule');
+    expect(lateBy((await calls(page)).at(-1), '2026-09-23T07:35:00.000Z')).toBeGreaterThanOrEqual(0);
+    expect(lateBy((await calls(page)).at(-1), '2026-09-23T07:35:00.000Z')).toBeLessThan(60_000);
+    await page.clock.fastForward('26:00');
+    await session(page).getByRole('button', { name: 'Terminer la tâche' }).click();
+    await expect.poll(async () => (await calls(page)).at(-1)?.type).toBe('cancel');
+  });
+
+  test('échec de planification : bandeau sur l’écran Focus, la session continue (critère 15)', async ({ page }, testInfo) => {
+    await page.evaluate(() => window.__ctFocusEnd?.failNext(new Error('refusé')));
+    await launch(page, testInfo);
+    await expect(page.getByText('La notification de fin de session n’a pas pu être planifiée')).toBeVisible();
+    await expect(session(page).getByRole('timer')).toBeVisible();
+    // Un `schedule` réussi (pause puis reprise) efface le bandeau.
+    await session(page).getByRole('button', { name: 'Mettre en pause' }).click();
+    await expect(page.getByText('La notification de fin de session n’a pas pu être planifiée')).toHaveCount(0);
   });
 });

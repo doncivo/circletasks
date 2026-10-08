@@ -1,0 +1,39 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sync-ios",
+  "description": "iPhone : synchronisation par iCloud Drive (ADR 0011 §22 point 7 et §23 point 5 ; Y-IOS-01, Y-IOS-02). Les 21 commandes sync_* de la fenêtre principale : les 24 moins les trois de la fenêtre pairing (sync_pairing_open, sync_pairing_payload, sync_pairing_close), qui n'existent pas sur iPhone : l'iPhone n'affiche jamais le QR. Dossier tenu par Rust sous le signet du plugin folder-bookmark (jamais de chemin dans la WebView) ; aucune permission du plugin folder-bookmark (il n'expose aucune commande à la WebView). Scan du QR d'association par le plugin barcode-scanner, seulement ses cinq commandes : le texte lu est passé aussitôt à sync_key_import, jamais gardé (section 2.1, troisième point d'exposition).",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "iOS"
+  ],
+  "permissions": [
+    "allow-sync-folder-info",
+    "allow-sync-folder-choose",
+    "allow-sync-folder-forget",
+    "allow-sync-bind-device",
+    "allow-sync-key-status",
+    "allow-sync-key-create",
+    "allow-sync-scan",
+    "allow-sync-read-journal",
+    "allow-sync-append-journal",
+    "allow-sync-write-state",
+    "allow-sync-snapshot-begin",
+    "allow-sync-snapshot-append",
+    "allow-sync-snapshot-commit",
+    "allow-sync-read-snapshot",
+    "allow-sync-delete-own",
+    "allow-sync-restore-marker-get",
+    "allow-sync-restore-marker-clear",
+    "allow-sync-forgotten-delete",
+    "allow-sync-key-import",
+    "allow-sync-device-forget",
+    "allow-sync-reset-key",
+    "barcode-scanner:allow-scan",
+    "barcode-scanner:allow-cancel",
+    "barcode-scanner:allow-check-permissions",
+    "barcode-scanner:allow-request-permissions",
+    "barcode-scanner:allow-open-app-settings"
+  ]
+}

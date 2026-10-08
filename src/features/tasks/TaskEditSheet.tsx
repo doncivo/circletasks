@@ -79,6 +79,7 @@ export function TaskEditSheet({ task, spaces, today, recurrence, reminders, onCl
           time={choice.date === null ? null : choice.time}
           offsets={offsets}
           onToggle={(offset) => setOffsets((current) => toggleReminderOffset(current, offset))}
+          warnFor={{ spaceId, date: choice.date }}
         />
         <div className="ct-task-sheet__spaceRow">
           <SpaceSegmented

@@ -18,8 +18,8 @@
 
 - [ ] Signet de sécurité du dossier (plugin folder-bookmark), choix du dossier iCloud Drive/CircleTasks, `BookmarkFs`, refus des liens symboliques sous le signet (Y-01, dettes ordre 5).
 - [ ] Trousseau : attributs de `circletasks.sync.key.v1` et `.next` relus par `SecItemCopyMatching` (`ThisDeviceOnly`, non synchronisés) ; compilation iOS de `vault_ios.rs` par la CI ; version de `security-framework` confirmée par `cargo tree --target aarch64-apple-ios` (Y-08 critères 17 et 19, Y-11).
-- [ ] Scan du QR lancé par Rust (`sync_key_import({ scan: true })` avec le plugin barcode-scanner) ; sinon passage par le JS et avenant à l'ADR 0011 §2.1 (dettes ordre 5, Y-06).
-- [ ] Confirmations natives iOS (affichage de la clé, remplacement de clé, oubli d'un appareil, réinitialisation) : « Annuler » par défaut, refus hors premier plan (Y-08, Y-10, Y-11).
+- [ ] Scan du QR par le JS (ADR 0011 §23 point 2 : aucune API Rust du plugin barcode-scanner) : texte passé aussitôt à `sync_key_import({ qrText })`, jamais gardé (troisième point d'exposition, §2.1) ; vérifier sur l'iPhone la demande d'autorisation de la caméra et le refus visible (dettes ordre 5, Y-06).
+- [ ] Confirmations natives iOS (remplacement de clé, « Oublier le dossier et la clé », oubli d'un appareil, réinitialisation ; jamais « Afficher la clé » : l'iPhone n'affiche pas le QR, ADR 0011 §23 point 3) : « Annuler » par défaut, refus hors premier plan (Y-08, Y-10, Y-11).
 - [ ] Saisie de la clé de secours sur iPhone (une seule WebView : limite documentée), progression de l'arrivée sur iPhone, écran Appairage.html (Y-06).
 - [ ] Étape « Synchronisation » de l'assistant de premier lancement sur iPhone : 4 étapes quand la synchro est disponible, 3 sinon (Y-06 D5, P-05).
 - [ ] Échec de réintégration affiché sur l'iPhone dès que le service de synchro y existe (dettes, Y-07).

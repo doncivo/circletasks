@@ -396,6 +396,16 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return fetchByIds(ids);
     },
 
+    async listByIds(ids: readonly TaskId[]) {
+      const out: Task[] = [];
+      for (let start = 0; start < ids.length; start += 200) {
+        const chunk = ids.slice(start, start + 200);
+        const rows = await db.select<TaskRow>(`SELECT * FROM task WHERE deleted_at IS NULL AND id IN (${chunk.map(() => '?').join(', ')})`, [...chunk]);
+        out.push(...rows.map(rowToTask));
+      }
+      return out;
+    },
+
     async listForDay(date: LocalDate, filter: SpaceFilter) {
       const f = spaceFilterClause(filter);
       const rows = await db.select<TaskRow>(

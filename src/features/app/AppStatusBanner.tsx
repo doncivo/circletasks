@@ -43,6 +43,13 @@ function useCurrentBanner() {
       const message = source.more && source.more > 0 ? t('status.syncTroubleMore', { message: text, n: source.more }) : text;
       return <StatusBanner message={message} {...(source.onAction ? { actionLabel: t('status.syncTroubleView'), actionAriaLabel: t('status.syncTroubleViewLabel'), onAction: source.onAction } : {})} />;
     }
+    case 'remindersTrouble': {
+      // N-01 (avenant N1.8) : texte composé par les rappels, '(+N)' s'il y a d'autres états, 'Autoriser' (autorisation non décidée) ou 'Voir' (Réglages > Rappels).
+      const text = source.message ?? t('reminders.status.troubleGeneric');
+      const message = source.more && source.more > 0 ? t('status.syncTroubleMore', { message: text, n: source.more }) : text;
+      const allow = source.detail === 'undetermined';
+      return <StatusBanner message={message} {...(source.onAction ? { actionLabel: t(allow ? 'reminders.status.allow' : 'status.syncTroubleView'), actionAriaLabel: t(allow ? 'reminders.status.allowLabel' : 'reminders.status.viewLabel'), onAction: source.onAction } : {})} />;
+    }
     case 'updateRequired':
       // Y-07 critère 9 : texte seul, aucun bouton (mise à jour par l'updater PC ou SideStore). Détail « reintegration » : échec de
       // réintégration (exigence d'Ali), état A-09 le plus proche, faute d'autre signe visible depuis l'écran principal.

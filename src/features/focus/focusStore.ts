@@ -6,6 +6,7 @@ import type { LocalTime, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { useNoticeStore } from '../app/notice';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { clearFocusEndFailure, reportFocusEndFailure } from '../reminders/notificationStatus';
 import { createFocusUseCases, type FocusUseCases, type StartOutcome } from './focusUseCases';
 
 /** Tâche de la session, lue au lancement ; la fiche à jour vient de `taskEntities` tant qu'elle y est (le titre peut changer en route). */
@@ -111,19 +112,28 @@ function createFocusStore(container: AppContainer) {
     }
 
     /**
-     * Notification de fin (iPhone, F-04 critères 8 et 9) : planifiée au lancement et à la reprise, annulée à la pause, à l'arrêt et à
-     * la fin ; recalculée à chaque changement de durée. Meilleur effort : un échec n'interrompt jamais la session.
+     * Notification de fin (iPhone, F-04 critères 8, 9 et 15) : planifiée au lancement et à la reprise, annulée à la pause, à l'arrêt et à
+     * la fin ; recalculée à chaque changement de durée. Un échec n'interrompt jamais la session, mais il n'est plus avalé : il est écrit
+     * dans l'état persistant des rappels (bandeau sur l'écran Focus et dans Réglages > Rappels), effacé au prochain succès.
      */
+    function settle(work: Promise<void>, sessionId: string): void {
+      void work
+        .then(
+          () => clearFocusEndFailure(container),
+          (error: unknown) => reportFocusEndFailure(container, sessionId, error),
+        )
+        .catch(() => undefined);
+    }
+
     function syncSchedule(): void {
       const { session, task } = get();
       if (!session) return;
       const fireAt = notificationFireAtMs(session);
-      const work = fireAt === null ? scheduler.cancel(session.id) : scheduler.schedule(session.id, new Date(fireAt), task?.title ?? t('focus.windowTitle'));
-      void work.catch(() => undefined);
+      settle(fireAt === null ? scheduler.cancel(session.id) : scheduler.schedule(session.id, new Date(fireAt), task?.title ?? t('focus.windowTitle'), session.plannedMin), session.id);
     }
 
     function cancelSchedule(sessionId: string): void {
-      void scheduler.cancel(sessionId).catch(() => undefined);
+      settle(scheduler.cancel(sessionId), sessionId);
     }
 
     /** Relit le total du jour (F-03) ; une erreur de lecture laisse la valeur précédente. */
@@ -137,6 +147,8 @@ function createFocusStore(container: AppContainer) {
     }
 
     function closed(session: FocusSession, minutes: number, silent: boolean): void {
+      // Clôture : l'échec éventuel d'une session close est effacé (F-04 critère 15) ; l'annulation qui suit le réécrit si elle échoue.
+      void clearFocusEndFailure(container).catch(() => undefined);
       cancelSchedule(session.id);
       set((s) => ({
         session: null,

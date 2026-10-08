@@ -11,7 +11,7 @@ import { formatDetailDate, formatTime } from '../../i18n/format';
 import { DateEditor, Icon, TextField, spaceTextColor, type Layout } from '../../ui';
 import { useAppStore } from '../app/appStore';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
-import { ReminderChoices } from '../reminders';
+import { IphoneReminderWarning, ReminderChoices } from '../reminders';
 import { ProjectSelect } from '../spaces';
 import { DetailRow } from './DetailRow';
 import { TaskRepeatRow } from './TaskRepeatRow';
@@ -270,6 +270,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
         {repeat}
         <DetailRow label={t('detail.remindersRow')}>
           <ReminderChips reminders={reminders} active={canHaveReminders(task)} />
+          {task.status === 'todo' && <IphoneReminderWarning spaceId={task.spaceId} date={task.date} time={task.time} offsets={reminders} />}
         </DetailRow>
         <DetailRow label={t('detail.spaceProjectRow')}>
           <span style={space ? { color: spaceTextColor(space.color), fontWeight: 'var(--ct-font-weight-bold)' } : undefined}>{space?.name}</span>
@@ -301,6 +302,7 @@ export function TaskDetailFields({ task, layout, spaces, today, reminders, setRe
       {repeat}
       <DetailRow label={t('detail.remindersRow')}>
         <RemindersValue task={task} reminders={reminders} setReminders={setReminders} cancelInlineRef={cancelInlineRef} />
+        {task.status === 'todo' && <IphoneReminderWarning spaceId={task.spaceId} date={task.date} time={task.time} offsets={reminders} />}
       </DetailRow>
       <DetailRow label={t('detail.spaceRow')}>
         <SpaceValue {...inline} spaces={spaces} />

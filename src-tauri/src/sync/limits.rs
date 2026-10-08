@@ -55,6 +55,10 @@ pub const CONSENT_BLOCK_MS: u64 = 10 * 60_000;
 pub const HYDRATE_FILE_TIMEOUT_MS: u64 = 60_000;
 pub const HYDRATE_CYCLE_TIMEOUT_MS: u64 = 3 * 60_000;
 
+/// Octets échangés au plus par appel du plugin folder-bookmark (iPhone, ADR 0011 §22 point 2), et bloc de la lecture en flux de la fin
+/// d'un instantané (§22 point 4, toutes plateformes).
+pub const MAX_PLUGIN_CHUNK_BYTES: usize = MIB as usize;
+
 /// Budget de nonces par clé (audit B1) : alerte, puis refus de chiffrer (`key-exhausted`).
 pub const NONCE_WARN_RECORDS: u64 = 1 << 30;
 pub const NONCE_MAX_RECORDS: u64 = 1 << 32;

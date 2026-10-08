@@ -2,13 +2,22 @@ import type { StoreApi } from 'zustand';
 import { systemClock, type Clock } from '../../domain/clock';
 import type { HlcClock } from '../../domain/hlc';
 import { uuidGenerator, type IdGenerator } from '../../domain/id';
-import type { DataAccess } from '../../db/repositories';
+import { observeWrites, type DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
 import { createUnavailableBackup, type BackupService } from '../../platform/backup';
 import type { SyncEngineService, SyncPlatform } from '../../platform/sync/types';
 import { createUnavailableFiles, type FileService } from '../../platform/files';
+import {
+  createLedgerStore,
+  createUnavailableNotificationScheduler,
+  systemNotificationClock,
+  type LedgerStore,
+  type NotificationClock,
+  type NotificationScheduler,
+} from '../../platform/notifications';
 import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPlatform, type SoundPlayer } from '../../platform/focus';
+import { createSettingsLedger } from '../reminders/settingsLedger';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
 import { createUndoStack, type UndoStack } from './undo';
@@ -43,6 +52,22 @@ export interface AppContainer {
   readonly focusEndScheduler: FocusEndScheduler;
   /** Son de fin de session (F-04) ; null : carillon embarqué par défaut (élément Audio). */
   readonly soundPlayer: SoundPlayer | null;
+  /**
+   * Notifications locales de rappel (N-01, ADR 0012) : adaptateur réel sur l'iPhone installé, implémentation vide partout ailleurs (le PC
+   * n'envoie aucune notification de rappel). Planifié par `replanNotifications` (features/reminders), jamais appelé ailleurs.
+   */
+  readonly notifications: NotificationScheduler;
+  /** Registre local des notifications planifiées, partagé entre les rappels et la fin de Focus (accès sérialisé). */
+  readonly notificationLedger: LedgerStore;
+  /** Instant et fuseau de l'appareil pour la planification (injectables : tests, e2e). */
+  readonly notificationClock: NotificationClock;
+  /**
+   * Déclencheur `edit` de la replanification (avenant N1.3) : appelé après toute écriture validée d'une tâche, routine, validation, événement,
+   * rappel, espace (plages silencieuses) ou récapitulatif ; posé UNE fois ici par `observeWrites`, pas par chaque cas d'usage.
+   */
+  readonly notificationsPlanChanged: () => void;
+  /** S'abonne au déclencheur `edit` ; renvoie le désabonnement. */
+  readonly onNotificationsPlanChanged: (listener: () => void) => () => void;
   /** Enregistrement de fichiers (export H-03, P-04, P-07) : boîte « Enregistrer sous » sur PC, téléchargement en développement, indisponible sur iPhone avant l'ordre 5. */
   readonly files: FileService;
   /** Sauvegardes locales (P-04) : quotidienne, liste, restauration ; commandes Rust sur PC, mémoire en développement, indisponible sur iPhone. */
@@ -58,12 +83,28 @@ export interface AppContainer {
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
 
+/** Réglages dont la modification change le plan de rappels : récapitulatifs (heures, activation) et langue des textes. */
+const isPlanSetting = (key: string): boolean => key.startsWith('reminders.') || key === 'general.locale';
+
 export function createAppContainer(parts: AppContainerParts): AppContainer {
+  const planListeners = new Set<() => void>();
+  const planChanged = (): void => {
+    for (const listener of [...planListeners]) listener();
+  };
+  // Faux de test sans repositories (`{}`) : rien à observer.
+  const hasRepositories = typeof (parts.data as Partial<DataAccess>).repos === 'object' && (parts.data as Partial<DataAccess>).repos !== null;
+  const data = hasRepositories
+    ? observeWrites(parts.data, {
+        watch: ['tasks', 'recurrences', 'routines', 'routineLogs', 'events', 'reminders', 'spaces', 'settings'],
+        settingsKey: isPlanSetting,
+        onWrite: planChanged,
+      })
+    : parts.data;
   return {
     clock: parts.clock ?? systemClock,
     ids: parts.ids ?? uuidGenerator,
     hlc: parts.hlc,
-    data: parts.data,
+    data,
     undo: parts.undo ?? createUndoStack(),
     taskEntities: parts.taskEntities ?? createTaskEntities(),
     shortcuts: parts.shortcuts ?? createShortcutRegistry(),
@@ -73,6 +114,14 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     focusWindow: parts.focusWindow ?? null,
     focusEndScheduler: parts.focusEndScheduler ?? createNoopFocusEndScheduler(),
     soundPlayer: parts.soundPlayer ?? null,
+    notifications: parts.notifications ?? createUnavailableNotificationScheduler(),
+    notificationLedger: parts.notificationLedger ?? createLedgerStore(hasRepositories ? createSettingsLedger(parts.data.repos.settings) : { load: () => Promise.resolve({ state: 'missing' }), save: () => Promise.resolve() }),
+    notificationClock: parts.notificationClock ?? systemNotificationClock,
+    notificationsPlanChanged: planChanged,
+    onNotificationsPlanChanged: (listener) => {
+      planListeners.add(listener);
+      return () => planListeners.delete(listener);
+    },
     files: parts.files ?? createUnavailableFiles(),
     backups: parts.backups ?? createUnavailableBackup(),
     sync: parts.sync ?? null,

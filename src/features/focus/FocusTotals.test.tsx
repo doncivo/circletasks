@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createManualClock } from '../../domain/clock';
 import type { TaskId } from '../../domain/types';
@@ -12,6 +12,7 @@ import { ReportScreen } from '../stats';
 import { TaskDetail } from '../tasks/TaskDetail';
 import { FocusView } from './FocusView';
 import { focusStore } from './focusStore';
+import { settle } from '../../../tests/setup/settle';
 import { MIN, seedFocusTask, setupFocus, type FocusHarness } from './testKit';
 
 function mockViewport(width: number): void {
@@ -155,19 +156,27 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       await session(notaire.id, 35);
     }
 
-    function renderReport() {
-      return render(
+    // Pas de findBy* ni de waitFor à échéance : leur délai en temps réel (1 s, 2 s) est dépassé machine chargée, alors que le rapport se
+    // redessine en plusieurs temps. `settle` attend le repos de l'écran (voir settle.ts), les assertions suivantes sont synchrones.
+    async function renderReport(): Promise<HTMLElement> {
+      render(
         <AppContainerProvider container={h.container}>
           <ReportScreen />
         </AppContainerProvider>,
       );
+      await settle(h.db.driver);
+      return screen.getByRole('region', { name: 'CONCENTRATION' });
+    }
+
+    async function change(action: () => void): Promise<void> {
+      act(action);
+      await settle(h.db.driver);
     }
 
     it('critère 4 : Aujourd’hui, Cette semaine, Ce mois et les tâches les plus travaillées (« Envoyer la facture · 2 h 30 »)', async () => {
       await seed();
       useAppStore.getState().setDay('2026-10-04' as never);
-      renderReport();
-      const section = await screen.findByRole('region', { name: 'CONCENTRATION' });
+      const section = await renderReport();
       const rows = within(section).getAllByRole('listitem').map((row) => row.textContent);
       expect(rows).toEqual(['Aujourd’hui3 h 25', 'Cette semaine3 h 25', 'Ce mois3 h 25', 'Envoyer la facture2 h 30', 'Appeler le notaire35 min', 'Courses20 min']);
     });
@@ -176,14 +185,11 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
     it('critère 5 : le filtre Pro puis le projet « Mission client » recalculent aussitôt les totaux', async () => {
       await seed();
       useAppStore.getState().setDay('2026-10-04' as never);
-      renderReport();
-      const section = await screen.findByRole('region', { name: 'CONCENTRATION' });
-      await within(section).findByText('Courses');
-      act(() => useAppStore.getState().setSpaceFilter(SPACE_PRO_ID));
-      await waitFor(() => expect(within(section).queryByText('Courses')).not.toBeInTheDocument(), { timeout: 2_000 });
+      const section = await renderReport();
+      expect(within(section).getByText('Courses')).toBeInTheDocument();
+      await change(() => useAppStore.getState().setSpaceFilter(SPACE_PRO_ID));
       expect(within(section).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['Aujourd’hui3 h 05', 'Cette semaine3 h 05', 'Ce mois3 h 05', 'Envoyer la facture2 h 30', 'Appeler le notaire35 min']);
-      act(() => useAppStore.getState().setProjectFilter('10000000-0000-4000-8000-0000000000b1' as never));
-      await waitFor(() => expect(within(section).queryByText('Appeler le notaire')).not.toBeInTheDocument(), { timeout: 2_000 });
+      await change(() => useAppStore.getState().setProjectFilter('10000000-0000-4000-8000-0000000000b1' as never));
       expect(within(section).getAllByRole('listitem').map((row) => row.textContent)).toEqual(['Aujourd’hui2 h 30', 'Cette semaine2 h 30', 'Ce mois2 h 30', 'Envoyer la facture2 h 30']);
     });
 
@@ -199,9 +205,8 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
       await h.db.driver.execute(insert, ['40000000-0000-4000-8000-0000000000e1', SPACE_PRO_ID, new Date(2026, 9, 3, 10, 0).toISOString(), new Date(2026, 9, 3, 11, 0).toISOString()]);
       await h.db.driver.execute(insert, ['40000000-0000-4000-8000-0000000000e2', SPACE_PRO_ID, new Date(2026, 8, 27, 10, 0).toISOString(), new Date(2026, 8, 27, 11, 0).toISOString()]);
       setFormatPrefs({ firstWeekday });
-      renderReport();
-      const section = await screen.findByRole('region', { name: 'CONCENTRATION' });
-      await waitFor(() => expect(within(section).getAllByRole('listitem')[1]?.textContent).toBe(expected));
+      const section = await renderReport();
+      expect(within(section).getAllByRole('listitem')[1]?.textContent).toBe(expected);
       // Le jour et le mois ne dépendent pas du premier jour de semaine.
       expect(within(section).getAllByRole('listitem')[0]?.textContent).toBe('Aujourd’hui3 h 25');
       expect(within(section).getAllByRole('listitem')[2]?.textContent).toBe('Ce mois4 h 25');
@@ -210,8 +215,7 @@ describe('Totaux de concentration : magasin, fiche et rapport (F-03)', () => {
     it('sans session ce mois-ci : message vide (le mois a une tâche, donc le rapport n’est pas vide, H-01)', async () => {
       await seedFocusTask(h.container, 'Envoyer la facture');
       useAppStore.getState().setDay('2026-10-04' as never);
-      renderReport();
-      const section = await screen.findByRole('region', { name: 'CONCENTRATION' });
+      const section = await renderReport();
       expect(within(section).getByText('Aucune session ce mois-ci.')).toBeInTheDocument();
     });
   });

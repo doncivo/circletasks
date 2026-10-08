@@ -66,6 +66,20 @@ keyring = { version = "3", default-features = false, features = ["apple-native"]
 # Clé de synchro au Trousseau avec kSecAttrAccessibleWhenUnlockedThisDeviceOnly et non synchronisée (ADR 0011 section 2.2, vault_ios.rs) :
 # keyring ne règle pas ces attributs. Même version que celle déjà tirée par keyring.
 security-framework = { version = "3", default-features = false }
+# Rappels (N-01, ADR 0012 avenant lot N1 section N1.1) : notifications locales iOS seulement, version ÉPINGLÉE (les constats 7 à 12 de
+# l'avenant lisent son code Swift ; toute montée exige une relecture et un avenant). Jamais sous cfg(desktop) : le PC n'envoie aucune
+# notification de rappel (consistency.test.ts, tests/desktop/config.rs et l'étape « Plugins iOS » de build-ios.yml le vérifient).
+tauri-plugin-notification = "=2.5.1"
+# Signet de sécurité du dossier iCloud Drive/CircleTasks et accès aux fichiers (ADR 0011 §22, Y-IOS-01) : plugin Swift local, appelé par Rust seul.
+tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
+# Scan du QR d'association (ADR 0011 §23 point 2, Y-IOS-02) : API du JS seulement (aucune API Rust publique), texte passé aussitôt à
+# sync_key_import. Version exacte relue (2.5.1, revue audit), alignée sur @tauri-apps/plugin-barcode-scanner ~2.5.1 ; relire le code
+# (API Rust, permissions) à chaque montée de version.
+tauri-plugin-barcode-scanner = "=2.5.1"
+
+# Fuseau local de la boîte « Oublier cet appareil » (ADR 0011 §23 point 4) : localtime_r. Même version que celle déjà tirée.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 # Plugins PC uniquement (absents du build iOS).
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]

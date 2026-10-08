@@ -64,10 +64,40 @@ jobs:
 
       - run: npm ci
 
+      # ADR 0011 §22 point 10 (Y-IOS-01) : le plugin folder-bookmark est dans la cible iOS et nulle part ailleurs ; aucun plugin PC dans la
+      # cible iOS (ADR 0007). Résolution seulement (aucune compilation) : la cible Windows se résout aussi sur ce runner.
+      - name: Dépendances des cibles iOS et Windows
+        working-directory: src-tauri
+        run: |
+          ios=$(cargo tree --locked --target aarch64-apple-ios -e normal --prefix none)
+          echo "$ios" | grep -q '^tauri-plugin-folder-bookmark ' || { echo "::error::tauri-plugin-folder-bookmark absent de la cible iOS"; exit 1; }
+          for pc in tauri-plugin-single-instance tauri-plugin-autostart tauri-plugin-updater tauri-plugin-process tauri-plugin-opener tauri-plugin-dialog tauri-plugin-global-shortcut; do
+            if echo "$ios" | grep -q "^$pc "; then echo "::error::plugin PC dans la cible iOS : $pc"; exit 1; fi
+          done
+          windows=$(cargo tree --locked --target x86_64-pc-windows-msvc -e normal --prefix none)
+          if echo "$windows" | grep -q '^tauri-plugin-folder-bookmark '; then echo "::error::tauri-plugin-folder-bookmark dans la cible Windows"; exit 1; fi
+          # ADR 0011 §23 point 1 (Y-IOS-02) : Trousseau par security-framework 3.7.0 (celle de keyring), utilisé directement par l'app.
+          sf=$(cargo tree --locked --target aarch64-apple-ios -e normal -i security-framework@3.7.0 --prefix none)
+          echo "$sf" | grep -q '^circletasks ' || { echo "::error::security-framework 3.7.0 n'est pas une dépendance directe de l'app iOS"; exit 1; }
+          echo "$ios" | grep -q '^tauri-plugin-barcode-scanner ' || { echo "::error::tauri-plugin-barcode-scanner absent de la cible iOS"; exit 1; }
+
       # Le projet Xcode (src-tauri/gen/apple) n'est pas versionné : il est régénéré à chaque build
       # depuis tauri.conf.json et src-tauri/Info.ios.plist.
       - name: Initialiser le projet iOS
         run: npx tauri ios init --ci
+
+      # Plugins iOS (N-01, ADR 0012 avenant N1.9) : le plugin de notifications locales est compilé pour l'iPhone et JAMAIS pour le PC
+      # (le PC n'envoie aucune notification de rappel). Échec explicite dans les deux sens.
+      - name: Plugins iOS
+        run: |
+          set -euo pipefail
+          cd src-tauri
+          IOS=$(cargo tree --target aarch64-apple-ios -i tauri-plugin-notification 2>&1 || true)
+          echo "$IOS"
+          grep -q "tauri-plugin-notification v" <<<"$IOS" || { echo "::error::tauri-plugin-notification absent de la compilation iOS"; exit 1; }
+          WIN=$(cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-notification 2>&1 || true)
+          echo "$WIN"
+          if grep -q "tauri-plugin-notification v" <<<"$WIN"; then echo "::error::tauri-plugin-notification présent dans la compilation Windows"; exit 1; fi
 
       # Option officielle du CLI Tauri `--no-sign` (crates/tauri-cli/src/mobile/ios/build.rs, v2.12.1) :
       # `xcodebuild archive` avec CODE_SIGNING_ALLOWED=NO pendant que le CLI sert ses options à la phase

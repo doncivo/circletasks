@@ -75,9 +75,17 @@ fn focus_window_label_url_and_position_are_fixed_by_rust() {
 
 #[test]
 fn pc_never_sends_a_notification_for_focus() {
-    // PRD section 7 : le PC n'émet que le son de fin de Focus ; aucun module Rust n'utilise de notification.
+    // PRD section 7 : le PC n'émet que le son de fin de Focus ; aucun module Rust n'utilise de notification sur le PC.
+    // N-01 (ADR 0012 N1.1) : seul l'enregistrement du plugin pour l'iPhone est admis, sous `#[cfg(target_os = "ios")]`.
     for source in SOURCES {
-        assert!(!source.contains("tauri_plugin_notification"), "plugin de notification présent");
-        assert!(!source.contains("notification::"), "API de notification présente");
+        let lines: Vec<&str> = source.lines().collect();
+        for (index, line) in lines.iter().enumerate() {
+            if !line.contains("tauri_plugin_notification") && !line.contains("notification::") {
+                continue;
+            }
+            let ios_only = index > 0 && lines[index - 1].trim() == "#[cfg(target_os = \"ios\")]";
+            let registration = line.trim() == "let builder = builder.plugin(tauri_plugin_notification::init());";
+            assert!(ios_only && registration, "notification hors de l'enregistrement iOS : {}", line.trim());
+        }
     }
 }

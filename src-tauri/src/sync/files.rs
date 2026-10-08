@@ -1,8 +1,9 @@
 //! Accès aux fichiers du dossier de synchronisation (ADR 0011, sections 1.3, 1.6, 6.1 et 6.2 ; Y-01 critères 11 à 14).
 //!
 //! Le trait `SyncFs` est la seule porte vers le dossier : chemins **relatifs** à la racine contrôlée, composants déjà validés par
-//! `names.rs`. Implémentations : `StdFs` (PC : handles Windows, `cloud_windows` ; autre cible : `std::fs`, en attendant `BookmarkFs`
-//! iOS de l'ordre 5) et, dans les tests, un `SyncFs` en mémoire qui simule balises cloud et placeholders.
+//! `names.rs`. Implémentations : `StdFs` (PC : handles Windows, `cloud_windows` ; autre cible : `std::fs`), `BookmarkFs` (iPhone : plugin
+//! folder-bookmark, `bookmark.rs`, ADR 0011 §22) et, dans les tests, un `SyncFs` en mémoire qui simule balises cloud et placeholders. Une
+//! même table de cas (`tests/fixtures/sync/syncfs-conformance.json`) est rejouée sur les trois.
 //!
 //! Garanties de `StdFs` sur Windows :
 //! - la racine est rouverte à chaque opération (`FILE_FLAG_OPEN_REPARSE_POINT`), sa balise et son chemin final recontrôlés : un dossier
@@ -88,6 +89,14 @@ impl FsError {
     }
 }
 
+/// Bloc lu à partir d'un octet (`SyncFs::read_from`, ADR 0011 §22 point 4) : octets lus, taille annoncée du fichier, fin atteinte.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Chunk {
+    pub bytes: Vec<u8>,
+    pub size: u64,
+    pub eof: bool,
+}
+
 /// Mode d'ouverture pour un ajout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AppendMode {
@@ -103,6 +112,12 @@ pub trait SyncFs: Send + Sync {
     fn check_root(&self) -> Result<(), FsError>;
     /// Recontrôle la racine et ouvre un nouveau cycle d'hydratation de 3 minutes (début de `sync_scan`, création et import de clé).
     fn start_cycle(&self) -> Result<(), FsError>;
+    /// Comme `start_cycle`, avec un budget d'hydratation réduit (`sync_scan({ hydrateBudgetMs })`, cycle `hide` de l'iPhone, ADR 0011
+    /// §22 point 4) ; `budget` est déjà borné à 3 minutes par l'appelant. Par défaut (faux des tests) : `start_cycle`.
+    fn start_cycle_within(&self, budget: Duration) -> Result<(), FsError> {
+        let _ = budget;
+        self.start_cycle()
+    }
     /// Premiers octets d'un fichier présent sur le disque (`max` au plus, en-tête) : jamais d'hydratation, `CloudPending` pour un
     /// fichier dans le nuage. Sert aux pré-filtres sur l'en-tête en clair (audit A3, A4).
     fn read_head(&self, file: &[&str], max: usize) -> Result<Vec<u8>, FsError>;
@@ -111,6 +126,10 @@ pub trait SyncFs: Send + Sync {
     /// Lit un fichier entier, `limit` octets au plus (taille annoncée contrôlée avant toute lecture ou hydratation). Un placeholder
     /// n'est hydraté que si `hydrate` ; sinon `CloudPending`.
     fn read(&self, file: &[&str], limit: u64, hydrate: bool) -> Result<Vec<u8>, FsError>;
+    /// Lit `max` octets au plus à partir de `offset` (ADR 0011 §22 point 4) : mémoire bornée par l'appelant. Un fichier dans le nuage
+    /// n'est hydraté que si `hydrate` (sinon `CloudPending`), sous le même budget que `read` ; `size` : taille annoncée (l'appelant
+    /// compare sa borne avant de continuer) ; `eof` : plus rien après ce bloc.
+    fn read_from(&self, file: &[&str], offset: u64, max: usize, hydrate: bool) -> Result<Chunk, FsError>;
     /// Ajoute à la fin, puis `sync_all`.
     fn append(&self, file: &[&str], bytes: &[u8], mode: AppendMode) -> Result<(), FsError>;
     /// Écrit `<nom>.tmp` puis le renomme en `<nom>` (remplacement atomique).
@@ -284,7 +303,7 @@ mod imp {
 
     use super::super::cloud_windows;
     use super::super::folder::{final_path_of, is_accepted_reparse, normalize_final_path};
-    use super::{AppendMode, Availability, FsEntry, FsError, Listing, SyncFs, HYDRATE_CYCLE_BUDGET, HYDRATE_FILE_TIMEOUT};
+    use super::{AppendMode, Availability, Chunk, FsEntry, FsError, Listing, SyncFs, HYDRATE_CYCLE_BUDGET, HYDRATE_FILE_TIMEOUT};
 
     const STATUS_OBJECT_NAME_NOT_FOUND: i32 = 0xC000_0034_u32 as i32;
     const STATUS_OBJECT_PATH_NOT_FOUND: i32 = 0xC000_003A_u32 as i32;
@@ -392,7 +411,8 @@ mod imp {
         root: PathBuf,
         /// Chemin final normalisé attendu (en minuscules, pour la comparaison).
         root_key: String,
-        cycle_started: Mutex<Instant>,
+        /// Début et budget du cycle d'hydratation en cours (3 minutes, ou moins pour `hydrateBudgetMs`).
+        cycle_started: Mutex<(Instant, std::time::Duration)>,
     }
 
     impl StdFs {
@@ -400,7 +420,7 @@ mod imp {
         pub fn new(root: PathBuf) -> Self {
             cloud_windows::expose_placeholders();
             let root_key = root.to_string_lossy().to_lowercase();
-            Self { root, root_key, cycle_started: Mutex::new(Instant::now()) }
+            Self { root, root_key, cycle_started: Mutex::new((Instant::now(), HYDRATE_CYCLE_BUDGET)) }
         }
 
         fn open_root(&self) -> Result<OwnedHandle, FsError> {
@@ -511,9 +531,34 @@ mod imp {
         }
 
         fn remaining_budget(&self) -> std::time::Duration {
-            let started = *self.cycle_started.lock().unwrap_or_else(|e| e.into_inner());
-            HYDRATE_CYCLE_BUDGET.saturating_sub(started.elapsed())
+            let (started, budget) = *self.cycle_started.lock().unwrap_or_else(|e| e.into_inner());
+            budget.saturating_sub(started.elapsed())
         }
+
+        /// Hydrate le fichier dans le nuage sur un fil dédié, puis `then` sur son handle ; au-delà du délai (60 s par fichier, reste du
+        /// budget du cycle), le fichier reste « en attente d'iCloud » (le fil finit seul).
+        fn hydrate_then<T: Send + 'static>(&self, handle: OwnedHandle, then: impl FnOnce(File) -> Result<T, FsError> + Send + 'static) -> Result<T, FsError> {
+            let budget = self.remaining_budget().min(HYDRATE_FILE_TIMEOUT);
+            if budget.is_zero() {
+                return Err(FsError::CloudPending);
+            }
+            let (sender, receiver) = mpsc::channel();
+            std::thread::spawn(move || {
+                let result = cloud_windows::hydrate(raw(&handle)).and_then(|()| then(File::from(handle)));
+                let _ = sender.send(result);
+            });
+            receiver.recv_timeout(budget).unwrap_or(Err(FsError::CloudPending))
+        }
+    }
+
+    /// Bloc de `max` octets au plus à partir de `offset`, sur le handle déjà contrôlé (lecture positionnée).
+    fn read_chunk(file: &mut File, offset: u64, max: usize, size: u64) -> Result<Chunk, FsError> {
+        use std::io::{Seek, SeekFrom};
+        file.seek(SeekFrom::Start(offset)).map_err(|e| cloud_windows::io_error(&e))?;
+        let mut bytes = Vec::with_capacity(max.min(size.saturating_sub(offset) as usize));
+        file.take(max as u64).read_to_end(&mut bytes).map_err(|e| cloud_windows::io_error(&e))?;
+        let eof = bytes.len() < max || offset.saturating_add(bytes.len() as u64) >= size;
+        Ok(Chunk { bytes, size, eof })
     }
 
     fn list_handle(handle: &OwnedHandle, max: usize) -> Result<Listing, FsError> {
@@ -584,8 +629,12 @@ mod imp {
         }
 
         fn start_cycle(&self) -> Result<(), FsError> {
+            self.start_cycle_within(HYDRATE_CYCLE_BUDGET)
+        }
+
+        fn start_cycle_within(&self, budget: std::time::Duration) -> Result<(), FsError> {
             self.open_root()?;
-            *self.cycle_started.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+            *self.cycle_started.lock().unwrap_or_else(|e| e.into_inner()) = (Instant::now(), budget.min(HYDRATE_CYCLE_BUDGET));
             Ok(())
         }
 
@@ -623,17 +672,23 @@ mod imp {
             if !hydrate {
                 return Err(FsError::CloudPending);
             }
-            let budget = self.remaining_budget().min(HYDRATE_FILE_TIMEOUT);
-            if budget.is_zero() {
+            self.hydrate_then(handle, move |mut file| read_limited(&mut file, limit))
+        }
+
+        fn read_from(&self, file: &[&str], offset: u64, max: usize, hydrate: bool) -> Result<Chunk, FsError> {
+            let (dir, name) = Self::split(file)?;
+            let parent = self.open_dir(dir, false)?;
+            let handle = open_relative(&parent, name, FILE_GENERIC_READ, FILE_OPEN, FILE_NON_DIRECTORY_FILE)?;
+            let attributes = check_tag(&handle)?;
+            let info = by_handle(&handle)?;
+            let size = (u64::from(info.nFileSizeHigh) << 32) | u64::from(info.nFileSizeLow);
+            if !is_cloud(attributes) {
+                return read_chunk(&mut File::from(handle), offset, max, size);
+            }
+            if !hydrate {
                 return Err(FsError::CloudPending);
             }
-            // Hydratation sur un fil dédié : au-delà du délai, le fichier reste « en attente d'iCloud » (le fil finit seul).
-            let (sender, receiver) = mpsc::channel();
-            std::thread::spawn(move || {
-                let result = cloud_windows::hydrate(raw(&handle)).and_then(|()| read_limited(&mut File::from(handle), limit));
-                let _ = sender.send(result);
-            });
-            receiver.recv_timeout(budget).unwrap_or(Err(FsError::CloudPending))
+            self.hydrate_then(handle, move |mut file| read_chunk(&mut file, offset, max, size))
         }
 
         fn append(&self, file: &[&str], bytes: &[u8], mode: AppendMode) -> Result<(), FsError> {
@@ -731,7 +786,7 @@ mod imp {
     use std::io::{Read, Write};
     use std::path::{Path, PathBuf};
 
-    use super::{AppendMode, Availability, FsEntry, FsError, Listing, SyncFs};
+    use super::{AppendMode, Availability, Chunk, FsEntry, FsError, Listing, SyncFs};
 
     pub struct StdFs {
         root: PathBuf,
@@ -819,6 +874,18 @@ mod imp {
                 return Err(FsError::TooLarge);
             }
             Ok(out)
+        }
+
+        fn read_from(&self, file: &[&str], offset: u64, max: usize, _hydrate: bool) -> Result<Chunk, FsError> {
+            use std::io::{Seek, SeekFrom};
+            let path = self.path(file)?;
+            let mut handle = File::open(&path).map_err(|e| io(&e))?;
+            let size = handle.metadata().map_err(|e| io(&e))?.len();
+            handle.seek(SeekFrom::Start(offset)).map_err(|e| io(&e))?;
+            let mut bytes = Vec::with_capacity(max.min(size.saturating_sub(offset) as usize));
+            handle.take(max as u64).read_to_end(&mut bytes).map_err(|e| io(&e))?;
+            let eof = bytes.len() < max || offset.saturating_add(bytes.len() as u64) >= size;
+            Ok(Chunk { bytes, size, eof })
         }
 
         fn append(&self, file: &[&str], bytes: &[u8], mode: AppendMode) -> Result<(), FsError> {

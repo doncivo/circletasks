@@ -2,8 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Fusionné par Tauri dans l'Info.plist généré (tauri ios init). Aucune permission à ce stade :
-	     caméra, micro, notifications, rappels arrivent à l'ordre 5. -->
+	<!-- Fusionné par Tauri dans l'Info.plist généré (tauri ios init). Chaque clé de permission est déclarée dans
+	     scripts/ios/plist-contract.json par le lot du plugin qui la demande (ADR 0007, avenant I-01). -->
+	<!-- Y-IOS-02 (ADR 0011 §23 point 2) : scan du QR d'association par barcode-scanner. CAP-IOS-01 réutilisera la clé. -->
+	<key>NSCameraUsageDescription</key>
+	<string>CircleTasks utilise la caméra pour scanner le code d'association affiché sur votre PC.</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>

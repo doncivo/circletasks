@@ -343,6 +343,7 @@ export async function runForgetDeletions(
       continue;
     }
     const previous = stored.get(target);
+    deps.deadline?.check('forgotten-delete');
     try {
       const result = await deps.platform.forget.deleteFiles(target);
       deps.logger.log('forgotten-delete', { device: target, deleted: result.deleted, complete: result.complete });

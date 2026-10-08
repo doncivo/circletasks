@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 
 /**
  * Socle commun des simulateurs d'agendas (ADR 0008) : serveur HTTP local sur 127.0.0.1, port libre, CORS ouvert (le navigateur de
- * dev et Playwright appellent depuis http://localhost:1420), injection d'erreurs pour la prochaine requête.
+ * dev et Playwright appellent depuis http://localhost:1420 par défaut, E2E_DEV_PORT), injection d'erreurs pour la prochaine requête.
  */
 
 export interface SimRequest {

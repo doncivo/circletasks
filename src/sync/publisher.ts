@@ -426,6 +426,8 @@ export async function publishOutbox(deps: SyncDeps, epoch: EpochId, head: Device
     }
     let attempt = 0;
     for (;;) {
+      // ADR 0011 §22 point 6 : échéance comparée avant l'unité « intention, ajout, retrait de la file », jamais au milieu.
+      deps.deadline?.check('append');
       const inflight: Inflight = { epoch, segment, expect, count: batch.length, maxHlc, entries: done };
       await writeJson(data.repos, META.inflight, inflight);
       try {

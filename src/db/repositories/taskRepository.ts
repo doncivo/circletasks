@@ -65,6 +65,8 @@ export interface TaskRepository {
   /** Annulation de T-08, restauration depuis la corbeille. */
   restore(ids: readonly TaskId[]): Promise<Task[]>;
 
+  /** N-01 : tâches vivantes de ces identifiants (cibles des rappels), tous espaces ; les identifiants inconnus ou supprimés sont ignorés. */
+  listByIds(ids: readonly TaskId[]): Promise<Task[]>;
   /** A-01 : tâches datées du jour (faites comprises), hors Un jour. */
   listForDay(date: LocalDate, filter: SpaceFilter): Promise<Task[]>;
   /** S-01 : tâches des 7 jours à partir de `weekStart` (lundi), faites comprises. */

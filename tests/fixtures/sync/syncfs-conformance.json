@@ -1,0 +1,155 @@
+{
+  "$comment": [
+    "Table de conformité de SyncFs (ADR 0011 §22 point 4 ; Y-IOS-01 critère 2) : une table, trois implémentations (StdFs sur un dossier temporaire, BookmarkFs sur le faux du plugin, SyncFs en mémoire des tests), mêmes résultats attendus. Rejouée par src-tauri/tests/desktop/sync_fs_conformance.rs ; les cas observables par SyncPlatform (absent, partiel, nuage) sont rejoués par src/platform/sync/syncFsConformance.test.ts sur memory.ts.",
+    "setup : mkdir (dossier), file (texte, cloud facultatif, delayMs : durée simulée du téléchargement), link (lien symbolique sous la racine). requires : capacités exigées (cloud, links) ; une implémentation qui ne peut pas les produire saute le cas (StdFs : cloud ; mémoire : links).",
+    "steps : op (list, read, readFrom, readHead, append, writeAtomic, rename, createDir, remove, removeEmptyDir, makeLink), puis expect : ok, names (liste triée « nom » ou « nom/ » pour un dossier, « nom! » pour une entrée en erreur, « nom~ » pour une entrée dans le nuage), text, eof, size, removed, ou error (not-found, exists, unsafe, cloud-pending, too-large) ou errorCode (code SyncErrorCode, quand les implémentations diffèrent par la variante mais pas par le code).",
+    "observable : cas rejoué aussi sur memory.ts (statut de readJournal et readSnapshot)."
+  ],
+  "cases": [
+    {
+      "name": "lister un dossier",
+      "setup": [{ "mkdir": ["devices", "a", "e1"] }, { "file": ["devices", "a", "state.ctx"], "text": "etat" }],
+      "steps": [{ "op": "list", "path": ["devices", "a"], "expect": { "names": ["e1/", "state.ctx"] } }]
+    },
+    {
+      "name": "lister un dossier absent",
+      "setup": [{ "mkdir": ["devices"] }],
+      "steps": [{ "op": "list", "path": ["devices", "absent"], "expect": { "error": "not-found" } }]
+    },
+    {
+      "name": "lire un fichier entier et sa taille",
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "abcdef" }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "abcdef" } },
+        { "op": "readFrom", "path": ["devices", "a", "state.ctx"], "offset": 0, "max": 100, "expect": { "text": "abcdef", "size": 6, "eof": true } }
+      ]
+    },
+    {
+      "name": "lire à partir d'un octet",
+      "setup": [{ "file": ["devices", "a", "s-00000001.cts"], "text": "abcdef" }],
+      "steps": [
+        { "op": "readFrom", "path": ["devices", "a", "s-00000001.cts"], "offset": 2, "max": 3, "expect": { "text": "cde", "size": 6, "eof": false } },
+        { "op": "readFrom", "path": ["devices", "a", "s-00000001.cts"], "offset": 4, "max": 10, "expect": { "text": "ef", "size": 6, "eof": true } },
+        { "op": "readHead", "path": ["devices", "a", "s-00000001.cts"], "max": 2, "expect": { "text": "ab" } }
+      ]
+    },
+    {
+      "name": "taille au-delà de la borne",
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "abcdef" }],
+      "steps": [{ "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 5, "hydrate": false, "expect": { "error": "too-large" } }]
+    },
+    {
+      "name": "fichier absent",
+      "observable": true,
+      "setup": [{ "mkdir": ["devices", "a"] }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": true, "expect": { "error": "not-found" } },
+        { "op": "readFrom", "path": ["devices", "a", "state.ctx"], "offset": 0, "max": 10, "expect": { "error": "not-found" } },
+        { "op": "remove", "path": ["devices", "a", "state.ctx"], "expect": { "removed": false } }
+      ]
+    },
+    {
+      "name": "fichier partiel (dernière ligne incomplète)",
+      "observable": true,
+      "setup": [{ "file": ["devices", "a", "e1", "j-00000001.ctj"], "text": "{\"h\":1}\nligne\nmoit" }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "e1", "j-00000001.ctj"], "limit": 1000, "hydrate": false, "expect": { "text": "{\"h\":1}\nligne\nmoit" } },
+        { "op": "readFrom", "path": ["devices", "a", "e1", "j-00000001.ctj"], "offset": 14, "max": 100, "expect": { "text": "moit", "eof": true } }
+      ]
+    },
+    {
+      "name": "ajouter, créer un segment, segment déjà présent",
+      "setup": [{ "mkdir": ["devices", "a", "e1"] }],
+      "steps": [
+        { "op": "append", "path": ["devices", "a", "e1", "j-00000001.ctj"], "text": "en-tete\n", "create": true, "expect": { "ok": true } },
+        { "op": "append", "path": ["devices", "a", "e1", "j-00000001.ctj"], "text": "l1\n", "create": false, "expect": { "ok": true } },
+        { "op": "append", "path": ["devices", "a", "e1", "j-00000001.ctj"], "text": "x", "create": true, "expect": { "error": "exists" } },
+        { "op": "append", "path": ["devices", "a", "e1", "j-00000002.ctj"], "text": "x", "create": false, "expect": { "error": "not-found" } },
+        { "op": "read", "path": ["devices", "a", "e1", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "en-tete\nl1\n" } }
+      ]
+    },
+    {
+      "name": "écrire puis renommer (remplacement atomique)",
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "ancien" }],
+      "steps": [
+        { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "nouveau", "expect": { "ok": true } },
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "nouveau" } },
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["state.ctx"] } }
+      ]
+    },
+    {
+      "name": "renommer dans un dossier",
+      "setup": [{ "file": ["devices", "a", "e1", "s-00000001.cts.tmp"], "text": "instantane" }],
+      "steps": [
+        { "op": "rename", "dir": ["devices", "a", "e1"], "from": "s-00000001.cts.tmp", "to": "s-00000001.cts", "expect": { "ok": true } },
+        { "op": "list", "path": ["devices", "a", "e1"], "expect": { "names": ["s-00000001.cts"] } },
+        { "op": "rename", "dir": ["devices", "a", "e1"], "from": "s-00000009.cts.tmp", "to": "s-00000009.cts", "expect": { "errorCode": "io" } }
+      ]
+    },
+    {
+      "name": "créer et supprimer",
+      "setup": [{ "mkdir": ["devices"] }],
+      "steps": [
+        { "op": "createDir", "path": ["devices", "a", "e1"], "expect": { "ok": true } },
+        { "op": "createDir", "path": ["devices", "a", "e1"], "expect": { "ok": true } },
+        { "op": "append", "path": ["devices", "a", "e1", "j-00000001.ctj"], "text": "x\n", "create": true, "expect": { "ok": true } },
+        { "op": "removeEmptyDir", "path": ["devices", "a", "e1"], "expect": { "ok": true } },
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["e1/"] } },
+        { "op": "remove", "path": ["devices", "a", "e1", "j-00000001.ctj"], "expect": { "removed": true } },
+        { "op": "removeEmptyDir", "path": ["devices", "a", "e1"], "expect": { "ok": true } },
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": [] } }
+      ]
+    },
+    {
+      "name": "fichier dans le nuage sans hydratation",
+      "observable": true,
+      "requires": ["cloud"],
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat", "cloud": true }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["state.ctx~"] } },
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "error": "cloud-pending" } },
+        { "op": "readHead", "path": ["devices", "a", "state.ctx"], "max": 10, "expect": { "error": "cloud-pending" } }
+      ]
+    },
+    {
+      "name": "fichier dans le nuage avec hydratation",
+      "requires": ["cloud"],
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat", "cloud": true, "delayMs": 1000 }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": true, "expect": { "text": "etat" } },
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["state.ctx"] } }
+      ]
+    },
+    {
+      "name": "délai de téléchargement dépassé",
+      "requires": ["cloud"],
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat", "cloud": true, "delayMs": 70000 }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": true, "expect": { "error": "cloud-pending" } },
+        { "op": "readFrom", "path": ["devices", "a", "state.ctx"], "offset": 0, "max": 10, "hydrate": true, "expect": { "error": "cloud-pending" } }
+      ]
+    },
+    {
+      "name": "lien sous la racine",
+      "requires": ["links"],
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat" }, { "link": ["devices", "b"] }],
+      "steps": [
+        { "op": "list", "path": ["devices"], "expect": { "names": ["a/", "b!"] } },
+        { "op": "list", "path": ["devices", "b"], "expect": { "error": "unsafe" } },
+        { "op": "read", "path": ["devices", "b", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "error": "unsafe" } },
+        { "op": "append", "path": ["devices", "b", "state.ctx"], "text": "x", "create": true, "expect": { "error": "unsafe" } }
+      ]
+    },
+    {
+      "name": "composant remplacé par un lien entre deux appels",
+      "requires": ["links"],
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat" }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "etat" } },
+        { "op": "makeLink", "path": ["devices", "a"], "expect": { "ok": true } },
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "error": "unsafe" } },
+        { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "pirate", "expect": { "error": "unsafe" } }
+      ]
+    }
+  ]
+}

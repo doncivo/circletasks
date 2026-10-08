@@ -7,7 +7,8 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncForgetStatus, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
+import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncForgetStatus, type SyncNowOptions, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
+import type { DeadlineUnit } from './deadline';
 import { declareForget, prepareRejoin, readForgetStatus } from './forget';
 import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure, RESET_META } from './reset';
 import type { SyncDeps } from './deps';
@@ -44,6 +45,8 @@ export interface SyncServiceOptions {
   readonly clearTimeout?: (handle: unknown) => void;
   /** Y-10 (« Associer de nouveau ») : nouvel identifiant d'appareil (UUID v4 en minuscules) ; tests : injecté. */
   readonly newDeviceId?: () => DeviceId;
+  /** Tests (ADR 0011 §22 point 6) : appelé avant chaque comparaison à l'échéance d'un cycle borné (arrêt à une frontière choisie). */
+  readonly deadlineProbe?: (unit: DeadlineUnit) => void;
 }
 
 const randomDeviceId = (): DeviceId => crypto.randomUUID().toLowerCase() as DeviceId;
@@ -74,6 +77,8 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    * n'est donc jamais absorbé par une synchro déjà programmée.
    */
   type ActionKind = 'choice' | 'forget' | 'reset' | 'sync';
+  /** Échéance du cycle de synchro en attente (cycle `hide` de l'iPhone) ; undefined : non borné. */
+  let nextDeadline: number | undefined;
   const waiting = new Map<ActionKind, { run: () => Promise<unknown>; done: () => void; promise: Promise<void> }>();
 
   const publish = (next: SyncStatus): void => {
@@ -230,6 +235,12 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         await markResumed();
       }
       const result = await runCycle(deps, { onRemoteChanges: emitChanges, onWork: markSyncing, onProgress: (done, total) => publish({ ...status, progress: { done, total } }) }, cycleOptions);
+      if (result.outcome === 'interrupted') {
+        // ADR 0011 §22 point 6 : arrêt à l'échéance (iPhone passé en arrière-plan) : ni panne, ni bandeau ; l'état d'avant le cycle reste
+        // affiché (heure de dernière synchro inchangée), le cycle d'ouverture suivant reprend.
+        publish(withoutCycleStart({ ...before, progress: null }));
+        return result;
+      }
       await finish(result);
       return result;
     } catch (error) {
@@ -314,9 +325,18 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    syncNow: (reason: SyncReason) => {
+    syncNow: (reason: SyncReason, syncOptions: SyncNowOptions = {}) => {
       deps.logger.log('sync-now', { reason });
-      return schedule('sync', () => cycle());
+      // ADR 0011 §22 point 6 : seul le cycle `hide` est borné par une échéance ; une demande non bornée attendant avec lui la retire (un
+      // cycle d'ouverture, périodique ou manuel n'est jamais coupé).
+      const deadlineAt = reason === 'hide' ? syncOptions.deadlineAt : undefined;
+      if (waiting.has('sync')) nextDeadline = deadlineAt === undefined ? undefined : nextDeadline === undefined ? undefined : deadlineAt;
+      else nextDeadline = deadlineAt;
+      return schedule('sync', () => {
+        const at = nextDeadline;
+        nextDeadline = undefined;
+        return cycle(at === undefined ? {} : { deadlineAt: at, ...(options.deadlineProbe ? { deadlineProbe: options.deadlineProbe } : {}) });
+      });
     },
     onRemoteChanges: (listener) => {
       changeListeners.add(listener);

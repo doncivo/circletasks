@@ -259,7 +259,7 @@ fn shared_table_seen_devices() {
 fn forget_detail_texts_are_all_present_in_the_compiled_file() {
     // Sécurité (basse) : une clé absente de native/fr.json donnerait un texte vide (unwrap_or_default) et une boîte sans détail.
     let texts = circletasks_lib::sync::consent::forget_detail_texts();
-    for (name, text) in [("detail", &texts.detail), ("never", &texts.never), ("windows", &texts.windows), ("ios", &texts.ios)] {
+    for (name, text) in [("detail", &texts.detail), ("never", &texts.never), ("windows", &texts.windows), ("ios", &texts.ios), ("utc", &texts.utc)] {
         assert!(!text.trim().is_empty(), "forgetDetail.{name} absent ou vide");
     }
     for field in ["{platform}", "{id}", "{date}", "{time}"] {
@@ -375,7 +375,9 @@ fn snapshot_end_is_read_once_per_session_across_scans_and_reused_for_the_paged_r
 }
 
 #[test]
-fn snapshot_end_read_then_paged_read_reads_the_file_once() {
+fn snapshot_end_read_then_paged_read_reads_the_file_once_each() {
+    // ADR 0011 §22 point 4 : la fin est lue en flux (mémoire bornée), sans remplir le cache d'octets de la lecture par pages ; la reprise
+    // qui suit relit le fichier une fois (coût local seulement). Chaque lecture ne lit le fichier qu'une fois.
     let mut net = Net::new(&[DEV_B]);
     net.cycle(DEV_A).unwrap();
     let ep = epoch(1, DEV_A);
@@ -384,8 +386,9 @@ fn snapshot_end_read_then_paged_read_reads_the_file_once() {
     b.scan(&[]).unwrap();
     let start = net.fs.read_log.lock().unwrap().len();
     assert_eq!(b.read_snapshot_with(DEV_A, &ep, 1, 0, None, true).unwrap().status, "complete");
+    assert_eq!(reads_of(&net, &path, start), 1, "fin : une lecture en flux");
     assert_eq!(b.read_snapshot(DEV_A, &ep, 1, 0, None).unwrap().status, "complete");
-    assert_eq!(reads_of(&net, &path, start), 1, "fin puis lecture par pages : un seul fichier lu");
+    assert_eq!(reads_of(&net, &path, start), 2, "lecture par pages : une lecture de plus, jamais davantage");
 }
 
 #[test]

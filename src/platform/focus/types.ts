@@ -87,8 +87,12 @@ export interface FocusWindowClient {
  * viendra d'un plugin Swift ; ici une implémentation vide et un faux testé (F-04 critère 8).
  */
 export interface FocusEndScheduler {
-  /** Planifie (ou remplace) la notification de fin de cette session à `fireAt`. */
-  schedule(sessionId: string, fireAt: Date, title: string): Promise<void>;
+  /**
+   * Planifie (ou remplace) la notification de fin de cette session à `fireAt`. `plannedMin` (durée prévue) sert au titre de la
+   * notification iPhone (« Session terminée · 25 min ») ; ajout facultatif de l'avenant ADR 0012 lot N1, le contrat reste compatible.
+   * Rejette (`NotificationSchedulerError`) si la notification n'a pas pu être planifiée : l'appelant l'affiche, la session continue.
+   */
+  schedule(sessionId: string, fireAt: Date, title: string, plannedMin?: number | null): Promise<void>;
   /** Annule la notification de cette session ; sans effet si aucune n'est planifiée. */
   cancel(sessionId: string): Promise<void>;
 }

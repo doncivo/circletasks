@@ -53,6 +53,7 @@ import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from '
 import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
+import { startNotificationIntegration } from './features/reminders/startNotifications';
 import { t } from './i18n';
 import { formatPrefsVersion, subscribeFormatPrefs } from './i18n/formatPrefs';
 import { AppShell, TabRail } from './ui';
@@ -252,6 +253,12 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     return startSyncIntegration(container).dispose;
+  }, [container]);
+
+  // N-01 : replanification des rappels sur l'iPhone (ouverture APRÈS le premier rendu, reprise, passage en arrière-plan, synchro, édition) ; sans effet sur le PC.
+  useEffect(() => {
+    if (!container) return undefined;
+    return startNotificationIntegration(container).dispose;
   }, [container]);
 
   // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).

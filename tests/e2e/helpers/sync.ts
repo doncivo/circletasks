@@ -1,6 +1,6 @@
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
 import { E2E_SYNC_SIM_PORT, simUrl } from '../../sim/ports';
-import { APP_READY_TIMEOUT_MS } from './app';
+import { APP_READY_TIMEOUT_MS, waitForScreenLoaded } from './app';
 
 /**
  * Aides e2e de la synchro (Y-04, parcours 10 à deux pages) : pages du navigateur de dev reliées au simulateur de dossier
@@ -40,7 +40,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * Ouvre l'app dans un nouveau contexte (base neuve) relié au simulateur : `first` choisit le dossier et crée la clé ; `join` est associé
  * au premier (qui doit déjà avoir synchronisé une fois) ; `bare` reçoit le dossier du premier sans clé (association par l'app, Y-06).
  */
-export async function openSyncedPage(browser: Browser, room: string, device: string, role: 'first' | 'join' | 'bare', kind: 'pc' | 'iphone' = device === 'iphone' ? 'iphone' : 'pc'): Promise<SyncedPage> {
+export async function openSyncedPage(browser: Browser, room: string, device: string, role: 'first' | 'join' | 'bare' | 'nofolder', kind: 'pc' | 'iphone' = device === 'iphone' ? 'iphone' : 'pc'): Promise<SyncedPage> {
   const context = await browser.newContext({ ...(kind === 'pc' ? PC_CONTEXT : IPHONE_CONTEXT), locale: 'fr-FR', timezoneId: 'Europe/Paris' });
   const page = await context.newPage();
   await page.addInitScript((config) => {
@@ -57,9 +57,21 @@ export const propagate = (room: string): Promise<unknown> => post('/propagate', 
 /** La méthode de plateforme de l'appareil échouera (code donné, avant toute écriture) après `after` appels réussis. */
 export const failAfter = (room: string, device: string, method: string, after: number, code = 'io'): Promise<unknown> => post('/fail', { room, device, method, after, code });
 
+/** Y-IOS-02 : le prochain scan de l'iPhone `device` lira le QR affiché par `from` (texte produit par le simulateur, jamais par la page). */
+export const presentQr = (room: string, device: string, from: string): Promise<unknown> => post('/scan', { room, device, from });
+
+/** Y-IOS-02 : autorisation de la caméra simulée de l'iPhone (`answer` : réponse à la demande d'iOS) ; rend les ouvertures des réglages. */
+export const setCamera = (room: string, device: string, state: 'granted' | 'denied' | 'prompt', answer?: 'granted' | 'denied'): Promise<{ readonly opened: number }> =>
+  post('/camera', { room, device, state, ...(answer ? { answer } : {}) });
+
+/** Y-IOS-01 : dossier rendu injoignable (signet perdu) ou rétabli. */
+export const setUnreachable = (room: string, device: string, on: boolean): Promise<unknown> => post('/unreachable', { room, device, on });
+
 export interface SimInspection {
   readonly deviceId: string | null;
   readonly appends: number;
+  /** Y-IOS-01 : `hydrateBudgetMs` reçu par chaque scan (null : absent). */
+  readonly scanBudgets: readonly (number | null)[];
   /** Tâches publiées par l'appareil : nombre de créations complètes par identifiant. */
   readonly tasks: Readonly<Record<string, number>>;
   readonly failing: boolean;
@@ -71,6 +83,8 @@ export const closeRoom = (room: string): Promise<unknown> => post('/close-room',
 
 /** Réglages › Synchronisation › Détails (l'onglet Réglages rouvre le dernier écran visité : les détails, ou l'accueil de Réglages). */
 export async function openSyncDetails(page: Page): Promise<void> {
+  await waitForScreenLoaded(page, 'settingsscreen');
+  await waitForScreenLoaded(page, 'syncdetailsscreen');
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   const heading = page.getByRole('heading', { name: 'Synchronisation', level: 1 });
   const details = page.getByRole('button', { name: 'Détails', exact: true });

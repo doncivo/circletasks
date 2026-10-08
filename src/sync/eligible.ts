@@ -35,6 +35,7 @@ export async function readSnapshotEnd(deps: SyncDeps, state: PublishedDeviceStat
   const key = `${state.deviceId}|${state.epoch}|${String(announced.seq)}|${announced.endHlc}`;
   const cached = cache.get(key);
   if (cached) return cached;
+  deps.deadline?.check('snapshot-read');
   try {
     const page = await deps.platform.readSnapshot({ deviceId: state.deviceId, epoch: state.epoch, seq: announced.seq, fromRecord: 0, tail: true });
     if (page.status === 'cloud-pending') return 'cloud-pending';

@@ -18,6 +18,8 @@ export type FakeSchedulerCall = { readonly type: 'schedule'; readonly sessionId:
 /** Faux testé (F-04 critère 9) : enregistre les appels et sait quelle notification est planifiée par session. */
 export interface FakeFocusEndScheduler extends FocusEndScheduler {
   readonly calls: FakeSchedulerCall[];
+  /** Le prochain `schedule` ou `cancel` rejette avec cette erreur (consommée par l'appel) : échec de planification de F-04 critère 15. */
+  failNext(error: Error): void;
   /** Notifications actuellement planifiées : session -> échéance et titre. */
   pending(): ReadonlyMap<string, { readonly fireAt: Date; readonly title: string }>;
 }
@@ -25,16 +27,29 @@ export interface FakeFocusEndScheduler extends FocusEndScheduler {
 export function createFakeFocusEndScheduler(): FakeFocusEndScheduler {
   const calls: FakeSchedulerCall[] = [];
   const pending = new Map<string, { readonly fireAt: Date; readonly title: string }>();
+  let failure: Error | null = null;
+  const take = (): Error | null => {
+    const error = failure;
+    failure = null;
+    return error;
+  };
   return {
     calls,
+    failNext: (error) => {
+      failure = error;
+    },
     pending: () => pending,
     schedule: (sessionId, fireAt, title) => {
       calls.push({ type: 'schedule', sessionId, fireAt, title });
+      const error = take();
+      if (error !== null) return Promise.reject(error);
       pending.set(sessionId, { fireAt, title });
       return Promise.resolve();
     },
     cancel: (sessionId) => {
       calls.push({ type: 'cancel', sessionId });
+      const error = take();
+      if (error !== null) return Promise.reject(error);
       pending.delete(sessionId);
       return Promise.resolve();
     },

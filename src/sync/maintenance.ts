@@ -168,6 +168,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
     segmentPurgeable(n, { headSegment: input.head.segment, coveredSegment: covered, readers, self: deps.deviceId, lastWriteMs: times[`${input.epoch}/${String(n)}`] ?? null, nowMs, epoch: input.epoch }),
   );
   if (removable.length > 0) {
+    deps.deadline?.check('delete-own');
     try {
       await platform.deleteOwn(removable.map((n) => ({ epoch: input.epoch, kind: 'j' as const, n })));
       logger.log('segments-purged', { count: removable.length });
@@ -181,6 +182,7 @@ export async function maintain(deps: SyncDeps, input: MaintenanceInput): Promise
   const older = (input.ownScan?.epochs ?? []).filter((e) => compareEpochs(e.epoch, input.epoch) < 0);
   const allMoved = readers.every((r) => input.accepted.get(r.deviceId)?.epoch === input.epoch);
   if (older.length > 0 && allMoved && input.keepOldEpochs !== true) {
+    deps.deadline?.check('delete-own');
     try {
       await platform.deleteOwn(older.map((e) => ({ epoch: e.epoch, kind: 'epoch' as const })));
       logger.log('old-epochs-deleted', { count: older.length });

@@ -62,6 +62,10 @@ pub struct FolderRecord {
     pub v: u32,
     pub path: String,
     pub device_id: Option<String>,
+    /// iPhone (ADR 0011 §22 point 5) : signet de sécurité du dossier (base64), jamais transmis à la WebView ; absent sur PC (un
+    /// `folder.json` du PC est inchangé et toujours lu).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bookmark: Option<String>,
 }
 
 pub fn config_dir(base: &Path) -> PathBuf {

@@ -1,5 +1,5 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { openApp } from './app';
+import { openApp, waitForScreenLoaded } from './app';
 import { setWheels, typeDate } from './schedule';
 
 /** Aides e2e d'Aujourd'hui (A-01 à A-09), communes aux projets `pc` et `iphone`. */
@@ -44,5 +44,6 @@ export const todayTab = (page: Page): Locator => page.getByRole('navigation').ge
 
 export async function openToday(page: Page): Promise<void> {
   await openApp(page);
+  await waitForScreenLoaded(page, 'taskdetail');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }

@@ -284,8 +284,13 @@ fn r5_snapshot_writers_are_unique_and_capped() {
     let (a, fs) = device();
     a.setup(DEV_A);
     let ep = epoch(1, DEV_A);
+    let stale = a.core.snapshot_begin(&ep, 1, 14).unwrap();
+    // Revue Y-IOS : même époque, même numéro resté ouvert (cycle interrompu entre deux pages) : abandonné, jamais un refus à chaque cycle.
+    let log = circletasks_lib::sync::log::capture();
     let first = a.core.snapshot_begin(&ep, 1, 14).unwrap();
-    assert_eq!(code(a.core.snapshot_begin(&ep, 1, 14)), SyncCode::SegmentMismatch);
+    assert!(log.lines().iter().any(|l| l == "sync:snapshot-abandoned 1"));
+    assert_eq!(code(a.core.snapshot_append(stale, &["{}".into()])), SyncCode::BadName, "un seul écrivain par numéro");
+    a.core.snapshot_append(first, &["{}".into()]).unwrap();
     for seq in 2..=5 {
         a.core.snapshot_begin(&ep, seq, 14).unwrap();
     }

@@ -82,10 +82,13 @@ describe('QA rappels (N-02)', () => {
     expect((await rows(task)).map((r) => r.fireAt)).toEqual(['2026-04-02T10:00']);
   });
 
-  it('N-02 c.9 / N-04 c.7 : aucun plugin de notification dans package.json, Cargo.toml, capabilities', () => {
+  it("N-02 c.9 / N-04 c.7 : aucun plugin de notification dans package.json ; dans Cargo.toml, seulement celui d'iOS (N-01, voir consistency.test.ts)", () => {
     const root = join(__dirname, '..', '..', '..');
-    for (const file of ['package.json', 'src-tauri/Cargo.toml']) {
-      expect(readFileSync(join(root, file), 'utf8'), file).not.toMatch(/notification/i);
-    }
+    expect(readFileSync(join(root, 'package.json'), 'utf8')).not.toMatch(/notification/i);
+    const declared = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8')
+      .split(/\r?\n/)
+      .filter((line) => !/^\s*#/.test(line) && /notification/i.test(line));
+    expect(declared).toHaveLength(1);
+    expect(declared[0]).toMatch(/^tauri-plugin-notification = "=2\.5\.1"$/);
   });
 });

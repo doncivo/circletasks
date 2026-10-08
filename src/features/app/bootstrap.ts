@@ -10,7 +10,10 @@ import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
 import { openBackupService, type BackupService } from '../../platform/backup';
 import { openFileService, type FileService } from '../../platform/files';
-import { openFocusWindowPlatform, type FocusWindowPlatform } from '../../platform/focus';
+import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler, type FocusWindowPlatform } from '../../platform/focus';
+import { createLedgerStore, openNotificationScheduler, systemNotificationClock, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
+import { composeFocusEndText } from '../reminders/focusEndText';
+import { createSettingsLedger } from '../reminders/settingsLedger';
 import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
@@ -81,6 +84,12 @@ export interface BootstrapAppOptions {
   readonly calendars?: CalendarPlatform;
   /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
   readonly focusWindow?: FocusWindowPlatform | null;
+  /** Notifications locales de rappel (N-01) ; `openNotificationScheduler` par défaut (adaptateur réel sur l'iPhone installé, vide ailleurs). */
+  readonly notifications?: NotificationScheduler;
+  /** Notification de fin de session Focus (F-04) ; `openFocusEndScheduler` par défaut. */
+  readonly focusEndScheduler?: FocusEndScheduler;
+  /** Instant et fuseau de la planification des rappels ; l'horloge du système par défaut. */
+  readonly notificationClock?: NotificationClock;
   /** Enregistrement de fichiers (H-03) ; `openFileService` par défaut. */
   readonly files?: FileService;
   /** Sauvegardes locales (P-04) ; `openBackupService` par défaut. */
@@ -127,6 +136,11 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       .then(() => data.repos.sync.assertGuardEmpty())
       .catch(() => 0);
     if (strayGuards > 0) logFailure('sync', `garde trouvée au démarrage : ${String(strayGuards)}`);
+    // N-01 : registre local partagé entre les rappels et la fin de Focus (réglage local, sur la base BRUTE : jamais observée).
+    const notificationLedger = createLedgerStore(createSettingsLedger(data.repos.settings));
+    const notificationClock = options.notificationClock ?? systemNotificationClock;
+    const runtime = detectRuntime();
+    const os = detectOs();
     const desktop = options.desktop === undefined ? await openDesktopPlatform() : options.desktop;
     const opened = options.syncPlatform === undefined ? openSyncPlatform(detectRuntime(), detectOs()) : options.syncPlatform;
     const syncPlatform = opened?.available() ? opened : null;
@@ -151,6 +165,10 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       desktop,
       sync,
       syncPlatform,
+      notificationLedger,
+      notificationClock,
+      notifications: options.notifications ?? openNotificationScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, log: (code, counts) => logFailure('notifications', `${code} ${JSON.stringify(counts ?? {})}`) }),
+      focusEndScheduler: options.focusEndScheduler ?? openFocusEndScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, compose: composeFocusEndText }),
       focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
       files: options.files ?? openFileService(detectRuntime(), detectOs()),
       backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),

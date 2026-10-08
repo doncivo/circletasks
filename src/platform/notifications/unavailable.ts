@@ -21,5 +21,6 @@ export function createUnavailableNotificationScheduler(): NotificationScheduler 
     },
     cancelAll: () => Promise.resolve(),
     pending: () => Promise.resolve([]),
+    reservedCount: () => Promise.resolve(0),
   };
 }

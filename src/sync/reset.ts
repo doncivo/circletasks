@@ -1,3 +1,4 @@
+import { isCycleInterrupted } from './deadline';
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { resetPrecondition, resetWinner, restoreCandidates, type OpenedEpoch, type ResetCandidate, type ResetLagReason, type ResetPreconditionDevice } from '../domain/sync/epoch';
 import { DEVICE_EXPIRY_MS, isSyncDeviceId, isSyncErrorCode, SYNC_FORMAT_MAJOR, type DeviceAck, type EpochId, type PublishedDeviceState } from '../domain/sync/format';
@@ -481,6 +482,8 @@ export async function openResetEpoch(
     if (current) await writeResetState(deps, { ...current, step: 'waiting-devices', failure: null, waitingSince: current.waitingSince ?? iso(deps.clock.nowMs()) });
     return true;
   } catch (error) {
+    // ADR 0011 §22 point 6 : un arrêt à l'échéance n'est pas un échec (rien n'est enregistré, le cycle suivant reprend).
+    if (isCycleInterrupted(error)) throw error;
     await recordResetFailure(deps, 'snapshot', syncErrorCodeOf(error));
     throw error;
   }
@@ -519,6 +522,7 @@ export async function republishWithoutNotice(deps: SyncDeps, own: PublishedDevic
     });
     deps.logger.log('reset-withdrawn', { epoch: own.epoch });
   } catch (error) {
+    if (isCycleInterrupted(error)) throw error;
     await recordResetFailure(deps, 'superseded', syncErrorCodeOf(error));
     throw error;
   }

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { waitForScreenLoaded } from './helpers/app';
 import { createTask, isPhone, openToday, todayTab } from './helpers/today';
 
 /**
@@ -14,6 +15,9 @@ const tab = (page: Page, name: string) => page.getByRole('navigation').getByRole
 test.describe('A-04 — Aujourd’hui en un geste', () => {
   test.beforeEach(async ({ page }) => {
     await openToday(page);
+    // Le rapport est un écran à la demande : on attend son bloc plutôt que de courir contre le serveur (voir waitForScreenLoaded).
+    await waitForScreenLoaded(page, 'reportscreen');
+    await waitForScreenLoaded(page, 'settingsscreen');
   });
 
   test('Alt+1 ramène à Aujourd’hui depuis Réglages et l’onglet est actif (critère 1)', async ({ page }) => {
@@ -86,5 +90,26 @@ test.describe('A-04 — Aujourd’hui en un geste', () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByLabel('Titre')).toHaveValue('Saisie en cours');
     await expect(todayTab(page)).toHaveAttribute('aria-current', 'page');
+  });
+});
+
+test.describe('A-04 — bloc du rapport lent à arriver (serveur à froid, machine chargée)', () => {
+  test('l’aide d’ouverture attend un bloc de rapport lent (6 s) : Alt+1 revient ensuite à Aujourd’hui (critère 4)', async ({ page }) => {
+    // Non-régression de l'instabilité : le bloc de ReportScreen (écran à la demande) mettait plus de 5 s, délai d'une assertion.
+    let hits = 0;
+    await page.route('**/src/features/stats/ReportScreen.tsx*', async (route) => {
+      hits += 1;
+      await new Promise((resolve) => setTimeout(resolve, 6000));
+      await route.continue();
+    });
+    await openToday(page);
+    await waitForScreenLoaded(page, 'reportscreen');
+    await page.getByRole('button', { name: 'Rapport mensuel' }).click();
+    await expect(page.getByText('Rapport du mois', { exact: true })).toBeVisible();
+    await page.keyboard.press('Alt+1');
+    await expect(page.getByText('Rapport du mois', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
+    // Le ralentissement a bien eu lieu : sans cela le test ne prouverait rien.
+    expect(hits).toBeGreaterThan(0);
   });
 });

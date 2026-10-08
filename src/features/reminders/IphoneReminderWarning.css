@@ -1,0 +1,9 @@
+/* Avertissement N-07 du PC : un rappel proche que l'iPhone n'a peut-être pas reçu. Écran sans maquette ; mêmes codes que les messages d'état. */
+.ct-reminder-warning {
+  margin: var(--ct-space-2) 0 0;
+  padding: var(--ct-space-2) var(--ct-space-3);
+  border-radius: var(--ct-radius-md);
+  background: var(--ct-color-danger-bg);
+  color: var(--ct-color-danger);
+  font-size: var(--ct-font-size-text-sm);
+}
