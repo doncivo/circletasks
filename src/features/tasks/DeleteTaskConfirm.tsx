@@ -4,7 +4,7 @@ import { t } from '../../i18n';
 import { ChoiceDialog, ConfirmDialog } from '../../ui';
 
 interface DeleteTaskConfirmProps {
-  task: Pick<Task, 'title' | 'recurrenceId'>;
+  task: Pick<Task, 'title' | 'recurrenceId'> & Partial<Pick<Task, 'source' | 'externalId'>>;
   /** `scope` : choix « cette occurrence / toutes les suivantes », seulement pour une occurrence récurrente (T-10). */
   onConfirm: (scope?: SeriesScope) => void;
   onCancel: () => void;
@@ -24,6 +24,18 @@ export function DeleteTaskConfirm({ task, onConfirm, onCancel }: DeleteTaskConfi
         options={DELETE_SCOPES.map((id) => ({ id, label: t(id === 'occurrence' ? 'tasks.seriesScopeOccurrence' : 'tasks.seriesScopeFollowing') }))}
         optionVariant="danger"
         onChoose={(scope) => onConfirm(scope)}
+        onCancel={onCancel}
+      />
+    );
+  }
+  // K-06 critère 7 (D2) : une tâche liée à un rappel Apple le supprime aussi dans Rappels ; la confirmation le dit.
+  if (task.source === 'apple_reminders' && task.externalId !== null && task.externalId !== undefined) {
+    return (
+      <ConfirmDialog
+        title={t('appleReminders.deleteTitle')}
+        description={t('appleReminders.deleteBody', { title: task.title })}
+        confirmLabel={t('appleReminders.deleteConfirm')}
+        onConfirm={() => onConfirm()}
         onCancel={onCancel}
       />
     );

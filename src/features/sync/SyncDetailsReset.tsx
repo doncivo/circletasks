@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import type { DeviceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import type { SyncDeviceStatus, SyncResetStatus } from '../../platform/sync/types';
@@ -6,6 +7,7 @@ import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { forgetDeviceName } from './forgetText';
 import { openPairingWindow, pairingOpenErrorKey } from './pairingStatus';
+import { useKeyPresence } from './keyPresence';
 import { ResetSyncDialog } from './ResetSyncDialog';
 import { resetFailureText, resetReminderText, resetStepText } from './resetText';
 import { SyncDeviceForgetAction } from './SyncDetailsForget';
@@ -39,16 +41,21 @@ export function SyncDetailsReset() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [keyNotice, setKeyNotice] = useState<PlainMessageKey | null>(null);
+  const key = useKeyPresence();
   const sync = container.sync;
   if (!sync || !container.syncPlatform) return null;
   const reset = status.reset ?? null;
   const phase = status.phase;
   const stopped = interrupted(reset);
   const required = phase === 'reset-required' || reset?.role === 'required' || (reset?.step === 'superseded' && !stopped);
-  const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten';
+  // QA D2 : dossier à choisir de nouveau (not-bound, unsafe-folder, folder-too-large…) : la cause est le dossier, jamais la clé : pas de réinitialisation.
+  const folderLost = phase === 'error' && syncErrorFamily(status.errorCode ?? null) === 'folder';
+  const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten' && !folderLost;
   const running = reset !== null && IN_PROGRESS.has(reset.step);
   // Confirmation native requise : masqué tant qu'elle n'existe pas sur cet appareil (ADR 0011 §22 point 7).
-  const canStart = configured && !required && !running;
+  // Y-IOS-02 (point de contrôle d'Ali) : jamais proposé sans clé lue sur cet appareil (une réinitialisation par un appareil sans clé
+  // écraserait les données des autres : nouvelle clé, nouvelle époque) ; le service la refuse aussi (`key-missing`).
+  const canStart = configured && !required && !running && key === 'present';
   if (!configured && !required && !reset) return null;
   const nowMs = container.clock.nowMs();
   const devices = status.devices;

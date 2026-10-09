@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use serde::Serialize;
 use tauri::{AppHandle, Manager};
 
-use crate::backup_triggers::REFERENCE_TRIGGERS;
+use crate::backup_triggers::{trigger_body_for, REFERENCE_TRIGGERS};
 
 /// Nom du fichier de base (tauri-plugin-sql, `sqlite:circletasks.db`).
 pub const DB_FILE: &str = "circletasks.db";
@@ -42,7 +42,7 @@ pub const PRE_RESTORE_PREFIX: &str = "circletasks-pre-restore-";
 pub const KEEP_PRE_RESTORE_BACKUPS: usize = 3;
 /// Version de schéma de cette app (plus haute migration de `src/db/migrations`). Une sauvegarde plus récente est refusée. Constante côté Rust :
 /// la WebView ne fournit jamais cette valeur ; un test (`restore_hardening.rs`) la compare aux fichiers de migration.
-pub const APP_SCHEMA_VERSION: u32 = 17;
+pub const APP_SCHEMA_VERSION: u32 = 18;
 /// Plafond de taille d'une base à vérifier ou à restaurer (512 Mo) : au-delà, la sauvegarde est refusée (`corrupt`).
 pub const MAX_BACKUP_BYTES: u64 = 512 * 1024 * 1024;
 /// Attente maximale d'un verrou pendant une sauvegarde quotidienne : la base n'est jamais bloquée plus de 2 s (P-04 critère 1).
@@ -510,11 +510,19 @@ pub fn reset_triggers(path: &Path) -> Result<(), BackupError> {
     // Déclencheurs de capture de la synchro (`sync_*`, migration 0015) : seulement si leurs tables existent (une sauvegarde plus ancienne
     // les recevra par la migration à l'ouverture ; les créer ici ferait échouer cette migration).
     let has_sync = has_table("sync_guard")?;
+    // Corps valables à la version de la sauvegarde (une sauvegarde de version 17 reçoit les corps de la migration 0015, jamais un corps qui
+    // cite une colonne absente d'elle ; la migration 0018 les remplace à l'ouverture). Sans table de versions : corps actuels.
+    let version = if has_table("schema_migrations")? {
+        tx.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0)).map_err(sql_err)?.filter(|v| *v >= 1).unwrap_or(APP_SCHEMA_VERSION)
+    } else {
+        APP_SCHEMA_VERSION
+    };
     if has_table("search_index_doc")? {
-        for (name, table, sql) in REFERENCE_TRIGGERS {
+        for (name, table, _) in REFERENCE_TRIGGERS {
             if name.starts_with("sync_") && !has_sync {
                 continue;
             }
+            let Some(sql) = trigger_body_for(name, table, version) else { continue };
             if has_table(table)? {
                 tx.execute_batch(sql).map_err(sql_err)?;
             }
@@ -556,18 +564,20 @@ pub fn check_backup_file(path: &Path, app_version: u32) -> Result<u32, BackupErr
         .collect::<Result<_, _>>()
         .map_err(|e| corrupt(e.to_string()))?;
     drop(definitions);
+    // Version de schéma lue d'abord : le corps admis d'un déclencheur dépend d'elle (une sauvegarde de version 17 porte les corps de la migration
+    // 0015, remplacés par la 0018 : `SUPERSEDED_TRIGGERS`). Les erreurs de lecture ne sont rendues qu'après le contrôle des définitions (même ordre qu'avant).
+    let version_read = conn
+        .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0))
+        .map_err(|e| corrupt(e.to_string()));
+    let version_for_triggers = version_read.as_ref().ok().copied().flatten().filter(|v| *v >= 1).unwrap_or(app_version);
     for (kind, name, table, sql) in &found {
         let matches_reference = kind == "trigger"
-            && REFERENCE_TRIGGERS
-                .iter()
-                .any(|(ref_name, ref_table, ref_sql)| ref_name == name && ref_table == table && sql.as_deref().is_some_and(|text| normalize_sql(text) == normalize_sql(ref_sql)));
+            && trigger_body_for(name, table, version_for_triggers).is_some_and(|ref_sql| sql.as_deref().is_some_and(|text| normalize_sql(text) == normalize_sql(ref_sql)));
         if !matches_reference {
             return Err(corrupt(format!("définition inattendue : {kind} {name}")));
         }
     }
-    let version = conn
-        .query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0))
-        .map_err(|e| corrupt(e.to_string()))?
+    let version = version_read?
         .filter(|v| *v >= 1)
         .ok_or_else(|| corrupt("aucune version de schéma".into()))?;
     if version > app_version {
@@ -840,6 +850,46 @@ fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {
 
 fn join_error(e: tauri::Error) -> BackupError {
     BackupError::new("io", e.to_string())
+}
+
+/// Diagnostic d'ouverture de la base (0.2.1), affiché sous « Impossible d'ouvrir la base de données. » : chemins résolus et existence.
+/// Lecture seule, aucun argument venu de la WebView : seuls le dossier de configuration et `circletasks.db` y sont examinés.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DbDiagnostics {
+    pub config_dir: Option<String>,
+    pub config_dir_error: Option<String>,
+    pub dir_exists: bool,
+    pub db_path: Option<String>,
+    pub file_exists: bool,
+    pub file_bytes: Option<u64>,
+    pub wal_exists: bool,
+}
+
+/// Diagnostic du dossier `dir` (celui que tauri-plugin-sql résout pour `sqlite:circletasks.db`).
+pub fn diagnose_db_dir(dir: Result<PathBuf, String>) -> DbDiagnostics {
+    match dir {
+        Ok(dir) => {
+            let db = dir.join(DB_FILE);
+            let meta = fs::metadata(&db).ok().filter(|m| m.is_file());
+            DbDiagnostics {
+                config_dir: Some(dir.to_string_lossy().into_owned()),
+                config_dir_error: None,
+                dir_exists: dir.is_dir(),
+                db_path: Some(db.to_string_lossy().into_owned()),
+                file_exists: meta.is_some(),
+                file_bytes: meta.map(|m| m.len()),
+                wal_exists: dir.join(format!("{DB_FILE}-wal")).is_file(),
+            }
+        }
+        Err(error) => DbDiagnostics { config_dir: None, config_dir_error: Some(error), dir_exists: false, db_path: None, file_exists: false, file_bytes: None, wal_exists: false },
+    }
+}
+
+/// Commande de diagnostic (PC et iPhone), appelée seulement quand l'ouverture de la base a échoué.
+#[tauri::command]
+pub fn db_diagnostics(app: AppHandle) -> DbDiagnostics {
+    diagnose_db_dir(app.path().app_config_dir().map_err(|e| e.to_string()))
 }
 
 /// Commande appelée par le front avant d'appliquer des migrations sur une base existante.

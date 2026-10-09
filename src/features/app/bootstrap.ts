@@ -4,6 +4,7 @@ import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
+import { DbStepError, JournalModeError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
@@ -14,7 +15,8 @@ import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler,
 import { createLedgerStore, openNotificationActionSource, openNotificationScheduler, systemNotificationClock, type NotificationActionSource, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
 import { composeFocusEndText } from '../reminders/focusEndText';
 import { createSettingsLedger } from '../reminders/settingsLedger';
-import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
+import { openRemindersPlatform, type RemindersPlatform } from '../../platform/reminders';
+import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform, type MemoryPlatformOptions, type WebAuthFailureCode } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
 import { openSyncPlatform } from '../../platform/sync';
@@ -46,16 +48,53 @@ export async function bootstrapDatabase(
   const { setDbStatus } = useAppStore.getState();
   setDbStatus('loading');
   let db: SqlDriver | undefined;
+  // 0.2.1 : étape en cours, mise à jour avant chaque appel (diagnostic affiché sous app.dbError).
+  let step: DbOpenStep = 'load';
+  let migration: number | undefined;
+  const { setDbProgress } = useAppStore.getState();
+  setDbProgress({ step });
   try {
     db = await open();
+    step = 'backup';
+    setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
-    await migrate(db, migrations, { beforeApply: createBackupBeforeMigration(port, options.clock), afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined) });
+    await migrate(db, migrations, {
+      beforeApply: createBackupBeforeMigration(port, options.clock),
+      afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined),
+      onStep: (current) => {
+        step = current.kind;
+        migration = current.kind === 'migration' ? current.version : undefined;
+        setDbProgress({ step, migration });
+      },
+    });
+    setDbProgress(null);
     setDbStatus('ready');
     return db;
   } catch (error) {
+    setDbProgress(null);
+    const cause = error instanceof DbStepError ? error.cause : error;
+    const journalMode = cause instanceof JournalModeError ? cause.mode : db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
-    setDbStatus('error', { detail: error instanceof Error ? error.message : String(error), backupFailed: error instanceof MigrationBackupError });
+    const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
+    const message = describeError(error);
+    logFailure('db', `ouverture impossible (${failedStep}${migration === undefined ? '' : ` ${String(migration)}`}) : ${errorName(error)}: ${message}`);
+    setDbStatus('error', {
+      detail: message,
+      backupFailed: error instanceof MigrationBackupError,
+      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message, ...(journalMode === undefined ? {} : { journalMode }) },
+    });
     return undefined;
+  }
+}
+
+/** Mode de journal effectif pour le diagnostic (0.2.2) ; null si la lecture échoue (elle ne masque jamais l'erreur d'origine). */
+async function readJournalMode(db: SqlDriver): Promise<string | null> {
+  try {
+    const rows = await db.select('PRAGMA journal_mode');
+    const mode = rows[0]?.journal_mode;
+    return typeof mode === 'string' ? mode : null;
+  } catch {
+    return null;
   }
 }
 
@@ -86,6 +125,8 @@ export interface BootstrapAppOptions {
   readonly desktop?: DesktopPlatform | null;
   /** Agendas externes ; `openCalendarPlatform` par défaut (commandes Rust, ou mémoire + simulateurs en développement). */
   readonly calendars?: CalendarPlatform;
+  /** Rappels Apple (K-05) ; `openRemindersPlatform` par défaut (plugin EventKit sur l'iPhone installé, indisponible ailleurs). */
+  readonly reminders?: RemindersPlatform;
   /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
   readonly focusWindow?: FocusWindowPlatform | null;
   /** Notifications locales de rappel (N-01) ; `openNotificationScheduler` par défaut (adaptateur réel sur l'iPhone installé, vide ailleurs). */
@@ -130,20 +171,29 @@ const readOnlyStamper: WriteStamper = {
  * (dbStatus = 'error'). Appelé par App.tsx ; le conteneur est fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
-  const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });
+  // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
+  const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
+  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup });
   if (!driver) return undefined;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;
   const ids = options.ids ?? uuidGenerator;
+  // 0.2.1 : étape en cours (module ou appel), posée avant chaque appel : diagnostic sous app.startError.
+  let step = 'testHooks';
+  const at = <T>(name: string, run: () => T): T => {
+    step = name;
+    return run();
+  };
   try {
     // Prises de test des e2e : chargées dynamiquement et seulement en développement (Vite retire la branche d'un build).
     if (import.meta.env.DEV) (await import('../../db/testHooks')).installDevTestHooks(driver);
-    const boot = factory(driver, readOnlyStamper);
-    const storedDeviceId = await boot.settings.get('device.id');
+    const boot = at('repositories', () => factory(driver, readOnlyStamper));
+    const storedDeviceId = await at('settings.get(device.id)', () => boot.settings.get('device.id'));
     const deviceId = storedDeviceId ?? newEntityId<DeviceId>(ids);
-    const hlc = createHlcClock({ clock, deviceId, seed: await boot.syncMeta.maxHlc() });
-    const data = createDataAccess(driver, createWriteStamper(clock, hlc), factory);
-    if (!storedDeviceId) await data.repos.settings.set('device.id', deviceId);
+    const seed = await at('syncMeta.maxHlc', () => boot.syncMeta.maxHlc());
+    const hlc = at('createHlcClock', () => createHlcClock({ clock, deviceId, seed }));
+    const data = at('createDataAccess', () => createDataAccess(driver, createWriteStamper(clock, hlc), factory));
+    if (!storedDeviceId) await at('settings.set(device.id)', () => data.repos.settings.set('device.id', deviceId));
     // ADR 0011 section 3.2 (audit M10) : la garde de la synchro est vide au démarrage, y compris après une restauration P-04 (qui relance
     // l'app). Une ligne trouvée (base copiée à chaud) est supprimée et journalisée.
     const strayGuards = await Promise.resolve()
@@ -151,26 +201,29 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       .catch(() => 0);
     if (strayGuards > 0) logFailure('sync', `garde trouvée au démarrage : ${String(strayGuards)}`);
     // N-01 : registre local partagé entre les rappels et la fin de Focus (réglage local, sur la base BRUTE : jamais observée).
-    const notificationLedger = createLedgerStore(createSettingsLedger(data.repos.settings));
+    const notificationLedger = at('notificationLedger', () => createLedgerStore(createSettingsLedger(data.repos.settings)));
     const notificationClock = options.notificationClock ?? systemNotificationClock;
-    const runtime = detectRuntime();
+    const runtime = at('detectRuntime', () => detectRuntime());
     const os = detectOs();
-    const desktop = options.desktop === undefined ? await openDesktopPlatform() : options.desktop;
-    const opened = options.syncPlatform === undefined ? openSyncPlatform(detectRuntime(), detectOs()) : options.syncPlatform;
-    const syncPlatform = opened?.available() ? opened : null;
+    const desktop = options.desktop === undefined ? await at('openDesktopPlatform', () => openDesktopPlatform()) : options.desktop;
+    const opened = options.syncPlatform === undefined ? at('openSyncPlatform', () => openSyncPlatform(detectRuntime(), detectOs())) : options.syncPlatform;
+    const syncPlatform = at('syncPlatform.available', () => opened?.available()) ? opened : null;
+    const appVersion = syncPlatform && desktop ? await at('desktop.getVersion', () => desktop.getVersion().catch(() => '0.0.0')) : '0.0.0';
     const sync = syncPlatform
-      ? createSyncService({
-          data,
-          platform: syncPlatform,
-          hlc,
-          clock,
-          deviceId,
-          devicePlatform: detectOs() === 'ios' ? 'ios' : 'windows',
-          appVersion: desktop ? await desktop.getVersion().catch(() => '0.0.0') : '0.0.0',
-          sv: migrations.at(-1)?.version ?? 1,
-        })
+      ? at('createSyncService', () =>
+          createSyncService({
+            data,
+            platform: syncPlatform,
+            hlc,
+            clock,
+            deviceId,
+            devicePlatform: detectOs() === 'ios' ? 'ios' : 'windows',
+            appVersion,
+            sv: migrations.at(-1)?.version ?? 1,
+          }),
+        )
       : null;
-    return createAppContainer({
+    const deps: Parameters<typeof createAppContainer>[0] = {
       clock,
       ids,
       hlc,
@@ -181,34 +234,48 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       syncPlatform,
       notificationLedger,
       notificationClock,
-      notificationActions: options.notificationActions === undefined ? openNotificationActionSource(runtime, os) : options.notificationActions,
-      notifications: options.notifications ?? openNotificationScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, log: (code, counts) => logFailure('notifications', `${code} ${JSON.stringify(counts ?? {})}`) }),
-      focusEndScheduler: options.focusEndScheduler ?? openFocusEndScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, compose: composeFocusEndText }),
-      focusWindow: options.focusWindow === undefined ? await openFocusWindowPlatform() : options.focusWindow,
-      files: options.files ?? openFileService(detectRuntime(), detectOs()),
-      backups: options.backups ?? openBackupService(detectRuntime(), detectOs(), { db: driver }),
-      calendars: options.calendars ?? (await openCalendarPlatform(...developmentCalendarSetup())),
-      haptics: options.haptics ?? openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) }),
-      authenticator: options.authenticator ?? openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) }),
-      privacyShield: options.privacyShield ?? openPrivacyShield(runtime, os),
-      signing: options.signing ?? openSigning(runtime, os),
-    });
+      notificationActions: options.notificationActions === undefined ? at('openNotificationActionSource', () => openNotificationActionSource(runtime, os)) : options.notificationActions,
+      notifications: options.notifications ?? at('openNotificationScheduler', () => openNotificationScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, log: (code, counts) => logFailure('notifications', `${code} ${JSON.stringify(counts ?? {})}`) })),
+      focusEndScheduler: options.focusEndScheduler ?? at('openFocusEndScheduler', () => openFocusEndScheduler(runtime, os, { ledger: notificationLedger, clock: notificationClock, compose: composeFocusEndText })),
+      focusWindow: options.focusWindow === undefined ? await at('openFocusWindowPlatform', () => openFocusWindowPlatform()) : options.focusWindow,
+      files: options.files ?? at('openFileService', () => openFileService(detectRuntime(), detectOs())),
+      backups: options.backups ?? at('openBackupService', () => openBackupService(detectRuntime(), detectOs(), { db: driver })),
+      calendars: options.calendars ?? (await at('openCalendarPlatform', () => openCalendarPlatform(...developmentCalendarSetup()))),
+      reminders: options.reminders ?? at('openRemindersPlatform', () => openRemindersPlatform(runtime, os)),
+      haptics: options.haptics ?? at('openHaptics', () => openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) })),
+      authenticator: options.authenticator ?? at('openAuthenticator', () => openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) })),
+      privacyShield: options.privacyShield ?? at('openPrivacyShield', () => openPrivacyShield(runtime, os)),
+      signing: options.signing ?? at('openSigning', () => openSigning(runtime, os)),
+    };
+    return at('createAppContainer', () => createAppContainer(deps));
   } catch (error) {
-    useAppStore.getState().setDbStatus('error', { detail: error instanceof Error ? error.message : String(error) });
+    publishStartFailure(step, error);
     return undefined;
   }
+}
+
+/**
+ * 0.2.1 : échec du démarrage APRÈS l'ouverture de la base (message app.startError, plus « base de données ») ; l'étape est le module ou
+ * l'appel en cours. Aussi appelé par App.tsx pour les étapes qui suivent `bootstrapApp` (espaces, apparence, verrou, report).
+ */
+export function publishStartFailure(step: string, error: unknown): void {
+  const message = describeError(error);
+  logFailure('startup', `démarrage impossible (${step}) : ${errorName(error)}: ${message}`);
+  useAppStore.getState().setDbStatus('error', { detail: message, failure: { phase: 'start', step, errorName: errorName(error), message } });
 }
 
 /**
  * Points d'accès et ID client des simulateurs d'agendas, en développement seulement (variables VITE_CT_GOOGLE_SIM, VITE_CT_CALDAV_SIM,
  * VITE_CT_GOOGLE_SIM_CLIENT_ID posées par Playwright) : un build de production n'en lit jamais.
  */
-function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, { googleClientId?: string }] {
+function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, MemoryPlatformOptions] {
   const env = import.meta.env;
   if (!env.DEV) return [PRODUCTION_ENDPOINTS, undefined, {}];
   // Playwright : un test qui modifie l'état d'un simulateur en démarre un à lui et l'annonce avant le chargement de la page.
   const override = (globalThis as { __ctCalendarSims?: { google: string; caldav: string; clientId?: string } }).__ctCalendarSims;
-  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, override.clientId ? { googleClientId: override.clientId } : {}];
+  // K-TECH-01 (e2e iphone) : échec de la feuille de connexion Google posé par le test (`window.__ctWebAuthFailure`), relu à chaque connexion.
+  const webAuthFailure = (): WebAuthFailureCode | null => (globalThis as { __ctWebAuthFailure?: WebAuthFailureCode }).__ctWebAuthFailure ?? null;
+  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, { ...(override.clientId ? { googleClientId: override.clientId } : {}), webAuthFailure }];
   if (!env.VITE_CT_GOOGLE_SIM || !env.VITE_CT_CALDAV_SIM) return [PRODUCTION_ENDPOINTS, undefined, {}];
   return [simulatorEndpoints(env.VITE_CT_GOOGLE_SIM, env.VITE_CT_CALDAV_SIM), undefined, env.VITE_CT_GOOGLE_SIM_CLIENT_ID ? { googleClientId: env.VITE_CT_GOOGLE_SIM_CLIENT_ID } : {}];
 }

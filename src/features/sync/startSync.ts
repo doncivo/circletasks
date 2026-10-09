@@ -7,6 +7,7 @@ import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import { remindersHidePass } from '../calendars/appleReminders/hidePass';
 import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
@@ -398,7 +399,8 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   });
   void refreshPersisted();
   // ADR 0011 §22 point 6 : sur iPhone, le cycle du passage en arrière-plan est borné à 25 s (tâche d'arrière-plan iOS).
-  const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS } : {};
+  // Rappels Apple (K-05, ADR 0008 §10.8) : le passage de masquage termine (8 s au plus) AVANT le cycle, qui publie ainsi ce qu'il vient de changer.
+  const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, ...(container.reminders.available ? { beforeHide: () => remindersHidePass(container) } : {}) } : {};
   const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide });
   schedulers.set(container, scheduler);
   return {

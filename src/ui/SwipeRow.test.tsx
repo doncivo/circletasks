@@ -331,7 +331,7 @@ describe('SwipeRow (A-07)', () => {
   it('le groupe d’actions VoiceOver : nommé, après le contenu, mêmes cas d’usage (critères 16, 17)', () => {
     const { onSelect, row } = setup();
     const group = screen.getByRole('group', { name: 'Actions : Courses' });
-    expect(group).toHaveAttribute('aria-expanded', 'false');
+    expect(group).not.toHaveAttribute('aria-expanded'); // ARIA 1.2 : pas pour role=group, VoiceOver annoncerait « réduit »
     expect(row.lastElementChild).toBe(group);
     fireEvent.click(screen.getByRole('button', { name: 'Reporter : Courses' }));
     expect(onSelect).toHaveBeenCalledWith('postpone');
@@ -339,12 +339,32 @@ describe('SwipeRow (A-07)', () => {
     expect(onSelect).toHaveBeenCalledWith('delete');
   });
 
-  it('aria-expanded suit l’ouverture de la ligne (critère 17)', () => {
+  it('le groupe n’a jamais aria-expanded, ligne ouverte ou non (critère 17)', () => {
     const { row } = setup();
     touch(row, 'pointerdown', 300, 30, 0);
     touch(row, 'pointermove', 200, 30, 100);
     touch(row, 'pointerup', 200, 30, 150);
-    expect(screen.getByRole('group', { name: 'Actions : Courses' })).toHaveAttribute('aria-expanded', 'true');
+    expect(row).toHaveAttribute('data-open', 'true');
+    expect(screen.getByRole('group', { name: 'Actions : Courses' })).not.toHaveAttribute('aria-expanded');
+  });
+
+  it('pendant le cas d’usage du premier balayage, un second balayage est ignoré (QA D1)', async () => {
+    const onCommit = vi.fn(() => new Promise<boolean>(() => undefined));
+    const { row } = setup({ right: { label: 'Terminer', tone: 'complete', onCommit } });
+    touch(row, 'pointerdown', 20, 30, 0);
+    touch(row, 'pointermove', 250, 30, 100);
+    await act(async () => {
+      touch(row, 'pointerup', 250, 30, 150);
+      await Promise.resolve();
+    });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+    touch(row, 'pointerdown', 20, 30, 1000);
+    touch(row, 'pointermove', 250, 30, 1100);
+    await act(async () => {
+      touch(row, 'pointerup', 250, 30, 1150);
+      await Promise.resolve();
+    });
+    expect(onCommit).toHaveBeenCalledTimes(1);
   });
 
   it('le nom accessible peut être fourni par l’action (« Planifier aujourd’hui : … »)', () => {

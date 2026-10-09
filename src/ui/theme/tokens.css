@@ -201,6 +201,7 @@
     --ct-edit-track: #c9bee6;
 --ct-edit-idle-knob: #1c1630;
 --ct-edit-ink: #f1eef8;
+--ct-swipe-shadow: rgba(0, 0, 0, 0.7);
   }
 }
 
@@ -247,6 +248,7 @@
   --ct-edit-track: #c9bee6;
   --ct-edit-idle-knob: #1c1630;
   --ct-edit-ink: #f1eef8;
+  --ct-swipe-shadow: rgba(0, 0, 0, 0.7);
 }
 
 :root[data-theme='light'] {

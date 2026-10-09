@@ -15,6 +15,8 @@ export const syncEngineFr = {
     neverSynced: 'Pas encore synchronisé',
     notConfigured: 'Synchronisation non configurée',
     needsPairing: 'Associez cet appareil pour synchroniser',
+    // Y-IOS-02 (point de contrôle d'Ali) : l'iPhone sans clé : seule l'association au PC le débloque.
+    needsPairingIos: 'Associez cet iPhone au PC pour synchroniser',
     syncingPhase: 'Synchronisation en cours…',
     waitingIcloud: 'En attente d’iCloud',
     waitingIcloudLong: 'Synchro incomplète depuis plus de 24 h, en attente d’iCloud : vérifiez iCloud Drive et le dossier de synchro',
@@ -26,6 +28,14 @@ export const syncEngineFr = {
     clockAhead: 'L’horloge de {device} est en avance : vérifiez sa date et son heure',
     keyMismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',
+    // Y-IOS-02 (audit des impasses) : erreurs permanentes : action et code, jamais « nouvel essai au prochain cycle ».
+    errorSlowed: 'Synchronisation ralentie : nouvel essai à {time} (code {code}), ou « Synchroniser » maintenant',
+    errorSlowedCause: '{cause}. Nouvel essai à {time} (code {code}), ou « Synchroniser » maintenant',
+    errorStopped:'La synchronisation est arrêtée (code {code}) : ouvrez Détails, puis « Synchroniser » pour réessayer',
+    errorStoppedPairing: 'Clé de chiffrement absente ou différente (code {code}) : associez cet appareil',
+    errorStoppedFolder: 'Dossier de synchro à choisir de nouveau (code {code}) : Réglages → Synchronisation',
+    errorStoppedReset: 'La clé de chiffrement a atteint sa limite (code {code}) : réinitialisez la synchronisation dans Détails',
+    errorStoppedUpdate: 'Données d’une version plus récente (code {code}) : mettez à jour l’app',
     errorFolderUnreachable: 'Dossier de synchro introuvable : vos modifications seront envoyées au retour',
     // ADR 0011 §22 point 8 : signet du dossier perdu sur l'iPhone (réinstallation, dossier supprimé ou déplacé).
     errorFolderUnreachableIos: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks',
@@ -43,6 +53,11 @@ export const syncEngineFr = {
     back: 'Retour à Réglages',
     sectionState: 'ÉTAT',
     sectionDevices: 'APPAREILS',
+    keyId: 'Clé de chiffrement (identifiant)',
+    // Y-IOS-02 : sans clé, les états des autres appareils ne peuvent pas être lus ; jamais une liste vide sans explication.
+    devicesNeedPairing: 'Associez cet appareil pour voir les autres appareils',
+    devicesNeedPairingIos: 'Associez cet iPhone pour voir les autres appareils',
+    devicesNone: 'Aucun appareil lu pour l’instant',
     sectionPending: 'EN ATTENTE D’ICLOUD',
     sectionConflicts: 'JOURNAL DES CONFLITS',
     thisDevice: 'Cet appareil · {time}',

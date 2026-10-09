@@ -39,6 +39,8 @@ interface TaskRow extends SqlRow, SyncRow {
   readonly someday: number;
   readonly source: string;
   readonly external_id: string | null;
+  readonly apple_list_id: string | null;
+  readonly apple_recurring: number;
   readonly external_event_id: string | null;
 }
 
@@ -74,6 +76,8 @@ function rowToTask(row: TaskRow): Task {
     someday: row.someday === 1,
     source: row.source as Task['source'],
     externalId: row.external_id,
+    appleListId: row.apple_list_id,
+    appleRecurring: row.apple_recurring === 1,
     externalEventId: row.external_event_id as ExternalEventId | null,
     ...readSyncMeta(row),
   };
@@ -91,7 +95,7 @@ function taskFromNew(input: NewTask, stamp: WriteStamp): Task {
 }
 
 const TASK_COLUMNS =
-  'id, space_id, project_id, title, note, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, series_template, goal_id, icon, someday, source, external_id, external_event_id, created_at, updated_at, deleted_at, device_id, hlc';
+  'id, space_id, project_id, title, note, date, time, status, done_at, sort_order, carried_over, recurrence_id, series_index, series_template, goal_id, icon, someday, source, external_id, external_event_id, apple_list_id, apple_recurring, created_at, updated_at, deleted_at, device_id, hlc';
 
 export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): TaskRepository {
   async function fetchById(id: TaskId, options?: ReadOptions): Promise<TaskRow | undefined> {
@@ -126,11 +130,37 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return rows[0] ? rowToTask(rows[0]) : null;
     },
 
+    async listAppleSourced() {
+      const rows = await db.select<TaskRow>("SELECT * FROM task WHERE source = 'apple_reminders' AND deleted_at IS NULL AND discarded = 0 ORDER BY created_at, id");
+      return rows.map(rowToTask);
+    },
+
+    async findByExternalId(externalId) {
+      const rows = await db.select<TaskRow>("SELECT * FROM task WHERE source = 'apple_reminders' AND external_id = ? AND deleted_at IS NULL AND discarded = 0 ORDER BY created_at, id LIMIT 1", [externalId]);
+      return rows[0] ? rowToTask(rows[0]) : null;
+    },
+
+    async setAppleLink(id, link) {
+      const stamp = stamper.next();
+      // Sans filtre sur la corbeille : le détachement d'une tâche supprimée (suppression envoyée vers Rappels) est une écriture normale.
+      await db.execute('UPDATE task SET source = ?, external_id = ?, apple_list_id = ?, apple_recurring = ?, updated_at = ?, device_id = ?, hlc = ? WHERE id = ?', [
+        link.source,
+        link.externalId,
+        link.appleListId,
+        link.appleRecurring ? 1 : 0,
+        stamp.at,
+        stamp.deviceId,
+        stamp.hlc,
+        id,
+      ]);
+      return requireMapped(await fetchById(id, { includeDeleted: true }), 'task', id, rowToTask);
+    },
+
     async create(task: NewTask) {
       const stamp = stamper.next();
       await db.execute(
         `INSERT INTO task (${TASK_COLUMNS})
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         [
           task.id,
           task.spaceId,
@@ -152,6 +182,8 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
           task.source,
           task.externalId,
           task.externalEventId,
+          task.appleListId,
+          task.appleRecurring ? 1 : 0,
           stamp.at,
           stamp.at,
           stamp.deviceId,
@@ -190,13 +222,15 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
             task.source,
             task.externalId,
             task.externalEventId,
+            task.appleListId,
+            task.appleRecurring ? 1 : 0,
             stamp.at,
             stamp.at,
             stamp.deviceId,
             stamp.hlc,
           );
           created.push(taskFromNew(task, stamp));
-          return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)';
+          return '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)';
         });
         await db.execute(`INSERT INTO task (${TASK_COLUMNS}) VALUES ${rows.join(', ')}`, params);
       }

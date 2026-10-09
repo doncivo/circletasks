@@ -64,7 +64,7 @@ export interface SomedayState {
   /** SD-04 critère 6 : planifie la sélection (« Planifier » de la barre), un seul message « Annuler », puis la vide. Ne rejette jamais. */
   scheduleSelected(ids: readonly TaskId[], target: ScheduleSomedayTarget): Promise<void>;
   /** SD-04 critère 8 : supprime des tâches vers la corbeille (T-08, un seul message « Annuler »), puis vide la sélection. Ne rejette jamais. */
-  remove(ids: readonly TaskId[]): Promise<void>;
+  remove(ids: readonly TaskId[]): Promise<boolean>;
   /** SD-04 critère 5, Q12 : déplace des tâches vers un espace (et un projet), sans changer la date ; annulable en une fois. Ne rejette jamais. */
   moveToSpace(ids: readonly TaskId[], spaceId: SpaceId, projectId: ProjectId | null): Promise<void>;
 }
@@ -200,12 +200,14 @@ export const somedayStore = defineFeatureStore<SomedayState>((container: AppCont
     },
 
     async remove(ids) {
-      if (ids.length === 0) return;
+      if (ids.length === 0) return false;
       try {
         await useCases.remove(ids);
         set({ actionErrorKey: null, selection: without(get().selection, ids) });
+        return true;
       } catch {
         set({ actionErrorKey: 'tasks.deleteError' });
+        return false;
       }
     },
 

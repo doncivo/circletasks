@@ -60,6 +60,12 @@ export const failAfter = (room: string, device: string, method: string, after: n
 /** Y-IOS-02 : le prochain scan de l'iPhone `device` lira le QR affiché par `from` (texte produit par le simulateur, jamais par la page). */
 export const presentQr = (room: string, device: string, from: string): Promise<unknown> => post('/scan', { room, device, from });
 
+/** Y-IOS-02 (QA du parcours) : le prochain scan lit ce texte à la place du QR (`null` : scan annulé). Texte choisi par le test, jamais par la page. */
+export const presentText = (room: string, device: string, text: string | null): Promise<unknown> => post('/scan', { room, device, text });
+
+/** Y-IOS-02 (QA du parcours) : crochet de la plateforme simulée de l'appareil (Trousseau verrouillé, application en arrière-plan, confirmation refusée). */
+export const setTesting = (room: string, device: string, call: 'setVaultAvailable' | 'setForeground' | 'setConsent', value: boolean): Promise<unknown> => post('/testing', { room, device, call, args: [value] });
+
 /** Y-IOS-02 : autorisation de la caméra simulée de l'iPhone (`answer` : réponse à la demande d'iOS) ; rend les ouvertures des réglages. */
 export const setCamera = (room: string, device: string, state: 'granted' | 'denied' | 'prompt', answer?: 'granted' | 'denied'): Promise<{ readonly opened: number }> =>
   post('/camera', { room, device, state, ...(answer ? { answer } : {}) });

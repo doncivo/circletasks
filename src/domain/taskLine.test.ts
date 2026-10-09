@@ -48,3 +48,15 @@ describe('taskLineSegments : projet dans « Un jour » (SD-01 critère 8)', () =
     expect(kinds(taskLineSegments({ ...task(), projectId: null }, { showSpace: false, hasRule: false, showProject: true }))).toEqual([]);
   });
 });
+
+describe('badge « Rappels » (K-05 critère 13)', () => {
+  it('une tâche d’origine Rappels porte le segment, « récurrent » si le rappel l’est ; une tâche ordinaire aucun', () => {
+    expect(taskLineSegments({ ...task(), source: 'apple_reminders', appleRecurring: false }, { showSpace: false, hasRule: false })).toEqual([{ kind: 'apple', recurring: false }]);
+    expect(taskLineSegments({ ...task({ time: '09:00' }), source: 'apple_reminders', appleRecurring: true }, { showSpace: true, hasRule: false })).toEqual([
+      { kind: 'time', time: '09:00' },
+      { kind: 'space', spaceId: PRO },
+      { kind: 'apple', recurring: true },
+    ]);
+    expect(taskLineSegments({ ...task(), source: 'local', appleRecurring: false }, { showSpace: false, hasRule: false })).toEqual([]);
+  });
+});

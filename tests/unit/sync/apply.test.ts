@@ -25,7 +25,7 @@ const T1 = '11111111-1111-4111-8111-111111111111';
 
 let db: TestDb;
 let logger: ReturnType<typeof createMemorySyncLogger>;
-const ctx = (extra: Partial<ApplyContext> = {}): ApplyContext => ({ localSv: 17, remoteSv: 17, now: AT, knows: () => false, logger, ...extra });
+const ctx = (extra: Partial<ApplyContext> = {}): ApplyContext => ({ localSv: 18, remoteSv: 18, now: AT, knows: () => false, logger, ...extra });
 const op = (t: string, id: string, fields: Record<string, SyncField>): SyncOp => ({ t, id, at: AT, f: new Map(Object.entries(fields)) });
 const apply = (data: DataAccess, ops: SyncOp[], extra: Partial<ApplyContext> = {}) => guarded(data, (repos) => applyOps(repos, ops, ctx(extra)));
 
@@ -50,6 +50,8 @@ function taskOp(id: string, hlc: Hlc, title = 'Reçue'): SyncOp {
     external_id: [null, hlc, null],
     series_template: [null, hlc, null],
     external_event_id: [null, hlc, null],
+    apple_list_id: [null, hlc, null],
+    apple_recurring: [0, hlc, null],
     created_at: [AT, hlc, null],
     deleted_at: [null, hlc, null],
   };
@@ -77,11 +79,11 @@ describe('application (Y-02 critère 6)', () => {
     const data = createDataAccess(spy, { next: () => ({ at: AT, deviceId: SELF, hlc: h(0, SELF) }) }, createSqlRepositories);
     const evil = op('evil_table', T1, { evil_col: ['x', h(1), null] });
     const evilField = { ...taskOp(T1, h(2)), f: new Map([...taskOp(T1, h(2)).f, ['evil_col', ['y', h(2), null] as SyncField]]) };
-    await apply(data, [evil, evilField], { remoteSv: 18 });
+    await apply(data, [evil, evilField], { remoteSv: 19 });
     expect(sqls.some((sql) => sql.includes('evil'))).toBe(false);
     expect(await db.driver.select('SELECT table_name, field, value, sv FROM sync_unknown ORDER BY table_name')).toEqual([
-      { table_name: 'evil_table', field: 'evil_col', value: '"x"', sv: 18 },
-      { table_name: 'task', field: 'evil_col', value: '"y"', sv: 18 },
+      { table_name: 'evil_table', field: 'evil_col', value: '"x"', sv: 19 },
+      { table_name: 'task', field: 'evil_col', value: '"y"', sv: 19 },
     ]);
     expect(await db.driver.select('SELECT title FROM task')).toEqual([{ title: 'Reçue' }]);
   });
@@ -101,7 +103,7 @@ describe('application (Y-02 critère 6)', () => {
       op('settings', 'device.id', { value: ['"x"', h(1), null] }),
       op('settings', 'general.locale', { value: ['"en"', h(1), null] }),
       op('settings', 'future.option', { value: ['true', h(1), null] }),
-    ], { remoteSv: 18 });
+    ], { remoteSv: 19 });
     const rows = await db.driver.select<{ key: string; value: string }>("SELECT key, value FROM settings WHERE key IN ('device.id', 'general.locale', 'future.option')");
     expect(rows.find((r) => r.key === 'general.locale')?.value).toBe('"en"');
     expect(rows.find((r) => r.key === 'device.id')?.value).not.toBe('"x"');

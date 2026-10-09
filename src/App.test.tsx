@@ -27,7 +27,7 @@ function mockViewport(width: number): void {
 describe('App (coquille, T-01)', () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
-    useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null, spaceFilter: 'all' });
+    useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null, dbFailure: null, spaceFilter: 'all' });
     useNavigationStore.setState(INITIAL_NAVIGATION);
   });
 
@@ -59,6 +59,30 @@ describe('App (coquille, T-01)', () => {
     useAppStore.setState({ dbStatus: 'error' });
     render(<App />);
     expect(screen.getByRole('alert')).toHaveTextContent(t('app.dbError'));
+  });
+
+  it('0.2.1 erreur d’ouverture : diagnostic affiché sous le message (étape, erreur exacte, URL)', () => {
+    vi.mocked(bootstrapApp).mockResolvedValueOnce(undefined);
+    mockViewport(440);
+    useAppStore.setState({ dbStatus: 'error', dbFailure: { phase: 'open', step: 'migration', migration: 12, errorName: 'Error', message: 'no such table: tasks' } });
+    render(<App />);
+    expect(screen.getByRole('alert')).toHaveTextContent(t('app.dbError'));
+    const detail = screen.getByTestId('db-failure-detail');
+    expect(detail).toHaveTextContent(t('app.diag.steps.migration', { version: '12' }));
+    expect(detail).toHaveTextContent('no such table: tasks');
+    expect(detail).toHaveTextContent('sqlite:circletasks.db');
+    expect(screen.getByRole('button', { name: t('app.diag.copy') })).toBeInTheDocument();
+  });
+
+  it('0.2.1 échec après l’ouverture : app.startError (plus « base de données ») et module nommé', () => {
+    vi.mocked(bootstrapApp).mockResolvedValueOnce(undefined);
+    mockViewport(440);
+    useAppStore.setState({ dbStatus: 'error', dbFailure: { phase: 'start', step: 'openNotificationScheduler', errorName: 'TypeError', message: 'x is undefined' } });
+    render(<App />);
+    expect(screen.getByRole('alert')).toHaveTextContent(t('app.startError'));
+    expect(screen.getByRole('alert')).not.toHaveTextContent(t('app.dbError'));
+    expect(screen.getByTestId('db-failure-detail')).toHaveTextContent('openNotificationScheduler');
+    expect(screen.getByTestId('db-failure-detail')).toHaveTextContent('TypeError : x is undefined');
   });
 
   it('D-03 échec de sauvegarde avant migration : message dédié « données non modifiées »', () => {

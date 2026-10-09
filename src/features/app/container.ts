@@ -6,6 +6,7 @@ import { observeWrites, type DataAccess } from '../../db/repositories';
 import type { DesktopPlatform, OsFamily, Runtime } from '../../platform';
 import { createMemoryCalendarPlatform, PRODUCTION_ENDPOINTS, type CalendarPlatform } from '../../platform/calendars';
 import { createUnavailableBackup, type BackupService } from '../../platform/backup';
+import { createUnavailableReminders, type RemindersPlatform } from '../../platform/reminders';
 import type { SyncEngineService, SyncPlatform } from '../../platform/sync/types';
 import { createUnavailableFiles, type FileService } from '../../platform/files';
 import {
@@ -51,6 +52,8 @@ export interface AppContainer {
   readonly desktop: DesktopPlatform | null;
   /** Agendas externes (K-01 à K-03, ADR 0008) : coffre, transport HTTP et OAuth ; commandes Rust dans l'app, mémoire ailleurs. */
   readonly calendars: CalendarPlatform;
+  /** Rappels Apple (K-05 à K-07, ADR 0008 §10) : plugin Swift EventKit sur l'iPhone installé ; « indisponible » partout ailleurs (le PC ne les reçoit que par la synchro). */
+  readonly reminders: RemindersPlatform;
   /** Mini-fenêtre Focus du PC (F-01, toujours au premier plan) ; null hors PC : la session s'affiche alors dans la fenêtre principale. */
   readonly focusWindow: FocusWindowPlatform | null;
   /** Notification locale de fin de session (iPhone, F-04) : contrat seul à l'ordre 3, implémentation vide ; l'envoi réel est de l'ordre 5. */
@@ -126,6 +129,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     platform: parts.platform ?? { runtime: 'web', os: 'other' },
     desktop: parts.desktop ?? null,
     calendars: parts.calendars ?? createMemoryCalendarPlatform(PRODUCTION_ENDPOINTS),
+    reminders: parts.reminders ?? createUnavailableReminders(),
     focusWindow: parts.focusWindow ?? null,
     focusEndScheduler: parts.focusEndScheduler ?? createNoopFocusEndScheduler(),
     soundPlayer: parts.soundPlayer ?? null,

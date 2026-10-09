@@ -746,3 +746,60 @@ fn i02_signing_command_exists_for_ios_only() {
     assert!(!desktop_block.contains("app_signing_info"), "commande iOS dans le gestionnaire du PC");
     assert!(manifest_commands().contains("app_signing_info"));
 }
+
+const IOS_REMINDERS_CAPABILITY: &str = include_str!("../../capabilities/reminders-ios.json");
+
+/// K-05 (ADR 0008 §10.4) : liste EXACTE des permissions de la capability iOS des Rappels Apple ; fenêtre principale, iOS seulement ; aucune
+/// capability (Windows comprise) n'accorde `reminders:`.
+#[test]
+fn k05_ios_reminders_capability_grants_exactly_the_listed_permissions_and_no_other_capability_does() {
+    let capability: Value = serde_json::from_str(IOS_REMINDERS_CAPABILITY).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    let mut names = permissions_of(IOS_REMINDERS_CAPABILITY);
+    names.sort();
+    assert_eq!(
+        names,
+        [
+            "reminders:allow-delete",
+            "reminders:allow-fetch",
+            "reminders:allow-lists",
+            "reminders:allow-register-listener",
+            "reminders:allow-remove-listener",
+            "reminders:allow-request-access",
+            "reminders:allow-set-completed",
+            "reminders:allow-status",
+            "reminders:allow-upsert",
+        ]
+    );
+    for forbidden in [":default", "allow-check-permissions", "allow-request-permissions"] {
+        assert!(!names.iter().any(|name| name.contains(forbidden)), "{forbidden}");
+    }
+    for other in other_capabilities("reminders-ios.json") {
+        assert!(!other.contains("reminders:"), "une autre capability accorde reminders:");
+    }
+}
+
+/// K-05 : le plugin des Rappels n'est déclaré que dans la section des dépendances iOS de Cargo.toml et enregistré sous `cfg(target_os = "ios")`.
+#[test]
+fn k05_reminders_plugin_is_ios_only() {
+    let mut section = String::new();
+    let mut declarations = 0;
+    for line in CARGO.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            section = trimmed.to_owned();
+        }
+        if trimmed.starts_with("tauri-plugin-reminders") {
+            declarations += 1;
+            assert_eq!(section, "[target.'cfg(target_os = \"ios\")'.dependencies]", "plugin des Rappels hors de la section iOS");
+            assert!(trimmed.contains("path = \"plugins/reminders\""), "{trimmed}");
+        }
+    }
+    assert_eq!(declarations, 1);
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_reminders::")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    assert!(!DESKTOP_SOURCE.contains("reminders"));
+}

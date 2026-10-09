@@ -101,7 +101,7 @@ describe('SyncSettingsSection (Y-01)', () => {
     const failing: SyncPlatform = { ...platform, folder: { ...platform.folder, choose: () => Promise.reject(new SyncPlatformError('unsafe-folder')) } };
     renderSection(failing);
     fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
-    expect(await screen.findByText('Ce dossier ne peut pas servir à la synchronisation')).toHaveAttribute('role', 'status');
+    expect(await screen.findByText('Ce dossier ne peut pas servir à la synchronisation : choisissez-en un autre')).toHaveAttribute('role', 'status');
     // Revue 6 : le choix a échoué, rien n'est lié : « Choisir le dossier » reste proposé, jamais « Oublier ».
     expect(screen.getByRole('button', { name: 'Choisir le dossier de synchronisation' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Oublier le dossier de synchronisation' })).toBeNull();
@@ -184,7 +184,7 @@ describe('SyncSettingsSection branchée sur le service (Y-02 critère 16, branch
     expect(screen.getByRole('button', { name: 'Oublier le dossier de synchronisation' })).toBeInTheDocument();
   });
 
-  it('dossier qui contient déjà des données : aucun cycle (association d’abord), « associez cet appareil »', async () => {
+  it('dossier qui contient déjà des données : « associez cet appareil » ; un seul cycle, qui s’arrête sur needs-pairing (bandeau A-09, Y-IOS-02)', async () => {
     const platform = createMemorySyncPlatform({ folder: await folderWithData() });
     const sync = createFakeSyncService({ phase: 'needs-pairing' });
     const container = createAppContainer({ clock, hlc: createHlcClock({ clock, deviceId: DEVICE }), data: {} as DataAccess, sync, syncPlatform: platform });
@@ -195,6 +195,6 @@ describe('SyncSettingsSection branchée sur le service (Y-02 critère 16, branch
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' }));
     expect(await screen.findByText('Ce dossier contient déjà des données chiffrées : associez cet appareil')).toBeInTheDocument();
-    expect(sync.calls).toEqual([]);
+    expect(sync.calls).toEqual(['open']);
   });
 });

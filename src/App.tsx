@@ -3,7 +3,8 @@ import { TodayScreen } from './features/today/TodayScreen';
 import { AppContainerProvider, useAppContainer } from './features/app/AppContainerContext';
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
-import { bootstrapApp } from './features/app/bootstrap';
+import { bootstrapApp, publishStartFailure } from './features/app/bootstrap';
+import { DbFailureDetails, DbOpenWatchdog } from './features/app/DbFailureDetails';
 import type { AppContainer } from './features/app/container';
 import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
@@ -53,6 +54,7 @@ import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from '
 import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
+import { startRemindersLazily } from './features/calendars/appleReminders/loadIntegration';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
 import { AppLockGate } from './features/security/AppLockGate';
 import { bootAppLock } from './features/security/appLockBoot';
@@ -203,6 +205,7 @@ export function App() {
   const layout = useLayout();
   const dbStatus = useAppStore((s) => s.dbStatus);
   const dbBackupFailed = useAppStore((s) => s.dbBackupFailed);
+  const dbFailure = useAppStore((s) => s.dbFailure);
   const [container, setContainer] = useState<AppContainer | null>(null);
   const mounted = useRef(true);
   const startup = useRef<AppStartup | null>(null);
@@ -210,8 +213,11 @@ export function App() {
 
   useEffect(() => {
     if (useAppStore.getState().dbStatus === 'idle') {
+      // 0.2.1 : étape en cours après `bootstrapApp`, affichée (app.startError) si une étape rejette au lieu de laisser l'écran vide.
+      let step = 'bootstrapApp';
       void bootstrapApp().then(async (created) => {
         if (!created) return;
+        step = 'restoreSpaceFilter';
         // Espaces (ES-01) chargés une fois ici, avant le premier rendu des écrans :
         // les features les lisent dans `useAppStore`, jamais via `src/db/seed`.
         try {
@@ -228,16 +234,20 @@ export function App() {
         // Filtre Pro / Perso / Tout (ES-03) : dernier choix de cet appareil, restauré avant le premier rendu.
         await restoreSpaceFilter(created);
         // Apparence (P-03) : premier jour et format d'heure lus avant le premier rendu.
+        step = 'restoreAppearance';
         await restoreAppearance(created);
+        step = 'bootAppLock';
         // I-03 : verrouillage lu avant le premier rendu de la coquille (illisible : verrouillé). Le verrou couvre l'interface seulement :
         // la suite du démarrage (report, synchro, rappels) continue normalement.
         const lock = await bootAppLock(created);
         appLock.current = lock;
         // Report automatique (T-06) : premier contrôle AVANT le premier rendu d'Aujourd'hui ;
         // démarrage nettoyé si l'app est démontée avant la fin (startup.ts).
+        step = 'startAppStartup';
         const started = startAppStartup(created);
         startup.current = started;
         await started.ready;
+        step = 'setContainer';
         if (!mounted.current) {
           started.dispose();
           lock.dispose();
@@ -245,6 +255,8 @@ export function App() {
           return;
         }
         setContainer(created);
+      }).catch((error: unknown) => {
+        if (mounted.current) publishStartFailure(step, error);
       });
     }
   }, []);
@@ -271,6 +283,13 @@ export function App() {
   useEffect(() => {
     if (!container) return undefined;
     return startNotificationIntegration(container).dispose;
+  }, [container]);
+
+  // K-05 à K-07 : Rappels Apple (lecture et écriture sur l'iPhone, ouverture APRÈS le premier rendu, reprise, `changed`, synchro, écriture locale) ; sur PC, réglages relus seulement.
+  useEffect(() => {
+    if (!container) return undefined;
+    // Chargé à part (hors du bundle de départ, jamais avant le premier rendu) ; un échec de chargement est visible et réessayé à la reprise.
+    return startRemindersLazily(container).dispose;
   }, [container]);
 
   // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).
@@ -302,7 +321,10 @@ export function App() {
   return (
     <div className="app-shell" data-layout={layout} data-db-status={dbStatus}>
       {dbStatus === 'loading' && <p role="status">{t('app.loading')}</p>}
-      {dbStatus === 'error' && <p role="alert">{t(dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
+      {dbStatus === 'loading' && <DbOpenWatchdog />}
+      {dbStatus === 'error' && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
+      {/* 0.2.1 : étape, erreur exacte, URL et chemins de la base, copiables (diagnostic sans logs, sur PC comme sur iPhone). */}
+      {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} />}
       {container ? (
         <AppContainerProvider container={container}>
           {/* I-03 : écran de verrou ; coquille non montée au lancement verrouillé, masquée et inerte au retour. */}

@@ -1,4 +1,6 @@
 import type { SyncWarningCode } from '../../domain/syncBanners';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
+import { isSyncErrorCode } from '../../domain/sync/format';
 import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
 import type { DeviceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
@@ -78,7 +80,29 @@ function errorText(code: string | null | undefined, platform: 'windows' | 'ios' 
     case 'rollback':
       return t('sync.status.errorRollback');
     default:
+      return stoppedText(code);
+  }
+}
+
+/**
+ * Y-IOS-02 (audit des impasses) : « nouvel essai au prochain cycle » seulement pour une erreur passagère ; une erreur permanente dit son
+ * action et son code (le planificateur ne la relance plus en boucle).
+ */
+function stoppedText(code: string | null | undefined): string {
+  if (!isSyncErrorCode(code)) return code ? t('sync.status.errorStopped', { code }) : t('sync.status.errorGeneric');
+  switch (syncErrorFamily(code)) {
+    case 'transient':
       return t('sync.status.errorGeneric');
+    case 'pairing':
+      return t('sync.status.errorStoppedPairing', { code });
+    case 'folder':
+      return t('sync.status.errorStoppedFolder', { code });
+    case 'reset':
+      return t('sync.status.errorStoppedReset', { code });
+    case 'update':
+      return t('sync.status.errorStoppedUpdate', { code });
+    case 'details':
+      return t('sync.status.errorStopped', { code });
   }
 }
 
@@ -152,7 +176,8 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'not-configured':
       return t('sync.status.notConfigured');
     case 'needs-pairing':
-      return t('sync.status.needsPairing');
+      // Y-IOS-02 : sur l'iPhone, l'association se fait avec le PC (« Associer au PC »).
+      return ownPlatform(status) === 'ios' ? t('sync.status.needsPairingIos') : t('sync.status.needsPairing');
     case 'syncing':
       return t('sync.status.syncingPhase');
     case 'waiting-icloud':
@@ -173,6 +198,13 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
     case 'key-mismatch':
       return t('sync.status.keyMismatch');
     case 'error':
+      // Revue de la PR #14 : erreur passagère répétée : cycles espacés, jamais arrêtés ; l'heure du prochain essai est dite.
+      if (status.retryAt && status.errorCode) {
+        const time = formatSyncTime(status.retryAt, nowMs);
+        // QA D4 : la cause connue garde son conseil (« déverrouillez l’iPhone »…) ; sans cause propre, le texte « ralentie » seul.
+        const cause = errorText(status.errorCode, ownPlatform(status));
+        return cause === t('sync.status.errorGeneric') ? t('sync.status.errorSlowed', { time, code: status.errorCode }) : t('sync.status.errorSlowedCause', { cause, time, code: status.errorCode });
+      }
       return errorText(status.errorCode, ownPlatform(status));
     case 'forgotten':
       return t('sync.forget.banner');

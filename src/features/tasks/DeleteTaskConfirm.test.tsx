@@ -28,3 +28,20 @@ describe('DeleteTaskConfirm (T-08, T-10 critère 7)', () => {
     expect(onCancel).toHaveBeenCalledOnce();
   });
 });
+
+describe('DeleteTaskConfirm : tâche liée à un rappel Apple (K-06 critère 7)', () => {
+  it('la confirmation nomme Rappels ; une tâche ordinaire garde sa confirmation', () => {
+    const onConfirm = vi.fn();
+    render(<DeleteTaskConfirm task={{ title: 'Pain', recurrenceId: null, source: 'apple_reminders', externalId: 'R-1' }} onConfirm={onConfirm} onCancel={() => undefined} />);
+    expect(screen.getByRole('alertdialog', { name: 'Supprimer aussi dans Rappels ?' })).toBeInTheDocument();
+    expect(screen.getByText('« Pain » est liée à un rappel : il sera aussi supprimé dans Rappels.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Supprimer' }));
+    expect(onConfirm).toHaveBeenCalledWith();
+    cleanup();
+    render(<DeleteTaskConfirm task={{ title: 'Pain', recurrenceId: null, source: 'apple_reminders', externalId: null }} onConfirm={() => undefined} onCancel={() => undefined} />);
+    expect(screen.getByRole('alertdialog', { name: 'Supprimer « Pain » ?' })).toBeInTheDocument();
+    cleanup();
+    render(<DeleteTaskConfirm task={{ title: 'Pain', recurrenceId: null, source: 'local', externalId: null }} onConfirm={() => undefined} onCancel={() => undefined} />);
+    expect(screen.queryByText(/Rappels/)).not.toBeInTheDocument();
+  });
+});

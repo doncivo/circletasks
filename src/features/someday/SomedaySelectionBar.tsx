@@ -84,7 +84,7 @@ export function SomedaySelectionDialogs({ edit, view, spaces }: { edit: ListEdit
           onConfirm={() => {
             edit.setDeleteTargetId(null);
             const refocus = focusNeighborLater(target.id, true);
-            void remove([target.id]).then(refocus);
+            void remove([target.id]).then((ok) => ok && refocus());
           }}
         />
       )}

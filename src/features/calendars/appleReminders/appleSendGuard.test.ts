@@ -1,0 +1,153 @@
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { TaskId } from '../../../domain/types';
+import { createTaskUseCases } from '../../tasks/createTaskUseCases';
+import { appleRemindersStore } from './appleRemindersState';
+import { resolveHeldSend } from './remindersWrites';
+import { PERSO, setupRemindersHarness, type RemindersHarness } from './testKit';
+
+/**
+ * Garde de suppression massive SYMÉTRIQUE (audit M2) : des tâches supprimées ici qui dépasseraient max(10, 25 %) des tâches liées d'une
+ * liste n'effacent rien dans Rappels sans confirmation (écran Agendas) ; jamais de suppression dans Rappels sans tâche supprimée connue.
+ */
+let h: RemindersHarness;
+beforeEach(async () => {
+  h = await setupRemindersHarness('23');
+  await h.showList({ id: 'L-courses', name: 'Courses', spaceId: PERSO });
+});
+afterEach(() => h.close());
+
+const uc = () => createTaskUseCases(h.container);
+const status = () => appleRemindersStore.get(h.container).getState().status;
+
+async function importMany(count: number): Promise<TaskId[]> {
+  for (let index = 0; index < count; index += 1) h.reminders.add({ listId: 'L-courses', title: `Rappel ${String(index)}` });
+  await h.pass();
+  const tasks = await h.tasks();
+  expect(tasks).toHaveLength(count);
+  return tasks.map((task) => task.id);
+}
+
+describe('suppressions vers Rappels sous garde (audit M2)', () => {
+  it('au-delà de max(10, 25 %) : rien n’est envoyé, la retenue est inscrite avec le nombre, les rappels restent', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    const report = await h.pass();
+    expect(report).toMatchObject({ status: 'done', sent: 0 });
+    expect(h.reminders.writes).toEqual([]);
+    expect(h.reminders.all()).toHaveLength(14);
+    expect(status().held).toEqual([{ listId: 'L-courses', count: 11, at: expect.any(String), send: true }]);
+    expect(report.pending).toBe(11);
+    // Un passage de plus ne change rien : toujours retenu, une seule entrée.
+    await h.pass();
+    expect(status().held).toHaveLength(1);
+    expect(h.reminders.writes).toEqual([]);
+  });
+
+  it('jusqu’au seuil : les suppressions partent normalement', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 10));
+    expect(await h.pass()).toMatchObject({ sent: 10 });
+    expect(status().held).toEqual([]);
+    expect(h.reminders.all()).toHaveLength(4);
+  });
+
+  it('confirmation « Supprimer dans Rappels » : les rappels sont supprimés, la retenue disparaît', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    h.db.clock.advance(1_000);
+    expect(await resolveHeldSend(h.container, 'L-courses', 'delete')).toMatchObject({ status: 'done', sent: 11 });
+    expect(h.reminders.all()).toHaveLength(3);
+    expect(status().held).toEqual([]);
+    expect(await h.container.data.repos.appleLinks.listAll()).toHaveLength(3);
+  });
+
+  it('confirmation « Garder les rappels » : les rappels restent, les tâches supprimées sont détachées ; la liste étant suivie, les rappels conservés sont réimportés, et rien n’est écrit dans Rappels', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    expect(await resolveHeldSend(h.container, 'L-courses', 'keep')).toMatchObject({ status: 'done', sent: 0 });
+    expect(h.reminders.all()).toHaveLength(14);
+    expect(status().held).toEqual([]);
+    expect(await h.pass()).toMatchObject({ sent: 0, created: 11 });
+    expect(h.reminders.all()).toHaveLength(14);
+    expect(h.reminders.writes).toEqual([]);
+  });
+
+  it('tâche absente de la base sans suppression connue : jamais de suppression dans Rappels', async () => {
+    const ids = await importMany(2);
+    const first = ids[0];
+    if (first === undefined) throw new Error('aucune tâche');
+    await h.db.driver.execute('DELETE FROM task WHERE id = ?', [first]);
+    expect(await h.pass()).toMatchObject({ sent: 0 });
+    expect(h.reminders.all()).toHaveLength(2);
+    expect(h.reminders.writes).toEqual([]);
+  });
+});
+
+describe('confirmation : seulement ce qui a été affiché (audit)', () => {
+  it('le nombre a changé depuis l’affichage : rien n’est supprimé, la question est reposée avec le nouveau nombre', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    expect(status().held).toEqual([expect.objectContaining({ count: 11, send: true })]);
+    await uc().remove(ids.slice(11, 13));
+    h.db.clock.advance(6_000);
+    const report = await resolveHeldSend(h.container, 'L-courses', 'delete', 11);
+    expect(report).toMatchObject({ sent: 0 });
+    expect(h.reminders.all()).toHaveLength(14);
+    expect(h.reminders.writes).toEqual([]);
+    expect(status().held).toEqual([expect.objectContaining({ count: 13, send: true })]);
+    // Le nouveau nombre confirmé : tout part.
+    expect(await resolveHeldSend(h.container, 'L-courses', 'delete', 13)).toMatchObject({ sent: 13 });
+    expect(h.reminders.all()).toHaveLength(1);
+  });
+
+  it('geste dans la fenêtre de 5 s : la confirmation est gardée, le push reprogrammé envoie sans second toucher', async () => {
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    h.db.clock.advance(6_000);
+    await h.pass();
+    // Une suppression de plus, juste avant le geste.
+    await uc().remove(ids.slice(11, 12));
+    const report = await resolveHeldSend(h.container, 'L-courses', 'delete', 12);
+    expect(report.holdMs).toBeGreaterThan(0);
+    expect(report.sent).toBe(11);
+    h.db.clock.advance(report.holdMs ?? 0);
+    expect(await h.pass('push', { settle: false })).toMatchObject({ sent: 1, pending: 0 });
+    expect(status().held).toEqual([]);
+    expect(h.reminders.all()).toHaveLength(2);
+  });
+});
+
+describe('lien orphelin jamais silencieux (audit)', () => {
+  it('lien dont la tâche est absente sans suppression connue : le lien est retiré avec un message, le rappel reste et est réimporté', async () => {
+    const ids = await importMany(2);
+    const first = ids[0];
+    if (first === undefined) throw new Error('aucune tâche');
+    await h.db.driver.execute('DELETE FROM task WHERE id = ?', [first]);
+    await h.pass('push');
+    expect(await h.container.data.repos.appleLinks.get(first)).toBeNull();
+    expect(status().notices).toContainEqual(expect.objectContaining({ kind: 'orphan-link', count: 1 }));
+    expect(h.reminders.all()).toHaveLength(2);
+    expect(h.reminders.writes).toEqual([]);
+    expect(await h.pass('full')).toMatchObject({ created: 1, sent: 0 });
+  });
+});
+
+describe('suppressions retenues signalées (revue, mineur)', () => {
+  it('un bandeau sur l’iPhone dit combien de suppressions attendent la confirmation ; le compteur publié le dit aussi pour le PC ; ils disparaissent à la résolution', async () => {
+    const { useAppStatusStore } = await import('../../app/appStatus');
+    const ids = await importMany(14);
+    await uc().remove(ids.slice(0, 11));
+    await h.pass();
+    const banner = useAppStatusStore.getState().sources['appleRemindersTrouble'];
+    expect(banner).toMatchObject({ detail: 'held' });
+    expect(banner?.message).toBe('11 suppression(s) attendent votre confirmation dans l’écran Agendas.');
+    expect(await h.container.data.repos.settings.get('appleReminders.pending')).toMatchObject({ count: 11, held: true });
+    h.db.clock.advance(1_000);
+    await resolveHeldSend(h.container, 'L-courses', 'delete', 11);
+    expect(useAppStatusStore.getState().sources['appleRemindersTrouble']).toBeUndefined();
+    expect(await h.container.data.repos.settings.get('appleReminders.pending')).toBeNull();
+  });
+});

@@ -1,0 +1,12 @@
+{
+  "$comment": [
+    "Contrat de la commande Swift du plugin web-auth (ADR 0008 §9.1 ; K-TECH-01 critère 3).",
+    "Lu par le contrôle statique (src-tauri/tests/desktop/web_auth.rs) contre src-tauri/plugins/web-auth/ios/Sources/WebAuthPlugin.swift et src-tauri/src/calendars/web_auth.rs, et par le faux du plugin (src-tauri/tests/desktop/support/fake_web_auth.rs), qui refuse tout champ d'entrée absent de ce fichier.",
+    "Seul Rust appelle le plugin : aucune permission web-auth: dans les capabilities. Les codes d'erreur sont les seuls rejets ; aucun texte français en Swift."
+  ],
+  "plugin": "web-auth",
+  "commands": [
+    { "name": "authenticate", "swiftMethod": "authenticate", "input": ["url", "callbackScheme"], "output": ["callbackUrl"] }
+  ],
+  "errors": ["cancelled", "unavailable", "failed"]
+}

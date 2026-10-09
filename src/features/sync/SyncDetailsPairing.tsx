@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { t, type PlainMessageKey } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -7,6 +8,7 @@ import { onPairingChange, openPairingWindow, pairingOpenErrorKey, pairingStorage
 import { syncStore } from './syncStore';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
+import { useKeyInfo } from './keyPresence';
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 
@@ -20,12 +22,15 @@ type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { readonly showOnly?: boolean; readonly withProgress?: boolean } = {}) {
   const container = useAppContainer();
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
+  const errorCode = useFeatureStore(syncStore, (s) => s.status.errorCode ?? null);
   const [failure, setFailure] = useState<PairingFailure | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
   const [storageFailed, setStorageFailed] = useState(false);
   const lastMode = useRef<'show' | 'import' | null>(null);
   const [iosPairing, setIosPairing] = useState(false);
+  const keyInfo = useKeyInfo();
+  const key = keyInfo.presence;
 
   useEffect(() => {
     let cancelled = false;
@@ -49,9 +54,26 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
 
   if (!container.syncPlatform || phase === 'not-configured') return null;
   // Y-11 : un appareil à associer de nouveau (réinitialisation annoncée ailleurs) importe la nouvelle clé ; il ne montre jamais l'ancienne.
-  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' ? 'import' : 'show';
+  // Y-IOS-02 (point de contrôle d'Ali) : clé absente du coffre (quelle que soit la phase affichée) : à associer, jamais « Associer l'iPhone ».
+  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' || key === 'absent' ? 'import' : 'show';
   // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
   if (showOnly && mode === 'import') return null;
+  // QA du parcours d'association : le QR (« Associer l'iPhone ») seulement quand cet appareil a une clé lisible et sert un dossier utilisable :
+  // jamais pour un appareil oublié (D1, « Associer de nouveau » seul), un dossier à choisir de nouveau (D2) ou un coffre illisible (D3).
+  // Revue de la PR #17 : clé illisible alors que la synchro est à jour : dit, avec « Réessayer » (jamais un QR qui disparaît en silence).
+  if (mode === 'show' && keyInfo.unreadable && phase === 'idle') {
+    return (
+      <div className="ct-settings__row" data-testid="sync-key-unreadable">
+        <span className="ct-settings__hint ct-settings__hint--danger" role="status">
+          {t('sync.pairing.keyUnreadable')}
+        </span>
+        <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.keyRereadLabel')} onClick={keyInfo.reread}>
+          {t('sync.pairing.keyReread')}
+        </Button>
+      </div>
+    );
+  }
+  if (mode === 'show' && (key !== 'present' || phase === 'forgotten' || (phase === 'error' && syncErrorFamily(errorCode) === 'folder'))) return null;
   // iPhone (ADR 0011 §23 point 7) : jamais le QR ni la fenêtre `pairing` ; « Associer au PC » quand une clé est à recevoir.
   if (container.platform.os === 'ios') {
     const platform = container.syncPlatform;
