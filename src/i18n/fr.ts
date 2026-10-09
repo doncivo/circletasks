@@ -566,6 +566,7 @@ export const fr = {
     signingSoon: 'CircleTasks expire bientôt : actualisez-la dans SideStore',
     /** I-02 : signature expirée. */
     signingExpired: 'La signature est expirée : réinstallez l’app',
+    signingViewLabel: 'Voir l’expiration de la signature dans À propos',
   },
   today: {
     dayPrevious: 'Jour précédent',

@@ -21,6 +21,10 @@ export const signingEn: Messages['signing'] = {
     notificationsDenied: 'Notifications are denied: you will not be warned',
     notificationsUndetermined: 'Notifications are not allowed: you will not be warned',
     alertFailed: 'The alert could not be scheduled: you may not be warned',
+    allow: 'Allow',
+    allowLabel: 'Allow notifications for the expiry alert',
+    viewReminders: 'View',
+    viewRemindersLabel: 'View the reminders settings to allow notifications',
     reading: 'Reading the expiry date…',
   },
 };

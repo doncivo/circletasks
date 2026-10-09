@@ -179,7 +179,8 @@ describe('WheelPicker : roue longue (rendu par fenêtre)', () => {
     expect(screen.getByText('J20')).toBeInTheDocument();
     expect(screen.getByText('J0')).toBeInTheDocument();
     expect(screen.queryByText('J100')).toBeNull();
-    expect(rendered()).toBe(2 * RADIUS + 1);
+    // Fenêtre bornée au début de la liste : de J0 à J(20 + rayon).
+    expect(rendered()).toBe(20 + RADIUS + 1);
     expect(totalHeight()).toBe(COUNT * WHEEL_ITEM_HEIGHT);
     expect(viewport().scrollTop).toBe(20 * WHEEL_ITEM_HEIGHT);
   });

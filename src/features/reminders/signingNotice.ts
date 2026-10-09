@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { NotificationPermission } from '../../platform/notifications';
 import { useAppStatusStore } from '../app/appStatus';
+import { useNavigationStore } from '../app/navigation';
 import type { AppContainer } from '../app/container';
 import type { ReplanTrigger } from './replanNotifications';
 import { bannerSoonText, signingAlertText } from './signingText';
@@ -61,7 +62,10 @@ export function signingAlertFailure(container: AppContainer): PlanFailureReason 
   return memoryOf(container).failure;
 }
 
-const setBanner = (state: { readonly detail: 'soon' | 'expired'; readonly message: string } | null): void => useAppStatusStore.getState().setStatus('signingExpiry', state);
+/** Action « Voir » du bandeau : l'écran « À propos », où la date, l'état de l'alerte et la marche à suivre sont écrits. */
+const openAbout = (): void => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'about' });
+
+const setBanner = (state: { readonly detail: 'soon' | 'expired'; readonly message: string } | null): void => useAppStatusStore.getState().setStatus('signingExpiry', state === null ? null : { ...state, onAction: openAbout });
 
 /** Retire le bandeau et arrête sa minuterie (démontage de l'intégration). */
 export function clearSigningBanner(container?: AppContainer): void {

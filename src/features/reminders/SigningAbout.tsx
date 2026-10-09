@@ -5,8 +5,11 @@ import { t } from '../../i18n';
 import { formatTime } from '../../i18n/format';
 import { localDateTimeAt } from '../../domain/notificationInstant';
 import type { SigningStatusV1 } from '../../domain/signingNotice';
+import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { useNavigationStore } from '../app/navigation';
 import { notificationStatusStore } from './notificationStatus';
+import { requestPermissionOnGesture } from './requestPermission';
 import { signingAlertFailure } from './signingNotice';
 import { signingStatusController, signingStatusStore } from './signingStatus';
 import { aboutRemaining, wallText } from './signingText';
@@ -76,6 +79,8 @@ export function SigningAboutRow() {
   let hint: string | null = null;
   let hintDanger = false;
   let mainDanger = false;
+  // Action utile quand l'alerte ne peut pas partir : demander l'autorisation (geste), ou ouvrir Réglages > Rappels quand iOS ne redemande plus.
+  let action: 'allow' | 'view' | null = null;
   if (status.failure !== null) {
     return (
       <div className="ct-settings__row" data-kind="signing">
@@ -101,9 +106,11 @@ export function SigningAboutRow() {
     } else {
       main = t('signing.about.expires', { date, time, remaining: aboutRemaining(expiresAt - nowMs) });
       if (permission === 'denied') {
+        action = 'view';
         hint = t('signing.about.notificationsDenied');
         hintDanger = true;
       } else if (permission === 'undetermined') {
+        action = 'allow';
         hint = t('signing.about.notificationsUndetermined');
         hintDanger = true;
       } else if (signingAlertFailure(container) !== null) {
@@ -125,6 +132,16 @@ export function SigningAboutRow() {
           <span className={hintDanger ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
             {hint}
           </span>
+        )}
+        {action === 'allow' && (
+          <Button variant="secondary" ariaLabel={t('signing.about.allowLabel')} onClick={() => void requestPermissionOnGesture(container)} className="ct-settings__link">
+            {t('signing.about.allow')}
+          </Button>
+        )}
+        {action === 'view' && (
+          <Button variant="secondary" ariaLabel={t('signing.about.viewRemindersLabel')} onClick={() => useNavigationStore.getState().navigate({ tab: 'settings', screen: 'reminders' })} className="ct-settings__link">
+            {t('signing.about.viewReminders')}
+          </Button>
         )}
       </span>
     </div>

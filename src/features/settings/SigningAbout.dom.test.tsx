@@ -2,6 +2,8 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createFakeSigningAlert, createFakeSigningSource, type FakeSigningSource } from '../../platform/signing';
 import { AppContainerProvider } from '../app/AppContainerContext';
+import { fireEvent } from '@testing-library/react';
+import { useNavigationStore } from '../app/navigation';
 import { AppStatusBanner } from '../app/AppStatusBanner';
 import { useAppStatusStore } from '../app/appStatus';
 import { RemindersStatusSection } from '../reminders/RemindersStatusSection';
@@ -94,6 +96,40 @@ describe('À propos : expiration de la signature (I-02)', () => {
     expect(await screen.findByText('Les notifications sont refusées : vous ne serez pas prévenu')).toBeInTheDocument();
     expect(screen.queryByText(/Alerte prévue/)).toBeNull();
     expect(screen.getByText('Expire le mer. 14 oct. à 10:00 · dans 6 jours')).toBeInTheDocument();
+  });
+
+  it('notifications non autorisées : « Autoriser » demande l’autorisation sur le geste, puis l’alerte est prévue', async () => {
+    source.expireAt('2026-10-14T08:00:00Z');
+    h.fake.setPermission('undetermined');
+    await replanNotifications(h.container, 'open');
+    renderAbout();
+    expect(await screen.findByText('Les notifications ne sont pas autorisées : vous ne serez pas prévenu')).toBeInTheDocument();
+    h.fake.setPermission('granted');
+    fireEvent.click(screen.getByRole('button', { name: 'Autoriser les notifications pour l’alerte d’expiration' }));
+    await waitFor(() => expect(screen.getByText('Alerte prévue le mar. 13 oct. à 10:00')).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: /Autoriser les notifications pour l’alerte/ })).toBeNull();
+  });
+
+  it('notifications refusées : « Voir » ouvre Réglages > Rappels', async () => {
+    source.expireAt('2026-10-14T08:00:00Z');
+    h.fake.setPermission('denied');
+    await replanNotifications(h.container, 'open');
+    renderAbout();
+    await screen.findByText('Les notifications sont refusées : vous ne serez pas prévenu');
+    fireEvent.click(screen.getByRole('button', { name: 'Voir les réglages des rappels pour autoriser les notifications' }));
+    expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'reminders' });
+  });
+
+  it('bandeau d’expiration sous 24 h : « Voir » ouvre À propos', async () => {
+    source.expireAt('2026-10-08T20:00:00Z');
+    await replanNotifications(h.container, 'open');
+    render(
+      <AppContainerProvider container={h.container}>
+        <AppStatusBanner />
+      </AppContainerProvider>,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Voir l’expiration de la signature dans À propos' }));
+    expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'about' });
   });
 
   it('alerte non planifiée : « L’alerte n’a pas pu être planifiée »', async () => {

@@ -25,6 +25,10 @@ export const signingFr = {
     notificationsDenied: 'Les notifications sont refusées : vous ne serez pas prévenu',
     notificationsUndetermined: 'Les notifications ne sont pas autorisées : vous ne serez pas prévenu',
     alertFailed: 'L’alerte n’a pas pu être planifiée : vous ne serez peut-être pas prévenu',
+    allow: 'Autoriser',
+    allowLabel: 'Autoriser les notifications pour l’alerte d’expiration',
+    viewReminders: 'Voir',
+    viewRemindersLabel: 'Voir les réglages des rappels pour autoriser les notifications',
     reading: 'Lecture de la date d’expiration…',
   },
 } as const;
