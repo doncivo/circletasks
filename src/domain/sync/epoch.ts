@@ -91,6 +91,44 @@ export function canPublish(src: { readonly ownStateOk: boolean; readonly acksOnS
   return src.listedFiles === 0 && src.localStateSeq === 0;
 }
 
+/**
+ * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : époque **orpheline** = ouverte par cet appareil et jamais publiée. Preuve locale : l'époque
+ * locale a un instantané enregistré localement (`storedSnapshot`), c'est le seul fichier listé dans le dossier de l'appareil (aucun segment,
+ * aucune autre époque), `state.ctx` est absent (`missing` : ni illisible ni dans le nuage), `stateSeq` jamais écrit, et aucun autre appareil
+ * n'a d'accusé sur lui. Une seule règle pour l'abandon de l'orpheline et pour la reprise de l'état jamais écrit.
+ */
+export function isOrphanEpoch(input: {
+  readonly epoch: EpochId | null;
+  readonly ownStateOk: boolean;
+  readonly ownStateStatus: string | undefined;
+  readonly acksOnSelf: number;
+  readonly localStateSeq: number;
+  readonly storedSnapshot: { readonly epoch: EpochId; readonly seq: number } | null;
+  readonly ownEpochs: readonly { readonly epoch: EpochId; readonly segments: readonly number[]; readonly snapshots: readonly number[] }[];
+}): boolean {
+  if (input.epoch === null || input.ownStateOk || input.ownStateStatus !== 'missing' || input.acksOnSelf !== 0 || input.localStateSeq !== 0) return false;
+  if (input.storedSnapshot?.epoch !== input.epoch || input.ownEpochs.length !== 1) return false;
+  const listed = input.ownEpochs[0];
+  return listed !== undefined && listed.epoch === input.epoch && listed.segments.length === 0 && listed.snapshots.length === 1 && listed.snapshots[0] === input.storedSnapshot.seq;
+}
+
+/**
+ * Y-IOS-02 : appareils (hors soi et hors oubliés) dont les fichiers ne sont pas encore lisibles à ce scan : état dans le nuage, fichiers
+ * en attente d'iCloud, ou époques listées sans `state.ctx` lisible (absent, illisible, trop gros). Tant qu'il en existe un, un appareil qui
+ * n'a suivi aucune époque n'en ouvre pas : il ne sait pas encore s'il est le premier.
+ */
+export function unreadableDevices<T extends { readonly deviceId: DeviceId; readonly stateStatus: string; readonly epochs: readonly unknown[]; readonly pending: readonly unknown[] }>(
+  devices: readonly T[],
+  self: DeviceId,
+  forgotten: { has(id: DeviceId): boolean },
+): T[] {
+  return devices.filter((d) => {
+    if (d.deviceId === self || forgotten.has(d.deviceId)) return false;
+    if (d.stateStatus === 'cloud-pending' || d.pending.length > 0) return true;
+    return (d.stateStatus === 'missing' || d.stateStatus === 'corrupt' || d.stateStatus === 'too-large') && d.epochs.length > 0;
+  });
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Restauration (règles 3 et 4 ; section 9.1)
 // ---------------------------------------------------------------------------------------------------------------------------------

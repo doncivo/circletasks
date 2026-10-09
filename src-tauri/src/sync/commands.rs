@@ -564,6 +564,14 @@ pub async fn sync_delete_own(app: AppHandle, window: WebviewWindow, state: State
     blocking(move || core.delete_own(&files).map(|deleted| Deleted { deleted })).await
 }
 
+/// Y-IOS-02 (ADR 0011 §24 point 4 (b)) : `own.json` revient sans époque pour une époque orpheline (preuve recontrôlée).
+#[tauri::command]
+pub async fn sync_abandon_orphan_epoch(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>, epoch: String) -> SyncResult<()> {
+    require_main(&window)?;
+    let core = state.core(&app)?;
+    blocking(move || core.abandon_orphan_epoch(&epoch)).await
+}
+
 #[tauri::command]
 pub async fn sync_restore_marker_get(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>) -> SyncResult<Option<RestoreMarker>> {
     require_main(&window)?;

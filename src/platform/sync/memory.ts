@@ -1484,12 +1484,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       return record && record.superseded === null ? (record.base?.epoch ?? null) : null;
     })();
     if (baseEpoch !== null && files.some((ref) => ref.epoch === baseEpoch)) fail('state-mismatch');
-    // Y-IOS-02 : époque orpheline (ouverte, ni état, ni enregistrement jamais écrits) : supprimable, `own.json` revient sans époque.
-    const orphan = o.stateSeq === 0 && o.segment === 0 && o.record === 0;
     for (const ref of files) {
       if (!isEpochId(ref.epoch) || (ref.kind !== 'j' && ref.kind !== 's' && ref.kind !== 'epoch')) fail('bad-name');
       if (ref.kind === 'epoch' ? ref.n !== undefined : !isFileNumber(ref.n)) fail('bad-name');
-      if (ref.epoch === o.epoch && ref.kind === 'epoch' && !orphan) fail('current-epoch');
+      if (ref.epoch === o.epoch && ref.kind === 'epoch') fail('current-epoch');
       // Choix conservateur : le segment de la tête courante n'est jamais supprimé (il reçoit encore des ajouts).
       if (ref.epoch === o.epoch && ref.kind === 'j' && ref.n === o.segment) fail('current-epoch');
     }
@@ -1501,10 +1499,6 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (ref.kind === 'epoch') {
         deleted += epochDir.segments.size + epochDir.snapshots.size;
         dir.epochs.delete(ref.epoch);
-        if (ref.epoch === o.epoch) {
-          o.epoch = null;
-          o.maxHlc = null;
-        }
       } else if (ref.n !== undefined && (ref.kind === 'j' ? epochDir.segments : epochDir.snapshots).delete(ref.n)) {
         deleted += 1;
       }
@@ -1513,6 +1507,34 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const gone = new Set(files.filter((ref) => ref.epoch === o.epoch && ref.kind === 'j').map((ref) => ref.n));
     o.closed = o.closed.filter((c) => !gone.has(c.segment));
     return deleted;
+  };
+
+  /**
+   * ADR 0011 §24 point 4 (b) (`sync_abandon_orphan_epoch`, miroir de `SyncCore::abandon_orphan_epoch`) : `own.json` revient sans époque.
+   * `own.epoch` déjà nul (ou autre) : sans effet. Sinon la preuve d'orpheline est recontrôlée dans le dossier et dans `own.json` :
+   * `state-mismatch` si un état, un segment, un second instantané, une autre époque, un `stateSeq` > 0 ou une réinitialisation existent.
+   */
+  const abandonOrphanEpoch = async (epoch: EpochId): Promise<void> => {
+    const { folder: f, self, own: o } = requireWritable();
+    if (!isEpochId(epoch)) fail('bad-name');
+    if (o.epoch !== epoch) return;
+    const record = loadReset(f, self);
+    if (record && record.superseded === null) fail('state-mismatch');
+    const dir = f.devices.get(self);
+    const epochDir = dir?.epochs.get(epoch);
+    const proven =
+      o.stateSeq === 0 &&
+      o.segment === 0 &&
+      o.record === 0 &&
+      !dir?.state &&
+      !dir?.nextState &&
+      dir?.epochs.size === 1 &&
+      epochDir !== undefined &&
+      epochDir.segments.size === 0 &&
+      epochDir.snapshots.size === 1;
+    if (!proven) fail('state-mismatch');
+    o.epoch = null;
+    o.maxHlc = null;
   };
 
   // --- oubli d'un appareil (Y-10, forget.rs ; ADR 0011 §18 points 3 à 10) --------------------------------------------------------
@@ -2423,6 +2445,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     writeSnapshot,
     readSnapshot,
     deleteOwn,
+    abandonOrphanEpoch,
     restoreMarker: {
       get: async () => marker,
       clear: async () => {

@@ -1407,9 +1407,7 @@ impl<'a> Store<'a> {
                 return fail(SyncCode::BadName);
             }
             let current = own.epoch.as_deref() == Some(file.epoch.as_str());
-            // Y-IOS-02 : époque orpheline (ouverte, ni état ni enregistrement jamais écrits) : supprimable ; `own.json` revient sans époque.
-            let orphan = own.state_seq == 0 && own.segment == 0 && own.record == 0;
-            if current && ((file.kind == "epoch" && !orphan) || (file.kind == "j" && file.n == Some(own.segment))) {
+            if current && (file.kind == "epoch" || (file.kind == "j" && file.n == Some(own.segment))) {
                 return fail(SyncCode::CurrentEpoch);
             }
         }
@@ -1431,10 +1429,6 @@ impl<'a> Store<'a> {
                         }
                     }
                     self.fs.remove_empty_dir(&[DEVICES_DIR, self_id, epoch]).map_err(fs_error)?;
-                    if own.epoch.as_deref() == Some(epoch) {
-                        own.epoch = None;
-                        own.max_hlc = None;
-                    }
                 }
                 (kind, Some(n)) => {
                     let name = if kind == "j" { segment_name(n as u32) } else { snapshot_name(n as u32) };
@@ -1450,6 +1444,36 @@ impl<'a> Store<'a> {
             }
         }
         Ok(deleted)
+    }
+
+    /// `sync_abandon_orphan_epoch` (ADR 0011 §24 points 2 et 4) : preuve d'époque orpheline recontrôlée dans `own.json` et dans le dossier.
+    /// `stateSeq`, segment et enregistrement à 0 ; ni `state.ctx` ni `state.next.ctx` (même dans le nuage) ; aucune autre époque à cet
+    /// appareil ; dans `epoch`, un seul instantané et rien d'autre (les `.tmp` d'instantané ne sont pas des fichiers annoncés). Sinon
+    /// `state-mismatch`. Aucune écriture : `own.json` est remis sans époque par l'appelant.
+    pub fn check_orphan_proof(&self, own: &OwnState, self_id: &str, epoch: &str) -> SyncResult<()> {
+        if own.state_seq != 0 || own.segment != 0 || own.record != 0 {
+            return fail(SyncCode::StateMismatch);
+        }
+        let listing = match self.fs.list(&[DEVICES_DIR, self_id], MAX_SCAN_ENTRIES_PER_FOLDER) {
+            Ok(listing) => listing,
+            Err(error) => return Err(fs_error(error)),
+        };
+        if listing.entries.iter().any(|e| !e.is_dir && (e.name == STATE_FILE || e.name == STATE_NEXT_FILE)) {
+            return fail(SyncCode::StateMismatch);
+        }
+        if listing.entries.iter().any(|e| e.is_dir && e.name != epoch && is_epoch_id(&e.name)) {
+            return fail(SyncCode::StateMismatch);
+        }
+        let in_epoch = match self.fs.list(&[DEVICES_DIR, self_id, epoch], MAX_SCAN_ENTRIES_PER_FOLDER) {
+            Ok(listing) => listing,
+            Err(error) => return Err(fs_error(error)),
+        };
+        let snapshots = in_epoch.entries.iter().filter(|e| !e.is_dir && matches!(parse_file_name(&e.name), Some(SyncFileName::Snapshot(_)))).count();
+        let others = in_epoch.entries.iter().any(|e| e.is_dir || (!e.name.ends_with(TEMP_SUFFIX) && !matches!(parse_file_name(&e.name), Some(SyncFileName::Snapshot(_)))));
+        if snapshots != 1 || others {
+            return fail(SyncCode::StateMismatch);
+        }
+        Ok(())
     }
 
     // --------------------------------------------------------------------------------------------------------------------------

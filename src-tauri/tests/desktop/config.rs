@@ -332,7 +332,7 @@ const FOCUS_LAUNCHER_CAPABILITY: &str = include_str!("../../capabilities/focus-l
 
 /// Les 24 commandes `sync_*`, dans l'ordre de la section 11.1 (même liste que `SYNC_COMMANDS` de `types.ts`) ; les trois dernières
 /// sont celles du lot Y4 (section 18).
-const SYNC_COMMANDS: [&str; 24] = [
+const SYNC_COMMANDS: [&str; 25] = [
     "sync_folder_info",
     "sync_folder_choose",
     "sync_folder_forget",
@@ -352,6 +352,7 @@ const SYNC_COMMANDS: [&str; 24] = [
     "sync_snapshot_commit",
     "sync_read_snapshot",
     "sync_delete_own",
+    "sync_abandon_orphan_epoch",
     "sync_restore_marker_get",
     "sync_restore_marker_clear",
     "sync_device_forget",
@@ -399,7 +400,7 @@ fn sync_1_handlers_equal_the_build_manifest() {
     for command in SYNC_COMMANDS.iter().chain(["focus_window_open", "focus_window_bring_to_front", "focus_window_close"].iter()) {
         assert!(manifest.contains(*command), "{command}");
     }
-    assert_eq!(manifest.iter().filter(|c| c.starts_with("sync_")).count(), 24);
+    assert_eq!(manifest.iter().filter(|c| c.starts_with("sync_")).count(), 25);
 }
 
 /// (2) `sync.json` : exactement les 21 permissions de `main` (18 et les trois du lot Y4), Windows, sans les trois commandes de `pairing`.
@@ -413,7 +414,7 @@ fn sync_2_main_capability_grants_exactly_twenty_one_commands() {
     granted.sort();
     let mut expected: Vec<String> = SYNC_COMMANDS.iter().filter(|c| !PAIRING_ONLY.contains(c)).map(|c| permission_of(c)).collect();
     expected.sort();
-    assert_eq!(granted.len(), 21);
+    assert_eq!(granted.len(), 22);
     assert_eq!(granted, expected);
 }
 
@@ -573,7 +574,7 @@ fn sync_7_ios_capability_grants_exactly_its_list_and_no_pairing_window_command()
     granted.sort();
     let mut expected: Vec<String> = ios_sync_commands().iter().map(|c| permission_of(c)).chain(BARCODE_PERMISSIONS.iter().map(|p| (*p).to_owned())).collect();
     expected.sort();
-    assert_eq!(granted.iter().filter(|p| p.starts_with("allow-sync-")).count(), 21);
+    assert_eq!(granted.iter().filter(|p| p.starts_with("allow-sync-")).count(), 22);
     assert_eq!(granted, expected);
     // Aucune autre capability n'accorde le scan (une seule fenêtre, iPhone).
     for (name, text) in all_capabilities() {

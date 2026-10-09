@@ -82,3 +82,107 @@ describe('garde générale du changement d’époque', () => {
     expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
   });
 });
+
+/** Trois appareils associés au PC `a` (opener des restaurations), synchronisés. */
+async function three(): Promise<[SimDevice, SimDevice, SimDevice]> {
+  const a = await createSimDevice(A_ID, { name: 'PC' });
+  const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+  const c = await createSimDevice(C_ID, { name: 'Autre', clock: a.clock });
+  devices = [a, b, c];
+  await setupFirst(a);
+  await a.cycle();
+  await pair(a, b);
+  await pair(a, c);
+  await b.cycle();
+  await c.cycle();
+  syncFolders(devices);
+  await a.cycle();
+  syncFolders(devices);
+  return [a, b, c];
+}
+
+async function rounds(list: readonly SimDevice[], n = 3): Promise<void> {
+  for (let i = 0; i < n; i += 1) {
+    for (const d of list) {
+      await d.cycle();
+      syncFolders(devices);
+    }
+  }
+}
+
+async function applyEverywhere(a: SimDevice, copy: Map<string, unknown[]>): Promise<void> {
+  await restore(a, copy);
+  expect((await a.cycle()).phase).toBe('restore-choice');
+  await a.service.chooseRestoreOption('apply-everywhere');
+}
+
+/** Tableau du point 6 de l'ADR 0011 §24 : une ligne, un test. */
+describe('tableau de la règle de report (ADR 0011 §24 point 6)', () => {
+  it('tiers C lu une fois par l’ouvreur puis écrivant encore : survit (champ sur une ligne présente), double report idempotent, bases identiques', async () => {
+    const [a, b, c] = await three();
+    const t = await c.createTask('v1');
+    await c.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    await b.cycle();
+    syncFolders(devices);
+    const copy = await backupOf(a);
+    a.clock.advance(60_000);
+    // C réécrit (au-delà de ce que A a lu) ; B le lit ; A restaure et ouvre l'époque suivante.
+    await c.updateTask(t.id, { title: 'v2' });
+    await c.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    expect((await b.task(t.id))?.title).toBe('v2');
+    await applyEverywhere(a, copy);
+    // B seul avec A : la mise à jour de C survit et arrive sur A (B la reporte, C silencieux).
+    await rounds([a, b]);
+    expect((await a.task(t.id))?.title).toBe('v2');
+    expect((await b.task(t.id))?.title).toBe('v2');
+    // C revient : il reporte le même champ (même hlc, même valeur) ; tout converge.
+    await rounds([a, b, c], 4);
+    for (const d of [a, b, c]) expect((await d.task(t.id))?.title, d.name).toBe('v2');
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(c));
+  });
+
+  it('écriture de C déjà lue par l’ouvreur : remplacée partout', async () => {
+    const [a, b, c] = await three();
+    const copy = await backupOf(a);
+    a.clock.advance(60_000);
+    const readByA = await c.createTask('Écrite par C, lue par A');
+    await c.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    await b.cycle();
+    syncFolders(devices);
+    expect((await a.task(readByA.id))?.title).toBe('Écrite par C, lue par A');
+    await applyEverywhere(a, copy);
+    await rounds([a, b, c], 4);
+    for (const d of [a, b, c]) expect(await d.task(readByA.id), d.name).toBeNull();
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+
+  it('écriture annulée de l’ouvreur (postérieure à la sauvegarde) : jamais reportée par les autres', async () => {
+    const [a, b, c] = await three();
+    const t = await a.createTask('Version sauvegardée');
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await c.cycle();
+    syncFolders(devices);
+    const copy = await backupOf(a);
+    a.clock.advance(60_000);
+    await a.updateTask(t.id, { title: 'Annulée par la restauration' });
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    await c.cycle();
+    syncFolders(devices);
+    await applyEverywhere(a, copy);
+    await rounds([a, b, c], 4);
+    for (const d of [a, b, c]) expect((await d.task(t.id))?.title, d.name).toBe('Version sauvegardée');
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(c));
+  });
+});

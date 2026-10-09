@@ -287,6 +287,7 @@ export interface SyncCommandMap {
   sync_snapshot_commit: { readonly args: { readonly handle: number }; readonly result: null };
   sync_read_snapshot: { readonly args: ReadSnapshotRequest; readonly result: ReadPage };
   sync_delete_own: { readonly args: { readonly files: readonly OwnFileRef[] }; readonly result: { readonly deleted: number } };
+  sync_abandon_orphan_epoch: { readonly args: { readonly epoch: EpochId }; readonly result: null };
   sync_restore_marker_get: { readonly args: undefined; readonly result: RestoreMarker | null };
   sync_restore_marker_clear: { readonly args: undefined; readonly result: null };
   // Lot Y4 (ADR 0011 sections 11.1 et 18) : déclarées à l'étape 0, `not-configured` jusqu'à Y-10 et Y-11.
@@ -318,6 +319,7 @@ export const SYNC_COMMAND_WINDOWS: { readonly [C in SyncCommand]: 'main' | 'pair
   sync_snapshot_commit: 'main',
   sync_read_snapshot: 'main',
   sync_delete_own: 'main',
+  sync_abandon_orphan_epoch: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
   sync_device_forget: 'main',
@@ -353,6 +355,7 @@ export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | n
   sync_snapshot_commit: 'main',
   sync_read_snapshot: 'main',
   sync_delete_own: 'main',
+  sync_abandon_orphan_epoch: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
   sync_device_forget: 'main',
@@ -420,6 +423,8 @@ export interface SyncPlatform {
   readSnapshot(r: ReadSnapshotRequest): Promise<ReadPage>;
   /** Supprime ses propres fichiers ; renvoie le nombre supprimé (`current-epoch` pour le dossier de l'époque courante). */
   deleteOwn(files: readonly OwnFileRef[]): Promise<number>;
+  /** ADR 0011 §24 point 4 (b) : `own.json` revient sans époque pour une époque orpheline (Rust recontrôle la preuve, `state-mismatch` sinon) ; sans effet si `own.epoch` est déjà nul. */
+  abandonOrphanEpoch(epoch: EpochId): Promise<void>;
   readonly restoreMarker: { get(): Promise<RestoreMarker | null>; clear(): Promise<void> };
   /** Lot Y4, Y-10 (ADR 0011 section 14.2). Étape 0 : les deux méthodes rejettent `not-configured`. */
   readonly forget: {

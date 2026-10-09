@@ -20,7 +20,7 @@ use super::folder::{
 };
 use super::limits::{NONCE_MAX_RECORDS, NONCE_WARN_RECORDS, PAIRING_CLOCK_TOLERANCE_MS};
 use super::marker::{self, RestoreMarker};
-use super::names::{is_uuid_v4, EpochId};
+use super::names::{is_epoch_id, is_uuid_v4, EpochId};
 use super::files::{delete_forgotten_device_files, ForgottenDeletion};
 use super::files::Listing;
 use super::forget::{
@@ -1112,13 +1112,38 @@ impl SyncCore {
         let next = self.active_next(&mut inner)?;
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let before = own.closed.len();
-        let epoch_before = own.epoch.clone();
         let deleted = store_for(bound, &key, &next, false).delete_own(&mut own, &self_id, files)?;
-        // Y-TECH-02 : entrée `closed` d'un segment supprimé retirée de own.json ; Y-IOS-02 : époque orpheline supprimée.
-        if own.closed.len() != before || own.epoch != epoch_before {
+        // Y-TECH-02 : entrée `closed` d'un segment supprimé retirée de own.json.
+        if own.closed.len() != before {
             self.save_own(&mut inner, own)?;
         }
         Ok(deleted)
+    }
+
+    /// `sync_abandon_orphan_epoch` (ADR 0011 §24 point 4 (b)) : `own.json` revient sans époque (une seule écriture atomique). `own.epoch`
+    /// déjà nul ou autre : sans effet (reprise après arrêt). Sinon la preuve d'orpheline est recontrôlée (`state-mismatch` si elle ne tient pas,
+    /// rien n'est écrit) et aucune réinitialisation ne doit être en cours. Les fichiers ne sont pas touchés : `sync_delete_own` les supprime
+    /// ensuite, l'époque n'étant plus courante.
+    pub fn abandon_orphan_epoch(&self, epoch: &str) -> SyncResult<()> {
+        if !is_epoch_id(epoch) {
+            return fail(SyncCode::BadName);
+        }
+        let mut inner = self.lock();
+        let (key, self_id, mut own, _) = self.writable(&mut inner)?;
+        if own.epoch.as_deref() != Some(epoch) {
+            return Ok(());
+        }
+        if self.reset_record(&mut inner, &self_id)?.is_some_and(|r| r.active()) {
+            return fail(SyncCode::StateMismatch);
+        }
+        let next = self.active_next(&mut inner)?;
+        {
+            let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+            store_for(bound, &key, &next, false).check_orphan_proof(&own, &self_id, epoch)?;
+        }
+        own.epoch = None;
+        own.max_hlc = None;
+        self.save_own(&mut inner, own)
     }
 
     // --------------------------------------------------------------------------------------------------------------------------

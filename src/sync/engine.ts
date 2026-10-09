@@ -2,7 +2,7 @@ import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredResumeTried, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
-import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
+import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, maxEpoch, ownBounds, unreadableDevices } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
@@ -394,77 +394,69 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       return { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(own ? [own] : [])], published(own)), forgotten: forgetView.order };
     };
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
-    // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : un appareil qui n'a suivi aucune époque ne se tient pas pour le premier tant qu'un autre
-    // appareil a des fichiers que ce scan ne peut pas encore lire (état ou fichiers encore dans le nuage) : ouvrir alors sa propre époque,
-    // parfois plus grande que celle du PC, ferait diverger les deux appareils (la tâche créée sur le PC n'arriverait jamais).
-    const othersUnreadable = scan.devices.filter((d) => d.deviceId !== self && !forgetView.order.has(d.deviceId) && (d.stateStatus === 'cloud-pending' || d.pending.length > 0));
-    // Époque orpheline abandonnée dont les fichiers restent à supprimer (la suppression a échoué au cycle précédent) : retentée d'abord.
-    const abandoned = await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch);
-    let orphanGone: EpochId | null = abandoned?.epoch ?? null;
-    if (abandoned) {
-      if (ownScan?.epochs.some((e) => e.epoch === abandoned.epoch)) {
-        try {
-          await platform.deleteOwn([{ epoch: abandoned.epoch, kind: 'epoch' }]);
-        } catch (error) {
-          if (isCycleInterrupted(error)) throw error;
-          logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
-          return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
-        }
+    // Y-IOS-02 (ADR 0011 §24 point 1) : un appareil qui n'a suivi aucune époque ne se tient pas pour le premier tant qu'un autre appareil non
+    // oublié a des fichiers que ce scan ne peut pas encore lire (état dans le nuage, illisible, époques sans état, fichiers en attente).
+    const unreadable = unreadableDevices(scan.devices, self, forgetView.order);
+    /** Attente visible qui nomme l'appareil (fantôme « jamais vu » dans APPAREILS, où « Oublier l'appareil » est la seule issue). */
+    const waitForUnreadable = async (event: string): Promise<CycleResult> => {
+      for (const d of unreadable) {
+        pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
+        logger.log(event, { device: d.deviceId, state: d.stateStatus });
       }
-      await writeJson(repos, META.orphanEpoch, null);
-      logger.log('orphan-epoch-deleted', { epoch: abandoned.epoch });
-    }
-    /**
-     * Époque orpheline (point de contrôle 0.2.3, étape 4) : ouverte par cet appareil (un seul fichier listé : son instantané, enregistré
-     * localement), état jamais publié (`state.ctx` absent, `stateSeq` 0, aucun accusé d'un autre appareil sur lui), aucun segment.
-     */
+      const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, []);
+      return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices, keyMismatch };
+    };
+    /** Époque orpheline (§24 point 2) : preuve locale, recontrôlée par Rust à l'abandon. */
     const storedOwnSnapshot = await readJson<{ epoch: EpochId; seq: number }>(repos, META.snapshot);
-    const ownListing = localEpoch === null ? undefined : ownScan?.epochs.find((e) => e.epoch === localEpoch);
-    const orphanProof =
-      localEpoch !== null &&
-      ownState === null &&
-      ownScan?.stateStatus === 'missing' &&
-      acksOnSelf.length === 0 &&
-      localSeq === 0 &&
-      storedOwnSnapshot?.epoch === localEpoch &&
-      ownScan.epochs.length === 1 &&
-      ownListing !== undefined &&
-      ownListing.segments.length === 0 &&
-      ownListing.snapshots.length === 1 &&
-      ownListing.snapshots[0] === storedOwnSnapshot.seq;
-    if (orphanProof && folderE === null && othersUnreadable.length > 0) {
-      for (const d of othersUnreadable) pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
-      logger.log('orphan-epoch-waiting', { reason: 'other-device-unreadable' });
-      return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
-    }
-    if (orphanProof && folderE !== null && folderE !== localEpoch && localEpoch !== null) {
-      // Une autre époque existe dans le dossier (celle du PC, qui détient les données) : on abandonne la sienne, jamais publiée, et on
-      // rejoint l'existante par la reprise en fusion (rien n'est effacé localement). Les lignes que cet appareil a écrites sont remises
-      // dans la file de publication (elle avait été vidée à l'ouverture de l'orpheline). L'époque orpheline n'est jamais annoncée.
+    const orphanProof = isOrphanEpoch({
+      epoch: localEpoch,
+      ownStateOk: ownState !== null,
+      ownStateStatus: ownScan?.stateStatus,
+      acksOnSelf: acksOnSelf.length,
+      localStateSeq: localSeq,
+      storedSnapshot: storedOwnSnapshot,
+      ownEpochs: ownScan?.epochs ?? [],
+    });
+    /** Époque orpheline déjà abandonnée dont les fichiers restent à supprimer (`sync_meta.orphanEpoch`, §24 point 4 (e)). */
+    let orphanLeft = (await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch))?.epoch ?? null;
+    if (orphanProof && localEpoch !== null && folderE !== null && folderE !== localEpoch) {
+      // (ii) Une autre époque existe (celle du PC, qui détient les données) : abandon de la sienne, jamais annoncée. Étapes idempotentes.
       work();
       const orphan = localEpoch;
+      // (a) lignes remises dans la file d'envoi (elle avait été vidée à l'ouverture de l'orpheline), puis intention mémorisée.
       const queued = await queueOwnRowsForRepublish(deps);
-      await data.transaction(async (tx) => {
-        await writeJson(tx, META.orphanEpoch, { epoch: orphan });
-        await writeJson(tx, META.epoch, null);
-        await writeJson(tx, META.head, null);
-        await writeJson(tx, META.snapshot, null);
-        await writeJson(tx, META.lastState, null);
-        await writeJson(tx, META.resume, true);
-        await tx.sync.saveState(self, { epoch: null, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
-      });
-      localEpoch = null;
-      orphanGone = orphan;
-      logger.log('epoch-abandoned', { epoch: orphan, rows: queued });
+      await writeJson(repos, META.orphanEpoch, { epoch: orphan });
+      deps.deadline?.check('append');
+      // (b) `own.json` sans époque (Rust recontrôle la preuve). `state-mismatch` : preuve refusée, rien n'est écrit, l'abandon est annulé
+      // (journal, et l'appareil le dit : `publish-blocked`) ; toute autre erreur est transitoire : cycle en échec visible, étape reprise.
+      let refused = false;
       try {
-        await platform.deleteOwn([{ epoch: orphan, kind: 'epoch' }]);
-        await writeJson(repos, META.orphanEpoch, null);
+        await platform.abandonOrphanEpoch(orphan);
       } catch (error) {
         if (isCycleInterrupted(error)) throw error;
-        // Visible : le cycle échoue avec le code ; la suppression est retentée en tête du cycle suivant (rien ne publie avant).
-        logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
-        return fail(syncErrorCodeOf(error), { folderLabel, folderKind });
+        const code = syncErrorCodeOf(error);
+        logger.log('orphan-epoch-abandon-failed', { code });
+        if (code !== 'state-mismatch') return fail(code, { folderLabel, folderKind });
+        refused = true;
+        await writeJson(repos, META.orphanEpoch, null);
       }
+      if (!refused) {
+        // (c) transaction locale : l'appareil n'a plus d'époque suivie ; la reprise en fusion (branche « nouvel appareil ») suit.
+        await data.transaction(async (tx) => {
+          await writeJson(tx, META.epoch, null);
+          await writeJson(tx, META.head, null);
+          await writeJson(tx, META.snapshot, null);
+          await writeJson(tx, META.lastState, null);
+          await writeJson(tx, META.resume, true);
+          await tx.sync.saveState(self, { epoch: null, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
+        });
+        localEpoch = null;
+        orphanLeft = orphan;
+        logger.log('epoch-abandoned', { epoch: orphan, rows: queued });
+      }
+    } else if (orphanProof && folderE === null && unreadable.length > 0) {
+      // (iii) rien ne dit si l'autre appareil a une époque : attente visible.
+      return waitForUnreadable('orphan-epoch-waiting');
     }
     let epoch = localEpoch;
     let resume = options.forceResume === true || (await readJson<boolean>(repos, META.resume)) === true;
@@ -478,11 +470,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const switchState = storedSwitch && (allowed === undefined || storedSwitch.target === allowed) ? storedSwitch : null;
     const followable = (e: EpochId | null): EpochId | null => (e === null || allowed === undefined || e === allowed ? e : null);
     if (allowed !== undefined && folderE !== null && folderE !== allowed && epoch !== null && compareEpochs(folderE, epoch) > 0) logger.log('epoch-not-followed', { epoch: folderE });
-    if (epoch === null && folderE === null && othersUnreadable.length > 0) {
-      for (const d of othersUnreadable) pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
-      logger.log('epoch-open-deferred', { reason: 'other-device-unreadable' });
-      return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
-    }
+    if (epoch === null && folderE === null && unreadable.length > 0) return waitForUnreadable('epoch-open-deferred');
     if (epoch === null && folderE === null) {
       // Premier appareil : ouverture de l'époque 1 (instantané complet, puis état).
       epoch = epochId(1, self);
@@ -522,6 +510,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos, logger),
+        forgotten: new Set(forgetView.order.keys()),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
       });
       if (switched !== 'done') {
@@ -558,20 +547,21 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * dans le nuage) : aucun autre appareil n'a rien accepté de lui, la borne de la règle 1 est vide. Sans cette exception, `canPublish`
      * refuse pour toujours (instantané listé, état absent) : l'appareil ne publie jamais rien.
      */
-    const files = (ownScan?.epochs ?? []).filter((e) => e.epoch !== orphanGone).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0);
+    // Les fichiers d'une orpheline déjà abandonnée (suppression en attente) ne comptent pas : aucun état ne les annonce.
+    const files = (ownScan?.epochs ?? []).filter((e) => e.epoch !== orphanLeft || e.epoch === currentEpoch).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0);
     const openedHere =
-      ownState === null &&
-      ownScan?.stateStatus === 'missing' &&
-      acksOnSelf.length === 0 &&
-      localSeq === 0 &&
-      storedSnapshot?.epoch === currentEpoch &&
       currentEpoch === localEpoch &&
       folderE === null &&
-      othersUnreadable.length === 0 &&
-      (listed?.segments.length ?? 0) === 0 &&
-      (listed?.snapshots.length ?? 0) === files &&
-      files === 1 &&
-      listed?.snapshots[0] === storedSnapshot.seq;
+      unreadable.length === 0 &&
+      isOrphanEpoch({
+        epoch: localEpoch,
+        ownStateOk: ownState !== null,
+        ownStateStatus: ownScan?.stateStatus,
+        acksOnSelf: acksOnSelf.length,
+        localStateSeq: localSeq,
+        storedSnapshot: storedSnapshot,
+        ownEpochs: ownScan?.epochs ?? [],
+      });
     const publishAllowed =
       canPublish({
         ownStateOk: ownState !== null,
@@ -983,6 +973,29 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       }
       // Y-11 : anciennes époques gardées pendant une réinitialisation (supprimées par la bascule, ou relues si elle perd).
       await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
+    }
+
+    // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (`sync_delete_own` : l'époque n'est plus
+    // courante). Échec : journal avec son code (comme les autres suppressions de l'étape 7), retenté à chaque cycle ; ni la lecture ni la
+    // publication n'attendent.
+    {
+      const left = await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch);
+      if (left !== null && left.epoch !== currentEpoch && (await readJson<EpochId>(repos, META.epoch)) !== left.epoch) {
+        if (ownScan?.epochs.some((e) => e.epoch === left.epoch)) {
+          deps.deadline?.check('delete-own');
+          try {
+            await platform.deleteOwn([{ epoch: left.epoch, kind: 'epoch' }]);
+            await writeJson(repos, META.orphanEpoch, null);
+            logger.log('orphan-epoch-deleted', { epoch: left.epoch });
+          } catch (error) {
+            if (isCycleInterrupted(error)) throw error;
+            logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
+          }
+        } else {
+          await writeJson(repos, META.orphanEpoch, null);
+          logger.log('orphan-epoch-cleared', { epoch: left.epoch });
+        }
+      }
     }
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une

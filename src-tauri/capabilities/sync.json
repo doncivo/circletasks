@@ -21,6 +21,7 @@
     "allow-sync-snapshot-commit",
     "allow-sync-read-snapshot",
     "allow-sync-delete-own",
+    "allow-sync-abandon-orphan-epoch",
     "allow-sync-restore-marker-get",
     "allow-sync-restore-marker-clear",
     "allow-sync-device-forget",
