@@ -6,6 +6,7 @@ import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { BackupSheet } from './BackupSheet';
 import { backupStore } from './backupStore';
+import { backupSchedulerLoadFailed } from './backupSchedulerStatus';
 
 /**
  * Ligne « Sauvegarde automatique » de Réglages › DONNÉES ET SÉCURITÉ (Reglages.html, P-04 critères 3 et 4) : sous-ligne « Aujourd'hui 03:12 ·
@@ -15,8 +16,10 @@ import { backupStore } from './backupStore';
 export function BackupRow() {
   const container = useAppContainer();
   const versions = useFeatureStore(backupStore, (s) => s.versions);
-  const failed = useFeatureStore(backupStore, (s) => s.failed);
-  const failedCode = useFeatureStore(backupStore, (s) => s.failedCode);
+  const loadFailed = backupSchedulerLoadFailed();
+  const failed = useFeatureStore(backupStore, (s) => s.failed) || loadFailed;
+  const storeCode = useFeatureStore(backupStore, (s) => s.failedCode);
+  const failedCode = loadFailed ? 'load-failed' : storeCode;
   const load = useFeatureStore(backupStore, (s) => s.load);
   const [open, setOpen] = useState(false);
   const available = container.backups.available();

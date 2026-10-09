@@ -1,6 +1,7 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
 import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } from '../calendars/scheduler';
 import type { BackupScheduler } from '../settings/backupScheduler';
+import { noteBackupSchedulerLoadFailed } from '../settings/backupSchedulerStatus';
 import { logFailure } from '../../platform/desktop/log';
 import { createDayRollover } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
@@ -75,7 +76,10 @@ export function startAppStartup(
     (module) => {
       if (!disposed) backups = module.startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
     },
-    (error: unknown) => logFailure('backup-daily', error),
+    (error: unknown) => {
+      noteBackupSchedulerLoadFailed();
+      logFailure('backup-daily', error);
+    },
   );
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') {

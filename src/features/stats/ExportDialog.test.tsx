@@ -206,11 +206,11 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
   it('FILES-IOS-01 critère 9 : un échec affiche le code et « Réessayer », qui relance l’enregistrement', async () => {
     renderReport();
     const dialog = await openDialog();
-    files.failNext('write-failed', 'unsafe-folder');
+    files.failNext('write-failed', 'io');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
     const alert = await within(dialog).findByRole('alert');
     expect(alert).toHaveTextContent('L’export a échoué');
-    expect(alert).toHaveTextContent('Code : unsafe-folder');
+    expect(alert).toHaveTextContent('Code : io');
     fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer' }));
     expect(await screen.findByText('Historique exporté')).toBeInTheDocument();
     expect(files.saved).toHaveLength(1);

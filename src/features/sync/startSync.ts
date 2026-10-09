@@ -17,6 +17,7 @@ import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
+import { markerFailures, schedulers } from './syncRestoreState';
 import { deviceName, deviceStatusText, formatCount, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
@@ -36,7 +37,6 @@ export interface SyncIntegrationEnv extends Partial<SyncSchedulerEnv> {
   readonly clearTimeout?: (handle: unknown) => void;
 }
 
-import { markerFailures, schedulers } from './syncRestoreState';
 
 /** États A-09 posés par la synchro, tous retirés à `dispose()` (critère 9 j). */
 const SYNC_KINDS = ['syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing'] as const satisfies readonly AppStatusKind[];

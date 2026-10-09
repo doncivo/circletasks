@@ -640,10 +640,24 @@ pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupErro
         Ok(None) => return Ok(()),
         Ok(Some((value, _, _, _))) if value.trim() == "false" => return Ok(()),
         Ok(Some((_, updated_at, device_id, hlc))) => (updated_at, device_id, hlc),
-        // Base actuelle illisible : échec fermé, le verrou est activé dans la version restaurée.
+        // Base actuelle illisible : échec fermé, le verrou est activé dans la version restaurée. Métadonnées valides (revue) : celles de la
+        // ligne du fichier préparé si elle existe, sinon l'identifiant d'appareil et la plus haute horloge des réglages préparés.
         Err(_) => {
             let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-            (iso_instant(now), String::new(), String::new())
+            let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+            let existing: Option<(String, String)> = conn
+                .query_row("SELECT device_id, hlc FROM settings WHERE key = ?1", [APP_LOCK_SETTING_KEY], |r| Ok((r.get(0)?, r.get(1)?)))
+                .ok();
+            let (device_id, hlc) = match existing {
+                Some(found) => found,
+                None => {
+                    let device: Option<String> = conn.query_row("SELECT value FROM settings WHERE key = 'device.id'", [], |r| r.get(0)).ok();
+                    let device = device.map(|raw| serde_json::from_str::<String>(&raw).unwrap_or(raw)).unwrap_or_default();
+                    let hlc: Option<String> = conn.query_row("SELECT MAX(hlc) FROM settings", [], |r| r.get(0)).ok().flatten();
+                    (device, hlc.unwrap_or_default())
+                }
+            };
+            (iso_instant(now), device_id, hlc)
         }
     };
     let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;

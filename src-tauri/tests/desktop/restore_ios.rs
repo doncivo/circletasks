@@ -354,3 +354,19 @@ fn p04_ios_marker_is_written_before_the_swap_and_undone_when_the_swap_fails() {
     assert!(pending.is_none());
     assert!(fs::read_to_string(&marker).unwrap().contains("circletasks-daily-20261007.db"));
 }
+
+#[test]
+fn p04_ios_11_unreadable_current_base_writes_true_with_valid_device_and_clock() {
+    let dir = scratch();
+    let staged = dir.path().join("staged.db");
+    make_db(&staged, None);
+    let conn = Connection::open(&staged).unwrap();
+    conn.execute("INSERT INTO settings VALUES ('device.id', '\"60000000-0000-4000-8000-0000000000aa\"', '2026-10-01T08:00:00.000Z', '60000000-0000-4000-8000-0000000000aa', '0001791446400000-0000-60000000')", []).unwrap();
+    drop(conn);
+    let broken = dir.path().join("cassée.db");
+    fs::write(&broken, b"pas une base").unwrap();
+    carry_app_lock(&broken, &staged).unwrap();
+    let conn = Connection::open(&staged).unwrap();
+    let row: (String, String, String) = conn.query_row("SELECT value, device_id, hlc FROM settings WHERE key = ?1", [APP_LOCK_SETTING_KEY], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
+    assert_eq!(row, ("true".into(), "60000000-0000-4000-8000-0000000000aa".into(), "0001791446400000-0000-60000000".into()));
+}

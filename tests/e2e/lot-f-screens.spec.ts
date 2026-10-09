@@ -87,3 +87,21 @@ test.describe('Lot F — écrans sans défilement horizontal, échecs avec une a
     await noHorizontalScroll(page);
   });
 });
+
+test.describe('Lot F — écran « Restauration interrompue » (P-04-iOS, revue I1)', () => {
+  test('conflit : texte, action utile, puis consigne avec le code ; aucun « Réessayer » vain, sans défilement horizontal', async ({ page }) => {
+    await page.addInitScript(() => {
+      const g = globalThis as { __ctDbOpen?: () => Promise<never> };
+      g.__ctDbOpen = () => Promise.reject(Object.assign(new Error('startup-recovery: recovery-conflict'), { name: 'StartupRecoveryError' }));
+    });
+    await page.goto('/');
+    await expect(page.getByRole('alert').filter({ hasText: 'Restauration interrompue : fermez puis rouvrez CircleTasks.' })).toBeVisible();
+    await expect(page.getByText(/rien n’est supprimé/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Réessayer' })).toHaveCount(0);
+    await noHorizontalScroll(page);
+    await page.getByRole('button', { name: 'Mettre les fichiers en conflit de côté' }).click();
+    // Navigateur de développement : la commande Rust n'existe pas, l'échec est dit avec son code et la consigne de rouvrir.
+    await expect(page.getByRole('alert').filter({ hasText: 'La récupération reste impossible' })).toContainText('Code : status-unavailable');
+    await noHorizontalScroll(page);
+  });
+});

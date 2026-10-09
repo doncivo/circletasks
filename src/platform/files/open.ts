@@ -8,7 +8,15 @@ import { DEFAULT_PICK_MAX_BYTES, type FileService } from './types';
  */
 function createLazyIosFiles(): FileService {
   let loaded: Promise<FileService> | null = null;
-  const real = (): Promise<FileService> => (loaded ??= import('./iosFiles').then((module) => module.createIosFiles()));
+  // Un chargement en échec n'est pas gardé : l'essai suivant recharge le module (revue, mineur).
+  const real = (): Promise<FileService> =>
+    (loaded ??= import('./iosFiles').then(
+      (module) => module.createIosFiles(),
+      (error: unknown) => {
+        loaded = null;
+        throw error;
+      },
+    ));
   return {
     canSave: () => true,
     save: (request) => real().then((files) => files.save(request)),
