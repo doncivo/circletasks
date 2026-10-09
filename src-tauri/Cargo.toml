@@ -93,6 +93,9 @@ tauri-plugin-biometric = "=2.4.1"
 tauri-plugin-ct-haptics = { path = "plugins/haptics" }
 # Cache de confidentialité natif (I-03, ADR 0013 §2.5, décision d'Ali du 2026-10-08) : vue opaque quand l'app devient inactive.
 tauri-plugin-privacy-shield = { path = "plugins/privacy-shield" }
+# Enregistrer un fichier dans Fichiers (FILES-IOS-01, ADR 0009 avenant lot F) : plugin Swift local (sélecteur « Enregistrer dans Fichiers »),
+# appelé par Rust seul (export_ios.rs) ; aucune permission pour la WebView. iPhone seulement.
+tauri-plugin-ct-files = { path = "plugins/files" }
 
 # Fuseau local de la boîte « Oublier cet appareil » (ADR 0011 §23 point 4) : localtime_r. Même version que celle déjà tirée.
 [target.'cfg(unix)'.dependencies]
@@ -126,7 +129,9 @@ panic = "abort"
 strip = true
 
 # Pool SQLite à UNE connexion (correctif 0.2.2, base verrouillée). tauri-plugin-sql 2.5.0 ouvre un pool sqlx de 10 connexions et ne permet
-# pas de le régler. La copie dans vendor/ diffère de l'amont par : src/wrapper.rs (open_sqlite_pool et ses tests), les features mysql et
+# pas de le régler. La copie dans vendor/ diffère de l'amont par : src/wrapper.rs (open_sqlite_pool et ses tests), src/lib.rs (réexport de
+# open_sqlite_pool et restore_pending pour les tests de la restauration, P-04-iOS), src/error.rs et wrapper.rs (refus d'ouvrir ou de créer
+# la base tant qu'un `.restore-old` existe, revue B1), les features mysql et
 # postgres vidées (Cargo.lock ne tire ni rustls ni webpki-roots), et les dépendances de test (tempfile, tokio). Voir CHANGELOG 0.2.2.
 [patch.crates-io]
 tauri-plugin-sql = { path = "vendor/tauri-plugin-sql" }

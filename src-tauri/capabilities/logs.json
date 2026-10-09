@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "logs",
+  "description": "PC Windows : journal technique persistant (I-04, ADR 0014 §2), fenêtre principale seulement. Trois commandes Rust : log_append, log_read, log_clear. Aucune capability des fenêtres pairing, capture ni focus ne les porte (tests/desktop/config.rs).",
+  "windows": ["main"],
+  "platforms": ["windows"],
+  "permissions": ["allow-log-append", "allow-log-read", "allow-log-clear"]
+}

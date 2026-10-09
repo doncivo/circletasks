@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
-import { createMemoryFiles, type MemoryFiles } from '../../platform/files';
+import { createIosFiles, createMemoryFiles, type IosFileApi, type MemoryFiles } from '../../platform/files';
+import { configureExcursions, currentExcursion } from '../security/excursion';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { createAppContainer } from '../app/container';
@@ -187,7 +188,7 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Impossible d’afficher le fichier dans le dossier.');
   });
 
-  it('critère 10 : sans enregistrement de fichier possible (iPhone), le bouton « Exporter » n’apparaît pas', async () => {
+  it('critère 10 : sans enregistrement de fichier possible (plateforme sans service), le bouton « Exporter » n’apparaît pas', async () => {
     renderReport(createMemoryFiles({ canSave: false }));
     await screen.findByRole('heading', { level: 1, name: 'septembre' });
     await screen.findByRole('group', { name: 'Chiffres du mois' });
@@ -200,5 +201,79 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
     const dialog = await openDialog();
     expect(dialog.className).toContain('ct-sheet');
     expect(within(dialog).getByRole('radio', { name: 'Historique en CSV' })).toBeChecked();
+  });
+
+  it('FILES-IOS-01 critère 9 : un échec affiche le code et « Réessayer », qui relance l’enregistrement', async () => {
+    renderReport();
+    const dialog = await openDialog();
+    files.failNext('write-failed', 'io');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent('L’export a échoué');
+    expect(alert).toHaveTextContent('Code : io');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Historique exporté')).toBeInTheDocument();
+    expect(files.saved).toHaveLength(1);
+  });
+
+  describe('iPhone (FILES-IOS-01 critère 8, H-03 critère 10 mis à jour)', () => {
+    afterEach(() => configureExcursions());
+
+    function iosFiles(saveFile: IosFileApi['saveFile']) {
+      return createIosFiles({ saveFile });
+    }
+
+    it('iPhone : bouton visible, enregistrement par le sélecteur « Enregistrer dans Fichiers » (excursion du verrou), sans « Afficher dans le dossier »', async () => {
+      mockViewport(440);
+      const kinds: (string | undefined)[] = [];
+      const saveFile = vi.fn((name: string, data: Uint8Array) => {
+        kinds.push(currentExcursion()?.kind);
+        expect(data.length).toBeGreaterThan(0);
+        return Promise.resolve({ completed: name.length > 0 });
+      });
+      renderReport(iosFiles(saveFile) as unknown as MemoryFiles);
+      const dialog = await openDialog();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+      expect(await screen.findByText('Historique exporté')).toBeInTheDocument();
+      expect(saveFile).toHaveBeenCalledWith('circletasks-taches-2026-09-23.csv', expect.any(Uint8Array));
+      expect(kinds).toEqual(['file-picker']);
+      expect(screen.queryByRole('button', { name: 'Afficher dans le dossier' })).toBeNull();
+    });
+
+    it('iPhone : CSV et JSON passent par save avec les noms de historyExport (PDF et image : e2e, canvas réel)', async () => {
+      mockViewport(440);
+      const names: string[] = [];
+      const saveFile = vi.fn((name: string) => {
+        names.push(name);
+        return Promise.resolve({ completed: true });
+      });
+      for (const label of ['Historique en CSV', 'Historique en JSON']) {
+        const view = renderReport(iosFiles(saveFile) as unknown as MemoryFiles);
+        const dialog = await openDialog();
+        fireEvent.click(within(dialog).getByRole('radio', { name: label }));
+        fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+        expect(await screen.findByText('Historique exporté')).toBeInTheDocument();
+        view.unmount();
+      }
+      expect(names).toEqual(['circletasks-taches-2026-09-23.csv', 'circletasks-historique-2026-09-23.json']);
+    });
+
+    it('iPhone : annuler le sélecteur n’affiche rien ; un fichier trop volumineux affiche « Fichier trop volumineux » (code too-large)', async () => {
+      mockViewport(440);
+      let answer: () => Promise<{ completed: boolean }> = () => Promise.resolve({ completed: false });
+      renderReport(iosFiles(() => answer()) as unknown as MemoryFiles);
+      const dialog = await openDialog();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Exporter' })).toBeEnabled());
+      expect(screen.queryByRole('alert')).toBeNull();
+      answer = () => Promise.reject({ code: 'too-large' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Exporter' }));
+      const alert = await within(dialog).findByRole('alert');
+      expect(alert).toHaveTextContent('Fichier trop volumineux.');
+      expect(alert).toHaveTextContent('Code : too-large');
+      // Refaire le même enregistrement ne peut pas réussir : pas de « Réessayer », l'action utile est indiquée.
+      expect(within(alert).queryByRole('button', { name: 'Réessayer' })).toBeNull();
+      expect(alert).toHaveTextContent('Réduisez le contenu exporté');
+    });
   });
 });

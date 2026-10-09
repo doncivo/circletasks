@@ -332,7 +332,7 @@ describe('Import CSV (P-07)', () => {
       expect(screen.getByRole('button', { name: 'Choisir un fichier' })).toBeEnabled();
     });
 
-    it('critère 13 : sans enregistrement de fichier (iPhone), le modèle et le rapport sont masqués mais le choix reste possible', async () => {
+    it('critère 13 : sans enregistrement de fichier (plateforme sans service), le modèle et le rapport sont masqués mais le choix reste possible', async () => {
       const phone = createMemoryFiles({ canSave: false });
       phone.setPick({ name: 'x.csv', text: csv });
       const c = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, files: phone });

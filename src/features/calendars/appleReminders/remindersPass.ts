@@ -1,3 +1,4 @@
+import { isRestoreQuiet, trackQuietWork } from '../../../platform/quiet';
 import {
   APPLE_REMINDERS_DEVICE,
   appleListsReadable,
@@ -58,7 +59,7 @@ export type PassKind = 'full' | 'push';
 
 export interface PassReport {
   readonly status: 'done' | 'skipped' | 'failed';
-  readonly reason?: 'unavailable' | 'not-determined';
+  readonly reason?: 'unavailable' | 'not-determined' | 'restore';
   readonly code?: string;
   /** Tâches créées depuis Rappels. */
   readonly created: number;
@@ -168,7 +169,13 @@ class PassAbort extends Error {
   }
 }
 
-export async function runRemindersPass(container: AppContainer, kind: PassKind, options: PassOptions = {}): Promise<PassReport> {
+export function runRemindersPass(container: AppContainer, kind: PassKind, options: PassOptions = {}): Promise<PassReport> {
+  // P-04-iOS (revue I3) : aucun passage pendant la mise au calme d'une restauration ; un passage en cours est attendu par elle.
+  if (isRestoreQuiet()) return Promise.resolve({ ...EMPTY_REPORT, status: 'skipped', reason: 'restore' });
+  return trackQuietWork(runRemindersPassNow(container, kind, options));
+}
+
+async function runRemindersPassNow(container: AppContainer, kind: PassKind, options: PassOptions): Promise<PassReport> {
   if (!container.reminders.available) return { ...EMPTY_REPORT, status: 'skipped', reason: 'unavailable' };
   const state = appleRemindersState(container);
   try {

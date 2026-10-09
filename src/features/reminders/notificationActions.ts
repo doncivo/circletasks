@@ -1,3 +1,5 @@
+import type { ReplanTrigger } from './replanNotifications';
+import { restoredThisLaunch, settleRestoreMemo } from '../settings/restoreMemoPeek';
 import { nowIso } from '../../domain/clock';
 import {
   ACTION_TYPE_ID,
@@ -74,7 +76,7 @@ async function ensureWake(container: AppContainer, source: NotificationActionSou
 const FAILURE_PRIORITY: readonly ActionsFailureReason[] = ['queue-write-failed', 'source-failed', 'register-failed', 'delegate-lost', 'delegate-late'];
 
 /** Ne rejette jamais. Sans source (PC, navigateur) : rien à faire. */
-export async function runActionsStep(container: AppContainer): Promise<void> {
+export async function runActionsStep(container: AppContainer, trigger?: ReplanTrigger): Promise<void> {
   const source = container.notificationActions;
   if (source === null) return;
   const failures = new Set<ActionsFailureReason>();
@@ -105,6 +107,11 @@ export async function runActionsStep(container: AppContainer): Promise<void> {
     logFailure('notifications', 'actions status-failed');
   }
   await collectActions(container, source, failures);
+  // P-04-iOS critère 14 : au premier passage après une restauration (rechargement ou relance), ce qui vise un rappel absent de la version
+  // restaurée est retiré (après la collecte : les actions reçues pendant l'arrêt sont comprises). Hors de ce cas, une cible disparue reste un
+  // échec visible (N-03).
+  // Revue du lot F : le mémo de restauration n'est effacé qu'après ce nettoyage réussi (sinon refait au lancement suivant).
+  if (trigger === 'open' && restoredThisLaunch() && (await dropUnknownTargets(container, failures))) settleRestoreMemo();
   await applyActions(container, failures);
 
   const reason = FAILURE_PRIORITY.find((candidate) => failures.has(candidate)) ?? null;
@@ -232,6 +239,41 @@ async function applyOne(container: AppContainer, entry: ActionQueueEntry): Promi
   // Routine : validée pour la date de la notification, pas pour aujourd'hui ; refus du cas d'usage (déjà validée, jour non validable) = sans effet.
   await createRoutineUseCases(container).setDone(reminder.targetId as unknown as RoutineId, target.date, true);
   return { ok: true };
+}
+
+/**
+ * P-04-iOS critère 14 (QA du lot F) : à l'ouverture, les actions en attente et les répétitions « +15 min » dont le rappel n'existe plus dans
+ * la base (version restaurée qui ne le connaît pas) sont retirées sans erreur persistante ; le retrait est inscrit au journal (compteur).
+ */
+/** Vrai si la file est propre (rien à retirer, ou retiré) ; faux si l'écriture a échoué (échec visible). */
+async function dropUnknownTargets(container: AppContainer, failures: Set<ActionsFailureReason>): Promise<boolean> {
+  try {
+    const controller = actionQueueController(container);
+    const queue = await controller.load();
+    const known = new Map<string, boolean>();
+    const exists = async (sid: string | null): Promise<boolean> => {
+      if (sid === null || sid === '') return true;
+      const target = parseActionTarget(sid);
+      if (target === null || target.kind === 'none') return true;
+      const cached = known.get(target.reminderId);
+      if (cached !== undefined) return cached;
+      const found = (await container.data.repos.reminders.getById(target.reminderId as ReminderId)) !== null;
+      known.set(target.reminderId, found);
+      return found;
+    };
+    const deadEntries = new Set<string>();
+    for (const entry of queue.entries) if (!(await exists(entry.sid))) deadEntries.add(entry.key);
+    const deadSnoozes = new Set<string>();
+    for (const snooze of queue.snoozes) if (!(await exists(snooze.originId))) deadSnoozes.add(snooze.id);
+    if (deadEntries.size === 0 && deadSnoozes.size === 0) return true;
+    await controller.update((current) => ({ ...current, entries: current.entries.filter((entry) => !deadEntries.has(entry.key)), snoozes: current.snoozes.filter((snooze) => !deadSnoozes.has(snooze.id)) }));
+    logFailure('notifications', `actions dropped-unknown ${String(deadEntries.size + deadSnoozes.size)}`);
+    return true;
+  } catch {
+    failures.add('queue-write-failed');
+    logFailure('notifications', 'actions queue-write-failed');
+    return false;
+  }
 }
 
 /** Purge de la file les répétitions mortes ou passées (cible terminée, supprimée, archivée, validée, rappel retiré, échéance passée). */

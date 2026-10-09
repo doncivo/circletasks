@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "logs-ios",
+  "description": "iPhone : journal technique persistant (I-04, ADR 0014 §2). Trois commandes Rust : log_append, log_read, log_clear. Liste exacte fixée par tests/desktop/config.rs.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": ["allow-log-append", "allow-log-read", "allow-log-clear"]
+}

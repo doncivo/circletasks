@@ -1,6 +1,7 @@
 import { createStore } from 'zustand';
 import { backupDay, backupStamp, isDailyBackupDue, sortBackupVersions } from '../../domain/backupSchedule';
 import { backupFailureOf, type BackupFailureReason, type BackupVersion } from '../../platform/backup';
+import type { RestoreFlowOutcome } from './restoreFlow';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
 
@@ -15,6 +16,8 @@ export interface BackupState {
   readonly directory: string | null;
   /** Dernière sauvegarde (automatique ou « Sauvegarder maintenant ») échouée : ligne rouge de Réglages. */
   readonly failed: boolean;
+  /** Code du dernier échec de sauvegarde (P-04-iOS critère 13, QA du lot F), affiché avec « Dernière sauvegarde échouée ». */
+  readonly failedCode: string | null;
   readonly backingUp: boolean;
   /** Message bref après « Sauvegarder maintenant ». */
   readonly justBackedUp: boolean;
@@ -22,6 +25,8 @@ export interface BackupState {
   readonly restoreError: BackupFailureReason | null;
   /** La base est fermée (échec après la fermeture) : seul un redémarrage rouvre l'app. */
   readonly restartNeeded: boolean;
+  /** Marqueur de restauration non écrit (P-04-iOS critère 12) : code affiché avec « Voir la synchronisation » avant le redémarrage. */
+  readonly markerFailure: string | null;
   /** Lit les versions. Ne rejette jamais. */
   load(): Promise<void>;
   /**
@@ -51,6 +56,7 @@ function createBackupStore(container: AppContainer) {
   let failures = 0;
   let nextRetryAt = 0;
   let failureLoggedDay: string | null = null;
+  let restarting = false;
 
   return createStore<BackupState>()((set, get) => {
     const isRestoring = (): boolean => get().restorePhase === 'running' || get().restorePhase === 'done';
@@ -65,11 +71,13 @@ function createBackupStore(container: AppContainer) {
       versions: [],
       directory: null,
       failed: false,
+      failedCode: null,
       backingUp: false,
       justBackedUp: false,
       restorePhase: 'idle',
       restoreError: null,
       restartNeeded: false,
+      markerFailure: null,
       async load() {
         if (!service.available()) return;
         set({ status: get().status === 'ready' ? 'ready' : 'loading' });
@@ -97,7 +105,7 @@ function createBackupStore(container: AppContainer) {
             coveredDay = today;
             failures = 0;
             nextRetryAt = 0;
-            set({ failed: false });
+            set({ failed: false, failedCode: null });
             await refresh();
           } catch (error) {
             // Affichée en rouge dans Réglages ; consignée au premier échec du jour seulement (pas un message par minute).
@@ -107,7 +115,7 @@ function createBackupStore(container: AppContainer) {
               failureLoggedDay = today;
               logDesktopFailure('backup-daily', error);
             }
-            set({ failed: true });
+            set({ failed: true, failedCode: backupFailureOf(error).reason });
           } finally {
             dailyInFlight = null;
           }
@@ -120,40 +128,56 @@ function createBackupStore(container: AppContainer) {
         try {
           await service.createDaily({ day: backupDay(container.clock), replace: true });
           coveredDay = backupDay(container.clock);
-          set({ failed: false, justBackedUp: true });
+          set({ failed: false, failedCode: null, justBackedUp: true });
           await refresh();
         } catch (error) {
           logDesktopFailure('backup-now', error);
-          set({ failed: true, justBackedUp: false });
+          set({ failed: true, failedCode: backupFailureOf(error).reason, justBackedUp: false });
         } finally {
           set({ backingUp: false });
         }
       },
       async restore(version) {
         if (!service.available() || get().restorePhase === 'running') return;
-        set({ restorePhase: 'running', restoreError: null, restartNeeded: false });
+        set({ restorePhase: 'running', restoreError: null, restartNeeded: false, markerFailure: null });
         // Une sauvegarde automatique déjà en cours se termine avant que la base ne soit fermée.
         await dailyInFlight;
+        let outcome: RestoreFlowOutcome;
         try {
-          await service.restore({ name: version.name, stamp: backupStamp(container.clock) });
+          // Ordre et mémo : `restoreFlow.ts`, chargé à la demande (bundle de départ).
+          const { performRestore } = await import('./restoreFlow');
+          outcome = await performRestore(container, service, version, backupStamp(container.clock));
         } catch (error) {
           logDesktopFailure('backup-restore', error);
-          const { reason, databaseClosed } = backupFailureOf(error);
-          set({ restorePhase: 'failed', restoreError: reason, restartNeeded: databaseClosed });
+          set({ restorePhase: 'failed', restoreError: 'io', restartNeeded: false });
           return;
         }
-        set({ restorePhase: 'done' });
+        if (outcome.kind === 'failed') {
+          set({ restorePhase: 'failed', restoreError: outcome.reason, restartNeeded: outcome.databaseClosed });
+          // Critère 7 (QA du lot F) : base fermée = jamais une app qui tourne sans connexion ; le message est dit, puis l'app redémarre
+          // (rechargement sur iPhone) et l'issue mémorisée est redite après. « Redémarrer » reste proposé si la relance échoue.
+          if (outcome.databaseClosed) {
+            await new Promise<void>((resolve) => globalThis.setTimeout(resolve, RESTART_ANNOUNCE_MS));
+            await get().restart();
+          }
+          return;
+        }
+        set({ restorePhase: 'done', markerFailure: outcome.markerFailure });
         await new Promise<void>((resolve) => globalThis.setTimeout(resolve, RESTART_ANNOUNCE_MS));
         await get().restart();
       },
       async restart() {
+        // Une seule relance (automatique ou « Redémarrer ») ; un échec la laisse de nouveau possible.
+        if (restarting) return;
+        restarting = true;
         try {
           await service.restart();
         } catch (error) {
+          restarting = false;
           logDesktopFailure('backup-restart', error);
         }
       },
-      resetRestore: () => set({ restorePhase: 'idle', restoreError: null, restartNeeded: false }),
+      resetRestore: () => set({ restorePhase: 'idle', restoreError: null, restartNeeded: false, markerFailure: null }),
     };
   });
 }

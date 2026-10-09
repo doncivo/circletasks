@@ -1,6 +1,8 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
 import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } from '../calendars/scheduler';
-import { startBackupScheduler } from '../settings/backupScheduler';
+import type { BackupScheduler } from '../settings/backupScheduler';
+import { noteBackupSchedulerLoadFailed } from '../settings/backupSchedulerStatus';
+import { logFailure } from '../../platform/desktop/log';
 import { createDayRollover } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
@@ -8,6 +10,7 @@ import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
 import { getNotificationRunner } from '../reminders/notificationRunner';
 import { createTimeZoneWatcher } from './timeZoneWatcher';
+import { announcePendingRestore } from '../settings/restoreMemoPeek';
 
 export interface AppStartup {
   /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
@@ -45,6 +48,8 @@ export function startAppStartup(
   container: AppContainer,
   env: StartupEnv = { document, window },
 ): AppStartup {
+  // Revue du lot F : avec une file d'actions N-03 (iPhone), le mémo reste jusqu'à son nettoyage.
+  announcePendingRestore({ actionQueue: container.notificationActions !== null });
   const rollover = createDayRollover(container, {
     onDayChange: (day) => {
       useAppStore.getState().setDay(day);
@@ -66,7 +71,17 @@ export function startAppStartup(
   });
   const calendars = startCalendarScheduler(container, { document: env.document, ...(env.timers ?? {}) });
   // P-04 : sauvegarde quotidienne à l'ouverture, au retour au premier plan et après minuit (sans bloquer le démarrage).
-  const backups = startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
+  // Chargé à la demande (bundle de départ, PRD 8) : la première vérification part dès l'arrivée du module, sans bloquer `ready`.
+  let backups: BackupScheduler | null = null;
+  void import('../settings/backupScheduler').then(
+    (module) => {
+      if (!disposed) backups = module.startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
+    },
+    (error: unknown) => {
+      noteBackupSchedulerLoadFailed();
+      logFailure('backup-daily', error);
+    },
+  );
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') {
       void timeZone.check().then(() => rollover.check());
@@ -85,7 +100,7 @@ export function startAppStartup(
       if (disposed) return;
       disposed = true;
       calendars.dispose();
-      backups.dispose();
+      backups?.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);
       env.window.removeEventListener('focus', onCheck);
       rollover.stop();

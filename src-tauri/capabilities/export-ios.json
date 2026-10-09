@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "export-ios",
+  "description": "iPhone : enregistrer un fichier exporté (FILES-IOS-01, ADR 0009 avenant lot F A3). Une seule commande Rust, export_save_file : le fichier est écrit par Rust dans un temporaire du cache, présenté par le plugin ct-files (sélecteur « Enregistrer dans Fichiers ») puis supprimé. Aucune permission du plugin ct-files (Rust seul l'appelle), ni dialog:, fs: ou opener:. Liste exacte fixée par tests/desktop/config.rs.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": ["allow-export-save-file"]
+}

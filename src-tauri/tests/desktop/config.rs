@@ -69,7 +69,7 @@ fn main_window_starts_hidden_on_windows_only() {
 fn setup_recovers_first_then_creates_the_main_window_before_anything_that_uses_it() {
     let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
     let position = |needle: &str| setup.find(needle).unwrap_or_else(|| panic!("{needle} absent de setup"));
-    let recover = position("recover_interrupted_restore");
+    let recover = position("recover_and_settle");
     let create = position("create_main_window(app.handle())");
     assert!(recover < create, "récupération avant la création de la fenêtre");
     for later in ["crate::shortcut::manage", "crate::capture::setup", "create_tray(", "show_main_window("] {
@@ -291,9 +291,13 @@ fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on
     assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
     let mut names = permissions_of(text);
     names.sort();
-    assert_eq!(names, ["allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
+    assert_eq!(names, ["allow-backup-restore-marker-write", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
     // Aucune autre capability n'accorde ces commandes (la restauration n'est jamais appelable depuis une fenêtre secondaire).
     for other in other_capabilities("backups.json") {
+        // P-04-iOS : la capability de l'iPhone porte quatre de ces commandes (liste exacte vérifiée plus bas).
+        if other.contains("\"identifier\": \"backups-ios\"") {
+            continue;
+        }
         assert!(!permissions_of(&other).iter().any(|p| p.contains("restore-backup") || p.contains("daily-backup") || p.contains("list-backups") || p.contains("check-backup") || p.contains("reveal-backups")));
     }
 }
@@ -725,6 +729,172 @@ fn lot_m_local_plugins_acl_prefix_matches_runtime_name() {
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
+// Lot F (ADR 0009 avenant lot F) : plugin ct-files et export sur iPhone (FILES-IOS-01)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// FILES-IOS-01 critère 4 : `export-ios.json` n'accorde que `allow-export-save-file` (fenêtre `main`, iOS) ; `export.json` (PC) inchangé ;
+/// aucune capability ne contient `ct-files:` (Rust seul appelle le plugin).
+#[test]
+fn files_ios_01_4_export_ios_capability_is_exact_and_no_capability_grants_the_plugin() {
+    assert_exact_ios_capability("export-ios.json", "allow-export-save-file\"]", &["allow-export-save-file"]);
+    let mut pc = permissions_of(include_str!("../../capabilities/export.json"));
+    pc.sort();
+    assert_eq!(pc, ["allow-export-save-file", "allow-reveal-exported-file"]);
+    for (name, text) in all_capabilities() {
+        assert!(!text.contains("ct-files:"), "{name}");
+        let capability: Value = serde_json::from_str(&text).unwrap();
+        let ios = capability["platforms"].as_array().is_some_and(|p| p.iter().any(|x| x == "iOS"));
+        if ios {
+            for permission in permissions_of(&text) {
+                assert!(!["fs:", "dialog:", "opener:"].iter().any(|prefix| permission.starts_with(prefix)), "{name} : {permission}");
+                assert!(permission != "allow-reveal-exported-file" && permission != "allow-import-open-file", "{name} : {permission}");
+            }
+        }
+    }
+}
+
+/// FILES-IOS-01 critères 4 et 10 : le crate est une dépendance de la cible iOS seulement, enregistré une fois dans le bloc iOS ;
+/// `export_save_file` est dans les deux gestionnaires (PC et iPhone), `reveal_exported_file` et `import_open_file` jamais sur iPhone ;
+/// ni dialog ni fs dans la section iOS.
+#[test]
+fn files_ios_01_4_plugin_is_ios_only_and_the_ios_handler_has_only_the_save_command() {
+    assert_eq!(cargo_sections_of("tauri-plugin-ct-files"), [(IOS_SECTION.to_owned(), "tauri-plugin-ct-files = { path = \"plugins/files\" }".to_owned())]);
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_ct_files::init()")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1);
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
+    assert!(!DESKTOP_SOURCE.contains("ct_files"));
+    let ios = ios_handler_commands();
+    assert!(ios.contains("export_save_file"));
+    assert!(!ios.contains("reveal_exported_file") && !ios.contains("import_open_file"));
+    assert!(LIB_SOURCE.contains("export_ios::export_save_file"));
+    for krate in ["tauri-plugin-dialog", "tauri-plugin-fs"] {
+        assert!(cargo_sections_of(krate).iter().all(|(section, _)| section != IOS_SECTION), "{krate} dans la section iOS");
+    }
+}
+
+/// FILES-IOS-01 critère 10 : `build-ios.yml` vérifie par `cargo tree` le plugin ct-files (iOS oui, Windows non) et l'absence de dialog / fs.
+#[test]
+fn files_ios_01_10_ios_workflow_checks_the_plugin_targets() {
+    let workflow = include_str!("../../../.github/workflows/build-ios.yml");
+    assert!(workflow.contains("cargo tree --target aarch64-apple-ios -i tauri-plugin-ct-files"));
+    assert!(workflow.contains("cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-ct-files"));
+    assert!(workflow.contains("tauri-plugin-dialog tauri-plugin-fs"), "dialog et fs refusés dans la cible iOS");
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// I-04 (ADR 0014 §2) : journal technique persistant
+// ------------------------------------------------------------------------------------------------------------------------------
+
+const LOG_PERMISSIONS: [&str; 3] = ["allow-log-append", "allow-log-clear", "allow-log-read"];
+
+/// I-04 critères 9 et 13 : `logs.json` (PC) et `logs-ios.json` (iPhone) exacts, fenêtre `main` ; aucune autre capability (pairing, capture,
+/// focus…) ne porte ces commandes ; les trois commandes sont dans les deux gestionnaires et au manifeste.
+#[test]
+fn i04_9_log_capabilities_are_exact_and_only_for_the_main_window() {
+    for (file, platform) in [("logs.json", "windows"), ("logs-ios.json", "iOS")] {
+        let text = std::fs::read_to_string(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("capabilities").join(file)).expect("capability");
+        let capability: Value = serde_json::from_str(&text).expect("capability valide");
+        assert_eq!(capability["windows"], serde_json::json!(["main"]), "{file}");
+        assert_eq!(capability["platforms"], serde_json::json!([platform]), "{file}");
+        assert!(capability.get("webviews").is_none(), "{file}");
+        let mut granted = permissions_of(&text);
+        granted.sort();
+        assert_eq!(granted, LOG_PERMISSIONS, "{file}");
+    }
+    for (name, text) in all_capabilities() {
+        if name != "logs.json" && name != "logs-ios.json" {
+            assert!(!permissions_of(&text).iter().any(|p| p.contains("-log-")), "{name} accorde une commande du journal");
+        }
+    }
+    let manifest = manifest_commands();
+    let ios = ios_handler_commands();
+    for command in ["log_append", "log_read", "log_clear"] {
+        assert!(manifest.contains(command), "{command} absent du manifeste");
+        assert!(ios.contains(command), "{command} absent du gestionnaire iOS");
+        assert!(LIB_SOURCE.contains(&format!("applog::{command}")), "{command}");
+    }
+}
+
+/// I-04 critère 9 (ADR 0014, « Conséquences ») : le seul `eprintln!` du code Rust est dans `applog.rs` ; le journal est initialisé au début
+/// du `setup` PC (avant la récupération) et iPhone (avant la purge).
+#[test]
+fn i04_9_the_only_eprintln_is_in_applog_and_the_journal_starts_first() {
+    fn visit(dir: &std::path::Path, out: &mut Vec<(String, String)>) {
+        for entry in std::fs::read_dir(dir).expect("dossier") {
+            let path = entry.expect("entrée").path();
+            if path.is_dir() {
+                visit(&path, out);
+            } else if path.extension().is_some_and(|x| x == "rs") {
+                out.push((path.to_string_lossy().into_owned(), std::fs::read_to_string(&path).expect("source")));
+            }
+        }
+    }
+    let mut sources = Vec::new();
+    visit(&std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut sources);
+    assert!(sources.len() > 20);
+    for (path, text) in &sources {
+        // Code seulement : les commentaires peuvent citer la macro.
+        let count = text.lines().filter(|l| !l.trim_start().starts_with("//")).map(|l| l.matches("eprintln!").count()).sum::<usize>();
+        if path.ends_with("applog.rs") {
+            assert_eq!(count, 1, "{path}");
+        } else {
+            assert_eq!(count, 0, "eprintln! hors d'applog : {path}");
+        }
+    }
+    let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
+    assert!(setup.find("crate::applog::init(").unwrap() < setup.find("recover_and_settle").unwrap());
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(ios.find("crate::applog::init(").unwrap() < ios.find("purge_exports").unwrap());
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// P-04-iOS (ADR 0009 avenant lot F B1 et B3)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// P-04-iOS critère 16 : `backups-ios.json` exacte (cinq commandes, jamais `allow-reveal-backups-folder`), `backups.json` (PC) inchangé ;
+/// gestionnaire iOS = ces cinq commandes de sauvegarde (plus la sauvegarde avant migration) ; aucune autre capability iOS ne les porte.
+#[test]
+fn p04_ios_16_backups_capability_and_handler_are_exact() {
+    let text = include_str!("../../capabilities/backups-ios.json");
+    let capability: Value = serde_json::from_str(text).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    let mut granted = permissions_of(text);
+    granted.sort();
+    assert_eq!(granted, ["allow-backup-restore-marker-write", "allow-backup-set-aside-conflicts", "allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
+    let ios = ios_handler_commands();
+    for command in ["daily_backup", "list_backups", "check_backup", "restore_backup", "backup_startup_status", "backup_set_aside_conflicts"] {
+        assert!(ios.contains(command), "{command}");
+    }
+    assert!(!ios.contains("reveal_backups_folder"));
+    for (name, other) in all_capabilities() {
+        if name != "backups-ios.json" {
+            assert!(!other.contains("allow-backup-startup-status") && !other.contains("allow-backup-set-aside-conflicts"), "{name}");
+        }
+        if name != "backups.json" {
+            assert!(!other.contains("allow-reveal-backups-folder"), "{name}");
+        }
+    }
+}
+
+/// P-04-iOS B3 : sur iPhone le plugin SQL n'est PAS dans la chaîne du builder (enregistré par `ios_setup` après la récupération) ; sur PC
+/// il l'est, après les plugins du PC (l'instance unique reste le premier plugin).
+#[test]
+fn p04_ios_sql_plugin_is_registered_late_on_iphone_only() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_sql::Builder")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement dans lib.rs");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(desktop)]");
+    let configure = lines.iter().position(|l| l.contains("desktop::configure(builder)")).unwrap();
+    assert!(configure < uses[0], "après desktop::configure (instance unique d'abord)");
+    let gate = include_str!("../../src/startup_gate.rs");
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(gate.contains("app.plugin(tauri_plugin_sql::Builder::default().build())"));
+    assert!(ios.find("crate::applog::init(").unwrap() < ios.find("register_sql_after_recovery").unwrap());
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
 // I-02 (ADR 0013 §3.1) : commande app_signing_info, iPhone seulement
 // ------------------------------------------------------------------------------------------------------------------------------
 
@@ -802,4 +972,14 @@ fn k05_reminders_plugin_is_ios_only() {
     assert_eq!(uses.len(), 1, "un seul enregistrement");
     assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
     assert!(!DESKTOP_SOURCE.contains("reminders"));
+}
+
+/// Fusion du lot C : un seul `setup` dans lib.rs (Tauri n'en garde qu'un ; un second remplacerait `ios_setup` et le plugin SQL ne serait
+/// jamais enregistré sur l'iPhone) ; le nettoyage de Vision au lancement passe par `ios_setup`.
+#[test]
+fn p04_ios_a_single_setup_runs_recovery_then_vision_cleanup() {
+    assert_eq!(LIB_SOURCE.matches(".setup(").count(), 1);
+    assert!(LIB_SOURCE.contains(".setup(ios_setup::setup)"));
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(ios.find("register_sql_after_recovery").unwrap() < ios.find("clean_on_launch").unwrap());
 }

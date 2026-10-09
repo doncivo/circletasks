@@ -53,6 +53,9 @@ const DEFAULT_BUSY_MS: u64 = 5_000;
 const STAGING_SUFFIX: &str = ".restoring";
 /// Suffixe des fichiers de l'ancienne base pendant l'échange.
 const OLD_SUFFIX: &str = ".restore-old";
+/// Clé du réglage du verrouillage (I-03), même valeur que `src/domain/model/settings.ts` (test statique `restore_ios.rs`). Sa valeur
+/// ACTUELLE prévaut sur celle de la version restaurée (P-04-iOS critère 11, ADR 0009 avenant lot F B5) : échec fermé.
+pub const APP_LOCK_SETTING_KEY: &str = "security.appLock";
 
 /// Famille d'une sauvegarde, selon son nom.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -280,7 +283,7 @@ fn ensure_plain_backups_dir(dir: &Path) -> Result<(), BackupError> {
 }
 
 /// Vrai pour un dossier ordinaire (ni lien ni jonction).
-fn is_plain_dir(path: &Path) -> bool {
+pub fn is_plain_dir(path: &Path) -> bool {
     let Ok(meta) = fs::symlink_metadata(path) else { return false };
     if meta.file_type().is_symlink() || !meta.is_dir() {
         return false;
@@ -593,6 +596,9 @@ pub enum RestoreStep {
     Staged,
     /// L'ancienne base est déplacée, la nouvelle n'est pas encore en place.
     OldMoved,
+    /// La version restaurée est en place, les `.restore-old` pas encore retirés (revue du lot F : confirmation du marqueur ; un échec de
+    /// ce point est ignoré, l'échange reste fait).
+    Swapped,
 }
 
 /// Résultat d'une restauration.
@@ -602,6 +608,68 @@ pub struct RestoreOutcome {
     /// Copie de sécurité de l'état d'avant (`None` si la base n'existait pas).
     pub safety_copy: Option<String>,
     pub schema_version: u32,
+    /// Marqueur de restauration de la synchro (ADR 0010 règle 2) : `written`, `not-configured` (aucun dossier de synchro) ou `failed`
+    /// (P-04-iOS critère 12 : renvoyé au front et affiché, jamais seulement journalisé). `restore_backup_file` rend `not-configured`, la
+    /// commande le remplace après l'écriture.
+    pub marker: &'static str,
+    /// Code de l'échec du marqueur (`None` sinon).
+    pub marker_code: Option<&'static str>,
+}
+
+/// Recopie dans le fichier PRÉPARÉ la valeur actuelle du verrouillage (P-04-iOS critère 11, B5) : valeur `true` ou illisible (tout sauf
+/// `false`) dans la base actuelle -> la ligne entière est recopiée (valeur `true`, métadonnées d'origine) ; base actuelle illisible ->
+/// `true` écrit ; `false` ou ligne absente -> fichier préparé inchangé (une version avec verrou reste verrouillée) ; aucune base actuelle
+/// -> rien. Aucun déclencheur de synchro ne vise cette clé. Échec -> `io` : la restauration est refusée avant l'échange.
+pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupError> {
+    if !current_db.is_file() {
+        return Ok(());
+    }
+    type Row = (String, String, String, String);
+    let read = || -> Result<Option<Row>, rusqlite::Error> {
+        let conn = open_read_only(current_db)?;
+        // Base sans table `settings` (jamais le cas de l'app ; bases de test) : aucune valeur à reporter.
+        let has_settings = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'settings'", [], |r| r.get::<_, u64>(0))? == 1;
+        if !has_settings {
+            return Ok(None);
+        }
+        let mut stmt = conn.prepare("SELECT value, updated_at, device_id, hlc FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query([APP_LOCK_SETTING_KEY])?;
+        match rows.next()? {
+            Some(row) => Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))),
+            None => Ok(None),
+        }
+    };
+    let (updated_at, device_id, hlc) = match read() {
+        Ok(None) => return Ok(()),
+        Ok(Some((value, _, _, _))) if value.trim() == "false" => return Ok(()),
+        Ok(Some((_, updated_at, device_id, hlc))) => (updated_at, device_id, hlc),
+        // Base actuelle illisible : échec fermé, le verrou est activé dans la version restaurée. Métadonnées valides (revue) : celles de la
+        // ligne du fichier préparé si elle existe, sinon l'identifiant d'appareil et la plus haute horloge des réglages préparés.
+        Err(_) => {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+            let existing: Option<(String, String)> = conn
+                .query_row("SELECT device_id, hlc FROM settings WHERE key = ?1", [APP_LOCK_SETTING_KEY], |r| Ok((r.get(0)?, r.get(1)?)))
+                .ok();
+            let (device_id, hlc) = match existing {
+                Some(found) => found,
+                None => {
+                    let device: Option<String> = conn.query_row("SELECT value FROM settings WHERE key = 'device.id'", [], |r| r.get(0)).ok();
+                    let device = device.map(|raw| serde_json::from_str::<String>(&raw).unwrap_or(raw)).unwrap_or_default();
+                    let hlc: Option<String> = conn.query_row("SELECT MAX(hlc) FROM settings", [], |r| r.get(0)).ok().flatten();
+                    (device, hlc.unwrap_or_default())
+                }
+            };
+            (iso_instant(now), device_id, hlc)
+        }
+    };
+    let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+    conn.execute(
+        "INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES (?1, 'true', ?2, ?3, ?4)          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, device_id = excluded.device_id, hlc = excluded.hlc",
+        rusqlite::params![APP_LOCK_SETTING_KEY, updated_at, device_id, hlc],
+    )
+    .map_err(|e| BackupError::new("io", e.to_string()))?;
+    Ok(())
 }
 
 /// Des fichiers `.restore-old` existent-ils ? (restauration interrompue, ou retour arrière incomplet `rollback-failed`)
@@ -750,6 +818,7 @@ fn swap_database(db_path: &Path, staged: &Path, hook: &dyn Fn(RestoreStep) -> io
         fs::rename(staged, db_path)
     })();
     let Err(error) = result else {
+        let _ = hook(RestoreStep::Swapped);
         for (_, old) in &moved {
             let _ = fs::remove_file(old);
         }
@@ -812,6 +881,8 @@ pub fn restore_backup_file(
         // Déclencheurs recréés depuis la référence de l'app sur le fichier préparé, avant l'échange : la base mise en place n'a que des
         // déclencheurs de l'app, et un échec ici ne laisse aucun état à moitié restauré.
         .and_then(|_| reset_triggers(&staged))
+        // P-04-iOS critère 11 : la valeur actuelle du verrouillage prévaut, recopiée sur le fichier préparé AVANT l'échange.
+        .and_then(|()| carry_app_lock(db_path, &staged))
         .and_then(|()| hook(RestoreStep::Staged).map_err(io_err));
     if let Err(error) = prepared {
         let _ = fs::remove_file(&staged);
@@ -822,7 +893,7 @@ pub fn restore_backup_file(
         return Err(error);
     }
     let _ = prune_family(backups_dir, Family::PreRestore, KEEP_PRE_RESTORE_BACKUPS);
-    Ok(RestoreOutcome { safety_copy, schema_version })
+    Ok(RestoreOutcome { safety_copy, schema_version, marker: "not-configured", marker_code: None })
 }
 
 /// Instant ISO 8601 UTC à la milliseconde (`2026-10-05T08:00:00.000Z`), forme de `IsoDateTime` côté TypeScript.
@@ -836,12 +907,17 @@ pub fn iso_instant(secs: u64) -> String {
 /// configuré**. L'heure de la sauvegarde est celle de son fichier (sinon l'heure de restauration). Renvoie vrai s'il a été écrit. Jamais
 /// appelé par la récupération au démarrage (`recover_interrupted_restore`) : une restauration interrompue puis récupérée n'a pas de marqueur.
 pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32) -> Result<bool, crate::sync::SyncError> {
+    write_restore_marker_as(config_dir, backups_dir, backup, restored_at_secs, schema_version, false)
+}
+
+/// Comme `write_restore_marker`, provisoire (avant l'échange) ou confirmé.
+pub fn write_restore_marker_as(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32, provisional: bool) -> Result<bool, crate::sync::SyncError> {
     let taken = fs::metadata(backups_dir.join(backup))
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(restored_at_secs, |d| d.as_secs());
-    crate::sync::marker::write_after_restore(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version))
+    crate::sync::marker::write_marker(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version), provisional)
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {
@@ -926,6 +1002,7 @@ pub fn check_named_backup(backups_dir: &Path, name: &str) -> Result<u32, BackupE
 /// Sauvegarde quotidienne (P-04) ; `replace` = « Sauvegarder maintenant ». Hors du fil de l'interface.
 #[tauri::command]
 pub async fn daily_backup(app: AppHandle, day: String, replace: bool) -> Result<DailyOutcome, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
     let dir = data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || create_daily_backup(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &day, replace, KEEP_DAILY_BACKUPS))
         .await
@@ -936,7 +1013,9 @@ pub async fn daily_backup(app: AppHandle, day: String, replace: bool) -> Result<
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupListing {
-    pub directory: String,
+    /// PC : `%APPDATA%<identifiant>ackups` ; iPhone : `None` (la WebView affiche « Dossier de l'app (non visible dans Fichiers) »,
+    /// jamais le chemin du conteneur ; ADR 0009 avenant lot F B1).
+    pub directory: Option<String>,
     pub entries: Vec<BackupEntry>,
 }
 
@@ -948,7 +1027,7 @@ pub fn neutral_directory_label(identifier: &str) -> String {
 #[tauri::command]
 pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
-    let label = neutral_directory_label(&app.config().identifier);
+    let label = if cfg!(target_os = "ios") { None } else { Some(neutral_directory_label(&app.config().identifier)) };
     tauri::async_runtime::spawn_blocking(move || {
         let entries = list_backups_in(&dir)?;
         Ok(BackupListing { directory: label, entries })
@@ -960,6 +1039,7 @@ pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> 
 /// Vérifie une sauvegarde avant que l'app ne ferme sa base (un fichier refusé ne coûte rien).
 #[tauri::command]
 pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
     let dir = data_dir(&app)?.join(BACKUP_DIR);
     tauri::async_runtime::spawn_blocking(move || {
         check_named_backup(&dir, &name)
@@ -968,22 +1048,52 @@ pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupErr
     .map_err(|e| join_error(e.into()))?
 }
 
-/// Restaure une sauvegarde (la base a été fermée par le front, qui relance ensuite l'app).
+/// Refus de la restauration tant qu'un pool du plugin SQL est ouvert : jamais une 2e connexion pendant l'échange (P-04-iOS, pool à une
+/// connexion de `vendor/tauri-plugin-sql`). Plugin absent (porte de démarrage fermée) : rien d'ouvert.
+pub async fn ensure_sql_closed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), BackupError> {
+    let Some(instances) = app.try_state::<tauri_plugin_sql::DbInstances>() else { return Ok(()) };
+    match crate::startup_gate::open_sql_pools(&instances).await {
+        0 => Ok(()),
+        _ => Err(BackupError::new("db-open", "la connexion à la base n'est pas fermée")),
+    }
+}
+
+/// Restaure une sauvegarde (la base a été fermée par le front, qui relance l'app sur PC ou recharge la WebView sur iPhone). Le marqueur de
+/// restauration de la synchro est écrit après l'échange ; son échec est RENDU (`marker: failed`, code), gardé pour un nouvel essai
+/// (`PendingRestoreMarker`) et inscrit au journal (P-04-iOS critère 12) : la restauration reste faite.
 #[tauri::command]
 pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Result<RestoreOutcome, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
+    ensure_sql_closed(&app).await?;
     let dir = data_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        let outcome = restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))?;
-        // Échange abouti : marqueur de la synchro (aucun cycle ne partira avant le choix de l'utilisateur, ADR 0010 règle 3). Un échec
-        // d'écriture est journalisé sans bloquer la restauration déjà faite.
+    let gate_app = app.clone();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        if let Err(error) = write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version) {
-            eprintln!("[backup] marqueur de restauration non écrit : {}", error.code.as_str());
+        match crate::startup_gate::restore_with_provisional_marker(&dir, &name, &stamp, now, &|_| Ok(())) {
+            Ok(done) => Ok(done),
+            Err(error) => {
+                // Revue B1 : retour arrière incomplet -> récupération immédiate ; si elle échoue, la porte passe à l'échec (le rechargement
+                // montre l'écran persistant, jamais une base vide créée puis copiée par la sauvegarde du jour).
+                if let Some(Err(code)) = crate::startup_gate::recover_after_failed_swap(&dir.join(DB_FILE), &dir.join(BACKUP_DIR)) {
+                    if gate_app.try_state::<crate::startup_gate::StartupGate>().is_none() {
+                        gate_app.manage(crate::startup_gate::StartupGate::default());
+                    }
+                    gate_app.state::<crate::startup_gate::StartupGate>().set(Err(code));
+                }
+                Err(error)
+            }
         }
-        Ok(outcome)
     })
     .await
-    .map_err(|e| join_error(e.into()))?
+    .map_err(|e| join_error(e.into()))??;
+    if let Some(marker) = outcome.1 {
+        if let Some(pending) = app.try_state::<crate::startup_gate::PendingRestoreMarker>() {
+            if let Ok(mut slot) = pending.0.lock() {
+                *slot = Some(marker);
+            }
+        }
+    }
+    Ok(outcome.0)
 }
 
 /// Affiche le dossier des sauvegardes dans l'Explorateur (PC) : aucun paramètre venant de la WebView.

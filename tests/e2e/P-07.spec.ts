@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { failNextPick, installFakeFiles, onlySaved, savedFiles, setPick, textOf } from './helpers/files';
+import { failNextPick, installFakeFiles, nextFilesMode, onlySaved, savedFiles, setPick, textOf } from './helpers/files';
 import { listTitles, openToday } from './helpers/today';
 
 /**
@@ -161,5 +161,28 @@ test.describe('P-07 — import CSV', () => {
     await page.getByRole('button', { name: 'Choisir un fichier' }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Choisir un fichier' })).toBeEnabled();
+  });
+
+  // FILES-IOS-01 critère 7 (projets iphone et pc) : modèle et rapport enregistrés (contenus lus), annulation sans message, échec visible
+  // avec son code et « Réessayer » ; l'aperçu n'est pas perdu.
+  test('FILES-IOS-01 critère 7 : annulation sans message, échec avec code et « Réessayer », aperçu conservé', async ({ page }) => {
+    await openImport(page);
+    await nextFilesMode(page, 'cancel');
+    await page.getByRole('button', { name: 'Télécharger un modèle' }).click();
+    await expect(page.getByRole('button', { name: 'Télécharger un modèle' })).toBeEnabled();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    expect(await savedFiles(page)).toEqual([]);
+    await choose(page, MIXED);
+    await nextFilesMode(page, 'fail');
+    await page.getByRole('button', { name: 'Télécharger le rapport des lignes rejetées' }).click();
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('L’enregistrement n’a pas abouti.');
+    await expect(alert).toContainText('Code : write-failed');
+    await alert.getByRole('button', { name: 'Réessayer' }).click();
+    await expect(page.getByText('Rapport enregistré')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    const report = textOf(await onlySaved(page));
+    expect(report).toContain('7;espace inconnu « Famille »;Ailleurs;;;Famille;;');
+    await expect(page.getByRole('button', { name: 'Importer 2 tâches' })).toBeEnabled();
   });
 });
