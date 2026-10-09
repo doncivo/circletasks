@@ -106,6 +106,21 @@ describe('écran Agendas (K-01 à K-03)', () => {
     expect(screen.queryByText(`Agenda ${GOOGLE_ACCOUNT} déconnecté`)).not.toBeInTheDocument();
   });
 
+  it('iPhone : compte iCloud reçu du PC sans secret ici : « Connecté ailleurs », aucun bandeau « déconnecté », « Connecter ici » ouvre le formulaire', async () => {
+    const id = 'a7000000-0000-4000-8000-0000000000e1' as Parameters<typeof h.container.data.repos.calendarAccounts.create>[0]['id'];
+    await h.container.data.repos.calendarAccounts.create({ id, provider: 'icloud', label: '', tokenRef: '', calendars: [] });
+    renderScreen();
+    const card = await screen.findByRole('region', { name: 'iCloud · Compte iCloud' });
+    expect(await within(card).findByText('Connecté ailleurs')).toBeInTheDocument();
+    expect(within(card).getByText(/^Connecté sur un autre appareil/)).toBeInTheDocument();
+    expect(within(card).queryByText('Déconnecté')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /^Actualiser/ })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /^Reconnecter/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/déconnecté$/)).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Connecter Compte iCloud sur cet appareil' }));
+    expect(calendarsStore.get(h.container).getState().icloudForm).toEqual({ accountId: id, username: '' });
+  });
+
   it('supprimer un compte demande confirmation, puis efface le jeton, le compte et ses événements (critère 8)', async () => {
     renderScreen();
     const card = await addGoogle();

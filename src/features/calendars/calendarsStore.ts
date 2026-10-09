@@ -1,6 +1,6 @@
 import { createStore } from 'zustand';
 import type { ChangeCursor, ProviderCalendar } from '../../domain/calendarProvider';
-import { calendarAppStatuses, disconnectedAccount, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
+import { calendarAppStatuses, disconnectedAccount, localAccountState, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
 import { prefillCalendarSpaces, validateCalendars } from '../../domain/externalCalendars';
 import { newEntityId } from '../../domain/id';
 import type { CalendarAccount, CalendarProviderKind, CalendarRef } from '../../domain/model';
@@ -20,8 +20,9 @@ import { refreshAccount } from './refreshUseCase';
 
 /**
  * Comptes d'agendas externes (K-01, K-02, K-03) : liste, connexion, choix des agendas et de leur espace (ES-06), rafraîchissement,
- * suppression. L'état d'un compte (connecté, à reconnecter, erreur) est LOCAL à l'appareil et non persistant : il est recalculé au
- * chargement (secret absent du coffre de CET appareil : « à reconnecter », K-01 D1) puis suit les résultats réseau. Aucun secret n'entre
+ * suppression. L'état d'un compte (connecté, connecté sur un autre appareil, à reconnecter, erreur) est LOCAL à l'appareil et non
+ * persistant : il est recalculé au chargement (jamais connecté ici : « connecté sur un autre appareil », sans alerte ; secret absent du
+ * coffre de CET appareil : « à reconnecter », K-01 D1) puis suit les résultats réseau. Aucun secret n'entre
  * dans ce store : seule une référence du coffre (`tokenRef`) existe côté interface.
  */
 
@@ -162,11 +163,13 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       return accounts;
     };
 
-    /** Le secret de CET appareil existe-t-il ? Sinon le compte est « à reconnecter » (K-01 D1). */
+    /**
+     * État local du compte (K-01 D1, `localAccountState`) : jamais connecté sur CET appareil (référence locale vide, ligne reçue par la
+     * synchro) → « connecté sur un autre appareil », sans interroger le coffre ; sinon le secret de cet appareil existe-t-il ?
+     */
     const vaultState = async (account: CalendarAccount, previous: CalendarAccountState | undefined): Promise<CalendarAccountState> => {
-      const present = await platform.vault.has(account.tokenRef).catch(() => false);
-      if (!present) return { kind: 'reconnect-required', lastSuccessAt: previous?.lastSuccessAt ?? null };
-      return previous && previous.kind !== 'reconnect-required' ? previous : { kind: 'connected', lastSuccessAt: previous?.lastSuccessAt ?? null };
+      const secretPresent = account.tokenRef === '' ? false : await platform.vault.has(account.tokenRef).catch(() => false);
+      return localAccountState({ tokenRef: account.tokenRef, secretPresent }, previous);
     };
 
     const report = (outcome: ConnectOutcome): ConnectOutcome => {

@@ -132,7 +132,8 @@
   color: var(--ct-color-danger);
 }
 
-.ct-calendars__state[data-state='error'] {
+.ct-calendars__state[data-state='error'],
+.ct-calendars__state[data-state='elsewhere'] {
   color: var(--ct-color-text-secondary);
 }
 

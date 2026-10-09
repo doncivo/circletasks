@@ -8,7 +8,9 @@ import type { CalendarAccountId, IsoDateTime } from './types';
  * premier plan et le verrou par compte sont fournis par l'appelant (planificateur de src/features/calendars).
  *
  * L'état d'un compte est LOCAL à l'appareil (jamais en base ni dans les journaux de synchro) : il dépend du coffre de l'appareil
- * (K-01 D1) et du dernier résultat réseau ; il est recalculé au démarrage (secret absent → « à reconnecter »).
+ * (K-01 D1) et du dernier résultat réseau ; il est recalculé au démarrage (`localAccountState`) : compte jamais connecté sur cet appareil
+ * (référence du coffre locale vide : ligne reçue par la synchro) → « connecté sur un autre appareil », sans alerte ; référence présente
+ * mais secret absent → « à reconnecter ».
  */
 
 /** K-03 : échéance de 15 min, comptée depuis la dernière réussite, au premier plan seulement (K-03 D3). */
@@ -28,6 +30,12 @@ export type RefreshTrigger =
 
 export type CalendarAccountState =
   | { readonly kind: 'connected'; readonly lastSuccessAt: IsoDateTime | null }
+  /**
+   * Compte reçu par la synchro et jamais connecté sur CET appareil (colonne locale `token_ref` vide) : il est connecté sur l'appareil
+   * qui détient son secret. Ni bandeau « déconnecté », ni « Hors ligne », ni rafraîchissement ici ; « Connecter ici » reste proposé
+   * (décision du 2026-10-09, docs/decisions.md).
+   */
+  | { readonly kind: 'elsewhere'; readonly lastSuccessAt: null }
   /** A-09 : « Agenda <label> déconnecté » + « Reconnecter » ; aucune nouvelle tentative automatique (K-03 critère 6). */
   | { readonly kind: 'reconnect-required'; readonly lastSuccessAt: IsoDateTime | null }
   /** Réseau ou serveur : données conservées, « Hors ligne » (K-03 critère 5) ; `retryAt` respecte un 429. */
@@ -59,6 +67,8 @@ export interface RefreshDecisionInput {
 export function shouldRefresh(input: RefreshDecisionInput): boolean {
   const { state, trigger, now, foreground, inFlight } = input;
   if (inFlight) return false;
+  // Aucun secret sur cet appareil : rien à lire ici, quel que soit le déclencheur.
+  if (state.kind === 'elsewhere') return false;
   if (state.kind === 'reconnect-required') return trigger === 'manual' || trigger === 'connected';
   const nowMs = Date.parse(now);
   if (state.kind === 'error' && state.retryAt !== null && nowMs < Date.parse(state.retryAt)) {
@@ -68,6 +78,20 @@ export function shouldRefresh(input: RefreshDecisionInput): boolean {
   if (!foreground) return false;
   if (state.lastSuccessAt === null) return true;
   return nowMs - Date.parse(state.lastSuccessAt) >= CALENDAR_REFRESH_INTERVAL_MS;
+}
+
+/**
+ * État d'un compte au chargement, sur CET appareil (K-01 D1) :
+ * - référence du coffre locale vide (`token_ref` n'est jamais publié : ligne reçue d'un autre appareil, jamais connectée ici) →
+ *   `elsewhere` : le secret vit sur l'autre appareil, le compte n'y est pas « déconnecté » ;
+ * - référence présente, secret absent du coffre de cet appareil (effacé, coffre réinitialisé) → `reconnect-required` (bandeau A-09) ;
+ * - secret présent → l'état précédent s'il était connu et valable, sinon `connected`.
+ */
+export function localAccountState(local: { readonly tokenRef: string; readonly secretPresent: boolean }, previous: CalendarAccountState | undefined): CalendarAccountState {
+  const lastSuccessAt = previous?.lastSuccessAt ?? null;
+  if (local.tokenRef === '') return { kind: 'elsewhere', lastSuccessAt: null };
+  if (!local.secretPresent) return { kind: 'reconnect-required', lastSuccessAt };
+  return previous && previous.kind !== 'reconnect-required' && previous.kind !== 'elsewhere' ? previous : { kind: 'connected', lastSuccessAt };
 }
 
 export type RefreshOutcome = { readonly ok: true; readonly at: IsoDateTime } | { readonly ok: false; readonly at: IsoDateTime; readonly error: ProviderError };

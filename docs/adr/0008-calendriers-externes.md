@@ -29,7 +29,7 @@ Lecture seule de Google Calendar (OAuth) et d'Apple Calendar (iCloud CalDAV, mot
 | `calendar_oauth_google_revoke` | `tokenRef` | `null` (au mieux, puis effacement) | `vault-unavailable` |
 | `calendar_http` | `CalendarHttpRequest` | `CalendarHttpResponse` (4xx/5xx = réponse) | `host-not-allowed`, `secret-missing`, `reauth-required`, `network`, `timeout` |
 
-`token_ref` = `circletasks.calendar.<fournisseur>.<uuid>` (fournisseur `google` ou `icloud` ; format imposé par Rust, refus sinon ; la WebView ne peut pas écrire une référence `google`, seul le flux OAuth de Rust le fait), service `fr.circletasks.planner`. Le jeton Google est un JSON `{ refresh, access, expires_at }`. Un `token_ref` est **propre à l'appareil** (K-01 D1) : `calendar_account` se synchronise, le secret non ; sans entrée locale, le compte est « à reconnecter ».
+`token_ref` = `circletasks.calendar.<fournisseur>.<uuid>` (fournisseur `google` ou `icloud` ; format imposé par Rust, refus sinon ; la WebView ne peut pas écrire une référence `google`, seul le flux OAuth de Rust le fait), service `fr.circletasks.planner`. Le jeton Google est un JSON `{ refresh, access, expires_at }`. Un `token_ref` est **propre à l'appareil** (K-01 D1) : `calendar_account` se synchronise, le secret non ; sans entrée locale, le compte est « à reconnecter ». **Avenant du 2026-10-09 (défaut vu sur l'iPhone 0.2.3)** : une ligne reçue par la synchro et jamais connectée sur cet appareil (`token_ref` local vide) est « Connecté ailleurs » (état `elsewhere`), sans bandeau A-09, sans « Hors ligne » ni rafraîchissement, avec « Connecter ici » ; « à reconnecter » reste réservé à l'appareil qui a une référence locale mais plus de secret (voir docs/decisions.md).
 
 ### 3. Coffre : crate `keyring` 3
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CALENDAR_REFRESH_INTERVAL_MS, calendarAppStatuses, disconnectedAccount, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshDecisionInput } from './calendarRefresh';
+import { CALENDAR_REFRESH_INTERVAL_MS, calendarAppStatuses, disconnectedAccount, localAccountState, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshDecisionInput } from './calendarRefresh';
 import type { CalendarAccountId, IsoDateTime } from './types';
 
 const iso = (value: string): IsoDateTime => value as IsoDateTime;
@@ -119,5 +119,33 @@ describe('fournisseur non chargeable (audit B3)', () => {
     expect(state).toMatchObject({ kind: 'error', error: 'unavailable' });
     const accounts = [{ id: 'a' as never, label: 'Google' }];
     expect(calendarAppStatuses(accounts, new Map([['a' as never, state]]))).toEqual({});
+  });
+});
+
+describe('localAccountState (K-01 D1) : compte connecté sur un autre appareil', () => {
+  const ID = 'acc-elsewhere' as CalendarAccountId;
+  const only = (state: CalendarAccountState): ReadonlyMap<CalendarAccountId, CalendarAccountState> => new Map([[ID, state]]);
+  const account = { id: ID, label: 'Compte iCloud' };
+
+  it('référence locale vide (ligne reçue par la synchro) : « ailleurs », ni bandeau « déconnecté » ni « Hors ligne », jamais rafraîchi', () => {
+    const state = localAccountState({ tokenRef: '', secretPresent: false }, undefined);
+    expect(state).toEqual({ kind: 'elsewhere', lastSuccessAt: null });
+    expect(calendarAppStatuses([account], only(state))).toEqual({});
+    expect(disconnectedAccount([account], only(state))).toBeUndefined();
+    for (const trigger of ['open', 'resume', 'tick', 'manual', 'connected'] as const) expect(shouldRefresh(base({ trigger, state }))).toBe(false);
+  });
+
+  it('référence présente mais secret absent du coffre de cet appareil : « à reconnecter », bandeau gardé', () => {
+    const state = localAccountState({ tokenRef: 'circletasks.calendar.icloud.x', secretPresent: false }, connected());
+    expect(state).toEqual({ kind: 'reconnect-required', lastSuccessAt: T0 });
+    expect(calendarAppStatuses([account], only(state))).toEqual({ calendarDisconnected: { detail: 'Compte iCloud' } });
+  });
+
+  it('secret présent : état précédent gardé, ou « connecté » après « ailleurs » ou « à reconnecter »', () => {
+    const offline: CalendarAccountState = { kind: 'error', lastSuccessAt: T0, error: 'network', retryAt: plus(15) };
+    expect(localAccountState({ tokenRef: 'r', secretPresent: true }, offline)).toBe(offline);
+    expect(localAccountState({ tokenRef: 'r', secretPresent: true }, { kind: 'elsewhere', lastSuccessAt: null })).toEqual({ kind: 'connected', lastSuccessAt: null });
+    expect(localAccountState({ tokenRef: 'r', secretPresent: true }, { kind: 'reconnect-required', lastSuccessAt: T0 })).toEqual({ kind: 'connected', lastSuccessAt: T0 });
+    expect(localAccountState({ tokenRef: 'r', secretPresent: true }, undefined)).toEqual({ kind: 'connected', lastSuccessAt: null });
   });
 });
