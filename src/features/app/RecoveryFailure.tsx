@@ -22,13 +22,6 @@ export function RecoveryFailure({ message, setAside = setAsideRecoveryConflicts,
   const [failedCode, setFailedCode] = useState<string | null>(null);
   if (code === 'no-data-dir') return <p>{tBackupRestore('recoveryNoDataDir')}</p>;
   if (code === 'sql-plugin') return <p>{tBackupRestore('recoverySqlPlugin')}</p>;
-  if (code === 'marker-cancel-failed') {
-    return (
-      <p role="alert">
-        {tBackupRestore('recoveryMarkerCancel')} {t('backup.errorCode', { code })}
-      </p>
-    );
-  }
   if (!CONFLICTS.has(code)) return <p>{t('backup.recoveryFailedIosHelp')}</p>;
   if (phase === 'fresh-base') {
     return (

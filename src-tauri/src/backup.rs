@@ -672,6 +672,37 @@ pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupErro
     Ok(())
 }
 
+/// Jeton de restauration que porte une base : l'`application_id` de son en-tête SQLite (32 bits, inutilisé par l'app), `None` s'il vaut 0, si le
+/// fichier manque ou s'il est illisible. La base en place PORTE la preuve de la restauration : elle ne dépend d'aucun fichier voisin.
+pub fn database_token(db: &Path) -> Option<u32> {
+    let conn = open_read_only(db).ok()?;
+    let raw: i64 = conn.query_row("PRAGMA application_id", [], |r| r.get(0)).ok()?;
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let token = raw as i32 as u32;
+    (token != 0).then_some(token)
+}
+
+/// Jeton du fichier préparé (`.restoring`) à côté de `db_path`.
+pub fn staged_restore_token(db_path: &Path) -> Option<u32> {
+    database_token(&sidecar(db_path, STAGING_SUFFIX))
+}
+
+/// Écrit un jeton aléatoire non nul, différent de celui de la base actuelle, dans le fichier PRÉPARÉ (comme `carry_app_lock`), avant l'échange.
+/// Le jeton passe ensuite dans le marqueur provisoire ; au démarrage la restauration est confirmée seulement si la base en place le porte.
+fn stamp_restore_token(staged: &Path, current_db: &Path) -> Result<u32, BackupError> {
+    let current = database_token(current_db);
+    let token = std::iter::repeat_with(rand::random::<u32>).find(|t| *t != 0 && Some(*t) != current).unwrap_or(1);
+    let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+    #[allow(clippy::cast_possible_wrap)]
+    conn.pragma_update(None, "application_id", token as i32).map_err(sql_err)?;
+    drop(conn);
+    if database_token(staged) == Some(token) {
+        Ok(token)
+    } else {
+        Err(BackupError::new("io", "jeton de restauration non écrit"))
+    }
+}
+
 /// Des fichiers `.restore-old` existent-ils ? (restauration interrompue, ou retour arrière incomplet `rollback-failed`)
 pub fn has_pending_restore(db_path: &Path) -> bool {
     ["", "-wal", "-shm"].iter().any(|suffix| present(&sidecar(&sidecar(db_path, suffix), OLD_SUFFIX)))
@@ -701,11 +732,10 @@ pub fn utc_stamp(secs: u64) -> String {
 /// Ce qu'a fait la récupération au démarrage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Recovery {
-    /// Rien à récupérer : aucun `.restoring` ni `.restore-old`. Si un marqueur provisoire existe encore, l'échange avait abouti et son
-    /// ménage aussi : le marqueur doit être confirmé.
+    /// Rien à récupérer : aucun `.restoring` ni `.restore-old`. AMBIGU pour un marqueur provisoire : l'échange a pu réussir (ménage fait) ou
+    /// échouer proprement (retour arrière fait). Seul le jeton de la base en place tranche.
     Nothing,
-    /// Un fichier préparé (`.restoring`, ou ses restes) orphelin a été supprimé, sans `.restore-old` : l'échange n'avait pas commencé, la
-    /// version n'a jamais été en place. Un marqueur provisoire doit être annulé.
+    /// Un fichier préparé (`.restoring`, ou ses restes) orphelin a été supprimé, sans `.restore-old` : l'échange n'avait pas commencé.
     StagedRemoved,
     /// Des fichiers de l'ancienne base ont été remis en place (base, `-wal`, `-shm`).
     PutBack,
@@ -726,22 +756,11 @@ pub enum Recovery {
 /// l'erreur `unsafe-restore-file` est renvoyée. Une cible déjà occupée n'est jamais écrasée (`recovery-conflict`). Un `.restoring` orphelin est
 /// une copie préparée d'une sauvegarde qui existe toujours : il est supprimé s'il est ordinaire (sinon `unsafe-restore-file`). Toute erreur de
 /// renommage est propagée : l'appelant n'ouvre alors pas la base (voir `desktop.rs`).
+///
+/// L'issue ne décide PAS du marqueur de restauration : `Nothing` est ambigu (échange jamais commencé ET déjà nettoyé, ou échange abouti et
+/// déjà nettoyé). Le règlement du marqueur provisoire se fait au démarrage par le jeton que porte la base en place
+/// (`startup_gate::settle_provisional_marker`, `database_token`).
 pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result<Recovery, BackupError> {
-    recover_interrupted_restore_with(db_path, backups_dir, &|_| true)
-}
-
-/// Comme `recover_interrupted_restore`, avec un crochet appelé AVANT toute suppression ou remise en place qui effacerait la preuve d'une
-/// restauration non aboutie (`StagedRemoved` : suppression des `.restoring` ; `PutBack` : renommage des `.restore-old`). Le crochet annule le
-/// marqueur provisoire ; s'il rend faux, rien n'est touché et l'erreur `marker-cancel-failed` est renvoyée : au démarrage suivant la preuve est
-/// toujours là et l'issue est de nouveau `StagedRemoved` / `PutBack`, jamais `Nothing` (qui ferait confirmer une version non restaurée).
-pub fn recover_interrupted_restore_with(db_path: &Path, backups_dir: &Path, before_cancel: &dyn Fn(Recovery) -> bool) -> Result<Recovery, BackupError> {
-    let cancel = |outcome: Recovery| -> Result<(), BackupError> {
-        if before_cancel(outcome) {
-            Ok(())
-        } else {
-            Err(BackupError::new("marker-cancel-failed", "le marqueur de restauration provisoire n'a pas pu être annulé"))
-        }
-    };
     let fail = |code: &'static str, e: io::Error| BackupError::new(code, e.to_string());
     let old_of = |suffix: &str| sidecar(&sidecar(db_path, suffix), OLD_SUFFIX);
     let olds: Vec<(&str, PathBuf)> = ["", "-wal", "-shm"].into_iter().map(|suffix| (suffix, old_of(suffix))).collect();
@@ -771,8 +790,6 @@ pub fn recover_interrupted_restore_with(db_path: &Path, backups_dir: &Path, befo
     let journal_old = olds[1..].iter().any(|(_, old)| present(old));
     let put_back = (db_present && !main_old && journal_old) || (!db_present && main_old);
     if staged_removed && !put_back && !(db_present && main_old) {
-        // La preuve (le fichier préparé) n'est supprimée qu'après l'annulation du marqueur.
-        cancel(Recovery::StagedRemoved)?;
         remove_leftovers()?;
         return Ok(Recovery::StagedRemoved);
     }
@@ -817,8 +834,6 @@ pub fn recover_interrupted_restore_with(db_path: &Path, backups_dir: &Path, befo
         if olds.iter().any(|(suffix, old)| present(old) && present(&sidecar(db_path, suffix))) {
             return Err(BackupError::new("recovery-conflict", "un fichier de la base existe déjà : l'ancien n'est pas écrasé"));
         }
-        // Les `.restore-old` sont la preuve : le marqueur provisoire est annulé AVANT de les renommer.
-        cancel(Recovery::PutBack)?;
         remove_leftovers()?;
         for (suffix, old) in &olds {
             if present(old) {
@@ -919,6 +934,8 @@ pub fn restore_backup_file(
         .and_then(|_| reset_triggers(&staged))
         // P-04-iOS critère 11 : la valeur actuelle du verrouillage prévaut, recopiée sur le fichier préparé AVANT l'échange.
         .and_then(|()| carry_app_lock(db_path, &staged))
+        // Jeton de restauration dans le fichier préparé : la base en place prouvera que CETTE restauration a eu lieu.
+        .and_then(|()| stamp_restore_token(&staged, db_path).map(|_| ()))
         .and_then(|()| hook(RestoreStep::Staged).map_err(io_err));
     if let Err(error) = prepared {
         let _ = fs::remove_file(&staged);
@@ -948,12 +965,21 @@ pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str,
 
 /// Comme `write_restore_marker`, provisoire (avant l'échange) ou confirmé.
 pub fn write_restore_marker_as(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32, provisional: bool) -> Result<bool, crate::sync::SyncError> {
+    write_restore_marker_token(config_dir, backups_dir, backup, restored_at_secs, schema_version, None, provisional)
+}
+
+/// Marqueur provisoire portant le jeton de restauration (`token`), ou confirmé (`provisional` faux).
+pub fn write_provisional_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32, token: u32) -> Result<bool, crate::sync::SyncError> {
+    write_restore_marker_token(config_dir, backups_dir, backup, restored_at_secs, schema_version, Some(token), true)
+}
+
+fn write_restore_marker_token(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32, token: Option<u32>, provisional: bool) -> Result<bool, crate::sync::SyncError> {
     let taken = fs::metadata(backups_dir.join(backup))
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(restored_at_secs, |d| d.as_secs());
-    crate::sync::marker::write_marker(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version), provisional)
+    crate::sync::marker::write_marker_token(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version), provisional, token)
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {

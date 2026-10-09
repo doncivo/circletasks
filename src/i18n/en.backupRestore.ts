@@ -17,6 +17,5 @@ export const backupRestoreEn: { readonly [K in keyof typeof backupRestoreFr]: st
   recoveryContinue: 'Continue',
   recoveryStillFailed: 'Recovery is still impossible: close and reopen CircleTasks. If the message comes back, copy the details.',
   recoveryNoDataDir: 'The app data folder cannot be found: close and reopen CircleTasks. Nothing was changed.',
-  recoveryMarkerCancel: 'An interrupted restore could not be cancelled cleanly (the restore marker could not be written). Nothing was deleted: close and reopen CircleTasks to retry. Your data is untouched.',
   recoverySqlPlugin: 'The database module did not start: close and reopen CircleTasks. Your data is untouched.',
 };

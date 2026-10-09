@@ -51,6 +51,7 @@ function restoreDescription(restore: RestoreContext): string {
   const inReset = restore.notice === 'reset-in-progress' || restore.notice === 'reset-finish';
   if (restore.failure) return inReset ? t('sync.restore.failedReset') : t('sync.restore.failed', { reason: resetReason(restore.failure.code) });
   if (restore.notice === 'scan-failed') return t(restore.options.length > 0 ? 'sync.restore.scanFailed' : 'sync.restore.scanFailedNoOption');
+  if (restore.notice === 'provisional') return t(restore.options.length > 0 ? 'sync.restore.provisional' : 'sync.restore.provisionalNoOption');
   if (restore.notice === 'reset-finish') return t('sync.restore.resetFinish');
   if (restore.notice === 'reset-in-progress') return t('sync.restore.resetInProgress');
   return t(restore.options.includes('keep-synced') ? 'sync.restore.body' : 'sync.restore.bodyOnlyApply');

@@ -557,9 +557,8 @@ fn crashed_at(stop: Option<RestoreStep>) -> tempfile::TempDir {
 
 /// Démarrage : récupération puis règlement du marqueur ; rend l'issue de la récupération et le marqueur lu ensuite.
 fn start(dir: &Path) -> (circletasks_lib::backup::Recovery, Option<circletasks_lib::sync::marker::RestoreMarker>) {
-    use circletasks_lib::backup::recover_interrupted_restore;
-    let recovery = recover_interrupted_restore(&dir.join(DB_FILE), &dir.join(BACKUP_DIR));
-    circletasks_lib::startup_gate::settle_provisional_marker(dir, &recovery);
+    // Chemin de production : `recover_and_settle` (récupération, puis règlement du marqueur d'après la base en place).
+    let recovery = circletasks_lib::startup_gate::recover_and_settle(dir);
     (recovery.expect("récupération"), circletasks_lib::sync::marker::read(dir).unwrap())
 }
 
@@ -602,7 +601,6 @@ fn p04_ios_marker_after_the_swap_with_restore_old_is_archived_and_confirmed() {
 
 #[test]
 fn p04_ios_marker_after_the_swap_without_restore_old_is_nothing_and_still_confirmed() {
-    use circletasks_lib::backup::Recovery;
     // Triple échec : confirmation au point Swapped, nouvel essai, puis relance à froid. Les `.restore-old` ont déjà été retirés, la
     // version restaurée est en place, et le marqueur est resté provisoire.
     let dir = crashed_at(Some(RestoreStep::Swapped));
@@ -611,7 +609,8 @@ fn p04_ios_marker_after_the_swap_without_restore_old_is_nothing_and_still_confir
     }
     assert!(!dir.path().join("circletasks.db.restore-old").exists());
     // Le point Swapped a confirmé le marqueur avant l'arrêt : on le remet provisoire, comme si la confirmation avait échoué.
-    circletasks_lib::backup::write_restore_marker_as(dir.path(), &dir.path().join(BACKUP_DIR), "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, true).unwrap();
+    let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).expect("la base en place porte le jeton de la restauration");
+    circletasks_lib::backup::write_provisional_marker(dir.path(), &dir.path().join(BACKUP_DIR), "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, token).unwrap();
     assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
     let (recovery, marker) = start(dir.path());
     assert_eq!(recovery, circletasks_lib::backup::Recovery::Nothing);
@@ -645,29 +644,108 @@ fn cancellation_fails_then_next_launch_cancels(stop: RestoreStep, evidence: &str
     blocker.push(circletasks_lib::sync::names::TEMP_SUFFIX);
     let blocker = std::path::PathBuf::from(blocker);
     fs::create_dir(&blocker).unwrap();
-    // Annulation impossible : récupération en échec visible, preuve intacte, marqueur toujours provisoire (jamais confirmé).
-    for _ in 0..2 {
-        assert_eq!(recover_and_settle(dir.path()).unwrap_err().code, "marker-cancel-failed");
-        assert!(dir.path().join(evidence).exists(), "la preuve {evidence} reste");
-        assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
-    }
-    // Le blocage disparaît : le démarrage suivant retrouve la même issue et annule (marqueur d'avant remis).
-    fs::remove_dir(&blocker).unwrap();
+    // Annulation impossible : la récupération n'est PAS bloquée (la preuve disparaît), le marqueur reste provisoire (jamais confirmé).
     assert_eq!(recover_and_settle(dir.path()).unwrap(), expected);
+    assert!(!dir.path().join(evidence).exists(), "la récupération a eu lieu : {evidence} n'est plus là");
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    // Sans preuve (le démarrage suivant voit `Nothing`), le jeton de la base en place décide encore : toujours pas confirmé.
+    assert_eq!(recover_and_settle(dir.path()).unwrap(), circletasks_lib::backup::Recovery::Nothing);
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    // Le blocage disparaît : le démarrage suivant annule (marqueur d'avant remis), il ne confirme jamais.
+    fs::remove_dir(&blocker).unwrap();
+    assert_eq!(recover_and_settle(dir.path()).unwrap(), circletasks_lib::backup::Recovery::Nothing);
     let marker = circletasks_lib::sync::marker::read(dir.path()).unwrap().expect("marqueur d'avant");
     assert_eq!(marker.backup, "ancien");
     assert!(!marker.provisional);
-    assert!(!dir.path().join(evidence).exists());
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"));
 }
 
 #[test]
-fn p04_ios_marker_cancellation_failure_after_staged_keeps_the_staged_file_and_never_confirms() {
+fn p04_ios_marker_cancellation_failure_after_staged_never_confirms_even_without_the_staged_file() {
     cancellation_fails_then_next_launch_cancels(RestoreStep::Staged, "circletasks.db.restoring", circletasks_lib::backup::Recovery::StagedRemoved);
 }
 
 #[test]
-fn p04_ios_marker_cancellation_failure_before_put_back_keeps_the_restore_old_and_never_confirms() {
+fn p04_ios_marker_cancellation_failure_before_put_back_never_confirms_even_without_the_restore_old() {
     cancellation_fails_then_next_launch_cancels(RestoreStep::OldMoved, "circletasks.db.restore-old", circletasks_lib::backup::Recovery::PutBack);
+}
+
+#[test]
+fn p04_ios_marker_clean_swap_failure_with_blocked_undo_is_never_confirmed_and_blocks_a_new_restore() {
+    use circletasks_lib::startup_gate::{restore_with_provisional_marker, PREVIOUS_MARKER_FILE};
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), Some("true"));
+    sync_configured(dir.path());
+    let marker_path = dir.path().join(circletasks_lib::sync::marker::MARKER_FILE);
+    fs::write(&marker_path, br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    let mut blocker = marker_path.as_os_str().to_owned();
+    blocker.push(circletasks_lib::sync::names::TEMP_SUFFIX);
+    let blocker = std::path::PathBuf::from(blocker);
+    // Le marqueur provisoire est écrit au point Staged ; le blocage est posé juste après, puis l'échange échoue PROPREMENT (retour arrière
+    // réussi, `.restoring` supprimé) : l'annulation du marqueur échoue, aucune preuve ne reste dans le dossier.
+    let blocker_in_hook = blocker.clone();
+    let hook = move |step: RestoreStep| -> std::io::Result<()> {
+        match step {
+            RestoreStep::Staged => fs::create_dir(&blocker_in_hook),
+            RestoreStep::OldMoved => Err(std::io::Error::other("échec simulé")),
+            RestoreStep::Swapped => Ok(()),
+        }
+    };
+    let error = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook).unwrap_err();
+    assert_eq!(error.code, "io");
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()), "annulation impossible : le marqueur reste provisoire");
+    assert!(!dir.path().join("circletasks.db.restoring").exists() && !dir.path().join("circletasks.db.restore-old").exists(), "aucune preuve");
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"), "l'ancienne base est en place");
+    let previous = fs::read(dir.path().join(PREVIOUS_MARKER_FILE)).expect("le marqueur d'avant est gardé");
+    // Une nouvelle restauration est refusée tant que le marqueur est provisoire : le marqueur d'avant n'est pas écrasé.
+    let refused = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080001Z", 1_791_446_401, &|_| Ok(())).unwrap_err();
+    assert_eq!(refused.code, "restore-pending");
+    assert_eq!(fs::read(dir.path().join(PREVIOUS_MARKER_FILE)).unwrap(), previous);
+    // Démarrage avec le blocage encore là : pas de confirmation (la base en place ne porte pas le jeton).
+    let (_, marker) = start(dir.path());
+    assert!(marker.expect("marqueur").provisional);
+    // Blocage levé : le démarrage annule (marqueur d'avant remis). Jamais confirmé.
+    fs::remove_dir(&blocker).unwrap();
+    let (_, marker) = start(dir.path());
+    let marker = marker.expect("marqueur d'avant");
+    assert_eq!(marker.backup, "ancien");
+    assert!(!marker.provisional);
+    assert!(!dir.path().join(PREVIOUS_MARKER_FILE).exists());
+}
+
+#[test]
+fn p04_ios_marker_provisional_without_a_matching_token_is_cancelled_whatever_the_recovery() {
+    use circletasks_lib::backup::write_restore_marker_as;
+    // Marqueur provisoire sans jeton (ancien format), ou avec un autre jeton : la base en place ne le prouve pas -> annulé.
+    for token in [None, Some(0x1234_5678_u32)] {
+        let dir = crashed_at(None);
+        let backups = dir.path().join(BACKUP_DIR);
+        match token {
+            None => assert!(write_restore_marker_as(dir.path(), &backups, "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, true).unwrap()),
+            Some(token) => assert!(circletasks_lib::backup::write_provisional_marker(dir.path(), &backups, "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, token).unwrap()),
+        }
+        assert_eq!(start(dir.path()), (circletasks_lib::backup::Recovery::Nothing, None), "{token:?}");
+    }
+}
+
+#[test]
+fn p04_ios_restore_stamps_a_fresh_token_that_the_database_in_place_carries() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), None);
+    assert_eq!(circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)), None);
+    let mut seen = Vec::new();
+    for n in 0..3 {
+        restore_backup_file(&dir.path().join(DB_FILE), &backups, "circletasks-daily-20261007.db", APP_SCHEMA_VERSION, &format!("20261008T08000{n}Z"), &|_| Ok(())).unwrap();
+        let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).expect("jeton");
+        assert!(!seen.contains(&token), "chaque restauration a son jeton");
+        seen.push(token);
+    }
 }
 
 #[test]

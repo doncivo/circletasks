@@ -96,4 +96,16 @@ describe('fenêtre de restauration (point 3)', () => {
     expect(screen.getByText(t('sync.restore.scanFailed'))).toBeTruthy();
     expect(screen.queryByText(t('sync.restore.applyEverywhere'))).toBeNull();
   });
+
+  it('marqueur provisoire non réglé : le texte le dit et demande de rouvrir, sans « Appliquer partout »', async () => {
+    sync.restore = {
+      marker: { backup: 'b', backupTakenAt: '2026-10-05T07:00:00.000Z' as IsoDateTime, restoredAt: '2026-10-05T07:30:00.000Z' as IsoDateTime, schemaVersion: 1, provisional: true },
+      options: ['keep-synced'],
+      notice: 'provisional',
+    };
+    await syncStore.get(container).getState().openRestore();
+    renderIn(<RestoreChoiceDialog />);
+    expect(screen.getByText(t('sync.restore.provisional'))).toBeTruthy();
+    expect(screen.queryByText(t('sync.restore.applyEverywhere'))).toBeNull();
+  });
 });

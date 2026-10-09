@@ -36,13 +36,6 @@ describe('RecoveryFailure', () => {
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('marker-cancel-failed : alerte visible avec le code, rien supprimé, consigne de rouvrir', () => {
-    render(<RecoveryFailure message="startup-recovery: marker-cancel-failed" />);
-    expect(screen.getByRole('alert')).toHaveTextContent('Rien n’a été supprimé');
-    expect(screen.getByRole('alert')).toHaveTextContent('Code : marker-cancel-failed');
-    expect(screen.queryByRole('button')).toBeNull();
-  });
-
   it('no-data-dir et sql-plugin : texte propre, aucune action vaine', () => {
     render(<RecoveryFailure message="startup-recovery: no-data-dir" />);
     expect(screen.getByText(/dossier des données de l’app est introuvable/)).toBeInTheDocument();
