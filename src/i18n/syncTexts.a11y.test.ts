@@ -56,6 +56,9 @@ describe('textes de synchro : cohérence des libellés', () => {
       ['sync.reset.syncFirst', 'sync.reset.syncFirstLabel'],
       ['sync.conflicts.restore', 'sync.conflicts.restoreLabel'],
       ['status.syncTroubleView', 'status.syncTroubleViewLabel'],
+      ['status.syncTroubleView', 'status.signingViewLabel'],
+      ['signing.about.allow', 'signing.about.allowLabel'],
+      ['signing.about.viewReminders', 'signing.about.viewRemindersLabel'],
     ];
     for (const catalog of [fr, en]) {
       const flat = flatten(catalog as unknown as Tree);

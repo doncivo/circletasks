@@ -35,6 +35,34 @@ describe('TaskRepository (SQL)', () => {
     expect(read).toEqual(created);
   });
 
+  it('create idempotent (l’appelant fournit l’id) : un id déjà présent ne crée pas de seconde ligne, la ligne existante est rendue (Q-05)', async () => {
+    const [task] = sampleTodayTasks(DAY);
+    if (!task) throw new Error('fixture manquante');
+    const first = await db.data.repos.tasks.create(task, { idempotent: true });
+    const again = await db.data.repos.tasks.create({ ...task, title: 'Autre titre' }, { idempotent: true });
+    expect(again).toEqual(first);
+    expect(again.title).toBe(task.title);
+    const rows = await db.data.repos.tasks.listForDay(DAY, 'all');
+    expect(rows.filter((row) => row.id === task.id)).toHaveLength(1);
+  });
+
+  it('create idempotent dont la ligne existante est introuvable (corbeille) : RepositoryError conflict, jamais une tâche inventée', async () => {
+    const [task] = sampleTodayTasks(DAY);
+    if (!task) throw new Error('fixture manquante');
+    await db.data.repos.tasks.create(task);
+    await db.data.repos.tasks.softDelete([task.id]);
+    await expect(db.data.repos.tasks.create(task, { idempotent: true })).rejects.toMatchObject({ name: 'RepositoryError', code: 'conflict', entity: 'task', entityId: task.id });
+  });
+
+  it('create sans l’option idempotente : un id déjà présent lève comme avant (contrainte), aucune seconde ligne', async () => {
+    const [task] = sampleTodayTasks(DAY);
+    if (!task) throw new Error('fixture manquante');
+    await db.data.repos.tasks.create(task);
+    await expect(db.data.repos.tasks.create({ ...task, title: 'Autre titre' })).rejects.toMatchObject({ code: 'constraint' });
+    const rows = await db.data.repos.tasks.listForDay(DAY, 'all');
+    expect(rows.filter((row) => row.id === task.id)).toHaveLength(1);
+  });
+
   it('createMany insère plusieurs tâches en conservant leurs champs', async () => {
     const created = await db.data.repos.tasks.createMany(sampleTodayTasks(DAY));
     expect(created).toHaveLength(2);

@@ -19,6 +19,7 @@ export { Kbd, tokenLabel, type KbdProps } from './Kbd';
 export { TabRail, type TabRailItem, type TabRailProps } from './TabRail';
 export { AppShell, useDetailSlot, type AppShellProps } from './AppShell';
 export { Fab, type FabProps } from './Fab';
+export { openNow } from './openNow';
 export { SpacePills, type SpacePillItem, type SpacePillsProps } from './SpacePills';
 export { useFocusTrap, type UseFocusTrapOptions } from './useFocusTrap';
 export { DetailPanel, type DetailPanelProps } from './DetailPanel';

@@ -23,6 +23,7 @@ import { openSyncPlatform } from '../../platform/sync';
 import { openHaptics, type Haptics } from '../../platform/haptics';
 import { openAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { openPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
+import { openSigning, type SigningPlatform } from '../../platform/signing';
 import { openSpeechRecognizer, setSpeechRecognizer, unavailableSpeech } from '../../platform/speech';
 import { openSystemSettings, setSystemSettings } from '../../platform/systemSettings';
 import type { SyncPlatform } from '../../platform/sync/types';
@@ -155,6 +156,8 @@ export interface BootstrapAppOptions {
   readonly authenticator?: AppAuthenticator;
   /** Cache de confidentialité natif (I-03) ; `openPrivacyShield` par défaut. */
   readonly privacyShield?: PrivacyShield;
+  /** Expiration de la signature (I-02) ; `openSigning` par défaut. */
+  readonly signing?: SigningPlatform;
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -251,6 +254,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       haptics: options.haptics ?? at('openHaptics', () => openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) })),
       authenticator: options.authenticator ?? at('openAuthenticator', () => openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) })),
       privacyShield: options.privacyShield ?? at('openPrivacyShield', () => openPrivacyShield(runtime, os)),
+      signing: options.signing ?? at('openSigning', () => openSigning(runtime, os)),
     };
     return at('createAppContainer', () => createAppContainer(deps));
   } catch (error) {

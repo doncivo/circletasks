@@ -2,7 +2,7 @@ import { Undo2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import { t } from '../../i18n';
-import { CompactToggle, EditModeSwitch, Fab, Icon, SomedayIcon, useDelayedFlag, useLayout } from '../../ui';
+import { CompactToggle, EditModeSwitch, Fab, Icon, SomedayIcon, openNow, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -44,7 +44,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   // Ctrl+N : même feuille « Nouvelle tâche » que le bouton « + » (présélectionnée sur « Un jour »).
-  useEffect(() => container.shortcuts.register('app.newTask', () => setSheetOpen(true)), [container]);
+  useEffect(() => container.shortcuts.register('app.newTask', () => openNow(() => setSheetOpen(true))), [container]);
 
   return (
     <div ref={rootRef} className="ct-someday" data-layout="mobile">
@@ -77,7 +77,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
       <SomedaySelectionBar edit={state.edit} view={view} />
       <div className="ct-someday__bottomRow">
         <EditModeSwitch active={state.edit.editMode} onChange={state.edit.setEditMode} label={t('today.editMode')} />
-        <Fab onClick={() => setSheetOpen(true)} label={t('common.add')} />
+        <Fab onClick={() => openNow(() => setSheetOpen(true))} label={t('common.add')} />
       </div>
       {sheetOpen && (
         <TaskCreateSheet
@@ -100,6 +100,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
               icon: input.icon,
               reminderOffsets: input.reminderOffsets,
               goalId: input.goalId,
+              id: input.taskId,
             });
             if (result.ok) view.announceCreation(input.spaceId);
             return result.ok;

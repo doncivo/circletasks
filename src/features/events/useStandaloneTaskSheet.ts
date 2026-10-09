@@ -19,7 +19,7 @@ export function useStandaloneTaskSheet(viewedDate: LocalDate): AddSheetProps['ta
       viewedDate,
       initialProjectId: projectFilter,
       onCreate: async (input) => {
-        const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId }, input.icon, input.projectId);
+        const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId, taskId: input.taskId }, input.icon, input.projectId);
         if (result.ok) announceCreation(input.spaceId);
         return result.ok;
       },

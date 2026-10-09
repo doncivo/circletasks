@@ -22,6 +22,7 @@ import { createNoopFocusEndScheduler, type FocusEndScheduler, type FocusWindowPl
 import { createNoopHaptics, type Haptics } from '../../platform/haptics';
 import { createUnavailableAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { createNoopPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
+import { createUnsupportedSigning, type SigningPlatform } from '../../platform/signing';
 import { createSettingsLedger } from '../reminders/settingsLedger';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
@@ -94,6 +95,8 @@ export interface AppContainer {
   readonly authenticator: AppAuthenticator;
   /** Cache de confidentialité natif (I-03, ADR 0013 §2.5) : plugin local sur l'iPhone installé, vide ailleurs. */
   readonly privacyShield: PrivacyShield;
+  /** Expiration de la signature SideStore (I-02, ADR 0013 §3) : lecture du profil et alerte (identifiant réservé 2) sur l'iPhone installé, non prise en charge ailleurs. */
+  readonly signing: SigningPlatform;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -146,6 +149,7 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     haptics: parts.haptics ?? createNoopHaptics(),
     authenticator: parts.authenticator ?? createUnavailableAuthenticator(),
     privacyShield: parts.privacyShield ?? createNoopPrivacyShield(),
+    signing: parts.signing ?? createUnsupportedSigning(),
   };
 }
 

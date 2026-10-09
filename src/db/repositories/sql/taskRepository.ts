@@ -17,7 +17,7 @@ import type { WriteStamper, WriteStamp } from '../../../domain/hlc';
 import { addDays } from '../../../domain/localDate';
 import type { SqlExecutor, SqlRow, SqlValue } from '../../driver';
 import type { RecurrenceRepository, TaskRepository } from '../taskRepository';
-import type { InstantRange, ReadOptions, SortOrderEntry } from '../common';
+import { RepositoryError, type InstantRange, type ReadOptions, type SortOrderEntry } from '../common';
 import { deletedClause, fromJson, fromJsonOrNull, inClause, readSyncMeta, requireMapped, requireRow, spaceFilterClause, toJson, type SyncRow } from './sqlHelpers';
 
 interface TaskRow extends SqlRow, SyncRow {
@@ -156,11 +156,13 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
       return requireMapped(await fetchById(id, { includeDeleted: true }), 'task', id, rowToTask);
     },
 
-    async create(task: NewTask) {
+    async create(task: NewTask, options?: { readonly idempotent?: boolean }) {
       const stamp = stamper.next();
-      await db.execute(
+      const written = await db.execute(
+        // Écriture idempotente (Q-05, option `idempotent`) : un id déjà présent est ignoré (« Réessayer » rejoue la même création).
         `INSERT INTO task (${TASK_COLUMNS})
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+         ${options?.idempotent ? 'ON CONFLICT(id) DO NOTHING' : ''}`,
         [
           task.id,
           task.spaceId,
@@ -190,6 +192,12 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
           stamp.hlc,
         ],
       );
+      if (written.rowsAffected === 0) {
+        // Jamais une tâche inventée : la ligne existante est rendue, sinon l'échec est dit.
+        const existing = await this.getById(task.id);
+        if (!existing) throw new RepositoryError('conflict', 'task', task.id);
+        return existing;
+      }
       return taskFromNew(task, stamp);
     },
 

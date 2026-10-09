@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { todayLocal } from '../../domain/clock';
 import { uuidGenerator } from '../../domain/id';
 import { ScheduleInvariantError } from '../../domain/taskSchedule';
-import { asEntityId, asLocalDate, asLocalTime, type DeviceId } from '../../domain/types';
+import { asEntityId, asLocalDate, asLocalTime, type DeviceId, type TaskId } from '../../domain/types';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { createTaskEntities } from '../app/taskEntities';
@@ -251,5 +251,25 @@ describe('createTaskUseCases.complete / reopen (T-04)', () => {
     expect(result.status).toBe('stale');
     const reread = await db.data.repos.tasks.getById(created.value.id);
     expect(reread?.status).toBe('done'); // rien écrit par l'annulation périmée
+  });
+
+  it('Q-05 : deux créations avec le même id (Réessayer) donnent une seule tâche, la seconde rend la première comme une réussite', async () => {
+    const id = asEntityId<TaskId>('40000000-0000-4000-8000-0000000000aa');
+    const first = await useCases.create({ id, title: 'Appeler le notaire', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-10-05'), time: asLocalTime('10:00'), reminderOffsets: [0] });
+    const second = await useCases.create({ id, title: 'Appeler le notaire', spaceId: SPACE_PRO_ID, date: asLocalDate('2026-10-05'), time: asLocalTime('10:00'), reminderOffsets: [0] });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+    expect(second.value.id).toBe(id);
+    const day = await db.data.repos.tasks.listForDay(asLocalDate('2026-10-05'), 'all');
+    expect(day.filter((task) => task.title === 'Appeler le notaire')).toHaveLength(1);
+    expect(await db.data.repos.reminders.listForTarget({ type: 'task', id })).toHaveLength(1);
+  });
+
+  it('Q-05 : deux créations simultanées avec le même id (écriture en file) donnent une seule tâche', async () => {
+    const id = asEntityId<TaskId>('40000000-0000-4000-8000-0000000000ab');
+    const results = await Promise.all([useCases.create({ id, title: 'En file', spaceId: SPACE_PRO_ID }), useCases.create({ id, title: 'En file', spaceId: SPACE_PRO_ID })]);
+    expect(results.every((result) => result.ok)).toBe(true);
+    const day = await db.data.repos.tasks.listForDay(todayLocal(db.clock), 'all');
+    expect(day.filter((task) => task.title === 'En file')).toHaveLength(1);
   });
 });

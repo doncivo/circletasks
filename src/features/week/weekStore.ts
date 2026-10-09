@@ -35,6 +35,8 @@ export interface NewWeekTask {
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
   /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
   readonly goalId?: GoalId | null;
+  /** Q-05 : identifiant de la tâche (écriture idempotente de la feuille d'ajout). */
+  readonly taskId?: TaskId;
 }
 
 /** `addTask` peut en plus échouer pour une raison imprévue (écriture en base). */
@@ -208,6 +210,7 @@ export const weekStore = defineFeatureStore<WeekState>((container: AppContainer)
           ...(input.recurrence ? { recurrence: input.recurrence } : {}),
           ...(input.reminderOffsets && input.reminderOffsets.length > 0 ? { reminderOffsets: input.reminderOffsets } : {}),
           ...(input.goalId ? { goalId: input.goalId } : {}),
+          ...(input.taskId ? { id: input.taskId } : {}),
         });
       } catch {
         set({ actionErrorKey: 'week.addError' });

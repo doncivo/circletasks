@@ -26,6 +26,7 @@ mod restore_ios;
 mod restore_qa_ios;
 mod restore_recovery;
 mod shortcut;
+mod signing;
 mod speech;
 mod support;
 mod sync_bookmark;

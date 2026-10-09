@@ -28,9 +28,13 @@ export interface NewTaskSchedule {
   readonly reminderOffsets?: readonly ReminderOffsetMin[];
   /** OB-03 : objectif auquel la tâche est rattachée à sa création (feuille d'ajout). */
   readonly goalId?: GoalId | null;
+  /** Q-05 : identifiant de la tâche à créer (écriture idempotente). */
+  readonly taskId?: TaskId;
 }
 
 export interface CreateTaskInput {
+  /** Q-05 : identifiant choisi par l'appelant (la feuille « Nouvelle tâche » le tire une fois par saisie) : une seconde création avec le même id rend la tâche déjà écrite. */
+  readonly id?: TaskId;
   /** Saisie brute ; trim et validation par src/domain. */
   readonly title: string;
   /** Espace résolu par l'appelant : filtre actif, sinon réglage `spaces.defaultSpaceId` (ES-02). */

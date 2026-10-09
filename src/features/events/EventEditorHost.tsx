@@ -9,7 +9,7 @@ import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { onEventsChanged } from './eventEvents';
-import { EventForm } from './EventForm';
+import { LazyEventForm } from './lazyEventForm';
 import { createEventUseCases, type EventInput } from './eventUseCases';
 
 function EditorPanel({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
@@ -79,7 +79,7 @@ function EventEditor({ id }: { id: EventId }) {
 
   const label = t('events.sheet.editTitle');
   const form = (
-    <EventForm
+    <LazyEventForm
       event={event}
       spaces={spaces}
       initialSpaceId={event.spaceId}

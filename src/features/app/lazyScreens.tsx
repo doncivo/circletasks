@@ -62,7 +62,7 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
  * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état). Le composant paresseux est
  * propre à chaque instance : un « Réessayer » n'en touche aucune autre.
  */
-export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName): ComponentType<P> {
+export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName): ComponentType<P> & { readonly preload: () => Promise<void> } {
   let loaded: ComponentType<P> | null = null;
   const remember = (): Promise<{ default: ComponentType<P> }> =>
     loaded
@@ -74,7 +74,7 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName)
           })
           .finally(() => markLoaded(name));
   loaders.push(remember);
-  return function LazyScreen(props: P): ReactElement {
+  function LazyScreen(props: P): ReactElement {
     const [direct] = useState(() => loaded);
     const [Lazy, setLazy] = useState(() => lazy<ComponentType<P>>(remember));
     const [attempt, setAttempt] = useState(0);
@@ -91,7 +91,9 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName)
         {body}
       </ScreenErrorBoundary>
     );
-  };
+  }
+  // Chargement à la demande du module (feuilles qui l'ouvrent sur un geste : prêt avant le geste, rendu direct, focus dans le geste).
+  return Object.assign(LazyScreen, { preload: (): Promise<void> => remember().then(() => undefined) });
 }
 
 export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })), 'reportscreen');

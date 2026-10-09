@@ -31,7 +31,8 @@ describe('bundle de départ (index.html)', () => {
     outDir = mkdtempSync(join(tmpdir(), 'ct-bundle-'));
     // NODE_ENV forcé : sinon le build hérite de NODE_ENV=test posé par Vitest et embarque React en mode développement, ce qui mesure
     // un bundle sans rapport avec l'app livrée.
-    const env = { ...process.env, NODE_ENV: 'production', TAURI_ENV_DEBUG: '' };
+    // VITE_CT_E2E_HOOKS vidé : le build livré n'a jamais les accroches de test des mesures @perf (playwright.config.ts le pose pour dist-perf seulement).
+    const env = { ...process.env, NODE_ENV: 'production', TAURI_ENV_DEBUG: '', VITE_CT_E2E_HOOKS: '' };
     const build = spawnSync('npm', ['run', 'build', '--', '--outDir', outDir, '--emptyOutDir', '--manifest'], { encoding: 'utf8', shell: true, env });
     if (build.status !== 0) throw new Error(`npm run build a échoué (code ${String(build.status)}) :\n${build.stdout}\n${build.stderr}`);
     manifest = JSON.parse(readFileSync(join(outDir, '.vite', 'manifest.json'), 'utf8')) as Record<string, ManifestChunk>;
@@ -101,8 +102,18 @@ describe('bundle de départ (index.html)', () => {
       });
     const scripts = files(outDir);
     expect(scripts.length).toBeGreaterThan(0);
-    for (const marker of ['__ctSyncSim', '/rpc', '__ctMap']) {
+    for (const marker of ['__ctSyncSim', '/rpc', '__ctMap', '__ctTest', '__ctSigning', '__ctHaptics', '__ctBiometric', '__ctNotifications', '__ctPrivacyShield']) {
       expect(scripts.filter((file) => readFileSync(file, 'utf8').includes(marker)), marker).toEqual([]);
     }
+  });
+
+  it('le drapeau VITE_CT_E2E_HOOKS n’existe que dans la configuration Playwright et vite.config.ts : jamais dans un workflow ni un script de livraison', () => {
+    const root = join(import.meta.dirname, '..', '..');
+    const workflows = join(root, '.github', 'workflows');
+    for (const name of readdirSync(workflows)) expect(readFileSync(join(workflows, name), 'utf8'), name).not.toContain('VITE_CT_E2E_HOOKS');
+    const pkg = readFileSync(join(root, 'package.json'), 'utf8');
+    expect(pkg).not.toContain('VITE_CT_E2E_HOOKS');
+    expect(readFileSync(join(root, 'src-tauri', 'tauri.conf.json'), 'utf8')).not.toContain('VITE_CT_E2E_HOOKS');
+    expect(readFileSync(join(root, 'playwright.config.ts'), 'utf8')).toContain("VITE_CT_E2E_HOOKS: '1'");
   });
 });

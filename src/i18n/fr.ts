@@ -28,6 +28,7 @@ import { syncPairingFr } from './fr.syncPairing';
 import { syncForgetFr } from './fr.syncForget';
 import { syncResetFr } from './fr.syncReset';
 import { securityFr } from './fr.security';
+import { signingFr } from './fr.signing';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -572,6 +573,7 @@ export const fr = {
     signingSoon: 'CircleTasks expire bientôt : actualisez-la dans SideStore',
     /** I-02 : signature expirée. */
     signingExpired: 'La signature est expirée : réinstallez l’app',
+    signingViewLabel: 'Voir l’expiration de la signature dans À propos',
   },
   today: {
     dayPrevious: 'Jour précédent',
@@ -700,6 +702,7 @@ export const fr = {
   backup: backupFr,
   importCsv: importCsvFr,
   security: securityFr,
+  signing: signingFr,
   onboarding: onboardingFr,
   shortcuts: {
     quickCapture: 'Capture rapide',

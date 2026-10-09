@@ -36,8 +36,14 @@ export interface DateWheelsProps {
  */
 export function DateWheels({ value, today, onChange, allowSomeday = true, somedayDisabledHint, showTime = true, className }: DateWheelsProps) {
   const days = useMemo(() => wheelDays(today), [today]);
+  // Libellés calculés à la lecture : la roue des jours compte 791 éléments, mais seuls ceux rendus sont formatés (Q-05, ouverture de la feuille).
   const dayItems = useMemo<WheelItem[]>(
-    () => days.map((day) => ({ label: day === today ? t('datePicker.today') : formatWheelDay(day) })),
+    () =>
+      days.map((day) => ({
+        get label(): string {
+          return day === today ? t('datePicker.today') : formatWheelDay(day);
+        },
+      })),
     [days, today],
   );
 

@@ -5,6 +5,7 @@ import { logDesktopFailure } from '../../platform';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { SigningAboutRow } from '../reminders';
 import { updaterStore } from '../updater';
 import { useLogJournal, useLogStatus } from './logs/useLogJournal';
 import { onboardingStore } from './onboardingStore';
@@ -107,6 +108,8 @@ export function AboutSection() {
           </div>
         </>
       )}
+      {/* I-02 : expiration de la signature SideStore (iPhone installé seulement : la ligne est absente sur PC et dans le navigateur). */}
+      <SigningAboutRow />
       <div className="ct-settings__row">
         <span>{t('onboarding.guideRow')}</span>
         <Button variant="secondary" ariaLabel={t('onboarding.guideOpenLabel')} onClick={() => void relaunchGuide()} className="ct-settings__link">

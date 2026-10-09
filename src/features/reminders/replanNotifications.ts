@@ -76,11 +76,23 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
   // (3) Autorisation relue à chaque passage : retirée ou rétablie dans Réglages iOS, le bandeau suit.
   const permission = await scheduler.permission();
   await status.patch((current) => ({ ...current, permission }));
-  if (permission !== 'granted') return { status: 'blocked', permission };
 
   // Fuseau et registre : le changement de fuseau et le registre reconstruit sont des informations visibles (N-06, avenant N1.2).
   const zoneName = clock.zone();
   const zone = zoneName !== null && isValidTimeZone(zoneName) ? zoneName : null;
+
+  // I-02 (ADR 0013 §3.4) : alerte d'expiration de la signature (identifiant réservé 2), APRÈS la lecture de l'autorisation et AVANT le calcul
+  // de la place disponible : elle compte dans le plafond de ce passage. Ne rejette jamais ; sans effet sur le PC et hors des déclencheurs
+  // `open`, `resume` et `permission`. L'autorisation refusée ne la planifie pas, mais la date lue reste affichée.
+  // Chargée à la demande (iPhone installé seulement, budget du bundle de départ) : jamais chargée sur le PC ni dans le navigateur.
+  let signingFailure: PlanFailureReason | null = null;
+  if (container.signing.source.supported) {
+    const signing = await import('./signingNotice');
+    await signing.runSigningStep(container, { trigger, permission, nowMs: clock.nowMs(), zone });
+    signingFailure = signing.signingAlertFailure(container);
+  }
+  if (permission !== 'granted') return { status: 'blocked', permission };
+
   const ledger = await container.notificationLedger.read();
   const ledgerZone = ledger.state === 'valid' ? ledger.ledger.zone : null;
   const zoneChange = zone !== null && ledgerZone !== null && ledgerZone !== zone ? { from: ledgerZone, to: zone } : null;
@@ -136,7 +148,8 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
       permission: 'granted',
       lastSuccess: { at, coverage: plan.coverage, total: plan.total, zone },
       // Fuseau illisible : le passage est mené à bout avec le décalage courant, puis l'état reste visible (N-06 critère 3).
-      planFailure: zone === null ? { at, reason: 'zone-unknown', count: 0, partial: null } : null,
+      // I-02 : l'échec de l'alerte d'expiration (rejet de l'envoi, absente de get_pending) reste visible jusqu'à la prochaine étape qui réussit.
+      planFailure: signingFailure !== null ? { at, reason: signingFailure, count: 1, partial: null } : zone === null ? { at, reason: 'zone-unknown', count: 0, partial: null } : null,
       zoneChange: zoneChange === null ? null : { at: current.zoneChange?.to === zoneChange.to && current.zoneChange.from === zoneChange.from ? current.zoneChange.at : at, ...zoneChange },
       ledgerRebuiltAt,
     }));

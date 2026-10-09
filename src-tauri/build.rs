@@ -61,6 +61,8 @@ fn main() {
             "log_append", "log_read", "log_clear",
             // P-04-iOS (ADR 0009 avenant lot F B3) : issue de la récupération au démarrage (iPhone).
             "backup_startup_status", "backup_set_aside_conflicts", "backup_restore_marker_write",
+            // I-02 (ADR 0013 section 3.1) : dates du profil de signature SideStore, iPhone uniquement (capability signing-ios.json).
+            "app_signing_info",
         ])),
     )
     .expect("échec de la configuration de la compilation Tauri");

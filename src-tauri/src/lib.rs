@@ -34,6 +34,8 @@ mod ios_setup;
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Expiration de la signature SideStore (I-02, ADR 0013 section 3) : analyse compilée partout, commande iOS seulement.
+pub mod signing;
 /// Appel des plugins Swift avec délai (ADR 0015 §3.1) ; compilé partout, testé avec un faux.
 pub mod mobile_call;
 /// Dictée sur l'appareil et Réglages iOS (CAP-IOS-01, ADR 0015 §2) ; la logique est testée sous Windows, les commandes sont iOS.
@@ -104,6 +106,8 @@ pub fn run() {
         backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status, startup_gate::backup_set_aside_conflicts, startup_gate::backup_restore_marker_write,
         // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
         applog::log_append, applog::log_read, applog::log_clear,
+        // I-02 (ADR 0013 section 3.1) : dates du profil de signature (lecture de embedded.mobileprovision), iOS seulement.
+        signing::app_signing_info,
         // CAP-IOS-01 (ADR 0015) : Vision derrière les commandes OCR du PC, dictée sur l'appareil, Réglages iOS. Rust seul appelle les plugins.
         ocr::ocr_status, ocr::ocr_recognize, speech::ios::speech_status, speech::ios::speech_request_permissions, speech::ios::speech_listen, speech::ios::speech_stop, speech::ios::app_settings_open,
     ]);

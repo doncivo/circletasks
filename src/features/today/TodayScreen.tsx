@@ -10,7 +10,7 @@ import { buildTodayList } from '../../domain/todayList';
 import type { EventId, LocalDate, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatWeekdayName } from '../../i18n/format';
-import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, useDelayedFlag, useLayout } from '../../ui';
+import { CompactToggle, EditModeSwitch, Fab, Icon, Kbd, openNow, useDelayedFlag, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -182,7 +182,7 @@ export function TodayScreen() {
   const { count: somedayCount } = useSomedayTasks();
   const openCreate = useCallback((): void => {
     if (layout === 'pc') inlineInputRef.current?.focus();
-    else setSheetOpen(true);
+    else openNow(() => setSheetOpen(true));
   }, [layout]);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
@@ -366,7 +366,7 @@ export function TodayScreen() {
               initialProjectId: projectFilter,
               defaultOffsets,
               onCreate: async (input) => {
-                const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId }, input.icon, input.projectId);
+                const result = await addTask(input.title, input.spaceId, { ...scheduleOf(input.choice), recurrence: input.recurrence, reminderOffsets: input.reminderOffsets, goalId: input.goalId, taskId: input.taskId }, input.icon, input.projectId);
                 if (result.ok) announceCreation(input.spaceId);
                 return result.ok;
               },

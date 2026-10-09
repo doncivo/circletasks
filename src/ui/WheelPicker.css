@@ -34,6 +34,8 @@
   scroll-snap-type: y mandatory;
   scrollbar-width: none;
   overscroll-behavior: contain;
+  /* Roue par fenêtre (Q-05) : les espaceurs gardent la hauteur, aucun recalage automatique du défilement. */
+  overflow-anchor: none;
   padding: 64px 0;
   box-sizing: border-box;
   /* Aucune sélection de texte ni retour tactile parasite pendant le défilement. */

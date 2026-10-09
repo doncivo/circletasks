@@ -1,5 +1,5 @@
 import { Trash2, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import { scheduleCountdown, nextCountdown } from '../../domain/eventCountdown';
 import { ANNUAL_DEFAULT_REMINDERS, annualStartDate, applyKind, checkBirthYear, defaultCountdown, isAnnualKind, MIN_BIRTH_YEAR, nextAnnualDate } from '../../domain/eventKinds';
@@ -117,11 +117,10 @@ export function EventForm({ event, spaces, initialSpaceId, today, initialDate, i
   const typedYearInvalid = annual && birthYearText.trim() !== '' && birthYear === null;
   const valid = validateEventTitle(title).ok && birthYearError === null && !typedYearInvalid;
 
-  // Focus dans le titre à l'ouverture : après le piège de focus de la feuille ou du panneau, qui prend le premier élément.
-  useEffect(() => {
-    if (!autoFocus) return undefined;
-    const timer = window.setTimeout(() => titleRef.current?.focus(), 0);
-    return () => window.clearTimeout(timer);
+  // Focus dans le titre dans le geste d'ouverture (Q-05, même règle que la feuille « Nouvelle tâche ») : effet de mise en page, sans minuterie ;
+  // le piège de focus de la feuille ou du panneau garde un focus déjà posé dans le formulaire. Vaut aussi au changement de segment.
+  useLayoutEffect(() => {
+    if (autoFocus) titleRef.current?.focus({ preventScroll: true });
   }, [autoFocus]);
 
   function toggleAllDay(): void {

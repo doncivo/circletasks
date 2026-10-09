@@ -12,6 +12,8 @@ export async function expectFitsViewport(page: Page, where: string): Promise<voi
     const offenders: string[] = [];
     for (const element of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
       if (element.closest('[aria-hidden="true"], .ct-visually-hidden')) continue;
+      // Seules les rangées défilantes voulues (attribut data-scroll-row) sont écartées : leur CONTENU peut dépasser, mais la rangée elle-même doit tenir.
+      if (element.parentElement?.closest('[data-scroll-row]')) continue;
       const style = getComputedStyle(element);
       if (style.display === 'none' || style.visibility === 'hidden') continue;
       const rect = element.getBoundingClientRect();
