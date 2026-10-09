@@ -410,3 +410,25 @@ fn files_ios_01_4_plugin_exposes_no_command_to_the_webview() {
     assert!(!PLUGIN_LIB.contains("invoke_handler"));
     assert!(PLUGIN_LIB.contains("pub fn call(&self, command: &str, args: serde_json::Value) -> Result<serde_json::Value, String>"));
 }
+
+// --- revue I4 : jamais d'appel en suspens ni d'occupation permanente ---
+
+#[test]
+fn files_ios_01_i4_silent_presentation_failures_reject_and_rust_bounds_the_wait() {
+    let code = swift_code();
+    assert!(code.contains("presenter.isBeingDismissed || presenter.isBeingPresented"));
+    assert!(code.contains("controller.presentingViewController == nil || controller.isBeingDismissed"));
+    assert!(code.contains("self.failPending()"));
+    assert!(code.contains("stale.presentingViewController == nil"), "appel en suspens d'un sélecteur disparu résolu d'abord");
+    assert!(EXPORT_IOS_RS.contains("call_with_deadline(move || plugin.call(\"present\", args), PRESENT_DEADLINE)"));
+    assert_eq!(circletasks_lib::export_ios::PRESENT_DEADLINE, std::time::Duration::from_secs(900));
+    // Le délai dépassé est visible avec son code et le temporaire est supprimé.
+    let cache = tempfile::tempdir().unwrap();
+    let (transport, _) = FakeTransport::new(Err("timeout".to_owned()));
+    let state = ExportIosState::default();
+    let (result, _) = save_prepared(&state, cache.path(), &prepared("a.csv", b"1"), &transport);
+    assert_eq!(result.unwrap_err().code, "timeout");
+    assert_eq!(exports_entries(cache.path()), 0);
+    let (transport, _) = FakeTransport::new(Ok(true));
+    assert!(save_prepared(&state, cache.path(), &prepared("b.csv", b"2"), &transport).0.is_ok(), "verrou rendu, jamais busy permanent");
+}

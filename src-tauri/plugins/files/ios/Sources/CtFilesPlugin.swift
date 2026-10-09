@@ -97,6 +97,17 @@ class CtFilesPlugin: Plugin {
     }
   }
 
+  /// Rejette l'appel en cours (`failed`) quand le sélecteur n'a pas pu être présenté (fil principal) : jamais d'appel en suspens.
+  private func failPending() {
+    guard let invoke = pending else {
+      return
+    }
+    pending = nil
+    picker = nil
+    delegate = nil
+    reject(invoke, .failed)
+  }
+
   /// Résout l'appel en cours une seule fois (fil principal).
   private func finish(_ completed: Bool) {
     guard let invoke = pending else {
@@ -152,10 +163,15 @@ class CtFilesPlugin: Plugin {
         self.reject(invoke, .notForeground)
         return
       }
-      // Rust refuse déjà un second appel (`busy`) : seconde barrière.
+      // Rust refuse déjà un second appel (`busy`) : seconde barrière. Un appel resté en suspens alors que son sélecteur n'est plus affiché
+      // (fermé par iOS sans réponse) est d'abord résolu comme annulé : jamais d'occupation permanente.
       if self.pending != nil {
-        self.reject(invoke, .failed)
-        return
+        if let stale = self.picker, stale.presentingViewController == nil {
+          self.finish(false)
+        } else {
+          self.reject(invoke, .failed)
+          return
+        }
       }
       guard let url = self.checkedURL(input.path, input.mime), var presenter = self.manager.viewController else {
         self.reject(invoke, .failed)
@@ -163,6 +179,11 @@ class CtFilesPlugin: Plugin {
       }
       while let next = presenter.presentedViewController {
         presenter = next
+      }
+      // Un contrôleur en train de partir ou d'arriver ne peut pas présenter : échec visible plutôt qu'une présentation ignorée par UIKit.
+      if presenter.isBeingDismissed || presenter.isBeingPresented {
+        self.reject(invoke, .failed)
+        return
       }
       let delegate = ExportDelegate(onDone: { [weak self] completed in
         self?.onMain { self?.finish(completed) }
@@ -173,7 +194,12 @@ class CtFilesPlugin: Plugin {
       self.pending = invoke
       self.picker = controller
       self.delegate = delegate
-      presenter.present(controller, animated: true, completion: nil)
+      presenter.present(controller, animated: true) {
+        // Présentation ignorée sans bruit par UIKit (aucun parent) ou sélecteur aussitôt retiré : l'appel est rejeté, jamais en suspens.
+        if self.picker === controller && (controller.presentingViewController == nil || controller.isBeingDismissed) {
+          self.failPending()
+        }
+      }
     }
   }
 }

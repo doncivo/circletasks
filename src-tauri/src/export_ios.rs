@@ -21,6 +21,10 @@ use crate::export_common::{allowed_extension, body_bytes, decode_name, mime_for,
 
 /// Sous-dossier du cache de l'app qui reçoit les temporaires d'export.
 pub const EXPORTS_DIR: &str = "exports";
+/// Délai maximal d'une présentation du sélecteur (revue I4) : au-delà, `timeout` visible et le verrou d'enregistrement est rendu.
+pub const PRESENT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+/// Code de Rust quand Swift ne répond pas avant `PRESENT_DEADLINE`.
+pub const TIMEOUT_CODE: &str = "timeout";
 /// Codes de rejet du plugin Swift connus de Rust (fixture `tests/fixtures/files/files-contract.json`) ; tout autre code devient `failed`.
 pub const PLUGIN_REJECT_CODES: [&str; 2] = ["not-foreground", "failed"];
 
@@ -153,6 +157,7 @@ pub fn save_prepared(state: &ExportIosState, cache_dir: &Path, prepared: &Prepar
         Err(_) => Err(fail("io")),
         Ok(()) => match transport.present(&path, prepared.mime) {
             Ok(completed) => Ok(SaveOutcome { completed }),
+            Err(code) if code == TIMEOUT_CODE => Err(fail(TIMEOUT_CODE)),
             Err(code) => Err(fail(PLUGIN_REJECT_CODES.iter().copied().find(|known| *known == code).unwrap_or("failed"))),
         },
     };
@@ -213,7 +218,13 @@ pub struct PluginTransport(pub tauri_plugin_ct_files::CtFiles<tauri::Wry>);
 impl SaveTransport for PluginTransport {
     fn present(&self, path: &Path, mime: &str) -> Result<bool, String> {
         let path = path.to_str().ok_or_else(|| "failed".to_owned())?;
-        let answer = self.0.call("present", serde_json::json!({ "path": path, "mime": mime }))?;
+        let plugin = self.0.clone();
+        let args = serde_json::json!({ "path": path, "mime": mime });
+        // Revue I4 : délai maximal ; une réponse tardive de Swift est ignorée, le temporaire est supprimé et le verrou rendu.
+        let answer = crate::mobile_call::call_with_deadline(move || plugin.call("present", args), PRESENT_DEADLINE).map_err(|error| match error {
+            crate::mobile_call::CallError::Timeout => TIMEOUT_CODE.to_owned(),
+            crate::mobile_call::CallError::Rejected(code) => code,
+        })?;
         answer.get("completed").and_then(serde_json::Value::as_bool).ok_or_else(|| "failed".to_owned())
     }
 }

@@ -8,9 +8,22 @@
   "plugin": "ct-files",
   "swiftClass": "CtFilesPlugin",
   "binding": "init_plugin_ct_files",
-  "rejectCodes": ["not-foreground", "failed"],
+  "rejectCodes": [
+    "not-foreground",
+    "failed"
+  ],
   "commands": {
-    "present": { "input": ["path", "mime"], "output": [["completed"]] }
+    "present": {
+      "input": [
+        "path",
+        "mime"
+      ],
+      "output": [
+        [
+          "completed"
+        ]
+      ]
+    }
   },
   "mimeByExtension": {
     "csv": "text/csv",
@@ -21,5 +34,14 @@
   },
   "fallbackMime": "application/octet-stream",
   "exportsFolder": "exports",
-  "rustErrorCodes": ["too-large", "bad-name", "busy", "unsafe-folder", "io", "not-foreground", "failed"]
+  "rustErrorCodes": [
+    "too-large",
+    "bad-name",
+    "busy",
+    "unsafe-folder",
+    "io",
+    "not-foreground",
+    "failed",
+    "timeout"
+  ]
 }
