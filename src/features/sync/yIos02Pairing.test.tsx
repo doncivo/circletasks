@@ -271,8 +271,9 @@ describe('iPhone : jamais de clé créée au choix du dossier (point 1, ADR 0011
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Commencer quand même' }));
     });
-    expect((await phone.key.status()).present).toBe(true);
+    // Issue attendue (ligne liée, après la création de la clé et la relecture), jamais la seule fin du clic : la création est asynchrone.
     expect(await screen.findByRole('button', { name: 'Détails' })).toBeInTheDocument();
+    expect((await phone.key.status()).present).toBe(true);
   });
 
   it('dossier qui contient les données du PC : « Commencer » confirmé est refusé (folder-has-data), dit ; aucune clé', async () => {
@@ -367,7 +368,10 @@ describe('io : passagère, espacée après 3 échecs consécutifs, jamais arrêt
     expect(isPermanentSyncError('io')).toBe(false);
     // 08:00 UTC + 30 min ; affichée à l'heure de Paris (fuseau des tests).
     expect(service.status().retryAt).toBe('2026-10-08T08:30:00.000Z');
-    expect(line()).toBe('Synchronisation ralentie : nouvel essai à 10:30 (code io), ou « Synchroniser » maintenant');
+    // Heure locale du processus de test (UTC en CI, Paris en local) : la même que celle de l'app.
+    const at = new Date('2026-10-08T08:30:00.000Z');
+    const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+    expect(line()).toBe(`Synchronisation ralentie : nouvel essai à ${hhmm} (code io), ou « Synchroniser » maintenant`);
 
     // Planificateur (PC, sans échéance de masquage) branché sur le vrai service : jamais d'arrêt, essai espacé de 30 min.
     const listeners = new Set<() => void>();
