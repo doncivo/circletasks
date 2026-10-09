@@ -217,3 +217,46 @@ fn i04_internal_writes_wait_in_memory_until_init_then_are_written() {
     assert_eq!(pairs.last(), Some(&("backup", "restore-marker-failed", None)));
     assert!(entries.iter().all(|e| e.detail.is_empty()), "aucun texte dynamique");
 }
+
+// --- QA du lot F : lots de lignes maximales, chemins et jetons jamais écrits, journal de 2 × 256 Kio jamais dépassé ---
+
+#[test]
+fn i04_qa_batches_of_maximal_lines_never_exceed_two_files_of_256_kib() {
+    let dir = tempfile::tempdir().unwrap();
+    let logs = dir.path().join("logs");
+    let fat = |tag: char| LogEntryIn { at: "2026-10-08T08:00:00.000Z".into(), scope: "sync".into(), code: "fat".into(), detail: tag.to_string().repeat(10_000), n: None };
+    let mut rates = RateTable::new();
+    // 100 lignes de près de 4 Kio par appel, dix appels (4 Mio demandés) : seul le plafond de 2 fichiers de 256 Kio tient.
+    for round in 0..10_u8 {
+        let entries: Vec<LogEntryIn> = (0..100).map(|i| LogEntryIn { code: format!("fat-{round}-{i}"), ..fat('a') }).collect();
+        append_in(&logs, &mut rates, &entries, NOW + u64::from(round) * 120).unwrap();
+        assert!(size(&logs.join(CURRENT_FILE)) <= MAX_FILE_BYTES, "tour {round} : fichier courant {}", size(&logs.join(CURRENT_FILE)));
+        assert!(size(&logs.join(PREVIOUS_FILE)) <= MAX_FILE_BYTES, "tour {round} : fichier .1 {}", size(&logs.join(PREVIOUS_FILE)));
+        assert_eq!(fs::read_dir(&logs).unwrap().count() <= 2, true, "aucun autre fichier (ni .tmp)");
+    }
+    // Le journal reste lisible de bout en bout (aucune ligne coupée par la rotation).
+    let entries = read_entries(&logs, 500).unwrap();
+    assert!(!entries.is_empty() && entries.iter().all(|e| e.code != "unreadable-line"), "lignes coupées par la rotation");
+}
+
+#[test]
+fn i04_qa_paths_urls_and_tokens_in_a_detail_never_reach_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let logs = dir.path().join("logs");
+    let nasty = [
+        r"échec C:\Users\Ali\Documents\Titre privé.csv",
+        "échec /private/var/mobile/Containers/Data/Application/ABC/Documents/x.db",
+        "échec file:///private/var/x/y.csv",
+        "échec https://exemple.org/p?token=SECRET123",
+        "échec ali@example.com",
+        "échec Bearer abcdefghijklmnop.qrstuvwxyz",
+        &format!("échec {}", "0123456789abcdef".repeat(2)),
+    ];
+    let entries: Vec<LogEntryIn> = nasty.iter().enumerate().map(|(i, d)| entry("backup", &format!("c{i}"), d)).collect();
+    append_in(&logs, &mut RateTable::new(), &entries, NOW).unwrap();
+    let text = fs::read_to_string(logs.join(CURRENT_FILE)).unwrap();
+    for leaked in ["Users", "Ali", "Titre privé", "/private", "Containers", "file://", "SECRET123", "example.com", "abcdefghijklmnop", "0123456789abcdef"] {
+        assert!(!text.contains(leaked), "« {leaked} » écrit dans le journal :\n{text}");
+    }
+    assert_eq!(text.lines().count(), nasty.len());
+}
