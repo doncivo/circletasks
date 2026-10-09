@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 0.3.1
+
+- Version de test de la mise à jour : aucune autre modification que le numéro de version. Elle sert à vérifier que SideStore propose et installe la mise à jour depuis la 0.3.0, données conservées.
+
 ## 0.3.0
 
 - Mise à jour de l'iPhone par SideStore : la source CircleTasks propose chaque nouvelle version ; le numéro de version est affiché dans Réglages > À propos et la synchronisation publie le vrai numéro de l'iPhone (plus de « 0.0.0 »).
