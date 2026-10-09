@@ -170,7 +170,7 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | I-03 | M16 | Je protège l'app par Face ID | ios-mobile | à faire |
 | I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | à faire (fiche prête, 2026-10-08) |
 | I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile + quick-capture | à faire (fiche prête, 2026-10-08) |
-| I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile | à faire |
+| I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile + ci-release | à faire (fiche prête, 2026-10-09 ; phase 4 ; solde la dette `appVersion '0.0.0'` sur iPhone ; avenant ADR 0007 requis avant le code) |
 | P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
 | FILES-IOS-01 | M12 | Story technique : plugin Fichiers (`FileService.save` sur iPhone par le panneau de partage), P-07 « Télécharger un modèle » et rapport des rejets sur iPhone, bouton « Exporter » de H-03 sur iPhone | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
 | N-TECH-01 | M5 | Story technique : interface `NotificationScheduler` dans src/platform/notifications (faux, noop PC) et planificateur pur dans src/domain (échéance effective, routines actives, prochaine occurrence, plafond iOS de 64) | notifications | fait (2026-10-07, lot N0, ADR 0012) |
@@ -189,7 +189,9 @@ Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en para
   - Avant tout code : architecte, avenant ADR 0009 (plugin Fichiers et P-04 sur iPhone) et ADR 0014 (journal technique persistant) pour le lot F ; ADR 0015 (plugins Vision et Speech, autorisations de capture) pour le lot C.
   - Lot F : FILES-IOS-01, puis I-04, puis P-04-iOS (le plus risqué en dernier). Lot C : CAP-IOS-01 (Vision, puis Speech avec les critères d'I-05 sur le micro), puis I-05 (test transversal, contrat Info.plist complet).
   - Dossiers : aucun des deux lots ne touche `src/db` ni `src/domain` (le lot K, en revue, les occupe) ; si une fiche l'exige, arrêt et question au product-owner. Dossiers disjoints, sauf les fichiers partagés `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/lib.rs`, `tests/desktop/config.rs`, `build-ios.yml`, `container.ts`, `src/i18n` (index) : fusion du lot K d'abord, puis lot C, puis lot F rebasé.
-- Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), IPA candidate, vérifications d'Ali sur l'iPhone, puis REL-01 à REL-03.
+- Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), IPA candidate, vérifications d'Ali sur l'iPhone, puis REL-01 à REL-03. Fiche prête le 2026-10-09 (`docs/stories/I-06.md`). Détail :
+  - Avant tout code : architecte, avenant ADR 0007 (version lue par l'app, `CFBundleVersion` monotone, notes issues de `CHANGELOG.md`, absence de retour arrière) et lignes d'avenant 0011, 0012, 0002.
+  - Sous-tâches : version commune PC et iPhone (solde de la dette Y-07), erreur typée « base plus récente » et écran d'échec avec restauration, premier lancement d'une nouvelle version (réglage local), source SideStore à deux versions avec notes, guide, e2e `iphone`, revue. Aucun autre lot en parallèle. Prérequis : P-04-iOS et I-04 fusionnés (restauration avant mise à jour, export du journal).
 
 ## Livraison unique
 
