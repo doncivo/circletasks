@@ -1,24 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import { openStartupRecovery } from './recovery';
-import type { TauriBackupApi } from './tauriBackup';
+import { openStartupRecovery, startupRecoveryAvailable, type StartupRecoveryApi } from './recovery';
 
-/** I-06 (ADR 0007 avenant I-06 point 7) : restauration depuis l'écran d'échec, base fermée, mêmes commandes que P-04 / P-04-iOS. */
+/**
+ * I-06 (ADR 0007 avenant I-06 point 7, revue I2 et M3) : restauration depuis l'écran d'échec, base fermée : retour arrière LOCAL
+ * (`restore_backup` avec `local: true`), aucun marqueur de synchro ; une seule condition de disponibilité.
+ */
 
-function fakeApi(): TauriBackupApi & { calls: string[] } {
+function fakeApi(fail?: unknown): StartupRecoveryApi & { calls: string[] } {
   const calls: string[] = [];
   return {
     calls,
-    list: () => Promise.resolve({ directory: null, entries: [] }),
-    daily: () => Promise.resolve({ created: true }),
-    check: (name) => {
-      calls.push(`check ${name}`);
-      return Promise.resolve(18);
+    rollback: (name, stamp) => {
+      calls.push(`rollback ${name} ${stamp}`);
+      return fail === undefined ? Promise.resolve({ marker: 'skipped', markerCode: null }) : Promise.reject(fail);
     },
-    restore: (name, stamp) => {
-      calls.push(`restore ${name} ${stamp}`);
-      return Promise.resolve({ marker: 'written', markerCode: null });
-    },
-    reveal: () => Promise.resolve(),
     relaunch: () => {
       calls.push('relaunch');
       return Promise.resolve();
@@ -27,19 +22,27 @@ function fakeApi(): TauriBackupApi & { calls: string[] } {
 }
 
 describe('openStartupRecovery', () => {
-  it('navigateur et système inconnu : aucune restauration proposée', () => {
-    expect(openStartupRecovery('web', 'ios')).toBeNull();
-    expect(openStartupRecovery('tauri', 'other')).toBeNull();
+  it('navigateur et système inconnu : aucune restauration proposée ; même condition que l’écran (une seule source)', () => {
+    expect(openStartupRecovery('web', 'ios', fakeApi())).toBeNull();
+    expect(openStartupRecovery('tauri', 'other', fakeApi())).toBeNull();
+    for (const [runtime, os] of [['web', 'ios'], ['tauri', 'other'], ['tauri', 'ios'], ['tauri', 'windows']] as const) {
+      expect(startupRecoveryAvailable(runtime, os)).toBe(openStartupRecovery(runtime, os, fakeApi()) !== null);
+    }
   });
 
-  it('PC : vérification puis échange (base déjà fermée : rien à fermer), relance, sans « Afficher dans le dossier »', async () => {
+  it('PC : retour arrière local (aucun marqueur rendu), puis relance', async () => {
     const api = fakeApi();
     const service = openStartupRecovery('tauri', 'windows', api);
     expect(service?.available()).toBe(true);
     expect(service?.reveal).toBeUndefined();
-    await expect(service?.restore({ name: 'n.db', stamp: '20261009T080000Z' })).resolves.toEqual({ marker: 'written', markerCode: null });
+    await expect(service?.restore({ name: 'n.db', stamp: '20261009T080000Z' })).resolves.toBeUndefined();
     await service?.restart();
-    expect(api.calls).toEqual(['check n.db', 'restore n.db 20261009T080000Z', 'relaunch']);
+    expect(api.calls).toEqual(['rollback n.db 20261009T080000Z', 'relaunch']);
+  });
+
+  it('échec de Rust : raison reconnue, base fermée (redémarrer)', async () => {
+    const service = openStartupRecovery('tauri', 'windows', fakeApi({ code: 'restore-unconfirmed', message: 'x' }));
+    await expect(service?.restore({ name: 'n.db', stamp: '20261009T080000Z' })).rejects.toMatchObject({ reason: 'restore-unconfirmed', databaseClosed: true });
   });
 
   it('iPhone : rechargement de la WebView au lieu de la relance', async () => {
@@ -51,5 +54,14 @@ describe('openStartupRecovery', () => {
     expect(reload).toHaveBeenCalledTimes(1);
     expect(api.calls).not.toContain('relaunch');
     vi.unstubAllGlobals();
+  });
+
+  it('commande appelée : restore_backup avec local: true (jamais le chemin P-04 qui écrit un marqueur)', async () => {
+    const invoke = vi.fn(() => Promise.resolve({ marker: 'skipped' }));
+    vi.doMock('@tauri-apps/api/core', () => ({ invoke }));
+    const { loadStartupRecoveryApi } = await import('./recovery');
+    await loadStartupRecoveryApi().rollback('n.db', '20261009T080000Z');
+    expect(invoke).toHaveBeenCalledWith('restore_backup', { name: 'n.db', stamp: '20261009T080000Z', local: true });
+    vi.doUnmock('@tauri-apps/api/core');
   });
 });

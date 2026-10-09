@@ -4,7 +4,7 @@ import { tUpdateRestore } from '../../i18n/appUpdateRestoreText';
 import { ConfirmDialog } from '../../ui';
 import type { UpdateRestoreOutcome } from './updateRestore';
 
-type RestoreState = { readonly phase: 'idle' | 'confirm' | 'running' } | { readonly phase: 'failed'; readonly message: string; readonly code: string };
+type RestoreState = { readonly phase: 'idle' | 'confirm' | 'running' | 'restart' } | { readonly phase: 'failed'; readonly message: string; readonly code: string };
 
 export interface UpdateRestoreActionProps {
   /** Nom de la sauvegarde « Avant mise à jour » de ce démarrage (jamais un chemin). */
@@ -24,13 +24,22 @@ export function UpdateRestoreAction({ name, restore }: UpdateRestoreActionProps)
     setState({ phase: 'running' });
     const outcome = await restore(name).catch((): UpdateRestoreOutcome => ({ ok: false, message: t('backup.errorIo'), code: 'io' }));
     if (!outcome.ok) setState({ phase: 'failed', message: outcome.message, code: outcome.code });
+    // Restauration faite mais relance impossible (revue I3) : consigne visible, l'action n'est plus proposée.
+    else if (outcome.restartFailed === true) setState({ phase: 'restart' });
   };
 
   return (
     <>
-      <button type="button" disabled={state.phase === 'running'} onClick={() => setState({ phase: 'confirm' })}>
-        {tUpdateRestore('restore')}
-      </button>
+      {state.phase !== 'restart' && (
+        <button type="button" disabled={state.phase === 'running'} onClick={() => setState({ phase: 'confirm' })}>
+          {tUpdateRestore('restore')}
+        </button>
+      )}
+      {state.phase === 'restart' && (
+        <p role="alert" className="ct-db-failure__note">
+          {tUpdateRestore('restartManually')}
+        </p>
+      )}
       {state.phase === 'running' && (
         <p role="status" className="ct-db-failure__note">
           {tUpdateRestore('restoring')}

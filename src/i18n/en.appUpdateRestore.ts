@@ -8,5 +8,6 @@ export const appUpdateRestoreEn: { readonly [K in keyof typeof appUpdateRestoreF
   restoreConfirm: 'Restore',
   restoring: 'Restoring…',
   restoreUnavailable: 'Restoring is not available here: copy the details and install the fixed version.',
+  restartManually: 'Data restored. Restart CircleTasks: close the app, then open it again.',
   restoreFailed: 'The restore did not complete. {reason}',
 };

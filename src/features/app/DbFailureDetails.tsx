@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { systemClock } from '../../domain/clock';
 import { t, type PlainMessageKey } from '../../i18n';
 import { DB_URL, readDbEnvironment, type DbEnvironment } from '../../platform/dbDiagnostics';
+import { startupRecoveryAvailable } from '../../platform/backup/recoveryAvailable';
 import { detectOs, detectRuntime } from '../../platform/runtime';
 import { appReload } from '../security/lockLayer';
 import { useAppStore, type DbFailure } from './appStore';
@@ -125,10 +126,9 @@ export function failureAlertKey(failure: DbFailure | null, backupFailed: boolean
   return backupFailed ? 'app.dbBackupError' : 'app.dbError';
 }
 
-/** I-06 : une restauration depuis l'écran d'échec est-elle possible ici (app installée sur PC ou iPhone, ou faux d'un e2e) ? */
+/** I-06 : une restauration depuis l'écran d'échec est-elle possible ici ? Même condition que `openStartupRecovery` (revue M3). */
 function startupRecoveryPossible(): boolean {
-  if (import.meta.env.DEV && (globalThis as { __ctStartupRecovery?: unknown }).__ctStartupRecovery) return true;
-  return detectRuntime() === 'tauri' && detectOs() !== 'other';
+  return startupRecoveryAvailable(detectRuntime(), detectOs());
 }
 
 /** Restauration par défaut : module chargé au premier appui (hors du bundle de départ). */

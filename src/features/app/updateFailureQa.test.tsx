@@ -119,15 +119,17 @@ describe('états d’échec réels : un message qui dit quoi faire, Copier le d�
     expect(screen.getByTestId('db-failure-detail').textContent).not.toMatch(/Rapport|Courses/);
   });
 
-  it('migration en échec, sauvegarde réutilisée d’un essai précédent : la restauration proposée porte son nom, pas un chemin', async () => {
+  it('même migration en échec deux fois : nouvelle sauvegarde au second essai (revue I1), la restauration proposée porte le nom de la dernière, pas un chemin', async () => {
     const backups = backupPort();
     const db = await dbAtN();
     await bootstrapDatabase(() => Promise.resolve(keepOpen(db)), { clock, backup: backups.factory, migrations: [...migrations, BROKEN], appVersion: '0.3.0' });
     useAppStore.setState({ dbStatus: 'idle', dbFailure: null });
+    clock.advance(60_000);
     await bootstrapDatabase(() => Promise.resolve(keepOpen(db)), { clock, backup: backups.factory, migrations: [...migrations, BROKEN], appVersion: '0.3.0' });
-    expect(backups.names).toHaveLength(1);
+    expect(backups.names).toHaveLength(2);
     const failure = useAppStore.getState().dbFailure;
-    expect(failure?.updateBackup).toEqual({ name: backups.names[0] });
+    expect(failure?.updateBackup).toEqual({ name: backups.names[1] });
+    expect(backups.names[1]).not.toBe(backups.names[0]);
     expect(failure?.updateBackup?.name).not.toMatch(/[\\/]/);
   });
 });

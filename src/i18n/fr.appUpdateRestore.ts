@@ -9,6 +9,8 @@ export const appUpdateRestoreFr = {
   restoreConfirm: 'Restaurer',
   restoring: 'Restauration en cours…',
   restoreUnavailable: 'La restauration n’est pas disponible ici : copiez le détail et installez la version corrigée.',
+  /** Restauration faite, relance automatique impossible (revue I3). */
+  restartManually: 'Données restaurées. Relancez CircleTasks : fermez l’app puis rouvrez-la.',
   /** Échec de la restauration : raison de P-04, puis le code. */
   restoreFailed: 'La restauration n’a pas abouti. {reason}',
 } as const;

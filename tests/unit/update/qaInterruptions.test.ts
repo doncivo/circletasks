@@ -130,7 +130,9 @@ afterEach(() => {
 
 describe('critère 12 (QA) : mise à jour interrompue à chaque étape', () => {
   // Le processus meurt pendant la migration k, au moment d'enregistrer son numéro (instructions déjà jouées, transaction annulée).
-  it.each([1, 2, 3])('mort pendant la migration %i : la migration n’est pas à moitié faite, le redémarrage reprend, une seule sauvegarde', async (k) => {
+  // Revue I-06 (I1) : la sauvegarde n'est réutilisée que si au moins une migration de la chaîne a été validée (k > 1) ; mort pendant la
+  // migration 1 = rien de validé : une nouvelle sauvegarde de la même base est faite (un doublon, jamais une sauvegarde périmée).
+  it.each([1, 2, 3])('mort pendant la migration %i : la migration n’est pas à moitié faite, le redémarrage reprend, sauvegarde réutilisée si la chaîne a avancé', async (k) => {
     const db = await populatedAtN();
     const before = await snapshot(db);
     const backups = fakeBackups(db);
@@ -150,19 +152,19 @@ describe('critère 12 (QA) : mise à jour interrompue à chaque étape', () => {
     expect(useAppStore.getState()).toMatchObject({ dbStatus: 'error', dbBackupFailed: false, dbFailure: { kind: 'migration', migration: target, schemaVersion: target - 1, updateBackup: { name: backups.names[0] } } });
     expect(logged()).toContain(`[desktop:db] migration ${String(target)} impossible (Error)`);
 
-    // Démarrage suivant : reprise à la migration k, sauvegarde réutilisée (jamais dupliquée), aucune ligne perdue.
+    // Démarrage suivant : reprise à la migration k ; sauvegarde réutilisée si la chaîne a avancé (k > 1), sinon refaite ; aucune ligne perdue.
     useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null, dbFailure: null });
     const container = await boot(db, { v: '0.3.0', migrations: NEXT, backup: backups.factory });
     expect(container?.launch).toBe('updated');
     expect(await applied(db)).toEqual(NEXT.map((m) => m.version));
-    expect(backups.requests).toHaveLength(1);
-    expect(backups.names).toHaveLength(1);
+    expect(backups.requests).toHaveLength(k > 1 ? 1 : 2);
+    expect(backups.names).toHaveLength(k > 1 ? 1 : 2);
     expect(await lastLaunched(db)).toBe('0.3.0');
     expect(await snapshot(db)).toEqual(before);
     await db.close();
   });
 
-  it('mort juste après la sauvegarde, avant la première migration : redémarrage sans nouvelle sauvegarde, version non mémorisée entre-temps', async () => {
+  it('mort juste après la sauvegarde, avant la première migration : nouvelle sauvegarde au redémarrage (rien de validé, revue I1), version non mémorisée entre-temps', async () => {
     const db = await populatedAtN();
     const backups = fakeBackups(db);
     const dying = dieOn(db, () => true);
@@ -171,7 +173,7 @@ describe('critère 12 (QA) : mise à jour interrompue à chaque étape', () => {
     expect(backups.names).toHaveLength(1);
     expect(await lastLaunched(db)).toBe('0.2.3');
     expect((await boot(db, { v: '0.3.0', migrations: NEXT, backup: backups.factory }))?.launch).toBe('updated');
-    expect(backups.requests).toHaveLength(1);
+    expect(backups.requests).toHaveLength(2);
     expect(await applied(db)).toEqual(NEXT.map((m) => m.version));
     await db.close();
   });

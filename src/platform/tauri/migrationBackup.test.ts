@@ -50,12 +50,12 @@ describe('I-06 : nom de la sauvegarde et sauvegarde déjà faite', () => {
     await expect(createTauriMigrationBackup(dbWith(0)).backup(request)).resolves.toEqual({ name: 'circletasks-pre-migration-v0002-to-v0004-20261002T101500Z.db' });
   });
 
-  it('findPrevious relit list_backups ; liste illisible : aucune (nouvelle sauvegarde)', async () => {
+  it('findPrevious relit list_backups ; liste illisible : rejet (l’orchestration refait une sauvegarde et le journalise)', async () => {
     const port = createTauriMigrationBackup(dbWith(0));
     invoke.mockResolvedValueOnce({ directory: null, entries: [{ name: 'circletasks-pre-migration-v0002-to-v0004-20261001T080000Z.db' }, { name: 'circletasks-daily-20261001.db' }, { name: 3 }] } as never);
     await expect(port.findPrevious?.({ fromVersion: 3, toVersion: 4 })).resolves.toEqual({ name: 'circletasks-pre-migration-v0002-to-v0004-20261001T080000Z.db' });
     expect(invoke).toHaveBeenLastCalledWith('list_backups', undefined);
     invoke.mockRejectedValueOnce({ code: 'io', message: 'illisible' });
-    await expect(port.findPrevious?.({ fromVersion: 3, toVersion: 4 })).resolves.toBeNull();
+    await expect(port.findPrevious?.({ fromVersion: 3, toVersion: 4 })).rejects.toBeDefined();
   });
 });

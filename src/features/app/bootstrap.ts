@@ -78,9 +78,14 @@ export async function bootstrapDatabase(
     setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
     await migrate(db, list, {
-      beforeApply: createBackupBeforeMigration(port, options.clock, (backup) => {
-        updateBackup = { name: backup.name };
-      }),
+      beforeApply: createBackupBeforeMigration(
+        port,
+        options.clock,
+        (backup) => {
+          updateBackup = { name: backup.name };
+        },
+        () => logFailure('db', 'pre-migration-list-unreadable'),
+      ),
       afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined),
       onSchemaRead: ({ current }) => {
         schemaVersion = current;

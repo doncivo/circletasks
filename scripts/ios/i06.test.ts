@@ -264,3 +264,30 @@ describe('critère 19 : non-régression (aucune clé Info.plist, plugin, capabil
     expect(SYNC_FORMAT_MAJOR).toBe(1);
   });
 });
+
+describe('revue M2 : rétrogradation = avertissement sur une branche, échec sur un tag ios-v*', () => {
+  const n1 = publish(publish(null, '0.2.3'), '0.3.0', { sha: sha('c') });
+  const fix = publish(n1, '0.2.4', { sha: sha('e') });
+  const message = 'version publiée 0.2.4 inférieure à la plus haute déjà présente (0.3.0) : aucune rétrogradation';
+
+  it('checkSource : downgrade « warn » met l’écart en avertissement, « error » (défaut) en échec', () => {
+    expect((checkSource(fix, { published: '0.2.4', downgrade: 'warn' }) as Check)).toEqual({ errors: [], warnings: [message] });
+    expect((checkSource(fix, { published: '0.2.4' }) as Check).errors).toContain(message);
+  });
+
+  it('build-ios.yml : la simulation passe --downgrade warn hors tag ios-v*, error sur un tag ; la publication garde l’échec', () => {
+    const workflow = read('.github/workflows/build-ios.yml');
+    const simulation = workflow.slice(workflow.indexOf('- name: Source SideStore simulée'), workflow.indexOf('\n  publish:'));
+    expect(simulation).toContain('DOWNGRADE=error');
+    expect(simulation).toContain('case "${GITHUB_REF}" in refs/tags/ios-v*) ;; *) DOWNGRADE=warn;; esac');
+    expect(simulation).toContain('--downgrade "$DOWNGRADE"');
+    const publishJob = workflow.slice(workflow.indexOf('\n  publish:'));
+    expect(publishJob).toContain('node scripts/ios/check-source.mjs source.new.json --published "$VERSION"\n');
+  });
+
+  it('en ligne de commande : --downgrade warn rend 0 avec ::warning:: ; valeur inconnue refusée', () => {
+    const warn = runNode('scripts/ios/check-source.mjs', ['tests/fixtures/release/source.i06.json', '--published', '0.3.0', '--downgrade', 'warn']);
+    expect(warn.status).toBe(0);
+    expect(runNode('scripts/ios/check-source.mjs', ['tests/fixtures/release/source.i06.json', '--published', '0.3.0', '--downgrade', 'peut-être']).status).toBe(1);
+  });
+});

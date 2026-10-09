@@ -102,7 +102,8 @@ describe('Y-07 entre PC et iPhone avec les numéros publiés (critère 7)', () =
 describe('numéro illisible publié par l’autre appareil', () => {
   it('« unknown » (I-06) et « 0.0.0 » (anciennes versions de l’iPhone) : « version inconnue », jamais le numéro brut', () => {
     const devicesList = [{ platform: 'ios' as const }];
-    for (const raw of ['unknown', '0.0.0']) {
+    // Revue M1 : même règle que le domaine (`isAppVersion`) : tout ce qui n'est pas X.Y.Z.
+    for (const raw of ['unknown', '0.0.0', '1.2', 'v1.2.3']) {
       const text = newerDeviceText({ deviceId: PHONE_ID as never, platform: 'ios', appVersion: raw }, devicesList);
       expect(text).toBe(t('sync.version.newerWithVersion', { device: t('sync.status.deviceIphone'), version: t('sync.version.unknownVersion') }));
       expect(text).not.toContain(raw);

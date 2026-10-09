@@ -749,6 +749,9 @@ fn p04_ios_marker_with_an_unreadable_database_in_place_stays_provisional_and_blo
     // Démarrage : un dossier à la place de la base n'est ni un `.restore-old` ni un `.restoring` -> la récupération rend `Nothing`, puis le
     // règlement tombe sur la base illisible : rien n'est décidé et le journal le consigne.
     let _log_dir = crate::support::applog_dir_lock();
+    // Journal propre à ce test : les entrées notées avant `init` par les autres tests du processus n'y sont pas versées (cause de l'échec
+    // de ce test en lot : « provisional-marker-settled » d'un autre test retrouvé ici).
+    circletasks_lib::applog::reset_for_tests();
     let logs = dir.path().join("logs");
     circletasks_lib::applog::init(logs.clone());
     assert_eq!(recover_and_settle(dir.path()).expect("la récupération elle-même aboutit"), circletasks_lib::backup::Recovery::Nothing);
@@ -806,4 +809,44 @@ fn p04_ios_marker_staged_removed_puts_back_the_previous_pending_marker() {
     let (recovery, marker) = start(dir.path());
     assert_eq!(recovery, Recovery::StagedRemoved);
     assert_eq!(marker.expect("marqueur d'avant").backup, "ancien");
+}
+
+// --- I-06 (revue I2) : « Restaurer la sauvegarde d'avant la mise à jour » = retour arrière local, aucun marqueur de synchro ---
+
+#[test]
+fn i06_update_restore_is_a_local_rollback_without_any_sync_marker() {
+    use circletasks_lib::startup_gate::restore_local_rollback;
+    use circletasks_lib::sync::marker::MARKER_FILE;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let name = "circletasks-pre-migration-v0001-to-v0002-20261009T080000Z.db";
+    make_db(&backups.join(name), None);
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), None);
+    Connection::open(dir.path().join(DB_FILE)).unwrap().execute("INSERT INTO task (title) VALUES ('après la migration ratée')", []).unwrap();
+    sync_configured(dir.path());
+    let marker = dir.path().join(MARKER_FILE);
+    // Seule une sauvegarde d'avant mise à jour : une quotidienne garde le chemin P-04 (marqueur, choix de la synchro).
+    assert_eq!(restore_local_rollback(dir.path(), "circletasks-daily-20261007.db", "20261009T090000Z", NO_FAIL).unwrap_err().code, "bad-name");
+    let outcome = restore_local_rollback(dir.path(), name, "20261009T090001Z", NO_FAIL).expect("retour arrière");
+    assert_eq!(outcome.marker, "skipped");
+    assert!(outcome.safety_copy.is_some(), "copie de sécurité de la base actuelle");
+    assert!(!marker.exists(), "aucun marqueur : pas de fenêtre « Appliquer partout »");
+    let count: i64 = Connection::open(dir.path().join(DB_FILE)).unwrap().query_row("SELECT COUNT(*) FROM task", [], |r| r.get(0)).unwrap();
+    assert_eq!(count, 0, "données d'avant la mise à jour");
+    // Un marqueur d'une restauration P-04 précédente (choix pas encore fait) n'est jamais touché.
+    fs::write(&marker, br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    let before = fs::read(&marker).unwrap();
+    restore_local_rollback(dir.path(), name, "20261009T090002Z", NO_FAIL).expect("second retour arrière");
+    assert_eq!(fs::read(&marker).unwrap(), before);
+}
+
+#[test]
+fn i06_local_rollback_is_chosen_by_the_command_flag_after_the_sql_guard() {
+    let source = include_str!("../../src/backup.rs");
+    let command = &source[source.find("pub async fn restore_backup(").unwrap()..];
+    assert!(command.starts_with("pub async fn restore_backup(app: AppHandle, name: String, stamp: String, local: Option<bool>)"));
+    let guard = command.find("ensure_sql_closed(&app).await?").unwrap();
+    assert!(guard < command.find("restore_local_rollback(").unwrap(), "contrôle AVANT l'échange");
 }

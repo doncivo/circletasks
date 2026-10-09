@@ -15,7 +15,7 @@ interface BackupResult {
  * le migrateur n'applique alors rien. Le chemin rendu par Rust est réduit à son NOM (I-06).
  *
  * I-06 : `findPrevious` relit la liste des sauvegardes (`list_backups`, capabilities `backups` et `backups-ios`) ; une liste illisible
- * vaut « aucune » (nouvelle sauvegarde).
+ * rejette : l'orchestration fait alors une nouvelle sauvegarde et le journalise.
  */
 export function createTauriMigrationBackup(db: SqlDriver): MigrationBackup {
   return {
@@ -26,14 +26,11 @@ export function createTauriMigrationBackup(db: SqlDriver): MigrationBackup {
       if (!result.path) throw new Error('Aucun fichier de sauvegarde créé');
       return { name: backupNameOf(result.path) };
     },
+    // Liste illisible : rejet, rattrapé par l'orchestration (nouvelle sauvegarde, journal `pre-migration-list-unreadable`).
     findPrevious: async (target) => {
-      try {
-        const listing = await invoke<{ entries?: readonly { name?: unknown }[] }>('list_backups');
-        const names = (listing.entries ?? []).flatMap((entry) => (typeof entry.name === 'string' ? [entry.name] : []));
-        return findUpdateBackup(names, target);
-      } catch {
-        return null;
-      }
+      const listing = await invoke<{ entries?: readonly { name?: unknown }[] }>('list_backups');
+      const names = (listing.entries ?? []).flatMap((entry) => (typeof entry.name === 'string' ? [entry.name] : []));
+      return findUpdateBackup(names, target);
     },
   };
 }

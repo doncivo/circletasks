@@ -48,9 +48,17 @@ export function backupStamp(clock: Clock): string {
 
 const PRE_MIGRATION_NAME = /^circletasks-pre-migration-v(\d{4})-to-v(\d{4})-(\d{8}T\d{6}Z)\.db$/;
 
+const PRE_RESTORE_NAME = /^circletasks-pre-restore-(\d{8}T\d{6}Z)\.db$/;
+const DAILY_NAME = /^circletasks-daily-(\d{8})\.db$/;
+
 /**
- * Parmi des noms de sauvegardes, la plus récente « Avant mise à jour » réutilisable pour la cible (BBBB = `toVersion`, AAAA ≤
- * `fromVersion`) ; null sinon. Pur : la plateforme fournit les noms.
+ * Parmi des noms de sauvegardes, la sauvegarde « Avant mise à jour » à RÉUTILISER pour la cible, ou null (nouvelle sauvegarde). Pur : la
+ * plateforme fournit les noms. Revue I-06 (I1) : réutilisée seulement pour une chaîne de migrations vraiment interrompue :
+ * - même cible (BBBB = `toVersion`) et départ STRICTEMENT inférieur à la version courante (AAAA < `fromVersion` : au moins une migration
+ *   de la chaîne a été validée depuis, l'app n'a donc pas pu servir entre-temps) ; la plus récente ;
+ * - et aucune autre sauvegarde plus récente qu'elle : copie de sécurité d'une restauration (`pre-restore`), autre « Avant mise à jour »,
+ *   ou sauvegarde quotidienne d'un jour postérieur (l'app a servi depuis : la candidate n'est plus l'état d'avant la mise à jour).
+ * Sinon (même migration ratée puis relancée, restauration P-04 d'une ancienne version, version N utilisée entre deux essais) : null.
  */
 export function findUpdateBackup(names: readonly string[], target: { readonly fromVersion: number; readonly toVersion: number }): MigrationBackupResult | null {
   let best: { name: string; stamp: string } | null = null;
@@ -58,10 +66,19 @@ export function findUpdateBackup(names: readonly string[], target: { readonly fr
     const match = PRE_MIGRATION_NAME.exec(name);
     if (!match) continue;
     const [, from = '', to = '', stamp = ''] = match;
-    if (Number(to) !== target.toVersion || Number(from) > target.fromVersion) continue;
+    if (Number(to) !== target.toVersion || Number(from) >= target.fromVersion) continue;
     if (best === null || stamp > best.stamp) best = { name, stamp };
   }
-  return best === null ? null : { name: best.name };
+  if (best === null) return null;
+  const candidate = best;
+  const newer = names.some((name) => {
+    if (name === candidate.name) return false;
+    const stamp = PRE_MIGRATION_NAME.exec(name)?.[3] ?? PRE_RESTORE_NAME.exec(name)?.[1];
+    if (stamp !== undefined) return stamp > candidate.stamp;
+    const day = DAILY_NAME.exec(name)?.[1];
+    return day !== undefined && day > candidate.stamp.slice(0, 8);
+  });
+  return newer ? null : { name: candidate.name };
 }
 
 /** Résultat de `backup` qui porte un nom de fichier. */
@@ -83,13 +100,20 @@ export function createBackupBeforeMigration(
   port: MigrationBackup | undefined,
   clock: Clock = systemClock,
   onBackup: (backup: MigrationBackupResult & { readonly reused: boolean }) => void = () => undefined,
+  /** Revue I-06 (M4) : liste des sauvegardes illisible (nouvelle sauvegarde faite) ; journalisé par l'appelant (code seul). */
+  onListUnreadable: () => void = () => undefined,
 ): NonNullable<MigrateOptions['beforeApply']> {
   return async (pending, info) => {
     if (!port || info.fromVersion < 1) return;
     const last = pending.at(-1);
     if (!last) return;
     const target = { fromVersion: info.fromVersion, toVersion: last.version };
-    const previous = port.findPrevious ? await port.findPrevious(target).catch(() => null) : null;
+    const previous = port.findPrevious
+      ? await port.findPrevious(target).catch(() => {
+          onListUnreadable();
+          return null;
+        })
+      : null;
     if (previous) {
       onBackup({ name: previous.name, reused: true });
       return;

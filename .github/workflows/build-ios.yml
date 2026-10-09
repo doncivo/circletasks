@@ -224,7 +224,10 @@ jobs:
           node scripts/ios/make-source-json.mjs --version "$VERSION" --ipa ipa/CircleTasks.ipa --info-plist info/Info.plist \
             --url "https://github.com/doncivo/circletasks-releases/releases/download/ios-v${VERSION}/CircleTasks.ipa" --notes "$NOTES" \
             --existing sim/published.json > sim/source.json
-          node scripts/ios/check-source.mjs sim/source.json --published "$VERSION"
+          # Hors tag ios-v* (branche de lot) : une version plus basse que la plus haute publiée n'est qu'un avertissement (revue I-06 M2).
+          DOWNGRADE=error
+          case "${GITHUB_REF}" in refs/tags/ios-v*) ;; *) DOWNGRADE=warn;; esac
+          node scripts/ios/check-source.mjs sim/source.json --published "$VERSION" --downgrade "$DOWNGRADE"
           BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' info/Info.plist)
           COUNT=$(node -p "require('./sim/source.json').apps[0].versions.length")
           {

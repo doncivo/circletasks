@@ -1,4 +1,5 @@
 import type { SyncWarningCode } from '../../domain/syncBanners';
+import { isAppVersion } from '../../domain/appUpdate';
 import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { isSyncErrorCode } from '../../domain/sync/format';
 import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
@@ -289,8 +290,8 @@ export function isTroublePhase(status: SyncStatus): boolean {
 export function newerDeviceText(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'appVersion'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
   const name = deviceName(device, all);
   if (!device.appVersion) return t('sync.version.newer', { device: name });
-  // I-06 : `unknown` (version illisible) et `0.0.0` (ancien repli de l'iPhone) ne sont pas des numéros : « version inconnue ».
-  const version = device.appVersion === 'unknown' || device.appVersion === '0.0.0' ? t('sync.version.unknownVersion') : device.appVersion;
+  // I-06 : `unknown` (version illisible), `0.0.0` (ancien repli de l'iPhone) ou tout ce qui n'est pas X.Y.Z : « version inconnue ».
+  const version = isAppVersion(device.appVersion) ? device.appVersion : t('sync.version.unknownVersion');
   return t('sync.version.newerWithVersion', { device: name, version });
 }
 
