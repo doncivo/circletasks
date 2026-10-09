@@ -4,6 +4,7 @@ import { migrations } from '../../../db/migrations';
 import { t } from '../../../i18n';
 import { formatDayMonth, formatTime } from '../../../i18n/format';
 import { tLogs } from '../../../i18n/logsText';
+import { publishedAppVersion, UNKNOWN_APP_VERSION } from '../../../platform/appVersion';
 import { categoryOf, type LogCategory, type LogEntry, type LogJournal } from '../../../platform/logs';
 import { Button, ConfirmDialog, Icon, useLayout } from '../../../ui';
 import { useAppContainer } from '../../app/AppContainerContext';
@@ -91,8 +92,9 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
     setExportFailure(null);
     try {
       const all = await journal.read();
-      const readVersion = version ?? (() => (container.desktop ? container.desktop.getVersion() : import('../../../platform/logs').then((m) => m.appVersion(container.platform.runtime))));
-      const appVersion = await readVersion().catch(() => '?');
+      // I-06 : version lue au démarrage (platform/appVersion.ts), PC et iPhone ; illisible : « unknown ».
+      const readVersion = version ?? (() => Promise.resolve(publishedAppVersion(container.appVersion)));
+      const appVersion = await readVersion().catch(() => UNKNOWN_APP_VERSION);
       const file = buildLogExport(all, { version: appVersion, os: container.platform.os, schemaVersion: migrations.at(-1)?.version ?? 0, now: new Date(container.clock.nowMs()) });
       const outcome = await saveFile(container.files, { suggestedName: file.name, mime: 'text/plain', data: new TextEncoder().encode(file.text) }, 'logs-export');
       if (outcome.status === 'saved') setExported(true);

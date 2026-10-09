@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { t } from '../../i18n';
+import { systemClock } from '../../domain/clock';
+import { t, type PlainMessageKey } from '../../i18n';
 import { DB_URL, readDbEnvironment, type DbEnvironment } from '../../platform/dbDiagnostics';
+import { detectOs, detectRuntime } from '../../platform/runtime';
 import { appReload } from '../security/lockLayer';
 import { useAppStore, type DbFailure } from './appStore';
+import { UpdateRestoreActionLazy } from './lazyScreens';
+import type { UpdateRestoreOutcome } from './updateRestore';
 import './DbFailureDetails.css';
 
 /** Délai sans réponse de l'ouverture de la base au-delà duquel le diagnostic remplace l'attente silencieuse. */
@@ -76,8 +80,14 @@ export function formatDbFailure(failure: DbFailure, env: DbEnvironment | null): 
   const lines = [
     t('app.diag.step', { step: failureStepLabel(failure) }),
     t('app.diag.error', { name: failure.errorName, message: failure.message }),
-    t('app.diag.url', { url: DB_URL }),
   ];
+  // I-06 : version de l'app et versions de schéma (base, dernière connue du code), sauvegarde d'avant la mise à jour.
+  if (failure.appVersion !== undefined) lines.push(t('app.update.appVersionLine', { version: failure.appVersion ?? t('app.diag.unknown') }));
+  if (failure.appSchemaVersion !== undefined) {
+    lines.push(t('app.update.schemaLine', { database: failure.schemaVersion === null || failure.schemaVersion === undefined ? t('app.diag.unknown') : String(failure.schemaVersion), app: String(failure.appSchemaVersion) }));
+  }
+  if (failure.updateBackup) lines.push(t('app.update.backupLine', { name: failure.updateBackup.name }));
+  lines.push(t('app.diag.url', { url: DB_URL }));
   if (failure.journalMode !== undefined) lines.push(t('app.diag.journalMode', { mode: failure.journalMode ?? t('app.diag.unknown') }));
   if (typeof failure.journalMode === 'string' && failure.journalMode !== 'wal') lines.push(t('app.diag.journalExpected'));
   if (!env) {
@@ -106,12 +116,49 @@ export function formatDbFailure(failure: DbFailure, env: DbEnvironment | null): 
 }
 
 /**
+ * Message d'échec du démarrage (0.2.1, D-03) ; I-06 : base plus récente que l'app : consigne de mise à jour (SideStore sur l'iPhone, page
+ * des versions sur le PC) au lieu du message brut.
+ */
+export function failureAlertKey(failure: DbFailure | null, backupFailed: boolean): PlainMessageKey {
+  if (failure?.phase === 'start') return 'app.startError';
+  if (failure?.kind === 'schema-newer') return detectOs() === 'ios' ? 'app.update.schemaNewer' : 'app.update.schemaNewerPc';
+  return backupFailed ? 'app.dbBackupError' : 'app.dbError';
+}
+
+/** I-06 : une restauration depuis l'écran d'échec est-elle possible ici (app installée sur PC ou iPhone, ou faux d'un e2e) ? */
+function startupRecoveryPossible(): boolean {
+  if (import.meta.env.DEV && (globalThis as { __ctStartupRecovery?: unknown }).__ctStartupRecovery) return true;
+  return detectRuntime() === 'tauri' && detectOs() !== 'other';
+}
+
+/** Restauration par défaut : module chargé au premier appui (hors du bundle de départ). */
+async function defaultRestore(name: string): Promise<UpdateRestoreOutcome> {
+  const { restoreUpdateBackup } = await import('./updateRestore');
+  return restoreUpdateBackup(name, systemClock);
+}
+
+export interface DbFailureDetailsProps {
+  failure: DbFailure;
+  readEnvironment?: () => Promise<DbEnvironment>;
+  /** Faux quand recharger ne peut pas réussir (P-04-iOS : récupération faite au lancement seulement). */
+  retry?: boolean;
+  /** I-06 : restauration possible sur cette plateforme (tests) ; détectée par défaut. */
+  canRestore?: boolean;
+  /** I-06 : restauration de la sauvegarde d'avant la mise à jour (tests) ; `updateRestore.ts` chargé à la demande par défaut. */
+  restore?: (name: string) => Promise<UpdateRestoreOutcome>;
+}
+
+/**
  * 0.2.1 : diagnostic d'échec de démarrage, sous le message d'erreur (PC et iPhone). Texte sélectionnable et bouton « Copier le détail »
  * (presse-papiers, sinon sélection + copie du système, sinon invitation à sélectionner le texte).
+ * I-06 : après une migration en échec dont la sauvegarde « Avant mise à jour » existe, troisième action « Restaurer la sauvegarde d'avant
+ * la mise à jour », avec confirmation (« Annuler » par défaut) ; un échec affiche la raison de P-04 et l'écran reste.
  */
-export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment, retry = true }: { failure: DbFailure; readEnvironment?: () => Promise<DbEnvironment>; /** Faux quand recharger ne peut pas réussir (P-04-iOS : récupération faite au lancement seulement). */ retry?: boolean }) {
+export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment, retry = true, canRestore = startupRecoveryPossible(), restore = defaultRestore }: DbFailureDetailsProps) {
   const [env, setEnv] = useState<DbEnvironment | null>(null);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
+  // Jamais de restauration pour une base plus récente que l'app (D5) : rien à défaire, il faut la dernière version.
+  const backup = failure.kind === 'schema-newer' ? null : (failure.updateBackup ?? null);
   const pre = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
@@ -147,6 +194,8 @@ export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment,
 
   return (
     <section className="ct-db-failure" aria-label={t('app.diag.title')}>
+      {/* I-06 : migration en échec après une mise à jour : les données sont intactes, ne pas supprimer l'app. */}
+      {failure.kind === 'migration' && <p>{t('app.update.migrationIntact')}</p>}
       <pre ref={pre} data-testid="db-failure-detail" className="ct-db-failure__detail">
         {text}
       </pre>
@@ -159,6 +208,8 @@ export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment,
         <button type="button" onClick={() => void onCopy()}>
           {t('app.diag.copy')}
         </button>
+        {/* I-06 : troisième action, chargée à la demande (bundle de départ). */}
+        {backup !== null && canRestore && <UpdateRestoreActionLazy name={backup.name} restore={restore} />}
       </div>
       {copy !== 'idle' && <p role="status">{t(copy === 'copied' ? 'app.diag.copied' : 'app.diag.copyFailed')}</p>}
     </section>

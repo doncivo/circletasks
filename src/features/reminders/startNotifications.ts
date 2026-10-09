@@ -8,7 +8,7 @@ import type { AppContainer } from '../app/container';
 export const SYNC_PLAN_TABLES = ['task', 'routine', 'routine_pause', 'routine_log', 'event', 'reminder', 'space', 'settings'] as const;
 
 export interface NotificationsIntegration {
-  /** Se résout à la fin du passage `open` (tests : aucune attente par délai). */
+  /** Se résout à la fin du passage `open` (ou `update`, I-06) (tests : aucune attente par délai). */
   opened(): Promise<unknown>;
   dispose(): void;
 }
@@ -41,7 +41,8 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
 
   // Le bandeau persistant est posé dès la lecture de l'état enregistré, avant la fin du premier passage.
   void statusController(container).load();
-  const opened = runner.request('open');
+  // I-06 (ADR 0012 renvoi) : premier lancement d'une nouvelle version : déclencheur `update` (même passage complet que `open`).
+  const opened = runner.request(container.launch === 'updated' ? 'update' : 'open');
   return {
     opened: () => opened,
     dispose: () => {

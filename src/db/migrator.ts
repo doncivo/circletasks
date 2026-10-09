@@ -46,6 +46,11 @@ export interface MigrateOptions {
   readonly afterApply?: (db: SqlDriver, report: MigrateReport) => Promise<void>;
   /** Étape en cours (diagnostic d'ouverture affiché sous app.dbError) : appelé avant chaque étape. */
   readonly onStep?: (step: MigrateStep) => void;
+  /**
+   * I-06 : appelé une fois après la lecture de `schema_migrations`, avant tout contrôle et toute écriture : `current` = dernière migration
+   * appliquée à la base (0 = base neuve), `known` = dernière migration connue du code (diagnostic de l'écran d'échec).
+   */
+  readonly onSchemaRead?: (info: { readonly current: number; readonly known: number }) => void;
 }
 
 /** Étapes de `migrate()`, dans l'ordre : lecture du schéma, sauvegarde, chaque migration, crochet final. */
@@ -61,7 +66,22 @@ export interface MigrateReport {
 }
 
 export class MigrationError extends Error {
-  override readonly name = 'MigrationError';
+  override readonly name: string = 'MigrationError';
+}
+
+/**
+ * I-06 (ADR 0002 renvoi, ADR 0007 avenant I-06 point 4) : la base porte une migration plus récente que la dernière connue du code (app plus
+ * ancienne que les données, par exemple une IPA plus ancienne réinstallée). Levée AVANT toute écriture : ni sauvegarde, ni migration, ni
+ * crochet de fin. Le message reste technique (diagnostic copiable) ; l'écran affiche son propre texte.
+ */
+export class SchemaNewerThanApp extends MigrationError {
+  override readonly name: string = 'SchemaNewerThanApp';
+  constructor(
+    readonly databaseVersion: number,
+    readonly appSchemaVersion: number,
+  ) {
+    super(`schéma de la base ${String(databaseVersion)} > schéma de l'app ${String(appSchemaVersion)}`);
+  }
 }
 
 export const MIGRATIONS_TABLE = 'schema_migrations';
@@ -131,6 +151,10 @@ export async function migrate(
   await ensureMigrationsTable(db);
   const applied = await readAppliedMigrations(db);
   const known = new Map(migrations.map((m) => [m.version, m]));
+  const lastKnown = migrations.at(-1)?.version ?? 0;
+  const lastApplied = applied.reduce((max, row) => Math.max(max, row.version), 0);
+  options.onSchemaRead?.({ current: lastApplied, known: lastKnown });
+  if (lastApplied > lastKnown) throw new SchemaNewerThanApp(lastApplied, lastKnown);
 
   for (const row of applied) {
     const migration = known.get(row.version);

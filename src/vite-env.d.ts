@@ -9,6 +9,9 @@ interface ImportMetaEnv {
   readonly VITE_CT_GOOGLE_SIM_CLIENT_ID?: string;
 }
 
+/** I-06 : version de `src-tauri/tauri.conf.json`, posée par `vite.config.ts` (`define`) ; lue seulement par `src/platform/appVersion.ts`. */
+declare const __CT_APP_VERSION__: string;
+
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }

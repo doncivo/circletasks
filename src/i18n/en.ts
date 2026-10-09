@@ -20,6 +20,7 @@ import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
 import { securityEn } from './en.security';
 import { signingEn } from './en.signing';
+import { appUpdateEn } from './en.appUpdate';
 import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
@@ -42,6 +43,8 @@ export const en: Messages = {
     screenReload: 'Reload',
     dbBackupError: 'Data update interrupted: the safety backup failed. Your data was not modified. Free some disk space, then restart CircleTasks.',
     version: 'Version {version}',
+    versionUnknown: 'Unknown version',
+    update: appUpdateEn,
     dbStalled: 'Opening may still be in progress; if nothing changes, tap “Retry”.',
     startError: 'CircleTasks failed to start.',
     diag: {

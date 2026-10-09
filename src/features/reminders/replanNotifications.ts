@@ -23,7 +23,8 @@ import { failureOf, statusController } from './notificationStatus';
  * planification (« Les rappels sont envoyés par l'iPhone »).
  */
 
-export type ReplanTrigger = 'open' | 'resume' | 'sync' | 'hide' | 'edit' | 'action' | 'zone' | 'permission';
+/** `update` (I-06) : premier passage du premier lancement d'une nouvelle version ; même passage complet que `open`. */
+export type ReplanTrigger = 'open' | 'update' | 'resume' | 'sync' | 'hide' | 'edit' | 'action' | 'zone' | 'permission';
 
 export type ReplanOutcome =
   | { readonly status: 'pc' }

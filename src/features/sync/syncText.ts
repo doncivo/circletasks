@@ -288,7 +288,10 @@ export function isTroublePhase(status: SyncStatus): boolean {
  */
 export function newerDeviceText(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'appVersion'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
   const name = deviceName(device, all);
-  return device.appVersion ? t('sync.version.newerWithVersion', { device: name, version: device.appVersion }) : t('sync.version.newer', { device: name });
+  if (!device.appVersion) return t('sync.version.newer', { device: name });
+  // I-06 : `unknown` (version illisible) et `0.0.0` (ancien repli de l'iPhone) ne sont pas des numéros : « version inconnue ».
+  const version = device.appVersion === 'unknown' || device.appVersion === '0.0.0' ? t('sync.version.unknownVersion') : device.appVersion;
+  return t('sync.version.newerWithVersion', { device: name, version });
 }
 
 /** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */

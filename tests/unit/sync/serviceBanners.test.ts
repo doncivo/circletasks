@@ -33,6 +33,7 @@ function make(platform: SyncPlatform) {
     clock: db.clock,
     deviceId: SELF,
     sv: 1,
+    appVersion: '0.2.3',
     logger,
     setTimeout: (handler, ms) => timers.push({ handler, ms }),
     clearTimeout: () => undefined,

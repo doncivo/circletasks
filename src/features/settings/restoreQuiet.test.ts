@@ -27,7 +27,7 @@ describe('mise au calme au niveau des services', () => {
 
   it('syncNow refusé pendant le calme, d’où que vienne la demande (zone de notification, minuteur d’association, manuel)', async () => {
     const logger = createMemorySyncLogger();
-    const service = createSyncService({ data: db.data, platform: createMemorySyncPlatform(), hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), clock: db.clock, deviceId: DEVICE, sv: 1, logger });
+    const service = createSyncService({ data: db.data, platform: createMemorySyncPlatform(), hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), clock: db.clock, deviceId: DEVICE, sv: 1, appVersion: '0.2.3', logger });
     const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, sync: service });
     const handle = await quiesceForRestore(container, 50);
     expect(typeof handle).toBe('object');

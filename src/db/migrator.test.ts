@@ -5,6 +5,7 @@ import type { SqlDriver } from './driver';
 import { openSqliteWasmDriver } from './drivers/sqliteWasm';
 import {
   MigrationError,
+  SchemaNewerThanApp,
   ensureMigrationsTable,
   migrate,
   migrationChecksum,
@@ -76,9 +77,12 @@ describe('lanceur de migrations', () => {
     await expect(migrate(db, altered)).rejects.toThrow(MigrationError);
   });
 
-  it('refuse une base plus récente que le code', async () => {
+  it('refuse une base plus récente que le code (I-06 : erreur typée SchemaNewerThanApp, versions de la base et du code)', async () => {
     await migrate(db, sampleMigrations);
-    await expect(migrate(db, sampleMigrations.slice(0, 1))).rejects.toThrow(/inconnue/);
+    const error: unknown = await migrate(db, sampleMigrations.slice(0, 1)).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SchemaNewerThanApp);
+    expect(error).toBeInstanceOf(MigrationError);
+    expect(error).toMatchObject({ name: 'SchemaNewerThanApp', databaseVersion: sampleMigrations.at(-1)?.version, appSchemaVersion: sampleMigrations[0]?.version });
   });
 
   it('ensureMigrationsTable est idempotent et readAppliedMigrations ne crée rien', async () => {

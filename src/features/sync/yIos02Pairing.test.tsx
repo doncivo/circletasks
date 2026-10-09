@@ -95,7 +95,7 @@ function lockedData(): DataAccess {
 }
 
 function realContainer(platform: MemorySyncPlatform, os: 'ios' | 'windows', data: DataAccess = db.data): AppContainer {
-  const service = createSyncService({ data, platform, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: os, sv: 14, logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
+  const service = createSyncService({ data, platform, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: os, sv: 14, appVersion: '0.2.3', logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
   return createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), data: db.data, sync: service, syncPlatform: platform, platform: { runtime: 'tauri', os: os === 'ios' ? 'ios' : 'windows' } });
 }
 
@@ -354,7 +354,7 @@ describe('io : passagère, espacée après 3 échecs consécutifs, jamais arrêt
     let failing = true;
     const scan = pc.scan.bind(pc);
     const flaky: SyncPlatform = { ...pc, scan: (r) => (failing ? Promise.reject(new SyncPlatformError('io')) : scan(r)) };
-    const service = createSyncService({ data: db.data, platform: flaky, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: 'windows', sv: 14, logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
+    const service = createSyncService({ data: db.data, platform: flaky, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: 'windows', sv: 14, appVersion: '0.2.3', logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
     const line = (): string => statusLine(service.status(), db.clock.nowMs());
     const GENERIC = 'La synchronisation a échoué : nouvel essai au prochain cycle';
     await service.syncNow('timer');

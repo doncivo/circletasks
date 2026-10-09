@@ -29,6 +29,7 @@ import { syncForgetFr } from './fr.syncForget';
 import { syncResetFr } from './fr.syncReset';
 import { securityFr } from './fr.security';
 import { signingFr } from './fr.signing';
+import { appUpdateFr } from './fr.appUpdate';
 /**
  * Textes de l'interface, en français : source de vérité (ADR 0003).
  * - Clés regroupées par écran / module, en camelCase ;
@@ -45,6 +46,8 @@ export const fr = {
     screenReload: 'Recharger',
     dbBackupError: 'Mise à jour des données interrompue : la sauvegarde de sécurité a échoué. Vos données n’ont pas été modifiées. Libérez de l’espace disque puis relancez CircleTasks.',
     version: 'Version {version}',
+    versionUnknown: 'Version inconnue',
+    update: appUpdateFr,
     dbStalled: 'L’ouverture est peut-être encore en cours ; si rien ne change, touchez « Réessayer ».',
     startError: 'Le démarrage de CircleTasks a échoué.',
     diag: {

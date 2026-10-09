@@ -473,6 +473,7 @@ describe('« Synchro en cours » avec le vrai service : un seul seuil (revue, po
       clock: db.clock,
       deviceId: SELF,
       sv: 1,
+      appVersion: '0.2.3',
       logger: silentSyncLogger,
       setTimeout: (handler) => serviceTimers.push(handler),
       clearTimeout: () => undefined,
