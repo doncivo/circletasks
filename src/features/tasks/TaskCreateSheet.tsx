@@ -257,7 +257,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
               enterKeyHint="done"
               onKeyDown={handleTitleKeyDown}
               context={quick.suggestionContext}
-              {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
+              {...(dictation.noticeVisible ? { describedBy: dictation.helpId } : {})}
             />
             <DictationButton dictation={dictation} />
           </div>

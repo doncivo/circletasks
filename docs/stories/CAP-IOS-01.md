@@ -69,3 +69,11 @@ Appareil photo natif propre à l'app (la photo vient du sélecteur du système, 
 3. ios-mobile : crate `src-tauri/plugins/speech`, commandes Rust, `speech_stop` sur arrière-plan et verrou ; Info.plist et contrat. quick-capture : adaptateur `tauriSpeech`, `setSpeechRecognizer` au démarrage iOS, feuille d'écoute, messages (voir I-05).
 4. I-05 (critères sur le micro) dans la même branche, puis revue transversale d'I-05.
 5. qa-test, code-reviewer, security-privacy ; `build-ios.yml` vert ; checklist d'appareil.
+
+## Écarts retenus (ADR 0015, 2026-10-08, reportés dans docs/decisions.md)
+
+- Écart 1 : `recognitionLanguages = ["fr-FR", "en-US"]` (français prioritaire) au lieu de `["fr-FR"]` ; repli à `["fr-FR"]` si les accents se dégradent (A1) ; à valider par Ali en fin d'ordre.
+- Écart 2 : codes d'erreur de Vision = les six du contrat existant (la fiche en cite quatre, `language-missing`, `unsupported-format`, `too-large`, `failed` ; le contrat existant ajoute `dimensions` et `unavailable`) ; aucun code nouveau.
+- Écart 3 : le front réduit à 2 000 px ; Rust borne à 4 096 px de côté et 12 Mio.
+- Écart 7 : critère 17, partie « journal » : sur `lot-c-ios`, `logFailure` n'écrit que dans la console ; l'entrée de Réglages › À propos › Logs se vérifie après la fusion du lot F. Le message visible avec code est livré ici.
+- Écart 9 : le module de validation est `src-tauri/src/ocr/` (et non `src-tauri/src/ocr*` de la liste de lecture).

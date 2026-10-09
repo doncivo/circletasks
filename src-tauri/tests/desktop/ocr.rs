@@ -49,13 +49,13 @@ fn rejects_empty_oversized_and_unknown_inputs() {
 #[test]
 fn error_codes_are_stable_for_the_front() {
     let codes: Vec<&str> =
-        [OcrError::EmptyImage, OcrError::TooLarge, OcrError::UnsupportedFormat, OcrError::DimensionsTooLarge, OcrError::LanguageMissing, OcrError::Unavailable, OcrError::Engine("x".into())]
+        [OcrError::EmptyImage, OcrError::TooLarge, OcrError::UnsupportedFormat, OcrError::DimensionsTooLarge, OcrError::LanguageMissing, OcrError::Unavailable, OcrError::Busy, OcrError::Timeout, OcrError::Engine("x".into())]
             .iter()
             .map(OcrError::code)
             .collect();
     assert_eq!(
         codes,
-        ["ocr-empty-image", "ocr-too-large", "ocr-unsupported-format", "ocr-dimensions-too-large", "ocr-language-missing", "ocr-unavailable", "ocr-engine"]
+        ["ocr-empty-image", "ocr-too-large", "ocr-unsupported-format", "ocr-dimensions-too-large", "ocr-language-missing", "ocr-unavailable", "ocr-busy", "ocr-timeout", "ocr-engine"]
     );
 }
 

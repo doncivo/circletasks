@@ -648,8 +648,10 @@ dependencies = [
  "tauri-plugin-process",
  "tauri-plugin-reminders",
  "tauri-plugin-single-instance",
+ "tauri-plugin-speech",
  "tauri-plugin-sql",
  "tauri-plugin-updater",
+ "tauri-plugin-vision",
  "tauri-plugin-web-auth",
  "tempfile",
  "tokio",
@@ -5280,6 +5282,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-speech"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-sql"
 version = "2.5.0"
 dependencies = [
@@ -5330,6 +5341,15 @@ dependencies = [
  "url",
  "windows-sys 0.61.2",
  "zip",
+]
+
+[[package]]
+name = "tauri-plugin-vision"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

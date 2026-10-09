@@ -43,7 +43,7 @@ describe('capture rapide : cohérence avec src-tauri', () => {
   it('les commandes OCR existent, sont enregistrées et réservées à la fenêtre principale', () => {
     const ocr = read('src-tauri/src/ocr/mod.rs');
     for (const command of ['ocr_status', 'ocr_recognize']) {
-      expect(ocr).toContain(`pub async fn ${command}(`);
+      expect(ocr).toContain(`pub async fn ${command}<R: Runtime>(`);
       expect(lib).toContain(`ocr::${command}`);
       expect(build).toContain(`"${command}"`);
       expect(ocrCapability.permissions).toContain(`allow-${command.replace(/_/g, '-')}`);
