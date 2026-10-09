@@ -1,4 +1,5 @@
 import type { SyncWarningCode } from '../../domain/syncBanners';
+import { isAppVersion } from '../../domain/appUpdate';
 import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { isSyncErrorCode } from '../../domain/sync/format';
 import { WAITING_ICLOUD_LONG_MS } from '../../domain/sync/limits';
@@ -296,7 +297,10 @@ export function isTroublePhase(status: SyncStatus): boolean {
  */
 export function newerDeviceText(device: Pick<SyncDeviceStatus, 'deviceId' | 'platform' | 'appVersion'>, all: readonly Pick<SyncDeviceStatus, 'platform'>[]): string {
   const name = deviceName(device, all);
-  return device.appVersion ? t('sync.version.newerWithVersion', { device: name, version: device.appVersion }) : t('sync.version.newer', { device: name });
+  if (!device.appVersion) return t('sync.version.newer', { device: name });
+  // I-06 : `unknown` (version illisible), `0.0.0` (ancien repli de l'iPhone) ou tout ce qui n'est pas X.Y.Z : « version inconnue ».
+  const version = isAppVersion(device.appVersion) ? device.appVersion : t('sync.version.unknownVersion');
+  return t('sync.version.newerWithVersion', { device: name, version });
 }
 
 /** Libellé affiché d'un dossier (jamais un chemin) : « iCloud Drive / <nom> » pour un dossier iCloud, sinon son nom (revue 13). */

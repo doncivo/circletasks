@@ -1,4 +1,5 @@
 import { describeError } from '../db/errorText';
+import { readAppVersion } from './appVersion';
 import { detectOs, detectRuntime, type Runtime } from './runtime';
 
 /** URL de la base de l'app installée (tauri-plugin-sql), recopiée ici pour ne pas charger le driver Tauri dans le diagnostic. */
@@ -33,8 +34,9 @@ export interface DbEnvironment {
  */
 export async function readDbEnvironment(runtime: Runtime = detectRuntime()): Promise<DbEnvironment> {
   const base = { runtime, os: detectOs(), buildPlatform: import.meta.env.TAURI_ENV_PLATFORM ?? null };
-  if (runtime !== 'tauri') return { ...base, appVersion: null, paths: null, pathsError: null };
-  const appVersion = await import('@tauri-apps/api/app').then((app) => app.getVersion()).catch(() => null);
+  // I-06 : même lecteur que la synchro et « À propos » (constante de build hors app installée).
+  const appVersion = (await readAppVersion()).version;
+  if (runtime !== 'tauri') return { ...base, appVersion, paths: null, pathsError: null };
   try {
     const { invoke } = await import('@tauri-apps/api/core');
     return { ...base, appVersion, paths: await invoke<DbPathDiagnostics>('db_diagnostics'), pathsError: null };

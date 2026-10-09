@@ -56,7 +56,13 @@ Si la source n'est pas encore publiée : télécharge `CircleTasks.ipa` (artefac
 
 ## 7. Mises à jour de CircleTasks
 
-Quand une nouvelle version est publiée, elle apparaît dans la source avec ses notes. Dans SideStore, ouvre la source (ou « Mises à jour ») et touche « Mettre à jour ». Les données de l'app sont conservées tant que tu ne la supprimes pas.
+1. **Notes** : dans SideStore, ouvre la source CircleTasks, puis la fiche de l'app : « Nouveautés » liste les changements.
+2. **Un geste** : VPN actif, Wi-Fi, touche « Mettre à jour ». Ne supprime jamais l'app pour la réinstaller : ses données locales seraient perdues.
+3. **Conservé** : tâches, réglages, Face ID, dossier iCloud Drive, clé de synchronisation et rappels (replanifiés seuls au premier lancement).
+4. **Vérifier en 30 secondes** : Réglages > « À propos » affiche le nouveau numéro de version.
+5. **Écran d'échec au démarrage** : tes données sont intactes. Touche « Copier le détail » et envoie-le, ou « Restaurer la sauvegarde d'avant la mise à jour ». Ne supprime pas l'app.
+6. **Pas de retour arrière** : n'installe pas une version plus ancienne. Si l'app dit qu'elle est « plus ancienne que vos données », installe la dernière version : rien n'a été modifié.
+7. **PC et iPhone** : si l'un affiche « Mettez à jour l'app », mets l'autre à jour (PC : Réglages > « Rechercher une mise à jour »).
 
 ## 8. Renouveler tous les 7 jours
 

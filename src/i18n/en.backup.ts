@@ -47,6 +47,7 @@ export const backupEn: Messages['backup'] = {
   errorIo: 'The restore failed. Your current data is intact.',
   errorClosed: 'The restore failed. Restart CircleTasks to get your current data back.',
   errorRollback: 'The restore failed and the previous file could not be put back. A safety copy is in the backup folder.',
+  errorBadName: 'This backup cannot be used here. Nothing was changed.',
   errorUnconfirmed: 'The previous restore is not confirmed yet. Reopen CircleTasks; if this message comes back, choose “Keep the synced data” in the sync window.',
   errorPending: 'A previous restore was interrupted: restart CircleTasks to finish it before starting another.',
   restart: 'Restart',

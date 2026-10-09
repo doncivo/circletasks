@@ -39,7 +39,8 @@ export interface SyncServiceOptions {
   readonly clock: Clock;
   readonly deviceId: DeviceId;
   readonly devicePlatform?: SyncDevicePlatform;
-  readonly appVersion?: string;
+  /** Numéro d'application publié (I-06 : `platform/appVersion.ts`, `unknown` si illisible) ; obligatoire, jamais un repli `0.0.0`. */
+  readonly appVersion: string;
   readonly sv: number;
   readonly logger?: SyncLogger;
   /** Minuteur du seuil `SYNCING_BANNER_DELAY_MS` (tests : injecté). */
@@ -63,7 +64,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
     clock: options.clock,
     deviceId: options.deviceId,
     devicePlatform: options.devicePlatform ?? 'windows',
-    appVersion: options.appVersion ?? '0.0.0',
+    appVersion: options.appVersion,
     sv: options.sv,
     logger: options.logger ?? defaultSyncLogger,
   };

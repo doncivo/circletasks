@@ -32,7 +32,7 @@ import { signingStatusController } from './signingStatus';
 /** Une alerte à moins de 5 s n'est plus transmise (iOS la refuserait) : même marge que les rappels (`SEND_MARGIN_MS`, copiée pour ne pas charger l'adaptateur iOS au démarrage). */
 const SEND_MARGIN_MS = 5_000;
 
-export const SIGNING_TRIGGERS: readonly ReplanTrigger[] = ['open', 'resume', 'permission'];
+export const SIGNING_TRIGGERS: readonly ReplanTrigger[] = ['open', 'update', 'resume', 'permission'];
 
 interface ProcessMemory {
   /** Instant et texte du dernier envoi réussi de CE processus. */

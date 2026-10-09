@@ -4,7 +4,7 @@ import { AppContainerProvider, useAppContainer } from './features/app/AppContain
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp, publishStartFailure } from './features/app/bootstrap';
-import { DbFailureDetails, DbOpenWatchdog } from './features/app/DbFailureDetails';
+import { DbFailureDetails, DbOpenWatchdog, failureAlertKey } from './features/app/DbFailureDetails';
 import type { AppContainer } from './features/app/container';
 import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
@@ -334,7 +334,7 @@ export function App() {
           <RecoveryFailureLazy message={dbFailure?.message ?? ''} />
         </>
       )}
-      {dbStatus === 'error' && !recoveryFailed && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
+      {dbStatus === 'error' && !recoveryFailed && <p role="alert">{t(failureAlertKey(dbFailure, dbBackupFailed))}</p>}
       {/* 0.2.1 : étape, erreur exacte, URL et chemins de la base, copiables (diagnostic sans logs, sur PC comme sur iPhone). */}
       {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} retry={!recoveryFailed} />}
       {container ? (

@@ -1,7 +1,12 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ocrAssets } from './vite.ocrAssets.ts';
+
+// I-06 (ADR 0007 avenant I-06 point 1) : version de tauri.conf.json, constante de build lue par src/platform/appVersion.ts (repli quand
+// `getVersion()` de Tauri ne répond pas : navigateur de développement, e2e).
+const APP_VERSION: string = (JSON.parse(readFileSync(resolve(import.meta.dirname, 'src-tauri', 'tauri.conf.json'), 'utf8')) as { version: string }).version;
 // Port partagé avec src-tauri/tauri.conf.json (devUrl, 1420). Seul playwright.config.ts le déplace, par CT_DEV_PORT dans l'environnement
 // du serveur qu'il lance (webServer.env) : `npm run dev` et `tauri dev` restent sur 1420, même si CT_E2E_PORT_BASE est posée.
 export const DEV_PORT = Number(process.env['CT_DEV_PORT'] ?? 1420);
@@ -12,7 +17,7 @@ export const DEV_PORT = Number(process.env['CT_DEV_PORT'] ?? 1420);
 const E2E_HOOKS = process.env['VITE_CT_E2E_HOOKS'] === '1';
 
 export default defineConfig({
-  define: E2E_HOOKS ? { 'import.meta.env.DEV': 'true', 'import.meta.env.PROD': 'false' } : {},
+  define: { __CT_APP_VERSION__: JSON.stringify(APP_VERSION), ...(E2E_HOOKS ? { 'import.meta.env.DEV': 'true', 'import.meta.env.PROD': 'false' } : {}) },
   plugins: [react(), ocrAssets()],
   clearScreen: false,
   server: {

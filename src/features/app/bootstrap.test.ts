@@ -56,3 +56,18 @@ describe('démarrage : sauvegarde avant migration', () => {
     expect(useAppStore.getState().dbBackupFailed).toBe(false);
   });
 });
+
+describe('I-06 (régression CI) : un seul démarrage', () => {
+  it('dbStatus passe à « loading » SANS attendre la lecture de la version : le second appel de l’effet (StrictMode) ne relance rien', async () => {
+    useAppStore.setState({ dbStatus: 'idle', dbErrorDetail: null });
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const { bootstrapApp } = await import('./bootstrap');
+    const started = bootstrapApp({ open: openSqliteWasmDriver, desktop: null, focusWindow: null, syncPlatform: null, appVersion: () => held.then(() => ({ ok: true, version: '0.3.0', source: 'runtime' }) as const) });
+    // App.tsx ne lance `bootstrapApp` que sur « idle » : l'état doit déjà avoir changé avant toute attente.
+    expect(useAppStore.getState().dbStatus).toBe('loading');
+    release();
+    expect(await started).toBeDefined();
+    expect(useAppStore.getState().dbStatus).toBe('ready');
+  });
+});

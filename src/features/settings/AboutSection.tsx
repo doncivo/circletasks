@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { t } from '../../i18n';
 import { tLogs } from '../../i18n/logsText';
 import { logDesktopFailure } from '../../platform';
@@ -15,7 +15,8 @@ import { onboardingStore } from './onboardingStore';
  * « Logs » (écran du journal technique ; un échec d'écriture ou de lecture du journal y est signalé en rouge, critère 10). Sur PC : version installée, « Rechercher une mise à jour »
  * (résultat : « CircleTasks est à jour », « Impossible de vérifier les mises à jour » ou le bandeau de mise à jour) et lien vers la dernière
  * version. Partout (PC et iPhone) : « Revoir le guide de bienvenue », qui relance l'assistant sans toucher aux données. L'iPhone se met à
- * jour par SideStore (I-06) : il n'y a pas de ligne de mise à jour.
+ * jour par SideStore (I-06) : il n'y a pas de ligne de mise à jour, mais la version y est lue (vérifier qu'une mise à jour a pris).
+ * I-06 : la version vient du conteneur (`platform/appVersion.ts`, lue une fois au démarrage, PC et iPhone) ; illisible : « Version inconnue ».
  */
 export function AboutSection() {
   const container = useAppContainer();
@@ -23,27 +24,12 @@ export function AboutSection() {
   const status = useFeatureStore(updaterStore, (s) => s.status);
   const check = useFeatureStore(updaterStore, (s) => s.check);
   const relaunchGuide = useFeatureStore(onboardingStore, (s) => s.relaunch);
-  const [version, setVersion] = useState<string | null>(null);
+  const version = container.appVersion.version;
   const [openFailed, setOpenFailed] = useState(false);
   const navigate = useNavigationStore((s) => s.navigate);
   const { journal, unavailable: journalUnavailable } = useLogJournal();
   const logStatus = useLogStatus(journal);
   const logFailureCode = logStatus.writeError ?? logStatus.readError ?? journalUnavailable;
-  const runtime = container.platform.runtime;
-
-  useEffect(() => {
-    let active = true;
-    // PC : version de l'intégration ; iPhone et navigateur : version de l'app (`@tauri-apps/api/app`), chargée à la demande.
-    const read = desktop ? desktop.getVersion() : import('../../platform/logs').then((m) => m.appVersion(runtime));
-    read
-      .then((value) => {
-        if (active) setVersion(value);
-      })
-      .catch((error: unknown) => logDesktopFailure('version', error));
-    return () => {
-      active = false;
-    };
-  }, [desktop, runtime]);
 
   const checking = status === 'checking';
   const hint =
@@ -68,7 +54,7 @@ export function AboutSection() {
       <h2 className="ct-settings__section">{t('settings.sectionAbout')}</h2>
       <div className="ct-settings__row">
         <span className="ct-settings__stack">
-          {version ? t('app.version', { version }) : t('app.name')}
+          {version ? t('app.version', { version }) : t('app.versionUnknown')}
           {hint && (
             <span className={status === 'checkFailed' ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
               {hint}

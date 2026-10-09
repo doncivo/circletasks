@@ -81,7 +81,7 @@ export async function upgradeDevice(device: SimDevice): Promise<ReintegrationRep
  * Fait de `device` un appareil de version plus récente : `sv` publié `sv`, numéro d'application `appVersion`, et chaque opération sur
  * `task` qu'il publie porte en plus `x` = `xFor(id)` (même horloge que l'opération). Remplace le service de l'appareil.
  */
-export function makeNewerDevice(device: SimDevice, options: { readonly sv?: number; readonly appVersion?: string; readonly xFor?: (taskId: string) => string | null } = {}): void {
+export function makeNewerDevice(device: SimDevice, options: { readonly sv?: number; readonly appVersion?: string; readonly devicePlatform?: 'windows' | 'ios'; readonly xFor?: (taskId: string) => string | null } = {}): void {
   const sv = options.sv ?? NEXT_SV;
   const base = device.platform;
   const platform: MemorySyncPlatform = {
@@ -111,6 +111,7 @@ export function makeNewerDevice(device: SimDevice, options: { readonly sv?: numb
     hlc: device.hlc,
     clock: device.clock,
     deviceId: device.id,
+    ...(options.devicePlatform ? { devicePlatform: options.devicePlatform } : {}),
     sv,
     appVersion: options.appVersion ?? '0.5.0',
     logger: device.logger,

@@ -71,7 +71,9 @@ describe('démarrage complet', () => {
     const seed = `00${String(Date.parse('2026-10-02T00:00:00.000Z'))}-0005-${DEVICE}` as Hlc;
     const set = vi.fn(async () => undefined);
     const container = await bootstrapApp({ open: openSqliteWasmDriver, repositories: fakeFactory(DEVICE, seed, set), clock });
-    expect(set).not.toHaveBeenCalled();
+    // L'identité n'est pas réécrite ; seule la version de ce lancement est mémorisée (I-06 : le faux rend DEVICE pour toute clé, valeur illisible).
+    expect(set).not.toHaveBeenCalledWith('device.id', expect.anything());
+    expect(set.mock.calls.map((call: unknown[]) => call[0])).toEqual(['app.lastLaunchedVersion']);
     expect(parseHlc(container?.hlc.now() ?? ('' as Hlc))).toMatchObject({ counter: 6 });
   });
 
