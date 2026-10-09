@@ -1,11 +1,17 @@
 # Journal des versions
 
-## [Non publié]
+## 0.3.0
 
-- iPhone : le numéro de version est affiché dans Réglages > À propos ; la synchronisation publie le vrai numéro de l'iPhone (plus de « 0.0.0 »).
-- Mise à jour par SideStore : les rappels sont replanifiés au premier lancement d'une nouvelle version.
+- Mise à jour de l'iPhone par SideStore : la source CircleTasks propose chaque nouvelle version ; le numéro de version est affiché dans Réglages > À propos et la synchronisation publie le vrai numéro de l'iPhone (plus de « 0.0.0 »).
+- Les rappels sont replanifiés au premier lancement d'une nouvelle version.
+- Synchronisation : l'iPhone rejoint correctement l'état du PC au lieu d'ouvrir sa propre époque ; une époque orpheline est abandonnée au profit de celle du PC, sans perte de données.
+- « À jour » n'est plus affiché tant que l'état n'a pas été publié et lu en entier.
+- Une clé importée n'est jamais prise pour celle du premier appareil ; actions « Démarrer la synchro depuis cet appareil » et « Lancer une reprise complète » proposées en cas d'avertissement.
+- Agenda : un compte reçu du PC sans secret local s'affiche « Connecté ailleurs » (plus de faux bandeau « déconnecté ») ; « Connecter ici » connecte l'iPhone sous une référence neuve.
+- iPhone : titres datés de Tâches et de la Semaine sur une ligne à côté de leurs boutons ; titre « Synchronisation » des Détails sur une ligne.
 - Si la mise à jour des données échoue au démarrage : versions affichées et bouton « Restaurer la sauvegarde d'avant la mise à jour ».
 - Une version plus ancienne que les données ne les modifie pas et indique d'installer la dernière version.
+- PC et iPhone exécutent le même code de synchronisation : mets les deux appareils à jour.
 
 ## 0.2.3
 
