@@ -1,7 +1,29 @@
 import { expect, type Locator, type Page } from '@playwright/test';
-import { waitForScreenLoaded } from './app';
+import { REPORT_FONT_FACES, REPORT_FONT_SAMPLE } from '../../../src/features/stats/reportFonts';
+import { APP_READY_TIMEOUT_MS, waitForScreenLoaded } from './app';
 
 /** Aides e2e des statistiques (H-01 à H-03, ES-08), communes aux projets `pc` et `iphone`. */
+
+/**
+ * Attend que les polices du rapport exporté soient chargées (état `document.fonts`, jamais un délai). Leurs fichiers sont servis à la
+ * demande : l'export en PDF ou en image les télécharge au premier clic, ce qui dépasse les 5 s d'une assertion sur une machine chargée
+ * (H-03 critère 5, instable sur la CI). À appeler avant de lancer un export PDF ou image ; l'app affiche « Export en cours… » entre-temps.
+ */
+export async function waitForReportFonts(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ faces, sample }) => {
+            for (const face of faces) void document.fonts.load(face, sample).catch(() => undefined);
+            return faces.every((face) => document.fonts.check(face, sample));
+          },
+          { faces: [...REPORT_FONT_FACES], sample: REPORT_FONT_SAMPLE },
+        ),
+      { message: 'polices du rapport jamais chargées', timeout: APP_READY_TIMEOUT_MS },
+    )
+    .toBe(true);
+}
 
 export interface DirectTask {
   readonly title: string;
