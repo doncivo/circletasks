@@ -26,6 +26,7 @@ import {
   HolidaySettingsScreen,
   ImportScreen,
   LogsScreen,
+  RecoveryFailureLazy,
   preloadScreens,
   QuietHoursRoute,
   RecapSettingsScreen,
@@ -330,7 +331,7 @@ export function App() {
         // page ne relance pas la récupération (elle est faite par Rust au lancement), d'où la consigne de fermer puis rouvrir l'app.
         <>
           <p role="alert">{t('backup.recoveryFailedIos')}</p>
-          <p>{t('backup.recoveryFailedIosHelp')}</p>
+          <RecoveryFailureLazy message={dbFailure?.message ?? ''} />
         </>
       )}
       {dbStatus === 'error' && !recoveryFailed && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}

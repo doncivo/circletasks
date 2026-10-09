@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "backups-ios",
-  "description": "iPhone : sauvegarde quotidienne et restauration (P-04-iOS, ADR 0009 avenant lot F B1). Cinq commandes Rust : daily_backup, list_backups, check_backup, restore_backup et backup_startup_status (issue de la récupération d'une restauration interrompue). Jamais reveal_backups_folder (PC). Aucune exportation des sauvegardes hors de l'appareil. Liste exacte fixée par tests/desktop/config.rs.",
+  "description": "iPhone : sauvegarde quotidienne et restauration (P-04-iOS, ADR 0009 avenant lot F B1). Six commandes Rust : daily_backup, list_backups, check_backup, restore_backup, backup_startup_status (issue de la récupération d'une restauration interrompue) et backup_set_aside_conflicts (fichiers qui empêchent la récupération déplacés dans backups/, jamais supprimés). Jamais reveal_backups_folder (PC). Aucune exportation des sauvegardes hors de l'appareil. Liste exacte fixée par tests/desktop/config.rs.",
   "windows": ["main"],
   "platforms": ["iOS"],
-  "permissions": ["allow-daily-backup", "allow-list-backups", "allow-check-backup", "allow-restore-backup", "allow-backup-startup-status"]
+  "permissions": ["allow-daily-backup", "allow-list-backups", "allow-check-backup", "allow-restore-backup", "allow-backup-startup-status", "allow-backup-set-aside-conflicts"]
 }

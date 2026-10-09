@@ -862,15 +862,15 @@ fn p04_ios_16_backups_capability_and_handler_are_exact() {
     assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
     let mut granted = permissions_of(text);
     granted.sort();
-    assert_eq!(granted, ["allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
+    assert_eq!(granted, ["allow-backup-set-aside-conflicts", "allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
     let ios = ios_handler_commands();
-    for command in ["daily_backup", "list_backups", "check_backup", "restore_backup", "backup_startup_status"] {
+    for command in ["daily_backup", "list_backups", "check_backup", "restore_backup", "backup_startup_status", "backup_set_aside_conflicts"] {
         assert!(ios.contains(command), "{command}");
     }
     assert!(!ios.contains("reveal_backups_folder"));
     for (name, other) in all_capabilities() {
         if name != "backups-ios.json" {
-            assert!(!other.contains("allow-backup-startup-status"), "{name}");
+            assert!(!other.contains("allow-backup-startup-status") && !other.contains("allow-backup-set-aside-conflicts"), "{name}");
         }
         if name != "backups.json" {
             assert!(!other.contains("allow-reveal-backups-folder"), "{name}");

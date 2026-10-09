@@ -253,3 +253,45 @@ fn p04_ios_b1_the_sql_plugin_checks_for_a_pending_restore_before_creating_the_da
     let restore = &command[command.find("pub async fn restore_backup(").unwrap()..];
     assert!(restore.contains("recover_after_failed_swap"));
 }
+
+// --- revue I1 : « Mettre les fichiers en conflit de côté » ---
+
+#[test]
+fn p04_ios_i1_conflicting_files_are_set_aside_never_deleted_then_recovery_succeeds() {
+    use circletasks_lib::backup::recover_interrupted_restore;
+    use circletasks_lib::startup_gate::set_aside_conflicts;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let db = dir.path().join(DB_FILE);
+    make_db(&db, Some("true"));
+    fs::write(dir.path().join(format!("{DB_FILE}-wal.restore-old")), b"ancien wal").unwrap();
+    fs::write(dir.path().join(format!("{DB_FILE}-wal")), b"wal en conflit").unwrap();
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap_err().code, "recovery-conflict");
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080000Z"), Ok(1));
+    let aside = backups.join("circletasks-set-aside-20261009T080000Z");
+    assert_eq!(fs::read(aside.join(format!("{DB_FILE}-wal"))).unwrap(), b"wal en conflit", "déplacé, jamais supprimé");
+    recover_interrupted_restore(&db, &backups).expect("récupération possible");
+    assert_eq!(fs::read(dir.path().join(format!("{DB_FILE}-wal"))).unwrap(), b"ancien wal");
+    // Le dossier mis de côté n'est ni listé ni purgé comme une sauvegarde.
+    assert!(circletasks_lib::backup::list_backups_in(&backups).unwrap().iter().all(|entry| !entry.name.contains("set-aside")));
+    assert!(aside.is_dir());
+}
+
+#[test]
+fn p04_ios_i1_an_unsafe_restore_old_is_set_aside() {
+    use circletasks_lib::backup::recover_interrupted_restore;
+    use circletasks_lib::startup_gate::set_aside_conflicts;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let db = dir.path().join(DB_FILE);
+    make_db(&db, Some("true"));
+    fs::create_dir_all(dir.path().join(format!("{DB_FILE}.restore-old"))).unwrap();
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap_err().code, "unsafe-restore-file");
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080001Z"), Ok(1));
+    assert!(backups.join("circletasks-set-aside-20261009T080001Z").join(format!("{DB_FILE}.restore-old")).is_dir());
+    recover_interrupted_restore(&db, &backups).expect("plus rien d'anormal");
+    assert_eq!(lock_value(&db).as_deref(), Some("true"), "base actuelle intacte");
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080002Z"), Ok(0), "rien à déplacer");
+}

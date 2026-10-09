@@ -75,7 +75,13 @@ pub fn register_sql_after_recovery<R: Runtime>(app: &AppHandle<R>, config_dir: O
         None => Err("no-data-dir"),
         Some(dir) => crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)).map(|_| ()).map_err(|error| error.code),
     };
-    let outcome = outcome.and_then(|()| app.plugin(tauri_plugin_sql::Builder::default().build()).map_err(|_| "sql-plugin"));
+    // Plugin déjà enregistré (nouvel essai après « Mettre les fichiers en conflit de côté ») : rien à refaire.
+    let outcome = outcome.and_then(|()| {
+        if app.try_state::<tauri_plugin_sql::DbInstances>().is_some() {
+            return Ok(());
+        }
+        app.plugin(tauri_plugin_sql::Builder::default().build()).map_err(|_| "sql-plugin")
+    });
     if let Err(code) = outcome {
         crate::applog::write("backup-recovery", code);
     }
@@ -155,4 +161,66 @@ pub fn retry_pending_marker<R: Runtime>(app: &AppHandle<R>) -> Result<(), crate:
             Ok(())
         }
     }
+}
+
+/// Revue I1 : action utile de l'écran « Restauration interrompue » pour `recovery-conflict` et `unsafe-restore-file`. Les fichiers qui
+/// empêchent la récupération sont DÉPLACÉS (jamais supprimés) dans `backups/circletasks-set-aside-<horodatage>/` : un `.restore-old` qui
+/// n'est pas un fichier ordinaire (lien, dossier), l'occupant d'une cible du retour en place (`-wal`, `-shm` actuels quand leur
+/// `.restore-old` existe ; la base quand elle n'est pas un fichier ordinaire), et un fichier préparé `.restoring` anormal. Rend le nombre d'entrées déplacées ; `io` si un déplacement échoue (rien n'est supprimé).
+pub fn set_aside_conflicts(db_path: &Path, backups_dir: &Path, stamp: &str) -> Result<usize, &'static str> {
+    let name = |suffix: &str| {
+        let mut text = db_path.as_os_str().to_owned();
+        text.push(suffix);
+        PathBuf::from(text)
+    };
+    let plain = |path: &Path| std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_file());
+    let present = |path: &Path| std::fs::symlink_metadata(path).is_ok();
+    let mut aside: Vec<PathBuf> = Vec::new();
+    for suffix in ["", "-wal", "-shm"] {
+        let current = name(suffix);
+        let old = name(&format!("{suffix}.restore-old"));
+        if present(&old) && !plain(&old) {
+            aside.push(old);
+        } else if present(&old) && present(&current) && (suffix != "" || !plain(&current)) {
+            aside.push(current);
+        }
+    }
+    for leftover in [".restoring", ".restoring.tmp"] {
+        let path = name(leftover);
+        if present(&path) && !plain(&path) {
+            aside.push(path);
+        }
+    }
+    if aside.is_empty() {
+        return Ok(0);
+    }
+    let target = backups_dir.join(format!("circletasks-set-aside-{stamp}"));
+    std::fs::create_dir_all(&target).map_err(|_| "io")?;
+    for path in &aside {
+        let Some(file) = path.file_name() else { return Err("io") };
+        std::fs::rename(path, target.join(file)).map_err(|_| "io")?;
+    }
+    crate::applog::write_count("backup-recovery", "conflicts-set-aside", u32::try_from(aside.len()).unwrap_or(u32::MAX));
+    Ok(aside.len())
+}
+
+/// « Mettre les fichiers en conflit de côté » (iPhone) : déplacement, puis nouvelle récupération et, si elle réussit, enregistrement du
+/// plugin SQL ; rend le nouvel état de la porte (`ready` : la WebView recharge et ouvre la base).
+#[tauri::command]
+pub async fn backup_set_aside_conflicts(app: AppHandle) -> StartupStatus {
+    let Ok(dir) = app.path().app_config_dir() else { return StartupStatus { state: "failed", code: Some("no-data-dir") } };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let stamp = crate::backup::utc_stamp(now);
+    let moved = {
+        let dir = dir.clone();
+        tauri::async_runtime::spawn_blocking(move || set_aside_conflicts(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR), &stamp)).await
+    };
+    if !matches!(moved, Ok(Ok(_))) {
+        if let Some(gate) = app.try_state::<StartupGate>() {
+            gate.set(Err("io"));
+        }
+        return StartupStatus { state: "failed", code: Some("io") };
+    }
+    let _ = register_sql_after_recovery(&app, Some(&dir));
+    status_of(app.try_state::<StartupGate>().as_deref())
 }

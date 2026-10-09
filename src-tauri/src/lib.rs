@@ -101,7 +101,7 @@ pub fn run() {
         // FILES-IOS-01 (ADR 0009 avenant lot F A3) : même commande et même permission qu'au PC, temporaire remis au plugin ct-files.
         export_ios::export_save_file,
         // P-04-iOS (ADR 0009 avenant lot F B1) : sauvegarde et restauration sur iPhone ; `reveal_backups_folder` reste PC.
-        backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status,
+        backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status, startup_gate::backup_set_aside_conflicts,
         // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
         applog::log_append, applog::log_read, applog::log_clear,
         // CAP-IOS-01 (ADR 0015) : Vision derrière les commandes OCR du PC, dictée sur l'appareil, Réglages iOS. Rust seul appelle les plugins.

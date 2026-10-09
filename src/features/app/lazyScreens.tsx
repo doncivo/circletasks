@@ -108,6 +108,8 @@ export const SettingsScreen = lazyScreen<object>(() => import('../settings/Setti
 export const AppearanceScreen = lazyScreen<object>(() => import('../settings/AppearanceScreen').then((m) => ({ default: m.AppearanceScreen })), 'appearancescreen');
 export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScreen').then((m) => ({ default: m.TabsScreen })), 'tabsscreen');
 export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })), 'importscreen');
+/** P-04-iOS (revue I1) : texte et action de l'écran « Restauration interrompue », chargés seulement dans ce cas. */
+export const RecoveryFailureLazy = lazyScreen<{ message: string }>(() => import('./RecoveryFailure').then((m) => ({ default: m.RecoveryFailure })), 'recoveryfailure');
 /** Écran Logs (I-04), ouvert depuis Réglages › À PROPOS. */
 export const LogsScreen = lazyScreen<object>(() => import('../settings/logs/LogsScreen').then((m) => ({ default: m.LogsScreen })), 'logsscreen');
 export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })), 'recapsettingsscreen');

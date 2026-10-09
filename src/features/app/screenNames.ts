@@ -20,6 +20,7 @@ export type ScreenName =
   | 'tabsscreen'
   | 'importscreen'
   | 'logsscreen'
+  | 'recoveryfailure'
   | 'recapsettingsscreen'
   | 'holidaysettingsscreen'
   | 'spacesscreen'
