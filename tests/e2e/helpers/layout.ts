@@ -12,6 +12,12 @@ export async function expectFitsViewport(page: Page, where: string): Promise<voi
     const offenders: string[] = [];
     for (const element of Array.from(document.body.querySelectorAll<HTMLElement>('*'))) {
       if (element.closest('[aria-hidden="true"], .ct-visually-hidden')) continue;
+      // Rangée voulue défilante (ex. pastilles d'icônes de la feuille Ajout) : ses éléments hors cadre sont rognés par elle, pas par la page.
+      let clipped = false;
+      for (let parent = element.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+        if (['auto', 'scroll', 'hidden', 'clip'].includes(getComputedStyle(parent).overflowX)) clipped = true;
+      }
+      if (clipped) continue;
       const style = getComputedStyle(element);
       if (style.display === 'none' || style.visibility === 'hidden') continue;
       const rect = element.getBoundingClientRect();

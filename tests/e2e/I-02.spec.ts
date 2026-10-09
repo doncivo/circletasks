@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { openApp } from './helpers/app';
+import { expectFitsViewport } from './helpers/layout';
 import { isPhone } from './helpers/today';
 
 /**
@@ -103,6 +104,56 @@ test.describe('I-02 — alerte avant expiration (iPhone, profil et planificateur
     await openSettings(page);
     await expect(page.getByText('Les notifications sont refusées : vous ne serez pas prévenu')).toBeVisible();
     expect(await signing(page, (hooks) => hooks.alert.scheduled.length)).toBe(0);
+  });
+});
+
+test.describe('I-02 — 440 × 956 : À propos et bandeau sans défilement horizontal, une action utile par échec (iPhone)', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Le profil de signature injecté représente l’iPhone.');
+    await page.addInitScript(() => {
+      (globalThis as { __ctNotificationsFake?: boolean }).__ctNotificationsFake = true;
+      (globalThis as { __ctSigningFake?: boolean }).__ctSigningFake = true;
+    });
+    await page.clock.install({ time: NOW });
+    await openApp(page);
+  });
+
+  test('notifications non autorisées : « Autoriser » sur À propos, la ligne tient dans la largeur', async ({ page }) => {
+    await page.evaluate(() => window.__ctNotifications?.setPermission('undetermined'));
+    await signing(page, (hooks) => hooks.source.expireAt('2026-10-14T07:00:00Z'));
+    await resume(page);
+    await openSettings(page);
+    await expect(page.getByText('Les notifications ne sont pas autorisées : vous ne serez pas prévenu')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Autoriser les notifications pour l’alerte d’expiration' })).toBeVisible();
+    await expectFitsViewport(page, 'À propos, notifications non autorisées');
+  });
+
+  test('notifications refusées : « Voir » mène à Réglages > Rappels ; date inconnue : la ligne tient dans la largeur', async ({ page }) => {
+    await page.evaluate(() => window.__ctNotifications?.setPermission('denied'));
+    await signing(page, (hooks) => hooks.source.expireAt('2026-10-14T07:00:00Z'));
+    await resume(page);
+    await openSettings(page);
+    await expectFitsViewport(page, 'À propos, notifications refusées');
+    await page.getByRole('button', { name: 'Voir les réglages des rappels pour autoriser les notifications' }).click();
+    await expect(page.getByRole('heading', { name: 'Récapitulatifs' })).toBeVisible();
+  });
+
+  test('bandeau sous 24 h : « Voir » ouvre À propos, sans défilement horizontal', async ({ page }) => {
+    await signing(page, (hooks) => hooks.source.expireAt('2026-10-08T23:30:00Z'));
+    await resume(page);
+    await expect(page.locator('.ct-status-banner')).toContainText('expire dans 16 h');
+    await expectFitsViewport(page, 'bandeau d’expiration');
+    await page.getByRole('button', { name: 'Voir l’expiration de la signature dans À propos' }).click();
+    await expect(page.getByText('Moins de 24 h restantes : actualisez CircleTasks dans SideStore')).toBeVisible();
+    await expectFitsViewport(page, 'À propos, moins de 24 h');
+  });
+
+  test('date inconnue : À propos tient dans la largeur', async ({ page }) => {
+    await signing(page, (hooks) => hooks.source.fail('profile-missing'));
+    await resume(page);
+    await openSettings(page);
+    await expect(page.getByText('Date d’expiration inconnue : l’alerte avant expiration est désactivée')).toBeVisible();
+    await expectFitsViewport(page, 'À propos, date inconnue');
   });
 });
 

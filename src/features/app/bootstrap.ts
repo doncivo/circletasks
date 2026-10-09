@@ -23,7 +23,8 @@ import { openSyncPlatform } from '../../platform/sync';
 import { openHaptics, type Haptics } from '../../platform/haptics';
 import { openAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { openPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
-import { openSigning, type SigningPlatform } from '../../platform/signing';
+import type { OsFamily, Runtime } from '../../platform/runtime';
+import { createUnsupportedSigning, type SigningPlatform } from '../../platform/signing';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
 import { useAppStore } from './appStore';
@@ -88,6 +89,15 @@ export async function bootstrapDatabase(
 }
 
 /** Mode de journal effectif pour le diagnostic (0.2.2) ; null si la lecture échoue (elle ne masque jamais l'erreur d'origine). */
+/**
+ * Source de l'expiration de la signature (I-02) : le résolveur et les adaptateurs ne sont chargés que sur l'iPhone installé (et en
+ * développement, pour les faux des tests) ; PC et navigateur reçoivent la version vide sans charger ce code (budget du bundle de départ).
+ */
+async function openSigningOnDemand(runtime: Runtime, os: OsFamily): Promise<SigningPlatform> {
+  if (!import.meta.env.DEV && !(runtime === 'tauri' && os === 'ios')) return createUnsupportedSigning();
+  return (await import('../../platform/signing/open')).openSigning(runtime, os);
+}
+
 async function readJournalMode(db: SqlDriver): Promise<string | null> {
   try {
     const rows = await db.select('PRAGMA journal_mode');
@@ -245,7 +255,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       haptics: options.haptics ?? at('openHaptics', () => openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) })),
       authenticator: options.authenticator ?? at('openAuthenticator', () => openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) })),
       privacyShield: options.privacyShield ?? at('openPrivacyShield', () => openPrivacyShield(runtime, os)),
-      signing: options.signing ?? at('openSigning', () => openSigning(runtime, os)),
+      signing: options.signing ?? (await at('openSigning', () => openSigningOnDemand(runtime, os))),
     };
     return at('createAppContainer', () => createAppContainer(deps));
   } catch (error) {

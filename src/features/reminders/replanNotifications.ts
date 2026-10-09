@@ -11,7 +11,6 @@ import { NotificationSchedulerError } from '../../platform/notifications';
 import type { AppContainer } from '../app/container';
 import { requestsFor } from './notificationTexts';
 import { failureOf, statusController } from './notificationStatus';
-import { runSigningStep, signingAlertFailure } from './signingNotice';
 
 /**
  * Cas d'usage `replanNotifications` (N-01, ADR 0012 avenant N1.3) : UN passage de replanification du plan de notifications de
@@ -85,7 +84,13 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
   // I-02 (ADR 0013 §3.4) : alerte d'expiration de la signature (identifiant réservé 2), APRÈS la lecture de l'autorisation et AVANT le calcul
   // de la place disponible : elle compte dans le plafond de ce passage. Ne rejette jamais ; sans effet sur le PC et hors des déclencheurs
   // `open`, `resume` et `permission`. L'autorisation refusée ne la planifie pas, mais la date lue reste affichée.
-  await runSigningStep(container, { trigger, permission, nowMs: clock.nowMs(), zone });
+  // Chargée à la demande (iPhone installé seulement, budget du bundle de départ) : jamais chargée sur le PC ni dans le navigateur.
+  let signingFailure: PlanFailureReason | null = null;
+  if (container.signing.source.supported) {
+    const signing = await import('./signingNotice');
+    await signing.runSigningStep(container, { trigger, permission, nowMs: clock.nowMs(), zone });
+    signingFailure = signing.signingAlertFailure(container);
+  }
   if (permission !== 'granted') return { status: 'blocked', permission };
 
   const ledger = await container.notificationLedger.read();
@@ -138,7 +143,6 @@ async function pass(container: AppContainer, trigger: ReplanTrigger, status: Ret
 
     // (8) et (9) Remplacement par différence ; la réussite efface l'échec.
     const report = await scheduler.replace(requests);
-    const signingFailure = signingAlertFailure(container);
     await status.patch((current) => ({
       ...current,
       permission: 'granted',

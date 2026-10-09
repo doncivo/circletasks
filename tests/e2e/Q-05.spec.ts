@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { APP_READY_TIMEOUT_MS, openApp } from './helpers/app';
+import { expectFitsViewport } from './helpers/layout';
 import { isPhone, listTitles, openToday } from './helpers/today';
 
 /**
@@ -57,6 +58,20 @@ test.describe('Q-05 — capture rapide', () => {
     expect(box).not.toBeNull();
     expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(height);
     expect(box?.y ?? -1).toBeGreaterThanOrEqual(0);
+  });
+
+  test('iPhone 440 × 956 : la feuille de capture ne défile pas à l’horizontale, même avec un titre très long et un mot sans espace', async ({ page }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'La feuille « Nouvelle tâche » est celle de l’iPhone.');
+    await openToday(page);
+    await page.getByRole('button', { name: 'Ajouter', exact: true }).tap();
+    const dialog = page.getByRole('dialog', { name: 'Nouvelle tâche' });
+    await expect(dialog.getByLabel('Titre')).toBeFocused();
+    // Le bas de la feuille arrive à l'image suivante (transition) : mesuré une fois monté.
+    await expect(dialog.locator('.ct-icon-picker')).toBeVisible();
+    await expectFitsViewport(page, 'feuille de capture vide');
+    await dialog.getByLabel('Titre').fill(`Appeler le notaire demain 10h #perso ${'ExtraordinairementLong'.repeat(8)}`);
+    await expect(dialog.getByRole('button', { name: 'Enregistrer' })).toBeEnabled();
+    await expectFitsViewport(page, 'feuille de capture, titre long');
   });
 
   test('iPhone : derrière l’assistant de premier lancement, le bouton + n’est pas atteignable (critère 8 de la fiche)', async ({ page }, testInfo) => {
