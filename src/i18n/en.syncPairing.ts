@@ -84,7 +84,7 @@ export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
     title: 'Pair the iPhone',
     warning: 'This code carries the encryption key of your data. It never goes through iCloud.',
     step1: 'On the iPhone, open {path}.',
-    step1Path: 'Settings → Sync → Pair with PC',
+    step1Path: 'Settings → Sync → Pair with the PC',
     step2: 'Scan this code with the iPhone.',
     step3: 'Choose the same iCloud Drive / CircleTasks folder on the iPhone.',
     qrLabel: 'Pairing QR code',

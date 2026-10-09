@@ -21,11 +21,14 @@ test.describe('A-01 — liste du jour', () => {
   test('l’app démarre sur l’onglet Tâches avec le jour et le badge AUJOURD’HUI (critères 1, 2)', async ({ page }) => {
     await expect(todayTab(page)).toHaveAttribute('aria-current', 'page');
     await expect(page.getByText('Aujourd’hui', { exact: true })).toBeVisible();
-    // Jour du navigateur (fuseau simulé), pas celui du processus de test : entre 22 h et minuit UTC ils diffèrent.
-    const { month, shortMonth } = await page.evaluate(() => ({ month: new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(new Date()), shortMonth: new Intl.DateTimeFormat('fr-FR', { month: 'short', year: 'numeric' }).format(new Date()) }));
+    // Jour de Paris (fuseau du navigateur de test), jamais celui du processus de test (UTC en CI : un jour d'écart de 22:00 à minuit UTC).
+    const today = new Date();
+    const timeZone = 'Europe/Paris';
+    const month = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone }).format(today);
     // PC : mois en toutes lettres ; iPhone : mois abrégé (« oct. 2026 »).
+    const shortMonth = new Intl.DateTimeFormat('fr-FR', { month: 'short', year: 'numeric', timeZone }).format(today);
     await expect(page.getByText(test.info().project.name === 'iphone' ? shortMonth : month, { exact: true })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1 })).toContainText(await page.evaluate(() => String(new Date().getDate())));
+    await expect(page.getByRole('heading', { level: 1 })).toContainText(new Intl.DateTimeFormat('fr-FR', { day: 'numeric', timeZone }).format(today));
   });
 
   test('l’état vide propose d’ajouter une tâche (critère 7)', async ({ page }) => {

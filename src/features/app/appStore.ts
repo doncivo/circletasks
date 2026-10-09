@@ -16,6 +16,8 @@ export interface DbFailure {
   readonly migration?: number | undefined;
   readonly errorName: string;
   readonly message: string;
+  /** Mode de journal effectif de la base ouverte (PRAGMA journal_mode) ; null si illisible, absent si la base n'était pas ouverte. */
+  readonly journalMode?: string | null;
 }
 
 /**
@@ -69,9 +71,14 @@ export interface AppState {
   setSpaces(spaces: readonly Space[]): void;
   setProjects(projects: readonly Project[]): void;
   setProjectFilter(projectId: ProjectId | null): void;
+  /** Étape d'ouverture en cours (lue par le chien de garde du démarrage) ; null hors ouverture. */
+  readonly dbProgress: { readonly step: string; readonly migration?: number | undefined } | null;
+  setDbProgress(progress: AppState['dbProgress']): void;
 }
 
 export const useAppStore = create<AppState>()((set) => ({
+  dbProgress: null,
+  setDbProgress: (dbProgress) => set({ dbProgress }),
   dbStatus: 'idle',
   dbErrorDetail: null,
   dbBackupFailed: false,

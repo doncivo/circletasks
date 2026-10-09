@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "circletasks"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -5282,8 +5282,6 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-sql"
 version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "811fca8f6b80ca3026496db4612d93000ce96915ac6e36f7adc73b8232aee9f0"
 dependencies = [
  "futures-core",
  "indexmap 2.14.2",
@@ -5294,6 +5292,7 @@ dependencies = [
  "sqlx",
  "tauri",
  "tauri-plugin",
+ "tempfile",
  "thiserror 2.0.21",
  "time",
  "tokio",

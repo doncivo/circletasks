@@ -4,7 +4,7 @@ import { AppContainerProvider, useAppContainer } from './features/app/AppContain
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp, publishStartFailure } from './features/app/bootstrap';
-import { DbFailureDetails } from './features/app/DbFailureDetails';
+import { DbFailureDetails, DbOpenWatchdog } from './features/app/DbFailureDetails';
 import type { AppContainer } from './features/app/container';
 import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
@@ -321,6 +321,7 @@ export function App() {
   return (
     <div className="app-shell" data-layout={layout} data-db-status={dbStatus}>
       {dbStatus === 'loading' && <p role="status">{t('app.loading')}</p>}
+      {dbStatus === 'loading' && <DbOpenWatchdog />}
       {dbStatus === 'error' && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
       {/* 0.2.1 : étape, erreur exacte, URL et chemins de la base, copiables (diagnostic sans logs, sur PC comme sur iPhone). */}
       {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} />}

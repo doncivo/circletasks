@@ -1,7 +1,46 @@
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { DB_URL, readDbEnvironment, type DbEnvironment } from '../../platform/dbDiagnostics';
-import type { DbFailure } from './appStore';
+import { appReload } from '../security/lockLayer';
+import { useAppStore, type DbFailure } from './appStore';
+import './DbFailureDetails.css';
+
+/** Délai sans réponse de l'ouverture de la base au-delà duquel le diagnostic remplace l'attente silencieuse. */
+export const DB_WATCHDOG_MS = 15_000;
+
+/** Prise de test des e2e (développement seulement) : délai du chien de garde. */
+function watchdogMs(): number {
+  const override = import.meta.env.DEV ? (globalThis as { __ctDbWatchdogMs?: number }).__ctDbWatchdogMs : undefined;
+  return typeof override === 'number' ? override : DB_WATCHDOG_MS;
+}
+
+/**
+ * Chien de garde de l'ouverture : monté pendant « Chargement… ». Passé le délai, affiche l'étape en cours, l'environnement et « Réessayer »
+ * au lieu d'attendre sans fin ; disparaît dès que l'ouverture aboutit ou échoue (l'écran d'échec prend le relais).
+ */
+export function DbOpenWatchdog() {
+  const progress = useAppStore((s) => s.dbProgress);
+  const [stalled, setStalled] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setStalled(true), watchdogMs());
+    return () => clearTimeout(timer);
+  }, []);
+  if (!stalled) return null;
+  const seconds = Math.round(watchdogMs() / 1000);
+  const failure: DbFailure = {
+    phase: 'open',
+    step: progress?.step ?? 'load',
+    migration: progress?.migration,
+    errorName: 'Timeout',
+    message: t('app.diag.stalled', { seconds: String(seconds) }),
+  };
+  return (
+    <>
+      <p role="alert">{t('app.dbStalled')}</p>
+      <DbFailureDetails failure={failure} />
+    </>
+  );
+}
 
 const OPEN_STEP_LABELS: Readonly<Record<string, () => string>> = {
   runtime: () => t('app.diag.steps.runtime'),
@@ -39,6 +78,8 @@ export function formatDbFailure(failure: DbFailure, env: DbEnvironment | null): 
     t('app.diag.error', { name: failure.errorName, message: failure.message }),
     t('app.diag.url', { url: DB_URL }),
   ];
+  if (failure.journalMode !== undefined) lines.push(t('app.diag.journalMode', { mode: failure.journalMode ?? t('app.diag.unknown') }));
+  if (typeof failure.journalMode === 'string' && failure.journalMode !== 'wal') lines.push(t('app.diag.journalExpected'));
   if (!env) {
     lines.push(t('app.diag.pathsPending'));
     return lines.join('\n');
@@ -106,12 +147,17 @@ export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment 
 
   return (
     <section className="ct-db-failure" aria-label={t('app.diag.title')}>
-      <pre ref={pre} data-testid="db-failure-detail" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', userSelect: 'text', WebkitUserSelect: 'text' }}>
+      <pre ref={pre} data-testid="db-failure-detail" className="ct-db-failure__detail">
         {text}
       </pre>
-      <button type="button" onClick={() => void onCopy()}>
-        {t('app.diag.copy')}
-      </button>
+      <div className="ct-db-failure__actions">
+        <button type="button" onClick={() => appReload.run()}>
+          {t('app.diag.retry')}
+        </button>
+        <button type="button" onClick={() => void onCopy()}>
+          {t('app.diag.copy')}
+        </button>
+      </div>
       {copy !== 'idle' && <p role="status">{t(copy === 'copied' ? 'app.diag.copied' : 'app.diag.copyFailed')}</p>}
     </section>
   );

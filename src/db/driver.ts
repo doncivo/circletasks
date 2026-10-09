@@ -44,7 +44,7 @@ export interface SqlDriver extends SqlExecutor {
   close(): Promise<void>;
 }
 
-export type DbErrorCode = 'constraint' | 'busy' | 'syntax' | 'transaction-wait-timeout' | 'closed' | 'unknown';
+export type DbErrorCode = 'constraint' | 'busy' | 'syntax' | 'transaction-wait-timeout' | 'transaction-lost' | 'closed' | 'unknown';
 
 /** Erreur normalisée renvoyée par tous les drivers (message brut conservé dans `cause`). */
 export class DbError extends Error {
