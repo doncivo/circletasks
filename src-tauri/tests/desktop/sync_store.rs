@@ -632,6 +632,24 @@ fn y_ios_02_abandon_orphan_epoch_refused_while_a_reset_is_in_progress() {
     assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
 }
 
+/// Une liste tronquée (plus de 10 000 entrées) ne prouve rien : refus, aussi bien dans le dossier de l'appareil que dans celui de l'époque
+/// (les fichiers en trop sont des `.tmp`, tolérés par la preuve : seule la troncature les fait refuser).
+#[test]
+fn y_ios_02_abandon_orphan_epoch_refuses_a_truncated_listing() {
+    let high = epoch(1, IPHONE);
+    let (a, fs) = orphan_device(&high);
+    for i in 0..10_001 {
+        fs.put(&["devices", DEV_A, &high, &format!("z{i:05}.tmp")], b"x");
+    }
+    assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+    let (b, fs) = orphan_device(&high);
+    for i in 0..10_001 {
+        fs.put(&["devices", DEV_A, &format!("z{i:05}.txt")], b"x");
+    }
+    assert_eq!(code(b.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_some());
+}
+
 /// B5 reste entière : `sync_delete_own` refuse l'époque courante, même orpheline.
 #[test]
 fn y_ios_02_delete_own_still_refuses_the_current_epoch() {

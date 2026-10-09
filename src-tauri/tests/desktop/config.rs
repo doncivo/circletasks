@@ -330,7 +330,7 @@ const SYNC_CAPABILITY: &str = include_str!("../../capabilities/sync.json");
 const SYNC_PAIRING_CAPABILITY: &str = include_str!("../../capabilities/sync-pairing.json");
 const FOCUS_LAUNCHER_CAPABILITY: &str = include_str!("../../capabilities/focus-launcher.json");
 
-/// Les 24 commandes `sync_*`, dans l'ordre de la section 11.1 (même liste que `SYNC_COMMANDS` de `types.ts`) ; les trois dernières
+/// Les 25 commandes `sync_*`, dans l'ordre de la section 11.1 (même liste que `SYNC_COMMANDS` de `types.ts`) ; les trois dernières
 /// sont celles du lot Y4 (section 18).
 const SYNC_COMMANDS: [&str; 25] = [
     "sync_folder_info",
@@ -403,7 +403,7 @@ fn sync_1_handlers_equal_the_build_manifest() {
     assert_eq!(manifest.iter().filter(|c| c.starts_with("sync_")).count(), 25);
 }
 
-/// (2) `sync.json` : exactement les 21 permissions de `main` (18 et les trois du lot Y4), Windows, sans les trois commandes de `pairing`.
+/// (2) `sync.json` : exactement les 22 permissions de `main` (18, les trois du lot Y4 et `sync_abandon_orphan_epoch`), Windows, sans les trois commandes de `pairing`.
 #[test]
 fn sync_2_main_capability_grants_exactly_twenty_one_commands() {
     let capability: Value = serde_json::from_str(SYNC_CAPABILITY).expect("sync.json valide");
@@ -538,7 +538,7 @@ fn sync_6_focus_launcher_grants_only_the_three_focus_commands() {
 
 const SYNC_IOS_CAPABILITY: &str = include_str!("../../capabilities/sync-ios.json");
 
-/// Commandes de l'iPhone (ADR 0011 §23 point 5) : les 24 moins les trois de la fenêtre `pairing`.
+/// Commandes de l'iPhone (ADR 0011 §23 point 5) : les 25 moins les trois de la fenêtre `pairing`.
 const PAIRING_WINDOW_COMMANDS: [&str; 3] = ["sync_pairing_open", "sync_pairing_payload", "sync_pairing_close"];
 /// Les cinq commandes du plugin barcode-scanner (scan du QR par le JS, §23 point 2), seules permissions de plugin de `sync-ios.json`.
 const BARCODE_PERMISSIONS: [&str; 5] = [

@@ -602,12 +602,11 @@ impl SyncCore {
         Ok(KeyStatus { present: key.is_some(), kid, next_kid: next.map(|k| k.kid().to_owned()), import_failure, paired_by, imported })
     }
 
-    /// Origine de la clé (créée ici / importée) ; un échec d'écriture est journalisé (la clé reste « d'origine inconnue » : comportement d'avant).
-    fn save_key_origin(&self, kid: &str, imported: bool) {
+    /// Origine de la clé (créée ici / importée), écrite **avant** que la clé soit rangée au coffre : un échec d'écriture fait échouer la création
+    /// ou l'import (visible, `io`), jamais une clé importée prise pour une clé créée ici.
+    fn save_key_origin(&self, kid: &str, imported: bool) -> SyncResult<()> {
         let origin = KeyOrigin { kid: kid.to_owned(), imported };
-        if write_config_file(&self.path(KEY_ORIGIN_FILE), &serde_json::to_vec(&origin).unwrap_or_default()).is_err() {
-            log::event("key-origin-unsaved", "io");
-        }
+        write_config_file(&self.path(KEY_ORIGIN_FILE), &serde_json::to_vec(&origin).unwrap_or_default())
     }
 
     /// Appareil d'association : mémorisé à l'import (pas encore lié), sinon `own.json` de la clé courante ; illisible : aucun.
@@ -693,6 +692,7 @@ impl SyncCore {
             return fail(SyncCode::FolderHasData);
         }
         let key = MasterKey::generate().map_err(|_| SyncError::new(SyncCode::Io))?;
+        self.save_key_origin(key.kid(), false)?;
         self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
         let kid = key.kid().to_owned();
         self.save_usage(&mut inner, Usage { kid: kid.clone(), sealed: 0 })?;
@@ -705,7 +705,6 @@ impl SyncCore {
                 log::event("forgotten-registry-deferred", "key-create");
             }
         }
-        self.save_key_origin(&kid, false);
         log::event("key-created", &kid);
         Ok(kid)
     }
@@ -1394,6 +1393,7 @@ impl SyncCore {
         }
         if !existing.as_ref().is_some_and(|e| e.same_as(&key)) {
             // usage.json n'est pas remis à zéro : indexé par kid, il ne repart de 0 que pour une autre clé (audit S9).
+            self.save_key_origin(key.kid(), true)?;
             self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
             inner.usage = None;
         }
@@ -1415,7 +1415,6 @@ impl SyncCore {
                 log::event("forgotten-registry-deferred", "key-import");
             }
         }
-        self.save_key_origin(&kid, true);
         log::event("key-imported", &kid);
         Ok(KeyImportResult { kid, paired_by, epoch })
     }

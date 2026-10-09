@@ -544,6 +544,8 @@ export interface MemorySyncTesting {
   setOwnEpoch(epoch: EpochId | null): void;
   /** Y-IOS-02 : réinitialisation active minimale (`reset.json` : refus de l'abandon d'une orpheline), sans clé ni annonce. */
   injectActiveReset(): void;
+  /** Y-IOS-02 : clé d'avant `key-origin.json` (origine inconnue : `imported` faux). */
+  forgetKeyOrigin(): void;
   /** Y-TECH-02 : `own.json` écrit avant la story (aucune entrée `closed`) : l'état suivant est publié sans `closed`. */
   clearClosedSegments(): void;
   /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
@@ -2514,6 +2516,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       },
       dropOwnState: () => {
         own = null;
+      },
+      forgetKeyOrigin: () => {
+        importedKid = null;
       },
       injectActiveReset: () => {
         if (!folder || bound === null) throw new Error('appareil non lié');

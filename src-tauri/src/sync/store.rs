@@ -1458,6 +1458,10 @@ impl<'a> Store<'a> {
             Ok(listing) => listing,
             Err(error) => return Err(fs_error(error)),
         };
+        // Une liste tronquée ne prouve rien (un `state.ctx` ou une autre époque peut se trouver au-delà) : refus.
+        if listing.truncated {
+            return fail(SyncCode::StateMismatch);
+        }
         if listing.entries.iter().any(|e| !e.is_dir && (e.name == STATE_FILE || e.name == STATE_NEXT_FILE)) {
             return fail(SyncCode::StateMismatch);
         }
@@ -1468,6 +1472,9 @@ impl<'a> Store<'a> {
             Ok(listing) => listing,
             Err(error) => return Err(fs_error(error)),
         };
+        if in_epoch.truncated {
+            return fail(SyncCode::StateMismatch);
+        }
         let snapshots = in_epoch.entries.iter().filter(|e| !e.is_dir && matches!(parse_file_name(&e.name), Some(SyncFileName::Snapshot(_)))).count();
         let others = in_epoch.entries.iter().any(|e| e.is_dir || (!e.name.ends_with(TEMP_SUFFIX) && !matches!(parse_file_name(&e.name), Some(SyncFileName::Snapshot(_)))));
         if snapshots != 1 || others {

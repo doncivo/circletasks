@@ -713,6 +713,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       logger.log('forget-gap', { device: gapsBefore[0] ?? null });
       resume = true;
     }
+    // « Lancer une reprise complète » (§24) : l'acquittement efface l'avertissement d'une trace **avant** les lectures de la reprise, pour qu'un
+    // nouveau coup porté pendant cette reprise reste visible.
+    if (resume && (await repos.sync.getMeta(META.orphanTraceAck)) !== null) {
+      await writeJson(repos, META.orphanTraceHit, null);
+      await writeJson(repos, META.orphanTraceAck, null);
+    }
     if (resume) await doResume();
 
     let allRead = true;
@@ -917,14 +923,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
 
     // Y-IOS-02 (§24 point 4 (a)) : une opération reçue a visé une trace purgée dans l'orpheline abandonnée : divergence visible.
     // Persiste tant que l'utilisateur ne l'a pas acquitté (« Lancer une reprise complète » : `orphanTraceAck`, effacé avec la trace au cycle qui reprend).
-    if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) {
-      if ((await repos.sync.getMeta(META.orphanTraceAck)) !== null && resumed) {
-        await writeJson(repos, META.orphanTraceHit, null);
-        await writeJson(repos, META.orphanTraceAck, null);
-      } else {
-        seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
-      }
-    }
+    // La garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon : ensuite les traces mémorisées sont vidées.
+    if (resumed && allRead && (await repos.sync.getMeta(META.orphanTraces)) !== null) await writeJson(repos, META.orphanTraces, null);
+    if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
 
     // 5. Publication.
     let publishError: string | null = null;

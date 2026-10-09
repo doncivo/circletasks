@@ -34,7 +34,7 @@ function iphoneService(b: SimDevice, platform: SyncPlatform, probe?: Parameters<
 const orphanEpochOf = (_b: SimDevice): EpochId => `e0001-${B_ID}` as EpochId;
 
 /** PC : 5 tâches dans l'instantané, « Test Pc » (enregistrement 1), mise à jour de minuit (enregistrement 2) ; iPhone en époque orpheline. */
-async function topology(cursor: 'ack-set' | 'ack-null' = 'ack-null'): Promise<{ a: SimDevice; b: SimDevice; testPc: TaskId; localIphone: TaskId }> {
+async function topology(cursor: 'ack-set' | 'ack-null' = 'ack-null', via: { readonly qr?: boolean; readonly legacyKey?: boolean } = {}): Promise<{ a: SimDevice; b: SimDevice; testPc: TaskId; localIphone: TaskId }> {
   const a = await createSimDevice(A_ID, { name: 'PC' });
   const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
   devices.push(a, b);
@@ -43,7 +43,10 @@ async function topology(cursor: 'ack-set' | 'ack-null' = 'ack-null'): Promise<{ 
   await a.cycle();
   const testPc = (await a.createTask('Test Pc')).id as TaskId;
   await a.cycle();
-  await pair(a, b);
+  if (via.qr === true) await pairByQr(a, b);
+  else await pair(a, b);
+  // Clé d'avant `key-origin.json` : origine inconnue (`imported` faux), comme sur l'iPhone d'Ali.
+  if (via.legacyKey === true) b.platform.testing.forgetKeyOrigin();
   a.clock.advance(3_600_000);
   await a.updateTask(testPc, { carriedOver: true });
   await a.cycle();
@@ -260,11 +263,43 @@ describe('avertissement d’une trace de l’orpheline : persistant jusqu’à a
     syncFolders(devices);
     expect((await b.cycle()).warnings).toContain('received-unapplied');
     for (let i = 0; i < 3; i += 1) expect((await b.cycle()).warnings).toContain('received-unapplied');
+    // La reprise efface l'avertissement AVANT ses lectures : l'opération rejouée pendant elle frappe de nouveau la trace, le coup reste visible.
+    await b.service.fullResume();
+    expect(b.logger.entries.filter((e) => e.event === 'orphan-trace-hit').length).toBeGreaterThan(1);
+    expect(b.service.status().warnings ?? []).toContain('received-unapplied');
+    // La reprise a vidé les traces mémorisées (la garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon) : la suivante résout.
+    expect(await b.data.repos.sync.getMeta('orphanTraces')).toBeNull();
     await b.service.fullResume();
     expect(b.service.status().warnings ?? []).not.toContain('received-unapplied');
     expect(await b.data.repos.sync.getMeta('orphanTraceHit')).toBeNull();
     expect(await b.data.repos.sync.getMeta('orphanTraceAck')).toBeNull();
     expect((await b.cycle()).warnings ?? []).not.toContain('received-unapplied');
+  });
+
+  it('traces mémorisées illisibles : journalisé, traitées comme vides, le cycle n’échoue pas à chaque fois', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    const id = '12345678-1234-4234-8234-123456789012' as TaskId;
+    b.clock.advance(1_000);
+    await b.data.repos.sync.insertTombstones([{ table: 'task', rowId: id, deletedHlc: b.hlc.now() }], new Date(b.clock.nowMs()).toISOString() as never);
+    await b.data.repos.sync.setMeta('orphanTraces', '{pas du json');
+    a.clock.advance(1_000);
+    await a.createTask('Visée par la trace', { id });
+    await a.cycle();
+    syncFolders(devices);
+    for (let i = 0; i < 3; i += 1) {
+      const status = await b.cycle();
+      expect(status.phase).not.toBe('error');
+    }
+    expect(b.logger.entries.some((e) => e.event === 'orphan-traces-unreadable')).toBe(true);
+    expect(b.logger.entries.some((e) => e.event === 'orphan-trace-hit')).toBe(false);
   });
 });
 
@@ -334,8 +369,32 @@ describe('abandon de l’orpheline : étapes, arrêts, refus, suppression', () =
     expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b)) ?? false).toBe(false);
     expect(b.logger.entries.some((e) => e.event === 'epoch-abandoned')).toBe(true);
     expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
+    // Les traces mémorisées sont vidées une fois la reprise qui suit l'abandon terminée.
+    expect(await b.data.repos.sync.getMeta('orphanTraces')).toBeNull();
   });
   }
+
+  it('chemin exact d’Ali : clé d’avant (imported faux, pas de key-origin.json), pairedBy, orpheline ef50 avec s-1 seul, époque 56d4 avec s-1, j-1 de 2 enregistrements et state.ctx : rejoint 56d4, rien perdu, Test Pc avec ses champs de minuit', async () => {
+    const { a, b, testPc, localIphone } = await topology('ack-set', { qr: true, legacyKey: true });
+    const key = await b.platform.key.status();
+    expect(key.imported).toBe(false);
+    expect(key.pairedBy).toBe(a.id);
+    expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b))).toBe(true);
+    const pcBefore = await liveIds(a);
+    for (let round = 0; round < 4; round += 1) {
+      await b.cycle();
+      syncFolders(devices);
+      await a.cycle();
+      syncFolders(devices);
+    }
+    expect(await b.data.repos.sync.getMeta('epoch')).toBe(JSON.stringify('e0001-' + A_ID));
+    expect((await b.task(testPc))?.title).toBe('Test Pc');
+    expect((await b.task(testPc))?.carriedOver).toBe(true);
+    for (const id of pcBefore) expect(await b.task(id as TaskId), id).not.toBeNull();
+    expect((await a.task(localIphone))?.title).toBe('Écrite sur l’iPhone');
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+    expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b)) ?? false).toBe(false);
+  });
 
   for (const stop of ['avant-rust', 'apres-rust'] as const) {
     it(`arrêt ${stop} : cycle en échec visible sans rien publier, le cycle suivant reprend à l’étape interrompue`, async () => {

@@ -26,7 +26,7 @@ pub const MAIN_WINDOW: &str = "main";
 /// Propriétaire des confirmations natives sur iPhone (une seule fenêtre, §23 point 3).
 const OWNER: isize = 0;
 
-/// Commandes de l'iPhone (Y-IOS-01, Y-IOS-02) : les 24 moins les trois de la fenêtre `pairing`.
+/// Commandes de l'iPhone (Y-IOS-01, Y-IOS-02) : les 25 moins les trois de la fenêtre `pairing`.
 pub const IOS_SYNC_COMMANDS: [&str; 22] = [
     "sync_folder_info",
     "sync_folder_choose",

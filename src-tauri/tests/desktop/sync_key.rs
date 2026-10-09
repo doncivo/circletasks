@@ -41,6 +41,19 @@ fn publish_state(d: &Device, dev: &str, seq: u64) {
     d.core.write_state(14, state).expect("état");
 }
 
+/// Y-IOS-02 : l'origine de la clé est écrite **avant** la clé au coffre ; si elle ne peut pas l'être, la création échoue (`io`) et aucune
+/// clé n'est rangée (jamais une clé dont l'origine serait inconnue sans que personne le sache).
+#[test]
+fn y_ios_02_key_origin_is_written_before_the_key_and_a_failure_fails_the_creation() {
+    let (d, _) = device();
+    d.core.choose_folder(Path::new(FOLDER)).unwrap();
+    // Un dossier à la place du fichier : l'écriture (renommage) échoue.
+    std::fs::create_dir_all(d.base.path().join("sync").join("key-origin.json")).unwrap();
+    assert_eq!(code(d.core.key_create()), SyncCode::Io);
+    assert!(!d.core.key_status().unwrap().present);
+    assert!(d.vault.get(SYNC_KEY_ACCOUNT).unwrap().is_none());
+}
+
 #[test]
 fn y08_6_create_status_and_key_exists() {
     let (d, _) = device();
