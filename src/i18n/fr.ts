@@ -91,6 +91,7 @@ export const fr = {
     errorCode: 'Code : {code}',
     retry: 'Réessayer',
     tooLarge: 'Fichier trop volumineux.',
+    tooLargeHint: 'Réduisez le contenu exporté (période plus courte, autre format), puis recommencez.',
   },
   nav: {
     primaryLabel: 'Navigation principale',

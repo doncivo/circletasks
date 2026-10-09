@@ -87,6 +87,7 @@ export const en: Messages = {
     errorCode: 'Code: {code}',
     retry: 'Try again',
     tooLarge: 'File too large.',
+    tooLargeHint: 'Reduce the exported content (shorter period, other format), then try again.',
   },
   nav: {
     primaryLabel: 'Main navigation',

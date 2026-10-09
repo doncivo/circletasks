@@ -24,9 +24,9 @@ export function AboutSection() {
   const [version, setVersion] = useState<string | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
   const navigate = useNavigationStore((s) => s.navigate);
-  const journal = useLogJournal();
+  const { journal, unavailable: journalUnavailable } = useLogJournal();
   const logStatus = useLogStatus(journal);
-  const logFailureCode = logStatus.writeError ?? logStatus.readError;
+  const logFailureCode = logStatus.writeError ?? logStatus.readError ?? journalUnavailable;
   const runtime = container.platform.runtime;
 
   useEffect(() => {
@@ -74,7 +74,7 @@ export function AboutSection() {
           )}
           {logFailureCode && (
             <span className="ct-settings__hint ct-settings__hint--missed" role="alert">
-              {logStatus.writeError ? t('logs.writeError') : t('logs.readError')} {t('logs.errorCode', { code: logFailureCode })}
+              {logStatus.writeError ? t('logs.writeError') : logStatus.readError ? t('logs.readError') : t('logs.unavailable')} {t('logs.errorCode', { code: logFailureCode })}
             </span>
           )}
         </span>

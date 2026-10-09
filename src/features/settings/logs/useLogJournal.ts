@@ -1,21 +1,53 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { currentLogJournal, whenLogJournal } from '../../../platform/desktop/log';
 import type { LogJournal, LogStatus } from '../../../platform/logs/types';
+import { journalInstallError, startLogJournal } from '../../app/logJournalBoot';
 
-/** Journal installé au démarrage (`startLogJournal`), dès qu'il existe. */
-export function useLogJournal(): LogJournal | null {
+/** Attente du journal avant de le déclarer indisponible (chargement à la demande au démarrage). */
+export const LOG_JOURNAL_WAIT_MS = 5_000;
+
+export interface LogJournalState {
+  readonly journal: LogJournal | null;
+  /** Code quand le journal n'est toujours pas installé après l'attente (`load-failed`, `not-installed`), sinon null. */
+  readonly unavailable: string | null;
+  /** Relance le chargement du journal (« Réessayer » de l'écran Logs). */
+  retry(): void;
+}
+
+/**
+ * Journal installé au démarrage (`startLogJournal`), dès qu'il existe. Jamais d'attente sans fin : au bout de 5 s sans journal, l'état
+ * « indisponible » porte un code et `retry` relance le chargement (aucune impasse, règle d'Ali).
+ */
+export function useLogJournal(): LogJournalState {
   const [journal, setJournal] = useState<LogJournal | null>(currentLogJournal);
+  const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     if (journal) return undefined;
     let active = true;
+    const timer = setTimeout(() => {
+      if (active) setUnavailable(journalInstallError() ?? 'not-installed');
+    }, LOG_JOURNAL_WAIT_MS);
     void whenLogJournal().then((installed) => {
-      if (active) setJournal(installed);
+      if (!active) return;
+      clearTimeout(timer);
+      setUnavailable(null);
+      setJournal(installed);
     });
     return () => {
       active = false;
+      clearTimeout(timer);
     };
-  }, [journal]);
-  return journal;
+  }, [journal, attempt]);
+  return {
+    journal,
+    unavailable: journal ? null : unavailable,
+    retry: () => {
+      setUnavailable(null);
+      setAttempt((value) => value + 1);
+      void startLogJournal('main');
+    },
+  };
 }
 
 const NO_FAILURE: LogStatus = { writeError: null, readError: null };

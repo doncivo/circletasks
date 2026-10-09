@@ -14,6 +14,8 @@ export const logsEn: Messages['logs'] = {
   listLabel: 'Journal entries, newest first',
   empty: 'No entries',
   loading: 'Reading the journal…',
+  unavailable: 'Journal unavailable.',
+  exportUnavailable: 'Export is not available on this platform (files cannot be saved): entries remain readable here.',
   count: '{count} entries shown (500 at most)',
   repeated: '×{count}',
   writeError: 'The journal could not be written.',

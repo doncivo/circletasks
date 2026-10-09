@@ -12,6 +12,8 @@ export const logsFr = {
   listLabel: 'Entrées du journal, de la plus récente à la plus ancienne',
   empty: 'Aucune entrée',
   loading: 'Lecture du journal…',
+  unavailable: 'Journal indisponible.',
+  exportUnavailable: 'L’export n’est pas disponible sur cette plateforme (aucun enregistrement de fichier possible) : les entrées restent lisibles ici.',
   count: '{count} entrées affichées (500 au plus)',
   repeated: '×{count}',
   writeError: 'Le journal n’a pas pu être écrit.',

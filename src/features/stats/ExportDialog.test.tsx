@@ -271,6 +271,9 @@ describe('Fenêtre « Exporter l’historique » (H-03)', () => {
       const alert = await within(dialog).findByRole('alert');
       expect(alert).toHaveTextContent('Fichier trop volumineux.');
       expect(alert).toHaveTextContent('Code : too-large');
+      // Refaire le même enregistrement ne peut pas réussir : pas de « Réessayer », l'action utile est indiquée.
+      expect(within(alert).queryByRole('button', { name: 'Réessayer' })).toBeNull();
+      expect(alert).toHaveTextContent('Réduisez le contenu exporté');
     });
   });
 });

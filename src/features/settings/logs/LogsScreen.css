@@ -127,3 +127,14 @@
 .ct-logs__code {
   font-weight: var(--ct-font-weight-semibold);
 }
+
+.ct-logs__failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-2) var(--ct-space-3);
+}
+
+.ct-logs__failure .ct-button {
+  min-height: 44px;
+}

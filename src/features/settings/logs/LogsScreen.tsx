@@ -1,9 +1,9 @@
 import { Download, Trash2, Undo2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { migrations } from '../../../db/migrations';
 import { getLocale, t } from '../../../i18n';
 import { categoryOf, type LogCategory, type LogEntry, type LogJournal } from '../../../platform/logs';
-import { ConfirmDialog, Icon, useLayout } from '../../../ui';
+import { Button, ConfirmDialog, Icon, useLayout } from '../../../ui';
 import { useAppContainer } from '../../app/AppContainerContext';
 import { FileSaveFailure } from '../../app/FileSaveFailure';
 import { useNavigationStore } from '../../app/navigation';
@@ -45,7 +45,8 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
   const layout = useLayout();
   const navigate = useNavigationStore((s) => s.navigate);
   const installed = useLogJournal();
-  const journal = injected ?? installed;
+  const journal = injected ?? installed.journal;
+  const unavailable = injected ? null : installed.unavailable;
   const status = useLogStatus(journal);
   const [entries, setEntries] = useState<readonly LogEntry[] | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -54,20 +55,24 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
   const [exported, setExported] = useState(false);
   const [exportFailure, setExportFailure] = useState<{ readonly code: string; readonly tooLarge: boolean } | null>(null);
   const [clearFailure, setClearFailure] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState(0);
   const titleRef = useRef<HTMLHeadingElement>(null);
-
-  const reload = useCallback(async () => {
-    if (!journal) return;
-    setEntries(await journal.read());
-  }, [journal]);
 
   useEffect(() => {
     titleRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // Lecture du journal (et relecture après « Effacer ») ; `read` ne rejette jamais (repli sur la session).
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    if (!journal) return undefined;
+    let active = true;
+    void journal.read().then((list) => {
+      if (active) setEntries(list);
+    });
+    return () => {
+      active = false;
+    };
+  }, [journal, refresh]);
 
   const shown = useMemo(() => {
     const list = (entries ?? []).filter((entry) => filter === 'all' || categoryOf(entry.scope) === filter);
@@ -104,7 +109,7 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
       const code = typeof error === 'object' && error !== null ? (error as { code?: unknown }).code : undefined;
       setClearFailure(typeof code === 'string' ? code : 'io');
     } finally {
-      await reload();
+      setRefresh((value) => value + 1);
       setBusy(false);
     }
   }
@@ -135,6 +140,17 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
             {t('logs.clearError')} {t('logs.errorCode', { code: clearFailure })}
           </p>
         )}
+        {unavailable && (
+          <div className="ct-logs__failure" role="alert">
+            <p className="ct-logs__error">
+              {t('logs.unavailable')} {t('logs.errorCode', { code: unavailable })}
+            </p>
+            <Button variant="secondary" onClick={installed.retry}>
+              {t('files.retry')}
+            </Button>
+          </div>
+        )}
+        {!container.files.canSave() && <p className="ct-logs__note">{t('logs.exportUnavailable')}</p>}
         <div className="ct-logs__actions">
           {container.files.canSave() && (
             <button type="button" className="ct-logs__export" onClick={() => void runExport()} disabled={busy || !journal}>
@@ -158,7 +174,7 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
             </button>
           ))}
         </div>
-        {entries === null ? (
+        {entries === null && unavailable ? null : entries === null ? (
           <p className="ct-logs__note">{t('logs.loading')}</p>
         ) : shown.length === 0 ? (
           <p className="ct-logs__empty">{t('logs.empty')}</p>
