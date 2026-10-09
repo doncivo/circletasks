@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { APP_READY_TIMEOUT_MS, openApp } from './helpers/app';
 import { expectFitsViewport } from './helpers/layout';
 import { isPhone, listTitles, openToday } from './helpers/today';
@@ -160,5 +160,93 @@ test.describe('Q-05 — mesures iPhone @perf', () => {
     const development = await page.evaluate(() => document.querySelector('script[src*="/@vite/client"]') !== null);
     expect(development, 'le projet perf doit tourner sur le bundle de production').toBe(false);
     expect(median).toBeLessThan(300);
+  });
+
+  /** Médiane de cinq essais d'une mesure faite sur une feuille fraîchement ouverte (CPU 4×, page au repos), la feuille étant refermée entre deux essais. */
+  async function medianOfFive(page: Page, measure: () => Promise<number>): Promise<{ median: number; timings: number[] }> {
+    const timings: number[] = [];
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await page.evaluate(() => new Promise<void>((resolve) => requestIdleCallback(() => resolve())));
+      timings.push(await measure());
+      await page.getByRole('dialog', { name: 'Nouvelle tâche' }).getByRole('button', { name: 'Fermer' }).click();
+      await expect(page.getByRole('dialog', { name: 'Nouvelle tâche' })).toHaveCount(0);
+    }
+    const sorted = [...timings].sort((a, b) => a - b);
+    return { median: sorted[Math.floor(sorted.length / 2)] ?? Number.NaN, timings };
+  }
+
+  /**
+   * Décision I1 (docs/decisions.md) : le critère 6 (300 ms) vaut pour la feuille affichée avec le champ Titre prêt à la saisie ; le reste de la
+   * feuille arrive à l'image suivante. Pour qu'une régression du bas de la feuille ne passe pas inaperçue : du toucher à la feuille COMPLÈTE
+   * (choix d'icône et trois roues montés, puis une image et une minuterie), budget de 700 ms à CPU 4× sur le build de production.
+   */
+  test('toucher du bouton + jusqu’à la feuille complète sous 700 ms, médiane de 5 essais, CPU 4× @perf', async ({ page }, testInfo) => {
+    await openToday(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const { median, timings } = await medianOfFive(page, () =>
+      page.evaluate(async () => {
+        const button = document.querySelector<HTMLButtonElement>('.ct-fab');
+        if (!button) throw new Error('bouton + introuvable');
+        const complete = (): boolean => {
+          const dialog = document.querySelector('[role="dialog"]');
+          return dialog !== null && dialog.querySelector('.ct-icon-picker') !== null && dialog.querySelectorAll('.ct-wheel').length >= 3;
+        };
+        const begin = performance.now();
+        const shown = new Promise<void>((resolve, reject) => {
+          const observer = new MutationObserver(() => {
+            if (!complete()) return;
+            observer.disconnect();
+            requestAnimationFrame(() => {
+              setTimeout(resolve, 0);
+            });
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+          // Garde de la mesure (pas un délai de test) : une feuille qui ne devient jamais complète est un échec visible.
+          setTimeout(() => {
+            observer.disconnect();
+            reject(new Error('la feuille complète (icônes et roues) ne s’est jamais affichée'));
+          }, 10_000);
+        });
+        button.click();
+        await shown;
+        return performance.now() - begin;
+      }),
+    );
+    testInfo.annotations.push({ type: 'mesure', description: `toucher jusqu’à la feuille complète : médiane ${String(Math.round(median))} ms (essais : ${timings.map((v) => String(Math.round(v))).join(' / ')} ms, CPU 4×, budget 700 ms)` });
+    expect(await page.evaluate(() => document.querySelector('script[src*="/@vite/client"]') !== null), 'le projet perf doit tourner sur le bundle de production').toBe(false);
+    expect(median).toBeLessThan(700);
+  });
+
+  /** Latence de la première frappe : de la saisie d'un caractère (champ focalisé dans le toucher, bas de la feuille pas encore monté) à l'image suivante, budget 100 ms. */
+  test('première frappe dans la feuille ouverte : écho à l’image suivante sous 100 ms, médiane de 5 essais, CPU 4× @perf', async ({ page }, testInfo) => {
+    await openToday(page);
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+    const { median, timings } = await medianOfFive(page, () =>
+      page.evaluate(async () => {
+        const button = document.querySelector<HTMLButtonElement>('.ct-fab');
+        if (!button) throw new Error('bouton + introuvable');
+        button.click();
+        const field = document.activeElement;
+        if (!(field instanceof HTMLInputElement) || !field.closest('[role="dialog"]')) throw new Error('champ non focalisé au retour du toucher');
+        // Frappe au premier instant, comme un utilisateur rapide : le bas de la feuille se monte encore.
+        const begin = performance.now();
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+        if (!setter) throw new Error('valeur du champ non modifiable');
+        setter.call(field, 'A');
+        field.dispatchEvent(new InputEvent('input', { bubbles: true, data: 'A', inputType: 'insertText' }));
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            setTimeout(resolve, 0);
+          });
+        });
+        const elapsed = performance.now() - begin;
+        if (field.value !== 'A') throw new Error('la frappe n’a pas été prise en compte');
+        return elapsed;
+      }),
+    );
+    testInfo.annotations.push({ type: 'mesure', description: `première frappe : médiane ${String(Math.round(median))} ms (essais : ${timings.map((v) => String(Math.round(v))).join(' / ')} ms, CPU 4×, budget 100 ms)` });
+    expect(median).toBeLessThan(100);
   });
 });
