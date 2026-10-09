@@ -1151,6 +1151,7 @@ Choix faits par Y-07, Y-04 et Y-06 (fusionnées sur `main` dans cet ordre), d'ap
 2. **Réintégration** à la fin de `migrate()`, à chaque démarrage tant que `sync_unknown` n'est pas vide : sous garde, ordre parent → enfant, passages répétés tant qu'il y a du progrès, **point de sauvegarde par ligne**, règle **« même écriture »**, **règle de trace** (rien n'est recréé sous une trace) ; décision pure `decideReintegration` (7.2).
 3. **Échec persisté** dans `sync_meta.reintegrationFailure` (sans contenu), effacé au premier démarrage sans échec ; visible dans Réglages, Détails (VERSION) et par le bandeau `updateRequired` avec `detail: 'reintegration'` ; `SyncStatus.reintegrationFailure` (7.2, 10.2, 10.4, 11.2).
 4. **État A-09 `updateRequired`** (priorité après `calendarDisconnected`) tant qu'un appareil actif autre que soi publie un `sv` ou un `sm` supérieur ; **`corrupt` et `rollback` exclus** (comme `foreign`, `expired`, `forgotten`) ; version affichée = `app_version` (7.2, 8).
+   - *Renvoi I-06 (2026-10-09, ADR 0007 avenant I-06 point 1)* : `appVersion` est publié par le PC **et** l'iPhone via `src/platform/appVersion.ts` (fin du `'0.0.0'` de l'iPhone) ; illisible : `'unknown'` (le champ reste obligatoire dans l'état publié), affiché « version inconnue ».
 
 **Y-04 (conflits)**
 
