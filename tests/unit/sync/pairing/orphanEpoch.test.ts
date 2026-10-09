@@ -263,17 +263,25 @@ describe('avertissement d’une trace de l’orpheline : persistant jusqu’à a
     syncFolders(devices);
     expect((await b.cycle()).warnings).toContain('received-unapplied');
     for (let i = 0; i < 3; i += 1) expect((await b.cycle()).warnings).toContain('received-unapplied');
-    // La reprise efface l'avertissement AVANT ses lectures : l'opération rejouée pendant elle frappe de nouveau la trace, le coup reste visible.
+    const hitsBefore = b.logger.entries.filter((e) => e.event === 'orphan-trace-hit').length;
+    // Une seule demande de l'utilisateur suffit : traces, avertissement et acquittement sont effacés avant les lectures de la reprise.
     await b.service.fullResume();
-    expect(b.logger.entries.filter((e) => e.event === 'orphan-trace-hit').length).toBeGreaterThan(1);
-    expect(b.service.status().warnings ?? []).toContain('received-unapplied');
-    // La reprise a vidé les traces mémorisées (la garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon) : la suivante résout.
-    expect(await b.data.repos.sync.getMeta('orphanTraces')).toBeNull();
-    await b.service.fullResume();
+    expect(b.logger.entries.filter((e) => e.event === 'orphan-trace-hit').length).toBe(hitsBefore);
     expect(b.service.status().warnings ?? []).not.toContain('received-unapplied');
+    expect(await b.data.repos.sync.getMeta('orphanTraces')).toBeNull();
     expect(await b.data.repos.sync.getMeta('orphanTraceHit')).toBeNull();
     expect(await b.data.repos.sync.getMeta('orphanTraceAck')).toBeNull();
     expect((await b.cycle()).warnings ?? []).not.toContain('received-unapplied');
+    // Un coup ultérieur (nouvelles traces d'un autre abandon) reste visible.
+    const other = '87654321-4321-4321-8321-210987654321' as TaskId;
+    b.clock.advance(1_000);
+    await b.data.repos.sync.insertTombstones([{ table: 'task', rowId: other, deletedHlc: b.hlc.now() }], new Date(b.clock.nowMs()).toISOString() as never);
+    await b.data.repos.sync.setMeta('orphanTraces', JSON.stringify([`task|${other}`]));
+    a.clock.advance(1_000);
+    await a.createTask('Visée par la nouvelle trace', { id: other });
+    await a.cycle();
+    syncFolders(devices);
+    expect((await b.cycle()).warnings).toContain('received-unapplied');
   });
 
   it('traces mémorisées illisibles : journalisé, traitées comme vides, le cycle n’échoue pas à chaque fois', async () => {

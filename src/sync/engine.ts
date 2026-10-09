@@ -713,9 +713,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       logger.log('forget-gap', { device: gapsBefore[0] ?? null });
       resume = true;
     }
-    // « Lancer une reprise complète » (§24) : l'acquittement efface l'avertissement d'une trace **avant** les lectures de la reprise, pour qu'un
-    // nouveau coup porté pendant cette reprise reste visible.
+    // « Lancer une reprise complète » (§24) : décision explicite de l'utilisateur d'arrêter de protéger les traces de l'orpheline. Traces,
+    // avertissement et acquittement sont effacés **avant** les lectures : l'opération rejouée passe par la fusion ordinaire (la donnée reçue
+    // l'emporte comme d'habitude, rien de local n'est perdu) et une seule demande suffit. Une reprise automatique ne touche à rien : un coup
+    // porté pendant elle lève l'avertissement.
     if (resume && (await repos.sync.getMeta(META.orphanTraceAck)) !== null) {
+      await writeJson(repos, META.orphanTraces, null);
       await writeJson(repos, META.orphanTraceHit, null);
       await writeJson(repos, META.orphanTraceAck, null);
     }

@@ -54,6 +54,23 @@ fn y_ios_02_key_origin_is_written_before_the_key_and_a_failure_fails_the_creatio
     assert!(d.vault.get(SYNC_KEY_ACCOUNT).unwrap().is_none());
 }
 
+/// Même garde à l'import : l'origine (importée) est écrite avant la clé ; si elle ne peut pas l'être, l'import échoue (`io`) et aucune clé n'est
+/// rangée.
+#[test]
+fn y_ios_02_key_origin_write_failure_fails_the_import_and_stores_no_key() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish_state(&a, DEV_A, 1);
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = second(&fs);
+    b.core.choose_folder(Path::new(FOLDER)).unwrap();
+    b.core.bind_device(DEV_B).unwrap();
+    std::fs::create_dir_all(b.base.path().join("sync").join("key-origin.json")).unwrap();
+    assert_eq!(code(b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1)), SyncCode::Io);
+    assert!(!b.core.key_status().unwrap().present);
+    assert!(b.vault.get(SYNC_KEY_ACCOUNT).unwrap().is_none());
+}
+
 #[test]
 fn y08_6_create_status_and_key_exists() {
     let (d, _) = device();
