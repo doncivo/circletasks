@@ -2,6 +2,7 @@ import { Camera, ImagePlus } from 'lucide-react';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { t } from '../../../i18n';
 import { Button, Icon, type Layout } from '../../../ui';
+import { canOpenAppSettings, openAppSettingsAction } from '../../security/systemSettingsAction';
 import { captureFrame, startWebcam, stopWebcam, WebcamError, type WebcamFailure } from './prepareImage';
 import type { Scan } from './useScan';
 
@@ -89,6 +90,16 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
   }
 
   const pc = layout === 'pc';
+  // Réglages iOS par le module commun (ADR 0015 écart 6) : absent (PC, navigateur), l'indication n'est pas affichée.
+  const canOpenSettings = !pc && canOpenAppSettings();
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+
+  async function openCameraSettings(): Promise<void> {
+    setSettingsError(null);
+    const code = await openAppSettingsAction();
+    if (code && mounted.current) setSettingsError(code);
+  }
+
   return (
     <div className="ct-scan__step">
       <h1 className="ct-scan__title">{t('scan.source.title')}</h1>
@@ -96,6 +107,11 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
       {scan.refusal && (
         <p className="ct-scan__alert" role="alert">
           {t(REFUSALS[scan.refusal])}
+        </p>
+      )}
+      {scan.cleanupFailed && (
+        <p className="ct-scan__alert" role="alert">
+          {`${t('scan.cleanupFailed')} ${t('scan.code', { code: 'vision-cleanup-failed' })}`}
         </p>
       )}
       {webcamError && (
@@ -138,6 +154,19 @@ export function ScanSource({ scan, layout }: { readonly scan: Scan; readonly lay
               </button>
             )}
           </div>
+          {canOpenSettings && (
+            <div className="ct-scan__cameraHint">
+              <p className="ct-scan__lead">{t('scan.cameraHint.text')}</p>
+              <Button variant="secondary" onClick={() => void openCameraSettings()}>
+                {t('scan.cameraHint.openSettings')}
+              </Button>
+              {settingsError && (
+                <p className="ct-scan__alert" role="alert">
+                  {`${t('scan.cameraHint.settingsFailed')} ${t('scan.code', { code: settingsError })}`}
+                </p>
+              )}
+            </div>
+          )}
           {pc && (
             <div className="ct-scan__drop" aria-hidden="true">
               <span>{t('scan.source.drop')}</span>

@@ -2,7 +2,7 @@
   "$comment": [
     "Contrat des clés Info.plist exigées par plugin iOS (I-01). Lu par check-plist-contract.mjs sur le Info.plist de l'IPA (build-ios.yml) et sur src-tauri/Info.ios.plist (Vitest).",
     "Chaque lot de plugin ajoute une entrée dans plugins et la clé correspondante dans src-tauri/Info.ios.plist, texte en français.",
-    "Champs d'une entrée : story (ID de la story, obligatoire), usageDescriptions (clés NS…UsageDescription, présentes et non vides), keys (clés simplement présentes), arrayIncludes ({ clé: [valeurs] } contenues dans un tableau).",
+    "Champs d'une entrée : story (ID de la story, obligatoire), usageDescriptions (clés NS…UsageDescription, présentes et non vides), keys (clés simplement présentes), arrayIncludes ({ clé: [valeurs] } contenues dans un tableau). Champ racine facultatif : forbiddenKeys (clés qui ne doivent JAMAIS figurer dans l'Info.plist : aucune clé superflue, CAP-IOS-01 critère 16 et I-05 critère 8).",
     "Exemples : barcode-scanner et vision -> NSCameraUsageDescription ; speech -> NSMicrophoneUsageDescription et NSSpeechRecognitionUsageDescription ; reminders -> NSRemindersFullAccessUsageDescription ; biometric -> NSFaceIDUsageDescription.",
     "Notifications locales : aucune clé Info.plist (autorisation demandée par l'API au premier usage, I-05).",
     "Apple ID gratuit : aucune clé ni capacité payante (iCloud, push, App Groups, extensions)."
@@ -26,6 +26,28 @@
       "usageDescriptions": [
         "NSFaceIDUsageDescription"
       ]
+    },
+    "vision": {
+      "story": "CAP-IOS-01",
+      "usageDescriptions": [
+        "NSCameraUsageDescription"
+      ]
+    },
+    "speech": {
+      "story": "CAP-IOS-01",
+      "usageDescriptions": [
+        "NSMicrophoneUsageDescription",
+        "NSSpeechRecognitionUsageDescription"
+      ]
     }
-  }
+  },
+  "forbiddenKeys": [
+    "UIBackgroundModes",
+    "NSLocationWhenInUseUsageDescription",
+    "NSLocationAlwaysAndWhenInUseUsageDescription",
+    "NSPhotoLibraryUsageDescription",
+    "NSPhotoLibraryAddUsageDescription",
+    "NSContactsUsageDescription",
+    "NSUserTrackingUsageDescription"
+  ]
 }

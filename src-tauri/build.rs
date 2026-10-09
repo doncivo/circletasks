@@ -41,8 +41,10 @@ fn main() {
             "daily_backup", "list_backups", "check_backup", "restore_backup", "reveal_backups_folder",
             // Import CSV (P-07) : PC uniquement.
             "import_open_file",
-            // Capture rapide (Q-01) et OCR (Q-04) : PC uniquement.
+            // Capture rapide (Q-01) : PC uniquement. OCR (Q-04, Windows ; CAP-IOS-01, Vision sur iPhone) : PC et iPhone.
             "export_save_file", "reveal_exported_file", "hide_quick_capture", "resize_quick_capture", "submit_quick_capture", "request_capture_context", "capture_setup_error", "ocr_status", "ocr_recognize",
+            // Dictée sur l'appareil et Réglages iOS (CAP-IOS-01, ADR 0015) : iPhone uniquement.
+            "speech_status", "speech_request_permissions", "speech_listen", "speech_stop", "app_settings_open",
             // Agendas externes (ADR 0008) : PC et iPhone.
             "calendar_secret_set", "calendar_secret_exists", "calendar_secret_delete",
             "calendar_oauth_google_authorize", "calendar_oauth_google_revoke", "calendar_http",

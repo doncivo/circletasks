@@ -9,7 +9,7 @@ import { checkPlistContract, validateContract } from './check-plist-contract.mjs
 type Json = Record<string, unknown>;
 const root = resolve(__dirname, '..', '..');
 const read = (p: string): string => readFileSync(join(root, p), 'utf8');
-const CAMERA_TEXT = 'CircleTasks utilise la caméra pour scanner le code d’association affiché sur votre PC.';
+const CAMERA_TEXT = 'CircleTasks utilise la caméra pour scanner le code d’association affiché sur votre PC et pour photographier une liste de tâches à lire.';
 
 describe('contrat Info.plist du scan du QR (Y-IOS-02)', () => {
   const contract = JSON.parse(read('scripts/ios/plist-contract.json')) as Json;

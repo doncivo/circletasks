@@ -6,7 +6,7 @@ import { openOcrService, type OcrService } from '../../../platform/ocr';
 import { Button, ConfirmDialog, Icon, useFocusTrap, useLayout } from '../../../ui';
 import { ScanReview } from './ScanReview';
 import { ScanSource } from './ScanSource';
-import { useScan, type Scan } from './useScan';
+import { isTransientFailure, useScan, type Scan, type ScanFailure, type UnavailableReason } from './useScan';
 import './ScanDialog.css';
 
 export interface ScanDialogProps {
@@ -15,7 +15,78 @@ export interface ScanDialogProps {
   readonly service?: OcrService;
 }
 
+/** Moteur de lecture de l'iPhone (Vision) indisponible : raison et code visibles, repli au choix de l'utilisateur (CAP-IOS-01 critère 17). */
+function UnavailableIos({ scan, reason }: { readonly scan: Scan; readonly reason: UnavailableReason }) {
+  return (
+    <div className="ct-scan__step">
+      <h1 className="ct-scan__title">{t('scan.unavailableIos.title')}</h1>
+      <p className="ct-scan__lead">{t(reason === 'language-missing' ? 'scan.unavailableIos.languageHint' : 'scan.unavailableIos.pluginHint')}</p>
+      <p className="ct-scan__alert" role="alert">
+        {scan.recheck === 'still-missing' ? `${t('scan.unavailableIos.stillMissing')} ` : ''}
+        {t('scan.code', { code: `vision-${reason}` })}
+      </p>
+      <div className="ct-scan__actions">
+        {scan.canUseFallback && <Button onClick={scan.chooseFallbackEngine}>{t('scan.unavailableIos.useFallback')}</Button>}
+        <Button variant="secondary" disabled={scan.recheck === 'running'} onClick={() => void scan.recheckEngine()}>
+          {scan.recheck === 'running' ? t('scan.unavailable.rechecking') : t('scan.unavailable.recheck')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const CAUSES = {
+  failed: 'scan.visionError.hint',
+  unavailable: 'scan.visionError.hint',
+  timeout: 'scan.visionError.cause.timeout',
+  busy: 'scan.visionError.cause.busy',
+  'unsupported-format': 'scan.visionError.cause.unsupportedFormat',
+  'too-large': 'scan.visionError.cause.tooLarge',
+  dimensions: 'scan.visionError.cause.dimensions',
+  'language-missing': 'scan.visionError.hint',
+} as const;
+
+/** Lecture refusée par Vision : erreur persistante avec son code, « Réessayer » et « Lire avec le moteur intégré » (jamais de repli silencieux). */
+function VisionError({ scan, failure }: { readonly scan: Scan; readonly failure: ScanFailure }) {
+  // Erreur passagère : « Réessayer ». Erreur de l'image (format, poids, dimensions) : jamais de « Réessayer » qui reboucle.
+  const transient = isTransientFailure(failure.reason);
+  return (
+    <div className="ct-scan__step ct-scan__step--center">
+      <h1 className="ct-scan__title">{t('scan.visionError.title')}</h1>
+      <p className="ct-scan__lead">{t(CAUSES[failure.reason])}</p>
+      <p className="ct-scan__alert" role="alert">
+        {t('scan.code', { code: failure.code })}
+      </p>
+      <div className="ct-scan__actions">
+        {transient ? (
+          <>
+            <Button onClick={scan.retry}>{t('scan.visionError.retry')}</Button>
+            {scan.canUseFallback && (
+              <Button variant="secondary" onClick={scan.chooseFallbackEngine}>
+                {t('scan.visionError.useFallback')}
+              </Button>
+            )}
+            <Button variant="secondary" onClick={scan.goToSource}>
+              {t('scan.review.retake')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button onClick={scan.goToSource}>{t('scan.review.retake')}</Button>
+            {scan.canUseFallback && (
+              <Button variant="secondary" onClick={scan.chooseFallbackEngine}>
+                {t('scan.visionError.useFallback')}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Unavailable({ scan }: { readonly scan: Scan }) {
+  if (scan.unavailableReason) return <UnavailableIos scan={scan} reason={scan.unavailableReason} />;
   return (
     <div className="ct-scan__step">
       <h1 className="ct-scan__title">{t('scan.unavailable.title')}</h1>
@@ -103,7 +174,12 @@ export function ScanDialog({ onClose, service }: ScanDialogProps) {
       body = <Message title={t('scan.empty.title')} hint={t('scan.empty.hint')} scan={scan} />;
       break;
     case 'error':
-      body = <Message title={t('scan.error.title')} hint={t('scan.error.hint')} scan={scan} />;
+      body =
+        scan.failure?.engine === 'vision' ? (
+          <VisionError scan={scan} failure={scan.failure} />
+        ) : (
+          <Message title={t('scan.error.title')} hint={t('scan.error.hint')} scan={scan} />
+        );
       break;
     case 'review':
       body = <ScanReview scan={scan} layout={layout} />;

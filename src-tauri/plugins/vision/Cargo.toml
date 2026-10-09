@@ -1,0 +1,20 @@
+[package]
+name = "tauri-plugin-vision"
+version = "0.1.0"
+description = "CircleTasks : lecture de texte d'une image avec Vision (ADR 0015). Appelé par Rust seulement."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Exigé par tauri-plugin (nom identique au paquet) : le plugin Swift est lié par le script de compilation.
+links = "tauri-plugin-vision"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+serde_json = "1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

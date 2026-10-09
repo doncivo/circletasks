@@ -19,10 +19,15 @@ pub mod desktop;
 pub mod export;
 #[cfg(desktop)]
 pub mod import;
-#[cfg(desktop)]
+/// OCR : Windows.Media.Ocr sur PC, Vision sur iPhone (CAP-IOS-01, ADR 0015).
+#[cfg(any(desktop, target_os = "ios"))]
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Appel des plugins Swift avec délai (ADR 0015 §3.1) ; compilé partout, testé avec un faux.
+pub mod mobile_call;
+/// Dictée sur l'appareil et Réglages iOS (CAP-IOS-01, ADR 0015 §2) ; la logique est testée sous Windows, les commandes sont iOS.
+pub mod speech;
 /// Synchronisation par iCloud Drive (ADR 0011, lot Y1 : Y-08, Y-01).
 pub mod sync;
 /// Coffre système (agendas, clé de synchro), déplacé de `calendars/vault.rs` au lot Y1.
@@ -56,7 +61,7 @@ pub fn run() {
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
-    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
+    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_vision::init()).plugin(tauri_plugin_speech::init()).manage(ocr::vision::VisionState::default()).manage(speech::SpeechState::default()).manage(sync::commands_ios::SyncState::default());
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, backup::db_diagnostics, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : commandes de `main`, aucune de la fenêtre `pairing`.
@@ -67,6 +72,8 @@ pub fn run() {
         sync::commands_ios::sync_restore_marker_clear, sync::commands_ios::sync_forgotten_delete,
         // Y-IOS-02 (ADR 0011 §23 point 5) : clé reçue dans `main`, oubli, réinitialisation (confirmations natives de l'iPhone).
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,
+        // CAP-IOS-01 (ADR 0015) : Vision derrière les commandes OCR du PC, dictée sur l'appareil, Réglages iOS. Rust seul appelle les plugins.
+        ocr::ocr_status, ocr::ocr_recognize, speech::ios::speech_status, speech::ios::speech_request_permissions, speech::ios::speech_listen, speech::ios::speech_stop, speech::ios::app_settings_open,
     ]);
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]
@@ -81,6 +88,12 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_ct_haptics::init());
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_privacy_shield::init());
+    // CAP-IOS-01 : au lancement, les copies temporaires de photos laissées par une session précédente sont supprimées (fil dédié, avec délai).
+    #[cfg(target_os = "ios")]
+    let builder = builder.setup(|app| {
+        ocr::vision::clean_on_launch(app.handle());
+        Ok(())
+    });
     builder
         .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())

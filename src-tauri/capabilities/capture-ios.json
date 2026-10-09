@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "capture-ios",
+  "description": "iPhone : lecture de texte d'une photo de liste (Vision) et dictée sur l'appareil (CAP-IOS-01, ADR 0015 §4.4). Sept commandes de l'app, liste exacte fixée par tests/desktop/config.rs. Aucune permission des plugins vision et speech : Rust seul les appelle.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": [
+    "allow-ocr-status",
+    "allow-ocr-recognize",
+    "allow-speech-status",
+    "allow-speech-request-permissions",
+    "allow-speech-listen",
+    "allow-speech-stop",
+    "allow-app-settings-open"
+  ]
+}

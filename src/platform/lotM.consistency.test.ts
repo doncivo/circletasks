@@ -104,7 +104,7 @@ describe('lot M : Rust et capabilities (iOS seulement)', () => {
 
   it('build-ios.yml vérifie par cargo tree les trois crates (iOS oui, Windows non)', () => {
     const workflow = read('.github/workflows/build-ios.yml');
-    expect(workflow).toContain('for CRATE in tauri-plugin-biometric tauri-plugin-ct-haptics tauri-plugin-privacy-shield; do');
+    expect(workflow).toContain('for CRATE in tauri-plugin-biometric tauri-plugin-ct-haptics tauri-plugin-privacy-shield tauri-plugin-vision tauri-plugin-speech; do');
     expect(workflow).toContain('cargo tree --target aarch64-apple-ios -i "$CRATE"');
     expect(workflow).toContain('cargo tree --target x86_64-pc-windows-msvc -i "$CRATE"');
   });
