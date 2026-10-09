@@ -15,7 +15,6 @@ import { beginReset, dismissResetState, readResetState, readResetStatus, recordR
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
-import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
 import { META, writeJson } from './meta';
 import { INITIAL_STATUS, errorRepeat, phaseOf, statusFromFacts } from './status';
 import { omitKey } from '../domain/omitKey';
@@ -136,7 +135,8 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
   /** Contexte de la fenêtre de choix ; toute erreur remonte (jamais lue comme « aucun marqueur »). */
   const loadRestoreContext = async (): Promise<RestoreContext | null> => {
     const marker = await options.platform.restoreMarker.get();
-    return marker ? await restoreContext(deps, marker) : null;
+    // Chargé à la demande (rare : après une restauration) : taille du bundle de départ.
+    return marker ? await (await import('./restoreChoice')).restoreContext(deps, marker) : null;
   };
 
   const finish = async (result: CycleResult): Promise<void> => {
@@ -369,7 +369,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
          */
         const failed = async (code: SyncErrorCode): Promise<void> => {
           try {
-            await recordRestoreFailure(deps, option, code);
+            await (await import('./restoreChoice')).recordRestoreFailure(deps, option, code);
           } catch {
             deps.logger.log('restore-failure-unrecorded', { code });
           }
@@ -386,20 +386,20 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
           }
           deps.logger.log('restore-choice', { option });
           if (option === 'apply-everywhere') {
-            await applyEverywhere(deps);
+            await (await import('./restoreChoice')).applyEverywhere(deps);
             await options.platform.restoreMarker.clear();
-            await writeJson(options.data.repos, RESTORE_FAILURE_META, null);
+            await writeJson(options.data.repos, META.restoreFailure, null);
             await cycle();
             return;
           }
-          await prepareKeepSynced(deps);
+          await (await import('./restoreChoice')).prepareKeepSynced(deps);
           const result = await cycle({ ignoreMarker: true, forceResume: true });
           if (result.outcome !== 'done') {
             await failed(result.errorCode ?? 'io');
             return;
           }
           await options.platform.restoreMarker.clear();
-          await writeJson(options.data.repos, RESTORE_FAILURE_META, null);
+          await writeJson(options.data.repos, META.restoreFailure, null);
           await finish(result);
         } catch (error) {
           await failed(syncErrorCodeOf(error));

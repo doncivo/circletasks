@@ -36,6 +36,8 @@ export const META = {
   parkedResume: 'parkedResume',
   /** Y-IOS-02 : époque orpheline abandonnée dont les fichiers restent à supprimer, `{epoch}`. */
   orphanEpoch: 'orphanEpoch',
+  /** Dernier choix refusé ou en échec après une restauration (`restoreChoice.ts`, chargé à la demande). */
+  restoreFailure: 'restoreFailure',
   /** Y-IOS-02 : traces purgées (`table|id`) de l'orpheline abandonnée, auteur cet appareil (garde `orphan-trace-hit`, §24 point 4 (a)). */
   orphanTraces: 'orphanTraces',
   /** Y-IOS-02 : une opération reçue a visé l'une de ces traces ; levé en avertissement `received-unapplied` au cycle suivant. */

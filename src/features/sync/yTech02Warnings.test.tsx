@@ -7,6 +7,7 @@ import { SYNC_TROUBLE_ORDER, syncBannerFor } from '../../domain/syncBanners';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { t } from '../../i18n';
+import { rescueText } from '../../i18n/syncRescue';
 import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStatusStore } from '../app/appStatus';
@@ -91,14 +92,14 @@ describe('actions de secours des avertissements (ADR 0011 §24)', () => {
     syncStore.get(container).setState({ status: status({ warnings: ['awaiting-other-devices'] }) });
     renderIn(<SyncDetailsScreen slots={slots} />);
     expect(screen.getByText(t('sync.status.warnAwaitingOthers'))).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: t('sync.status.startHere') }));
+    fireEvent.click(screen.getByRole('button', { name: rescueText('startHere') }));
     const dialog = screen.getByRole('alertdialog');
-    expect(dialog.textContent).toContain(t('sync.status.startHereBody'));
+    expect(dialog.textContent).toContain(rescueText('startHereBody'));
     expect(document.activeElement?.textContent).toBe(t('common.cancel'));
     fireEvent.click(screen.getByRole('button', { name: t('common.cancel') }));
     expect(sync.startHereCalls).toBe(0);
-    fireEvent.click(screen.getByRole('button', { name: t('sync.status.startHere') }));
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: t('sync.status.startHere') }));
+    fireEvent.click(screen.getByRole('button', { name: rescueText('startHere') }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: rescueText('startHere') }));
     await act(async () => {
       await Promise.resolve();
     });
@@ -108,9 +109,9 @@ describe('actions de secours des avertissements (ADR 0011 §24)', () => {
   it('received-unapplied : « Lancer une reprise complète » avec confirmation, reprise demandée seulement après confirmation', async () => {
     syncStore.get(container).setState({ status: status({ warnings: ['received-unapplied'] }) });
     renderIn(<SyncDetailsScreen slots={slots} />);
-    fireEvent.click(screen.getByRole('button', { name: t('sync.status.fullResume') }));
+    fireEvent.click(screen.getByRole('button', { name: rescueText('fullResume') }));
     expect(sync.fullResumeCalls).toBe(0);
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: t('sync.status.fullResume') }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: rescueText('fullResume') }));
     await act(async () => {
       await Promise.resolve();
     });

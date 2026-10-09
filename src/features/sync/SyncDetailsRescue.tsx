@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { t } from '../../i18n';
+import { rescueText } from '../../i18n/syncRescue';
 import { Button, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { syncStore } from './syncStore';
@@ -36,22 +36,22 @@ export function SyncDetailsRescue() {
       {awaiting && (
         <div className="ct-settings__row" data-action="start-here">
           <Button variant="secondary" onClick={() => setOpen('start')} disabled={busy} ariaBusy={busy} className="ct-settings__link">
-            {t('sync.status.startHere')}
+            {rescueText('startHere')}
           </Button>
         </div>
       )}
       {unapplied && (
         <div className="ct-settings__row" data-action="full-resume">
           <Button variant="secondary" onClick={() => setOpen('resume')} disabled={busy} ariaBusy={busy} className="ct-settings__link">
-            {t('sync.status.fullResume')}
+            {rescueText('fullResume')}
           </Button>
         </div>
       )}
       {open === 'start' && (
-        <ConfirmDialog title={t('sync.status.startHereTitle')} description={t('sync.status.startHereBody')} confirmLabel={t('sync.status.startHere')} onConfirm={() => void run('start')} onCancel={() => setOpen(null)} />
+        <ConfirmDialog title={rescueText('startHereTitle')} description={rescueText('startHereBody')} confirmLabel={rescueText('startHere')} onConfirm={() => void run('start')} onCancel={() => setOpen(null)} />
       )}
       {open === 'resume' && (
-        <ConfirmDialog title={t('sync.status.fullResumeTitle')} description={t('sync.status.fullResumeBody')} confirmLabel={t('sync.status.fullResume')} onConfirm={() => void run('resume')} onCancel={() => setOpen(null)} />
+        <ConfirmDialog title={rescueText('fullResumeTitle')} description={rescueText('fullResumeBody')} confirmLabel={rescueText('fullResume')} onConfirm={() => void run('resume')} onCancel={() => setOpen(null)} />
       )}
     </>
   );

@@ -3,12 +3,11 @@ import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parse
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, maxEpoch, ownBounds, unreadableDevices } from '../domain/sync/epoch';
-import { hlcDevice, hlcMs, publishedStateToText } from '../domain/sync/parse';
+import { hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
-import { queueOwnRowsForRepublish, switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from '../domain/sync/ownState';
@@ -423,46 +422,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // (ii) Une autre époque existe (celle du PC, qui détient les données) : abandon de la sienne, jamais annoncée. Étapes idempotentes.
       work();
       const orphan = localEpoch;
-      // (a) lignes remises dans la file d'envoi (elle avait été vidée à l'ouverture de l'orpheline), puis intention mémorisée.
-      const queued = await queueOwnRowsForRepublish(deps);
-      // Traces purgées dans l'orpheline (auteur cet appareil) : mémorisées pour la garde `orphan-trace-hit` de la reprise (§24 point 4 (a)).
-      const traces: string[] = [];
-      for (let after: { table: string; rowId: string } | null = null; ; ) {
-        const page = await repos.sync.exportTombstones(after, 500);
-        if (page.length === 0) break;
-        const last = page[page.length - 1] as { table: string; rowId: string };
-        after = { table: last.table, rowId: last.rowId };
-        for (const tomb of page) if (hlcDevice(tomb.deletedHlc) === self) traces.push(`${tomb.table}|${tomb.rowId}`);
-      }
-      await writeJson(repos, META.orphanTraces, traces.length > 0 ? traces : null);
-      await writeJson(repos, META.orphanEpoch, { epoch: orphan });
-      deps.deadline?.check('append');
-      // (b) `own.json` sans époque (Rust recontrôle la preuve). `state-mismatch` : preuve refusée, rien n'est écrit, l'abandon est annulé
-      // (journal, et l'appareil le dit : `publish-blocked`) ; toute autre erreur est transitoire : cycle en échec visible, étape reprise.
-      let refused = false;
-      try {
-        await platform.abandonOrphanEpoch(orphan);
-      } catch (error) {
-        if (isCycleInterrupted(error)) throw error;
-        const code = syncErrorCodeOf(error);
-        logger.log('orphan-epoch-abandon-failed', { code });
-        if (code !== 'state-mismatch') return fail(code, { folderLabel, folderKind });
-        refused = true;
-        await writeJson(repos, META.orphanEpoch, null);
-      }
-      if (!refused) {
-        // (c) transaction locale : l'appareil n'a plus d'époque suivie ; la reprise en fusion (branche « nouvel appareil ») suit.
-        await data.transaction(async (tx) => {
-          await writeJson(tx, META.epoch, null);
-          await writeJson(tx, META.head, null);
-          await writeJson(tx, META.snapshot, null);
-          await writeJson(tx, META.lastState, null);
-          await writeJson(tx, META.resume, true);
-          await tx.sync.saveState(self, { epoch: null, cursorSegment: 0, cursorRecord: 0, ackHlc: null });
-        });
+      // Étapes (a) à (c) dans un module chargé à la demande (cas rare : taille du bundle de départ).
+      const { abandonOrphan } = await import('./orphanEpoch');
+      const abandoned = await abandonOrphan(deps, orphan);
+      if (abandoned.kind === 'failed') return fail(abandoned.code, { folderLabel, folderKind });
+      if (abandoned.kind === 'done') {
         localEpoch = null;
         orphanLeft = orphan;
-        logger.log('epoch-abandoned', { epoch: orphan, rows: queued });
       }
     } else if (orphanProof && folderE === null && unreadable.length > 0) {
       // (iii) rien ne dit si l'autre appareil a une époque : attente visible.
@@ -526,6 +492,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // couvrir chaque oublié retenu jusqu'à sa coupure (accusés des actifs sous les deux clés, positions de l'époque `n`).
       const inReset = directive.kind === 'joined' || directive.kind === 'initiator';
       const merge = inReset && (directive.view.noticeEpoch ?? null) === epoch;
+      const { switchEpoch } = await import('./epochSwitch');
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos, logger),
@@ -714,9 +681,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       resume = true;
     }
     // « Lancer une reprise complète » (§24) : décision explicite de l'utilisateur d'arrêter de protéger les traces de l'orpheline. Traces,
-    // avertissement et acquittement sont effacés **avant** les lectures : l'opération rejouée passe par la fusion ordinaire (la donnée reçue
-    // l'emporte comme d'habitude, rien de local n'est perdu) et une seule demande suffit. Une reprise automatique ne touche à rien : un coup
-    // porté pendant elle lève l'avertissement.
+    // avertissement et acquittement sont effacés **avant** les lectures, donc une seule demande suffit et l'opération rejouée ne relève plus
+    // rien. La trace reste dans la base : la ligne supprimée ici n'est pas recréée par l'opération rejouée ; la pression acquitte, elle ne
+    // répare pas cette ligne. Une reprise automatique ne touche à rien : un coup porté pendant elle lève l'avertissement.
     if (resume && (await repos.sync.getMeta(META.orphanTraceAck)) !== null) {
       await writeJson(repos, META.orphanTraces, null);
       await writeJson(repos, META.orphanTraceHit, null);
@@ -1009,28 +976,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
     }
 
-    // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (`sync_delete_own` : l'époque n'est plus
-    // courante). Échec : journal avec son code (comme les autres suppressions de l'étape 7), retenté à chaque cycle ; ni la lecture ni la
-    // publication n'attendent.
-    {
-      const left = await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch);
-      if (left !== null && left.epoch !== currentEpoch && (await readJson<EpochId>(repos, META.epoch)) !== left.epoch) {
-        if (ownScan?.epochs.some((e) => e.epoch === left.epoch)) {
-          deps.deadline?.check('delete-own');
-          try {
-            await platform.deleteOwn([{ epoch: left.epoch, kind: 'epoch' }]);
-            await writeJson(repos, META.orphanEpoch, null);
-            logger.log('orphan-epoch-deleted', { epoch: left.epoch });
-          } catch (error) {
-            if (isCycleInterrupted(error)) throw error;
-            logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
-          }
-        } else {
-          await writeJson(repos, META.orphanEpoch, null);
-          logger.log('orphan-epoch-cleared', { epoch: left.epoch });
-        }
-      }
-    }
+    // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
+    if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une
     // réinitialisation (Rust la refuse, condition (b)).

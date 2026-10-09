@@ -9,7 +9,7 @@ import { positionAfterReplace } from '../domain/sync/positions';
 import { snapshotPages } from './snapshot';
 
 /** Dernier choix refusé ou en échec (`sync_meta`, local, jamais publié) : affiché dans la fenêtre de choix jusqu'à un choix appliqué. */
-export const RESTORE_FAILURE_META = 'restoreFailure';
+export const RESTORE_FAILURE_META = META.restoreFailure;
 
 /**
  * Choix après une restauration P-04 (ADR 0010 règles 1 à 4, ADR 0011 section 9 ; Y-02 critères 13 à 15, Y-09 critère 8).
