@@ -1,7 +1,9 @@
 //! Outils partagés des tests (faux du plugin folder-bookmark, ADR 0011 §22).
 
-/// `applog::init` fixe un dossier de journal pour TOUT le processus de test : les tests qui l'appellent puis relisent le journal prennent ce
-/// verrou pour qu'aucun autre ne redirige le journal entre l'écriture et la relecture.
+/// Verrou + `applog::reset_for_tests` : le test qui le prend a SON journal (état propre à son fil), où n'entrent pas les écritures des autres
+/// tests (limite : celles faites depuis un autre fil vont à l'état global). Le verrou est conservé : l'état global reste partagé par les
+/// tests qui n'isolent pas leur fil, et il sérialise ceux qui ont besoin du journal global (écritures depuis d'autres fils, `applog::init`
+/// au `setup`) pour qu'aucun ne le redirige pendant qu'un autre le relit.
 pub static APPLOG_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn applog_dir_lock() -> std::sync::MutexGuard<'static, ()> {
