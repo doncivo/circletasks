@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import { useNoticeStore } from '../app/notice';
 import { renderEvents, setupEvents } from '../events/testKit';
 import { renderRoutines } from '../routines/testKit';
 import { CREATE_NOT_READY_MS, TaskCreateSheet } from '../tasks/TaskCreateSheet';
@@ -41,7 +42,7 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(CREATE_NOT_READY_MS);
     });
-    expect(screen.getByRole('alert')).toHaveTextContent('figé');
+    expect(screen.getByRole('alert')).toHaveTextContent('ne peut pas être modifié');
     // Figé : le champ est en lecture seule et une modification n'est pas prise en compte (rien n'est perdu sans le dire).
     expect(screen.getByLabelText('Titre')).toHaveAttribute('readonly');
     fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Acheter du pain complet' } });
@@ -61,6 +62,80 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
       await Promise.resolve();
     });
     expect(onCreate.mock.calls.map(([input]) => input.title)).toEqual(['Acheter du pain', 'Acheter du pain complet']);
+  });
+
+  /** Feuille ouverte sur un onCreate piloté à la main, texte saisi, « Enregistrer » touché, délai de 2 s écoulé (« La base n’est pas prête »). */
+  async function openStuck(onClose: () => void) {
+    const finishers: ((ok: boolean) => void)[] = [];
+    const onCreate = vi.fn((input: { title: string }) => {
+      void input;
+      return new Promise<boolean>((resolve) => finishers.push(resolve));
+    });
+    const view = render(
+      <AppContainerProvider container={h.container}>
+        <TaskCreateSheet viewedDate={h.today} today={h.today} spaces={useAppStore.getState().spaces} initialSpaceId={SPACE_PERSO_ID} onClose={onClose} onCreate={onCreate} />
+      </AppContainerProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Appeler le notaire' } });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CREATE_NOT_READY_MS);
+    });
+    expect(screen.getByRole('alert')).toHaveTextContent('La base n’est pas prête');
+    return { finishers, onCreate, view };
+  }
+
+  it('Q-05 critère 2 (revue) : onCreate qui ne se résout jamais, « Réessayer » relance une vraie écriture (pas la même attente) avec le même texte', async () => {
+    const onClose = vi.fn();
+    const { finishers, onCreate } = await openStuck(onClose);
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+      await Promise.resolve();
+    });
+    expect(onCreate).toHaveBeenCalledTimes(2);
+    expect(onCreate.mock.calls[1]?.[0].title).toBe('Appeler le notaire');
+    // L'ancien message est parti, la nouvelle écriture décide de la feuille.
+    expect(screen.queryByRole('alert')).toBeNull();
+    await act(async () => {
+      finishers[1]?.(true);
+      await Promise.resolve();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    // L'ancienne écriture aboutit enfin : le doublon possible est dit, la feuille n'est pas refermée une seconde fois.
+    await act(async () => {
+      finishers[0]?.(true);
+      await Promise.resolve();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(useNoticeStore.getState().notice?.text).toContain('deux fois');
+  });
+
+  it('Q-05 critère 2 (revue) : feuille fermée pendant l’attente, la fin de l’écriture est dite (enregistrée, ou non enregistrée avec la marche à suivre)', async () => {
+    const onClose = vi.fn();
+    const first = await openStuck(onClose);
+    first.view.unmount();
+    useNoticeStore.getState().clear();
+    await act(async () => {
+      first.finishers[0]?.(true);
+      await Promise.resolve();
+    });
+    expect(useNoticeStore.getState().notice?.text).toBe('La tâche « Appeler le notaire » a été enregistrée après la fermeture de la feuille.');
+    expect(onClose).not.toHaveBeenCalled();
+    vi.useRealTimers();
+    const second = await openStuck(onClose);
+    second.view.unmount();
+    useNoticeStore.getState().clear();
+    await act(async () => {
+      second.finishers[0]?.(false);
+      await Promise.resolve();
+    });
+    expect(useNoticeStore.getState().notice?.text).toContain('n’a pas pu être enregistrée');
+    expect(useNoticeStore.getState().notice?.text).toContain('« + »');
   });
 
   it('Q-05 critère 3 : ouverture depuis Événements puis Routines : le champ est focalisé dans le geste du toucher', async () => {

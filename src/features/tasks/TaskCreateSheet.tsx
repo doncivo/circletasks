@@ -8,6 +8,7 @@ import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { AddSegments, Button, DatePicker, Icon, IconChooser, QuickInputField, QuickPreview, RecurrencePicker, Sheet, SpaceSegmented, type AddSegment } from '../../ui';
 import { DictationButton, DictationHelp, ListeningSheet, useDictation, useQuickInput } from '../capture';
+import { useNoticeStore } from '../app/notice';
 import { GoalAttachSwitch } from '../goals/GoalAttachSwitch';
 import { ReminderBlock } from '../reminders';
 import { ProjectSelect } from '../spaces';
@@ -30,6 +31,13 @@ export const CREATE_NOT_READY_MS = 2000;
 const SHAKE_MS = 450;
 
 type SheetNotice = 'not-ready' | 'failed';
+
+/** Une écriture lancée par la feuille ; `abandoned` : « Réessayer » en a lancé une autre à sa place (celle-ci ne décide plus de la feuille). */
+interface Attempt {
+  readonly title: string;
+  abandoned: boolean;
+  readonly promise: Promise<boolean>;
+}
 
 export interface TaskCreateSheetProps {
   readonly viewedDate: LocalDate;
@@ -82,7 +90,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const titleRef = useRef<HTMLInputElement>(null);
   const busy = useRef(false);
   // Q-05 : création en cours (une seule à la fois, même après le message « base non prête » : « Réessayer » la reprend au lieu d'en lancer une seconde).
-  const pending = useRef<Promise<boolean> | null>(null);
+  const pending = useRef<Attempt | null>(null);
   const mounted = useRef(true);
   const onCloseRef = useRef(onClose);
   const [notice, setNotice] = useState<SheetNotice | null>(null);
@@ -138,8 +146,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     setChoice(value);
   }
 
-  async function submit(event: FormEvent): Promise<void> {
-    event.preventDefault();
+  async function submit(event?: FormEvent): Promise<void> {
+    event?.preventDefault();
     // Un second Entrée pendant l'attente (chargement des dates, écriture) ne crée pas une seconde tâche.
     if (busy.current) return;
     busy.current = true;
@@ -149,6 +157,50 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     } finally {
       busy.current = false;
     }
+  }
+
+  /**
+   * Lance l'écriture. Fin tardive, quelle qu'en soit l'issue, jamais muette : feuille ouverte, elle ferme la feuille ou affiche l'erreur ; feuille
+   * fermée entre-temps, un message dit ce qui est arrivé à la tâche ; écriture abandonnée par « Réessayer » puis aboutie, un message prévient du doublon possible.
+   */
+  function startAttempt(input: Parameters<TaskCreateSheetProps['onCreate']>[0]): Attempt {
+    const promise = (async (): Promise<boolean> => {
+      try {
+        return await onCreate(input);
+      } catch {
+        return false;
+      }
+    })();
+    const attempt: Attempt = { title: input.title, abandoned: false, promise };
+    pending.current = attempt;
+    setWaiting(true);
+    void promise.then((created) => {
+      if (pending.current === attempt) pending.current = null;
+      if (attempt.abandoned) {
+        if (created) useNoticeStore.getState().show(t('capture.lateTwice', { title: attempt.title }));
+        return;
+      }
+      if (!mounted.current) {
+        useNoticeStore.getState().show(t(created ? 'capture.lateSaved' : 'capture.lateFailed', { title: attempt.title }));
+        return;
+      }
+      setWaiting(false);
+      if (created) onCloseRef.current();
+      else setNotice('failed');
+    });
+    return attempt;
+  }
+
+  /** « Réessayer » : l'écriture en attente est abandonnée et une nouvelle part (le texte est figé, c'est le même). */
+  function retry(): void {
+    if (busy.current) return;
+    const stuck = pending.current;
+    if (stuck) {
+      stuck.abandoned = true;
+      pending.current = null;
+      setWaiting(false);
+    }
+    void submit();
   }
 
   async function create(): Promise<void> {
@@ -165,38 +217,13 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     const reminderOffsets = finalChoice.date === null || finalChoice.time === null ? [] : finalOffsets;
     let run = pending.current;
     if (!run) {
-      const started = (async (): Promise<boolean> => {
-        try {
-          return await onCreate({
-            title: parsed.title,
-            spaceId: finalSpaceId,
-            projectId: finalProjectId,
-            choice: finalChoice,
-            recurrence: finalChoice.date === null ? null : recurrence,
-            icon,
-            reminderOffsets,
-            goalId,
-          });
-        } catch {
-          return false;
-        }
-      })();
-      run = started;
-      pending.current = started;
-      setWaiting(true);
-      // Fin de l'écriture, même tardive : réussie, la feuille se ferme ; refusée, l'erreur s'affiche et le texte reste.
-      void started.then((created) => {
-        if (pending.current === started) pending.current = null;
-        if (!mounted.current) return;
-        setWaiting(false);
-        if (created) onCloseRef.current();
-        else setNotice('failed');
-      });
+      const input = { title: parsed.title, spaceId: finalSpaceId, projectId: finalProjectId, choice: finalChoice, recurrence: finalChoice.date === null ? null : recurrence, icon, reminderOffsets, goalId };
+      run = startAttempt(input);
     }
     // Course contre le délai de Q-05 : au-delà, « La base n'est pas prête » (l'écriture reste attendue, rien n'est perdu).
     let timer = 0;
     const slow = await Promise.race([
-      run.then(() => false),
+      run.promise.then(() => false),
       new Promise<boolean>((resolve) => {
         timer = window.setTimeout(() => resolve(true), CREATE_NOT_READY_MS);
       }),
@@ -280,7 +307,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
           <div className="ct-task-sheet__notice" role="alert">
             <span>{notice === 'not-ready' ? t('capture.sheetNotReady') : t('capture.sheetSaveError')}</span>
             {notice === 'not-ready' && (
-              <button type="button" className="ct-task-sheet__retry" onClick={(event) => void submit(event)}>
+              <button type="button" className="ct-task-sheet__retry" onClick={retry}>
                 {t('capture.sheetRetry')}
               </button>
             )}
