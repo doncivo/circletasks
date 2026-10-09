@@ -601,3 +601,28 @@
 .ct-task-appleBadge {
   font-weight: var(--ct-font-weight-semibold);
 }
+
+/*
+ * Jour en grand sur UNE ligne (IOS-titres) : le titre se réduit (useFitText) à la place que lui laissent le badge « AUJOURD'HUI » et
+ * les boutons de droite, sans couper ni rogner ; badge et boutons gardent leur taille.
+ */
+.ct-today__header,
+.ct-today__dateRow {
+  min-width: 0;
+}
+
+.ct-today__day {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.ct-today__badge,
+.ct-today__headerActions {
+  flex-shrink: 0;
+}
+
+/* Texte très agrandi : au plancher de taille (useFitText, data-fit="floor"), le badge passe sous le jour au lieu de le chevaucher. */
+.ct-today__dateRow:has(> .ct-today__day[data-fit='floor']) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}

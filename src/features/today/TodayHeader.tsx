@@ -1,9 +1,9 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
 import { formatTodayHeader } from '../../i18n/format';
-import { Icon, type Layout } from '../../ui';
+import { Icon, useFitText, type Layout } from '../../ui';
 
 export interface TodayHeaderProps {
   /** Jour affiché. */
@@ -24,13 +24,19 @@ export interface TodayHeaderProps {
  */
 export function TodayHeader({ date, today, layout, onPreviousDay, onNextDay, actions }: TodayHeaderProps) {
   const header = formatTodayHeader(date, layout === 'pc' ? 'long' : 'short');
+  const rowRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Jour en grand sur une ligne, réduit à la place laissée par le badge et les boutons (iPhone 375 pt ; IOS-titres).
+  useFitText(titleRef, rowRef, `${header.dayLine}|${String(date === today)}`);
   return (
     <>
-      <div className="ct-today__headerRow">
+      <div className="ct-today__headerRow" ref={rowRef}>
         <div className="ct-today__header">
           <span className="ct-today__month">{header.monthLine}</span>
           <div className="ct-today__dateRow">
-            <h1 className="ct-today__day">{header.dayLine}</h1>
+            <h1 className="ct-today__day" ref={titleRef}>
+              {header.dayLine}
+            </h1>
             {date === today && <span className="ct-today__badge">{t('tasks.todayBadge')}</span>}
           </div>
         </div>

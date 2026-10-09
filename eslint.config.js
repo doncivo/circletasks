@@ -35,7 +35,7 @@ const forbidLayers = (files, layers, message, allow = []) => ({
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'src-tauri/**', 'node_modules/**', '.claude/**'],
+    ignores: ['dist/**', 'dist-perf/**', 'dist-webkit/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'src-tauri/**', 'node_modules/**', '.claude/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.strict,

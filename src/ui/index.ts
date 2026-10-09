@@ -48,6 +48,7 @@ export { DragHandle, type DragHandleProps } from './DragHandle';
 export { useZoneDrag, type UseZoneDragOptions, type ZoneDrag, type ZoneDragState } from './useZoneDrag';
 export { DragGhost, type DragGhostProps } from './DragGhost';
 export { useSwipe, type SwipeHandlers, type UseSwipeOptions } from './useSwipe';
+export { FIT_TEXT_MIN_PX, useFitText } from './useFitText';
 export { SomedayIcon, type SomedayIconProps } from './SomedayIcon';
 export { CompactToggle, type CompactToggleProps } from './CompactToggle';
 export {
