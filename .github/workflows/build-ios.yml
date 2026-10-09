@@ -45,6 +45,21 @@ jobs:
             exit 1
           fi
 
+      # I-06 (ADR 0007 avenant I-06 point 3) : notes de version tirées de CHANGELOG.md (script commun avec build-windows.yml), calculées
+      # AVANT la compilation. Tag ios-v* : section absente = échec ; branche : avertissement visible et repli « CircleTasks X.Y.Z ».
+      - name: Notes de version
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          mkdir -p notes
+          if ! node scripts/release/release-notes.mjs "$VERSION" > notes/notes.txt; then
+            case "${GITHUB_REF}" in
+              refs/tags/ios-v*) echo "::error::Aucune section « ## ${VERSION} » dans CHANGELOG.md : publication refusée"; exit 1;;
+            esac
+            echo "::warning::Aucune section « ## ${VERSION} » dans CHANGELOG.md : notes de repli « CircleTasks ${VERSION} »"
+            echo "CircleTasks ${VERSION}" > notes/notes.txt
+          fi
+
       - name: Rust stable et cible iOS
         uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable (branche stable au 2026-10-07)
         with:
@@ -193,6 +208,31 @@ jobs:
             if [ -f "$RUNNER_TEMP/check/Payload/CircleTasks.app/embedded.mobileprovision" ]; then echo "- embedded.mobileprovision : présent dans l'IPA"; else echo "- embedded.mobileprovision : absent de l'IPA (normal pour une IPA non signée ; SideStore l'écrit à l'installation, I-02)"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # I-06 (ADR 0007 avenant I-06 point 2, critère 5) : source SideStore SIMULÉE avec l'IPA de ce build et la source publiée (lue à l'URL
+      # publique, aucun secret), contrôlée par check-source.mjs (build croissant, URL, sha256, taille, identifiant, champs hérités). Rien
+      # n'est publié ici : la publication reste le job publish, sur un tag ios-v* seulement.
+      - name: Source SideStore simulée
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          NOTES=$(cat notes/notes.txt)
+          rm -rf sim && mkdir -p sim
+          if ! curl -fsSL "https://raw.githubusercontent.com/doncivo/circletasks-releases/main/source.json" -o sim/published.json; then
+            echo "::warning::Source publiée illisible : simulation sans les versions déjà publiées"
+            rm -f sim/published.json
+          fi
+          node scripts/ios/make-source-json.mjs --version "$VERSION" --ipa ipa/CircleTasks.ipa --info-plist info/Info.plist \
+            --url "https://github.com/doncivo/circletasks-releases/releases/download/ios-v${VERSION}/CircleTasks.ipa" --notes "$NOTES" \
+            --existing sim/published.json > sim/source.json
+          node scripts/ios/check-source.mjs sim/source.json --published "$VERSION"
+          BUILD=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' info/Info.plist)
+          COUNT=$(node -p "require('./sim/source.json').apps[0].versions.length")
+          {
+            echo "- Source SideStore simulée : version ${VERSION}, build ${BUILD}, ${COUNT} version(s) dans la source"
+            echo "- Notes (première ligne) : $(head -n 1 notes/notes.txt)"
+            echo "- source valide"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # ADR 0008 §9.3 (K-TECH-01) : l'ID client Google de type iOS est-il compilé dans le binaire de l'IPA ? Résultat réduit à présent / absent :
       # la valeur n'est ni affichée ni gardée. Absent : avertissement et ligne du résumé (jamais un échec : l'app affiche alors « non configuré »).
       - name: ID client Google iOS compilé
@@ -282,12 +322,15 @@ jobs:
           fi
           REPO="doncivo/circletasks-releases"
           IPA_URL="https://github.com/${REPO}/releases/download/${TAG}/CircleTasks.ipa"
-          NOTES="CircleTasks ${VERSION}"
+          # I-06 : notes de CHANGELOG.md (script commun) ; sur un tag, une section absente fait échouer la publication.
+          NOTES=$(node scripts/release/release-notes.mjs "$VERSION") || { echo "::error::Aucune section « ## ${VERSION} » dans CHANGELOG.md : publication refusée"; exit 1; }
           # Le jeton passe par le credential helper de gh, jamais dans l'URL ni dans .git/config.
           gh auth setup-git
           git clone "https://github.com/${REPO}.git" releases
           node scripts/ios/make-source-json.mjs --version "$VERSION" --ipa ipa/CircleTasks.ipa --info-plist info/Info.plist \
             --url "$IPA_URL" --notes "$NOTES" --existing releases/source.json > source.new.json
+          # I-06 : contrôle de la source AVANT toute publication (release et push) ; un écart arrête tout.
+          node scripts/ios/check-source.mjs source.new.json --published "$VERSION"
           gh release create "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --title "CircleTasks iPhone ${VERSION}" --notes "$NOTES" --latest=false \
             || gh release upload "$TAG" ipa/CircleTasks.ipa --repo "$REPO" --clobber
           cp source.new.json releases/source.json

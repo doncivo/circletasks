@@ -1,0 +1,51 @@
+{
+  "name": "CircleTasks",
+  "subtitle": "Source SideStore de CircleTasks",
+  "description": "Planificateur personnel CircleTasks pour iPhone.",
+  "identifier": "fr.circletasks.source",
+  "website": "https://github.com/doncivo/circletasks-releases",
+  "iconURL": "https://raw.githubusercontent.com/doncivo/circletasks-releases/main/icon.png",
+  "apps": [
+    {
+      "name": "CircleTasks",
+      "bundleIdentifier": "fr.circletasks.planner",
+      "developerName": "Ali Cherif",
+      "subtitle": "Planificateur personnel",
+      "localizedDescription": "Tâches, routines, événements et checklists, synchronisés avec la version PC.",
+      "iconURL": "https://raw.githubusercontent.com/doncivo/circletasks-releases/main/icon.png",
+      "tintColor": "#C2410C",
+      "versions": [
+        {
+          "version": "0.3.0",
+          "buildVersion": "0.3.0",
+          "date": "2026-10-20T08:00:00.000Z",
+          "localizedDescription": "Version visible dans « À propos » sur l'iPhone.",
+          "downloadURL": "https://github.com/doncivo/circletasks-releases/releases/download/ios-v0.3.0/CircleTasks.ipa",
+          "size": 7100000,
+          "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "minOSVersion": "18.0"
+        },
+        {
+          "version": "0.2.3",
+          "buildVersion": "0.2.3",
+          "date": "2026-10-09T04:11:39.487Z",
+          "localizedDescription": "Association : chaque état propose l'action utile.",
+          "downloadURL": "https://github.com/doncivo/circletasks-releases/releases/download/ios-v0.2.3/CircleTasks.ipa",
+          "size": 6998773,
+          "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "minOSVersion": "18.0"
+        }
+      ],
+      "version": "0.3.0",
+      "versionDate": "2026-10-20T08:00:00.000Z",
+      "versionDescription": "Version visible dans « À propos » sur l'iPhone.",
+      "downloadURL": "https://github.com/doncivo/circletasks-releases/releases/download/ios-v0.3.0/CircleTasks.ipa",
+      "size": 7100000,
+      "appPermissions": {
+        "entitlements": [],
+        "privacy": {}
+      }
+    }
+  ],
+  "news": []
+}
