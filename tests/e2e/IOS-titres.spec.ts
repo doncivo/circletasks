@@ -72,15 +72,38 @@ async function measureTitle(page: Page): Promise<TitleMetrics> {
  * `neighbours` : éléments qui partagent la rangée du titre (badge, boutons) : ils restent entiers dans l'écran, à droite du titre,
  * sans le chevaucher (le titre se réduit, eux non).
  */
+/**
+ * Change la largeur et attend que la page l'ait REÇUE : événement `resize` livré (useFitText s'y ajuste, comme à la rotation de
+ * l'iPhone), puis une image. Constat sur WebKit Linux en CI (branche de diagnostic diag-webkit-fit, run 37934673681) : après
+ * `setViewportSize(430)`, la mise en page est déjà à 430 et deux `requestAnimationFrame` passent, mais ni `resize` ni ResizeObserver
+ * ne sont encore livrés (ils arrivent ensuite) : une mesure à ce moment voit le titre de 440. On attend donc l'événement lui-même
+ * (un état, jamais un délai) ; s'il n'arrive jamais, le test échoue sur le délai de l'assertion.
+ */
+async function resizeTo(page: Page, width: number): Promise<void> {
+  const current = await page.evaluate(() => window.innerWidth);
+  if (current !== width) {
+    await page.evaluate(() => {
+      const scope = window as unknown as { __ctResized?: boolean };
+      scope.__ctResized = false;
+      window.addEventListener('resize', () => void (scope.__ctResized = true), { once: true });
+    });
+  }
+  await page.setViewportSize({ width, height: 956 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
+  if (current !== width) {
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { __ctResized?: boolean }).__ctResized === true), {
+        message: `événement resize jamais livré après le passage à ${String(width)} px`,
+      })
+      .toBe(true);
+  }
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+}
+
 async function expectOneLineTitle(page: Page, where: string, neighbours: readonly Locator[] = []): Promise<void> {
   await fontsReady(page);
   for (const width of WIDTHS) {
-    await page.setViewportSize({ width, height: 956 });
-    await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
-    // useFitText s'ajuste à l'image suivante (notification de ResizeObserver ou événement `resize`, livrés pendant la mise à jour du
-    // rendu). Attendre DEUX images (la seconde commence après la livraison de la première) : un état, jamais un délai. L'ancienne
-    // attente (une seule ligne de texte) passait tout de suite avec `nowrap` : la mesure tombait avant l'ajustement (WebKit sous Linux).
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await resizeTo(page, width);
     const metrics = await measureTitle(page);
     const label = `${where} à ${String(width)} px : « ${metrics.text} » (${JSON.stringify(metrics)})`;
     expect(metrics.lines, `${label} : titre sur plusieurs lignes`).toBe(1);
@@ -178,8 +201,7 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
       await expect(page.locator(selector)).toBeVisible();
       await fontsReady(page);
       for (const width of WIDTHS) {
-        await page.setViewportSize({ width, height: 956 });
-        await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
+        await resizeTo(page, width);
         const title = page.locator(selector);
         await expect.poll(() => title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
         const report = await title.evaluate((el) => {
