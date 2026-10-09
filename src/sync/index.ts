@@ -3,7 +3,7 @@
  * Couche autorisée à dépendre de domain, db et platform ; jamais de features ni d'ui. Les règles pures sont dans `src/domain/sync`.
  */
 export { createSyncService, type SyncEngineService, type SyncServiceOptions } from './service';
-export { startSyncScheduler, HIDE_SYNC_DEADLINE_MS, SYNC_POLL_MS, type SyncScheduler, type SyncSchedulerEnv } from './scheduler';
+export { startSyncScheduler, BEFORE_HIDE_BUDGET_MS, HIDE_SYNC_DEADLINE_MS, SYNC_POLL_MS, type SyncScheduler, type SyncSchedulerEnv } from './scheduler';
 export { CycleInterrupted, HYDRATE_DEADLINE_MARGIN_MS, isCycleInterrupted, type DeadlineUnit } from './deadline';
 export { syncAge, phaseOf, INITIAL_STATUS, type SyncAge } from './status';
 export { readStoredDeviceStatuses, storedDeviceStatuses } from './deviceStatus';

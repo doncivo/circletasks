@@ -1,3 +1,4 @@
+import type { AppleCreateSetting, AppleListsSetting, ApplePending } from '../appleReminders';
 import type { FocusDuration } from '../focusSession';
 import type { OnboardingStepId, SampleIds } from '../onboarding';
 import type { DeviceId, IsoDateTime, LocalTime, SpaceFilter, SpaceId } from '../types';
@@ -86,6 +87,16 @@ export interface SettingsValues {
   'notifications.status': unknown;
   /** N-03 (avenant N3.4) : file durable des actions « Fait » et « +15 min » reçues de la notification, répétitions vivantes. Valeur BRUTE lue par `parseActionQueue` ; locale, jamais synchronisée. */
   'notifications.actionQueue': unknown;
+  /** K-05 (ADR 0008 §10.3) : listes Rappels choisies, avec leur espace et leur nom lisible sur le PC ; partagé. Valeur à relire par `parseAppleLists`. */
+  'appleReminders.lists': AppleListsSetting;
+  /** K-06 : création dans Rappels par espace (désactivée par défaut) ; partagé. Valeur à relire par `parseAppleCreate`. */
+  'appleReminders.create': AppleCreateSetting;
+  /** K-05 critère 14, K-07 : dernière lecture réussie de Rappels par l'iPhone (une écriture au plus tous les 15 min) ; partagé. */
+  'appleReminders.lastPassAt': IsoDateTime | null;
+  /** K-06 critère 8, K-07 critère 8 : écritures dues vers Rappels (nombre et heure), publié par l'iPhone ; partagé. */
+  'appleReminders.pending': ApplePending | null;
+  /** ADR 0008 §10.3 : échec persistant, plafonds, suppressions retenues, liens inconnus, messages ; LOCAL. Valeur BRUTE lue par `parseAppleStatus` ; jamais de titre. */
+  'appleReminders.status': unknown;
   /**
    * I-03 (ADR 0013 §2.3) : verrouillage de l'app par Face ID ou code de l'iPhone. Valeur BRUTE lue par `parseAppLockSetting` (illisible :
    * verrouillé, échec fermé) ; locale, jamais synchronisée ni observée par la replanification.
@@ -135,6 +146,11 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'notifications.ledger': { scope: 'local', defaultValue: null },
   'notifications.status': { scope: 'local', defaultValue: null },
   'notifications.actionQueue': { scope: 'local', defaultValue: null },
+  'appleReminders.lists': { scope: 'shared', defaultValue: { lists: [] } },
+  'appleReminders.create': { scope: 'shared', defaultValue: { bySpace: [] } },
+  'appleReminders.lastPassAt': { scope: 'shared', defaultValue: null },
+  'appleReminders.pending': { scope: 'shared', defaultValue: null },
+  'appleReminders.status': { scope: 'local', defaultValue: null },
   'security.appLock': { scope: 'local', defaultValue: false },
   'notifications.signing': { scope: 'local', defaultValue: null },
 };

@@ -25,7 +25,7 @@ export interface RefreshDeps {
 
 const cursorKey = (accountId: CalendarAccountId, calendarId: string): string => `${accountId}|${calendarId}`;
 
-const stoppingErrors: ReadonlySet<ProviderError['kind']> = new Set(['unauthorized', 'rate-limited', 'server', 'network']);
+const stoppingErrors: ReadonlySet<ProviderError['kind']> = new Set(['unauthorized', 'rate-limited', 'server', 'network', 'unavailable']);
 
 /** Résultat d'un rafraîchissement ; `gone` : le compte a été supprimé pendant la lecture (rien n'a été écrit, l'état n'est pas à mettre à jour). */
 export type RefreshResult = RefreshOutcome & { readonly gone?: true };

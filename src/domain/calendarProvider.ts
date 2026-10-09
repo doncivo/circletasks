@@ -81,6 +81,8 @@ export type ProviderError =
   | { readonly kind: 'rate-limited'; readonly retryAfterMs: number | null }
   | { readonly kind: 'server'; readonly status: number }
   | { readonly kind: 'network' }
+  /** Le code du fournisseur n'a pas pu être chargé (fichier absent de la WebView) : ni réseau ni réponse du serveur. */
+  | { readonly kind: 'unavailable' }
   | { readonly kind: 'malformed' };
 
 /** Accès en LECTURE SEULE à un compte (K-01 critère 9, K-02 critère 8). Aucune méthode d'écriture n'existe. */

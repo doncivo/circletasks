@@ -20,7 +20,7 @@ const SELF = '60000000-0000-4000-8000-0000000000f1' as DeviceId;
 const A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const PRO = '00000000-0000-4000-8000-000000000001';
 const AT = '2026-10-05T08:00:00.000Z' as IsoDateTime;
-const LOCAL_SV = 17;
+const LOCAL_SV = 18;
 const h = (ms: number): Hlc => `${String(1_791_187_200_000 + ms).padStart(15, '0')}-0000-${A}` as Hlc;
 
 let db: TestDb;
@@ -51,6 +51,8 @@ function fullTask(id: string, hlc: Hlc, extra: Record<string, SyncField> = {}): 
     external_id: v(null),
     series_template: v(null),
     external_event_id: v(null),
+    apple_list_id: v(null),
+    apple_recurring: v(0),
     created_at: v(AT),
     deleted_at: v(null),
     ...extra,
@@ -110,13 +112,13 @@ describe('champs inconnus d’une version plus récente (Y-07 critère 2)', () =
   it('nom hors de ^[a-z][a-z0-9_]{0,62}$ : l’enregistrement entier est refusé à l’analyse (rien n’est appliqué)', () => {
     const good = fullTask(idOf(4), h(1));
     for (const bad of ['Future', 'future-col', '_x', '1x', 'x'.repeat(64), 'é']) {
-      const asField = journalRecordToText({ k: 'ops', sv: 18, ops: [{ ...good, f: new Map([...good.f, [bad, ['v', h(1), null] as SyncField]]) }] });
+      const asField = journalRecordToText({ k: 'ops', sv: 19, ops: [{ ...good, f: new Map([...good.f, [bad, ['v', h(1), null] as SyncField]]) }] });
       expect(parseJournalRecord(asField), `champ ${bad}`).toBeNull();
-      const asTable = journalRecordToText({ k: 'ops', sv: 18, ops: [good, op(bad, idOf(4), { a: ['v', h(1), null] })] });
+      const asTable = journalRecordToText({ k: 'ops', sv: 19, ops: [good, op(bad, idOf(4), { a: ['v', h(1), null] })] });
       expect(parseJournalRecord(asTable), `table ${bad}`).toBeNull();
     }
-    expect(parseJournalRecord(journalRecordToText({ k: 'ops', sv: 18, ops: [good] }))).not.toBeNull();
-    expect(parseJournalRecord(journalRecordToText({ k: 'ops', sv: 18, ops: [{ ...good, f: new Map([...good.f, ['x'.repeat(63), ['v', h(1), null] as SyncField]]) }] }))).not.toBeNull();
+    expect(parseJournalRecord(journalRecordToText({ k: 'ops', sv: 19, ops: [good] }))).not.toBeNull();
+    expect(parseJournalRecord(journalRecordToText({ k: 'ops', sv: 19, ops: [{ ...good, f: new Map([...good.f, ['x'.repeat(63), ['v', h(1), null] as SyncField]]) }] }))).not.toBeNull();
   });
 
   it('un espion sur execute ne voit jamais un nom reçu (table, champ ni clé de réglage)', async () => {

@@ -159,6 +159,8 @@ describe('buildNextOccurrence', () => {
     someday: false,
     source: 'local',
     externalId: null,
+    appleListId: null,
+    appleRecurring: false,
     externalEventId: null,
   };
   let n = 100;
@@ -189,6 +191,8 @@ describe('buildNextOccurrence', () => {
       someday: false,
       source: 'local',
       externalId: null,
+      appleListId: null,
+      appleRecurring: false,
       externalEventId: null,
     });
     expect(reminders).toEqual([]);

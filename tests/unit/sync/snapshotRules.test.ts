@@ -118,6 +118,8 @@ describe('écriture de l’instantané : conditions (Y-02 critère 11)', () => {
           someday: false,
           source: 'local' as const,
           externalId: null,
+          appleListId: null,
+          appleRecurring: false,
           externalEventId: null,
         })),
       );

@@ -1,0 +1,19 @@
+[package]
+name = "tauri-plugin-reminders"
+version = "0.1.0"
+description = "CircleTasks : lecture et écriture des Rappels Apple (EventKit) sur iPhone (ADR 0008 §10). Appelé par la WebView."
+authors = ["Ali Cherif"]
+edition = "2021"
+rust-version = "1.80"
+publish = false
+# Exigé par tauri-plugin (nom identique au paquet) : le plugin Swift est lié par le script de compilation.
+links = "tauri-plugin-reminders"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+tauri = { version = "2", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }
