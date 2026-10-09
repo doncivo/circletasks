@@ -137,6 +137,9 @@ pub struct KeyStatus {
     pub next_kid: Option<String>,
     /// Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null.
     pub import_failure: Option<ImportFailureView>,
+    /// Y-IOS-02 (ADR 0011 §24 point 1 (b)) : appareil par lequel cet appareil a été associé (`own.json`, ou mémorisé à l'import avant la
+    /// liaison), ou null. Le moteur ne se tient pas pour le premier appareil tant que son état n'est pas lisible.
+    pub paired_by: Option<String>,
 }
 
 /// Échec d'import persisté (§18 point 17) : code et instant ISO UTC, jamais de clé.
@@ -582,7 +585,29 @@ impl SyncCore {
         let key = self.read_vault_key()?;
         let next = self.read_vault_next()?;
         let import_failure = self.import_failure();
-        Ok(KeyStatus { present: key.is_some(), kid: key.map(|k| k.kid().to_owned()), next_kid: next.map(|k| k.kid().to_owned()), import_failure })
+        let kid = key.as_ref().map(|k| k.kid().to_owned());
+        let paired_by = self.paired_by(kid.as_deref());
+        Ok(KeyStatus { present: key.is_some(), kid, next_kid: next.map(|k| k.kid().to_owned()), import_failure, paired_by })
+    }
+
+    /// Appareil d'association : mémorisé à l'import (pas encore lié), sinon `own.json` de la clé courante ; illisible : aucun.
+    fn paired_by(&self, kid: Option<&str>) -> Option<String> {
+        let inner = self.lock();
+        self.paired_by_in(&inner, kid)
+    }
+
+    fn paired_by_in(&self, inner: &Inner, kid: Option<&str>) -> Option<String> {
+        if let Some(paired) = inner.pending_paired_by.clone() {
+            return Some(paired);
+        }
+        let kid = kid?;
+        if let Some(own) = inner.own.as_ref().filter(|o| o.kid == kid) {
+            return own.paired_by.clone();
+        }
+        match read_config_file::<OwnState>(&self.path(OWN_FILE)) {
+            Ok(Some(own)) if own.kid == kid => own.paired_by,
+            _ => None,
+        }
     }
 
     /// Identifiant du dossier lié d'après `folder.json` (sans contrôle du dossier) ; `None` sans dossier.
@@ -1620,7 +1645,10 @@ impl SyncCore {
         let ok = Self::ok_states(&reads);
         let actives: Vec<&PublishedState> = ok.iter().filter(|(id, _)| !order.contains_key(*id)).map(|(_, s)| *s).collect();
         let cited = cited_devices(actives.iter().copied());
-        let known = reads.contains_key(device_id) || cited.contains(device_id) || reg.accepted.contains_key(device_id) || reg.entries.iter().any(|e| e.device_id == device_id);
+        // Y-IOS-02 (ADR 0011 §24 point 1) : l'appareil par lequel cet appareil a été associé est connu même si son dossier n'apparaît pas
+        // encore (iCloud) : il peut être oublié s'il ne reviendra pas.
+        let paired = self.paired_by_in(inner, Some(key.kid())).is_some_and(|p| p == device_id);
+        let known = paired || reads.contains_key(device_id) || cited.contains(device_id) || reg.accepted.contains_key(device_id) || reg.entries.iter().any(|e| e.device_id == device_id);
         if !known {
             return fail(SyncCode::BadName);
         }

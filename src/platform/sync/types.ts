@@ -447,6 +447,8 @@ export interface KeyStatus {
   readonly nextKid?: string | null;
   /** Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null. */
   readonly importFailure?: { readonly code: SyncErrorCode; readonly at: IsoDateTime } | null;
+  /** ADR 0011 §24 point 1 (b) : appareil par lequel cet appareil a été associé (`own.json`), ou null. Facultatif (anciens faux). */
+  readonly pairedBy?: DeviceId | null;
 }
 
 /** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */

@@ -618,6 +618,20 @@ fn y_ios_02_abandon_orphan_epoch_refusals() {
     assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_some());
 }
 
+/// Réinitialisation en cours (`reset.json` actif) : l'abandon est refusé (`state-mismatch`), `own.json` inchangé.
+#[test]
+fn y_ios_02_abandon_orphan_epoch_refused_while_a_reset_is_in_progress() {
+    let high = epoch(1, IPHONE);
+    let (a, _) = orphan_device(&high);
+    let own: Value = serde_json::from_slice(&std::fs::read(a.base.path().join("sync").join("own.json")).unwrap()).unwrap();
+    let record = json!({
+        "folderId": own["folderId"], "deviceId": DEV_A, "role": "initiator", "kid": "0123456789abcdef", "epoch": epoch(2, DEV_A), "by": DEV_A,
+        "notice": null, "noticeEpoch": null, "stage": "created", "base": null, "superseded": null
+    });
+    std::fs::write(a.base.path().join("sync").join("reset.json"), serde_json::to_vec(&record).unwrap()).unwrap();
+    assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+}
+
 /// B5 reste entière : `sync_delete_own` refuse l'époque courante, même orpheline.
 #[test]
 fn y_ios_02_delete_own_still_refuses_the_current_epoch() {

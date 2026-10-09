@@ -136,10 +136,10 @@ describe('clé (Y-08)', () => {
     const p = createMemorySyncPlatform({ folder: new MemorySyncFolder(), nowMs: clock });
     expect(await codeOf(p.key.create())).toBe('not-configured');
     await p.folder.choose();
-    expect(await p.key.status()).toEqual({ present: false, kid: null, nextKid: null, importFailure: null });
+    expect(await p.key.status()).toEqual({ present: false, kid: null, nextKid: null, importFailure: null, pairedBy: null });
     const { kid } = await p.key.create();
     expect(kid).toMatch(/^[0-9a-f]{16}$/);
-    expect(await p.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null });
+    expect(await p.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null, pairedBy: null });
     expect(await codeOf(p.key.create())).toBe('key-exists');
     p.testing.setVaultAvailable(false);
     expect(await codeOf(p.key.status())).toBe('vault-unavailable');
@@ -787,8 +787,7 @@ describe('abandon d’une époque orpheline (ADR 0011 §24 point 4, miroir de sy
     folder = new MemorySyncFolder();
     a = await firstDevice(folder);
     await a.writeSnapshot({ epoch: ORPHAN, seq: 1, sv: 14, records: pages(['s0']) });
-    a.testing.dropOwnState();
-    await a.deleteOwn([]);
+    a.testing.setOwnEpoch(ORPHAN);
   }
 
   it('preuve tenue : own.json sans époque, fichiers intacts, sans effet la seconde fois ; sync_delete_own supprime ensuite l’orpheline', async () => {
@@ -828,6 +827,24 @@ describe('abandon d’une époque orpheline (ADR 0011 §24 point 4, miroir de sy
       expect(await codeOf(a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }]))).toBe('current-epoch');
     });
   }
+
+  it('own.json reconstruit : un instantané seul n’est jamais une époque suivie (comme Rust), l’époque plus petite d’un autre appareil peut être suivie', async () => {
+    folder = new MemorySyncFolder();
+    a = await firstDevice(folder);
+    await a.writeSnapshot({ epoch: ORPHAN, seq: 1, sv: 14, records: pages(['s0']) });
+    a.testing.dropOwnState();
+    await a.deleteOwn([]);
+    // Ancien comportement du simulateur : own.epoch = ORPHAN (plus grande que E1) et le snapshot de E1 était refusé (state-mismatch).
+    await a.writeSnapshot({ epoch: E1, seq: 1, sv: 14, records: pages(['s0']) });
+    expect(await a.abandonOrphanEpoch(ORPHAN)).toBeUndefined();
+  });
+
+  it('refusée tant qu’une réinitialisation est en cours (reset.json actif) : state-mismatch, own.json inchangé', async () => {
+    await orphan();
+    a.testing.injectActiveReset();
+    expect(await codeOf(a.abandonOrphanEpoch(ORPHAN))).toBe('state-mismatch');
+    expect(await codeOf(a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }]))).toBe('current-epoch');
+  });
 
   it('refusée si un état a été publié (stateSeq > 0) ; nom invalide : bad-name', async () => {
     folder = new MemorySyncFolder();

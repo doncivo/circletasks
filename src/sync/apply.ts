@@ -238,6 +238,13 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     /** Restauration fondée sur la trace, éventuellement en plusieurs parties (grosse ligne découpée champ par champ). */
     let restoring = false;
     if (tomb !== undefined) {
+      // ADR 0011 §24 point 4 (a) : trace posée dans une époque orpheline abandonnée visée par une opération reçue : règle ordinaire (la ligne
+      // n'est pas recréée), mais le cas est journalisé (table seulement) et mémorisé pour lever `received-unapplied` (jamais muet).
+      const orphanTraces = await sync.getMeta('orphanTraces');
+      if (orphanTraces !== null && (JSON.parse(orphanTraces) as string[]).includes(`${t.name}|${op.id}`)) {
+        ctx.logger.log('orphan-trace-hit', { table: t.name });
+        await sync.setMeta('orphanTraceHit', JSON.stringify({ table: t.name }));
+      }
       const restoreField = fields.get('deleted_at');
       const complete = t.columns.every((col) => fields.has(col.name));
       // Restauration de la suppression purgée (Y-09, restauration hors ligne contre purge) : `deleted_at` remis à nul par une écriture

@@ -30,6 +30,7 @@ import {
   SYNC_FORMAT_MAJOR,
   compareEpochs,
   encryptedLineBytes,
+  epochId,
   isEpochId,
   isFileNumber,
   isStrictHlc,
@@ -97,6 +98,7 @@ import {
   type SnapshotEndRead,
 } from '../../domain/sync/retention';
 import {
+  maxEpoch,
   resetPrecondition,
   resetWaiting,
   resetWinner,
@@ -538,6 +540,10 @@ export interface MemorySyncTesting {
   setSealedRecords(count: number): void;
   /** Simule la perte de `own.json` (dossier de configuration effacé). */
   dropOwnState(): void;
+  /** Y-IOS-02 : `own.json` désigne `epoch` (fichier édité à la main ; Rust ne l'écrit que par un ajout ou un état). */
+  setOwnEpoch(epoch: EpochId | null): void;
+  /** Y-IOS-02 : réinitialisation active minimale (`reset.json` : refus de l'abandon d'une orpheline), sans clé ni annonce. */
+  injectActiveReset(): void;
   /** Y-TECH-02 : `own.json` écrit avant la story (aucune entrée `closed`) : l'état suivant est publié sans `closed`. */
   clearClosedSegments(): void;
   /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
@@ -788,7 +794,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const header = dir?.state && dir.state.header.f === 'ct-state' && dir.state.header.dev === self ? dir.state.header.n : 0;
       replacedSeq = header <= authenticated + MAX_UNAUTHENTICATED_SEQ_JUMP ? Math.max(authenticated, header) : authenticated;
     }
-    const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(dir?.epochs.keys() ?? []), ...acks.map((a) => a.epoch)];
+    // Comme Rust (`rebuild_own`) : une époque listée n'est retenue que si elle contient un segment (la plus grande qui en a un) ; un
+    // instantané seul n'a aucune source authentifiée de tête (ADR 0011 §24 point 4 (e)).
+    const listedEpochs = [...(dir?.epochs.entries() ?? [])].filter(([, e]) => e.segments.size > 0).map(([name]) => name);
+    const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(maxEpoch(listedEpochs) ? [maxEpoch(listedEpochs) as EpochId] : []), ...acks.map((a) => a.epoch)];
     const epoch = epochs.reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
     const stateSeq = Math.max(state?.stateSeq ?? 0, replacedSeq, ...acks.map((a) => a.stateSeq));
     const epochDir = epoch !== null ? dir?.epochs.get(epoch) : undefined;
@@ -1634,7 +1643,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const ok = okStates(reads);
     const actives = ok.filter(([id]) => !order.has(id)).map(([, s]) => s);
     const cited = citedDevices(actives);
-    const known = reads.has(deviceId) || cited.has(deviceId) || accepted.has(deviceId) || reg.entries.some((e) => e.deviceId === deviceId);
+    // Y-IOS-02 (ADR 0011 §24 point 1) : l'appareil d'association est connu même si son dossier n'apparaît pas encore.
+    const known = (pendingPairedBy ?? own?.pairedBy ?? null) === deviceId || reads.has(deviceId) || cited.has(deviceId) || accepted.has(deviceId) || reg.entries.some((e) => e.deviceId === deviceId);
     if (!known) return fail('bad-name');
     if (reg.entries.length >= FORGET_DECLARE_LIMIT) return fail('too-large');
     const seen = actives.filter((s) => s.deviceId !== deviceId).flatMap(stateHlcs);
@@ -2354,7 +2364,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       status: async () => {
         requireVault();
         const failure = importFailure && folder && importFailure.folderId === folder.id ? { code: importFailure.code, at: importFailure.at as IsoDateTime } : null;
-        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure };
+        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure, pairedBy: pendingPairedBy ?? own?.pairedBy ?? null };
       },
       create: async () => {
         requireVault();
@@ -2500,6 +2510,16 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       },
       dropOwnState: () => {
         own = null;
+      },
+      injectActiveReset: () => {
+        if (!folder || bound === null) throw new Error('appareil non lié');
+        resetRecord = { folderId: folder.id, deviceId: bound, role: 'initiator', kid: '0123456789abcdef', epoch: epochId(2, bound), by: bound, notice: null, noticeEpoch: null, noticeSeq: null, kState: null, authorAtImport: null, stage: 'created', base: null, superseded: null, switchStep: 0 };
+      },
+      setOwnEpoch: (epoch) => {
+        if (own) {
+          own.epoch = epoch;
+          own.maxHlc = null;
+        }
       },
       clearClosedSegments: () => {
         if (own) own.closed = [];

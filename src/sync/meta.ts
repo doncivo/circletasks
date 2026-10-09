@@ -36,6 +36,10 @@ export const META = {
   parkedResume: 'parkedResume',
   /** Y-IOS-02 : époque orpheline abandonnée dont les fichiers restent à supprimer, `{epoch}`. */
   orphanEpoch: 'orphanEpoch',
+  /** Y-IOS-02 : traces purgées (`table|id`) de l'orpheline abandonnée, auteur cet appareil (garde `orphan-trace-hit`, §24 point 4 (a)). */
+  orphanTraces: 'orphanTraces',
+  /** Y-IOS-02 : une opération reçue a visé l'une de ces traces ; levé en avertissement `received-unapplied` au cycle suivant. */
+  orphanTraceHit: 'orphanTraceHit',
   /** Quatrième revue, point D : repères `[stateSeq, lastSyncHlc]` de ses états publiés (ADR 0011 §5.5, condition 3). */
   ownStateHlcs: 'ownStateHlcs',
 } as const;

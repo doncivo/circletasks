@@ -3,7 +3,7 @@ import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parse
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, maxEpoch, ownBounds, unreadableDevices } from '../domain/sync/epoch';
-import { hlcMs, publishedStateToText } from '../domain/sync/parse';
+import { hlcDevice, hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
@@ -396,14 +396,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
     // Y-IOS-02 (ADR 0011 §24 point 1) : un appareil qui n'a suivi aucune époque ne se tient pas pour le premier tant qu'un autre appareil non
     // oublié a des fichiers que ce scan ne peut pas encore lire (état dans le nuage, illisible, époques sans état, fichiers en attente).
-    const unreadable = unreadableDevices(scan.devices, self, forgetView.order);
+    const unreadable = unreadableDevices(scan.devices, self, forgetView.order, [...(keyStatus.pairedBy ? [keyStatus.pairedBy] : []), ...known.keys()] as DeviceId[]);
     /** Attente visible qui nomme l'appareil (fantôme « jamais vu » dans APPAREILS, où « Oublier l'appareil » est la seule issue). */
     const waitForUnreadable = async (event: string): Promise<CycleResult> => {
       for (const d of unreadable) {
         pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
         logger.log(event, { device: d.deviceId, state: d.stateStatus });
       }
-      const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, []);
+      const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, unreadable.map((d) => d.deviceId));
       return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices, keyMismatch };
     };
     /** Époque orpheline (§24 point 2) : preuve locale, recontrôlée par Rust à l'abandon. */
@@ -425,6 +425,16 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const orphan = localEpoch;
       // (a) lignes remises dans la file d'envoi (elle avait été vidée à l'ouverture de l'orpheline), puis intention mémorisée.
       const queued = await queueOwnRowsForRepublish(deps);
+      // Traces purgées dans l'orpheline (auteur cet appareil) : mémorisées pour la garde `orphan-trace-hit` de la reprise (§24 point 4 (a)).
+      const traces: string[] = [];
+      for (let after: { table: string; rowId: string } | null = null; ; ) {
+        const page = await repos.sync.exportTombstones(after, 500);
+        if (page.length === 0) break;
+        const last = page[page.length - 1] as { table: string; rowId: string };
+        after = { table: last.table, rowId: last.rowId };
+        for (const tomb of page) if (hlcDevice(tomb.deletedHlc) === self) traces.push(`${tomb.table}|${tomb.rowId}`);
+      }
+      await writeJson(repos, META.orphanTraces, traces.length > 0 ? traces : null);
       await writeJson(repos, META.orphanEpoch, { epoch: orphan });
       deps.deadline?.check('append');
       // (b) `own.json` sans époque (Rust recontrôle la preuve). `state-mismatch` : preuve refusée, rien n'est écrit, l'abandon est annulé
@@ -894,6 +904,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
           logger.log('parked-resume-requested', { epoch: currentEpoch });
         }
       }
+    }
+
+    // Y-IOS-02 (§24 point 4 (a)) : une opération reçue a visé une trace purgée dans l'orpheline abandonnée : divergence visible.
+    if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) {
+      seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+      await writeJson(repos, META.orphanTraceHit, null);
     }
 
     // 5. Publication.

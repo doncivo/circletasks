@@ -113,20 +113,31 @@ export function isOrphanEpoch(input: {
 }
 
 /**
- * Y-IOS-02 : appareils (hors soi et hors oubliés) dont les fichiers ne sont pas encore lisibles à ce scan : état dans le nuage, fichiers
- * en attente d'iCloud, ou époques listées sans `state.ctx` lisible (absent, illisible, trop gros). Tant qu'il en existe un, un appareil qui
- * n'a suivi aucune époque n'en ouvre pas : il ne sait pas encore s'il est le premier.
+ * Y-IOS-02 (ADR 0011 §24 point 1) : appareils (hors soi et hors oubliés) dont l'état n'est pas encore lisible à ce scan : état dans le
+ * nuage, fichiers en attente d'iCloud, époques listées sans `state.ctx` lisible (absent, illisible, trop gros), et tout appareil **connu**
+ * (`expected` : celui par lequel on a été associé, ceux qui ont une ligne `sync_state`) dont aucun état `ok` n'est listé, même si son
+ * dossier n'apparaît pas encore dans le scan (iCloud pas synchronisé). Tant qu'il en existe un, un appareil qui n'a suivi aucune époque
+ * n'en ouvre pas : il ne sait pas encore s'il est le premier.
  */
-export function unreadableDevices<T extends { readonly deviceId: DeviceId; readonly stateStatus: string; readonly epochs: readonly unknown[]; readonly pending: readonly unknown[] }>(
-  devices: readonly T[],
+export function unreadableDevices(
+  devices: readonly { readonly deviceId: DeviceId; readonly stateStatus: string; readonly epochs: readonly unknown[]; readonly pending: readonly unknown[] }[],
   self: DeviceId,
   forgotten: { has(id: DeviceId): boolean },
-): T[] {
-  return devices.filter((d) => {
-    if (d.deviceId === self || forgotten.has(d.deviceId)) return false;
-    if (d.stateStatus === 'cloud-pending' || d.pending.length > 0) return true;
-    return (d.stateStatus === 'missing' || d.stateStatus === 'corrupt' || d.stateStatus === 'too-large') && d.epochs.length > 0;
-  });
+  expected: readonly DeviceId[] = [],
+): { readonly deviceId: DeviceId; readonly stateStatus: string }[] {
+  const out = new Map<DeviceId, string>();
+  for (const d of devices) {
+    if (d.deviceId === self || forgotten.has(d.deviceId)) continue;
+    if (d.stateStatus === 'cloud-pending' || d.pending.length > 0) out.set(d.deviceId, d.stateStatus);
+    else if ((d.stateStatus === 'missing' || d.stateStatus === 'corrupt' || d.stateStatus === 'too-large') && d.epochs.length > 0) out.set(d.deviceId, d.stateStatus);
+  }
+  for (const id of expected) {
+    if (id === self || forgotten.has(id) || out.has(id)) continue;
+    const listed = devices.find((d) => d.deviceId === id);
+    if (listed === undefined) out.set(id, 'absent');
+    else if (listed.stateStatus === 'missing') out.set(id, 'missing');
+  }
+  return [...out].map(([deviceId, stateStatus]) => ({ deviceId, stateStatus }));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

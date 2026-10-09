@@ -124,6 +124,113 @@ describe('attente avant toute ouverture d’époque (§24 point 1)', () => {
   });
 });
 
+/** Association par le QR du PC (le QR porte l'appareil qui l'a affiché : `pairedBy`), dossier du PC recopié d'abord. */
+async function pairByQr(owner: SimDevice, joiner: SimDevice): Promise<void> {
+  propagate(owner.folder, joiner.folder, owner.id);
+  await joiner.platform.folder.choose();
+  await owner.platform.key.openPairing('show');
+  const payload = await owner.platform.key.pairingPayload();
+  await owner.platform.key.closePairing();
+  await joiner.platform.key.openPairing('import');
+  await joiner.platform.key.import({ qrText: payload.qrText });
+}
+
+describe('appareil connu dont le dossier n’apparaît pas encore (§24 point 1 (b))', () => {
+  it('association fraîche, listing vide pour le PC : l’iPhone n’ouvre rien, nomme le PC, puis rejoint son époque quand ses fichiers apparaissent', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    const task = await a.createTask('Test Pc');
+    await a.cycle();
+    await pairByQr(a, b);
+    expect((await b.platform.key.status()).pairedBy).toBe(a.id);
+    // iCloud n'a pas encore synchronisé le dossier du PC : il n'apparaît pas du tout dans le listing.
+    b.folder.devices.delete(a.id);
+    const local = (await b.createTask('Écrite sur l’iPhone')).id as TaskId;
+    for (let i = 0; i < 3; i += 1) {
+      const status = await b.cycle();
+      expect(status.phase).toBe('waiting-icloud');
+      expect(statusLine(status, b.clock.nowMs())).not.toContain('À jour');
+      expect(status.devices.some((d) => d.deviceId === a.id && d.seen === false)).toBe(true);
+      expect(status.pendingFiles.some((f) => f.startsWith(String(a.id).slice(0, 8)))).toBe(true);
+    }
+    expect(await b.data.repos.sync.getMeta('epoch')).toBeNull();
+    expect(b.folder.devices.get(b.id)?.epochs.size ?? 0).toBe(0);
+    propagate(a.folder, b.folder, a.id);
+    expect((await b.cycle()).phase).toBe('idle');
+    syncFolders(devices);
+    await a.cycle();
+    syncFolders(devices);
+    await b.cycle();
+    expect(await b.data.repos.sync.getMeta('epoch')).toBe(await a.data.repos.sync.getMeta('epoch'));
+    expect((await b.task(task.id as TaskId))?.title).toBe('Test Pc');
+    expect((await a.task(local))?.title).toBe('Écrite sur l’iPhone');
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+
+  it('appareil mort (fichiers jamais arrivés) : attente, Détails le montre « jamais vu » avec l’action Oublier, puis l’iPhone ouvre son époque normalement', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    await pairByQr(a, b);
+    b.folder.devices.delete(a.id);
+    const waiting = await b.cycle();
+    expect(waiting.phase).toBe('waiting-icloud');
+    const ghost = waiting.devices.find((d) => d.deviceId === a.id);
+    expect(ghost).toMatchObject({ seen: false, self: false });
+    // L'action « Oublier l'appareil » (flux existant, Détails) sur ce fantôme.
+    expect(await b.service.forgetDevice(a.id)).toEqual({ kind: 'done' });
+    const after = await b.cycle();
+    expect(after.phase).not.toBe('waiting-icloud');
+    expect(await b.data.repos.sync.getMeta('epoch')).not.toBeNull();
+    expect(b.logger.entries.some((e) => e.event === 'epoch-opened')).toBe(true);
+  });
+});
+
+describe('garde des traces purgées de l’orpheline (§24 point 4 (a))', () => {
+  it('ligne créée, supprimée puis purgée dans l’orpheline : après l’abandon et la reprise, rien ne revient, aucun orphan-trace-hit', async () => {
+    const { a, b, testPc } = await topology();
+    const purged = (await b.createTask('Créée puis purgée')).id as TaskId;
+    await b.data.repos.sync.insertTombstones([{ table: 'task', rowId: purged, deletedHlc: b.hlc.now() }], new Date(b.clock.nowMs()).toISOString() as never);
+    await b.driver.execute('DELETE FROM task WHERE id = ?', [purged]);
+    await converge([b, a], 4);
+    expect((await b.task(testPc))?.title).toBe('Test Pc');
+    expect(await b.task(purged)).toBeNull();
+    expect(await a.task(purged)).toBeNull();
+    expect(b.logger.entries.some((e) => e.event === 'orphan-trace-hit')).toBe(false);
+    expect(b.logger.entries.some((e) => e.event === 'epoch-abandoned')).toBe(true);
+  });
+
+  it('une opération reçue qui vise une de ces traces : journalisée (table seulement) et received-unapplied levé, la ligne n’est pas recréée', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    const id = '12345678-1234-4234-8234-123456789012' as TaskId;
+    b.clock.advance(1_000);
+    await b.data.repos.sync.insertTombstones([{ table: 'task', rowId: id, deletedHlc: b.hlc.now() }], new Date(b.clock.nowMs()).toISOString() as never);
+    await b.data.repos.sync.setMeta('orphanTraces', JSON.stringify([`task|${id}`]));
+    a.clock.advance(1_000);
+    await a.createTask('Visée par la trace', { id });
+    await a.cycle();
+    syncFolders(devices);
+    const status = await b.cycle();
+    expect(b.logger.entries.some((e) => e.event === 'orphan-trace-hit' && (e.detail as { table?: string }).table === 'task')).toBe(true);
+    expect(await b.task(id)).toBeNull();
+    expect(status.warnings).toContain('received-unapplied');
+    expect(statusLine(status, b.clock.nowMs())).not.toContain('À jour');
+  });
+});
+
 describe('abandon de l’orpheline : étapes, arrêts, refus, suppression', () => {
   for (const cursor of ['ack-set', 'ack-null'] as const) {
   it(`topologie réelle (${cursor}) : le PC cycle avec l’orpheline listée sans effet, l’iPhone abandonne ef50 et rejoint 56d4 sans rien perdre`, async () => {
