@@ -5,7 +5,7 @@ import { insertFocusSessions } from './helpers/focus';
 import { insertGoals } from './helpers/goals';
 import { insertRoutines } from './helpers/routines';
 import { filterPill } from './helpers/spaces';
-import { insertTasks, openReport } from './helpers/stats';
+import { insertTasks, openReport, waitForReportFonts } from './helpers/stats';
 import { isPhone, todayTab } from './helpers/today';
 
 /**
@@ -113,6 +113,7 @@ test.describe('H-03 — export de l’historique', () => {
     await prepare(page);
     const dialog = await openDialog(page);
     await dialog.getByRole('radio', { name: 'Rapport du mois en PDF' }).check();
+    await waitForReportFonts(page);
     await dialog.getByRole('button', { name: 'Exporter', exact: true }).click();
     await expect(page.getByText('Historique exporté')).toBeVisible();
     const file = await onlySaved(page);
@@ -130,6 +131,7 @@ test.describe('H-03 — export de l’historique', () => {
     await prepare(page);
     const dialog = await openDialog(page);
     await dialog.getByRole('radio', { name: 'Rapport du mois en image' }).check();
+    await waitForReportFonts(page);
     await dialog.getByRole('button', { name: 'Exporter', exact: true }).click();
     await expect(page.getByText('Historique exporté')).toBeVisible();
     const file = await onlySaved(page);
