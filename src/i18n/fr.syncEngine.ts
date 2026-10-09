@@ -30,6 +30,7 @@ export const syncEngineFr = {
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',
     // Y-IOS-02 (audit des impasses) : erreurs permanentes : action et code, jamais « nouvel essai au prochain cycle ».
     errorSlowed: 'Synchronisation ralentie : nouvel essai à {time} (code {code}), ou « Synchroniser » maintenant',
+    errorSlowedCause: '{cause}. Nouvel essai à {time} (code {code}), ou « Synchroniser » maintenant',
     errorStopped:'La synchronisation est arrêtée (code {code}) : ouvrez Détails, puis « Synchroniser » pour réessayer',
     errorStoppedPairing: 'Clé de chiffrement absente ou différente (code {code}) : associez cet appareil',
     errorStoppedFolder: 'Dossier de synchro à choisir de nouveau (code {code}) : Réglages → Synchronisation',
