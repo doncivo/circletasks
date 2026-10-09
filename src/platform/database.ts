@@ -1,5 +1,6 @@
 import type { MigrationBackup } from '../db/migrationBackup';
 import type { SqlDriver } from '../db/driver';
+import { DbStepError } from '../db/errorText';
 import { detectRuntime, type Runtime } from './runtime';
 
 /**
@@ -10,13 +11,15 @@ import { detectRuntime, type Runtime } from './runtime';
  */
 export async function openDatabase(runtime: Runtime = detectRuntime()): Promise<SqlDriver> {
   if (runtime === 'tauri') {
-    const { openTauriSqlDriver } = await import('./tauri/sqlDriver');
+    const { openTauriSqlDriver } = await import('./tauri/sqlDriver').catch((error: unknown) => {
+      throw new DbStepError('load', error);
+    });
     return openTauriSqlDriver();
   }
   // Constante remplacée à la compilation par Vite : dans un build Tauri, la branche
   // Wasm devient du code mort et le .wasm n'est pas embarqué dans l'installeur.
   if (import.meta.env.TAURI_ENV_PLATFORM) {
-    throw new Error('Driver SQLite Wasm indisponible dans un build Tauri');
+    throw new DbStepError('runtime', new Error(`isTauri() est faux dans un build Tauri (${String(import.meta.env.TAURI_ENV_PLATFORM)}) : driver SQLite Wasm indisponible`));
   }
   const { openSqliteWasmDriver } = await import('../db/drivers/sqliteWasm');
   return openSqliteWasmDriver();

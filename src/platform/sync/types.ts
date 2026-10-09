@@ -503,6 +503,15 @@ export interface SyncStatus {
    * la ligne de Réglages (Y-05 critère 2). Ajout du lot Y2, facultatif.
    */
   readonly errorCode?: SyncErrorCode | null;
+  /**
+   * Y-IOS-02 : cycles consécutifs en échec avec ce même `errorCode` (absent : aucun, ou un seul) ; remis à zéro par un cycle réussi.
+   */
+  readonly errorStreak?: number;
+  /**
+   * Y-IOS-02 : erreur passagère répétée (`SLOW_AFTER` échecs de suite, `io` sur PC) : heure du prochain essai périodique, espacé de
+   * `SLOW_RETRY_MS` ; jamais un arrêt. Absent sinon.
+   */
+  readonly retryAt?: IsoDateTime;
   /** Appareil dont l'horloge est en avance (phase `clock-ahead`, Y-09 critère 10). Ajout du lot Y2, facultatif. */
   readonly clockAheadDevice?: DeviceId | null;
   /**
@@ -615,7 +624,8 @@ export type ForgetOutcome = { readonly kind: 'done' } | { readonly kind: 'cancel
 /** Y-10 : issue de « Associer de nouveau » (`restart` : l'app doit être relancée sous sa nouvelle identité). */
 export type RejoinOutcome = { readonly kind: 'restart' } | { readonly kind: 'failed'; readonly code: string };
 
-export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray';
+/** `key-arrived` (Y-IOS-02) : clé lue présente alors que le dernier cycle l'a trouvée absente (association faite ailleurs) : un cycle relit l'état. */
+export type SyncReason = 'open' | 'timer' | 'hide' | 'quit' | 'manual' | 'tray' | 'key-arrived';
 
 /** Options de `syncNow` (ADR 0011 §22 point 6). */
 export interface SyncNowOptions {

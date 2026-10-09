@@ -8,6 +8,7 @@ mod backup;
 mod capture;
 mod calendars;
 mod config;
+mod db_diagnostics;
 mod export;
 mod export_ios;
 mod focus;

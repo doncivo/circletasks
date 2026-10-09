@@ -1407,6 +1407,8 @@ Story technique Y-IOS-02 (même branche, après Y-IOS-01), décisions du 2026-10
 
 8. **Tests exigés en plus de la fiche** : `tauriSync.ts` avec un faux du plugin de scan : le texte n'apparaît ni dans le résultat, ni dans les journaux, ni dans un store, ni dans les erreurs (fouille des sorties) ; `visibilitychange` pendant le scan → `cancel()` ; `IosConsentUi` : `DialogSpec` de chacune des quatre boîtes, refus sur erreur, aucune alerte hors `active` ; contrôle statique Swift étendu à `confirm` (aucune chaîne française, aucun libellé) ; `vault_ios` : comptes refusés, relecture différente → suppression et `vault-unavailable`, `errSecInteractionNotAllowed` → `vault-unavailable` (table de correspondance des codes testée sur PC) ; contrat Info.plist négatif (clé absente → échec).
 
+9. **Avenant du point de contrôle d'Ali (2026-10-09, PR #14)** : sur l'iPhone, le choix du dossier ne crée **jamais** de clé (un dossier qui paraît vide peut ne pas être encore listé par iCloud : clé différente du PC, synchro scindée) ; l'iPhone sans clé propose « Associer au PC » (recommandé) ou « Commencer une nouvelle synchronisation sur cet iPhone » après une confirmation qui dit le risque (`sync_key_create`, toujours refusé par Rust si le dossier contient des données) ; le PC (premier appareil) garde la création au choix du dossier (section 10.3). Sans clé, phase `needs-pairing` même si l'état local est illisible, aucun cycle périodique, aucune réinitialisation (`key-missing`) ; clé présente mais différente du dossier : `key-mismatch`, association proposée, `kid` court affiché dans Détails.
+
 ## Conséquences
 
 - **Dépendances** (validées par l'architecte) :

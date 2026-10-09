@@ -16,7 +16,8 @@ import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
 import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
 import { META, writeJson } from './meta';
-import { INITIAL_STATUS, phaseOf, statusFromFacts } from './status';
+import { INITIAL_STATUS, errorRepeat, phaseOf, statusFromFacts } from './status';
+import { omitKey } from '../domain/omitKey';
 
 /**
  * Service de synchronisation exposé par le conteneur (`AppContainer.sync`, ADR 0011 section 11.2 ; Y-02, Y-03, Y-05).
@@ -189,6 +190,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         ...(forget === undefined ? {} : { forget }),
         ...(reset === undefined ? {} : { reset }),
         stateUnreadable: unreadable || result.stateUnreadable === true,
+        nowMs: options.clock.nowMs(),
       }),
     );
   };
@@ -248,7 +250,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const code = syncErrorCodeOf(error);
       const unreadable = isSyncStateUnreadable(error);
       deps.logger.log('cycle-crashed', { code });
-      publish({ ...before, phase: 'error', errorCode: code, ...(unreadable ? { stateUnreadable: true } : {}) });
+      publish({ ...omitKey(omitKey(before, 'errorStreak'), 'retryAt'), phase: 'error', errorCode: code, ...errorRepeat(before, code, options.clock.nowMs()), ...(unreadable ? { stateUnreadable: true } : {}) });
       return { outcome: 'failed', errorCode: code, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false, ...(unreadable ? { stateUnreadable: true } : {}) };
     } finally {
       clearTimer(timer);
@@ -442,6 +444,22 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
    * attendu (appareil seul : au premier cycle). Refus de la boîte : annulation, rien n'est gardé ; tout autre échec : gardé et rendu.
    */
   const runReset = async (): Promise<ResetOutcome> => {
+    // Y-IOS-02 (point de contrôle d'Ali) : un appareil sans clé ne réinitialise jamais (nouvelle clé et nouvelle époque : les autres
+    // appareils devraient tout recevoir de lui). Refus `key-missing` gardé et rendu, avant tout cycle et toute boîte native. Trousseau
+    // illisible : son code réel (`vault-unavailable`), jamais lu comme « présente ».
+    let keyPresent: boolean;
+    try {
+      keyPresent = (await options.platform.key.status()).present;
+    } catch (error) {
+      const code = syncErrorCodeOf(error);
+      await recordResetFailure(deps, 'start', code);
+      return { kind: 'failed', code };
+    }
+    if (!keyPresent) {
+      deps.logger.log('reset-refused', { code: 'key-missing' });
+      await recordResetFailure(deps, 'start', 'key-missing');
+      return { kind: 'failed', code: 'key-missing' };
+    }
     const checked = await cycle({ resetCheck: true });
     if (checked.outcome !== 'done') {
       const code = checked.errorCode ?? 'state-mismatch';

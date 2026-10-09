@@ -54,7 +54,7 @@ test('Y-IOS-02 : caméra refusée visible, puis « Associer au PC » par le scan
   await page.getByRole('navigation').getByText('Réglages', { exact: true }).click();
   await expect(page.getByTestId('sync-camera-denied')).toHaveText('L’accès à la caméra est refusé', { timeout: APP_READY_TIMEOUT_MS });
   await expect(page.getByRole('button', { name: 'Ouvrir les réglages d’iOS pour autoriser la caméra' })).toBeVisible();
-  await expect(page.locator('.ct-status-banner').filter({ hasText: 'Associez cet appareil pour synchroniser' })).toBeVisible();
+  await expect(page.locator('.ct-status-banner').filter({ hasText: 'Associez cet iPhone au PC pour synchroniser' })).toBeVisible();
   await page.getByRole('button', { name: 'Ouvrir les réglages d’iOS pour autoriser la caméra' }).click();
   expect((await setCamera(room, 'iphone', 'denied')).opened).toBe(1);
 
@@ -79,7 +79,7 @@ test('Y-IOS-02 : caméra refusée visible, puis « Associer au PC » par le scan
   await syncNow(page);
   await openTasks(page);
   await expect(taskRow(page, TITLE)).toBeVisible();
-  await expect(page.locator('.ct-status-banner').filter({ hasText: 'Associez cet appareil pour synchroniser' })).toHaveCount(0);
+  await expect(page.locator('.ct-status-banner').filter({ hasText: 'Associez cet iPhone au PC pour synchroniser' })).toHaveCount(0);
 });
 
 test('Y-IOS-02 QA : écrans d’association de l’iPhone, dossier d’abord, puis caméra expliquée et scan', async ({ browser }) => {
