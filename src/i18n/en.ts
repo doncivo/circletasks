@@ -40,6 +40,7 @@ export const en: Messages = {
     screenReload: 'Reload',
     dbBackupError: 'Data update interrupted: the safety backup failed. Your data was not modified. Free some disk space, then restart CircleTasks.',
     version: 'Version {version}',
+    dbStalled: 'Opening may still be in progress; if nothing changes, tap “Retry”.',
     startError: 'CircleTasks failed to start.',
     diag: {
       title: 'Technical details',
@@ -50,6 +51,10 @@ export const en: Messages = {
       configDirError: 'Folder not found: {message}',
       dbFile: 'File: {path} (exists: {exists}, size: {size})',
       wal: 'WAL journal present: {exists}',
+      retry: 'Retry',
+      stalled: 'No response from the database for {seconds} s.',
+      journalMode: 'Effective journal mode: {mode}',
+      journalExpected: 'WAL expected: the database could not be opened in WAL mode.',
       pathsError: 'Paths unavailable: {message}',
       pathsPending: 'Paths: reading…',
       environment: 'Environment: {runtime}, system {os}, build {build}, version {version}',

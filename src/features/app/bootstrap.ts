@@ -4,7 +4,7 @@ import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
-import { DbStepError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
+import { DbStepError, JournalModeError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
@@ -49,9 +49,12 @@ export async function bootstrapDatabase(
   // 0.2.1 : étape en cours, mise à jour avant chaque appel (diagnostic affiché sous app.dbError).
   let step: DbOpenStep = 'load';
   let migration: number | undefined;
+  const { setDbProgress } = useAppStore.getState();
+  setDbProgress({ step });
   try {
     db = await open();
     step = 'backup';
+    setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
     await migrate(db, migrations, {
       beforeApply: createBackupBeforeMigration(port, options.clock),
@@ -59,11 +62,16 @@ export async function bootstrapDatabase(
       onStep: (current) => {
         step = current.kind;
         migration = current.kind === 'migration' ? current.version : undefined;
+        setDbProgress({ step, migration });
       },
     });
+    setDbProgress(null);
     setDbStatus('ready');
     return db;
   } catch (error) {
+    setDbProgress(null);
+    const cause = error instanceof DbStepError ? error.cause : error;
+    const journalMode = cause instanceof JournalModeError ? cause.mode : db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
     const message = describeError(error);
@@ -71,9 +79,20 @@ export async function bootstrapDatabase(
     setDbStatus('error', {
       detail: message,
       backupFailed: error instanceof MigrationBackupError,
-      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message },
+      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message, ...(journalMode === undefined ? {} : { journalMode }) },
     });
     return undefined;
+  }
+}
+
+/** Mode de journal effectif pour le diagnostic (0.2.2) ; null si la lecture échoue (elle ne masque jamais l'erreur d'origine). */
+async function readJournalMode(db: SqlDriver): Promise<string | null> {
+  try {
+    const rows = await db.select('PRAGMA journal_mode');
+    const mode = rows[0]?.journal_mode;
+    return typeof mode === 'string' ? mode : null;
+  } catch {
+    return null;
   }
 }
 
@@ -146,7 +165,9 @@ const readOnlyStamper: WriteStamper = {
  * (dbStatus = 'error'). Appelé par App.tsx ; le conteneur est fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
-  const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });
+  // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
+  const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
+  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup });
   if (!driver) return undefined;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;

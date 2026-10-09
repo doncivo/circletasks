@@ -1,0 +1,30 @@
+/* Diagnostic d'échec ou d'attente du démarrage (0.2.2) : marges de sécurité de l'iPhone, cibles de 44 pt, aucun débordement horizontal. */
+.ct-db-failure {
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: var(--ct-space-4) max(var(--ct-space-4), var(--ct-safe-area-right)) max(var(--ct-space-4), var(--ct-safe-area-bottom)) max(var(--ct-space-4), var(--ct-safe-area-left, 0px));
+  overflow-x: hidden;
+}
+
+.ct-db-failure__detail {
+  box-sizing: border-box;
+  max-width: 100%;
+  margin: 0 0 var(--ct-space-4);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.ct-db-failure__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ct-space-3);
+}
+
+.ct-db-failure__actions button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 var(--ct-space-4);
+}
