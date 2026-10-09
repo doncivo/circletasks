@@ -20,6 +20,16 @@ export const FIT_FLOOR_ATTRIBUTE = 'data-fit';
  *
  * `title` : l'élément du titre ; `row` : un ancêtre dont la largeur ne dépend PAS de la taille du titre (sinon boucle).
  */
+/**
+ * Largeur de CONTENU de la rangée (sans bordures ni marges intérieures, fractions gardées), même mesure pour ResizeObserver et pour
+ * l'événement `resize` : une seule source, donc jamais de faux changement entre les deux.
+ */
+export function contentWidth(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  const px = (value: string): number => parseFloat(value) || 0;
+  return element.getBoundingClientRect().width - px(style.borderLeftWidth) - px(style.borderRightWidth) - px(style.paddingLeft) - px(style.paddingRight);
+}
+
 export function useFitText(title: RefObject<HTMLElement | null>, row: RefObject<HTMLElement | null>, text: string): void {
   useLayoutEffect(() => {
     const element = title.current;
@@ -69,12 +79,12 @@ export function useFitText(title: RefObject<HTMLElement | null>, row: RefObject<
     };
     const observer =
       typeof ResizeObserver !== 'undefined' && observed
-        ? new ResizeObserver((entries) => onWidth(entries[entries.length - 1]?.contentRect.width ?? null))
+        ? new ResizeObserver(() => onWidth(observed ? contentWidth(observed) : null))
         : null;
     if (observer && observed) observer.observe(observed);
     // Changement de fenêtre (rotation, fenêtre PC) : aussi par l'événement `resize`, qui ne dépend pas du rythme de livraison des
     // notifications de ResizeObserver (WebKit sous Linux en CI : notification arrivée après la mesure).
-    const onResize = (): void => onWidth(observed ? observed.getBoundingClientRect().width : null);
+    const onResize = (): void => onWidth(observed ? contentWidth(observed) : null);
     window.addEventListener('resize', onResize);
     return () => {
       cancelled = true;

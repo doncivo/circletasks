@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FIT_FLOOR_ATTRIBUTE, FIT_TEXT_MIN_PX, useFitText } from './useFitText';
+import { contentWidth, FIT_FLOOR_ATTRIBUTE, FIT_TEXT_MIN_PX, useFitText } from './useFitText';
 
 /**
  * useFitText (IOS-titres) : jsdom n'a pas de mise en page ; largeurs simulées : le texte mesure `textEmWidth` em à la taille
@@ -41,12 +41,12 @@ afterEach(() => {
   document.head.innerHTML = '';
 });
 
-function Title({ text }: { text: string }) {
+function Title({ text, rowClass }: { text: string; rowClass?: string }) {
   const row = useRef<HTMLDivElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   useFitText(title, row, text);
   return (
-    <div ref={row}>
+    <div ref={row} className={rowClass}>
       <h1 ref={title} className="fit-title">
         {text}
       </h1>
@@ -127,22 +127,34 @@ describe('useFitText', () => {
       unobserve(): void {}
       disconnect(): void {}
     } as unknown as typeof ResizeObserver;
+    // Rangée : boîte de 376 px, 20 px de marge intérieure de chaque côté → contenu de 336 px (même mesure que l'événement resize).
+    let box = { width: 376, height: 42 };
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => box as DOMRect);
+    const style = document.createElement('style');
+    style.textContent = '.fit-row { padding: 0 20px; }';
+    document.head.appendChild(style);
     try {
       withCssSize(40);
       room = 248;
       textEmWidth = 7.3;
-      render(<Title text="28 sept. – 4 oct." />);
+      render(<Title text="28 sept. – 4 oct." rowClass="fit-row" />);
       const notify = (width: number, height: number): void => {
-        for (const callback of callbacks) callback([{ contentRect: { width, height } } as ResizeObserverEntry], {} as ResizeObserver);
+        box = { width, height };
+        // contentRect volontairement faux : le hook lit la largeur de contenu lui-même (une seule mesure).
+        for (const callback of callbacks) callback([{ contentRect: { width: 0, height: 0 } } as ResizeObserverEntry], {} as ResizeObserver);
       };
-      notify(336, 42);
+      notify(376, 42);
       const afterFirst = measures;
       expect(afterFirst).toBeGreaterThan(0);
-      notify(336, 60);
+      notify(376, 60);
       expect(measures).toBe(afterFirst);
-      notify(271, 60);
+      // Même largeur de contenu signalée par l'événement resize : aucun nouvel ajustement.
+      window.dispatchEvent(new Event('resize'));
+      expect(measures).toBe(afterFirst);
+      notify(311, 60);
       expect(measures).toBeGreaterThan(afterFirst);
     } finally {
+      rect.mockRestore();
       globalThis.ResizeObserver = original;
     }
   });
@@ -192,6 +204,24 @@ describe('useFitText', () => {
     } finally {
       if (descriptor) Object.defineProperty(document, 'fonts', descriptor);
       else Reflect.deleteProperty(document, 'fonts');
+    }
+  });
+});
+
+describe('contentWidth', () => {
+  it('largeur de contenu : boîte moins bordures et marges intérieures, fractions gardées', () => {
+    const style = document.createElement('style');
+    style.textContent = '.measured { padding: 0 20.5px 0 19.5px; border-left: 1px solid; border-right: 2px solid; }';
+    document.head.appendChild(style);
+    const element = document.createElement('div');
+    element.className = 'measured';
+    document.body.appendChild(element);
+    const rect = vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({ width: 379.25 } as DOMRect);
+    try {
+      expect(contentWidth(element)).toBeCloseTo(336.25, 5);
+    } finally {
+      rect.mockRestore();
+      element.remove();
     }
   });
 });

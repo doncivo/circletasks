@@ -2,7 +2,7 @@ import { createStore } from 'zustand';
 import type { ChangeCursor } from '../../domain/calendarProvider';
 import { calendarAppStatuses, disconnectedAccount, localAccountState, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
 import { validateCalendars } from '../../domain/externalCalendars';
-import type { OrphanSecret } from '../../domain/orphanSecrets';
+import { parseOrphanSecrets, withOrphan, type OrphanSecret } from '../../domain/orphanSecrets';
 import type { CalendarAccount, CalendarProviderKind, CalendarRef } from '../../domain/model';
 import type { CalendarAccountId, IsoDateTime } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
@@ -214,6 +214,24 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         });
       return connectModule;
     };
+    /**
+     * Secrets orphelins au chargement : le réglage local est lu ici (lecture simple) ; le module de connexion n'est chargé que s'il
+     * reste au moins une référence. Module indisponible : les références relues sont affichées telles quelles (message et
+     * « Réessayer l'effacement », qui recharge le module), jamais d'échec silencieux. Réglage illisible : journal à code fixe.
+     */
+    const loadOrphans = async (accounts: readonly CalendarAccount[]): Promise<void> => {
+      let stored: OrphanSecret[] = [];
+      try {
+        stored = parseOrphanSecrets(await container.data.repos.settings.get('calendars.orphanSecrets'));
+      } catch {
+        logFailure('calendars', 'orphan-secrets-unreadable');
+      }
+      if (stored.length === 0 && get().orphanSecrets.length === 0) return;
+      const actions = await connectActions().catch(() => null);
+      if (actions) await actions.restoreOrphans(accounts);
+      else set({ orphanSecrets: get().orphanSecrets.reduce((list, orphan) => withOrphan(list, orphan), stored) });
+    };
+
     /** Geste de connexion : module indisponible → échec dit (« Connexion impossible »), jamais silencieux. */
     const connectOrFail = async (run: (actions: ConnectActions) => Promise<ConnectOutcome>): Promise<ConnectOutcome> => {
       const actions = await connectActions().catch(() => null);
@@ -243,9 +261,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           const previous = get().states;
           const states: Record<string, CalendarAccountState> = {};
           for (const account of accounts) states[account.id] = await vaultState(account, previous[account.id]);
-          // Secrets orphelins relus (module à la demande) ; module indisponible : journal, le chargement des comptes continue.
-          const actions = await connectActions().catch(() => null);
-          if (actions) await actions.restoreOrphans(accounts);
+          await loadOrphans(accounts);
           set({ states, status: 'ready' });
           syncStatuses();
         } catch {
