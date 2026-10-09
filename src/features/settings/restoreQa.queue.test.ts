@@ -7,7 +7,8 @@ import type { AppContainer } from '../app/container';
 import { replanNotifications } from '../reminders/replanNotifications';
 import { reopenReminders, seedReminderTask, setupReminders, type ReminderHarness } from '../reminders/testKit';
 import { writeRestoreResult } from './restoreMemo';
-import { announcePendingRestore } from './restoreMemoPeek';
+import { announcePendingRestore, RESTORE_RESULT_KEY } from './restoreMemoPeek';
+import { useNoticeStore } from '../app/notice';
 
 /**
  * QA du lot F, P-04-iOS critères 6 et 14 : la mise au calme attend une action N-03 en cours d'application ; après une restauration, les
@@ -64,9 +65,15 @@ describe('P-04-iOS QA : restauration et rappels / actions N-03', () => {
     vi.stubGlobal('localStorage', { getItem: (k: string) => memory.get(k) ?? null, setItem: (k: string, v: string) => void memory.set(k, v), removeItem: (k: string) => void memory.delete(k) });
     vi.stubGlobal('window', { localStorage: globalThis.localStorage });
     writeRestoreResult({ outcome: 'done', reason: null, databaseClosed: false, marker: 'not-configured', markerCode: null });
-    announcePendingRestore();
+    announcePendingRestore({ actionQueue: true });
+    // Revue du lot F : le mémo reste jusqu'au nettoyage de la file (un arrêt avant lui le refait au lancement suivant, sans redire l'issue).
+    expect(memory.has(RESTORE_RESULT_KEY)).toBe(true);
+    useNoticeStore.getState().clear();
+    announcePendingRestore({ actionQueue: true });
+    expect(useNoticeStore.getState().notice, 'issue dite une seule fois').toBeNull();
     const reloaded = reopenReminders(h, { parts: { notificationActions: source } });
     await replanNotifications(reloaded, 'open');
+    expect(memory.has(RESTORE_RESULT_KEY), 'mémo effacé APRÈS le nettoyage de la file N-03').toBe(false);
     const queue = await storedQueue(reloaded);
     expect(queue.entries, 'aucune action en échec pour un identifiant inconnu').toEqual([]);
     expect(queue.snoozes, 'aucune répétition d’un rappel absent').toEqual([]);

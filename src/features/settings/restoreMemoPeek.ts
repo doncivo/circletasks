@@ -45,24 +45,43 @@ export function clearMarkerFailedMemo(): void {
   }
 }
 
+/** Efface le mémo de l'issue (revue du lot F : APRÈS le nettoyage de la file N-03 quand l'appareil en a une). */
+export function settleRestoreMemo(): void {
+  try {
+    globalThis.localStorage?.removeItem(RESTORE_RESULT_KEY);
+  } catch {
+    // Stockage indisponible : rien à effacer.
+  }
+}
+
 /**
  * P-04-iOS critère 7 : issue de la restauration mémorisée avant le redémarrage (relance PC, rechargement iPhone), dite UNE fois après
- * (message et entrée au journal `restore-done` / `restore-failed`), puis effacée.
+ * (message et entrée au journal `restore-done` / `restore-failed`). Revue du lot F : avec une file d'actions N-03 (`actionQueue`), une
+ * restauration aboutie garde son mémo (marqué `announced`) jusqu'au nettoyage de la file (`settleRestoreMemo`, `notificationActions.ts`) :
+ * un arrêt avant lui refait le nettoyage au lancement suivant, sans redire l'issue. Sinon, le mémo est effacé tout de suite.
  */
-export function announcePendingRestore(): void {
+export function announcePendingRestore(options: { readonly actionQueue: boolean } = { actionQueue: false }): void {
   const raw = item(RESTORE_RESULT_KEY);
   if (raw === null) return;
-  try {
-    globalThis.localStorage.removeItem(RESTORE_RESULT_KEY);
-  } catch {
-    // Stockage indisponible : l'issue est dite une fois quand même.
-  }
-  let memo: { outcome?: unknown; reason?: unknown } = {};
+  let memo: { outcome?: unknown; reason?: unknown; announced?: unknown } = {};
   try {
     memo = JSON.parse(raw) as typeof memo;
   } catch {
     memo = { outcome: 'failed', reason: 'unreadable' };
   }
+  if (memo.outcome === 'done' && options.actionQueue) {
+    restored = true;
+    if (memo.announced === true) return;
+    try {
+      globalThis.localStorage.setItem(RESTORE_RESULT_KEY, JSON.stringify({ ...memo, announced: true }));
+    } catch {
+      // Stockage indisponible : l'issue pourrait être redite au lancement suivant, jamais perdue.
+    }
+    logFailure('backup', 'restore-done');
+    useNoticeStore.getState().show(t('backup.resultDone'));
+    return;
+  }
+  settleRestoreMemo();
   if (memo.outcome === 'done') {
     restored = true;
     logFailure('backup', 'restore-done');

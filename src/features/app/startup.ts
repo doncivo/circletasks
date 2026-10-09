@@ -48,7 +48,8 @@ export function startAppStartup(
   container: AppContainer,
   env: StartupEnv = { document, window },
 ): AppStartup {
-  announcePendingRestore();
+  // Revue du lot F : avec une file d'actions N-03 (iPhone), le mémo reste jusqu'à son nettoyage.
+  announcePendingRestore({ actionQueue: container.notificationActions !== null });
   const rollover = createDayRollover(container, {
     onDayChange: (day) => {
       useAppStore.getState().setDay(day);
