@@ -20,7 +20,7 @@ use super::folder::{
 };
 use super::limits::{NONCE_MAX_RECORDS, NONCE_WARN_RECORDS, PAIRING_CLOCK_TOLERANCE_MS};
 use super::marker::{self, RestoreMarker};
-use super::names::{is_uuid_v4, EpochId};
+use super::names::{is_epoch_id, is_uuid_v4, EpochId};
 use super::files::{delete_forgotten_device_files, ForgottenDeletion};
 use super::files::Listing;
 use super::forget::{
@@ -137,7 +137,21 @@ pub struct KeyStatus {
     pub next_kid: Option<String>,
     /// Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null.
     pub import_failure: Option<ImportFailureView>,
+    /// Y-IOS-02 (ADR 0011 §24 point 1 (b)) : appareil par lequel cet appareil a été associé (`own.json`, ou mémorisé à l'import avant la
+    /// liaison), ou null. Le moteur ne se tient pas pour le premier appareil tant que son état n'est pas lisible.
+    pub paired_by: Option<String>,
+    /// Y-IOS-02 : la clé a été **importée** (QR ou clé de secours) et non créée ici ; faux pour une clé d'avant (origine inconnue).
+    pub imported: bool,
 }
+
+/// `sync/key-origin.json` : origine de la clé locale (`kid`), écrite à la création et à l'import.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+struct KeyOrigin {
+    kid: String,
+    imported: bool,
+}
+
+const KEY_ORIGIN_FILE: &str = "key-origin.json";
 
 /// Échec d'import persisté (§18 point 17) : code et instant ISO UTC, jamais de clé.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -582,7 +596,37 @@ impl SyncCore {
         let key = self.read_vault_key()?;
         let next = self.read_vault_next()?;
         let import_failure = self.import_failure();
-        Ok(KeyStatus { present: key.is_some(), kid: key.map(|k| k.kid().to_owned()), next_kid: next.map(|k| k.kid().to_owned()), import_failure })
+        let kid = key.as_ref().map(|k| k.kid().to_owned());
+        let paired_by = self.paired_by(kid.as_deref());
+        let imported = kid.as_deref().is_some_and(|k| matches!(read_config_file::<KeyOrigin>(&self.path(KEY_ORIGIN_FILE)), Ok(Some(o)) if o.kid == k && o.imported));
+        Ok(KeyStatus { present: key.is_some(), kid, next_kid: next.map(|k| k.kid().to_owned()), import_failure, paired_by, imported })
+    }
+
+    /// Origine de la clé (créée ici / importée), écrite **avant** que la clé soit rangée au coffre : un échec d'écriture fait échouer la création
+    /// ou l'import (visible, `io`), jamais une clé importée prise pour une clé créée ici.
+    fn save_key_origin(&self, kid: &str, imported: bool) -> SyncResult<()> {
+        let origin = KeyOrigin { kid: kid.to_owned(), imported };
+        write_config_file(&self.path(KEY_ORIGIN_FILE), &serde_json::to_vec(&origin).unwrap_or_default())
+    }
+
+    /// Appareil d'association : mémorisé à l'import (pas encore lié), sinon `own.json` de la clé courante ; illisible : aucun.
+    fn paired_by(&self, kid: Option<&str>) -> Option<String> {
+        let inner = self.lock();
+        self.paired_by_in(&inner, kid)
+    }
+
+    fn paired_by_in(&self, inner: &Inner, kid: Option<&str>) -> Option<String> {
+        if let Some(paired) = inner.pending_paired_by.clone() {
+            return Some(paired);
+        }
+        let kid = kid?;
+        if let Some(own) = inner.own.as_ref().filter(|o| o.kid == kid) {
+            return own.paired_by.clone();
+        }
+        match read_config_file::<OwnState>(&self.path(OWN_FILE)) {
+            Ok(Some(own)) if own.kid == kid => own.paired_by,
+            _ => None,
+        }
     }
 
     /// Identifiant du dossier lié d'après `folder.json` (sans contrôle du dossier) ; `None` sans dossier.
@@ -648,6 +692,7 @@ impl SyncCore {
             return fail(SyncCode::FolderHasData);
         }
         let key = MasterKey::generate().map_err(|_| SyncError::new(SyncCode::Io))?;
+        self.save_key_origin(key.kid(), false)?;
         self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
         let kid = key.kid().to_owned();
         self.save_usage(&mut inner, Usage { kid: kid.clone(), sealed: 0 })?;
@@ -1120,6 +1165,32 @@ impl SyncCore {
         Ok(deleted)
     }
 
+    /// `sync_abandon_orphan_epoch` (ADR 0011 §24 point 4 (b)) : `own.json` revient sans époque (une seule écriture atomique). `own.epoch`
+    /// déjà nul ou autre : sans effet (reprise après arrêt). Sinon la preuve d'orpheline est recontrôlée (`state-mismatch` si elle ne tient pas,
+    /// rien n'est écrit) et aucune réinitialisation ne doit être en cours. Les fichiers ne sont pas touchés : `sync_delete_own` les supprime
+    /// ensuite, l'époque n'étant plus courante.
+    pub fn abandon_orphan_epoch(&self, epoch: &str) -> SyncResult<()> {
+        if !is_epoch_id(epoch) {
+            return fail(SyncCode::BadName);
+        }
+        let mut inner = self.lock();
+        let (key, self_id, mut own, _) = self.writable(&mut inner)?;
+        if own.epoch.as_deref() != Some(epoch) {
+            return Ok(());
+        }
+        if self.reset_record(&mut inner, &self_id)?.is_some_and(|r| r.active()) {
+            return fail(SyncCode::StateMismatch);
+        }
+        let next = self.active_next(&mut inner)?;
+        {
+            let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
+            store_for(bound, &key, &next, false).check_orphan_proof(&own, &self_id, epoch)?;
+        }
+        own.epoch = None;
+        own.max_hlc = None;
+        self.save_own(&mut inner, own)
+    }
+
     // --------------------------------------------------------------------------------------------------------------------------
     // Appairage
     // --------------------------------------------------------------------------------------------------------------------------
@@ -1322,6 +1393,7 @@ impl SyncCore {
         }
         if !existing.as_ref().is_some_and(|e| e.same_as(&key)) {
             // usage.json n'est pas remis à zéro : indexé par kid, il ne repart de 0 que pour une autre clé (audit S9).
+            self.save_key_origin(key.kid(), true)?;
             self.vault.set(SYNC_KEY_ACCOUNT, &key.to_vault_value()).map_err(vault_error)?;
             inner.usage = None;
         }
@@ -1594,7 +1666,10 @@ impl SyncCore {
         let ok = Self::ok_states(&reads);
         let actives: Vec<&PublishedState> = ok.iter().filter(|(id, _)| !order.contains_key(*id)).map(|(_, s)| *s).collect();
         let cited = cited_devices(actives.iter().copied());
-        let known = reads.contains_key(device_id) || cited.contains(device_id) || reg.accepted.contains_key(device_id) || reg.entries.iter().any(|e| e.device_id == device_id);
+        // Y-IOS-02 (ADR 0011 §24 point 1) : l'appareil par lequel cet appareil a été associé est connu même si son dossier n'apparaît pas
+        // encore (iCloud) : il peut être oublié s'il ne reviendra pas.
+        let paired = self.paired_by_in(inner, Some(key.kid())).is_some_and(|p| p == device_id);
+        let known = paired || reads.contains_key(device_id) || cited.contains(device_id) || reg.accepted.contains_key(device_id) || reg.entries.iter().any(|e| e.device_id == device_id);
         if !known {
             return fail(SyncCode::BadName);
         }

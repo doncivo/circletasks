@@ -30,6 +30,7 @@ import {
   SYNC_FORMAT_MAJOR,
   compareEpochs,
   encryptedLineBytes,
+  epochId,
   isEpochId,
   isFileNumber,
   isStrictHlc,
@@ -97,6 +98,7 @@ import {
   type SnapshotEndRead,
 } from '../../domain/sync/retention';
 import {
+  maxEpoch,
   resetPrecondition,
   resetWaiting,
   resetWinner,
@@ -538,6 +540,12 @@ export interface MemorySyncTesting {
   setSealedRecords(count: number): void;
   /** Simule la perte de `own.json` (dossier de configuration effacé). */
   dropOwnState(): void;
+  /** Y-IOS-02 : `own.json` désigne `epoch` (fichier édité à la main ; Rust ne l'écrit que par un ajout ou un état). */
+  setOwnEpoch(epoch: EpochId | null): void;
+  /** Y-IOS-02 : réinitialisation active minimale (`reset.json` : refus de l'abandon d'une orpheline), sans clé ni annonce. */
+  injectActiveReset(): void;
+  /** Y-IOS-02 : clé d'avant `key-origin.json` (origine inconnue : `imported` faux). */
+  forgetKeyOrigin(): void;
   /** Y-TECH-02 : `own.json` écrit avant la story (aucune entrée `closed`) : l'état suivant est publié sans `closed`. */
   clearClosedSegments(): void;
   /** Y-10 : réinitialisation en cours (entrée `.next` au coffre, Y-11). */
@@ -646,6 +654,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
 
   let folder: MemorySyncFolder | null = null;
   let key: { readonly raw: Bytes; readonly kid: string } | null = null;
+  /** `kid` de la clé importée (QR ou clé de secours) et non créée ici (miroir de `sync/key-origin.json`). */
+  let importedKid: string | null = null;
   let vaultAvailable = true;
   let bound: DeviceId | null = null;
   let own: OwnState | null = null;
@@ -788,7 +798,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       const header = dir?.state && dir.state.header.f === 'ct-state' && dir.state.header.dev === self ? dir.state.header.n : 0;
       replacedSeq = header <= authenticated + MAX_UNAUTHENTICATED_SEQ_JUMP ? Math.max(authenticated, header) : authenticated;
     }
-    const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(dir?.epochs.keys() ?? []), ...acks.map((a) => a.epoch)];
+    // Comme Rust (`rebuild_own`) : une époque listée n'est retenue que si elle contient un segment (la plus grande qui en a un) ; un
+    // instantané seul n'a aucune source authentifiée de tête (ADR 0011 §24 point 4 (e)).
+    const listedEpochs = [...(dir?.epochs.entries() ?? [])].filter(([, e]) => e.segments.size > 0).map(([name]) => name);
+    const epochs: EpochId[] = [...(state ? [state.epoch] : []), ...(maxEpoch(listedEpochs) ? [maxEpoch(listedEpochs) as EpochId] : []), ...acks.map((a) => a.epoch)];
     const epoch = epochs.reduce<EpochId | null>((best, e) => (best === null || compareEpochs(e, best) > 0 ? e : best), null);
     const stateSeq = Math.max(state?.stateSeq ?? 0, replacedSeq, ...acks.map((a) => a.stateSeq));
     const epochDir = epoch !== null ? dir?.epochs.get(epoch) : undefined;
@@ -1509,6 +1522,34 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return deleted;
   };
 
+  /**
+   * ADR 0011 §24 point 4 (b) (`sync_abandon_orphan_epoch`, miroir de `SyncCore::abandon_orphan_epoch`) : `own.json` revient sans époque.
+   * `own.epoch` déjà nul (ou autre) : sans effet. Sinon la preuve d'orpheline est recontrôlée dans le dossier et dans `own.json` :
+   * `state-mismatch` si un état, un segment, un second instantané, une autre époque, un `stateSeq` > 0 ou une réinitialisation existent.
+   */
+  const abandonOrphanEpoch = async (epoch: EpochId): Promise<void> => {
+    const { folder: f, self, own: o } = requireWritable();
+    if (!isEpochId(epoch)) fail('bad-name');
+    if (o.epoch !== epoch) return;
+    const record = loadReset(f, self);
+    if (record && record.superseded === null) fail('state-mismatch');
+    const dir = f.devices.get(self);
+    const epochDir = dir?.epochs.get(epoch);
+    const proven =
+      o.stateSeq === 0 &&
+      o.segment === 0 &&
+      o.record === 0 &&
+      !dir?.state &&
+      !dir?.nextState &&
+      dir?.epochs.size === 1 &&
+      epochDir !== undefined &&
+      epochDir.segments.size === 0 &&
+      epochDir.snapshots.size === 1;
+    if (!proven) fail('state-mismatch');
+    o.epoch = null;
+    o.maxHlc = null;
+  };
+
   // --- oubli d'un appareil (Y-10, forget.rs ; ADR 0011 §18 points 3 à 10) --------------------------------------------------------
 
   /** Registre lu : absent (aucun, autre dossier, autre identité) → null ; illisible (crochet de test) → `io`. */
@@ -1606,7 +1647,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const ok = okStates(reads);
     const actives = ok.filter(([id]) => !order.has(id)).map(([, s]) => s);
     const cited = citedDevices(actives);
-    const known = reads.has(deviceId) || cited.has(deviceId) || accepted.has(deviceId) || reg.entries.some((e) => e.deviceId === deviceId);
+    // Y-IOS-02 (ADR 0011 §24 point 1) : l'appareil d'association est connu même si son dossier n'apparaît pas encore.
+    const known = (pendingPairedBy ?? own?.pairedBy ?? null) === deviceId || reads.has(deviceId) || cited.has(deviceId) || accepted.has(deviceId) || reg.entries.some((e) => e.deviceId === deviceId);
     if (!known) return fail('bad-name');
     if (reg.entries.length >= FORGET_DECLARE_LIMIT) return fail('too-large');
     const seen = actives.filter((s) => s.deviceId !== deviceId).flatMap(stateHlcs);
@@ -2253,6 +2295,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       key = { raw, kid };
       sealed = 0; // budget de nonces compté par clé
     }
+    importedKid = kid;
     if (!own || own.folderId !== f.id || own.kid !== kid) own = bound ? rebuildOwn(f, kid, bound) : null;
     if (own && pairedBy !== null) own.pairedBy = pairedBy;
     pendingPairedBy = pairedBy;
@@ -2326,7 +2369,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       status: async () => {
         requireVault();
         const failure = importFailure && folder && importFailure.folderId === folder.id ? { code: importFailure.code, at: importFailure.at as IsoDateTime } : null;
-        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure };
+        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure, pairedBy: pendingPairedBy ?? own?.pairedBy ?? null, imported: key !== null && importedKid === key.kid };
       },
       create: async () => {
         requireVault();
@@ -2335,6 +2378,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         if (folderHasData(f)) return fail('folder-has-data');
         const raw = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
         key = { raw, kid: await kidOf(raw) };
+        importedKid = null;
         own = null;
         sealed = 0;
         // Y-10 : appareil déjà lié, dossier sans données : registre créé dès maintenant (rien n'a été publié).
@@ -2417,6 +2461,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     writeSnapshot,
     readSnapshot,
     deleteOwn,
+    abandonOrphanEpoch,
     restoreMarker: {
       get: async () => marker,
       clear: async () => {
@@ -2471,6 +2516,19 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       },
       dropOwnState: () => {
         own = null;
+      },
+      forgetKeyOrigin: () => {
+        importedKid = null;
+      },
+      injectActiveReset: () => {
+        if (!folder || bound === null) throw new Error('appareil non lié');
+        resetRecord = { folderId: folder.id, deviceId: bound, role: 'initiator', kid: '0123456789abcdef', epoch: epochId(2, bound), by: bound, notice: null, noticeEpoch: null, noticeSeq: null, kState: null, authorAtImport: null, stage: 'created', base: null, superseded: null, switchStep: 0 };
+      },
+      setOwnEpoch: (epoch) => {
+        if (own) {
+          own.epoch = epoch;
+          own.maxHlc = null;
+        }
       },
       clearClosedSegments: () => {
         if (own) own.closed = [];

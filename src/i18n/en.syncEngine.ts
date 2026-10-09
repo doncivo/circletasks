@@ -80,6 +80,10 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     warnFolderLarge: 'The sync folder is over 1 GB: sync may slow down',
     warnTooManyDevices: 'More than 16 devices in the sync folder: the oldest are ignored',
     warnScanIncomplete: 'Cluttered sync folder: some files were not read',
+    warnPublishBlocked: 'This device has not published its state yet: your other devices cannot see its changes. Sync again; if it persists, pair the device again',
+    warnReceivedUnapplied: 'Some received changes could not be applied (missing item): sync again on the other device',
+    incomplete: 'Sync incomplete: see warnings',
+    warnAwaitingOthers: 'Waiting for the other devices’ files in iCloud',
     progress: 'Syncing: {done} of {total}',
   },
   restore: {

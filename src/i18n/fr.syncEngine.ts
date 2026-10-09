@@ -87,6 +87,10 @@ export const syncEngineFr = {
     warnFolderLarge: 'Le dossier de synchro dépasse 1 Go : la synchronisation peut ralentir',
     warnTooManyDevices: 'Plus de 16 appareils dans le dossier de synchro : les plus anciens sont ignorés',
     warnScanIncomplete: 'Dossier de synchro encombré : certains fichiers n’ont pas été lus',
+    warnPublishBlocked: 'Cet appareil n’a pas encore publié son état : vos autres appareils ne voient pas ses modifications. Synchronisez de nouveau ; si cela persiste, associez l’appareil de nouveau',
+    warnReceivedUnapplied: 'Des modifications reçues n’ont pas pu être appliquées (élément manquant) : synchronisez de nouveau sur l’autre appareil',
+    incomplete: 'Synchro incomplète : voir les avertissements',
+    warnAwaitingOthers: 'En attente des fichiers des autres appareils dans iCloud',
   },
   restore: {
     title: 'Restauration : que faire de la synchronisation ?',

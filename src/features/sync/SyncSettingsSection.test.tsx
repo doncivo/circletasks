@@ -123,7 +123,7 @@ describe('SyncSettingsSection (Y-01)', () => {
     const kid = (await platform.key.status()).kid;
     fireEvent.click(screen.getByRole('button', { name: 'Oublier le dossier' }));
     expect(await screen.findByText('Non configurée')).toBeInTheDocument();
-    expect(await platform.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null });
+    expect(await platform.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null, pairedBy: null, imported: false });
     fireEvent.click(screen.getByRole('button', { name: 'Choisir le dossier de synchronisation' }));
     expect(await screen.findByText('Dossier choisi')).toBeInTheDocument();
     expect((await platform.key.status()).kid).toBe(kid);

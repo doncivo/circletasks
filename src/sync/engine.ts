@@ -1,14 +1,13 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredResumeTried, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
-import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
+import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
-import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
+import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, maxEpoch, ownBounds, unreadableDevices } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
 import type { ApplyContext } from './apply';
 import type { SyncDeps } from './deps';
-import { switchEpoch } from './epochSwitch';
 import { maintain, retryParked } from './maintenance';
 import { META, readJson, writeJson } from './meta';
 import { AWAITING_ACK_SEQ, ackSeqAwaited, comparableState, deviceStatusOf } from '../domain/sync/ownState';
@@ -168,7 +167,7 @@ export async function runCycle(baseDeps: SyncDeps, hooks: CycleHooks, options: C
     deps.logger.log('cycle-failed', { code: 'io', unreadable: true });
     result = { ...EMPTY, outcome: 'failed', errorCode: 'io', stateUnreadable: true };
   }
-  const withWarnings = seen.warnings ? { ...result, warnings: seen.warnings } : result;
+  const withWarnings = seen.warnings ? { ...result, warnings: [...new Set(seen.warnings)] } : result;
   // Cinquième revue, points 2 et 5 : valeur locale illisible relue vide et réécrite pendant ce cycle : visible pour ce cycle seulement.
   return seen.unreadable ? { ...withWarnings, stateUnreadable: true } : withWarnings;
 }
@@ -302,7 +301,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
 
   // 2. Règle 1 : bornes de sa propre publication.
   const acksOnSelf = [...accepted.values()].map((s) => s.acks.get(self)).filter((a): a is DeviceAck => a !== undefined);
-  const localEpoch = await readJson<EpochId>(repos, META.epoch);
+  let localEpoch = await readJson<EpochId>(repos, META.epoch);
   const localSeq = (await readJson<number>(repos, META.stateSeq)) ?? 0;
   const pairedBy = ownState?.pairedBy;
   let stateSeq = Math.max(localSeq, ownState?.stateSeq ?? 0, ...acksOnSelf.map((a) => a.stateSeq));
@@ -394,6 +393,47 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       return { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(own ? [own] : [])], published(own)), forgotten: forgetView.order };
     };
     const folderE = folderEpoch([...states, ...(ownState ? [ownState] : [])]);
+    // Y-IOS-02 (ADR 0011 §24 point 1) : un appareil qui n'a suivi aucune époque ne se tient pas pour le premier tant qu'un autre appareil non
+    // oublié a des fichiers que ce scan ne peut pas encore lire (état dans le nuage, illisible, époques sans état, fichiers en attente).
+    const unreadable = unreadableDevices(scan.devices, self, forgetView.order, [...(keyStatus.pairedBy ? [keyStatus.pairedBy] : []), ...known.keys()] as DeviceId[]);
+    /** Attente visible qui nomme l'appareil (fantôme « jamais vu » dans APPAREILS, où « Oublier l'appareil » est la seule issue). */
+    const waitForUnreadable = async (event: string): Promise<CycleResult> => {
+      for (const d of unreadable) {
+        pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
+        logger.log(event, { device: d.deviceId, state: d.stateStatus });
+      }
+      const devices = withUnseenDevices(await deviceStatuses(repos, self, accepted, deps.sv, logger), scan, self, unreadable.map((d) => d.deviceId));
+      return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices, keyMismatch };
+    };
+    /** Époque orpheline (§24 point 2) : preuve locale, recontrôlée par Rust à l'abandon. */
+    const storedOwnSnapshot = await readJson<{ epoch: EpochId; seq: number }>(repos, META.snapshot);
+    const orphanProof = isOrphanEpoch({
+      epoch: localEpoch,
+      ownStateOk: ownState !== null,
+      ownStateStatus: ownScan?.stateStatus,
+      acksOnSelf: acksOnSelf.length,
+      localStateSeq: localSeq,
+      storedSnapshot: storedOwnSnapshot,
+      ownEpochs: ownScan?.epochs ?? [],
+    });
+    /** Époque orpheline déjà abandonnée dont les fichiers restent à supprimer (`sync_meta.orphanEpoch`, §24 point 4 (e)). */
+    let orphanLeft = (await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch))?.epoch ?? null;
+    if (orphanProof && localEpoch !== null && folderE !== null && folderE !== localEpoch) {
+      // (ii) Une autre époque existe (celle du PC, qui détient les données) : abandon de la sienne, jamais annoncée. Étapes idempotentes.
+      work();
+      const orphan = localEpoch;
+      // Étapes (a) à (c) dans un module chargé à la demande (cas rare : taille du bundle de départ).
+      const { abandonOrphan } = await import('./orphanEpoch');
+      const abandoned = await abandonOrphan(deps, orphan);
+      if (abandoned.kind === 'failed') return fail(abandoned.code, { folderLabel, folderKind });
+      if (abandoned.kind === 'done') {
+        localEpoch = null;
+        orphanLeft = orphan;
+      }
+    } else if (orphanProof && folderE === null && unreadable.length > 0) {
+      // (iii) rien ne dit si l'autre appareil a une époque : attente visible.
+      return waitForUnreadable('orphan-epoch-waiting');
+    }
     let epoch = localEpoch;
     let resume = options.forceResume === true || (await readJson<boolean>(repos, META.resume)) === true;
     const selfRow = known.get(self);
@@ -406,6 +446,15 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const switchState = storedSwitch && (allowed === undefined || storedSwitch.target === allowed) ? storedSwitch : null;
     const followable = (e: EpochId | null): EpochId | null => (e === null || allowed === undefined || e === allowed ? e : null);
     if (allowed !== undefined && folderE !== null && folderE !== allowed && epoch !== null && compareEpochs(folderE, epoch) > 0) logger.log('epoch-not-followed', { epoch: folderE });
+    if (epoch === null && folderE === null && unreadable.length > 0) return waitForUnreadable('epoch-open-deferred');
+    // Y-IOS-02 (ADR 0011 §24 point 1) : une clé **importée** (QR ou clé de secours, `sync/key-origin.json`) ne fait jamais d'un appareil le premier :
+    // tant qu'aucun état d'un autre appareil n'a été lu, quoi que montre le listing, il attend (sans nommer d'appareil) ; l'action explicite
+    // « Démarrer la synchro depuis cet appareil » (`sync_meta.startHere`) lève l'attente.
+    if (epoch === null && folderE === null && keyStatus.imported === true && live.size === 0 && (await readJson<boolean>(repos, META.startHere)) !== true) {
+      logger.log('epoch-open-deferred', { reason: 'imported-key' });
+      seen.warnings = [...(seen.warnings ?? []), 'awaiting-other-devices'];
+      return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
+    }
     if (epoch === null && folderE === null) {
       // Premier appareil : ouverture de l'époque 1 (instantané complet, puis état).
       epoch = epochId(1, self);
@@ -421,6 +470,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         await writeJson(tx, META.epoch, epoch);
         await writeJson(tx, META.head, head);
         await writeJson(tx, META.snapshot, { epoch, seq: 1, endHlc });
+        await writeJson(tx, META.startHere, null);
       });
       logger.log('epoch-opened', { epoch });
     } else if (epoch === null && folderE !== null) {
@@ -442,9 +492,11 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // couvrir chaque oublié retenu jusqu'à sa coupure (accusés des actifs sous les deux clés, positions de l'époque `n`).
       const inReset = directive.kind === 'joined' || directive.kind === 'initiator';
       const merge = inReset && (directive.view.noticeEpoch ?? null) === epoch;
+      const { switchEpoch } = await import('./epochSwitch');
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
         knows: await knowsFrom(repos, logger),
+        forgotten: new Set(forgetView.order.keys()),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },
       });
       if (switched !== 'done') {
@@ -473,14 +525,41 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       listedMaxSegment: Math.max(0, ...(listed?.segments ?? [])),
     });
     stateSeq = bounds.nextStateSeq - 1;
-    const publishAllowed = canPublish({
-      ownStateOk: ownState !== null,
-      acksOnSelf: acksOnSelf.length,
-      listedFiles: (ownScan?.epochs ?? []).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0),
-      localStateSeq: localSeq,
-    }) || ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt';
-    let head: DeviceAck = { epoch: currentEpoch, segment: bounds.head.segment, record: bounds.head.record, hlc: bounds.headHlc, stateSeq: 0 };
     const storedSnapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc }>(repos, META.snapshot);
+    /**
+     * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : époque ouverte par cet appareil dont l'état n'a jamais été écrit (arrêt entre
+     * l'instantané et l'état : échéance du cycle `hide` de l'iPhone, erreur d'écriture). Preuve locale : son propre instantané est le seul
+     * fichier listé, aucun segment, `stateSeq` jamais écrit, aucun accusé d'un autre appareil sur lui, `state.ctx` absent (pas illisible ni
+     * dans le nuage) : aucun autre appareil n'a rien accepté de lui, la borne de la règle 1 est vide. Sans cette exception, `canPublish`
+     * refuse pour toujours (instantané listé, état absent) : l'appareil ne publie jamais rien.
+     */
+    // Les fichiers d'une orpheline déjà abandonnée (suppression en attente) ne comptent pas : aucun état ne les annonce.
+    const files = (ownScan?.epochs ?? []).filter((e) => e.epoch !== orphanLeft || e.epoch === currentEpoch).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0);
+    const openedHere =
+      currentEpoch === localEpoch &&
+      folderE === null &&
+      unreadable.length === 0 &&
+      isOrphanEpoch({
+        epoch: localEpoch,
+        ownStateOk: ownState !== null,
+        ownStateStatus: ownScan?.stateStatus,
+        acksOnSelf: acksOnSelf.length,
+        localStateSeq: localSeq,
+        storedSnapshot: storedSnapshot,
+        ownEpochs: ownScan?.epochs ?? [],
+      });
+    const publishAllowed =
+      canPublish({
+        ownStateOk: ownState !== null,
+        acksOnSelf: acksOnSelf.length,
+        listedFiles: files,
+        localStateSeq: localSeq,
+      }) ||
+      openedHere ||
+      ownScan?.stateStatus === 'foreign' ||
+      ownScan?.stateStatus === 'corrupt';
+    if (openedHere && !canPublish({ ownStateOk: false, acksOnSelf: 0, listedFiles: files, localStateSeq: localSeq })) logger.log('own-state-recovered', { epoch: currentEpoch });
+    let head: DeviceAck = { epoch: currentEpoch, segment: bounds.head.segment, record: bounds.head.record, hlc: bounds.headHlc, stateSeq: 0 };
     let snapshotMeta = storedSnapshot?.epoch === currentEpoch ? { seq: storedSnapshot.seq, endHlc: storedSnapshot.endHlc } : null;
     const purgeHorizon = await readJson<Hlc>(repos, META.purgeHorizon);
     const ackMap = async (): Promise<Map<DeviceId, DeviceAck>> => {
@@ -600,6 +679,15 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if (gapsBefore.length > 0 && !resume) {
       logger.log('forget-gap', { device: gapsBefore[0] ?? null });
       resume = true;
+    }
+    // « Lancer une reprise complète » (§24) : décision explicite de l'utilisateur d'arrêter de protéger les traces de l'orpheline. Traces,
+    // avertissement et acquittement sont effacés **avant** les lectures, donc une seule demande suffit et l'opération rejouée ne relève plus
+    // rien. La trace reste dans la base : la ligne supprimée ici n'est pas recréée par l'opération rejouée ; la pression acquitte, elle ne
+    // répare pas cette ligne. Une reprise automatique ne touche à rien : un coup porté pendant elle lève l'avertissement.
+    if (resume && (await repos.sync.getMeta(META.orphanTraceAck)) !== null) {
+      await writeJson(repos, META.orphanTraces, null);
+      await writeJson(repos, META.orphanTraceHit, null);
+      await writeJson(repos, META.orphanTraceAck, null);
     }
     if (resume) await doResume();
 
@@ -787,7 +875,27 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if ((await repos.sync.parkedCount(['missing-parent', 'missing-row'])) > 0) {
       const retried = await retryParked(deps);
       if (retried.size > 0) hooks.onRemoteChanges(retried);
+      // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : tout est lu jusqu'aux têtes et des opérations attendent encore une ligne qui manque :
+      // un enregistrement a été sauté (curseur posé trop loin). Une reprise depuis l'instantané (fusion, rien n'est effacé) replace les
+      // curseurs aux positions couvertes et relit les journaux ; une seule demande par époque, ensuite l'avertissement reste visible.
+      if (allRead && (await repos.sync.parkedCount(['missing-row'])) > 0) {
+        seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+        const tried = await readJson<{ epoch: EpochId }>(repos, META.parkedResume);
+        if (tried?.epoch !== currentEpoch && !resumed) {
+          await data.transaction(async (tx) => {
+            await writeJson(tx, META.parkedResume, { epoch: currentEpoch });
+            await writeJson(tx, META.resume, true);
+          });
+          logger.log('parked-resume-requested', { epoch: currentEpoch });
+        }
+      }
     }
+
+    // Y-IOS-02 (§24 point 4 (a)) : une opération reçue a visé une trace purgée dans l'orpheline abandonnée : divergence visible.
+    // Persiste tant que l'utilisateur ne l'a pas acquitté (« Lancer une reprise complète » : `orphanTraceAck`, effacé avec la trace au cycle qui reprend).
+    // La garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon : ensuite les traces mémorisées sont vidées.
+    if (resumed && allRead && (await repos.sync.getMeta(META.orphanTraces)) !== null) await writeJson(repos, META.orphanTraces, null);
+    if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
 
     // 5. Publication.
     let publishError: string | null = null;
@@ -802,6 +910,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await repos.sync.saveState(self, { epoch: currentEpoch, cursorSegment: head.segment, cursorRecord: head.record, ackHlc: head.hlc, headSegment: head.segment, headRecord: head.record, headHlc: head.hlc });
     } else {
       logger.log('publish-deferred', { reason: 'own-state-unknown' });
+      // Exigence d'Ali : jamais « À jour » ni silence quand cet appareil ne peut pas publier (avertissement visible dans Détails et en bandeau).
+      seen.warnings = [...(seen.warnings ?? []), 'publish-blocked'];
     }
 
     // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers). Y-11 : l'annonce de l'appareil qui réinitialise est
@@ -865,6 +975,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       // Y-11 : anciennes époques gardées pendant une réinitialisation (supprimées par la bascule, ou relues si elle perd).
       await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
     }
+
+    // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
+    if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une
     // réinitialisation (Rust la refuse, condition (b)).

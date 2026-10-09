@@ -54,7 +54,7 @@ fn main() {
             "sync_folder_info", "sync_folder_choose", "sync_folder_forget", "sync_bind_device", "sync_key_status", "sync_key_create",
             "sync_pairing_open", "sync_pairing_payload", "sync_key_import", "sync_pairing_close", "sync_scan", "sync_read_journal",
             "sync_append_journal", "sync_write_state", "sync_snapshot_begin", "sync_snapshot_append", "sync_snapshot_commit",
-            "sync_read_snapshot", "sync_delete_own", "sync_restore_marker_get", "sync_restore_marker_clear",
+            "sync_read_snapshot", "sync_delete_own", "sync_abandon_orphan_epoch", "sync_restore_marker_get", "sync_restore_marker_clear",
             // Lot Y4 (ADR 0011 sections 11.1 et 18, étape 0) : Y-10 (oubli, suppression des fichiers d'un appareil oublié) et Y-11.
             "sync_device_forget", "sync_forgotten_delete", "sync_reset_key",
             // Journal technique persistant (I-04, ADR 0014 §2) : PC et iPhone, capabilities logs.json et logs-ios.json.

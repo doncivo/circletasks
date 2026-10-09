@@ -210,6 +210,9 @@ export function createTauriSync(options: TauriSyncOptions): SyncPlatform {
     },
     readSnapshot: (r): Promise<ReadPage> => call('sync_read_snapshot', r),
     deleteOwn: async (files) => (await call('sync_delete_own', { files })).deleted,
+    abandonOrphanEpoch: async (epoch) => {
+      await call('sync_abandon_orphan_epoch', { epoch });
+    },
     restoreMarker: {
       get: (): Promise<RestoreMarker | null> => call('sync_restore_marker_get'),
       clear: async () => {

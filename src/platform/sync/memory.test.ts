@@ -136,10 +136,10 @@ describe('clé (Y-08)', () => {
     const p = createMemorySyncPlatform({ folder: new MemorySyncFolder(), nowMs: clock });
     expect(await codeOf(p.key.create())).toBe('not-configured');
     await p.folder.choose();
-    expect(await p.key.status()).toEqual({ present: false, kid: null, nextKid: null, importFailure: null });
+    expect(await p.key.status()).toEqual({ present: false, kid: null, nextKid: null, importFailure: null, pairedBy: null, imported: false });
     const { kid } = await p.key.create();
     expect(kid).toMatch(/^[0-9a-f]{16}$/);
-    expect(await p.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null });
+    expect(await p.key.status()).toEqual({ present: true, kid, nextKid: null, importFailure: null, pairedBy: null, imported: false });
     expect(await codeOf(p.key.create())).toBe('key-exists');
     p.testing.setVaultAvailable(false);
     expect(await codeOf(p.key.status())).toBe('vault-unavailable');
@@ -227,6 +227,7 @@ describe('ajout au journal (sections 1.3, 1.4)', () => {
   it('own.json perdu : reconstruit depuis son state.ctx et ses fichiers (règle 1)', async () => {
     await publish(a);
     a.testing.dropOwnState();
+    await a.deleteOwn([]);
     expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 0, sv: 14, maxHlc: hlc(20), records: ['x'] }))).toBe('segment-mismatch');
     expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(10), records: ['x'] }))).toBe('hlc-order');
     await a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(20), records: ['r1'] });
@@ -242,6 +243,7 @@ describe('ajout au journal (sections 1.3, 1.4)', () => {
     await b.writeState({ sv: 14, state: stateOf(B, E1, 1, { segment: 1, record: 1, hlc: hlc(1, B) }, { pairedBy: A, acks: new Map([[A, ackOfA]]) }) });
     folder.removeFile(A, 'state.ctx');
     a.testing.dropOwnState();
+    await a.deleteOwn([]);
     expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(5), records: ['x'] }))).toBe('hlc-order');
     expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(10), records: ['x'] }))).toBe('hlc-order');
     await a.appendJournal({ epoch: E1, segment: 1, expectRecords: 1, sv: 14, maxHlc: hlc(11), records: ['r1'] });
@@ -255,6 +257,7 @@ describe('ajout au journal (sections 1.3, 1.4)', () => {
     await a.writeState({ sv: 14, state: stateOf(A, E1, 1, { segment: 1, record: 3, hlc: hlc(10) }) });
     folder.removeFile(A, seg(E1, 1));
     a.testing.dropOwnState();
+    await a.deleteOwn([]);
     expect(await codeOf(a.appendJournal({ epoch: E1, segment: 1, expectRecords: 0, sv: 14, maxHlc: hlc(11), records: ['x'] }))).toBe('segment-mismatch');
     expect(await a.appendJournal({ epoch: E1, segment: 2, expectRecords: 0, sv: 14, maxHlc: hlc(11), records: ['r3'] })).toEqual({ firstRecord: 0, head: { segment: 2, record: 1 } });
     await a.writeState({ sv: 14, state: stateOf(A, E1, 2, { segment: 2, record: 1, hlc: hlc(11) }) });
@@ -318,6 +321,7 @@ describe('écriture de state.ctx (section 1.4, second audit point 6)', () => {
     expect(await codeOf(a.writeState({ sv: 14, state: stateOf(A, E2, 1, empty) }))).toBe('state-mismatch');
     await a.writeState({ sv: 14, state: stateOf(A, E2, 2, empty) });
     a.testing.dropOwnState();
+    await a.deleteOwn([]);
     expect(await codeOf(a.writeState({ sv: 14, state: stateOf(A, E2, 2, empty) }))).toBe('state-mismatch');
   });
 
@@ -768,6 +772,89 @@ describe('suppression de ses fichiers (sections 5.3 et 9)', () => {
     await a.appendJournal({ epoch: E2, segment: 1, expectRecords: 0, sv: 14, maxHlc: hlc(1), records: ['x'] });
     expect(await a.deleteOwn([{ epoch: E1, kind: 'epoch' }])).toBe(2);
     expect(folder.fileNames(A)).toEqual([seg(E2, 1)]);
+  });
+});
+
+describe('abandon d’une époque orpheline (ADR 0011 §24 point 4, miroir de sync_abandon_orphan_epoch)', () => {
+  let folder: MemorySyncFolder;
+  let a: MemorySyncPlatform;
+  const ORPHAN = epochId(1, C);
+  async function* pages(...list: string[][]): AsyncIterable<readonly string[]> {
+    for (const page of list) yield page;
+  }
+  /** `own.json` désigne l'orpheline (instantané seul, aucun état) : cas d'un `own.json` reconstruit. */
+  async function orphan(): Promise<void> {
+    folder = new MemorySyncFolder();
+    a = await firstDevice(folder);
+    await a.writeSnapshot({ epoch: ORPHAN, seq: 1, sv: 14, records: pages(['s0']) });
+    a.testing.setOwnEpoch(ORPHAN);
+  }
+
+  it('preuve tenue : own.json sans époque, fichiers intacts, sans effet la seconde fois ; sync_delete_own supprime ensuite l’orpheline', async () => {
+    await orphan();
+    expect(await codeOf(a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }]))).toBe('current-epoch');
+    await a.abandonOrphanEpoch(ORPHAN);
+    expect(folder.fileNames(A)).toEqual([`${ORPHAN}/s-00000001.cts`]);
+    await a.abandonOrphanEpoch(ORPHAN);
+    await a.abandonOrphanEpoch(E1);
+    expect(await a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }])).toBe(1);
+    expect(folder.fileNames(A)).toEqual([]);
+  });
+
+  const dirOf = (f: MemorySyncFolder): ReturnType<MemorySyncFolder['devices']['get']> & object => {
+    const d = f.devices.get(A);
+    if (!d) throw new Error('dossier de A absent');
+    return d;
+  };
+  const epochDirOf = (f: MemorySyncFolder): { segments: Map<number, never>; snapshots: Map<number, never> } => {
+    const e = dirOf(f).epochs.get(ORPHAN);
+    if (!e) throw new Error('époque absente');
+    return e as never;
+  };
+  const file = { header: { f: 'ct-state' }, lines: [], partialTail: false, availability: 'local', extraBytes: 0 } as never;
+  const refused: [string, (f: MemorySyncFolder) => void][] = [
+    ['state.ctx', (f) => void (dirOf(f).state = file)],
+    ['state.next.ctx', (f) => void (dirOf(f).nextState = file)],
+    ['segment', (f) => void epochDirOf(f).segments.set(1, file)],
+    ['second instantané', (f) => void epochDirOf(f).snapshots.set(2, file)],
+    ['autre époque', (f) => void dirOf(f).epochs.set(E2, { segments: new Map(), snapshots: new Map([[1, file]]) } as never)],
+  ];
+  for (const [name, change] of refused) {
+    it(`refusée (state-mismatch) si ${name} existe : rien n’est écrit`, async () => {
+      await orphan();
+      change(folder);
+      expect(await codeOf(a.abandonOrphanEpoch(ORPHAN))).toBe('state-mismatch');
+      expect(await codeOf(a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }]))).toBe('current-epoch');
+    });
+  }
+
+  it('own.json reconstruit : un instantané seul n’est jamais une époque suivie (comme Rust), l’époque plus petite d’un autre appareil peut être suivie', async () => {
+    folder = new MemorySyncFolder();
+    a = await firstDevice(folder);
+    await a.writeSnapshot({ epoch: ORPHAN, seq: 1, sv: 14, records: pages(['s0']) });
+    a.testing.dropOwnState();
+    await a.deleteOwn([]);
+    // Ancien comportement du simulateur : own.epoch = ORPHAN (plus grande que E1) et le snapshot de E1 était refusé (state-mismatch).
+    await a.writeSnapshot({ epoch: E1, seq: 1, sv: 14, records: pages(['s0']) });
+    expect(await a.abandonOrphanEpoch(ORPHAN)).toBeUndefined();
+  });
+
+  it('refusée tant qu’une réinitialisation est en cours (reset.json actif) : state-mismatch, own.json inchangé', async () => {
+    await orphan();
+    a.testing.injectActiveReset();
+    expect(await codeOf(a.abandonOrphanEpoch(ORPHAN))).toBe('state-mismatch');
+    expect(await codeOf(a.deleteOwn([{ epoch: ORPHAN, kind: 'epoch' }]))).toBe('current-epoch');
+  });
+
+  it('refusée si un état a été publié (stateSeq > 0) ; nom invalide : bad-name', async () => {
+    folder = new MemorySyncFolder();
+    a = await firstDevice(folder);
+    await publish(a);
+    await a.deleteOwn([]).catch(() => undefined);
+    const dir = folder.devices.get(A);
+    if (dir) dir.state = null;
+    expect(await codeOf(a.abandonOrphanEpoch(E1))).toBe('state-mismatch');
+    expect(await codeOf(a.abandonOrphanEpoch('x' as EpochId))).toBe('bad-name');
   });
 });
 

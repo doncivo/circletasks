@@ -10,6 +10,7 @@ import { SyncDetailsFolder } from './SyncDetailsFolder';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { useKeyInfo } from './keyPresence';
 import { SyncDetailsReset } from './SyncDetailsReset';
+import { SyncDetailsRescue } from './SyncDetailsRescue';
 import { SyncDetailsVersion } from './SyncDetailsVersion';
 import { SyncStatusLine } from './SyncStatusLine';
 import { syncStore } from './syncStore';
@@ -118,6 +119,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
               </li>
             ))}
           </ul>
+          <SyncDetailsRescue />
         </>
       )}
       {status.pendingFiles.length > 0 && (

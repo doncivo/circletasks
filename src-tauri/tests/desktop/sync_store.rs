@@ -547,6 +547,119 @@ fn y01_12_snapshots_and_own_file_deletion() {
     assert!(fs.get(&["devices", DEV_A, &ep, "notes.txt"]).is_some(), "fichier étranger jamais supprimé");
 }
 
+const IPHONE: &str = "ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+fn open_snapshot_only(a: &Device, ep: &str) {
+    let handle = a.core.snapshot_begin(ep, 1, 14).unwrap();
+    a.core.snapshot_append(handle, &["{\"k\":\"snap-rows\"}".to_owned()]).unwrap();
+    a.core.snapshot_commit(handle).unwrap();
+}
+
+/// Appareil dont `own.json` désigne l'époque `ep` ouverte par un seul instantané (cas réel : `own.json` reconstruit depuis les fichiers).
+fn orphan_device(ep: &str) -> (Device, std::sync::Arc<MemFs>) {
+    let (mut a, fs) = device();
+    a.setup(DEV_A);
+    open_snapshot_only(&a, ep);
+    // `own.json` désigne l'orpheline sans état : un état d'abord écrit (pour que Rust retienne l'époque), puis `stateSeq` remis à 0 et
+    // `state.ctx` retiré.
+    a.core.write_state(14, state(DEV_A, ep, 1, 0, 0, None)).unwrap();
+    fs.remove(&["devices", DEV_A, "state.ctx"]);
+    let path = a.base.path().join("sync").join("own.json");
+    let mut own: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    own["stateSeq"] = json!(0);
+    std::fs::write(&path, serde_json::to_vec(&own).unwrap()).unwrap();
+    a.restart();
+    (a, fs)
+}
+
+fn low_epoch() -> String {
+    epoch(1, "56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+}
+
+/// ADR 0011 §24 point 4 : `sync_abandon_orphan_epoch` remet `own.json` sans époque (une époque plus petite, celle du PC, peut alors être
+/// suivie), ne touche aucun fichier, est sans effet la seconde fois ; `sync_delete_own` supprime ensuite l'orpheline devenue non courante.
+#[test]
+fn y_ios_02_abandon_orphan_epoch_resets_own_json_only_and_is_idempotent() {
+    let high = epoch(1, IPHONE);
+    let (a, fs) = orphan_device(&high);
+    assert!(a.core.snapshot_begin(&low_epoch(), 1, 14).is_err(), "own.json désigne l'orpheline (plus grande) : l'époque du PC est refusée");
+    a.core.abandon_orphan_epoch(&high).unwrap();
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_some(), "aucun fichier touché");
+    a.core.abandon_orphan_epoch(&high).unwrap();
+    a.core.abandon_orphan_epoch(&epoch(1, DEV_B)).unwrap();
+    let handle = a.core.snapshot_begin(&low_epoch(), 1, 14).unwrap();
+    a.core.snapshot_commit(handle).unwrap();
+    assert_eq!(a.core.delete_own(&[OwnFileRef { epoch: high.clone(), kind: "epoch".into(), n: None }]).unwrap(), 1);
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_none());
+}
+
+/// Refus (`state-mismatch`, rien d'écrit) quand la preuve ne tient pas : `state.ctx`, `state.next.ctx`, segment, second instantané, autre
+/// époque, `stateSeq` > 0 sans enregistrement ; nom invalide (`bad-name`).
+#[test]
+fn y_ios_02_abandon_orphan_epoch_refusals() {
+    let high = epoch(1, IPHONE);
+    let refused = |extra: &dyn Fn(&std::sync::Arc<MemFs>)| {
+        let (a, fs) = orphan_device(&high);
+        extra(&fs);
+        assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+        assert!(a.core.snapshot_begin(&low_epoch(), 1, 14).is_err(), "own.json inchangé");
+    };
+    refused(&|fs| fs.put(&["devices", DEV_A, "state.ctx"], b"x"));
+    refused(&|fs| fs.put(&["devices", DEV_A, "state.next.ctx"], b"x"));
+    refused(&|fs| fs.put(&["devices", DEV_A, &epoch(1, IPHONE), "j-00000001.ctj"], b"x"));
+    refused(&|fs| fs.put(&["devices", DEV_A, &epoch(1, IPHONE), "s-00000002.cts"], b"x"));
+    refused(&|fs| fs.put(&["devices", DEV_A, &epoch(2, IPHONE), "s-00000001.cts"], b"x"));
+    // `stateSeq` > 0 sans enregistrement ni fichier d'état (état publié puis fichier disparu).
+    let (a, fs) = orphan_device(&high);
+    a.core.write_state(14, state(DEV_A, &high, 1, 0, 0, None)).unwrap();
+    fs.remove(&["devices", DEV_A, "state.ctx"]);
+    assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+    assert_eq!(code(a.core.abandon_orphan_epoch("pas-une-epoque")), SyncCode::BadName);
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_some());
+}
+
+/// Réinitialisation en cours (`reset.json` actif) : l'abandon est refusé (`state-mismatch`), `own.json` inchangé.
+#[test]
+fn y_ios_02_abandon_orphan_epoch_refused_while_a_reset_is_in_progress() {
+    let high = epoch(1, IPHONE);
+    let (a, _) = orphan_device(&high);
+    let own: Value = serde_json::from_slice(&std::fs::read(a.base.path().join("sync").join("own.json")).unwrap()).unwrap();
+    let record = json!({
+        "folderId": own["folderId"], "deviceId": DEV_A, "role": "initiator", "kid": "0123456789abcdef", "epoch": epoch(2, DEV_A), "by": DEV_A,
+        "notice": null, "noticeEpoch": null, "stage": "created", "base": null, "superseded": null
+    });
+    std::fs::write(a.base.path().join("sync").join("reset.json"), serde_json::to_vec(&record).unwrap()).unwrap();
+    assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+}
+
+/// Une liste tronquée (plus de 10 000 entrées) ne prouve rien : refus, aussi bien dans le dossier de l'appareil que dans celui de l'époque
+/// (les fichiers en trop sont des `.tmp`, tolérés par la preuve : seule la troncature les fait refuser).
+#[test]
+fn y_ios_02_abandon_orphan_epoch_refuses_a_truncated_listing() {
+    let high = epoch(1, IPHONE);
+    let (a, fs) = orphan_device(&high);
+    for i in 0..10_001 {
+        fs.put(&["devices", DEV_A, &high, &format!("z{i:05}.tmp")], b"x");
+    }
+    assert_eq!(code(a.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+    let (b, fs) = orphan_device(&high);
+    for i in 0..10_001 {
+        fs.put(&["devices", DEV_A, &format!("z{i:05}.txt")], b"x");
+    }
+    assert_eq!(code(b.core.abandon_orphan_epoch(&high)), SyncCode::StateMismatch);
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_some());
+}
+
+/// B5 reste entière : `sync_delete_own` refuse l'époque courante, même orpheline.
+#[test]
+fn y_ios_02_delete_own_still_refuses_the_current_epoch() {
+    let high = epoch(1, IPHONE);
+    let (a, _) = orphan_device(&high);
+    assert_eq!(code(a.core.delete_own(&[OwnFileRef { epoch: high.clone(), kind: "epoch".into(), n: None }])), SyncCode::CurrentEpoch);
+}
+
+
+
 #[test]
 fn y01_16_restore_marker_written_only_when_a_folder_is_configured() {
     let (d, _) = device();

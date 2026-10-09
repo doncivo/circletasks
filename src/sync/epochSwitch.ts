@@ -1,6 +1,5 @@
 import type { ExportedRow, Repositories } from '../db/repositories';
 import { PAGE_ROWS, parseEpochId, type DeviceAck, type EpochId, type ForgottenDevice, type PublishedDeviceState, type SyncField, type SyncOp } from '../domain/sync/format';
-import { mustCarry } from '../domain/sync/epoch';
 import { hlcDevice } from '../domain/sync/parse';
 import { SYNC_TABLES, settingKeyScope, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
@@ -91,6 +90,35 @@ function carriedOf(t: SyncTable, row: ExportedRow, isOwn: (name: string, hlc: Hl
   return own.length > 0 ? { t: t.name, id: row.id, at: row.updatedAt, f, own } : null;
 }
 
+/**
+ * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : abandon d'une époque orpheline (ouverte, jamais publiée) : chaque ligne qui porte un champ
+ * écrit par cet appareil est remise **entière** dans la file de publication (`ROW_REPUBLISH_FIELD`, hlc d'origine gardés), car la file avait
+ * été vidée à l'ouverture de l'époque (ses lignes ne vivaient que dans l'instantané orphelin). Rien n'est supprimé ni modifié localement.
+ */
+export async function queueOwnRowsForRepublish(deps: SyncDeps): Promise<number> {
+  let queued = 0;
+  // Idempotent (arrêt puis reprise) : une ligne déjà en file en ligne entière n'est pas ajoutée une seconde fois.
+  const already = new Set((await deps.data.repos.sync.readOutbox(undefined, 0)).filter((e) => e.field === ROW_REPUBLISH_FIELD).map((e) => `${e.table}|${e.rowId}`));
+  for (const t of SYNC_TABLES) {
+    let after: string | null = null;
+    for (;;) {
+      const rows: ExportedRow[] = await deps.data.repos.sync.exportRows(t, after, PAGE_ROWS);
+      if (rows.length === 0) break;
+      after = (rows.at(-1) as ExportedRow).id;
+      // Lignes dont une horloge porte le `device_id` de cet appareil (les lignes de l'amorce, `SEED`, sont identiques partout et n'en ont pas) ;
+      // les lignes supprimées (`deleted_at`) sont republiées comme telles. Une trace purgée (`sync_tombstone`) n'a aucune forme dans le
+      // journal : chaque appareil purge de son côté à l'échéance (section 7), la file ne peut pas la porter.
+      const mine = rows.filter((row) => !already.has(`${t.name}|${row.id}`) && carriedOf(t, row, (_name, hlc) => hlcDevice(hlc) === deps.deviceId) !== null);
+      if (mine.length === 0) continue;
+      await deps.data.transaction(async (repos) => {
+        await repos.sync.addOutbox(mine.map((row) => ({ table: t.name, rowId: row.id, field: ROW_REPUBLISH_FIELD })));
+      });
+      queued += mine.length;
+    }
+  }
+  return queued;
+}
+
 /** Champs en attente d'une ligne : `'*'` et `ROW_REPUBLISH_FIELD` valent pour toutes les colonnes. */
 const pendingHas = (pending: ReadonlySet<string>, name: string): boolean => pending.has(name) || pending.has('*') || pending.has(ROW_REPUBLISH_FIELD);
 
@@ -99,8 +127,19 @@ const pendingHas = (pending: ReadonlySet<string>, name: string): boolean => pend
  * début de (a) est mémorisé (`maxSeq`) : seules les entrées jusqu'à lui seront vidées en (b) ; les écritures suivantes sont reportées
  * par `carryNewer` avant chaque transaction de remplacement.
  */
-async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: number): Promise<number> {
+async function materialize(deps: SyncDeps, covers: ReadonlyMap<DeviceId, DeviceAck>, maxSeq: number, opener: DeviceId, forgotten: ReadonlySet<DeviceId>): Promise<number> {
   const self = deps.deviceId;
+  /**
+   * ADR 0011 §24 point 6 : survit au changement d'époque tout ce que l'ouvreur `O` n'avait pas lu, sauf ses propres écritures et celles d'un
+   * appareil oublié. Un champ (suppression comprise) ou une trace purgée d'auteur `X` est reporté si `X ≠ O`, `X` non oublié et
+   * hlc > `covers[X].hlc` de l'instantané d'ouverture (entrée absente ou sans hlc : tout ce que cet appareil détient de `X`).
+   */
+  const carries = (hlc: Hlc): boolean => {
+    const author = hlcDevice(hlc) as DeviceId;
+    if (author === opener || forgotten.has(author)) return false;
+    const read = covers.get(author);
+    return read === undefined || read.hlc === null || hlc > read.hlc;
+  };
   const { data } = deps;
   await data.transaction(async (repos) => {
     const old = await repos.sync.parked(['epoch-carry'], 0, 1_000_000);
@@ -124,7 +163,7 @@ async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: numb
       const ops: CarriedOp[] = [];
       for (const row of rows) {
         const pending = pendingFields.get(`${t.name}\u0000${row.id}`) ?? new Set<string>();
-        const op = carriedOf(t, row, (name, hlc) => hlcDevice(hlc) === self && (mustCarry(hlc, self, cover) || pendingHas(pending, name)));
+        const op = carriedOf(t, row, (name, hlc) => carries(hlc) || (hlcDevice(hlc) === self && pendingHas(pending, name)));
         if (op) ops.push(op);
       }
       if (ops.length > 0) {
@@ -142,7 +181,7 @@ async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: numb
     if (tombs.length === 0) break;
     const last = tombs.at(-1) as { table: string; rowId: string };
     afterTomb = { table: last.table, rowId: last.rowId };
-    const mine = tombs.filter((tomb) => mustCarry(tomb.deletedHlc, self, cover));
+    const mine = tombs.filter((tomb) => carries(tomb.deletedHlc));
     if (mine.length === 0) continue;
     await data.transaction(async (repos) => {
       for (const tomb of mine) {
@@ -232,6 +271,17 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         } else {
           const clocks = (await repos.sync.readClocks(t, [op.id])).get(op.id) ?? new Map();
           const row = (await repos.sync.readRows(t, [op.id])).get(op.id);
+          // Champ d'un autre auteur reporté et gagnant sur la ligne présente : le publieur ne republie champ par champ que les horloges de cet
+          // appareil (ordre des hlc du journal) ; la ligne part donc **entière**, avec les horloges d'origine de chacun de ses champs.
+          const foreignWon = op.own.some((name) => {
+            const hlc = (op.f[name] as SyncField)[1];
+            return hlcDevice(hlc) !== deps.deviceId && (clocks.get(name) ?? clocks.get('*') ?? { hlc: row?.hlc }).hlc === hlc;
+          });
+          if (foreignWon) {
+            await repos.sync.addOutbox([{ table: t.name, rowId: op.id, field: ROW_REPUBLISH_FIELD }]);
+            addTouched(touched, t.name, op.id);
+            continue;
+          }
           const keep = op.own.filter((name) => (clocks.get(name) ?? clocks.get('*') ?? { hlc: row?.hlc }).hlc === (op.f[name] as SyncField)[1]);
           await repos.sync.addOutbox(keep.map((field) => ({ table: t.name, rowId: op.id, field })));
         }
@@ -254,6 +304,8 @@ function addTouched(touched: Map<string, Set<string>>, table: string, id: string
 export interface SwitchOptions {
   readonly mode: 'replace' | 'merge';
   readonly knows?: ApplyContext['knows'];
+  /** Appareils oubliés (ordre total) : leurs écritures au-delà de la coupure ne sont jamais reportées par la garde générale. */
+  readonly forgotten?: ReadonlySet<DeviceId>;
   readonly coverage?: { readonly master: readonly ForgottenDevice[]; readonly ackers: readonly PublishedDeviceState[] };
 }
 
@@ -304,7 +356,7 @@ export async function switchEpoch(
     const loaded = await load();
     if (loaded === 'cloud-pending') return 'cloud-pending';
     if (!loaded) return 'error';
-    const carried = await materialize(deps, loaded.end.covers.get(deps.deviceId) ?? null, progress.maxSeq);
+    const carried = await materialize(deps, loaded.end.covers, progress.maxSeq, progress.from.deviceId, options.forgotten ?? new Set());
     deps.logger.log('epoch-carry', { target, rows: carried });
     await advance('b');
     await testHooks.afterStep?.('a');

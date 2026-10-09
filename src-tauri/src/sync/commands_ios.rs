@@ -26,8 +26,8 @@ pub const MAIN_WINDOW: &str = "main";
 /// Propriétaire des confirmations natives sur iPhone (une seule fenêtre, §23 point 3).
 const OWNER: isize = 0;
 
-/// Commandes de l'iPhone (Y-IOS-01, Y-IOS-02) : les 24 moins les trois de la fenêtre `pairing`.
-pub const IOS_SYNC_COMMANDS: [&str; 21] = [
+/// Commandes de l'iPhone (Y-IOS-01, Y-IOS-02) : les 25 moins les trois de la fenêtre `pairing`.
+pub const IOS_SYNC_COMMANDS: [&str; 22] = [
     "sync_folder_info",
     "sync_folder_choose",
     "sync_folder_forget",
@@ -43,6 +43,7 @@ pub const IOS_SYNC_COMMANDS: [&str; 21] = [
     "sync_snapshot_commit",
     "sync_read_snapshot",
     "sync_delete_own",
+    "sync_abandon_orphan_epoch",
     "sync_restore_marker_get",
     "sync_restore_marker_clear",
     "sync_forgotten_delete",
@@ -270,6 +271,14 @@ pub async fn sync_delete_own<R: Runtime>(app: AppHandle<R>, window: WebviewWindo
     require_main(&window)?;
     let core = state.core(&app)?;
     blocking(move || core.delete_own(&files).map(|deleted| Deleted { deleted })).await
+}
+
+/// Y-IOS-02 (ADR 0011 §24 point 4 (b)) : `own.json` revient sans époque pour une époque orpheline (preuve recontrôlée).
+#[tauri::command]
+pub async fn sync_abandon_orphan_epoch<R: Runtime>(app: AppHandle<R>, window: WebviewWindow<R>, state: State<'_, SyncState>, epoch: String) -> SyncResult<()> {
+    require_main(&window)?;
+    let core = state.core(&app)?;
+    blocking(move || core.abandon_orphan_epoch(&epoch)).await
 }
 
 #[tauri::command]

@@ -41,10 +41,40 @@ fn publish_state(d: &Device, dev: &str, seq: u64) {
     d.core.write_state(14, state).expect("état");
 }
 
+/// Y-IOS-02 : l'origine de la clé est écrite **avant** la clé au coffre ; si elle ne peut pas l'être, la création échoue (`io`) et aucune
+/// clé n'est rangée (jamais une clé dont l'origine serait inconnue sans que personne le sache).
+#[test]
+fn y_ios_02_key_origin_is_written_before_the_key_and_a_failure_fails_the_creation() {
+    let (d, _) = device();
+    d.core.choose_folder(Path::new(FOLDER)).unwrap();
+    // Un dossier à la place du fichier : l'écriture (renommage) échoue.
+    std::fs::create_dir_all(d.base.path().join("sync").join("key-origin.json")).unwrap();
+    assert_eq!(code(d.core.key_create()), SyncCode::Io);
+    assert!(!d.core.key_status().unwrap().present);
+    assert!(d.vault.get(SYNC_KEY_ACCOUNT).unwrap().is_none());
+}
+
+/// Même garde à l'import : l'origine (importée) est écrite avant la clé ; si elle ne peut pas l'être, l'import échoue (`io`) et aucune clé n'est
+/// rangée.
+#[test]
+fn y_ios_02_key_origin_write_failure_fails_the_import_and_stores_no_key() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    publish_state(&a, DEV_A, 1);
+    let payload = a.core.pairing_payload(a.clock.now() + PAIRING_VALIDITY_MS).unwrap();
+    let b = second(&fs);
+    b.core.choose_folder(Path::new(FOLDER)).unwrap();
+    b.core.bind_device(DEV_B).unwrap();
+    std::fs::create_dir_all(b.base.path().join("sync").join("key-origin.json")).unwrap();
+    assert_eq!(code(b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1)), SyncCode::Io);
+    assert!(!b.core.key_status().unwrap().present);
+    assert!(b.vault.get(SYNC_KEY_ACCOUNT).unwrap().is_none());
+}
+
 #[test]
 fn y08_6_create_status_and_key_exists() {
     let (d, _) = device();
-    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None, next_kid: None, import_failure: None });
+    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None, next_kid: None, import_failure: None, paired_by: None, imported: false });
     assert_eq!(code(d.core.key_create()), SyncCode::NotConfigured);
     d.core.choose_folder(Path::new(FOLDER)).unwrap();
     let kid = d.core.key_create().unwrap();
@@ -103,6 +133,9 @@ fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
     b.core.choose_folder(Path::new(FOLDER)).unwrap();
     b.core.bind_device(DEV_B).unwrap();
     b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    // Y-IOS-02 : origine de la clé persistée (`sync/key-origin.json`) : importée sur B, créée sur A (`a.setup` crée la clé).
+    assert!(b.core.key_status().unwrap().imported);
+    assert!(!a.core.key_status().unwrap().imported);
     // Import depuis un fil annexe (comme `spawn_blocking` dans la commande) : ses lignes sont capturées aussi.
     let recovery = payload.recovery_key.clone();
     let b = std::thread::spawn(move || {

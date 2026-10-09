@@ -67,7 +67,7 @@ pub fn run() {
         sync::commands::sync_key_status, sync::commands::sync_key_create, sync::commands::sync_pairing_open, sync::commands::sync_pairing_payload,
         sync::commands::sync_key_import, sync::commands::sync_pairing_close, sync::commands::sync_scan, sync::commands::sync_read_journal,
         sync::commands::sync_append_journal, sync::commands::sync_write_state, sync::commands::sync_snapshot_begin, sync::commands::sync_snapshot_append,
-        sync::commands::sync_snapshot_commit, sync::commands::sync_read_snapshot, sync::commands::sync_delete_own, sync::commands::sync_restore_marker_get,
+        sync::commands::sync_snapshot_commit, sync::commands::sync_read_snapshot, sync::commands::sync_delete_own, sync::commands::sync_abandon_orphan_epoch, sync::commands::sync_restore_marker_get,
         sync::commands::sync_restore_marker_clear,
         // Lot Y4 (ADR 0011 section 18, étape 0) : corps qui répondent `not-configured` jusqu'à Y-10 et Y-11.
         sync::commands::sync_device_forget, sync::commands::sync_forgotten_delete, sync::commands::sync_reset_key,
@@ -96,7 +96,7 @@ pub fn run() {
         sync::commands_ios::sync_folder_info, sync::commands_ios::sync_folder_choose, sync::commands_ios::sync_folder_forget, sync::commands_ios::sync_bind_device,
         sync::commands_ios::sync_key_status, sync::commands_ios::sync_key_create, sync::commands_ios::sync_scan, sync::commands_ios::sync_read_journal,
         sync::commands_ios::sync_append_journal, sync::commands_ios::sync_write_state, sync::commands_ios::sync_snapshot_begin, sync::commands_ios::sync_snapshot_append,
-        sync::commands_ios::sync_snapshot_commit, sync::commands_ios::sync_read_snapshot, sync::commands_ios::sync_delete_own, sync::commands_ios::sync_restore_marker_get,
+        sync::commands_ios::sync_snapshot_commit, sync::commands_ios::sync_read_snapshot, sync::commands_ios::sync_delete_own, sync::commands_ios::sync_abandon_orphan_epoch, sync::commands_ios::sync_restore_marker_get,
         sync::commands_ios::sync_restore_marker_clear, sync::commands_ios::sync_forgotten_delete,
         // Y-IOS-02 (ADR 0011 §23 point 5) : clé reçue dans `main`, oubli, réinitialisation (confirmations natives de l'iPhone).
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,

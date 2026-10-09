@@ -287,6 +287,7 @@ export interface SyncCommandMap {
   sync_snapshot_commit: { readonly args: { readonly handle: number }; readonly result: null };
   sync_read_snapshot: { readonly args: ReadSnapshotRequest; readonly result: ReadPage };
   sync_delete_own: { readonly args: { readonly files: readonly OwnFileRef[] }; readonly result: { readonly deleted: number } };
+  sync_abandon_orphan_epoch: { readonly args: { readonly epoch: EpochId }; readonly result: null };
   sync_restore_marker_get: { readonly args: undefined; readonly result: RestoreMarker | null };
   sync_restore_marker_clear: { readonly args: undefined; readonly result: null };
   // Lot Y4 (ADR 0011 sections 11.1 et 18) : déclarées à l'étape 0, `not-configured` jusqu'à Y-10 et Y-11.
@@ -318,6 +319,7 @@ export const SYNC_COMMAND_WINDOWS: { readonly [C in SyncCommand]: 'main' | 'pair
   sync_snapshot_commit: 'main',
   sync_read_snapshot: 'main',
   sync_delete_own: 'main',
+  sync_abandon_orphan_epoch: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
   sync_device_forget: 'main',
@@ -353,6 +355,7 @@ export const SYNC_COMMAND_WINDOWS_IOS: { readonly [C in SyncCommand]: 'main' | n
   sync_snapshot_commit: 'main',
   sync_read_snapshot: 'main',
   sync_delete_own: 'main',
+  sync_abandon_orphan_epoch: 'main',
   sync_restore_marker_get: 'main',
   sync_restore_marker_clear: 'main',
   sync_device_forget: 'main',
@@ -420,6 +423,8 @@ export interface SyncPlatform {
   readSnapshot(r: ReadSnapshotRequest): Promise<ReadPage>;
   /** Supprime ses propres fichiers ; renvoie le nombre supprimé (`current-epoch` pour le dossier de l'époque courante). */
   deleteOwn(files: readonly OwnFileRef[]): Promise<number>;
+  /** ADR 0011 §24 point 4 (b) : `own.json` revient sans époque pour une époque orpheline (Rust recontrôle la preuve, `state-mismatch` sinon) ; sans effet si `own.epoch` est déjà nul. */
+  abandonOrphanEpoch(epoch: EpochId): Promise<void>;
   readonly restoreMarker: { get(): Promise<RestoreMarker | null>; clear(): Promise<void> };
   /** Lot Y4, Y-10 (ADR 0011 section 14.2). Étape 0 : les deux méthodes rejettent `not-configured`. */
   readonly forget: {
@@ -442,6 +447,10 @@ export interface KeyStatus {
   readonly nextKid?: string | null;
   /** Y-11 (§18 point 17) : dernier refus de `sync_key_import` pour ce dossier (`sync/import-failure.json`), ou null. */
   readonly importFailure?: { readonly code: SyncErrorCode; readonly at: IsoDateTime } | null;
+  /** ADR 0011 §24 point 1 (b) : appareil par lequel cet appareil a été associé (`own.json`), ou null. Facultatif (anciens faux). */
+  readonly pairedBy?: DeviceId | null;
+  /** Clé importée (QR ou clé de secours) et non créée sur cet appareil ; faux si l'origine est inconnue (clé d'avant). Facultatif. */
+  readonly imported?: boolean;
 }
 
 /** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */
@@ -683,6 +692,13 @@ export interface SyncEngineService extends SyncService {
   resetSync(): Promise<ResetOutcome>;
   /** Y-11 : efface l'état « réinitialisation terminée » (ou un échec de lancement abandonné) affiché dans Réglages. */
   dismissReset(): Promise<void>;
+  /**
+   * Y-IOS-02 (ADR 0011 §24 point 1) : « Démarrer la synchro depuis cet appareil » : un appareil dont la clé a été importée n'ouvre jamais une époque
+   * tant qu'aucun état d'un autre appareil n'a été lu ; cette action explicite (tous les autres sont perdus) lève l'attente. Ne rejette jamais.
+   */
+  startFromThisDevice(): Promise<void>;
+  /** Y-IOS-02 : « Lancer une reprise complète » : reprise depuis l'instantané (fusion) forcée ; acquitte l'avertissement `received-unapplied` d'une trace. Ne rejette jamais. */
+  fullResume(): Promise<void>;
 }
 
 /** Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9). */

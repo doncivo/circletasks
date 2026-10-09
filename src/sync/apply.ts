@@ -7,6 +7,7 @@ import { isNaturalId, type NaturalIdTable } from '../domain/sync/naturalIds';
 import { hlcDevice } from '../domain/sync/parse';
 import { TECHNICAL_COLUMNS, isValidRowId, isValidValue, settingKeyScope, syncColumn, syncTable, type SyncTable } from '../domain/sync/syncTables';
 import type { SyncLogger } from './log';
+import { META } from './meta';
 
 /**
  * Application d'un lot d'opérations reçues (ADR 0011, sections 3.3, 4, 5.4, 7.2 et 8 ; Y-02 critères 2, 6 et 8, Y-09 critères 1 et 4).
@@ -17,6 +18,20 @@ import type { SyncLogger } from './log';
  * traces de suppression (un hlc inférieur ou égal ne ressuscite rien) ; fusion par champ (`merge.ts`) ; ligne ou parent absent : mise
  * de côté dans `sync_parked`.
  */
+
+/** Traces purgées (`table|id`) de l'orpheline abandonnée (`sync_meta.orphanTraces`) ; valeur illisible : journalisée, traitée comme vide, jamais un échec. */
+async function readOrphanTraces(sync: Repositories['sync'], logger: SyncLogger): Promise<ReadonlySet<string>> {
+  const raw = await sync.getMeta(META.orphanTraces);
+  if (raw === null) return new Set();
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return new Set(value as string[]);
+  } catch {
+    // journalisé ci-dessous
+  }
+  logger.log('orphan-traces-unreadable', {});
+  return new Set();
+}
 
 export interface ApplyContext {
   /** `schema_version` local et celui de l'écrivain. */
@@ -64,6 +79,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
   const conflicts: ConflictEntry[] = [];
   const cache = new Map<string, CachedRow>();
   const tombstoneCache = new Map<string, Map<string, Hlc>>();
+  let orphanTraces: ReadonlySet<string> | undefined;
 
   // Préchargement par table : lignes, horloges, champs en attente, traces.
   const byTable = new Map<SyncTable, string[]>();
@@ -238,6 +254,13 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
     /** Restauration fondée sur la trace, éventuellement en plusieurs parties (grosse ligne découpée champ par champ). */
     let restoring = false;
     if (tomb !== undefined) {
+      // ADR 0011 §24 point 4 (a) : trace posée dans une époque orpheline abandonnée visée par une opération reçue : règle ordinaire (la ligne
+      // n'est pas recréée), mais le cas est journalisé (table seulement) et mémorisé pour lever `received-unapplied` (jamais muet).
+      orphanTraces ??= await readOrphanTraces(sync, ctx.logger);
+      if (orphanTraces.has(`${t.name}|${op.id}`)) {
+        ctx.logger.log('orphan-trace-hit', { table: t.name });
+        await sync.setMeta(META.orphanTraceHit, JSON.stringify({ table: t.name }));
+      }
       const restoreField = fields.get('deleted_at');
       const complete = t.columns.every((col) => fields.has(col.name));
       // Restauration de la suppression purgée (Y-09, restauration hors ligne contre purge) : `deleted_at` remis à nul par une écriture
