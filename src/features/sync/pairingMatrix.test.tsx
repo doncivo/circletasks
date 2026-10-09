@@ -187,7 +187,8 @@ const SCENARIOS: Scenario[] = [
     },
     expected: {
       windows: { settings: ['forgetFolder', 'rereadFolder'], details: ['reset', 'showQr', 'syncNow'], banner: 'Dossier de synchro introuvable : vos modifications seront envoyées au retour' },
-      ios: { settings: ['choose', 'forgetFolder', 'rereadFolder'], details: ['reset', 'syncNow'], banner: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks' },
+      // Revue de la PR #17 : Détails (où mène le bandeau) offre aussi « Choisir le dossier » pour le signet perdu de l'iPhone.
+      ios: { settings: ['choose', 'forgetFolder', 'rereadFolder'], details: ['choose', 'reset', 'syncNow'], banner: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks' },
     },
   },
   {

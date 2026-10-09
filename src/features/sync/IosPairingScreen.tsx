@@ -35,6 +35,10 @@ export function iosPairingErrorKey(code: SyncErrorCode): PlainMessageKey {
       return 'sync.pairing.ios.errors.rateLimited';
     case 'not-configured':
       return 'sync.pairing.ios.errors.notConfigured';
+    case 'vault-unavailable':
+      return 'sync.pairing.ios.errors.vaultUnavailable';
+    case 'folder-unreachable':
+      return 'sync.pairing.ios.errors.folderUnreachable';
     default:
       return 'sync.pairing.ios.errors.generic';
   }
@@ -159,7 +163,11 @@ export function IosPairingScreen({ platform, onClose, document: injected }: IosP
         setStage('camera');
         return;
       case 'failed':
-        setStage('camera');
+        // QA D5 : dossier devenu inaccessible (signet perdu) : retour à l'étape du dossier, « Choisir le dossier » offert, cause dite.
+        if (outcome.code === 'folder-unreachable' || outcome.code === 'not-configured') {
+          setFolderReady(false);
+          setStage('folder');
+        } else setStage('camera');
         setMessage(iosPairingErrorKey(outcome.code));
         void readCamera();
     }

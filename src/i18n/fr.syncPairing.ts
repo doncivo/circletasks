@@ -7,6 +7,10 @@
  */
 export const syncPairingFr = {
   rowLabel: 'Nouvel appareil',
+  // Revue de la PR #17 : coffre illisible alors que la synchro est à jour (iPhone verrouillé, coffre de Windows indisponible).
+  keyUnreadable: 'Clé de chiffrement illisible pour l’instant : déverrouillez l’appareil, puis réessayez',
+  keyReread: 'Réessayer',
+  keyRereadLabel: 'Relire la clé de chiffrement',
   show: 'Associer l’iPhone',
   showLabel: 'Associer l’iPhone : afficher le code d’association',
   importAction: 'Associer cet appareil',
@@ -67,6 +71,9 @@ export const syncPairingFr = {
     scanCancelled: 'Scan annulé',
     close: 'Fermer',
     errors: {
+      // QA D5 : causes de l'import dites avec leur conseil (jamais « L’association a échoué : réessayez »).
+      vaultUnavailable: 'Le Trousseau de l’iPhone est indisponible : déverrouillez l’iPhone, puis réessayez',
+      folderUnreachable: 'Dossier iCloud Drive inaccessible : choisissez de nouveau le dossier iCloud Drive / CircleTasks',
       invalidPairing: 'Ce code n’est pas un code d’association CircleTasks : affichez le code sur le PC et réessayez',
       keyMismatch: 'Ce code ne correspond pas aux données du dossier choisi : vérifiez le dossier iCloud Drive / CircleTasks',
       cloudPending: 'Le dossier ne contient pas encore les données du PC : attendez qu’iCloud les apporte, puis réessayez',
@@ -91,8 +98,9 @@ export const syncPairingWindowFr = {
     warning: 'Ce code transmet la clé de chiffrement de vos données. Il ne passe jamais par iCloud.',
     step1: 'Sur l’iPhone, ouvrez {path}.',
     step1Path: 'Réglages → Synchronisation → Associer au PC',
-    step2: 'Scannez ce code avec l’iPhone.',
-    step3: 'Choisissez le même dossier iCloud Drive / CircleTasks sur l’iPhone.',
+    // Dossier d'abord, clé ensuite (ADR 0011 §10.3, §23 point 7) : l'iPhone choisit le dossier avant de scanner.
+    step2: 'Choisissez le même dossier iCloud Drive / CircleTasks sur l’iPhone.',
+    step3: 'Scannez ce code avec l’iPhone.',
     qrLabel: 'QR code d’association',
     noCapture: 'Ce code n’apparaît pas dans les captures d’écran',
     waiting: 'En attente de l’iPhone…',

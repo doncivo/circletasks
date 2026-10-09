@@ -199,7 +199,12 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return t('sync.status.keyMismatch');
     case 'error':
       // Revue de la PR #14 : erreur passagère répétée : cycles espacés, jamais arrêtés ; l'heure du prochain essai est dite.
-      if (status.retryAt && status.errorCode) return t('sync.status.errorSlowed', { time: formatSyncTime(status.retryAt, nowMs), code: status.errorCode });
+      if (status.retryAt && status.errorCode) {
+        const time = formatSyncTime(status.retryAt, nowMs);
+        // QA D4 : la cause connue garde son conseil (« déverrouillez l’iPhone »…) ; sans cause propre, le texte « ralentie » seul.
+        const cause = errorText(status.errorCode, ownPlatform(status));
+        return cause === t('sync.status.errorGeneric') ? t('sync.status.errorSlowed', { time, code: status.errorCode }) : t('sync.status.errorSlowedCause', { cause, time, code: status.errorCode });
+      }
       return errorText(status.errorCode, ownPlatform(status));
     case 'forgotten':
       return t('sync.forget.banner');

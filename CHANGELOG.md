@@ -1,5 +1,9 @@
 # Journal des versions
 
+## 0.2.3
+
+- Association : chaque état propose l'action utile (PC oublié, dossier à rechoisir, clé illisible, Trousseau indisponible), étapes de la fenêtre QR dans le bon ordre ; tests du parcours complet.
+
 ## 0.2.2
 
 - Correction : base de données verrouillée au premier lancement sur iPhone.
