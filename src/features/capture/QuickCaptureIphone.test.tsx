@@ -172,7 +172,7 @@ describe('Feuille « Nouvelle tâche » : base occupée et échec (critères 2 e
     });
   };
 
-  it('écriture qui n’aboutit pas en 2 s : « La base n’est pas prête », texte conservé, « Réessayer » reprend la même écriture sans doublon', async () => {
+  it('écriture qui n’aboutit pas en 2 s : « La base n’est pas prête », texte conservé, « Réessayer » abandonne l’écriture en attente et en relance une, la fin de l’ancienne est dite', async () => {
     let finish: (ok: boolean) => void = () => undefined;
     const onCreate = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
     const onClose = vi.fn();
@@ -188,14 +188,15 @@ describe('Feuille « Nouvelle tâche » : base occupée et échec (critères 2 e
     expect(screen.getByLabelText('Titre')).toHaveValue('Acheter du pain');
     expect(onClose).not.toHaveBeenCalled();
 
-    // « Réessayer » pendant que la première écriture est encore attendue : aucune seconde création.
+    // « Réessayer » : la première écriture est abandonnée (jamais rattendue), une nouvelle est lancée avec le même texte.
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
       await Promise.resolve();
     });
-    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('Titre')).toHaveValue('Acheter du pain');
 
-    // La base devient prête : l'écriture aboutit, la feuille se ferme.
+    // La base devient prête : la nouvelle écriture aboutit, la feuille se ferme une fois.
     await act(async () => {
       finish(true);
       await Promise.resolve();

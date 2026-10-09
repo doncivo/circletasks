@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 import { createFakeBridge } from '../notifications/fakeBridge';
 import { NotificationSchedulerError } from '../notifications/types';
-import { createUnsupportedSigning } from './index';
-import { openSigning } from './open';
+import { createUnsupportedSigning, openSigning } from './index';
 import { createTauriSigningSource } from './tauriSigning';
 import { createTauriSigningAlert, SIGNING_ALERT_NUMERIC_ID } from './tauriSigningAlert';
 

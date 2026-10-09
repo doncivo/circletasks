@@ -4,6 +4,7 @@ import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { TASK_TITLE_MAX_LENGTH } from '../../domain/taskRules';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
+import { useNoticeStore } from '../app/notice';
 import { renderEvents, setupEvents } from '../events/testKit';
 import { CREATE_NOT_READY_MS, TaskCreateSheet } from '../tasks/TaskCreateSheet';
 import { mockViewport, renderToday, setupToday, teardownToday, type TodayHarness } from '../today/testKit';
@@ -150,9 +151,9 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     });
   };
 
-  it('Q-05 critère 2 : « Réessayer » cliqué 5 fois, puis base libérée : une seule écriture, une seule fermeture', async () => {
-    let finish: (ok: boolean) => void = () => undefined;
-    const onCreate = vi.fn(() => new Promise<boolean>((resolve) => (finish = resolve)));
+  it('Q-05 critère 2 (revue) : « Réessayer » cliqué 5 fois sur une écriture qui ne revient pas : chaque clic relance, le texte reste ; à la fin, une seule fermeture et le doublon possible est dit', async () => {
+    const finishers: ((ok: boolean) => void)[] = [];
+    const onCreate = vi.fn(() => new Promise<boolean>((resolve) => finishers.push(resolve)));
     const onClose = vi.fn();
     renderSheet(onCreate, onClose);
     type('Acheter du pain');
@@ -161,16 +162,26 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     await notReady();
     for (let i = 0; i < 5; i += 1) {
       await click('Réessayer');
+      // Le bouton disparaît pendant la nouvelle écriture : pas de salve de clics sans attente.
+      expect(screen.queryByRole('button', { name: 'Réessayer' })).toBeNull();
       await notReady();
       expect(screen.getByRole('alert')).toHaveTextContent('La base n’est pas prête');
       expect(field()).toHaveValue('Acheter du pain');
     }
-    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledTimes(6);
+    useNoticeStore.getState().clear();
     await act(async () => {
-      finish(true);
+      finishers[5]?.(true);
       await Promise.resolve();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
+    // Une écriture abandonnée aboutit à son tour : jamais en silence.
+    await act(async () => {
+      finishers[0]?.(true);
+      await Promise.resolve();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(useNoticeStore.getState().notice?.text).toContain('deux fois');
   });
 
   it('Q-05 critère 10 : base libérée mais écriture refusée : message d’erreur, texte conservé, nouvel essai recrée une fois', async () => {

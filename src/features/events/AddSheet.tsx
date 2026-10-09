@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { todayLocal } from '../../domain/clock';
 import type { LocalDate } from '../../domain/types';
 import { t } from '../../i18n';
@@ -6,11 +6,11 @@ import { Sheet, type AddSegment } from '../../ui';
 import { useAppContainer } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useDefaultReminderOffsets } from '../reminders';
-import { RoutineForm } from '../routines/RoutineForm';
+import { LazyRoutineForm } from '../routines/lazyRoutineForm';
 import { createRoutineUseCases, type RoutineInput } from '../routines/routineUseCases';
 import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
 import { TaskCreateSheet, type TaskCreateSheetProps } from '../tasks/TaskCreateSheet';
-import { EventForm } from './EventForm';
+import { LazyEventForm } from './lazyEventForm';
 import { createEventUseCases, type EventInput } from './eventUseCases';
 
 export interface AddSheetProps {
@@ -41,6 +41,11 @@ export function AddSheet({ initialSegment, date, taskSheet, createRoutine, onClo
   const [segment, setSegment] = useState<AddSegment>(initialSegment);
   const [title, setTitle] = useState('');
   const [error, setError] = useState<string | null>(null);
+
+  // Les deux autres segments se chargent dès que la feuille est ouverte : prêts (rendu direct, focus dans le geste) quand on touche le segment.
+  useEffect(() => {
+    void Promise.all([LazyEventForm.preload(), LazyRoutineForm.preload()]).catch(() => undefined);
+  }, []);
 
   const change = (next: AddSegment, typed: string): void => {
     setTitle(typed);
@@ -77,13 +82,13 @@ export function AddSheet({ initialSegment, date, taskSheet, createRoutine, onClo
   if (segment === 'event') {
     return (
       <Sheet open onClose={onClose} label={t('events.sheet.newTitle')} className="ct-sheet--tall">
-        <EventForm event={null} spaces={spaces} initialSpaceId={defaultSpaceId} today={today} initialDate={date ?? today} initialTitle={title} onSubmit={saveEvent} onClose={onClose} onSegmentChange={change} errorMessage={error} autoFocus />
+        <LazyEventForm event={null} spaces={spaces} initialSpaceId={defaultSpaceId} today={today} initialDate={date ?? today} initialTitle={title} onSubmit={saveEvent} onClose={onClose} onSegmentChange={change} errorMessage={error} autoFocus />
       </Sheet>
     );
   }
   return (
     <Sheet open onClose={onClose} label={t('routines.form.newTitle')} className="ct-sheet--tall">
-      <RoutineForm routine={null} spaces={spaces} initialSpaceId={defaultSpaceId} today={today} onSubmit={saveRoutine} onClose={onClose} errorMessage={error} autoFocus defaultOffsets={defaultOffsets} initialTitle={title} onSegmentChange={change} />
+      <LazyRoutineForm routine={null} spaces={spaces} initialSpaceId={defaultSpaceId} today={today} onSubmit={saveRoutine} onClose={onClose} errorMessage={error} autoFocus defaultOffsets={defaultOffsets} initialTitle={title} onSegmentChange={change} />
     </Sheet>
   );
 }
