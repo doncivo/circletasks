@@ -51,7 +51,7 @@ export function sampleTodayTitles(now: Date = new Date()): string[] {
   return titles;
 }
 
-export const todayTab =(page: Page): Locator => page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true });
+export const todayTab = (page: Page): Locator => page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true });
 
 export async function openToday(page: Page): Promise<void> {
   await openApp(page);

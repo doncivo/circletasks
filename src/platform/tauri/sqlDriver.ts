@@ -1,6 +1,6 @@
 import Database from '@tauri-apps/plugin-sql';
 import type { SqlDriver, SqlRow } from '../../db/driver';
-import { DbStepError } from '../../db/errorText';
+import { DbStepError, JournalModeError } from '../../db/errorText';
 import { createSerializedDriver, type SerializedDriverOptions } from '../../db/serializedDriver';
 
 /** Fichier de base dans le dossier de configuration de l'app (géré par tauri-plugin-sql). */
@@ -28,8 +28,9 @@ export async function openTauriSqlDriver(
     // Le pool Rust ouvre déjà en WAL (src-tauri/vendor/tauri-plugin-sql) ; on le vérifie : SQLite répond « delete » au lieu d'échouer
     // quand le WAL est impossible, et la base resterait en journal de retour arrière sans qu'aucune erreur ne le dise.
     const mode = await db.select<Array<{ journal_mode?: unknown }>>('PRAGMA journal_mode = WAL');
-    const effective = String(mode[0]?.journal_mode ?? 'inconnu').toLowerCase();
-    if (effective !== 'wal') throw new Error(`mode de journal effectif « ${effective} » au lieu de « wal »`);
+    const raw = mode[0]?.journal_mode;
+    const effective = typeof raw === 'string' ? raw.toLowerCase() : null;
+    if (effective !== 'wal') throw new JournalModeError(effective);
   } catch (error) {
     await db.close().catch(() => undefined);
     throw new DbStepError('pragma', error);

@@ -1,15 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
+import { APP_READY_TIMEOUT_MS } from './helpers/app';
 
 /**
  * 0.2.2 : l'ouverture de la base ne laisse plus jamais « Chargement… » sans fin ni un écran d'échec sans issue.
  * Le premier chargement de la page simule l'ouverture (prise `__ctDbOpen` du développement) ; « Réessayer » recharge la page, dont
  * le second chargement ouvre la vraie base (le drapeau est gardé dans sessionStorage, qui survit au rechargement).
+ * Après « Réessayer », la vraie ouverture charge SQLite Wasm pour la première fois : budget commun de démarrage (APP_READY_TIMEOUT_MS).
  */
-/**
- * Budget de la vraie ouverture après « Réessayer » : c'est la première fois que la page charge SQLite Wasm (le premier chargement
- * simulé ne l'a pas importé), ce qui dépasse 5 s sur un exécuteur CI froid. Borne d'attente d'un chargement réel, pas un correctif.
- */
-const READY_BUDGET_MS = 30_000;
+const READY_BUDGET_MS = APP_READY_TIMEOUT_MS;
 
 async function simulateFirstOpen(page: Page, kind: 'never' | 'reject'): Promise<void> {
   await page.addInitScript((mode) => {

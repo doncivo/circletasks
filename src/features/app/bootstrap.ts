@@ -4,7 +4,7 @@ import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
-import { DbStepError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
+import { DbStepError, JournalModeError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
@@ -70,7 +70,8 @@ export async function bootstrapDatabase(
     return db;
   } catch (error) {
     setDbProgress(null);
-    const journalMode = db ? await readJournalMode(db) : undefined;
+    const cause = error instanceof DbStepError ? error.cause : error;
+    const journalMode = cause instanceof JournalModeError ? cause.mode : db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
     const message = describeError(error);

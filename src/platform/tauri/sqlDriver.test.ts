@@ -33,8 +33,9 @@ describe('driver Tauri SQL (plugin simulé)', () => {
 
   it('0.2.2 : un mode de journal autre que WAL fait échouer l’ouverture (étape pragma, mode dans le message), base fermée', async () => {
     journalMode = 'delete';
-    await expect(openTauriSqlDriver()).rejects.toMatchObject({ name: 'DbStepError', step: 'pragma', message: expect.stringContaining('« delete » au lieu de « wal »') });
+    await expect(openTauriSqlDriver()).rejects.toMatchObject({ name: 'DbStepError', step: 'pragma', message: 'journal-mode: expected wal, got delete' });
     expect(calls.at(-1)).toEqual({ op: 'close' });
+    expect((await openTauriSqlDriver().catch((e: unknown) => e) as Error).cause).toMatchObject({ name: 'JournalModeError', mode: 'delete' });
   });
 
   it('ouvre la base par défaut et pose les PRAGMA dans l’ordre', async () => {

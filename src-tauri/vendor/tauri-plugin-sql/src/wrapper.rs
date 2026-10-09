@@ -351,6 +351,10 @@ fn path_mapper(mut app_path: std::path::PathBuf, connection_string: &str) -> Str
 /// « database is locked » apres `busy_timeout`. Avec `max_connections(1)`, l'appel suivant attend le permis du pool, rendu
 /// seulement APRES le retour de la connexion dans la file : une seule connexion, jamais deux. Connexion jamais recyclee
 /// (`idle_timeout` et `max_lifetime` desactives) pour qu'aucune reconnexion ne survienne entre deux appels d'une transaction.
+///
+/// Cas restant : si le `ping` de retour au pool echoue en pleine transaction, sqlx ferme cette connexion et en ouvre une neuve ; les
+/// ecritures suivantes sont alors validees une a une (hors transaction), puis le `COMMIT` echoue « no transaction is active ». Le
+/// front (`serializedDriver.ts`) le traite en echec visible `transaction-lost`, jamais rattrape en silence.
 #[cfg(feature = "sqlite")]
 pub async fn open_sqlite_pool(conn_url: &str) -> Result<Pool<Sqlite>, sqlx::Error> {
     use std::str::FromStr;

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openSqliteWasmDriver } from '../../db/drivers/sqliteWasm';
-import { DbStepError, describeError } from '../../db/errorText';
+import { DbStepError, JournalModeError, describeError } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { t } from '../../i18n';
@@ -78,6 +78,11 @@ describe('0.2.1 diagnostic : étape de l’ouverture qui a échoué', () => {
     vi.spyOn(db, 'transaction').mockRejectedValueOnce(new Error('database is locked'));
     await bootstrapDatabase(() => Promise.resolve(db), { backup: () => Promise.resolve(undefined) });
     expect(failure()).toMatchObject({ step: 'migration', journalMode: 'delete' });
+
+    reset();
+    await bootstrapDatabase(() => Promise.reject(new DbStepError('pragma', new JournalModeError('delete'))));
+    expect(failure()).toMatchObject({ step: 'pragma', message: 'journal-mode: expected wal, got delete', journalMode: 'delete' });
+    expect(formatDbFailure(failure() as DbFailure, ENV)).toContain(t('app.diag.journalExpected'));
 
     reset();
     await bootstrapDatabase(() => Promise.reject(new DbStepError('load', 'x')));
