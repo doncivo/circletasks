@@ -8,7 +8,7 @@ export const DEV_PORT = Number(process.env['CT_DEV_PORT'] ?? 1420);
 
 // Build des mesures de performance (@perf, projet Playwright `perf`) : bundle de PRODUCTION (React en mode production, code minifié) auquel on
 // rend les accroches de test de développement (`import.meta.env.DEV` : faux des plateformes, `__ctTest`…). Posé SEULEMENT par la commande de
-// build de playwright.config.ts ; jamais dans `npm run build`, `tauri build` ni les workflows de livraison (tests/bundle/e2eHooks.test.ts).
+// build de playwright.config.ts ; jamais dans `npm run build`, `tauri build` ni les workflows de livraison (tests/bundle/startBundle.test.ts).
 const E2E_HOOKS = process.env['VITE_CT_E2E_HOOKS'] === '1';
 
 export default defineConfig({
