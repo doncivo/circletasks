@@ -295,3 +295,17 @@ fn p04_ios_i1_an_unsafe_restore_old_is_set_aside() {
     assert_eq!(lock_value(&db).as_deref(), Some("true"), "base actuelle intacte");
     assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080002Z"), Ok(0), "rien à déplacer");
 }
+
+// --- revue I2 : nouvel essai du marqueur depuis le mémo ---
+
+#[test]
+fn p04_ios_i2_marker_retry_revalidates_the_name_and_reports_its_outcome() {
+    use circletasks_lib::startup_gate::{write_marker_for, MarkerWriteOutcome};
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    assert_eq!(write_marker_for(dir.path(), "../circletasks.db", 1_791_446_400), MarkerWriteOutcome { marker: "failed", code: Some("bad-name") });
+    assert_eq!(write_marker_for(dir.path(), "circletasks-daily-20261001.db", 1_791_446_400).marker, "failed", "sauvegarde absente");
+    assert_eq!(write_marker_for(dir.path(), "circletasks-daily-20261007.db", 1_791_446_400), MarkerWriteOutcome { marker: "not-configured", code: None });
+}

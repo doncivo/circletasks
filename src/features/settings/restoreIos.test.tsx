@@ -173,6 +173,27 @@ describe('P-04-iOS : restauration sur iPhone (mise au calme, mémo, marqueur, é
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
   });
 
+  it('revue I2 : « Réessayer » réécrit le marqueur depuis le mémo : échec -> nouveau code ; réussite -> mémo effacé, la synchro reprend', async () => {
+    writeMarkerFailed({ backup: VERSION.name, code: 'io', at: '2026-10-08T08:00:00.000Z' });
+    startIntegration();
+    await waitFor(() => expect(useAppStatusStore.getState().sources.syncTrouble?.detail).toBe('restore-marker-failed'));
+    const answers = [{ marker: 'failed' as const, code: 'disk-full' }, { marker: 'written' as const }];
+    const retry = vi.fn(() => Promise.resolve(answers.shift() ?? { marker: 'written' as const }));
+    render(
+      <AppContainerProvider container={container}>
+        <RestoreMarkerResume retry={retry} />
+      </AppContainerProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    expect(await screen.findByText('Code : disk-full')).toBeInTheDocument();
+    expect(retry).toHaveBeenCalledWith(VERSION.name);
+    expect(sync.calls).toEqual([]);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+    await waitFor(() => expect(sync.calls).toEqual(['open']));
+    expect(readMarkerFailed()).toBeNull();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+  });
+
   it('critère 12 : marqueur réécrit au démarrage (contexte de restauration présent) : mémo effacé, la fenêtre de choix habituelle reprend', async () => {
     writeMarkerFailed({ backup: VERSION.name, code: 'io', at: '2026-10-08T08:00:00.000Z' });
     sync.restore = { options: ['apply', 'keep'] } as never;

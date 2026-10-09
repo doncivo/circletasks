@@ -13,3 +13,18 @@ export async function setAsideRecoveryConflicts(): Promise<RecoveryRetryOutcome>
     return { state: 'failed', code: 'status-unavailable' };
   }
 }
+
+/** Issue d'un nouvel essai du marqueur de restauration (revue I2). */
+export type MarkerRetryOutcome = { readonly marker: 'written' | 'not-configured' } | { readonly marker: 'failed'; readonly code: string };
+
+/** « Réessayer » du marqueur non écrit (commande Rust `backup_restore_marker_write`, PC et iPhone) ; navigateur : `unavailable`. */
+export async function writeRestoreMarker(backup: string): Promise<MarkerRetryOutcome> {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core');
+    const outcome = await invoke<{ marker: string; code: string | null }>('backup_restore_marker_write', { backup });
+    if (outcome.marker === 'written' || outcome.marker === 'not-configured') return { marker: outcome.marker };
+    return { marker: 'failed', code: outcome.code ?? 'unknown' };
+  } catch {
+    return { marker: 'failed', code: 'unavailable' };
+  }
+}

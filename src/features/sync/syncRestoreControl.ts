@@ -31,6 +31,11 @@ export function restoreMarkerFailure(container: AppContainer): string | null {
  * « Reprendre la synchronisation » (P-04-iOS critère 12, choix explicite et confirmé dans Réglages › Synchronisation) : le mémo est
  * effacé, le bandeau retiré, les cycles reprennent (les données synchronisées pourront remplacer la version restaurée).
  */
+/** Marqueur réécrit (revue I2) : même effet que la reprise, la synchro repart et la fenêtre de choix habituelle suit le marqueur. */
+export function markerResolved(container: AppContainer): void {
+  resumeSyncDespiteMarker(container);
+}
+
 export function resumeSyncDespiteMarker(container: AppContainer): void {
   const failure = markerFailures.get(container);
   clearMarkerFailedMemo();

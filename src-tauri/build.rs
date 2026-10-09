@@ -60,7 +60,7 @@ fn main() {
             // Journal technique persistant (I-04, ADR 0014 §2) : PC et iPhone, capabilities logs.json et logs-ios.json.
             "log_append", "log_read", "log_clear",
             // P-04-iOS (ADR 0009 avenant lot F B3) : issue de la récupération au démarrage (iPhone).
-            "backup_startup_status", "backup_set_aside_conflicts",
+            "backup_startup_status", "backup_set_aside_conflicts", "backup_restore_marker_write",
         ])),
     )
     .expect("échec de la configuration de la compilation Tauri");

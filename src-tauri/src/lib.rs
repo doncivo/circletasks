@@ -56,7 +56,7 @@ pub fn run() {
         export::export_save_file, export::reveal_exported_file, import::import_open_file,
         capture::hide_quick_capture, capture::resize_quick_capture, capture::submit_quick_capture, capture::request_capture_context, capture::capture_setup_error,
         ocr::ocr_status, ocr::ocr_recognize,
-        backup::backup_database_before_migration, backup::db_diagnostics, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder,
+        backup::backup_database_before_migration, backup::db_diagnostics, backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, backup::reveal_backups_folder, startup_gate::backup_restore_marker_write,
         calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Mini-fenêtre Focus ouverte par Rust (correctif F-01, ADR 0011 section 2.1).
         focus_window::focus_window_open, focus_window::focus_window_bring_to_front, focus_window::focus_window_close,
@@ -101,7 +101,7 @@ pub fn run() {
         // FILES-IOS-01 (ADR 0009 avenant lot F A3) : même commande et même permission qu'au PC, temporaire remis au plugin ct-files.
         export_ios::export_save_file,
         // P-04-iOS (ADR 0009 avenant lot F B1) : sauvegarde et restauration sur iPhone ; `reveal_backups_folder` reste PC.
-        backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status, startup_gate::backup_set_aside_conflicts,
+        backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status, startup_gate::backup_set_aside_conflicts, startup_gate::backup_restore_marker_write,
         // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
         applog::log_append, applog::log_read, applog::log_clear,
         // CAP-IOS-01 (ADR 0015) : Vision derrière les commandes OCR du PC, dictée sur l'appareil, Réglages iOS. Rust seul appelle les plugins.

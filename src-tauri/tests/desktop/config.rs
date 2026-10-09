@@ -291,7 +291,7 @@ fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on
     assert_eq!(capability["platforms"], serde_json::json!(["windows"]));
     let mut names = permissions_of(text);
     names.sort();
-    assert_eq!(names, ["allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
+    assert_eq!(names, ["allow-backup-restore-marker-write", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
     // Aucune autre capability n'accorde ces commandes (la restauration n'est jamais appelable depuis une fenêtre secondaire).
     for other in other_capabilities("backups.json") {
         // P-04-iOS : la capability de l'iPhone porte quatre de ces commandes (liste exacte vérifiée plus bas).
@@ -862,7 +862,7 @@ fn p04_ios_16_backups_capability_and_handler_are_exact() {
     assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
     let mut granted = permissions_of(text);
     granted.sort();
-    assert_eq!(granted, ["allow-backup-set-aside-conflicts", "allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
+    assert_eq!(granted, ["allow-backup-restore-marker-write", "allow-backup-set-aside-conflicts", "allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
     let ios = ios_handler_commands();
     for command in ["daily_backup", "list_backups", "check_backup", "restore_backup", "backup_startup_status", "backup_set_aside_conflicts"] {
         assert!(ios.contains(command), "{command}");

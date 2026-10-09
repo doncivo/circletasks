@@ -224,3 +224,39 @@ pub async fn backup_set_aside_conflicts(app: AppHandle) -> StartupStatus {
     let _ = register_sql_after_recovery(&app, Some(&dir));
     status_of(app.try_state::<StartupGate>().as_deref())
 }
+
+/// Réponse de `backup_restore_marker_write`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct MarkerWriteOutcome {
+    /// `written`, `not-configured` (aucun dossier de synchro) ou `failed`.
+    pub marker: &'static str,
+    pub code: Option<&'static str>,
+}
+
+/// Revue I2 : nouvel essai du marqueur de restauration à partir du mémo de la WebView (PC après la relance, iPhone après un arrêt) : le nom
+/// est revalidé (sauvegarde connue du dossier), la version de schéma relue dans le fichier, l'heure est celle de l'essai.
+pub fn write_marker_for(config_dir: &Path, backup: &str, now_secs: u64) -> MarkerWriteOutcome {
+    let backups = config_dir.join(crate::backup::BACKUP_DIR);
+    let schema = match crate::backup::check_named_backup(&backups, backup) {
+        Ok(version) => version,
+        Err(error) => return MarkerWriteOutcome { marker: "failed", code: Some(error.code) },
+    };
+    let (marker, code) = write_marker_with_retry(&MarkerToWrite { config_dir: config_dir.to_path_buf(), backup: backup.to_owned(), restored_at_secs: now_secs, schema_version: schema }, std::time::Duration::from_millis(0));
+    MarkerWriteOutcome { marker, code }
+}
+
+/// « Réessayer » du marqueur non écrit (Réglages › Synchronisation, PC et iPhone).
+#[tauri::command]
+pub async fn backup_restore_marker_write(app: AppHandle, backup: String) -> MarkerWriteOutcome {
+    let Ok(dir) = app.path().app_config_dir() else { return MarkerWriteOutcome { marker: "failed", code: Some("no-data-dir") } };
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+    let outcome = tauri::async_runtime::spawn_blocking(move || write_marker_for(&dir, &backup, now)).await.unwrap_or(MarkerWriteOutcome { marker: "failed", code: Some("io") });
+    if outcome.marker != "failed" {
+        if let Some(pending) = app.try_state::<PendingRestoreMarker>() {
+            if let Ok(mut slot) = pending.0.lock() {
+                *slot = None;
+            }
+        }
+    }
+    outcome
+}
