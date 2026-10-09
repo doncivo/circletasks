@@ -5,6 +5,12 @@ import { expect, test, type Page } from '@playwright/test';
  * Le premier chargement de la page simule l'ouverture (prise `__ctDbOpen` du développement) ; « Réessayer » recharge la page, dont
  * le second chargement ouvre la vraie base (le drapeau est gardé dans sessionStorage, qui survit au rechargement).
  */
+/**
+ * Budget de la vraie ouverture après « Réessayer » : c'est la première fois que la page charge SQLite Wasm (le premier chargement
+ * simulé ne l'a pas importé), ce qui dépasse 5 s sur un exécuteur CI froid. Borne d'attente d'un chargement réel, pas un correctif.
+ */
+const READY_BUDGET_MS = 30_000;
+
 async function simulateFirstOpen(page: Page, kind: 'never' | 'reject'): Promise<void> {
   await page.addInitScript((mode) => {
     if (sessionStorage.getItem('ct-test-open-simulated')) return;
@@ -36,8 +42,8 @@ test.describe('0.2.2 — ouverture de la base en échec ou sans réponse', () =>
     const retry = page.getByRole('button', { name: 'Réessayer' });
     const box = await retry.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-    await retry.click();
-    await expect(page.locator('.app-shell')).toHaveAttribute('data-db-status', 'ready');
+    await Promise.all([page.waitForEvent('load'), retry.click()]);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-db-status', 'ready', { timeout: READY_BUDGET_MS });
     await expect(detail).toBeHidden();
   });
 
@@ -48,8 +54,8 @@ test.describe('0.2.2 — ouverture de la base en échec ou sans réponse', () =>
     await expect(detail).toContainText('database is locked');
     await expectNoHorizontalScroll(page);
 
-    await page.getByRole('button', { name: 'Réessayer' }).click();
-    await expect(page.locator('.app-shell')).toHaveAttribute('data-db-status', 'ready');
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Réessayer' }).click()]);
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-db-status', 'ready', { timeout: READY_BUDGET_MS });
     await expect(detail).toBeHidden();
   });
 });
