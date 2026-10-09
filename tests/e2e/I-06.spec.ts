@@ -10,7 +10,7 @@ import { APP_READY_TIMEOUT_MS } from './helpers/app';
  * mise à jour réussie, migration en échec, base plus récente que l'app.
  */
 
-type Mode = 'update' | 'fail' | 'newer';
+type Mode = 'update' | 'fail' | 'newer' | 'backup' | 'restore-fails';
 
 const IPHONE_UA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1';
 const TITLE = 'Tâche créée avant la mise à jour';
@@ -48,7 +48,7 @@ async function installAtN(page: Page, mode: Mode): Promise<void> {
           await migrator.migrate(db, migrations);
           await db.execute("INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (99, 'future', '00000000', '2026-10-20T08:00:00.000Z')");
         }
-        if (mode !== 'fail') return db;
+        if (mode !== 'fail' && mode !== 'restore-fails') return db;
         // Migration volontairement en échec : toute instruction de la dernière migration (colonnes Rappels Apple) est refusée.
         const refuse = (sql: string): boolean => sql.includes('apple_list_id');
         return {
@@ -60,7 +60,11 @@ async function installAtN(page: Page, mode: Mode): Promise<void> {
           close: () => db.close(),
         };
       };
-      if (mode === 'fail') {
+      if (mode === 'backup') {
+        // QA : disque plein, la sauvegarde d'avant la mise à jour échoue (aucune migration lancée).
+        g['__ctMigrationBackup'] = { backup: () => Promise.reject(new Error('disque plein')) };
+      }
+      if (mode === 'fail' || mode === 'restore-fails') {
         const pad = (n: number): string => String(n).padStart(4, '0');
         g['__ctMigrationBackup'] = {
           backup: (request: { fromVersion: number; toVersion: number; stamp: string }) =>
@@ -73,6 +77,7 @@ async function installAtN(page: Page, mode: Mode): Promise<void> {
           createDaily: () => Promise.resolve({ created: false }),
           restore: (request: { name: string }) => {
             (g['__ctRestored'] as string[]).push(request.name);
+            if (mode === 'restore-fails') return Promise.reject(new Error('restauration impossible'));
             return Promise.resolve({ marker: 'not-configured', markerCode: null });
           },
           restart: () => new Promise<void>(() => undefined),
@@ -119,8 +124,11 @@ test.describe('I-06 — mise à jour N vers N+1 (iPhone, base préremplie, versi
     await expect(dialog.getByRole('button', { name: 'Annuler' })).toBeFocused();
     await dialog.getByRole('button', { name: 'Restaurer', exact: true }).click();
     await expect(page.getByText('Restauration en cours…')).toBeVisible();
-    const restored = await page.evaluate(() => (globalThis as { __ctRestored?: string[] }).__ctRestored ?? []);
-    expect(restored).toHaveLength(1);
+    // QA : « Restauration en cours… » s'affiche avant que le module de restauration (chargé à la demande) appelle le service : on attend
+    // l'appel (condition), on ne lit pas le compteur au hasard (échec observé en suite parallèle).
+    const readRestored = () => page.evaluate(() => (globalThis as { __ctRestored?: string[] }).__ctRestored ?? []);
+    await expect.poll(async () => (await readRestored()).length).toBe(1);
+    const restored = await readRestored();
     expect(restored[0]).toMatch(/^circletasks-pre-migration-v0017-to-v0018-\d{8}T\d{6}Z\.db$/);
   });
 
@@ -134,5 +142,35 @@ test.describe('I-06 — mise à jour N vers N+1 (iPhone, base préremplie, versi
     await expect(page.getByText(/inconnue de cette version/)).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Copier le détail' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Restaurer la sauvegarde d’avant la mise à jour' })).toHaveCount(0);
+  });
+
+  // QA I-06 : états d'échec durables de la mise à jour, chacun visible avec son action (règle d'Ali), jamais de page blanche.
+  test('QA sauvegarde impossible (disque plein) : message d’espace disque, base non migrée, Réessayer et Copier le détail, pas de restauration', async ({ page }) => {
+    await installAtN(page, 'backup');
+    await page.goto('/');
+    await expect(page.getByRole('alert').first()).toContainText('la sauvegarde de sécurité a échoué', { timeout: APP_READY_TIMEOUT_MS });
+    await expect(page.getByRole('alert').first()).toContainText('Libérez de l’espace disque');
+    await expect(page.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Copier le détail' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Restaurer la sauvegarde d’avant la mise à jour' })).toHaveCount(0);
+    await expect(page.getByTestId('db-failure-detail')).toContainText('Version de l’app : 0.3.0');
+    await expect(page.locator('.app-shell')).not.toHaveAttribute('data-db-status', 'ready');
+  });
+
+  test('QA restauration en échec : raison et code affichés, l’écran garde ses actions, la restauration peut être relancée', async ({ page }) => {
+    await installAtN(page, 'restore-fails');
+    await page.goto('/');
+    const restore = page.getByRole('button', { name: 'Restaurer la sauvegarde d’avant la mise à jour' });
+    await expect(restore).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
+    for (const attempt of [1, 2]) {
+      await restore.click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Restaurer', exact: true }).click();
+      await expect(page.getByText('La restauration n’a pas abouti.')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Réessayer' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Copier le détail' })).toBeVisible();
+      await expect(restore).toBeEnabled();
+      const calls = await page.evaluate(() => (globalThis as { __ctRestored?: string[] }).__ctRestored ?? []);
+      expect(calls).toHaveLength(attempt);
+    }
   });
 });
