@@ -71,7 +71,7 @@ describe('relance pendant l’affichage du QR (critère 9, QA)', () => {
     const failing: SyncPlatform = { ...platform, key: { ...platform.key, openPairing: () => Promise.reject(new SyncPlatformError('rate-limited')) } };
     const container = await make(failing);
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: SHOW }));
+    fireEvent.click(await screen.findByRole('button', { name: SHOW }));
     await screen.findByTestId('sync-pairing-notice');
     expect(arrivalWatchActive(container)).toBe(false);
     await advance(30_000);
@@ -98,7 +98,7 @@ describe('relance pendant l’affichage du QR (critère 9, QA)', () => {
     renderIn(container, <SyncDetailsPairing />);
     expect(desktop.syncPairedListeners).toBe(1);
     const opened = pairingSettled(container);
-    fireEvent.click(screen.getByRole('button', { name: SHOW }));
+    fireEvent.click(await screen.findByRole('button', { name: SHOW }));
     await act(async () => {
       await opened;
     });

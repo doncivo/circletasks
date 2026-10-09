@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import type { DeviceId } from '../../domain/types';
 import { t, type PlainMessageKey } from '../../i18n';
 import type { SyncDeviceStatus, SyncResetStatus } from '../../platform/sync/types';
@@ -47,7 +48,9 @@ export function SyncDetailsReset() {
   const phase = status.phase;
   const stopped = interrupted(reset);
   const required = phase === 'reset-required' || reset?.role === 'required' || (reset?.step === 'superseded' && !stopped);
-  const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten';
+  // QA D2 : dossier à choisir de nouveau (not-bound, unsafe-folder, folder-too-large…) : la cause est le dossier, jamais la clé : pas de réinitialisation.
+  const folderLost = phase === 'error' && syncErrorFamily(status.errorCode ?? null) === 'folder';
+  const configured = phase !== 'not-configured' && phase !== 'needs-pairing' && phase !== 'key-mismatch' && phase !== 'forgotten' && !folderLost;
   const running = reset !== null && IN_PROGRESS.has(reset.step);
   // Confirmation native requise : masqué tant qu'elle n'existe pas sur cet appareil (ADR 0011 §22 point 7).
   // Y-IOS-02 (point de contrôle d'Ali) : jamais proposé sans clé lue sur cet appareil (une réinitialisation par un appareil sans clé

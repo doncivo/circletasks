@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { t, type PlainMessageKey } from '../../i18n';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -21,6 +22,7 @@ type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { readonly showOnly?: boolean; readonly withProgress?: boolean } = {}) {
   const container = useAppContainer();
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
+  const errorCode = useFeatureStore(syncStore, (s) => s.status.errorCode ?? null);
   const [failure, setFailure] = useState<PairingFailure | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,6 +57,9 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' || key === 'absent' ? 'import' : 'show';
   // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
   if (showOnly && mode === 'import') return null;
+  // QA du parcours d'association : le QR (« Associer l'iPhone ») seulement quand cet appareil a une clé lisible et sert un dossier utilisable :
+  // jamais pour un appareil oublié (D1, « Associer de nouveau » seul), un dossier à choisir de nouveau (D2) ou un coffre illisible (D3).
+  if (mode === 'show' && (key !== 'present' || phase === 'forgotten' || (phase === 'error' && syncErrorFamily(errorCode) === 'folder'))) return null;
   // iPhone (ADR 0011 §23 point 7) : jamais le QR ni la fenêtre `pairing` ; « Associer au PC » quand une clé est à recevoir.
   if (container.platform.os === 'ios') {
     const platform = container.syncPlatform;
