@@ -1,7 +1,8 @@
 import { Download, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { migrations } from '../../../db/migrations';
-import { getLocale, t } from '../../../i18n';
+import { t } from '../../../i18n';
+import { formatDayMonth, formatTime } from '../../../i18n/format';
 import { tLogs } from '../../../i18n/logsText';
 import { categoryOf, type LogCategory, type LogEntry, type LogJournal } from '../../../platform/logs';
 import { Button, ConfirmDialog, Icon, useLayout } from '../../../ui';
@@ -25,7 +26,10 @@ const FILTERS: readonly { readonly id: Filter; readonly label: 'filterAll' | 'fi
 function localTime(at: string): string {
   const date = new Date(at);
   if (Number.isNaN(date.getTime())) return at;
-  return new Intl.DateTimeFormat(getLocale() === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(date);
+  const pad = (value: number): string => String(value).padStart(2, '0');
+  // Heure locale par le formateur unique (P-03 : 24 h ou 12 h selon le réglage), jour et mois de la langue courante.
+  const day = `${String(date.getFullYear())}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return `${formatDayMonth(day)} ${formatTime(`${pad(date.getHours())}:${pad(date.getMinutes())}`)}`;
 }
 
 export interface LogsScreenProps {

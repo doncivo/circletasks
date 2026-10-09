@@ -69,7 +69,8 @@ describe('I-04 : écran Logs', () => {
     await waitFor(() => expect(rows()).toHaveLength(5));
     expect(rows()[0]).toContain('sync-rust pin-failed');
     expect(rows()[4]).toContain('sync sync-now {"reason":"open"}');
-    expect(rows()[0]).toMatch(/08\/10 \d{2}:45:00/);
+    // Heure locale par le formateur unique (P-03, 24 h par défaut) : « 8 oct. HH:45 ».
+    expect(rows()[0]).toMatch(/^8 oct\. \d{2}:45 /);
     const filter = (name: string) => screen.getByRole('button', { name });
     expect(filter('Tout')).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(filter('Synchro'));
