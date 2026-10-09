@@ -99,9 +99,22 @@
     padding-right: env(safe-area-inset-right, 0px);
   }
 
+  /*
+   * Titre « Synchronisation » sur UNE ligne (défaut revu sur l'iPhone en 0.2.3). L'ancienne règle (clamp(2rem, 9.5vw, 52px) et
+   * overflow-wrap: anywhere) se calculait sur la largeur de la FENÊTRE alors que le titre n'a que la colonne de contenu (fenêtre moins
+   * les onglets de 64 px et 2 × 20 px de marge : 336 px sur 440) : 41,8 px sur 440 pt, le mot (348 px) ne tenait pas et passait à la
+   * ligne en pleine lettre, sans débordement, d'où un test resté vert. Maintenant : taille de la maquette Synchro.html (38 px), bornée
+   * par la largeur réelle de la colonne (unités de conteneur : le mot mesure 8,33 em en Fraunces 700, 11,5 cqi lui laisse 4 % de
+   * marge) pour 430 et 375 pt, sans retour à la ligne.
+   */
+  .ct-sync {
+    container-type: inline-size;
+  }
+
   .ct-sync .ct-settings__title {
-    font-size: clamp(2rem, 9.5vw, var(--ct-font-size-display-mobile));
-    overflow-wrap: anywhere;
+    font-size: min(2.375rem, 11.5cqi);
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .ct-sync .ct-settings__row,

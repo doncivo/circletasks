@@ -291,6 +291,58 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  # Playwright WebKit (moteur de la WebView iOS) : contrôles de mise en page de l'iPhone (titres sur une ligne, IOS-titres) sur le
+  # build de production avec accroches de test (playwright.config.ts, CT_E2E_WEBKIT=1). ADR 0002 : WebKit ajouté après l'écart de 0.2.3.
+  e2e-webkit:
+    name: e2e iphone-webkit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CT_E2E_WEBKIT: "1"
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Cache de WebKit (Playwright)
+        id: pw-cache
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-webkit-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - name: Installer WebKit
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps webkit
+      - name: Dépendances système de WebKit
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps webkit
+      - name: Playwright projet iphone-webkit
+        run: npx playwright test --project=iphone-webkit --reporter=github,html,json
+      - name: Comptage
+        if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/e2e-iphone-webkit.json" "e2e iphone-webkit"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: playwright-iphone-webkit
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: count-e2e-iphone-webkit
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
   # Mesures de performance (budgets en ms, PRD section 8) : un job à part, sans autre charge sur la machine.
   # Les étapes s'enchaînent même après un échec pour que toutes les mesures soient visibles.
   perf:
@@ -356,7 +408,7 @@ jobs:
   suite-verte:
     name: suite verte
     if: always()
-    needs: [qualite, vitest-node, vitest-dom, vitest-couverture, cargo-test, audit-rust, e2e, perf]
+    needs: [qualite, vitest-node, vitest-dom, vitest-couverture, cargo-test, audit-rust, e2e, e2e-webkit, perf]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

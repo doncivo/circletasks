@@ -28,14 +28,31 @@ beforeEach(async () => {
 afterEach(() => h.close());
 
 describe('calendar_account.username (Y-02 critère 10)', () => {
-  it('ligne 122 : bandeau « agenda déconnecté » rapproché par identifiant de compte, nommé « Compte iCloud » sans identifiant local', async () => {
+  it('compte reçu d’un autre appareil (aucune référence locale) : « connecté ailleurs », AUCUN bandeau « déconnecté », aucune lecture', async () => {
     await receivedAccount(RECEIVED);
     await state().load();
-    await vi.waitFor(() => expect(state().states[RECEIVED]?.kind).toBe('reconnect-required'));
-    const banner = useAppStatusStore.getState().sources.calendarDisconnected;
-    expect(banner?.detail).toBe('Compte iCloud');
-    banner?.onAction?.();
+    await vi.waitFor(() => expect(state().states[RECEIVED]?.kind).toBe('elsewhere'));
+    expect(useAppStatusStore.getState().sources.calendarDisconnected).toBeFalsy();
+    expect(useAppStatusStore.getState().sources.offline).toBeFalsy();
+    expect(await state().refresh(RECEIVED, 'open')).toBe('skipped');
+    expect(await state().refresh(RECEIVED, 'manual')).toBe('skipped');
+    // « Connecter ici » : formulaire iCloud du compte reçu, identifiant à saisir.
+    state().requestReconnect(RECEIVED);
     expect(state().icloudForm).toEqual({ accountId: RECEIVED, username: '' });
+  });
+
+  it('ligne 122 : compte de CET appareil dont le secret a disparu : bandeau « déconnecté » rapproché par identifiant de compte', async () => {
+    const outcome = await state().connectIcloud(CALDAV_USER, CALDAV_APP_PASSWORD);
+    if (!outcome.ok) throw new Error(outcome.failure);
+    const account = await h.container.data.repos.calendarAccounts.getById(outcome.accountId);
+    if (!account) throw new Error('compte absent');
+    await h.vault.delete(account.tokenRef);
+    await state().load();
+    await vi.waitFor(() => expect(state().states[outcome.accountId]?.kind).toBe('reconnect-required'));
+    const banner = useAppStatusStore.getState().sources.calendarDisconnected;
+    expect(banner?.detail).toBe(CALDAV_USER);
+    banner?.onAction?.();
+    expect(state().icloudForm).toEqual({ accountId: outcome.accountId, username: CALDAV_USER });
   });
 
   it('ligne 253 : doublon contrôlé sur username ; un compte reçu sans username est complété au lieu d’être recréé', async () => {

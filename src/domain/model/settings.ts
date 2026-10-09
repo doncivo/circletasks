@@ -109,6 +109,11 @@ export interface SettingsValues {
    * premier lancement d'une nouvelle version (replanification complète des rappels, journal `app-updated`). Locale, jamais synchronisée.
    */
   'app.lastLaunchedVersion': string | null;
+  /**
+   * K-01 (revue PR #25) : RÉFÉRENCES du coffre (jamais les secrets) d'une connexion d'agenda abandonnée dont l'effacement a échoué ;
+   * relues au chargement (« Réessayer l'effacement » survit à un redémarrage). Valeur BRUTE lue par `parseOrphanSecrets` ; locale.
+   */
+  'calendars.orphanSecrets': unknown;
 }
 
 export type SettingKey = keyof SettingsValues;
@@ -159,6 +164,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'security.appLock': { scope: 'local', defaultValue: false },
   'notifications.signing': { scope: 'local', defaultValue: null },
   'app.lastLaunchedVersion': { scope: 'local', defaultValue: null },
+  'calendars.orphanSecrets': { scope: 'local', defaultValue: null },
 };
 
 /** Valeur par défaut d'un réglage. */

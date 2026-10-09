@@ -1,11 +1,11 @@
 import { ArrowLeft, ArrowRight } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { addDays } from '../../domain/localDate';
 import type { LocalDate } from '../../domain/types';
 import { isoWeekOf } from '../../domain/week';
 import { t } from '../../i18n';
 import { formatWeekRange } from '../../i18n/format';
-import { Icon, type Layout } from '../../ui';
+import { Icon, useFitText, type Layout } from '../../ui';
 
 export interface WeekHeaderProps {
   readonly weekStart: LocalDate;
@@ -33,6 +33,10 @@ export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, on
   const caption = layout === 'pc' ? t('week.title', { number: week }) : t('week.titleYear', { number: week, year });
   const range = formatWeekRange(weekStart, addDays(weekStart, 6), layout === 'pc' && !shortRange ? 'long' : 'short');
   const size = layout === 'pc' ? 22 : 24;
+  const rowRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // Plage sur une ligne, réduite à la place laissée par les flèches (« 28 sept. – 4 oct. » sur iPhone ; IOS-titres).
+  useFitText(titleRef, rowRef, range);
   const previous = (
     <button type="button" className="ct-week__iconButton" aria-label={t('week.previous')} onClick={onPrevious}>
       <Icon icon={ArrowLeft} size={size} />
@@ -51,10 +55,12 @@ export function WeekHeader({ weekStart, layout, pills, isCurrent, onPrevious, on
   );
   return (
     <>
-      <div className="ct-week__headerRow" data-layout={layout}>
+      <div className="ct-week__headerRow" data-layout={layout} ref={rowRef}>
         <div className="ct-week__heading">
           <span className="ct-week__caption">{caption}</span>
-          <h1 className="ct-week__range">{range}</h1>
+          <h1 className="ct-week__range" ref={titleRef}>
+            {range}
+          </h1>
         </div>
         {layout === 'pc' ? (
           <div className="ct-week__tools">

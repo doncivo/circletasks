@@ -20,6 +20,7 @@ import './CalendarsScreen.css';
 function stateLabelKey(state: CalendarAccountState | undefined): PlainMessageKey {
   if (!state || state.kind === 'connected') return 'calendars.stateConnected';
   if (state.kind === 'reconnect-required') return 'calendars.stateReconnect';
+  if (state.kind === 'elsewhere') return 'calendars.stateElsewhere';
   if (state.error === 'unavailable') return 'calendars.stateUnavailable';
   return state.error === 'rate-limited' ? 'calendars.stateRateLimited' : 'calendars.stateOffline';
 }
@@ -39,6 +40,8 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
   const spaces = useAppStore((s) => s.spaces);
   const providerName = t(account.provider === 'google' ? 'calendars.providerGoogle' : 'calendars.providerIcloud');
   const reconnect = state?.kind === 'reconnect-required';
+  // Compte connecté sur un autre appareil (secret absent ici par construction) : ni « Mis à jour », ni « Actualiser » ; « Connecter ici ».
+  const elsewhere = state?.kind === 'elsewhere';
   const spaceOptions = spaces.map((space) => ({ value: space.id, label: space.name }));
   const name = accountDisplayName(account);
   const update = (id: string, patch: Partial<CalendarRef>): void => onChange(account.calendars.map((calendar) => (calendar.id === id ? { ...calendar, ...patch } : calendar)));
@@ -53,11 +56,16 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
           {t(stateLabelKey(state))}
         </span>
       </div>
-      <span className="ct-calendars__updated">{formatUpdated(state?.lastSuccessAt ?? null, nowMs)}</span>
+      {elsewhere ? <span className="ct-calendars__updated">{t('calendars.elsewhereHint')}</span> : <span className="ct-calendars__updated">{formatUpdated(state?.lastSuccessAt ?? null, nowMs)}</span>}
       <div className="ct-calendars__actions">
         {reconnect && (
           <Button ariaLabel={t('calendars.reconnectLabel', { label: name })} onClick={onReconnect}>
             {t('calendars.reconnect')}
+          </Button>
+        )}
+        {elsewhere && (
+          <Button variant="secondary" ariaLabel={t('calendars.connectHereLabel', { label: name })} onClick={onReconnect}>
+            {t('calendars.connectHere')}
           </Button>
         )}
         {state?.kind === 'error' && state.error === 'unavailable' && (
@@ -65,9 +73,11 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
             {t('calendars.relaunch')}
           </Button>
         )}
-        <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: name })} onClick={onRefresh}>
-          {refreshing ? t('calendars.refreshing') : t('calendars.refresh')}
-        </Button>
+        {!elsewhere && (
+          <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: name })} onClick={onRefresh}>
+            {refreshing ? t('calendars.refreshing') : t('calendars.refresh')}
+          </Button>
+        )}
         <Button variant="secondary" ariaLabel={t('calendars.removeLabel', { label: name })} onClick={onRemove}>
           {t('calendars.remove')}
         </Button>
@@ -117,6 +127,7 @@ export function CalendarsScreen() {
   const messageKey = useFeatureStore(calendarsStore, (s) => s.messageKey);
   const googleFailure = useFeatureStore(calendarsStore, (s) => s.googleFailure);
   const icloudForm = useFeatureStore(calendarsStore, (s) => s.icloudForm);
+  const orphanSecrets = useFeatureStore(calendarsStore, (s) => s.orphanSecrets);
   const store = calendarsStore.get(container);
   const nowMs = useMinuteClock(container.clock);
   const [removing, setRemoving] = useState<CalendarAccount | null>(null);
@@ -153,6 +164,14 @@ export function CalendarsScreen() {
               onClick={() => void (googleFailure.accountId === null ? store.getState().connectGoogle() : store.getState().reconnectGoogle(googleFailure.accountId))}
             >
               {t('calendars.errorWebAuthRetry')}
+            </Button>
+          </div>
+        )}
+        {orphanSecrets.length > 0 && (
+          <div className="ct-calendars__error ct-calendars__webAuthFailure" role="alert" data-testid="calendars-orphan-secret">
+            <p>{t('calendars.errorOrphanSecret')}</p>
+            <Button variant="secondary" onClick={() => void store.getState().retryForgetSecrets()}>
+              {t('calendars.retryForgetSecret')}
             </Button>
           </div>
         )}

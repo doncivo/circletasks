@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CALDAV_APP_PASSWORD, CALDAV_USER, GOOGLE_ACCOUNT } from '../../../tests/sim';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -104,6 +104,60 @@ describe('écran Agendas (K-01 à K-03)', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Reconnecter' })[0] as HTMLElement);
     expect(await within(card).findByText('Connecté')).toBeInTheDocument();
     expect(screen.queryByText(`Agenda ${GOOGLE_ACCOUNT} déconnecté`)).not.toBeInTheDocument();
+  });
+
+  it('iPhone : compte iCloud reçu du PC sans secret ici : « Connecté ailleurs », aucun bandeau « déconnecté », « Connecter ici » ouvre le formulaire', async () => {
+    const id = 'a7000000-0000-4000-8000-0000000000e1' as Parameters<typeof h.container.data.repos.calendarAccounts.create>[0]['id'];
+    await h.container.data.repos.calendarAccounts.create({ id, provider: 'icloud', label: '', tokenRef: '', calendars: [] });
+    renderScreen();
+    const card = await screen.findByRole('region', { name: 'iCloud · Compte iCloud' });
+    expect(await within(card).findByText('Connecté ailleurs')).toBeInTheDocument();
+    expect(within(card).getByText(/^Connecté sur un autre appareil/)).toBeInTheDocument();
+    expect(within(card).queryByText('Déconnecté')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /^Actualiser/ })).not.toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /^Reconnecter/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/déconnecté$/)).not.toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: 'Connecter Compte iCloud sur cet appareil' }));
+    expect(calendarsStore.get(h.container).getState().icloudForm).toEqual({ accountId: id, username: '' });
+  });
+
+  it('compte Google reçu du PC : « Connecter ici » connecte CET appareil (pas d’impasse), annulation dite puis nouvel essai', async () => {
+    const id = 'a7000000-0000-4000-8000-0000000000e2' as Parameters<typeof h.container.data.repos.calendarAccounts.create>[0]['id'];
+    await h.container.data.repos.calendarAccounts.create({ id, provider: 'google', label: GOOGLE_ACCOUNT, tokenRef: '', calendars: [] });
+    renderScreen();
+    const card = await screen.findByRole('region', { name: `Google Agenda · ${GOOGLE_ACCOUNT}` });
+    expect(await within(card).findByText('Connecté ailleurs')).toBeInTheDocument();
+    h.google.denyNextConsent();
+    fireEvent.click(within(card).getByRole('button', { name: `Connecter ${GOOGLE_ACCOUNT} sur cet appareil` }));
+    expect(await screen.findByText('Connexion annulée')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: `Connecter ${GOOGLE_ACCOUNT} sur cet appareil` }));
+    expect(await within(card).findByText('Connecté')).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /sur cet appareil$/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(card).getByText(/^Mis à jour/)).toBeInTheDocument());
+  });
+
+  it('jeton d’une connexion abandonnée resté au coffre : message dédié et « Réessayer l’effacement » qui l’efface', async () => {
+    renderScreen();
+    await addGoogle();
+    await waitFor(() => expect(calendarsStore.get(h.container).getState().refreshing).toEqual([]));
+    const revoke = vi.spyOn(h.container.calendars.oauth, 'revokeGoogle').mockRejectedValue(new Error('coffre indisponible'));
+    fireEvent.click(screen.getByRole('button', { name: 'Google' }));
+    const alert = await screen.findByTestId('calendars-orphan-secret');
+    expect(within(alert).getByText(/l’effacement a échoué$/)).toBeInTheDocument();
+    revoke.mockRestore();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer l’effacement' }));
+    await waitFor(() => expect(screen.queryByTestId('calendars-orphan-secret')).not.toBeInTheDocument());
+  });
+
+  it('après un redémarrage : jeton orphelin relu du réglage local et encore au coffre, message et « Réessayer l’effacement » affichés', async () => {
+    const ref = 'circletasks.calendar.icloud.a7000000-0000-4000-8000-0000000000e9';
+    await h.container.calendars.vault.set(ref, 'mot-de-passe-de-test');
+    await h.container.data.repos.settings.set('calendars.orphanSecrets', [{ provider: 'icloud', tokenRef: ref }]);
+    renderScreen();
+    const alert = await screen.findByTestId('calendars-orphan-secret');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer l’effacement' }));
+    await waitFor(() => expect(screen.queryByTestId('calendars-orphan-secret')).not.toBeInTheDocument());
+    expect(await h.container.calendars.vault.has(ref)).toBe(false);
   });
 
   it('supprimer un compte demande confirmation, puis efface le jeton, le compte et ses événements (critère 8)', async () => {

@@ -674,3 +674,21 @@ button.ct-week-event:focus-visible {
 .ct-week-item[data-layout='mobile'][data-kind='checklist'] > svg {
   margin-top: 0;
 }
+
+/*
+ * Plage sur UNE ligne (IOS-titres) : « 28 sept. – 4 oct. » se réduit (useFitText) à la place laissée par les flèches (iPhone) ou les
+ * outils (PC), sans couper ni rogner ; flèches et outils gardent leur taille.
+ */
+.ct-week__range {
+  white-space: nowrap;
+}
+
+.ct-week__arrows,
+.ct-week__tools {
+  flex-shrink: 0;
+}
+
+/* Texte très agrandi : au plancher de taille (useFitText, data-fit="floor"), les flèches passent sous la plage. */
+.ct-week__headerRow:has(.ct-week__range[data-fit='floor']) {
+  flex-wrap: wrap;
+}
