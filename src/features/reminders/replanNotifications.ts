@@ -40,7 +40,7 @@ export async function replanNotifications(container: AppContainer, trigger: Repl
     await status.load();
     // N-03 : les actions déjà reçues (« Fait », « +15 min ») sont appliquées AVANT tout contrôle d'autorisation ou de disponibilité.
     // Chargé à la demande : le PC n'a aucune source d'actions (bundle de départ).
-    if (container.notificationActions !== null) await (await import('./notificationActions')).runActionsStep(container);
+    if (container.notificationActions !== null) await (await import('./notificationActions')).runActionsStep(container, trigger);
     return await pass(container, trigger, status);
   } catch (error) {
     // Jamais d'avalement : l'exception inattendue devient un échec visible.

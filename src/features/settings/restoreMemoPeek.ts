@@ -9,6 +9,13 @@ import { useNoticeStore } from '../app/notice';
 export const RESTORE_RESULT_KEY = 'ct.restore.result';
 export const MARKER_FAILED_KEY = 'ct.restore.markerFailed';
 
+let restored = false;
+
+/** Une restauration a abouti juste avant ce lancement (P-04-iOS critère 14 : la file N-03 est alors nettoyée des cibles inconnues). */
+export function restoredThisLaunch(): boolean {
+  return restored;
+}
+
 function item(key: string): string | null {
   try {
     return globalThis.localStorage?.getItem(key) ?? null;
@@ -57,6 +64,7 @@ export function announcePendingRestore(): void {
     memo = { outcome: 'failed', reason: 'unreadable' };
   }
   if (memo.outcome === 'done') {
+    restored = true;
     logFailure('backup', 'restore-done');
     useNoticeStore.getState().show(t('backup.resultDone'));
     return;
