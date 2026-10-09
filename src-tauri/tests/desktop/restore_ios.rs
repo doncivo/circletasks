@@ -746,8 +746,15 @@ fn p04_ios_marker_with_an_unreadable_database_in_place_stays_provisional_and_blo
     fs::rename(&db, &aside).unwrap();
     fs::create_dir(&db).unwrap();
     assert!(circletasks_lib::backup::database_token(&db).is_err());
-    // La récupération signale elle-même l'anomalie (fichier anormal) ou passe : dans les deux cas le marqueur est intact.
-    let _ = recover_and_settle(dir.path());
+    // Démarrage : un dossier à la place de la base n'est ni un `.restore-old` ni un `.restoring` -> la récupération rend `Nothing`, puis le
+    // règlement tombe sur la base illisible : rien n'est décidé et le journal le consigne.
+    let _log_dir = crate::support::applog_dir_lock();
+    let logs = dir.path().join("logs");
+    circletasks_lib::applog::init(logs.clone());
+    assert_eq!(recover_and_settle(dir.path()).expect("la récupération elle-même aboutit"), circletasks_lib::backup::Recovery::Nothing);
+    let logged = circletasks_lib::applog::read_entries(&logs, 500).unwrap();
+    assert!(logged.iter().any(|e| e.scope == "backup-recovery" && e.code == "provisional-marker-db-unreadable"), "{logged:?}");
+    assert!(!logged.iter().any(|e| e.code == "provisional-marker-settled"), "ni confirmé ni annulé");
     assert!(circletasks_lib::sync::marker::is_provisional(dir.path()), "ni annulé ni confirmé");
     let refused = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080001Z", 1_791_446_401, &|_| Ok(())).unwrap_err();
     assert_eq!(refused.code, "restore-unconfirmed");
