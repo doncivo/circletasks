@@ -163,6 +163,23 @@ describe('jeton refusé ou révoqué (K-01 critère 7, A-09 critère 10)', () =>
   });
 });
 
+describe('connexion abandonnée dont le jeton ne s’efface pas (revue PR #25, point 2)', () => {
+  it('doublon à la connexion Google : jeton gardé signalé, puis effacé par « Réessayer l’effacement »', async () => {
+    await connected();
+    const revoke = vi.spyOn(h.container.calendars.oauth, 'revokeGoogle').mockRejectedValue(new Error('coffre indisponible'));
+    const outcome = await state().connectGoogle();
+    expect(outcome).toEqual({ ok: false, failure: 'duplicate' });
+    expect(state().orphanSecrets).toHaveLength(1);
+    const orphan = state().orphanSecrets[0];
+    expect(orphan?.provider).toBe('google');
+    expect(await h.container.calendars.vault.has(orphan?.tokenRef ?? '')).toBe(true);
+    revoke.mockRestore();
+    await state().retryForgetSecrets();
+    expect(state().orphanSecrets).toEqual([]);
+    expect(await h.container.calendars.vault.has(orphan?.tokenRef ?? '')).toBe(false);
+  });
+});
+
 describe('« Connecter ici » : compte Google reçu du PC, jamais connecté sur cet appareil (K-01 D1)', () => {
   const RECEIVED = 'a0000000-0000-4000-8000-0000000000c1' as CalendarAccountId;
   const FRESH_REF = `circletasks.calendar.google.${RECEIVED}`;
@@ -222,6 +239,43 @@ describe('« Connecter ici » : compte Google reçu du PC, jamais connecté sur 
     expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: true, accountId: RECEIVED });
     expect(state().googleFailure).toBeNull();
     await idle();
+  });
+
+  it('ligne sans libellé et compte sans agenda (agenda principal introuvable) : refusé (« failed »), rien rattaché, jeton effacé', async () => {
+    await h.close();
+    h = await setupCalendarHarness('1', { google: { calendars: [] } });
+    await received('');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'failed' });
+    expect(await localRef()).toBe('');
+    expect(await h.container.calendars.vault.has(FRESH_REF)).toBe(false);
+    expect(state().states[RECEIVED]).toMatchObject({ kind: 'elsewhere' });
+  });
+
+  it('même compte Google déjà connecté ici sur une autre ligne : « duplicate » sans connexion ni jeton', async () => {
+    const own = await connected();
+    expect(state().accounts.find((account) => account.id === own)?.label).toBe(GOOGLE_ACCOUNT);
+    await received();
+    const authorize = vi.spyOn(h.container.calendars.oauth, 'authorizeGoogle');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'duplicate' });
+    expect(state().messageKey).toBe('calendars.errorDuplicate');
+    expect(authorize).not.toHaveBeenCalled();
+    expect(await localRef()).toBe('');
+    expect(state().connecting).toBe(false);
+  });
+
+  it('jeton refusé qui ne s’efface pas : signalé (orphanSecrets), « Réessayer l’effacement » l’efface ensuite', async () => {
+    await received('autre@example.com');
+    const revoke = vi.spyOn(h.container.calendars.oauth, 'revokeGoogle').mockRejectedValue(new Error('coffre indisponible'));
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'google-other-account' });
+    expect(state().orphanSecrets).toEqual([{ provider: 'google', tokenRef: FRESH_REF }]);
+    expect(await h.container.calendars.vault.has(FRESH_REF)).toBe(true);
+    // Nouvel échec : toujours signalé.
+    await state().retryForgetSecrets();
+    expect(state().orphanSecrets).toHaveLength(1);
+    revoke.mockRestore();
+    await state().retryForgetSecrets();
+    expect(state().orphanSecrets).toEqual([]);
+    expect(await h.container.calendars.vault.has(FRESH_REF)).toBe(false);
   });
 
   it('autre compte Google que celui de la ligne : jeton révoqué et effacé, rien rattaché, message dédié', async () => {

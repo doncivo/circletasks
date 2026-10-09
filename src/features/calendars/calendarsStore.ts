@@ -63,6 +63,12 @@ export interface GoogleWebAuthFailure {
   readonly accountId: CalendarAccountId | null;
 }
 
+/** Référence d'un secret à effacer (jamais le secret lui-même). */
+export interface OrphanSecret {
+  readonly provider: CalendarProviderKind;
+  readonly tokenRef: string;
+}
+
 export type CalendarsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
 export interface IcloudFormState {
@@ -87,6 +93,11 @@ export interface CalendarsState {
   readonly messageKey: PlainMessageKey | null;
   /** Formulaire iCloud ouvert : nouveau compte ou reconnexion pré-remplie (K-02 critère 6). */
   readonly icloudForm: IcloudFormState | null;
+  /**
+   * Secrets d'une connexion abandonnée que le coffre n'a pas pu effacer (révocation ou effacement en échec) : ils restent peut-être
+   * au coffre de cet appareil ; l'écran Agendas le dit et propose « Réessayer l'effacement » (aucun échec silencieux).
+   */
+  readonly orphanSecrets: readonly OrphanSecret[];
   load(): Promise<void>;
   connectGoogle(): Promise<ConnectOutcome>;
   connectIcloud(username: string, password: string): Promise<ConnectOutcome>;
@@ -104,6 +115,8 @@ export interface CalendarsState {
   openIcloudForm(): void;
   closeIcloudForm(): void;
   clearMessage(): void;
+  /** « Réessayer l'effacement » : nouvelle tentative pour chaque secret orphelin ; ceux encore présents restent signalés. */
+  retryForgetSecrets(): Promise<void>;
   /** Retire les états A-09 posés par les agendas (arrêt du planificateur, tests). */
   releaseStatuses(): void;
 }
@@ -228,7 +241,17 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       return false;
     };
 
-    const markConnected = (accountId: CalendarAccountId): void => {
+    /**
+     * Oublie le secret d'une connexion abandonnée (compte refusé, doublon, écriture impossible). S'il reste au coffre, il est gardé
+     * dans `orphanSecrets` : message dédié et « Réessayer l'effacement » sur l'écran Agendas, jamais d'échec silencieux.
+     */
+    const forget = async (provider: CalendarProviderKind, tokenRef: string): Promise<void> => {
+      if (await discard(provider, tokenRef)) return;
+      const kept = get().orphanSecrets.filter((orphan) => orphan.tokenRef !== tokenRef);
+      set({ orphanSecrets: [...kept, { provider, tokenRef }] });
+    };
+
+    const markConnected =(accountId: CalendarAccountId): void => {
       setStates({ [accountId]: { kind: 'connected', lastSuccessAt: get().states[accountId]?.lastSuccessAt ?? null } });
       void get().refresh(accountId, 'connected');
     };
@@ -243,6 +266,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       errorKey: null,
       messageKey: null,
       icloudForm: null,
+      orphanSecrets: [],
 
       async load() {
         set({ status: 'loading', errorKey: null });
@@ -272,16 +296,16 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           set({ googleFailure: null });
           const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
           if (!listed.ok) {
-            await discard('google', tokenRef);
+            await forget('google', tokenRef);
             return report({ ok: false, failure: listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed' });
           }
           const label = (listed.value.find((calendar) => calendar.primary) ?? listed.value[0])?.id ?? '';
           if (label === '' || get().accounts.some((account) => account.provider === 'google' && account.label === label)) {
-            await discard('google', tokenRef);
+            await forget('google', tokenRef);
             return report({ ok: false, failure: label === '' ? 'failed' : 'duplicate' });
           }
           const created = await createAccount('google', accountId, label, listed.value);
-          if (!created.ok) await discard('google', tokenRef);
+          if (!created.ok) await forget('google', tokenRef);
           return report(created);
         } finally {
           set({ connecting: false });
@@ -309,12 +333,12 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         }
         const listed = await providerFor({ provider: 'icloud', tokenRef, username: appleId }).listCalendars();
         if (!listed.ok) {
-          await discard('icloud', tokenRef);
+          await forget('icloud', tokenRef);
           return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
         }
         const created = await createAccount('icloud', accountId, label, listed.value, appleId);
         if (!created.ok) {
-          await discard('icloud', tokenRef);
+          await forget('icloud', tokenRef);
           return created;
         }
         set({ icloudForm: null, messageKey: null });
@@ -329,6 +353,11 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         // appareil (colonne locale `token_ref`, jamais publiée), comme pour iCloud ; jamais d'autorisation sur une référence vide.
         const incomplete = account.tokenRef === '';
         const tokenRef = incomplete ? tokenRefFor('google', accountId) : account.tokenRef;
+        // Même compte Google déjà connecté ici sur une autre ligne : pas de second jeton pour lui.
+        if (incomplete && get().accounts.some((other) => other.id !== accountId && other.provider === 'google' && other.label === account.label && other.tokenRef !== '')) {
+          set({ connecting: false });
+          return report({ ok: false, failure: 'duplicate' });
+        }
         try {
           try {
             await platform.oauth.authorizeGoogle(tokenRef);
@@ -341,16 +370,17 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
             // est révoqué et effacé, rien n'est rattaché.
             const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
             const primary = listed.ok ? ((listed.value.find((calendar) => calendar.primary) ?? listed.value[0])?.id ?? '') : '';
-            if (!listed.ok || primary !== account.label) {
-              await discard('google', tokenRef);
-              const failure: ConnectFailure = !listed.ok ? (listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed') : 'google-other-account';
+            // Agenda principal introuvable (liste vide) : rien ne prouve que c'est le bon compte, même si la ligne n'a pas de libellé.
+            if (!listed.ok || primary === '' || primary !== account.label) {
+              await forget('google', tokenRef);
+              const failure: ConnectFailure = !listed.ok ? (listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed') : primary === '' ? 'failed' : 'google-other-account';
               return report({ ok: false, failure });
             }
             try {
               await container.data.repos.calendarAccounts.setLocalCredentials(accountId, { username: '', tokenRef });
               await reload();
             } catch {
-              await discard('google', tokenRef);
+              await forget('google', tokenRef);
               return report({ ok: false, failure: 'failed' });
             }
           }
@@ -376,7 +406,7 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         }
         const listed = await providerFor(account).listCalendars();
         if (!listed.ok) {
-          if (listed.error.kind === 'unauthorized') await platform.vault.delete(account.tokenRef).catch(() => undefined);
+          if (listed.error.kind === 'unauthorized') await forget('icloud', account.tokenRef);
           return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
         }
         if (incomplete) {
@@ -480,6 +510,13 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
 
       closeIcloudForm() {
         set({ icloudForm: null });
+      },
+
+      async retryForgetSecrets() {
+        const pending = get().orphanSecrets;
+        const remaining: OrphanSecret[] = [];
+        for (const orphan of pending) if (!(await discard(orphan.provider, orphan.tokenRef))) remaining.push(orphan);
+        set({ orphanSecrets: remaining });
       },
 
       clearMessage() {

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CALDAV_APP_PASSWORD, CALDAV_USER, GOOGLE_ACCOUNT } from '../../../tests/sim';
 import { SPACE_PERSO_ID, SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -134,6 +134,19 @@ describe('écran Agendas (K-01 à K-03)', () => {
     expect(await within(card).findByText('Connecté')).toBeInTheDocument();
     expect(within(card).queryByRole('button', { name: /sur cet appareil$/ })).not.toBeInTheDocument();
     await waitFor(() => expect(within(card).getByText(/^Mis à jour/)).toBeInTheDocument());
+  });
+
+  it('jeton d’une connexion abandonnée resté au coffre : message dédié et « Réessayer l’effacement » qui l’efface', async () => {
+    renderScreen();
+    await addGoogle();
+    await waitFor(() => expect(calendarsStore.get(h.container).getState().refreshing).toEqual([]));
+    const revoke = vi.spyOn(h.container.calendars.oauth, 'revokeGoogle').mockRejectedValue(new Error('coffre indisponible'));
+    fireEvent.click(screen.getByRole('button', { name: 'Google' }));
+    const alert = await screen.findByTestId('calendars-orphan-secret');
+    expect(within(alert).getByText(/l’effacement a échoué$/)).toBeInTheDocument();
+    revoke.mockRestore();
+    fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer l’effacement' }));
+    await waitFor(() => expect(screen.queryByTestId('calendars-orphan-secret')).not.toBeInTheDocument());
   });
 
   it('supprimer un compte demande confirmation, puis efface le jeton, le compte et ses événements (critère 8)', async () => {

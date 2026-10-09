@@ -127,6 +127,7 @@ export function CalendarsScreen() {
   const messageKey = useFeatureStore(calendarsStore, (s) => s.messageKey);
   const googleFailure = useFeatureStore(calendarsStore, (s) => s.googleFailure);
   const icloudForm = useFeatureStore(calendarsStore, (s) => s.icloudForm);
+  const orphanSecrets = useFeatureStore(calendarsStore, (s) => s.orphanSecrets);
   const store = calendarsStore.get(container);
   const nowMs = useMinuteClock(container.clock);
   const [removing, setRemoving] = useState<CalendarAccount | null>(null);
@@ -163,6 +164,14 @@ export function CalendarsScreen() {
               onClick={() => void (googleFailure.accountId === null ? store.getState().connectGoogle() : store.getState().reconnectGoogle(googleFailure.accountId))}
             >
               {t('calendars.errorWebAuthRetry')}
+            </Button>
+          </div>
+        )}
+        {orphanSecrets.length > 0 && (
+          <div className="ct-calendars__error ct-calendars__webAuthFailure" role="alert" data-testid="calendars-orphan-secret">
+            <p>{t('calendars.errorOrphanSecret')}</p>
+            <Button variant="secondary" onClick={() => void store.getState().retryForgetSecrets()}>
+              {t('calendars.retryForgetSecret')}
             </Button>
           </div>
         )}

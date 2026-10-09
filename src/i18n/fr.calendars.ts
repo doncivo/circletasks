@@ -74,6 +74,8 @@ export const calendarsFr = {
   errorIcloudChooseAccount: 'Plusieurs comptes iCloud reçus de vos autres appareils : touchez « Connecter ici » sur celui à compléter',
   icloudDefaultLabel: 'Compte iCloud',
   errorGoogleUnreachable: 'Impossible de joindre Google',
+  errorOrphanSecret: 'Une connexion abandonnée a peut-être laissé un jeton ou un mot de passe dans le coffre de cet appareil : l’effacement a échoué',
+  retryForgetSecret: 'Réessayer l’effacement',
   errorGoogleOtherAccount: 'Ce compte Google n’est pas celui de l’autre appareil : touchez « Connecter ici » et choisissez le même compte',
   errorSave: 'Enregistrement impossible.',
   errorLoad: 'Impossible de lire les comptes.',
