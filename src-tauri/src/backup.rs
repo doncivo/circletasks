@@ -727,6 +727,21 @@ pub enum Recovery {
 /// une copie préparée d'une sauvegarde qui existe toujours : il est supprimé s'il est ordinaire (sinon `unsafe-restore-file`). Toute erreur de
 /// renommage est propagée : l'appelant n'ouvre alors pas la base (voir `desktop.rs`).
 pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result<Recovery, BackupError> {
+    recover_interrupted_restore_with(db_path, backups_dir, &|_| true)
+}
+
+/// Comme `recover_interrupted_restore`, avec un crochet appelé AVANT toute suppression ou remise en place qui effacerait la preuve d'une
+/// restauration non aboutie (`StagedRemoved` : suppression des `.restoring` ; `PutBack` : renommage des `.restore-old`). Le crochet annule le
+/// marqueur provisoire ; s'il rend faux, rien n'est touché et l'erreur `marker-cancel-failed` est renvoyée : au démarrage suivant la preuve est
+/// toujours là et l'issue est de nouveau `StagedRemoved` / `PutBack`, jamais `Nothing` (qui ferait confirmer une version non restaurée).
+pub fn recover_interrupted_restore_with(db_path: &Path, backups_dir: &Path, before_cancel: &dyn Fn(Recovery) -> bool) -> Result<Recovery, BackupError> {
+    let cancel = |outcome: Recovery| -> Result<(), BackupError> {
+        if before_cancel(outcome) {
+            Ok(())
+        } else {
+            Err(BackupError::new("marker-cancel-failed", "le marqueur de restauration provisoire n'a pas pu être annulé"))
+        }
+    };
     let fail = |code: &'static str, e: io::Error| BackupError::new(code, e.to_string());
     let old_of = |suffix: &str| sidecar(&sidecar(db_path, suffix), OLD_SUFFIX);
     let olds: Vec<(&str, PathBuf)> = ["", "-wal", "-shm"].into_iter().map(|suffix| (suffix, old_of(suffix))).collect();
@@ -737,21 +752,33 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
             return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
         }
     }
-    let mut staged_removed = false;
-    for leftover in [staged.clone(), sidecar(&staged, ".tmp"), sidecar(&staged, "-wal"), sidecar(&staged, "-shm"), sidecar(&staged, "-journal")] {
-        if present(&leftover) {
-            if !is_plain_file(&leftover) {
-                return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
-            }
-            fs::remove_file(&leftover).map_err(|e| fail("recovery-failed", e))?;
-            staged_removed = true;
-        }
+    let leftovers: Vec<PathBuf> = [staged.clone(), sidecar(&staged, ".tmp"), sidecar(&staged, "-wal"), sidecar(&staged, "-shm"), sidecar(&staged, "-journal")]
+        .into_iter()
+        .filter(|leftover| present(leftover))
+        .collect();
+    if leftovers.iter().any(|leftover| !is_plain_file(leftover)) {
+        return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
     }
+    let staged_removed = !leftovers.is_empty();
+    let remove_leftovers = || -> Result<(), BackupError> {
+        for leftover in &leftovers {
+            fs::remove_file(leftover).map_err(|e| fail("recovery-failed", e))?;
+        }
+        Ok(())
+    };
     let db_present = present(db_path);
     let main_old = present(&olds[0].1);
     let journal_old = olds[1..].iter().any(|(_, old)| present(old));
+    let put_back = (db_present && !main_old && journal_old) || (!db_present && main_old);
+    if staged_removed && !put_back && !(db_present && main_old) {
+        // La preuve (le fichier préparé) n'est supprimée qu'après l'annulation du marqueur.
+        cancel(Recovery::StagedRemoved)?;
+        remove_leftovers()?;
+        return Ok(Recovery::StagedRemoved);
+    }
 
     if db_present && main_old {
+        remove_leftovers()?;
         if present(backups_dir) && !is_plain_dir(backups_dir) {
             return Err(BackupError::new("unsafe-restore-file", "le dossier des sauvegardes n'est pas un dossier ordinaire"));
         }
@@ -784,12 +811,15 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
         let _ = prune_family(backups_dir, Family::PreRestore, KEEP_PRE_RESTORE_BACKUPS);
         return Ok(Recovery::Archived);
     }
-    if (db_present && !main_old && journal_old) || (!db_present && main_old) {
+    if put_back {
         // Base d'abord (si absente), puis son journal ; une cible occupée n'est jamais écrasée.
         // Toutes les cibles sont vérifiées AVANT le premier déplacement : un conflit ne laisse rien à moitié remis en place.
         if olds.iter().any(|(suffix, old)| present(old) && present(&sidecar(db_path, suffix))) {
             return Err(BackupError::new("recovery-conflict", "un fichier de la base existe déjà : l'ancien n'est pas écrasé"));
         }
+        // Les `.restore-old` sont la preuve : le marqueur provisoire est annulé AVANT de les renommer.
+        cancel(Recovery::PutBack)?;
+        remove_leftovers()?;
         for (suffix, old) in &olds {
             if present(old) {
                 fs::rename(old, sidecar(db_path, suffix)).map_err(|e| fail("recovery-failed", e))?;
@@ -797,7 +827,7 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
         }
         return Ok(Recovery::PutBack);
     }
-    Ok(if staged_removed { Recovery::StagedRemoved } else { Recovery::Nothing })
+    Ok(Recovery::Nothing)
 }
 
 /// Échange la base par le fichier préparé. Tout ce qui est déplacé est remis en place si une étape échoue : l'ancienne base (et son

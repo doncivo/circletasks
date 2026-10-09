@@ -372,7 +372,10 @@ fn undo_provisional_marker(config_dir: &Path) -> bool {
         Ok(bytes) => crate::sync::folder::write_config_file(&config_dir.join(crate::sync::marker::MARKER_FILE), &bytes).is_ok(),
         Err(_) => crate::sync::marker::clear(config_dir).is_ok(),
     };
-    let _ = std::fs::remove_file(previous);
+    // Le marqueur d'avant n'est effacé que si l'annulation a réussi : sinon la preuve reste pour le prochain essai.
+    if undone {
+        let _ = std::fs::remove_file(previous);
+    }
     undone
 }
 
@@ -453,7 +456,19 @@ pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::bac
 
 /// Récupération au démarrage puis règlement du marqueur provisoire (PC et iPhone).
 pub fn recover_and_settle(config_dir: &Path) -> Result<crate::backup::Recovery, crate::backup::BackupError> {
-    let recovery = crate::backup::recover_interrupted_restore(&config_dir.join(crate::backup::DB_FILE), &config_dir.join(crate::backup::BACKUP_DIR));
+    // Ordre voulu : le marqueur provisoire est annulé AVANT que la preuve (`.restoring`, `.restore-old`) soit supprimée ou renommée. Si
+    // l'annulation échoue, rien n'est touché (`marker-cancel-failed`, porte en échec, écran de récupération) et le prochain démarrage retrouve
+    // la même preuve : jamais `Nothing`, donc jamais de confirmation d'une version qui n'a pas été restaurée.
+    let cancel = |_: crate::backup::Recovery| {
+        if !crate::sync::marker::is_provisional(config_dir) {
+            let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
+            return true;
+        }
+        let done = undo_provisional_marker(config_dir);
+        crate::applog::write("backup-recovery", if done { "provisional-marker-settled" } else { "provisional-marker-settle-failed" });
+        done
+    };
+    let recovery = crate::backup::recover_interrupted_restore_with(&config_dir.join(crate::backup::DB_FILE), &config_dir.join(crate::backup::BACKUP_DIR), &cancel);
     settle_provisional_marker(config_dir, &recovery);
     if recovery.is_ok() {
         // Revue du lot F : conservation des dossiers mis de côté (30 jours).

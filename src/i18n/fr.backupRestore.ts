@@ -16,5 +16,6 @@ export const backupRestoreFr = {
   recoveryContinue: 'Continuer',
   recoveryStillFailed: 'La récupération reste impossible : fermez puis rouvrez CircleTasks. Si le message revient, copiez le détail.',
   recoveryNoDataDir: 'Le dossier des données de l’app est introuvable : fermez puis rouvrez CircleTasks. Rien n’a été modifié.',
+  recoveryMarkerCancel: 'Une restauration interrompue n’a pas pu être annulée proprement (le marqueur de restauration n’a pas pu être écrit). Rien n’a été supprimé : fermez puis rouvrez CircleTasks pour réessayer. Vos données ne sont pas touchées.',
   recoverySqlPlugin: 'Le module de base de données n’a pas démarré : fermez puis rouvrez CircleTasks. Vos données ne sont pas touchées.',
 } as const;

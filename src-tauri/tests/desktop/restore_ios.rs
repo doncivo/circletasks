@@ -620,6 +620,56 @@ fn p04_ios_marker_after_the_swap_without_restore_old_is_nothing_and_still_confir
     assert_eq!(marker.backup, "circletasks-daily-20261007.db");
 }
 
+/// Arrêt au point `stop` avec un marqueur d'avant en attente, puis démarrage dont l'ANNULATION du marqueur échoue (le fichier temporaire du
+/// marqueur est occupé par un dossier). La preuve doit rester ; le démarrage suivant, sans le blocage, annule toujours et ne confirme jamais.
+fn cancellation_fails_then_next_launch_cancels(stop: RestoreStep, evidence: &str, expected: circletasks_lib::backup::Recovery) {
+    use circletasks_lib::startup_gate::recover_and_settle;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), Some("true"));
+    sync_configured(dir.path());
+    let marker_path = dir.path().join(circletasks_lib::sync::marker::MARKER_FILE);
+    fs::write(&marker_path, br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    let hook = move |step: RestoreStep| -> std::io::Result<()> {
+        if step == stop {
+            panic!("arrêt forcé");
+        }
+        Ok(())
+    };
+    let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| circletasks_lib::startup_gate::restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook)));
+    assert!(crashed.is_err());
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    let mut blocker = marker_path.as_os_str().to_owned();
+    blocker.push(circletasks_lib::sync::names::TEMP_SUFFIX);
+    let blocker = std::path::PathBuf::from(blocker);
+    fs::create_dir(&blocker).unwrap();
+    // Annulation impossible : récupération en échec visible, preuve intacte, marqueur toujours provisoire (jamais confirmé).
+    for _ in 0..2 {
+        assert_eq!(recover_and_settle(dir.path()).unwrap_err().code, "marker-cancel-failed");
+        assert!(dir.path().join(evidence).exists(), "la preuve {evidence} reste");
+        assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    }
+    // Le blocage disparaît : le démarrage suivant retrouve la même issue et annule (marqueur d'avant remis).
+    fs::remove_dir(&blocker).unwrap();
+    assert_eq!(recover_and_settle(dir.path()).unwrap(), expected);
+    let marker = circletasks_lib::sync::marker::read(dir.path()).unwrap().expect("marqueur d'avant");
+    assert_eq!(marker.backup, "ancien");
+    assert!(!marker.provisional);
+    assert!(!dir.path().join(evidence).exists());
+}
+
+#[test]
+fn p04_ios_marker_cancellation_failure_after_staged_keeps_the_staged_file_and_never_confirms() {
+    cancellation_fails_then_next_launch_cancels(RestoreStep::Staged, "circletasks.db.restoring", circletasks_lib::backup::Recovery::StagedRemoved);
+}
+
+#[test]
+fn p04_ios_marker_cancellation_failure_before_put_back_keeps_the_restore_old_and_never_confirms() {
+    cancellation_fails_then_next_launch_cancels(RestoreStep::OldMoved, "circletasks.db.restore-old", circletasks_lib::backup::Recovery::PutBack);
+}
+
 #[test]
 fn p04_ios_marker_staged_removed_puts_back_the_previous_pending_marker() {
     use circletasks_lib::backup::Recovery;
