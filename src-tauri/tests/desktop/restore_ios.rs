@@ -154,7 +154,7 @@ fn p04_ios_6_restore_requires_every_sql_pool_to_be_closed() {
     let source = include_str!("../../src/backup.rs");
     let command = &source[source.find("pub async fn restore_backup(").unwrap()..];
     let guard = command.find("ensure_sql_closed(&app).await?").unwrap();
-    assert!(guard < command.find("restore_backup_file(").unwrap(), "contrôle AVANT l'échange");
+    assert!(guard < command.find("restore_with_provisional_marker(").unwrap(), "contrôle AVANT l'échange");
 }
 
 // --- critère 12 et règle 2 : marqueur renvoyé ---
@@ -176,7 +176,7 @@ fn p04_ios_12_marker_outcome_is_returned_not_configured_or_failed() {
     }
     let source = include_str!("../../src/backup.rs");
     assert!(!source.contains("eprintln!"), "plus aucun eprintln! pour le marqueur");
-    assert!(source.contains("RestoreOutcome { marker: state, marker_code: code, ..outcome }"));
+    assert!(include_str!("../../src/startup_gate.rs").contains("RestoreOutcome { marker: state, marker_code: code, ..outcome }"));
 }
 
 #[test]
@@ -308,4 +308,49 @@ fn p04_ios_i2_marker_retry_revalidates_the_name_and_reports_its_outcome() {
     assert_eq!(write_marker_for(dir.path(), "../circletasks.db", 1_791_446_400), MarkerWriteOutcome { marker: "failed", code: Some("bad-name") });
     assert_eq!(write_marker_for(dir.path(), "circletasks-daily-20261001.db", 1_791_446_400).marker, "failed", "sauvegarde absente");
     assert_eq!(write_marker_for(dir.path(), "circletasks-daily-20261007.db", 1_791_446_400), MarkerWriteOutcome { marker: "not-configured", code: None });
+}
+
+// --- revue : marqueur provisoire écrit AVANT l'échange, retiré si l'échange échoue ---
+
+fn sync_configured(dir: &Path) {
+    let config = dir.join(circletasks_lib::sync::folder::CONFIG_SUBDIR);
+    fs::create_dir_all(&config).unwrap();
+    fs::write(config.join(circletasks_lib::sync::folder::FOLDER_FILE), b"{}").unwrap();
+}
+
+#[test]
+fn p04_ios_marker_is_written_before_the_swap_and_undone_when_the_swap_fails() {
+    use circletasks_lib::startup_gate::restore_with_provisional_marker;
+    use circletasks_lib::sync::marker::MARKER_FILE;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), None);
+    sync_configured(dir.path());
+    let marker = dir.path().join(MARKER_FILE);
+    // Le marqueur existe déjà au moment de l'échange (point d'arrêt) ; l'échange échoue : il est retiré.
+    let seen = std::sync::Arc::new(std::sync::Mutex::new(false));
+    let probe = seen.clone();
+    let marker_probe = marker.clone();
+    let failing = move |step: RestoreStep| -> std::io::Result<()> {
+        if step == RestoreStep::OldMoved {
+            *probe.lock().unwrap() = marker_probe.is_file();
+            return Err(std::io::Error::other("arrêt simulé"));
+        }
+        Ok(())
+    };
+    assert!(restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &failing).is_err());
+    assert!(*seen.lock().unwrap(), "marqueur écrit avant l'échange");
+    assert!(!marker.exists(), "marqueur provisoire retiré après l'échec");
+    // Un marqueur d'une restauration précédente (choix pas encore fait) est remis tel quel.
+    fs::write(&marker, br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    let before = fs::read(&marker).unwrap();
+    assert!(restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080001Z", 1_791_446_401, &failing).is_err());
+    assert_eq!(fs::read(&marker).unwrap(), before);
+    // Échange abouti : marqueur écrit, issue « written ».
+    let (outcome, pending) = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080002Z", 1_791_446_402, NO_FAIL).unwrap();
+    assert_eq!(outcome.marker, "written");
+    assert!(pending.is_none());
+    assert!(fs::read_to_string(&marker).unwrap().contains("circletasks-daily-20261007.db"));
 }

@@ -260,3 +260,40 @@ pub async fn backup_restore_marker_write(app: AppHandle, backup: String) -> Mark
     }
     outcome
 }
+
+/// Revue (marqueur provisoire) : le marqueur de restauration est écrit AVANT l'échange, pour qu'un arrêt entre l'échange et l'écriture ne
+/// laisse jamais une version restaurée sans marqueur (la synchro la remplacerait sans choix) ; si l'échange échoue, le marqueur d'avant est
+/// remis (ou le provisoire retiré). Après un échange abouti, un marqueur provisoire écrit vaut `written` ; sinon l'écriture est retentée.
+/// Rend l'issue de la restauration (marqueur compris) et, en cas d'échec du marqueur, le marqueur à réessayer.
+pub fn restore_with_provisional_marker(
+    config_dir: &Path,
+    name: &str,
+    stamp: &str,
+    now_secs: u64,
+    hook: &dyn Fn(crate::backup::RestoreStep) -> std::io::Result<()>,
+) -> Result<(crate::backup::RestoreOutcome, Option<MarkerToWrite>), crate::backup::BackupError> {
+    let backups = config_dir.join(crate::backup::BACKUP_DIR);
+    let marker_path = config_dir.join(crate::sync::marker::MARKER_FILE);
+    let previous = std::fs::read(&marker_path).ok();
+    let schema = crate::backup::check_named_backup(&backups, name)?;
+    let provisional = crate::backup::write_restore_marker(config_dir, &backups, name, now_secs, schema);
+    let outcome = match crate::backup::restore_backup_file(&config_dir.join(crate::backup::DB_FILE), &backups, name, crate::backup::APP_SCHEMA_VERSION, stamp, hook) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            if matches!(provisional, Ok(true)) {
+                let undone = match &previous {
+                    Some(bytes) => crate::sync::folder::write_config_file(&marker_path, bytes).is_ok(),
+                    None => crate::sync::marker::clear(config_dir).is_ok(),
+                };
+                if !undone {
+                    crate::applog::write("backup", "provisional-marker-undo-failed");
+                }
+            }
+            return Err(error);
+        }
+    };
+    let marker = MarkerToWrite { config_dir: config_dir.to_path_buf(), backup: name.to_owned(), restored_at_secs: now_secs, schema_version: outcome.schema_version };
+    let (state, code) = if matches!(provisional, Ok(true)) { ("written", None) } else { write_marker_with_retry(&marker, std::time::Duration::from_millis(200)) };
+    let pending = (state == "failed").then_some(marker);
+    Ok((crate::backup::RestoreOutcome { marker: state, marker_code: code, ..outcome }, pending))
+}

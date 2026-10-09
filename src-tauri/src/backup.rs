@@ -1045,26 +1045,21 @@ pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Resu
     let dir = data_dir(&app)?;
     let gate_app = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        let outcome = match restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(())) {
-            Ok(outcome) => outcome,
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        match crate::startup_gate::restore_with_provisional_marker(&dir, &name, &stamp, now, &|_| Ok(())) {
+            Ok(done) => Ok(done),
             Err(error) => {
                 // Revue B1 : retour arrière incomplet -> récupération immédiate ; si elle échoue, la porte passe à l'échec (le rechargement
                 // montre l'écran persistant, jamais une base vide créée puis copiée par la sauvegarde du jour).
                 if let Some(Err(code)) = crate::startup_gate::recover_after_failed_swap(&dir.join(DB_FILE), &dir.join(BACKUP_DIR)) {
-                    if let Some(gate) = gate_app.try_state::<crate::startup_gate::StartupGate>() {
-                        gate.set(Err(code));
-                    } else {
+                    if gate_app.try_state::<crate::startup_gate::StartupGate>().is_none() {
                         gate_app.manage(crate::startup_gate::StartupGate::default());
-                        gate_app.state::<crate::startup_gate::StartupGate>().set(Err(code));
                     }
+                    gate_app.state::<crate::startup_gate::StartupGate>().set(Err(code));
                 }
-                return Err(error);
+                Err(error)
             }
-        };
-        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        let marker = crate::startup_gate::MarkerToWrite { config_dir: dir, backup: name, restored_at_secs: now, schema_version: outcome.schema_version };
-        let (state, code) = crate::startup_gate::write_marker_with_retry(&marker, std::time::Duration::from_millis(200));
-        Ok::<_, BackupError>((RestoreOutcome { marker: state, marker_code: code, ..outcome }, (state == "failed").then_some(marker)))
+        }
     })
     .await
     .map_err(|e| join_error(e.into()))??;
