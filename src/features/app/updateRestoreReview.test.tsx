@@ -97,3 +97,14 @@ describe('I3 : relance hors de la restauration', () => {
     expect(calls.calls).toEqual([`rollback ${BACKUP} 20261009T080000Z`, 'relaunch']);
   });
 });
+
+describe('revue (mineur) : `bad-name` de Rust reconnu', () => {
+  it('raison `bad-name` (pas `io`), texte lisible sur l’écran d’échec', async () => {
+    const { reasonOf } = await import('../../platform/backup');
+    expect(reasonOf({ code: 'bad-name', message: 'x' })).toBe('bad-name');
+    expect(updateRestoreFailureText('bad-name', true)).toBe(t('backup.errorBadName'));
+    const recovery = openStartupRecovery('tauri', 'windows', { ...api(), rollback: () => Promise.reject({ code: 'bad-name', message: 'x' }) });
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await expect(restoreUpdateBackup(BACKUP, clock, recovery)).resolves.toEqual({ ok: false, message: t('backup.errorBadName'), code: 'bad-name' });
+  });
+});

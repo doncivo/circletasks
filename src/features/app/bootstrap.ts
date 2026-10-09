@@ -243,6 +243,10 @@ const readOnlyStamper: WriteStamper = {
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
   // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
   const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
+  // Démarrage en cours, posé SANS attendre : App.tsx ne lance `bootstrapApp` que si dbStatus vaut « idle », et le double appel de l'effet
+  // (StrictMode, remontage) ne doit jamais créer deux apps (deux conteneurs, deux sauvegardes du jour, deux reports à minuit). La lecture
+  // de la version ci-dessous est asynchrone : sans cette ligne, le second appel trouvait encore « idle » (régression I-06 vue en CI).
+  useAppStore.getState().setDbStatus('loading');
   // I-06 : version lue AVANT l'ouverture (diagnostic d'échec, synchro, « À propos ») ; ne rejette jamais.
   const appVersion = await (options.appVersion ?? readAppVersion)();
   const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup, migrations: options.migrations, appVersion: appVersion.version });

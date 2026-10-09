@@ -748,10 +748,8 @@ fn p04_ios_marker_with_an_unreadable_database_in_place_stays_provisional_and_blo
     assert!(circletasks_lib::backup::database_token(&db).is_err());
     // Démarrage : un dossier à la place de la base n'est ni un `.restore-old` ni un `.restoring` -> la récupération rend `Nothing`, puis le
     // règlement tombe sur la base illisible : rien n'est décidé et le journal le consigne.
+    // Le verrou remet le journal à neuf (`support::applog_dir_lock`) : les entrées notées avant `init` par les autres tests n'y sont pas versées.
     let _log_dir = crate::support::applog_dir_lock();
-    // Journal propre à ce test : les entrées notées avant `init` par les autres tests du processus n'y sont pas versées (cause de l'échec
-    // de ce test en lot : « provisional-marker-settled » d'un autre test retrouvé ici).
-    circletasks_lib::applog::reset_for_tests();
     let logs = dir.path().join("logs");
     circletasks_lib::applog::init(logs.clone());
     assert_eq!(recover_and_settle(dir.path()).expect("la récupération elle-même aboutit"), circletasks_lib::backup::Recovery::Nothing);

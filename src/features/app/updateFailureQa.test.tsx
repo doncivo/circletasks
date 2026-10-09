@@ -192,6 +192,7 @@ describe('restauration depuis l’écran d’échec : chaque raison d’échec d
     'rollback-failed': true,
     'restore-pending': true,
     'restore-unconfirmed': true,
+    'bad-name': true,
     unavailable: true,
     'sync-busy': true,
     busy: true,

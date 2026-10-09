@@ -30,6 +30,7 @@ const REASON_KEYS = {
   'rollback-failed': 'backup.errorRollback',
   'restore-pending': 'backup.errorPending',
   'restore-unconfirmed': 'backup.errorUnconfirmed',
+  'bad-name': 'backup.errorBadName',
   unavailable: 'backup.errorIo',
   'sync-busy': 'backup.errorIo',
   busy: 'backup.errorIo',
