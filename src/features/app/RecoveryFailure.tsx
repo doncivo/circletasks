@@ -18,11 +18,21 @@ const CONFLICTS = new Set(['recovery-conflict', 'unsafe-restore-file']);
  */
 export function RecoveryFailure({ message, setAside = setAsideRecoveryConflicts, reload = () => appReload.run() }: { message: string; setAside?: () => Promise<RecoveryRetryOutcome>; reload?: () => void }) {
   const code = recoveryCodeOf(message);
-  const [phase, setPhase] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'busy' | 'failed' | 'fresh-base'>('idle');
   const [failedCode, setFailedCode] = useState<string | null>(null);
   if (code === 'no-data-dir') return <p>{tBackupRestore('recoveryNoDataDir')}</p>;
   if (code === 'sql-plugin') return <p>{tBackupRestore('recoverySqlPlugin')}</p>;
   if (!CONFLICTS.has(code)) return <p>{t('backup.recoveryFailedIosHelp')}</p>;
+  if (phase === 'fresh-base') {
+    return (
+      <>
+        <p role="status">{tBackupRestore('recoveryFreshBase')}</p>
+        <button type="button" className="ct-recovery__action" onClick={() => reload()}>
+          {tBackupRestore('recoveryContinue')}
+        </button>
+      </>
+    );
+  }
   return (
     <>
       <p>{tBackupRestore('recoveryConflict')}</p>
@@ -39,6 +49,11 @@ export function RecoveryFailure({ message, setAside = setAsideRecoveryConflicts,
             setPhase('busy');
             void setAside().then((outcome) => {
               if (outcome.state === 'ready') {
+                // Revue du lot F : base neuve -> le message vers « Avant restauration » d'abord ; rechargement sur « Continuer ».
+                if (outcome.notice === 'fresh-base') {
+                  setPhase('fresh-base');
+                  return;
+                }
                 reload();
                 return;
               }

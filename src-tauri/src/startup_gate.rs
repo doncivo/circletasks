@@ -163,11 +163,53 @@ pub fn retry_pending_marker<R: Runtime>(app: &AppHandle<R>) -> Result<(), crate:
     }
 }
 
-/// Revue I1 : action utile de l'écran « Restauration interrompue » pour `recovery-conflict` et `unsafe-restore-file`. Les fichiers qui
-/// empêchent la récupération sont DÉPLACÉS (jamais supprimés) dans `backups/circletasks-set-aside-<horodatage>/` : un `.restore-old` qui
-/// n'est pas un fichier ordinaire (lien, dossier), l'occupant d'une cible du retour en place (`-wal`, `-shm` actuels quand leur
-/// `.restore-old` existe ; la base quand elle n'est pas un fichier ordinaire), et un fichier préparé `.restoring` anormal. Rend le nombre d'entrées déplacées ; `io` si un déplacement échoue (rien n'est supprimé).
-pub fn set_aside_conflicts(db_path: &Path, backups_dir: &Path, stamp: &str) -> Result<usize, &'static str> {
+/// Préfixe des dossiers de mise de côté (dans `backups/`, ou à côté de lui quand `backups` lui-même n'était pas un dossier ordinaire).
+pub const SET_ASIDE_PREFIX: &str = "circletasks-set-aside-";
+/// Durée de conservation des dossiers mis de côté (purgés au démarrage, comme les copies « Avant restauration » sont tournées).
+pub const KEEP_SET_ASIDE_DAYS: u64 = 30;
+
+/// Issue d'une mise de côté.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SetAside {
+    /// Nombre d'entrées déplacées (jamais supprimées).
+    pub moved: usize,
+    /// L'ancienne base (`.restore-old` anormal) a été mise de côté et aucune base n'est en place : l'app va en créer une neuve ; le message
+    /// renvoie vers la copie « Avant restauration » des sauvegardes.
+    pub fresh_base: bool,
+}
+
+/// Revue du lot F : la mise de côté n'est permise que si la porte a échoué sur un conflit (`recovery-conflict`, `unsafe-restore-file`) et
+/// qu'aucun pool SQL n'est ouvert ; sinon `set-aside-refused` (rien d'autre à mettre de côté) ou `db-open`.
+pub fn set_aside_allowed(outcome: Option<Result<(), &'static str>>, open_pools: usize) -> Result<(), &'static str> {
+    if !matches!(outcome, Some(Err("recovery-conflict" | "unsafe-restore-file"))) {
+        return Err("set-aside-refused");
+    }
+    if open_pools > 0 {
+        return Err("db-open");
+    }
+    Ok(())
+}
+
+/// Crée un dossier de mise de côté NEUF (`create_dir`, exclusif) : `circletasks-set-aside-<stamp>`, sinon `-1`, `-2`… ; jamais un dossier existant.
+fn create_set_aside_dir(parent: &Path, stamp: &str) -> Result<PathBuf, &'static str> {
+    for n in 0..1_000 {
+        let name = if n == 0 { format!("{SET_ASIDE_PREFIX}{stamp}") } else { format!("{SET_ASIDE_PREFIX}{stamp}-{n}") };
+        let path = parent.join(name);
+        match std::fs::create_dir(&path) {
+            Ok(()) => return Ok(path),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err("io"),
+        }
+    }
+    Err("io")
+}
+
+/// Revue I1 et revue du lot F : action utile de l'écran « Restauration interrompue » pour `recovery-conflict` et `unsafe-restore-file`. Ce qui
+/// empêche la récupération est DÉPLACÉ (jamais supprimé, jamais écrasé) dans un dossier neuf `backups/circletasks-set-aside-<horodatage>[-n]/` :
+/// un `.restore-old` qui n'est pas un fichier ordinaire (lien, dossier ; celui de la base emmène aussi les `-wal` / `-shm.restore-old`, qui lui
+/// appartiennent), l'occupant d'une cible du retour en place, un fichier préparé `.restoring` anormal. Si `backups` lui-même n'est pas un dossier
+/// ordinaire, il est d'abord déplacé dans un dossier neuf à côté de lui, puis un `backups/` ordinaire est créé. `io` si un déplacement échoue.
+pub fn set_aside_conflicts(db_path: &Path, backups_dir: &Path, stamp: &str) -> Result<SetAside, &'static str> {
     let name = |suffix: &str| {
         let mut text = db_path.as_os_str().to_owned();
         text.push(suffix);
@@ -175,54 +217,113 @@ pub fn set_aside_conflicts(db_path: &Path, backups_dir: &Path, stamp: &str) -> R
     };
     let plain = |path: &Path| std::fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_file());
     let present = |path: &Path| std::fs::symlink_metadata(path).is_ok();
+    let mut moved = 0;
+    if present(backups_dir) && !crate::backup::is_plain_dir(backups_dir) {
+        let parent = backups_dir.parent().ok_or("io")?;
+        let holder = create_set_aside_dir(parent, stamp)?;
+        let file = backups_dir.file_name().ok_or("io")?;
+        std::fs::rename(backups_dir, holder.join(file)).map_err(|_| "io")?;
+        moved += 1;
+        std::fs::create_dir(backups_dir).map_err(|_| "io")?;
+    }
     let mut aside: Vec<PathBuf> = Vec::new();
+    let main_old = name(".restore-old");
+    let main_old_unsafe = present(&main_old) && !plain(&main_old);
     for suffix in ["", "-wal", "-shm"] {
         let current = name(suffix);
         let old = name(&format!("{suffix}.restore-old"));
-        if present(&old) && !plain(&old) {
+        if present(&old) && (!plain(&old) || main_old_unsafe) {
             aside.push(old);
-        } else if present(&old) && present(&current) && (suffix != "" || !plain(&current)) {
+        } else if present(&old) && present(&current) && (!suffix.is_empty() || !plain(&current)) {
             aside.push(current);
         }
     }
-    for leftover in [".restoring", ".restoring.tmp"] {
+    for leftover in [".restoring", ".restoring.tmp", ".restoring-wal", ".restoring-shm", ".restoring-journal"] {
         let path = name(leftover);
         if present(&path) && !plain(&path) {
             aside.push(path);
         }
     }
-    if aside.is_empty() {
-        return Ok(0);
+    if !aside.is_empty() {
+        std::fs::create_dir_all(backups_dir).map_err(|_| "io")?;
+        let target = create_set_aside_dir(backups_dir, stamp)?;
+        for path in &aside {
+            let Some(file) = path.file_name() else { return Err("io") };
+            std::fs::rename(path, target.join(file)).map_err(|_| "io")?;
+        }
+        moved += aside.len();
     }
-    let target = backups_dir.join(format!("circletasks-set-aside-{stamp}"));
-    std::fs::create_dir_all(&target).map_err(|_| "io")?;
-    for path in &aside {
-        let Some(file) = path.file_name() else { return Err("io") };
-        std::fs::rename(path, target.join(file)).map_err(|_| "io")?;
+    if moved > 0 {
+        crate::applog::write_count("backup-recovery", "conflicts-set-aside", u32::try_from(moved).unwrap_or(u32::MAX));
     }
-    crate::applog::write_count("backup-recovery", "conflicts-set-aside", u32::try_from(aside.len()).unwrap_or(u32::MAX));
-    Ok(aside.len())
+    Ok(SetAside { moved, fresh_base: main_old_unsafe && !present(db_path) })
 }
 
-/// « Mettre les fichiers en conflit de côté » (iPhone) : déplacement, puis nouvelle récupération et, si elle réussit, enregistrement du
-/// plugin SQL ; rend le nouvel état de la porte (`ready` : la WebView recharge et ouvre la base).
+/// Supprime les dossiers de mise de côté datés de plus de `KEEP_SET_ASIDE_DAYS` jours, dans `config_dir` et `config_dir/backups` : seulement
+/// des DOSSIERS ordinaires au nom `circletasks-set-aside-<horodatage>[-n]` valide (jamais un lien, un fichier ou un nom inconnu). Rend le
+/// nombre supprimé.
+pub fn purge_set_aside(config_dir: &Path, now_secs: u64) -> usize {
+    let cutoff = crate::backup::utc_stamp(now_secs.saturating_sub(KEEP_SET_ASIDE_DAYS * 86_400));
+    let mut purged = 0;
+    for parent in [config_dir.to_path_buf(), config_dir.join(crate::backup::BACKUP_DIR)] {
+        if !crate::backup::is_plain_dir(&parent) {
+            continue;
+        }
+        let Ok(entries) = std::fs::read_dir(&parent) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(rest) = path.file_name().and_then(|n| n.to_str()).and_then(|n| n.strip_prefix(SET_ASIDE_PREFIX)) else { continue };
+            let Some(stamp) = rest.get(..16) else { continue };
+            let suffix = &rest[16..];
+            let suffix_ok = suffix.is_empty() || suffix.strip_prefix('-').is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()));
+            if crate::backup::is_valid_stamp(stamp) && suffix_ok && stamp < cutoff.as_str() && crate::backup::is_plain_dir(&path) && std::fs::remove_dir_all(&path).is_ok() {
+                purged += 1;
+            }
+        }
+    }
+    purged
+}
+
+/// Réponse de `backup_set_aside_conflicts` : l'état de la porte et, si l'app va créer une base neuve, `notice: "fresh-base"`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct SetAsideStatus {
+    pub state: &'static str,
+    pub code: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<&'static str>,
+}
+
+/// « Mettre les fichiers en conflit de côté » (iPhone) : refusée sauf porte en échec sur un conflit et aucun pool SQL ouvert ; déplacement,
+/// puis nouvelle récupération et, si elle réussit, enregistrement du plugin SQL ; rend le nouvel état de la porte (`ready` : la WebView
+/// recharge et ouvre la base).
 #[tauri::command]
-pub async fn backup_set_aside_conflicts(app: AppHandle) -> StartupStatus {
-    let Ok(dir) = app.path().app_config_dir() else { return StartupStatus { state: "failed", code: Some("no-data-dir") } };
+pub async fn backup_set_aside_conflicts(app: AppHandle) -> SetAsideStatus {
+    let failed = |code: &'static str| SetAsideStatus { state: "failed", code: Some(code), notice: None };
+    let outcome = app.try_state::<StartupGate>().as_deref().and_then(StartupGate::outcome);
+    let pools = match app.try_state::<tauri_plugin_sql::DbInstances>() {
+        Some(instances) => open_sql_pools(&instances).await,
+        None => 0,
+    };
+    if let Err(code) = set_aside_allowed(outcome, pools) {
+        crate::applog::write("backup-recovery", code);
+        return failed(code);
+    }
+    let Ok(dir) = app.path().app_config_dir() else { return failed("no-data-dir") };
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
     let stamp = crate::backup::utc_stamp(now);
     let moved = {
         let dir = dir.clone();
         tauri::async_runtime::spawn_blocking(move || set_aside_conflicts(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR), &stamp)).await
     };
-    if !matches!(moved, Ok(Ok(_))) {
+    let Ok(Ok(aside)) = moved else {
         if let Some(gate) = app.try_state::<StartupGate>() {
             gate.set(Err("io"));
         }
-        return StartupStatus { state: "failed", code: Some("io") };
-    }
+        return failed("io");
+    };
     let _ = register_sql_after_recovery(&app, Some(&dir));
-    status_of(app.try_state::<StartupGate>().as_deref())
+    let status = status_of(app.try_state::<StartupGate>().as_deref());
+    SetAsideStatus { state: status.state, code: status.code, notice: (aside.fresh_base && status.state == "ready").then_some("fresh-base") }
 }
 
 /// Réponse de `backup_restore_marker_write`.
@@ -352,5 +453,13 @@ pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::bac
 pub fn recover_and_settle(config_dir: &Path) -> Result<crate::backup::Recovery, crate::backup::BackupError> {
     let recovery = crate::backup::recover_interrupted_restore(&config_dir.join(crate::backup::DB_FILE), &config_dir.join(crate::backup::BACKUP_DIR));
     settle_provisional_marker(config_dir, &recovery);
+    if recovery.is_ok() {
+        // Revue du lot F : conservation des dossiers mis de côté (30 jours).
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let purged = purge_set_aside(config_dir, now);
+        if purged > 0 {
+            crate::applog::write_count("backup-recovery", "set-aside-purged", u32::try_from(purged).unwrap_or(u32::MAX));
+        }
+    }
     recovery
 }

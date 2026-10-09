@@ -283,7 +283,7 @@ fn ensure_plain_backups_dir(dir: &Path) -> Result<(), BackupError> {
 }
 
 /// Vrai pour un dossier ordinaire (ni lien ni jonction).
-fn is_plain_dir(path: &Path) -> bool {
+pub fn is_plain_dir(path: &Path) -> bool {
     let Ok(meta) = fs::symlink_metadata(path) else { return false };
     if meta.file_type().is_symlink() || !meta.is_dir() {
         return false;

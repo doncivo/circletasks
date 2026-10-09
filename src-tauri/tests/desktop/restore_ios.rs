@@ -268,7 +268,7 @@ fn p04_ios_i1_conflicting_files_are_set_aside_never_deleted_then_recovery_succee
     fs::write(dir.path().join(format!("{DB_FILE}-wal.restore-old")), b"ancien wal").unwrap();
     fs::write(dir.path().join(format!("{DB_FILE}-wal")), b"wal en conflit").unwrap();
     assert_eq!(recover_interrupted_restore(&db, &backups).unwrap_err().code, "recovery-conflict");
-    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080000Z"), Ok(1));
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080000Z").map(|aside| aside.moved), Ok(1));
     let aside = backups.join("circletasks-set-aside-20261009T080000Z");
     assert_eq!(fs::read(aside.join(format!("{DB_FILE}-wal"))).unwrap(), b"wal en conflit", "déplacé, jamais supprimé");
     recover_interrupted_restore(&db, &backups).expect("récupération possible");
@@ -289,11 +289,114 @@ fn p04_ios_i1_an_unsafe_restore_old_is_set_aside() {
     make_db(&db, Some("true"));
     fs::create_dir_all(dir.path().join(format!("{DB_FILE}.restore-old"))).unwrap();
     assert_eq!(recover_interrupted_restore(&db, &backups).unwrap_err().code, "unsafe-restore-file");
-    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080001Z"), Ok(1));
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080001Z").map(|aside| aside.moved), Ok(1));
     assert!(backups.join("circletasks-set-aside-20261009T080001Z").join(format!("{DB_FILE}.restore-old")).is_dir());
     recover_interrupted_restore(&db, &backups).expect("plus rien d'anormal");
     assert_eq!(lock_value(&db).as_deref(), Some("true"), "base actuelle intacte");
-    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080002Z"), Ok(0), "rien à déplacer");
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080002Z").map(|aside| aside.moved), Ok(0), "rien à déplacer");
+}
+
+// --- revue du lot F : mise de côté encadrée (porte, connexion, dossier ordinaire, destination exclusive, conservation) ---
+
+#[test]
+fn p04_ios_set_aside_is_refused_unless_the_gate_failed_on_a_conflict_and_no_pool_is_open() {
+    use circletasks_lib::startup_gate::set_aside_allowed;
+    assert_eq!(set_aside_allowed(Some(Err("recovery-conflict")), 0), Ok(()));
+    assert_eq!(set_aside_allowed(Some(Err("unsafe-restore-file")), 0), Ok(()));
+    assert_eq!(set_aside_allowed(Some(Err("recovery-conflict")), 1), Err("db-open"), "jamais avec une connexion ouverte");
+    for outcome in [None, Some(Ok(())), Some(Err("io")), Some(Err("no-data-dir")), Some(Err("sql-plugin")), Some(Err("recovery-failed"))] {
+        assert_eq!(set_aside_allowed(outcome, 0), Err("set-aside-refused"), "{outcome:?}");
+    }
+    // La commande vérifie la porte et les pools AVANT tout déplacement.
+    let source = include_str!("../../src/startup_gate.rs");
+    let command = &source[source.find("pub async fn backup_set_aside_conflicts(").unwrap()..];
+    let allowed = command.find("set_aside_allowed(").unwrap();
+    assert!(command.find("open_sql_pools(").unwrap() < allowed && allowed < command.find("set_aside_conflicts(&").unwrap());
+}
+
+#[test]
+fn p04_ios_set_aside_moves_an_abnormal_backups_entry_itself_then_recovery_succeeds() {
+    use circletasks_lib::backup::{recover_interrupted_restore, Recovery};
+    use circletasks_lib::startup_gate::set_aside_conflicts;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::write(&backups, b"un fichier a la place du dossier").unwrap();
+    let db = dir.path().join(DB_FILE);
+    make_db(&db, Some("true"));
+    fs::write(dir.path().join(format!("{DB_FILE}.restore-old")), b"ancienne base").unwrap();
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap_err().code, "unsafe-restore-file");
+    let aside = set_aside_conflicts(&db, &backups, "20261009T090000Z").unwrap();
+    assert_eq!(aside.moved, 1);
+    assert!(!aside.fresh_base);
+    let holder = dir.path().join("circletasks-set-aside-20261009T090000Z");
+    assert_eq!(fs::read(holder.join(BACKUP_DIR)).unwrap(), b"un fichier a la place du dossier", "déplacé, jamais supprimé");
+    assert!(backups.is_dir());
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap(), Recovery::Archived);
+}
+
+#[test]
+fn p04_ios_set_aside_destination_is_created_exclusively_never_overwritten() {
+    use circletasks_lib::startup_gate::set_aside_conflicts;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    let taken = backups.join("circletasks-set-aside-20261009T080000Z");
+    fs::create_dir_all(&taken).unwrap();
+    fs::write(taken.join(format!("{DB_FILE}-wal")), b"mise de cote precedente").unwrap();
+    let db = dir.path().join(DB_FILE);
+    make_db(&db, Some("true"));
+    fs::write(dir.path().join(format!("{DB_FILE}-wal.restore-old")), b"ancien wal").unwrap();
+    fs::write(dir.path().join(format!("{DB_FILE}-wal")), b"wal en conflit").unwrap();
+    assert_eq!(set_aside_conflicts(&db, &backups, "20261009T080000Z").map(|aside| aside.moved), Ok(1));
+    assert_eq!(fs::read(taken.join(format!("{DB_FILE}-wal"))).unwrap(), b"mise de cote precedente", "jamais écrasé");
+    let next = backups.join("circletasks-set-aside-20261009T080000Z-1");
+    assert_eq!(fs::read(next.join(format!("{DB_FILE}-wal"))).unwrap(), b"wal en conflit");
+}
+
+#[test]
+fn p04_ios_set_aside_of_an_unsafe_old_base_takes_its_journal_and_reports_a_fresh_base() {
+    use circletasks_lib::backup::recover_interrupted_restore;
+    use circletasks_lib::startup_gate::set_aside_conflicts;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let db = dir.path().join(DB_FILE);
+    fs::create_dir_all(dir.path().join(format!("{DB_FILE}.restore-old"))).unwrap();
+    fs::write(dir.path().join(format!("{DB_FILE}-wal.restore-old")), b"wal de l'ancienne base").unwrap();
+    let aside = set_aside_conflicts(&db, &backups, "20261009T100000Z").unwrap();
+    assert_eq!(aside.moved, 2, "le journal de l'ancienne base suit sa base : jamais remis à côté d'une autre");
+    assert!(aside.fresh_base, "l'app va créer une base neuve : le message renvoie vers « Avant restauration »");
+    let target = backups.join("circletasks-set-aside-20261009T100000Z");
+    assert_eq!(fs::read(target.join(format!("{DB_FILE}-wal.restore-old"))).unwrap(), b"wal de l'ancienne base");
+    recover_interrupted_restore(&db, &backups).expect("plus rien d'anormal");
+    assert!(!dir.path().join(format!("{DB_FILE}-wal")).exists(), "aucun ancien journal remis");
+}
+
+#[test]
+fn p04_ios_set_aside_folders_are_purged_after_30_days() {
+    use circletasks_lib::backup::utc_stamp;
+    use circletasks_lib::startup_gate::purge_set_aside;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let now = 1_791_590_400_u64; // 2026-10-10T00:00:00Z
+    let old = backups.join(format!("circletasks-set-aside-{}", utc_stamp(now - 31 * 86_400)));
+    let old_suffixed = dir.path().join(format!("circletasks-set-aside-{}-1", utc_stamp(now - 40 * 86_400)));
+    let recent = backups.join(format!("circletasks-set-aside-{}", utc_stamp(now - 29 * 86_400)));
+    for folder in [&old, &old_suffixed, &recent] {
+        fs::create_dir_all(folder).unwrap();
+        fs::write(folder.join("x"), b"x").unwrap();
+    }
+    let not_a_folder = backups.join(format!("circletasks-set-aside-{}", utc_stamp(now - 90 * 86_400)));
+    fs::write(&not_a_folder, b"fichier").unwrap();
+    let odd = backups.join("circletasks-set-aside-pas-une-date");
+    fs::create_dir_all(&odd).unwrap();
+    assert_eq!(purge_set_aside(dir.path(), now), 2);
+    assert!(!old.exists() && !old_suffixed.exists());
+    assert!(recent.is_dir() && not_a_folder.is_file() && odd.is_dir(), "seuls les dossiers datés de plus de 30 jours");
+    // Purge faite au démarrage, après une récupération réussie.
+    let source = include_str!("../../src/startup_gate.rs");
+    let settle = &source[source.find("pub fn recover_and_settle(").unwrap()..];
+    assert!(settle[..settle.find("\n}\n").unwrap()].contains("purge_set_aside("));
 }
 
 // --- revue I2 : nouvel essai du marqueur depuis le mémo ---

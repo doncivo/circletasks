@@ -26,6 +26,16 @@ describe('RecoveryFailure', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it('ancienne base mise de côté et base neuve : renvoi vers « Avant restauration », rechargement seulement sur « Continuer »', async () => {
+    const reload = vi.fn();
+    render(<RecoveryFailure message="startup-recovery: unsafe-restore-file" setAside={() => Promise.resolve({ state: 'ready' as const, notice: 'fresh-base' as const })} reload={reload} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Mettre les fichiers en conflit de côté' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Avant restauration');
+    expect(reload).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Continuer' }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it('no-data-dir et sql-plugin : texte propre, aucune action vaine', () => {
     render(<RecoveryFailure message="startup-recovery: no-data-dir" />);
     expect(screen.getByText(/dossier des données de l’app est introuvable/)).toBeInTheDocument();
