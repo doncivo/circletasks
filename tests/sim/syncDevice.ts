@@ -25,6 +25,8 @@ export interface SimDevice {
   /** Identifiant d'appareil ; change seulement par `restartAs` (Y-10, « Associer de nouveau »). */
   id: DeviceId;
   readonly name: string;
+  /** I-06 : plateforme simulée (`windows` par défaut) ; l'iPhone importe la clé depuis la fenêtre principale (ADR 0011 §23). */
+  readonly devicePlatform: 'windows' | 'ios';
   readonly driver: SqlDriver;
   readonly data: DataAccess;
   readonly clock: ManualClock;
@@ -75,7 +77,8 @@ export async function warmSimDevices(): Promise<void> {
   await migratedDatabaseImage();
 }
 
-export async function createSimDevice(id: string, options: { readonly name?: string; readonly start?: string; readonly clock?: ManualClock } = {}): Promise<SimDevice> {
+/** I-06 : `appVersion` (numéro publié, `0.4.0` par défaut) et `devicePlatform` (`windows` par défaut) de l'appareil simulé. */
+export async function createSimDevice(id: string, options: { readonly name?: string; readonly start?: string; readonly clock?: ManualClock; readonly appVersion?: string; readonly devicePlatform?: 'windows' | 'ios' } = {}): Promise<SimDevice> {
   const driver = await openSqliteWasmDriver({}, await migratedDatabaseImage());
   const clock = options.clock ?? createManualClock(options.start ?? '2026-10-05T08:00:00.000Z');
   let deviceId = id as DeviceId;
@@ -87,9 +90,9 @@ export async function createSimDevice(id: string, options: { readonly name?: str
   const data = createDataAccess(driver, stamper, createSqlRepositories);
   await data.repos.settings.set('device.id', deviceId);
 
-  const makePlatform = (): MemorySyncPlatform => createMemorySyncPlatform({ folder, nowMs: () => clock.nowMs() });
+  const makePlatform = (): MemorySyncPlatform => createMemorySyncPlatform({ folder, nowMs: () => clock.nowMs(), ...(options.devicePlatform ? { platform: options.devicePlatform } : {}) });
   const makeService = (platform: MemorySyncPlatform): SyncEngineService => {
-    const service = createSyncService({ data, platform, hlc, clock, deviceId, sv: SCHEMA_VERSION, appVersion: '0.4.0', logger, setTimeout: () => 0, clearTimeout: () => undefined });
+    const service = createSyncService({ data, platform, hlc, clock, deviceId, ...(options.devicePlatform ? { devicePlatform: options.devicePlatform } : {}), sv: SCHEMA_VERSION, appVersion: options.appVersion ?? '0.4.0', logger, setTimeout: () => 0, clearTimeout: () => undefined });
     service.onRemoteChanges((c) => changes.push(c));
     return service;
   };
@@ -97,6 +100,7 @@ export async function createSimDevice(id: string, options: { readonly name?: str
   const device: SimDevice = {
     id: deviceId,
     name: options.name ?? id.slice(0, 4),
+    devicePlatform: options.devicePlatform ?? 'windows',
     driver,
     data,
     clock,
@@ -177,7 +181,8 @@ export async function pair(owner: SimDevice, joiner: SimDevice): Promise<void> {
   await owner.platform.key.openPairing('show');
   const payload = await owner.platform.key.pairingPayload();
   await owner.platform.key.closePairing();
-  await joiner.platform.key.openPairing('import');
+  // iPhone : saisie de la clé de secours dans la fenêtre principale (pas de fenêtre `pairing`).
+  if (joiner.devicePlatform === 'windows') await joiner.platform.key.openPairing('import');
   await joiner.platform.key.import({ recoveryKey: payload.recoveryKey });
 }
 

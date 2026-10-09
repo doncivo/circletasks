@@ -72,7 +72,7 @@ function lockableData(): { readonly data: DataAccess; readonly locked: { on: boo
 }
 
 function phoneService(platform: MemorySyncPlatform, data: DataAccess = db.data) {
-  return createSyncService({ data, platform, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: 'ios', sv: 14, logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
+  return createSyncService({ data, platform, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), clock: db.clock, deviceId: PHONE, devicePlatform: 'ios', sv: 14, appVersion: '0.2.3', logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
 }
 
 describe('appareil sans clé : toujours « à associer » (Y-IOS-02)', () => {

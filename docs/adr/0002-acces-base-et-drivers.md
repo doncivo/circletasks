@@ -100,3 +100,7 @@ Critères D-03 8 et 9 ; PRD section 7. Remplit le point d'accroche `beforeApply`
 
 - `search_index` (FTS5) et `search_index_doc` (liaison élément → rowid) sont locaux : exclus des journaux de synchro, reconstruits sur chaque appareil (`SearchRepository.rebuild`, `isStale`).
 - Mise à jour par déclencheurs SQL (migration 0011), donc aussi pour les écritures de la synchro ; suppression logique = retrait de l'index, restauration = retour.
+
+## Renvoi I-06 (2026-10-09)
+
+Base plus récente que l'app : erreur typée `SchemaNewerThanApp` (avant toute écriture) ; échec d'une migration après une mise à jour : sauvegarde « Avant mise à jour » unique (réutilisée à la reprise) et action « Restaurer la sauvegarde d'avant la mise à jour ». Détail : ADR 0007, avenant I-06 points 4, 6 et 7.

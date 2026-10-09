@@ -99,7 +99,7 @@ function containerFor(platform: SyncPlatform, os: Os, service: FakeSyncService |
   const hlc = createHlcClock({ clock: db.clock, deviceId: SELF });
   const sync =
     service ??
-    createSyncService({ data: access, platform, hlc, clock: db.clock, deviceId: SELF, devicePlatform: os, sv: 14, logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
+    createSyncService({ data: access, platform, hlc, clock: db.clock, deviceId: SELF, devicePlatform: os, sv: 14, appVersion: '0.2.3', logger: silentSyncLogger, setTimeout: () => 0, clearTimeout: () => undefined });
   return createAppContainer({ clock: db.clock, hlc, data: access, sync, syncPlatform: platform, platform: { runtime: 'tauri', os } });
 }
 

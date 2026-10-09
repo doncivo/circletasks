@@ -32,6 +32,7 @@ function serviceOn(platform: MemorySyncPlatform, os: 'ios' | 'windows') {
     deviceId: SELF,
     devicePlatform: os,
     sv: 14,
+    appVersion: '0.2.3',
     logger: silentSyncLogger,
     setTimeout: () => 0,
     clearTimeout: () => undefined,

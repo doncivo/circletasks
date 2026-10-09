@@ -19,6 +19,7 @@ const ERROR_KEYS: Record<Exclude<BackupFailureReason, 'sync-busy' | 'busy' | 'db
   'rollback-failed': 'backup.errorRollback',
   'restore-pending': 'backup.errorPending',
   'restore-unconfirmed': 'backup.errorUnconfirmed',
+  'bad-name': 'backup.errorBadName',
   unavailable: 'backup.errorIo',
 };
 

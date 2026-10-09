@@ -32,6 +32,11 @@ export async function openDatabase(runtime: Runtime = detectRuntime()): Promise<
  *   rien à protéger ; la sauvegarde réelle est couverte par `cargo test` (ADR 0002, avenant).
  */
 export async function createMigrationBackup(db: SqlDriver): Promise<MigrationBackup | undefined> {
+  // I-06 (e2e `iphone`, développement seulement) : faux port posé par le test (`__ctMigrationBackup`) pour l'écran d'échec après une mise à jour.
+  if (import.meta.env.DEV) {
+    const override = (globalThis as { __ctMigrationBackup?: MigrationBackup }).__ctMigrationBackup;
+    if (override) return override;
+  }
   if (db.kind !== 'tauri-sqlite') return undefined;
   const { createTauriMigrationBackup } = await import('./tauri/migrationBackup');
   return createTauriMigrationBackup(db);

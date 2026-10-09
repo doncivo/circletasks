@@ -23,6 +23,12 @@
   gap: var(--ct-space-3);
 }
 
+/* I-06 : annonce et échec de la restauration, sur leur propre ligne sous les actions. */
+.ct-db-failure__note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
 .ct-db-failure__actions button {
   min-width: 44px;
   min-height: 44px;

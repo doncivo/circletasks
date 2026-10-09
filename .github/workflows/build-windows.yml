@@ -46,6 +46,9 @@ jobs:
         run: |
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             node scripts/release/check-version.mjs "${GITHUB_REF_NAME}"
+            # I-06 (ADR 0007 avenant I-06 point 3) : un tag sans section dans CHANGELOG.md échoue AVANT la compilation.
+            VERSION="${GITHUB_REF_NAME#v}"
+            node scripts/release/release-notes.mjs "${VERSION}" > /dev/null || { echo "::error::Aucune section « ## ${VERSION} » dans CHANGELOG.md : publication refusée"; exit 1; }
           else
             node scripts/release/check-version.mjs
           fi
@@ -123,18 +126,8 @@ jobs:
           if [ "${GITHUB_EVENT_NAME}" = "push" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             test -f "${DIR}/${EXE}.sig" || { echo "::error::Signature .sig absente : createUpdaterArtifacts n'a rien produit."; exit 1; }
             cp "${DIR}/${EXE}.sig" dist-release/
-            # Notes : section de CHANGELOG.md dont le titre « ## [X.Y.Z] » ou « ## X.Y.Z » correspond exactement.
-            NOTES=""
-            if [ -f CHANGELOG.md ]; then
-              NOTES=$(awk -v v="${VERSION}" '
-                /^## / {
-                  if (found) exit
-                  t = $0; sub(/^## +/, "", t); sub(/^\[/, "", t)
-                  if (t == v || index(t, v "]") == 1 || index(t, v " ") == 1) { found = 1; next }
-                }
-                found { print }' CHANGELOG.md)
-            fi
-            [ -n "${NOTES}" ] || NOTES="CircleTasks ${VERSION}"
+            # Notes : section de CHANGELOG.md « ## [X.Y.Z] » ou « ## X.Y.Z », script commun PC et iPhone (I-06) ; absente sur un tag = échec.
+            NOTES=$(node scripts/release/release-notes.mjs "${VERSION}") || { echo "::error::Aucune section « ## ${VERSION} » dans CHANGELOG.md : publication refusée"; exit 1; }
             BASE="https://github.com/${RELEASES_REPO}/releases/download/v${VERSION}"
             node scripts/release/make-latest-json.mjs "${VERSION}" "dist-release/${EXE}" "dist-release/${EXE}.sig" "${BASE}" "${NOTES}" > dist-release/latest.json
             cat dist-release/latest.json

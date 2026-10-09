@@ -1,3 +1,4 @@
+import type { UpdateRestoreActionProps } from './UpdateRestoreAction';
 import { Component, createElement, lazy, Suspense, useState, type ComponentType, type ErrorInfo, type ReactElement, type ReactNode } from 'react';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform';
@@ -112,6 +113,8 @@ export const TabsScreen = lazyScreen<object>(() => import('../settings/TabsScree
 export const ImportScreen = lazyScreen<object>(() => import('../settings/ImportScreen').then((m) => ({ default: m.ImportScreen })), 'importscreen');
 /** P-04-iOS (revue I1) : texte et action de l'écran « Restauration interrompue », chargés seulement dans ce cas. */
 export const RecoveryFailureLazy = lazyScreen<{ message: string }>(() => import('./RecoveryFailure').then((m) => ({ default: m.RecoveryFailure })), 'recoveryfailure');
+/** I-06 : « Restaurer la sauvegarde d'avant la mise à jour » de l'écran d'échec du démarrage. */
+export const UpdateRestoreActionLazy = lazyScreen<UpdateRestoreActionProps>(() => import('./UpdateRestoreAction').then((m) => ({ default: m.UpdateRestoreAction })), 'updaterestoreaction');
 /** Écran Logs (I-04), ouvert depuis Réglages › À PROPOS. */
 export const LogsScreen = lazyScreen<object>(() => import('../settings/logs/LogsScreen').then((m) => ({ default: m.LogsScreen })), 'logsscreen');
 export const RecapSettingsScreen = lazyScreen<object>(() => import('../reminders/RecapSettingsScreen').then((m) => ({ default: m.RecapSettingsScreen })), 'recapsettingsscreen');

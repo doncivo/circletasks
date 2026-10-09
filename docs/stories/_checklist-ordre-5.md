@@ -142,7 +142,7 @@ Sources : fiches FILES-IOS-01, I-04, P-04-iOS, CAP-IOS-01, I-05. Les critères u
 
 ## Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), ajouté par le product-owner le 2026-10-09
 
-Source : fiche I-06 (A1 à A10). Deux IPA de la même branche : N, puis N+1 avec une migration additive et une entrée dans `CHANGELOG.md`. Ne jamais supprimer l'app entre N et N+1 (sinon les données locales sont perdues et les cases sont à refaire).
+Source : fiche I-06 (A1 à A10). Deux IPA de la même branche : N, puis N+1 avec une migration additive et une entrée dans `CHANGELOG.md`. N+1 exige un numéro plus haut dans `package.json`, `src-tauri/tauri.conf.json` et `src-tauri/Cargo.toml` (le `CFBundleVersion` en découle) et une section `## X.Y.Z` dans `CHANGELOG.md` (sinon le tag `ios-vX.Y.Z` échoue avant la compilation) ; le résumé du run `build-ios.yml` affiche version, build, première ligne des notes et « source valide ». Ne jamais supprimer l'app entre N et N+1 (sinon les données locales sont perdues et les cases sont à refaire).
 
 - [ ] I-06 A1 et A2 : N installée depuis la source SideStore ; version de « À propos » notée ; 3 tâches (une avec rappel à +2 jours, une routine, une en Perso), thème sombre, Face ID, dossier iCloud, appareil associé, tâche reçue du PC, nombre de notifications en attente noté.
 - [ ] I-06 A3 : N+1 visible dans la source avec ses **notes** (texte relevé), « Mettre à jour » en un geste, durée notée.

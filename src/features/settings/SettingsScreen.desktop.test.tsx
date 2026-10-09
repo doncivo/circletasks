@@ -94,8 +94,8 @@ describe('SettingsScreen PC (D-02, D-03)', () => {
 
   describe('À propos (D-03)', () => {
     it('affiche la version installée et le bouton de recherche (critère 7)', async () => {
-      desktop.version = '0.1.0';
-      renderScreen();
+      // I-06 : la version vient du conteneur (lue au démarrage par platform/appVersion.ts, même lecteur que DesktopPlatform.getVersion).
+      renderScreen(createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, desktop, appVersion: { ok: true, version: '0.1.0', source: 'runtime' } }));
       expect(await screen.findByText('Version 0.1.0')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Rechercher une mise à jour' })).toBeEnabled();
     });

@@ -18,6 +18,19 @@ export interface DbFailure {
   readonly message: string;
   /** Mode de journal effectif de la base ouverte (PRAGMA journal_mode) ; null si illisible, absent si la base n'était pas ouverte. */
   readonly journalMode?: string | null;
+  /**
+   * I-06 (ADR 0007 avenant I-06 point 7) : nature de l'échec d'ouverture : base plus récente que l'app, migration, sauvegarde avant
+   * migration, autre. Absent pour la suite du démarrage et le chien de garde.
+   */
+  readonly kind?: 'schema-newer' | 'migration' | 'backup' | 'other';
+  /** Version de l'app (`appVersion.ts`) ; null si illisible. */
+  readonly appVersion?: string | null;
+  /** Dernière migration appliquée à la base au moment de l'échec ; null si `schema_migrations` n'a pas été lue. */
+  readonly schemaVersion?: number | null;
+  /** Dernière migration connue du code. */
+  readonly appSchemaVersion?: number;
+  /** Sauvegarde « Avant mise à jour » de ce démarrage (créée ou réutilisée) : nom seul ; null s'il n'y en a pas. */
+  readonly updateBackup?: { readonly name: string } | null;
 }
 
 /**

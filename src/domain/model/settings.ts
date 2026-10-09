@@ -104,6 +104,11 @@ export interface SettingsValues {
   'security.appLock': unknown;
   /** I-02 (ADR 0013 §3.3) : dernière date d'expiration lue, échec, alerte en attente. Valeur BRUTE lue par `parseSigningStatus` ; locale. */
   'notifications.signing': unknown;
+  /**
+   * I-06 (ADR 0007 avenant I-06 point 6) : version de l'app au dernier démarrage réussi sur cet appareil ; un changement au démarrage =
+   * premier lancement d'une nouvelle version (replanification complète des rappels, journal `app-updated`). Locale, jamais synchronisée.
+   */
+  'app.lastLaunchedVersion': string | null;
 }
 
 export type SettingKey = keyof SettingsValues;
@@ -153,6 +158,7 @@ export const SETTINGS_DEFINITIONS: { readonly [K in SettingKey]: SettingDefiniti
   'appleReminders.status': { scope: 'local', defaultValue: null },
   'security.appLock': { scope: 'local', defaultValue: false },
   'notifications.signing': { scope: 'local', defaultValue: null },
+  'app.lastLaunchedVersion': { scope: 'local', defaultValue: null },
 };
 
 /** Valeur par défaut d'un réglage. */

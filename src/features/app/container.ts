@@ -23,6 +23,8 @@ import { createNoopHaptics, type Haptics } from '../../platform/haptics';
 import { createUnavailableAuthenticator, type AppAuthenticator } from '../../platform/biometric';
 import { createNoopPrivacyShield, type PrivacyShield } from '../../platform/privacyShield';
 import { createUnsupportedSigning, type SigningPlatform } from '../../platform/signing';
+import { buildAppVersion, type AppVersionRead } from '../../platform/appVersion';
+import type { LaunchKind } from '../../domain/appUpdate';
 import { createSettingsLedger } from '../reminders/settingsLedger';
 import { createShortcutRegistry, type ShortcutRegistry } from './shortcuts';
 import { createTaskEntities, type TaskEntities } from './taskEntities';
@@ -97,6 +99,13 @@ export interface AppContainer {
   readonly privacyShield: PrivacyShield;
   /** Expiration de la signature SideStore (I-02, ADR 0013 §3) : lecture du profil et alerte (identifiant réservé 2) sur l'iPhone installé, non prise en charge ailleurs. */
   readonly signing: SigningPlatform;
+  /** Version de l'app lue au démarrage (I-06, `platform/appVersion.ts`) : « À propos », en-tête de l'export des logs. */
+  readonly appVersion: AppVersionRead;
+  /**
+   * Nature de ce lancement (I-06, `domain/appUpdate.ts`) : `updated` = premier lancement d'une nouvelle version (le premier passage des
+   * rappels est demandé avec le déclencheur `update`).
+   */
+  readonly launch: LaunchKind;
 }
 
 export type AppContainerParts = Pick<AppContainer, 'hlc' | 'data'> & Partial<AppContainer>;
@@ -150,6 +159,8 @@ export function createAppContainer(parts: AppContainerParts): AppContainer {
     authenticator: parts.authenticator ?? createUnavailableAuthenticator(),
     privacyShield: parts.privacyShield ?? createNoopPrivacyShield(),
     signing: parts.signing ?? createUnsupportedSigning(),
+    appVersion: parts.appVersion ?? buildAppVersion(),
+    launch: parts.launch ?? 'same',
   };
 }
 

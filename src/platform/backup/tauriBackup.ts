@@ -50,7 +50,7 @@ export function loadTauriBackupApi(): TauriBackupApi {
   };
 }
 
-const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed', 'restore-pending', 'restore-unconfirmed', 'db-open'];
+const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed', 'restore-pending', 'restore-unconfirmed', 'bad-name', 'db-open'];
 
 /** Issue du marqueur rendue par Rust (`RestoreOutcome.marker`, P-04-iOS critère 12) ; forme inattendue : `failed` (jamais tue). */
 export function markerOf(raw: unknown): RestoreResult {

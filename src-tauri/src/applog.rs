@@ -552,6 +552,18 @@ pub fn init(dir: PathBuf) {
     state.dir = Some(dir);
 }
 
+/// Tests seulement (`test-hooks`) : état du processus remis à neuf (dossier, entrées en attente, débit). Les tests d'un même processus
+/// partagent cet état : sans remise à zéro, les entrées notées AVANT `init` par d'autres tests (file `pending`) sont versées dans le dossier
+/// du test qui appelle `init`. À appeler sous `support::applog_dir_lock()`.
+#[cfg(feature = "test-hooks")]
+pub fn reset_for_tests() {
+    let mut state = state();
+    state.dir = None;
+    state.pending.clear();
+    state.write_error = None;
+    state.rates = RateTable::new();
+}
+
 /// Écriture interne à Rust : deux identifiants fixes, aucun texte dynamique. Avant `init`, gardée en mémoire (100 au plus).
 pub fn write(scope: &'static str, code: &'static str) {
     write_entry(scope, code, None);

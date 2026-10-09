@@ -48,6 +48,8 @@ export const backupFr = {
   errorClosed: 'La restauration a échoué. Redémarrez CircleTasks pour retrouver vos données actuelles.',
   errorRollback: 'La restauration a échoué et l’ancien fichier n’a pas pu être remis en place. Une copie de sécurité est dans le dossier des sauvegardes.',
   errorPending: 'Une restauration précédente a été interrompue : redémarrez CircleTasks pour la terminer avant d’en lancer une autre.',
+  /** Revue I-06 : nom refusé par Rust (`bad-name`), par exemple une sauvegarde qui n'est pas « Avant mise à jour » pour l'écran d'échec. */
+  errorBadName: 'Cette sauvegarde ne peut pas être utilisée ici. Rien n’a été modifié.',
   errorUnconfirmed: 'La restauration précédente n’est pas encore confirmée. Rouvrez CircleTasks ; si ce message revient, choisissez « Garder les données synchronisées » dans la fenêtre de synchro.',
   restart: 'Redémarrer',
   recoveryFailed: 'Restauration interrompue : redémarrez CircleTasks.',

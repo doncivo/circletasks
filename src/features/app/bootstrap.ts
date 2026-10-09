@@ -5,7 +5,9 @@ import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
 import { DbStepError, JournalModeError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
-import { migrate } from '../../db/migrator';
+import { migrate, SchemaNewerThanApp, type Migration } from '../../db/migrator';
+import { classifyLaunch, shouldRecordLaunch, type LaunchKind } from '../../domain/appUpdate';
+import { publishedAppVersion, readAppVersion, type AppVersionRead } from '../../platform/appVersion';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
 import { detectOs, detectRuntime, openDesktopPlatform, type DesktopPlatform } from '../../platform';
@@ -28,7 +30,7 @@ import { openSpeechRecognizer, setSpeechRecognizer, unavailableSpeech } from '..
 import { openSystemSettings, setSystemSettings } from '../../platform/systemSettings';
 import type { SyncPlatform } from '../../platform/sync/types';
 import { createSyncService } from '../../sync';
-import { useAppStore } from './appStore';
+import { useAppStore, type DbFailure } from './appStore';
 import { createAppContainer, type AppContainer } from './container';
 
 /**
@@ -41,6 +43,17 @@ export interface BootstrapDatabaseOptions {
   readonly clock?: Clock | undefined;
   /** Port de sauvegarde avant migration ; celui de la plateforme par défaut (aucun en navigateur de dev). */
   readonly backup?: ((db: SqlDriver) => Promise<MigrationBackup | undefined>) | undefined;
+  /** Migrations de l'app ; remplaçables en test seulement (version N+1 avec une migration de test, I-06). */
+  readonly migrations?: readonly Migration[] | undefined;
+  /** I-06 : version de l'app lue avant l'ouverture, jointe au diagnostic d'échec (null : illisible). */
+  readonly appVersion?: string | null | undefined;
+}
+
+/** I-06 : nature de l'échec d'ouverture, pour l'écran d'échec (texte, actions). */
+function failureKind(error: unknown, step: string): NonNullable<DbFailure['kind']> {
+  if (error instanceof SchemaNewerThanApp) return 'schema-newer';
+  if (error instanceof MigrationBackupError) return 'backup';
+  return step === 'migration' ? 'migration' : 'other';
 }
 
 export async function bootstrapDatabase(
@@ -50,9 +63,13 @@ export async function bootstrapDatabase(
   const { setDbStatus } = useAppStore.getState();
   setDbStatus('loading');
   let db: SqlDriver | undefined;
+  const list = options.migrations ?? migrations;
   // 0.2.1 : étape en cours, mise à jour avant chaque appel (diagnostic affiché sous app.dbError).
   let step: DbOpenStep = 'load';
   let migration: number | undefined;
+  // I-06 : dernière migration appliquée (lue, puis suivie migration par migration) et sauvegarde « Avant mise à jour » de ce démarrage.
+  let schemaVersion: number | null = null;
+  let updateBackup: { readonly name: string } | null = null;
   const { setDbProgress } = useAppStore.getState();
   setDbProgress({ step });
   try {
@@ -60,10 +77,22 @@ export async function bootstrapDatabase(
     step = 'backup';
     setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
-    await migrate(db, migrations, {
-      beforeApply: createBackupBeforeMigration(port, options.clock),
+    await migrate(db, list, {
+      beforeApply: createBackupBeforeMigration(
+        port,
+        options.clock,
+        (backup) => {
+          updateBackup = { name: backup.name };
+        },
+        () => logFailure('db', 'pre-migration-list-unreadable'),
+      ),
       afterApply: (db) => reintegrateAfterMigration(db, options.clock).then(() => undefined),
+      onSchemaRead: ({ current }) => {
+        schemaVersion = current;
+      },
       onStep: (current) => {
+        // L'étape suivante commence : la migration précédente est validée (chacune dans sa transaction).
+        if (step === 'migration' && migration !== undefined) schemaVersion = migration;
         step = current.kind;
         migration = current.kind === 'migration' ? current.version : undefined;
         setDbProgress({ step, migration });
@@ -79,11 +108,27 @@ export async function bootstrapDatabase(
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
     const message = describeError(error);
+    const kind = failureKind(error, failedStep);
     logFailure('db', `ouverture impossible (${failedStep}${migration === undefined ? '' : ` ${String(migration)}`}) : ${errorName(error)}: ${message}`);
+    // I-04 / I-06 : ligne sans contenu (numéro et nom de l'erreur seulement).
+    if (kind === 'migration') logFailure('db', `migration ${String(migration ?? '?')} impossible (${errorName(error)})`);
+    if (kind === 'schema-newer') logFailure('db', `schema-newer ${String(schemaVersion ?? '?')} ${String(list.at(-1)?.version ?? 0)}`);
     setDbStatus('error', {
       detail: message,
       backupFailed: error instanceof MigrationBackupError,
-      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message, ...(journalMode === undefined ? {} : { journalMode }) },
+      failure: {
+        phase: 'open',
+        step: failedStep,
+        migration: failedStep === 'migration' ? migration : undefined,
+        errorName: errorName(error),
+        message,
+        ...(journalMode === undefined ? {} : { journalMode }),
+        kind,
+        ...(options.appVersion === undefined ? {} : { appVersion: options.appVersion }),
+        schemaVersion,
+        appSchemaVersion: list.at(-1)?.version ?? 0,
+        updateBackup: kind === 'schema-newer' ? null : updateBackup,
+      },
     });
     return undefined;
   }
@@ -158,6 +203,29 @@ export interface BootstrapAppOptions {
   readonly privacyShield?: PrivacyShield;
   /** Expiration de la signature (I-02) ; `openSigning` par défaut. */
   readonly signing?: SigningPlatform;
+  /** Version de l'app (I-06) ; `readAppVersion` par défaut (PC et iPhone). */
+  readonly appVersion?: () => Promise<AppVersionRead>;
+  /** Voir BootstrapDatabaseOptions.migrations (tests seulement). */
+  readonly migrations?: readonly Migration[];
+}
+
+/**
+ * I-06 (ADR 0007 avenant I-06 point 6) : premier lancement d'une nouvelle version ? Lecture du réglage local `app.lastLaunchedVersion` ;
+ * une lecture impossible compte comme une mise à jour (une replanification complète de plus, sans effet néfaste). Journal : numéros seuls.
+ */
+async function readLaunch(settings: { get(key: 'app.lastLaunchedVersion'): Promise<string | null> }, version: AppVersionRead, hadPreviousRun: boolean): Promise<{ kind: LaunchKind; previous: string | null }> {
+  let previous: unknown;
+  try {
+    previous = await settings.get('app.lastLaunchedVersion');
+  } catch {
+    logFailure('app', 'launch-version-unreadable');
+    previous = '';
+  }
+  const kind = classifyLaunch(previous, version.version, hadPreviousRun);
+  const shown = typeof previous === 'string' && previous !== '' ? previous : '?';
+  if (kind === 'updated') logFailure('app', `app-updated ${shown} ${version.version ?? '?'}`);
+  if (kind === 'downgraded') logFailure('app', `app-downgraded ${shown} ${version.version ?? '?'}`);
+  return { kind, previous: typeof previous === 'string' ? previous : null };
 }
 
 /** Tampon des lectures de démarrage : toute écriture à ce stade est une erreur de programmation. */
@@ -175,8 +243,15 @@ const readOnlyStamper: WriteStamper = {
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
   // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
   const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
-  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup });
+  // Démarrage en cours, posé SANS attendre : App.tsx ne lance `bootstrapApp` que si dbStatus vaut « idle », et le double appel de l'effet
+  // (StrictMode, remontage) ne doit jamais créer deux apps (deux conteneurs, deux sauvegardes du jour, deux reports à minuit). La lecture
+  // de la version ci-dessous est asynchrone : sans cette ligne, le second appel trouvait encore « idle » (régression I-06 vue en CI).
+  useAppStore.getState().setDbStatus('loading');
+  // I-06 : version lue AVANT l'ouverture (diagnostic d'échec, synchro, « À propos ») ; ne rejette jamais.
+  const appVersion = await (options.appVersion ?? readAppVersion)();
+  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup, migrations: options.migrations, appVersion: appVersion.version });
   if (!driver) return undefined;
+  const list = options.migrations ?? migrations;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;
   const ids = options.ids ?? uuidGenerator;
@@ -196,6 +271,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
     const hlc = at('createHlcClock', () => createHlcClock({ clock, deviceId, seed }));
     const data = at('createDataAccess', () => createDataAccess(driver, createWriteStamper(clock, hlc), factory));
     if (!storedDeviceId) await at('settings.set(device.id)', () => data.repos.settings.set('device.id', deviceId));
+    const launch = await at('readLaunch', () => readLaunch(boot.settings, appVersion, storedDeviceId !== null));
     // ADR 0011 section 3.2 (audit M10) : la garde de la synchro est vide au démarrage, y compris après une restauration P-04 (qui relance
     // l'app). Une ligne trouvée (base copiée à chaud) est supprimée et journalisée.
     const strayGuards = await Promise.resolve()
@@ -210,7 +286,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
     const desktop = options.desktop === undefined ? await at('openDesktopPlatform', () => openDesktopPlatform()) : options.desktop;
     const opened = options.syncPlatform === undefined ? at('openSyncPlatform', () => openSyncPlatform(detectRuntime(), detectOs())) : options.syncPlatform;
     const syncPlatform = at('syncPlatform.available', () => opened?.available()) ? opened : null;
-    const appVersion = syncPlatform && desktop ? await at('desktop.getVersion', () => desktop.getVersion().catch(() => '0.0.0')) : '0.0.0';
+    // I-06 : même version sur PC et iPhone (fin du '0.0.0' de l'iPhone) ; illisible : 'unknown', jamais 0.0.0.
     const sync = syncPlatform
       ? at('createSyncService', () =>
           createSyncService({
@@ -220,8 +296,8 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
             clock,
             deviceId,
             devicePlatform: detectOs() === 'ios' ? 'ios' : 'windows',
-            appVersion,
-            sv: migrations.at(-1)?.version ?? 1,
+            appVersion: publishedAppVersion(appVersion),
+            sv: list.at(-1)?.version ?? 1,
           }),
         )
       : null;
@@ -255,8 +331,16 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       authenticator: options.authenticator ?? at('openAuthenticator', () => openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) })),
       privacyShield: options.privacyShield ?? at('openPrivacyShield', () => openPrivacyShield(runtime, os)),
       signing: options.signing ?? at('openSigning', () => openSigning(runtime, os)),
+      appVersion,
+      launch: launch.kind,
     };
-    return at('createAppContainer', () => createAppContainer(deps));
+    const container = at('createAppContainer', () => createAppContainer(deps));
+    // I-06 : version mémorisée à la fin d'un démarrage réussi seulement (jamais si elle est illisible) ; un échec d'écriture ne bloque rien
+    // (le lancement suivant compte encore comme une mise à jour : une replanification de plus).
+    if (appVersion.ok && shouldRecordLaunch(launch.kind)) {
+      await data.repos.settings.set('app.lastLaunchedVersion', appVersion.version).catch((error: unknown) => logFailure('app', `launch-version-unwritable (${errorName(error)})`));
+    }
+    return container;
   } catch (error) {
     publishStartFailure(step, error);
     return undefined;

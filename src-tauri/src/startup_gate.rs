@@ -442,6 +442,31 @@ pub fn restore_with_provisional_marker(
     Ok((crate::backup::RestoreOutcome { marker: state, marker_code: code, ..outcome }, pending))
 }
 
+/// I-06 (revue I2) : « Restaurer la sauvegarde d'avant la mise à jour » depuis l'écran d'échec d'une migration = RETOUR ARRIÈRE LOCAL,
+/// pas un retour dans le temps : la sauvegarde « Avant mise à jour » est la base telle qu'elle était juste avant la migration (aucune
+/// écriture entre les deux), donc AUCUN marqueur de restauration de la synchro n'est écrit (ni provisoire, ni définitif) : la fenêtre de
+/// choix « Appliquer partout » n'est jamais proposée et la fusion normale reprend. Mêmes contrôles et même échange que P-04 (vérification
+/// du fichier, copie de sécurité, verrou recopié) ; un marqueur provisoire d'une restauration précédente non réglé refuse l'opération
+/// (`restore-unconfirmed`) comme pour P-04, et un marqueur déjà en place n'est jamais touché. Seules les sauvegardes `pre-migration` sont
+/// acceptées (`bad-name` sinon). Issue : `marker` vaut `skipped`.
+pub fn restore_local_rollback(
+    config_dir: &Path,
+    name: &str,
+    stamp: &str,
+    hook: &dyn Fn(crate::backup::RestoreStep) -> std::io::Result<()>,
+) -> Result<crate::backup::RestoreOutcome, crate::backup::BackupError> {
+    if !matches!(crate::backup::parse_backup_name(name), Some((crate::backup::Family::Migration, _))) {
+        return Err(crate::backup::BackupError { code: "bad-name", message: "seule une sauvegarde d'avant mise à jour se restaure sans marqueur".to_owned() });
+    }
+    let backups = config_dir.join(crate::backup::BACKUP_DIR);
+    crate::backup::check_named_backup(&backups, name)?;
+    if !settle_provisional_marker(config_dir, &Ok(crate::backup::Recovery::Nothing)) {
+        return Err(crate::backup::BackupError { code: "restore-unconfirmed", message: "un marqueur de restauration provisoire n'est pas encore réglé (redémarrage)".to_owned() });
+    }
+    let outcome = crate::backup::restore_backup_file(&config_dir.join(crate::backup::DB_FILE), &backups, name, crate::backup::APP_SCHEMA_VERSION, stamp, hook)?;
+    Ok(crate::backup::RestoreOutcome { marker: "skipped", marker_code: None, ..outcome })
+}
+
 /// Règle un marqueur provisoire (au démarrage après la récupération, et avant toute nouvelle restauration). La DÉCISION vient de la base en
 /// place, jamais de l'issue de la récupération (`Nothing` est ambigu) : le marqueur est confirmé seulement si la base porte le jeton de
 /// restauration qu'il contient (`backup::database_token`), sinon annulé (marqueur d'avant remis, ou provisoire retiré). Si la confirmation ou
