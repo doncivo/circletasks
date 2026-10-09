@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { t, type PlainMessageKey } from '../../i18n';
 import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderInfo, type SyncPlatform } from '../../platform/sync';
-import { Button, ChoiceDialog } from '../../ui';
+import { Button, ChoiceDialog, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import type { AppContainer } from '../app/container';
 import { JoinProgress } from './JoinProgress';
@@ -11,6 +12,7 @@ import { syncStore } from './syncStore';
 import { failureLine, folderLabel } from './syncText';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
+import { SyncDetailsPairing } from './SyncDetailsPairing';
 
 export { folderLabel };
 import './SyncSettingsSection.css';
@@ -66,6 +68,11 @@ export function syncErrorMessageKey(code: SyncErrorCode, ios = false): PlainMess
   }
 }
 
+/** Le texte d'erreur demande de choisir un dossier (de nouveau, ou un autre) : « Choisir le dossier » proposé à côté. */
+function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
+  return code === 'unsafe-folder' || code === 'not-local' || (ios && code === 'folder-unreachable');
+}
+
 /** État de la section, lu sur la plateforme : dossier, puis présence de la clé. */
 async function readView(platform: SyncPlatform): Promise<View> {
   let info: SyncFolderInfo;
@@ -109,6 +116,9 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const [pairingBusy, setPairingBusy] = useState(false);
   // iPhone (§23 point 7) : écran « Associer au PC » ouvert ; il reste ouvert quand l'association change la ligne.
   const [iosPairing, setIosPairing] = useState(false);
+  // iPhone sans clé (§23 point 9) : confirmation de « Commencer une nouvelle synchronisation » et son issue (refus visible).
+  const [startOpen, setStartOpen] = useState(false);
+  const [startNotice, setStartNotice] = useState<PlainMessageKey | null>(null);
 
   useEffect(() => {
     if (!available) return;
@@ -133,6 +143,12 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     };
   }, [available, container, platform]);
 
+  // Y-IOS-02 (point de contrôle d'Ali, 0.2.1) : l'état de la ligne (dossier, clé) est relu à chaque changement de phase du service : une
+  // ligne lue avant un cycle ne contredit jamais le moteur (« Associer au PC » toujours proposé tant que la clé manque).
+  // Audit des impasses : relue aussi sur « Réessayer » et au retour au premier plan (iPhone déverrouillé, iCloud pour Windows rouvert).
+  const phase = useFeatureStore(syncStore, (s) => s.status.phase);
+  const errorCode = useFeatureStore(syncStore, (s) => s.status.errorCode ?? null);
+  const [reread, setReread] = useState(0);
   useEffect(() => {
     if (!available) return;
     let cancelled = false;
@@ -142,9 +158,33 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     return () => {
       cancelled = true;
     };
-  }, [available, platform]);
+  }, [available, platform, phase, reread]);
+  useEffect(() => {
+    if (!available) return;
+    const onVisibility = (): void => {
+      if (document.visibilityState !== 'hidden') setReread((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, [available]);
+
+  // Clé lue présente alors que le dernier cycle l'a trouvée absente (association faite depuis) : un cycle relit l'état, la ligne suit.
+  const keyArrived = view.kind === 'bound' && !view.needsPairing && phase === 'needs-pairing';
+  const sync = container.sync;
+  useEffect(() => {
+    if (keyArrived) void sync?.syncNow('key-arrived');
+  }, [keyArrived, sync]);
 
   if (!available) return null;
+  const retry = async (): Promise<void> => {
+    setReread((n) => n + 1);
+    // Une erreur relue au cycle : le service relit aussi l'état (sans clé : `needs-pairing`, aucun cycle de plus).
+    await container.sync?.syncNow('manual');
+  };
+  // Clé absente d'après le coffre, ou d'après le dernier cycle du moteur (phase `needs-pairing`) : à associer.
+  const needsPairing = view.kind === 'bound' && (view.needsPairing || phase === 'needs-pairing');
+  // Clé présente mais pas celle du dossier (installation précédente, Trousseau gardé), ou réinitialisation annoncée : à associer de nouveau.
+  const toAssociate = needsPairing || phase === 'key-mismatch' || phase === 'reset-required';
 
   /** Choix du dossier, puis clé (créée seulement si le dossier n'a pas de données chiffrées) et liaison de l'appareil (critère 10). */
   const choose = async () => {
@@ -156,7 +196,10 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       if (!info) return;
       let needsPairing = false;
       const key = await platform.key.status();
-      if (!key.present) {
+      // Y-IOS-02 (ADR 0011 §23 point 9) : l'iPhone ne crée jamais de clé au choix du dossier (un dossier qui paraît vide peut ne pas être
+      // encore listé par iCloud) ; il propose l'association, ou une nouvelle synchronisation après une confirmation explicite.
+      if (!key.present && ios) needsPairing = true;
+      else if (!key.present) {
         try {
           await platform.key.create();
         } catch (error) {
@@ -166,8 +209,9 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       }
       await platform.bindDevice(container.hlc.deviceId);
       setView({ kind: 'bound', info, needsPairing });
-      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes.
-      if (!needsPairing) void container.sync?.syncNow('open');
+      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes. Sans clé (Y-IOS-02) :
+      // ce cycle s'arrête aussitôt sur `needs-pairing` (aucune lecture du dossier) et le bandeau A-09 dit d'associer cet appareil.
+      void container.sync?.syncNow('open');
     } catch (error) {
       // Dossier refusé par le contrôle : rien n'a été lié, « Choisir le dossier » reste proposé ; un dossier lié puis un échec de
       // clé ou de liaison : « Oublier » (revue 6).
@@ -186,6 +230,26 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
     } catch (error) {
       const info = view.kind === 'bound' || view.kind === 'error' ? view.info : null;
       setView({ kind: 'error', code: syncErrorCodeOf(error), info, configured: true });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * iPhone : « Commencer une nouvelle synchronisation sur cet iPhone », après la confirmation qui dit le risque. Rust refuse toujours un
+   * dossier qui contient des données (y compris dans le nuage) : `folder-has-data`, l'association reste la seule issue, dite.
+   */
+  const startNew = async (): Promise<void> => {
+    setStartOpen(false);
+    setBusy(true);
+    setStartNotice(null);
+    try {
+      await platform.key.create();
+      setView(await readView(platform));
+      void container.sync?.syncNow('manual');
+    } catch (error) {
+      const code = syncErrorCodeOf(error);
+      setStartNotice(code === 'folder-has-data' ? 'sync.key.needsPairing' : syncErrorMessageKey(code, ios));
     } finally {
       setBusy(false);
     }
@@ -241,10 +305,10 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
       {view.kind === 'bound' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
-            {container.sync && !view.needsPairing ? <SyncStatusLine /> : folderLabel(view.info)}
-            {container.sync && !view.needsPairing ? null : view.needsPairing ? (
+            {container.sync && !needsPairing ? <SyncStatusLine /> : folderLabel(view.info)}
+            {container.sync && !needsPairing ? null : needsPairing ? (
               <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-folder-state">
-                {t('sync.key.needsPairing')}
+                {t(ios ? 'sync.key.needsPairingIos' : 'sync.key.needsPairing')}
               </span>
             ) : (
               <span className="ct-settings__hint ct-sync__ok" data-testid="sync-folder-state">
@@ -257,11 +321,39 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
               </span>
             )}
           </span>
+          {/* Revue de la PR #14 : dossier à choisir de nouveau (non lié, déjà lié ailleurs) : « Choisir le dossier » à côté de « Oublier ». */}
+          {phase === 'error' && syncErrorFamily(errorCode) === 'folder' && chooseButton}
           {forgetButton}
         </div>
       )}
       {/* iPhone (ADR 0011 §23 point 7) : « Associer au PC » (dossier d'abord, clé ensuite), jamais la fenêtre `pairing` du PC. */}
-      {ios && (view.kind === 'not-configured' || (view.kind === 'bound' && view.needsPairing)) && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
+      {ios && (view.kind === 'not-configured' || (view.kind === 'bound' && toAssociate)) && <IosPairingRow platform={platform} onOpen={() => setIosPairing(true)} />}
+      {/* §23 point 9 : sans clé, nouvelle synchronisation seulement sur demande explicite, après une confirmation qui dit le risque. */}
+      {ios && view.kind === 'bound' && needsPairing && (
+        <div className="ct-settings__row">
+          <span className="ct-settings__stack">
+            {t('sync.key.startNew')}
+            <span className="ct-settings__hint">{t('sync.key.startNewHint')}</span>
+            {startNotice && (
+              <span className="ct-settings__hint ct-settings__hint--danger" role="status" data-testid="sync-start-notice">
+                {t(startNotice)}
+              </span>
+            )}
+          </span>
+          <Button variant="secondary" ariaLabel={t('sync.key.startNewLabel')} onClick={() => setStartOpen(true)} className="ct-settings__link" disabled={busy}>
+            {t('sync.key.startNewAction')}
+          </Button>
+        </div>
+      )}
+      {startOpen && (
+        <ConfirmDialog
+          title={t('sync.key.startNewTitle')}
+          description={t('sync.key.startNewDescription')}
+          confirmLabel={t('sync.key.startNewConfirm')}
+          onConfirm={() => void startNew()}
+          onCancel={() => setStartOpen(false)}
+        />
+      )}
       {iosPairing && (
         <IosPairingScreen
           platform={platform}
@@ -271,7 +363,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           }}
         />
       )}
-      {view.kind === 'bound' && view.needsPairing && !ios && (
+      {view.kind === 'bound' && toAssociate && !ios && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
             {t('sync.pairing.importLabel')}
@@ -286,7 +378,13 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
           </Button>
         </div>
       )}
-      {view.kind === 'bound' && !view.needsPairing && <JoinProgress />}
+      {view.kind === 'bound' && !toAssociate && (
+        <>
+          {/* Y-IOS-02 (point de contrôle d'Ali) : « Associer l'iPhone » directement ici sur le PC (chemin dit par l'iPhone), aussi dans Détails. */}
+          {!ios && <SyncDetailsPairing showOnly withProgress={false} />}
+          <JoinProgress />
+        </>
+      )}
       {view.kind === 'error' && (
         <div className="ct-settings__row">
           <span className="ct-settings__stack">
@@ -295,8 +393,15 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
               {t(syncErrorMessageKey(view.code, ios))}
             </span>
           </span>
-          {/* iPhone (§22 point 8) : signet perdu ou dossier déplacé : « Choisir le dossier » de nouveau (même dossier : rien n'est perdu). */}
-          {view.configured && ios && view.code === 'folder-unreachable' && chooseButton}
+          {/* Y-IOS-02 (audit des impasses) : erreur du dossier lié relue à la demande (et au retour au premier plan), jamais figée. */}
+          {view.configured && (
+            <Button variant="secondary" ariaLabel={t('sync.folder.retryLabel')} onClick={() => void retry()} className="ct-settings__link" disabled={busy}>
+              {t('sync.folder.retry')}
+            </Button>
+          )}
+          {/* iPhone (§22 point 8) : signet perdu ou dossier déplacé : « Choisir le dossier » de nouveau (même dossier : rien n'est perdu) ;
+              dossier inutilisable : le texte demande d'en choisir un autre. */}
+          {view.configured && asksForFolder(view.code, ios) && chooseButton}
           {view.configured ? forgetButton : chooseButton}
         </div>
       )}

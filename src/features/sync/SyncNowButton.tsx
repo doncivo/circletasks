@@ -12,7 +12,9 @@ export function SyncNowButton() {
   const busy = useFeatureStore(syncStore, (s) => s.busy);
   const syncNow = useFeatureStore(syncStore, (s) => s.syncNow);
   const available = useFeatureStore(syncStore, (s) => s.available);
-  if (!available || phase === 'not-configured') return null;
+  // Y-IOS-02 (point de contrôle d'Ali) : sans clé, un cycle ne peut rien faire ; seule l'association (« Associer au PC », clé de secours)
+  // est proposée.
+  if (!available || phase === 'not-configured' || phase === 'needs-pairing') return null;
   const running = busy || phase === 'syncing';
   return (
     <button type="button" className="ct-button ct-button--primary ct-sync__now" disabled={running} aria-busy={running} onClick={() => void syncNow('manual')}>
