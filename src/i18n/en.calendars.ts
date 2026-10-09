@@ -73,6 +73,7 @@ export const calendarsEn: Messages['calendars'] = {
   errorIcloudChooseAccount: 'Several iCloud accounts were received from your other devices: tap “Connect here” on the one to complete',
   icloudDefaultLabel: 'iCloud account',
   errorGoogleUnreachable: 'Unable to reach Google',
+  errorGoogleOtherAccount: 'This Google account is not the one from the other device: tap “Connect here” and choose the same account',
   errorSave: 'Unable to save.',
   errorLoad: 'Unable to read the accounts.',
   errorRemove: 'Unable to remove the account.',

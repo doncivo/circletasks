@@ -26,7 +26,18 @@ import { refreshAccount } from './refreshUseCase';
  * dans ce store : seule une référence du coffre (`tokenRef`) existe côté interface.
  */
 
-export type ConnectFailure = 'cancelled' | 'not-configured' | 'failed' | 'duplicate' | 'icloud-invalid' | 'icloud-unreachable' | 'google-unreachable' | 'icloud-choose-account' | 'web-auth-failed';
+export type ConnectFailure =
+  | 'cancelled'
+  | 'not-configured'
+  | 'failed'
+  | 'duplicate'
+  | 'icloud-invalid'
+  | 'icloud-unreachable'
+  | 'google-unreachable'
+  | 'icloud-choose-account'
+  | 'web-auth-failed'
+  /** « Connecter ici » d'un compte Google reçu : l'utilisateur s'est connecté avec un autre compte Google que celui de la ligne. */
+  | 'google-other-account';
 export type ConnectOutcome = { readonly ok: true; readonly accountId: CalendarAccountId } | { readonly ok: false; readonly failure: ConnectFailure };
 
 /** Message (clé i18n) d'un échec de connexion. */
@@ -40,6 +51,7 @@ export const FAILURE_KEYS: Readonly<Record<ConnectFailure, PlainMessageKey>> = {
   'google-unreachable': 'calendars.errorGoogleUnreachable',
   'icloud-choose-account': 'calendars.errorIcloudChooseAccount',
   'web-auth-failed': 'calendars.errorWebAuth',
+  'google-other-account': 'calendars.errorGoogleOtherAccount',
 };
 
 /**
@@ -313,13 +325,35 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         const account = get().accounts.find((candidate) => candidate.id === accountId);
         if (!account || get().connecting) return { ok: false, failure: 'failed' };
         set({ connecting: true, messageKey: null });
+        // Compte reçu par la synchro, jamais connecté sur CET appareil (« Connecter ici ») : nouvelle référence du coffre propre à cet
+        // appareil (colonne locale `token_ref`, jamais publiée), comme pour iCloud ; jamais d'autorisation sur une référence vide.
+        const incomplete = account.tokenRef === '';
+        const tokenRef = incomplete ? tokenRefFor('google', accountId) : account.tokenRef;
         try {
           try {
-            await platform.oauth.authorizeGoogle(account.tokenRef);
+            await platform.oauth.authorizeGoogle(tokenRef);
           } catch (error) {
             return reportAuthorization(error, accountId);
           }
           set({ googleFailure: null });
+          if (incomplete) {
+            // Le compte autorisé doit être celui de la ligne reçue (libellé = agenda principal, comme à la connexion) ; sinon le jeton
+            // est révoqué et effacé, rien n'est rattaché.
+            const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
+            const primary = listed.ok ? ((listed.value.find((calendar) => calendar.primary) ?? listed.value[0])?.id ?? '') : '';
+            if (!listed.ok || primary !== account.label) {
+              await discard('google', tokenRef);
+              const failure: ConnectFailure = !listed.ok ? (listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed') : 'google-other-account';
+              return report({ ok: false, failure });
+            }
+            try {
+              await container.data.repos.calendarAccounts.setLocalCredentials(accountId, { username: '', tokenRef });
+              await reload();
+            } catch {
+              await discard('google', tokenRef);
+              return report({ ok: false, failure: 'failed' });
+            }
+          }
           markConnected(accountId);
           return report({ ok: true, accountId });
         } finally {

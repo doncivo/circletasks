@@ -121,6 +121,21 @@ describe('écran Agendas (K-01 à K-03)', () => {
     expect(calendarsStore.get(h.container).getState().icloudForm).toEqual({ accountId: id, username: '' });
   });
 
+  it('compte Google reçu du PC : « Connecter ici » connecte CET appareil (pas d’impasse), annulation dite puis nouvel essai', async () => {
+    const id = 'a7000000-0000-4000-8000-0000000000e2' as Parameters<typeof h.container.data.repos.calendarAccounts.create>[0]['id'];
+    await h.container.data.repos.calendarAccounts.create({ id, provider: 'google', label: GOOGLE_ACCOUNT, tokenRef: '', calendars: [] });
+    renderScreen();
+    const card = await screen.findByRole('region', { name: `Google Agenda · ${GOOGLE_ACCOUNT}` });
+    expect(await within(card).findByText('Connecté ailleurs')).toBeInTheDocument();
+    h.google.denyNextConsent();
+    fireEvent.click(within(card).getByRole('button', { name: `Connecter ${GOOGLE_ACCOUNT} sur cet appareil` }));
+    expect(await screen.findByText('Connexion annulée')).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole('button', { name: `Connecter ${GOOGLE_ACCOUNT} sur cet appareil` }));
+    expect(await within(card).findByText('Connecté')).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: /sur cet appareil$/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(within(card).getByText(/^Mis à jour/)).toBeInTheDocument());
+  });
+
   it('supprimer un compte demande confirmation, puis efface le jeton, le compte et ses événements (critère 8)', async () => {
     renderScreen();
     const card = await addGoogle();

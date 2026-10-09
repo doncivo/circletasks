@@ -163,6 +163,77 @@ describe('jeton refusé ou révoqué (K-01 critère 7, A-09 critère 10)', () =>
   });
 });
 
+describe('« Connecter ici » : compte Google reçu du PC, jamais connecté sur cet appareil (K-01 D1)', () => {
+  const RECEIVED = 'a0000000-0000-4000-8000-0000000000c1' as CalendarAccountId;
+  const FRESH_REF = `circletasks.calendar.google.${RECEIVED}`;
+
+  /** Ligne telle que la synchro la crée : colonnes publiées, `token_ref` local vide. */
+  async function received(label = GOOGLE_ACCOUNT): Promise<void> {
+    await h.container.data.repos.calendarAccounts.create({ id: RECEIVED, provider: 'google', label, tokenRef: '', calendars: [] });
+    await state().load();
+    expect(state().states[RECEIVED]).toMatchObject({ kind: 'elsewhere' });
+  }
+
+  const localRef = async (): Promise<string | undefined> => (await h.container.data.repos.calendarAccounts.getById(RECEIVED))?.tokenRef;
+
+  it('lance la connexion de CET appareil sous une référence neuve (jamais la référence vide), la garde en local, compte connecté', async () => {
+    await received();
+    const authorize = vi.spyOn(h.container.calendars.oauth, 'authorizeGoogle');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: true, accountId: RECEIVED });
+    expect(authorize).toHaveBeenCalledTimes(1);
+    expect(authorize).toHaveBeenCalledWith(FRESH_REF);
+    expect(authorize).not.toHaveBeenCalledWith('');
+    expect(await localRef()).toBe(FRESH_REF);
+    expect(await h.container.calendars.vault.has(FRESH_REF)).toBe(true);
+    await vi.waitFor(() => expect(state().states[RECEIVED]).toMatchObject({ kind: 'connected', lastSuccessAt: expect.any(String) as string }));
+    await idle();
+    // Colonne locale seulement : rien n'entre dans la file d'envoi de la synchro.
+    expect(await h.db.driver.select("SELECT field FROM sync_outbox WHERE table_name = 'calendar_account' AND field <> '*'")).toEqual([]);
+    expect(useAppStatusStore.getState().sources.calendarDisconnected).toBeUndefined();
+  });
+
+  it('« Connecter ici » de la carte passe par la même connexion (requestReconnect)', async () => {
+    await received();
+    state().requestReconnect(RECEIVED);
+    await vi.waitFor(() => expect(state().states[RECEIVED]).toMatchObject({ kind: 'connected' }));
+    expect(await localRef()).toBe(FRESH_REF);
+    await idle();
+  });
+
+  it('annulation : message « Connexion annulée », compte toujours « ailleurs », rien gardé ; un nouvel essai réussit', async () => {
+    await received();
+    h.google.denyNextConsent();
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'cancelled' });
+    expect(state().messageKey).toBe('calendars.errorCancelled');
+    expect(state().states[RECEIVED]).toMatchObject({ kind: 'elsewhere' });
+    expect(await localRef()).toBe('');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: true, accountId: RECEIVED });
+    await vi.waitFor(() => expect(state().states[RECEIVED]).toMatchObject({ kind: 'connected' }));
+    await idle();
+  });
+
+  it('échec de la feuille iPhone : code et « Réessayer » sur ce compte (googleFailure), puis réussite', async () => {
+    await received();
+    h.failWebAuth('web-auth-failed');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'web-auth-failed' });
+    expect(state().googleFailure).toEqual({ code: 'web-auth-failed', accountId: RECEIVED });
+    expect(await localRef()).toBe('');
+    h.failWebAuth(null);
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: true, accountId: RECEIVED });
+    expect(state().googleFailure).toBeNull();
+    await idle();
+  });
+
+  it('autre compte Google que celui de la ligne : jeton révoqué et effacé, rien rattaché, message dédié', async () => {
+    await received('autre@example.com');
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'google-other-account' });
+    expect(state().messageKey).toBe('calendars.errorGoogleOtherAccount');
+    expect(await h.container.calendars.vault.has(FRESH_REF)).toBe(false);
+    expect(await localRef()).toBe('');
+    expect(state().states[RECEIVED]).toMatchObject({ kind: 'elsewhere' });
+  });
+});
+
 describe('suppression d’un compte (K-01 critère 8)', () => {
   it('efface le jeton du coffre, le révoque, supprime le compte et ses événements', async () => {
     const accountId = await connected();
