@@ -29,6 +29,8 @@ const base = (id: string, patch: Partial<NewTask> = {}): NewTask => ({
   someday: false,
   source: 'local',
   externalId: null,
+  appleListId: null,
+  appleRecurring: false,
   externalEventId: null,
   ...patch,
 });

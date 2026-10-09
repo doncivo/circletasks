@@ -74,7 +74,7 @@ pub fn run() {
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
-    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
+    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
     // FILES-IOS-01 : plugin ct-files (sélecteur « Enregistrer dans Fichiers », appelé par Rust seul) et état de l'export ; purge des
     // temporaires restants au démarrage (`ios_setup`).
     #[cfg(target_os = "ios")]

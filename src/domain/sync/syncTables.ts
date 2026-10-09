@@ -145,6 +145,8 @@ export const SYNC_TABLES: readonly SyncTable[] = [
       c('external_id', 'text', true, { max: 512 }),
       c('series_template', 'json', true, hidden),
       c('external_event_id', 'text', true, { max: 512 }),
+      c('apple_list_id', 'text', true, { max: 512, ...hidden }),
+      bool('apple_recurring', hidden),
       createdAt,
       deletedAt,
     ],

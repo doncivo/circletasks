@@ -45,6 +45,8 @@ describe('Semaine : ajout rapide par jour (S-04)', () => {
           someday: false,
           source: 'local',
           externalId: null,
+          appleListId: null,
+          appleRecurring: false,
           externalEventId: null,
         });
         renderWeek(h.container);

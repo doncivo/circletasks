@@ -119,6 +119,14 @@ export interface SelectionDialogsProps {
 export function SelectionDialogs({ edit, spaces, onRemoveSelected, onMoveSelected }: SelectionDialogsProps) {
   const { batchDeleteOpen, setBatchDeleteOpen, moveOpen, setMoveOpen } = edit.dialogs;
   const projects = useAppStore((s) => s.projects);
+  const container = useAppContainer();
+  // K-06 critère 7 : la confirmation nomme Rappels quand la sélection contient des tâches liées à un rappel (supprimé aussi dans Rappels).
+  const linkedCount = batchDeleteOpen
+    ? edit.selectedIds.filter((id) => {
+        const task = container.taskEntities.get(id);
+        return task !== undefined && task.source === 'apple_reminders' && task.externalId !== null;
+      }).length
+    : 0;
   // Q12 : une liste d'une pression, « Perso · aucun projet » puis « Pro · Mission client »… (espace, puis projet ou aucun).
   const destinations = moveDestinations(spaces, projects).map((target) => {
     const space = spaces.find((s) => s.id === target.spaceId)?.name ?? '';
@@ -130,7 +138,7 @@ export function SelectionDialogs({ edit, spaces, onRemoveSelected, onMoveSelecte
       {batchDeleteOpen && (
         <ConfirmDialog
           title={t('today.deleteManyTitle', { count: edit.selectedIds.length })}
-          description={t('today.deleteManyBody')}
+          description={linkedCount > 0 ? `${t('today.deleteManyBody')} ${t('appleReminders.deleteManyLinked', { count: linkedCount })}` : t('today.deleteManyBody')}
           confirmLabel={t('tasks.deleteConfirm')}
           onConfirm={() => {
             setBatchDeleteOpen(false);

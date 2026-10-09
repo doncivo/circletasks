@@ -7,6 +7,7 @@ import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import { remindersHidePass } from '../calendars/appleReminders/hidePass';
 import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
@@ -442,7 +443,8 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   });
   void refreshPersisted();
   // ADR 0011 §22 point 6 : sur iPhone, le cycle du passage en arrière-plan est borné à 25 s (tâche d'arrière-plan iOS).
-  const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS } : {};
+  // Rappels Apple (K-05, ADR 0008 §10.8) : le passage de masquage termine (8 s au plus) AVANT le cycle, qui publie ainsi ce qu'il vient de changer.
+  const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, ...(container.reminders.available ? { beforeHide: () => remindersHidePass(container) } : {}) } : {};
   // P-04-iOS critère 12 : marqueur de restauration non écrit (mémo) : aucun cycle ; la lecture du contexte de restauration réessaie
   // l'écriture côté Rust (iPhone) ; marqueur présent -> mémo effacé, fenêtre de choix habituelle ; sinon bandeau persistant.
   const memo = readMarkerFailed();

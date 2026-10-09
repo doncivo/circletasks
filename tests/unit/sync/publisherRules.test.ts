@@ -123,6 +123,8 @@ describe('valeurs et horloges lues ensemble (revue Y2, point 5)', () => {
       someday: false,
       source: 'local',
       externalId: null,
+      appleListId: null,
+      appleRecurring: false,
       externalEventId: null,
     });
     db.clock.advance(1_000);

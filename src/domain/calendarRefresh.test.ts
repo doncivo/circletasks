@@ -112,3 +112,12 @@ describe('calendarAppStatuses (A-09 critère 10)', () => {
     expect(Object.keys(result).sort()).toEqual(['calendarDisconnected', 'offline']);
   });
 });
+
+describe('fournisseur non chargeable (audit B3)', () => {
+  it('`unavailable` : erreur du compte réessayée dans 15 min, jamais « Hors ligne » ni rien de silencieux', () => {
+    const state = nextAccountState({ kind: 'connected', lastSuccessAt: null }, { ok: false, at: '2026-10-08T09:00:00.000Z' as never, error: { kind: 'unavailable' } });
+    expect(state).toMatchObject({ kind: 'error', error: 'unavailable' });
+    const accounts = [{ id: 'a' as never, label: 'Google' }];
+    expect(calendarAppStatuses(accounts, new Map([['a' as never, state]]))).toEqual({});
+  });
+});

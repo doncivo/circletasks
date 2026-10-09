@@ -14,9 +14,9 @@
 //! calendar_oauth_google_authorize(token_ref: String) -> Result<(), String>   // async
 //!     PC : PKCE S256 + state, écoute 127.0.0.1:<port libre>, navigateur système (opener),
 //!          délai 5 min, échange du code, jetons JSON { refresh, access, expires_at } au coffre.
-//!     iOS : contrat seulement (ordre 5) : rejet `unsupported` ; le plugin Swift `web-auth`
-//!          (ASWebAuthenticationSession, redirection com.googleusercontent.apps.<id>:/oauth2redirect)
-//!          appellera ensuite le même échange (`google::exchange_code`).
+//!     iOS (K-TECH-01, ADR 0008 §9) : plugin Swift `web-auth` (ASWebAuthenticationSession, appelé par Rust seul), redirection
+//!          com.googleusercontent.apps.<id>:/oauth2redirect, ID client « iOS » sans secret, même échange du code ; rejets
+//!          supplémentaires `web-auth-unavailable` et `web-auth-failed`.
 //! calendar_oauth_google_revoke(token_ref: String) -> Result<(), String>      // async, au mieux
 //! calendar_http(request: HttpRequest) -> Result<HttpResponse, String>        // async, reqwest rustls
 //! ```
@@ -24,6 +24,7 @@
 pub mod google;
 pub mod hosts;
 pub mod http;
+pub mod web_auth;
 /// Coffre système, déplacé à la racine de la crate au lot Y1 (partagé avec la synchro, ADR 0011 section 2.2).
 pub use crate::vault;
 
@@ -125,8 +126,27 @@ pub async fn calendar_oauth_google_authorize(app: tauri::AppHandle, token_ref: S
     google::authorize(&env, &token_ref, |url| app.opener().open_url(url, None::<&str>).map_err(|_| "network".to_owned()), google::CONSENT_TIMEOUT).await
 }
 
-/// iPhone : contrat seulement (ordre 5, plugin Swift `web-auth`).
-#[cfg(mobile)]
+/// Une seule feuille d'authentification à la fois sur iPhone (un second appel rend `web-auth-unavailable`).
+#[cfg(target_os = "ios")]
+static WEB_AUTH_SESSION: web_auth::WebAuthSession = web_auth::WebAuthSession::new();
+
+/// iPhone (K-TECH-01) : session d'authentification web du système par le plugin Swift `web-auth`, puis le même échange que sur PC.
+#[cfg(target_os = "ios")]
+#[tauri::command]
+pub async fn calendar_oauth_google_authorize(app: tauri::AppHandle, token_ref: String) -> Result<(), String> {
+    use tauri::Manager;
+    checked_ref(&token_ref, Some(vault::RefNamespace::Google))?;
+    let Some(plugin) = app.try_state::<tauri_plugin_web_auth::WebAuth<tauri::Wry>>() else { return Err("web-auth-unavailable".to_owned()) };
+    let runner: std::sync::Arc<dyn web_auth::WebAuthRunner> = std::sync::Arc::new(web_auth::TransportWebAuth(web_auth::PluginTransport((*plugin).clone())));
+    let vault = system_vault();
+    let endpoints = google::GoogleEndpoints::from_environment();
+    let client = google::ClientConfig::from_environment();
+    let env = http::HttpEnv { vault: &vault, google: &endpoints, client: client.as_ref() };
+    web_auth::authorize_ios(&env, &token_ref, runner, &WEB_AUTH_SESSION).await
+}
+
+/// Autre mobile (Android n'est pas livré) : pas de plugin, rejet explicite.
+#[cfg(all(mobile, not(target_os = "ios")))]
 #[tauri::command]
 pub async fn calendar_oauth_google_authorize(_token_ref: String) -> Result<(), String> {
     Err("unsupported".to_owned())

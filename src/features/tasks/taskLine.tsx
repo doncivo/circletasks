@@ -51,6 +51,12 @@ export function taskSubtitle(task: Task, { spaces, showSpace, rule, projects }: 
           <TaskGoalMark size={14} /> {t('goals.attachedWord')}
         </span>,
       );
+    } else if (segment.kind === 'apple') {
+      parts.push(
+        <span key="apple" className="ct-task-appleBadge">
+          {t(segment.recurring ? 'appleReminders.badgeRecurring' : 'appleReminders.badge')}
+        </span>,
+      );
     } else if (rule) parts.push(<span key="repeat">{formatMessageRef(recurrenceLabel(rule, task.date, 'short'))}</span>);
   }
   if (parts.length === 0) return undefined;

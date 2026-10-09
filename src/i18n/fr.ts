@@ -10,6 +10,7 @@ import { scanFr } from './fr.scan';
 import { searchFr } from './fr.search';
 import { appearanceFr } from './fr.appearance';
 import { spacesFr } from './fr.spaces';
+import { appleRemindersFr } from './fr.appleReminders';
 import { calendarsFr } from './fr.calendars';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
@@ -108,6 +109,7 @@ export const fr = {
   focus: focusFr,
   stats: statsFr,
   appearance: appearanceFr,
+  appleReminders: appleRemindersFr,
   calendars: calendarsFr,
   // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1 ;
   // lot Y3 : `conflicts` et `field` (Y-04), `version` (Y-07), `pairing` (Y-06) ; lot Y4 : `forget` (Y-10), `reset` (Y-11) ; chacune dans son fichier.

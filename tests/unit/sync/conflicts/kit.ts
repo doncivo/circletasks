@@ -108,6 +108,8 @@ export async function openConflictBench(start = START): Promise<ConflictBench> {
         someday: false,
         source: 'local',
         externalId: null,
+        appleListId: null,
+        appleRecurring: false,
         externalEventId: null,
         ...extra,
       });
