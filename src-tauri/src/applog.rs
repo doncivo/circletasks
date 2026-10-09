@@ -89,10 +89,21 @@ pub fn is_scope(value: &str) -> bool {
     !bytes.is_empty() && bytes.len() <= 40 && (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit()) && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-')
 }
 
-/// `^[a-z0-9][a-z0-9.-]{0,63}$`
+/// `^[a-z0-9][a-z0-9.-]{0,63}$`, sans séquence hexadécimale de 32+ ni jeton probable (revue du lot F, `has_code_token`).
 pub fn is_code(value: &str) -> bool {
     let bytes = value.as_bytes();
-    !bytes.is_empty() && bytes.len() <= 64 && (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit()) && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-' || *b == b'.')
+    !bytes.is_empty()
+        && bytes.len() <= 64
+        && (bytes[0].is_ascii_lowercase() || bytes[0].is_ascii_digit())
+        && bytes.iter().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || *b == b'-' || *b == b'.')
+        && !has_hex_run(value, 32)
+        && !has_code_token(value)
+}
+
+/// Jeton probable dans un code : un segment (entre `-` et `.`) de 24 caractères ou plus, hors UUID exact, ou `ya29.`. Même règle que
+/// `hasCodeToken` de TypeScript ; vecteurs `codeVectors` partagés.
+fn has_code_token(value: &str) -> bool {
+    value.contains("ya29.") || (!is_uuid(value) && value.split(['-', '.']).any(|segment| segment.len() >= 24))
 }
 
 /// `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?Z$`

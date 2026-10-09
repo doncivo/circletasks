@@ -9,9 +9,15 @@ interface Vector {
   readonly expected: string;
 }
 
-const vectors = (JSON.parse(readFileSync(new URL('../../../tests/fixtures/logs/sanitize-vectors.json', import.meta.url), 'utf8')) as { vectors: Vector[] }).vectors;
+const fixture = JSON.parse(readFileSync(new URL('../../../tests/fixtures/logs/sanitize-vectors.json', import.meta.url), 'utf8')) as { vectors: Vector[]; codeVectors: { code: string; valid: boolean }[] };
+const vectors = fixture.vectors;
 
 describe('I-04 critère 5 : assainissement du journal (vecteurs partagés avec Rust)', () => {
+  it.each(fixture.codeVectors.map((vector) => [vector.code, vector] as const))('code « %s » : gardé ou unknown (revue du lot F)', (_, vector) => {
+    expect(codeAndDetailOf({ code: vector.code, message: '' }).code).toBe(vector.valid ? vector.code : 'unknown');
+    expect(codeAndDetailOf(vector.code).code).toBe(vector.valid ? vector.code : 'unknown');
+  });
+
   it.each(vectors.map((vector) => [vector.input ?? `${vector.repeat?.[0] ?? ''} × ${String(vector.repeat?.[1] ?? 0)}`, vector] as const))('%s', (_, vector) => {
     const input = vector.input ?? (vector.repeat ? vector.repeat[0].repeat(vector.repeat[1]) : '');
     expect(sanitizeLogDetail(input)).toBe(vector.expected);

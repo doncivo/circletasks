@@ -94,9 +94,17 @@ export function normalizeScope(scope: string): string {
   return SCOPE.test(scope) ? scope : 'invalid';
 }
 
-/** Valeur en forme de code (`too-large`, `sync-now`…). */
+/**
+ * Jeton probable dans un code (revue du lot F) : un segment (entre `-` et `.`) de 24 caractères ou plus, hors UUID exact, ou `ya29.`. Même
+ * règle que `has_code_token` de Rust ; vecteurs `codeVectors` partagés.
+ */
+function hasCodeToken(value: string): boolean {
+  return value.includes('ya29.') || (!UUID.test(value) && value.split(/[-.]/).some((segment) => segment.length >= 24));
+}
+
+/** Valeur en forme de code (`too-large`, `sync-now`…), sans séquence hexadécimale de 32+ ni jeton probable (revue du lot F). */
 export function isLogCode(value: unknown): value is string {
-  return typeof value === 'string' && CODE.test(value);
+  return typeof value === 'string' && CODE.test(value) && !hasHexRun(value) && !hasCodeToken(value);
 }
 
 /**

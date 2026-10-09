@@ -25,6 +25,18 @@ fn size(path: &Path) -> u64 {
 // --- critère 5 : assainissement, seconde barrière (mêmes vecteurs que sanitize.test.ts) ---
 
 #[test]
+fn i04_5_code_field_is_sanitized_with_the_shared_vectors() {
+    let vectors: Value = serde_json::from_str(VECTORS).unwrap();
+    let list = vectors["codeVectors"].as_array().unwrap();
+    assert!(list.len() >= 10);
+    for vector in list {
+        let code = vector["code"].as_str().unwrap();
+        let expected = if vector["valid"].as_bool().unwrap() { code } else { "invalid" };
+        assert_eq!(normalize(&entry("sync", code, ""), "2026-10-08T08:00:00.000Z").code, expected, "{code:?}");
+    }
+}
+
+#[test]
 fn i04_5_sanitize_detail_matches_the_shared_vectors() {
     let vectors: Value = serde_json::from_str(VECTORS).unwrap();
     let list = vectors["vectors"].as_array().unwrap();

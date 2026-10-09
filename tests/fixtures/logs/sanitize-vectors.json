@@ -2,7 +2,8 @@
   "$comment": [
     "Vecteurs d'assainissement du journal technique (I-04 critère 5, ADR 0014 §1 et §3), lus par Vitest (src/platform/logs/sanitize.test.ts) et cargo test (src-tauri/tests/desktop/applog.rs) : sanitizeLogDetail (TypeScript) et applog::sanitize_detail (Rust) doivent rendre exactement `expected`.",
     "Règles : caractères de contrôle remplacés par une espace ; plus de 300 caractères -> [masqué] en entier ; sinon chaque mot (séparé par des espaces) qui contient un chemin (Windows, UNC, POSIX, ~/), file:, une URL avec requête, une adresse e-mail une séquence hexadécimale de 32 caractères ou plus, ou un jeton probable (suite de 24 caractères ou plus de [A-Za-z0-9+/=_.-] hors UUID exact, eyJ, ya29., 1//, token=) devient [masqué] ; « Bearer » et le mot suivant aussi.",
-    "repeat : entrée construite par répétition (`[texte, nombre]`) au lieu de `input`."
+    "repeat : entrée construite par répétition (`[texte, nombre]`) au lieu de `input`.",
+    "codeVectors (revue du lot F) : le champ code est assaini aussi ; forme stricte ^[a-z0-9][a-z0-9.-]{0,63}$, sans séquence hexadécimale de 32 caractères ou plus ni jeton probable (segment entre - et . de 24 caractères ou plus hors UUID exact, ya29.) ; sinon `unknown` (codeAndDetailOf, TypeScript) ou `invalid` (applog::normalize, Rust)."
   ],
   "vectors": [
     {
@@ -160,6 +161,56 @@
     {
       "input": "remote-reload-failed {\"code\":\"io\"}",
       "expected": "remote-reload-failed {\"code\":\"io\"}"
+    }
+  ],
+  "codeVectors": [
+    {
+      "code": "too-large",
+      "valid": true
+    },
+    {
+      "code": "recovery-conflict",
+      "valid": true
+    },
+    {
+      "code": "provisional-marker-settle-failed",
+      "valid": true
+    },
+    {
+      "code": "http.429",
+      "valid": true
+    },
+    {
+      "code": "123e4567-e89b-12d3-a456-426614174000",
+      "valid": true
+    },
+    {
+      "code": "0123456789abcdef0123456789abcdef",
+      "valid": false
+    },
+    {
+      "code": "err-0123456789abcdef0123456789abcdef01",
+      "valid": false
+    },
+    {
+      "code": "abcdefghijklmnopqrstuvwxyz12",
+      "valid": false
+    },
+    {
+      "code": "sk-abcdefghijklmnopqrstuvwx1234",
+      "valid": false
+    },
+    {
+      "code": "ya29.a0afh6smb",
+      "valid": false
+    },
+    {
+      "code": "Too-Large",
+      "valid": false
+    },
+    {
+      "code": "",
+      "valid": false
     }
   ]
 }
