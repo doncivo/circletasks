@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "circletasks"
-version = "0.2.0"
+version = "0.2.2"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
@@ -646,9 +646,11 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-privacy-shield",
  "tauri-plugin-process",
+ "tauri-plugin-reminders",
  "tauri-plugin-single-instance",
  "tauri-plugin-sql",
  "tauri-plugin-updater",
+ "tauri-plugin-web-auth",
  "tempfile",
  "tokio",
  "url",
@@ -5254,6 +5256,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-plugin-reminders"
+version = "0.1.0"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
+]
+
+[[package]]
 name = "tauri-plugin-single-instance"
 version = "2.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5272,8 +5282,6 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-sql"
 version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "811fca8f6b80ca3026496db4612d93000ce96915ac6e36f7adc73b8232aee9f0"
 dependencies = [
  "futures-core",
  "indexmap 2.14.2",
@@ -5284,6 +5292,7 @@ dependencies = [
  "sqlx",
  "tauri",
  "tauri-plugin",
+ "tempfile",
  "thiserror 2.0.21",
  "time",
  "tokio",
@@ -5321,6 +5330,15 @@ dependencies = [
  "url",
  "windows-sys 0.61.2",
  "zip",
+]
+
+[[package]]
+name = "tauri-plugin-web-auth"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

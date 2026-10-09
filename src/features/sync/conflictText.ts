@@ -6,6 +6,7 @@ import { getLocale, t, tDynamic, type MessageKey } from '../../i18n';
 import { formatDayMonth, formatTime } from '../../i18n/format';
 import type { SyncStatus } from '../../platform/sync/types';
 import type { ConflictSideView, ConflictView, RestoreRefusal, RestoreResult } from './syncConflictUseCases';
+import { APPLE_REMINDERS_DEVICE } from '../../domain/appleReminders';
 import { deviceName, formatSyncTime } from './syncText';
 
 /**
@@ -90,7 +91,9 @@ export function conflictValueText(table: SyncTable, column: SyncColumn, side: Pi
 }
 
 /** Nom d'un appareil comme dans APPAREILS ; un appareil devenu inconnu : « Autre appareil » (critère 3). */
-export function conflictDeviceName(device: DeviceId, devices: SyncStatus['devices']): string {
+export function conflictDeviceName(device: DeviceId | string, devices: SyncStatus['devices']): string {
+  // K-06 (ADR 0008 §10.5) : la valeur perdue ou gardée côté Rappels Apple porte l'appareil fictif `apple-reminders`.
+  if (device === APPLE_REMINDERS_DEVICE) return t('sync.conflicts.appleReminders');
   const known = devices.find((d) => d.deviceId === device);
   return known ? deviceName(known, devices) : t('sync.conflicts.otherDevice');
 }

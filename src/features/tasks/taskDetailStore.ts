@@ -282,7 +282,7 @@ export const taskDetailStore = defineFeatureStore<TaskDetailState>((container: A
       try {
         const result = await useCases.setRecurrence(taskId, rule);
         if (!result.ok) {
-          set({ status: 'error', errorKey: result.error === 'invalid' || result.error === 'needs-date' ? 'tasks.repeatInvalid' : 'tasks.repeatError' });
+          set({ status: 'error', errorKey: result.error === 'invalid' || result.error === 'needs-date' ? 'tasks.repeatInvalid' : result.error === 'apple-linked' ? 'appleReminders.noRepeat' : 'tasks.repeatError' });
           return false;
         }
         set({ status: 'ready', errorKey: null, recurrence: rule });

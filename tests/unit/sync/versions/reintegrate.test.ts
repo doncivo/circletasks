@@ -51,6 +51,8 @@ async function createTask(id: TaskId, title = 'Locale'): Promise<void> {
     someday: false,
     source: 'local',
     externalId: null,
+    appleListId: null,
+    appleRecurring: false,
     externalEventId: null,
   });
 }
@@ -198,7 +200,7 @@ describe('réintégration (Y-07 critère 6)', () => {
 
   it('ligne absente mais complète (table devenue connue) : insérée avec ses horloges si ses parents sont là ; sinon elle attend', async () => {
     const task = syncTable('task');
-    const full = { space_id: PRO, project_id: null, title: 'Nouvelle', note: '', date: '2026-10-05', time: null, status: 'todo', done_at: null, sort_order: 1, carried_over: 0, recurrence_id: null, series_index: null, goal_id: null, icon: null, someday: 0, source: 'local', external_id: null, series_template: null, external_event_id: null, created_at: '2026-10-05T08:00:00.000Z', deleted_at: null, [TEST_COLUMN]: 'x' } as Record<string, unknown>;
+    const full = { space_id: PRO, project_id: null, title: 'Nouvelle', note: '', date: '2026-10-05', time: null, status: 'todo', done_at: null, sort_order: 1, carried_over: 0, recurrence_id: null, series_index: null, goal_id: null, icon: null, someday: 0, source: 'local', external_id: null, series_template: null, external_event_id: null, apple_list_id: null, apple_recurring: 0, created_at: '2026-10-05T08:00:00.000Z', deleted_at: null, [TEST_COLUMN]: 'x' } as Record<string, unknown>;
     expect(task?.columns.every((c) => c.name in full)).toBe(true);
     for (const [field, value] of Object.entries(full)) await keep('task', T2, field, value, field === 'title' ? h(2_000) : h(1_000), field === 'title' ? h(1_000) : null);
     expect((await run()).reintegrated).toBe(Object.keys(full).length);

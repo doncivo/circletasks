@@ -180,6 +180,11 @@ jobs:
         shell: bash
         working-directory: src-tauri
         run: cargo test --locked --features test-hooks --test desktop 2>&1 | tee "$RUNNER_TEMP/cargo.log"
+      # 0.2.2 : pool SQLite à une connexion (src-tauri/vendor/tauri-plugin-sql). Le test échoue sur le pool d'origine (code 5).
+      - name: cargo test (pool SQLite à une connexion)
+        shell: bash
+        working-directory: src-tauri
+        run: cargo test --locked -p tauri-plugin-sql --features sqlite
       - name: cargo test --release (fenêtre pairing)
         if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         shell: bash

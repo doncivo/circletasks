@@ -71,6 +71,7 @@ export const syncResetEn: Shape<typeof syncResetFr> = {
     keyMismatch: 'this key does not match the folder’s new key',
     invalidPairing: 'unreadable QR code or recovery key',
     pairingExpired: 'QR code expired, show a new one',
+    keyMissing: 'this device does not have the encryption key: pair it first',
     other: 'unexpected error',
   },
   waitingSnapshot: 'Waiting for an up-to-date snapshot from the device that is resetting',

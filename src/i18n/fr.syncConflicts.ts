@@ -12,6 +12,7 @@ export const syncConflictsFr = {
   discarded: '{value} écartée',
   side: '{device} · {time}',
   otherDevice: 'Autre appareil',
+  appleReminders: 'Rappels Apple',
   restore: 'Restaurer',
   restoreLabel: 'Restaurer la valeur écartée : {title}, {field}',
   restoring: 'Restauration…',

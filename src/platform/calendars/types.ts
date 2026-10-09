@@ -27,7 +27,18 @@ export type CalendarPlatformErrorCode =
   | 'timeout'
   /** Coffre système indisponible ou refus d'accès. */
   | 'vault-unavailable'
+  /** iPhone (K-TECH-01) : la feuille d'authentification web n'a pas pu s'ouvrir (aucune fenêtre, session déjà en cours). */
+  | 'web-auth-unavailable'
+  /** iPhone (K-TECH-01) : la session d'authentification web a échoué (erreur système, URL de retour inattendue, réponse Google refusée). */
+  | 'web-auth-failed'
   | 'unsupported';
+
+/** Échecs propres à la session d'authentification web de l'iPhone : écran Agendas « La connexion à Google n'a pas pu aboutir ». */
+export type WebAuthFailureCode = Extract<CalendarPlatformErrorCode, 'web-auth-unavailable' | 'web-auth-failed'>;
+
+export function isWebAuthFailure(code: CalendarPlatformErrorCode): code is WebAuthFailureCode {
+  return code === 'web-auth-unavailable' || code === 'web-auth-failed';
+}
 
 export class CalendarPlatformError extends Error {
   constructor(readonly code: CalendarPlatformErrorCode) {
@@ -85,10 +96,10 @@ export interface CalendarHttp {
 /**
  * Flux OAuth Google (portée `calendar.readonly` seule, K-01 critère 9), PKCE S256 + `state`, sans secret client embarqué :
  * - PC : navigateur système + redirection boucle locale `http://127.0.0.1:<port libre>/` (Rust) ;
- * - iPhone : ASWebAuthenticationSession (plugin Swift `web-auth`, ordre 5 pour le test réel), redirection
- *   `com.googleusercontent.apps.<id>:/oauth2redirect`.
+ * - iPhone (K-TECH-01, ADR 0008 §9) : ASWebAuthenticationSession (plugin Swift `web-auth`, appelé par Rust seul), ID client « iOS »
+ *   sans secret, redirection `com.googleusercontent.apps.<id>:/oauth2redirect`.
  * Le code est échangé par Rust ; les jetons vont au coffre sous `tokenRef`. Rejette `cancelled`, `state-mismatch`,
- * `config-missing`, `network`, `timeout` (5 min sans réponse).
+ * `config-missing`, `network`, `timeout` (5 min sans réponse, PC seulement), `web-auth-unavailable` et `web-auth-failed` (iPhone).
  */
 export interface OAuthFlow {
   authorizeGoogle(tokenRef: TokenRef): Promise<void>;

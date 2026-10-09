@@ -1,6 +1,6 @@
 [package]
 name = "circletasks"
-version = "0.2.0"
+version = "0.2.2"
 description = "CircleTasks : planificateur personnel (PC Windows et iPhone)"
 authors = ["Ali Cherif"]
 edition = "2021"
@@ -75,6 +75,10 @@ tauri-plugin-notification = "=2.5.1"
 tauri-plugin-notification-actions = { path = "plugins/notification-actions" }
 # Signet de sécurité du dossier iCloud Drive/CircleTasks et accès aux fichiers (ADR 0011 §22, Y-IOS-01) : plugin Swift local, appelé par Rust seul.
 tauri-plugin-folder-bookmark = { path = "plugins/folder-bookmark" }
+# Connexion Google sur iPhone (K-TECH-01, ADR 0008 §9) : session d'authentification web du système, plugin Swift local, appelé par Rust seul.
+tauri-plugin-web-auth = { path = "plugins/web-auth" }
+# Rappels Apple (K-05 à K-07, ADR 0008 §10.4) : EventKit, plugin Swift local appelé par la WebView (capability reminders-ios.json). Jamais sous cfg(desktop).
+tauri-plugin-reminders = { path = "plugins/reminders" }
 # Scan du QR d'association (ADR 0011 §23 point 2, Y-IOS-02) : API du JS seulement (aucune API Rust publique), texte passé aussitôt à
 # sync_key_import. Version exacte relue (2.5.1, revue audit), alignée sur @tauri-apps/plugin-barcode-scanner ~2.5.1 ; relire le code
 # (API Rust, permissions) à chaque montée de version.
@@ -117,3 +121,12 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# Pool SQLite à UNE connexion (correctif 0.2.2, base verrouillée). tauri-plugin-sql 2.5.0 ouvre un pool sqlx de 10 connexions et ne permet
+# pas de le régler. La copie dans vendor/ diffère de l'amont par : src/wrapper.rs (open_sqlite_pool et ses tests), les features mysql et
+# postgres vidées (Cargo.lock ne tire ni rustls ni webpki-roots), et les dépendances de test (tempfile, tokio). Voir CHANGELOG 0.2.2.
+[patch.crates-io]
+tauri-plugin-sql = { path = "vendor/tauri-plugin-sql" }
+
+[workspace]
+members = [".", "vendor/tauri-plugin-sql"]

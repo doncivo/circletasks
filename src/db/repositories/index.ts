@@ -20,6 +20,7 @@ export type * from './focusSessionRepository';
 export type * from './searchRepository';
 export type * from './statsRepository';
 export type * from './syncRepository';
+export type * from './appleReminderLinkRepository';
 // Y-04 (début)
 export type * from './syncConflictRepository';
 // Y-04 (fin)

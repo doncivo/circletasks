@@ -14,8 +14,10 @@ import { resetRequiredLine } from './syncText';
 export function resetReason(code: string): string {
   switch (code) {
     case 'vault-unavailable':
-    case 'key-missing':
       return t('sync.reset.reasons.vaultUnavailable');
+    case 'key-missing':
+      // Y-IOS-02 : réinitialisation refusée à un appareil sans clé (jamais « coffre indisponible », la clé n'existe pas).
+      return t('sync.reset.reasons.keyMissing');
     case 'cloud-pending':
     case 'cloud-error':
     case 'cloud-provider-stopped':

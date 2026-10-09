@@ -117,8 +117,8 @@ function SpacesStep() {
  * créée ou « Associer cet appareil ») et « Associer l'iPhone » quand cet appareil a la clé. Une seule implémentation du choix du dossier.
  */
 // Chargées à la demande : la section de synchro (et la plateforme mémoire de développement) reste hors du bundle de départ (PERF-02).
+// Y-IOS-02 : « Associer l'iPhone » fait partie de la section elle-même (une seule ligne, sur PC seulement).
 const SyncSettingsSection = lazy(async () => ({ default: (await import('../sync/SyncSettingsSection')).SyncSettingsSection }));
-const SyncDetailsPairing = lazy(async () => ({ default: (await import('../sync/SyncDetailsPairing')).SyncDetailsPairing }));
 
 function PairingStep() {
   return (
@@ -127,7 +127,6 @@ function PairingStep() {
       <div className="ct-settings ct-onboarding__sync">
         <Suspense fallback={null}>
           <SyncSettingsSection />
-          <SyncDetailsPairing showOnly withProgress={false} />
         </Suspense>
       </div>
     </>
