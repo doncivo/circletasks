@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { statusLine } from '../../../../src/features/sync/syncText';
 import type { TaskId } from '../../../../src/domain/types';
 import type { EpochId } from '../../../../src/domain/sync/format';
@@ -477,6 +477,50 @@ describe('abandon de l’orpheline : étapes, arrêts, refus, suppression', () =
     expect(b.logger.entries.some((e) => e.event === 'orphan-epoch-deleted')).toBe(true);
     expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
     expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b)) ?? false).toBe(false);
+  });
+
+  it('bloc ./orphanEpoch illisible à l’abandon : cycle en io, rien d’écrit (époque toujours l’orpheline, orphanEpoch nul), le cycle suivant reprend', async () => {
+    const { a, b, testPc } = await topology();
+    vi.doMock('../../../../src/sync/orphanEpoch', () => {
+      throw new Error('bloc illisible');
+    });
+    try {
+      await b.cycle();
+      const failed = b.service.status();
+      expect(failed.phase).toBe('error');
+      expect(failed.errorCode).toBe('io');
+      expect(await b.data.repos.sync.getMeta('epoch')).toBe(JSON.stringify(orphanEpochOf(b)));
+      expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
+      expect(b.folder.devices.get(b.id)?.epochs.has(orphanEpochOf(b))).toBe(true);
+    } finally {
+      vi.doUnmock('../../../../src/sync/orphanEpoch');
+      vi.resetModules();
+    }
+    await converge([b, a], 4);
+    expect(await b.data.repos.sync.getMeta('epoch')).toBe(JSON.stringify('e0001-' + A_ID));
+    expect((await b.task(testPc))?.carriedOver).toBe(true);
+    expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+  });
+
+  it('bloc ./orphanEpoch illisible à la suppression des fichiers : journalisé, ni lecture ni publication sautées, retenté ensuite', async () => {
+    const { a, b } = await topology();
+    await converge([b, a], 3);
+    await b.data.repos.sync.setMeta('orphanEpoch', JSON.stringify({ epoch: orphanEpochOf(b) }));
+    vi.doMock('../../../../src/sync/orphanEpoch', () => {
+      throw new Error('bloc illisible');
+    });
+    try {
+      const status = await b.cycle();
+      expect(status.phase).not.toBe('error');
+      expect(b.logger.entries.some((e) => e.event === 'orphan-epoch-delete-failed')).toBe(true);
+      expect(b.folder.devices.get(b.id)?.state ?? null).not.toBeNull();
+      expect(await b.data.repos.sync.getMeta('orphanEpoch')).not.toBeNull();
+    } finally {
+      vi.doUnmock('../../../../src/sync/orphanEpoch');
+      vi.resetModules();
+    }
+    await b.cycle();
+    expect(await b.data.repos.sync.getMeta('orphanEpoch')).toBeNull();
   });
 
   it('orpheline déjà absente du dossier : intention effacée (orphan-epoch-cleared)', async () => {

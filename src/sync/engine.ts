@@ -423,8 +423,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       work();
       const orphan = localEpoch;
       // Étapes (a) à (c) dans un module chargé à la demande (cas rare : taille du bundle de départ).
-      const { abandonOrphan } = await import('./orphanEpoch');
-      const abandoned = await abandonOrphan(deps, orphan);
+      // Chargement du bloc en échec : cycle en `io`, rien n'est écrit, l'étape est reprise au cycle suivant.
+      const orphanModule = await import('./orphanEpoch').catch((): null => null);
+      if (orphanModule === null) {
+        logger.log('orphan-epoch-abandon-failed', { code: 'io' });
+        return fail('io', { folderLabel, folderKind });
+      }
+      const abandoned = await orphanModule.abandonOrphan(deps, orphan);
       if (abandoned.kind === 'failed') return fail(abandoned.code, { folderLabel, folderKind });
       if (abandoned.kind === 'done') {
         localEpoch = null;
@@ -977,7 +982,16 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     }
 
     // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
-    if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
+    if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) {
+      try {
+        await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
+      } catch (error) {
+        // Comme les autres suppressions de l'étape 7 : journalisé, retenté au cycle suivant ; ni la lecture, ni la publication, ni la suppression
+        // des fichiers d'un appareil oublié ne sont sautées.
+        if (isCycleInterrupted(error)) throw error;
+        logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
+      }
+    }
 
     // Y-10 : suppression des fichiers des appareils oubliés (conditions de Rust vérifiées d'abord, aucune boîte) ; jamais pendant une
     // réinitialisation (Rust la refuse, condition (b)).
