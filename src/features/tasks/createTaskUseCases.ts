@@ -175,11 +175,11 @@ function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
               const already = input.id ? await repos.tasks.getById(newTask.id) : null;
               if (already) return already;
               const rule = recurrence ? await repos.recurrences.create({ ...recurrence, id: newEntityId<RecurrenceId>(deps.ids) } satisfies NewRecurrence) : null;
-              const task = await repos.tasks.create(rule ? { ...newTask, recurrenceId: rule.id, seriesIndex: 0 } : newTask);
+              const task = await repos.tasks.create(rule ? { ...newTask, recurrenceId: rule.id, seriesIndex: 0 } : newTask, input.id ? { idempotent: true } : undefined);
               if (reminders.length > 0) await repos.reminders.replaceForTarget({ type: 'task', id: task.id }, reminders);
               return task;
             })
-          : await deps.data.repos.tasks.create(newTask);
+          : await deps.data.repos.tasks.create(newTask, input.id ? { idempotent: true } : undefined);
       deps.taskEntities.publish([created]);
       return { ok: true, value: created };
     },

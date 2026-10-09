@@ -45,7 +45,11 @@ export interface TaskRepository {
   setAppleLink(id: TaskId, link: AppleLink): Promise<Task>;
 
   /** T-01, S-04, SD-01. */
-  create(task: NewTask): Promise<Task>;
+  /**
+   * `idempotent` (Q-05) : l'appelant a fourni l'identifiant ("Réessayer" rejoue la même création) ; un id déjà présent est ignoré et la ligne existante est
+   * rendue, ou `RepositoryError('conflict')` si elle est introuvable. Sans l'option, un id déjà présent lève comme toute contrainte.
+   */
+  create(task: NewTask, options?: { readonly idempotent?: boolean }): Promise<Task>;
   /** T-12 (duplication), P-07 (import), OB-05 (reconduction). */
   createMany(tasks: readonly NewTask[]): Promise<Task[]>;
   /** Édition depuis la fiche détail (T-02, T-03, OB-03, ES-05). */
