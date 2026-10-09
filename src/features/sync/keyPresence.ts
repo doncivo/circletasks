@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { onPairingChange } from './pairingStatus';
 import { syncStore } from './syncStore';
@@ -24,12 +24,28 @@ export function useKeyPresence(): KeyPresence {
 export const SHORT_KID_CHARS = 8;
 
 /** Présence et identifiant court (`kid`) de la clé de cet appareil ; jamais la clé. */
-export function useKeyInfo(): { readonly presence: KeyPresence; readonly shortKid: string | null } {
+export interface KeyInfo {
+  readonly presence: KeyPresence;
+  readonly shortKid: string | null;
+  /** La dernière lecture du coffre a échoué (Trousseau verrouillé, coffre indisponible) : à dire, jamais à taire. */
+  readonly unreadable: boolean;
+  /** Relit la clé (« Réessayer »). */
+  readonly reread: () => void;
+}
+
+/**
+ * Présence et identifiant court (`kid`) de la clé de cet appareil ; jamais la clé. Relue à chaque changement de phase et d'association, à
+ * la demande (`reread`) et au retour au premier plan (revue de la PR #17 : iPhone déverrouillé, coffre de Windows rouvert).
+ */
+export function useKeyInfo(): KeyInfo {
   const container = useAppContainer();
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
   const platform = container.syncPlatform;
   const [value, setValue] = useState<KeyPresence>('unknown');
   const [kid, setKid] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const reread = useCallback(() => setAttempt((n) => n + 1), []);
 
   const readable = platform !== null && phase !== 'not-configured';
   useEffect(() => {
@@ -41,23 +57,31 @@ export function useKeyInfo(): { readonly presence: KeyPresence; readonly shortKi
           if (cancelled) return;
           setValue(key.present ? 'present' : 'absent');
           setKid(key.present && key.kid ? key.kid.slice(0, SHORT_KID_CHARS) : null);
+          setFailed(false);
         },
         () => {
-          // Coffre illisible : ni présente ni absente ; la phase du service dit l'erreur (jamais silencieux).
+          // Coffre illisible : ni présente ni absente ; dit par l'écran (`unreadable`) et par la phase du service (jamais silencieux).
           if (cancelled) return;
           setValue('unknown');
           setKid(null);
+          setFailed(true);
         },
       );
     };
     read();
     const stop = onPairingChange(container, read);
+    const onVisibility = (): void => {
+      if (document.visibilityState !== 'hidden') read();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       cancelled = true;
       stop();
+      document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [container, platform, phase, readable]);
+  }, [container, platform, phase, readable, attempt]);
 
-  if (!readable) return { presence: 'unknown', shortKid: null };
-  return phase === 'needs-pairing' ? { presence: 'absent', shortKid: null } : { presence: value, shortKid: kid };
+  if (!readable) return { presence: 'unknown', shortKid: null, unreadable: false, reread };
+  if (phase === 'needs-pairing') return { presence: 'absent', shortKid: null, unreadable: false, reread };
+  return { presence: value, shortKid: kid, unreadable: failed && value === 'unknown', reread };
 }

@@ -8,7 +8,7 @@ import { onPairingChange, openPairingWindow, pairingOpenErrorKey, pairingStorage
 import { syncStore } from './syncStore';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
-import { useKeyPresence } from './keyPresence';
+import { useKeyInfo } from './keyPresence';
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 
@@ -29,7 +29,8 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const [storageFailed, setStorageFailed] = useState(false);
   const lastMode = useRef<'show' | 'import' | null>(null);
   const [iosPairing, setIosPairing] = useState(false);
-  const key = useKeyPresence();
+  const keyInfo = useKeyInfo();
+  const key = keyInfo.presence;
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +60,19 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   if (showOnly && mode === 'import') return null;
   // QA du parcours d'association : le QR (« Associer l'iPhone ») seulement quand cet appareil a une clé lisible et sert un dossier utilisable :
   // jamais pour un appareil oublié (D1, « Associer de nouveau » seul), un dossier à choisir de nouveau (D2) ou un coffre illisible (D3).
+  // Revue de la PR #17 : clé illisible alors que la synchro est à jour : dit, avec « Réessayer » (jamais un QR qui disparaît en silence).
+  if (mode === 'show' && keyInfo.unreadable && phase === 'idle') {
+    return (
+      <div className="ct-settings__row" data-testid="sync-key-unreadable">
+        <span className="ct-settings__hint ct-settings__hint--danger" role="status">
+          {t('sync.pairing.keyUnreadable')}
+        </span>
+        <Button variant="secondary" className="ct-settings__link" ariaLabel={t('sync.pairing.keyRereadLabel')} onClick={keyInfo.reread}>
+          {t('sync.pairing.keyReread')}
+        </Button>
+      </div>
+    );
+  }
   if (mode === 'show' && (key !== 'present' || phase === 'forgotten' || (phase === 'error' && syncErrorFamily(errorCode) === 'folder'))) return null;
   // iPhone (ADR 0011 §23 point 7) : jamais le QR ni la fenêtre `pairing` ; « Associer au PC » quand une clé est à recevoir.
   if (container.platform.os === 'ios') {

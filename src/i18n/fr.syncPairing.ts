@@ -7,6 +7,10 @@
  */
 export const syncPairingFr = {
   rowLabel: 'Nouvel appareil',
+  // Revue de la PR #17 : coffre illisible alors que la synchro est à jour (iPhone verrouillé, coffre de Windows indisponible).
+  keyUnreadable: 'Clé de chiffrement illisible pour l’instant : déverrouillez l’appareil, puis réessayez',
+  keyReread: 'Réessayer',
+  keyRereadLabel: 'Relire la clé de chiffrement',
   show: 'Associer l’iPhone',
   showLabel: 'Associer l’iPhone : afficher le code d’association',
   importAction: 'Associer cet appareil',

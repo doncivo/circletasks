@@ -5,6 +5,9 @@ type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<
 /** `sync.pairing` texts (Y-06), English. Same shape as `fr.syncPairing.ts`. */
 export const syncPairingEn: Shape<typeof syncPairingFr> = {
   rowLabel: 'New device',
+  keyUnreadable: 'Encryption key unreadable for now: unlock the device, then try again',
+  keyReread: 'Try again',
+  keyRereadLabel: 'Read the encryption key again',
   show: 'Pair the iPhone',
   showLabel: 'Pair the iPhone: show the pairing code',
   importAction: 'Pair this device',

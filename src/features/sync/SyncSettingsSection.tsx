@@ -101,7 +101,7 @@ export async function chooseFolderAndBind(
 }
 
 /** Le texte d'erreur demande de choisir un dossier (de nouveau, ou un autre) : « Choisir le dossier » proposé à côté. */
-function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
+export function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
   return code === 'unsafe-folder' || code === 'not-local' || (ios && code === 'folder-unreachable');
 }
 

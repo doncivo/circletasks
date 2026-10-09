@@ -5,7 +5,7 @@ import { syncErrorCodeOf } from '../../platform/sync/types';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { syncStore } from './syncStore';
-import { chooseFolderAndBind, syncErrorMessageKey } from './SyncSettingsSection';
+import { asksForFolder, chooseFolderAndBind, syncErrorMessageKey } from './SyncSettingsSection';
 
 /**
  * QA du parcours d'association (D2) : dossier à choisir de nouveau (erreur de la famille `folder` : non lié, inutilisable, trop volumineux)
@@ -19,8 +19,10 @@ export function SyncDetailsFolder() {
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<PlainMessageKey | null>(null);
   const platform = container.syncPlatform;
-  if (!platform || phase !== 'error' || syncErrorFamily(errorCode) !== 'folder') return null;
   const ios = container.platform.os === 'ios';
+  // Revue de la PR #17 : aussi le signet perdu sur l'iPhone (`folder-unreachable`) et tout texte qui demande un autre dossier (`asksForFolder`).
+  const asks = errorCode !== null && (syncErrorFamily(errorCode) === 'folder' || asksForFolder(errorCode, ios));
+  if (!platform || phase !== 'error' || !asks) return null;
 
   const choose = async (): Promise<void> => {
     setBusy(true);
