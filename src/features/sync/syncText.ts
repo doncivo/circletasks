@@ -212,7 +212,7 @@ export function statusLine(status: SyncStatus, nowMs: number): string {
       return resetRequiredLine(status.reset, status.devices);
     case 'idle':
       // Jamais « À jour » tant que cet appareil n'a pas publié son état ou que des modifications reçues restent inappliquées.
-      if (status.warnings?.some((code) => code === 'publish-blocked' || code === 'received-unapplied')) return t('sync.status.incomplete');
+      if (status.warnings?.some((code) => code === 'publish-blocked' || code === 'received-unapplied' || code === 'awaiting-other-devices')) return t('sync.status.incomplete');
       return status.lastSyncAt ? t('sync.status.upToDate', { age: formatSyncAge(status.lastSyncAt, nowMs) }) : t('sync.status.neverSynced');
   }
 }
@@ -245,6 +245,8 @@ export function warningText(code: SyncWarningCode): string {
       return t('sync.status.warnPublishBlocked');
     case 'received-unapplied':
       return t('sync.status.warnReceivedUnapplied');
+    case 'awaiting-other-devices':
+      return t('sync.status.warnAwaitingOthers');
   }
 }
 

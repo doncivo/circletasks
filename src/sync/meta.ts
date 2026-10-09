@@ -40,6 +40,10 @@ export const META = {
   orphanTraces: 'orphanTraces',
   /** Y-IOS-02 : une opération reçue a visé l'une de ces traces ; levé en avertissement `received-unapplied` au cycle suivant. */
   orphanTraceHit: 'orphanTraceHit',
+  /** Y-IOS-02 : reprise complète demandée par l'utilisateur : acquitte `orphanTraceHit` (effacé au cycle qui reprend). */
+  orphanTraceAck: 'orphanTraceAck',
+  /** Y-IOS-02 : « Démarrer la synchro depuis cet appareil » confirmé : lève l'attente des autres appareils (clé importée). */
+  startHere: 'startHere',
   /** Quatrième revue, point D : repères `[stateSeq, lastSyncHlc]` de ses états publiés (ADR 0011 §5.5, condition 3). */
   ownStateHlcs: 'ownStateHlcs',
 } as const;

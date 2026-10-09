@@ -44,7 +44,7 @@ fn publish_state(d: &Device, dev: &str, seq: u64) {
 #[test]
 fn y08_6_create_status_and_key_exists() {
     let (d, _) = device();
-    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None, next_kid: None, import_failure: None, paired_by: None });
+    assert_eq!(d.core.key_status().unwrap(), circletasks_lib::sync::service::KeyStatus { present: false, kid: None, next_kid: None, import_failure: None, paired_by: None, imported: false });
     assert_eq!(code(d.core.key_create()), SyncCode::NotConfigured);
     d.core.choose_folder(Path::new(FOLDER)).unwrap();
     let kid = d.core.key_create().unwrap();
@@ -103,6 +103,9 @@ fn y08_7_and_16_key_never_leaves_the_vault_and_logs_hold_no_secret() {
     b.core.choose_folder(Path::new(FOLDER)).unwrap();
     b.core.bind_device(DEV_B).unwrap();
     b.core.key_import(KeyInput::QrText(Zeroizing::new(payload.qr_text.clone())), 1).unwrap();
+    // Y-IOS-02 : origine de la clé persistée (`sync/key-origin.json`) : importée sur B, créée sur A (`a.setup` crée la clé).
+    assert!(b.core.key_status().unwrap().imported);
+    assert!(!a.core.key_status().unwrap().imported);
     // Import depuis un fil annexe (comme `spawn_blocking` dans la commande) : ses lignes sont capturées aussi.
     let recovery = payload.recovery_key.clone();
     let b = std::thread::spawn(move || {

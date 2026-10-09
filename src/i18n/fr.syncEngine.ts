@@ -90,6 +90,13 @@ export const syncEngineFr = {
     warnPublishBlocked: 'Cet appareil n’a pas encore publié son état : vos autres appareils ne voient pas ses modifications. Synchronisez de nouveau ; si cela persiste, associez l’appareil de nouveau',
     warnReceivedUnapplied: 'Des modifications reçues n’ont pas pu être appliquées (élément manquant) : synchronisez de nouveau sur l’autre appareil',
     incomplete: 'Synchro incomplète : voir les avertissements',
+    warnAwaitingOthers: 'En attente des fichiers des autres appareils dans iCloud',
+    startHere: 'Démarrer la synchro depuis cet appareil',
+    startHereTitle: 'Démarrer la synchro depuis cet appareil ?',
+    startHereBody: 'À utiliser seulement si vos autres appareils ne sont plus disponibles. Cet appareil devient le point de départ : les autres appareils fusionneront ensuite leurs données dans celui-ci.',
+    fullResume: 'Lancer une reprise complète',
+    fullResumeTitle: 'Lancer une reprise complète ?',
+    fullResumeBody: 'Les données reçues sont relues depuis le dernier instantané et fusionnées avec celles de cet appareil ; rien n’est effacé.',
   },
   restore: {
     title: 'Restauration : que faire de la synchronisation ?',

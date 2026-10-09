@@ -93,6 +93,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'scan-incomplete':
     case 'publish-blocked':
     case 'received-unapplied':
+    case 'awaiting-other-devices':
       return warningText(trouble.code);
   }
 }

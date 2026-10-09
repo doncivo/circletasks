@@ -652,6 +652,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
 
   let folder: MemorySyncFolder | null = null;
   let key: { readonly raw: Bytes; readonly kid: string } | null = null;
+  /** `kid` de la clé importée (QR ou clé de secours) et non créée ici (miroir de `sync/key-origin.json`). */
+  let importedKid: string | null = null;
   let vaultAvailable = true;
   let bound: DeviceId | null = null;
   let own: OwnState | null = null;
@@ -2291,6 +2293,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       key = { raw, kid };
       sealed = 0; // budget de nonces compté par clé
     }
+    importedKid = kid;
     if (!own || own.folderId !== f.id || own.kid !== kid) own = bound ? rebuildOwn(f, kid, bound) : null;
     if (own && pairedBy !== null) own.pairedBy = pairedBy;
     pendingPairedBy = pairedBy;
@@ -2364,7 +2367,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       status: async () => {
         requireVault();
         const failure = importFailure && folder && importFailure.folderId === folder.id ? { code: importFailure.code, at: importFailure.at as IsoDateTime } : null;
-        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure, pairedBy: pendingPairedBy ?? own?.pairedBy ?? null };
+        return { present: key !== null, kid: key?.kid ?? null, nextKid: nextKey?.kid ?? null, importFailure: failure, pairedBy: pendingPairedBy ?? own?.pairedBy ?? null, imported: key !== null && importedKid === key.kid };
       },
       create: async () => {
         requireVault();
@@ -2373,6 +2376,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         if (folderHasData(f)) return fail('folder-has-data');
         const raw = crypto.getRandomValues(new Uint8Array(KEY_BYTES));
         key = { raw, kid: await kidOf(raw) };
+        importedKid = null;
         own = null;
         sealed = 0;
         // Y-10 : appareil déjà lié, dossier sans données : registre créé dès maintenant (rien n'a été publié).

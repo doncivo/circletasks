@@ -56,7 +56,7 @@ const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan
  * `publish-blocked` (l'état de cet appareil n'est pas publié : les autres ne voient rien de lui) et `received-unapplied` (des
  * modifications reçues restent en attente d'une ligne qui manque, même après lecture complète et reprise depuis l'instantané).
  */
-export const SYNC_WARNINGS = [...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied'] as const;
+export const SYNC_WARNINGS = [...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
 type ScanWarningCode = (typeof SCAN_WARNINGS)[number];
 

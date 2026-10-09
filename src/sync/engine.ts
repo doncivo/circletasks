@@ -168,7 +168,7 @@ export async function runCycle(baseDeps: SyncDeps, hooks: CycleHooks, options: C
     deps.logger.log('cycle-failed', { code: 'io', unreadable: true });
     result = { ...EMPTY, outcome: 'failed', errorCode: 'io', stateUnreadable: true };
   }
-  const withWarnings = seen.warnings ? { ...result, warnings: seen.warnings } : result;
+  const withWarnings = seen.warnings ? { ...result, warnings: [...new Set(seen.warnings)] } : result;
   // Cinquième revue, points 2 et 5 : valeur locale illisible relue vide et réécrite pendant ce cycle : visible pour ce cycle seulement.
   return seen.unreadable ? { ...withWarnings, stateUnreadable: true } : withWarnings;
 }
@@ -481,6 +481,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const followable = (e: EpochId | null): EpochId | null => (e === null || allowed === undefined || e === allowed ? e : null);
     if (allowed !== undefined && folderE !== null && folderE !== allowed && epoch !== null && compareEpochs(folderE, epoch) > 0) logger.log('epoch-not-followed', { epoch: folderE });
     if (epoch === null && folderE === null && unreadable.length > 0) return waitForUnreadable('epoch-open-deferred');
+    // Y-IOS-02 (ADR 0011 §24 point 1) : une clé **importée** (QR ou clé de secours, `sync/key-origin.json`) ne fait jamais d'un appareil le premier :
+    // tant qu'aucun état d'un autre appareil n'a été lu, quoi que montre le listing, il attend (sans nommer d'appareil) ; l'action explicite
+    // « Démarrer la synchro depuis cet appareil » (`sync_meta.startHere`) lève l'attente.
+    if (epoch === null && folderE === null && keyStatus.imported === true && live.size === 0 && (await readJson<boolean>(repos, META.startHere)) !== true) {
+      logger.log('epoch-open-deferred', { reason: 'imported-key' });
+      seen.warnings = [...(seen.warnings ?? []), 'awaiting-other-devices'];
+      return { ...EMPTY, outcome: 'done', folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
+    }
     if (epoch === null && folderE === null) {
       // Premier appareil : ouverture de l'époque 1 (instantané complet, puis état).
       epoch = epochId(1, self);
@@ -496,6 +504,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
         await writeJson(tx, META.epoch, epoch);
         await writeJson(tx, META.head, head);
         await writeJson(tx, META.snapshot, { epoch, seq: 1, endHlc });
+        await writeJson(tx, META.startHere, null);
       });
       logger.log('epoch-opened', { epoch });
     } else if (epoch === null && folderE !== null) {
@@ -907,9 +916,14 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     }
 
     // Y-IOS-02 (§24 point 4 (a)) : une opération reçue a visé une trace purgée dans l'orpheline abandonnée : divergence visible.
+    // Persiste tant que l'utilisateur ne l'a pas acquitté (« Lancer une reprise complète » : `orphanTraceAck`, effacé avec la trace au cycle qui reprend).
     if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) {
-      seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
-      await writeJson(repos, META.orphanTraceHit, null);
+      if ((await repos.sync.getMeta(META.orphanTraceAck)) !== null && resumed) {
+        await writeJson(repos, META.orphanTraceHit, null);
+        await writeJson(repos, META.orphanTraceAck, null);
+      } else {
+        seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+      }
     }
 
     // 5. Publication.

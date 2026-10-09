@@ -436,6 +436,18 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       }).catch(() => undefined);
       return outcome;
     },
+    async startFromThisDevice(): Promise<void> {
+      await schedule('choice', async () => {
+        await writeJson(options.data.repos, META.startHere, true);
+        await cycle();
+      }).catch(() => undefined);
+    },
+    async fullResume(): Promise<void> {
+      await schedule('choice', async () => {
+        await writeJson(options.data.repos, META.orphanTraceAck, true);
+        await cycle({ forceResume: true });
+      }).catch(() => undefined);
+    },
     async dismissReset(): Promise<void> {
       await schedule('reset', async () => {
         await dismissResetState(deps);

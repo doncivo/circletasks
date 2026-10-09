@@ -1,6 +1,6 @@
 // Y-TECH-02 (point 1) : avertissements du scan et état local illisible visibles dans le bandeau (règle existante : le plus urgent, « (+N) »)
 // et dans Réglages › Synchronisation (section AVERTISSEMENTS) ; fenêtre de restauration quand le dossier n'a pas pu être vérifié.
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { SYNC_TROUBLE_ORDER, syncBannerFor } from '../../domain/syncBanners';
@@ -44,7 +44,7 @@ const status = (patch: Partial<SyncStatus>): SyncStatus => ({ ...sync.status(), 
 
 describe('décision et texte du bandeau', () => {
   it('avertissements à la fin de SYNC_TROUBLE_ORDER, jamais avant un échec ; texte de chacun', () => {
-    expect(SYNC_TROUBLE_ORDER.slice(-6)).toEqual(['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete', 'publish-blocked', 'received-unapplied']);
+    expect(SYNC_TROUBLE_ORDER.slice(-7)).toEqual(['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete', 'publish-blocked', 'received-unapplied', 'awaiting-other-devices']);
     const s = status({ warnings: ['scan-incomplete', 'nonce-budget'], devices: [] });
     const banners = syncBannerFor<SyncDeviceStatus, SyncStatus>(s, NO_PERSISTED);
     expect(banners.troubles.map((x) => x.code)).toEqual(['nonce-budget', 'scan-incomplete']);
@@ -81,6 +81,40 @@ describe('Réglages › Synchronisation', () => {
     expect(screen.getByText(t('status.syncStateUnreadable'))).toBeTruthy();
     expect(screen.getByText(t('sync.status.warnNonceBudget'))).toBeTruthy();
     expect(screen.getByText(t('sync.status.warnScanIncomplete'))).toBeTruthy();
+  });
+});
+
+describe('actions de secours des avertissements (ADR 0011 §24)', () => {
+  const slots = { pairing: null, conflicts: null, version: null, forget: null, reset: null } as const;
+
+  it('en attente des autres appareils : texte sans nom d’appareil, « Démarrer la synchro depuis cet appareil » avec confirmation (Annuler par défaut)', async () => {
+    syncStore.get(container).setState({ status: status({ warnings: ['awaiting-other-devices'] }) });
+    renderIn(<SyncDetailsScreen slots={slots} />);
+    expect(screen.getByText(t('sync.status.warnAwaitingOthers'))).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: t('sync.status.startHere') }));
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog.textContent).toContain(t('sync.status.startHereBody'));
+    expect(document.activeElement?.textContent).toBe(t('common.cancel'));
+    fireEvent.click(screen.getByRole('button', { name: t('common.cancel') }));
+    expect(sync.startHereCalls).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: t('sync.status.startHere') }));
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: t('sync.status.startHere') }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sync.startHereCalls).toBe(1);
+  });
+
+  it('received-unapplied : « Lancer une reprise complète » avec confirmation, reprise demandée seulement après confirmation', async () => {
+    syncStore.get(container).setState({ status: status({ warnings: ['received-unapplied'] }) });
+    renderIn(<SyncDetailsScreen slots={slots} />);
+    fireEvent.click(screen.getByRole('button', { name: t('sync.status.fullResume') }));
+    expect(sync.fullResumeCalls).toBe(0);
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: t('sync.status.fullResume') }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(sync.fullResumeCalls).toBe(1);
   });
 });
 

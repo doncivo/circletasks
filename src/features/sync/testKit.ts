@@ -23,6 +23,8 @@ export interface FakeSyncService extends SyncEngineService {
   resets: number;
   resetOutcome: ResetOutcome;
   dismissals: number;
+  startHereCalls: number;
+  fullResumeCalls: number;
 }
 
 export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSyncService {
@@ -86,8 +88,16 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
       return fake.resetOutcome;
     },
     dismissals: 0,
+    startHereCalls: 0,
+    fullResumeCalls: 0,
     async dismissReset() {
       fake.dismissals += 1;
+    },
+    async startFromThisDevice() {
+      fake.startHereCalls += 1;
+    },
+    async fullResume() {
+      fake.fullResumeCalls += 1;
     },
   };
   return fake;

@@ -184,10 +184,87 @@ describe('appareil connu dont le dossier n’apparaît pas encore (§24 point 1 
     expect(ghost).toMatchObject({ seen: false, self: false });
     // L'action « Oublier l'appareil » (flux existant, Détails) sur ce fantôme.
     expect(await b.service.forgetDevice(a.id)).toEqual({ kind: 'done' });
+    // Le PC oublié ne bloque plus nommément ; la clé étant importée, l'appareil attend encore (aucun état lu) jusqu'à l'action explicite.
     const after = await b.cycle();
     expect(after.phase).not.toBe('waiting-icloud');
+    expect(after.warnings).toContain('awaiting-other-devices');
+    await b.service.startFromThisDevice();
     expect(await b.data.repos.sync.getMeta('epoch')).not.toBeNull();
     expect(b.logger.entries.some((e) => e.event === 'epoch-opened')).toBe(true);
+  });
+});
+
+describe('clé importée : jamais le premier appareil sans action explicite (§24 point 1)', () => {
+  it('clé de secours (pas de pairedBy), listing sans aucun autre appareil : attente sans nom, rien d’écrit, puis « Démarrer la synchro depuis cet appareil » ouvre l’époque', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    expect((await b.platform.key.status()).imported).toBe(true);
+    expect((await b.platform.key.status()).pairedBy ?? null).toBeNull();
+    expect((await a.platform.key.status()).imported).toBe(false);
+    b.folder.devices.delete(a.id);
+    for (let i = 0; i < 3; i += 1) {
+      const status = await b.cycle();
+      expect(status.warnings).toContain('awaiting-other-devices');
+      expect(statusLine(status, b.clock.nowMs())).not.toContain('À jour');
+      expect(status.devices.every((d) => d.self)).toBe(true);
+    }
+    expect(await b.data.repos.sync.getMeta('epoch')).toBeNull();
+    expect(b.folder.devices.get(b.id)?.epochs.size ?? 0).toBe(0);
+    await b.service.startFromThisDevice();
+    expect(await b.data.repos.sync.getMeta('epoch')).not.toBeNull();
+    expect(b.service.status().warnings ?? []).not.toContain('awaiting-other-devices');
+    expect(await b.data.repos.sync.getMeta('startHere')).toBeNull();
+  });
+
+  it('les fichiers des autres appareils arrivent sans action : l’appareil rejoint leur époque, jamais la sienne', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    const task = await a.createTask('Test Pc');
+    await a.cycle();
+    await pair(a, b);
+    b.folder.devices.delete(a.id);
+    expect((await b.cycle()).warnings).toContain('awaiting-other-devices');
+    propagate(a.folder, b.folder, a.id);
+    const joined = await b.cycle();
+    expect(joined.warnings ?? []).not.toContain('awaiting-other-devices');
+    expect((await b.task(task.id as TaskId))?.title).toBe('Test Pc');
+    expect(await b.data.repos.sync.getMeta('epoch')).toBe(await a.data.repos.sync.getMeta('epoch'));
+  });
+});
+
+describe('avertissement d’une trace de l’orpheline : persistant jusqu’à acquittement', () => {
+  it('reste levé à chaque cycle, puis « Lancer une reprise complète » le résout', async () => {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    await a.cycle();
+    await pair(a, b);
+    await b.cycle();
+    syncFolders(devices);
+    await a.cycle();
+    const id = '12345678-1234-4234-8234-123456789012' as TaskId;
+    b.clock.advance(1_000);
+    await b.data.repos.sync.insertTombstones([{ table: 'task', rowId: id, deletedHlc: b.hlc.now() }], new Date(b.clock.nowMs()).toISOString() as never);
+    await b.data.repos.sync.setMeta('orphanTraces', JSON.stringify([`task|${id}`]));
+    a.clock.advance(1_000);
+    await a.createTask('Visée par la trace', { id });
+    await a.cycle();
+    syncFolders(devices);
+    expect((await b.cycle()).warnings).toContain('received-unapplied');
+    for (let i = 0; i < 3; i += 1) expect((await b.cycle()).warnings).toContain('received-unapplied');
+    await b.service.fullResume();
+    expect(b.service.status().warnings ?? []).not.toContain('received-unapplied');
+    expect(await b.data.repos.sync.getMeta('orphanTraceHit')).toBeNull();
+    expect(await b.data.repos.sync.getMeta('orphanTraceAck')).toBeNull();
+    expect((await b.cycle()).warnings ?? []).not.toContain('received-unapplied');
   });
 });
 

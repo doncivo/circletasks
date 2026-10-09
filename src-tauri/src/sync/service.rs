@@ -140,7 +140,18 @@ pub struct KeyStatus {
     /// Y-IOS-02 (ADR 0011 §24 point 1 (b)) : appareil par lequel cet appareil a été associé (`own.json`, ou mémorisé à l'import avant la
     /// liaison), ou null. Le moteur ne se tient pas pour le premier appareil tant que son état n'est pas lisible.
     pub paired_by: Option<String>,
+    /// Y-IOS-02 : la clé a été **importée** (QR ou clé de secours) et non créée ici ; faux pour une clé d'avant (origine inconnue).
+    pub imported: bool,
 }
+
+/// `sync/key-origin.json` : origine de la clé locale (`kid`), écrite à la création et à l'import.
+#[derive(Debug, Clone, Serialize, serde::Deserialize)]
+struct KeyOrigin {
+    kid: String,
+    imported: bool,
+}
+
+const KEY_ORIGIN_FILE: &str = "key-origin.json";
 
 /// Échec d'import persisté (§18 point 17) : code et instant ISO UTC, jamais de clé.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -587,7 +598,16 @@ impl SyncCore {
         let import_failure = self.import_failure();
         let kid = key.as_ref().map(|k| k.kid().to_owned());
         let paired_by = self.paired_by(kid.as_deref());
-        Ok(KeyStatus { present: key.is_some(), kid, next_kid: next.map(|k| k.kid().to_owned()), import_failure, paired_by })
+        let imported = kid.as_deref().is_some_and(|k| matches!(read_config_file::<KeyOrigin>(&self.path(KEY_ORIGIN_FILE)), Ok(Some(o)) if o.kid == k && o.imported));
+        Ok(KeyStatus { present: key.is_some(), kid, next_kid: next.map(|k| k.kid().to_owned()), import_failure, paired_by, imported })
+    }
+
+    /// Origine de la clé (créée ici / importée) ; un échec d'écriture est journalisé (la clé reste « d'origine inconnue » : comportement d'avant).
+    fn save_key_origin(&self, kid: &str, imported: bool) {
+        let origin = KeyOrigin { kid: kid.to_owned(), imported };
+        if write_config_file(&self.path(KEY_ORIGIN_FILE), &serde_json::to_vec(&origin).unwrap_or_default()).is_err() {
+            log::event("key-origin-unsaved", "io");
+        }
     }
 
     /// Appareil d'association : mémorisé à l'import (pas encore lié), sinon `own.json` de la clé courante ; illisible : aucun.
@@ -685,6 +705,7 @@ impl SyncCore {
                 log::event("forgotten-registry-deferred", "key-create");
             }
         }
+        self.save_key_origin(&kid, false);
         log::event("key-created", &kid);
         Ok(kid)
     }
@@ -1394,6 +1415,7 @@ impl SyncCore {
                 log::event("forgotten-registry-deferred", "key-import");
             }
         }
+        self.save_key_origin(&kid, true);
         log::event("key-imported", &kid);
         Ok(KeyImportResult { kid, paired_by, epoch })
     }

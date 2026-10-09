@@ -83,6 +83,13 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     warnPublishBlocked: 'This device has not published its state yet: your other devices cannot see its changes. Sync again; if it persists, pair the device again',
     warnReceivedUnapplied: 'Some received changes could not be applied (missing item): sync again on the other device',
     incomplete: 'Sync incomplete: see warnings',
+    warnAwaitingOthers: 'Waiting for the other devices’ files in iCloud',
+    startHere: 'Start syncing from this device',
+    startHereTitle: 'Start syncing from this device?',
+    startHereBody: 'Only use this if your other devices are no longer available. This device becomes the starting point: the other devices will then merge their data into it.',
+    fullResume: 'Run a full resume',
+    fullResumeTitle: 'Run a full resume?',
+    fullResumeBody: 'Received data is read again from the latest snapshot and merged with this device’s data; nothing is erased.',
     progress: 'Syncing: {done} of {total}',
   },
   restore: {

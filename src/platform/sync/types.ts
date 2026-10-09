@@ -449,6 +449,8 @@ export interface KeyStatus {
   readonly importFailure?: { readonly code: SyncErrorCode; readonly at: IsoDateTime } | null;
   /** ADR 0011 §24 point 1 (b) : appareil par lequel cet appareil a été associé (`own.json`), ou null. Facultatif (anciens faux). */
   readonly pairedBy?: DeviceId | null;
+  /** Clé importée (QR ou clé de secours) et non créée sur cet appareil ; faux si l'origine est inconnue (clé d'avant). Facultatif. */
+  readonly imported?: boolean;
 }
 
 /** Sortie de `sync_forgotten_delete` (Y-10) : `complete` faux s'il reste des fichiers (10 000 entrées au plus par appel). */
@@ -690,6 +692,13 @@ export interface SyncEngineService extends SyncService {
   resetSync(): Promise<ResetOutcome>;
   /** Y-11 : efface l'état « réinitialisation terminée » (ou un échec de lancement abandonné) affiché dans Réglages. */
   dismissReset(): Promise<void>;
+  /**
+   * Y-IOS-02 (ADR 0011 §24 point 1) : « Démarrer la synchro depuis cet appareil » : un appareil dont la clé a été importée n'ouvre jamais une époque
+   * tant qu'aucun état d'un autre appareil n'a été lu ; cette action explicite (tous les autres sont perdus) lève l'attente. Ne rejette jamais.
+   */
+  startFromThisDevice(): Promise<void>;
+  /** Y-IOS-02 : « Lancer une reprise complète » : reprise depuis l'instantané (fusion) forcée ; acquitte l'avertissement `received-unapplied` d'une trace. Ne rejette jamais. */
+  fullResume(): Promise<void>;
 }
 
 /** Fenêtre de choix après une restauration P-04 (ADR 0010 règles 3 et 4, ADR 0011 section 9). */
