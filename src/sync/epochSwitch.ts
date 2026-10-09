@@ -91,6 +91,31 @@ function carriedOf(t: SyncTable, row: ExportedRow, isOwn: (name: string, hlc: Hl
   return own.length > 0 ? { t: t.name, id: row.id, at: row.updatedAt, f, own } : null;
 }
 
+/**
+ * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : abandon d'une époque orpheline (ouverte, jamais publiée) : chaque ligne qui porte un champ
+ * écrit par cet appareil est remise **entière** dans la file de publication (`ROW_REPUBLISH_FIELD`, hlc d'origine gardés), car la file avait
+ * été vidée à l'ouverture de l'époque (ses lignes ne vivaient que dans l'instantané orphelin). Rien n'est supprimé ni modifié localement.
+ */
+export async function queueOwnRowsForRepublish(deps: SyncDeps): Promise<number> {
+  const self = deps.deviceId;
+  let queued = 0;
+  for (const t of SYNC_TABLES) {
+    let after: string | null = null;
+    for (;;) {
+      const rows: ExportedRow[] = await deps.data.repos.sync.exportRows(t, after, PAGE_ROWS);
+      if (rows.length === 0) break;
+      after = (rows.at(-1) as ExportedRow).id;
+      const mine = rows.filter((row) => carriedOf(t, row, (_name, hlc) => hlcDevice(hlc) === self) !== null);
+      if (mine.length === 0) continue;
+      await deps.data.transaction(async (repos) => {
+        await repos.sync.addOutbox(mine.map((row) => ({ table: t.name, rowId: row.id, field: ROW_REPUBLISH_FIELD })));
+      });
+      queued += mine.length;
+    }
+  }
+  return queued;
+}
+
 /** Champs en attente d'une ligne : `'*'` et `ROW_REPUBLISH_FIELD` valent pour toutes les colonnes. */
 const pendingHas = (pending: ReadonlySet<string>, name: string): boolean => pending.has(name) || pending.has('*') || pending.has(ROW_REPUBLISH_FIELD);
 
@@ -99,7 +124,8 @@ const pendingHas = (pending: ReadonlySet<string>, name: string): boolean => pend
  * début de (a) est mémorisé (`maxSeq`) : seules les entrées jusqu'à lui seront vidées en (b) ; les écritures suivantes sont reportées
  * par `carryNewer` avant chaque transaction de remplacement.
  */
-async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: number): Promise<number> {
+async function materialize(deps: SyncDeps, covers: ReadonlyMap<DeviceId, DeviceAck>, maxSeq: number, opener: DeviceId): Promise<number> {
+  const cover = covers.get(deps.deviceId) ?? null;
   const self = deps.deviceId;
   const { data } = deps;
   await data.transaction(async (repos) => {
@@ -124,7 +150,18 @@ async function materialize(deps: SyncDeps, cover: DeviceAck | null, maxSeq: numb
       const ops: CarriedOp[] = [];
       for (const row of rows) {
         const pending = pendingFields.get(`${t.name}\u0000${row.id}`) ?? new Set<string>();
-        const op = carriedOf(t, row, (name, hlc) => hlcDevice(hlc) === self && (mustCarry(hlc, self, cover) || pendingHas(pending, name)));
+        // Garde générale : un champ écrit par un autre appareil que l'ouvreur n'a pas lu jusque-là (aucune entrée `covers`, ou hlc au-delà)
+        // est reporté comme les siens ; ce que l'ouvreur avait lu reste remplacé (règle confirmée par Ali pour la restauration).
+        const op = carriedOf(t, row, (name, hlc) => {
+          const author = hlcDevice(hlc);
+          if (author !== self) {
+            // Seulement un appareil dont l'ouvreur n'a jamais rien lu (aucune position, ou position sans hlc) : une position réelle fixe
+            // volontairement ce qui survit (restauration, coupure d'un oublié, écritures de l'ouvreur annulées).
+            const read = covers.get(author);
+            return author !== opener && (read === undefined || read.hlc === null);
+          }
+          return mustCarry(hlc, self, cover) || pendingHas(pending, name);
+        });
         if (op) ops.push(op);
       }
       if (ops.length > 0) {
@@ -232,7 +269,7 @@ async function reapply(deps: SyncDeps): Promise<Map<string, Set<string>>> {
         } else {
           const clocks = (await repos.sync.readClocks(t, [op.id])).get(op.id) ?? new Map();
           const row = (await repos.sync.readRows(t, [op.id])).get(op.id);
-          const keep = op.own.filter((name) => (clocks.get(name) ?? clocks.get('*') ?? { hlc: row?.hlc }).hlc === (op.f[name] as SyncField)[1]);
+          const keep = op.own.filter((name) => hlcDevice((op.f[name] as SyncField)[1]) === deps.deviceId && (clocks.get(name) ?? clocks.get('*') ?? { hlc: row?.hlc }).hlc === (op.f[name] as SyncField)[1]);
           await repos.sync.addOutbox(keep.map((field) => ({ table: t.name, rowId: op.id, field })));
         }
         addTouched(touched, t.name, op.id);
@@ -304,7 +341,7 @@ export async function switchEpoch(
     const loaded = await load();
     if (loaded === 'cloud-pending') return 'cloud-pending';
     if (!loaded) return 'error';
-    const carried = await materialize(deps, loaded.end.covers.get(deps.deviceId) ?? null, progress.maxSeq);
+    const carried = await materialize(deps, loaded.end.covers, progress.maxSeq, progress.from.deviceId);
     deps.logger.log('epoch-carry', { target, rows: carried });
     await advance('b');
     await testHooks.afterStep?.('a');

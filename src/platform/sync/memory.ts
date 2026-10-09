@@ -1484,10 +1484,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       return record && record.superseded === null ? (record.base?.epoch ?? null) : null;
     })();
     if (baseEpoch !== null && files.some((ref) => ref.epoch === baseEpoch)) fail('state-mismatch');
+    // Y-IOS-02 : époque orpheline (ouverte, ni état, ni enregistrement jamais écrits) : supprimable, `own.json` revient sans époque.
+    const orphan = o.stateSeq === 0 && o.segment === 0 && o.record === 0;
     for (const ref of files) {
       if (!isEpochId(ref.epoch) || (ref.kind !== 'j' && ref.kind !== 's' && ref.kind !== 'epoch')) fail('bad-name');
       if (ref.kind === 'epoch' ? ref.n !== undefined : !isFileNumber(ref.n)) fail('bad-name');
-      if (ref.epoch === o.epoch && ref.kind === 'epoch') fail('current-epoch');
+      if (ref.epoch === o.epoch && ref.kind === 'epoch' && !orphan) fail('current-epoch');
       // Choix conservateur : le segment de la tête courante n'est jamais supprimé (il reçoit encore des ajouts).
       if (ref.epoch === o.epoch && ref.kind === 'j' && ref.n === o.segment) fail('current-epoch');
     }
@@ -1499,6 +1501,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (ref.kind === 'epoch') {
         deleted += epochDir.segments.size + epochDir.snapshots.size;
         dir.epochs.delete(ref.epoch);
+        if (ref.epoch === o.epoch) {
+          o.epoch = null;
+          o.maxHlc = null;
+        }
       } else if (ref.n !== undefined && (ref.kind === 'j' ? epochDir.segments : epochDir.snapshots).delete(ref.n)) {
         deleted += 1;
       }

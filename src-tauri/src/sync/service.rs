@@ -1112,9 +1112,10 @@ impl SyncCore {
         let next = self.active_next(&mut inner)?;
         let bound = inner.folder.as_ref().ok_or(SyncError::new(SyncCode::NotConfigured))?;
         let before = own.closed.len();
+        let epoch_before = own.epoch.clone();
         let deleted = store_for(bound, &key, &next, false).delete_own(&mut own, &self_id, files)?;
-        // Y-TECH-02 : entrée `closed` d'un segment supprimé retirée de own.json.
-        if own.closed.len() != before {
+        // Y-TECH-02 : entrée `closed` d'un segment supprimé retirée de own.json ; Y-IOS-02 : époque orpheline supprimée.
+        if own.closed.len() != before || own.epoch != epoch_before {
             self.save_own(&mut inner, own)?;
         }
         Ok(deleted)

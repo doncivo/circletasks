@@ -61,6 +61,77 @@ describe('arrivée alors que l’état du PC est encore dans le nuage', () => {
   });
 });
 
+describe('topologie réelle du point de contrôle 0.2.3 : iPhone en époque orpheline, PC porteur des données', () => {
+  /** PC : 5 tâches dans l'instantané, « Test Pc » créée après (enregistrement 1), mise à jour de minuit (enregistrement 2). */
+  async function topology(cursor: 'ack-set' | 'ack-null'): Promise<{ a: SimDevice; b: SimDevice; testPc: TaskId; localIphone: TaskId }> {
+    const a = await createSimDevice(A_ID, { name: 'PC' });
+    const b = await createSimDevice(B_ID, { name: 'iPhone', clock: a.clock });
+    devices.push(a, b);
+    await setupFirst(a);
+    for (let i = 0; i < 5; i += 1) await a.createTask(`Tâche PC ${String(i)}`);
+    await a.cycle();
+    const testPc = (await a.createTask('Test Pc')).id as TaskId;
+    await a.cycle();
+    await pair(a, b);
+    a.clock.advance(3_600_000);
+    await a.updateTask(testPc, { carriedOver: true });
+    await a.cycle();
+    // L'iPhone voit le dossier du PC sans son état (absent, pas dans le nuage) : il se croit le premier, ouvre ef50 et s'arrête avant l'état.
+    const localIphone = (await b.createTask('Écrite sur l’iPhone')).id as TaskId;
+    propagate(a.folder, b.folder, a.id, { drop: ['state.ctx'] });
+    b.service = createSyncService({
+      data: b.data, platform: b.platform, hlc: b.hlc, clock: b.clock, deviceId: b.id, devicePlatform: 'ios', sv: SCHEMA_VERSION, appVersion: '0.4.0', logger: b.logger,
+      setTimeout: () => 0, clearTimeout: () => undefined,
+      deadlineProbe: (unit) => {
+        if (unit === 'write-state') b.clock.advance(HIDE_SYNC_DEADLINE_MS);
+      },
+    });
+    await b.service.syncNow('hide', { deadlineAt: b.clock.nowMs() + HIDE_SYNC_DEADLINE_MS });
+    await b.restart();
+    expect(await b.data.repos.sync.getMeta('epoch')).toContain(B_ID.slice(0, 8));
+    expect(b.folder.devices.get(b.id)?.state ?? null).toBeNull();
+    // Position de lecture laissée par le défaut sur le PC.
+    const pcRow = (await a.data.repos.sync.getStates()).find((r) => r.isSelf);
+    await b.data.repos.sync.saveState(a.id, { cursorSegment: 1, cursorRecord: 2, ackHlc: cursor === 'ack-set' ? (pcRow?.ackHlc ?? a.hlc.now()) : null });
+    // Le dossier du PC arrive complètement chez l'iPhone.
+    propagate(a.folder, b.folder, a.id);
+    return { a, b, testPc, localIphone };
+  }
+
+  const liveIds = async (d: SimDevice): Promise<string[]> => (await d.driver.select<{ id: string }>('SELECT id FROM task WHERE deleted_at IS NULL ORDER BY id')).map((r) => r.id);
+
+  for (const cursor of ['ack-set', 'ack-null'] as const) {
+    it(`l’iPhone abandonne son époque orpheline et rejoint celle du PC (${cursor}) : aucune ligne perdue, aucun « À jour » prématuré`, async () => {
+      const { a, b, testPc, localIphone } = await topology(cursor);
+      const pcBefore = await liveIds(a);
+      expect(pcBefore).toHaveLength(6);
+      const epochA = await a.data.repos.sync.getMeta('epoch');
+      for (let round = 0; round < 4; round += 1) {
+        const status = await b.cycle();
+        // « À jour » seulement quand tout le contenu du PC est là.
+        if (status.phase === 'idle' && status.warnings === undefined) expect((await b.task(testPc))?.title).toBe('Test Pc');
+        syncFolders(devices);
+        await a.cycle();
+        syncFolders(devices);
+      }
+      expect(await b.data.repos.sync.getMeta('epoch')).toBe(epochA);
+      expect(await a.data.repos.sync.getMeta('epoch')).toBe(epochA);
+      expect((await b.task(testPc))?.carriedOver).toBe(true);
+      expect((await b.task(testPc))?.title).toBe('Test Pc');
+      for (const id of pcBefore) expect(await b.task(id as TaskId), id).not.toBeNull();
+      // Rien n'est supprimé ni perdu des deux côtés ; la tâche de l'iPhone est arrivée sur le PC.
+      expect((await a.task(localIphone))?.title).toBe('Écrite sur l’iPhone');
+      for (const id of pcBefore) expect(await a.task(id as TaskId), id).not.toBeNull();
+      expect(await taskSnapshot(a)).toEqual(await taskSnapshot(b));
+      expect(await a.driver.select('SELECT id FROM task WHERE deleted_at IS NOT NULL')).toEqual([]);
+      expect(await b.driver.select('SELECT id FROM task WHERE deleted_at IS NOT NULL')).toEqual([]);
+      // L'époque orpheline n'a jamais été annoncée et ses fichiers sont supprimés ; l'état de l'iPhone est publié.
+      expect(b.folder.devices.get(b.id)?.epochs.has(`e0001-${B_ID}` as never) ?? false).toBe(false);
+      expect(b.folder.devices.get(b.id)?.state ?? null).not.toBeNull();
+    });
+  }
+});
+
 describe('« À jour » jamais affiché en silence', () => {
   it('curseur posé au-delà d’un enregistrement (mise à jour d’une ligne inconnue) : avertissement visible, puis reprise automatique sans perte', async () => {
     const a = await createSimDevice(A_ID, { name: 'PC' });

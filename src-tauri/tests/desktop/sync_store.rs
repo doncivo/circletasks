@@ -548,6 +548,24 @@ fn y01_12_snapshots_and_own_file_deletion() {
 }
 
 #[test]
+fn y_ios_02_orphan_epoch_can_be_deleted_and_a_lower_epoch_joined() {
+    let (a, fs) = device();
+    a.setup(DEV_A);
+    // Époque ouverte (instantané écrit) sans état ni enregistrement : orpheline.
+    let high = epoch(1, "ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    let handle = a.core.snapshot_begin(&high, 1, 14).unwrap();
+    a.core.snapshot_append(handle, &["{\"k\":\"snap-rows\"}".to_owned()]).unwrap();
+    a.core.snapshot_commit(handle).unwrap();
+    let orphan = |ep: &str| OwnFileRef { epoch: ep.to_owned(), kind: "epoch".into(), n: None };
+    assert_eq!(a.core.delete_own(&[orphan(&high)]).unwrap(), 1);
+    assert!(fs.get(&["devices", DEV_A, &high, "s-00000001.cts"]).is_none());
+    // `own.json` est revenu sans époque : une époque plus petite (celle du PC) peut maintenant être suivie.
+    let low = epoch(1, "56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+    let handle = a.core.snapshot_begin(&low, 1, 14).unwrap();
+    a.core.snapshot_commit(handle).unwrap();
+}
+
+#[test]
 fn y01_16_restore_marker_written_only_when_a_folder_is_configured() {
     let (d, _) = device();
     let base = d.base.path();

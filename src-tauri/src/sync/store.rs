@@ -1407,7 +1407,9 @@ impl<'a> Store<'a> {
                 return fail(SyncCode::BadName);
             }
             let current = own.epoch.as_deref() == Some(file.epoch.as_str());
-            if current && (file.kind == "epoch" || (file.kind == "j" && file.n == Some(own.segment))) {
+            // Y-IOS-02 : époque orpheline (ouverte, ni état ni enregistrement jamais écrits) : supprimable ; `own.json` revient sans époque.
+            let orphan = own.state_seq == 0 && own.segment == 0 && own.record == 0;
+            if current && ((file.kind == "epoch" && !orphan) || (file.kind == "j" && file.n == Some(own.segment))) {
                 return fail(SyncCode::CurrentEpoch);
             }
         }
@@ -1429,6 +1431,10 @@ impl<'a> Store<'a> {
                         }
                     }
                     self.fs.remove_empty_dir(&[DEVICES_DIR, self_id, epoch]).map_err(fs_error)?;
+                    if own.epoch.as_deref() == Some(epoch) {
+                        own.epoch = None;
+                        own.max_hlc = None;
+                    }
                 }
                 (kind, Some(n)) => {
                     let name = if kind == "j" { segment_name(n as u32) } else { snapshot_name(n as u32) };
