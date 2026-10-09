@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SPACE_PERSO_ID } from '../../db/seed/defaultSpaces';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -6,6 +6,8 @@ import { useAppStore } from '../app/appStore';
 import { useNoticeStore } from '../app/notice';
 import { renderEvents, setupEvents } from '../events/testKit';
 import { renderRoutines } from '../routines/testKit';
+import type { TaskId } from '../../domain/types';
+import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import { CREATE_NOT_READY_MS, TaskCreateSheet } from '../tasks/TaskCreateSheet';
 import { mockViewport, renderToday, setupToday, teardownToday, type TodayHarness } from '../today/testKit';
 
@@ -106,13 +108,15 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
       await Promise.resolve();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
-    // L'ancienne écriture aboutit enfin : le doublon possible est dit, la feuille n'est pas refermée une seconde fois.
+    // L'ancienne écriture aboutit enfin : même identifiant, donc rien de plus à dire ; la feuille n'est pas refermée une seconde fois.
     await act(async () => {
       finishers[0]?.(true);
       await Promise.resolve();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(useNoticeStore.getState().notice?.text).toContain('deux fois');
+    expect(useNoticeStore.getState().notice).toBeNull();
+    expect(onCreate.mock.calls[0]?.[0]).toHaveProperty('taskId');
+    expect((onCreate.mock.calls[1]?.[0] as unknown as { taskId: string }).taskId).toBe((onCreate.mock.calls[0]?.[0] as unknown as { taskId: string }).taskId);
   });
 
   it('Q-05 critère 2 (revue) : feuille fermée pendant l’attente, la fin de l’écriture est dite (enregistrée, ou non enregistrée avec la marche à suivre)', async () => {
@@ -136,6 +140,48 @@ describe('Q-05 revue : écriture lente et points d’entrée', () => {
     });
     expect(useNoticeStore.getState().notice?.text).toContain('n’a pas pu être enregistrée');
     expect(useNoticeStore.getState().notice?.text).toContain('« + »');
+  });
+
+  it('Q-05 critère 2 (revue) : « Réessayer » pendant une écriture en file, avec la vraie création : une seule tâche en base', async () => {
+    const useCases = createTaskUseCases(h.container);
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let calls = 0;
+    const create = async (input: { title: string; taskId: TaskId }): Promise<boolean> => {
+      calls += 1;
+      // La première écriture reste en file (base occupée) ; la seconde passe aussitôt.
+      if (calls === 1) await gate;
+      const result = await useCases.create({ id: input.taskId, title: input.title, spaceId: SPACE_PERSO_ID, date: h.today });
+      return result.ok;
+    };
+    const onClose = vi.fn();
+    render(
+      <AppContainerProvider container={h.container}>
+        <TaskCreateSheet viewedDate={h.today} today={h.today} spaces={useAppStore.getState().spaces} initialSpaceId={SPACE_PERSO_ID} onClose={onClose} onCreate={create} />
+      </AppContainerProvider>,
+    );
+    fireEvent.change(screen.getByLabelText('Titre'), { target: { value: 'Une seule fois' } });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Enregistrer' }));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(CREATE_NOT_READY_MS);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Réessayer' }));
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    vi.useRealTimers();
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      release();
+      await gate;
+    });
+    await waitFor(async () => expect((await h.container.data.repos.tasks.listForDay(h.today, 'all')).filter((task) => task.title === 'Une seule fois')).toHaveLength(1));
+    expect(calls).toBe(2);
+    expect(useNoticeStore.getState().notice).toBeNull();
   });
 
   it('Q-05 critère 3 : ouverture depuis Événements puis Routines : le champ est focalisé dans le geste du toucher', async () => {

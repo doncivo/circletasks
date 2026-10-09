@@ -35,6 +35,17 @@ describe('TaskRepository (SQL)', () => {
     expect(read).toEqual(created);
   });
 
+  it('create avec un id déjà présent : aucune seconde ligne, aucune erreur, la ligne existante est rendue (écriture idempotente, Q-05)', async () => {
+    const [task] = sampleTodayTasks(DAY);
+    if (!task) throw new Error('fixture manquante');
+    const first = await db.data.repos.tasks.create(task);
+    const again = await db.data.repos.tasks.create({ ...task, title: 'Autre titre' });
+    expect(again).toEqual(first);
+    expect(again.title).toBe(task.title);
+    const rows = await db.data.repos.tasks.listForDay(DAY, 'all');
+    expect(rows.filter((row) => row.id === task.id)).toHaveLength(1);
+  });
+
   it('createMany insère plusieurs tâches en conservant leurs champs', async () => {
     const created = await db.data.repos.tasks.createMany(sampleTodayTasks(DAY));
     expect(created).toHaveLength(2);

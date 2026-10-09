@@ -151,7 +151,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
     });
   };
 
-  it('Q-05 critère 2 (revue) : « Réessayer » cliqué 5 fois sur une écriture qui ne revient pas : chaque clic relance, le texte reste ; à la fin, une seule fermeture et le doublon possible est dit', async () => {
+  it('Q-05 critère 2 (revue) : « Réessayer » cliqué 5 fois sur une écriture qui ne revient pas : chaque clic relance, le texte reste ; toutes portent le même identifiant (écriture idempotente), une seule fermeture', async () => {
     const finishers: ((ok: boolean) => void)[] = [];
     const onCreate = vi.fn(() => new Promise<boolean>((resolve) => finishers.push(resolve)));
     const onClose = vi.fn();
@@ -181,7 +181,8 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
       await Promise.resolve();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(useNoticeStore.getState().notice?.text).toContain('deux fois');
+    expect(new Set(onCreate.mock.calls.map(([input]) => (input as unknown as { taskId: string }).taskId)).size).toBe(1);
+    expect(useNoticeStore.getState().notice).toBeNull();
   });
 
   it('Q-05 critère 10 : base libérée mais écriture refusée : message d’erreur, texte conservé, nouvel essai recrée une fois', async () => {
