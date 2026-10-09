@@ -31,7 +31,7 @@ export interface BackupListing {
  * `sync-busy` / `busy` (P-04-iOS critère 6) : un cycle de synchro ou une mise à jour des rappels n'a pas fini dans les 10 s de la mise au
  * calme ; rien n'est modifié, l'utilisateur peut réessayer. `db-open` : la connexion à la base n'était pas fermée (Rust refuse l'échange).
  */
-export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'restore-pending' | 'restore-unconfirmed' | 'unavailable' | 'sync-busy' | 'busy' | 'db-open';
+export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'restore-pending' | 'restore-unconfirmed' | 'bad-name' | 'unavailable' | 'sync-busy' | 'busy' | 'db-open';
 
 /** Échec d'une opération de sauvegarde. Pour `restore`, `databaseClosed` indique qu'un redémarrage est nécessaire pour rouvrir la base. */
 export class BackupError extends Error {

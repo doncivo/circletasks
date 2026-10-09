@@ -50,7 +50,8 @@ describe('I-04 : entonnoir logFailure et ligne « Logs » de Réglages', () => {
   function renderAbout(os: 'ios' | 'windows') {
     const clock = db.clock;
     const desktop = os === 'windows' ? ({ getVersion: () => Promise.resolve('0.2.0') } as never) : null;
-    const container = createAppContainer({ clock, hlc: createHlcClock({ clock, deviceId: DEVICE }), data: db.data, desktop, platform: { runtime: 'web', os } });
+    const appVersion = os === 'windows' ? { appVersion: { ok: true, version: '0.2.0', source: 'runtime' } as const } : {};
+    const container = createAppContainer({ clock, hlc: createHlcClock({ clock, deviceId: DEVICE }), data: db.data, desktop, platform: { runtime: 'web', os }, ...appVersion });
     return render(
       <AppContainerProvider container={container}>
         <AboutSection />
@@ -60,7 +61,8 @@ describe('I-04 : entonnoir logFailure et ligne « Logs » de Réglages', () => {
 
   it('critère 1 : iPhone et PC, la ligne « Version … » porte le lien « Logs », qui ouvre l’écran', async () => {
     renderAbout('ios');
-    expect(await screen.findByText('Version dev')).toBeInTheDocument();
+    // I-06 : la version vient du conteneur (lue au démarrage, platform/appVersion.ts) ; sans lecture, la constante de build (tauri.conf.json).
+    expect(await screen.findByText(`Version ${__CT_APP_VERSION__}`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Ouvrir l’écran des logs' }));
     expect(useNavigationStore.getState().route).toEqual({ tab: 'settings', screen: 'logs' });
     cleanup();

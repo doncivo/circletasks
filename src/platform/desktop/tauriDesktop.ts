@@ -1,5 +1,5 @@
-import { getVersion } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
+import { readAppVersion } from '../appVersion';
 import { listen } from '@tauri-apps/api/event';
 import { disable, enable, isEnabled } from '@tauri-apps/plugin-autostart';
 import { openUrl } from '@tauri-apps/plugin-opener';
@@ -92,7 +92,12 @@ export function createTauriDesktop(): DesktopPlatform {
       else await disable();
     },
 
-    getVersion: () => getVersion(),
+    // I-06 : seul lecteur de la version, commun au PC et à l'iPhone (src/platform/appVersion.ts) ; illisible : rejet (jamais 0.0.0).
+    getVersion: async () => {
+      const read = await readAppVersion();
+      if (!read.ok) throw new Error('app-version-unreadable');
+      return read.version;
+    },
 
     checkForUpdate: async () => {
       const update = await check();

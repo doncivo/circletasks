@@ -1,5 +1,12 @@
 # Journal des versions
 
+## [Non publié]
+
+- iPhone : le numéro de version est affiché dans Réglages > À propos ; la synchronisation publie le vrai numéro de l'iPhone (plus de « 0.0.0 »).
+- Mise à jour par SideStore : les rappels sont replanifiés au premier lancement d'une nouvelle version.
+- Si la mise à jour des données échoue au démarrage : versions affichées et bouton « Restaurer la sauvegarde d'avant la mise à jour ».
+- Une version plus ancienne que les données ne les modifie pas et indique d'installer la dernière version.
+
 ## 0.2.3
 
 - Association : chaque état propose l'action utile (PC oublié, dossier à rechoisir, clé illisible, Trousseau indisponible), étapes de la fenêtre QR dans le bon ordre ; tests du parcours complet.

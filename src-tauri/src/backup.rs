@@ -610,7 +610,7 @@ pub struct RestoreOutcome {
     pub schema_version: u32,
     /// Marqueur de restauration de la synchro (ADR 0010 règle 2) : `written`, `not-configured` (aucun dossier de synchro) ou `failed`
     /// (P-04-iOS critère 12 : renvoyé au front et affiché, jamais seulement journalisé). `restore_backup_file` rend `not-configured`, la
-    /// commande le remplace après l'écriture.
+    /// commande le remplace après l'écriture. I-06 : `skipped` pour le retour arrière local de l'écran d'échec (aucun marqueur écrit).
     pub marker: &'static str,
     /// Code de l'échec du marqueur (`None` sinon).
     pub marker_code: Option<&'static str>,
@@ -1136,14 +1136,21 @@ pub async fn ensure_sql_closed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> 
 /// restauration de la synchro est écrit après l'échange ; son échec est RENDU (`marker: failed`, code), gardé pour un nouvel essai
 /// (`PendingRestoreMarker`) et inscrit au journal (P-04-iOS critère 12) : la restauration reste faite.
 #[tauri::command]
-pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Result<RestoreOutcome, BackupError> {
+pub async fn restore_backup(app: AppHandle, name: String, stamp: String, local: Option<bool>) -> Result<RestoreOutcome, BackupError> {
     crate::startup_gate::ensure_ready(&app)?;
     ensure_sql_closed(&app).await?;
     let dir = data_dir(&app)?;
     let gate_app = app.clone();
+    // I-06 (revue I2) : `local` = retour arrière local de l'écran d'échec d'une migration, sans marqueur de synchro.
+    let local = local == Some(true);
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        match crate::startup_gate::restore_with_provisional_marker(&dir, &name, &stamp, now, &|_| Ok(())) {
+        let done = if local {
+            crate::startup_gate::restore_local_rollback(&dir, &name, &stamp, &|_| Ok(())).map(|outcome| (outcome, None))
+        } else {
+            crate::startup_gate::restore_with_provisional_marker(&dir, &name, &stamp, now, &|_| Ok(()))
+        };
+        match done {
             Ok(done) => Ok(done),
             Err(error) => {
                 // Revue B1 : retour arrière incomplet -> récupération immédiate ; si elle échoue, la porte passe à l'échec (le rechargement

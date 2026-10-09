@@ -8,6 +8,8 @@ export const syncVersionFr = {
   section: 'VERSION',
   newer: '{device} utilise une version plus récente de l’app',
   newerWithVersion: '{device} utilise une version plus récente de l’app ({version})',
+  /** I-06 : l'autre appareil n'a pas pu lire son numéro (publié `unknown`, ou `0.0.0` des anciennes versions de l'iPhone). */
+  unknownVersion: 'version inconnue',
   readSuspended: 'Lecture de ses données suspendue : mettez à jour l’app',
   failedLineOne: '1 élément reçu d’une version plus récente n’a pas pu être intégré',
   failedLineMany: '{count} éléments reçus d’une version plus récente n’ont pas pu être intégrés',

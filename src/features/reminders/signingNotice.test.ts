@@ -90,13 +90,13 @@ describe('I-02 : planification de l’alerte (critères 4 et 5)', () => {
     expect(r.alert.scheduled).toHaveLength(2);
   });
 
-  it('open, resume et permission relisent la date ; edit, sync, hide, zone et action ne la lisent pas', async () => {
-    expect(SIGNING_TRIGGERS).toEqual(['open', 'resume', 'permission']);
+  it('open, update (I-06), resume et permission relisent la date ; edit, sync, hide, zone et action ne la lisent pas', async () => {
+    expect(SIGNING_TRIGGERS).toEqual(['open', 'update', 'resume', 'permission']);
     r.source.expireAt(IN_6_DAYS);
-    for (const trigger of ['open', 'resume', 'permission'] as const) await replanNotifications(r.h.container, trigger);
-    expect(r.source.reads).toBe(3);
+    for (const trigger of ['open', 'update', 'resume', 'permission'] as const) await replanNotifications(r.h.container, trigger);
+    expect(r.source.reads).toBe(4);
     for (const trigger of ['edit', 'sync', 'hide', 'zone', 'action'] as const) await replanNotifications(r.h.container, trigger);
-    expect(r.source.reads).toBe(3);
+    expect(r.source.reads).toBe(4);
   });
 
   it('le texte de l’alerte ne contient ni titre de tâche ni donnée personnelle (critère 10)', async () => {

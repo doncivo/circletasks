@@ -5,7 +5,10 @@
 pub static APPLOG_DIR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn applog_dir_lock() -> std::sync::MutexGuard<'static, ()> {
-    APPLOG_DIR_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    let guard = APPLOG_DIR_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    // Journal propre au test qui prend le verrou : ni dossier, ni entrées en attente, ni débit laissés par les tests précédents du processus.
+    circletasks_lib::applog::reset_for_tests();
+    guard
 }
 
 pub mod fake_bookmark;

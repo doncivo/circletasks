@@ -470,3 +470,7 @@ Journal technique : codes et nombres seulement.
 ## Avenant lot M (2026-10-08) — identifiant réservé 2
 
 - Plage réservée [1 ; 65 535] : **2 = alerte d'expiration de la signature** (I-02, ADR 0013 section 3), une seule en attente, sans catégorie, envoyée par le pont `createIosNotificationBridge` dans le passage du `NotificationRunner` (déclencheurs `open`, `resume`, `permission`), **avant** le calcul `limit = 64 − reservedCount()` ; `replace` et `cancelAll` du plan ne la touchent jamais. État local `notifications.signing`, distinct de `notifications.status`.
+
+## Renvoi I-06 (2026-10-09)
+
+Premier lancement d'une nouvelle version (réglage local `app.lastLaunchedVersion` changé) : le premier passage est demandé avec le déclencheur `'update'` (même passage complet que `open`, ajouté à `SIGNING_TRIGGERS`). Détail : ADR 0007, avenant I-06 point 6.

@@ -24,9 +24,3 @@ export function openLogJournal(runtime: 'tauri' | 'web', os: 'windows' | 'ios' |
   return createLogJournal(null, env);
 }
 
-/** Version de l'app pour l'en-tête de l'export (`@tauri-apps/api/app`, permission `core:default`) ; `dev` dans le navigateur. */
-export async function appVersion(runtime: 'tauri' | 'web'): Promise<string> {
-  if (runtime === 'web') return 'dev';
-  const { getVersion } = await import('@tauri-apps/api/app');
-  return getVersion();
-}

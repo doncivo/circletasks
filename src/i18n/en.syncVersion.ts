@@ -8,6 +8,7 @@ export const syncVersionEn: Shape<typeof syncVersionFr> = {
   section: 'VERSION',
   newer: '{device} uses a newer version of the app',
   newerWithVersion: '{device} uses a newer version of the app ({version})',
+  unknownVersion: 'unknown version',
   readSuspended: 'Reading its data is paused: update the app',
   failedLineOne: '1 item received from a newer version could not be integrated',
   failedLineMany: '{count} items received from a newer version could not be integrated',

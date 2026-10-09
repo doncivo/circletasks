@@ -21,6 +21,7 @@ export type ScreenName =
   | 'importscreen'
   | 'logsscreen'
   | 'recoveryfailure'
+  | 'updaterestoreaction'
   | 'recapsettingsscreen'
   | 'holidaysettingsscreen'
   | 'spacesscreen'

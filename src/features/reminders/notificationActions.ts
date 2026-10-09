@@ -111,7 +111,7 @@ export async function runActionsStep(container: AppContainer, trigger?: ReplanTr
   // restaurée est retiré (après la collecte : les actions reçues pendant l'arrêt sont comprises). Hors de ce cas, une cible disparue reste un
   // échec visible (N-03).
   // Revue du lot F : le mémo de restauration n'est effacé qu'après ce nettoyage réussi (sinon refait au lancement suivant).
-  if (trigger === 'open' && restoredThisLaunch() && (await dropUnknownTargets(container, failures))) settleRestoreMemo();
+  if ((trigger === 'open' || trigger === 'update') && restoredThisLaunch() && (await dropUnknownTargets(container, failures))) settleRestoreMemo();
   await applyActions(container, failures);
 
   const reason = FAILURE_PRIORITY.find((candidate) => failures.has(candidate)) ?? null;
