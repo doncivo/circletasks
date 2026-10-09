@@ -1,5 +1,6 @@
 import type { WriteStamper } from '../../domain/hlc';
 import type { SqlDriver, SqlExecutor } from '../driver';
+import type { AppleReminderLinkRepository } from './appleReminderLinkRepository';
 import type { CalendarAccountRepository, EventRepository, ExternalEventRepository } from './agendaRepository';
 import type { ChecklistItemRepository, ChecklistRepository } from './checklistRepository';
 import type { FocusSessionRepository } from './focusSessionRepository';
@@ -35,6 +36,8 @@ export interface Repositories {
   readonly externalEvents: ExternalEventRepository;
   readonly calendarAccounts: CalendarAccountRepository;
   readonly syncMeta: SyncMetaRepository;
+  /** Liens locaux aux Rappels Apple (K-05, ADR 0008 §10.2) : table non publiée, vide sur le PC. */
+  readonly appleLinks: AppleReminderLinkRepository;
   /** Tables de la synchronisation (ADR 0011, lot Y2). */
   readonly sync: SyncRepository;
 }

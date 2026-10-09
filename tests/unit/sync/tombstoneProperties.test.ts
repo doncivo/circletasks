@@ -53,6 +53,8 @@ function taskFields(hlc: Hlc, title: string): Record<string, SyncField> {
     external_id: [null, hlc, null],
     series_template: [null, hlc, null],
     external_event_id: [null, hlc, null],
+    apple_list_id: [null, hlc, null],
+    apple_recurring: [0, hlc, null],
     created_at: [AT, hlc, null],
     deleted_at: [null, hlc, null],
   };

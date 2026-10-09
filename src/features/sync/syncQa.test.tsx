@@ -129,7 +129,7 @@ describe('rechargement après un lot reçu (Y-02 critère 18)', () => {
   it('la corbeille ouverte se recharge quand une tâche est touchée : une suppression reçue y apparaît', async () => {
     const task = await db.data.repos.tasks.create({
       id: asEntityId('12000000-0000-4000-8000-000000000002'), spaceId: asEntityId('00000000-0000-4000-8000-000000000001'), projectId: null, title: 'Supprimée ailleurs', note: '', date: null, time: null,
-      status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, externalEventId: null,
+      status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, appleListId: null, appleRecurring: false, externalEventId: null,
     });
     const trash = trashStore.get(container);
     await trash.getState().load('all');

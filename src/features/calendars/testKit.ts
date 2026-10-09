@@ -3,7 +3,7 @@ import { asEntityId, type DeviceId } from '../../domain/types';
 import type { SqlRow } from '../../db/driver';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import { startCaldavSim, startGoogleSim, type CaldavSim, type CaldavSimOptions, type GoogleSim, type GoogleSimOptions } from '../../../tests/sim';
-import { createMemoryCalendarPlatform, simulatorEndpoints, type MemorySecretVault } from '../../platform/calendars';
+import { createMemoryCalendarPlatform, simulatorEndpoints, type MemorySecretVault, type WebAuthFailureCode } from '../../platform/calendars';
 import { useAppStatusStore } from '../app/appStatus';
 import { useAppStore } from '../app/appStore';
 import { createAppContainer, type AppContainer } from '../app/container';
@@ -21,6 +21,8 @@ export interface CalendarHarness {
   readonly google: GoogleSim;
   readonly caldav: CaldavSim;
   readonly vault: MemorySecretVault;
+  /** Fait échouer la feuille de connexion Google comme sur iPhone (K-TECH-01) jusqu'à `null`. */
+  failWebAuth(code: WebAuthFailureCode | null): void;
   close(): Promise<void>;
 }
 
@@ -37,7 +39,9 @@ export async function setupCalendarHarness(deviceSuffix: string, options: Calend
   const db = await openTestDb(device, options.startAt ?? '2026-09-23T10:00:00.000Z');
   const google = await startGoogleSim(options.google);
   const caldav = await startCaldavSim(options.caldav);
+  let webAuthFailure: WebAuthFailureCode | null = null;
   const platform = createMemoryCalendarPlatform(simulatorEndpoints(google.baseUrl, caldav.baseUrl), {
+    webAuthFailure: () => webAuthFailure,
     googleClientId: options.noGoogleClient ? undefined : google.clientId,
     nowSeconds: () => Math.floor(db.clock.nowMs() / 1000),
   });
@@ -50,6 +54,7 @@ export async function setupCalendarHarness(deviceSuffix: string, options: Calend
     google,
     caldav,
     vault: platform.memoryVault,
+    failWebAuth: (code) => void (webAuthFailure = code),
     close: async () => {
       calendarsStore.get(container).getState().releaseStatuses();
       useAppStore.setState({ spaceFilter: 'all', spaces: [], projects: [], projectFilter: null, day: null, timeZone: null });

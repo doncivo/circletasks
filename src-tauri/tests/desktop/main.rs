@@ -4,6 +4,7 @@
 //! désactivés dans Cargo.toml).
 
 mod backup;
+mod backup_versions;
 mod capture;
 mod calendars;
 mod config;
@@ -41,4 +42,6 @@ mod sync_support;
 mod sync_tz;
 mod sync_y_tech_02;
 mod updater;
+mod web_auth;
+mod web_auth_qa;
 mod window;

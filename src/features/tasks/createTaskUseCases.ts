@@ -13,9 +13,11 @@ import { completeTask, isCompleted } from '../../domain/taskCompletion';
 import { nextDayFrom, postponeTask, resolvePostponeDate } from '../../domain/taskPostpone';
 import { validateTaskTitle } from '../../domain/taskRules';
 import { ScheduleInvariantError, scheduleOf, setTaskSchedule } from '../../domain/taskSchedule';
-import type { LocalDate, RecurrenceId, ReminderId, Result, TaskId } from '../../domain/types';
+import type { LocalDate, RecurrenceId, ReminderId, Result, SpaceId, TaskId } from '../../domain/types';
 import { formatDayLabel } from '../../i18n/format';
 import { RepositoryError } from '../../db/repositories';
+import { createTargetFor, parseAppleCreate, parseAppleLists } from '../../domain/appleReminders';
+import { withAppleGuards } from '../calendars/appleReminders/appleGuards';
 import type { UndoableCommand } from '../app/undo';
 import { createNextOccurrence, type CreatedOccurrence } from './recurrenceUseCases';
 import {
@@ -31,6 +33,14 @@ import {
   type PostponedEntry,
 } from './undoCommands';
 import type { CreateTaskError, SetRecurrenceError, SetRemindersError, TaskUseCaseDeps, TaskUseCases } from './taskUseCases';
+
+/** Liste Rappels de destination d'une tâche créée dans cet espace (K-06) : null si la création y est désactivée ou si sa liste n'est plus affichée. */
+async function appleCreateDestination(deps: TaskUseCaseDeps, spaceId: SpaceId): Promise<string | null> {
+  const settings = deps.data.repos.settings;
+  const create = parseAppleCreate(await settings.get('appleReminders.create'));
+  if (create.bySpace.length === 0) return null;
+  return createTargetFor(spaceId, create, parseAppleLists(await settings.get('appleReminders.lists')));
+}
 
 /** Le patch touche-t-il la planification (date, heure, « Un jour ») ? */
 function touchesSchedule(patch: TaskPatch): boolean {
@@ -52,6 +62,11 @@ class RemindersRefused extends Error {
  * Chaque méthode est posée par sa story (commentaires du contrat).
  */
 export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
+  return withAppleGuards(createBaseTaskUseCases(deps), deps);
+}
+
+/** Cas d'usage sans la garde des rappels Apple récurrents (`withAppleGuards`, ADR 0008 §10.6). */
+function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
 
   /** Écrit une modification de la tâche dans la transaction `repos` (invariants T-02, badge T-06, rappels N-02). */
   async function applyUpdate(repos: TxRepos, id: TaskId, patch: TaskPatch): Promise<Task> {
@@ -114,6 +129,9 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         ? somedayHeadOrder((await deps.data.repos.tasks.listSomeday('all')).map((other) => other.sortOrder), deps.clock.nowMs())
         : deps.clock.nowMs();
 
+      // K-06 (ADR 0008 §10.7) : réglage « Créer aussi dans Rappels » de l'espace (désactivé par défaut) : la tâche naît « à créer » (liste de
+      // destination), sur PC comme sur iPhone ; l'iPhone l'envoie à son prochain passage. Jamais pour une série CircleTasks.
+      const appleDestination = recurrence === null ? await appleCreateDestination(deps, input.spaceId) : null;
       const newTask: NewTask = {
         id: newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
@@ -134,9 +152,11 @@ export function createTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
         goalId: input.goalId ?? null,
         icon: input.icon ?? null,
         someday,
-        source: 'local',
+        source: appleDestination === null ? 'local' : 'apple_reminders',
         externalId: null,
         // K-04 : tâche créée depuis un événement d'agenda externe.
+        appleListId: appleDestination,
+        appleRecurring: false,
         externalEventId: input.externalEventId ?? null,
       };
       // N-02 : une ligne `reminder` par avance choisie, seulement si la tâche a une date et une heure (QB-07).

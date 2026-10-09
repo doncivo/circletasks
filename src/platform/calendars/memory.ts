@@ -1,4 +1,4 @@
-import { CalendarPlatformError, type CalendarAuth, type CalendarEndpoints, type CalendarHttp, type CalendarHttpMethod, type CalendarHttpRequest, type CalendarHttpResponse, type CalendarPlatform, type OAuthFlow, type SecretVault, type TokenRef } from './types';
+import { CalendarPlatformError, type CalendarAuth, type CalendarEndpoints, type CalendarHttp, type CalendarHttpMethod, type CalendarHttpRequest, type CalendarHttpResponse, type CalendarPlatform, type OAuthFlow, type SecretVault, type TokenRef, type WebAuthFailureCode } from './types';
 
 /**
  * Plateforme d'agendas pour le navigateur de dev, Vitest et Playwright (ADR 0008) : coffre en mémoire (perdu à la fermeture),
@@ -49,6 +49,11 @@ const GOOGLE_REF = /^circletasks\.calendar\.google\./;
 export interface MemoryPlatformOptions {
   /** ID client OAuth du simulateur ; absent : `config-missing` (miroir de « non configuré »). */
   readonly googleClientId?: string | undefined;
+  /**
+   * Échec de la feuille d'authentification web de l'iPhone (K-TECH-01), lu à chaque connexion : tests et développement seulement.
+   * Rend le code à rejeter (après le contrôle de configuration, comme Rust) ou `null` pour laisser la connexion se faire.
+   */
+  readonly webAuthFailure?: () => WebAuthFailureCode | null;
   /** Horloge injectable (secondes Unix) pour les échéances de jeton. */
   readonly nowSeconds?: () => number;
   /** `fetch` injectable. */
@@ -168,6 +173,8 @@ export function createMemoryOAuthFlow(vault: MemorySecretVault, endpoints: Calen
     async authorizeGoogle(tokenRef) {
       const clientId = options.googleClientId;
       if (!clientId) throw new CalendarPlatformError('config-missing');
+      const injected = options.webAuthFailure?.() ?? null;
+      if (injected !== null) throw new CalendarPlatformError(injected);
       const random = globalThis.crypto.getRandomValues(new Uint8Array(48));
       const verifier = toBase64Url(random);
       const challenge = toBase64Url(new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));

@@ -10,6 +10,8 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { calendarsStore, FAILURE_KEYS } from './calendarsStore';
+import { AppleRemindersSection } from './appleReminders/AppleRemindersSection';
+import { appReload } from '../security/lockLayer';
 import { IcloudForm } from './IcloudForm';
 import { formatUpdated } from './updatedText';
 import { useMinuteClock } from './useMinuteClock';
@@ -18,6 +20,7 @@ import './CalendarsScreen.css';
 function stateLabelKey(state: CalendarAccountState | undefined): PlainMessageKey {
   if (!state || state.kind === 'connected') return 'calendars.stateConnected';
   if (state.kind === 'reconnect-required') return 'calendars.stateReconnect';
+  if (state.error === 'unavailable') return 'calendars.stateUnavailable';
   return state.error === 'rate-limited' ? 'calendars.stateRateLimited' : 'calendars.stateOffline';
 }
 
@@ -55,6 +58,11 @@ function AccountCard({ account, state, refreshing, nowMs, onRefresh, onReconnect
         {reconnect && (
           <Button ariaLabel={t('calendars.reconnectLabel', { label: name })} onClick={onReconnect}>
             {t('calendars.reconnect')}
+          </Button>
+        )}
+        {state?.kind === 'error' && state.error === 'unavailable' && (
+          <Button ariaLabel={t('calendars.relaunchLabel', { label: name })} onClick={() => appReload.run()}>
+            {t('calendars.relaunch')}
           </Button>
         )}
         <Button variant="secondary" disabled={refreshing} ariaLabel={t('calendars.refreshLabel', { label: name })} onClick={onRefresh}>
@@ -107,6 +115,7 @@ export function CalendarsScreen() {
   const connecting = useFeatureStore(calendarsStore, (s) => s.connecting);
   const errorKey = useFeatureStore(calendarsStore, (s) => s.errorKey);
   const messageKey = useFeatureStore(calendarsStore, (s) => s.messageKey);
+  const googleFailure = useFeatureStore(calendarsStore, (s) => s.googleFailure);
   const icloudForm = useFeatureStore(calendarsStore, (s) => s.icloudForm);
   const store = calendarsStore.get(container);
   const nowMs = useMinuteClock(container.clock);
@@ -133,6 +142,19 @@ export function CalendarsScreen() {
           <p className="ct-calendars__error" role="alert">
             {t((errorKey ?? messageKey) as NonNullable<typeof errorKey>)}
           </p>
+        )}
+        {googleFailure !== null && (
+          <div className="ct-calendars__error ct-calendars__webAuthFailure" role="alert">
+            <p>{t('calendars.errorWebAuth')}</p>
+            <p>{t('calendars.errorWebAuthCode', { code: googleFailure.code })}</p>
+            <Button
+              variant="secondary"
+              disabled={connecting}
+              onClick={() => void (googleFailure.accountId === null ? store.getState().connectGoogle() : store.getState().reconnectGoogle(googleFailure.accountId))}
+            >
+              {t('calendars.errorWebAuthRetry')}
+            </Button>
+          </div>
         )}
         <h2 className="ct-calendars__section">{t('calendars.sectionAccounts')}</h2>
         {accounts.length === 0 && <p className="ct-calendars__empty">{t('calendars.noAccount')}</p>}
@@ -183,6 +205,7 @@ export function CalendarsScreen() {
             }}
           />
         )}
+        <AppleRemindersSection />
       </div>
       {removing && (
         <ConfirmDialog

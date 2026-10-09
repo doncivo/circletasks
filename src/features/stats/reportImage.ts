@@ -1,5 +1,6 @@
 import { buildPdfWithJpeg } from '../../domain/pdfDocument';
 import type { ReportLayout, ReportOp } from '../../domain/reportLayout';
+import { REPORT_FONT_FACES, REPORT_FONT_SAMPLE } from './reportFonts';
 import { REPORT_PALETTE } from './reportPalette';
 
 /** Largeur de l'image PNG (H-03 critère 6) ; le PDF utilise la même image, réduite à la page. */
@@ -10,13 +11,7 @@ const FAMILY = { title: '"Fraunces Variable", Georgia, serif', text: '"DM Sans V
 /** Charge les polices embarquées avant de dessiner (sinon le canvas utiliserait la police de repli). */
 async function loadFonts(): Promise<void> {
   if (typeof document === 'undefined' || !('fonts' in document)) return;
-  const sample = 'Septembre 0123456789 éèêàçù % — · / ÉÈ';
-  await Promise.all([
-    document.fonts.load('700 44px "Fraunces Variable"', sample),
-    document.fonts.load('400 12px "DM Sans Variable"', sample),
-    document.fonts.load('600 14px "DM Sans Variable"', sample),
-    document.fonts.load('700 12px "DM Sans Variable"', sample),
-  ]).catch(() => undefined);
+  await Promise.all(REPORT_FONT_FACES.map((face) => document.fonts.load(face, REPORT_FONT_SAMPLE))).catch(() => undefined);
 }
 
 function shorten(context: CanvasRenderingContext2D, text: string, maxWidth: number | undefined): string {

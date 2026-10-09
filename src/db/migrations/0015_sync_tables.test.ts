@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SHARED_SETTING_KEYS, SYNC_TABLES, publishedColumns } from '../../domain/sync/syncTables';
+import { SYNC_TABLES, publishedColumns } from '../../domain/sync/syncTables';
 import type { SqlDriver } from '../driver';
 import { openSqliteWasmDriver } from '../drivers/sqliteWasm';
 import { migrate } from '../migrator';
@@ -19,7 +19,7 @@ async function freshDb(): Promise<SqlDriver> {
 
 async function insertTask(db: SqlDriver, id: string, hlc: string): Promise<void> {
   await db.execute(
-    'INSERT INTO task (id, space_id, title, created_at, updated_at, device_id, hlc) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO task (id, space_id, title, created_at, updated_at, device_id, hlc) VALUES (?, ?, ?, ?, ?, ?, ?)',
     [id, PRO, 'Facture', AT, AT, DEV, hlc],
   );
 }
@@ -36,9 +36,27 @@ describe('migration 0015 : tables et déclencheurs de synchro (Y-02 critère 4)'
     await db.close();
   });
 
-  it('la copie figée des colonnes publiées est égale au catalogue (syncTables.ts)', () => {
-    expect(CAPTURE_TABLES_V15.map(([t, key, cols]) => [t, key, [...cols]])).toEqual(SYNC_TABLES.map((t) => [t.name, t.key, [...publishedColumns(t)]]));
-    expect([...SHARED_SETTING_KEYS_V15]).toEqual([...SHARED_SETTING_KEYS]);
+  it('la copie figée (version 15) est égale à sa copie littérale : elle ne change jamais (somme de contrôle de la migration)', () => {
+    // Le catalogue courant (syncTables.ts) a évolué depuis : V18 est contrôlée par 0018_apple_reminders.test.ts (ADR 0008 §10.2).
+    expect(CAPTURE_TABLES_V15.map(([t, key, cols]) => `${t}|${key}|${cols.join(',')}`)).toEqual([
+      'space|id|name,color,sort_order,quiet_hours,created_at,deleted_at',
+      'project|id|space_id,name,color,archived,sort_order,created_at,deleted_at',
+      'recurrence|id|freq,interval,weekdays,month_day,nth_weekday,until,count,created_at,deleted_at',
+      'goal|id|space_id,week_start,title,icon,pinned,status,carried_from_id,created_at,deleted_at',
+      'task|id|space_id,project_id,title,note,date,time,status,done_at,sort_order,carried_over,recurrence_id,series_index,goal_id,icon,someday,source,external_id,series_template,external_event_id,created_at,deleted_at',
+      'routine|id|space_id,title,icon,schedule_type,weekdays,times_per_week,interval,start_date,time,archived,created_at,deleted_at',
+      'routine_log|id|routine_id,date,done_at,created_at,deleted_at',
+      'routine_pause|id|routine_id,from_date,to_date,created_at,deleted_at',
+      'reminder|id|target_type,target_id,offset_min,fire_at,delivered,created_at,deleted_at',
+      'event|id|space_id,title,start_date,start_time,end_date,end_time,all_day,kind,repeat,important,icon,birth_year,created_at,deleted_at',
+      'checklist|id|space_id,title,date,is_template,icon,created_at,deleted_at',
+      'checklist_item|id|checklist_id,text,checked,sort_order,created_at,deleted_at',
+      'focus_session|id|task_id,space_id,planned_min,started_at,ended_at,paused_sec,paused_at,project_id,created_at,deleted_at',
+      'calendar_account|id|provider,label,calendars,created_at,deleted_at',
+      'holiday|id|country,year,key,date,name,kind,source,overridden,created_at,deleted_at',
+      'settings|key|value',
+    ]);
+    expect([...SHARED_SETTING_KEYS_V15]).toEqual(["general.firstWeekday","general.locale","general.theme","general.timeFormat","holidays.countries","reminders.defaultOffsets","reminders.eveningRecap","reminders.morningRecap","spaces.defaultSpaceId","tasks.carryOverUndone","today.hideRoutines"]);
   });
 
   it('le catalogue est égal au schéma : colonnes publiées + locales + techniques = PRAGMA table_info', async () => {

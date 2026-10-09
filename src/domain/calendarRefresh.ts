@@ -34,7 +34,7 @@ export type CalendarAccountState =
   | {
       readonly kind: 'error';
       readonly lastSuccessAt: IsoDateTime | null;
-      readonly error: 'network' | 'server' | 'rate-limited';
+      readonly error: 'network' | 'server' | 'rate-limited' | 'unavailable';
       readonly retryAt: IsoDateTime | null;
     };
 
@@ -91,6 +91,8 @@ export function nextAccountState(previous: CalendarAccountState, outcome: Refres
       return { kind: 'error', lastSuccessAt, error: 'network', retryAt: after(CALENDAR_REFRESH_INTERVAL_MS) };
     case 'server':
       return { kind: 'error', lastSuccessAt, error: 'server', retryAt: after(CALENDAR_REFRESH_INTERVAL_MS) };
+    case 'unavailable':
+      return { kind: 'error', lastSuccessAt, error: 'unavailable', retryAt: after(CALENDAR_REFRESH_INTERVAL_MS) };
     case 'forbidden':
     case 'not-found':
     case 'malformed':
@@ -111,7 +113,7 @@ export function calendarAppStatuses(accounts: readonly Pick<CalendarAccount, 'id
   const disconnected = disconnectedAccount(accounts, states);
   const offline = accounts.some((account) => {
     const state = states.get(account.id);
-    return state?.kind === 'error' && state.error !== 'rate-limited';
+    return state?.kind === 'error' && (state.error === 'network' || state.error === 'server');
   });
   return { ...(disconnected ? { calendarDisconnected: { detail: disconnected.label } } : {}), ...(offline ? { offline: {} } : {}) };
 }

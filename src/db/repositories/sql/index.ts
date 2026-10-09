@@ -1,4 +1,5 @@
 import type { RepositoryFactory } from '../dataAccess';
+import { createAppleReminderLinkRepository } from './appleReminderLinks';
 import { createCalendarAccountRepository, createEventRepository, createExternalEventRepository } from './agendaRepository';
 import { createChecklistItemRepository, createChecklistRepository } from './checklistRepository';
 import { createFocusSessionRepository } from './focusSessionRepository';
@@ -44,6 +45,7 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   externalEvents: createExternalEventRepository(executor),
   calendarAccounts: createCalendarAccountRepository(executor, stamper),
   syncMeta: createSyncMetaRepository(executor),
+  appleLinks: createAppleReminderLinkRepository(executor),
   // Y-04 (début)
   syncConflicts: createSyncConflictRepository(executor, stamper),
   // Y-04 (fin)

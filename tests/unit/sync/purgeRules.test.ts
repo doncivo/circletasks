@@ -57,6 +57,8 @@ const newTask = (n: number): NewTask => ({
   someday: false,
   source: 'local',
   externalId: null,
+  appleListId: null,
+  appleRecurring: false,
   externalEventId: null,
 });
 
