@@ -73,7 +73,7 @@ pub fn register_sql_after_recovery<R: Runtime>(app: &AppHandle<R>, config_dir: O
     }
     let outcome = match config_dir {
         None => Err("no-data-dir"),
-        Some(dir) => crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)).map(|_| ()).map_err(|error| error.code),
+        Some(dir) => recover_and_settle(dir).map(|_| ()).map_err(|error| error.code),
     };
     // Plugin déjà enregistré (nouvel essai après « Mettre les fichiers en conflit de côté ») : rien à refaire.
     let outcome = outcome.and_then(|()| {
@@ -261,10 +261,24 @@ pub async fn backup_restore_marker_write(app: AppHandle, backup: String) -> Mark
     outcome
 }
 
-/// Revue (marqueur provisoire) : le marqueur de restauration est écrit AVANT l'échange, pour qu'un arrêt entre l'échange et l'écriture ne
-/// laisse jamais une version restaurée sans marqueur (la synchro la remplacerait sans choix) ; si l'échange échoue, le marqueur d'avant est
-/// remis (ou le provisoire retiré). Après un échange abouti, un marqueur provisoire écrit vaut `written` ; sinon l'écriture est retentée.
-/// Rend l'issue de la restauration (marqueur compris) et, en cas d'échec du marqueur, le marqueur à réessayer.
+/// Fichier qui garde, pendant une restauration, le marqueur d'une restauration précédente encore en attente de choix.
+pub const PREVIOUS_MARKER_FILE: &str = "restore-marker.previous.json";
+
+/// Remet le marqueur d'avant (s'il y en avait un) ou retire le marqueur provisoire ; rend faux si un fichier n'a pas pu être écrit.
+fn undo_provisional_marker(config_dir: &Path) -> bool {
+    let previous = config_dir.join(PREVIOUS_MARKER_FILE);
+    let undone = match std::fs::read(&previous) {
+        Ok(bytes) => crate::sync::folder::write_config_file(&config_dir.join(crate::sync::marker::MARKER_FILE), &bytes).is_ok(),
+        Err(_) => crate::sync::marker::clear(config_dir).is_ok(),
+    };
+    let _ = std::fs::remove_file(previous);
+    undone
+}
+
+/// Revue du lot F (marqueur provisoire) : le marqueur est écrit **provisoire** au point `Staged` (fichier préparé, juste avant les
+/// renommages ; le marqueur d'avant est gardé à part), **confirmé** au point `Swapped` (version en place, avant le retrait des
+/// `.restore-old`). Échange en échec : marqueur d'avant remis, ou provisoire retiré. Arrêt brutal : `settle_provisional_marker` le règle au
+/// démarrage. Rend l'issue de la restauration (marqueur compris) et, si le marqueur n'a pas pu être écrit, celui à réessayer.
 pub fn restore_with_provisional_marker(
     config_dir: &Path,
     name: &str,
@@ -272,28 +286,71 @@ pub fn restore_with_provisional_marker(
     now_secs: u64,
     hook: &dyn Fn(crate::backup::RestoreStep) -> std::io::Result<()>,
 ) -> Result<(crate::backup::RestoreOutcome, Option<MarkerToWrite>), crate::backup::BackupError> {
+    use crate::backup::RestoreStep;
+    use std::cell::Cell;
     let backups = config_dir.join(crate::backup::BACKUP_DIR);
-    let marker_path = config_dir.join(crate::sync::marker::MARKER_FILE);
-    let previous = std::fs::read(&marker_path).ok();
     let schema = crate::backup::check_named_backup(&backups, name)?;
-    let provisional = crate::backup::write_restore_marker(config_dir, &backups, name, now_secs, schema);
-    let outcome = match crate::backup::restore_backup_file(&config_dir.join(crate::backup::DB_FILE), &backups, name, crate::backup::APP_SCHEMA_VERSION, stamp, hook) {
+    let written = Cell::new(false);
+    let confirmed = Cell::new(false);
+    let wrapped = |step: RestoreStep| -> std::io::Result<()> {
+        match step {
+            RestoreStep::Staged => {
+                let marker = config_dir.join(crate::sync::marker::MARKER_FILE);
+                let previous = config_dir.join(PREVIOUS_MARKER_FILE);
+                let _ = std::fs::remove_file(&previous);
+                if let Ok(bytes) = std::fs::read(&marker) {
+                    crate::sync::folder::write_config_file(&previous, &bytes).map_err(|_| std::io::Error::other("marqueur précédent"))?;
+                }
+                written.set(matches!(crate::backup::write_restore_marker_as(config_dir, &backups, name, now_secs, schema, true), Ok(true)));
+            }
+            RestoreStep::Swapped => {
+                if written.get() {
+                    confirmed.set(crate::sync::marker::confirm(config_dir).is_ok());
+                }
+            }
+            RestoreStep::OldMoved => {}
+        }
+        hook(step)
+    };
+    let outcome = match crate::backup::restore_backup_file(&config_dir.join(crate::backup::DB_FILE), &backups, name, crate::backup::APP_SCHEMA_VERSION, stamp, &wrapped) {
         Ok(outcome) => outcome,
         Err(error) => {
-            if matches!(provisional, Ok(true)) {
-                let undone = match &previous {
-                    Some(bytes) => crate::sync::folder::write_config_file(&marker_path, bytes).is_ok(),
-                    None => crate::sync::marker::clear(config_dir).is_ok(),
-                };
-                if !undone {
-                    crate::applog::write("backup", "provisional-marker-undo-failed");
-                }
+            if written.get() && !undo_provisional_marker(config_dir) {
+                crate::applog::write("backup", "provisional-marker-undo-failed");
             }
             return Err(error);
         }
     };
+    let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
     let marker = MarkerToWrite { config_dir: config_dir.to_path_buf(), backup: name.to_owned(), restored_at_secs: now_secs, schema_version: outcome.schema_version };
-    let (state, code) = if matches!(provisional, Ok(true)) { ("written", None) } else { write_marker_with_retry(&marker, std::time::Duration::from_millis(200)) };
+    let (state, code) = if written.get() && confirmed.get() { ("written", None) } else { write_marker_with_retry(&marker, std::time::Duration::from_millis(200)) };
     let pending = (state == "failed").then_some(marker);
     Ok((crate::backup::RestoreOutcome { marker: state, marker_code: code, ..outcome }, pending))
+}
+
+/// Au démarrage, après la récupération (revue du lot F) : un marqueur encore provisoire vient d'un arrêt pendant une restauration.
+/// `Archived` (l'échange avait abouti) -> confirmé ; `PutBack` ou `Nothing` (ancienne base remise, ou fichier préparé seulement supprimé : la
+/// version n'a jamais été en place) -> marqueur d'avant remis, sinon retiré. Jamais « Appliquer partout » sur une version non restaurée.
+pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::backup::Recovery, crate::backup::BackupError>) {
+    if !crate::sync::marker::is_provisional(config_dir) {
+        let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
+        return;
+    }
+    let done = match recovery {
+        Ok(crate::backup::Recovery::Archived) => {
+            let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
+            crate::sync::marker::confirm(config_dir).is_ok()
+        }
+        Ok(_) => undo_provisional_marker(config_dir),
+        // Récupération impossible : rien n'est touché (la porte reste fermée, l'écran le dit).
+        Err(_) => return,
+    };
+    crate::applog::write("backup-recovery", if done { "provisional-marker-settled" } else { "provisional-marker-settle-failed" });
+}
+
+/// Récupération au démarrage puis règlement du marqueur provisoire (PC et iPhone).
+pub fn recover_and_settle(config_dir: &Path) -> Result<crate::backup::Recovery, crate::backup::BackupError> {
+    let recovery = crate::backup::recover_interrupted_restore(&config_dir.join(crate::backup::DB_FILE), &config_dir.join(crate::backup::BACKUP_DIR));
+    settle_provisional_marker(config_dir, &recovery);
+    recovery
 }

@@ -69,7 +69,7 @@ fn main_window_starts_hidden_on_windows_only() {
 fn setup_recovers_first_then_creates_the_main_window_before_anything_that_uses_it() {
     let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
     let position = |needle: &str| setup.find(needle).unwrap_or_else(|| panic!("{needle} absent de setup"));
-    let recover = position("recover_interrupted_restore");
+    let recover = position("recover_and_settle");
     let create = position("create_main_window(app.handle())");
     assert!(recover < create, "récupération avant la création de la fenêtre");
     for later in ["crate::shortcut::manage", "crate::capture::setup", "create_tray(", "show_main_window("] {
@@ -843,7 +843,7 @@ fn i04_9_the_only_eprintln_is_in_applog_and_the_journal_starts_first() {
         }
     }
     let setup = DESKTOP_SOURCE.split(".setup(|app| {").nth(1).expect("setup");
-    assert!(setup.find("crate::applog::init(").unwrap() < setup.find("recover_interrupted_restore").unwrap());
+    assert!(setup.find("crate::applog::init(").unwrap() < setup.find("recover_and_settle").unwrap());
     let ios = include_str!("../../src/ios_setup.rs");
     assert!(ios.find("crate::applog::init(").unwrap() < ios.find("purge_exports").unwrap());
 }

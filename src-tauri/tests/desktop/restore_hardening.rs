@@ -194,6 +194,7 @@ fn p04_the_swap_moves_wal_and_shm_before_the_main_file() {
             fs::write(&shm, b"shm")
         }
         RestoreStep::OldMoved => Err(std::io::Error::other("échec simulé")),
+        RestoreStep::Swapped => Ok(()),
     };
     assert!(restore_backup_file(&db, &backups, "circletasks-daily-20261003.db", 4, "20261005T101500Z", &fail).is_err());
     assert_eq!(fs::read(&db).unwrap(), before);

@@ -370,3 +370,60 @@ fn p04_ios_11_unreadable_current_base_writes_true_with_valid_device_and_clock() 
     let row: (String, String, String) = conn.query_row("SELECT value, device_id, hlc FROM settings WHERE key = ?1", [APP_LOCK_SETTING_KEY], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?))).unwrap();
     assert_eq!(row, ("true".into(), "60000000-0000-4000-8000-0000000000aa".into(), "0001791446400000-0000-60000000".into()));
 }
+
+// --- revue du lot F : marqueur provisoire, fermeture forcée à chaque étape ---
+
+/// Restauration arrêtée net (panic) au point `stop`, avec un dossier de synchro configuré et, si `previous`, un marqueur d'une restauration
+/// précédente ; puis démarrage : récupération et règlement du marqueur. Rend le marqueur lu après le démarrage.
+fn crash_then_start(stop: RestoreStep, previous: bool) -> (Option<circletasks_lib::sync::marker::RestoreMarker>, tempfile::TempDir) {
+    use circletasks_lib::startup_gate::{recover_and_settle, restore_with_provisional_marker};
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), Some("true"));
+    sync_configured(dir.path());
+    if previous {
+        fs::write(dir.path().join(circletasks_lib::sync::marker::MARKER_FILE), br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    }
+    let hook = move |step: RestoreStep| -> std::io::Result<()> {
+        if step == stop {
+            panic!("arrêt forcé");
+        }
+        Ok(())
+    };
+    let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook)));
+    assert!(crashed.is_err(), "arrêt simulé");
+    recover_and_settle(dir.path()).expect("récupération");
+    (circletasks_lib::sync::marker::read(dir.path()).unwrap(), dir)
+}
+
+#[test]
+fn p04_ios_provisional_marker_is_settled_after_a_forced_stop_at_each_step() {
+    // Fichier préparé seulement (la version n'a jamais été en place) : aucun marqueur, la base d'avant reste.
+    let (marker, dir) = crash_then_start(RestoreStep::Staged, false);
+    assert_eq!(marker, None);
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"));
+    // Ancienne base déplacée, nouvelle pas en place : ancienne remise (PutBack), aucun marqueur.
+    let (marker, dir) = crash_then_start(RestoreStep::OldMoved, false);
+    assert_eq!(marker, None);
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"));
+    // Version en place (Archived au démarrage) : marqueur confirmé, la fenêtre de choix complète est due.
+    let (marker, _dir) = crash_then_start(RestoreStep::Swapped, false);
+    let marker = marker.expect("marqueur");
+    assert_eq!(marker.backup, "circletasks-daily-20261007.db");
+    assert!(!marker.provisional);
+}
+
+#[test]
+fn p04_ios_provisional_marker_restores_the_previous_pending_marker_when_the_version_never_landed() {
+    for stop in [RestoreStep::Staged, RestoreStep::OldMoved] {
+        let (marker, dir) = crash_then_start(stop, true);
+        let marker = marker.expect("marqueur d'avant remis");
+        assert_eq!(marker.backup, "ancien", "{stop:?}");
+        assert!(!marker.provisional);
+        assert!(!dir.path().join(circletasks_lib::startup_gate::PREVIOUS_MARKER_FILE).exists());
+    }
+    let (marker, _dir) = crash_then_start(RestoreStep::Swapped, true);
+    assert_eq!(marker.expect("nouveau").backup, "circletasks-daily-20261007.db");
+}

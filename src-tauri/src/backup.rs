@@ -596,6 +596,9 @@ pub enum RestoreStep {
     Staged,
     /// L'ancienne base est déplacée, la nouvelle n'est pas encore en place.
     OldMoved,
+    /// La version restaurée est en place, les `.restore-old` pas encore retirés (revue du lot F : confirmation du marqueur ; un échec de
+    /// ce point est ignoré, l'échange reste fait).
+    Swapped,
 }
 
 /// Résultat d'une restauration.
@@ -815,6 +818,7 @@ fn swap_database(db_path: &Path, staged: &Path, hook: &dyn Fn(RestoreStep) -> io
         fs::rename(staged, db_path)
     })();
     let Err(error) = result else {
+        let _ = hook(RestoreStep::Swapped);
         for (_, old) in &moved {
             let _ = fs::remove_file(old);
         }
@@ -903,12 +907,17 @@ pub fn iso_instant(secs: u64) -> String {
 /// configuré**. L'heure de la sauvegarde est celle de son fichier (sinon l'heure de restauration). Renvoie vrai s'il a été écrit. Jamais
 /// appelé par la récupération au démarrage (`recover_interrupted_restore`) : une restauration interrompue puis récupérée n'a pas de marqueur.
 pub fn write_restore_marker(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32) -> Result<bool, crate::sync::SyncError> {
+    write_restore_marker_as(config_dir, backups_dir, backup, restored_at_secs, schema_version, false)
+}
+
+/// Comme `write_restore_marker`, provisoire (avant l'échange) ou confirmé.
+pub fn write_restore_marker_as(config_dir: &Path, backups_dir: &Path, backup: &str, restored_at_secs: u64, schema_version: u32, provisional: bool) -> Result<bool, crate::sync::SyncError> {
     let taken = fs::metadata(backups_dir.join(backup))
         .and_then(|m| m.modified())
         .ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map_or(restored_at_secs, |d| d.as_secs());
-    crate::sync::marker::write_after_restore(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version))
+    crate::sync::marker::write_marker(config_dir, backup, &iso_instant(taken), &iso_instant(restored_at_secs), u64::from(schema_version), provisional)
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf, BackupError> {

@@ -386,7 +386,8 @@ pub fn configure(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
             };
             // I-04 (ADR 0014 §2) : journal technique d'abord, pour garder la trace de la récupération.
             crate::applog::init(dir.join(crate::applog::LOG_DIR));
-            if let Err(error) = crate::backup::recover_interrupted_restore(&dir.join(crate::backup::DB_FILE), &dir.join(crate::backup::BACKUP_DIR)) {
+            // Revue du lot F : un marqueur encore provisoire est réglé selon la récupération (`recover_and_settle`).
+            if let Err(error) = crate::startup_gate::recover_and_settle(&dir) {
                 return Err(abort_startup_after_failed_recovery(error.code, &app.config().identifier));
             }
             // Fenêtre impossible à créer (`window-failed`) : même boîte système, puis arrêt (sans elle l'app tournerait sans interface).
