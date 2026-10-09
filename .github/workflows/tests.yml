@@ -320,6 +320,9 @@ jobs:
         if: steps.pw-cache.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
       - name: Perf e2e
+        env:
+          # Projet perf et son build de production (second serveur) : définis seulement avec cette variable (playwright.config.ts).
+          CT_E2E_PERF: "1"
         run: npx playwright test --project=perf --no-deps --reporter=github,html,json
       - name: Perf Vitest
         if: ${{ !cancelled() }}
