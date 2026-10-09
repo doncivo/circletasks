@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from '../helpers/app';
-import { isPhone, listTitles, todayTab } from '../helpers/today';
+import { isPhone, listTitles, sampleTodayTitles, todayTab } from '../helpers/today';
 
 /**
  * Parcours clé 1 (PRD 8) : premier lancement. Base neuve, assistant de bienvenue (P-05), trois étapes (Bienvenue, Espaces, Données
@@ -46,7 +46,7 @@ test('parcours 1 : base neuve, assistant en trois étapes, données d’exemple,
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await expect
     .poll(() => listTitles(page))
-    .toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois']);
+    .toEqual(sampleTodayTitles());
 
   // L'assistant ne revient pas : l'app reste utilisable, la navigation est complète.
   await expect(page.getByRole('navigation')).toBeVisible();

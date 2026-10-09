@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { E2E_DEV_PORT } from '../sim/ports';
 import { openApp } from './helpers/app';
-import { isPhone, listTitles, todayTab } from './helpers/today';
+import { isPhone, listTitles, sampleTodayTitles, todayTab } from './helpers/today';
 
 /**
  * P-05 — Je suis guidé au premier lancement. Le navigateur de développement part d'une base neuve à chaque chargement : l'assistant n'y
@@ -97,7 +97,7 @@ test.describe('P-05 — premier lancement', () => {
     await dialog.getByRole('button', { name: 'Commencer' }).click();
     await expect(dialog).not.toBeVisible();
     await todayTab(page).click();
-    await expect.poll(() => listTitles(page)).toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois']);
+    await expect.poll(() => listTitles(page)).toEqual(sampleTodayTitles());
     await tab(page, 'Réglages').click();
     await page.getByRole('button', { name: 'Supprimer les données d’exemple' }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Supprimer les données d’exemple ?' });
