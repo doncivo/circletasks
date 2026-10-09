@@ -1,6 +1,6 @@
 import type { AppContainer } from '../app/container';
 import { getNotificationRunner } from '../reminders/notificationRunner';
-import { pauseSyncForRestore, resumeSyncAfterRestore } from '../sync/startSync';
+import { pauseSyncForRestore, resumeSyncAfterRestore } from '../sync/syncRestoreControl';
 
 /** Attente maximale d'un cycle de synchro ou d'un passage des rappels avant de refuser la restauration. */
 export const QUIESCE_TIMEOUT_MS = 10_000;

@@ -53,17 +53,8 @@ export const backupFr = {
   // P-04-iOS (ADR 0009 avenant lot F).
   recoveryFailedIos: 'Restauration interrompue : fermez puis rouvrez CircleTasks.',
   recoveryFailedIosHelp: 'Aucune base n’a été ouverte et vos fichiers sont intacts. Si le message revient après une réouverture, copiez le détail et gardez l’app telle quelle.',
-  folderIos: 'Dossier de l’app (non visible dans Fichiers)',
-  errorSyncBusy: 'Une synchronisation est en cours, réessayez. Rien n’a été modifié.',
-  errorBusy: 'Une mise à jour des rappels est en cours, réessayez dans un instant. Rien n’a été modifié.',
-  errorDbOpen: 'La base n’a pas pu être fermée pour la restauration. Rien n’a été modifié : réessayez.',
-  retry: 'Réessayer',
   errorCode: 'Code : {code}',
   markerFailed: 'La restauration est faite, mais la synchronisation n’a pas pu être suspendue.',
-  seeSync: 'Voir la synchronisation',
   resultDone: 'Restauration terminée.',
   resultFailed: 'La restauration n’a pas abouti : vos données sont celles d’avant. Code : {code}',
-  resumeSync: 'Reprendre la synchronisation',
-  resumeSyncTitle: 'Reprendre la synchronisation ?',
-  resumeSyncText: 'Les données synchronisées pourront remplacer la version restaurée sur cet appareil.',
 } as const;

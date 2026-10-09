@@ -1,7 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { App } from './App';
-import { startLogJournal } from './features/app/logJournalBoot';
 import { FocusWindowRoot } from './features/focus';
 import { setCatalogFailureReporter } from './i18n';
 import { logFailure } from './platform';
@@ -17,6 +16,9 @@ setCatalogFailureReporter((locale, error) => logFailure(`catalog-${locale}`, err
 const isFocusWindow = new URLSearchParams(window.location.search).get('window') === 'focus';
 
 // I-04 : journal technique persistant (fichier pour la fenêtre principale seulement), chargé à la demande.
-void startLogJournal(isFocusWindow ? 'focus' : 'main');
+void import('./features/app/logJournalBoot').then(
+  (module) => module.startLogJournal(isFocusWindow ? 'focus' : 'main'),
+  (error: unknown) => logFailure('logs', error),
+);
 
 createRoot(container).render(<StrictMode>{isFocusWindow ? <FocusWindowRoot /> : <App />}</StrictMode>);

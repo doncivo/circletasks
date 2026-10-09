@@ -10,10 +10,11 @@ import { useAppStatusStore } from '../app/appStatus';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { useNoticeStore } from '../app/notice';
-import { announceRestoreResult } from '../app/startup';
+import { announcePendingRestore as announceRestoreResult } from './restoreMemoPeek';
 import { createNotificationRunner, getNotificationRunner } from '../reminders/notificationRunner';
 import { RestoreMarkerResume } from '../sync/RestoreMarkerResume';
-import { restoreMarkerFailure, startSyncIntegration, type SyncIntegration } from '../sync/startSync';
+import { startSyncIntegration, type SyncIntegration } from '../sync/startSync';
+import { restoreMarkerFailure } from '../sync/syncRestoreControl';
 import { createFakeSyncService, type FakeSyncService } from '../sync/testKit';
 import { BackupSheet } from './BackupSheet';
 import { backupStore, RESTART_ANNOUNCE_MS } from './backupStore';
@@ -101,6 +102,8 @@ describe('P-04-iOS : restauration sur iPhone (mise au calme, mémo, marqueur, é
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const store = backupStore.get(container);
     const restoring = store.getState().restore(VERSION);
+    // Le déroulé est chargé à la demande : attendre que le délai de la mise au calme soit armé, puis le faire expirer.
+    await vi.waitFor(() => expect(vi.getTimerCount()).toBeGreaterThan(0));
     await vi.advanceTimersByTimeAsync(10_000);
     await restoring;
     expect(store.getState().restorePhase).toBe('failed');

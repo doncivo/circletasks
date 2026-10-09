@@ -17,7 +17,6 @@ import { checklistsEn } from './en.checklists';
 import { eventsEn } from './en.events';
 import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
-import { logsEn } from './en.logs';
 import { importCsvEn } from './en.importCsv';
 import { securityEn } from './en.security';
 import { onboardingEn } from './en.onboarding';
@@ -687,7 +686,6 @@ export const en: Messages = {
   shortcutsUi: shortcutsUiEn,
   backup: backupEn,
   importCsv: importCsvEn,
-  logs: logsEn,
   security: securityEn,
   onboarding: onboardingEn,
   shortcuts: {

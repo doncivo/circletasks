@@ -1,6 +1,7 @@
 import type { TimeZoneChange } from '../../domain/timeZone';
 import { startCalendarScheduler, type CalendarScheduler, type SchedulerEnv } from '../calendars/scheduler';
-import { startBackupScheduler } from '../settings/backupScheduler';
+import type { BackupScheduler } from '../settings/backupScheduler';
+import { logFailure } from '../../platform/desktop/log';
 import { createDayRollover } from '../tasks/dayRollover';
 import { goalsStore } from '../goals/goalsStore';
 import { createTrashUseCases } from '../tasks/trashUseCases';
@@ -8,10 +9,7 @@ import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
 import { getNotificationRunner } from '../reminders/notificationRunner';
 import { createTimeZoneWatcher } from './timeZoneWatcher';
-import { t } from '../../i18n';
-import { logFailure } from '../../platform/desktop/log';
-import { takeRestoreResult } from '../settings/restoreMemo';
-import { useNoticeStore } from './notice';
+import { announcePendingRestore } from '../settings/restoreMemoPeek';
 
 export interface AppStartup {
   /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
@@ -45,27 +43,11 @@ export interface StartupEnv {
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
  * K-03 : les agendas externes sont rafraîchis dès l'ouverture puis toutes les 15 min au premier plan (`startCalendarScheduler`), sans bloquer `ready`.
  */
-/**
- * P-04-iOS critère 7 : issue de la restauration mémorisée avant le redémarrage (relance PC, rechargement iPhone), dite UNE fois après
- * (message et entrée au journal `restore-done` / `restore-failed`), puis effacée.
- */
-export function announceRestoreResult(): void {
-  const result = takeRestoreResult();
-  if (!result) return;
-  if (result.outcome === 'done') {
-    logFailure('backup', 'restore-done');
-    useNoticeStore.getState().show(t('backup.resultDone'));
-    return;
-  }
-  logFailure('backup', `restore-failed ${result.reason ?? 'io'}`);
-  useNoticeStore.getState().show(t('backup.resultFailed', { code: result.reason ?? 'io' }));
-}
-
 export function startAppStartup(
   container: AppContainer,
   env: StartupEnv = { document, window },
 ): AppStartup {
-  announceRestoreResult();
+  announcePendingRestore();
   const rollover = createDayRollover(container, {
     onDayChange: (day) => {
       useAppStore.getState().setDay(day);
@@ -87,7 +69,14 @@ export function startAppStartup(
   });
   const calendars = startCalendarScheduler(container, { document: env.document, ...(env.timers ?? {}) });
   // P-04 : sauvegarde quotidienne à l'ouverture, au retour au premier plan et après minuit (sans bloquer le démarrage).
-  const backups = startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
+  // Chargé à la demande (bundle de départ, PRD 8) : la première vérification part dès l'arrivée du module, sans bloquer `ready`.
+  let backups: BackupScheduler | null = null;
+  void import('../settings/backupScheduler').then(
+    (module) => {
+      if (!disposed) backups = module.startBackupScheduler(container, { document: env.document, window: env.window, ...(env.timers ?? {}) });
+    },
+    (error: unknown) => logFailure('backup-daily', error),
+  );
   const onCheck = (): void => {
     if (env.document.visibilityState !== 'hidden') {
       void timeZone.check().then(() => rollover.check());
@@ -106,7 +95,7 @@ export function startAppStartup(
       if (disposed) return;
       disposed = true;
       calendars.dispose();
-      backups.dispose();
+      backups?.dispose();
       env.document.removeEventListener('visibilitychange', onCheck);
       env.window.removeEventListener('focus', onCheck);
       rollover.stop();

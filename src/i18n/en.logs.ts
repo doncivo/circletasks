@@ -1,7 +1,7 @@
-import type { Messages } from './types';
+import type { logsFr } from './fr.logs';
 
 /** Logs screen and technical journal (I-04, ADR 0014 §4). */
-export const logsEn: Messages['logs'] = {
+export const logsEn: { readonly [K in keyof typeof logsFr]: string } = {
   rowLabel: 'Logs',
   rowOpenLabel: 'Open the logs screen',
   title: 'Logs',

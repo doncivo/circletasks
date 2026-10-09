@@ -8,11 +8,11 @@ import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
 import { remindersHidePass } from '../calendars/appleReminders/hidePass';
-import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
-import { clearMarkerFailed, readMarkerFailed } from '../settings/restoreMemo';
+import { clearMarkerFailedMemo, peekMarkerFailedCode } from '../settings/restoreMemoPeek';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
@@ -36,48 +36,7 @@ export interface SyncIntegrationEnv extends Partial<SyncSchedulerEnv> {
   readonly clearTimeout?: (handle: unknown) => void;
 }
 
-/** Planificateur actif de chaque conteneur : « Quitter » (desktop.ts) passe par lui, jamais par un minuteur à part. */
-const schedulers = new WeakMap<AppContainer, SyncScheduler>();
-
-/** Code du marqueur de restauration non écrit (P-04-iOS critère 12) : bandeau `syncTrouble` posé tant qu'il n'est pas résolu. */
-const markerFailures = new WeakMap<AppContainer, { readonly code: string; readonly refresh: () => void }>();
-
-/**
- * P-04-iOS (mise au calme avant une restauration, ADR 0009 avenant lot F B4) : plus aucun cycle lancé, cycle en cours attendu `timeoutMs`
- * au plus. Faux si le cycle n'a pas fini (le planificateur est alors relancé par `resumeSyncAfterRestore` de l'appelant).
- */
-export async function pauseSyncForRestore(container: AppContainer, timeoutMs: number): Promise<boolean> {
-  schedulers.get(container)?.pause();
-  const running = container.sync?.running() ?? null;
-  if (!running) return true;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const finished = await Promise.race([running.then(() => true, () => true), new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)))]);
-  if (timer !== undefined) clearTimeout(timer);
-  return finished;
-}
-
-/** Reprise après une restauration refusée avant la fermeture de la base (ou après « Reprendre la synchronisation »). */
-export function resumeSyncAfterRestore(container: AppContainer): void {
-  if (markerFailures.has(container)) return;
-  schedulers.get(container)?.resume();
-}
-
-/** Marqueur de restauration non écrit : code, ou null. */
-export function restoreMarkerFailure(container: AppContainer): string | null {
-  return markerFailures.get(container)?.code ?? null;
-}
-
-/**
- * « Reprendre la synchronisation » (P-04-iOS critère 12, choix explicite et confirmé dans Réglages › Synchronisation) : le mémo est
- * effacé, le bandeau retiré, les cycles reprennent (les données synchronisées pourront remplacer la version restaurée).
- */
-export function resumeSyncDespiteMarker(container: AppContainer): void {
-  const failure = markerFailures.get(container);
-  clearMarkerFailed();
-  markerFailures.delete(container);
-  failure?.refresh();
-  schedulers.get(container)?.resume();
-}
+import { markerFailures, schedulers } from './syncRestoreState';
 
 /** États A-09 posés par la synchro, tous retirés à `dispose()` (critère 9 j). */
 const SYNC_KINDS = ['syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing'] as const satisfies readonly AppStatusKind[];
@@ -447,16 +406,16 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, ...(container.reminders.available ? { beforeHide: () => remindersHidePass(container) } : {}) } : {};
   // P-04-iOS critère 12 : marqueur de restauration non écrit (mémo) : aucun cycle ; la lecture du contexte de restauration réessaie
   // l'écriture côté Rust (iPhone) ; marqueur présent -> mémo effacé, fenêtre de choix habituelle ; sinon bandeau persistant.
-  const memo = readMarkerFailed();
-  if (memo) markerFailures.set(container, { code: memo.code, refresh: () => safely(applyBanners) });
-  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide, ...(memo ? { startPaused: true } : {}) });
+  const memo = peekMarkerFailedCode();
+  if (memo !== null) markerFailures.set(container, { code: memo, refresh: () => safely(applyBanners) });
+  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide, ...(memo !== null ? { startPaused: true } : {}) });
   schedulers.set(container, scheduler);
-  if (memo) {
+  if (memo !== null) {
     safely(applyBanners);
     void sync.restoreContext().then(
       (context) => {
         if (disposed || !context) return;
-        clearMarkerFailed();
+        clearMarkerFailedMemo();
         markerFailures.delete(container);
         safely(applyBanners);
         scheduler.resume();

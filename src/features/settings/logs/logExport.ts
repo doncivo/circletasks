@@ -1,4 +1,4 @@
-import { t } from '../../../i18n';
+import { tLogs } from '../../../i18n/logsText';
 import type { LogEntry } from '../../../platform/logs';
 
 export interface LogExportMeta {
@@ -35,7 +35,7 @@ export function logExportName(now: Date): string {
 export function logExportLine(entry: LogEntry): string {
   const parts = [utcStamp(entry.at), entry.scope, entry.code];
   if (entry.detail) parts.push(entry.detail);
-  if (entry.n !== undefined && entry.n >= 2) parts.push(t('logs.repeated', { count: entry.n }));
+  if (entry.n !== undefined && entry.n >= 2) parts.push(tLogs('repeated', { count: entry.n }));
   return parts.join(' ');
 }
 
@@ -45,17 +45,17 @@ export function logExportLine(entry: LogEntry): string {
  * décalage local indiqué en en-tête. UTF-8, fins de ligne CRLF (lisible dans le Bloc-notes).
  */
 export function buildLogExport(entries: readonly LogEntry[], meta: LogExportMeta): { readonly name: string; readonly text: string } {
-  const os = meta.os === 'windows' ? t('logs.osWindows') : meta.os === 'ios' ? t('logs.osIos') : t('logs.osOther');
+  const os = meta.os === 'windows' ? tLogs('osWindows') : meta.os === 'ios' ? tLogs('osIos') : tLogs('osOther');
   const local = `${String(meta.now.getFullYear())}-${pad(meta.now.getMonth() + 1)}-${pad(meta.now.getDate())} ${pad(meta.now.getHours())}:${pad(meta.now.getMinutes())}`;
   const header = [
-    t('logs.fileTitle'),
-    t('logs.fileApp', { version: meta.version }),
-    t('logs.fileSystem', { os }),
-    t('logs.fileSchema', { schema: meta.schemaVersion }),
-    t('logs.fileDate', { date: local }),
-    t('logs.fileTimes', { offset: offsetOf(meta.now) }),
-    t('logs.fileCount', { count: entries.length }),
-    t('logs.filePrivacy'),
+    tLogs('fileTitle'),
+    tLogs('fileApp', { version: meta.version }),
+    tLogs('fileSystem', { os }),
+    tLogs('fileSchema', { schema: meta.schemaVersion }),
+    tLogs('fileDate', { date: local }),
+    tLogs('fileTimes', { offset: offsetOf(meta.now) }),
+    tLogs('fileCount', { count: entries.length }),
+    tLogs('filePrivacy'),
     '',
   ];
   const lines = [...header, ...entries.map(logExportLine)];

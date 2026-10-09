@@ -1,10 +1,9 @@
 import { createStore } from 'zustand';
 import { backupDay, backupStamp, isDailyBackupDue, sortBackupVersions } from '../../domain/backupSchedule';
-import { BackupError, backupFailureOf, type BackupFailureReason, type BackupVersion, type RestoreResult } from '../../platform/backup';
+import type { BackupFailureReason, BackupVersion } from '../../platform/backup';
+import type { RestoreFlowOutcome } from './restoreFlow';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
-import { quiesceForRestore, type QuiesceHandle } from './restoreQuiesce';
-import { writeMarkerFailed, writeRestoreResult } from './restoreMemo';
 
 export type BackupListStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -139,39 +138,21 @@ function createBackupStore(container: AppContainer) {
         set({ restorePhase: 'running', restoreError: null, restartNeeded: false, markerFailure: null });
         // Une sauvegarde automatique déjà en cours se termine avant que la base ne soit fermée.
         await dailyInFlight;
-        let quiet: QuiesceHandle | null = null;
-        let result: RestoreResult | undefined;
+        let outcome: RestoreFlowOutcome;
         try {
-          // Ordre (P-04-iOS critère 6) : vérification (base ouverte) -> mise au calme -> voile (phase running) -> point de contrôle ->
-          // fermeture -> échange -> annonce -> mémo -> redémarrage (rechargement sur iPhone).
-          result = await service.restore(
-            { name: version.name, stamp: backupStamp(container.clock) },
-            {
-              prepare: async () => {
-                const outcome = await quiesceForRestore(container);
-                if (outcome === 'sync-busy' || outcome === 'busy') throw new BackupError(outcome);
-                quiet = outcome;
-              },
-            },
-          );
+          // Ordre et mémo : `restoreFlow.ts`, chargé à la demande (bundle de départ).
+          const { performRestore } = await import('./restoreFlow');
+          outcome = await performRestore(container, service, version, backupStamp(container.clock));
         } catch (error) {
           logDesktopFailure('backup-restore', error);
-          const { reason, databaseClosed } = backupFailureOf(error);
-          // Base encore ouverte : rien n'a changé, la synchro et les rappels reprennent. Base fermée : seul un redémarrage la rouvre ; l'issue
-          // est mémorisée pour être dite APRÈS le redémarrage (critère 7, jamais un écran vide sans explication).
-          if (!databaseClosed) (quiet as QuiesceHandle | null)?.release();
-          else writeRestoreResult({ outcome: 'failed', reason, databaseClosed: true, marker: null, markerCode: null });
-          set({ restorePhase: 'failed', restoreError: reason, restartNeeded: databaseClosed });
+          set({ restorePhase: 'failed', restoreError: 'io', restartNeeded: false });
           return;
         }
-        const marker = result?.marker ?? 'not-configured';
-        const markerCode = result?.markerCode ?? null;
-        if (marker === 'failed') {
-          logDesktopFailure('backup', `restore-marker-failed ${markerCode ?? 'unknown'}`);
-          writeMarkerFailed({ backup: version.name, code: markerCode ?? 'unknown', at: new Date(container.clock.nowMs()).toISOString() });
+        if (outcome.kind === 'failed') {
+          set({ restorePhase: 'failed', restoreError: outcome.reason, restartNeeded: outcome.databaseClosed });
+          return;
         }
-        if (!writeRestoreResult({ outcome: 'done', reason: null, databaseClosed: false, marker, markerCode })) logDesktopFailure('backup', 'restore-memo-unwritable');
-        set({ restorePhase: 'done', markerFailure: marker === 'failed' ? (markerCode ?? 'unknown') : null });
+        set({ restorePhase: 'done', markerFailure: outcome.markerFailure });
         await new Promise<void>((resolve) => globalThis.setTimeout(resolve, RESTART_ANNOUNCE_MS));
         await get().restart();
       },

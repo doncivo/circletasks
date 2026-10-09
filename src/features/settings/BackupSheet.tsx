@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { t, type PlainMessageKey } from '../../i18n';
+import { tBackupRestore } from '../../i18n/backupRestoreText';
 import { formatBackupSize, formatBackupWhen } from '../../i18n/formatBackup';
 import type { BackupFailureReason, BackupVersion } from '../../platform/backup';
 import { syncStore } from '../sync/syncStore';
@@ -10,7 +11,7 @@ import { useNavigationStore } from '../app/navigation';
 import { backupStore } from './backupStore';
 import './BackupSheet.css';
 
-const ERROR_KEYS: Record<BackupFailureReason, PlainMessageKey> = {
+const ERROR_KEYS: Record<Exclude<BackupFailureReason, 'sync-busy' | 'busy' | 'db-open'>, PlainMessageKey> = {
   corrupt: 'backup.errorCorrupt',
   'newer-schema': 'backup.errorNewer',
   'not-found': 'backup.errorNotFound',
@@ -18,10 +19,15 @@ const ERROR_KEYS: Record<BackupFailureReason, PlainMessageKey> = {
   'rollback-failed': 'backup.errorRollback',
   'restore-pending': 'backup.errorPending',
   unavailable: 'backup.errorIo',
-  'sync-busy': 'backup.errorSyncBusy',
-  busy: 'backup.errorBusy',
-  'db-open': 'backup.errorDbOpen',
 };
+
+/** Message d'un échec de restauration (raisons de P-04-iOS : catalogue chargé avec la feuille). */
+function errorText(reason: BackupFailureReason): string {
+  if (reason === 'sync-busy') return tBackupRestore('errorSyncBusy');
+  if (reason === 'busy') return tBackupRestore('errorBusy');
+  if (reason === 'db-open') return tBackupRestore('errorDbOpen');
+  return t(ERROR_KEYS[reason]);
+}
 
 /** Échecs qu'un nouvel essai de la MÊME version peut résoudre (aucun « Réessayer » qui ne peut pas réussir). */
 const RETRYABLE: ReadonlySet<BackupFailureReason> = new Set(['sync-busy', 'busy', 'db-open', 'io']);
@@ -181,14 +187,14 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
             {t('backup.markerFailed')} {t('backup.errorCode', { code: markerFailure })}
           </p>
           <Button variant="secondary" onClick={() => navigate({ tab: 'settings', screen: 'sync' })}>
-            {t('backup.seeSync')}
+            {tBackupRestore('seeSync')}
           </Button>
         </div>
       )}
       {locked && <RestoreVeil />}
       {phase === 'failed' && restoreError && (
         <div className="ct-backup__error" role="alert">
-          <p>{t(restartNeeded && restoreError === 'io' ? 'backup.errorClosed' : ERROR_KEYS[restoreError])}</p>
+          <p>{restartNeeded && restoreError === 'io' ? t('backup.errorClosed') : errorText(restoreError)}</p>
           {restartNeeded && (
             <Button onClick={() => void restart()} className="ct-backup__restart">
               {t('backup.restart')}
@@ -196,12 +202,12 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
           )}
           {!restartNeeded && RETRYABLE.has(restoreError) && lastChosen && (
             <Button variant="secondary" onClick={() => void restore(lastChosen)}>
-              {t('backup.retry')}
+              {tBackupRestore('retry')}
             </Button>
           )}
         </div>
       )}
-      {directory ? <p className="ct-backup__note">{t('backup.location', { path: directory })}</p> : isIos && <p className="ct-backup__note">{t('backup.location', { path: t('backup.folderIos') })}</p>}
+      {directory ? <p className="ct-backup__note">{t('backup.location', { path: directory })}</p> : isIos && <p className="ct-backup__note">{t('backup.location', { path: tBackupRestore('folderIos') })}</p>}
       <p className="ct-backup__note">{t('backup.help')}</p>
       <div className="ct-backup__actions">
         <Button variant="secondary" onClick={close} disabled={locked}>

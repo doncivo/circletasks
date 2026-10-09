@@ -2,6 +2,7 @@ import { Download, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { migrations } from '../../../db/migrations';
 import { getLocale, t } from '../../../i18n';
+import { tLogs } from '../../../i18n/logsText';
 import { categoryOf, type LogCategory, type LogEntry, type LogJournal } from '../../../platform/logs';
 import { Button, ConfirmDialog, Icon, useLayout } from '../../../ui';
 import { useAppContainer } from '../../app/AppContainerContext';
@@ -14,11 +15,11 @@ import './LogsScreen.css';
 
 type Filter = 'all' | LogCategory;
 
-const FILTERS: readonly { readonly id: Filter; readonly label: 'logs.filterAll' | 'logs.filterSync' | 'logs.filterNotifications' | 'logs.filterErrors' }[] = [
-  { id: 'all', label: 'logs.filterAll' },
-  { id: 'sync', label: 'logs.filterSync' },
-  { id: 'notifications', label: 'logs.filterNotifications' },
-  { id: 'errors', label: 'logs.filterErrors' },
+const FILTERS: readonly { readonly id: Filter; readonly label: 'filterAll' | 'filterSync' | 'filterNotifications' | 'filterErrors' }[] = [
+  { id: 'all', label: 'filterAll' },
+  { id: 'sync', label: 'filterSync' },
+  { id: 'notifications', label: 'filterNotifications' },
+  { id: 'errors', label: 'filterErrors' },
 ];
 
 function localTime(at: string): string {
@@ -118,79 +119,79 @@ export function LogsScreen({ journal: injected, version }: LogsScreenProps = {})
     <div className="ct-logs-shell" data-layout={layout}>
       <div className="ct-logs">
         <div className="ct-logs__topRow">
-          <button type="button" className="ct-logs__back" aria-label={t('logs.back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
+          <button type="button" className="ct-logs__back" aria-label={tLogs('back')} onClick={() => navigate({ tab: 'settings', screen: 'home' })}>
             <Icon icon={Undo2} size={26} />
           </button>
         </div>
         <h1 ref={titleRef} tabIndex={-1} className="ct-logs__title">
-          {t('logs.title')}
+          {tLogs('title')}
         </h1>
         {status.writeError && (
           <p className="ct-logs__error" role="alert">
-            {t('logs.writeError')} {t('logs.errorCode', { code: status.writeError })}
+            {tLogs('writeError')} {tLogs('errorCode', { code: status.writeError })}
           </p>
         )}
         {status.readError && (
           <p className="ct-logs__error" role="alert">
-            {t('logs.readError')} {t('logs.errorCode', { code: status.readError })}
+            {tLogs('readError')} {tLogs('errorCode', { code: status.readError })}
           </p>
         )}
         {clearFailure && (
           <p className="ct-logs__error" role="alert">
-            {t('logs.clearError')} {t('logs.errorCode', { code: clearFailure })}
+            {tLogs('clearError')} {tLogs('errorCode', { code: clearFailure })}
           </p>
         )}
         {unavailable && (
           <div className="ct-logs__failure" role="alert">
             <p className="ct-logs__error">
-              {t('logs.unavailable')} {t('logs.errorCode', { code: unavailable })}
+              {tLogs('unavailable')} {tLogs('errorCode', { code: unavailable })}
             </p>
             <Button variant="secondary" onClick={installed.retry}>
               {t('files.retry')}
             </Button>
           </div>
         )}
-        {!container.files.canSave() && <p className="ct-logs__note">{t('logs.exportUnavailable')}</p>}
+        {!container.files.canSave() && <p className="ct-logs__note">{tLogs('exportUnavailable')}</p>}
         <div className="ct-logs__actions">
           {container.files.canSave() && (
             <button type="button" className="ct-logs__export" onClick={() => void runExport()} disabled={busy || !journal}>
               <Icon icon={Download} size={18} />
-              <span>{t('logs.export')}</span>
+              <span>{tLogs('export')}</span>
             </button>
           )}
           <button type="button" className="ct-logs__clear" onClick={() => setConfirming(true)} disabled={busy || !journal}>
             <Icon icon={Trash2} size={18} />
-            <span>{t('logs.clear')}</span>
+            <span>{tLogs('clear')}</span>
           </button>
         </div>
-        {exportFailure && <FileSaveFailure message={t('logs.exportError')} code={exportFailure.code} tooLarge={exportFailure.tooLarge} disabled={busy} onRetry={() => void runExport()} />}
+        {exportFailure && <FileSaveFailure message={tLogs('exportError')} code={exportFailure.code} tooLarge={exportFailure.tooLarge} disabled={busy} onRetry={() => void runExport()} />}
         <p className="ct-logs__note" role="status">
-          {exported ? t('logs.exportDone') : ''}
+          {exported ? tLogs('exportDone') : ''}
         </p>
-        <div className="ct-logs__filters" role="group" aria-label={t('logs.filtersLabel')}>
+        <div className="ct-logs__filters" role="group" aria-label={tLogs('filtersLabel')}>
           {FILTERS.map((option) => (
             <button key={option.id} type="button" className="ct-logs__filter" aria-pressed={filter === option.id} onClick={() => setFilter(option.id)}>
-              {t(option.label)}
+              {tLogs(option.label)}
             </button>
           ))}
         </div>
         {entries === null && unavailable ? null : entries === null ? (
-          <p className="ct-logs__note">{t('logs.loading')}</p>
+          <p className="ct-logs__note">{tLogs('loading')}</p>
         ) : shown.length === 0 ? (
-          <p className="ct-logs__empty">{t('logs.empty')}</p>
+          <p className="ct-logs__empty">{tLogs('empty')}</p>
         ) : (
-          <ol className="ct-logs__list" role="log" aria-live="off" aria-label={t('logs.listLabel')}>
+          <ol className="ct-logs__list" role="log" aria-live="off" aria-label={tLogs('listLabel')}>
             {shown.map((entry, index) => (
               <li key={`${entry.at}-${String(index)}`} className="ct-logs__entry">
                 <span className="ct-logs__time">{localTime(entry.at)}</span> <span className="ct-logs__scope">{entry.scope}</span> <span className="ct-logs__code">{entry.code}</span>
                 {entry.detail && <span className="ct-logs__detail"> {entry.detail}</span>}
-                {entry.n !== undefined && entry.n >= 2 && <span className="ct-logs__count"> {t('logs.repeated', { count: entry.n })}</span>}
+                {entry.n !== undefined && entry.n >= 2 && <span className="ct-logs__count"> {tLogs('repeated', { count: entry.n })}</span>}
               </li>
             ))}
           </ol>
         )}
       </div>
-      {confirming && <ConfirmDialog title={t('logs.clearTitle')} description={t('logs.clearMessage')} confirmLabel={t('logs.clearConfirm')} onCancel={() => setConfirming(false)} onConfirm={() => void runClear()} />}
+      {confirming && <ConfirmDialog title={tLogs('clearTitle')} description={tLogs('clearMessage')} confirmLabel={tLogs('clearConfirm')} onCancel={() => setConfirming(false)} onConfirm={() => void runClear()} />}
     </div>
   );
 }

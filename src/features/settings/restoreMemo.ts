@@ -8,8 +8,9 @@
  *   explicite « Reprendre la synchronisation »). Tant qu'il existe, aucun cycle de synchro ne part (critère 12).
  */
 
-export const RESTORE_RESULT_KEY = 'ct.restore.result';
-export const MARKER_FAILED_KEY = 'ct.restore.markerFailed';
+import { MARKER_FAILED_KEY, RESTORE_RESULT_KEY } from './restoreMemoPeek';
+
+export { MARKER_FAILED_KEY, RESTORE_RESULT_KEY };
 
 export interface RestoreResultMemo {
   readonly outcome: 'done' | 'failed';
@@ -64,22 +65,6 @@ function remove(key: string): void {
 
 export function writeRestoreResult(memo: RestoreResultMemo): boolean {
   return writeJson(RESTORE_RESULT_KEY, memo);
-}
-
-/** Lit l'issue mémorisée et l'efface (lue une seule fois). */
-export function takeRestoreResult(): RestoreResultMemo | null {
-  const value = readJson(RESTORE_RESULT_KEY);
-  remove(RESTORE_RESULT_KEY);
-  if (typeof value !== 'object' || value === null) return null;
-  const memo = value as Partial<RestoreResultMemo>;
-  if (memo.outcome !== 'done' && memo.outcome !== 'failed') return null;
-  return {
-    outcome: memo.outcome,
-    reason: typeof memo.reason === 'string' ? memo.reason : null,
-    databaseClosed: memo.databaseClosed === true,
-    marker: memo.marker === 'written' || memo.marker === 'not-configured' || memo.marker === 'failed' ? memo.marker : null,
-    markerCode: typeof memo.markerCode === 'string' ? memo.markerCode : null,
-  };
 }
 
 export function writeMarkerFailed(memo: MarkerFailedMemo): boolean {

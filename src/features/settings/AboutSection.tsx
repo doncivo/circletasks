@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
+import { tLogs } from '../../i18n/logsText';
 import { logDesktopFailure } from '../../platform';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
@@ -74,13 +75,13 @@ export function AboutSection() {
           )}
           {logFailureCode && (
             <span className="ct-settings__hint ct-settings__hint--missed" role="alert">
-              {logStatus.writeError ? t('logs.writeError') : logStatus.readError ? t('logs.readError') : t('logs.unavailable')} {t('logs.errorCode', { code: logFailureCode })}
+              {logStatus.writeError ? tLogs('writeError') : logStatus.readError ? tLogs('readError') : tLogs('unavailable')} {tLogs('errorCode', { code: logFailureCode })}
             </span>
           )}
         </span>
         <span className="ct-settings__actions">
-          <Button variant="secondary" ariaLabel={t('logs.rowOpenLabel')} onClick={() => navigate({ tab: 'settings', screen: 'logs' })} className="ct-settings__link">
-            {t('logs.rowLabel')}
+          <Button variant="secondary" ariaLabel={tLogs('rowOpenLabel')} onClick={() => navigate({ tab: 'settings', screen: 'logs' })} className="ct-settings__link">
+            {tLogs('rowLabel')}
           </Button>
           {desktop && (
             <Button variant="secondary" onClick={() => void check()} disabled={checking} className="ct-settings__link">
