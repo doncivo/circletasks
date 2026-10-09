@@ -191,3 +191,65 @@ fn p04_ios_4_same_rust_code_on_the_platform_data_folder() {
     assert_eq!(outcome.marker, "not-configured");
     assert!(config.join(BACKUP_DIR).join("circletasks-pre-restore-20261008T080000Z.db").is_file());
 }
+
+// --- revue B1 : échange en échec sans retour arrière complet, jamais une base vide ---
+
+#[test]
+fn p04_ios_b1_failed_rollback_is_recovered_immediately_and_never_leaves_an_empty_base() {
+    use circletasks_lib::startup_gate::recover_after_failed_swap;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), Some("false"));
+    make_db(&dir.path().join(DB_FILE), Some("true"));
+    let db = dir.path().join(DB_FILE);
+    // Pendant l'échange, un obstacle prend la place de la base : le retour arrière de la base échoue (`rollback-failed`).
+    let obstacle = db.clone();
+    let hook = move |step: RestoreStep| -> std::io::Result<()> {
+        if step == RestoreStep::OldMoved {
+            fs::create_dir(&obstacle)?;
+            return Err(std::io::Error::other("arrêt simulé"));
+        }
+        Ok(())
+    };
+    let error = restore_backup_file(&db, &backups, "circletasks-daily-20261007.db", APP_SCHEMA_VERSION, "20261008T080000Z", &hook).unwrap_err();
+    assert_eq!(error.code, "rollback-failed");
+    assert!(tauri_plugin_sql::restore_pending(&db), "le plugin SQL refuse d'ouvrir ou de créer la base");
+    // L'obstacle passager disparaît : la récupération immédiate remet la vraie base en place.
+    fs::remove_dir(&db).unwrap();
+    assert_eq!(recover_after_failed_swap(&db, &backups), Some(Ok(())));
+    assert_eq!(lock_value(&db).as_deref(), Some("true"), "la base d'avant, intacte");
+    assert!(!tauri_plugin_sql::restore_pending(&db));
+    assert_eq!(recover_after_failed_swap(&db, &backups), None, "rien en attente");
+}
+
+#[test]
+fn p04_ios_b1_failed_immediate_recovery_closes_the_gate_and_keeps_the_files() {
+    use circletasks_lib::startup_gate::recover_after_failed_swap;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    let db = dir.path().join(DB_FILE);
+    make_db(&db, None);
+    fs::write(dir.path().join(format!("{DB_FILE}-wal.restore-old")), b"ancien wal").unwrap();
+    fs::write(dir.path().join(format!("{DB_FILE}-wal")), b"wal actuel").unwrap();
+    let outcome = recover_after_failed_swap(&db, &backups).expect("en attente");
+    let code = outcome.unwrap_err();
+    let gate = StartupGate::default();
+    gate.set(Ok(()));
+    gate.set(Err(code));
+    assert_eq!(status_of(Some(&gate)), StartupStatus { state: "failed", code: Some(code) }, "la porte peut repasser à l'échec");
+    assert_eq!(fs::read(dir.path().join(format!("{DB_FILE}-wal.restore-old"))).unwrap(), b"ancien wal");
+    assert!(tauri_plugin_sql::restore_pending(&db));
+}
+
+#[test]
+fn p04_ios_b1_the_sql_plugin_checks_for_a_pending_restore_before_creating_the_database() {
+    let wrapper = include_str!("../../vendor/tauri-plugin-sql/src/wrapper.rs");
+    let connect = &wrapper[wrapper.find("pub(crate) async fn connect").unwrap()..];
+    let check = connect.find("restore_pending(").unwrap();
+    assert!(check < connect.find("create_database").unwrap() && check < connect.find("open_sqlite_pool(").unwrap());
+    let command = include_str!("../../src/backup.rs");
+    let restore = &command[command.find("pub async fn restore_backup(").unwrap()..];
+    assert!(restore.contains("recover_after_failed_swap"));
+}

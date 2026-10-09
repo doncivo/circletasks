@@ -10,24 +10,41 @@
 //!   `sync_restore_marker_get` (le processus survit au rechargement de la WebView sur iPhone).
 
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Mutex, RwLock};
 
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime};
 
-/// Issue de la récupération au démarrage (posée une fois, avant la fin du `setup` de l'iPhone).
+/// Issue de la récupération (posée avant la fin du `setup` de l'iPhone). Revue B1 : elle peut être REMISE à l'échec après le démarrage,
+/// quand un échange de restauration échoue sans retour arrière complet et que la récupération immédiate échoue aussi : le rechargement
+/// de la WebView affiche alors l'écran d'erreur persistant au lieu d'ouvrir (ou créer) une base.
 #[derive(Default)]
-pub struct StartupGate(OnceLock<Result<(), &'static str>>);
+pub struct StartupGate(RwLock<Option<Result<(), &'static str>>>);
 
 impl StartupGate {
     /// `None` : `setup` pas encore terminé ; `Some(Ok)` : prête ; `Some(Err(code))` : récupération impossible.
     pub fn outcome(&self) -> Option<Result<(), &'static str>> {
-        self.0.get().copied()
+        *self.0.read().unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub fn set(&self, outcome: Result<(), &'static str>) {
-        let _ = self.0.set(outcome);
+        *self.0.write().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(outcome);
     }
+}
+
+/// Revue B1 : après un échange en échec, si des `.restore-old` restent (retour arrière incomplet), la récupération est faite TOUT DE SUITE
+/// (aucun pool ouvert : la connexion est fermée avant `restore_backup`), avec la table de décision habituelle. Rend `None` si rien
+/// n'était en attente, sinon l'issue (`Err(code)` : les fichiers restent intacts, la porte doit passer à l'échec).
+pub fn recover_after_failed_swap(db_path: &Path, backups_dir: &Path) -> Option<Result<(), &'static str>> {
+    if !crate::backup::has_pending_restore(db_path) {
+        return None;
+    }
+    let outcome = crate::backup::recover_interrupted_restore(db_path, backups_dir).map(|_| ()).map_err(|error| error.code);
+    crate::applog::write("backup-recovery", match outcome {
+        Ok(()) => "recovered-after-swap",
+        Err(code) => code,
+    });
+    Some(outcome)
 }
 
 /// Réponse de `backup_startup_status`.

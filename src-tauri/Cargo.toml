@@ -130,7 +130,8 @@ strip = true
 
 # Pool SQLite à UNE connexion (correctif 0.2.2, base verrouillée). tauri-plugin-sql 2.5.0 ouvre un pool sqlx de 10 connexions et ne permet
 # pas de le régler. La copie dans vendor/ diffère de l'amont par : src/wrapper.rs (open_sqlite_pool et ses tests), src/lib.rs (réexport de
-# open_sqlite_pool pour les tests de la restauration, P-04-iOS), les features mysql et
+# open_sqlite_pool et restore_pending pour les tests de la restauration, P-04-iOS), src/error.rs et wrapper.rs (refus d'ouvrir ou de créer
+# la base tant qu'un `.restore-old` existe, revue B1), les features mysql et
 # postgres vidées (Cargo.lock ne tire ni rustls ni webpki-roots), et les dépendances de test (tempfile, tokio). Voir CHANGELOG 0.2.2.
 [patch.crates-io]
 tauri-plugin-sql = { path = "vendor/tauri-plugin-sql" }
