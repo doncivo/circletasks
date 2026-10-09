@@ -22,8 +22,11 @@ import { createSimFolder, propagate } from './syncCloudSim';
  * - `POST /inspect` `{ room, device }` : identifiant lié, nombre d'ajouts, tâches publiées (nombre de fois par identifiant), budgets
  *   d'hydratation reçus par chaque scan (`hydrateBudgetMs`, null sans) ;
  * - `POST /scan` `{ room, device, from }` (Y-IOS-02) : le prochain scan de l'iPhone `device` lit le QR affiché par l'appareil `from` (produit
- *   ici, comme par la fenêtre `pairing` du PC), jamais un texte venu de la page ;
+ *   ici, comme par la fenêtre `pairing` du PC), jamais un texte venu de la page ; `text` (facultatif) fournit le texte lu à la place du QR
+ *   (QR illisible, d'une autre application) et `null` annule le scan ;
  * - `POST /camera` `{ room, device, state, answer }` (Y-IOS-02) : autorisation de la caméra simulée de l'iPhone ;
+ * - `POST /testing` `{ room, device, call, args }` (Y-IOS-02, QA du parcours) : crochet de test de la plateforme mémoire de l'appareil,
+ *   parmi `TESTING_CALLS` (Trousseau verrouillé, application en arrière-plan, confirmation refusée, scan annulé, QR illisible) ;
  * - `POST /unreachable` `{ room, device, on }` (Y-IOS-01) : dossier injoignable (signet perdu) : toute méthode répond `folder-unreachable`
  *   jusqu'à `on: false` ou un nouveau choix du dossier. `on: false` remet aussi la liaison à neuf si la page s'est rechargée (la base du
  *   navigateur de dev n'est pas persistée : Rust, lui, retrouve l'appareil lié dans `folder.json`).
@@ -101,6 +104,9 @@ const METHODS: ReadonlySet<string> = new Set([
   'forget.deleteFiles',
   'reset.start',
 ]);
+
+/** Crochets de `platform.testing` pilotables par `POST /testing` (aucun ne rend de secret). */
+const TESTING_CALLS: ReadonlySet<string> = new Set(['setVaultAvailable', 'setForeground', 'setConsent', 'setScanResult', 'setCameraPermission']);
 
 /** Recopie mutuelle de tous les dossiers d'un espace (iCloud à jour partout). */
 function propagateRoom(room: Room): void {
@@ -262,10 +268,15 @@ export async function startSyncFolderSim(port = 0): Promise<SyncFolderSim> {
         return json(200, { deviceId: target.deviceId, appends: target.appends, tasks: publishedTasks(target), failing: target.failure !== null, scanBudgets: target.scanBudgets });
       }
       case '/scan': {
-        const { room, device, from } = JSON.parse(request.body) as { room: string; device: string; from: string };
+        const parsed = JSON.parse(request.body) as { room: string; device: string; from?: string; text?: string | null };
+        const { room, device, from } = parsed;
         const found = rooms.get(room);
         const target = found?.devices.get(device);
-        const owner = found?.devices.get(from);
+        if (target && 'text' in parsed) {
+          target.platform.testing.setScanResult(parsed.text ?? null);
+          return json(200, { ok: true });
+        }
+        const owner = found?.devices.get(from ?? '');
         if (!target || !owner) return json(404, { ok: false });
         await owner.platform.key.openPairing('show');
         const payload = await owner.platform.key.pairingPayload();
@@ -279,6 +290,14 @@ export async function startSyncFolderSim(port = 0): Promise<SyncFolderSim> {
         if (!target) return json(404, { ok: false });
         target.platform.testing.setCameraPermission(state, answer);
         return json(200, { ok: true, opened: target.platform.testing.cameraSettingsOpened() });
+      }
+      case '/testing': {
+        const { room, device, call, args } = JSON.parse(request.body) as { room: string; device: string; call: string; args: unknown[] };
+        const target = rooms.get(room)?.devices.get(device);
+        if (!target || !TESTING_CALLS.has(call)) return json(404, { ok: false });
+        const hooks = target.platform.testing as unknown as Record<string, (...a: unknown[]) => unknown>;
+        hooks[call]?.(...args);
+        return json(200, { ok: true });
       }
       case '/unreachable': {
         const { room, device, on } = JSON.parse(request.body) as { room: string; device: string; on: boolean };
