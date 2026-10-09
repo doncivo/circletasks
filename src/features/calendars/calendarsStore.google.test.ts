@@ -5,6 +5,8 @@ import type { InstantRange } from '../../db/repositories';
 import type { CalendarAccountId } from '../../domain/types';
 import { useAppStatusStore } from '../app/appStatus';
 import { useNavigationStore } from '../app/navigation';
+import { createHlcClock } from '../../domain/hlc';
+import { createAppContainer } from '../app/container';
 import { calendarsStore, type CalendarsState } from './calendarsStore';
 import { dumpDatabaseText, setupCalendarHarness, type CalendarHarness } from './testKit';
 
@@ -177,6 +179,76 @@ describe('connexion abandonnée dont le jeton ne s’efface pas (revue PR #25, p
     await state().retryForgetSecrets();
     expect(state().orphanSecrets).toEqual([]);
     expect(await h.container.calendars.vault.has(orphan?.tokenRef ?? '')).toBe(false);
+  });
+});
+
+describe('orphelins persistés et jamais confondus avec un secret valable (seconde revue PR #25)', () => {
+  const RECEIVED = 'a0000000-0000-4000-8000-0000000000d1' as CalendarAccountId;
+  const REF = `circletasks.calendar.google.${RECEIVED}`;
+
+  /** Ligne reçue du PC (libellé d'un autre compte Google) : « Connecter ici » est refusé et le jeton ne s'efface pas. */
+  async function orphanAfterRefusal(): Promise<ReturnType<typeof vi.spyOn>> {
+    await h.container.data.repos.calendarAccounts.create({ id: RECEIVED, provider: 'google', label: 'autre@example.com', tokenRef: '', calendars: [] });
+    await state().load();
+    const revoke = vi.spyOn(h.container.calendars.oauth, 'revokeGoogle').mockRejectedValue(new Error('coffre indisponible'));
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: false, failure: 'google-other-account' });
+    expect(state().orphanSecrets).toEqual([{ provider: 'google', tokenRef: REF }]);
+    return revoke;
+  }
+
+  it('redémarrage : la référence (jamais le secret) est relue du réglage local, le message reste', async () => {
+    const revoke = await orphanAfterRefusal();
+    const stored = await h.container.data.repos.settings.get('calendars.orphanSecrets');
+    expect(stored).toEqual([{ provider: 'google', tokenRef: REF }]);
+    expect(JSON.stringify(stored)).not.toMatch(/refresh|access/);
+    // Nouveau conteneur sur la même base et le même coffre : nouveau store, comme au relancement de l'app.
+    const restarted = createAppContainer({ clock: h.db.clock, hlc: createHlcClock({ clock: h.db.clock, deviceId: 'restart' as never }), data: h.db.data, calendars: h.container.calendars });
+    const fresh = calendarsStore.get(restarted);
+    expect(fresh.getState().orphanSecrets).toEqual([]);
+    await fresh.getState().load();
+    expect(fresh.getState().orphanSecrets).toEqual([{ provider: 'google', tokenRef: REF }]);
+    revoke.mockRestore();
+    await fresh.getState().retryForgetSecrets();
+    expect(fresh.getState().orphanSecrets).toEqual([]);
+    expect(await h.container.data.repos.settings.get('calendars.orphanSecrets')).toBeNull();
+    fresh.getState().releaseStatuses();
+  });
+
+  it('au chargement : une référence relue qui n’est plus au coffre est oubliée', async () => {
+    const revoke = await orphanAfterRefusal();
+    revoke.mockRestore();
+    await h.vault.delete(REF);
+    await state().load();
+    expect(state().orphanSecrets).toEqual([]);
+    expect(await h.container.data.repos.settings.get('calendars.orphanSecrets')).toBeNull();
+  });
+
+  it('reconnexion réussie sous la même référence : retirée des orphelins ; « Réessayer l’effacement » ne touche jamais le secret valable', async () => {
+    const revoke = await orphanAfterRefusal();
+    revoke.mockRestore();
+    // La ligne reçue porte maintenant le bon compte (libellé corrigé par la synchro) : la connexion réussit sous la même référence.
+    await h.db.driver.execute('UPDATE calendar_account SET label = ? WHERE id = ?', [GOOGLE_ACCOUNT, RECEIVED]);
+    await state().load();
+    expect(await state().reconnectGoogle(RECEIVED)).toEqual({ ok: true, accountId: RECEIVED });
+    expect(state().orphanSecrets).toEqual([]);
+    await state().retryForgetSecrets();
+    expect(await h.container.calendars.vault.has(REF)).toBe(true);
+    await idle();
+    expect(state().states[RECEIVED]).toMatchObject({ kind: 'connected' });
+  });
+
+  it('référence orpheline égale à celle d’un compte de cet appareil : jamais effacée par « Réessayer l’effacement »', async () => {
+    const accountId = await connected();
+    const tokenRef = state().accounts[0]?.tokenRef ?? '';
+    await h.container.data.repos.settings.set('calendars.orphanSecrets', [{ provider: 'google', tokenRef }]);
+    await state().load();
+    expect(state().orphanSecrets).toEqual([]);
+    // Même si la liste en mémoire la contenait : ignorée.
+    store().setState({ orphanSecrets: [{ provider: 'google', tokenRef }] });
+    await state().retryForgetSecrets();
+    expect(await h.container.calendars.vault.has(tokenRef)).toBe(true);
+    expect(state().orphanSecrets).toEqual([]);
+    expect(state().states[accountId]).toMatchObject({ kind: 'connected' });
   });
 });
 

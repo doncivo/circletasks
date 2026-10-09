@@ -149,6 +149,17 @@ describe('écran Agendas (K-01 à K-03)', () => {
     await waitFor(() => expect(screen.queryByTestId('calendars-orphan-secret')).not.toBeInTheDocument());
   });
 
+  it('après un redémarrage : jeton orphelin relu du réglage local et encore au coffre, message et « Réessayer l’effacement » affichés', async () => {
+    const ref = 'circletasks.calendar.icloud.a7000000-0000-4000-8000-0000000000e9';
+    await h.container.calendars.vault.set(ref, 'mot-de-passe-de-test');
+    await h.container.data.repos.settings.set('calendars.orphanSecrets', [{ provider: 'icloud', tokenRef: ref }]);
+    renderScreen();
+    const alert = await screen.findByTestId('calendars-orphan-secret');
+    fireEvent.click(within(alert).getByRole('button', { name: 'Réessayer l’effacement' }));
+    await waitFor(() => expect(screen.queryByTestId('calendars-orphan-secret')).not.toBeInTheDocument());
+    expect(await h.container.calendars.vault.has(ref)).toBe(false);
+  });
+
   it('supprimer un compte demande confirmation, puis efface le jeton, le compte et ses événements (critère 8)', async () => {
     renderScreen();
     const card = await addGoogle();

@@ -1,13 +1,13 @@
 import { createStore } from 'zustand';
-import type { ChangeCursor, ProviderCalendar } from '../../domain/calendarProvider';
+import type { ChangeCursor } from '../../domain/calendarProvider';
 import { calendarAppStatuses, disconnectedAccount, localAccountState, nextAccountState, shouldRefresh, type CalendarAccountState, type RefreshTrigger } from '../../domain/calendarRefresh';
-import { prefillCalendarSpaces, validateCalendars } from '../../domain/externalCalendars';
-import { newEntityId } from '../../domain/id';
+import { validateCalendars } from '../../domain/externalCalendars';
+import type { OrphanSecret } from '../../domain/orphanSecrets';
 import type { CalendarAccount, CalendarProviderKind, CalendarRef } from '../../domain/model';
 import type { CalendarAccountId, IsoDateTime } from '../../domain/types';
 import type { PlainMessageKey } from '../../i18n';
-import { detectTimeZone } from '../../platform';
-import { CalendarPlatformError, isWebAuthFailure, type WebAuthFailureCode } from '../../platform/calendars';
+import { detectTimeZone, logFailure } from '../../platform';
+import type { WebAuthFailureCode } from '../../platform/calendars';
 import { useAppStatusStore } from '../app/appStatus';
 import { useAppStore } from '../app/appStore';
 import { defineFeatureStore, type AppContainer } from '../app/container';
@@ -15,7 +15,8 @@ import { useNavigationStore } from '../app/navigation';
 import { emitEventsChanged } from '../events/eventEvents';
 import { createCalendarUseCases } from './calendarUseCases';
 import { accountDisplayName } from './accountName';
-import { createProviderFor, tokenRefFor } from './providerFactory';
+import type { ConnectActions } from './calendarsConnect';
+import { createProviderFor } from './providerFactory';
 import { refreshAccount } from './refreshUseCase';
 
 /**
@@ -63,11 +64,7 @@ export interface GoogleWebAuthFailure {
   readonly accountId: CalendarAccountId | null;
 }
 
-/** Référence d'un secret à effacer (jamais le secret lui-même). */
-export interface OrphanSecret {
-  readonly provider: CalendarProviderKind;
-  readonly tokenRef: string;
-}
+export type { OrphanSecret } from '../../domain/orphanSecrets';
 
 export type CalendarsStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -125,23 +122,6 @@ const systemTimeZone = (): string => useAppStore.getState().timeZone ?? detectTi
 
 const isoAt = (ms: number): IsoDateTime => new Date(ms).toISOString() as IsoDateTime;
 
-/** Agendas du fournisseur → agendas du compte : tous affichés, rattachés à l'espace par défaut (ES-06 critère 5, T-01 : Pro). */
-function toCalendarRefs(calendars: readonly ProviderCalendar[]): CalendarRef[] {
-  return prefillCalendarSpaces(
-    calendars.map((calendar) => ({ id: calendar.id, name: calendar.name, spaceId: null, shown: true })),
-    useAppStore.getState().spaces,
-  );
-}
-
-function connectionFailure(error: unknown): ConnectFailure {
-  if (error instanceof CalendarPlatformError) {
-    if (error.code === 'cancelled') return 'cancelled';
-    if (error.code === 'config-missing') return 'not-configured';
-    if (isWebAuthFailure(error.code)) return 'web-auth-failed';
-  }
-  return 'failed';
-}
-
 export const calendarsStore = defineFeatureStore<CalendarsState>((container: AppContainer) => {
   const cursors = new Map<string, ChangeCursor | null>();
   const inFlight = new Set<CalendarAccountId>();
@@ -197,33 +177,6 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       return localAccountState({ tokenRef: account.tokenRef, secretPresent }, previous);
     };
 
-    const report = (outcome: ConnectOutcome): ConnectOutcome => {
-      // L'échec de la feuille Google a son propre état persistant (code et « Réessayer ») : pas de message passager en double.
-      set({ messageKey: outcome.ok || outcome.failure === 'web-auth-failed' ? null : FAILURE_KEYS[outcome.failure] });
-      return outcome;
-    };
-
-    /** Échec d'une autorisation Google : retient le code de la feuille web (iPhone) ou efface l'état précédent (réussite, annulation, autre échec). */
-    const reportAuthorization = (error: unknown, accountId: CalendarAccountId | null): ConnectOutcome => {
-      const failure = connectionFailure(error);
-      const code = error instanceof CalendarPlatformError && isWebAuthFailure(error.code) ? error.code : null;
-      set({ googleFailure: code === null ? null : { code, accountId } });
-      return report({ ok: false, failure });
-    };
-
-    /** Crée le compte (agendas tous affichés, espace par défaut) puis lance son premier rafraîchissement (K-01 critère 6). */
-    const createAccount = async (provider: CalendarProviderKind, accountId: CalendarAccountId, label: string, calendars: readonly ProviderCalendar[], username = ''): Promise<ConnectOutcome> => {
-      try {
-        await useCases.createAccount({ id: accountId, provider, label, username, tokenRef: tokenRefFor(provider, accountId), calendars: toCalendarRefs(calendars) });
-        await reload();
-      } catch {
-        return { ok: false, failure: 'failed' };
-      }
-      setStates({ [accountId]: { kind: 'connected', lastSuccessAt: null } });
-      void get().refresh(accountId, 'connected');
-      return { ok: true, accountId };
-    };
-
     /**
      * Oublie le secret d'un compte : jeton Google révoqué au mieux puis effacé, mot de passe iCloud effacé. Deux tentatives ; rend
      * false si le secret est encore là (coffre indisponible) : l'appelant le signale au lieu de le perdre de vue.
@@ -241,19 +194,34 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       return false;
     };
 
-    /**
-     * Oublie le secret d'une connexion abandonnée (compte refusé, doublon, écriture impossible). S'il reste au coffre, il est gardé
-     * dans `orphanSecrets` : message dédié et « Réessayer l'effacement » sur l'écran Agendas, jamais d'échec silencieux.
-     */
-    const forget = async (provider: CalendarProviderKind, tokenRef: string): Promise<void> => {
-      if (await discard(provider, tokenRef)) return;
-      const kept = get().orphanSecrets.filter((orphan) => orphan.tokenRef !== tokenRef);
-      set({ orphanSecrets: [...kept, { provider, tokenRef }] });
-    };
-
-    const markConnected =(accountId: CalendarAccountId): void => {
+    const markConnected = (accountId: CalendarAccountId): void => {
       setStates({ [accountId]: { kind: 'connected', lastSuccessAt: get().states[accountId]?.lastSuccessAt ?? null } });
       void get().refresh(accountId, 'connected');
+    };
+
+    /**
+     * Connexion et secrets orphelins (calendarsConnect.ts), chargés à la demande : hors du JavaScript de départ (PRD 8). Un échec de
+     * chargement n'est pas mémorisé : le geste suivant réessaie.
+     */
+    let connectModule: Promise<ConnectActions> | null = null;
+    const connectActions = (): Promise<ConnectActions> => {
+      connectModule ??= import('./calendarsConnect')
+        .then(({ createConnectActions }) => createConnectActions({ container, platform, providerFor, useCases, get, set, setStates, reload, discard, markConnected }))
+        .catch((error: unknown) => {
+          connectModule = null;
+          logFailure('calendars', 'connect-module-unavailable');
+          throw error;
+        });
+      return connectModule;
+    };
+    /** Geste de connexion : module indisponible → échec dit (« Connexion impossible »), jamais silencieux. */
+    const connectOrFail = async (run: (actions: ConnectActions) => Promise<ConnectOutcome>): Promise<ConnectOutcome> => {
+      const actions = await connectActions().catch(() => null);
+      if (!actions) {
+        set({ messageKey: FAILURE_KEYS.failed });
+        return { ok: false, failure: 'failed' };
+      }
+      return run(actions);
     };
 
     return {
@@ -275,6 +243,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
           const previous = get().states;
           const states: Record<string, CalendarAccountState> = {};
           for (const account of accounts) states[account.id] = await vaultState(account, previous[account.id]);
+          // Secrets orphelins relus (module à la demande) ; module indisponible : journal, le chargement des comptes continue.
+          const actions = await connectActions().catch(() => null);
+          if (actions) await actions.restoreOrphans(accounts);
           set({ states, status: 'ready' });
           syncStatuses();
         } catch {
@@ -282,144 +253,21 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
         }
       },
 
+      // Connexion et secrets orphelins : module chargé à la demande (hors du JavaScript de départ, PRD 8).
       async connectGoogle() {
-        if (get().connecting) return { ok: false, failure: 'failed' };
-        const accountId = newEntityId<CalendarAccountId>(container.ids);
-        const tokenRef = tokenRefFor('google', accountId);
-        set({ connecting: true, messageKey: null });
-        try {
-          try {
-            await platform.oauth.authorizeGoogle(tokenRef);
-          } catch (error) {
-            return reportAuthorization(error, null);
-          }
-          set({ googleFailure: null });
-          const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
-          if (!listed.ok) {
-            await forget('google', tokenRef);
-            return report({ ok: false, failure: listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed' });
-          }
-          const label = (listed.value.find((calendar) => calendar.primary) ?? listed.value[0])?.id ?? '';
-          if (label === '' || get().accounts.some((account) => account.provider === 'google' && account.label === label)) {
-            await forget('google', tokenRef);
-            return report({ ok: false, failure: label === '' ? 'failed' : 'duplicate' });
-          }
-          const created = await createAccount('google', accountId, label, listed.value);
-          if (!created.ok) await forget('google', tokenRef);
-          return report(created);
-        } finally {
-          set({ connecting: false });
-        }
+        return connectOrFail((actions) => actions.connectGoogle());
       },
 
       async connectIcloud(username, password) {
-        const accountId = newEntityId<CalendarAccountId>(container.ids);
-        const tokenRef = tokenRefFor('icloud', accountId);
-        const appleId = username.trim();
-        if (appleId === '' || password === '') return { ok: false, failure: 'icloud-invalid' };
-        // Doublon contrôlé sur l'identifiant Apple de cet appareil (`username`, colonne locale ; ADR 0011 section 8).
-        if (get().accounts.some((account) => account.provider === 'icloud' && account.username.toLowerCase() === appleId.toLowerCase())) return { ok: false, failure: 'duplicate' };
-        // Compte iCloud reçu d'un autre appareil, sans identifiant ni secret ici : on le complète au lieu d'en créer un second ;
-        // s'il y en a plusieurs, l'utilisateur choisit lequel par « Reconnecter » sur sa carte.
-        const received = get().accounts.filter((account) => account.provider === 'icloud' && account.username === '' && account.tokenRef === '');
-        if (received.length > 1) return { ok: false, failure: 'icloud-choose-account' };
-        const only = received[0];
-        if (only) return get().reconnectIcloud(only.id, password, appleId);
-        const label = '';
-        try {
-          await platform.vault.set(tokenRef, password);
-        } catch {
-          return { ok: false, failure: 'failed' };
-        }
-        const listed = await providerFor({ provider: 'icloud', tokenRef, username: appleId }).listCalendars();
-        if (!listed.ok) {
-          await forget('icloud', tokenRef);
-          return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
-        }
-        const created = await createAccount('icloud', accountId, label, listed.value, appleId);
-        if (!created.ok) {
-          await forget('icloud', tokenRef);
-          return created;
-        }
-        set({ icloudForm: null, messageKey: null });
-        return created;
+        return connectOrFail((actions) => actions.connectIcloud(username, password));
       },
 
       async reconnectGoogle(accountId) {
-        const account = get().accounts.find((candidate) => candidate.id === accountId);
-        if (!account || get().connecting) return { ok: false, failure: 'failed' };
-        set({ connecting: true, messageKey: null });
-        // Compte reçu par la synchro, jamais connecté sur CET appareil (« Connecter ici ») : nouvelle référence du coffre propre à cet
-        // appareil (colonne locale `token_ref`, jamais publiée), comme pour iCloud ; jamais d'autorisation sur une référence vide.
-        const incomplete = account.tokenRef === '';
-        const tokenRef = incomplete ? tokenRefFor('google', accountId) : account.tokenRef;
-        // Même compte Google déjà connecté ici sur une autre ligne : pas de second jeton pour lui.
-        if (incomplete && get().accounts.some((other) => other.id !== accountId && other.provider === 'google' && other.label === account.label && other.tokenRef !== '')) {
-          set({ connecting: false });
-          return report({ ok: false, failure: 'duplicate' });
-        }
-        try {
-          try {
-            await platform.oauth.authorizeGoogle(tokenRef);
-          } catch (error) {
-            return reportAuthorization(error, accountId);
-          }
-          set({ googleFailure: null });
-          if (incomplete) {
-            // Le compte autorisé doit être celui de la ligne reçue (libellé = agenda principal, comme à la connexion) ; sinon le jeton
-            // est révoqué et effacé, rien n'est rattaché.
-            const listed = await providerFor({ provider: 'google', tokenRef, username: '' }).listCalendars();
-            const primary = listed.ok ? ((listed.value.find((calendar) => calendar.primary) ?? listed.value[0])?.id ?? '') : '';
-            // Agenda principal introuvable (liste vide) : rien ne prouve que c'est le bon compte, même si la ligne n'a pas de libellé.
-            if (!listed.ok || primary === '' || primary !== account.label) {
-              await forget('google', tokenRef);
-              const failure: ConnectFailure = !listed.ok ? (listed.error.kind === 'network' || listed.error.kind === 'server' ? 'google-unreachable' : 'failed') : primary === '' ? 'failed' : 'google-other-account';
-              return report({ ok: false, failure });
-            }
-            try {
-              await container.data.repos.calendarAccounts.setLocalCredentials(accountId, { username: '', tokenRef });
-              await reload();
-            } catch {
-              await forget('google', tokenRef);
-              return report({ ok: false, failure: 'failed' });
-            }
-          }
-          markConnected(accountId);
-          return report({ ok: true, accountId });
-        } finally {
-          set({ connecting: false });
-        }
+        return connectOrFail((actions) => actions.reconnectGoogle(accountId));
       },
 
       async reconnectIcloud(accountId, password, username) {
-        const found = get().accounts.find((candidate) => candidate.id === accountId);
-        if (!found || password === '') return { ok: false, failure: 'icloud-invalid' };
-        // Compte reçu par la synchro : identifiant Apple saisi ici et référence du coffre propre à cet appareil (colonnes locales).
-        const incomplete = found.username === '' || found.tokenRef === '';
-        const appleId = (found.username !== '' ? found.username : (username ?? '')).trim();
-        if (appleId === '') return { ok: false, failure: 'icloud-invalid' };
-        const account = { ...found, username: appleId, tokenRef: found.tokenRef !== '' ? found.tokenRef : tokenRefFor('icloud', accountId) };
-        try {
-          await platform.vault.set(account.tokenRef, password);
-        } catch {
-          return { ok: false, failure: 'failed' };
-        }
-        const listed = await providerFor(account).listCalendars();
-        if (!listed.ok) {
-          if (listed.error.kind === 'unauthorized') await forget('icloud', account.tokenRef);
-          return { ok: false, failure: listed.error.kind === 'unauthorized' ? 'icloud-invalid' : 'icloud-unreachable' };
-        }
-        if (incomplete) {
-          try {
-            await container.data.repos.calendarAccounts.setLocalCredentials(accountId, { username: appleId, tokenRef: account.tokenRef });
-            await reload();
-          } catch {
-            return { ok: false, failure: 'failed' };
-          }
-        }
-        markConnected(accountId);
-        set({ icloudForm: null, messageKey: null });
-        return { ok: true, accountId };
+        return connectOrFail((actions) => actions.reconnectIcloud(accountId, password, username));
       },
 
       async setCalendars(accountId, calendars) {
@@ -513,10 +361,9 @@ export const calendarsStore = defineFeatureStore<CalendarsState>((container: App
       },
 
       async retryForgetSecrets() {
-        const pending = get().orphanSecrets;
-        const remaining: OrphanSecret[] = [];
-        for (const orphan of pending) if (!(await discard(orphan.provider, orphan.tokenRef))) remaining.push(orphan);
-        set({ orphanSecrets: remaining });
+        const actions = await connectActions().catch(() => null);
+        if (!actions) set({ messageKey: FAILURE_KEYS.failed });
+        else await actions.retryForgetSecrets();
       },
 
       clearMessage() {
