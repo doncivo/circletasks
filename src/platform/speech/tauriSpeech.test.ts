@@ -42,6 +42,11 @@ describe('tauriSpeech : dictée sur l’appareil par les commandes Rust (CAP-IOS
     expect(await r.speech.onDeviceReady?.()).toBe(true);
     const off = rig({ [SPEECH_STATUS_COMMAND]: status({ onDevice: false }) });
     expect(await off.speech.onDeviceReady?.()).toBe(false);
+    // Lecture en échec ou réponse sans le champ : état inconnu (undefined), jamais « modèle absent » (false).
+    const broken = rig({ [SPEECH_STATUS_COMMAND]: new Error('x') });
+    expect(await broken.speech.onDeviceReady?.()).toBeUndefined();
+    const silent = rig({ [SPEECH_STATUS_COMMAND]: status({ onDevice: undefined }) });
+    expect(await silent.speech.onDeviceReady?.()).toBeUndefined();
   });
 
   it('permissions : plugin absent ou lecture en échec = SpeechError avec code', async () => {

@@ -127,9 +127,10 @@ export function createTauriSpeech(options: TauriSpeechOptions = {}): SpeechRecog
 
     onDeviceReady: async () => {
       try {
-        return (await status()).onDevice === true;
+        const { onDevice } = await status();
+        return typeof onDevice === 'boolean' ? onDevice : undefined;
       } catch {
-        return false;
+        return undefined;
       }
     },
 

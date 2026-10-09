@@ -54,8 +54,8 @@ export interface SpeechRecognizer {
   permissions?(): Promise<SpeechPermissions>;
   /** Demande le micro puis la reconnaissance vocale ; appelée seulement depuis « Continuer » (I-05), jamais au démarrage. */
   requestPermissions?(): Promise<SpeechPermissions>;
-  /** Vrai si le modèle français hors ligne est présent. */
-  onDeviceReady?(): Promise<boolean>;
+  /** Vrai si le modèle français hors ligne est présent, faux s'il manque ; `undefined` si l'état n'a pas pu être lu (jamais faux dans ce cas). */
+  onDeviceReady?(): Promise<boolean | undefined>;
   /** Disponibilité avec, si le service est indisponible, le code à dire à l'utilisateur ; absent : seul `isAvailable` existe (aucun code à dire). */
   availability?(): Promise<{ readonly available: boolean; readonly code?: string }>;
 }

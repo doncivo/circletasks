@@ -34,6 +34,8 @@ export interface FakeSpeech extends SpeechRecognizer {
   afterRequest: SpeechPermissions | null;
   /** Modèle hors ligne présent. */
   onDevice: boolean;
+  /** Lecture de la présence du modèle en échec : `onDeviceReady()` rend `undefined` (état inconnu). */
+  onDeviceFail: boolean;
   /** Code rendu par `availability()` quand le service est indisponible. */
   unavailableCode: string | undefined;
   /** Lecture de l'état en échec (erreur de la commande). */
@@ -45,7 +47,7 @@ export interface FakeSpeech extends SpeechRecognizer {
 type FakeSpeechInit = Partial<
   Pick<
     FakeSpeech,
-    'available' | 'transcript' | 'failure' | 'waitForStop' | 'deniedPermission' | 'failureCode' | 'stoppedBy' | 'onDevice' | 'afterRequest' | 'unavailableCode' | 'permissionsFail'
+    'available' | 'transcript' | 'failure' | 'waitForStop' | 'deniedPermission' | 'failureCode' | 'stoppedBy' | 'onDevice' | 'onDeviceFail' | 'afterRequest' | 'unavailableCode' | 'permissionsFail'
   >
 > & { state?: Partial<FakeSpeech['state']> };
 
@@ -67,6 +69,7 @@ export function createFakeSpeech(initial: FakeSpeechInit = {}): FakeSpeech {
     onDevice: initial.onDevice ?? true,
     unavailableCode: initial.unavailableCode,
     permissionsFail: initial.permissionsFail ?? false,
+    onDeviceFail: initial.onDeviceFail ?? false,
     calls: [],
     isAvailable: () => {
       record('isAvailable');
@@ -84,7 +87,7 @@ export function createFakeSpeech(initial: FakeSpeechInit = {}): FakeSpeech {
     },
     onDeviceReady: () => {
       record('onDeviceReady');
-      return Promise.resolve(fake.onDevice);
+      return Promise.resolve(fake.onDeviceFail ? undefined : fake.onDevice);
     },
     availability: () => {
       record('availability');

@@ -186,6 +186,17 @@ describe('dictée sur iPhone : autorisations et plugin (I-05, CAP-IOS-01)', () =
     expect(screen.getByRole('button', { name: 'Dicter' })).toBeEnabled();
   });
 
+  it('revue : lecture du modèle hors ligne en échec = état inconnu avec code, pas « modèle absent », aucune écoute ni demande', async () => {
+    const speech = createFakeSpeech({ onDeviceFail: true, state: { microphone: 'prompt', speechRecognition: 'prompt' } });
+    fireEvent.click(await setup(speech));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('L’état des autorisations n’a pas pu être lu');
+    expect(alert).toHaveTextContent('speech-status-failed');
+    expect(alert).not.toHaveTextContent('n’est pas disponible sur cet iPhone');
+    expect(speech.calls).not.toContain('requestPermissions');
+    expect(speech.listens).toBe(0);
+  });
+
   it('restreint (Temps d’écran) : le texte dit la cause, aucun « Ouvrir les réglages » inutile', async () => {
     const speech = createFakeSpeech({ state: { microphone: 'restricted' } });
     fireEvent.click(await setup(speech));

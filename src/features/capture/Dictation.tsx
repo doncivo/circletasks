@@ -189,10 +189,15 @@ export function useDictation({ layout, inputRef, onText }: UseDictationOptions) 
       try {
         // Décision d'Ali : sans le modèle français hors ligne, la dictée est DÉSACTIVÉE (message persistant) AVANT toute explication ou
         // demande d'autorisation : aucune fenêtre d'iOS, aucune écoute.
-        const ready = await getSpeechRecognizer()
-          .onDeviceReady?.()
-          .catch(() => undefined);
+        const recognizer = getSpeechRecognizer();
+        const ready = await recognizer.onDeviceReady?.().catch(() => undefined);
         if (!mounted.current) return;
+        if (ready === undefined && recognizer.onDeviceReady) {
+          // État du modèle illisible : état inconnu avec son code, jamais « modèle absent » ; aucune demande ni écoute.
+          logSpeech('speech-status-failed');
+          setNotice({ kind: 'error', key: 'unknownState', code: 'speech-status-failed' });
+          return;
+        }
         if (ready === false) {
           logSpeech('speech-on-device-unavailable');
           setOfflineMissing(true);
