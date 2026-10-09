@@ -32,7 +32,12 @@ function useCurrentBanner() {
   switch (kind) {
     case 'signingExpiry':
       // I-02 (ADR 0013 §3.3) : texte composé par l'alerte d'expiration (durée restante) ; à défaut, texte générique selon `detail`.
-      return <StatusBanner message={source.message ?? t(source.detail === 'expired' ? 'status.signingExpired' : 'status.signingSoon')} />;
+      return (
+        <StatusBanner
+          message={source.message ?? t(source.detail === 'expired' ? 'status.signingExpired' : 'status.signingSoon')}
+          {...(source.onAction ? { actionLabel: t('status.syncTroubleView'), actionAriaLabel: t('status.signingViewLabel'), onAction: source.onAction } : {})}
+        />
+      );
     case 'calendarDisconnected':
       return (
         <StatusBanner

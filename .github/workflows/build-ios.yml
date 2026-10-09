@@ -182,6 +182,9 @@ jobs:
             echo "- SHA-256 : $(shasum -a 256 ipa/CircleTasks.ipa | cut -d' ' -f1)"
             echo "- Version : $($PB -c 'Print :CFBundleShortVersionString' info/Info.plist) ($($PB -c 'Print :CFBundleVersion' info/Info.plist))"
             echo "- Descriptions d'usage : ${USAGES:-aucune}"
+            # I-02 (ADR 0013 §3.1) : information seulement. Une IPA non signée n'a pas de profil ; SideStore écrit embedded.mobileprovision
+            # (profil de 7 jours) à l'installation, et la commande app_signing_info le lit sur l'appareil (contrôle A1 de la fiche I-02).
+            if [ -f "$RUNNER_TEMP/check/Payload/CircleTasks.app/embedded.mobileprovision" ]; then echo "- embedded.mobileprovision : présent dans l'IPA"; else echo "- embedded.mobileprovision : absent de l'IPA (normal pour une IPA non signée ; SideStore l'écrit à l'installation, I-02)"; fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       # ADR 0008 §9.3 (K-TECH-01) : l'ID client Google de type iOS est-il compilé dans le binaire de l'IPA ? Résultat réduit à présent / absent :

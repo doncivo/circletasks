@@ -11,7 +11,7 @@ import { getFirstWeekday } from '../../i18n/formatPrefs';
 import { sourceNames } from '../calendars/sourceNames';
 import { addDays } from '../../domain/localDate';
 import { formatWeekRange } from '../../i18n/format';
-import { EmptyState, Fab, SwipeRowGroup, useDelayedFlag, useLayout, useSwipe } from '../../ui';
+import { EmptyState, Fab, SwipeRowGroup, openNow, useDelayedFlag, useLayout, useSwipe } from '../../ui';
 import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -135,7 +135,7 @@ export function WeekScreen() {
   // Bouton « + » (feuille « Nouvelle tâche », T-01) : date présélectionnée = aujourd'hui ; Ctrl+N de même.
   const [sheetOpen, setSheetOpen] = useState(false);
   const defaultOffsets = useDefaultReminderOffsets();
-  const openCreate = useCallback((): void => setSheetOpen(true), []);
+  const openCreate = useCallback((): void => openNow(() => setSheetOpen(true)), []);
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);
 
   // Déplacements (S-02) : glisser, clavier, question de portée des tâches récurrentes.
@@ -290,6 +290,7 @@ export function WeekScreen() {
                 icon: input.icon,
                 reminderOffsets: input.reminderOffsets,
                 goalId: input.goalId,
+                taskId: input.taskId,
               });
               if (result.ok) announceCreation(input.spaceId);
               return result.ok;

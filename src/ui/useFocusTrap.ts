@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -14,6 +14,12 @@ export interface UseFocusTrapOptions {
   readonly active: boolean;
   /** Appelé sur Échap (DetailPanel, Sheet : PRD section 5). */
   readonly onEscape?: () => void;
+  /**
+   * Élément qui reçoit le focus à l'activation (ex. le champ Titre d'une feuille de saisie). Posé dans un effet de mise en page,
+   * donc dans le traitement du geste qui a ouvert la surcouche : sur iPhone (WKWebView), c'est ce qui fait monter le clavier
+   * (Q-05, ADR 0013 §4). Absent ou vide : premier élément focusable.
+   */
+  readonly initialFocus?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -28,7 +34,7 @@ export interface UseFocusTrapOptions {
  * const ref = useFocusTrap<HTMLElement>({ active: open, onEscape: onClose });
  * <section ref={ref} tabIndex={-1}>…</section>
  */
-export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFocusTrapOptions) {
+export function useFocusTrap<T extends HTMLElement>({ active, onEscape, initialFocus }: UseFocusTrapOptions) {
   const containerRef = useRef<T | null>(null);
   // `onEscape` lu par référence : un parent qui recrée son rappel à chaque rendu ne relance pas l'effet
   // (sinon le focus serait replacé au premier élément à chaque rendu).
@@ -37,7 +43,14 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
     onEscapeRef.current = onEscape;
   });
 
-  useEffect(() => {
+  const initialFocusRef = useRef(initialFocus);
+  useLayoutEffect(() => {
+    initialFocusRef.current = initialFocus;
+  });
+
+  // Effet de mise en page (et non `useEffect`) : le focus est posé avant que le navigateur ne rende la main, dans le même passage que le
+  // geste d'ouverture. Les références des enfants sont attachées avant cet effet : le champ visé existe déjà.
+  useLayoutEffect(() => {
     if (!active) return;
     const container = containerRef.current;
     const token = Symbol('focus-trap');
@@ -47,8 +60,14 @@ export function useFocusTrap<T extends HTMLElement>({ active, onEscape }: UseFoc
     const focusables = (): HTMLElement[] =>
       container ? Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)) : [];
 
-    const first = focusables()[0];
-    (first ?? container)?.focus();
+    // Pas de vol de focus : un élément du conteneur déjà actif (champ à focalisation automatique) est conservé.
+    const target = initialFocusRef.current?.current ?? null;
+    if (target && container?.contains(target)) {
+      target.focus({ preventScroll: true });
+    } else if (!(container && document.activeElement instanceof HTMLElement && container.contains(document.activeElement))) {
+      const first = focusables()[0];
+      (first ?? container)?.focus();
+    }
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (activeTraps[activeTraps.length - 1] !== token) return;

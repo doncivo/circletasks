@@ -1,6 +1,7 @@
 import { setActionWakeHandler } from './actionWake';
 import { clearReminderBanner, statusController } from './notificationStatus';
 import { getNotificationRunner } from './notificationRunner';
+import { logFailure } from '../../platform/desktop/log';
 import type { AppContainer } from '../app/container';
 
 /** Tables synchronisées dont une modification reçue change le plan (avenant N1.3) : réglages = récapitulatifs et langue. */
@@ -51,6 +52,8 @@ export function startNotificationIntegration(container: AppContainer, env: Notif
       stopSync?.();
       env.document.removeEventListener('visibilitychange', onVisibility);
       clearReminderBanner();
+      // Le bandeau d'expiration n'existe que si le module a été chargé (iPhone) : import déjà résolu, donc retrait aussitôt.
+      if (container.signing.source.supported) void import('./signingNotice').then((signing) => signing.clearSigningBanner(container), () => logFailure('signing', 'banner-clear-failed'));
     },
   };
 }

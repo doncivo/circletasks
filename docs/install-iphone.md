@@ -62,7 +62,7 @@ Quand une nouvelle version est publiée, elle apparaît dans la source avec ses 
 
 - Ouvre SideStore, VPN actif, en Wi-Fi, et touche « Tout actualiser » (Mes apps). Le faire tous les 5 ou 6 jours est plus sûr.
 - SideStore peut le faire seul en arrière-plan ; une automatisation Raccourcis qui ouvre SideStore chaque jour aide.
-- CircleTasks préviendra 24 h avant l'expiration (à l'ordre 5).
+- CircleTasks vous prévient 24 h avant l'expiration ; actualisez-la alors dans SideStore. La date d'expiration lue par l'app est affichée dans Réglages, rubrique « À propos ».
 
 ## Pour publier une version (une fois, côté GitHub)
 

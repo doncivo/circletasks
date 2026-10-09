@@ -8,7 +8,7 @@ import type { LocalDate, SpaceId } from '../../domain/types';
 import { getLocale, t } from '../../i18n';
 import { sourceNames } from '../calendars/sourceNames';
 import { detectTimeZone } from '../../platform';
-import { EmptyState, Fab, Icon, Sheet, SpacePills, useLayout } from '../../ui';
+import { EmptyState, Fab, Icon, Sheet, SpacePills, openNow, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -68,7 +68,7 @@ export function EventsScreen() {
   }, [year, spaceFilter, load]);
 
   // Ctrl+N : nouvel événement (même raccourci que « nouvelle routine » dans l'onglet Routines).
-  const openAdd = useCallback((): void => setAddOpen(true), []);
+  const openAdd = useCallback((): void => openNow(() => setAddOpen(true)), []);
   useEffect(() => container.shortcuts.register('app.newTask', openAdd), [container, openAdd]);
 
   // Jours fériés des calendriers activés (E-03) : sans espace propre, donc visibles sous Pro, Perso et Tout.

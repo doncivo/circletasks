@@ -22,6 +22,7 @@ mod restore;
 mod restore_hardening;
 mod restore_recovery;
 mod shortcut;
+mod signing;
 mod speech;
 mod support;
 mod sync_bookmark;

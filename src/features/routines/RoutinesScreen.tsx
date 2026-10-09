@@ -5,7 +5,7 @@ import type { ReminderOffsetMin, Routine } from '../../domain/model';
 import { computeStreaks } from '../../domain/routineStreaks';
 import type { LocalDate, RoutineId } from '../../domain/types';
 import { t } from '../../i18n';
-import { CompactToggle, ConfirmDialog, EmptyState, Fab, Kbd, Sheet, SpacePills, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
+import { CompactToggle, ConfirmDialog, EmptyState, Fab, Kbd, Sheet, SpacePills, openNow, useDetailSlot, useFocusTrap, useLayout } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
@@ -111,8 +111,11 @@ export function RoutinesScreen() {
   useEffect(() => onRoutinesChanged(container.data, () => void refresh()), [container, refresh]);
 
   const openCreate = useCallback((): void => {
-    setFormError(null);
-    setEditor({ mode: 'create' });
+    // Q-05 : ouverture dans le geste, le focus du nom est posé avant la fin du toucher.
+    openNow(() => {
+      setFormError(null);
+      setEditor({ mode: 'create' });
+    });
   }, []);
   // Ctrl+N : nouvelle routine (PC-Routines.html, « Ctrl N nouvelle routine »).
   useEffect(() => container.shortcuts.register('app.newTask', openCreate), [container, openCreate]);

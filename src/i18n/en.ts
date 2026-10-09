@@ -19,6 +19,7 @@ import { shortcutsUiEn } from './en.shortcuts';
 import { backupEn } from './en.backup';
 import { importCsvEn } from './en.importCsv';
 import { securityEn } from './en.security';
+import { signingEn } from './en.signing';
 import { onboardingEn } from './en.onboarding';
 import { syncEngineEn } from './en.syncEngine';
 import type { Messages } from './types';
@@ -553,6 +554,7 @@ export const en: Messages = {
     loading: 'Loading',
     signingSoon: 'CircleTasks expires soon: refresh it in SideStore',
     signingExpired: 'The signature has expired: reinstall the app',
+    signingViewLabel: 'View the signature expiry in About',
   },
   today: {
     dayPrevious: 'Previous day',
@@ -681,6 +683,7 @@ export const en: Messages = {
   backup: backupEn,
   importCsv: importCsvEn,
   security: securityEn,
+  signing: signingEn,
   onboarding: onboardingEn,
   shortcuts: {
     quickCapture: 'Quick capture',

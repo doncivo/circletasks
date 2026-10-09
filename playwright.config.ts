@@ -1,5 +1,5 @@
-import { defineConfig } from '@playwright/test';
-import { E2E_DEV_PORT, E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
+import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
+import { E2E_DEV_PORT, E2E_PREVIEW_PORT, E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
 
 /**
  * Ports de la suite e2e (voir tests/sim/ports.ts). Par défaut : Vite 1420, simulateurs 53701 (Google), 53702 (CalDAV), 53703 (dossier iCloud).
@@ -10,6 +10,39 @@ import { E2E_DEV_PORT, E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
  * Playwright s'arrête avec « already used » au lieu de tester le serveur d'une autre copie.
  */
 const BASE_URL = `http://localhost:${String(E2E_DEV_PORT)}`;
+/** Build de production servi pour les mesures @perf (projet `perf`) : React en mode production, accroches de test rendues par VITE_CT_E2E_HOOKS. */
+const PERF_URL = `http://localhost:${String(E2E_PREVIEW_PORT)}`;
+
+const SIM_ENV_DEV = {
+  CT_DEV_PORT: String(E2E_DEV_PORT),
+  VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google),
+  VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav),
+  VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com',
+};
+
+/** Projet des mesures @perf : défini avec son serveur de production seulement quand `CT_E2E_PERF=1` (job perf de la CI, `npm run test:perf:e2e`). */
+const PERF = process.env['CT_E2E_PERF'] === '1';
+const PERF_SERVER: NonNullable<PlaywrightTestConfig['webServer']> = {
+      // Projet `perf` : build de production dans dist-perf (jamais dist, que lisent les tests du bundle de départ), puis prévisualisation.
+      // VITE_CT_E2E_HOOKS=1 rend les accroches de test (import.meta.env.DEV) à ce build SEUL ; React reste en mode production.
+      command: `npx vite build --outDir dist-perf --emptyOutDir && npx vite preview --outDir dist-perf --port ${String(E2E_PREVIEW_PORT)} --strictPort`,
+      url: PERF_URL,
+      reuseExistingServer: false,
+      timeout: 240_000,
+      env: { ...SIM_ENV_DEV, VITE_CT_E2E_HOOKS: '1' },
+    };
+const PERF_PROJECT: NonNullable<PlaywrightTestConfig['projects']>[number] = {
+      // Mesures de temps d'affichage (PRD 8, tests marqués @perf) : lancées APRÈS les projets pc et iphone, quand la machine n'est
+      // plus occupée par les autres tests en parallèle. Les mesures sans concurrence : `npm run test:perf`.
+      name: 'perf',
+      // Bundle de production (second serveur ci-dessous) : les budgets du PRD 8 se mesurent sur ce que l'utilisateur installe, pas sur React en
+      // mode développement (rendu environ deux fois plus lent).
+      use: { browserName: 'chromium', viewport: { width: 1440, height: 900 }, baseURL: PERF_URL },
+      grep: /@perf/,
+      dependencies: ['pc', 'iphone'],
+      // Consigne d'Ali : une mesure n'est jamais rejouée (aucune nouvelle tentative, même en CI).
+      retries: 0,
+    };
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -47,22 +80,16 @@ export default defineConfig({
       },
       grepInvert: /@perf/,
     },
-    {
-      // Mesures de temps d'affichage (PRD 8, tests marqués @perf) : lancées APRÈS les projets pc et iphone, quand la machine n'est
-      // plus occupée par les autres tests en parallèle. Les mesures sans concurrence : `npm run test:perf`.
-      name: 'perf',
-      use: { browserName: 'chromium', viewport: { width: 1440, height: 900 } },
-      grep: /@perf/,
-      dependencies: ['pc', 'iphone'],
-      // Consigne d'Ali : une mesure n'est jamais rejouée (aucune nouvelle tentative, même en CI).
-      retries: 0,
-    },
+    ...(PERF ? [PERF_PROJECT] : []),
   ],
-  webServer: {
-    command: 'npm run dev',
-    url: BASE_URL,
-    reuseExistingServer: false,
-    timeout: 120_000,
-    env: { CT_DEV_PORT: String(E2E_DEV_PORT), VITE_CT_GOOGLE_SIM: simUrl(E2E_SIM_PORTS.google), VITE_CT_CALDAV_SIM: simUrl(E2E_SIM_PORTS.caldav), VITE_CT_GOOGLE_SIM_CLIENT_ID: 'sim-client.apps.googleusercontent.com' },
-  },
+  webServer: [
+    {
+      command: 'npm run dev',
+      url: BASE_URL,
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: SIM_ENV_DEV,
+    },
+    ...(PERF ? [PERF_SERVER] : []),
+  ],
 });

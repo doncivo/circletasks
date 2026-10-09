@@ -1,5 +1,5 @@
 import { ChevronDown, X } from 'lucide-react';
-import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { IconRef, ReminderOffsetMin, Routine, RoutineFields, RoutineScheduleType, Space } from '../../domain/model';
 import { weekdayOf } from '../../domain/localDate';
 import {
@@ -118,11 +118,10 @@ export function RoutineForm(props: RoutineFormProps) {
   };
   const valid = validateRoutine(fields).ok;
 
-  // Focus dans le nom à l'ouverture : après le piège de focus de la feuille ou du panneau, qui prend le premier élément.
-  useEffect(() => {
-    if (!autoFocus) return undefined;
-    const timer = window.setTimeout(() => nameRef.current?.focus(), 0);
-    return () => window.clearTimeout(timer);
+  // Focus dans le nom dans le geste d'ouverture (Q-05, même règle que la feuille « Nouvelle tâche ») : effet de mise en page, sans minuterie ;
+  // le piège de focus de la feuille ou du panneau garde un focus déjà posé dans le formulaire. Vaut aussi au changement de segment.
+  useLayoutEffect(() => {
+    if (autoFocus) nameRef.current?.focus({ preventScroll: true });
   }, [autoFocus]);
 
   async function submit(event: FormEvent): Promise<void> {

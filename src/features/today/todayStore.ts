@@ -233,6 +233,7 @@ export const todayStore = defineFeatureStore<TodayState>((container: AppContaine
           ...(schedule?.recurrence ? { recurrence: schedule.recurrence } : {}),
           ...(reminderOffsets.length > 0 ? { reminderOffsets } : {}),
           ...(schedule?.goalId ? { goalId: schedule.goalId } : {}),
+          ...(schedule?.taskId ? { id: schedule.taskId } : {}),
         });
         if (!result.ok) return result;
         const id = ++requestId;

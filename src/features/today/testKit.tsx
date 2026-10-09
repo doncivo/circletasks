@@ -15,6 +15,8 @@ import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
 import { createTaskUseCases } from '../tasks/createTaskUseCases';
 import type { Haptics } from '../../platform/haptics';
 import { TodayScreen } from './TodayScreen';
+import { LazyEventForm } from '../events/lazyEventForm';
+import { LazyRoutineForm } from '../routines/lazyRoutineForm';
 
 /** Aides des tests d'écran d'Aujourd'hui (A-01 à A-09) : base en mémoire, conteneur, rendu, jeu de tâches. */
 export interface TodayHarness {
@@ -37,6 +39,8 @@ export async function setupToday(deviceSuffix: string, startAt = '2026-10-02T10:
   const db = await openTestDb(device, startAt);
   const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: device }), data: db.data, ...(haptics ? { haptics } : {}) });
   useAppStore.getState().setSpaces(await container.data.repos.spaces.listAll());
+  // Segments Événement et Routine de la feuille Ajout : chargés d'avance (en production, au premier rendu de la feuille ou au repos), pour que les tests les voient rendus directement.
+  await Promise.all([LazyEventForm.preload(), LazyRoutineForm.preload()]);
   return { db, container, today: todayLocal(db.clock) };
 }
 

@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "signing-ios",
+  "description": "iPhone uniquement : dates d'expiration du profil de signature SideStore (I-02, ADR 0013 section 3.1). Liste exacte fixée par tests/desktop/config.rs.",
+  "windows": ["main"],
+  "platforms": ["iOS"],
+  "permissions": ["allow-app-signing-info"]
+}
