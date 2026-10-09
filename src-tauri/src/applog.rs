@@ -169,10 +169,27 @@ fn has_url_with_query(token: &str) -> bool {
 
 /// Un mot à masquer : chemin (Windows, UNC, POSIX, `~/`), `file://`, URL avec requête, adresse e-mail, séquence hexadécimale de 32 caractères
 /// ou plus. Mêmes règles que `sanitizeLogDetail` (`src/platform/logs/sanitize.ts`).
+/// Identifiant UUID exact (8-4-4-4-12 hexadécimaux), permis par l'ADR 0011 §2.3.
+fn is_uuid(run: &str) -> bool {
+    let parts: Vec<&str> = run.split('-').collect();
+    parts.len() == 5 && [8, 4, 4, 4, 12].iter().zip(&parts).all(|(len, part)| part.len() == *len && part.chars().all(|c| c.is_ascii_hexdigit()))
+}
+
+/// Audit du lot F (moyen) : jeton probable : suite de 24 caractères ou plus de `[A-Za-z0-9+/=_.-]` (sauf un UUID exact), JWT (`eyJ`),
+/// jeton Google (`ya29.`, `1//`), `token=`. Mêmes règles que `hasTokenLike` de TypeScript.
+fn has_token_like(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    if token.contains("eyJ") || lower.contains("ya29.") || token.contains("1//") || lower.contains("token=") {
+        return true;
+    }
+    let allowed = |c: char| c.is_ascii_alphanumeric() || matches!(c, '+' | '/' | '=' | '_' | '.' | '-');
+    token.split(|c: char| !allowed(c)).any(|run| run.chars().count() >= 24 && !is_uuid(run))
+}
+
 fn is_sensitive_token(token: &str) -> bool {
     let chars: Vec<char> = token.chars().collect();
     let lower = token.to_ascii_lowercase();
-    lower.contains("file:") || token.contains('\\') || has_drive_path(&chars) || has_posix_path(&chars) || has_url_with_query(token) || has_email(&chars) || has_hex_run(token, 32)
+    has_token_like(token) || lower.contains("file:") || token.contains('\\') || has_drive_path(&chars) || has_posix_path(&chars) || has_url_with_query(token) || has_email(&chars) || has_hex_run(token, 32)
 }
 
 /// Seconde barrière (ADR 0014 §1) : caractères de contrôle remplacés par une espace ; plus de 300 caractères → `[masqué]` en entier ; sinon

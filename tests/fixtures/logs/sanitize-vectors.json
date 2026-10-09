@@ -1,7 +1,7 @@
 {
   "$comment": [
     "Vecteurs d'assainissement du journal technique (I-04 critère 5, ADR 0014 §1 et §3), lus par Vitest (src/platform/logs/sanitize.test.ts) et cargo test (src-tauri/tests/desktop/applog.rs) : sanitizeLogDetail (TypeScript) et applog::sanitize_detail (Rust) doivent rendre exactement `expected`.",
-    "Règles : caractères de contrôle remplacés par une espace ; plus de 300 caractères -> [masqué] en entier ; sinon chaque mot (séparé par des espaces) qui contient un chemin (Windows, UNC, POSIX, ~/), file:, une URL avec requête, une adresse e-mail ou une séquence hexadécimale de 32 caractères ou plus devient [masqué] ; « Bearer » et le mot suivant aussi.",
+    "Règles : caractères de contrôle remplacés par une espace ; plus de 300 caractères -> [masqué] en entier ; sinon chaque mot (séparé par des espaces) qui contient un chemin (Windows, UNC, POSIX, ~/), file:, une URL avec requête, une adresse e-mail une séquence hexadécimale de 32 caractères ou plus, ou un jeton probable (suite de 24 caractères ou plus de [A-Za-z0-9+/=_.-] hors UUID exact, eyJ, ya29., 1//, token=) devient [masqué] ; « Bearer » et le mot suivant aussi.",
     "repeat : entrée construite par répétition (`[texte, nombre]`) au lieu de `input`."
   ],
   "vectors": [
@@ -104,13 +104,6 @@
     {
       "repeat": [
         "z",
-        300
-      ],
-      "expected": "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
-    },
-    {
-      "repeat": [
-        "z",
         301
       ],
       "expected": "[masqué]"
@@ -121,6 +114,52 @@
         40
       ],
       "expected": "[masqué]"
+    },
+    {
+      "repeat": [
+        "ab ",
+        100
+      ],
+      "expected": "ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab "
+    },
+    {
+      "repeat": [
+        "z",
+        30
+      ],
+      "expected": "[masqué]"
+    },
+    {
+      "input": "jeton eyJhbGciOiJIUzI1NiJ9.e30.x fin",
+      "expected": "jeton [masqué] fin"
+    },
+    {
+      "input": "google ya29.a0AfH6 refusé",
+      "expected": "google [masqué] refusé"
+    },
+    {
+      "input": "refresh 1//0gAbc expiré",
+      "expected": "refresh [masqué] expiré"
+    },
+    {
+      "input": "callback?code=x token=abc",
+      "expected": "callback?code=x [masqué]"
+    },
+    {
+      "input": "clé QmFzZTY0VHJlc0xvbmd1ZUNsZQ== perdue",
+      "expected": "clé [masqué] perdue"
+    },
+    {
+      "input": "appareil 60000000-0000-4000-8000-0000000000f7 ok",
+      "expected": "appareil 60000000-0000-4000-8000-0000000000f7 ok"
+    },
+    {
+      "input": "sauvegarde circletasks-daily-20261007.db",
+      "expected": "sauvegarde [masqué]"
+    },
+    {
+      "input": "remote-reload-failed {\"code\":\"io\"}",
+      "expected": "remote-reload-failed {\"code\":\"io\"}"
     }
   ]
 }

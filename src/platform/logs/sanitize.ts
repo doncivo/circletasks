@@ -47,9 +47,21 @@ function hasUrlWithQuery(token: string): boolean {
   return start >= 0 && token.slice(start).includes('?');
 }
 
+const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+/**
+ * Audit du lot F (moyen) : jeton probable : suite de 24 caractères ou plus de `[A-Za-z0-9+/=_.-]` (sauf un identifiant UUID exact,
+ * permis par l'ADR 0011 §2.3), JWT (`eyJ`), jeton Google (`ya29.`, `1//`), `token=`.
+ */
+function hasTokenLike(token: string): boolean {
+  const lower = token.toLowerCase();
+  if (token.includes('eyJ') || lower.includes('ya29.') || token.includes('1//') || lower.includes('token=')) return true;
+  return (token.match(/[A-Za-z0-9+/=_.-]{24,}/g) ?? []).some((run) => !UUID.test(run));
+}
+
 function isSensitive(token: string): boolean {
   const chars = Array.from(token);
-  return token.toLowerCase().includes('file:') || token.includes('\\') || hasDrivePath(chars) || hasPosixPath(chars) || hasUrlWithQuery(token) || hasEmail(chars) || hasHexRun(token);
+  return hasTokenLike(token) || token.toLowerCase().includes('file:') || token.includes('\\') || hasDrivePath(chars) || hasPosixPath(chars) || hasUrlWithQuery(token) || hasEmail(chars) || hasHexRun(token);
 }
 
 /** Détail assaini (voir l'en-tête du module). */
