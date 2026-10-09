@@ -3,8 +3,15 @@ import { useEffect, useState } from 'react';
 import { t } from '../../../i18n';
 import { openOcrService } from '../../../platform/ocr';
 import { Icon, type Layout } from '../../../ui';
-import { ScanDialog } from './ScanDialog';
+import { lazyScreen } from '../../app/lazyScreens';
+import type { ScanDialogProps } from './ScanDialog';
 import './ScanDialog.css';
+
+/**
+ * Le dialogue de scan (lecture, relecture, moteurs) est un bloc à la demande (PERF-02 : le bundle de départ reste sous 350 Ko). Bloc illisible :
+ * message et « Réessayer » de `lazyScreen` (jamais un clic muet) ; préchargé en arrière-plan après le premier rendu.
+ */
+const ScanDialog = lazyScreen<ScanDialogProps>(() => import('./ScanDialog').then((module) => ({ default: module.ScanDialog })));
 
 /** Vrai si un moteur au moins peut lire du texte sur cet appareil (Windows.Media.Ocr avec le pack français, ou le repli intégré). */
 function useOcrAvailable(): boolean {
