@@ -430,15 +430,17 @@ pub fn restore_with_provisional_marker(
 }
 
 /// Au démarrage, après la récupération (revue du lot F) : un marqueur encore provisoire vient d'un arrêt pendant une restauration.
-/// `Archived` (l'échange avait abouti) -> confirmé ; `PutBack` ou `Nothing` (ancienne base remise, ou fichier préparé seulement supprimé : la
-/// version n'a jamais été en place) -> marqueur d'avant remis, sinon retiré. Jamais « Appliquer partout » sur une version non restaurée.
+/// `Archived` (échange abouti, `.restore-old` rangés) ou `Nothing` (échange abouti ET ménage fait : ni `.restoring` ni `.restore-old`, p. ex.
+/// confirmation et nouvel essai en échec puis relance à froid) -> confirmé ; `PutBack` (ancienne base remise) ou `StagedRemoved` (fichier
+/// préparé seulement supprimé : la version n'a jamais été en place) -> marqueur d'avant remis, sinon retiré. Si la confirmation ou
+/// l'annulation échoue, le marqueur reste provisoire : la fenêtre de choix l'affiche sans « Appliquer partout » et le journal le dit.
 pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::backup::Recovery, crate::backup::BackupError>) {
     if !crate::sync::marker::is_provisional(config_dir) {
         let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
         return;
     }
     let done = match recovery {
-        Ok(crate::backup::Recovery::Archived) => {
+        Ok(crate::backup::Recovery::Archived | crate::backup::Recovery::Nothing) => {
             let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
             crate::sync::marker::confirm(config_dir).is_ok()
         }

@@ -530,3 +530,115 @@ fn p04_ios_provisional_marker_restores_the_previous_pending_marker_when_the_vers
     let (marker, _dir) = crash_then_start(RestoreStep::Swapped, true);
     assert_eq!(marker.expect("nouveau").backup, "circletasks-daily-20261007.db");
 }
+
+// --- P-04-iOS : issue distincte `StagedRemoved`, marqueur annulé ou confirmé selon CHAQUE point d'arrêt ---
+
+/// Restauration arrêtée net au point `stop` (ou jamais lancée si `None`), SANS récupération ; rend le dossier de données.
+fn crashed_at(stop: Option<RestoreStep>) -> tempfile::TempDir {
+    use circletasks_lib::startup_gate::restore_with_provisional_marker;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), Some("true"));
+    sync_configured(dir.path());
+    if let Some(stop) = stop {
+        let hook = move |step: RestoreStep| -> std::io::Result<()> {
+            if step == stop {
+                panic!("arrêt forcé");
+            }
+            Ok(())
+        };
+        let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook)));
+        assert!(crashed.is_err(), "arrêt simulé");
+    }
+    dir
+}
+
+/// Démarrage : récupération puis règlement du marqueur ; rend l'issue de la récupération et le marqueur lu ensuite.
+fn start(dir: &Path) -> (circletasks_lib::backup::Recovery, Option<circletasks_lib::sync::marker::RestoreMarker>) {
+    use circletasks_lib::backup::recover_interrupted_restore;
+    let recovery = recover_interrupted_restore(&dir.join(DB_FILE), &dir.join(BACKUP_DIR));
+    circletasks_lib::startup_gate::settle_provisional_marker(dir, &recovery);
+    (recovery.expect("récupération"), circletasks_lib::sync::marker::read(dir).unwrap())
+}
+
+#[test]
+fn p04_ios_marker_before_staged_there_is_no_marker_and_nothing_to_recover() {
+    use circletasks_lib::backup::Recovery;
+    let dir = crashed_at(None);
+    assert_eq!(start(dir.path()), (Recovery::Nothing, None));
+}
+
+#[test]
+fn p04_ios_marker_staged_to_first_rename_reports_staged_removed_and_cancels_the_marker() {
+    use circletasks_lib::backup::Recovery;
+    let dir = crashed_at(Some(RestoreStep::Staged));
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()), "marqueur provisoire écrit au point Staged");
+    assert!(dir.path().join("circletasks.db.restoring").is_file());
+    assert_eq!(start(dir.path()), (Recovery::StagedRemoved, None));
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"));
+}
+
+#[test]
+fn p04_ios_marker_during_the_renames_with_the_database_missing_is_put_back_and_cancelled() {
+    use circletasks_lib::backup::Recovery;
+    let dir = crashed_at(Some(RestoreStep::OldMoved));
+    assert!(!dir.path().join(DB_FILE).exists());
+    assert_eq!(start(dir.path()), (Recovery::PutBack, None));
+    assert_eq!(lock_value(&dir.path().join(DB_FILE)).as_deref(), Some("true"));
+}
+
+#[test]
+fn p04_ios_marker_after_the_swap_with_restore_old_is_archived_and_confirmed() {
+    use circletasks_lib::backup::Recovery;
+    let dir = crashed_at(Some(RestoreStep::Swapped));
+    let (recovery, marker) = start(dir.path());
+    assert_eq!(recovery, Recovery::Archived);
+    let marker = marker.expect("marqueur");
+    assert!(!marker.provisional);
+    assert_eq!(marker.backup, "circletasks-daily-20261007.db");
+}
+
+#[test]
+fn p04_ios_marker_after_the_swap_without_restore_old_is_nothing_and_still_confirmed() {
+    use circletasks_lib::backup::Recovery;
+    // Triple échec : confirmation au point Swapped, nouvel essai, puis relance à froid. Les `.restore-old` ont déjà été retirés, la
+    // version restaurée est en place, et le marqueur est resté provisoire.
+    let dir = crashed_at(Some(RestoreStep::Swapped));
+    for name in ["circletasks.db.restore-old", "circletasks.db-wal.restore-old", "circletasks.db-shm.restore-old"] {
+        let _ = fs::remove_file(dir.path().join(name));
+    }
+    assert!(!dir.path().join("circletasks.db.restore-old").exists());
+    // Le point Swapped a confirmé le marqueur avant l'arrêt : on le remet provisoire, comme si la confirmation avait échoué.
+    circletasks_lib::backup::write_restore_marker_as(dir.path(), &dir.path().join(BACKUP_DIR), "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, true).unwrap();
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    let (recovery, marker) = start(dir.path());
+    assert_eq!(recovery, circletasks_lib::backup::Recovery::Nothing);
+    let marker = marker.expect("le marqueur n'est pas annulé : la version restaurée est en place");
+    assert!(!marker.provisional);
+    assert_eq!(marker.backup, "circletasks-daily-20261007.db");
+}
+
+#[test]
+fn p04_ios_marker_staged_removed_puts_back_the_previous_pending_marker() {
+    use circletasks_lib::backup::Recovery;
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join("circletasks-daily-20261007.db"), None);
+    make_db(&dir.path().join(DB_FILE), None);
+    sync_configured(dir.path());
+    fs::write(dir.path().join(circletasks_lib::sync::marker::MARKER_FILE), br#"{"v":1,"backup":"ancien","backupTakenAt":"x","restoredAt":"y","schemaVersion":17}"#).unwrap();
+    let hook = |step: RestoreStep| -> std::io::Result<()> {
+        if step == RestoreStep::Staged {
+            panic!("arrêt forcé");
+        }
+        Ok(())
+    };
+    let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| circletasks_lib::startup_gate::restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook)));
+    assert!(crashed.is_err());
+    let (recovery, marker) = start(dir.path());
+    assert_eq!(recovery, Recovery::StagedRemoved);
+    assert_eq!(marker.expect("marqueur d'avant").backup, "ancien");
+}

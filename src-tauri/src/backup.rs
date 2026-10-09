@@ -701,8 +701,12 @@ pub fn utc_stamp(secs: u64) -> String {
 /// Ce qu'a fait la récupération au démarrage.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Recovery {
-    /// Rien à récupérer.
+    /// Rien à récupérer : aucun `.restoring` ni `.restore-old`. Si un marqueur provisoire existe encore, l'échange avait abouti et son
+    /// ménage aussi : le marqueur doit être confirmé.
     Nothing,
+    /// Un fichier préparé (`.restoring`, ou ses restes) orphelin a été supprimé, sans `.restore-old` : l'échange n'avait pas commencé, la
+    /// version n'a jamais été en place. Un marqueur provisoire doit être annulé.
+    StagedRemoved,
     /// Des fichiers de l'ancienne base ont été remis en place (base, `-wal`, `-shm`).
     PutBack,
     /// L'échange était terminé : les restes de l'ancienne base ont été DÉPLACÉS dans `backups/` (famille `pre-restore`), jamais supprimés.
@@ -733,12 +737,14 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
             return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
         }
     }
+    let mut staged_removed = false;
     for leftover in [staged.clone(), sidecar(&staged, ".tmp"), sidecar(&staged, "-wal"), sidecar(&staged, "-shm"), sidecar(&staged, "-journal")] {
         if present(&leftover) {
             if !is_plain_file(&leftover) {
                 return Err(BackupError::new("unsafe-restore-file", "un fichier de restauration n'est pas un fichier ordinaire"));
             }
             fs::remove_file(&leftover).map_err(|e| fail("recovery-failed", e))?;
+            staged_removed = true;
         }
     }
     let db_present = present(db_path);
@@ -791,7 +797,7 @@ pub fn recover_interrupted_restore(db_path: &Path, backups_dir: &Path) -> Result
         }
         return Ok(Recovery::PutBack);
     }
-    Ok(Recovery::Nothing)
+    Ok(if staged_removed { Recovery::StagedRemoved } else { Recovery::Nothing })
 }
 
 /// Échange la base par le fichier préparé. Tout ce qui est déplacé est remis en place si une étape échoue : l'ancienne base (et son
