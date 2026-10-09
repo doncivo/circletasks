@@ -23,7 +23,7 @@ export interface IconPickerProps {
 export function IconPicker({ value, onChange, className }: IconPickerProps) {
   const selectedName = value?.kind === 'lucide' ? value.name : null;
   return (
-    <div role="group" aria-label={t('icons.pickerLabel')} className={['ct-icon-picker', className].filter(Boolean).join(' ')}>
+    <div role="group" data-scroll-row="" aria-label={t('icons.pickerLabel')} className={['ct-icon-picker', className].filter(Boolean).join(' ')}>
       {ICON_NAMES.map((name) => (
         <IconPickerButton key={name} name={name} chosen={selectedName === name} onToggle={onChange} />
       ))}

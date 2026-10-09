@@ -19,7 +19,7 @@ test.describe('expectFitsViewport : le contrôle de mise en page contrôle vraim
       const wide = document.createElement('div');
       wide.id = 'ct-test-wide';
       wide.textContent = 'trop large';
-      wide.style.cssText = 'width:600px;height:20px;';
+      wide.style.cssText = 'width:600px;min-width:600px;flex:none;height:20px;';
       host.appendChild(wide);
     }, selector);
 
