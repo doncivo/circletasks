@@ -535,11 +535,19 @@ thread_local! {
 fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
     #[cfg(feature = "test-hooks")]
     {
+        /// Remet l'état du fil en place même si `f` panique (sinon il serait perdu et les écritures suivantes iraient à l'état global).
+        struct Restore(Option<State>);
+        impl Drop for Restore {
+            fn drop(&mut self) {
+                if let Some(own) = self.0.take() {
+                    LOCAL.with(|cell| *cell.borrow_mut() = Some(own));
+                }
+            }
+        }
         let local = LOCAL.with(|cell| cell.borrow_mut().take());
-        if let Some(mut own) = local {
-            let result = f(&mut own);
-            LOCAL.with(|cell| *cell.borrow_mut() = Some(own));
-            return result;
+        if let Some(own) = local {
+            let mut guard = Restore(Some(own));
+            return f(guard.0.as_mut().expect("état du fil"));
         }
     }
     f(&mut STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
@@ -573,9 +581,11 @@ fn init_in(state: &mut State, dir: PathBuf) {
     state.dir = Some(dir);
 }
 
-/// Tests seulement (`test-hooks`) : état du processus remis à neuf (dossier, entrées en attente, débit). Les tests d'un même processus
-/// partagent cet état : sans remise à zéro, les entrées notées AVANT `init` par d'autres tests (file `pending`) sont versées dans le dossier
-/// du test qui appelle `init`. À appeler sous `support::applog_dir_lock()`.
+/// Tests seulement (`test-hooks`) : état propre au fil appelant, remis à neuf (dossier, entrées en attente, débit) ; l'état global n'est pas
+/// touché. Les écritures faites SUR CE FIL (le test lui-même et le code synchrone qu'il appelle) vont dans ce journal, et les écritures des
+/// autres tests n'y entrent plus. Limite : une écriture faite depuis un autre fil (`thread::spawn`, `spawn_blocking`, exécuteur asynchrone)
+/// va à l'état global, pas au journal du test ; un test qui relit un journal ne doit donc écrire que depuis son fil.
+/// À appeler sous `support::applog_dir_lock()` (voir ce verrou).
 #[cfg(feature = "test-hooks")]
 pub fn reset_for_tests() {
     LOCAL.with(|cell| *cell.borrow_mut() = Some(State { dir: None, pending: Vec::new(), write_error: None, rates: RateTable::new() }));
