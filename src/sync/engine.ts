@@ -197,6 +197,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   let folderKind: SyncFolderInfo['kind'] | null = null;
   /** Y-11 : `kid` de la clé locale et de la nouvelle clé (`.next`), dernier refus d'import ; jamais une clé. */
   let keyStatus!: Awaited<ReturnType<SyncDeps['platform']['key']['status']>>;
+  /**
+   * Y-IOS-02 (point de contrôle d'Ali, 0.2.1) : lecture de l'état local (reprise de « Associer de nouveau », identité) en échec (base
+   * occupée…). Elle ne masque jamais l'absence de clé : un appareil sans clé reste « à associer » (phase `needs-pairing`, état local
+   * illisible signalé à part), jamais une erreur générique qui retirerait « Associer au PC » et relancerait des cycles sans issue.
+   */
+  let localFailure: unknown = null;
   try {
     // Y-10 (D2) : « Associer de nouveau » interrompu avant que le dossier soit délié : terminé avant tout autre appel.
     if (await rejoinPending(repos)) {
@@ -210,13 +216,24 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       logger.log('restart-required', {});
       return { ...EMPTY, outcome: 'restart-required' };
     }
+  } catch (error) {
+    if (isCycleInterrupted(error)) throw error;
+    localFailure = error;
+  }
+  try {
     const folder = await platform.folder.info();
-    if (!folder.configured) return { ...EMPTY, outcome: 'not-configured' };
+    if (!folder.configured) return localFailure === null ? { ...EMPTY, outcome: 'not-configured' } : failWith(localFailure);
     folderLabel = folder.label;
     folderKind = folder.kind;
+    // Clé absente (`present` faux) : à associer. Trousseau ou coffre illisible (iPhone verrouillé) : `vault-unavailable` (rejet ci-dessous),
+    // jamais lu comme « absente ».
     const key = await platform.key.status();
     keyStatus = key;
-    if (!key.present) return { ...EMPTY, folderLabel, folderKind, outcome: 'needs-pairing' };
+    if (!key.present) {
+      if (localFailure !== null) logger.log('state-read-failed', { what: 'preconditions', code: syncErrorCodeOf(localFailure) });
+      return { ...EMPTY, folderLabel, folderKind, outcome: 'needs-pairing', ...(localFailure !== null ? { stateUnreadable: true } : {}) };
+    }
+    if (localFailure !== null) return failWith(localFailure, { folderLabel, folderKind });
     if (!options.ignoreMarker && (await platform.restoreMarker.get())) return { ...EMPTY, folderLabel, folderKind, outcome: 'restore-choice' };
     await platform.bindDevice(self);
   } catch (error) {

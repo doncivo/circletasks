@@ -72,6 +72,7 @@ export const syncResetFr = {
     keyMismatch: 'cette clé ne correspond pas à la nouvelle clé du dossier',
     invalidPairing: 'QR ou clé de secours illisible',
     pairingExpired: 'QR expiré, affichez-en un nouveau',
+    keyMissing: 'cet appareil n’a pas la clé de chiffrement : associez-le d’abord',
     other: 'erreur inattendue',
   },
   waitingSnapshot: 'En attente d’un instantané à jour de l’appareil qui réinitialise',

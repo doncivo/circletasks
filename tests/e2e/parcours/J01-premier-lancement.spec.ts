@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { openApp } from '../helpers/app';
-import { isPhone, listTitles, sampleTodayTitles, todayTab } from '../helpers/today';
+import { isPhone, listTitles, todayTab } from '../helpers/today';
 
 /**
  * Parcours clé 1 (PRD 8) : premier lancement. Base neuve, assistant de bienvenue (P-05), trois étapes (Bienvenue, Espaces, Données
@@ -44,9 +44,11 @@ test('parcours 1 : base neuve, assistant en trois étapes, données d’exemple,
   // Arrivée sur Aujourd'hui (A-01) avec les données d'exemple du jour.
   await todayTab(page).click();
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
+  // Routine d'exemple « Revue de la semaine » : le vendredi seulement (jour de Paris, celui de l'app ; échec constaté un vendredi en CI).
+  const friday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Europe/Paris' }).format(new Date()) === 'Fri';
   await expect
     .poll(() => listTitles(page))
-    .toEqual(sampleTodayTitles());
+    .toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', ...(friday ? ['Revue de la semaine'] : []), 'Envoyer la facture du mois']);
 
   // L'assistant ne revient pas : l'app reste utilisable, la navigation est complète.
   await expect(page.getByRole('navigation')).toBeVisible();

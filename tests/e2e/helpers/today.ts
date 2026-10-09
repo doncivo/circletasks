@@ -40,17 +40,6 @@ export async function listTitles(page: Page): Promise<string[]> {
   return page.locator('.ct-today__list .ct-list-row__title').allTextContents();
 }
 
-/**
- * Lignes du jour après « Commencer » avec les données d'exemple. La routine « Revue de la semaine » (Pro) a lieu le vendredi : ce jour-là
- * elle s'ajoute avant les tâches sans heure ; le test ne dépend pas du jour où il tourne (fuseau de la suite : Europe/Paris).
- */
-export function sampleTodayTitles(now: Date = new Date()): string[] {
-  const titles = ['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois'];
-  const friday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Europe/Paris' }).format(now) === 'Fri';
-  if (friday) titles.splice(3, 0, 'Revue de la semaine');
-  return titles;
-}
-
 export const todayTab = (page: Page): Locator => page.getByRole('navigation').getByRole('button', { name: 'Tâches', exact: true });
 
 export async function openToday(page: Page): Promise<void> {

@@ -7,6 +7,7 @@ import { onPairingChange, openPairingWindow, pairingOpenErrorKey, pairingStorage
 import { syncStore } from './syncStore';
 import { IosPairingRow } from './IosPairingRow';
 import { IosPairingScreen } from './IosPairingScreen';
+import { useKeyPresence } from './keyPresence';
 
 type Notice = { readonly key: PlainMessageKey; readonly tone: 'ok' | 'danger' };
 
@@ -26,6 +27,7 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
   const [storageFailed, setStorageFailed] = useState(false);
   const lastMode = useRef<'show' | 'import' | null>(null);
   const [iosPairing, setIosPairing] = useState(false);
+  const key = useKeyPresence();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +51,8 @@ export function SyncDetailsPairing({ showOnly = false, withProgress = true }: { 
 
   if (!container.syncPlatform || phase === 'not-configured') return null;
   // Y-11 : un appareil à associer de nouveau (réinitialisation annoncée ailleurs) importe la nouvelle clé ; il ne montre jamais l'ancienne.
-  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' ? 'import' : 'show';
+  // Y-IOS-02 (point de contrôle d'Ali) : clé absente du coffre (quelle que soit la phase affichée) : à associer, jamais « Associer l'iPhone ».
+  const mode: 'show' | 'import' = phase === 'needs-pairing' || phase === 'key-mismatch' || phase === 'reset-required' || key === 'absent' ? 'import' : 'show';
   // Assistant du premier lancement : « Associer cet appareil » est déjà sur la ligne de `SyncSettingsSection`.
   if (showOnly && mode === 'import') return null;
   // iPhone (ADR 0011 §23 point 7) : jamais le QR ni la fenêtre `pairing` ; « Associer au PC » quand une clé est à recevoir.
