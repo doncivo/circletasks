@@ -273,3 +273,18 @@ fn i04_qa_paths_urls_and_tokens_in_a_detail_never_reach_the_file() {
     }
     assert_eq!(text.lines().count(), nasty.len());
 }
+
+// --- Journal d'un test isolé des écritures des autres tests du processus (cause du test intermittent P-04-iOS « base illisible ») ---
+
+#[test]
+fn i04_a_tests_log_never_receives_entries_written_by_other_threads_of_the_process() {
+    let _log_dir = crate::support::applog_dir_lock();
+    let dir = tempfile::tempdir().unwrap();
+    let logs = dir.path().join("logs");
+    init(logs.clone());
+    // Un autre test du processus (sans le verrou) note une entrée pendant que celui-ci a son journal : elle ne doit pas s'y retrouver.
+    std::thread::spawn(|| write("backup-recovery", "provisional-marker-settled")).join().unwrap();
+    write("backup-recovery", "provisional-marker-db-unreadable");
+    let codes: Vec<String> = read_entries(&logs, 500).unwrap().into_iter().map(|e| e.code).collect();
+    assert_eq!(codes, ["provisional-marker-db-unreadable"], "seul ce test écrit dans son journal");
+}

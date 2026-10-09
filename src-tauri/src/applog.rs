@@ -523,8 +523,26 @@ struct State {
 
 static STATE: Mutex<State> = Mutex::new(State { dir: None, pending: Vec::new(), write_error: None, rates: RateTable::new() });
 
-fn state() -> std::sync::MutexGuard<'static, State> {
-    STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+#[cfg(feature = "test-hooks")]
+thread_local! {
+    /// Tests seulement : état propre au fil du test qui a appelé `reset_for_tests` (chaque test d'un processus s'exécute sur son fil).
+    static LOCAL: std::cell::RefCell<Option<State>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Accès à l'état du processus. Avec `test-hooks`, un fil qui a appelé `reset_for_tests` a son état à lui : les écritures des autres tests,
+/// sur d'autres fils, ne peuvent pas entrer dans son journal (elles allaient dans le dossier fixé par `init` du dernier test, d'où le
+/// test intermittent « base illisible » de P-04-iOS qui y trouvait un `provisional-marker-settled` venu d'un autre test).
+fn with_state<R>(f: impl FnOnce(&mut State) -> R) -> R {
+    #[cfg(feature = "test-hooks")]
+    {
+        let local = LOCAL.with(|cell| cell.borrow_mut().take());
+        if let Some(mut own) = local {
+            let result = f(&mut own);
+            LOCAL.with(|cell| *cell.borrow_mut() = Some(own));
+            return result;
+        }
+    }
+    f(&mut STATE.lock().unwrap_or_else(std::sync::PoisonError::into_inner))
 }
 
 /// Copie sur la sortie d'erreur (développement et `test-hooks` seulement) : **le seul `eprintln!` du code**.
@@ -544,11 +562,14 @@ fn record_outcome(state: &mut State, outcome: &Result<usize, LogError>) {
 
 /// Fixe le dossier du journal (`<app_config_dir>/logs`, début du `setup` PC et iPhone) et écrit les entrées internes en attente.
 pub fn init(dir: PathBuf) {
-    let mut state = state();
+    with_state(|state| init_in(state, dir));
+}
+
+fn init_in(state: &mut State, dir: PathBuf) {
     let pending = std::mem::take(&mut state.pending);
     let lines = admit_lines(&mut state.rates, &pending, now_secs());
     let outcome = append_lines(&dir, &lines);
-    record_outcome(&mut state, &outcome);
+    record_outcome(state, &outcome);
     state.dir = Some(dir);
 }
 
@@ -557,11 +578,7 @@ pub fn init(dir: PathBuf) {
 /// du test qui appelle `init`. À appeler sous `support::applog_dir_lock()`.
 #[cfg(feature = "test-hooks")]
 pub fn reset_for_tests() {
-    let mut state = state();
-    state.dir = None;
-    state.pending.clear();
-    state.write_error = None;
-    state.rates = RateTable::new();
+    LOCAL.with(|cell| *cell.borrow_mut() = Some(State { dir: None, pending: Vec::new(), write_error: None, rates: RateTable::new() }));
 }
 
 /// Écriture interne à Rust : deux identifiants fixes, aucun texte dynamique. Avant `init`, gardée en mémoire (100 au plus).
@@ -577,22 +594,23 @@ pub fn write_count(scope: &'static str, code: &'static str, count: u32) {
 fn write_entry(scope: &'static str, code: &'static str, count: Option<u32>) {
     echo(&format!("[{scope}] {code}"));
     let entry = LogEntry { at: iso_of(now_secs()), scope: scope.to_owned(), code: code.to_owned(), detail: String::new(), n: count };
-    let mut state = state();
-    let Some(dir) = state.dir.clone() else {
-        if state.pending.len() >= MAX_PENDING {
-            state.pending.remove(0);
-        }
-        state.pending.push(entry);
-        return;
-    };
-    let lines = admit_lines(&mut state.rates, &[entry], now_secs());
-    let outcome = append_lines(&dir, &lines);
-    record_outcome(&mut state, &outcome);
+    with_state(|state| {
+        let Some(dir) = state.dir.clone() else {
+            if state.pending.len() >= MAX_PENDING {
+                state.pending.remove(0);
+            }
+            state.pending.push(entry);
+            return;
+        };
+        let lines = admit_lines(&mut state.rates, &[entry], now_secs());
+        let outcome = append_lines(&dir, &lines);
+        record_outcome(state, &outcome);
+    });
 }
 
 /// Dernier échec d'écriture du processus (`None` après une écriture réussie).
 pub fn write_error() -> Option<&'static str> {
-    state().write_error
+    with_state(|state| state.write_error)
 }
 
 /// Réponse de `log_append`.
@@ -648,10 +666,11 @@ pub async fn log_append(app: tauri::AppHandle, entries: Vec<LogEntryIn>) -> Resu
     }
     let dir = logs_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let mut state = state();
-        let outcome = append_in(&dir, &mut state.rates, &entries, now_secs());
-        record_outcome(&mut state, &outcome);
-        outcome.map(|written| AppendOutcome { written, write_error: state.write_error })
+        with_state(|state| {
+            let outcome = append_in(&dir, &mut state.rates, &entries, now_secs());
+            record_outcome(state, &outcome);
+            outcome.map(|written| AppendOutcome { written, write_error: state.write_error })
+        })
     })
     .await
     .map_err(|_| fail("io"))?
@@ -662,9 +681,10 @@ pub async fn log_append(app: tauri::AppHandle, entries: Vec<LogEntryIn>) -> Resu
 pub async fn log_read(app: tauri::AppHandle, max: usize) -> Result<ReadOutcome, LogError> {
     let dir = logs_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let state = state();
-        let entries = read_entries(&dir, max.clamp(1, MAX_READ_ENTRIES))?;
-        Ok(ReadOutcome { entries, write_error: state.write_error })
+        with_state(|state| {
+            let entries = read_entries(&dir, max.clamp(1, MAX_READ_ENTRIES))?;
+            Ok(ReadOutcome { entries, write_error: state.write_error })
+        })
     })
     .await
     .map_err(|_| fail("io"))?
@@ -675,10 +695,11 @@ pub async fn log_read(app: tauri::AppHandle, max: usize) -> Result<ReadOutcome, 
 pub async fn log_clear(app: tauri::AppHandle) -> Result<ClearOutcome, LogError> {
     let dir = logs_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let mut state = state();
-        let outcome = clear_in(&dir, now_secs()).map(|()| 1);
-        record_outcome(&mut state, &outcome);
-        outcome.map(|_| ClearOutcome { cleared: true })
+        with_state(|state| {
+            let outcome = clear_in(&dir, now_secs()).map(|()| 1);
+            record_outcome(state, &outcome);
+            outcome.map(|_| ClearOutcome { cleared: true })
+        })
     })
     .await
     .map_err(|_| fail("io"))?
