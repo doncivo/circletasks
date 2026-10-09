@@ -395,9 +395,9 @@ pub fn restore_with_provisional_marker(
     let backups = config_dir.join(crate::backup::BACKUP_DIR);
     let schema = crate::backup::check_named_backup(&backups, name)?;
     // Un marqueur encore provisoire (règlement précédent impossible) est d'abord réglé d'après la base en place ; s'il l'est toujours, la
-    // restauration est refusée (`restore-pending`, « redémarrez CircleTasks ») : `restore-marker.previous.json` n'est jamais écrasé.
+    // restauration est refusée (`restore-unconfirmed`, « rouvrez CircleTasks ») : `restore-marker.previous.json` n'est jamais écrasé.
     if !settle_provisional_marker(config_dir, &Ok(crate::backup::Recovery::Nothing)) {
-        return Err(crate::backup::BackupError { code: "restore-pending", message: "un marqueur de restauration provisoire n'est pas encore réglé (redémarrage)".to_owned() });
+        return Err(crate::backup::BackupError { code: "restore-unconfirmed", message: "un marqueur de restauration provisoire n'est pas encore réglé (redémarrage)".to_owned() });
     }
     let written = Cell::new(false);
     let confirmed = Cell::new(false);
@@ -405,7 +405,10 @@ pub fn restore_with_provisional_marker(
         match step {
             RestoreStep::Staged => {
                 // Le jeton est celui que le fichier préparé porte déjà : la base en place le portera si, et seulement si, l'échange a lieu.
-                let token = crate::backup::staged_restore_token(&config_dir.join(crate::backup::DB_FILE)).ok_or_else(|| std::io::Error::other("jeton de restauration"))?;
+                let token = crate::backup::staged_restore_token(&config_dir.join(crate::backup::DB_FILE))
+                    .ok()
+                    .flatten()
+                    .ok_or_else(|| std::io::Error::other("jeton de restauration"))?;
                 let marker = config_dir.join(crate::sync::marker::MARKER_FILE);
                 let previous = config_dir.join(PREVIOUS_MARKER_FILE);
                 let _ = std::fs::remove_file(&previous);
@@ -453,7 +456,12 @@ pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::bac
     if recovery.is_err() {
         return false;
     }
-    let landed = token.is_some() && crate::backup::database_token(&config_dir.join(crate::backup::DB_FILE)) == token;
+    // Base en place illisible : on ne décide RIEN (ni confirmation ni annulation), le marqueur reste provisoire et la décision est reprise.
+    let Ok(in_place) = crate::backup::database_token(&config_dir.join(crate::backup::DB_FILE)) else {
+        crate::applog::write("backup-recovery", "provisional-marker-db-unreadable");
+        return false;
+    };
+    let landed = token.is_some() && in_place == token;
     let done = if landed {
         let confirmed = crate::sync::marker::confirm(config_dir).is_ok();
         if confirmed {

@@ -672,31 +672,43 @@ pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupErro
     Ok(())
 }
 
-/// Jeton de restauration que porte une base : l'`application_id` de son en-tête SQLite (32 bits, inutilisé par l'app), `None` s'il vaut 0, si le
-/// fichier manque ou s'il est illisible. La base en place PORTE la preuve de la restauration : elle ne dépend d'aucun fichier voisin.
-pub fn database_token(db: &Path) -> Option<u32> {
-    let conn = open_read_only(db).ok()?;
-    let raw: i64 = conn.query_row("PRAGMA application_id", [], |r| r.get(0)).ok()?;
+/// Jeton de restauration que porte une base : l'`application_id` de son en-tête SQLite (32 bits, inutilisé par l'app). La base en place PORTE
+/// la preuve de la restauration : elle ne dépend d'aucun fichier voisin.
+///
+/// `Ok(None)` : fichier absent, ou jeton à 0 (aucune restauration marquée). `Err` : le fichier est là mais n'a pas pu être lu (verrou,
+/// `-wal` sans `-shm` après un arrêt, protection de fichier d'iOS, dossier à la place du fichier) : l'appelant ne décide RIEN et réessaie.
+pub fn database_token(db: &Path) -> Result<Option<u32>, BackupError> {
+    if !present(db) {
+        return Ok(None);
+    }
+    let conn = open_read_only(db).map_err(sql_err)?;
+    let raw: i64 = conn.query_row("PRAGMA application_id", [], |r| r.get(0)).map_err(sql_err)?;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let token = raw as i32 as u32;
-    (token != 0).then_some(token)
+    Ok((token != 0).then_some(token))
 }
 
 /// Jeton du fichier préparé (`.restoring`) à côté de `db_path`.
-pub fn staged_restore_token(db_path: &Path) -> Option<u32> {
+pub fn staged_restore_token(db_path: &Path) -> Result<Option<u32>, BackupError> {
     database_token(&sidecar(db_path, STAGING_SUFFIX))
 }
 
 /// Écrit un jeton aléatoire non nul, différent de celui de la base actuelle, dans le fichier PRÉPARÉ (comme `carry_app_lock`), avant l'échange.
 /// Le jeton passe ensuite dans le marqueur provisoire ; au démarrage la restauration est confirmée seulement si la base en place le porte.
 fn stamp_restore_token(staged: &Path, current_db: &Path) -> Result<u32, BackupError> {
-    let current = database_token(current_db);
-    let token = std::iter::repeat_with(rand::random::<u32>).find(|t| *t != 0 && Some(*t) != current).unwrap_or(1);
+    // Base actuelle illisible : seule la différence avec son jeton importe, tout jeton non nul convient.
+    let current = database_token(current_db).unwrap_or(None);
+    let token = loop {
+        let candidate = rand::random::<u32>();
+        if candidate != 0 && Some(candidate) != current {
+            break candidate;
+        }
+    };
     let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
     #[allow(clippy::cast_possible_wrap)]
     conn.pragma_update(None, "application_id", token as i32).map_err(sql_err)?;
     drop(conn);
-    if database_token(staged) == Some(token) {
+    if database_token(staged)? == Some(token) {
         Ok(token)
     } else {
         Err(BackupError::new("io", "jeton de restauration non écrit"))

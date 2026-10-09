@@ -609,7 +609,7 @@ fn p04_ios_marker_after_the_swap_without_restore_old_is_nothing_and_still_confir
     }
     assert!(!dir.path().join("circletasks.db.restore-old").exists());
     // Le point Swapped a confirmé le marqueur avant l'arrêt : on le remet provisoire, comme si la confirmation avait échoué.
-    let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).expect("la base en place porte le jeton de la restauration");
+    let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).unwrap().expect("la base en place porte le jeton de la restauration");
     circletasks_lib::backup::write_provisional_marker(dir.path(), &dir.path().join(BACKUP_DIR), "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, token).unwrap();
     assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
     let (recovery, marker) = start(dir.path());
@@ -702,7 +702,7 @@ fn p04_ios_marker_clean_swap_failure_with_blocked_undo_is_never_confirmed_and_bl
     let previous = fs::read(dir.path().join(PREVIOUS_MARKER_FILE)).expect("le marqueur d'avant est gardé");
     // Une nouvelle restauration est refusée tant que le marqueur est provisoire : le marqueur d'avant n'est pas écrasé.
     let refused = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080001Z", 1_791_446_401, &|_| Ok(())).unwrap_err();
-    assert_eq!(refused.code, "restore-pending");
+    assert_eq!(refused.code, "restore-unconfirmed");
     assert_eq!(fs::read(dir.path().join(PREVIOUS_MARKER_FILE)).unwrap(), previous);
     // Démarrage avec le blocage encore là : pas de confirmation (la base en place ne porte pas le jeton).
     let (_, marker) = start(dir.path());
@@ -732,17 +732,47 @@ fn p04_ios_marker_provisional_without_a_matching_token_is_cancelled_whatever_the
 }
 
 #[test]
+fn p04_ios_marker_with_an_unreadable_database_in_place_stays_provisional_and_blocks_a_new_restore() {
+    use circletasks_lib::startup_gate::{recover_and_settle, restore_with_provisional_marker};
+    let dir = crashed_at(Some(RestoreStep::Swapped));
+    let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).unwrap().expect("jeton");
+    for name in ["circletasks.db.restore-old", "circletasks.db-wal.restore-old", "circletasks.db-shm.restore-old"] {
+        let _ = fs::remove_file(dir.path().join(name));
+    }
+    circletasks_lib::backup::write_provisional_marker(dir.path(), &dir.path().join(BACKUP_DIR), "circletasks-daily-20261007.db", 1_791_446_400, APP_SCHEMA_VERSION, token).unwrap();
+    // Un dossier à la place du fichier : la base est « là » mais illisible. Ni confirmation ni annulation.
+    let db = dir.path().join(DB_FILE);
+    let aside = dir.path().join("base-mise-de-cote");
+    fs::rename(&db, &aside).unwrap();
+    fs::create_dir(&db).unwrap();
+    assert!(circletasks_lib::backup::database_token(&db).is_err());
+    // La récupération signale elle-même l'anomalie (fichier anormal) ou passe : dans les deux cas le marqueur est intact.
+    let _ = recover_and_settle(dir.path());
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()), "ni annulé ni confirmé");
+    let refused = restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080001Z", 1_791_446_401, &|_| Ok(())).unwrap_err();
+    assert_eq!(refused.code, "restore-unconfirmed");
+    assert!(circletasks_lib::sync::marker::is_provisional(dir.path()));
+    // La base redevient lisible : la décision est reprise, la restauration a bien eu lieu -> confirmée.
+    fs::remove_dir(&db).unwrap();
+    fs::rename(&aside, &db).unwrap();
+    let (_, marker) = start(dir.path());
+    let marker = marker.expect("marqueur");
+    assert!(!marker.provisional);
+    assert_eq!(marker.backup, "circletasks-daily-20261007.db");
+}
+
+#[test]
 fn p04_ios_restore_stamps_a_fresh_token_that_the_database_in_place_carries() {
     let dir = scratch();
     let backups = dir.path().join(BACKUP_DIR);
     fs::create_dir_all(&backups).unwrap();
     make_db(&backups.join("circletasks-daily-20261007.db"), None);
     make_db(&dir.path().join(DB_FILE), None);
-    assert_eq!(circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)), None);
+    assert_eq!(circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).unwrap(), None);
     let mut seen = Vec::new();
     for n in 0..3 {
         restore_backup_file(&dir.path().join(DB_FILE), &backups, "circletasks-daily-20261007.db", APP_SCHEMA_VERSION, &format!("20261008T08000{n}Z"), &|_| Ok(())).unwrap();
-        let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).expect("jeton");
+        let token = circletasks_lib::backup::database_token(&dir.path().join(DB_FILE)).unwrap().expect("jeton");
         assert!(!seen.contains(&token), "chaque restauration a son jeton");
         seen.push(token);
     }
