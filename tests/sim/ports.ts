@@ -30,6 +30,9 @@ export const E2E_DEV_PORT = BASE ?? 1420;
  */
 export const E2E_PREVIEW_PORT = BASE === null ? 4173 : BASE + 4;
 
+/** Port de la prévisualisation du build servi au projet `iphone-webkit` (WebKit) : 4174 par défaut, `CT_E2E_PORT_BASE` + 5 sinon. */
+export const E2E_WEBKIT_PORT = BASE === null ? 4174 : BASE + 5;
+
 /** Ports des simulateurs d'agendas Google et CalDAV (ADR 0008). */
 export const E2E_SIM_PORTS = BASE === null ? ({ google: 53701, caldav: 53702 } as const) : ({ google: BASE + 1, caldav: BASE + 2 } as const);
 

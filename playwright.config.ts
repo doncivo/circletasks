@@ -1,5 +1,5 @@
 import { defineConfig, type PlaywrightTestConfig } from '@playwright/test';
-import { E2E_DEV_PORT, E2E_PREVIEW_PORT, E2E_SIM_PORTS, simUrl } from './tests/sim/ports';
+import { E2E_DEV_PORT, E2E_PREVIEW_PORT, E2E_SIM_PORTS, E2E_WEBKIT_PORT, simUrl } from './tests/sim/ports';
 
 /**
  * Ports de la suite e2e (voir tests/sim/ports.ts). Par défaut : Vite 1420, simulateurs 53701 (Google), 53702 (CalDAV), 53703 (dossier iCloud).
@@ -44,6 +44,36 @@ const PERF_PROJECT: NonNullable<PlaywrightTestConfig['projects']>[number] = {
       retries: 0,
     };
 
+/**
+ * Projet `iphone-webkit` (WebKit, moteur de la WebView iOS) : défini avec son serveur seulement quand `CT_E2E_WEBKIT=1` (job e2e-webkit
+ * de la CI ; en local : `CT_E2E_WEBKIT=1 npx playwright test --project=iphone-webkit`). ADR 0002 : « ajouter WebKit si un écart de rendu Safari apparaît » ; c'est le cas en 0.2.3
+ * (titre « Synchronisation » sur deux lignes sur l'iPhone). Seulement les contrôles de mise en page (IOS-titres), polices embarquées
+ * réelles. Build de production avec les accroches de test (même recette que `perf`) : WebKit charge les centaines de modules du serveur
+ * de développement trop lentement pour le budget d'un test (plus de 30 s par page sous Windows).
+ */
+const WEBKIT = process.env['CT_E2E_WEBKIT'] === '1';
+const WEBKIT_URL = `http://localhost:${String(E2E_WEBKIT_PORT)}`;
+const WEBKIT_SERVER: NonNullable<PlaywrightTestConfig['webServer']> = {
+  command: `npx vite build --outDir dist-webkit --emptyOutDir && npx vite preview --outDir dist-webkit --port ${String(E2E_WEBKIT_PORT)} --strictPort`,
+  url: WEBKIT_URL,
+  reuseExistingServer: false,
+  timeout: 240_000,
+  env: { ...SIM_ENV_DEV, VITE_CT_E2E_HOOKS: '1' },
+};
+const WEBKIT_PROJECT: NonNullable<PlaywrightTestConfig['projects']>[number] = {
+  name: 'iphone-webkit',
+  testMatch: /IOS-titres\.spec\.ts$/,
+  use: {
+    browserName: 'webkit',
+    viewport: { width: 440, height: 956 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+    baseURL: WEBKIT_URL,
+  },
+  grepInvert: /@perf/,
+};
+
 export default defineConfig({
   testDir: 'tests/e2e',
   // Simulateurs d'agendas Google et CalDAV (K-01 à K-03) sur les ports de tests/sim/ports.ts, arrêtés à la fin de la suite.
@@ -80,6 +110,7 @@ export default defineConfig({
       },
       grepInvert: /@perf/,
     },
+    ...(WEBKIT ? [WEBKIT_PROJECT] : []),
     ...(PERF ? [PERF_PROJECT] : []),
   ],
   webServer: [
@@ -90,6 +121,7 @@ export default defineConfig({
       timeout: 120_000,
       env: SIM_ENV_DEV,
     },
+    ...(WEBKIT ? [WEBKIT_SERVER] : []),
     ...(PERF ? [PERF_SERVER] : []),
   ],
 });

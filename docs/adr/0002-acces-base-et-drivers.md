@@ -79,7 +79,7 @@ Aucune table métier n'est créée à ce stade ; le registre est vide. Les 18 ta
 
 - Le comportement transactionnel du driver Tauri (une connexion réutilisée par sqlx) doit être vérifié dans l'app réelle par un test `tauri dev` puis sur iPhone (POC-01).
 - Emplacement exact de la base : tauri-plugin-sql la place dans le dossier de configuration de l'app ; à confirmer pour la sauvegarde quotidienne (desktop-tauri).
-- Projet Playwright « iphone » en Chromium émulé ; ajouter WebKit si un écart de rendu Safari apparaît.
+- Projet Playwright « iphone » en Chromium émulé ; ajouter WebKit si un écart de rendu Safari apparaît. **Avenant du 2026-10-09** : projet `iphone-webkit` ajouté (titre « Synchronisation » sur deux lignes sur l’iPhone en 0.2.3) : contrôles de mise en page seulement (`tests/e2e/IOS-titres.spec.ts`), build de production avec accroches de test (`CT_E2E_WEBKIT=1`), job `e2e-webkit` de la CI.
 
 ## Avenant D-03 (2026-10-02) : sauvegarde automatique avant migration
 
