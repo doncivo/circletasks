@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { openApp, waitForScreenLoaded } from './helpers/app';
 import { closeRoom, openSyncDetails, openSyncedPage, type SyncedPage } from './helpers/sync';
 
@@ -37,7 +37,7 @@ interface TitleMetrics {
 
 /** Mesure le titre `h1` visible : nombre de lignes de texte, hauteur, hauteur de ligne, débordement. */
 async function measureTitle(page: Page): Promise<TitleMetrics> {
-  const title = page.getByRole('heading', { level: 1 }).first();
+  const title = page.locator('main h1').first();
   await expect(title).toBeVisible();
   return title.evaluate((el) => {
     const style = getComputedStyle(el);
@@ -68,17 +68,30 @@ async function measureTitle(page: Page): Promise<TitleMetrics> {
   });
 }
 
-async function expectOneLineTitle(page: Page, where: string): Promise<void> {
+/**
+ * `neighbours` : éléments qui partagent la rangée du titre (badge, boutons) : ils restent entiers dans l'écran, à droite du titre,
+ * sans le chevaucher (le titre se réduit, eux non).
+ */
+async function expectOneLineTitle(page: Page, where: string, neighbours: readonly Locator[] = []): Promise<void> {
   await fontsReady(page);
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 956 });
     await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
+    // Le titre ajusté à la nouvelle largeur (useFitText, à l'image suivante) : attendre un état stable, jamais un délai.
+    await expect.poll(async () => (await measureTitle(page)).lines).toBe(1);
     const metrics = await measureTitle(page);
     const label = `${where} à ${String(width)} px : « ${metrics.text} » (${JSON.stringify(metrics)})`;
     expect(metrics.lines, `${label} : titre sur plusieurs lignes`).toBe(1);
     expect(metrics.height, `${label} : hauteur d'une ligne`).toBeLessThanOrEqual(metrics.lineHeight + 1);
     expect(metrics.overflow, `${label} : titre rogné`).toBe(false);
     expect(metrics.right, `${label} : titre hors de l'écran`).toBeLessThanOrEqual(metrics.viewport);
+    for (const neighbour of neighbours) {
+      const box = await neighbour.boundingBox();
+      expect(box, `${label} : voisin du titre absent`).not.toBeNull();
+      if (!box) continue;
+      expect(box.x, `${label} : voisin du titre chevauché`).toBeGreaterThanOrEqual(metrics.right - 0.5);
+      expect(box.x + box.width, `${label} : voisin du titre hors de l'écran`).toBeLessThanOrEqual(metrics.viewport);
+    }
   }
   // Retour à la taille de l'iPhone 16 Pro Max pour la suite du parcours.
   await page.setViewportSize({ width: WIDTHS[0], height: 956 });
@@ -108,11 +121,38 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
   });
 
   /*
-   * Titres au texte fixe seulement. Ceux de Tâches (« 9 ven. ») et de la Semaine (« 5 – 11 oct. ») dépendent de la date du jour, et
-   * partagent leur ligne avec des boutons : à 375 px ils passent déjà à la ligne, et une semaine à cheval sur deux mois
-   * (« 28 sept. – 4 oct. ») ne tiendrait pas à côté des flèches même à 440 px ; le test serait vert ou rouge selon le jour. Écart
-   * signalé à part, hors de ce correctif.
+   * Titres datés : horloge figée (test déterministe, quel que soit le jour du passage) sur les libellés les plus longs. Ils partagent
+   * leur rangée avec des boutons ; le titre se réduit, badge et boutons restent entiers à sa droite.
+   * - Tâches : jour à deux chiffres et jours courts les plus larges (« 28 mer. », « 27 dim. »), badge « AUJOURD'HUI » affiché.
+   * - Semaine : semaines à cheval sur deux mois (« 28 sept. – 4 oct. », « 26 janv. – 1 févr. », « 29 juin – 5 juil. »).
    */
+  const days = ['2026-10-28', '2026-09-27', '2026-09-30'] as const;
+  for (const day of days) {
+    test(`onglet Tâches, jour ${day} : titre sur une ligne à côté du badge et des boutons`, async ({ page }) => {
+      await page.clock.setFixedTime(new Date(`${day}T10:00:00+02:00`));
+      await openApp(page);
+      await expect(page.locator('main h1.ct-today__day')).toBeVisible();
+      await expect(page.locator('.ct-today__badge')).toBeVisible();
+      await expectOneLineTitle(page, `Tâches (${day})`, [page.locator('.ct-today__badge'), page.locator('.ct-today__headerActions')]);
+    });
+  }
+
+  const weeks = [
+    ['2026-09-30', '28 sept. – 4 oct.'],
+    ['2026-01-28', '26 janv. – 1 févr.'],
+    ['2026-07-01', '29 juin – 5 juil.'],
+  ] as const;
+  for (const [day, range] of weeks) {
+    test(`onglet Semaine, « ${range} » : plage sur une ligne à côté des flèches`, async ({ page }) => {
+      await page.clock.setFixedTime(new Date(`${day}T10:00:00+02:00`));
+      await openApp(page);
+      await waitForScreenLoaded(page, 'weekscreen');
+      await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
+      await expect(page.getByRole('heading', { name: range, level: 1 })).toBeVisible();
+      await expectOneLineTitle(page, `Semaine (${range})`, [page.locator('.ct-week__arrows')]);
+    });
+  }
+
   const tabs = [
     ['Routines', 'routinesscreen'],
     ['Événements', 'eventsscreen'],
