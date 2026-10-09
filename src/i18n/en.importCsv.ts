@@ -78,5 +78,5 @@ export const importCsvEn: Messages['importCsv'] = {
   errorTooLarge: 'The file is larger than 2 MB: shorten it and try again.',
   errorUnreadable: 'Unable to read this file.',
   errorFailed: 'The import failed. No task was created.',
-  errorSave: 'Unable to save the file.',
+  errorSave: 'The file could not be saved.',
 };

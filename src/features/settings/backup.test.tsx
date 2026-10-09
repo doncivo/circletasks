@@ -214,7 +214,8 @@ describe('Sauvegarde et restauration (P-04)', () => {
       backups.failNext('daily', 'io');
       renderRow();
       await startBackupScheduler(container, { document: { visibilityState: 'visible', addEventListener: vi.fn(), removeEventListener: vi.fn() }, window: { addEventListener: vi.fn(), removeEventListener: vi.fn() }, setInterval: () => 0, clearInterval: () => undefined }).ready;
-      const summary = await screen.findByText('Dernière sauvegarde échouée');
+      // QA du lot F (critère 13) : le code de l'échec suit le message.
+      const summary = await screen.findByText('Dernière sauvegarde échouée Code : io');
       expect(summary).toHaveClass('ct-settings__hint--danger');
       expect(summary).toHaveAttribute('role', 'alert');
     });

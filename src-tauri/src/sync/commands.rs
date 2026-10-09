@@ -567,6 +567,8 @@ pub async fn sync_delete_own(app: AppHandle, window: WebviewWindow, state: State
 #[tauri::command]
 pub async fn sync_restore_marker_get(app: AppHandle, window: WebviewWindow, state: State<'_, SyncState>) -> SyncResult<Option<RestoreMarker>> {
     require_main(&window)?;
+    // P-04-iOS critère 12 : un marqueur de restauration non écrit est réessayé ici ; nouvel échec -> erreur (aucun cycle).
+    crate::startup_gate::retry_pending_marker(&app)?;
     let core = state.core(&app)?;
     blocking(move || core.restore_marker()).await
 }

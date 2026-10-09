@@ -148,3 +148,12 @@
   flex-direction: column;
   gap: var(--ct-space-2);
 }
+
+/* P-04-iOS : voile de la restauration, sous la feuille (z-index 100) et la fenêtre PC (200), au-dessus de l'app (inerte). */
+.ct-backup__veil {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: var(--ct-color-surface);
+  opacity: 0.85;
+}

@@ -1,3 +1,4 @@
+import { isRestoreQuiet } from '../platform/quiet';
 import type { DataAccess } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredIso } from '../domain/sync/stored';
 import type { Clock } from '../domain/clock';
@@ -328,6 +329,11 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       return () => listeners.delete(listener);
     },
     syncNow: (reason: SyncReason, syncOptions: SyncNowOptions = {}) => {
+      // P-04-iOS (revue I3) : pendant la mise au calme d'une restauration, aucun cycle ne part, d'où que vienne la demande.
+      if (isRestoreQuiet()) {
+        deps.logger.log('sync-now-quiet', { reason });
+        return Promise.resolve();
+      }
       deps.logger.log('sync-now', { reason });
       // ADR 0011 §22 point 6 : seul le cycle `hide` est borné par une échéance ; une demande non bornée attendant avec lui la retire (un
       // cycle d'ouverture, périodique ou manuel n'est jamais coupé).

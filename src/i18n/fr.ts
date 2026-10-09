@@ -87,6 +87,13 @@ export const fr = {
     add: 'Ajouter',
     cancel: 'Annuler',
   },
+  // FILES-IOS-01 critère 9 : échec d'enregistrement d'un fichier (export, modèle, rapport, logs), visible avec son code.
+  files: {
+    errorCode: 'Code : {code}',
+    retry: 'Réessayer',
+    tooLarge: 'Fichier trop volumineux.',
+    tooLargeHint: 'Réduisez le contenu exporté (période plus courte, autre format), puis recommencez.',
+  },
   nav: {
     primaryLabel: 'Navigation principale',
     tabs: {

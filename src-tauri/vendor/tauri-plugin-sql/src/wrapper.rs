@@ -94,6 +94,11 @@ impl DbPool {
                 create_dir_all(&app_path).expect("Couldn't create app config dir");
 
                 let conn_url = &path_mapper(app_path, conn_url);
+                // CircleTasks (P-04-iOS, revue B1) : jamais d'ouverture ni de création pendant une restauration en attente de récupération.
+                let file = conn_url.trim_start_matches("sqlite:").split('?').next().unwrap_or_default();
+                if restore_pending(std::path::Path::new(file)) {
+                    return Err(crate::Error::RestorePending);
+                }
 
                 if !Sqlite::database_exists(conn_url).await.unwrap_or(false) {
                     Sqlite::create_database(conn_url).await?;
@@ -321,6 +326,17 @@ impl DbPool {
             DbPool::None => Vec::new(),
         })
     }
+}
+
+/// CircleTasks (P-04-iOS, revue B1) : un fichier `.restore-old` de la base, de son `-wal` ou de son `-shm` existe (lien compris) : une
+/// restauration interrompue doit être récupérée avant toute ouverture.
+pub fn restore_pending(db_file: &std::path::Path) -> bool {
+    ["", "-wal", "-shm"].iter().any(|suffix| {
+        let mut name = db_file.as_os_str().to_owned();
+        name.push(suffix);
+        name.push(".restore-old");
+        std::fs::symlink_metadata(std::path::PathBuf::from(name)).is_ok()
+    })
 }
 
 #[cfg(feature = "sqlite")]

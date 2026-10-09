@@ -109,7 +109,7 @@ export function formatDbFailure(failure: DbFailure, env: DbEnvironment | null): 
  * 0.2.1 : diagnostic d'échec de démarrage, sous le message d'erreur (PC et iPhone). Texte sélectionnable et bouton « Copier le détail »
  * (presse-papiers, sinon sélection + copie du système, sinon invitation à sélectionner le texte).
  */
-export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment }: { failure: DbFailure; readEnvironment?: () => Promise<DbEnvironment> }) {
+export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment, retry = true }: { failure: DbFailure; readEnvironment?: () => Promise<DbEnvironment>; /** Faux quand recharger ne peut pas réussir (P-04-iOS : récupération faite au lancement seulement). */ retry?: boolean }) {
   const [env, setEnv] = useState<DbEnvironment | null>(null);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const pre = useRef<HTMLPreElement>(null);
@@ -151,9 +151,11 @@ export function DbFailureDetails({ failure, readEnvironment = readDbEnvironment 
         {text}
       </pre>
       <div className="ct-db-failure__actions">
-        <button type="button" onClick={() => appReload.run()}>
-          {t('app.diag.retry')}
-        </button>
+        {retry && (
+          <button type="button" onClick={() => appReload.run()}>
+            {t('app.diag.retry')}
+          </button>
+        )}
         <button type="button" onClick={() => void onCopy()}>
           {t('app.diag.copy')}
         </button>

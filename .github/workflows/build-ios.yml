@@ -71,7 +71,7 @@ jobs:
         run: |
           ios=$(cargo tree --locked --target aarch64-apple-ios -e normal --prefix none)
           echo "$ios" | grep -q '^tauri-plugin-folder-bookmark ' || { echo "::error::tauri-plugin-folder-bookmark absent de la cible iOS"; exit 1; }
-          for pc in tauri-plugin-single-instance tauri-plugin-autostart tauri-plugin-updater tauri-plugin-process tauri-plugin-opener tauri-plugin-dialog tauri-plugin-global-shortcut; do
+          for pc in tauri-plugin-single-instance tauri-plugin-autostart tauri-plugin-updater tauri-plugin-process tauri-plugin-opener tauri-plugin-dialog tauri-plugin-fs tauri-plugin-global-shortcut; do
             if echo "$ios" | grep -q "^$pc "; then echo "::error::plugin PC dans la cible iOS : $pc"; exit 1; fi
           done
           windows=$(cargo tree --locked --target x86_64-pc-windows-msvc -e normal --prefix none)
@@ -121,6 +121,12 @@ jobs:
             WIN=$(cargo tree --target x86_64-pc-windows-msvc -i "$CRATE" 2>&1 || true)
             if grep -q "$CRATE v" <<<"$WIN"; then echo "::error::$CRATE présent dans la compilation Windows"; exit 1; fi
           done
+          # Lot F (FILES-IOS-01 critère 10, ADR 0009 avenant lot F A1) : plugin ct-files (Enregistrer dans Fichiers), iPhone seulement.
+          FILES=$(cargo tree --target aarch64-apple-ios -i tauri-plugin-ct-files 2>&1 || true)
+          echo "$FILES"
+          grep -q "tauri-plugin-ct-files v" <<<"$FILES" || { echo "::error::tauri-plugin-ct-files absent de la compilation iOS"; exit 1; }
+          WINFILES=$(cargo tree --target x86_64-pc-windows-msvc -i tauri-plugin-ct-files 2>&1 || true)
+          if grep -q "tauri-plugin-ct-files v" <<<"$WINFILES"; then echo "::error::tauri-plugin-ct-files présent dans la compilation Windows"; exit 1; fi
 
       # Option officielle du CLI Tauri `--no-sign` (crates/tauri-cli/src/mobile/ios/build.rs, v2.12.1) :
       # `xcodebuild archive` avec CODE_SIGNING_ALLOWED=NO pendant que le CLI sert ses options à la phase

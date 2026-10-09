@@ -29,6 +29,8 @@ export interface SyncSchedulerEnv {
   readonly clearInterval?: (handle: unknown) => void;
   /** iPhone : échéance du cycle `hide` (ms après le masquage) ; absente (PC) : cycle `hide` non borné, aucun cycle au retour. */
   readonly hideDeadlineMs?: number;
+  /** P-04-iOS critère 12 : démarre suspendu (marqueur de restauration non écrit) ; aucun cycle avant `resume()`. */
+  readonly startPaused?: boolean;
   /**
    * iPhone : travail à terminer AVANT le cycle `hide` (passage des Rappels Apple, ADR 0008 §10.8 : il publie ce qu'il vient de changer). Le cycle attend
    * sa fin, `beforeHideBudgetMs` au plus ; l'échéance du cycle reste mesurée depuis le masquage (la tâche d'arrière-plan d'iOS est une seule fenêtre).
@@ -43,6 +45,10 @@ export interface SyncScheduler {
   /** « Quitter » : un dernier cycle, attendu 5 s au plus ; ne rejette jamais. */
   beforeQuit(budgetMs?: number): Promise<void>;
   dispose(): void;
+  /** P-04-iOS (mise au calme avant une restauration, marqueur non écrit) : plus aucun cycle lancé par le planificateur. */
+  pause(): void;
+  /** Reprise : un cycle d'ouverture, puis le sondage habituel. */
+  resume(): void;
 }
 
 /** Attend `work` au plus `budgetMs` ; un échec ou un dépassement ne bloque jamais le cycle (le travail se termine seul, la reprise est à l'ouverture suivante). */
@@ -67,11 +73,12 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Parti
   const setTimer = env.setInterval ?? ((handler, ms) => setInterval(handler, ms));
   const clearTimer = env.clearInterval ?? ((handle) => clearInterval(handle as ReturnType<typeof setInterval>));
   let disposed = false;
+  let paused = env.startPaused === true;
   let lastStart = env.clock.nowMs();
   const visible = (): boolean => env.document.visibilityState !== 'hidden';
 
   const run = (reason: SyncReason, options?: SyncNowOptions): Promise<void> => {
-    if (disposed) return Promise.resolve();
+    if (disposed || paused) return Promise.resolve();
     lastStart = env.clock.nowMs();
     return (options ? service.syncNow(reason, options) : service.syncNow(reason)).catch(() => undefined);
   };
@@ -120,6 +127,14 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Parti
   void run('open');
 
   return {
+    pause: () => {
+      paused = true;
+    },
+    resume: () => {
+      if (!paused) return;
+      paused = false;
+      void run('open');
+    },
     tick,
     beforeQuit: async (budgetMs = QUIT_SYNC_BUDGET_MS) => {
       let timeout: ReturnType<typeof setTimeout> | undefined;

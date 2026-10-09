@@ -42,3 +42,7 @@ L'ouverture de P-04 à l'iPhone (capability `platforms: ["iOS"]`, gestionnaire m
 - La feuille de restauration (P-04) devra, à l'ordre 4, avertir avant confirmation que l'appareil est associé et que le choix sera demandé à la prochaine synchro.
 - Dette inscrite (docs/dettes.md, ordre 4) : « Restauration P-04 et synchro : appliquer l'ADR 0010 ».
 - Alternatives écartées : ré-horodater toutes les lignes restaurées pour qu'elles gagnent la fusion (coûteux, ne traite pas les éléments créés après la sauvegarde, qui resteraient) ; interdire la restauration sur un appareil associé (prive l'utilisateur de son filet de sécurité).
+
+## Avenant lot F (2026-10-08)
+
+Section « Ordre 5 » remplacée par l'avenant lot F de l'ADR 0009 (partie B) : sur iPhone, **rechargement de la WebView** après le remplacement (pas de réouverture de la base dans le processus, aucune modification de `src/db`) ; règles 1 à 6 inchangées ; échec d'écriture du marqueur (règle 2) renvoyé au front et affiché, sur PC comme sur iPhone, synchro retenue jusqu'à l'écriture du marqueur ou au choix explicite de l'utilisateur.

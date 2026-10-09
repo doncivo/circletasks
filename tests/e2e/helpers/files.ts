@@ -12,7 +12,7 @@ declare global {
   interface Window {
     __ctSaved?: SavedFile[];
     __ctRevealed?: string[];
-    __ctFilesMode?: 'save' | 'cancel' | 'fail';
+    __ctFilesMode?: 'save' | 'cancel' | 'fail' | 'too-large';
     /** P-07 : fichier que « Choisir un fichier » rendra (null : annulation) ; `__ctPickFail` : raison d'un échec de lecture. */
     __ctPick?: { name: string; text: string } | null;
     __ctPickFail?: string | null;
@@ -31,6 +31,7 @@ export async function installFakeFiles(page: Page, options: { canSave?: boolean 
         window.__ctFilesMode = 'save';
         if (mode === 'cancel') return { saved: false };
         if (mode === 'fail') throw new Error('disque plein');
+        if (mode === 'too-large') throw Object.assign(new Error('trop gros'), { reason: 'too-large' });
         (window.__ctSaved ??= []).push({ name: request.suggestedName, mime: request.mime, bytes: Array.from(request.data) });
         return { saved: true, path: `C:\\Export\\${request.suggestedName}` };
       },
@@ -47,7 +48,7 @@ export async function installFakeFiles(page: Page, options: { canSave?: boolean 
   }, options.canSave ?? true);
 }
 
-export async function nextFilesMode(page: Page, mode: 'cancel' | 'fail'): Promise<void> {
+export async function nextFilesMode(page: Page, mode: 'cancel' | 'fail' | 'too-large'): Promise<void> {
   await page.evaluate((value) => {
     window.__ctFilesMode = value;
   }, mode);

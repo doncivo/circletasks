@@ -76,6 +76,19 @@
   color: var(--ct-color-danger);
 }
 
+/* I-04 critère 10 : échec du journal technique, rouge #9E3F33 (jeton du thème, variante sombre comprise). */
+.ct-settings__hint--missed {
+  color: var(--ct-color-missed-text);
+}
+
+/* Ligne à deux liens (« Logs » et « Rechercher une mise à jour » sur PC). */
+.ct-settings__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--ct-space-2);
+}
+
 /* Bouton lien de ligne (.lk de Reglages.html). */
 .ct-settings__link {
   height: 30px;

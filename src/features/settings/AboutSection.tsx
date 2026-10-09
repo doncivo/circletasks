@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
 import { t } from '../../i18n';
+import { tLogs } from '../../i18n/logsText';
 import { logDesktopFailure } from '../../platform';
 import { Button } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { useNavigationStore } from '../app/navigation';
 import { SigningAboutRow } from '../reminders';
 import { updaterStore } from '../updater';
+import { useLogJournal, useLogStatus } from './logs/useLogJournal';
 import { onboardingStore } from './onboardingStore';
 
 /**
- * Section « À PROPOS » (Reglages.html, D-03 critères 6 et 7, P-05 critère 8). Sur PC : version installée, « Rechercher une mise à jour »
+ * Section « À PROPOS » (Reglages.html, D-03 critères 6 et 7, P-05 critère 8, I-04 critère 1). Partout : ligne « Version … » avec le lien
+ * « Logs » (écran du journal technique ; un échec d'écriture ou de lecture du journal y est signalé en rouge, critère 10). Sur PC : version installée, « Rechercher une mise à jour »
  * (résultat : « CircleTasks est à jour », « Impossible de vérifier les mises à jour » ou le bandeau de mise à jour) et lien vers la dernière
  * version. Partout (PC et iPhone) : « Revoir le guide de bienvenue », qui relance l'assistant sans toucher aux données. L'iPhone se met à
  * jour par SideStore (I-06) : il n'y a pas de ligne de mise à jour.
@@ -21,12 +25,17 @@ export function AboutSection() {
   const relaunchGuide = useFeatureStore(onboardingStore, (s) => s.relaunch);
   const [version, setVersion] = useState<string | null>(null);
   const [openFailed, setOpenFailed] = useState(false);
+  const navigate = useNavigationStore((s) => s.navigate);
+  const { journal, unavailable: journalUnavailable } = useLogJournal();
+  const logStatus = useLogStatus(journal);
+  const logFailureCode = logStatus.writeError ?? logStatus.readError ?? journalUnavailable;
+  const runtime = container.platform.runtime;
 
   useEffect(() => {
-    if (!desktop) return undefined;
     let active = true;
-    desktop
-      .getVersion()
+    // PC : version de l'intégration ; iPhone et navigateur : version de l'app (`@tauri-apps/api/app`), chargée à la demande.
+    const read = desktop ? desktop.getVersion() : import('../../platform/logs').then((m) => m.appVersion(runtime));
+    read
       .then((value) => {
         if (active) setVersion(value);
       })
@@ -34,7 +43,7 @@ export function AboutSection() {
     return () => {
       active = false;
     };
-  }, [desktop]);
+  }, [desktop, runtime]);
 
   const checking = status === 'checking';
   const hint =
@@ -57,21 +66,33 @@ export function AboutSection() {
   return (
     <>
       <h2 className="ct-settings__section">{t('settings.sectionAbout')}</h2>
-      {desktop && (
-        <>
-          <div className="ct-settings__row">
-            <span className="ct-settings__stack">
-              {version ? t('app.version', { version }) : t('app.name')}
-              {hint && (
-                <span className={status === 'checkFailed' ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
-                  {hint}
-                </span>
-              )}
+      <div className="ct-settings__row">
+        <span className="ct-settings__stack">
+          {version ? t('app.version', { version }) : t('app.name')}
+          {hint && (
+            <span className={status === 'checkFailed' ? 'ct-settings__hint ct-settings__hint--danger' : 'ct-settings__hint'} role="status">
+              {hint}
             </span>
+          )}
+          {logFailureCode && (
+            <span className="ct-settings__hint ct-settings__hint--missed" role="alert">
+              {logStatus.writeError ? tLogs('writeError') : logStatus.readError ? tLogs('readError') : tLogs('unavailable')} {tLogs('errorCode', { code: logFailureCode })}
+            </span>
+          )}
+        </span>
+        <span className="ct-settings__actions">
+          <Button variant="secondary" ariaLabel={tLogs('rowOpenLabel')} onClick={() => navigate({ tab: 'settings', screen: 'logs' })} className="ct-settings__link">
+            {tLogs('rowLabel')}
+          </Button>
+          {desktop && (
             <Button variant="secondary" onClick={() => void check()} disabled={checking} className="ct-settings__link">
               {t('settings.checkUpdates')}
             </Button>
-          </div>
+          )}
+        </span>
+      </div>
+      {desktop && (
+        <>
           <div className="ct-settings__row">
             <span className="ct-settings__stack">
               {t('settings.latestRelease')}

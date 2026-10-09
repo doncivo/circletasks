@@ -3,6 +3,7 @@
 //! Les tests sont ici et non dans `src/` pour cette raison (les tests unitaires de la lib sont
 //! désactivés dans Cargo.toml).
 
+mod applog;
 mod backup;
 mod backup_versions;
 mod capture;
@@ -11,6 +12,7 @@ mod calendars;
 mod config;
 mod db_diagnostics;
 mod export;
+mod export_ios;
 mod focus;
 mod import;
 mod logic;
@@ -20,6 +22,8 @@ mod ocr_vision;
 mod quit;
 mod restore;
 mod restore_hardening;
+mod restore_ios;
+mod restore_qa_ios;
 mod restore_recovery;
 mod shortcut;
 mod signing;

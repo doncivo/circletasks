@@ -27,7 +27,11 @@ export interface BackupListing {
   readonly versions: readonly BackupVersion[];
 }
 
-export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'restore-pending' | 'unavailable';
+/**
+ * `sync-busy` / `busy` (P-04-iOS critère 6) : un cycle de synchro ou une mise à jour des rappels n'a pas fini dans les 10 s de la mise au
+ * calme ; rien n'est modifié, l'utilisateur peut réessayer. `db-open` : la connexion à la base n'était pas fermée (Rust refuse l'échange).
+ */
+export type BackupFailureReason = 'corrupt' | 'newer-schema' | 'not-found' | 'io' | 'rollback-failed' | 'restore-pending' | 'unavailable' | 'sync-busy' | 'busy' | 'db-open';
 
 /** Échec d'une opération de sauvegarde. Pour `restore`, `databaseClosed` indique qu'un redémarrage est nécessaire pour rouvrir la base. */
 export class BackupError extends Error {
@@ -62,6 +66,20 @@ export interface RestoreRequest {
   readonly stamp: string;
 }
 
+/** Marqueur de restauration de la synchro (ADR 0010 règle 2) écrit par Rust après l'échange (P-04-iOS critère 12). */
+export interface RestoreResult {
+  readonly marker: 'written' | 'not-configured' | 'failed';
+  readonly markerCode: string | null;
+}
+
+export interface RestoreHooks {
+  /**
+   * Appelé après la vérification (base encore ouverte) et AVANT le point de contrôle et la fermeture : mise au calme et voile. Un rejet
+   * arrête la restauration sans rien modifier (`databaseClosed` faux).
+   */
+  readonly prepare?: () => Promise<void>;
+}
+
 export interface BackupService {
   /** Cette plateforme sauvegarde-t-elle ? Faux sur iPhone tant que les commandes ne lui sont pas ouvertes : la section est alors masquée. */
   available(): boolean;
@@ -72,8 +90,9 @@ export interface BackupService {
    * Restaure une version : la vérifie, ferme la base, remplace le fichier (copie de sécurité faite avant). Résout quand les fichiers sont
    * en place ; l'app doit alors redémarrer (`restart`). Rejette avec `BackupError` ; rien n'est modifié si `databaseClosed` est faux.
    */
-  restore(request: RestoreRequest): Promise<void>;
-  /** Relance l'app (rouvre la base, restaurée ou non). */
+  /** Marqueur écrit par Rust ; `undefined` pour un service sans marqueur (faux, navigateur). */
+  restore(request: RestoreRequest, hooks?: RestoreHooks): Promise<RestoreResult | undefined>;
+  /** Relance l'app (PC) ou recharge la WebView (iPhone) : rouvre la base, restaurée ou non. */
   restart(): Promise<void>;
   /** Affiche le dossier des sauvegardes (PC) ; absent ailleurs. */
   reveal?(): Promise<void>;
