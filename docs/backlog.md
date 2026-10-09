@@ -168,14 +168,15 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | I-01 | M16 | J'installe l'app sur l'iPhone | ios-mobile | fait (2026-10-07, lot I0 ; build de contrôle après revue à relancer quand la facturation GitHub sera réglée ; installation réelle par Ali en fin d’ordre) |
 | I-02 | M16 | Je suis prévenu avant l'expiration hebdomadaire | ios-mobile | à faire |
 | I-03 | M16 | Je protège l'app par Face ID | ios-mobile | à faire |
-| I-04 | M16 | Je consulte et exporte les logs | ios-mobile | à faire |
-| I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile | à faire |
+| I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | à faire (fiche prête, 2026-10-08) |
+| I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile + quick-capture | à faire (fiche prête, 2026-10-08) |
 | I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile | à faire |
-| P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire |
+| P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
+| FILES-IOS-01 | M12 | Story technique : plugin Fichiers (`FileService.save` sur iPhone par le panneau de partage), P-07 « Télécharger un modèle » et rapport des rejets sur iPhone, bouton « Exporter » de H-03 sur iPhone | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
 | N-TECH-01 | M5 | Story technique : interface `NotificationScheduler` dans src/platform/notifications (faux, noop PC) et planificateur pur dans src/domain (échéance effective, routines actives, prochaine occurrence, plafond iOS de 64) | notifications | fait (2026-10-07, lot N0, ADR 0012) |
 | Y-IOS-01 | M15 | Story technique : plugin folder-bookmark (signet, hydratation, lecture à partir d'un octet), `BookmarkFs`, cycle de synchro au passage en arrière-plan | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
 | Y-IOS-02 | M15 | Story technique : Trousseau iOS relu, scan du QR lancé par Rust, confirmations natives iOS, décalage horaire local iOS, échec de réintégration visible | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
-| CAP-IOS-01 | M9 | Story technique : plugins Vision (OCR, Q-04) et Speech (Q-03) sur iPhone derrière les contrats existants, avec I-05 caméra et micro | quick-capture + ios-mobile | à faire |
+| CAP-IOS-01 | M9 | Story technique : plugins Vision (OCR, Q-04) et Speech (Q-03) sur iPhone derrière les contrats existants, avec I-05 caméra et micro | quick-capture + ios-mobile | à faire (fiche prête, 2026-10-08) |
 
 Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en parallèle, un seul lot à la fois sur src/db et src/domain ; chaque lot à plugin Swift est accepté seulement si `build-ios.yml` lancé sur sa branche est vert) :
 - Phase 0, en parallèle : lot I0 (I-01, puis chaîne CI par branche et contrat des permissions Info.plist) et lot N0 (N-TECH-01).
@@ -184,7 +185,10 @@ Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en para
   - Avant tout code : architecte, avenant ADR 0008 §9 (web-auth) et §10 (Rappels Apple) pour le lot K ; ADR 0013 (haptique, biométrie, expiration de signature) pour le lot M.
   - Étape « M0 » : les pièces de `src/domain` du lot M (politique de verrou, calcul de l'alerte d'expiration, clés de réglage locales) sont écrites et fusionnées **avant** que le lot K ne touche `src/domain` ; ensuite le lot M ne touche ni `src/domain` ni `src/db`.
   - Lot K : K-TECH-01 (sans base ni domaine, peut démarrer pendant la rédaction de l'avenant §10), puis K-05, K-06, K-07. Lot M : M0, I-03, A-07, I-02, Q-05. Fusion : lot M d'abord (plus court), lot K rebasé ensuite (fichiers partagés : `Cargo.toml`, `lib.rs`, capabilities iOS, `Info.ios.plist`, `plist-contract.json`, `build-ios.yml`, `container.ts`). Le plugin `notification-actions` de N-03 (décision d'Ali du 2026-10-08, développé en parallèle) touche les mêmes fichiers : le fusionner avant la phase 2 ou le rebaser avec elle.
-- Phase 3, en parallèle : lot F (ADR 0009 avenant, P-04-iOS, plugin Fichiers, P-07 iPhone, I-04) et lot C (CAP-IOS-01, I-05).
+- Phase 3, en parallèle : lot F (ADR 0009 avenant, P-04-iOS, plugin Fichiers, P-07 iPhone, I-04) et lot C (CAP-IOS-01, I-05). Fiches prêtes le 2026-10-08. Détail :
+  - Avant tout code : architecte, avenant ADR 0009 (plugin Fichiers et P-04 sur iPhone) et ADR 0014 (journal technique persistant) pour le lot F ; ADR 0015 (plugins Vision et Speech, autorisations de capture) pour le lot C.
+  - Lot F : FILES-IOS-01, puis I-04, puis P-04-iOS (le plus risqué en dernier). Lot C : CAP-IOS-01 (Vision, puis Speech avec les critères d'I-05 sur le micro), puis I-05 (test transversal, contrat Info.plist complet).
+  - Dossiers : aucun des deux lots ne touche `src/db` ni `src/domain` (le lot K, en revue, les occupe) ; si une fiche l'exige, arrêt et question au product-owner. Dossiers disjoints, sauf les fichiers partagés `Cargo.toml`, `Cargo.lock`, `build.rs`, `src/lib.rs`, `tests/desktop/config.rs`, `build-ios.yml`, `container.ts`, `src/i18n` (index) : fusion du lot K d'abord, puis lot C, puis lot F rebasé.
 - Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), IPA candidate, vérifications d'Ali sur l'iPhone, puis REL-01 à REL-03.
 
 ## Livraison unique
