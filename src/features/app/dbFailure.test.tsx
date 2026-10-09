@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { openSqliteWasmDriver } from '../../db/drivers/sqliteWasm';
-import { DbStepError, describeError } from '../../db/errorText';
+import { DbStepError, JournalModeError, describeError } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { t } from '../../i18n';
@@ -69,6 +69,24 @@ describe('0.2.1 diagnostic : étape de l’ouverture qui a échoué', () => {
     vi.spyOn(db, 'transaction').mockImplementationOnce(() => Promise.reject(new Error('no such column: space_id'))).mockImplementation(transaction);
     await bootstrapDatabase(() => Promise.resolve(db), { backup: () => Promise.resolve(undefined) });
     expect(failure()).toMatchObject({ step: 'migration', migration: 3, message: 'no such column: space_id' });
+  });
+
+  it('0.2.2 : un échec base ouverte joint le mode de journal effectif (lu avant la fermeture) ; base non ouverte : absent', async () => {
+    const db = await openSqliteWasmDriver();
+    const select = db.select.bind(db);
+    vi.spyOn(db, 'select').mockImplementation((sql, params) => (sql === 'PRAGMA journal_mode' ? Promise.resolve([{ journal_mode: 'delete' }] as never) : select(sql, params)));
+    vi.spyOn(db, 'transaction').mockRejectedValueOnce(new Error('database is locked'));
+    await bootstrapDatabase(() => Promise.resolve(db), { backup: () => Promise.resolve(undefined) });
+    expect(failure()).toMatchObject({ step: 'migration', journalMode: 'delete' });
+
+    reset();
+    await bootstrapDatabase(() => Promise.reject(new DbStepError('pragma', new JournalModeError('delete'))));
+    expect(failure()).toMatchObject({ step: 'pragma', message: 'journal-mode: expected wal, got delete', journalMode: 'delete' });
+    expect(formatDbFailure(failure() as DbFailure, ENV)).toContain(t('app.diag.journalExpected'));
+
+    reset();
+    await bootstrapDatabase(() => Promise.reject(new DbStepError('load', 'x')));
+    expect(failure()).not.toHaveProperty('journalMode');
   });
 
   it('chaîne de causes : le message garde la cause', () => {
@@ -141,6 +159,12 @@ describe('0.2.1 diagnostic : affichage et copie', () => {
     expect(detail).toHaveTextContent(t('app.diag.error', { name: item.errorName, message: item.message }));
     expect(detail).toHaveTextContent('sqlite:circletasks.db');
     await waitFor(() => expect(detail).toHaveTextContent('/var/mobile/X/Library/Application Support/fr.ct/circletasks.db'));
+  });
+
+  it('0.2.2 : le mode de journal effectif est affiché, « inconnu » s’il est illisible, rien si la base n’était pas ouverte', () => {
+    expect(formatDbFailure({ ...MIGRATION_FAILURE, journalMode: 'delete' }, ENV)).toContain(t('app.diag.journalMode', { mode: 'delete' }));
+    expect(formatDbFailure({ ...MIGRATION_FAILURE, journalMode: null }, ENV)).toContain(t('app.diag.journalMode', { mode: t('app.diag.unknown') }));
+    expect(formatDbFailure(LOAD_FAILURE, ENV)).not.toContain(t('app.diag.journalMode', { mode: '' }));
   });
 
   it('chemins indisponibles : le message de la commande est affiché', () => {

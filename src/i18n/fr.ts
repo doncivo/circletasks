@@ -10,6 +10,7 @@ import { scanFr } from './fr.scan';
 import { searchFr } from './fr.search';
 import { appearanceFr } from './fr.appearance';
 import { spacesFr } from './fr.spaces';
+import { appleRemindersFr } from './fr.appleReminders';
 import { calendarsFr } from './fr.calendars';
 import { routinesFr } from './fr.routines';
 import { checklistsFr } from './fr.checklists';
@@ -43,6 +44,7 @@ export const fr = {
     screenReload: 'Recharger',
     dbBackupError: 'Mise à jour des données interrompue : la sauvegarde de sécurité a échoué. Vos données n’ont pas été modifiées. Libérez de l’espace disque puis relancez CircleTasks.',
     version: 'Version {version}',
+    dbStalled: 'L’ouverture est peut-être encore en cours ; si rien ne change, touchez « Réessayer ».',
     startError: 'Le démarrage de CircleTasks a échoué.',
     diag: {
       title: 'Détail technique',
@@ -53,6 +55,10 @@ export const fr = {
       configDirError: 'Dossier introuvable : {message}',
       dbFile: 'Fichier : {path} (existe : {exists}, taille : {size})',
       wal: 'Journal WAL présent : {exists}',
+      retry: 'Réessayer',
+      stalled: 'Aucune réponse de la base de données depuis {seconds} s.',
+      journalMode: 'Mode de journal effectif : {mode}',
+      journalExpected: 'WAL attendu : la base n’a pas pu être ouverte en mode WAL.',
       pathsError: 'Chemins indisponibles : {message}',
       pathsPending: 'Chemins : lecture en cours…',
       environment: 'Environnement : {runtime}, système {os}, build {build}, version {version}',
@@ -95,6 +101,7 @@ export const fr = {
   focus: focusFr,
   stats: statsFr,
   appearance: appearanceFr,
+  appleReminders: appleRemindersFr,
   calendars: calendarsFr,
   // Synchronisation : sections `status` et `restore` (lot Y2) ; `folder` et `key` viennent du lot Y1 ;
   // lot Y3 : `conflicts` et `field` (Y-04), `version` (Y-07), `pairing` (Y-06) ; lot Y4 : `forget` (Y-10), `reset` (Y-11) ; chacune dans son fichier.

@@ -36,7 +36,7 @@ afterEach(async () => {
 async function task(id = '13000000-0000-4000-8000-000000000001'): Promise<TaskId> {
   const created = await db.data.repos.tasks.create({
     id: asEntityId<TaskId>(id), spaceId: PRO, projectId: null, title: 'Vivante', note: '', date: null, time: null, status: 'todo', doneAt: null,
-    sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, externalEventId: null,
+    sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, appleListId: null, appleRecurring: false, externalEventId: null,
   });
   container.taskEntities.publish([created]);
   return created.id;

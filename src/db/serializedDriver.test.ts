@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DbError, classifySqliteMessage, toDbError, type SqlDriver, type SqlExecutor } from './driver';
 import { openSqliteWasmDriver } from './drivers/sqliteWasm';
-import { DEFAULT_TRANSACTION_WAIT_TIMEOUT_MS } from './serializedDriver';
+import { DEFAULT_TRANSACTION_WAIT_TIMEOUT_MS, createSerializedDriver } from './serializedDriver';
 
 describe('driver SQLite (contrat SqlDriver)', () => {
   let db: SqlDriver;
@@ -121,5 +121,21 @@ describe('driver SQLite (contrat SqlDriver)', () => {
     const original = new DbError('busy', 'occupé');
     expect(toDbError(original)).toBe(original);
     expect(toDbError('texte brut', 'SELECT 1')).toMatchObject({ code: 'unknown', sql: 'SELECT 1' });
+  });
+});
+
+describe('transaction perdue (connexion remplacée en cours de transaction)', () => {
+  it('un COMMIT « no transaction is active » est un échec visible `transaction-lost`, jamais un succès', async () => {
+    const sent: string[] = [];
+    const driver = createSerializedDriver('sqlite-wasm', {
+      execute: (sql) => {
+        sent.push(sql);
+        return sql === 'COMMIT' ? Promise.reject('error returned from database: (code: 1) cannot commit - no transaction is active') : Promise.resolve({ rowsAffected: 0, lastInsertId: null });
+      },
+      select: () => Promise.resolve([]),
+      close: () => Promise.resolve(),
+    });
+    await expect(driver.transaction(async (tx) => { await tx.execute('UPDATE t SET x = 1'); })).rejects.toMatchObject({ name: 'DbError', code: 'transaction-lost' });
+    expect(sent).toEqual(['BEGIN IMMEDIATE', 'UPDATE t SET x = 1', 'COMMIT', 'ROLLBACK']);
   });
 });

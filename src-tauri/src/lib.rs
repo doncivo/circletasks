@@ -61,7 +61,7 @@ pub fn run() {
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
-    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_vision::init()).plugin(tauri_plugin_speech::init()).manage(ocr::vision::VisionState::default()).manage(speech::SpeechState::default()).manage(sync::commands_ios::SyncState::default());
+    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_vision::init()).plugin(tauri_plugin_speech::init()).manage(ocr::vision::VisionState::default()).manage(speech::SpeechState::default()).manage(sync::commands_ios::SyncState::default());
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, backup::db_diagnostics, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : commandes de `main`, aucune de la fenêtre `pairing`.

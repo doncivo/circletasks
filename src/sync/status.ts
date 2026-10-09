@@ -1,5 +1,6 @@
 import type { ReintegrationFailure } from '../domain/sync/compat';
 import { omitKey } from '../domain/omitKey';
+import { isSlowedSyncError, SLOW_RETRY_MS } from '../domain/sync/errorFamily';
 import type { SyncWarningCode } from '../domain/syncBanners';
 import type { DeviceId, IsoDateTime } from '../domain/types';
 import { INITIAL_STATUS, type SyncDeviceStatus, type SyncErrorCode, type SyncForgetStatus, type SyncPhase, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
@@ -59,6 +60,20 @@ export function phaseOf(facts: CycleFacts): SyncPhase {
   return 'idle';
 }
 
+/**
+ * Y-IOS-02 : échecs consécutifs avec le même code (`errorStreak`) : un cycle en échec avec le code de l'échec précédent l'augmente, tout
+ * autre code le remet à 1 ; un cycle sans échec le retire. Erreur passagère répétée `SLOW_AFTER` fois : `retryAt`, prochain essai
+ * périodique espacé de `SLOW_RETRY_MS` (jamais un arrêt).
+ */
+export function errorRepeat(previous: Pick<SyncStatus, 'errorCode' | 'errorStreak'>, code: SyncErrorCode | null, nowMs: number): Pick<SyncStatus, 'errorStreak' | 'retryAt'> {
+  if (code === null) return {};
+  const streak = previous.errorCode === code ? (previous.errorStreak ?? 1) + 1 : 1;
+  return {
+    ...(streak > 1 ? { errorStreak: streak } : {}),
+    ...(isSlowedSyncError(code, streak) ? { retryAt: new Date(nowMs + SLOW_RETRY_MS).toISOString() as IsoDateTime } : {}),
+  };
+}
+
 export function statusFromFacts(
   previous: SyncStatus,
   facts: CycleFacts,
@@ -77,12 +92,15 @@ export function statusFromFacts(
     readonly stateUnreadable?: boolean;
     /** Y-TECH-02 (seconde revue, point 6) : début de l'attente d'iCloud en cours ; null : aucune. */
     readonly waitingSince?: IsoDateTime | null;
+    /** Y-IOS-02 : instant de fin du cycle (heure du prochain essai espacé) ; absent : aucune erreur répétée comptée. */
+    readonly nowMs?: number;
   },
 ): SyncStatus {
   const phase = phaseOf(facts);
   const clockAhead = facts.devices.find((d) => !d.self && d.status === 'clock-ahead');
   // Champ facultatif : absent quand il n'y a pas d'échec (les états sans échec restent identiques à ceux du lot Y2).
-  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince');
+  const { reintegrationFailure: kept, forget: keptForget, reset: keptReset, warnings: keptWarnings, ...rest } = omitKey(omitKey(omitKey(omitKey(previous, 'stateUnreadable'), 'waitingSince'), 'errorStreak'), 'retryAt');
+  const repeat = facts.outcome === 'failed' && extra.nowMs !== undefined ? errorRepeat(previous, facts.errorCode, extra.nowMs) : {};
   const warnings = facts.warnings ?? keptWarnings ?? [];
   const unreadable = facts.stateUnreadable === true || extra.stateUnreadable === true;
   const failure = extra.reintegrationFailure === undefined ? (kept ?? null) : extra.reintegrationFailure;
@@ -96,6 +114,7 @@ export function statusFromFacts(
     ...(warnings.length > 0 ? { warnings } : {}),
     ...(unreadable ? { stateUnreadable: true } : {}),
     ...(extra.waitingSince ? { waitingSince: extra.waitingSince } : {}),
+    ...repeat,
     phase,
     folderLabel: extra.folderLabel,
     folderKind: extra.folderKind ?? previous.folderKind ?? null,

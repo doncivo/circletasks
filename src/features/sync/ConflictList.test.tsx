@@ -78,6 +78,8 @@ async function task(title: string, time: string | null = '09:00'): Promise<TaskI
     someday: false,
     source: 'local',
     externalId: null,
+    appleListId: null,
+    appleRecurring: false,
     externalEventId: null,
   });
   return created.id;

@@ -221,7 +221,7 @@ describe('branchements (Y-02 critères 17 à 19)', () => {
   it('onRemoteChanges : taskEntities reçoit les tâches relues, une tâche supprimée en est retirée', async () => {
     const task = await db.data.repos.tasks.create({
       id: asEntityId('12000000-0000-4000-8000-000000000001'), spaceId: asEntityId('00000000-0000-4000-8000-000000000001'), projectId: null, title: 'Reçue', note: '', date: null, time: null,
-      status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, externalEventId: null,
+      status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: null, seriesIndex: null, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, appleListId: null, appleRecurring: false, externalEventId: null,
     });
     await applyRemoteChanges(container, { tables: new Set(['task']), ids: new Map([['task', new Set([task.id])]]) });
     expect(container.taskEntities.get(task.id)?.title).toBe('Reçue');

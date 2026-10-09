@@ -106,6 +106,8 @@ export function buildNextOccurrence(previous: Task, options: BuildNextOccurrence
     someday: false,
     source: 'local',
     externalId: null,
+    appleListId: null,
+    appleRecurring: false,
     externalEventId: null,
   };
   const time = previous.time;

@@ -4,7 +4,7 @@ import { AppContainerProvider, useAppContainer } from './features/app/AppContain
 import { useAppStore } from './features/app/appStore';
 import { UndoToast } from './features/app/UndoToast';
 import { bootstrapApp, publishStartFailure } from './features/app/bootstrap';
-import { DbFailureDetails } from './features/app/DbFailureDetails';
+import { DbFailureDetails, DbOpenWatchdog } from './features/app/DbFailureDetails';
 import type { AppContainer } from './features/app/container';
 import { resolveTabs } from './domain/tabs';
 import { useTabsConfigStore } from './features/app/tabsConfig';
@@ -54,6 +54,7 @@ import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from '
 import { UpdateBanner } from './features/updater';
 import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
 import { startSyncIntegration } from './features/sync/startSync';
+import { startRemindersLazily } from './features/calendars/appleReminders/loadIntegration';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
 import { AppLockGate } from './features/security/AppLockGate';
 import { bootAppLock } from './features/security/appLockBoot';
@@ -284,6 +285,13 @@ export function App() {
     return startNotificationIntegration(container).dispose;
   }, [container]);
 
+  // K-05 à K-07 : Rappels Apple (lecture et écriture sur l'iPhone, ouverture APRÈS le premier rendu, reprise, `changed`, synchro, écriture locale) ; sur PC, réglages relus seulement.
+  useEffect(() => {
+    if (!container) return undefined;
+    // Chargé à part (hors du bundle de départ, jamais avant le premier rendu) ; un échec de chargement est visible et réessayé à la reprise.
+    return startRemindersLazily(container).dispose;
+  }, [container]);
+
   // PC : zone de notification, « Ajout rapide », vérifications de mise à jour (D-01, D-03).
   useEffect(() => {
     if (!container) return undefined;
@@ -313,6 +321,7 @@ export function App() {
   return (
     <div className="app-shell" data-layout={layout} data-db-status={dbStatus}>
       {dbStatus === 'loading' && <p role="status">{t('app.loading')}</p>}
+      {dbStatus === 'loading' && <DbOpenWatchdog />}
       {dbStatus === 'error' && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
       {/* 0.2.1 : étape, erreur exacte, URL et chemins de la base, copiables (diagnostic sans logs, sur PC comme sur iPhone). */}
       {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} />}

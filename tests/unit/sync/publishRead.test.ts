@@ -214,7 +214,7 @@ describe('lecture (Y-02 critère 6, Y-05 critère 7)', () => {
 
   it('appareil qui rejoint : la base de A arrive par l’instantané puis par les journaux (SCHEMA_VERSION publié)', async () => {
     const [a, b] = await twoDevices();
-    expect(SCHEMA_VERSION).toBe(17);
+    expect(SCHEMA_VERSION).toBe(18);
     const t = await a.createTask('Pour B');
     await a.cycle();
     syncFolders(devices);

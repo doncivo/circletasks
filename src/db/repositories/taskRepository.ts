@@ -1,4 +1,4 @@
-import type { GoalProgress, NewRecurrence, NewTask, Recurrence, RecurrencePatch, Task, TaskPatch } from '../../domain/model';
+import type { GoalProgress, NewRecurrence, NewTask, Recurrence, RecurrencePatch, Task, TaskPatch, TaskSource } from '../../domain/model';
 import type {
   ExternalEventId,
   GoalId,
@@ -13,6 +13,14 @@ import type {
 } from '../../domain/types';
 import type { InstantRange, ReadOptions, SortOrderEntry } from './common';
 
+/** Colonnes du lien à un rappel Apple (ADR 0008 §10.2). */
+export interface AppleLink {
+  readonly source: TaskSource;
+  readonly externalId: string | null;
+  readonly appleListId: string | null;
+  readonly appleRecurring: boolean;
+}
+
 /**
  * Tâches (M1, M2, M3, M17, M18). Méthodes nommées par cas d'usage ; l'ordre
  * d'affichage final (terminées en bas, heure, ordre manuel) est calculé par
@@ -25,6 +33,16 @@ export interface TaskRepository {
    * Si plusieurs existent (deux appareils hors ligne), la plus ancienne.
    */
   findByExternalEvent(eventId: ExternalEventId): Promise<Task | null>;
+
+  /** K-05 : tâches vivantes d'origine Rappels (liées ou à créer dans Rappels), tous espaces, hors copies écartées ; plus anciennes d'abord. */
+  listAppleSourced(): Promise<Task[]>;
+  /** K-05 : tâche vivante liée à ce rappel (`external_id`) ; la plus ancienne si deux appareils en ont créé une chacun ; null sinon. */
+  findByExternalId(externalId: string): Promise<Task | null>;
+  /**
+   * K-05, K-06 : pose ou retire le lien à un rappel (`source`, `external_id`, `apple_list_id`, `apple_recurring`) sans toucher au reste ; agit aussi
+   * sur une tâche supprimée (détachement après l'envoi d'une suppression). Le cas d'usage fixe les états admis (`appleLinkState`).
+   */
+  setAppleLink(id: TaskId, link: AppleLink): Promise<Task>;
 
   /** T-01, S-04, SD-01. */
   create(task: NewTask): Promise<Task>;

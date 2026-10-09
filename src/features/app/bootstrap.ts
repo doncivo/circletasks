@@ -4,7 +4,7 @@ import { newEntityId, uuidGenerator, type IdGenerator } from '../../domain/id';
 import type { DeviceId } from '../../domain/types';
 import type { SqlDriver } from '../../db/driver';
 import { createBackupBeforeMigration, MigrationBackupError, type MigrationBackup } from '../../db/migrationBackup';
-import { DbStepError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
+import { DbStepError, JournalModeError, describeError, errorName, type DbOpenStep } from '../../db/errorText';
 import { migrate } from '../../db/migrator';
 import { migrations } from '../../db/migrations';
 import { createDataAccess, createSqlRepositories, reintegrateUnknownFields, type ReintegrationReport, type RepositoryFactory } from '../../db/repositories';
@@ -15,7 +15,8 @@ import { openFocusEndScheduler, openFocusWindowPlatform, type FocusEndScheduler,
 import { createLedgerStore, openNotificationActionSource, openNotificationScheduler, systemNotificationClock, type NotificationActionSource, type NotificationClock, type NotificationScheduler } from '../../platform/notifications';
 import { composeFocusEndText } from '../reminders/focusEndText';
 import { createSettingsLedger } from '../reminders/settingsLedger';
-import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform } from '../../platform/calendars';
+import { openRemindersPlatform, type RemindersPlatform } from '../../platform/reminders';
+import { openCalendarPlatform, PRODUCTION_ENDPOINTS, simulatorEndpoints, type CalendarPlatform, type MemoryPlatformOptions, type WebAuthFailureCode } from '../../platform/calendars';
 import { createMigrationBackup, openDatabase } from '../../platform/database';
 import { logFailure } from '../../platform/desktop/log';
 import { openSyncPlatform } from '../../platform/sync';
@@ -51,9 +52,12 @@ export async function bootstrapDatabase(
   // 0.2.1 : étape en cours, mise à jour avant chaque appel (diagnostic affiché sous app.dbError).
   let step: DbOpenStep = 'load';
   let migration: number | undefined;
+  const { setDbProgress } = useAppStore.getState();
+  setDbProgress({ step });
   try {
     db = await open();
     step = 'backup';
+    setDbProgress({ step });
     const port = await (options.backup ?? createMigrationBackup)(db);
     await migrate(db, migrations, {
       beforeApply: createBackupBeforeMigration(port, options.clock),
@@ -61,11 +65,16 @@ export async function bootstrapDatabase(
       onStep: (current) => {
         step = current.kind;
         migration = current.kind === 'migration' ? current.version : undefined;
+        setDbProgress({ step, migration });
       },
     });
+    setDbProgress(null);
     setDbStatus('ready');
     return db;
   } catch (error) {
+    setDbProgress(null);
+    const cause = error instanceof DbStepError ? error.cause : error;
+    const journalMode = cause instanceof JournalModeError ? cause.mode : db ? await readJournalMode(db) : undefined;
     if (db) await db.close().catch(() => undefined);
     const failedStep = error instanceof DbStepError ? error.step : error instanceof MigrationBackupError ? 'backup' : step;
     const message = describeError(error);
@@ -73,9 +82,20 @@ export async function bootstrapDatabase(
     setDbStatus('error', {
       detail: message,
       backupFailed: error instanceof MigrationBackupError,
-      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message },
+      failure: { phase: 'open', step: failedStep, migration: failedStep === 'migration' ? migration : undefined, errorName: errorName(error), message, ...(journalMode === undefined ? {} : { journalMode }) },
     });
     return undefined;
+  }
+}
+
+/** Mode de journal effectif pour le diagnostic (0.2.2) ; null si la lecture échoue (elle ne masque jamais l'erreur d'origine). */
+async function readJournalMode(db: SqlDriver): Promise<string | null> {
+  try {
+    const rows = await db.select('PRAGMA journal_mode');
+    const mode = rows[0]?.journal_mode;
+    return typeof mode === 'string' ? mode : null;
+  } catch {
+    return null;
   }
 }
 
@@ -106,6 +126,8 @@ export interface BootstrapAppOptions {
   readonly desktop?: DesktopPlatform | null;
   /** Agendas externes ; `openCalendarPlatform` par défaut (commandes Rust, ou mémoire + simulateurs en développement). */
   readonly calendars?: CalendarPlatform;
+  /** Rappels Apple (K-05) ; `openRemindersPlatform` par défaut (plugin EventKit sur l'iPhone installé, indisponible ailleurs). */
+  readonly reminders?: RemindersPlatform;
   /** Mini-fenêtre Focus (F-01) ; `openFocusWindowPlatform` par défaut (null hors Windows installé). */
   readonly focusWindow?: FocusWindowPlatform | null;
   /** Notifications locales de rappel (N-01) ; `openNotificationScheduler` par défaut (adaptateur réel sur l'iPhone installé, vide ailleurs). */
@@ -148,7 +170,9 @@ const readOnlyStamper: WriteStamper = {
  * (dbStatus = 'error'). Appelé par App.tsx ; le conteneur est fourni par AppContainerProvider.
  */
 export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<AppContainer | undefined> {
-  const driver = await bootstrapDatabase(options.open, { clock: options.clock, backup: options.backup });
+  // Prise de test des e2e (développement seulement, retirée d'un build) : simule une ouverture qui ne répond pas ou qui échoue.
+  const devOpen = import.meta.env.DEV ? (globalThis as { __ctDbOpen?: () => Promise<SqlDriver> }).__ctDbOpen : undefined;
+  const driver = await bootstrapDatabase(options.open ?? devOpen, { clock: options.clock, backup: options.backup });
   if (!driver) return undefined;
   const factory = options.repositories ?? createSqlRepositories;
   const clock = options.clock ?? systemClock;
@@ -223,6 +247,7 @@ export async function bootstrapApp(options: BootstrapAppOptions = {}): Promise<A
       files: options.files ?? at('openFileService', () => openFileService(detectRuntime(), detectOs())),
       backups: options.backups ?? at('openBackupService', () => openBackupService(detectRuntime(), detectOs(), { db: driver })),
       calendars: options.calendars ?? (await at('openCalendarPlatform', () => openCalendarPlatform(...developmentCalendarSetup()))),
+      reminders: options.reminders ?? at('openRemindersPlatform', () => openRemindersPlatform(runtime, os)),
       haptics: options.haptics ?? at('openHaptics', () => openHaptics(runtime, os, { log: (code) => logFailure('haptics', code) })),
       authenticator: options.authenticator ?? at('openAuthenticator', () => openAuthenticator(runtime, os, { log: (code) => logFailure('security', code) })),
       privacyShield: options.privacyShield ?? at('openPrivacyShield', () => openPrivacyShield(runtime, os)),
@@ -248,12 +273,14 @@ export function publishStartFailure(step: string, error: unknown): void {
  * Points d'accès et ID client des simulateurs d'agendas, en développement seulement (variables VITE_CT_GOOGLE_SIM, VITE_CT_CALDAV_SIM,
  * VITE_CT_GOOGLE_SIM_CLIENT_ID posées par Playwright) : un build de production n'en lit jamais.
  */
-function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, { googleClientId?: string }] {
+function developmentCalendarSetup(): [CalendarEndpointsArg, undefined, MemoryPlatformOptions] {
   const env = import.meta.env;
   if (!env.DEV) return [PRODUCTION_ENDPOINTS, undefined, {}];
   // Playwright : un test qui modifie l'état d'un simulateur en démarre un à lui et l'annonce avant le chargement de la page.
   const override = (globalThis as { __ctCalendarSims?: { google: string; caldav: string; clientId?: string } }).__ctCalendarSims;
-  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, override.clientId ? { googleClientId: override.clientId } : {}];
+  // K-TECH-01 (e2e iphone) : échec de la feuille de connexion Google posé par le test (`window.__ctWebAuthFailure`), relu à chaque connexion.
+  const webAuthFailure = (): WebAuthFailureCode | null => (globalThis as { __ctWebAuthFailure?: WebAuthFailureCode }).__ctWebAuthFailure ?? null;
+  if (override) return [simulatorEndpoints(override.google, override.caldav), undefined, { ...(override.clientId ? { googleClientId: override.clientId } : {}), webAuthFailure }];
   if (!env.VITE_CT_GOOGLE_SIM || !env.VITE_CT_CALDAV_SIM) return [PRODUCTION_ENDPOINTS, undefined, {}];
   return [simulatorEndpoints(env.VITE_CT_GOOGLE_SIM, env.VITE_CT_CALDAV_SIM), undefined, env.VITE_CT_GOOGLE_SIM_CLIENT_ID ? { googleClientId: env.VITE_CT_GOOGLE_SIM_CLIENT_ID } : {}];
 }

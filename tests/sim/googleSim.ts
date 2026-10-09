@@ -59,6 +59,8 @@ export interface GoogleSim extends RunningSim {
   readonly clientId: string;
   /** Le prochain consentement est refusé (`error=access_denied`, K-01 critère 2). */
   denyNextConsent(): void;
+  /** Le prochain retour de consentement porte un `state` falsifié (K-TECH-01 : `state-mismatch`, rien d'enregistré). */
+  forgeNextState(): void;
   /** Révoque tous les jetons : 401 puis `invalid_grant` au rafraîchissement (K-01 critère 7). */
   revokeAll(): void;
   /** Les jetons d'accès en cours expirent (le rafraîchissement doit suivre). */
@@ -75,6 +77,7 @@ export async function startGoogleSim(options: GoogleSimOptions = {}): Promise<Go
   const calendars = options.calendars ?? DEFAULT_GOOGLE_CALENDARS;
   let events = options.events ?? DEFAULT_GOOGLE_EVENTS;
   let denyConsent = false;
+  let forgeState = false;
   const codes = new Map<string, { challenge: string; redirectUri: string }>();
   const accessTokens = new Set<string>();
   const refreshTokens = new Set<string>();
@@ -109,7 +112,8 @@ export async function startGoogleSim(options: GoogleSimOptions = {}): Promise<Go
         codes.set(code, { challenge: searchParams.get('code_challenge') ?? '', redirectUri });
         target.searchParams.set('code', code);
       }
-      target.searchParams.set('state', state);
+      target.searchParams.set('state', forgeState ? 'etat-falsifie' : state);
+      forgeState = false;
       return { status: 302, headers: { location: target.toString() } };
     }
     if (request.method === 'POST' && pathname === '/token') {
@@ -167,6 +171,7 @@ export async function startGoogleSim(options: GoogleSimOptions = {}): Promise<Go
     ...running,
     clientId,
     denyNextConsent: () => void (denyConsent = true),
+    forgeNextState: () => void (forgeState = true),
     revokeAll: () => {
       accessTokens.clear();
       refreshTokens.clear();

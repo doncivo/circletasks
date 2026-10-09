@@ -97,7 +97,11 @@ test.describe('P-05 — premier lancement', () => {
     await dialog.getByRole('button', { name: 'Commencer' }).click();
     await expect(dialog).not.toBeVisible();
     await todayTab(page).click();
-    await expect.poll(() => listTitles(page)).toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', 'Envoyer la facture du mois']);
+    // Routine d'exemple « Revue de la semaine » : le vendredi seulement (jour de Paris, celui de l'app ; échec constaté un vendredi en CI).
+    const friday = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: 'Europe/Paris' }).format(new Date()) === 'Fri';
+    await expect
+      .poll(() => listTitles(page))
+      .toEqual(['Marcher 20 minutes', 'Préparer la réunion d’équipe', 'Faire les courses', ...(friday ? ['Revue de la semaine'] : []), 'Envoyer la facture du mois']);
     await tab(page, 'Réglages').click();
     await page.getByRole('button', { name: 'Supprimer les données d’exemple' }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Supprimer les données d’exemple ?' });

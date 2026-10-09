@@ -14,7 +14,7 @@ export const CALENDAR_COMMANDS = {
   http: 'calendar_http',
 } as const;
 
-const CODES: readonly CalendarPlatformErrorCode[] = ['host-not-allowed', 'secret-missing', 'reauth-required', 'cancelled', 'state-mismatch', 'config-missing', 'network', 'timeout', 'vault-unavailable', 'unsupported'];
+const CODES: readonly CalendarPlatformErrorCode[] = ['host-not-allowed', 'secret-missing', 'reauth-required', 'cancelled', 'state-mismatch', 'config-missing', 'network', 'timeout', 'vault-unavailable', 'web-auth-unavailable', 'web-auth-failed', 'unsupported'];
 
 /** Rejet Rust (code en chaîne, sans secret) → `CalendarPlatformError` ; un rejet inattendu devient `unsupported`, jamais son texte. */
 export function toPlatformError(rejection: unknown): CalendarPlatformError {

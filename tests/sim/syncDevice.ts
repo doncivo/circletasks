@@ -144,6 +144,8 @@ export async function createSimDevice(id: string, options: { readonly name?: str
         someday: false,
         source: 'local',
         externalId: null,
+        appleListId: null,
+        appleRecurring: false,
         externalEventId: null,
         ...extra,
       });

@@ -1,0 +1,22 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "reminders-ios",
+  "description": "iPhone uniquement : lecture et écriture des Rappels Apple par EventKit (K-05 à K-07, ADR 0008 §10.4). Liste exacte fixée par tests/desktop/config.rs ; aucune autre capability n'accorde reminders:.",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "iOS"
+  ],
+  "permissions": [
+    "reminders:allow-status",
+    "reminders:allow-request-access",
+    "reminders:allow-lists",
+    "reminders:allow-fetch",
+    "reminders:allow-upsert",
+    "reminders:allow-set-completed",
+    "reminders:allow-delete",
+    "reminders:allow-register-listener",
+    "reminders:allow-remove-listener"
+  ]
+}

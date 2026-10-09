@@ -131,7 +131,16 @@ export function createSerializedDriver(
         inTransaction = true;
         try {
           const result = await fn(tx);
-          await rawExecute('COMMIT');
+          try {
+            await rawExecute('COMMIT');
+          } catch (error) {
+            // Connexion remplacée en cours de transaction (ping en échec côté sqlx) : les écritures ont été validées une à une sur la
+            // nouvelle connexion, le COMMIT n'a plus de transaction. Échec visible de la transaction, jamais rattrapé en silence.
+            if (/no transaction is active/i.test(error instanceof Error ? error.message : String(error))) {
+              throw new DbError('transaction-lost', 'Transaction perdue : connexion remplacée avant le COMMIT', { cause: error });
+            }
+            throw error;
+          }
           return result;
         } catch (error) {
           await rawExecute('ROLLBACK').catch(() => undefined);

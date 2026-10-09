@@ -45,3 +45,12 @@ export function openSystemSettings(runtime: Runtime, os: OsFamily): SystemSettin
   }
   return null;
 }
+
+/**
+ * API du lot K (Rappels Apple) : ouvre Réglages › CircleTasks par le même ouvreur que la dictée et le scan (commande Rust de Réglages),
+ * jamais par le plugin de lecture de code QR. Sans ouvreur (PC, navigateur) : rejette `settings-unavailable`, l'appelant garde son texte.
+ */
+export async function openAppSettings(): Promise<void> {
+  if (!current) throw new SystemSettingsError('settings-unavailable');
+  await current.openApp();
+}

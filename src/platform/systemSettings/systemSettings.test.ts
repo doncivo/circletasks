@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { getSystemSettings, openSystemSettings, setSystemSettings, SystemSettingsError } from './index';
+import { getSystemSettings, openAppSettings, openSystemSettings, setSystemSettings, SystemSettingsError } from './index';
+import { createFakeSystemSettings } from './testing';
 import { createTauriSystemSettings, SETTINGS_OPEN_COMMAND } from './tauriSystemSettings';
 
 describe('systemSettings : ouverture des Réglages iOS (un seul point d’appel)', () => {
@@ -46,5 +47,19 @@ describe('systemSettings : ouverture des Réglages iOS (un seul point d’appel)
     };
     walk('src');
     expect(found).toEqual(['src/platform/systemSettings/tauriSystemSettings.ts']);
+  });
+});
+
+describe('openAppSettings (API du lot K) passe par l’ouvreur commun', () => {
+  afterEach(() => setSystemSettings(null));
+
+  it('appelle l’ouvreur branché une fois ; sans ouvreur : settings-unavailable ; échec de l’ouvreur propagé', async () => {
+    await expect(openAppSettings()).rejects.toMatchObject({ code: 'settings-unavailable' });
+    const fake = createFakeSystemSettings();
+    setSystemSettings(fake);
+    await openAppSettings();
+    expect(fake.opened).toBe(1);
+    fake.fail = true;
+    await expect(openAppSettings()).rejects.toMatchObject({ code: 'settings-open-failed' });
   });
 });

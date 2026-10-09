@@ -21,8 +21,8 @@ const FORBIDDEN = [
   'NSUserTrackingUsageDescription',
 ];
 
-/** Clés d'usage de l'app sur cette branche (NSRemindersFullAccessUsageDescription arrive avec K-05, écart 8 de l'ADR 0015). */
-const USAGE_KEYS = ['NSCameraUsageDescription', 'NSMicrophoneUsageDescription', 'NSSpeechRecognitionUsageDescription', 'NSFaceIDUsageDescription'];
+/** Clés d'usage de l'app (Rappels Apple : K-05, fusionné ; écart 8 de l'ADR 0015 soldé). */
+const USAGE_KEYS = ['NSCameraUsageDescription', 'NSMicrophoneUsageDescription', 'NSSpeechRecognitionUsageDescription', 'NSFaceIDUsageDescription', 'NSRemindersFullAccessUsageDescription'];
 
 /** Heuristique de langue : au moins deux mots français courants et aucun mot anglais courant. */
 function looksFrench(text: string): boolean {

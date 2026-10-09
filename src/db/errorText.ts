@@ -19,6 +19,15 @@ export class DbStepError extends Error {
   }
 }
 
+/** Mode de journal différent de WAL à l'ouverture : message neutre (code + mode), traduit par le diagnostic (app.diag.journalMode). */
+export class JournalModeError extends Error {
+  override readonly name = 'JournalModeError';
+  readonly code = 'journal-mode';
+  constructor(readonly mode: string | null) {
+    super(`journal-mode: expected wal, got ${mode ?? 'unknown'}`);
+  }
+}
+
 /** Longueur maximale d'un message d'erreur conservé pour le diagnostic (assez pour une erreur sqlx ou Tauri complète). */
 export const MAX_ERROR_TEXT = 4000;
 

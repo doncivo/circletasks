@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -29,6 +29,12 @@ describe('commandes de la capture sur iPhone : un seul fichier les nomme', () =>
   it('speech_* : tauriSpeech.ts seul ; app_settings_open : tauriSystemSettings.ts seul', () => {
     expect(filesNaming(/['"]speech_[a-z_]+['"]/)).toEqual(['src/platform/speech/tauriSpeech.ts']);
     expect(filesNaming(/['"]app_settings_open['"]/)).toEqual(['src/platform/systemSettings/tauriSystemSettings.ts']);
+  });
+
+  it('openAppSettings du plugin barcode-scanner : appelé seulement par l’écran d’association (Y-IOS-02), jamais par les autres', () => {
+    expect(filesNaming(/openAppSettings()/).filter((file) => /barcode-scanner|plugin./.test(CONTENTS.get(file) ?? '') && /plugin.openAppSettings()/.test(CONTENTS.get(file) ?? ''))).toEqual(['src/platform/sync/barcodeScanner.ts']);
+    expect(filesNaming(/plugin-barcode-scanner/)).toEqual(['src/platform/sync/barcodeScanner.ts']);
+    expect(existsSync(join(root, 'src/platform/systemSettings.ts'))).toBe(false);
   });
 
   it('ocr_status et ocr_recognize : nativeOcr.ts seul', () => {
