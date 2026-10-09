@@ -290,6 +290,7 @@ export function WeekScreen() {
                 icon: input.icon,
                 reminderOffsets: input.reminderOffsets,
                 goalId: input.goalId,
+                taskId: input.taskId,
               });
               if (result.ok) announceCreation(input.spaceId);
               return result.ok;

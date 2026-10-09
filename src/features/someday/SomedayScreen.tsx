@@ -100,6 +100,7 @@ function SomedayMobile({ onBack }: { onBack: () => void }) {
               icon: input.icon,
               reminderOffsets: input.reminderOffsets,
               goalId: input.goalId,
+              id: input.taskId,
             });
             if (result.ok) view.announceCreation(input.spaceId);
             return result.ok;

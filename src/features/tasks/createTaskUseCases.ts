@@ -133,7 +133,7 @@ function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       // destination), sur PC comme sur iPhone ; l'iPhone l'envoie à son prochain passage. Jamais pour une série CircleTasks.
       const appleDestination = recurrence === null ? await appleCreateDestination(deps, input.spaceId) : null;
       const newTask: NewTask = {
-        id: newEntityId<TaskId>(deps.ids),
+        id: input.id ?? newEntityId<TaskId>(deps.ids),
         spaceId: input.spaceId,
         projectId,
         title: titleResult.value,
@@ -171,6 +171,9 @@ function createBaseTaskUseCases(deps: TaskUseCaseDeps): TaskUseCases {
       const created =
         recurrence || reminders.length > 0
           ? await deps.data.transaction(async (repos) => {
+              // Q-05 : déjà écrite (même id, « Réessayer ») : ni seconde règle ni seconds rappels.
+              const already = input.id ? await repos.tasks.getById(newTask.id) : null;
+              if (already) return already;
               const rule = recurrence ? await repos.recurrences.create({ ...recurrence, id: newEntityId<RecurrenceId>(deps.ids) } satisfies NewRecurrence) : null;
               const task = await repos.tasks.create(rule ? { ...newTask, recurrenceId: rule.id, seriesIndex: 0 } : newTask);
               if (reminders.length > 0) await repos.reminders.replaceForTarget({ type: 'task', id: task.id }, reminders);

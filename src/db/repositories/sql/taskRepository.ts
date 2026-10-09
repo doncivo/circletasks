@@ -158,9 +158,11 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
 
     async create(task: NewTask) {
       const stamp = stamper.next();
-      await db.execute(
+      const written = await db.execute(
+        // Écriture idempotente (Q-05) : un id déjà présent est ignoré (« Réessayer » rejoue la même création), la ligne existante est rendue.
         `INSERT INTO task (${TASK_COLUMNS})
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
+         ON CONFLICT(id) DO NOTHING`,
         [
           task.id,
           task.spaceId,
@@ -190,6 +192,10 @@ export function createTaskRepository(db: SqlExecutor, stamper: WriteStamper): Ta
           stamp.hlc,
         ],
       );
+      if (written.rowsAffected === 0) {
+        const existing = await this.getById(task.id);
+        if (existing) return existing;
+      }
       return taskFromNew(task, stamp);
     },
 

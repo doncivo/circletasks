@@ -153,7 +153,10 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
 
   it('Q-05 critère 2 (revue) : « Réessayer » cliqué 5 fois sur une écriture qui ne revient pas : chaque clic relance, le texte reste ; toutes portent le même identifiant (écriture idempotente), une seule fermeture', async () => {
     const finishers: ((ok: boolean) => void)[] = [];
-    const onCreate = vi.fn(() => new Promise<boolean>((resolve) => finishers.push(resolve)));
+    const onCreate = vi.fn((input: { title: string; taskId?: string }) => {
+      void input;
+      return new Promise<boolean>((resolve) => finishers.push(resolve));
+    });
     const onClose = vi.fn();
     renderSheet(onCreate, onClose);
     type('Acheter du pain');
@@ -181,7 +184,7 @@ describe('Q-05 QA : base occupée puis libérée, « Réessayer » en série', (
       await Promise.resolve();
     });
     expect(onClose).toHaveBeenCalledTimes(1);
-    expect(new Set(onCreate.mock.calls.map(([input]) => (input as unknown as { taskId: string }).taskId)).size).toBe(1);
+    expect(new Set(onCreate.mock.calls.map(([input]) => input.taskId)).size).toBe(1);
     expect(useNoticeStore.getState().notice).toBeNull();
   });
 

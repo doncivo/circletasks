@@ -12,7 +12,6 @@ export const captureEn: Messages['capture'] = {
   sheetRetry: 'Retry',
   lateSaved: 'The task “{title}” was saved after the sheet closed.',
   lateFailed: 'The task “{title}” could not be saved. Tap + to enter it again.',
-  lateTwice: 'The task “{title}” may have been saved twice. Check your list.',
   sheetSaveError: 'The task could not be saved. Your text is kept.',
   spaceAnnounce: 'Space {space}',
   projectAnnounce: 'Project {project}',

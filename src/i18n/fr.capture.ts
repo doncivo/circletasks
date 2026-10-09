@@ -11,10 +11,9 @@ export const captureFr = {
   // Feuille « Nouvelle tâche » de l'iPhone (Q-05) : base occupée ou création refusée, texte conservé.
   sheetNotReady: 'La base n’est pas prête. Votre texte est conservé ; il ne peut pas être modifié pendant l’attente. Touchez « Réessayer » pour relancer l’enregistrement.',
   sheetRetry: 'Réessayer',
-  // Écriture qui se termine après la fermeture de la feuille, ou doublon possible après « Réessayer » : jamais de fin muette.
+  // Écriture qui se termine après la fermeture de la feuille, jamais de fin muette.
   lateSaved: 'La tâche « {title} » a été enregistrée après la fermeture de la feuille.',
   lateFailed: 'La tâche « {title} » n’a pas pu être enregistrée. Touchez « + » pour la saisir de nouveau.',
-  lateTwice: 'La tâche « {title} » a peut-être été enregistrée deux fois. Vérifiez votre liste.',
   sheetSaveError: 'La tâche n’a pas pu être enregistrée. Votre texte est conservé.',
   spaceAnnounce: 'Espace {space}',
   projectAnnounce: 'Projet {project}',

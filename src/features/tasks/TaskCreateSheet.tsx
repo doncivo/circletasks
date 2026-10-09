@@ -2,9 +2,10 @@ import { X } from 'lucide-react';
 import { startTransition, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import type { DateChoice } from '../../domain/dateInput';
 import type { IconRef, RecurrenceFields, ReminderOffsetMin, Space } from '../../domain/model';
+import { newEntityId, uuidGenerator } from '../../domain/id';
 import { offsetsAfterTimeChange, toggleReminderOffset } from '../../domain/reminders';
 import { TASK_TITLE_MAX_LENGTH, validateTaskTitle } from '../../domain/taskRules';
-import type { GoalId, LocalDate, ProjectId, SpaceId } from '../../domain/types';
+import type { GoalId, LocalDate, ProjectId, SpaceId, TaskId } from '../../domain/types';
 import { t } from '../../i18n';
 import { AddSegments, Button, DatePicker, Icon, IconChooser, QuickInputField, QuickPreview, RecurrencePicker, Sheet, SpaceSegmented, type AddSegment } from '../../ui';
 import { DictationButton, DictationHelp, ListeningSheet, useDictation, useQuickInput } from '../capture';
@@ -66,6 +67,8 @@ export interface TaskCreateSheetProps {
     reminderOffsets: readonly ReminderOffsetMin[];
     /** OB-03 : objectif auquel la tâche est rattachée à sa création. */
     goalId: GoalId | null;
+    /** Q-05 : identifiant tiré une fois par saisie ; « Réessayer » le rejoue, la création est idempotente (jamais deux tâches). */
+    taskId: TaskId;
   }) => Promise<boolean>;
 }
 
@@ -91,6 +94,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
   const busy = useRef(false);
   // Q-05 : création en cours (une seule à la fois, même après le message « base non prête » : « Réessayer » la reprend au lieu d'en lancer une seconde).
   const pending = useRef<Attempt | null>(null);
+  // Identifiant de la tâche, tiré à l'ouverture : toutes les écritures de cette saisie portent le même (écriture idempotente).
+  const [taskId] = useState(() => newEntityId<TaskId>(uuidGenerator));
   const mounted = useRef(true);
   const onCloseRef = useRef(onClose);
   const [notice, setNotice] = useState<SheetNotice | null>(null);
@@ -161,7 +166,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
 
   /**
    * Lance l'écriture. Fin tardive, quelle qu'en soit l'issue, jamais muette : feuille ouverte, elle ferme la feuille ou affiche l'erreur ; feuille
-   * fermée entre-temps, un message dit ce qui est arrivé à la tâche ; écriture abandonnée par « Réessayer » puis aboutie, un message prévient du doublon possible.
+   * fermée entre-temps, un message dit ce qui est arrivé à la tâche ; écriture abandonnée par « Réessayer » : même identifiant, la création est idempotente (une seule tâche).
    */
   function startAttempt(input: Parameters<TaskCreateSheetProps['onCreate']>[0]): Attempt {
     const promise = (async (): Promise<boolean> => {
@@ -176,10 +181,8 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     setWaiting(true);
     void promise.then((created) => {
       if (pending.current === attempt) pending.current = null;
-      if (attempt.abandoned) {
-        if (created) useNoticeStore.getState().show(t('capture.lateTwice', { title: attempt.title }));
-        return;
-      }
+      // Abandonnée par « Réessayer » : même identifiant que la nouvelle écriture, donc au plus une tâche ; la nouvelle décide de la feuille.
+      if (attempt.abandoned) return;
       if (!mounted.current) {
         useNoticeStore.getState().show(t(created ? 'capture.lateSaved' : 'capture.lateFailed', { title: attempt.title }));
         return;
@@ -217,7 +220,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
     const reminderOffsets = finalChoice.date === null || finalChoice.time === null ? [] : finalOffsets;
     let run = pending.current;
     if (!run) {
-      const input = { title: parsed.title, spaceId: finalSpaceId, projectId: finalProjectId, choice: finalChoice, recurrence: finalChoice.date === null ? null : recurrence, icon, reminderOffsets, goalId };
+      const input = { taskId, title: parsed.title, spaceId: finalSpaceId, projectId: finalProjectId, choice: finalChoice, recurrence: finalChoice.date === null ? null : recurrence, icon, reminderOffsets, goalId };
       run = startAttempt(input);
     }
     // Course contre le délai de Q-05 : au-delà, « La base n'est pas prête » (l'écriture reste attendue, rien n'est perdu).
