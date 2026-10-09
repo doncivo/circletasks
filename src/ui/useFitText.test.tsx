@@ -1,6 +1,6 @@
 import { render } from '@testing-library/react';
 import { useRef } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FIT_FLOOR_ATTRIBUTE, FIT_TEXT_MIN_PX, useFitText } from './useFitText';
 
 /**
@@ -144,6 +144,31 @@ describe('useFitText', () => {
       expect(measures).toBeGreaterThan(afterFirst);
     } finally {
       globalThis.ResizeObserver = original;
+    }
+  });
+
+  it('événement resize de la fenêtre : ajusté si la largeur de la rangée a changé, sans attendre ResizeObserver ; écoute retirée au démontage', () => {
+    withCssSize(40);
+    room = 248;
+    textEmWidth = 7.3;
+    let rowWidth = 336;
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ width: rowWidth }) as DOMRect);
+    try {
+      const { unmount } = render(<Title text="28 sept. – 4 oct." />);
+      window.dispatchEvent(new Event('resize'));
+      const afterFirst = measures;
+      window.dispatchEvent(new Event('resize'));
+      expect(measures).toBe(afterFirst);
+      rowWidth = 326;
+      window.dispatchEvent(new Event('resize'));
+      expect(measures).toBeGreaterThan(afterFirst);
+      unmount();
+      const afterUnmount = measures;
+      rowWidth = 271;
+      window.dispatchEvent(new Event('resize'));
+      expect(measures).toBe(afterUnmount);
+    } finally {
+      rect.mockRestore();
     }
   });
 

@@ -61,19 +61,25 @@ export function useFitText(title: RefObject<HTMLElement | null>, row: RefObject<
     fonts?.addEventListener('loadingdone', refit);
     const observed = row.current;
     let lastWidth: number | null = null;
+    /** Nouvel ajustement seulement si la largeur de la rangée a changé (sa hauteur dépend du titre : sinon boucle). */
+    const onWidth = (width: number | null): void => {
+      if (width === null || width === lastWidth) return;
+      lastWidth = width;
+      refit();
+    };
     const observer =
       typeof ResizeObserver !== 'undefined' && observed
-        ? new ResizeObserver((entries) => {
-            const width = entries[entries.length - 1]?.contentRect.width ?? null;
-            if (width === null || width === lastWidth) return;
-            lastWidth = width;
-            refit();
-          })
+        ? new ResizeObserver((entries) => onWidth(entries[entries.length - 1]?.contentRect.width ?? null))
         : null;
     if (observer && observed) observer.observe(observed);
+    // Changement de fenêtre (rotation, fenêtre PC) : aussi par l'événement `resize`, qui ne dépend pas du rythme de livraison des
+    // notifications de ResizeObserver (WebKit sous Linux en CI : notification arrivée après la mesure).
+    const onResize = (): void => onWidth(observed ? observed.getBoundingClientRect().width : null);
+    window.addEventListener('resize', onResize);
     return () => {
       cancelled = true;
       fonts?.removeEventListener('loadingdone', refit);
+      window.removeEventListener('resize', onResize);
       observer?.disconnect();
     };
   }, [title, row, text]);

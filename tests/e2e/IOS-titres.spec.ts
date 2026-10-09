@@ -77,8 +77,10 @@ async function expectOneLineTitle(page: Page, where: string, neighbours: readonl
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 956 });
     await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
-    // Le titre ajusté à la nouvelle largeur (useFitText, à l'image suivante) : attendre un état stable, jamais un délai.
-    await expect.poll(async () => (await measureTitle(page)).lines).toBe(1);
+    // useFitText s'ajuste à l'image suivante (notification de ResizeObserver ou événement `resize`, livrés pendant la mise à jour du
+    // rendu). Attendre DEUX images (la seconde commence après la livraison de la première) : un état, jamais un délai. L'ancienne
+    // attente (une seule ligne de texte) passait tout de suite avec `nowrap` : la mesure tombait avant l'ajustement (WebKit sous Linux).
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     const metrics = await measureTitle(page);
     const label = `${where} à ${String(width)} px : « ${metrics.text} » (${JSON.stringify(metrics)})`;
     expect(metrics.lines, `${label} : titre sur plusieurs lignes`).toBe(1);
