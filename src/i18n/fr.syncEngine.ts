@@ -102,6 +102,8 @@ export const syncEngineFr = {
     failed: 'Le choix n’a pas pu être appliqué ({reason}). Rien n’a été changé : vous pouvez réessayer.',
     failedReset: 'Le choix n’a pas été appliqué : une réinitialisation de la synchronisation est en cours. Rien n’a été changé.',
     scanFailed: 'Le dossier de synchro n’a pas pu être vérifié : « Appliquer cette version sur tous mes appareils » sera proposé quand il sera joignable.',
+    provisional: 'La restauration n’a pas pu être confirmée pour l’instant : « Appliquer cette version sur tous mes appareils » n’est pas proposé. CircleTasks revérifie au prochain démarrage : fermez puis rouvrez l’app.',
+    provisionalNoOption: 'La restauration n’a pas pu être confirmée pour l’instant. CircleTasks revérifie au prochain démarrage : fermez puis rouvrez l’app.',
     scanFailedNoOption: 'Le dossier de synchro n’a pas pu être vérifié : réessayez quand il sera joignable.',
     backupWarning: 'Cet appareil est associé : le choix vous sera demandé à la prochaine synchro',
   },

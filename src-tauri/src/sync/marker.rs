@@ -27,6 +27,10 @@ pub struct MarkerFile {
     /// démarrage selon la récupération (`startup_gate::settle_provisional_marker`) ; jamais « Appliquer partout » tant qu'il l'est.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub provisional: bool,
+    /// Jeton de restauration (`application_id` de la base préparée) d'un marqueur provisoire : confirmé au démarrage seulement si la base en
+    /// place le porte.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<u32>,
 }
 
 /// Forme IPC (`RestoreMarker` de `types.ts`).
@@ -53,10 +57,15 @@ pub fn write_after_restore(base: &Path, backup: &str, backup_taken_at: &str, res
 
 /// Écrit le marqueur, provisoire ou confirmé, si un dossier de synchro est configuré.
 pub fn write_marker(base: &Path, backup: &str, backup_taken_at: &str, restored_at: &str, schema_version: u64, provisional: bool) -> SyncResult<bool> {
+    write_marker_token(base, backup, backup_taken_at, restored_at, schema_version, provisional, None)
+}
+
+/// Comme `write_marker`, avec le jeton de restauration d'un marqueur provisoire.
+pub fn write_marker_token(base: &Path, backup: &str, backup_taken_at: &str, restored_at: &str, schema_version: u64, provisional: bool, token: Option<u32>) -> SyncResult<bool> {
     if !sync_folder_configured(base) {
         return Ok(false);
     }
-    let marker = MarkerFile { v: 1, backup: backup.to_owned(), backup_taken_at: backup_taken_at.to_owned(), restored_at: restored_at.to_owned(), schema_version, provisional };
+    let marker = MarkerFile { v: 1, backup: backup.to_owned(), backup_taken_at: backup_taken_at.to_owned(), restored_at: restored_at.to_owned(), schema_version, provisional, token };
     let bytes = serde_json::to_vec(&marker).map_err(|_| super::SyncError::new(SyncCode::Io))?;
     write_config_file(&base.join(MARKER_FILE), &bytes)?;
     Ok(true)
@@ -86,6 +95,15 @@ pub fn confirm(base: &Path) -> SyncResult<bool> {
             Ok(true)
         }
         _ => Ok(false),
+    }
+}
+
+/// Marqueur provisoire : `Some(jeton)` (le jeton peut manquer : marqueur d'une ancienne version), `None` s'il n'y a pas de marqueur provisoire
+/// ou s'il est illisible.
+pub fn provisional_token(base: &Path) -> Option<Option<u32>> {
+    match read_config_file::<MarkerFile>(&base.join(MARKER_FILE)) {
+        Ok(Some(marker)) if marker.provisional => Some(marker.token),
+        _ => None,
     }
 }
 

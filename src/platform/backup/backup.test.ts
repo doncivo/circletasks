@@ -64,6 +64,7 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
     const service = createTauriBackup({ db, api: makeApi({ daily: () => Promise.reject({ code: 'io', message: 'disque plein' }) }) });
     await expect(service.createDaily({ day: '20261005', replace: false })).rejects.toMatchObject({ name: 'BackupError', reason: 'io' });
     expect(reasonOf({ code: 'newer-schema' })).toBe('newer-schema');
+    expect(reasonOf({ code: 'restore-unconfirmed' })).toBe('restore-unconfirmed');
     expect(reasonOf({ code: 'inconnu' })).toBe('io');
     expect(reasonOf(new Error('x'))).toBe('io');
   });

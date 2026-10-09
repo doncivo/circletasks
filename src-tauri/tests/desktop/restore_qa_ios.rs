@@ -136,7 +136,7 @@ fn p04_ios_qa_kill_during_the_copy_discards_the_partial_staged_file() {
     let (dir, db, backups) = crashed_app_dir(APP_VERSION);
     let whole = fs::read(backups.join(SAVED)).unwrap();
     fs::write(dir.path().join("circletasks.db.restoring"), &whole[..whole.len() / 2]).unwrap();
-    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap(), Recovery::Nothing);
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap(), Recovery::StagedRemoved);
     assert_clean(dir.path());
     assert_eq!(open_and_titles(&db), old_titles());
     assert_eq!(fs::read(backups.join(SAVED)).unwrap(), whole, "la sauvegarde choisie n'est jamais touchée");
@@ -150,7 +150,7 @@ fn p04_ios_qa_kill_after_staging_keeps_the_old_database_and_drops_the_staged_cop
     let (dir, db, backups) = crashed_app_dir(APP_VERSION);
     kill_at(&db, &backups, RestoreStep::Staged);
     assert!(dir.path().join("circletasks.db.restoring").is_file());
-    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap(), Recovery::Nothing);
+    assert_eq!(recover_interrupted_restore(&db, &backups).unwrap(), Recovery::StagedRemoved);
     assert_clean(dir.path());
     assert_eq!(open_and_titles(&db), old_titles(), "le -wal n'a pas bougé : la dernière tâche est là");
     relaunch_then_restore_again(dir.path(), &db, &backups);

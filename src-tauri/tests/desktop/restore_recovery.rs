@@ -149,7 +149,7 @@ fn p04_the_staged_wal_shm_and_journal_leftovers_are_removed() {
     for name in ["circletasks.db.restoring", "circletasks.db.restoring.tmp", "circletasks.db.restoring-wal", "circletasks.db.restoring-shm", "circletasks.db.restoring-journal"] {
         write(dir.path(), name, b"reste");
     }
-    assert_eq!(recover(dir.path()).unwrap(), Recovery::Nothing);
+    assert_eq!(recover(dir.path()).unwrap(), Recovery::StagedRemoved);
     assert_eq!(names(dir.path()), ["circletasks.db"]);
 }
 

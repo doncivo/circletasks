@@ -215,6 +215,7 @@ fn i04_a_burst_of_the_same_entry_is_limited_to_10_per_minute_then_summarized() {
 
 #[test]
 fn i04_internal_writes_wait_in_memory_until_init_then_are_written() {
+    let _log_dir = crate::support::applog_dir_lock();
     write("backup-recovery", "recovery-conflict");
     write_count("export", "temp-purged", 3);
     let dir = tempfile::tempdir().unwrap();

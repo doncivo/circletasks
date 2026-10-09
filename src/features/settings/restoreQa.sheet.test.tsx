@@ -57,7 +57,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
 
   // Raison -> la base est-elle fermée quand elle survient ? (Rust vérifie `check_backup` AVANT la fermeture ; les autres arrivent après.)
   const NOT_RETRYABLE_OPEN: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found'];
-  const NOT_RETRYABLE_CLOSED: readonly BackupFailureReason[] = ['corrupt', 'rollback-failed', 'restore-pending', 'io'];
+  const NOT_RETRYABLE_CLOSED: readonly BackupFailureReason[] = ['corrupt', 'rollback-failed', 'restore-pending', 'restore-unconfirmed', 'io'];
   const RETRYABLE: readonly BackupFailureReason[] = ['io', 'sync-busy', 'busy', 'db-open'];
 
   it.each(NOT_RETRYABLE_OPEN)('critère 7 : %s, base ouverte : aucun « Réessayer » (ce fichier ne passera jamais), l’utilisateur peut choisir une autre version ou fermer', async (reason) => {
@@ -79,6 +79,14 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
     expect(within(alert).queryByRole('button', { name: 'Réessayer' })).toBeNull();
     fireEvent.click(within(alert).getByRole('button', { name: 'Redémarrer' }));
     await waitFor(() => expect(backups.restarts.count).toBe(1));
+  });
+
+  it('restore-unconfirmed : texte dédié (rouvrir, puis « Garder les données synchronisées »), pas celui de la restauration interrompue', async () => {
+    backups.failNext('restore', 'restore-unconfirmed', { databaseClosed: true });
+    const alert = await openAndRestore();
+    expect(alert).toHaveTextContent('La restauration précédente n’est pas encore confirmée');
+    expect(alert).toHaveTextContent('Garder les données synchronisées');
+    expect(alert).not.toHaveTextContent('interrompue');
   });
 
   it.each(RETRYABLE)('critère 7 : %s, base ouverte : « Réessayer » relance réellement la restauration et elle aboutit', async (reason) => {

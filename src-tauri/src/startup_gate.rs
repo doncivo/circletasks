@@ -372,7 +372,10 @@ fn undo_provisional_marker(config_dir: &Path) -> bool {
         Ok(bytes) => crate::sync::folder::write_config_file(&config_dir.join(crate::sync::marker::MARKER_FILE), &bytes).is_ok(),
         Err(_) => crate::sync::marker::clear(config_dir).is_ok(),
     };
-    let _ = std::fs::remove_file(previous);
+    // Le marqueur d'avant n'est effacé que si l'annulation a réussi : sinon la preuve reste pour le prochain essai.
+    if undone {
+        let _ = std::fs::remove_file(previous);
+    }
     undone
 }
 
@@ -391,18 +394,28 @@ pub fn restore_with_provisional_marker(
     use std::cell::Cell;
     let backups = config_dir.join(crate::backup::BACKUP_DIR);
     let schema = crate::backup::check_named_backup(&backups, name)?;
+    // Un marqueur encore provisoire (règlement précédent impossible) est d'abord réglé d'après la base en place ; s'il l'est toujours, la
+    // restauration est refusée (`restore-unconfirmed`, « rouvrez CircleTasks ») : `restore-marker.previous.json` n'est jamais écrasé.
+    if !settle_provisional_marker(config_dir, &Ok(crate::backup::Recovery::Nothing)) {
+        return Err(crate::backup::BackupError { code: "restore-unconfirmed", message: "un marqueur de restauration provisoire n'est pas encore réglé (redémarrage)".to_owned() });
+    }
     let written = Cell::new(false);
     let confirmed = Cell::new(false);
     let wrapped = |step: RestoreStep| -> std::io::Result<()> {
         match step {
             RestoreStep::Staged => {
+                // Le jeton est celui que le fichier préparé porte déjà : la base en place le portera si, et seulement si, l'échange a lieu.
+                let token = crate::backup::staged_restore_token(&config_dir.join(crate::backup::DB_FILE))
+                    .ok()
+                    .flatten()
+                    .ok_or_else(|| std::io::Error::other("jeton de restauration"))?;
                 let marker = config_dir.join(crate::sync::marker::MARKER_FILE);
                 let previous = config_dir.join(PREVIOUS_MARKER_FILE);
                 let _ = std::fs::remove_file(&previous);
                 if let Ok(bytes) = std::fs::read(&marker) {
                     crate::sync::folder::write_config_file(&previous, &bytes).map_err(|_| std::io::Error::other("marqueur précédent"))?;
                 }
-                written.set(matches!(crate::backup::write_restore_marker_as(config_dir, &backups, name, now_secs, schema, true), Ok(true)));
+                written.set(matches!(crate::backup::write_provisional_marker(config_dir, &backups, name, now_secs, schema, token), Ok(true)));
             }
             RestoreStep::Swapped => {
                 if written.get() {
@@ -429,24 +442,37 @@ pub fn restore_with_provisional_marker(
     Ok((crate::backup::RestoreOutcome { marker: state, marker_code: code, ..outcome }, pending))
 }
 
-/// Au démarrage, après la récupération (revue du lot F) : un marqueur encore provisoire vient d'un arrêt pendant une restauration.
-/// `Archived` (l'échange avait abouti) -> confirmé ; `PutBack` ou `Nothing` (ancienne base remise, ou fichier préparé seulement supprimé : la
-/// version n'a jamais été en place) -> marqueur d'avant remis, sinon retiré. Jamais « Appliquer partout » sur une version non restaurée.
-pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::backup::Recovery, crate::backup::BackupError>) {
-    if !crate::sync::marker::is_provisional(config_dir) {
+/// Règle un marqueur provisoire (au démarrage après la récupération, et avant toute nouvelle restauration). La DÉCISION vient de la base en
+/// place, jamais de l'issue de la récupération (`Nothing` est ambigu) : le marqueur est confirmé seulement si la base porte le jeton de
+/// restauration qu'il contient (`backup::database_token`), sinon annulé (marqueur d'avant remis, ou provisoire retiré). Si la confirmation ou
+/// l'annulation échoue, le marqueur reste provisoire (la décision se reprend, identique, au prochain essai) : la fenêtre de choix le dit
+/// (`sync.restore.provisional`), « Appliquer partout » reste retiré, une nouvelle restauration est refusée, et le journal le consigne.
+/// Rend vrai si le marqueur n'est plus provisoire. Récupération en erreur : rien n'est touché (la porte reste fermée).
+pub fn settle_provisional_marker(config_dir: &Path, recovery: &Result<crate::backup::Recovery, crate::backup::BackupError>) -> bool {
+    let Some(token) = crate::sync::marker::provisional_token(config_dir) else {
         let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
-        return;
+        return true;
+    };
+    if recovery.is_err() {
+        return false;
     }
-    let done = match recovery {
-        Ok(crate::backup::Recovery::Archived) => {
+    // Base en place illisible : on ne décide RIEN (ni confirmation ni annulation), le marqueur reste provisoire et la décision est reprise.
+    let Ok(in_place) = crate::backup::database_token(&config_dir.join(crate::backup::DB_FILE)) else {
+        crate::applog::write("backup-recovery", "provisional-marker-db-unreadable");
+        return false;
+    };
+    let landed = token.is_some() && in_place == token;
+    let done = if landed {
+        let confirmed = crate::sync::marker::confirm(config_dir).is_ok();
+        if confirmed {
             let _ = std::fs::remove_file(config_dir.join(PREVIOUS_MARKER_FILE));
-            crate::sync::marker::confirm(config_dir).is_ok()
         }
-        Ok(_) => undo_provisional_marker(config_dir),
-        // Récupération impossible : rien n'est touché (la porte reste fermée, l'écran le dit).
-        Err(_) => return,
+        confirmed
+    } else {
+        undo_provisional_marker(config_dir)
     };
     crate::applog::write("backup-recovery", if done { "provisional-marker-settled" } else { "provisional-marker-settle-failed" });
+    done
 }
 
 /// Récupération au démarrage puis règlement du marqueur provisoire (PC et iPhone).

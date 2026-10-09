@@ -62,7 +62,7 @@ export async function restoreContext(deps: SyncDeps, marker: RestoreMarker): Pro
   const all = restoreOptions(marker.backupTakenAt, horizons);
   // Revue du lot F : jamais « Appliquer partout » sur un marqueur provisoire (version peut-être jamais restaurée).
   const options = inReset || unchecked || marker.provisional === true ? all.filter((o) => o !== 'apply-everywhere') : all;
-  const notice = unchecked ? 'scan-failed' : inReset ? (options.length > 0 ? 'reset-in-progress' : 'reset-finish') : null;
+  const notice = unchecked ? 'scan-failed' : inReset ? (options.length > 0 ? 'reset-in-progress' : 'reset-finish') : marker.provisional === true ? 'provisional' : null;
   return { marker, options, notice, failure: await readRestoreFailure(deps) };
 }
 

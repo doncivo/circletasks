@@ -37,7 +37,7 @@ fn the_failure_dialog_gives_the_code_and_a_next_step_without_a_personal_path() {
     assert!(text.starts_with(RECOVERY_FAILED_MESSAGE));
     assert!(text.contains("recovery-conflict"));
     assert!(text.contains("%APPDATA%\\fr.circletasks.planner"));
-    assert!(text.contains(".restore-old"));
+    assert!(text.contains(".restore-old") && text.contains(".restoring") && text.contains("restore-marker.json"));
     assert!(!text.contains("Users"));
     for code in ["no-data-dir", "window-failed"] {
         assert!(recovery_failed_text(code, "fr.circletasks.planner").contains(code), "{code}");
