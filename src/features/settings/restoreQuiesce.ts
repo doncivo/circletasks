@@ -1,4 +1,5 @@
 import type { AppContainer } from '../app/container';
+import { quietWorkSettled, setRestoreQuiet } from '../../platform/quiet';
 import { getNotificationRunner } from '../reminders/notificationRunner';
 import { pauseSyncForRestore, resumeSyncAfterRestore } from '../sync/syncRestoreControl';
 
@@ -18,7 +19,10 @@ export interface QuiesceHandle {
  */
 export async function quiesceForRestore(container: AppContainer, timeoutMs: number = QUIESCE_TIMEOUT_MS): Promise<QuiesceHandle | 'sync-busy' | 'busy'> {
   const runner = getNotificationRunner(container);
+  // Revue I3 : drapeau posé d'abord (synchro de toute origine, agendas, Rappels Apple refusés), puis attente de ce qui est parti.
+  setRestoreQuiet(true);
   const release = (): void => {
+    setRestoreQuiet(false);
     runner.resume();
     resumeSyncAfterRestore(container);
   };
@@ -29,7 +33,7 @@ export async function quiesceForRestore(container: AppContainer, timeoutMs: numb
   let timer: ReturnType<typeof setTimeout> | undefined;
   const paused = await Promise.race([runner.pause().then(() => true), new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), timeoutMs)))]);
   if (timer !== undefined) clearTimeout(timer);
-  if (!paused) {
+  if (!paused || !(await quietWorkSettled(timeoutMs))) {
     release();
     return 'busy';
   }
