@@ -50,18 +50,25 @@ type ResetTroubleCode = 'reset-progress' | 'reset-reminder';
  * synchronisation »), dossier de plus de 1 Gio, plus de 16 dossiers d'appareil (les plus anciens ignorés), scan incomplet (dossier
  * encombré). Du plus urgent au moins urgent.
  */
-export const SYNC_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete'] as const;
+const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan-incomplete'] as const;
+/**
+ * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : deux avertissements du moteur (pas du scan) qui interdisent « À jour » :
+ * `publish-blocked` (l'état de cet appareil n'est pas publié : les autres ne voient rien de lui) et `received-unapplied` (des
+ * modifications reçues restent en attente d'une ligne qui manque, même après lecture complète et reprise depuis l'instantané).
+ */
+export const SYNC_WARNINGS = [...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
+type ScanWarningCode = (typeof SCAN_WARNINGS)[number];
 
 /** Avertissements d'un scan (`FolderScan`), dans l'ordre de `SYNC_WARNINGS`. */
 export function scanWarnings(scan: { readonly incomplete: boolean; readonly tooManyDevices: boolean; readonly folderLarge?: boolean | undefined; readonly nonceWarning?: boolean | undefined }): SyncWarningCode[] {
-  const on: Record<SyncWarningCode, boolean> = {
+  const on: Record<ScanWarningCode, boolean> = {
     'nonce-budget': scan.nonceWarning === true,
     'folder-large': scan.folderLarge === true,
     'too-many-devices': scan.tooManyDevices,
     'scan-incomplete': scan.incomplete,
   };
-  return SYNC_WARNINGS.filter((code) => on[code]);
+  return SCAN_WARNINGS.filter((code) => on[code]);
 }
 
 const isSyncWarning = (value: unknown): value is SyncWarningCode => (SYNC_WARNINGS as readonly unknown[]).includes(value);

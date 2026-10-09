@@ -1,6 +1,6 @@
 import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredResumeTried, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
-import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
+import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
 import { canPublish, compareCursors, folderEpoch, maxEpoch, ownBounds } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
@@ -406,6 +406,15 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const switchState = storedSwitch && (allowed === undefined || storedSwitch.target === allowed) ? storedSwitch : null;
     const followable = (e: EpochId | null): EpochId | null => (e === null || allowed === undefined || e === allowed ? e : null);
     if (allowed !== undefined && folderE !== null && folderE !== allowed && epoch !== null && compareEpochs(folderE, epoch) > 0) logger.log('epoch-not-followed', { epoch: folderE });
+    // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : un appareil qui n'a suivi aucune époque ne se tient pas pour le premier tant qu'un autre
+    // appareil a des fichiers que ce scan ne peut pas encore lire (état ou fichiers encore dans le nuage) : ouvrir alors sa propre époque,
+    // parfois plus grande que celle du PC, ferait diverger les deux appareils (la tâche créée sur le PC n'arriverait jamais).
+    const othersUnreadable = scan.devices.filter((d) => d.deviceId !== self && !forgetView.order.has(d.deviceId) && (d.stateStatus === 'cloud-pending' || d.pending.length > 0));
+    if (epoch === null && folderE === null && othersUnreadable.length > 0) {
+      for (const d of othersUnreadable) pending.add(`${String(d.deviceId).slice(0, 8)}/${STATE_FILE}`);
+      logger.log('epoch-open-deferred', { reason: 'other-device-unreadable' });
+      return { ...EMPTY, outcome: 'done', pendingFiles: [...pending], folderLabel, folderKind, worked, devices: await deviceStatuses(repos, self, accepted, deps.sv, logger), keyMismatch };
+    }
     if (epoch === null && folderE === null) {
       // Premier appareil : ouverture de l'époque 1 (instantané complet, puis état).
       epoch = epochId(1, self);
@@ -473,14 +482,38 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       listedMaxSegment: Math.max(0, ...(listed?.segments ?? [])),
     });
     stateSeq = bounds.nextStateSeq - 1;
-    const publishAllowed = canPublish({
-      ownStateOk: ownState !== null,
-      acksOnSelf: acksOnSelf.length,
-      listedFiles: (ownScan?.epochs ?? []).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0),
-      localStateSeq: localSeq,
-    }) || ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt';
-    let head: DeviceAck = { epoch: currentEpoch, segment: bounds.head.segment, record: bounds.head.record, hlc: bounds.headHlc, stateSeq: 0 };
     const storedSnapshot = await readJson<{ epoch: EpochId; seq: number; endHlc: Hlc }>(repos, META.snapshot);
+    /**
+     * Y-IOS-02 (point de contrôle 0.2.3, étape 4) : époque ouverte par cet appareil dont l'état n'a jamais été écrit (arrêt entre
+     * l'instantané et l'état : échéance du cycle `hide` de l'iPhone, erreur d'écriture). Preuve locale : son propre instantané est le seul
+     * fichier listé, aucun segment, `stateSeq` jamais écrit, aucun accusé d'un autre appareil sur lui, `state.ctx` absent (pas illisible ni
+     * dans le nuage) : aucun autre appareil n'a rien accepté de lui, la borne de la règle 1 est vide. Sans cette exception, `canPublish`
+     * refuse pour toujours (instantané listé, état absent) : l'appareil ne publie jamais rien.
+     */
+    const files = (ownScan?.epochs ?? []).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0);
+    const openedHere =
+      ownState === null &&
+      ownScan?.stateStatus === 'missing' &&
+      acksOnSelf.length === 0 &&
+      localSeq === 0 &&
+      storedSnapshot?.epoch === currentEpoch &&
+      currentEpoch === localEpoch &&
+      (listed?.segments.length ?? 0) === 0 &&
+      (listed?.snapshots.length ?? 0) === files &&
+      files === 1 &&
+      listed?.snapshots[0] === storedSnapshot.seq;
+    const publishAllowed =
+      canPublish({
+        ownStateOk: ownState !== null,
+        acksOnSelf: acksOnSelf.length,
+        listedFiles: files,
+        localStateSeq: localSeq,
+      }) ||
+      openedHere ||
+      ownScan?.stateStatus === 'foreign' ||
+      ownScan?.stateStatus === 'corrupt';
+    if (openedHere && !canPublish({ ownStateOk: false, acksOnSelf: 0, listedFiles: files, localStateSeq: localSeq })) logger.log('own-state-recovered', { epoch: currentEpoch });
+    let head: DeviceAck = { epoch: currentEpoch, segment: bounds.head.segment, record: bounds.head.record, hlc: bounds.headHlc, stateSeq: 0 };
     let snapshotMeta = storedSnapshot?.epoch === currentEpoch ? { seq: storedSnapshot.seq, endHlc: storedSnapshot.endHlc } : null;
     const purgeHorizon = await readJson<Hlc>(repos, META.purgeHorizon);
     const ackMap = async (): Promise<Map<DeviceId, DeviceAck>> => {
@@ -787,6 +820,20 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     if ((await repos.sync.parkedCount(['missing-parent', 'missing-row'])) > 0) {
       const retried = await retryParked(deps);
       if (retried.size > 0) hooks.onRemoteChanges(retried);
+      // Y-IOS-02 (point de contrôle 0.2.3, étape 4) : tout est lu jusqu'aux têtes et des opérations attendent encore une ligne qui manque :
+      // un enregistrement a été sauté (curseur posé trop loin). Une reprise depuis l'instantané (fusion, rien n'est effacé) replace les
+      // curseurs aux positions couvertes et relit les journaux ; une seule demande par époque, ensuite l'avertissement reste visible.
+      if (allRead && (await repos.sync.parkedCount(['missing-row'])) > 0) {
+        seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
+        const tried = await readJson<{ epoch: EpochId }>(repos, META.parkedResume);
+        if (tried?.epoch !== currentEpoch && !resumed) {
+          await data.transaction(async (tx) => {
+            await writeJson(tx, META.parkedResume, { epoch: currentEpoch });
+            await writeJson(tx, META.resume, true);
+          });
+          logger.log('parked-resume-requested', { epoch: currentEpoch });
+        }
+      }
     }
 
     // 5. Publication.
@@ -802,6 +849,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await repos.sync.saveState(self, { epoch: currentEpoch, cursorSegment: head.segment, cursorRecord: head.record, ackHlc: head.hlc, headSegment: head.segment, headRecord: head.record, headHlc: head.hlc });
     } else {
       logger.log('publish-deferred', { reason: 'own-state-unknown' });
+      // Exigence d'Ali : jamais « À jour » ni silence quand cet appareil ne peut pas publier (avertissement visible dans Détails et en bandeau).
+      seen.warnings = [...(seen.warnings ?? []), 'publish-blocked'];
     }
 
     // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers). Y-11 : l'annonce de l'appareil qui réinitialise est

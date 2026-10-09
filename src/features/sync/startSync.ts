@@ -91,6 +91,8 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'folder-large':
     case 'too-many-devices':
     case 'scan-incomplete':
+    case 'publish-blocked':
+    case 'received-unapplied':
       return warningText(trouble.code);
   }
 }
