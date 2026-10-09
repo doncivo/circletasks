@@ -620,3 +620,9 @@
 .ct-today__headerActions {
   flex-shrink: 0;
 }
+
+/* Texte très agrandi : au plancher de taille (useFitText, data-fit="floor"), le badge passe sous le jour au lieu de le chevaucher. */
+.ct-today__dateRow:has(> .ct-today__day[data-fit='floor']) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}

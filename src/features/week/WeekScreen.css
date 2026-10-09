@@ -687,3 +687,8 @@ button.ct-week-event:focus-visible {
 .ct-week__tools {
   flex-shrink: 0;
 }
+
+/* Texte très agrandi : au plancher de taille (useFitText, data-fit="floor"), les flèches passent sous la plage. */
+.ct-week__headerRow:has(.ct-week__range[data-fit='floor']) {
+  flex-wrap: wrap;
+}

@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FIT_TEXT_MIN_PX, useFitText } from './useFitText';
+import { FIT_FLOOR_ATTRIBUTE, FIT_TEXT_MIN_PX, useFitText } from './useFitText';
 
 /**
  * useFitText (IOS-titres) : jsdom n'a pas de mise en page ; largeurs simulées : le texte mesure `textEmWidth` em à la taille
@@ -9,6 +9,8 @@ import { FIT_TEXT_MIN_PX, useFitText } from './useFitText';
  */
 let room = 0;
 let textEmWidth = 0;
+/** Lectures de scrollWidth : chaque ajustement en fait au moins une. */
+let measures = 0;
 const descriptors = {
   clientWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth'),
   scrollWidth: Object.getOwnPropertyDescriptor(Element.prototype, 'scrollWidth'),
@@ -24,8 +26,11 @@ beforeEach(() => {
     configurable: true,
     get(this: Element) {
       // Chasse légèrement plus large aux petites tailles (taille optique) : la première estimation ne suffit pas toujours.
+      measures += 1;
       const size = fontSizeOf(this);
-      return Math.ceil(textEmWidth * size * (1 + (52 - size) / 1000));
+      const width = Math.ceil(textEmWidth * size * (1 + (52 - size) / 1000));
+      // Passage à la ligne entre deux mots : le texte tient dans la place.
+      return (this as HTMLElement).style.whiteSpace === 'normal' ? Math.min(width, room) : width;
     },
   });
 });
@@ -86,11 +91,82 @@ describe('useFitText', () => {
     expect(getByRole('heading').style.fontSize).toBe('');
   });
 
-  it('place minuscule : plancher lisible', () => {
+  it('place minuscule (texte très agrandi) : plancher lisible, puis passage à la ligne entre les mots, jamais de chevauchement', () => {
     withCssSize(52);
     room = 10;
     textEmWidth = 3;
     const { getByRole } = render(<Title text="30 mer." />);
-    expect(parseFloat(getByRole('heading').style.fontSize)).toBe(FIT_TEXT_MIN_PX);
+    const heading = getByRole('heading');
+    expect(parseFloat(heading.style.fontSize)).toBe(FIT_TEXT_MIN_PX);
+    expect(heading.style.whiteSpace).toBe('normal');
+    expect(heading.getAttribute(FIT_FLOOR_ATTRIBUTE)).toBe('floor');
+    expect(heading.scrollWidth).toBeLessThanOrEqual(room);
+  });
+
+  it('place retrouvée : le passage à la ligne est retiré', () => {
+    withCssSize(52);
+    room = 10;
+    textEmWidth = 3;
+    const { getByRole, rerender } = render(<Title text="30 mer." />);
+    expect(getByRole('heading').style.whiteSpace).toBe('normal');
+    room = 300;
+    rerender(<Title text="9 ven." />);
+    expect(getByRole('heading').style.whiteSpace).toBe('');
+    expect(getByRole('heading').style.fontSize).toBe('');
+    expect(getByRole('heading').hasAttribute(FIT_FLOOR_ATTRIBUTE)).toBe(false);
+  });
+
+  it('rangée observée : ajusté seulement quand sa LARGEUR change (pas sa hauteur)', () => {
+    const callbacks: ResizeObserverCallback[] = [];
+    const original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      constructor(callback: ResizeObserverCallback) {
+        callbacks.push(callback);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    } as unknown as typeof ResizeObserver;
+    try {
+      withCssSize(40);
+      room = 248;
+      textEmWidth = 7.3;
+      render(<Title text="28 sept. – 4 oct." />);
+      const notify = (width: number, height: number): void => {
+        for (const callback of callbacks) callback([{ contentRect: { width, height } } as ResizeObserverEntry], {} as ResizeObserver);
+      };
+      notify(336, 42);
+      const afterFirst = measures;
+      expect(afterFirst).toBeGreaterThan(0);
+      notify(336, 60);
+      expect(measures).toBe(afterFirst);
+      notify(271, 60);
+      expect(measures).toBeGreaterThan(afterFirst);
+    } finally {
+      globalThis.ResizeObserver = original;
+    }
+  });
+
+  it('polices chargées après coup (loadingdone) : nouvel ajustement ; écoute retirée au démontage', () => {
+    const target = new EventTarget();
+    const fonts = Object.assign(target, { ready: new Promise<never>(() => undefined) });
+    const descriptor = Object.getOwnPropertyDescriptor(document, 'fonts');
+    Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+    try {
+      withCssSize(40);
+      room = 248;
+      textEmWidth = 7.3;
+      const { unmount } = render(<Title text="28 sept. – 4 oct." />);
+      const before = measures;
+      target.dispatchEvent(new Event('loadingdone'));
+      expect(measures).toBeGreaterThan(before);
+      unmount();
+      const afterUnmount = measures;
+      target.dispatchEvent(new Event('loadingdone'));
+      expect(measures).toBe(afterUnmount);
+    } finally {
+      if (descriptor) Object.defineProperty(document, 'fonts', descriptor);
+      else Reflect.deleteProperty(document, 'fonts');
+    }
   });
 });

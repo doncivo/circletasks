@@ -153,6 +153,65 @@ test.describe('IOS-titres : titres des écrans iPhone sur une ligne (440, 430, 3
     });
   }
 
+  /*
+   * Texte agrandi à 200 % (zoom du texte ; PRD : « jusqu'à 200 % ») : au plancher de taille, le titre peut passer à la ligne, mais
+   * ENTRE deux mots seulement, sans déborder, et sans chevaucher ses voisins, qui restent dans l'écran.
+   */
+  const zoomed = [
+    ['Tâches', '2026-10-28', 'main h1.ct-today__day', ['.ct-today__badge', '.ct-today__headerActions']],
+    ['Semaine', '2026-09-30', 'main h1.ct-week__range', ['.ct-week__arrows']],
+  ] as const;
+  for (const [tab, day, selector, neighbours] of zoomed) {
+    test(`onglet ${tab}, texte agrandi à 200 % : titre entier, coupé entre deux mots au besoin, voisins intacts`, async ({ page }) => {
+      await page.clock.setFixedTime(new Date(`${day}T10:00:00+02:00`));
+      // Taille de texte réglée avant le lancement (comme un réglage d'accessibilité déjà actif à l'ouverture de l'app).
+      await page.addInitScript(() => {
+        document.addEventListener('DOMContentLoaded', () => document.documentElement.style.setProperty('font-size', '200%'));
+      });
+      await openApp(page);
+      if (tab === 'Semaine') {
+        await waitForScreenLoaded(page, 'weekscreen');
+        await page.getByRole('navigation').getByRole('button', { name: 'Semaine', exact: true }).click();
+      }
+      await expect(page.locator(selector)).toBeVisible();
+      await fontsReady(page);
+      for (const width of WIDTHS) {
+        await page.setViewportSize({ width, height: 956 });
+        await expect.poll(() => page.evaluate(() => document.documentElement.clientWidth)).toBe(width);
+        const title = page.locator(selector);
+        await expect.poll(() => title.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+        const report = await title.evaluate((el) => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const rects = Array.from(range.getClientRects()).filter((rect) => rect.width > 0);
+          // Chaque ligne commence par un mot entier : aucune ligne ne commence au milieu d'un mot (pas de coupure en pleine lettre).
+          const words = (el.textContent ?? '').trim().split(/\s+/);
+          const box = el.getBoundingClientRect();
+          return {
+            right: Math.max(...rects.map((rect) => rect.right)),
+            bottom: box.bottom,
+            words: words.length,
+            rects: rects.length,
+            viewport: document.documentElement.clientWidth,
+          };
+        });
+        const label = `${tab} à 200 %, ${String(width)} px (${JSON.stringify(report)})`;
+        expect(report.right, `${label} : titre hors de l'écran`).toBeLessThanOrEqual(report.viewport);
+        expect(await title.evaluate((el) => getComputedStyle(el).overflowWrap), `${label} : coupure en pleine lettre permise`).not.toBe('anywhere');
+        for (const neighbour of neighbours) {
+          const box = await page.locator(neighbour).boundingBox();
+          expect(box, `${label} : ${neighbour} absent`).not.toBeNull();
+          if (!box) continue;
+          // À droite du titre, ou passé dessous (rangée au plancher) : jamais par-dessus.
+          const beside = box.x >= report.right - 0.5;
+          const below = box.y >= report.bottom - 0.5;
+          expect(beside || below, `${label} : ${neighbour} chevauche le titre (${JSON.stringify(box)})`).toBe(true);
+          expect(box.x + box.width, `${label} : ${neighbour} hors de l'écran`).toBeLessThanOrEqual(report.viewport);
+        }
+      }
+    });
+  }
+
   const tabs = [
     ['Routines', 'routinesscreen'],
     ['Événements', 'eventsscreen'],

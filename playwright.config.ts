@@ -74,6 +74,28 @@ const WEBKIT_PROJECT: NonNullable<PlaywrightTestConfig['projects']>[number] = {
   grepInvert: /@perf/,
 };
 
+/**
+ * Projets demandés sur la ligne de commande (`--project=x` ou `--project x`) ; vide : tous. Seul `iphone-webkit` demandé (job e2e-webkit de
+ * la CI) : le serveur de développement, qu'aucun test de ce projet n'utilise, n'est pas lancé.
+ */
+function requestedProjects(argv: readonly string[]): string[] {
+  const names: string[] = [];
+  argv.forEach((arg, index) => {
+    if (arg.startsWith('--project=')) names.push(arg.slice('--project='.length));
+    else if (arg === '--project' && argv[index + 1] !== undefined) names.push(argv[index + 1] ?? '');
+  });
+  return names;
+}
+const REQUESTED = requestedProjects(process.argv);
+const ONLY_WEBKIT = WEBKIT && REQUESTED.length > 0 && REQUESTED.every((name) => name === 'iphone-webkit');
+const DEV_SERVER: NonNullable<PlaywrightTestConfig['webServer']> = {
+  command: 'npm run dev',
+  url: BASE_URL,
+  reuseExistingServer: false,
+  timeout: 120_000,
+  env: SIM_ENV_DEV,
+};
+
 export default defineConfig({
   testDir: 'tests/e2e',
   // Simulateurs d'agendas Google et CalDAV (K-01 à K-03) sur les ports de tests/sim/ports.ts, arrêtés à la fin de la suite.
@@ -114,13 +136,7 @@ export default defineConfig({
     ...(PERF ? [PERF_PROJECT] : []),
   ],
   webServer: [
-    {
-      command: 'npm run dev',
-      url: BASE_URL,
-      reuseExistingServer: false,
-      timeout: 120_000,
-      env: SIM_ENV_DEV,
-    },
+    ...(ONLY_WEBKIT ? [] : [DEV_SERVER]),
     ...(WEBKIT ? [WEBKIT_SERVER] : []),
     ...(PERF ? [PERF_SERVER] : []),
   ],
