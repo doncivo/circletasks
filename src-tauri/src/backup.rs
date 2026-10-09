@@ -53,6 +53,9 @@ const DEFAULT_BUSY_MS: u64 = 5_000;
 const STAGING_SUFFIX: &str = ".restoring";
 /// Suffixe des fichiers de l'ancienne base pendant l'échange.
 const OLD_SUFFIX: &str = ".restore-old";
+/// Clé du réglage du verrouillage (I-03), même valeur que `src/domain/model/settings.ts` (test statique `restore_ios.rs`). Sa valeur
+/// ACTUELLE prévaut sur celle de la version restaurée (P-04-iOS critère 11, ADR 0009 avenant lot F B5) : échec fermé.
+pub const APP_LOCK_SETTING_KEY: &str = "security.appLock";
 
 /// Famille d'une sauvegarde, selon son nom.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -592,6 +595,54 @@ pub struct RestoreOutcome {
     /// Copie de sécurité de l'état d'avant (`None` si la base n'existait pas).
     pub safety_copy: Option<String>,
     pub schema_version: u32,
+    /// Marqueur de restauration de la synchro (ADR 0010 règle 2) : `written`, `not-configured` (aucun dossier de synchro) ou `failed`
+    /// (P-04-iOS critère 12 : renvoyé au front et affiché, jamais seulement journalisé). `restore_backup_file` rend `not-configured`, la
+    /// commande le remplace après l'écriture.
+    pub marker: &'static str,
+    /// Code de l'échec du marqueur (`None` sinon).
+    pub marker_code: Option<&'static str>,
+}
+
+/// Recopie dans le fichier PRÉPARÉ la valeur actuelle du verrouillage (P-04-iOS critère 11, B5) : valeur `true` ou illisible (tout sauf
+/// `false`) dans la base actuelle -> la ligne entière est recopiée (valeur `true`, métadonnées d'origine) ; base actuelle illisible ->
+/// `true` écrit ; `false` ou ligne absente -> fichier préparé inchangé (une version avec verrou reste verrouillée) ; aucune base actuelle
+/// -> rien. Aucun déclencheur de synchro ne vise cette clé. Échec -> `io` : la restauration est refusée avant l'échange.
+pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupError> {
+    if !current_db.is_file() {
+        return Ok(());
+    }
+    type Row = (String, String, String, String);
+    let read = || -> Result<Option<Row>, rusqlite::Error> {
+        let conn = open_read_only(current_db)?;
+        // Base sans table `settings` (jamais le cas de l'app ; bases de test) : aucune valeur à reporter.
+        let has_settings = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'settings'", [], |r| r.get::<_, u64>(0))? == 1;
+        if !has_settings {
+            return Ok(None);
+        }
+        let mut stmt = conn.prepare("SELECT value, updated_at, device_id, hlc FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query([APP_LOCK_SETTING_KEY])?;
+        match rows.next()? {
+            Some(row) => Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))),
+            None => Ok(None),
+        }
+    };
+    let (updated_at, device_id, hlc) = match read() {
+        Ok(None) => return Ok(()),
+        Ok(Some((value, _, _, _))) if value.trim() == "false" => return Ok(()),
+        Ok(Some((_, updated_at, device_id, hlc))) => (updated_at, device_id, hlc),
+        // Base actuelle illisible : échec fermé, le verrou est activé dans la version restaurée.
+        Err(_) => {
+            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+            (iso_instant(now), String::new(), String::new())
+        }
+    };
+    let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+    conn.execute(
+        "INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES (?1, 'true', ?2, ?3, ?4)          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, device_id = excluded.device_id, hlc = excluded.hlc",
+        rusqlite::params![APP_LOCK_SETTING_KEY, updated_at, device_id, hlc],
+    )
+    .map_err(|e| BackupError::new("io", e.to_string()))?;
+    Ok(())
 }
 
 /// Des fichiers `.restore-old` existent-ils ? (restauration interrompue, ou retour arrière incomplet `rollback-failed`)
@@ -802,6 +853,8 @@ pub fn restore_backup_file(
         // Déclencheurs recréés depuis la référence de l'app sur le fichier préparé, avant l'échange : la base mise en place n'a que des
         // déclencheurs de l'app, et un échec ici ne laisse aucun état à moitié restauré.
         .and_then(|_| reset_triggers(&staged))
+        // P-04-iOS critère 11 : la valeur actuelle du verrouillage prévaut, recopiée sur le fichier préparé AVANT l'échange.
+        .and_then(|()| carry_app_lock(db_path, &staged))
         .and_then(|()| hook(RestoreStep::Staged).map_err(io_err));
     if let Err(error) = prepared {
         let _ = fs::remove_file(&staged);
@@ -812,7 +865,7 @@ pub fn restore_backup_file(
         return Err(error);
     }
     let _ = prune_family(backups_dir, Family::PreRestore, KEEP_PRE_RESTORE_BACKUPS);
-    Ok(RestoreOutcome { safety_copy, schema_version })
+    Ok(RestoreOutcome { safety_copy, schema_version, marker: "not-configured", marker_code: None })
 }
 
 /// Instant ISO 8601 UTC à la milliseconde (`2026-10-05T08:00:00.000Z`), forme de `IsoDateTime` côté TypeScript.
@@ -916,6 +969,7 @@ pub fn check_named_backup(backups_dir: &Path, name: &str) -> Result<u32, BackupE
 /// Sauvegarde quotidienne (P-04) ; `replace` = « Sauvegarder maintenant ». Hors du fil de l'interface.
 #[tauri::command]
 pub async fn daily_backup(app: AppHandle, day: String, replace: bool) -> Result<DailyOutcome, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
     let dir = data_dir(&app)?;
     tauri::async_runtime::spawn_blocking(move || create_daily_backup(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &day, replace, KEEP_DAILY_BACKUPS))
         .await
@@ -926,7 +980,9 @@ pub async fn daily_backup(app: AppHandle, day: String, replace: bool) -> Result<
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupListing {
-    pub directory: String,
+    /// PC : `%APPDATA%<identifiant>ackups` ; iPhone : `None` (la WebView affiche « Dossier de l'app (non visible dans Fichiers) »,
+    /// jamais le chemin du conteneur ; ADR 0009 avenant lot F B1).
+    pub directory: Option<String>,
     pub entries: Vec<BackupEntry>,
 }
 
@@ -938,7 +994,7 @@ pub fn neutral_directory_label(identifier: &str) -> String {
 #[tauri::command]
 pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> {
     let dir = data_dir(&app)?.join(BACKUP_DIR);
-    let label = neutral_directory_label(&app.config().identifier);
+    let label = if cfg!(target_os = "ios") { None } else { Some(neutral_directory_label(&app.config().identifier)) };
     tauri::async_runtime::spawn_blocking(move || {
         let entries = list_backups_in(&dir)?;
         Ok(BackupListing { directory: label, entries })
@@ -950,6 +1006,7 @@ pub async fn list_backups(app: AppHandle) -> Result<BackupListing, BackupError> 
 /// Vérifie une sauvegarde avant que l'app ne ferme sa base (un fichier refusé ne coûte rien).
 #[tauri::command]
 pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
     let dir = data_dir(&app)?.join(BACKUP_DIR);
     tauri::async_runtime::spawn_blocking(move || {
         check_named_backup(&dir, &name)
@@ -958,22 +1015,41 @@ pub async fn check_backup(app: AppHandle, name: String) -> Result<u32, BackupErr
     .map_err(|e| join_error(e.into()))?
 }
 
-/// Restaure une sauvegarde (la base a été fermée par le front, qui relance ensuite l'app).
+/// Refus de la restauration tant qu'un pool du plugin SQL est ouvert : jamais une 2e connexion pendant l'échange (P-04-iOS, pool à une
+/// connexion de `vendor/tauri-plugin-sql`). Plugin absent (porte de démarrage fermée) : rien d'ouvert.
+pub async fn ensure_sql_closed<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Result<(), BackupError> {
+    let Some(instances) = app.try_state::<tauri_plugin_sql::DbInstances>() else { return Ok(()) };
+    match crate::startup_gate::open_sql_pools(&instances).await {
+        0 => Ok(()),
+        _ => Err(BackupError::new("db-open", "la connexion à la base n'est pas fermée")),
+    }
+}
+
+/// Restaure une sauvegarde (la base a été fermée par le front, qui relance l'app sur PC ou recharge la WebView sur iPhone). Le marqueur de
+/// restauration de la synchro est écrit après l'échange ; son échec est RENDU (`marker: failed`, code), gardé pour un nouvel essai
+/// (`PendingRestoreMarker`) et inscrit au journal (P-04-iOS critère 12) : la restauration reste faite.
 #[tauri::command]
 pub async fn restore_backup(app: AppHandle, name: String, stamp: String) -> Result<RestoreOutcome, BackupError> {
+    crate::startup_gate::ensure_ready(&app)?;
+    ensure_sql_closed(&app).await?;
     let dir = data_dir(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
         let outcome = restore_backup_file(&dir.join(DB_FILE), &dir.join(BACKUP_DIR), &name, APP_SCHEMA_VERSION, &stamp, &|_| Ok(()))?;
-        // Échange abouti : marqueur de la synchro (aucun cycle ne partira avant le choix de l'utilisateur, ADR 0010 règle 3). Un échec
-        // d'écriture est inscrit au journal technique (I-04, ADR 0014) sans bloquer la restauration déjà faite.
         let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
-        if write_restore_marker(&dir, &dir.join(BACKUP_DIR), &name, now, outcome.schema_version).is_err() {
-            crate::applog::write("backup", "restore-marker-failed");
-        }
-        Ok(outcome)
+        let marker = crate::startup_gate::MarkerToWrite { config_dir: dir, backup: name, restored_at_secs: now, schema_version: outcome.schema_version };
+        let (state, code) = crate::startup_gate::write_marker_with_retry(&marker, std::time::Duration::from_millis(200));
+        Ok::<_, BackupError>((RestoreOutcome { marker: state, marker_code: code, ..outcome }, (state == "failed").then_some(marker)))
     })
     .await
-    .map_err(|e| join_error(e.into()))?
+    .map_err(|e| join_error(e.into()))??;
+    if let Some(marker) = outcome.1 {
+        if let Some(pending) = app.try_state::<crate::startup_gate::PendingRestoreMarker>() {
+            if let Ok(mut slot) = pending.0.lock() {
+                *slot = Some(marker);
+            }
+        }
+    }
+    Ok(outcome.0)
 }
 
 /// Affiche le dossier des sauvegardes dans l'Explorateur (PC) : aucun paramètre venant de la WebView.

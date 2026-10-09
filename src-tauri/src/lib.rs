@@ -33,6 +33,8 @@ mod ios_setup;
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Démarrage sûr et restauration (P-04-iOS) : porte de démarrage, plugin SQL enregistré après la récupération (iPhone), marqueur en attente.
+pub mod startup_gate;
 /// Synchronisation par iCloud Drive (ADR 0011, lot Y1 : Y-08, Y-01).
 pub mod sync;
 /// Coffre système (agendas, clé de synchro), déplacé de `calendars/vault.rs` au lot Y1.
@@ -65,6 +67,10 @@ pub fn run() {
         // Journal technique (I-04, ADR 0014 §2) : capability logs.json (fenêtre main).
         applog::log_append, applog::log_read, applog::log_clear,
     ]);
+    // PC : plugin SQL après les plugins PC (l'instance unique reste le premier) (la fenêtre principale n'est créée qu'après la récupération, `desktop.rs`) ; marqueur de restauration
+    // en attente (P-04-iOS critère 12, PC compris).
+    #[cfg(desktop)]
+    let builder = builder.plugin(tauri_plugin_sql::Builder::default().build()).manage(startup_gate::PendingRestoreMarker::default());
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
@@ -73,6 +79,10 @@ pub fn run() {
     // temporaires restants au démarrage (`ios_setup`).
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_ct_files::init()).manage(export_ios::ExportIosState::default()).setup(ios_setup::setup);
+    // P-04-iOS (ADR 0009 avenant lot F B3) : PAS de plugin SQL ici ; `ios_setup` l'enregistre après la récupération d'une restauration
+    // interrompue (`startup_gate`), la porte et le marqueur en attente sont gérés.
+    #[cfg(target_os = "ios")]
+    let builder = builder.manage(startup_gate::StartupGate::default()).manage(startup_gate::PendingRestoreMarker::default());
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![backup::backup_database_before_migration, backup::db_diagnostics, calendars::calendar_secret_set, calendars::calendar_secret_exists, calendars::calendar_secret_delete, calendars::calendar_oauth_google_authorize, calendars::calendar_oauth_google_revoke, calendars::calendar_http,
         // Synchronisation sur iPhone (ADR 0011 §22 point 7, Y-IOS-01) : commandes de `main`, aucune de la fenêtre `pairing`.
@@ -85,6 +95,8 @@ pub fn run() {
         sync::commands_ios::sync_key_import, sync::commands_ios::sync_device_forget, sync::commands_ios::sync_reset_key,
         // FILES-IOS-01 (ADR 0009 avenant lot F A3) : même commande et même permission qu'au PC, temporaire remis au plugin ct-files.
         export_ios::export_save_file,
+        // P-04-iOS (ADR 0009 avenant lot F B1) : sauvegarde et restauration sur iPhone ; `reveal_backups_folder` reste PC.
+        backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status,
         // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
         applog::log_append, applog::log_read, applog::log_clear,
     ]);
@@ -102,7 +114,6 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_privacy_shield::init());
     builder
-        .plugin(tauri_plugin_sql::Builder::default().build())
         .run(tauri::generate_context!())
         .expect("échec du démarrage de CircleTasks");
 }

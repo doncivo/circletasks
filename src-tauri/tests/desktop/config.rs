@@ -294,6 +294,10 @@ fn backups_capability_grants_only_the_five_backup_commands_to_the_main_window_on
     assert_eq!(names, ["allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup", "allow-reveal-backups-folder"]);
     // Aucune autre capability n'accorde ces commandes (la restauration n'est jamais appelable depuis une fenêtre secondaire).
     for other in other_capabilities("backups.json") {
+        // P-04-iOS : la capability de l'iPhone porte quatre de ces commandes (liste exacte vérifiée plus bas).
+        if other.contains("\"identifier\": \"backups-ios\"") {
+            continue;
+        }
         assert!(!permissions_of(&other).iter().any(|p| p.contains("restore-backup") || p.contains("daily-backup") || p.contains("list-backups") || p.contains("check-backup") || p.contains("reveal-backups")));
     }
 }
@@ -842,4 +846,50 @@ fn i04_9_the_only_eprintln_is_in_applog_and_the_journal_starts_first() {
     assert!(setup.find("crate::applog::init(").unwrap() < setup.find("recover_interrupted_restore").unwrap());
     let ios = include_str!("../../src/ios_setup.rs");
     assert!(ios.find("crate::applog::init(").unwrap() < ios.find("purge_exports").unwrap());
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// P-04-iOS (ADR 0009 avenant lot F B1 et B3)
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// P-04-iOS critère 16 : `backups-ios.json` exacte (cinq commandes, jamais `allow-reveal-backups-folder`), `backups.json` (PC) inchangé ;
+/// gestionnaire iOS = ces cinq commandes de sauvegarde (plus la sauvegarde avant migration) ; aucune autre capability iOS ne les porte.
+#[test]
+fn p04_ios_16_backups_capability_and_handler_are_exact() {
+    let text = include_str!("../../capabilities/backups-ios.json");
+    let capability: Value = serde_json::from_str(text).expect("capability valide");
+    assert_eq!(capability["windows"], serde_json::json!(["main"]));
+    assert_eq!(capability["platforms"], serde_json::json!(["iOS"]));
+    let mut granted = permissions_of(text);
+    granted.sort();
+    assert_eq!(granted, ["allow-backup-startup-status", "allow-check-backup", "allow-daily-backup", "allow-list-backups", "allow-restore-backup"]);
+    let ios = ios_handler_commands();
+    for command in ["daily_backup", "list_backups", "check_backup", "restore_backup", "backup_startup_status"] {
+        assert!(ios.contains(command), "{command}");
+    }
+    assert!(!ios.contains("reveal_backups_folder"));
+    for (name, other) in all_capabilities() {
+        if name != "backups-ios.json" {
+            assert!(!other.contains("allow-backup-startup-status"), "{name}");
+        }
+        if name != "backups.json" {
+            assert!(!other.contains("allow-reveal-backups-folder"), "{name}");
+        }
+    }
+}
+
+/// P-04-iOS B3 : sur iPhone le plugin SQL n'est PAS dans la chaîne du builder (enregistré par `ios_setup` après la récupération) ; sur PC
+/// il l'est, après les plugins du PC (l'instance unique reste le premier plugin).
+#[test]
+fn p04_ios_sql_plugin_is_registered_late_on_iphone_only() {
+    let lines: Vec<&str> = LIB_SOURCE.lines().collect();
+    let uses: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.contains("tauri_plugin_sql::Builder")).map(|(i, _)| i).collect();
+    assert_eq!(uses.len(), 1, "un seul enregistrement dans lib.rs");
+    assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(desktop)]");
+    let configure = lines.iter().position(|l| l.contains("desktop::configure(builder)")).unwrap();
+    assert!(configure < uses[0], "après desktop::configure (instance unique d'abord)");
+    let gate = include_str!("../../src/startup_gate.rs");
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(gate.contains("app.plugin(tauri_plugin_sql::Builder::default().build())"));
+    assert!(ios.find("crate::applog::init(").unwrap() < ios.find("register_sql_after_recovery").unwrap());
 }

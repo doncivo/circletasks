@@ -1,8 +1,10 @@
 import { createStore } from 'zustand';
 import { backupDay, backupStamp, isDailyBackupDue, sortBackupVersions } from '../../domain/backupSchedule';
-import { backupFailureOf, type BackupFailureReason, type BackupVersion } from '../../platform/backup';
+import { BackupError, backupFailureOf, type BackupFailureReason, type BackupVersion, type RestoreResult } from '../../platform/backup';
 import { logDesktopFailure } from '../../platform';
 import { defineFeatureStore, type AppContainer } from '../app/container';
+import { quiesceForRestore, type QuiesceHandle } from './restoreQuiesce';
+import { writeMarkerFailed, writeRestoreResult } from './restoreMemo';
 
 export type BackupListStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -22,6 +24,8 @@ export interface BackupState {
   readonly restoreError: BackupFailureReason | null;
   /** La base est fermée (échec après la fermeture) : seul un redémarrage rouvre l'app. */
   readonly restartNeeded: boolean;
+  /** Marqueur de restauration non écrit (P-04-iOS critère 12) : code affiché avec « Voir la synchronisation » avant le redémarrage. */
+  readonly markerFailure: string | null;
   /** Lit les versions. Ne rejette jamais. */
   load(): Promise<void>;
   /**
@@ -70,6 +74,7 @@ function createBackupStore(container: AppContainer) {
       restorePhase: 'idle',
       restoreError: null,
       restartNeeded: false,
+      markerFailure: null,
       async load() {
         if (!service.available()) return;
         set({ status: get().status === 'ready' ? 'ready' : 'loading' });
@@ -131,18 +136,42 @@ function createBackupStore(container: AppContainer) {
       },
       async restore(version) {
         if (!service.available() || get().restorePhase === 'running') return;
-        set({ restorePhase: 'running', restoreError: null, restartNeeded: false });
+        set({ restorePhase: 'running', restoreError: null, restartNeeded: false, markerFailure: null });
         // Une sauvegarde automatique déjà en cours se termine avant que la base ne soit fermée.
         await dailyInFlight;
+        let quiet: QuiesceHandle | null = null;
+        let result: RestoreResult | undefined;
         try {
-          await service.restore({ name: version.name, stamp: backupStamp(container.clock) });
+          // Ordre (P-04-iOS critère 6) : vérification (base ouverte) -> mise au calme -> voile (phase running) -> point de contrôle ->
+          // fermeture -> échange -> annonce -> mémo -> redémarrage (rechargement sur iPhone).
+          result = await service.restore(
+            { name: version.name, stamp: backupStamp(container.clock) },
+            {
+              prepare: async () => {
+                const outcome = await quiesceForRestore(container);
+                if (outcome === 'sync-busy' || outcome === 'busy') throw new BackupError(outcome);
+                quiet = outcome;
+              },
+            },
+          );
         } catch (error) {
           logDesktopFailure('backup-restore', error);
           const { reason, databaseClosed } = backupFailureOf(error);
+          // Base encore ouverte : rien n'a changé, la synchro et les rappels reprennent. Base fermée : seul un redémarrage la rouvre ; l'issue
+          // est mémorisée pour être dite APRÈS le redémarrage (critère 7, jamais un écran vide sans explication).
+          if (!databaseClosed) (quiet as QuiesceHandle | null)?.release();
+          else writeRestoreResult({ outcome: 'failed', reason, databaseClosed: true, marker: null, markerCode: null });
           set({ restorePhase: 'failed', restoreError: reason, restartNeeded: databaseClosed });
           return;
         }
-        set({ restorePhase: 'done' });
+        const marker = result?.marker ?? 'not-configured';
+        const markerCode = result?.markerCode ?? null;
+        if (marker === 'failed') {
+          logDesktopFailure('backup', `restore-marker-failed ${markerCode ?? 'unknown'}`);
+          writeMarkerFailed({ backup: version.name, code: markerCode ?? 'unknown', at: new Date(container.clock.nowMs()).toISOString() });
+        }
+        if (!writeRestoreResult({ outcome: 'done', reason: null, databaseClosed: false, marker, markerCode })) logDesktopFailure('backup', 'restore-memo-unwritable');
+        set({ restorePhase: 'done', markerFailure: marker === 'failed' ? (markerCode ?? 'unknown') : null });
         await new Promise<void>((resolve) => globalThis.setTimeout(resolve, RESTART_ANNOUNCE_MS));
         await get().restart();
       },
@@ -153,7 +182,7 @@ function createBackupStore(container: AppContainer) {
           logDesktopFailure('backup-restart', error);
         }
       },
-      resetRestore: () => set({ restorePhase: 'idle', restoreError: null, restartNeeded: false }),
+      resetRestore: () => set({ restorePhase: 'idle', restoreError: null, restartNeeded: false, markerFailure: null }),
     };
   });
 }

@@ -19,6 +19,7 @@ mod ocr;
 mod quit;
 mod restore;
 mod restore_hardening;
+mod restore_ios;
 mod restore_recovery;
 mod shortcut;
 mod support;

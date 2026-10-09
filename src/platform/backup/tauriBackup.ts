@@ -1,11 +1,13 @@
 import { relaunchApp } from '../relaunch';
-import { BackupError, type BackupFailureReason, type BackupKind, type BackupListing, type BackupService } from './types';
+import { BackupError, type BackupFailureReason, type BackupKind, type BackupListing, type BackupService, type RestoreResult } from './types';
 
 /** Commandes Rust (`src-tauri/src/backup.rs`, capability `backups.json`), injectables pour les tests. */
 export interface TauriBackupApi {
-  list(): Promise<{ directory: string; entries: readonly RawBackupEntry[] }>;
+  /** `directory` : libellé neutre du dossier (PC) ; null sur iPhone (jamais le chemin du conteneur). */
+  list(): Promise<{ directory: string | null; entries: readonly RawBackupEntry[] }>;
   daily(day: string, replace: boolean): Promise<{ created: boolean }>;
   check(name: string): Promise<number>;
+  /** `RestoreOutcome` de Rust (`marker`, `markerCode`, …) ; lu par `markerOf`. */
   restore(name: string, stamp: string): Promise<unknown>;
   reveal(): Promise<void>;
   relaunch(): Promise<void>;
@@ -48,7 +50,14 @@ export function loadTauriBackupApi(): TauriBackupApi {
   };
 }
 
-const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed', 'restore-pending'];
+const KNOWN_REASONS: readonly BackupFailureReason[] = ['corrupt', 'newer-schema', 'not-found', 'rollback-failed', 'restore-pending', 'db-open'];
+
+/** Issue du marqueur rendue par Rust (`RestoreOutcome.marker`, P-04-iOS critère 12) ; forme inattendue : `failed` (jamais tue). */
+export function markerOf(raw: unknown): RestoreResult {
+  const outcome = typeof raw === 'object' && raw !== null ? (raw as { marker?: unknown; markerCode?: unknown }) : {};
+  if (outcome.marker === 'written' || outcome.marker === 'not-configured') return { marker: outcome.marker, markerCode: null };
+  return { marker: 'failed', markerCode: typeof outcome.markerCode === 'string' ? outcome.markerCode : 'unknown' };
+}
 
 /** Erreur Rust `{ code, message }` -> raison stable ; tout le reste vaut `io`. */
 export function reasonOf(error: unknown): BackupFailureReason {
@@ -60,6 +69,9 @@ export interface TauriBackupOptions {
   /** Connexion unique de l'app : point de contrôle WAL avant une copie, fermée avant une restauration. */
   readonly db: { select(sql: string): Promise<unknown>; close(): Promise<void> };
   readonly api?: TauriBackupApi;
+  /** iPhone : rechargement de la WebView (`reloadApp`) au lieu de la relance ; pas de « Afficher dans le dossier ». */
+  readonly restart?: () => Promise<void>;
+  readonly reveal?: boolean;
 }
 
 /**
@@ -94,25 +106,30 @@ export function createTauriBackup(options: TauriBackupOptions): BackupService {
         throw new BackupError(reasonOf(error), { cause: error });
       }
     },
-    async restore({ name, stamp }) {
+    async restore({ name, stamp }, hooks = {}) {
       try {
         await api.check(name);
       } catch (error) {
         throw new BackupError(reasonOf(error), { cause: error });
       }
+      // Mise au calme et voile (P-04-iOS critère 6) : base encore ouverte, un refus ne coûte rien.
+      await hooks.prepare?.();
       try {
         await checkpoint();
         await options.db.close();
       } catch (error) {
         throw new BackupError('io', { cause: error });
       }
+      // Base fermée : plus AUCUN appel à la connexion jusqu'au redémarrage (Rust refuse l'échange si un pool est ouvert, `db-open`).
+      let raw: unknown;
       try {
-        await api.restore(name, stamp);
+        raw = await api.restore(name, stamp);
       } catch (error) {
         throw new BackupError(reasonOf(error), { cause: error, databaseClosed: true });
       }
+      return markerOf(raw);
     },
-    restart: () => api.relaunch(),
-    reveal: () => api.reveal(),
+    restart: options.restart ?? (() => api.relaunch()),
+    ...(options.reveal === false ? {} : { reveal: () => api.reveal() }),
   };
 }

@@ -8,6 +8,10 @@ import { useAppStore } from './appStore';
 import type { AppContainer } from './container';
 import { getNotificationRunner } from '../reminders/notificationRunner';
 import { createTimeZoneWatcher } from './timeZoneWatcher';
+import { t } from '../../i18n';
+import { logFailure } from '../../platform/desktop/log';
+import { takeRestoreResult } from '../settings/restoreMemo';
+import { useNoticeStore } from './notice';
 
 export interface AppStartup {
   /** Premier contrôle de report terminé (avant le premier rendu d'Aujourd'hui). Ne rejette jamais. */
@@ -41,10 +45,27 @@ export interface StartupEnv {
  * sans bloquer `ready` ; un échec est sans conséquence (nouvelle tentative au prochain démarrage).
  * K-03 : les agendas externes sont rafraîchis dès l'ouverture puis toutes les 15 min au premier plan (`startCalendarScheduler`), sans bloquer `ready`.
  */
+/**
+ * P-04-iOS critère 7 : issue de la restauration mémorisée avant le redémarrage (relance PC, rechargement iPhone), dite UNE fois après
+ * (message et entrée au journal `restore-done` / `restore-failed`), puis effacée.
+ */
+export function announceRestoreResult(): void {
+  const result = takeRestoreResult();
+  if (!result) return;
+  if (result.outcome === 'done') {
+    logFailure('backup', 'restore-done');
+    useNoticeStore.getState().show(t('backup.resultDone'));
+    return;
+  }
+  logFailure('backup', `restore-failed ${result.reason ?? 'io'}`);
+  useNoticeStore.getState().show(t('backup.resultFailed', { code: result.reason ?? 'io' }));
+}
+
 export function startAppStartup(
   container: AppContainer,
   env: StartupEnv = { document, window },
 ): AppStartup {
+  announceRestoreResult();
   const rollover = createDayRollover(container, {
     onDayChange: (day) => {
       useAppStore.getState().setDay(day);

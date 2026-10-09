@@ -57,6 +57,8 @@ fn main() {
             "sync_device_forget", "sync_forgotten_delete", "sync_reset_key",
             // Journal technique persistant (I-04, ADR 0014 §2) : PC et iPhone, capabilities logs.json et logs-ios.json.
             "log_append", "log_read", "log_clear",
+            // P-04-iOS (ADR 0009 avenant lot F B3) : issue de la récupération au démarrage (iPhone).
+            "backup_startup_status",
         ])),
     )
     .expect("échec de la configuration de la compilation Tauri");

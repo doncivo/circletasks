@@ -4,6 +4,7 @@ import { t, type PlainMessageKey } from '../../i18n';
 import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderInfo, type SyncPlatform } from '../../platform/sync';
 import { Button, ChoiceDialog, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
+import { RestoreMarkerResume } from './RestoreMarkerResume';
 import type { AppContainer } from '../app/container';
 import { JoinProgress } from './JoinProgress';
 import { onPairingChange, openPairingWindow, pairingOpenErrorKey, readPairingFailure, type PairingFailure } from './pairingStatus';
@@ -281,6 +282,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   return (
     <>
       <h2 className="ct-settings__section">{t('sync.folder.sectionTitle')}</h2>
+      <RestoreMarkerResume />
       {view.kind === 'loading' && (
         <div className="ct-settings__row" aria-busy="true">
           <span>{t('sync.folder.rowLabel')}</span>

@@ -25,6 +25,9 @@ mod wrapper;
 
 pub use error::Error;
 pub use wrapper::DbPool;
+/// CircleTasks : pool à une connexion, réexporté pour les tests de l'app (aucune 2e connexion pendant une restauration, P-04-iOS).
+#[cfg(feature = "sqlite")]
+pub use wrapper::open_sqlite_pool;
 
 use futures_core::future::BoxFuture;
 use serde::{Deserialize, Serialize};
