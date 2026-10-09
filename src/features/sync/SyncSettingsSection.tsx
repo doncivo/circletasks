@@ -69,8 +69,40 @@ export function syncErrorMessageKey(code: SyncErrorCode, ios = false): PlainMess
   }
 }
 
+/**
+ * Choix du dossier (boîte système), puis clé et liaison de l'appareil (Y-01 critère 10), partagé par Réglages et Détails (QA D2). Clé
+ * créée seulement sur PC et si le dossier n'a pas de données ; l'iPhone n'en crée jamais ici (ADR 0011 §23 point 9). Premier cycle lancé
+ * aussitôt (sans clé : il s'arrête sur `needs-pairing`). `onPicked` : dossier choisi, avant la clé (l'appelant sait qu'un dossier est lié
+ * si la suite échoue). null : choix annulé. Toute erreur remonte à l'appelant, qui l'affiche.
+ */
+export async function chooseFolderAndBind(
+  container: AppContainer,
+  platform: SyncPlatform,
+  ios: boolean,
+  onPicked: (info: SyncFolderInfo) => void = () => undefined,
+): Promise<{ readonly info: SyncFolderInfo; readonly needsPairing: boolean } | null> {
+  const info = await withExcursion('folder-picker', () => platform.folder.choose());
+  if (!info) return null;
+  onPicked(info);
+  let needsPairing = false;
+  const key = await platform.key.status();
+  if (!key.present && ios) needsPairing = true;
+  else if (!key.present) {
+    try {
+      await platform.key.create();
+    } catch (error) {
+      if (syncErrorCodeOf(error) !== 'folder-has-data') throw error;
+      needsPairing = true;
+    }
+  }
+  await platform.bindDevice(container.hlc.deviceId);
+  // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes.
+  void container.sync?.syncNow('open');
+  return { info, needsPairing };
+}
+
 /** Le texte d'erreur demande de choisir un dossier (de nouveau, ou un autre) : « Choisir le dossier » proposé à côté. */
-function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
+export function asksForFolder(code: SyncErrorCode, ios: boolean): boolean {
   return code === 'unsafe-folder' || code === 'not-local' || (ios && code === 'folder-unreachable');
 }
 
@@ -190,33 +222,16 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   /** Choix du dossier, puis clé (créée seulement si le dossier n'a pas de données chiffrées) et liaison de l'appareil (critère 10). */
   const choose = async () => {
     setBusy(true);
-    let info: SyncFolderInfo | null = null;
+    const picked: { info: SyncFolderInfo | null } = { info: null };
     const wasConfigured = view.kind === 'bound' || (view.kind === 'error' && view.configured);
     try {
-      info = await withExcursion('folder-picker', () => platform.folder.choose());
-      if (!info) return;
-      let needsPairing = false;
-      const key = await platform.key.status();
-      // Y-IOS-02 (ADR 0011 §23 point 9) : l'iPhone ne crée jamais de clé au choix du dossier (un dossier qui paraît vide peut ne pas être
-      // encore listé par iCloud) ; il propose l'association, ou une nouvelle synchronisation après une confirmation explicite.
-      if (!key.present && ios) needsPairing = true;
-      else if (!key.present) {
-        try {
-          await platform.key.create();
-        } catch (error) {
-          if (syncErrorCodeOf(error) !== 'folder-has-data') throw error;
-          needsPairing = true;
-        }
-      }
-      await platform.bindDevice(container.hlc.deviceId);
-      setView({ kind: 'bound', info, needsPairing });
-      // Premier cycle tout de suite (docs/decisions.md, Y-02) : le premier fichier ne doit pas attendre 5 minutes. Sans clé (Y-IOS-02) :
-      // ce cycle s'arrête aussitôt sur `needs-pairing` (aucune lecture du dossier) et le bandeau A-09 dit d'associer cet appareil.
-      void container.sync?.syncNow('open');
+      const chosen = await chooseFolderAndBind(container, platform, ios, (value) => (picked.info = value));
+      if (!chosen) return;
+      setView({ kind: 'bound', info: chosen.info, needsPairing: chosen.needsPairing });
     } catch (error) {
       // Dossier refusé par le contrôle : rien n'a été lié, « Choisir le dossier » reste proposé ; un dossier lié puis un échec de
       // clé ou de liaison : « Oublier » (revue 6).
-      setView({ kind: 'error', code: syncErrorCodeOf(error), info, configured: wasConfigured || info !== null });
+      setView({ kind: 'error', code: syncErrorCodeOf(error), info: picked.info, configured: wasConfigured || picked.info !== null });
     } finally {
       setBusy(false);
     }

@@ -107,6 +107,7 @@ export function ScanReview({ scan, layout }: { readonly scan: Scan; readonly lay
           {countLabel(scan.proposals.length)}
         </span>
         <span className="ct-scan__lead">{t('scan.review.instructions')}</span>
+        {scan.engineTruncated && <span className="ct-scan__lead">{t('scan.review.engineTruncated')}</span>}
         {scan.truncated && <span className="ct-scan__lead">{t('scan.review.truncated', { max: scan.proposals.length, count: scan.detected })}</span>}
         <button type="button" className="ct-scan__retake" onClick={scan.goToSource}>
           {t('scan.review.retake')}

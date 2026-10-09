@@ -65,7 +65,7 @@ function pairingSettled(container: AppContainer): Promise<void> {
 /** Clic qui ouvre la fenêtre `pairing`, attendu jusqu'à l'avis qui conclut l'ouverture (états de la plateforme et relance posés). */
 async function clickAndSettle(container: AppContainer, name: string): Promise<void> {
   const settled = pairingSettled(container);
-  fireEvent.click(screen.getByRole('button', { name }));
+  fireEvent.click(await screen.findByRole('button', { name }));
   await act(async () => {
     await settled;
   });
@@ -90,7 +90,7 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     arrange(platform);
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe(text);
     expect(platform.testing.pairing()).toBeNull();
     expect(await db.data.repos.sync.getMeta(PAIRING_FAILURE_META)).toBeNull();
@@ -100,7 +100,7 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     const failing: SyncPlatform = { ...platform, key: { ...platform.key, openPairing: () => Promise.reject(new SyncPlatformError('io')) } };
     const container = await make(failing);
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('Installation incomplète : réinstallez l’application');
     // Redémarrage : nouveau conteneur, même base.
     cleanup();
@@ -108,14 +108,14 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     renderIn(restarted, <SyncDetailsPairing />);
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('Installation incomplète : réinstallez l’application');
     const notice = screen.getByTestId('sync-pairing-notice');
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     await waitForElementToBeRemoved(notice);
     expect(await db.data.repos.sync.getMeta(PAIRING_FAILURE_META)).toBeNull();
     // Trop de demandes.
     cleanup();
     const limited: SyncPlatform = { ...platform, key: { ...platform.key, openPairing: () => Promise.reject(new SyncPlatformError('rate-limited')) } };
     renderIn(await make(limited), <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('Trop de demandes : réessayez dans 10 minutes');
   });
 
@@ -123,7 +123,7 @@ describe('« Associer l’iPhone » (critère 4)', () => {
     await platform.key.openPairing('show');
     const container = await make();
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('La fenêtre d’association est déjà ouverte');
     expect(platform.testing.pairing()).toEqual({ mode: 'show', generation: 1 });
     expect(await db.data.repos.sync.getMeta(PAIRING_FAILURE_META)).toBeNull();
@@ -169,7 +169,7 @@ describe('aucun échec silencieux (revue, faibles)', () => {
     expect((await screen.findByTestId('sync-pairing-notice')).textContent).toBe('L’état de l’association n’a pas pu être lu ou enregistré : réessayez');
     getMeta.mockRestore();
     const notice = screen.getByTestId('sync-pairing-notice');
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     await waitForElementToBeRemoved(notice);
   });
 
@@ -178,7 +178,7 @@ describe('aucun échec silencieux (revue, faibles)', () => {
     const failing: SyncPlatform = { ...platform, key: { ...platform.key, openPairing: () => Promise.reject(new SyncPlatformError('io')) } };
     const container = await make(failing);
     renderIn(container, <SyncDetailsPairing />);
-    fireEvent.click(screen.getByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Associer l’iPhone : afficher le code d’association' }));
     expect(await screen.findByText(/n’a pas pu être lu ou enregistré/)).toBeTruthy();
   });
 

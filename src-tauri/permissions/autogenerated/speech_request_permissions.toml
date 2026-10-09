@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-speech-request-permissions"
+description = "Enables the speech_request_permissions command without any pre-configured scope."
+commands.allow = ["speech_request_permissions"]
+
+[[permission]]
+identifier = "deny-speech-request-permissions"
+description = "Denies the speech_request_permissions command without any pre-configured scope."
+commands.deny = ["speech_request_permissions"]

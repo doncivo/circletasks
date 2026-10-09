@@ -33,3 +33,8 @@ Lot M (ADR 0013 et son avenant I-03) :
 Capabilities iOS à liste exacte (`haptics-ios.json`, `privacy-shield-ios.json`), contrôlées par `tests/desktop/config.rs` et
 `src/platform/lotM.consistency.test.ts` (qui relit aussi le Swift : méthodes, point d'entrée, fil principal). Plugin officiel du lot :
 `tauri-plugin-biometric` =2.4.1 (I-03), capability `biometric-ios.json`, clé `NSFaceIDUsageDescription` au contrat Info.plist.
+
+CAP-IOS-01 (ADR 0015) :
+- `vision` (`tauri-plugin-vision`) : `VNRecognizeTextRequest` (niveau précis, `["fr-FR", "en-US"]`), appelé par Rust seul derrière `ocr_status` et `ocr_recognize` (`src-tauri/src/ocr/vision.rs`, mêmes commandes que Windows) ; image en mémoire, jamais écrite ; contrat dans `tests/fixtures/capture/vision-contract.json`. Aucune clé Info.plist propre (la caméra du sélecteur de photo réutilise `NSCameraUsageDescription`).
+- `speech` (`tauri-plugin-speech`) : dictée française **sur l'appareil seulement** (`requiresOnDeviceRecognition = true`, aucune requête sans modèle hors ligne), session audio et moteur libérés à chaque fin, ouverture des Réglages de l'app (`openAppSettings`, qui résout toujours) ; commandes `speech_*` et `app_settings_open` (`src-tauri/src/speech/`), capability `capture-ios.json`, contrat dans `tests/fixtures/capture/speech-contract.json`. Clés `NSMicrophoneUsageDescription` et `NSSpeechRecognitionUsageDescription`.
+- Les deux plugins sont appelés avec délai (`src-tauri/src/mobile_call.rs`) : un plugin muet ne fige plus l'app. Contrôle statique du Swift : `src-tauri/tests/desktop/capture_ios.rs` ; `Package.swift` en `.iOS("17.0")` (la forme `.v17` exige swift-tools-version 5.9).

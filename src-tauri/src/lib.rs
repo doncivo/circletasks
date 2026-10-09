@@ -29,10 +29,15 @@ pub mod import;
 /// Démarrage de l'iPhone (`setup`) : journal technique, purge des temporaires d'export.
 #[cfg(target_os = "ios")]
 mod ios_setup;
-#[cfg(desktop)]
+/// OCR : Windows.Media.Ocr sur PC, Vision sur iPhone (CAP-IOS-01, ADR 0015).
+#[cfg(any(desktop, target_os = "ios"))]
 pub mod ocr;
 #[cfg(desktop)]
 pub mod shortcut;
+/// Appel des plugins Swift avec délai (ADR 0015 §3.1) ; compilé partout, testé avec un faux.
+pub mod mobile_call;
+/// Dictée sur l'appareil et Réglages iOS (CAP-IOS-01, ADR 0015 §2) ; la logique est testée sous Windows, les commandes sont iOS.
+pub mod speech;
 /// Démarrage sûr et restauration (P-04-iOS) : porte de démarrage, plugin SQL enregistré après la récupération (iPhone), marqueur en attente.
 pub mod startup_gate;
 /// Synchronisation par iCloud Drive (ADR 0011, lot Y1 : Y-08, Y-01).
@@ -74,7 +79,7 @@ pub fn run() {
     // iPhone (ADR 0011 §22 point 7, §23 point 2) : plugin folder-bookmark (appelé par Rust seul), scan du QR (JS), service de synchro.
     // Android non géré, volontairement : ni plugin ni commandes (seuls le PC Windows et l'iPhone sont livrés).
     #[cfg(target_os = "ios")]
-    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).manage(sync::commands_ios::SyncState::default());
+    let builder = builder.plugin(tauri_plugin_folder_bookmark::init()).plugin(tauri_plugin_web_auth::init()).plugin(tauri_plugin_reminders::init()).plugin(tauri_plugin_barcode_scanner::init()).plugin(tauri_plugin_vision::init()).plugin(tauri_plugin_speech::init()).manage(ocr::vision::VisionState::default()).manage(speech::SpeechState::default()).manage(sync::commands_ios::SyncState::default());
     // FILES-IOS-01 : plugin ct-files (sélecteur « Enregistrer dans Fichiers », appelé par Rust seul) et état de l'export ; purge des
     // temporaires restants au démarrage (`ios_setup`).
     #[cfg(target_os = "ios")]
@@ -99,6 +104,8 @@ pub fn run() {
         backup::daily_backup, backup::list_backups, backup::check_backup, backup::restore_backup, startup_gate::backup_startup_status,
         // Journal technique (I-04, ADR 0014 §2) : capability logs-ios.json.
         applog::log_append, applog::log_read, applog::log_clear,
+        // CAP-IOS-01 (ADR 0015) : Vision derrière les commandes OCR du PC, dictée sur l'appareil, Réglages iOS. Rust seul appelle les plugins.
+        ocr::ocr_status, ocr::ocr_recognize, speech::ios::speech_status, speech::ios::speech_request_permissions, speech::ios::speech_listen, speech::ios::speech_stop, speech::ios::app_settings_open,
     ]);
     // N-01 : notifications locales de l'iPhone (rappels, ADR 0012 N1.1). Aucune ligne sous cfg(desktop) : le PC n'envoie aucune notification.
     #[cfg(target_os = "ios")]
@@ -113,6 +120,8 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_ct_haptics::init());
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_privacy_shield::init());
+    // CAP-IOS-01 : copies temporaires de photos supprimées au lancement : dans `ios_setup` (un seul `setup` : un second remplacerait le
+    // premier et le plugin SQL ne serait jamais enregistré).
     builder
         .run(tauri::generate_context!())
         .expect("échec du démarrage de CircleTasks");

@@ -27,6 +27,7 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     keyMismatch: 'This folder was encrypted with another key: pair this device',
     errorGeneric: 'Sync failed: it will retry at the next cycle',
     errorSlowed: 'Sync slowed down: next try at {time} (code {code}), or “Sync” now',
+    errorSlowedCause: '{cause}. Next try at {time} (code {code}), or “Sync” now',
     errorStopped:'Sync stopped (code {code}): open Details, then “Sync” to try again',
     errorStoppedPairing: 'Encryption key missing or different (code {code}): pair this device',
     errorStoppedFolder: 'Choose the sync folder again (code {code}): Settings → Sync',

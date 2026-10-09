@@ -148,7 +148,7 @@ export function TaskCreateSheet({ viewedDate, today, spaces, initialSpaceId, ini
             onChange={setTitle}
             maxLength={TASK_TITLE_MAX_LENGTH}
             context={quick.suggestionContext}
-            {...(dictation.errorKey ? { describedBy: dictation.helpId } : {})}
+            {...(dictation.noticeVisible ? { describedBy: dictation.helpId } : {})}
           />
           <DictationButton dictation={dictation} />
         </div>

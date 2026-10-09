@@ -1,0 +1,29 @@
+{
+  "$comment": [
+    "Contrat des commandes Swift du plugin speech (ADR 0015 §2.2 et §4.1 ; CAP-IOS-01 critère 11).",
+    "Lu par le contrôle statique (src-tauri/tests/desktop/capture_ios.rs et src/platform/capture.ios.consistency.test.ts) contre src-tauri/plugins/speech/ios/Sources/SpeechPlugin.swift et src-tauri/src/speech/mod.rs, et par le faux transport de src-tauri/tests/desktop/speech.rs, qui refuse tout champ d'entrée absent de ce fichier.",
+    "États d'autorisation : granted, denied, restricted, prompt (unknown est ajouté par Rust si iOS rend une valeur inattendue). stoppedBy : user, time-limit, background (observateur natif seulement), interrupted, ended (le reconnaisseur a conclu, ou aucune parole).",
+    "output : formes de réponse possibles (ensembles exacts de clés). rejectCodes : codes de rejet de Swift ; swiftToRust : code Rust de la commande speech_listen ; 'unavailable' (plugin absent, appel en échec) et le délai dépassé sont produits par Rust seul."
+  ],
+  "rejectCodes": ["invalid-argument", "microphone-denied", "speech-recognition-denied", "on-device-unavailable", "recognizer-unavailable", "busy", "audio-unavailable", "failed"],
+  "swiftToRust": {
+    "invalid-argument": "speech-failed",
+    "microphone-denied": "speech-microphone-denied",
+    "speech-recognition-denied": "speech-recognition-denied",
+    "on-device-unavailable": "speech-on-device-unavailable",
+    "recognizer-unavailable": "speech-unavailable",
+    "busy": "speech-busy",
+    "audio-unavailable": "speech-audio-unavailable",
+    "failed": "speech-failed"
+  },
+  "rustOnly": { "unavailable": "speech-unavailable", "timeout": "speech-timeout" },
+  "stopReasons": ["user", "time-limit"],
+  "stoppedBy": ["user", "time-limit", "background", "interrupted", "ended"],
+  "commands": {
+    "status": { "input": [], "output": [["recognizer", "onDevice", "microphone", "speechRecognition"]] },
+    "requestPermissions": { "input": [], "output": [["microphone", "speechRecognition"]] },
+    "listen": { "input": ["locale", "maxDurationMs"], "output": [["text", "stoppedBy"]] },
+    "stop": { "input": ["reason"], "output": [["stopped"]] },
+    "openAppSettings": { "input": [], "output": [["opened"]] }
+  }
+}

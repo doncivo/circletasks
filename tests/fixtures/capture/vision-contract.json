@@ -1,0 +1,24 @@
+{
+  "$comment": [
+    "Contrat des commandes Swift du plugin vision (ADR 0015 §1.2 et §4.1 ; CAP-IOS-01 critère 5).",
+    "Lu par le contrôle statique (src-tauri/tests/desktop/capture_ios.rs et src/platform/capture.ios.consistency.test.ts) contre src-tauri/plugins/vision/ios/Sources/VisionPlugin.swift et src-tauri/src/ocr/vision.rs, et par le faux transport de src-tauri/tests/desktop/ocr_vision.rs, qui refuse tout champ d'entrée absent de ce fichier.",
+    "recognize.input.image : octets de l'image (PNG ou JPEG) en base64, jamais un chemin. x et y : bord gauche et HAUT de la ligne, normalisés de 0 à 1, origine en bas à gauche (boundingBox.minX et maxY). confidence : 0 à 1.",
+    "output : formes de réponse possibles (ensembles exacts de clés). rejectCodes : codes de rejet de Swift ; swiftToRust : code Rust de la commande ocr_recognize ; 'unavailable' (plugin absent ou appel en échec) est produit par Rust seul ; un délai de Rust dépassé donne ocr-timeout, une lecture déjà en cours ocr-busy."
+  ],
+  "rejectCodes": ["invalid-argument", "unsupported-format", "dimensions", "language-missing", "busy", "timeout", "failed"],
+  "swiftToRust": {
+    "unsupported-format": "ocr-unsupported-format",
+    "dimensions": "ocr-dimensions-too-large",
+    "language-missing": "ocr-language-missing",
+    "invalid-argument": "ocr-engine",
+    "busy": "ocr-busy",
+    "timeout": "ocr-timeout",
+    "failed": "ocr-engine"
+  },
+  "rustOnly": { "unavailable": "ocr-unavailable" },
+  "commands": {
+    "status": { "input": [], "output": [["languages"]] },
+    "cleanTemporaryUploads": { "input": [], "output": [["removed"]] },
+    "recognize": { "input": ["image", "languages", "maxSide", "maxLines"], "output": [["lines"]], "line": ["text", "confidence", "x", "y"] }
+  }
+}

@@ -5,6 +5,9 @@ type Shape<T> = { readonly [K in keyof T]: T[K] extends string ? string : Shape<
 /** `sync.pairing` texts (Y-06), English. Same shape as `fr.syncPairing.ts`. */
 export const syncPairingEn: Shape<typeof syncPairingFr> = {
   rowLabel: 'New device',
+  keyUnreadable: 'Encryption key unreadable for now: unlock the device, then try again',
+  keyReread: 'Try again',
+  keyRereadLabel: 'Read the encryption key again',
   show: 'Pair the iPhone',
   showLabel: 'Pair the iPhone: show the pairing code',
   importAction: 'Pair this device',
@@ -64,6 +67,8 @@ export const syncPairingEn: Shape<typeof syncPairingFr> = {
     scanCancelled: 'Scan cancelled',
     close: 'Close',
     errors: {
+      vaultUnavailable: 'The iPhone Keychain is unavailable: unlock the iPhone, then try again',
+      folderUnreachable: 'iCloud Drive folder unreachable: choose the iCloud Drive / CircleTasks folder again',
       invalidPairing: 'This is not a CircleTasks pairing code: show the code on the PC and try again',
       keyMismatch: 'This code does not match the data of the chosen folder: check the iCloud Drive / CircleTasks folder',
       cloudPending: 'The folder does not hold the PC data yet: wait for iCloud to bring it, then try again',
@@ -85,8 +90,8 @@ export const syncPairingWindowEn: Shape<typeof syncPairingWindowFr> = {
     warning: 'This code carries the encryption key of your data. It never goes through iCloud.',
     step1: 'On the iPhone, open {path}.',
     step1Path: 'Settings → Sync → Pair with the PC',
-    step2: 'Scan this code with the iPhone.',
-    step3: 'Choose the same iCloud Drive / CircleTasks folder on the iPhone.',
+    step2: 'Choose the same iCloud Drive / CircleTasks folder on the iPhone.',
+    step3: 'Scan this code with the iPhone.',
     qrLabel: 'Pairing QR code',
     noCapture: 'This code does not appear in screenshots',
     waiting: 'Waiting for the iPhone…',

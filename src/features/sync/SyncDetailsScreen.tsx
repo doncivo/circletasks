@@ -6,6 +6,7 @@ import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { SyncDetailsConflicts } from './SyncDetailsConflicts';
 import { SyncDetailsForget, SyncDeviceForgetAction } from './SyncDetailsForget';
+import { SyncDetailsFolder } from './SyncDetailsFolder';
 import { SyncDetailsPairing } from './SyncDetailsPairing';
 import { useKeyInfo } from './keyPresence';
 import { SyncDetailsReset } from './SyncDetailsReset';
@@ -66,6 +67,8 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
           <span className="ct-settings__value">{key.shortKid}</span>
         </div>
       )}
+      {/* QA D2 : dossier à choisir de nouveau : « Choisir le dossier » aussi dans Détails (où mène le bandeau). */}
+      <SyncDetailsFolder />
       {slots.pairing ?? <SyncDetailsPairing />}
       {slots.version ?? <SyncDetailsVersion />}
       <h2 className="ct-settings__section">{t('sync.status.sectionDevices')}</h2>

@@ -23,5 +23,7 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         Err(_) => crate::applog::write("export", "no-cache-dir"),
     }
     let _ = crate::startup_gate::register_sql_after_recovery(app.handle(), config_dir.as_deref());
+    // CAP-IOS-01 (ADR 0015) : copies temporaires de photos d'une session précédente supprimées (fil dédié, jamais bloquant).
+    crate::ocr::vision::clean_on_launch(app.handle());
     Ok(())
 }

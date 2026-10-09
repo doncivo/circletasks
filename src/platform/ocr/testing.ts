@@ -9,13 +9,17 @@ export interface FakeOcr extends OcrEngine {
   delayMs: number;
   /** Images reçues (taille et type), dans l'ordre. */
   received: Array<{ readonly size: number; readonly type: string }>;
+  /** Raison rendue par `status()` quand le moteur est indisponible (Vision). */
+  reason: 'language-missing' | 'plugin-unavailable' | undefined;
+  /** `status()` signale l'échec de la suppression des copies temporaires de photos. */
+  cleanupFailed: boolean;
   statusCalls: number;
   disposed: number;
   dispose(): Promise<void>;
 }
 
 export function createFakeOcr(
-  initial: Partial<Pick<FakeOcr, 'available' | 'lines' | 'failure' | 'delayMs'>> & { id?: OcrEngineId } = {},
+  initial: Partial<Pick<FakeOcr, 'available' | 'lines' | 'failure' | 'delayMs' | 'reason'>> & { id?: OcrEngineId } = {},
 ): FakeOcr {
   const fake: FakeOcr = {
     id: initial.id ?? 'fake',
@@ -23,12 +27,19 @@ export function createFakeOcr(
     lines: initial.lines ?? [],
     failure: initial.failure ?? null,
     delayMs: initial.delayMs ?? 0,
+    reason: initial.reason,
+    cleanupFailed: false,
     received: [],
     statusCalls: 0,
     disposed: 0,
     status: () => {
       fake.statusCalls += 1;
-      return Promise.resolve({ available: fake.available, languages: fake.available ? ['fr-FR'] : ['en-US'] });
+      return Promise.resolve({
+        available: fake.available,
+        languages: fake.available ? ['fr-FR'] : ['en-US'],
+        ...(!fake.available && fake.reason ? { reason: fake.reason } : {}),
+        ...(fake.cleanupFailed ? { cleanupFailed: true } : {}),
+      });
     },
     recognize: async (image: Blob, options: RecognizeOptions) => {
       fake.received.push({ size: image.size, type: image.type });

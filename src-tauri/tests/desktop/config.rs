@@ -950,3 +950,13 @@ fn k05_reminders_plugin_is_ios_only() {
     assert_eq!(lines[uses[0] - 1].trim(), "#[cfg(target_os = \"ios\")]");
     assert!(!DESKTOP_SOURCE.contains("reminders"));
 }
+
+/// Fusion du lot C : un seul `setup` dans lib.rs (Tauri n'en garde qu'un ; un second remplacerait `ios_setup` et le plugin SQL ne serait
+/// jamais enregistré sur l'iPhone) ; le nettoyage de Vision au lancement passe par `ios_setup`.
+#[test]
+fn p04_ios_a_single_setup_runs_recovery_then_vision_cleanup() {
+    assert_eq!(LIB_SOURCE.matches(".setup(").count(), 1);
+    assert!(LIB_SOURCE.contains(".setup(ios_setup::setup)"));
+    let ios = include_str!("../../src/ios_setup.rs");
+    assert!(ios.find("register_sql_after_recovery").unwrap() < ios.find("clean_on_launch").unwrap());
+}

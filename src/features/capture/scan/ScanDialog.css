@@ -485,3 +485,11 @@
   outline: 2px solid var(--ct-color-accent);
   outline-offset: 2px;
 }
+
+/* Indication de la caméra du sélecteur de photo (iPhone, I-05 critère 10). */
+.ct-scan__cameraHint {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--ct-space-2);
+}
