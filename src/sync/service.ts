@@ -16,7 +16,7 @@ import { runCycle, type CycleOptions, type CycleResult } from './engine';
 import { defaultSyncLogger, type SyncLogger } from './log';
 import { applyEverywhere, prepareKeepSynced, recordRestoreFailure, RESTORE_FAILURE_META, restoreContext } from './restoreChoice';
 import { META, writeJson } from './meta';
-import { INITIAL_STATUS, nextErrorStreak, phaseOf, statusFromFacts } from './status';
+import { INITIAL_STATUS, errorRepeat, phaseOf, statusFromFacts } from './status';
 import { omitKey } from '../domain/omitKey';
 
 /**
@@ -190,6 +190,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         ...(forget === undefined ? {} : { forget }),
         ...(reset === undefined ? {} : { reset }),
         stateUnreadable: unreadable || result.stateUnreadable === true,
+        nowMs: options.clock.nowMs(),
       }),
     );
   };
@@ -249,8 +250,7 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
       const code = syncErrorCodeOf(error);
       const unreadable = isSyncStateUnreadable(error);
       deps.logger.log('cycle-crashed', { code });
-      const streak = nextErrorStreak(before, code) ?? 1;
-      publish({ ...omitKey(before, 'errorStreak'), phase: 'error', errorCode: code, ...(streak > 1 ? { errorStreak: streak } : {}), ...(unreadable ? { stateUnreadable: true } : {}) });
+      publish({ ...omitKey(omitKey(before, 'errorStreak'), 'retryAt'), phase: 'error', errorCode: code, ...errorRepeat(before, code, options.clock.nowMs()), ...(unreadable ? { stateUnreadable: true } : {}) });
       return { outcome: 'failed', errorCode: code, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, lastSyncAt: null, worked: false, ...(unreadable ? { stateUnreadable: true } : {}) };
     } finally {
       clearTimer(timer);

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { syncErrorFamily } from '../../domain/sync/errorFamily';
 import { t, type PlainMessageKey } from '../../i18n';
 import { openSyncPlatform, syncErrorCodeOf, type SyncErrorCode, type SyncFolderInfo, type SyncPlatform } from '../../platform/sync';
 import { Button, ChoiceDialog, ConfirmDialog } from '../../ui';
@@ -146,6 +147,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   // ligne lue avant un cycle ne contredit jamais le moteur (« Associer au PC » toujours proposé tant que la clé manque).
   // Audit des impasses : relue aussi sur « Réessayer » et au retour au premier plan (iPhone déverrouillé, iCloud pour Windows rouvert).
   const phase = useFeatureStore(syncStore, (s) => s.status.phase);
+  const errorCode = useFeatureStore(syncStore, (s) => s.status.errorCode ?? null);
   const [reread, setReread] = useState(0);
   useEffect(() => {
     if (!available) return;
@@ -170,7 +172,7 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
   const keyArrived = view.kind === 'bound' && !view.needsPairing && phase === 'needs-pairing';
   const sync = container.sync;
   useEffect(() => {
-    if (keyArrived) void sync?.syncNow('manual');
+    if (keyArrived) void sync?.syncNow('key-arrived');
   }, [keyArrived, sync]);
 
   if (!available) return null;
@@ -319,6 +321,8 @@ export function SyncSettingsSection({ platform: injected }: { readonly platform?
               </span>
             )}
           </span>
+          {/* Revue de la PR #14 : dossier à choisir de nouveau (non lié, déjà lié ailleurs) : « Choisir le dossier » à côté de « Oublier ». */}
+          {phase === 'error' && syncErrorFamily(errorCode) === 'folder' && chooseButton}
           {forgetButton}
         </div>
       )}

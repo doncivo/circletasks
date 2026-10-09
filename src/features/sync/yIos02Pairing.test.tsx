@@ -214,7 +214,7 @@ describe('erreurs permanentes : jamais « nouvel essai au prochain cycle » (aud
       expect(lineFor(code), code).not.toBe(GENERIC);
       expect(lineFor(code), code).not.toContain('nouvel essai');
     }
-    for (const code of ['decrypt-failed', 'key-exhausted', 'not-bound', 'segment-full', 'hlc-order'] as const) {
+    for (const code of ['decrypt-failed', 'key-exhausted', 'not-bound', 'hlc-order'] as const) {
       expect(isPermanentSyncError(code), code).toBe(true);
       expect(lineFor(code), code).toContain(`code ${code}`);
     }
@@ -344,8 +344,8 @@ describe('clé présente mais pas celle du dossier (point 2)', () => {
   });
 });
 
-describe('io : passagère, puis permanente après 3 échecs consécutifs (point 3)', () => {
-  it('1er et 2e échecs : nouvel essai ; 3e : code et action, plus de cycle périodique ; réussite : compteur remis à zéro', async () => {
+describe('io : passagère, espacée après 3 échecs consécutifs, jamais arrêtée (point 3, revue de la PR #14)', () => {
+  it('1er et 2e échecs : nouvel essai ; 3e : « ralentie : nouvel essai à HH:MM (code io) », essai toutes les 30 min ; retour au premier plan : un essai ; réussite : remis à zéro', async () => {
     const pc = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud') });
     await pc.folder.choose();
     await pc.key.create();
@@ -364,26 +364,98 @@ describe('io : passagère, puis permanente après 3 échecs consécutifs (point 
     expect(line()).toBe(GENERIC);
     await service.syncNow('timer');
     expect(service.status().errorStreak).toBe(3);
-    expect(line()).toBe('La synchronisation est arrêtée (code io) : ouvrez Détails, puis « Synchroniser » pour réessayer');
-    expect(isPermanentSyncError('io', service.status().errorStreak)).toBe(true);
-    // Planificateur : plus de cycle des 5 minutes tant que l'erreur est permanente.
-    const clock = createManualClock(NOW);
+    expect(isPermanentSyncError('io')).toBe(false);
+    // 08:00 UTC + 30 min ; affichée à l'heure de Paris (fuseau des tests).
+    expect(service.status().retryAt).toBe('2026-10-08T08:30:00.000Z');
+    expect(line()).toBe('Synchronisation ralentie : nouvel essai à 10:30 (code io), ou « Synchroniser » maintenant');
+
+    // Planificateur (PC, sans échéance de masquage) branché sur le vrai service : jamais d'arrêt, essai espacé de 30 min.
+    const listeners = new Set<() => void>();
+    const doc = {
+      visibilityState: 'visible' as DocumentVisibilityState,
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    };
+    const setVisibility = (state: DocumentVisibilityState): void => {
+      doc.visibilityState = state;
+      for (const l of listeners) l();
+    };
     const reasons: SyncReason[] = [];
-    const doc = { visibilityState: 'visible', addEventListener: () => undefined, removeEventListener: () => undefined } as unknown as Document;
-    const scheduler = startSyncScheduler({ syncNow: async (r) => void reasons.push(r), status: () => service.status() }, { document: doc, clock, setInterval: () => 0, clearInterval: () => undefined });
-    clock.advance(10 * 60_000);
+    const scheduler = startSyncScheduler(
+      { syncNow: (r) => (reasons.push(r), service.syncNow(r)), status: () => service.status() },
+      { document: doc as unknown as Document, clock: db.clock, setInterval: () => 0, clearInterval: () => undefined },
+    );
+    await service.running();
+    expect(reasons).toEqual(['open']);
+    // L'ouverture a échoué de nouveau : prochain essai 30 min plus tard ; à 29 min, rien ; à 30 min, un essai.
+    const retryAt = Date.parse(service.status().retryAt ?? '');
+    db.clock.advance(29 * 60_000);
     await scheduler.tick();
     expect(reasons).toEqual(['open']);
+    db.clock.advance(60_000);
+    expect(db.clock.nowMs()).toBe(retryAt);
+    await scheduler.tick();
+    expect(reasons).toEqual(['open', 'timer']);
+    // Retour au premier plan sur PC : une seule tentative (`open`), sans attendre l'échéance ; jamais une boucle.
+    setVisibility('hidden');
+    setVisibility('visible');
+    await service.running();
+    expect(reasons).toEqual(['open', 'timer', 'hide', 'open']);
+    await scheduler.tick();
+    expect(reasons).toEqual(['open', 'timer', 'hide', 'open']);
     scheduler.dispose();
-    // « Synchroniser » (Réessayer) réussit : compteur remis à zéro.
+
+    // « Synchroniser » réussit : compteur et échéance retirés.
     failing = false;
     await service.syncNow('manual');
     expect(service.status().phase).toBe('idle');
     expect(service.status().errorStreak).toBeUndefined();
+    expect(service.status().retryAt).toBeUndefined();
     failing = true;
     await service.syncNow('timer');
     expect(service.status().errorStreak).toBeUndefined();
     expect(line()).toBe(GENERIC);
+  });
+});
+
+describe('planificateur : erreur permanente, retour au premier plan sur PC (revue de la PR #14)', () => {
+  it('aucun cycle périodique ; au retour au premier plan, un seul cycle d’ouverture ; segment-mismatch et segment-full passagers', async () => {
+    const clock = createManualClock(NOW);
+    const reasons: SyncReason[] = [];
+    const listeners = new Set<() => void>();
+    const doc = {
+      visibilityState: 'visible' as DocumentVisibilityState,
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    };
+    const scheduler = startSyncScheduler(
+      { syncNow: async (r) => void reasons.push(r), status: () => ({ ...INITIAL_STATUS, phase: 'error', errorCode: 'decrypt-failed' }) },
+      { document: doc as unknown as Document, clock, setInterval: () => 0, clearInterval: () => undefined },
+    );
+    clock.advance(60 * 60_000);
+    await scheduler.tick();
+    expect(reasons).toEqual(['open']);
+    doc.visibilityState = 'visible';
+    for (const l of listeners) l();
+    await scheduler.tick();
+    expect(reasons).toEqual(['open', 'open']);
+    scheduler.dispose();
+    expect(isPermanentSyncError('segment-mismatch')).toBe(false);
+    expect(isPermanentSyncError('segment-full')).toBe(false);
+  });
+});
+
+describe('dossier à choisir de nouveau (famille folder) : « Choisir le dossier » sur la ligne liée (revue de la PR #14)', () => {
+  it('not-bound : « Choisir le dossier » à côté de « Oublier »', async () => {
+    const pc = createMemorySyncPlatform({ folder: new MemorySyncFolder('icloud') });
+    await pc.folder.choose();
+    await pc.key.create();
+    await pc.bindDevice(PHONE);
+    const sync = createFakeSyncService({ phase: 'error', errorCode: 'not-bound', folderLabel: 'CircleTasks', folderKind: 'icloud' });
+    const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: PHONE }), data: db.data, sync, syncPlatform: pc });
+    renderIn(container, <SyncSettingsSection />);
+    expect(await screen.findByRole('button', { name: 'Choisir le dossier de synchronisation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Oublier le dossier de synchronisation' })).toBeInTheDocument();
   });
 });
 

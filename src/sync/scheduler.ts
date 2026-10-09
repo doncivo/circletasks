@@ -62,12 +62,22 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Parti
   /** Audit des impasses : erreur permanente (`isPermanentSyncError`) : aucun cycle périodique en boucle ; texte et action dits par l'écran. */
   const stopped = (): boolean => {
     const status = service.status?.();
-    return status !== undefined && status.phase === 'error' && isPermanentSyncError(status.errorCode, status.errorStreak ?? 1);
+    return status !== undefined && status.phase === 'error' && isPermanentSyncError(status.errorCode);
+  };
+
+  /** Erreur passagère répétée (revue de la PR #14) : échéance du prochain essai espacé (`retryAt`), jamais un arrêt ; null : aucune. */
+  const retryAtMs = (): number | null => {
+    const status = service.status?.();
+    if (status?.phase !== 'error' || !status.retryAt) return null;
+    const at = Date.parse(status.retryAt);
+    return Number.isFinite(at) ? at : null;
   };
 
   const tick = async (): Promise<void> => {
     if (disposed || !visible() || waitsForPairing() || stopped()) return;
-    if (env.clock.nowMs() - lastStart >= SYNC_INTERVAL_MS) await run('timer');
+    const retryAt = retryAtMs();
+    const due = retryAt === null ? env.clock.nowMs() - lastStart >= SYNC_INTERVAL_MS : env.clock.nowMs() >= retryAt;
+    if (due) await run('timer');
   };
 
   const bounded = env.hideDeadlineMs;
@@ -76,8 +86,9 @@ export function startSyncScheduler(service: Pick<SyncService, 'syncNow'> & Parti
     if (!visible()) {
       if (!waitsForPairing()) void run('hide', bounded === undefined ? undefined : { deadlineAt: env.clock.nowMs() + bounded });
     }
-    // Retour au premier plan : iPhone, un cycle d'ouverture (reprise d'un cycle `hide` interrompu) ; PC, le sondage des 5 minutes.
-    else if (bounded !== undefined) void run('open');
+    // Retour au premier plan : iPhone, un cycle d'ouverture (reprise d'un cycle `hide` interrompu) ; PC, le sondage des 5 minutes, ou un
+    // cycle d'ouverture (une seule tentative, jamais une boucle) quand une erreur permanente ou répétée suspend ou espace les cycles.
+    else if (bounded !== undefined || stopped() || retryAtMs() !== null) void run('open');
     else void tick();
   };
 

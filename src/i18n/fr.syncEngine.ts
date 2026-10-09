@@ -29,7 +29,8 @@ export const syncEngineFr = {
     keyMismatch: 'Ce dossier a été chiffré avec une autre clé : associez cet appareil',
     errorGeneric: 'La synchronisation a échoué : nouvel essai au prochain cycle',
     // Y-IOS-02 (audit des impasses) : erreurs permanentes : action et code, jamais « nouvel essai au prochain cycle ».
-    errorStopped: 'La synchronisation est arrêtée (code {code}) : ouvrez Détails, puis « Synchroniser » pour réessayer',
+    errorSlowed: 'Synchronisation ralentie : nouvel essai à {time} (code {code}), ou « Synchroniser » maintenant',
+    errorStopped:'La synchronisation est arrêtée (code {code}) : ouvrez Détails, puis « Synchroniser » pour réessayer',
     errorStoppedPairing: 'Clé de chiffrement absente ou différente (code {code}) : associez cet appareil',
     errorStoppedFolder: 'Dossier de synchro à choisir de nouveau (code {code}) : Réglages → Synchronisation',
     errorStoppedReset: 'La clé de chiffrement a atteint sa limite (code {code}) : réinitialisez la synchronisation dans Détails',
