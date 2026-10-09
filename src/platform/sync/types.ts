@@ -695,7 +695,7 @@ export interface RestoreContext {
    * option (`reset-finish` : « terminez-la sur l'appareil qui réinitialise »). Y-TECH-02 : `scan-failed` : le dossier n'a pas pu être
    * vérifié (réinitialisation, purge plus récente) : « Appliquer partout » retiré par prudence.
    */
-  readonly notice?: 'reset-in-progress' | 'reset-finish' | 'scan-failed' | null;
+  readonly notice?: 'reset-in-progress' | 'reset-finish' | 'scan-failed' | 'provisional' | null;
   /** Dernier choix refusé ou en échec (code, heure, option), gardé jusqu'à un choix appliqué (aucun échec silencieux, QA-1). */
   readonly failure?: RestoreFailure | null;
 }

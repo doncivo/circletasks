@@ -95,6 +95,8 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     failed: 'The choice could not be applied ({reason}). Nothing was changed: you can try again.',
     failedReset: 'The choice was not applied: a synchronization reset is in progress. Nothing was changed.',
     scanFailed: 'The sync folder could not be checked: “Apply this version on all my devices” will be offered once it can be reached.',
+    provisional: 'The restore could not be confirmed yet, so “Apply this version on all my devices” is not offered. CircleTasks checks again at the next start: close and reopen it.',
+    provisionalNoOption: 'The restore could not be confirmed yet. CircleTasks checks again at the next start: close and reopen it.',
     scanFailedNoOption: 'The sync folder could not be checked: try again once it can be reached.',
     backupWarning: 'This device is paired: you will be asked at the next sync',
   },

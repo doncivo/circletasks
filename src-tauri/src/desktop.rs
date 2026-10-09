@@ -304,7 +304,7 @@ pub const RECOVERY_FAILED_MESSAGE: &str = "Restauration interrompue : redémarre
 /// Texte complet de la boîte : le début, le code d'erreur et la consigne (sans chemin personnel : le dossier est désigné par `%APPDATA%`).
 pub fn recovery_failed_text(code: &str, identifier: &str) -> String {
     format!(
-        "{RECOVERY_FAILED_MESSAGE}\n\nCode : {code}\n\nSi ce message revient : fermez CircleTasks, ouvrez le dossier %APPDATA%\\{identifier} et conservez les fichiers « .restore-old » (ne les supprimez pas), puis demandez de l'aide."
+        "{RECOVERY_FAILED_MESSAGE}\n\nCode : {code}\n\nSi ce message revient : fermez CircleTasks, ouvrez le dossier %APPDATA%\\{identifier} et conservez les fichiers « .restore-old », « .restoring » et « restore-marker.json » (ne les supprimez pas : ils servent à retrouver ou à vérifier la version restaurée), puis demandez de l'aide."
     )
 }
 
