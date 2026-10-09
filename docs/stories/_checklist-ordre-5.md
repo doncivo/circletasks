@@ -140,6 +140,21 @@ Sources : fiches FILES-IOS-01, I-04, P-04-iOS, CAP-IOS-01, I-05. Les critères u
 - [ ] Contrat Info.plist de l'IPA de la phase 3 : cinq descriptions d'usage présentes et en français (caméra, micro, reconnaissance vocale, Rappels, Face ID) ; aucune clé en trop (localisation, photothèque, contacts, suivi, arrière-plan).
 - [ ] Règle d'Ali : parcourir les états d'échec créés par la phase 3 (journal non écrit, enregistrement de fichier refusé, marqueur de restauration non écrit, sauvegarde échouée, micro ou reconnaissance refusés, Vision en échec) : chacun est visible dans Réglages, la fiche ou un bandeau et disparaît à la résolution.
 
+## Phase 4 : I-06 (mise à jour N vers N+1 par SideStore), ajouté par le product-owner le 2026-10-09
+
+Source : fiche I-06 (A1 à A10). Deux IPA de la même branche : N, puis N+1 avec une migration additive et une entrée dans `CHANGELOG.md`. Ne jamais supprimer l'app entre N et N+1 (sinon les données locales sont perdues et les cases sont à refaire).
+
+- [ ] I-06 A1 et A2 : N installée depuis la source SideStore ; version de « À propos » notée ; 3 tâches (une avec rappel à +2 jours, une routine, une en Perso), thème sombre, Face ID, dossier iCloud, appareil associé, tâche reçue du PC, nombre de notifications en attente noté.
+- [ ] I-06 A3 : N+1 visible dans la source avec ses **notes** (texte relevé), « Mettre à jour » en un geste, durée notée.
+- [ ] I-06 A4 : premier lancement de N+1 : verrou demandé, mêmes tâches, filtre et thème conservés, « À propos » = N+1, aucun bandeau d'erreur ni fenêtre d'accueil.
+- [ ] I-06 A5 : signet et clé du Trousseau conservés (aucune nouvelle demande de dossier ni de clé, synchro dans les deux sens) ; sinon l'invitation « Choisissez de nouveau le dossier » est visible, la file attend (noter).
+- [ ] I-06 A6 : rappel planifié avant la mise à jour reçu à l'heure (≤ 60 s), notifications conservées ou replanifiées (noter lequel, avec N-05 A3), aucun doublon, actions « Fait » et « +15 min » intactes (avec N-03 A2 étendu (d)), alerte d'expiration remplacée.
+- [ ] I-06 A7 : version réelle de Y-07 : iPhone mis à jour avant le PC, le PC affiche « Mettez à jour l'app » avec le **numéro réel de l'iPhone** (pas 0.0.0) et continue de lire ; après la mise à jour du PC le bandeau disparaît, rien n'est perdu (rejoint la ligne Y-07 de « Versions, oubli, réinitialisation »).
+- [ ] I-06 A8 : la liste de sauvegardes de P-04 contient « Avant mise à jour » datée de A3.
+- [ ] I-06 A9 (build de test, jamais l'IPA finale) : migration en échec : écran avec étape, versions, trois actions, « Restaurer la sauvegarde d'avant la mise à jour » rend les données ; N installée par-dessus N+1 : message « version plus ancienne que vos données », rien de touché ; N+1 réinstallée : tout est là.
+- [ ] I-06 A10 : l'app n'a jamais été supprimée entre N et N+1 ; le guide `docs/install-iphone.md` (étape 7) suffit pour refaire la mise à jour en suivant son texte.
+- [ ] Règle d'Ali : états d'échec de la mise à jour (migration en échec, base plus récente, signet périmé, clé introuvable, réintégration en échec, notes absentes dans la source) : chacun visible dans l'app, la source ou le résumé du run, avec son action, et disparaît à la résolution.
+
 ## Point de contrôle de 15 minutes après la phase 1 (demandé par Ali)
 
 Objectif : valider en une séance courte que la chaîne tient, avant d'empiler les phases 2 à 4. IPA produite par `build-ios.yml` sur la branche fusionnée de la phase 1 et signalée à Ali par l'agent de coordination. Chronomètre lancé à l'ouverture du guide `docs/install-iphone.md`.
