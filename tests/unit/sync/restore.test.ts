@@ -41,7 +41,7 @@ async function backupOf(device: SimDevice): Promise<Map<string, unknown[]>> {
 }
 
 /** Restauration de la copie dans la base de l'appareil (sans déclencheur : comme un échange de fichiers), puis marqueur. */
-async function restore(device: SimDevice, copy: Map<string, unknown[]>, backupTakenAt: string): Promise<void> {
+async function restore(device: SimDevice, copy: Map<string, unknown[]>, backupTakenAt: string, provisional = false): Promise<void> {
   await device.driver.execute('PRAGMA foreign_keys = OFF');
   await device.driver.transaction(async (tx) => {
     await tx.execute('INSERT INTO sync_guard (id) VALUES (1)');
@@ -56,12 +56,23 @@ async function restore(device: SimDevice, copy: Map<string, unknown[]>, backupTa
     await tx.execute('DELETE FROM sync_guard');
   });
   await device.driver.execute('PRAGMA foreign_keys = ON');
-  const marker: RestoreMarker = { backup: 'circletasks-daily-20261005.db', backupTakenAt: backupTakenAt as RestoreMarker['backupTakenAt'], restoredAt: new Date(device.clock.nowMs()).toISOString() as RestoreMarker['restoredAt'], schemaVersion: 17 };
+  const marker: RestoreMarker = { backup: 'circletasks-daily-20261005.db', backupTakenAt: backupTakenAt as RestoreMarker['backupTakenAt'], restoredAt: new Date(device.clock.nowMs()).toISOString() as RestoreMarker['restoredAt'], schemaVersion: 17, ...(provisional ? { provisional: true } : {}) };
   device.platform.testing.setRestoreMarker(marker);
   await device.restart();
 }
 
 describe('restauration P-04 (Y-02 critères 13 à 15)', () => {
+  it('revue du lot F : marqueur provisoire -> « Appliquer partout » jamais proposé, et refusé s’il est demandé', async () => {
+    const [a] = await twoDevices();
+    const copy = await backupOf(a);
+    await restore(a, copy, '2026-10-05T07:00:00.000Z', true);
+    expect((await a.service.restoreContext())?.options).toEqual(['keep-synced']);
+    const before = a.folder.fileNames(A_ID);
+    await a.service.chooseRestoreOption('apply-everywhere');
+    expect(a.folder.fileNames(A_ID)).toEqual(before);
+    expect(a.service.status().phase).toBe('error');
+  });
+
   it('marqueur : aucun cycle (ni lecture ni publication), phase restore-choice, deux options', async () => {
     const [a] = await twoDevices();
     const copy = await backupOf(a);

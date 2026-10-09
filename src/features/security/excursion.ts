@@ -11,7 +11,11 @@
 /** Audit B2 : l'excursion vers Réglages iOS ne vaut que si l'app passe en arrière-plan dans les 3 s qui suivent son départ. */
 export const SYSTEM_SETTINGS_BACKGROUND_WINDOW_MS = 3_000;
 
-export type ExcursionKind = 'folder-picker' | 'camera' | 'system-settings' | 'permission';
+/**
+ * `file-picker` (FILES-IOS-01, ADR 0009 avenant lot F A4, décision du 2026-10-08) : sélecteur « Enregistrer dans Fichiers » de `files.save`
+ * et sélecteur de fichiers de l'import (`files.pickText`) ; affiché dans l'app, il suit la règle des 30 s comme `folder-picker`.
+ */
+export type ExcursionKind = 'folder-picker' | 'file-picker' | 'camera' | 'system-settings' | 'permission';
 
 export interface Excursion {
   readonly kind: ExcursionKind;

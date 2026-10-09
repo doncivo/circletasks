@@ -153,6 +153,11 @@ export interface RestoreMarker {
   readonly backupTakenAt: IsoDateTime;
   readonly restoredAt: IsoDateTime;
   readonly schemaVersion: number;
+  /**
+   * Revue du lot F : marqueur écrit avant l'échange et pas encore confirmé (normalement réglé au démarrage par Rust). Tant qu'il l'est,
+   * « Appliquer cette version sur tous mes appareils » n'est jamais proposé (la version n'est peut-être pas en place).
+   */
+  readonly provisional?: boolean;
 }
 
 export type PairingMode = 'show' | 'import';

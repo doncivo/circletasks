@@ -50,7 +50,7 @@ test.describe('P-04 — sauvegarde et restauration', () => {
   test('critère 3 : « Aucune sauvegarde » puis erreur en rouge quand la sauvegarde échoue', async ({ page }) => {
     await openSettings(page, [], { failFirstDaily: true });
     const summary = page.getByTestId('backup-summary');
-    await expect(summary).toHaveText('Dernière sauvegarde échouée');
+    await expect(summary).toHaveText('Dernière sauvegarde échouée Code : io');
     await expect(summary).toHaveClass(/danger/);
   });
 

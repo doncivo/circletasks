@@ -15,4 +15,10 @@ setCatalogFailureReporter((locale, error) => logFailure(`catalog-${locale}`, err
 // Mini-fenêtre Focus du PC (F-01) : même application, vue seule, sans base ni conteneur.
 const isFocusWindow = new URLSearchParams(window.location.search).get('window') === 'focus';
 
+// I-04 : journal technique persistant (fichier pour la fenêtre principale seulement), chargé à la demande.
+void import('./features/app/logJournalBoot').then(
+  (module) => module.startLogJournal(isFocusWindow ? 'focus' : 'main'),
+  (error: unknown) => logFailure('logs', error),
+);
+
 createRoot(container).render(<StrictMode>{isFocusWindow ? <FocusWindowRoot /> : <App />}</StrictMode>);

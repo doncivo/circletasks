@@ -4,6 +4,8 @@ Module : M12 Personnalisation (transverse M11) · Ordre de construction : 5 (lot
 Story technique ajoutée au backlog par le product-owner (écart à signaler à Ali : une ligne de plus, aucune fonction nouvelle du PRD). Elle livre ce que l'ADR 0009 appelle « le plugin Fichiers de l'ordre 5 » et solde la dette d'ordre 5 « P-07 sur iPhone : modèle et rapport masqués ». Effet de bord voulu par H-03 critère 10 : le bouton « Exporter » du Rapport apparaît sur iPhone (voir critère 8).
 Dépend de : H-03 (contrat `FileExporter`, boîte d'export), P-07 (modèle, rapport, `pickText`), I-01 (CI), I-03 (excursions).
 
+> **Décision d'Ali du 2026-10-08** (`docs/decisions.md`, avenant lot F de l'ADR 0009) : le plugin présente le sélecteur « Enregistrer dans Fichiers » (`UIDocumentPickerViewController(forExporting:asCopy: true)`), **pas** le panneau de partage : H-03 exige qu'aucune donnée ne quitte l'appareil et exclut l'envoi par e-mail. Partout où cette fiche écrit « panneau de partage » ou « feuille de partage », lire « sélecteur Enregistrer dans Fichiers » ; « envoyer par Mail et par AirDrop » (A4) devient « aucune option Mail, Messages ni AirDrop ». Excursion du verrou : `file-picker`. Crate : `tauri-plugin-ct-files` (critère 10).
+
 ## Rappel
 
 ADR 0009 : « Sur iPhone, l'export reste masqué jusqu'à l'ordre 5 : le plugin Fichiers (Swift, `UIDocumentPickerViewController`) implémentera le même contrat `FileService` dans `src/platform/files`, sans changer les features. Les crates dialog / fs ne seront pas activées sur iOS sans nouvel avenant. » H-03 critère 7 : l'app n'accède qu'au fichier choisi. P-07 critère 6 : le rapport des lignes rejetées est « proposé à l'enregistrement » ; critère 1 : « Télécharger un modèle ».

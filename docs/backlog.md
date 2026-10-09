@@ -123,7 +123,7 @@ Statuts : à faire · en cours · en revue · fait. Le product-owner tient ce fi
 | P-01 | M12 | Je réordonne et masque les onglets | settings-personalization | fait |
 | P-02 | M12 | Je choisis clair, sombre ou système | settings-personalization | fait |
 | P-03 | M12 | Je règle le premier jour de semaine, la langue et le format d'heure | settings-personalization | fait |
-| P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | en cours (PC fait ; critère 11 iPhone à l’ordre 5, avec le plugin Fichiers) |
+| P-04 | M12 | Je sauvegarde et restaure mes données | settings-personalization | fait (PC ; iPhone par P-04-iOS) |
 | P-05 | M12 | Je suis guidé au premier lancement | settings-personalization | fait |
 | P-06 | M12 | Un écran vide m'indique quoi faire | settings-personalization | fait |
 | P-07 | M12 | J'importe mes tâches existantes | settings-personalization | fait |
@@ -168,11 +168,11 @@ Ordre de construction de l'ordre 4 (ADR 0011 §13) : amorce (fait, 2092549) ; lo
 | I-01 | M16 | J'installe l'app sur l'iPhone | ios-mobile | fait (2026-10-07, lot I0 ; build de contrôle après revue à relancer quand la facturation GitHub sera réglée ; installation réelle par Ali en fin d’ordre) |
 | I-02 | M16 | Je suis prévenu avant l'expiration hebdomadaire | ios-mobile | à faire |
 | I-03 | M16 | Je protège l'app par Face ID | ios-mobile | à faire |
-| I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | à faire (fiche prête, 2026-10-08) |
+| I-04 | M16 | Je consulte et exporte les logs | ios-mobile + settings-personalization | fait (branche lot-f-ios ; critères d'appareil dans la checklist de l'ordre 5) |
 | I-05 | M16 | Les autorisations sont demandées au bon moment | ios-mobile + quick-capture | à faire (fiche prête, 2026-10-08) |
 | I-06 | M16 | Je mets à jour l'app iPhone depuis SideStore | ios-mobile + ci-release | à faire (fiche prête, 2026-10-09 ; phase 4 ; solde la dette `appVersion '0.0.0'` sur iPhone ; avenant ADR 0007 requis avant le code) |
-| P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
-| FILES-IOS-01 | M12 | Story technique : plugin Fichiers (`FileService.save` sur iPhone par le panneau de partage), P-07 « Télécharger un modèle » et rapport des rejets sur iPhone, bouton « Exporter » de H-03 sur iPhone | settings-personalization + ios-mobile | à faire (fiche prête, 2026-10-08) |
+| P-04-iOS | M12 | Sauvegarde et restauration sur iPhone (P-04 critère 11, ADR 0010 règles 1 à 6, avenant ADR 0009) | settings-personalization + ios-mobile | fait (branche lot-f-ios ; critères d'appareil dans la checklist de l'ordre 5) |
+| FILES-IOS-01 | M12 | Story technique : plugin Fichiers (`FileService.save` sur iPhone par le sélecteur « Enregistrer dans Fichiers », décision d'Ali du 2026-10-08), P-07 « Télécharger un modèle » et rapport des rejets sur iPhone, bouton « Exporter » de H-03 sur iPhone | settings-personalization + ios-mobile | fait (branche lot-f-ios ; critères d'appareil dans la checklist de l'ordre 5) |
 | N-TECH-01 | M5 | Story technique : interface `NotificationScheduler` dans src/platform/notifications (faux, noop PC) et planificateur pur dans src/domain (échéance effective, routines actives, prochaine occurrence, plafond iOS de 64) | notifications | fait (2026-10-07, lot N0, ADR 0012) |
 | Y-IOS-01 | M15 | Story technique : plugin folder-bookmark (signet, hydratation, lecture à partir d'un octet), `BookmarkFs`, cycle de synchro au passage en arrière-plan | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |
 | Y-IOS-02 | M15 | Story technique : Trousseau iOS relu, scan du QR lancé par Rust, confirmations natives iOS, décalage horaire local iOS, échec de réintégration visible | sync-icloud + ios-mobile | fait (2026-10-08, phase 1 de l'ordre 5, PR #1 ; vérification sur l'iPhone au point de contrôle et en fin d'ordre) |

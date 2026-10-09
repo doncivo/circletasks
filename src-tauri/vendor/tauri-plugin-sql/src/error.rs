@@ -30,6 +30,10 @@ pub enum Error {
     /// to JSON. Contains the name of that SQL type.
     #[error("unsupported datatype: {0}")]
     UnsupportedDatatype(String),
+    /// CircleTasks (P-04-iOS, revue B1) : une restauration interrompue attend sa récupération (`.restore-old` à côté de la base) ; la base
+    /// n'est ni ouverte ni créée (une base vide masquerait la vraie).
+    #[error("restore-pending: database not opened while a restore is pending")]
+    RestorePending,
 }
 
 impl Serialize for Error {

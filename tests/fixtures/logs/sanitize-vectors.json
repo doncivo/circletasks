@@ -1,0 +1,216 @@
+{
+  "$comment": [
+    "Vecteurs d'assainissement du journal technique (I-04 critère 5, ADR 0014 §1 et §3), lus par Vitest (src/platform/logs/sanitize.test.ts) et cargo test (src-tauri/tests/desktop/applog.rs) : sanitizeLogDetail (TypeScript) et applog::sanitize_detail (Rust) doivent rendre exactement `expected`.",
+    "Règles : caractères de contrôle remplacés par une espace ; plus de 300 caractères -> [masqué] en entier ; sinon chaque mot (séparé par des espaces) qui contient un chemin (Windows, UNC, POSIX, ~/), file:, une URL avec requête, une adresse e-mail une séquence hexadécimale de 32 caractères ou plus, ou un jeton probable (suite de 24 caractères ou plus de [A-Za-z0-9+/=_.-] hors UUID exact, eyJ, ya29., 1//, token=) devient [masqué] ; « Bearer » et le mot suivant aussi.",
+    "repeat : entrée construite par répétition (`[texte, nombre]`) au lieu de `input`.",
+    "codeVectors (revue du lot F) : le champ code est assaini aussi ; forme stricte ^[a-z0-9][a-z0-9.-]{0,63}$, sans séquence hexadécimale de 32 caractères ou plus ni jeton probable (segment entre - et . de 24 caractères ou plus hors UUID exact, ya29.) ; sinon `unknown` (codeAndDetailOf, TypeScript) ou `invalid` (applog::normalize, Rust)."
+  ],
+  "vectors": [
+    {
+      "input": "",
+      "expected": ""
+    },
+    {
+      "input": "sync-now {\"reason\":\"open\"}",
+      "expected": "sync-now {\"reason\":\"open\"}"
+    },
+    {
+      "input": "code=too-large",
+      "expected": "code=too-large"
+    },
+    {
+      "input": "échec C:\\Users\\Ali\\AppData\\Roaming\\x.db",
+      "expected": "échec [masqué]"
+    },
+    {
+      "input": "erreur D:/donnees/x.csv",
+      "expected": "erreur [masqué]"
+    },
+    {
+      "input": "\\\\serveur\\partage\\x.csv introuvable",
+      "expected": "[masqué] introuvable"
+    },
+    {
+      "input": "ouvrir /var/mobile/Containers/Data/Application/x",
+      "expected": "ouvrir [masqué]"
+    },
+    {
+      "input": "path=/Users/ali/Documents",
+      "expected": "[masqué]"
+    },
+    {
+      "input": "(/etc/hosts)",
+      "expected": "[masqué]"
+    },
+    {
+      "input": "~/Library/Caches/x",
+      "expected": "[masqué]"
+    },
+    {
+      "input": "lecture file:///private/var/x refusée",
+      "expected": "lecture [masqué] refusée"
+    },
+    {
+      "input": "GET https://www.googleapis.com/calendar/v3?pageToken=abc 401",
+      "expected": "GET [masqué] 401"
+    },
+    {
+      "input": "https://example.com/page sans requête",
+      "expected": "https://example.com/page sans requête"
+    },
+    {
+      "input": "http://localhost:1420/?x=1",
+      "expected": "[masqué]"
+    },
+    {
+      "input": "contact ali.s@example.fr refusé",
+      "expected": "contact [masqué] refusé"
+    },
+    {
+      "input": "a@b sans domaine",
+      "expected": "a@b sans domaine"
+    },
+    {
+      "input": "Authorization: Bearer abc.def.ghi suite",
+      "expected": "Authorization: [masqué] [masqué] suite"
+    },
+    {
+      "input": "clé 0123456789abcdef0123456789abcdef",
+      "expected": "clé [masqué]"
+    },
+    {
+      "input": "sha 9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "expected": "sha [masqué]"
+    },
+    {
+      "input": "court 0123456789abcdef",
+      "expected": "court 0123456789abcdef"
+    },
+    {
+      "input": "appareil 60000000-0000-4000-8000-0000000000f7",
+      "expected": "appareil 60000000-0000-4000-8000-0000000000f7"
+    },
+    {
+      "input": "ratio 3/4 ok",
+      "expected": "ratio 3/4 ok"
+    },
+    {
+      "input": "ligne1\nligne2\tfin",
+      "expected": "ligne1 ligne2 fin"
+    },
+    {
+      "input": "export de fichier : write-failed",
+      "expected": "export de fichier : write-failed"
+    },
+    {
+      "repeat": [
+        "z",
+        301
+      ],
+      "expected": "[masqué]"
+    },
+    {
+      "repeat": [
+        "a",
+        40
+      ],
+      "expected": "[masqué]"
+    },
+    {
+      "repeat": [
+        "ab ",
+        100
+      ],
+      "expected": "ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab ab "
+    },
+    {
+      "repeat": [
+        "z",
+        30
+      ],
+      "expected": "[masqué]"
+    },
+    {
+      "input": "jeton eyJhbGciOiJIUzI1NiJ9.e30.x fin",
+      "expected": "jeton [masqué] fin"
+    },
+    {
+      "input": "google ya29.a0AfH6 refusé",
+      "expected": "google [masqué] refusé"
+    },
+    {
+      "input": "refresh 1//0gAbc expiré",
+      "expected": "refresh [masqué] expiré"
+    },
+    {
+      "input": "callback?code=x token=abc",
+      "expected": "callback?code=x [masqué]"
+    },
+    {
+      "input": "clé QmFzZTY0VHJlc0xvbmd1ZUNsZQ== perdue",
+      "expected": "clé [masqué] perdue"
+    },
+    {
+      "input": "appareil 60000000-0000-4000-8000-0000000000f7 ok",
+      "expected": "appareil 60000000-0000-4000-8000-0000000000f7 ok"
+    },
+    {
+      "input": "sauvegarde circletasks-daily-20261007.db",
+      "expected": "sauvegarde [masqué]"
+    },
+    {
+      "input": "remote-reload-failed {\"code\":\"io\"}",
+      "expected": "remote-reload-failed {\"code\":\"io\"}"
+    }
+  ],
+  "codeVectors": [
+    {
+      "code": "too-large",
+      "valid": true
+    },
+    {
+      "code": "recovery-conflict",
+      "valid": true
+    },
+    {
+      "code": "provisional-marker-settle-failed",
+      "valid": true
+    },
+    {
+      "code": "http.429",
+      "valid": true
+    },
+    {
+      "code": "123e4567-e89b-12d3-a456-426614174000",
+      "valid": true
+    },
+    {
+      "code": "0123456789abcdef0123456789abcdef",
+      "valid": false
+    },
+    {
+      "code": "err-0123456789abcdef0123456789abcdef01",
+      "valid": false
+    },
+    {
+      "code": "abcdefghijklmnopqrstuvwxyz12",
+      "valid": false
+    },
+    {
+      "code": "sk-abcdefghijklmnopqrstuvwx1234",
+      "valid": false
+    },
+    {
+      "code": "ya29.a0afh6smb",
+      "valid": false
+    },
+    {
+      "code": "Too-Large",
+      "valid": false
+    },
+    {
+      "code": "",
+      "valid": false
+    }
+  ]
+}

@@ -8,14 +8,16 @@ import { t } from '../../i18n';
 import { logFailure } from '../../platform/desktop/log';
 import type { RemoteChanges, SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
 import { remindersHidePass } from '../calendars/appleReminders/hidePass';
-import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncScheduler, type SyncSchedulerEnv } from '../../sync';
+import { HIDE_SYNC_DEADLINE_MS, readForgetStatus, readResetStatus, readStoredDeviceStatuses, startSyncScheduler, type SyncSchedulerEnv } from '../../sync';
 import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
+import { clearMarkerFailedMemo, peekMarkerFailedCode } from '../settings/restoreMemoPeek';
 import { onPairingChange, readJoinFailure } from './pairingStatus';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
+import { markerFailures, schedulers } from './syncRestoreState';
 import { deviceName, deviceStatusText, formatCount, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
@@ -35,8 +37,6 @@ export interface SyncIntegrationEnv extends Partial<SyncSchedulerEnv> {
   readonly clearTimeout?: (handle: unknown) => void;
 }
 
-/** Planificateur actif de chaque conteneur : « Quitter » (desktop.ts) passe par lui, jamais par un minuteur à part. */
-const schedulers = new WeakMap<AppContainer, SyncScheduler>();
 
 /** États A-09 posés par la synchro, tous retirés à `dispose()` (critère 9 j). */
 const SYNC_KINDS = ['syncTrouble', 'updateRequired', 'waitingIcloud', 'syncing'] as const satisfies readonly AppStatusKind[];
@@ -198,7 +198,10 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     const banners = syncBannerFor(current, { ...persisted, readFailed: persisted.readFailed || writeFailed, reloadFailed }, settled);
 
     const [first, ...others] = banners.troubles;
-    if (first) put('syncTrouble', { detail: first.code, message: syncTroubleText(first, banners.textStatus, banners.devices, nowMs), more: others.length, onAction: actionFor(first) });
+    const marker = markerFailures.get(container);
+    // P-04-iOS critère 12 : la restauration est faite, mais la synchro n'est pas suspendue : ce bandeau prime tant qu'il n'est pas résolu.
+    if (marker) put('syncTrouble', { detail: 'restore-marker-failed', message: `${t('backup.markerFailed')} ${t('backup.errorCode', { code: marker.code })}`, more: 0, onAction: openSettings });
+    else if (first) put('syncTrouble', { detail: first.code, message: syncTroubleText(first, banners.textStatus, banners.devices, nowMs), more: others.length, onAction: actionFor(first) });
     else put('syncTrouble', null);
 
     // Critère 9 e : cause connue, texte de la ligne de Réglages (sans l'échec de réintégration, montré par `updateRequired`).
@@ -401,8 +404,25 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
   // ADR 0011 §22 point 6 : sur iPhone, le cycle du passage en arrière-plan est borné à 25 s (tâche d'arrière-plan iOS).
   // Rappels Apple (K-05, ADR 0008 §10.8) : le passage de masquage termine (8 s au plus) AVANT le cycle, qui publie ainsi ce qu'il vient de changer.
   const hide = container.platform.os === 'ios' ? { hideDeadlineMs: HIDE_SYNC_DEADLINE_MS, ...(container.reminders.available ? { beforeHide: () => remindersHidePass(container) } : {}) } : {};
-  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide });
+  // P-04-iOS critère 12 : marqueur de restauration non écrit (mémo) : aucun cycle ; la lecture du contexte de restauration réessaie
+  // l'écriture côté Rust (iPhone) ; marqueur présent -> mémo effacé, fenêtre de choix habituelle ; sinon bandeau persistant.
+  const memo = peekMarkerFailedCode();
+  if (memo !== null) markerFailures.set(container, { code: memo, refresh: () => safely(applyBanners) });
+  const scheduler = startSyncScheduler(sync, { document: env.document ?? document, clock: env.clock ?? container.clock, ...(env.setInterval ? { setInterval: env.setInterval } : {}), ...(env.clearInterval ? { clearInterval: env.clearInterval } : {}), ...hide, ...(memo !== null ? { startPaused: true } : {}) });
   schedulers.set(container, scheduler);
+  if (memo !== null) {
+    safely(applyBanners);
+    void sync.restoreContext().then(
+      (context) => {
+        if (disposed || !context) return;
+        clearMarkerFailedMemo();
+        markerFailures.delete(container);
+        safely(applyBanners);
+        scheduler.resume();
+      },
+      (error: unknown) => logFailure('sync', `restore-marker-retry-failed ${JSON.stringify({ name: error instanceof Error ? error.name : typeof error })}`),
+    );
+  }
   return {
     reloaded: () => lastReload,
     refreshed: async () => {
@@ -415,6 +435,7 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     },
     dispose: () => {
       disposed = true;
+      markerFailures.delete(container);
       if (schedulers.get(container) === scheduler) schedulers.delete(container);
       scheduler.dispose();
       stopStatus();

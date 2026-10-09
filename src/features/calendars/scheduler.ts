@@ -1,3 +1,4 @@
+import { isRestoreQuiet, trackQuietWork } from '../../platform/quiet';
 import type { AppContainer } from '../app/container';
 import { calendarsStore } from './calendarsStore';
 
@@ -38,9 +39,10 @@ export function startCalendarScheduler(container: AppContainer, env: SchedulerEn
   let disposed = false;
 
   const run = async (trigger: 'open' | 'resume' | 'tick'): Promise<void> => {
-    if (disposed) return;
+    // P-04-iOS (revue I3) : aucun rafraîchissement pendant la mise au calme d'une restauration ; un rafraîchissement en cours est attendu.
+    if (disposed || isRestoreQuiet()) return;
     try {
-      await store.getState().refreshAll(trigger, foreground());
+      await trackQuietWork(store.getState().refreshAll(trigger, foreground()));
     } catch {
       // `refreshAll` ne rejette pas ; une exception inattendue ne doit jamais arrêter le planificateur.
     }

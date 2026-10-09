@@ -1,4 +1,4 @@
-import { FileExportError, type FileService, type PickedText, type SaveRequest, type SaveResult } from './types';
+import { FileExportError, type FileFailureReason, type FileService, type PickedText, type SaveRequest, type SaveResult } from './types';
 
 export interface MemoryFiles extends FileService {
   /** Enregistrements réussis, dans l'ordre. */
@@ -6,7 +6,8 @@ export interface MemoryFiles extends FileService {
   readonly revealed: readonly string[];
   /** Prochaines réponses : annuler la boîte, échouer, ou fournir un texte à choisir. */
   cancelNext(): void;
-  failNext(): void;
+  /** Le prochain enregistrement échoue (raison du contrat, `write-failed` par défaut ; `code` : code de Rust porté par la cause). */
+  failNext(reason?: FileFailureReason, code?: string): void;
   setPick(file: PickedText | null): void;
   /** Le prochain choix de fichier échoue (« too-large », « unreadable »). */
   failNextPick(reason: 'too-large' | 'unreadable'): void;
@@ -20,6 +21,7 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
   const saved: (SaveRequest & { readonly path: string })[] = [];
   const revealed: string[] = [];
   let mode: 'save' | 'cancel' | 'fail' = 'save';
+  let failure: { reason: FileFailureReason; code: string | undefined } = { reason: 'write-failed', code: undefined };
   let pick: PickedText | null = null;
   let pickFailure: 'too-large' | 'unreadable' | null = null;
   const canSave = options.canSave ?? true;
@@ -29,8 +31,9 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
     cancelNext: () => {
       mode = 'cancel';
     },
-    failNext: () => {
+    failNext: (reason = 'write-failed', code) => {
       mode = 'fail';
+      failure = { reason, code };
     },
     setPick: (file) => {
       pick = file;
@@ -41,7 +44,7 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
       mode = 'save';
       if (!canSave) return Promise.reject(new FileExportError('unavailable'));
       if (current === 'cancel') return Promise.resolve({ saved: false });
-      if (current === 'fail') return Promise.reject(new FileExportError('write-failed'));
+      if (current === 'fail') return Promise.reject(new FileExportError(failure.reason, failure.code === undefined ? undefined : { code: failure.code }));
       const path = `C:\\Export\\${request.suggestedName}`;
       saved.push({ ...request, path });
       return Promise.resolve({ saved: true, path });
@@ -64,7 +67,7 @@ export function createMemoryFiles(options: { readonly canSave?: boolean } = {}):
   };
 }
 
-/** Plateforme sans enregistrement de fichier (iPhone avant l'ordre 5) : le bouton « Exporter » n'apparaît pas. */
+/** Plateforme sans enregistrement de fichier (ni PC, ni iPhone, ni navigateur) : le bouton « Exporter » n'apparaît pas. */
 export function createUnavailableFiles(): FileService {
   return {
     canSave: () => false,

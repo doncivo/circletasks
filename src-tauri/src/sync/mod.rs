@@ -217,9 +217,10 @@ pub fn fail<T>(code: SyncCode) -> SyncResult<T> {
 }
 
 /// Journal technique de la synchro : un événement et des compteurs, jamais de contenu (section 2.3). Écrit sur la sortie d'erreur
-/// en développement ou sous `test-hooks` seulement ; les tests le capturent par `take_log`.
+/// (par `applog::echo`) en développement ou sous `test-hooks` ; en production, l'événement seul va au journal persistant (ADR 0014).
 pub mod log {
-    //! En production, aucun journal n'est gardé : un événement n'est ni écrit ni conservé (pas de tampon inutilisé, revue B5). En
+    //! En production (ADR 0014, « Conséquences ») : le seul identifiant `event` est inscrit au journal technique persistant
+    //! (`applog::write("sync-rust", event)`), jamais `detail` ; aucun tampon propre (revue B5). En
     //! développement et dans les tests (`debug_assertions`, ou fonctionnalité `test-hooks` y compris en release), il est écrit sur la sortie d'erreur et remis aux captures ouvertes par
     //! `capture()` : une capture voit les événements de **tous** les fils (fils de `spawn_blocking`, hydratation), sans plafond, et
     //! seulement pendant sa durée de vie ; deux tests parallèles ont chacun la leur.
@@ -237,7 +238,7 @@ pub mod log {
     #[cfg(any(debug_assertions, feature = "test-hooks"))]
     pub fn event(event: &'static str, detail: &str) {
         let line = format!("sync:{event} {detail}");
-        eprintln!("{line}");
+        crate::applog::echo(&line);
         let sinks: Vec<Sink> = SINKS.lock().map(|s| s.clone()).unwrap_or_default();
         for sink in sinks {
             if let Ok(mut lines) = sink.lock() {
@@ -246,9 +247,13 @@ pub mod log {
         }
     }
 
+    /// Production (ADR 0014, « Conséquences », qui modifie l'ADR 0011 §2.3) : le seul `event` (identifiant fixe) est inscrit au journal
+    /// technique, jamais `detail`.
     #[cfg(not(any(debug_assertions, feature = "test-hooks")))]
     #[inline]
-    pub fn event(_event: &'static str, _detail: &str) {}
+    pub fn event(event: &'static str, _detail: &str) {
+        crate::applog::write("sync-rust", event);
+    }
 
     /// Capture des événements de tous les fils jusqu'à sa destruction (tests de développement seulement).
     #[cfg(any(debug_assertions, feature = "test-hooks"))]

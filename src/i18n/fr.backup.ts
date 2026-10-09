@@ -50,4 +50,11 @@ export const backupFr = {
   errorPending: 'Une restauration précédente a été interrompue : redémarrez CircleTasks pour la terminer avant d’en lancer une autre.',
   restart: 'Redémarrer',
   recoveryFailed: 'Restauration interrompue : redémarrez CircleTasks.',
+  // P-04-iOS (ADR 0009 avenant lot F).
+  recoveryFailedIos: 'Restauration interrompue : fermez puis rouvrez CircleTasks.',
+  recoveryFailedIosHelp: 'Aucune base n’a été ouverte et vos fichiers sont intacts. Si le message revient après une réouverture, copiez le détail et gardez l’app telle quelle.',
+  errorCode: 'Code : {code}',
+  markerFailed: 'La restauration est faite, mais la synchronisation n’a pas pu être suspendue.',
+  resultDone: 'Restauration terminée.',
+  resultFailed: 'La restauration n’a pas abouti : vos données sont celles d’avant. Code : {code}',
 } as const;

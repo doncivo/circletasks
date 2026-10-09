@@ -50,4 +50,10 @@ export const backupEn: Messages['backup'] = {
   errorPending: 'A previous restore was interrupted: restart CircleTasks to finish it before starting another.',
   restart: 'Restart',
   recoveryFailed: 'Restore interrupted: restart CircleTasks.',
+  recoveryFailedIos: 'Restore interrupted: close and reopen CircleTasks.',
+  recoveryFailedIosHelp: 'No database was opened and your files are intact. If this message comes back after reopening, copy the details and leave the app as it is.',
+  errorCode: 'Code: {code}',
+  markerFailed: 'The restore is done, but sync could not be suspended.',
+  resultDone: 'Restore complete.',
+  resultFailed: 'The restore did not complete: your data is as it was. Code: {code}',
 };

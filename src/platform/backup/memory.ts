@@ -1,4 +1,4 @@
-import { BackupError, type BackupListing, type BackupService, type BackupVersion, type DailyBackupRequest, type RestoreRequest } from './types';
+import { BackupError, type BackupListing, type BackupService, type BackupVersion, type DailyBackupRequest, type RestoreRequest, type RestoreResult } from './types';
 
 export interface MemoryBackup extends BackupService {
   /** Versions affichées ; modifiables par les tests. */
@@ -10,6 +10,8 @@ export interface MemoryBackup extends BackupService {
   readonly revealed: { count: number };
   /** Prochaine opération : échoue avec cette raison (`restore` : `databaseClosed` choisi). */
   failNext(operation: 'list' | 'daily' | 'restore', reason: BackupError['reason'], options?: { databaseClosed?: boolean }): void;
+  /** Marqueur rendu par la prochaine restauration réussie (défaut : aucun dossier de synchro). */
+  markerNext(result: RestoreResult): void;
 }
 
 export interface MemoryBackupOptions {
@@ -34,6 +36,7 @@ export function createMemoryBackup(options: MemoryBackupOptions = {}): MemoryBac
   const available = options.available ?? true;
   const now = options.nowMs ?? (() => Date.now());
   let failure: { operation: string; reason: BackupError['reason']; databaseClosed: boolean } | null = null;
+  let markerNext: RestoreResult | undefined;
 
   function maybeFail(operation: 'list' | 'daily' | 'restore'): void {
     if (failure?.operation !== operation) return;
@@ -48,6 +51,9 @@ export function createMemoryBackup(options: MemoryBackupOptions = {}): MemoryBac
     restores,
     restarts,
     revealed,
+    markerNext: (result) => {
+      markerNext = result;
+    },
     failNext: (operation, reason, opts) => {
       failure = { operation, reason, databaseClosed: opts?.databaseClosed ?? false };
     },
@@ -80,15 +86,14 @@ export function createMemoryBackup(options: MemoryBackupOptions = {}): MemoryBac
       for (const old of daily.slice(0, Math.max(0, daily.length - 14))) versions.splice(versions.indexOf(old), 1);
       return Promise.resolve({ created: true });
     },
-    restore(request) {
-      try {
-        maybeFail('restore');
-      } catch (error) {
-        return Promise.reject(error as Error);
-      }
-      if (!versions.some((version) => version.name === request.name)) return Promise.reject(new BackupError('not-found'));
+    async restore(request, hooks) {
+      if (!versions.some((version) => version.name === request.name)) throw new BackupError('not-found');
+      await hooks?.prepare?.();
+      maybeFail('restore');
       restores.push(request);
-      return Promise.resolve();
+      const marker = markerNext;
+      markerNext = undefined;
+      return marker;
     },
     restart() {
       restarts.count += 1;

@@ -52,7 +52,7 @@ export function createTauriFiles(api: TauriFileApi = loadTauriFileApi()): FileSe
     canSave: () => true,
     async save(request: SaveRequest) {
       // Même plafond que la commande Rust (64 Mio) : refus avant tout envoi.
-      if (request.data.length > MAX_EXPORT_BYTES) throw new FileExportError('write-failed');
+      if (request.data.length > MAX_EXPORT_BYTES) throw new FileExportError('too-large');
       let path: string | null;
       try {
         path = await api.saveFile(request.suggestedName, request.data);

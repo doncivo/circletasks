@@ -1,0 +1,6 @@
+# Copie de l'API Swift de Tauri faite par le script de compilation (iOS), et fichiers générés.
+/.tauri
+/ios/.build
+/ios/Package.resolved
+/permissions
+/target

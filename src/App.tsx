@@ -25,6 +25,8 @@ import {
   GoalsScreen,
   HolidaySettingsScreen,
   ImportScreen,
+  LogsScreen,
+  RecoveryFailureLazy,
   preloadScreens,
   QuietHoursRoute,
   RecapSettingsScreen,
@@ -193,7 +195,7 @@ function AppShellContent() {
       ) : route.tab === 'checklists' ? (
         <ChecklistsScreen />
       ) : route.tab === 'settings' ? (
-        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : route.screen === 'sync' ? <SyncDetailsScreen /> : <SettingsScreen />
+        route.screen === 'trash' ? <TrashScreen /> : route.screen === 'appearance' ? <AppearanceScreen /> : route.screen === 'tabs' ? <TabsScreen /> : route.screen === 'import' ? <ImportScreen /> : route.screen === 'logs' ? <LogsScreen /> : route.screen === 'reminders' ? <RecapSettingsScreen /> : route.screen === 'holidays' ? <HolidaySettingsScreen /> : route.screen === 'spaces' ? <SpacesScreen /> : route.screen === 'calendars' ? <CalendarsScreen /> : route.screen === 'quiet' ? <QuietHoursRoute /> : route.screen === 'sync' ? <SyncDetailsScreen /> : <SettingsScreen />
       ) : (
         <div className="ct-app__placeholder" aria-hidden="true" />
       )}
@@ -318,13 +320,23 @@ export function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [container]);
 
+  const recoveryFailed = dbFailure?.errorName === 'StartupRecoveryError';
+
   return (
     <div className="app-shell" data-layout={layout} data-db-status={dbStatus}>
       {dbStatus === 'loading' && <p role="status">{t('app.loading')}</p>}
       {dbStatus === 'loading' && <DbOpenWatchdog />}
-      {dbStatus === 'error' && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
+      {dbStatus === 'error' && recoveryFailed && (
+        // P-04-iOS (ADR 0009 avenant lot F B3) : récupération d'une restauration interrompue impossible : aucune base ouverte ; recharger la
+        // page ne relance pas la récupération (elle est faite par Rust au lancement), d'où la consigne de fermer puis rouvrir l'app.
+        <>
+          <p role="alert">{t('backup.recoveryFailedIos')}</p>
+          <RecoveryFailureLazy message={dbFailure?.message ?? ''} />
+        </>
+      )}
+      {dbStatus === 'error' && !recoveryFailed && <p role="alert">{t(dbFailure?.phase === 'start' ? 'app.startError' : dbBackupFailed ? 'app.dbBackupError' : 'app.dbError')}</p>}
       {/* 0.2.1 : étape, erreur exacte, URL et chemins de la base, copiables (diagnostic sans logs, sur PC comme sur iPhone). */}
-      {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} />}
+      {dbStatus === 'error' && dbFailure && <DbFailureDetails failure={dbFailure} retry={!recoveryFailed} />}
       {container ? (
         <AppContainerProvider container={container}>
           {/* I-03 : écran de verrou ; coquille non montée au lancement verrouillé, masquée et inerte au retour. */}
