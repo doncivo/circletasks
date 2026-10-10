@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "fr.circletasks.planner.smoke",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CircleTasks",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1024,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "dragDropEnabled": false,
+        "visible": false,
+        "create": false,
+        "additionalBrowserArgs": "--remote-debugging-port=9377 --disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+      }
+    ]
+  }
+}

@@ -197,6 +197,7 @@ Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en para
 
 | ID | Contrôle | Responsable | Statut |
 | --- | --- | --- | --- |
+| REL-TECH-01 | Test de fumée du binaire Windows : le vrai `circletasks.exe` démarre et affiche l'écran du jour (fiche `docs/stories/REL-TECH-01.md`, décision d'Ali du 2026-10-10) | ci-release + qa-test | en cours (2026-10-10, branche smoke-windows) |
 | REL-01 | Les 12 parcours clés (PRD section 8) verts sur PC et iPhone | qa-test | à faire |
 | REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | à faire |
 | REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | à faire |

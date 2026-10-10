@@ -404,11 +404,62 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  # REL-TECH-01 (ADR 0016) : test de fumée du VRAI binaire Windows. Build debug avec le front embarqué et l'identifiant de fumée
+  # (tauri.smoke.conf.json), puis lancement du binaire, observation par CDP et capture des pixels réels de la fenêtre (tests/smoke).
+  # Un écran noir au démarrage (2026-10-10) ne peut pas passer : le DOM seul ne suffit pas, les pixels sont contrôlés aussi.
+  smoke-windows:
+    name: smoke Windows (binaire réel)
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Rust stable
+        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Cache des dépendances Rust
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: src-tauri -> target/smoke
+          shared-key: smoke-windows
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - name: Build debug du binaire (front embarqué, identifiant de fumée)
+        run: npm run test:smoke:build
+      - name: Test de fumée (CDP et pixels de la fenêtre)
+        run: npm run test:smoke -- --reporter=github,html,json
+      - name: Comptage
+        if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}
+        shell: bash
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/smoke-windows.json" "smoke Windows"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: failure()
+        with:
+          name: smoke-windows
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: ${{ !cancelled() }}
+        with:
+          name: count-smoke-windows
+          path: counts/
+          if-no-files-found: ignore
+          retention-days: 1
+
   # Statut requis : vert seulement si tous les jobs sont verts. Résumé du nombre de tests par job.
   suite-verte:
     name: suite verte
     if: always()
-    needs: [qualite, vitest-node, vitest-dom, vitest-couverture, cargo-test, audit-rust, e2e, e2e-webkit, perf]
+    needs: [qualite, vitest-node, vitest-dom, vitest-couverture, cargo-test, audit-rust, e2e, e2e-webkit, perf, smoke-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

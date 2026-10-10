@@ -984,3 +984,15 @@ fn p04_ios_a_single_setup_runs_recovery_then_vision_cleanup() {
     let ios = include_str!("../../src/ios_setup.rs");
     assert!(ios.find("register_sql_after_recovery").unwrap() < ios.find("clean_on_launch").unwrap());
 }
+
+/// REL-TECH-01 (ADR 0016) : le port de débogage WebView2 n'existe que dans la surcharge du test de fumée, jamais dans une configuration livrée.
+#[test]
+fn rel_tech_01_no_remote_debugging_in_delivered_configuration() {
+    for text in [CONF, WINDOWS_CONF] {
+        assert!(!text.contains("remote-debugging"), "port de débogage dans une configuration livrée");
+        assert!(!text.contains("additionalBrowserArgs"), "arguments WebView2 dans une configuration livrée");
+    }
+    let smoke = include_str!("../../tauri.smoke.conf.json");
+    assert!(smoke.contains("\"identifier\": \"fr.circletasks.planner.smoke\""));
+    assert!(smoke.contains("--remote-debugging-port=9377"));
+}
