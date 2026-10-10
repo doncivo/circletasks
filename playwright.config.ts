@@ -62,7 +62,8 @@ const WEBKIT_SERVER: NonNullable<PlaywrightTestConfig['webServer']> = {
 };
 const WEBKIT_PROJECT: NonNullable<PlaywrightTestConfig['projects']>[number] = {
   name: 'iphone-webkit',
-  testMatch: /IOS-titres\.spec\.ts$/,
+  // T-14 correctif : la roue au doigt (défilement, scroll-snap) se vérifie aussi dans le moteur de l'iPhone.
+  testMatch: /(IOS-titres|T-14-roue-tactile)\.spec\.ts$/,
   use: {
     browserName: 'webkit',
     viewport: { width: 440, height: 956 },

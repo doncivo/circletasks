@@ -73,14 +73,34 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
   const positioned = useRef(false);
   const frame = useRef<number | null>(null);
   const userScrolled = useRef(false);
+  /**
+   * T-14 correctif (séance iPhone 0.3.0) : un choix produit par le défilement lui-même n'est JAMAIS recalé en écrivant `scrollTop`. Sur
+   * l'iPhone, écrire `scrollTop` pendant que le doigt glisse ou pendant l'élan interrompt le geste : la roue ne dépassait pas « 01 ». Le
+   * calage visuel est l'affaire de `scroll-snap` ; seul un choix venu de l'extérieur (puce, clavier, valeur initiale) recale la roue.
+   */
+  const scrollDriven = useRef<number | null>(null);
+  /** Doigt (ou souris) posé sur la roue : aucun recalage tant qu'il n'est pas relevé ; le choix extérieur arrivé entre-temps est appliqué au relâcher. */
+  const touching = useRef(false);
+  const deferred = useRef(false);
+  const position = (): void => {
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const target = indexRef.current * WHEEL_ITEM_HEIGHT;
+    if (Math.abs(viewport.scrollTop - target) > 1) viewport.scrollTop = target;
+  };
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
-    const position = (): void => {
-      const target = indexRef.current * WHEEL_ITEM_HEIGHT;
-      if (Math.abs(viewport.scrollTop - target) > 1) viewport.scrollTop = target;
-    };
     indexRef.current = index;
+    if (scrollDriven.current !== null) {
+      const fromScroll = scrollDriven.current === index;
+      scrollDriven.current = null;
+      if (fromScroll) return;
+    }
+    if (touching.current) {
+      deferred.current = true;
+      return;
+    }
     if (!positioned.current) {
       positioned.current = true;
       // L'image qui suit le montage précède son premier affichage ; un défilement du doigt avant elle (impossible sans affichage) l'emporte.
@@ -119,8 +139,24 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
       const viewport = viewportRef.current;
       if (!viewport) return;
       const next = Math.min(Math.max(Math.round(viewport.scrollTop / WHEEL_ITEM_HEIGHT), 0), items.length - 1);
-      if (next !== indexRef.current) onChangeRef.current(next);
+      if (next !== indexRef.current) {
+        // Le parent applique ce choix au rendu suivant : le recalage de CE choix est sauté ; un autre choix (refusé, remplacé) est recalé.
+        scrollDriven.current = next;
+        onChangeRef.current(next);
+      }
     }, SETTLE_MS);
+  }
+
+  function handlePointerDown(): void {
+    touching.current = true;
+  }
+
+  function handlePointerUp(): void {
+    touching.current = false;
+    if (deferred.current) {
+      deferred.current = false;
+      position();
+    }
   }
 
   function select(next: number): void {
@@ -156,7 +192,15 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
       className={['ct-wheel', disabled ? 'ct-wheel--disabled' : '', className].filter(Boolean).join(' ')}
     >
       <div className="ct-wheel__band" aria-hidden="true" />
-      <div ref={viewportRef} className="ct-wheel__viewport" onScroll={handleScroll} aria-hidden="true">
+      <div
+        ref={viewportRef}
+        className="ct-wheel__viewport"
+        onScroll={handleScroll}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        aria-hidden="true"
+      >
         {firstShown > 0 && <div key="before" aria-hidden="true" style={{ height: firstShown * WHEEL_ITEM_HEIGHT }} />}
         {items.slice(firstShown, lastShown + 1).map((item, offset) => {
           const i = firstShown + offset;
