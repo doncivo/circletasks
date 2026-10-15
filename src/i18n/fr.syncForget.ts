@@ -35,6 +35,10 @@ export const syncForgetFr = {
   retry: 'Réessayer',
   retryDeclareLabel: 'Réessayer d’oublier {device}',
   retrySyncLabel: 'Réessayer maintenant',
+  cancelRequest: 'Annuler la demande',
+  cancelRequestLabel: 'Annuler la demande d’oubli de {device}',
+  requestCancelled: 'Demande annulée',
+  cancelFailed: 'La demande n’a pas pu être annulée : {reason}',
   reasons: {
     notForeground: 'CircleTasks n’était pas au premier plan',
     rateLimited: 'trop de demandes, réessayez dans 10 minutes',
