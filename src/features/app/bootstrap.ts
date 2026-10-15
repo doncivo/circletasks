@@ -99,6 +99,13 @@ export async function bootstrapDatabase(
       },
     });
     setDbProgress(null);
+    // Prise de test des e2e (développement seulement, retirée d'un build) : SQL de départ posé AVANT le chargement (`globalThis.__ctSeedSql`),
+    // appliqué sur la base neuve une fois migrée. Exemple : jours fériés désactivés par `openApp`, pour que la suite ne dépende pas du
+    // calendrier réel (le 15 octobre 2026, fête de l'Évacuation en Tunisie, dix-huit tests d'état vide étaient rouges).
+    if (import.meta.env.DEV) {
+      const seed = (globalThis as { __ctSeedSql?: readonly string[] }).__ctSeedSql;
+      if (seed) for (const sql of seed) await db.execute(sql, []);
+    }
     setDbStatus('ready');
     return db;
   } catch (error) {
