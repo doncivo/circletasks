@@ -87,6 +87,57 @@ describe('WheelPicker (T-14, critère 6)', () => {
     rerender(<WheelPicker label="Heures" items={items} index={3} onChange={() => undefined} />);
     expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 3);
   });
+
+  // T-14 correctif (séance iPhone 0.3.0) : sur l'iPhone, écrire `scrollTop` pendant le geste ou l'élan interrompt le défilement (la roue ne
+  // dépassait pas « 01 »). Un choix venu du défilement n'est jamais recalé ; un choix extérieur pendant le toucher attend le relâcher.
+  it('un choix venu du défilement n’est pas recalé : scrollTop reste là où le doigt l’a laissé (le calage visuel est l’affaire de scroll-snap)', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
+    fireEvent.scroll(viewport);
+    act(() => void vi.advanceTimersByTime(120));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+    rerender(<WheelPicker label="Heures" items={items} index={2} onChange={onChange} />);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 2 + 5);
+    // Le choix suivant venu de l'extérieur est, lui, recalé.
+    rerender(<WheelPicker label="Heures" items={items} index={3} onChange={onChange} />);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 3);
+  });
+
+  it('un choix du défilement refusé par le parent (autre valeur appliquée) est recalé normalement', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
+    fireEvent.scroll(viewport);
+    act(() => void vi.advanceTimersByTime(120));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+    rerender(<WheelPicker label="Heures" items={items} index={1} onChange={onChange} />);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT);
+  });
+
+  it('doigt posé : un choix extérieur n’écrit pas scrollTop ; il est appliqué au relâcher', () => {
+    const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={() => undefined} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    fireEvent.pointerDown(viewport);
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT + 7;
+    fireEvent.scroll(viewport);
+    rerender(<WheelPicker label="Heures" items={items} index={3} onChange={() => undefined} />);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT + 7);
+    fireEvent.pointerUp(viewport);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 3);
+  });
+
+  it('doigt relevé sans choix extérieur entre-temps : rien n’est écrit', () => {
+    render(<WheelPicker label="Heures" items={items} index={0} onChange={() => undefined} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    fireEvent.pointerDown(viewport);
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT + 7;
+    fireEvent.scroll(viewport);
+    fireEvent.pointerCancel(viewport);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT + 7);
+  });
 });
 
 /** Roues longues (Q-05, revue I1) : rendu par fenêtre, premier calage à l'image suivante, fenêtre qui suit le défilement. Faux rAF, aucune horloge réelle. */
