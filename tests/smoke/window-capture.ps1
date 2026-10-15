@@ -13,34 +13,8 @@ param(
   [switch]$SelfTest
 )
 $ErrorActionPreference = 'Stop'
+$started = [DateTime]::UtcNow
 Add-Type -AssemblyName System.Drawing
-Add-Type -TypeDefinition @'
-using System; using System.Text; using System.Runtime.InteropServices;
-public static class CtSmokeWin {
-  public delegate bool EnumProc(IntPtr h, IntPtr l);
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
-  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
-  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
-  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
-  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
-  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
-  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
-  public static IntPtr Find(uint pid, string title) {
-    IntPtr found = IntPtr.Zero;
-    EnumWindows((h, l) => {
-      uint p; GetWindowThreadProcessId(h, out p);
-      if (p == pid) { var sb = new StringBuilder(512); GetWindowText(h, sb, 512); if (sb.ToString() == title) { found = h; return false; } }
-      return true;
-    }, IntPtr.Zero);
-    return found;
-  }
-}
-'@
 
 # Mesure d'une zone [x0, x0+w) × [y0, y0+h) d'un bitmap.
 function Measure-Region([System.Drawing.Bitmap]$bmp, [int]$x0, [int]$y0, [int]$w, [int]$h) {
@@ -82,6 +56,35 @@ if ($SelfTest) {
 }
 
 if ($ProcessId -le 0 -or $Out -eq '') { throw 'Usage : -ProcessId <pid> -Out <png> | -SelfTest' }
+# Compilation C# (P/Invoke) seulement pour la capture : l'auto-test (-SelfTest) ne la paie pas. Sur un runner froid, cette compilation
+# (csc, première exécution) a dépassé 60 s le 2026-10-15 ; le test lui accorde 120 s.
+Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices;
+public static class CtSmokeWin {
+  public delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
+  [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
+  [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr hdc, uint flags);
+  [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+  [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+  public static IntPtr Find(uint pid, string title) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((h, l) => {
+      uint p; GetWindowThreadProcessId(h, out p);
+      if (p == pid) { var sb = new StringBuilder(512); GetWindowText(h, sb, 512); if (sb.ToString() == title) { found = h; return false; } }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
+}
+'@
 # Coordonnées physiques (écran mis à l'échelle en local) : DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 (-4) ; refus (déjà fixé) sans effet.
 [void][CtSmokeWin]::SetProcessDpiAwarenessContext([IntPtr]::op_Explicit(-4))
 $h = [CtSmokeWin]::Find([uint32]$ProcessId, $Title)
@@ -112,4 +115,5 @@ if ($result.found) {
     $bmp.Dispose()
   }
 }
+$result.elapsedMs = [int]([DateTime]::UtcNow - $started).TotalMilliseconds
 $result | ConvertTo-Json -Compress

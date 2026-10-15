@@ -44,6 +44,7 @@ interface WindowCapture extends CaptureStats {
   readonly clientWidth: number;
   readonly clientHeight: number;
   readonly printed: boolean;
+  readonly elapsedMs: number;
 }
 
 function readConf(): { identifier: string; cdpPort: number } {
@@ -65,8 +66,10 @@ function dataDirs(identifier: string): string[] {
 }
 
 function runPowerShell(args: readonly string[]): string {
-  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, ...args], { encoding: 'utf8', timeout: 60_000 });
-  if (run.status !== 0) throw new Error(`window-capture.ps1 a échoué (code ${String(run.status)}) : ${run.stderr}${run.stdout}`);
+    // 120 s : la compilation C# du script (P/Invoke, csc à la première exécution d'un runner froid) a dépassé 60 s en CI le 2026-10-15 ;
+  // l'auto-test ne compile plus rien, la capture compile une fois. `elapsedMs` de la capture est joint au rapport.
+  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, ...args], { encoding: 'utf8', timeout: 120_000 });
+  if (run.status !== 0) throw new Error(`window-capture.ps1 a échoué (code ${String(run.status)}${run.signal ? `, signal ${run.signal}` : ''}${run.error ? `, ${run.error.message}` : ''}) : ${run.stderr}${run.stdout}`);
   const line = run.stdout
     .split(/\r?\n/)
     .map((text) => text.trim())
@@ -166,6 +169,7 @@ test('le binaire Windows démarre sur une base neuve et affiche l’écran du jo
 
     // 2. Les pixels : la fenêtre Win32 existe, est visible, non réduite ; sa zone cliente (sans cadre ni barre de titre) n'est pas noire.
     const capture = JSON.parse(runPowerShell(['-ProcessId', String(app.pid), '-Out', capturePath])) as WindowCapture;
+    await testInfo.attach('capture.json', { body: JSON.stringify(capture), contentType: 'application/json' });
     expect(capture.found, 'fenêtre « CircleTasks » introuvable pour le processus').toBe(true);
     expect(capture.visible, 'fenêtre principale invisible').toBe(true);
     expect(capture.iconic, 'fenêtre principale réduite').toBe(false);
