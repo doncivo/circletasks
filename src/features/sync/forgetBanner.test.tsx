@@ -6,6 +6,9 @@ import { SYNC_TROUBLE_ORDER, SYNC_WARNINGS } from '../../domain/syncBanners';
 import { asEntityId, type DeviceId, type IsoDateTime } from '../../domain/types';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
 import type { SyncDeviceStatus, SyncStatus } from '../../platform/sync/types';
+import { migrations } from '../../db/migrations';
+import { createMemorySyncPlatform } from '../../platform/sync/memory';
+import { createMemorySyncLogger, createSyncService, type SyncEngineService } from '../../sync';
 import { FORGET_META } from '../../sync/forget';
 import { useAppStatusStore } from '../app/appStatus';
 import { AppStatusBanner } from '../app/AppStatusBanner';
@@ -25,6 +28,7 @@ const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000a1');
 const PHONE = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000b2');
 const LAPTOP = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000c3');
 const NOW = '2026-10-06T08:00:00.000Z';
+const SV = migrations.at(-1)?.version ?? 1;
 
 let db: TestDb;
 let sync: FakeSyncService;
@@ -109,6 +113,46 @@ describe('échec d’un oubli et suppression en attente (critère 15 d)', () => 
     // Réussite : effacé par le moteur ; le cycle suivant conclut sans échec.
     await db.data.repos.sync.setMeta(FORGET_META.failure, null);
     set({ phase: 'idle', devices: DEVICES, forget: null, lastSyncAt: NOW as IsoDateTime });
+    await settle();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+  });
+
+  it('Y-10-FIX-01 critère 5 : le vrai cancelForgetRequest (vrai service, base temporaire) retire le bandeau venu de sync_meta, sans cycle ; il ne revient pas au redémarrage', async () => {
+    const failure = { deviceId: PHONE, code: 'rate-limited', at: NOW as IsoDateTime, step: 'declare' as const };
+    await db.data.repos.sync.setMeta(FORGET_META.failure, JSON.stringify(failure));
+    await db.data.repos.sync.saveState(SELF, { isSelf: true, platform: 'windows', status: 'active' });
+    await db.data.repos.sync.saveState(PHONE, { platform: 'ios', stateSeq: 4, status: 'active' });
+    const platform = createMemorySyncPlatform();
+    const logger = createMemorySyncLogger();
+    const realService = (): SyncEngineService =>
+      createSyncService({ data: db.data, platform, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), clock: db.clock, deviceId: SELF, sv: SV, appVersion: '0.4.0', logger, setTimeout: () => 0, clearTimeout: () => undefined });
+    let service = realService();
+    container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync: service });
+    render(<AppStatusBanner />);
+    start();
+    await settle();
+    await act(async () => {
+      await service.running();
+    });
+    await settle();
+    // Après le cycle d'ouverture (dossier non configuré : liste des appareils vide), l'appareil est nommé de façon neutre.
+    expect(text()).toMatch(/^L’oubli de .+ a échoué : trop de demandes, réessayez dans 10 minutes/);
+    // L'action réelle : mémo effacé dans sync_meta, état relu et publié sans cycle ; le bandeau disparaît.
+    const before = logger.entries.length;
+    await act(async () => {
+      expect(await service.cancelForgetRequest(PHONE)).toEqual({ kind: 'cancelled' });
+    });
+    await settle();
+    expect(logger.entries.slice(before).map((e) => e.event)).toEqual(['forget-cancelled']);
+    expect(await db.data.repos.sync.getMeta(FORGET_META.failure)).toBeNull();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
+    // Redémarrage : nouveau service sur la même base ; rien n'est relu de sync_meta, aucun bandeau.
+    service = realService();
+    container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync: service });
+    await restart();
+    await act(async () => {
+      await service.running();
+    });
     await settle();
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
   });

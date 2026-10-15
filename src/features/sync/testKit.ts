@@ -1,5 +1,5 @@
 import type { DeviceId } from '../../domain/types';
-import { INITIAL_STATUS, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
+import { INITIAL_STATUS, type CancelForgetOutcome, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncReason, type SyncStatus } from '../../platform/sync/types';
 
 /** Faux service de synchro pour les tests d'écran : état posé à la main, appels enregistrés, cycle libéré à la demande. */
 export interface FakeSyncService extends SyncEngineService {
@@ -16,6 +16,12 @@ export interface FakeSyncService extends SyncEngineService {
   /** Y-10 : appareils dont l'oubli a été demandé, et issue rendue par `forgetDevice`. */
   readonly forgets: DeviceId[];
   forgetOutcome: ForgetOutcome;
+  /**
+   * Y-10-FIX-01 : appareils dont « Annuler la demande » a été demandé, et issue rendue. `cancelled` : comme le service, l'échec de
+   * déclaration de cet appareil est retiré de l'état (relu sans cycle) ; `failed` : l'état reste.
+   */
+  readonly cancels: DeviceId[];
+  cancelOutcome: CancelForgetOutcome;
   /** Y-10 : appels de « Associer de nouveau » et issue rendue. */
   rejoins: number;
   rejoinOutcome: RejoinOutcome;
@@ -74,6 +80,17 @@ export function createFakeSyncService(initial: Partial<SyncStatus> = {}): FakeSy
     async forgetDevice(deviceId) {
       fake.forgets.push(deviceId);
       return fake.forgetOutcome;
+    },
+    cancels: [],
+    cancelOutcome: { kind: 'cancelled' },
+    async cancelForgetRequest(deviceId) {
+      fake.cancels.push(deviceId);
+      const outcome = fake.cancelOutcome;
+      // Comme `refreshForget` du service : l'état relu est toujours publié (abonnés prévenus), l'échec retiré s'il a été annulé.
+      const forget = status.forget ?? null;
+      const cleared = outcome.kind === 'cancelled' && forget?.failure?.deviceId === deviceId && forget.failure.step === 'declare';
+      fake.setStatus({ forget: cleared ? { ...forget, failure: null } : forget });
+      return outcome;
     },
     rejoins: 0,
     rejoinOutcome: { kind: 'restart' },

@@ -1,7 +1,7 @@
 import type { ForgetFacts } from '../../domain/syncBanners';
 import type { DeviceId } from '../../domain/types';
 import { t } from '../../i18n';
-import type { SyncDeviceStatus } from '../../platform/sync/types';
+import type { CancelForgetOutcome, SyncDeviceStatus } from '../../platform/sync/types';
 import { deviceName } from './syncText';
 
 /**
@@ -52,6 +52,14 @@ export function forgetFailureText(failure: NonNullable<ForgetFacts['failure']>, 
   if (failure.step === 'rejoin') return t('sync.forget.failedRejoin', { reason });
   const device = forgetDeviceName(failure.deviceId, devices);
   return failure.step === 'declare' ? t('sync.forget.failedDeclare', { device, reason }) : t('sync.forget.failedDelete', { device, reason });
+}
+
+/**
+ * Y-10-FIX-01 : message de « Annuler la demande ». Annulée, ou rien à annuler (échec déjà disparu) : même message neutre « Demande
+ * annulée » ; écriture refusée : la raison, sans code brut.
+ */
+export function cancelForgetText(outcome: CancelForgetOutcome): string {
+  return outcome.kind === 'failed' ? t('sync.forget.cancelFailed', { reason: forgetReason(outcome.code) }) : t('sync.forget.requestCancelled');
 }
 
 /** Ligne APPAREILS d'un appareil oublié dont les fichiers restent ; null : rien à dire. */

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { APP_READY_TIMEOUT_MS } from '../helpers/app';
-import { closeRoom, inspect, openSyncDetails, openSyncedPage, propagate, syncNow, syncStatusLine, type SyncedPage } from '../helpers/sync';
+import { closeRoom, inspect, openSyncDetails, openSyncedPage, propagate, setTesting, syncNow, syncStatusLine, type SyncedPage } from '../helpers/sync';
 
 /**
  * Y-10 « J'oublie un appareil » (ADR 0011 §14.2 ; fiche Y-10, critères 1 à 4, 13, 16 et 17) sur trois pages du navigateur de dev reliées
@@ -115,4 +115,99 @@ test('Y-10 : oublier l’iPhone depuis le PC, suppression des fichiers en attent
   // Le PC voit l'ancien iPhone oublié et le nouveau actif, sans bouton d'oubli sur l'ancien.
   await expect(pc.page.getByRole('listitem').filter({ hasText: 'Oublié' })).toHaveCount(1);
   await expect(pc.page.getByRole('button', { name: /^Oublier iPhone/ })).toHaveCount(1);
+});
+
+/**
+ * Budget de Y-10-FIX-01 : deux apps démarrées, quatre cycles, trois demandes d'oubli. Durées mesurées le 2026-10-15 (serveur de dev déjà
+ * compilé, processeur occupé de 87 à 100 % par d'autres suites) : 26,0 à 39,3 s sur pc, 27,2 à 30,3 s sur iphone ; pire mesuré
+ * 39,3 s (pc) ; budget 70 s, près du double de ce pire (consigne d'Ali : ni `test.slow()` ni nouvel essai).
+ */
+const CANCEL_BUDGET_MS = 70_000;
+
+/**
+ * Y-10-FIX-01 (cas réel de la séance iPhone 0.3.0) : la boîte native refusée, le nouvel essai rendu « trop de demandes » (blocage de
+ * 10 minutes de Rust, joué par la plateforme mémoire du simulateur) ; « Annuler la demande » efface la ligne rouge et le bandeau sans
+ * rien déclencher. Lancé sur les deux projets : sur `pc`, le PC oublie l'iPhone ; sur `iphone`, l'iPhone oublie le PC.
+ *
+ * Le redémarrage n'est pas rejoué ici : le navigateur de dev garde la base en mémoire (vide au rechargement, voir l'en-tête) ; la
+ * persistance dans `sync_meta` est prouvée par simulation (`tests/unit/sync/forget/forgetCancel.test.ts`, redémarrage du service).
+ */
+test('Y-10-FIX-01 : oubli en échec (trop de demandes), « Annuler la demande » efface la ligne et le bandeau sans rien déclencher', async ({ browser }) => {
+  const info = test.info();
+  test.setTimeout(CANCEL_BUDGET_MS);
+  room = `y10fix-${info.project.name}-${String(info.workerIndex)}-${info.testId}-${String(info.repeatEachIndex)}`;
+  const onPhone = info.project.name === 'iphone';
+
+  const pc = await openSyncedPage(browser, room, 'pc', 'first');
+  opened.push(pc);
+  await openSyncDetails(pc.page);
+  await syncNow(pc.page);
+  await propagate(room);
+  const iphone = await openSyncedPage(browser, room, 'iphone', 'join');
+  opened.push(iphone);
+  await openSyncDetails(iphone.page);
+  await syncAll([iphone, pc, iphone]);
+
+  const [actor, actorName, target] = onPhone ? ([iphone, 'iphone', 'PC'] as const) : ([pc, 'pc', 'iPhone'] as const);
+  const page = actor.page;
+  const row = deviceRow(page, new RegExp(`^${target}`));
+  const forgetButton = row.getByRole('button', { name: new RegExp(`^Oublier ${target}`) });
+  const forgetZone = page.locator('.ct-sync__forget[role="status"]');
+  const failedLine = forgetZone.locator('[data-failed="true"]');
+  const retry = page.getByRole('button', { name: new RegExp(`^Réessayer d’oublier ${target}`) });
+  const cancel = page.getByRole('button', { name: new RegExp(`^Annuler la demande d’oubli de ${target}`) });
+  const dialog = page.getByRole('alertdialog', { name: new RegExp(`^Oublier ${target}`) });
+
+  // La veille : « Oublier », « Continuer », boîte native refusée (rien n'est écrit, blocage de 10 minutes chez Rust).
+  await setTesting(room, actorName, 'setConsent', false);
+  await forgetButton.click();
+  await dialog.getByRole('button', { name: 'Continuer' }).click();
+  await expect(row.getByRole('status')).toHaveText('Oubli annulé', { timeout: APP_READY_TIMEOUT_MS });
+  await expect(failedLine).toHaveCount(0);
+
+  // Nouvel essai aussitôt : « trop de demandes » ; ligne rouge avec « Réessayer » et « Annuler la demande » (critère 1).
+  await setTesting(room, actorName, 'setConsent', true);
+  await forgetButton.click();
+  await dialog.getByRole('button', { name: 'Continuer' }).click();
+  await expect(failedLine).toContainText(`L’oubli de ${target}`, { timeout: APP_READY_TIMEOUT_MS });
+  await expect(failedLine).toContainText('trop de demandes, réessayez dans 10 minutes');
+  await expect(failedLine.getByRole('button')).toHaveText(['Réessayer', 'Annuler la demande']);
+  // Bandeau A-09 de l'échec, depuis l'écran principal comme dans Réglages.
+  const bannerButton = page.getByRole('button', { name: 'Voir le problème de synchronisation' });
+  await expect(bannerButton).toBeVisible();
+
+  // Critère 8 : un appui sur le texte rouge ou sur la ligne ne fait rien.
+  await failedLine.locator('[data-trouble="true"]').click();
+  await failedLine.getByText(/^Dernier essai/).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(failedLine).toHaveCount(1);
+
+  // Critère 10 : « Réessayer » repasse par la boîte de l'app ; « Annuler » (par défaut) : rien ne part.
+  await retry.click();
+  await expect(dialog).toContainText('L’oubli ne s’annule pas');
+  await expect(dialog.getByRole('button', { name: 'Annuler' })).toBeFocused();
+  await dialog.getByRole('button', { name: 'Annuler' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(failedLine).toHaveCount(1);
+
+  // Critères 3 et 5 : « Annuler la demande » : ligne et bandeau disparus, « Demande annulée », aucune boîte.
+  await cancel.click();
+  await expect(failedLine).toHaveCount(0);
+  await expect(forgetZone).toContainText('Demande annulée');
+  await expect(forgetZone).toBeFocused();
+  await expect(dialog).toHaveCount(0);
+  await expect(bannerButton).toHaveCount(0);
+
+  // Un cycle ne la fait pas revenir ; l'appareil n'est pas oublié.
+  await syncNow(page);
+  await expect(failedLine).toHaveCount(0);
+  await expect(row.getByText('Oublié', { exact: true })).toHaveCount(0);
+  await expect(forgetButton).toBeVisible();
+
+  // Critère 7 : le blocage de 10 minutes n'est pas levé : un nouvel oubli redonne « trop de demandes », la ligne revient avec ses deux boutons.
+  await forgetButton.click();
+  await dialog.getByRole('button', { name: 'Continuer' }).click();
+  await expect(failedLine).toContainText('trop de demandes, réessayez dans 10 minutes', { timeout: APP_READY_TIMEOUT_MS });
+  await expect(failedLine.getByRole('button')).toHaveText(['Réessayer', 'Annuler la demande']);
+  await expect(forgetZone).not.toContainText('Demande annulée');
 });
