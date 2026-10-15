@@ -28,7 +28,7 @@ Dépend de : A-01 (écran du jour), guide de bienvenue, build Tauri PC. Ne touch
 9. **Étant donné** la fenêtre Win32 du processus lancé, **quand** `tests/smoke/window-capture.ps1` la capture (PrintWindow, pixels réels), **alors** le test échoue si la fenêtre est absente, invisible, réduite, plus petite que 1024×700, ou si 95 % ou plus des pixels échantillonnés sont quasi noirs (max(R,G,B) < 12).
 10. **Alors** l'image capturée est jointe au rapport Playwright, en cas de réussite comme d'échec.
 11. **Étant donné** que l'app se cache dans la zone de notification à la fermeture, **alors** le processus est tué à la fin du test, y compris sur échec ; aucun `circletasks.exe` de fumée ne reste actif.
-12. **Étant donné** une fenêtre noire simulée (DOM correct mais rendu vide), **alors** le contrôle des pixels (critère 9) échoue : preuve que le test détecte le défaut d'origine (test du script de capture sur une image noire et sur une image normale).
+12. **Étant donné** une fenêtre noire simulée (DOM correct mais rendu vide), **alors** le contrôle des pixels (critère 9) échoue : preuve que le test détecte le défaut d'origine (Vitest `tests/unit/smoke/pixels.test.ts` : image noire, fenêtre noire sous barre de titre claire, thème sombre de l'app, décodeur PNG ; la mesure est en Node, `tests/smoke/pixels.ts`, PowerShell ne fait que capturer).
 13. **Alors** aucun échec n'est silencieux : un échec de lancement, de connexion CDP ou de capture est un échec du test avec son message, jamais un test ignoré.
 
 ### CI

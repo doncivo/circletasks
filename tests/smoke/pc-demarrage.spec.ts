@@ -4,12 +4,14 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { formatTodayHeader } from '../../src/i18n/format';
 import { fr } from '../../src/i18n/fr';
+import { decodePng, measureRegion } from './pixels';
 
 /**
  * REL-TECH-01 (ADR 0016) : test de fumée du VRAI binaire Windows. Le binaire `circletasks.exe` (build debug, front embarqué, identifiant de
  * fumée, dossier cargo dédié `target/smoke` : `npm run test:smoke:build`) est lancé sur un dossier de données neuf ; la WebView2 est observée
- * par CDP (port de `src-tauri/tauri.smoke.conf.json`) ; puis les pixels réels de la fenêtre Win32 sont capturés (PrintWindow,
- * `window-capture.ps1`). Les deux niveaux sont bloquants : le 2026-10-10, le DOM était complet et la fenêtre entièrement noire.
+ * par CDP (port de `src-tauri/tauri.smoke.conf.json`) ; puis la fenêtre Win32 est capturée en PNG (PrintWindow, `window-capture.ps1`) et ses
+ * pixels sont mesurés en Node (`pixels.ts`, dont le détecteur est prouvé par `tests/unit/smoke/pixels.test.ts`). Les deux niveaux sont
+ * bloquants : le 2026-10-10, le DOM était complet et la fenêtre entièrement noire.
  */
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const CONF_PATH = join(ROOT, 'src-tauri', 'tauri.smoke.conf.json');
@@ -29,18 +31,14 @@ interface SmokeConf {
   readonly app: { readonly windows: readonly { readonly label: string; readonly additionalBrowserArgs?: string }[] };
 }
 
-interface CaptureStats {
-  readonly sampled: number;
-  readonly nearBlack: number;
-  readonly distinct: number;
-}
-
-interface WindowCapture extends CaptureStats {
+interface WindowCapture {
   readonly found: boolean;
   readonly visible: boolean;
   readonly iconic: boolean;
   readonly width: number;
   readonly height: number;
+  readonly clientX: number;
+  readonly clientY: number;
   readonly clientWidth: number;
   readonly clientHeight: number;
   readonly printed: boolean;
@@ -65,18 +63,22 @@ function dataDirs(identifier: string): string[] {
   return dirs.filter((dir) => basename(dir) === SMOKE_IDENTIFIER);
 }
 
-function runPowerShell(args: readonly string[]): string {
-    // 120 s : la compilation C# du script (P/Invoke, csc à la première exécution d'un runner froid) a dépassé 60 s en CI le 2026-10-15 ;
-  // l'auto-test ne compile plus rien, la capture compile une fois. `elapsedMs` de la capture est joint au rapport.
-  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, ...args], { encoding: 'utf8', timeout: 120_000 });
-  if (run.status !== 0) throw new Error(`window-capture.ps1 a échoué (code ${String(run.status)}${run.signal ? `, signal ${run.signal}` : ''}${run.error ? `, ${run.error.message}` : ''}) : ${run.stderr}${run.stdout}`);
+/**
+ * Capture de la fenêtre par PowerShell (Win32, PNG). 120 s : le démarrage à froid de PowerShell et la compilation C# du script (csc,
+ * première exécution d'un runner) ont dépassé 60 s en CI le 2026-10-15 ; la durée réelle (`elapsedMs`) est jointe au rapport.
+ */
+function captureWindow(pid: number, out: string): WindowCapture {
+  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, '-ProcessId', String(pid), '-Out', out], { encoding: 'utf8', timeout: 120_000 });
+  if (run.status !== 0) {
+    throw new Error(`window-capture.ps1 a échoué (code ${String(run.status)}${run.signal ? `, signal ${run.signal}` : ''}${run.error ? `, ${run.error.message}` : ''}) : ${run.stderr}${run.stdout}`);
+  }
   const line = run.stdout
     .split(/\r?\n/)
     .map((text) => text.trim())
     .filter((text) => text.startsWith('{'))
     .at(-1);
   if (!line) throw new Error(`window-capture.ps1 : aucune ligne JSON dans la sortie : ${run.stdout}`);
-  return line;
+  return JSON.parse(line) as WindowCapture;
 }
 
 async function cdpReachable(port: number): Promise<boolean> {
@@ -93,19 +95,6 @@ function killTree(child: ChildProcess): void {
     spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { encoding: 'utf8' });
   }
 }
-
-test('le contrôle des pixels voit une image noire, même sous une barre de titre claire, et accepte le thème sombre de l’app (preuve du détecteur)', () => {
-  const result = JSON.parse(runPowerShell(['-SelfTest'])) as { black: CaptureStats; barredWhole: CaptureStats; barredClient: CaptureStats; app: CaptureStats };
-  expect(result.black.sampled).toBeGreaterThan(1000);
-  expect(result.black.nearBlack).toBe(result.black.sampled);
-  expect(result.black.distinct).toBe(1);
-  // Fenêtre noire sous une barre de titre claire : la fenêtre entière frôle le seuil, la zone cliente (celle que mesure le test) est noire à 100 %.
-  expect(result.barredWhole.nearBlack / result.barredWhole.sampled).toBeGreaterThan(MAX_NEAR_BLACK_RATIO);
-  expect(result.barredClient.nearBlack).toBe(result.barredClient.sampled);
-  expect(result.app.sampled).toBe(result.black.sampled);
-  expect(result.app.nearBlack).toBe(0);
-  expect(result.app.distinct).toBeGreaterThanOrEqual(2);
-});
 
 test('le binaire Windows démarre sur une base neuve et affiche l’écran du jour, à l’écran et pas seulement dans le DOM', async () => {
   const testInfo = test.info();
@@ -168,7 +157,7 @@ test('le binaire Windows démarre sur une base neuve et affiche l’écran du jo
     await testInfo.attach('dom.png', { body: await page.screenshot(), contentType: 'image/png' });
 
     // 2. Les pixels : la fenêtre Win32 existe, est visible, non réduite ; sa zone cliente (sans cadre ni barre de titre) n'est pas noire.
-    const capture = JSON.parse(runPowerShell(['-ProcessId', String(app.pid), '-Out', capturePath])) as WindowCapture;
+    const capture = captureWindow(app.pid ?? 0, capturePath);
     await testInfo.attach('capture.json', { body: JSON.stringify(capture), contentType: 'application/json' });
     expect(capture.found, 'fenêtre « CircleTasks » introuvable pour le processus').toBe(true);
     expect(capture.visible, 'fenêtre principale invisible').toBe(true);
@@ -176,10 +165,16 @@ test('le binaire Windows démarre sur une base neuve et affiche l’écran du jo
     expect(capture.clientWidth, 'largeur de la zone cliente').toBeGreaterThanOrEqual(1024);
     expect(capture.clientHeight, 'hauteur de la zone cliente').toBeGreaterThanOrEqual(700);
     expect(capture.printed, 'PrintWindow a échoué (session Windows non interactive ?)').toBe(true);
-    expect(capture.sampled).toBeGreaterThan(1000);
-    const ratio = capture.nearBlack / capture.sampled;
-    expect(ratio, `fenêtre noire : ${String(capture.nearBlack)} pixels quasi noirs sur ${String(capture.sampled)}`).toBeLessThan(MAX_NEAR_BLACK_RATIO);
-    expect(capture.distinct, 'fenêtre d’une seule couleur').toBeGreaterThanOrEqual(2);
+    expect(existsSync(capturePath), 'PNG de la fenêtre absent').toBe(true);
+    const image = decodePng(new Uint8Array(readFileSync(capturePath)));
+    expect(image.width, 'largeur du PNG').toBe(capture.width);
+    expect(image.height, 'hauteur du PNG').toBe(capture.height);
+    const stats = measureRegion(image, { x: capture.clientX, y: capture.clientY, width: capture.clientWidth, height: capture.clientHeight });
+    await testInfo.attach('pixels.json', { body: JSON.stringify(stats), contentType: 'application/json' });
+    expect(stats.sampled).toBeGreaterThan(1000);
+    const ratio = stats.nearBlack / stats.sampled;
+    expect(ratio, `fenêtre noire : ${String(stats.nearBlack)} pixels quasi noirs sur ${String(stats.sampled)}`).toBeLessThan(MAX_NEAR_BLACK_RATIO);
+    expect(stats.distinct, 'fenêtre d’une seule couleur').toBeGreaterThanOrEqual(2);
     expect(app.exitCode, exited()).toBeNull();
   } finally {
     if (existsSync(capturePath)) await testInfo.attach('fenetre.png', { path: capturePath, contentType: 'image/png' });
