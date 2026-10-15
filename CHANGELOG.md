@@ -1,5 +1,11 @@
 # Journal des versions
 
+## 0.3.2
+
+- iPhone : la roue des heures de « Nouvelle tâche » se règle au doigt (elle restait bloquée sur « 01 ») ; les rappels se cochent dès qu'une heure est posée.
+- Synchronisation : un oubli d'appareil en échec peut être annulé (« Annuler la demande ») ; « Réessayer » repasse par la confirmation de l'app.
+- Qualité : test de fumée du vrai binaire Windows à chaque suite (écran du jour vérifié à l'écran), suite de tests indépendante du calendrier.
+
 ## 0.3.1
 
 - Version de test de la mise à jour : aucune autre modification que le numéro de version. Elle sert à vérifier que SideStore propose et installe la mise à jour depuis la 0.3.0, données conservées.
