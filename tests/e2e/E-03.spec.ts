@@ -24,7 +24,7 @@ async function openHolidaySettings(page: Page): Promise<void> {
 
 test.describe('E-03 — jours fériés', () => {
   test('liste de l’année : fériés FR et TN avec leurs tags, fêtes religieuses « date estimée » (critères 1, 2, 4, 7)', async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { holidays: true });
     await openEvents(page);
     const evacuation = eventRow(page, 'Fête de l’Évacuation');
     await expect(evacuation).toContainText('Jour férié · Tunisie');
@@ -42,7 +42,7 @@ test.describe('E-03 — jours fériés', () => {
   });
 
   test('Réglages › Jours fériés : deux interrupteurs, chaque pays séparément, état conservé (critères 3, 4, 9)', async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { holidays: true });
     await settingsTab(page).click();
     await expect(page.getByRole('button', { name: 'Jours fériés : France, Tunisie' })).toBeVisible();
     await openHolidaySettings(page);
@@ -72,7 +72,7 @@ test.describe('E-03 — jours fériés', () => {
   test('bandeaux d’Aujourd’hui et de la Semaine le jour d’un férié, en lecture seule (critère 7, D5)', async ({ page }) => {
     // 1er novembre 2026 : Toussaint (France).
     await page.clock.setFixedTime(new Date('2026-11-01T10:00:00+01:00'));
-    await openApp(page);
+    await openApp(page, { holidays: true });
     await page.getByRole('navigation', { name: 'Navigation principale' }).getByRole('button', { name: 'Tâches', exact: true }).click();
     const band = page.getByRole('list', { name: 'Événements du jour' }).locator('li').filter({ hasText: 'Toussaint' });
     await expect(band).toContainText('Férié FR');
@@ -85,7 +85,7 @@ test.describe('E-03 — jours fériés', () => {
   test('fiche d’une fête religieuse : modifier la date, rétablir la date de la table (critère 5)', async ({ page }, testInfo) => {
     // Jour figé au 10 mai 2027 : l'Aïd el-Idha de la table (16 mai) est à une semaine, à portée des roues de l'iPhone.
     await page.clock.setFixedTime(new Date('2027-05-10T10:00:00+02:00'));
-    await openApp(page);
+    await openApp(page, { holidays: true });
     const tableDate = lunarTableDate(2027, 'eidAlAdha');
     if (!tableDate) throw new Error('table des fêtes religieuses non couverte pour 2027');
     const official = addIsoDays(tableDate, 1);
@@ -117,7 +117,7 @@ test.describe('E-03 — jours fériés', () => {
   });
 
   test('une fête fixe est en lecture seule (critère 5)', async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { holidays: true });
     await openEvents(page);
     await eventRow(page, 'Fête de l’Évacuation').click();
     const fiche = page.getByRole('dialog', { name: 'Jour férié' }).or(page.getByRole('complementary', { name: 'Jour férié' }));
@@ -127,7 +127,7 @@ test.describe('E-03 — jours fériés', () => {
   });
 
   test('année hors table : fêtes fixes et calculées, message « Dates religieuses non disponibles » (critère 8)', async ({ page }) => {
-    await openApp(page);
+    await openApp(page, { holidays: true });
     const year = Number((await browserToday(page)).slice(0, 4));
     await openEvents(page);
     for (let i = year; i < 2031; i += 1) await page.getByRole('button', { name: 'Année suivante' }).click();

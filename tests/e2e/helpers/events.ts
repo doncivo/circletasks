@@ -88,14 +88,17 @@ export const addEventButton = (page: Page, testInfo: { project: { name: string }
  * Désactive les deux calendriers de jours fériés (réglage `holidays.countries`, E-03) : les listes et la grille d'un test d'événements
  * ne portent alors que ses propres lignes. À appeler après `openApp`, avant d'ouvrir l'onglet Événements.
  */
+/**
+ * Réglage partagé « jours fériés » à faux pour FR et TN (E-03) : utilisé au démarrage par `openApp` et après coup par `disableHolidays`.
+ * Appareil et HLC de la graine (src/db/seed/defaultSpaces.ts) : un HLC mal formé fait échouer `createHlcClock` au démarrage.
+ */
+export const HOLIDAYS_OFF_SQL = `INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES ('holidays.countries', '{"FR":false,"TN":false}', '2026-01-01T08:00:00.000Z', '00000000-0000-4000-8000-000000000000', '000000000000000-0000-00000000-0000-4000-8000-000000000000')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`;
+
 export async function disableHolidays(page: Page): Promise<void> {
-  await page.evaluate(async () => {
+  await page.evaluate(async (sql) => {
     const hooks = window.__ctTest;
     if (!hooks) throw new Error('prise de test absente (navigateur de développement uniquement)');
-    await hooks.execute(
-      `INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES ('holidays.countries', '{"FR":false,"TN":false}', '2026-01-01T08:00:00.000Z', 'e2e', '0000000000001-0000-e2e')
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      [],
-    );
-  });
+    await hooks.execute(sql, []);
+  }, HOLIDAYS_OFF_SQL);
 }
