@@ -7,7 +7,7 @@ import { syncForgetEn } from '../../i18n/en.syncForget';
 import { syncForgetFr } from '../../i18n/fr.syncForget';
 import native from '../../i18n/native/fr.json';
 import { createMemorySyncPlatform } from '../../platform/sync/memory';
-import type { SyncDeviceStatus } from '../../platform/sync/types';
+import type { ForgetStep, SyncDeviceStatus } from '../../platform/sync/types';
 import { AppContainerProvider } from '../app/AppContainerContext';
 import { createAppContainer, type AppContainer } from '../app/container';
 import { INITIAL_NAVIGATION, useNavigationStore } from '../app/navigation';
@@ -183,7 +183,7 @@ describe('boîte de l’app avant la confirmation native (critères 2, 3 et 4, D
 });
 
 describe('emplacement forget : aucun échec silencieux (critère 15)', () => {
-  it('échec persistant : rouge, annoncé, heure en 24 h, « Réessayer » relance l’oubli ; sans chemin ni code brut', async () => {
+  it('échec persistant : rouge, annoncé, heure en 24 h, « Réessayer » relance l’oubli après la boîte de l’app (Y-10-FIX-01 D1) ; sans chemin ni code brut', async () => {
     sync.setStatus({ forget: { failure: { deviceId: IPHONE, code: 'not-foreground', at: '2026-10-06T07:45:00.000Z' as IsoDateTime, step: 'declare' }, deletions: [] } });
     renderIn(<SyncDetailsForget />);
     const region = screen.getByRole('status');
@@ -191,8 +191,10 @@ describe('emplacement forget : aucun échec silencieux (critère 15)', () => {
     expect(region.textContent).toMatch(/Dernier essai : \d{2}:\d{2}/);
     expect(region.textContent).not.toMatch(/not-foreground|[\\/]/);
     expect(region.querySelector('[data-trouble="true"]')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' }));
+    expect(sync.forgets).toEqual([]);
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' }));
+      fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Oublier iPhone ?' })).getByRole('button', { name: 'Continuer' }));
     });
     expect(sync.forgets).toEqual([IPHONE]);
   });
@@ -210,6 +212,198 @@ describe('emplacement forget : aucun échec silencieux (critère 15)', () => {
   it('rien à dire : emplacement vide', () => {
     const { container: root } = renderIn(<SyncDetailsForget />);
     expect(root.innerHTML).toBe('');
+  });
+});
+
+describe('Y-10-FIX-01 : « Annuler la demande » sur un oubli en échec', () => {
+  const STEPS: readonly ForgetStep[] = ['declare', 'delete', 'rejoin', 'overflow', 'revived'];
+  const failed = (step: ForgetStep, deviceId: DeviceId = IPHONE, at = '2026-10-06T07:45:00.000Z'): void =>
+    sync.setStatus({ forget: { failure: { deviceId, code: 'rate-limited', at: at as IsoDateTime, step }, deletions: [] } });
+  const failureRow = (): HTMLElement => document.querySelector('[data-failed="true"]') as HTMLElement;
+  const cancelButton = (): HTMLElement => screen.getByRole('button', { name: 'Annuler la demande d’oubli de iPhone' });
+
+  it('critère 1 : à l’étape declare, deux boutons, « Réessayer » puis « Annuler la demande » à sa droite, noms accessibles qui nomment l’appareil', () => {
+    failed('declare');
+    renderIn(<SyncDetailsForget />);
+    const buttons = within(failureRow()).getAllByRole('button');
+    expect(buttons.map((b) => b.textContent)).toEqual(['Réessayer', 'Annuler la demande']);
+    expect(buttons.map((b) => b.getAttribute('aria-label'))).toEqual(['Réessayer d’oublier iPhone', 'Annuler la demande d’oubli de iPhone']);
+    expect(failureRow().textContent).toContain('L’oubli de iPhone a échoué : trop de demandes, réessayez dans 10 minutes');
+  });
+
+  it.each(STEPS)('critère 2 : étape %s, « Annuler la demande » présent seulement à declare', (step) => {
+    failed(step);
+    renderIn(<SyncDetailsForget />);
+    const cancel = screen.queryByRole('button', { name: /^Annuler la demande/ });
+    if (step === 'declare') expect(cancel).not.toBeNull();
+    else expect(cancel).toBeNull();
+    // « Réessayer » reste proposé à chaque étape (inchangé).
+    expect(within(failureRow()).getAllByRole('button')).toHaveLength(step === 'declare' ? 2 : 1);
+  });
+
+  it('critères 3 et 5 : « Annuler la demande » : façade appelée pour cet appareil, ligne disparue, « Demande annulée » annoncé, aucun oubli ni cycle', async () => {
+    failed('declare');
+    renderIn(<SyncDetailsForget />);
+    await act(async () => {
+      fireEvent.click(cancelButton());
+    });
+    expect(sync.cancels).toEqual([IPHONE]);
+    expect(sync.forgets).toEqual([]);
+    expect(sync.calls).toEqual([]);
+    expect(document.querySelector('[data-failed="true"]')).toBeNull();
+    const region = screen.getByRole('status');
+    expect(region.textContent).toContain('Demande annulée');
+    expect(region.textContent).not.toContain('a échoué');
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    // Critère 11 : le focus reste dans la zone de statut, jamais perdu sur le corps de la page.
+    expect(document.activeElement).toBe(region);
+  });
+
+  it('critère 6 : rien à annuler (échec déjà disparu) : même message neutre, sans erreur', async () => {
+    failed('declare');
+    sync.cancelOutcome = { kind: 'nothing' };
+    renderIn(<SyncDetailsForget />);
+    await act(async () => {
+      fireEvent.click(cancelButton());
+    });
+    act(() => sync.setStatus({ forget: null }));
+    expect(screen.getByRole('status').textContent).toContain('Demande annulée');
+    expect(screen.getByRole('status').querySelector('[data-trouble="true"]')).toBeNull();
+  });
+
+  it('critère 7 : un nouvel échec (nouvel oubli refusé) fait revenir la ligne avec ses deux boutons ; « Demande annulée » n’est plus dit', async () => {
+    failed('declare');
+    renderIn(<SyncDetailsForget />);
+    await act(async () => {
+      fireEvent.click(cancelButton());
+    });
+    act(() => failed('declare', IPHONE, '2026-10-06T07:50:00.000Z'));
+    expect(within(failureRow()).getAllByRole('button')).toHaveLength(2);
+    expect(screen.getByRole('status').textContent).not.toContain('Demande annulée');
+  });
+
+  it('critère 12 : annulation refusée (écriture locale) : erreur en rouge, la ligne d’origine reste visible avec ses boutons', async () => {
+    failed('declare');
+    sync.cancelOutcome = { kind: 'failed', code: 'io' };
+    renderIn(<SyncDetailsForget />);
+    await act(async () => {
+      fireEvent.click(cancelButton());
+    });
+    expect(failureRow().textContent).toContain('L’oubli de iPhone a échoué');
+    const error = screen.getByText('La demande n’a pas pu être annulée : erreur inattendue');
+    expect(error.getAttribute('data-trouble')).toBe('true');
+    expect(error.className).toContain('ct-sync__forgetText');
+    expect(within(failureRow()).getAllByRole('button')).toHaveLength(2);
+  });
+
+  it('critère 8 : seul un appui sur un bouton agit : clic, appui, Entrée et Espace sur le texte, la ligne, l’heure ou la zone : rien', () => {
+    failed('declare');
+    renderIn(<SyncDetailsForget />);
+    const text = failureRow().querySelector('[data-trouble="true"]') as HTMLElement;
+    for (const target of [text, failureRow(), screen.getByRole('status'), screen.getByText(/^Dernier essai/)]) {
+      fireEvent.click(target);
+      fireEvent.pointerDown(target);
+      fireEvent.keyDown(target, { key: 'Enter' });
+      fireEvent.keyDown(target, { key: ' ' });
+    }
+    expect(sync.forgets).toEqual([]);
+    expect(sync.cancels).toEqual([]);
+    expect(sync.calls).toEqual([]);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+  });
+
+  it('critère 10 : « Réessayer » à declare ouvre la boîte de l’app (texte long, « Annuler » par défaut) ; Annuler ou Échap : rien ne part', () => {
+    failed('declare');
+    renderIn(<SyncDetailsForget />);
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Oublier iPhone ?' });
+    expect(dialog.textContent).toContain('L’oubli ne s’annule pas');
+    expect(document.activeElement?.textContent).toBe('Annuler');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Annuler' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' }));
+    fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(sync.forgets).toEqual([]);
+    // La ligne reste, avec ses deux boutons.
+    expect(within(failureRow()).getAllByRole('button')).toHaveLength(2);
+  });
+
+  it('ligne APPAREILS : l’échec qu’elle répète disparaît avec l’annulation (aucun reste rouge ailleurs dans l’écran)', async () => {
+    sync.forgetOutcome = { kind: 'failed', code: 'rate-limited' };
+    const forgetDevice = sync.forgetDevice.bind(sync);
+    // Comme le service : l'échec est gardé et l'état relu avant le retour.
+    sync.forgetDevice = async (deviceId) => {
+      failed('declare', deviceId);
+      return forgetDevice(deviceId);
+    };
+    renderIn(<SyncDetailsScreen />);
+    fireEvent.click(screen.getByRole('button', { name: 'Oublier iPhone' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Continuer' }));
+    });
+    const iphoneRow = (): HTMLElement => devicesList()[1] as HTMLElement;
+    expect(within(iphoneRow()).getByRole('status').textContent).toBe('L’oubli de iPhone a échoué : trop de demandes, réessayez dans 10 minutes');
+    await act(async () => {
+      fireEvent.click(cancelButton());
+    });
+    expect(within(iphoneRow()).queryByRole('status')).toBeNull();
+    expect(screen.queryByText(/a échoué/)).toBeNull();
+    expect(screen.getByText('Demande annulée')).toBeTruthy();
+  });
+
+  it('QA 8 : double appui rapide sur « Annuler la demande » : un seul appel ; les deux boutons sont désactivés pendant l’action', async () => {
+    failed('declare');
+    let finish: () => void = () => undefined;
+    const requested: DeviceId[] = [];
+    const cancel = sync.cancelForgetRequest.bind(sync);
+    // Annulation retenue jusqu'à `finish` (action en cours) ; chaque appel de la façade est compté.
+    sync.cancelForgetRequest = (deviceId) => {
+      requested.push(deviceId);
+      return new Promise((resolve) => {
+        finish = () => void cancel(deviceId).then(resolve);
+      });
+    };
+    renderIn(<SyncDetailsForget />);
+    const button = cancelButton();
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(cancelButton()).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' })).toHaveProperty('disabled', true);
+    await act(async () => {
+      finish();
+      await Promise.resolve();
+    });
+    expect(requested).toEqual([IPHONE]);
+    expect(sync.cancels).toEqual([IPHONE]);
+    expect(screen.getByRole('status').textContent).toContain('Demande annulée');
+  });
+
+  it('QA 8 : « Réessayer » puis « Continuer », boîte native refusée : ligne inchangée avec ses deux boutons, aucune alerte, aucun message d’annulation de la demande', async () => {
+    failed('declare');
+    sync.forgetOutcome = { kind: 'cancelled' };
+    renderIn(<SyncDetailsForget />);
+    const before = failureRow().textContent;
+    fireEvent.click(screen.getByRole('button', { name: 'Réessayer d’oublier iPhone' }));
+    await act(async () => {
+      fireEvent.click(within(screen.getByRole('alertdialog', { name: 'Oublier iPhone ?' })).getByRole('button', { name: 'Continuer' }));
+    });
+    expect(sync.forgets).toEqual([IPHONE]);
+    expect(failureRow().textContent).toBe(before);
+    expect(within(failureRow()).getAllByRole('button')).toHaveLength(2);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('status').textContent).not.toContain('Demande annulée');
+  });
+
+  it('autres étapes : « Réessayer » inchangé (cycle), sans boîte', async () => {
+    failed('delete');
+    renderIn(<SyncDetailsForget />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Réessayer maintenant' }));
+    });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(sync.calls).toEqual(['manual']);
   });
 });
 

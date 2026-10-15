@@ -8,9 +8,9 @@ import type { RestoreOption } from '../domain/sync/epoch';
 import { SYNCING_BANNER_DELAY_MS } from '../domain/sync/limits';
 import type { SyncDevicePlatform } from '../domain/sync/format';
 import type { DeviceId, IsoDateTime } from '../domain/types';
-import { syncErrorCodeOf, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncForgetStatus, type SyncNowOptions, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
+import { syncErrorCodeOf, type CancelForgetOutcome, type ForgetOutcome, type RejoinOutcome, type RemoteChanges, type ResetOutcome, type RestoreContext, type SyncEngineService, type SyncForgetStatus, type SyncNowOptions, type SyncPlatform, type SyncErrorCode, type SyncReason, type SyncResetStatus, type SyncStatus } from '../platform/sync/types';
 import type { DeadlineUnit } from './deadline';
-import { declareForget, prepareRejoin, readForgetStatus } from './forget';
+import { cancelForgetRequest, declareForget, prepareRejoin, readForgetStatus } from './forget';
 import { beginReset, dismissResetState, readResetState, readResetStatus, recordResetFailure, RESET_META } from './reset';
 import type { SyncDeps } from './deps';
 import { runCycle, type CycleOptions, type CycleResult } from './engine';
@@ -418,6 +418,19 @@ export function createSyncService(options: SyncServiceOptions): SyncEngineServic
         // Publication de la déclaration (Rust complète la liste), puis application de l'oubli (ordre total, coupure, suppression).
         await cycle();
         await cycle();
+      }).catch(() => undefined);
+      return outcome;
+    },
+    async cancelForgetRequest(deviceId: DeviceId): Promise<CancelForgetOutcome> {
+      let outcome: CancelForgetOutcome = { kind: 'failed', code: 'io' };
+      // Y-10-FIX-01 : dans la file des oublis (jamais pendant une déclaration ou un cycle) ; état relu et publié sans aucun cycle.
+      await schedule('forget', async () => {
+        outcome = await cancelForgetRequest(deps, deviceId).catch((error: unknown): CancelForgetOutcome => {
+          const code = syncErrorCodeOf(error);
+          deps.logger.log('forget-cancel-failed', { device: deviceId, code });
+          return { kind: 'failed', code };
+        });
+        await refreshForget();
       }).catch(() => undefined);
       return outcome;
     },
