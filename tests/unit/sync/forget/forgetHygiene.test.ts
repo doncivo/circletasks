@@ -83,7 +83,8 @@ describe('critère 20 : aucun délai réel, aucun nouvel essai, aucun test désa
     expect(budgets.length).toBe([...source.matchAll(/^\s*test\(/gm)].length);
     expect(budgets.length).toBe(2);
     const timeouts = [...source.matchAll(/timeout:\s*([A-Za-z_0-9]+)/g)].map((m) => m[1]);
-    expect(timeouts.length).toBe(3);
+    // Trois attentes du parcours d'origine, trois du parcours d'annulation (Y-10-FIX-01) : toutes sur le même délai nommé.
+    expect(timeouts.length).toBe(6);
     expect(timeouts.every((name) => name === 'APP_READY_TIMEOUT_MS'), String(timeouts)).toBe(true);
   });
 });
