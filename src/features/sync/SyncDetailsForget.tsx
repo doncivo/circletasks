@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { t } from '../../i18n';
 import { relaunchApp } from '../../platform/relaunch';
-import type { SyncDeviceStatus } from '../../platform/sync/types';
+import type { DeviceId, IsoDateTime } from '../../domain/types';
+import type { CancelForgetOutcome, SyncDeviceStatus } from '../../platform/sync/types';
 import { Button, ConfirmDialog } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { ForgetDeviceDialog } from './ForgetDeviceDialog';
 import { syncStore } from './syncStore';
 import './SyncDetailsForget.css';
-import { forgetDeletionLine, forgetDeviceName, forgetFailureText } from './forgetText';
+import { cancelForgetText, forgetDeletionLine, forgetDeviceName, forgetFailureText } from './forgetText';
 import { deviceName, formatSyncTime } from './syncText';
 import { withExcursion } from '../security/excursion';
 
@@ -28,16 +29,32 @@ function defaultRelaunch(runtime: string): Promise<void> {
  * Emplacement `forget` (critères 15 a, 16, 17) : échec persistant d'un oubli, d'une suppression ou d'une association (rouge,
  * `role="status"`, « Réessayer », effacé seulement à la réussite) ; appareil local oublié : « Cet appareil a été oublié : associez-le de
  * nouveau » et « Associer de nouveau » (confirmation, puis dossier délié, nouvel identifiant, choix du dossier, relance).
+ *
+ * Y-10-FIX-01 (consigne d'Ali : une action destructrice ne part jamais sans accord explicite) : échec à l'étape `declare` seulement,
+ * « Annuler la demande » à côté de « Réessayer » (mémo effacé, rien d'autre) ; « Réessayer » y repasse par `ForgetDeviceDialog` avant la
+ * confirmation native (D1). Seuls les boutons agissent : la ligne et son texte n'ont aucun gestionnaire.
  */
 export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Promise<void> } = {}) {
   const container = useAppContainer();
   const status = useFeatureStore(syncStore, (s) => s.status);
   const [confirmRejoin, setConfirmRejoin] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** Oubli à confirmer de nouveau dans la boîte de l'app (« Réessayer » à l'étape `declare`, D1). */
+  const [confirmForget, setConfirmForget] = useState<DeviceId | null>(null);
+  /** Issue de « Annuler la demande » et heure de l'échec visé (un échec plus récent la rend caduque). */
+  const [cancelNotice, setCancelNotice] = useState<{ readonly outcome: CancelForgetOutcome; readonly at: IsoDateTime } | null>(null);
+  const region = useRef<HTMLDivElement>(null);
+  // Critère 11 : la ligne disparue (avec le bouton qui avait le focus), le focus va à la zone de statut, jamais perdu sur la page.
+  useEffect(() => {
+    if (cancelNotice) region.current?.focus();
+  }, [cancelNotice]);
   const failure = status.forget?.failure ?? null;
   const forgotten = status.phase === 'forgotten';
   const sync = container.sync;
-  if (!sync || (!failure && !forgotten)) return null;
+  // « Demande annulée » tant qu'aucun nouvel échec n'est affiché ; annulation refusée : tant que l'échec visé reste affiché.
+  const notice = cancelNotice && (cancelNotice.outcome.kind === 'failed' ? failure?.at === cancelNotice.at : failure === null) ? cancelNotice.outcome : null;
+  // Pendant une action (annulation en cours), la zone reste montée : l'échec effacé avant l'arrivée du message ne la fait pas disparaître.
+  if (!sync || (!failure && !forgotten && !notice && !busy)) return null;
 
   const rejoin = async (): Promise<void> => {
     setConfirmRejoin(false);
@@ -56,11 +73,38 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
 
   const retry = async (): Promise<void> => {
     if (!failure) return;
+    setCancelNotice(null);
+    // D1 : l'oubli n'est jamais relancé sans repasser par la boîte de l'app (texte long, « Annuler » par défaut).
+    if (failure.step === 'declare') {
+      setConfirmForget(failure.deviceId);
+      return;
+    }
     setBusy(true);
     try {
-      if (failure.step === 'declare') await sync.forgetDevice(failure.deviceId);
-      else if (failure.step === 'rejoin') await rejoin();
+      if (failure.step === 'rejoin') await rejoin();
       else await sync.syncNow('manual');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const forgetAgain = async (deviceId: DeviceId): Promise<void> => {
+    setConfirmForget(null);
+    setBusy(true);
+    try {
+      await sync.forgetDevice(deviceId);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const cancelRequest = async (): Promise<void> => {
+    if (failure?.step !== 'declare') return;
+    const target = failure;
+    setBusy(true);
+    try {
+      const outcome = await sync.cancelForgetRequest(target.deviceId);
+      setCancelNotice({ outcome, at: target.at });
     } finally {
       setBusy(false);
     }
@@ -69,7 +113,7 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
   return (
     <>
       <h2 className="ct-settings__section">{t('sync.forget.section')}</h2>
-      <div role="status" className="ct-sync__forget">
+      <div role="status" className="ct-sync__forget" ref={region} tabIndex={-1}>
         {forgotten && (
           <div className="ct-settings__row ct-sync__device" data-forgotten-self="true">
             <span className="ct-sync__forgetText" data-trouble="true">
@@ -97,9 +141,29 @@ export function SyncDetailsForget({ relaunch }: { readonly relaunch?: () => Prom
             >
               {t('sync.forget.retry')}
             </Button>
+            {failure.step === 'declare' && (
+              <Button
+                variant="secondary"
+                ariaLabel={t('sync.forget.cancelRequestLabel', { device: forgetDeviceName(failure.deviceId, status.devices) })}
+                onClick={() => void cancelRequest()}
+                disabled={busy}
+                ariaBusy={busy}
+                className="ct-settings__link"
+              >
+                {t('sync.forget.cancelRequest')}
+              </Button>
+            )}
           </div>
         )}
+        {notice && (
+          <span className={notice.kind === 'failed' ? 'ct-sync__forgetText' : 'ct-sync__deviceRead'} data-cancel-notice={notice.kind} data-trouble={notice.kind === 'failed' ? 'true' : undefined}>
+            {cancelForgetText(notice)}
+          </span>
+        )}
       </div>
+      {confirmForget && (
+        <ForgetDeviceDialog deviceName={forgetDeviceName(confirmForget, status.devices)} onContinue={() => void forgetAgain(confirmForget)} onCancel={() => setConfirmForget(null)} />
+      )}
       {confirmRejoin && (
         <ConfirmDialog title={t('sync.forget.rejoinTitle')} description={t('sync.forget.rejoinBody')} confirmLabel={t('sync.forget.rejoin')} onConfirm={() => void rejoin()} onCancel={() => setConfirmRejoin(false)} />
       )}
@@ -117,7 +181,11 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
   const status = useFeatureStore(syncStore, (s) => s.status);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Message de la ligne ; `storedAt` : heure de l'échec gardé dans `sync_meta` qu'il répète (Y-10-FIX-01 : effacé par « Annuler la
+   * demande » ou remplacé, il n'est plus répété ici) ; null : rien de gardé, le message reste (seul endroit où l'échec est dit).
+   */
+  const [notice, setNotice] = useState<{ readonly text: string; readonly storedAt: string | null } | null>(null);
   const sync = container.sync;
   if (device.self || !sync) return null;
   const name = deviceName(device, status.devices);
@@ -135,18 +203,19 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
   const forget = async (): Promise<void> => {
     setOpen(false);
     setBusy(true);
-    setNotice(t('sync.forget.pending', { device: name }));
+    setNotice({ text: t('sync.forget.pending', { device: name }), storedAt: null });
     try {
       const outcome = await sync.forgetDevice(device.deviceId);
       // Échec : gardé et affiché dans l'emplacement `forget` (rouge, « Réessayer ») ; dit aussi ici, au cas où il n'aurait pas pu être
       // gardé (revue Y-10, suggestion 9). Réussite : la parade de l'ADR (§14.2, antidatage) est proposée.
-      setNotice(
-        outcome.kind === 'cancelled'
-          ? t('sync.forget.cancelled')
-          : outcome.kind === 'done'
-            ? t('sync.forget.done', { device: name })
-            : forgetFailureText({ deviceId: device.deviceId, code: outcome.code, step: 'declare' }, status.devices),
-      );
+      if (outcome.kind !== 'failed') {
+        setNotice({ text: outcome.kind === 'cancelled' ? t('sync.forget.cancelled') : t('sync.forget.done', { device: name }), storedAt: null });
+        return;
+      }
+      // L'état relu par le service (avant le retour de `forgetDevice`) dit si l'échec a été gardé.
+      const stored = sync.status().forget?.failure ?? null;
+      const storedAt = stored?.deviceId === device.deviceId && stored.step === 'declare' ? stored.at : null;
+      setNotice({ text: forgetFailureText({ deviceId: device.deviceId, code: outcome.code, step: 'declare' }, status.devices), storedAt });
     } finally {
       setBusy(false);
     }
@@ -166,9 +235,9 @@ export function SyncDeviceForgetAction({ device }: { readonly device: SyncDevice
       <Button variant="secondary" ariaLabel={t('sync.forget.actionLabel', { device: name })} onClick={() => setOpen(true)} disabled={busy} ariaBusy={busy} className="ct-settings__link">
         {t('sync.forget.action')}
       </Button>
-      {notice && (
+      {notice && (notice.storedAt === null || status.forget?.failure?.at === notice.storedAt) && (
         <span role="status" className="ct-sync__deviceRead">
-          {notice}
+          {notice.text}
         </span>
       )}
       {open && <ForgetDeviceDialog deviceName={name} onContinue={() => void forget()} onCancel={() => setOpen(false)} />}

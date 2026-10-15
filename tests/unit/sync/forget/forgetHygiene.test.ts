@@ -76,10 +76,15 @@ describe('critère 20 : aucun délai réel, aucun nouvel essai, aucun test désa
   it('le scénario Playwright n’emploie aucune attente à durée fixe ; ses seules durées sont le budget du parcours et l’attente de lancement de l’app', () => {
     const source = stripComments(read('tests/e2e/parcours/Y10-oublier-appareil.spec.ts'));
     expect(source).not.toMatch(/waitForTimeout|page\.pause|test\.slow|retries|\.retry/);
-    // Durées nommées : le budget du parcours (une fois) et le délai d'attente d'une réaction de l'interface (APP_READY_TIMEOUT_MS, commun, y compris l’attente du rechargement de la relance).
-    expect([...source.matchAll(/setTimeout\(/g)].length).toBe(1);
+    // Durées nommées : un budget par parcours (`test.setTimeout`, jamais un `setTimeout` nu ; Y-10-FIX-01 ajoute un second parcours) et le
+    // délai d'attente d'une réaction de l'interface (APP_READY_TIMEOUT_MS, commun, y compris l’attente du rechargement de la relance).
+    const budgets = [...source.matchAll(/test\.setTimeout\(([A-Z_]+)\)/g)].map((m) => m[1]);
+    expect([...source.matchAll(/setTimeout\(/g)].length).toBe(budgets.length);
+    expect(budgets.length).toBe([...source.matchAll(/^\s*test\(/gm)].length);
+    expect(budgets.length).toBe(2);
     const timeouts = [...source.matchAll(/timeout:\s*([A-Za-z_0-9]+)/g)].map((m) => m[1]);
-    expect(timeouts.length).toBe(3);
+    // Trois attentes du parcours d'origine, trois du parcours d'annulation (Y-10-FIX-01) : toutes sur le même délai nommé.
+    expect(timeouts.length).toBe(6);
     expect(timeouts.every((name) => name === 'APP_READY_TIMEOUT_MS'), String(timeouts)).toBe(true);
   });
 });

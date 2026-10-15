@@ -8,6 +8,7 @@ import { SYNC_TABLES } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import {
   syncErrorCodeOf,
+  type CancelForgetOutcome,
   type FolderScan,
   type ForgetDeletionStatus,
   type ForgetFailure,
@@ -168,6 +169,25 @@ export async function declareForget(deps: SyncDeps, deviceId: DeviceId): Promise
   await clearFailure(deps.data.repos, deviceId, ['declare']);
   deps.logger.log('forget-declared', { device: deviceId });
   return { kind: 'done' };
+}
+
+/**
+ * Y-10-FIX-01 « Annuler la demande » (critères 3 à 7) : abandonne un oubli dont la **déclaration** a échoué (Rust n'a rien écrit), sans
+ * rien déclencher. Efface le mémo d'échec s'il concerne `deviceId` à l'étape `declare` et journalise `forget-cancelled`.
+ * D2 (corrigée en revue, 2026-10-15) : l'intention `forgetPublish` n'est **jamais** modifiée ici. `declareForget` la remet déjà à sa
+ * valeur précédente quand la déclaration échoue : si elle vaut `true`, une déclaration confirmée attend d'être publiée (le cache
+ * `forgetDeclarations` du dernier scan peut être en retard sur `forgotten.json` de Rust), et l'effacer la ferait perdre.
+ * Aucun appel à la plateforme (ni Rust, ni boîte native, ni iCloud), aucun cycle ; le blocage de 10 minutes de Rust n'est pas touché.
+ * Idempotent : rien à annuler (échec déjà disparu, autre appareil, autre étape) : rien écrit, `nothing`. Une lecture illisible ou une
+ * écriture refusée est propagée (jamais silencieuse).
+ */
+export async function cancelForgetRequest(deps: SyncDeps, deviceId: DeviceId): Promise<Exclude<CancelForgetOutcome, { readonly kind: 'failed' }>> {
+  const repos = deps.data.repos;
+  const failure = parseForgetFailure(await readJson<unknown>(repos, FORGET_META.failure, deps.logger));
+  if (failure === null || failure.deviceId !== deviceId || failure.step !== 'declare') return { kind: 'nothing' };
+  await writeJson(repos, FORGET_META.failure, null);
+  deps.logger.log('forget-cancelled', { device: deviceId });
+  return { kind: 'cancelled' };
 }
 
 /** Publication de `forgotten` à forcer (déclaration confirmée depuis la dernière publication, ou arrêt avant elle). */

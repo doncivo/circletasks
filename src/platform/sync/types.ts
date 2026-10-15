@@ -635,6 +635,12 @@ export interface SyncForgetStatus {
 /** Y-10 : issue de « Oublier cet appareil » (`cancelled` : la boîte native a été refusée ou fermée, rien n'est écrit). */
 export type ForgetOutcome = { readonly kind: 'done' } | { readonly kind: 'cancelled' } | { readonly kind: 'failed'; readonly code: string };
 
+/**
+ * Y-10-FIX-01 : issue de « Annuler la demande » sur un oubli dont la déclaration a échoué. `cancelled` : échec effacé ; `nothing` : rien à
+ * annuler (échec déjà disparu, ou d'un autre appareil ou d'une autre étape), rien écrit ; `failed` : écriture locale refusée, échec gardé.
+ */
+export type CancelForgetOutcome = { readonly kind: 'cancelled' } | { readonly kind: 'nothing' } | { readonly kind: 'failed'; readonly code: string };
+
 /** Y-10 : issue de « Associer de nouveau » (`restart` : l'app doit être relancée sous sa nouvelle identité). */
 export type RejoinOutcome = { readonly kind: 'restart' } | { readonly kind: 'failed'; readonly code: string };
 
@@ -679,6 +685,12 @@ export interface SyncEngineService extends SyncService {
    * jamais : un échec est rendu et gardé dans `sync_meta.forgetFailure` (visible dans `status().forget`).
    */
   forgetDevice(deviceId: DeviceId): Promise<ForgetOutcome>;
+  /**
+   * Y-10-FIX-01 : « Annuler la demande » d'un oubli dont la déclaration a échoué : mémo d'échec effacé (et l'intention de publication si
+   * aucune autre déclaration n'attend), état relu sans cycle. Aucun appel à Rust, aucune boîte native, aucune écriture dans iCloud, aucun
+   * cycle. Ne rejette jamais : une écriture refusée est rendue (`failed`) et l'échec d'origine reste affiché.
+   */
+  cancelForgetRequest(deviceId: DeviceId): Promise<CancelForgetOutcome>;
   /**
    * Y-10 (D2) : « Associer de nouveau » sur l'appareil oublié : ses écritures non lues des autres sont republiées sous une nouvelle
    * identité, le dossier est délié (clé gardée) ; l'app doit ensuite être relancée (puis le dossier choisi de nouveau). Ne rejette jamais.

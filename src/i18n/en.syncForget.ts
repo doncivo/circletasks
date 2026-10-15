@@ -34,6 +34,10 @@ export const syncForgetEn: Shape<typeof syncForgetFr> = {
   retry: 'Try again',
   retryDeclareLabel: 'Try again to forget {device}',
   retrySyncLabel: 'Try again now',
+  cancelRequest: 'Cancel the request',
+  cancelRequestLabel: 'Cancel the request to forget {device}',
+  requestCancelled: 'Request cancelled',
+  cancelFailed: 'The request could not be cancelled: {reason}',
   reasons: {
     notForeground: 'CircleTasks was not in the foreground',
     rateLimited: 'too many requests, try again in 10 minutes',
