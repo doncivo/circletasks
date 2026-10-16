@@ -2,7 +2,7 @@ import type { Repositories, SyncStateRow } from '../db/repositories';
 import { isSyncStateUnreadable, parseStoredAcks, parseStoredOwnStateMarks, parseStoredResumeTried, parseStoredSegmentGaps, type StoredSegmentGap, type StoredStateLog } from '../domain/sync/stored';
 import { DEVICE_EXPIRY_MS, MAX_STATE_ACKS, SNAPSHOT_INTERVAL_MS, SNAPSHOTS_KEPT_PER_EPOCH, STATE_REFRESH_MS, SYNC_FORMAT_MAJOR, STATE_FILE, compareEpochs, epochId, segmentFileName, type DeviceAck, type EpochId, type PublishedDeviceState, type RecordCursor } from '../domain/sync/format';
 import { keyMismatchFromDevices } from '../domain/sync/devices';
-import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, maxEpoch, ownBounds, unreadableDevices } from '../domain/sync/epoch';
+import { canPublish, compareCursors, folderEpoch, isOrphanEpoch, listedFilesForPublish, maxEpoch, ownBounds, relistedOrphanEpochs, unreadableDevices } from '../domain/sync/epoch';
 import { hlcMs, publishedStateToText } from '../domain/sync/parse';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan, type FolderScan, type SyncFolderInfo, type SyncDeviceStatus, type SyncErrorCode } from '../platform/sync/types';
@@ -60,6 +60,10 @@ export interface CycleResult extends CycleFacts {
   /** Y-11 (`resetCheck`) : premier appareil pas encore lu jusqu'à sa tête (null : la réinitialisation peut commencer). */
   readonly resetLag?: ReturnType<typeof resetLagging>;
 }
+
+/** Y-IOS-02-FIX-02 : statut de son état propre dans `publish-deferred` quand son dossier n'apparaît pas au scan (liste fermée). */
+const OWN_STATE_ABSENT = 'absent' as const;
+type OwnStateLogStatus = DeviceScan['stateStatus'] | typeof OWN_STATE_ABSENT;
 
 const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, folderKind: null, lastSyncAt: null, worked: false };
 
@@ -538,8 +542,17 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * dans le nuage) : aucun autre appareil n'a rien accepté de lui, la borne de la règle 1 est vide. Sans cette exception, `canPublish`
      * refuse pour toujours (instantané listé, état absent) : l'appareil ne publie jamais rien.
      */
-    // Les fichiers d'une orpheline déjà abandonnée (suppression en attente) ne comptent pas : aucun état ne les annonce.
-    const files = (ownScan?.epochs ?? []).filter((e) => e.epoch !== orphanLeft || e.epoch === currentEpoch).reduce((n, e) => n + e.segments.length + e.snapshots.length, 0);
+    // Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : fichiers listés qui bornent la publication, règle unique du domaine (`listedFilesForPublish`) :
+    // segments de toute époque, instantanés de l'époque courante, d'une époque annoncée ou d'une époque qui contient un segment ; un
+    // instantané seul d'une époque jamais annoncée (reste d'orpheline, mémo `orphanEpoch` perdu) ne borne rien. Les fichiers d'une orpheline
+    // déjà abandonnée ne comptent pas.
+    /** Époques annoncées par une source authentifiée autre que son propre état : états acceptés (oubliés compris), accusés sur soi. */
+    const announcedByOthers = [...[...accepted.values()].map((s) => s.epoch), ...acksOnSelf.map((a) => a.epoch)];
+    // Pour le verdict de `canPublish`, ajouter son propre état et les accusés à `announced` ne change jamais rien (`ownStateOk` ou
+    // `acksOnSelf > 0` autorisent déjà) : seuls les états des autres appareils décident ici. Ils sont passés pour que le compteur `files` du
+    // journal `publish-deferred` et la liste `announced` soient ceux de la même règle que le réarmement.
+    const listedFiles = listedFilesForPublish(ownScan?.epochs ?? [], { currentEpoch, announced: [...announcedByOthers, ...(ownState ? [ownState.epoch] : [])], ignored: orphanLeft });
+    const files = listedFiles.counted;
     const openedHere =
       currentEpoch === localEpoch &&
       folderE === null &&
@@ -914,7 +927,17 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       }
       await repos.sync.saveState(self, { epoch: currentEpoch, cursorSegment: head.segment, cursorRecord: head.record, ackHlc: head.hlc, headSegment: head.segment, headRecord: head.record, headHlc: head.hlc });
     } else {
-      logger.log('publish-deferred', { reason: 'own-state-unknown' });
+      // Y-IOS-02-FIX-02 (critère 11) : cause réelle, statuts et compteurs seulement (liste fermée des statuts du scan, jamais de nom de
+      // fichier, de clé ni de chemin). `own-state-missing` : son état est connu comme absent (ni illisible, ni dans le nuage).
+      const ownStatus: OwnStateLogStatus = ownScan?.stateStatus ?? OWN_STATE_ABSENT;
+      logger.log('publish-deferred', {
+        reason: ownStatus === 'missing' || ownStatus === OWN_STATE_ABSENT ? 'own-state-missing' : 'own-state-unknown',
+        state: ownStatus,
+        files,
+        ignored: listedFiles.ignoredSnapshots,
+        acks: acksOnSelf.length,
+        localSeq,
+      });
       // Exigence d'Ali : jamais « À jour » ni silence quand cet appareil ne peut pas publier (avertissement visible dans Détails et en bandeau).
       seen.warnings = [...(seen.warnings ?? []), 'publish-blocked'];
     }
@@ -923,7 +946,13 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // toujours publiée (forcée) tant que l'époque visée n'est pas ouverte.
     const announcing = noticeToPublish(directive, currentEpoch) !== null;
     const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || ownState?.epoch !== currentEpoch || announcing;
-    if (publishAllowed) await writeState(await nextState(head), forceState);
+    if (publishAllowed && !(await writeState(await nextState(head), forceState))) {
+      // Revue Y-IOS-02-FIX-02, point 1 (§24 point 10 (a)) : état refusé par Rust (`state-mismatch`, déjà journalisé `write-state-failed` ;
+      // ou plus de 64 accusés) : jamais « À jour » ni silence. Cas résiduel : `state.ctx` supprimé par un tiers, base restaurée à `stateSeq` 0,
+      // aucun accusé, seul un instantané d'une ancienne époque jamais annoncée : le moteur propose `stateSeq` 1, Rust (maître) refuse.
+      logger.log('publish-deferred', { reason: 'state-refused', state: ownScan?.stateStatus ?? OWN_STATE_ABSENT, files, ignored: listedFiles.ignoredSnapshots, acks: acksOnSelf.length, localSeq });
+      seen.warnings = [...(seen.warnings ?? []), 'publish-blocked'];
+    }
     if (announcing && directive.kind === 'initiator') {
       // §14.3 étapes 3 et 4 : annonce publiée sous l'ancienne clé, puis époque visée ouverte sous la nouvelle (instantané, état).
       const announced = (lastWritten as PublishedDeviceState | null)?.reset ?? null;
@@ -981,6 +1010,32 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       await maintain(deps, { epoch: currentEpoch, head, accepted: live, ownScan, rows: await repos.sync.getStates(), coverage: coverage(), revived: forgetView.revived.filter((r) => r.done).map((r) => r.deviceId), keepOldEpochs: resetActive(directive) });
     }
 
+    // Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : mémo `orphanEpoch` perdu (effacé sur un listing iCloud transitoire, suppression locale non
+    // propagée) alors qu'une époque jamais annoncée ne garde que des instantanés dans son dossier : réarmé, puis supprimé par la voie unique
+    // ci-dessous. Jamais pendant une réinitialisation (époque visée annoncée dans `state.next.ctx`), jamais sans son propre état publié connu,
+    // jamais tant qu'un autre appareil non oublié a un état qui ne se lit pas à ce scan (revue, point 2 : son annonce échapperait au contrôle,
+    // et `sync_delete_own` ne protège que l'époque courante) : illisible, dans le nuage, en attente (`unreadable`), ou non accepté
+    // (étranger, rejoué, trop grand, version plus récente).
+    // Un dossier sans `state.ctx` ni fichier n'annonce rien.
+    const othersReadable =
+      unreadable.length === 0 &&
+      scan.devices.every((d) => d.deviceId === self || forgetView.order.has(d.deviceId) || accepted.has(d.deviceId) || (d.stateStatus === 'missing' && d.epochs.length === 0 && d.pending.length === 0));
+    if (directive.kind === 'none' && othersReadable && (await readJson<{ epoch: EpochId }>(repos, META.orphanEpoch)) === null) {
+      const relisted = relistedOrphanEpochs({
+        self,
+        ownEpochs: ownScan?.epochs ?? [],
+        currentEpoch,
+        localEpoch: await readJson<EpochId>(repos, META.epoch),
+        ownAnnounced: (lastWritten ?? ownState)?.epoch ?? null,
+        announced: announcedByOthers,
+      });
+      const first = relisted[0];
+      if (first !== undefined) {
+        await writeJson(repos, META.orphanEpoch, { epoch: first });
+        // Époque tronquée (numéro et 8 premiers caractères de l'ouvreur) : lisible dans l'export, jamais masquée comme un jeton.
+        logger.log('orphan-epoch-relisted', { epoch: first.slice(0, 14) });
+      }
+    }
     // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
     if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) {
       try {

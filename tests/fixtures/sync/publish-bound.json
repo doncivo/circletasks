@@ -1,0 +1,16 @@
+{
+  "about": "Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : fichiers listés de son propre dossier qui bornent la publication (listedFilesForPublish, src/domain/sync/epoch.ts). Table commune avec Rust (src-tauri/tests/desktop/sync_publish_bound.rs) : pour chaque cas qui porte rustBounds, `rebuild_own` retient l'époque (own.json la désigne, une époque plus petite est refusée) si et seulement si rustBounds est vrai. Époques : current = e0001-56d4…, other = e0001-ef50… (non courante, ouverte par l'appareil).",
+  "cases": [
+    { "name": "orpheline : instantané seul, jamais annoncée", "epochs": [{ "role": "other", "announced": false, "segments": 0, "snapshots": 1 }], "counted": 0, "ignored": 1, "canPublish": true, "rustBounds": false },
+    { "name": "orpheline : deux instantanés, jamais annoncée", "epochs": [{ "role": "other", "announced": false, "segments": 0, "snapshots": 2 }], "counted": 0, "ignored": 2, "canPublish": true, "rustBounds": false },
+    { "name": "non courante non annoncée : instantané plus segment", "epochs": [{ "role": "other", "announced": false, "segments": 1, "snapshots": 1 }], "counted": 2, "ignored": 0, "canPublish": false, "rustBounds": true },
+    { "name": "non courante non annoncée : segments seuls", "epochs": [{ "role": "other", "announced": false, "segments": 2, "snapshots": 0 }], "counted": 2, "ignored": 0, "canPublish": false, "rustBounds": true },
+    { "name": "non courante annoncée : instantané seul", "epochs": [{ "role": "other", "announced": true, "segments": 0, "snapshots": 1 }], "counted": 1, "ignored": 0, "canPublish": false },
+    { "name": "non courante annoncée : instantané plus segment", "epochs": [{ "role": "other", "announced": true, "segments": 1, "snapshots": 1 }], "counted": 2, "ignored": 0, "canPublish": false },
+    { "name": "courante : instantané seul", "epochs": [{ "role": "current", "announced": false, "segments": 0, "snapshots": 1 }], "counted": 1, "ignored": 0, "canPublish": false },
+    { "name": "courante : instantané plus segment", "epochs": [{ "role": "current", "announced": false, "segments": 1, "snapshots": 1 }], "counted": 2, "ignored": 0, "canPublish": false },
+    { "name": "courante vide et orpheline listée", "epochs": [{ "role": "current", "announced": false, "segments": 0, "snapshots": 0 }, { "role": "other", "announced": false, "segments": 0, "snapshots": 1 }], "counted": 0, "ignored": 1, "canPublish": true },
+    { "name": "orpheline déjà abandonnée (mémo posé) : ignorée", "epochs": [{ "role": "other", "announced": false, "segments": 0, "snapshots": 1, "abandoned": true }], "counted": 0, "ignored": 1, "canPublish": true },
+    { "name": "aucun fichier", "epochs": [], "counted": 0, "ignored": 0, "canPublish": true }
+  ]
+}

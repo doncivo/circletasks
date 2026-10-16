@@ -441,6 +441,24 @@ class FolderBookmarkPlugin: Plugin {
     return try result.get()
   }
 
+  /// Suppression coordonnée (`forDeleting`, Y-IOS-02-FIX-02) : iCloud propage la suppression de l'élément, y compris d'un fichier évincé
+  /// par iOS (« Optimiser le stockage ») dont il ne reste localement que le substitut `.<nom>.icloud`.
+  private func coordinatedDelete<T>(_ url: URL, _ body: @escaping () throws -> T) throws -> T {
+    let coordinator = NSFileCoordinator(filePresenter: nil)
+    var coordinationError: NSError?
+    var outcome: Result<T, Error>?
+    coordinator.coordinate(writingItemAt: url, options: .forDeleting, error: &coordinationError) { _ in
+      outcome = Result<T, Error>(catching: { try body() })
+    }
+    if coordinationError != nil {
+      throw Failure(code: .io)
+    }
+    guard let result = outcome else {
+      throw Failure(code: .io)
+    }
+    return try result.get()
+  }
+
   /// Renommage coordonné (revue, audit) : source `forMoving`, destination `forReplacing`, le coordinateur prévenu du déplacement.
   private func coordinatedMove<T>(_ from: URL, _ to: URL, _ body: @escaping () throws -> T) throws -> T {
     let coordinator = NSFileCoordinator(filePresenter: nil)
@@ -1019,7 +1037,9 @@ class FolderBookmarkPlugin: Plugin {
     }
   }
 
-  /// Suppression d'un fichier ; `removed` faux s'il n'existait pas ; un lien ou un dossier : `unsafe-folder`.
+  /// Suppression d'un fichier ; `removed` faux s'il n'existait pas ; un lien ou un dossier : `unsafe-folder`. Y-IOS-02-FIX-02 : un fichier
+  /// évincé par iOS (seul reste le substitut `.<nom>.icloud`, que `list` présente sous le nom réel, disponibilité `cloud`) est supprimé en
+  /// supprimant son substitut, sous la coordination `forDeleting` (suppression propagée à iCloud) : `removed` vrai.
   @objc public func remove(_ invoke: Invoke) {
     guard let input = args(invoke, PathArgs.self) else {
       return
@@ -1028,17 +1048,17 @@ class FolderBookmarkPlugin: Plugin {
       let (root, rootPath) = try self.sessionRoot()
       let (dir, name) = try self.split(input.path)
       let url = self.itemURL(root, input.path)
-      return try self.coordinatedWrite(url, replacing: false) { () throws -> JsonObject in
+      return try self.coordinatedDelete(url) { () throws -> JsonObject in
         guard let dirFd = try self.openDirectory(rootPath, dir, create: false) else {
           return ["removed": false]
         }
         defer { close(dirFd) }
         var st = stat()
         if fstatat(dirFd, name, &st, AT_SYMLINK_NOFOLLOW) != 0 {
-          if errno == ENOENT {
-            return ["removed": false]
+          if errno != ENOENT {
+            throw Failure(code: .io)
           }
-          throw Failure(code: .io)
+          return try self.removePlaceholder(dirFd, name)
         }
         if !self.isRegular(st.st_mode) {
           throw Failure(code: .unsafeFolder)
@@ -1054,7 +1074,32 @@ class FolderBookmarkPlugin: Plugin {
     }
   }
 
-  /// Suppression d'un dossier vide (sans effet s'il ne l'est pas, ou s'il n'existe pas).
+  /// Y-IOS-02-FIX-02 : le fichier `name` est absent ; s'il a été évincé, son substitut `.<name>.icloud` (fichier ordinaire, un seul lien
+  /// physique, jamais un lien) est supprimé. Appelé sous la coordination `forDeleting` de `remove`. Aucun nom ni chemin dans les erreurs.
+  private func removePlaceholder(_ dirFd: Int32, _ name: String) throws -> JsonObject {
+    let placeholder = placeholderName(name)
+    var st = stat()
+    if fstatat(dirFd, placeholder, &st, AT_SYMLINK_NOFOLLOW) != 0 {
+      if errno == ENOENT {
+        return ["removed": false]
+      }
+      throw Failure(code: .io)
+    }
+    if !isRegular(st.st_mode) || st.st_nlink > 1 {
+      throw Failure(code: .unsafeFolder)
+    }
+    if unlinkat(dirFd, placeholder, 0) != 0 {
+      let error = errno
+      if error == ENOENT {
+        return ["removed": false]
+      }
+      throw Failure(code: codeOf(error))
+    }
+    return ["removed": true]
+  }
+
+  /// Suppression d'un dossier vide (sans effet s'il ne l'est pas, ou s'il n'existe pas), sous la coordination `forDeleting`. Les substituts
+  /// `.<nom>.icloud` d'un dossier d'époque sont supprimés avant par `remove` (un par fichier listé) : le dossier est alors vide.
   @objc public func removeEmptyDir(_ invoke: Invoke) {
     guard let input = args(invoke, PathArgs.self) else {
       return
@@ -1063,7 +1108,7 @@ class FolderBookmarkPlugin: Plugin {
       let (root, rootPath) = try self.sessionRoot()
       let (dir, name) = try self.split(input.path)
       let url = self.itemURL(root, input.path)
-      return try self.coordinatedWrite(url, replacing: false) { () throws -> JsonObject in
+      return try self.coordinatedDelete(url) { () throws -> JsonObject in
         guard let parentFd = try self.openDirectory(rootPath, dir, create: false) else {
           return [:]
         }

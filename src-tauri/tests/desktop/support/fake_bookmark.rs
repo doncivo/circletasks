@@ -68,6 +68,18 @@ fn key(parts: &[String]) -> String {
     parts.join("/")
 }
 
+/// Y-IOS-02-FIX-02 : substitut `.<nom>.icloud` d'un fichier évincé par iOS (« Optimiser le stockage »), même règle que `placeholderName` du Swift.
+pub fn placeholder_key(path: &[String]) -> String {
+    let (name, dir) = path.split_last().expect("chemin non vide");
+    let stub = format!(".{name}.icloud");
+    if dir.is_empty() { stub } else { format!("{}/{stub}", key(dir)) }
+}
+
+/// Nom réel d'un substitut `.<nom>.icloud` (même règle que `placeholderTarget` du Swift).
+fn placeholder_target(name: &str) -> Option<&str> {
+    name.strip_prefix('.').and_then(|rest| rest.strip_suffix(".icloud")).filter(|target| !target.is_empty())
+}
+
 fn ok(value: Value) -> Result<Value, String> {
     Ok(value)
 }
@@ -115,6 +127,24 @@ impl FakePlugin {
     pub fn put_cloud(&self, parts: &[&str], bytes: &[u8], delay_ms: u64, error: bool) {
         self.mkdir(&parts[..parts.len() - 1]);
         self.state.lock().unwrap().nodes.insert(parts.join("/"), Node::File { bytes: bytes.to_vec(), cloud: true, delay_ms, download_error: error });
+    }
+
+    /// Y-IOS-02-FIX-02 : fichier évincé par iOS : seul le substitut `.<nom>.icloud` reste dans le dossier (listé sous le nom réel, `cloud`).
+    pub fn put_evicted(&self, parts: &[&str], bytes: &[u8]) {
+        self.mkdir(&parts[..parts.len() - 1]);
+        let path: Vec<String> = parts.iter().map(|p| (*p).to_owned()).collect();
+        self.state.lock().unwrap().nodes.insert(placeholder_key(&path), Node::File { bytes: bytes.to_vec(), cloud: true, delay_ms: 0, download_error: false });
+    }
+
+    /// Vrai si le substitut `.<nom>.icloud` de `parts` existe encore.
+    pub fn has_placeholder(&self, parts: &[&str]) -> bool {
+        let path: Vec<String> = parts.iter().map(|p| (*p).to_owned()).collect();
+        self.state.lock().unwrap().nodes.contains_key(&placeholder_key(&path))
+    }
+
+    /// Vrai si l'entrée `parts` (dossier ou fichier) existe.
+    pub fn exists(&self, parts: &[&str]) -> bool {
+        self.state.lock().unwrap().nodes.contains_key(&parts.join("/"))
     }
 
     /// Lien symbolique (sous la racine) à la place de l'entrée `parts` (et de tout ce qu'elle contenait).
@@ -256,6 +286,7 @@ impl FakePlugin {
                     return ok(absent);
                 }
                 ok(match state.nodes.get(&key(&path)) {
+                    None if matches!(state.nodes.get(&placeholder_key(&path)), Some(Node::File { .. })) => json!({ "exists": true, "isDir": false, "size": null, "availability": "cloud" }),
                     None => absent,
                     Some(Node::Link) => json!({ "exists": true, "isDir": false, "size": null, "availability": "error" }),
                     Some(Node::Dir) => json!({ "exists": true, "isDir": true, "size": null, "availability": "local" }),
@@ -277,6 +308,10 @@ impl FakePlugin {
                         truncated = true;
                         break;
                     }
+                    if let (Some(target), Node::File { .. }) = (placeholder_target(name), node) {
+                        entries.push(json!({ "name": target, "isDir": false, "size": null, "availability": "cloud" }));
+                        continue;
+                    }
                     entries.push(match node {
                         Node::Dir => json!({ "name": name, "isDir": true, "size": null, "availability": "local" }),
                         Node::Link => json!({ "name": name, "isDir": false, "size": null, "availability": "error" }),
@@ -295,6 +330,7 @@ impl FakePlugin {
                     return ok(json!({ "missing": true }));
                 }
                 match state.nodes.get(&key(&path)) {
+                    None if state.nodes.contains_key(&placeholder_key(&path)) => reject("cloud-pending"),
                     None => ok(json!({ "missing": true })),
                     Some(Node::Link) | Some(Node::Dir) => reject("unsafe-folder"),
                     Some(Node::File { cloud: true, .. }) => reject("cloud-pending"),
@@ -416,7 +452,16 @@ impl FakePlugin {
                     return ok(json!({ "removed": false }));
                 }
                 match state.nodes.get(&key(&path)) {
-                    None => ok(json!({ "removed": false })),
+                    // Y-IOS-02-FIX-02 : contrat Swift attendu (`remove` / `removePlaceholder`) : fichier évincé → son substitut est supprimé
+                    // (coordination `forDeleting`, propagée à iCloud), `removed` vrai. Ce faux ne fait que refléter ce contrat.
+                    None => match state.nodes.get(&placeholder_key(&path)) {
+                        Some(Node::File { .. }) => {
+                            state.nodes.remove(&placeholder_key(&path));
+                            ok(json!({ "removed": true }))
+                        }
+                        Some(_) => reject("unsafe-folder"),
+                        None => ok(json!({ "removed": false })),
+                    },
                     Some(Node::File { .. }) => {
                         state.nodes.remove(&key(&path));
                         ok(json!({ "removed": true }))

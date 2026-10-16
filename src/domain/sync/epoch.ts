@@ -84,11 +84,92 @@ export function ownBounds(src: OwnSources): OwnBounds {
 
 /**
  * Peut-on publier ? Oui si son propre état est authentifié, si un accusé d'un autre appareil sur soi fournit une borne, ou si
- * l'appareil n'a jamais rien publié (aucun fichier listé, aucun accusé, aucune trace locale) — section 1.4.
+ * l'appareil n'a jamais rien publié (aucun fichier listé qui borne, aucun accusé, aucune trace locale) — section 1.4. `listedFiles` :
+ * `listedFilesForPublish(...).counted` (Y-IOS-02-FIX-02, §24 point 10).
  */
 export function canPublish(src: { readonly ownStateOk: boolean; readonly acksOnSelf: number; readonly listedFiles: number; readonly localStateSeq: number }): boolean {
   if (src.ownStateOk || src.acksOnSelf > 0) return true;
   return src.listedFiles === 0 && src.localStateSeq === 0;
+}
+
+/** Époque listée dans son propre dossier (forme du scan). */
+export interface OwnEpochListing {
+  readonly epoch: EpochId;
+  readonly segments: readonly number[];
+  readonly snapshots: readonly number[];
+}
+
+/** Sources qui disent si une époque de son dossier a été annoncée (états authentifiés, accusés) ou doit être ignorée. */
+export interface ListedFilesContext {
+  readonly currentEpoch: EpochId;
+  /**
+   * Époques annoncées par une source authentifiée : son propre état publié, les états acceptés des autres appareils, leurs accusés sur
+   * soi. Une époque n'existe pour les autres appareils que par l'une d'elles.
+   */
+  readonly announced: readonly EpochId[];
+  /** Époque orpheline déjà abandonnée (`sync_meta.orphanEpoch`) : aucun de ses fichiers ne compte, sauf si c'est l'époque courante. */
+  readonly ignored?: EpochId | null;
+}
+
+/**
+ * Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : nombre de fichiers listés de son propre dossier qui **bornent** la publication (`listedFiles`
+ * de `canPublish`), et nombre d'instantanés ignorés (journal `publish-deferred`). Seule écriture de la règle ; le moteur ne fait que
+ * l'appeler.
+ * - Un segment compte toujours, dans n'importe quelle époque : il prouve un état publié (sa tête). Un état supprimé par un tiers avec
+ *   une base restaurée garde ses segments listés : le refus de publier tient toujours.
+ * - Un instantané compte s'il est dans l'époque courante (il prouve une publication antérieure, sauf à l'ouverture, déjà couverte par
+ *   `openedHere`), dans une époque annoncée par une source authentifiée, ou dans une époque qui a un segment.
+ * - Un instantané seul dans une époque non courante jamais annoncée ne borne rien : une époque n'existe pour les autres appareils que
+ *   par un `state.ctx` authentifié qui l'annonce (`folderEpoch`), personne ne l'a donc acceptée (reste d'une orpheline, §24 point 4 (e)).
+ * Même règle que Rust (`rebuild_own` ne retient que les époques listées qui ont un segment authentifié), qui reste maître de `stateSeq`
+ * (`sync_write_state` refuse tout numéro non croissant). Table commune : `tests/fixtures/sync/publish-bound.json`.
+ */
+export function listedFilesForPublish(ownEpochs: readonly OwnEpochListing[], ctx: ListedFilesContext): { readonly counted: number; readonly ignoredSnapshots: number } {
+  let counted = 0;
+  let ignoredSnapshots = 0;
+  for (const e of ownEpochs) {
+    const current = e.epoch === ctx.currentEpoch;
+    if (!current && e.epoch === (ctx.ignored ?? null)) {
+      ignoredSnapshots += e.snapshots.length;
+      continue;
+    }
+    counted += e.segments.length;
+    if (current || e.segments.length > 0 || ctx.announced.includes(e.epoch)) counted += e.snapshots.length;
+    else ignoredSnapshots += e.snapshots.length;
+  }
+  return { counted, ignoredSnapshots };
+}
+
+/**
+ * Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : époques de son propre dossier à supprimer comme restes d'orpheline quand le mémo
+ * `sync_meta.orphanEpoch` a été perdu (effacé sur un listing iCloud transitoire, suppression locale non propagée). Une époque l'est si :
+ * ouverte par cet appareil, **plus grande** que l'époque courante, des instantanés et aucun segment, ni l'époque locale (`sync_meta.epoch`),
+ * jamais annoncée (ni par son propre état publié, ni par un état ou un accusé d'un autre appareil). Son propre état publié doit être
+ * **connu** (`ownAnnounced` non nul : écrit dans ce cycle ou lu au scan) : sinon rien n'est retenu. Triées, la plus petite d'abord.
+ * Pourquoi « plus grande » : l'époque de `own.json` ne recule jamais (Rust refuse toute écriture dans une époque plus ancienne), sauf par
+ * l'abandon d'une orpheline (preuve : aucun segment). Une époque plus grande que la courante n'a donc jamais reçu un segment de cet appareil,
+ * même si un listing iCloud transitoire en cache une partie : sa suppression ne peut rien effacer de publié. Une orpheline plus petite que
+ * l'époque courante ne borne déjà plus la publication (`listedFilesForPublish`) et part avec les anciennes époques (`maintain`).
+ */
+export function relistedOrphanEpochs(input: {
+  readonly self: DeviceId;
+  readonly ownEpochs: readonly OwnEpochListing[];
+  readonly currentEpoch: EpochId;
+  readonly localEpoch: EpochId | null;
+  /** Époque annoncée par son propre état publié ; null : état inconnu. */
+  readonly ownAnnounced: EpochId | null;
+  /** Époques des états acceptés des autres appareils et de leurs accusés sur soi. */
+  readonly announced: readonly EpochId[];
+}): EpochId[] {
+  if (input.ownAnnounced === null) return [];
+  const out: EpochId[] = [];
+  for (const e of input.ownEpochs) {
+    if (e.segments.length > 0 || e.snapshots.length === 0) continue;
+    if (parseEpochId(e.epoch)?.opener !== input.self || parseEpochId(input.currentEpoch) === null) continue;
+    if (compareEpochs(e.epoch, input.currentEpoch) <= 0 || e.epoch === input.localEpoch || e.epoch === input.ownAnnounced || input.announced.includes(e.epoch)) continue;
+    out.push(e.epoch);
+  }
+  return out.sort(compareEpochs);
 }
 
 /**
@@ -104,7 +185,7 @@ export function isOrphanEpoch(input: {
   readonly acksOnSelf: number;
   readonly localStateSeq: number;
   readonly storedSnapshot: { readonly epoch: EpochId; readonly seq: number } | null;
-  readonly ownEpochs: readonly { readonly epoch: EpochId; readonly segments: readonly number[]; readonly snapshots: readonly number[] }[];
+  readonly ownEpochs: readonly OwnEpochListing[];
 }): boolean {
   if (input.epoch === null || input.ownStateOk || input.ownStateStatus !== 'missing' || input.acksOnSelf !== 0 || input.localStateSeq !== 0) return false;
   if (input.storedSnapshot?.epoch !== input.epoch || input.ownEpochs.length !== 1) return false;

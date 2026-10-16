@@ -8,6 +8,8 @@ Dépend de : Y-IOS-02 (fait), Y-07 (statuts, textes de motifs de synchro), A-09 
 
 Constat de la séance iPhone 0.3.0 (2026-10-10) : après l'abandon de son époque orpheline, le fichier `s-00000001.cts` de l'ancienne époque de l'iPhone est **resté** dans `devices/<iPhone>/e0001-<iPhone>/` du dossier iCloud. La suppression (`retryOrphanDeletion` de `src/sync/orphanEpoch.ts`) a échoué ; le moteur journalise `orphan-epoch-delete-failed` avec son code et la retente à chaque cycle, **mais rien n'est montré à l'utilisateur**. Or tant que ce fichier existe, `canPublish` (`src/domain/sync/epoch.ts`, `listedFiles`) refuse la publication, et l'iPhone n'affiche que « Cet appareil n'a pas encore publié son état : vos autres appareils ne voient pas ses modifications », **sans dire pourquoi**. C'est un blocage durable sans cause visible, contraire à la règle d'Ali « aucun échec silencieux » (mémoire projet : tout blocage durable visible dans l'app, pas seulement dans les logs).
 
+**Mise à jour du 2026-10-16** : la séance 0.3.2 a montré que la prémisse « le moteur retente et journalise » était fausse dans le cas réel (le mémo `orphanEpoch` avait été effacé alors que le fichier restait) ; la cause du blocage est corrigée par **Y-IOS-02-FIX-02**, qui lève le « `canPublish` inchangé » de cette fiche ; la présente story reste utile pour afficher un échec de suppression (statut inchangé : à faire).
+
 Rappel du mécanisme : `sync_meta.orphanEpoch` (`META.orphanEpoch`, `{ epoch }`) est posé à l'abandon et effacé à la suppression réussie, ou quand l'époque n'est plus listée (`orphan-epoch-cleared`). L'échec n'est aujourd'hui gardé nulle part : il faut le persister.
 
 ## Références visuelles

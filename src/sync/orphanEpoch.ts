@@ -55,7 +55,8 @@ export async function abandonOrphan(deps: SyncDeps, orphan: EpochId): Promise<Ab
 
 /**
  * Point 4 (e) : fichiers de l'orpheline abandonnée, supprimés au mieux par `sync_delete_own` (l'époque n'est plus courante). Échec : journal avec
- * son code (comme les autres suppressions de l'étape 7), retenté à chaque cycle ; ni la lecture ni la publication n'attendent.
+ * son code (comme les autres suppressions de l'étape 7), retenté à chaque cycle ; ni la lecture ni la publication n'attendent. Seule voie de
+ * suppression, aussi pour une orpheline dont le mémo perdu a été réarmé par le moteur (`orphan-epoch-relisted`, Y-IOS-02-FIX-02, §24 point 10).
  */
 export async function retryOrphanDeletion(deps: SyncDeps, ownScan: DeviceScan | null, currentEpoch: EpochId): Promise<void> {
   const { data, platform, logger } = deps;
@@ -69,9 +70,12 @@ export async function retryOrphanDeletion(deps: SyncDeps, ownScan: DeviceScan | 
   }
   deps.deadline?.check('delete-own');
   try {
-    await platform.deleteOwn([{ epoch: left.epoch, kind: 'epoch' }]);
+    const deleted = await platform.deleteOwn([{ epoch: left.epoch, kind: 'epoch' }]);
     await writeJson(repos, META.orphanEpoch, null);
-    logger.log('orphan-epoch-deleted', { epoch: left.epoch });
+    // Revue Y-IOS-02-FIX-02, point 4 : `orphan-epoch-deleted` seulement si un fichier a été effacé ; sinon l'époque listée n'existait déjà
+    // plus sur le disque (suppression locale pas encore propagée par iCloud) : `orphan-epoch-already-gone`, jamais un faux succès.
+    if (deleted > 0) logger.log('orphan-epoch-deleted', { epoch: left.epoch });
+    else logger.log('orphan-epoch-already-gone', { epoch: left.epoch.slice(0, 14) });
   } catch (error) {
     if (isCycleInterrupted(error)) throw error;
     logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
