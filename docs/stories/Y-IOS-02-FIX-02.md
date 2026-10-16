@@ -1,6 +1,6 @@
 # Y-IOS-02-FIX-02 — Publication bloquée par un instantané orphelin resté dans iCloud
 
-Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.2, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine `src/domain/sync/`, journal) et **ios-mobile** (vérification réelle sur l'iPhone, checklist de l'ordre 5) · Relectures : qa-test, code-reviewer · Statut : en cours (décision d'Ali du 2026-10-16 : « corrige cette cause, sans réinitialiser »)
+Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.2, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine `src/domain/sync/`, journal) et **ios-mobile** (vérification réelle sur l'iPhone, checklist de l'ordre 5) · Relectures : qa-test, code-reviewer · Statut : fait (code), vérification iPhone 0.3.3 en attente (décision d'Ali du 2026-10-16) ; fusionnée dans main (PR #36, suite CI verte), livrée en 0.3.3 PC et iPhone (PR #37, tags v0.3.3 et ios-v0.3.3). Décision d'origine : « corrige cette cause, sans réinitialiser »
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD. **Lève le « `canPublish` inchangé » de Y-IOS-02-FIX-01** (fiche du 2026-10-10) : la règle de comptage de `canPublish` change ici, sur décision d'Ali.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, journal de synchro). Ne bloque aucune autre story ; Y-IOS-02-FIX-01 reste utile et indépendante (affichage d'un échec de suppression).
 Code en parallèle dans ce worktree : `src/sync`, `src/domain/sync`, tests et ADR 0011 §24 (avenant) ; cette fiche ne touche que `docs/`.
@@ -77,6 +77,22 @@ Tests : Vitest (domaine pur pour `canPublish`, moteur sur faux `SyncFs` et horlo
 2. sync-icloud (moteur) : réarmement `orphan-epoch-relisted`, suppression par `retryOrphanDeletion`, protection contre le listing transitoire (critères 6 à 10).
 3. sync-icloud (journal) : cause réelle de `publish-deferred` (critère 11) ; cas de régression de la séance (critère 16).
 4. sync-icloud puis ios-mobile : avenant ADR 0011 §24, vérification réelle sur l'iPhone (checklist de l'ordre 5) ; qa-test ; code-reviewer ; product-owner vérifie critère par critère et clôt (critères 13 à 15 et 17).
+
+## Clôture (product-owner, 2026-10-16)
+
+Statut : **fait (code)** ; **vérification iPhone 0.3.3 en attente** (décision d'Ali du 2026-10-16). La story ne passe pas à « fait » complet tant que les vérifications manuelles ci-dessous ne sont pas consignées par Ali.
+
+Vérification critère par critère :
+- **Critères 1 à 5** (règle de comptage) : vérifiés par `src/domain/sync/epochPublishBound.test.ts` (cas annoncée / non annoncée, instantané seul / plus segment, époque courante / non courante) et par la parité avec `rebuild_own` dans `src-tauri/tests/desktop/sync_publish_bound.rs` (table `tests/fixtures/sync/publish-bound.json`).
+- **Critères 6 à 10** (réarmement et suppression) : vérifiés par `tests/unit/sync/pairing/orphanRelisted.test.ts` (faux `SyncFs`, horloge injectée, listing transitoire, jamais un autre appareil ni l'époque courante). Ajouts de la revue : réarmement bloqué tant qu'un autre appareil est illisible, `orphan-epoch-already-gone` (fichier déjà absent).
+- **Critère 11** (cause réelle de `publish-deferred`) : vérifié par `orphanRelisted.test.ts` ; un état refusé par Rust est rendu visible (`publish-deferred` raison `state-refused` plus `publish-blocked` levé, jamais « À jour »).
+- **Critère 12** : hors story (décision du 2026-10-16), non évalué.
+- **Critères 13 à 16** (qualité, absence de migration, régression de la séance) : vérifiés par les mêmes fichiers ; le cas de régression de la séance (appareil `ef50…`, `orphanEpoch` nul, instantané seul, `stateSeq` 0) est joué par `orphanRelisted.test.ts` et `sync_publish_bound.rs` ; plugin iOS : faux `src-tauri/tests/desktop/support/fake_bookmark.rs`. Bundle de départ : `tests/bundle/startBundle.test.ts` et `tests/bundle/pairingBundle.test.ts`.
+- **Critère 17** : **remplacé** par le banc Vitest à deux appareils, le test Rust et la vérification réelle sur l'iPhone (le simulateur ne peut pas reproduire le fichier iCloud orphelin). Les deux premiers sont verts ; la vérification réelle reste à faire par Ali.
+
+Revue code-reviewer : **trois passes**, approuvée à la troisième. Points traités : réarmement chargé à la demande (bundle de départ ramené de 350,3 à 349,67 Ko après l'incident CI du budget de bundle) ; `pairingStatus` sorti du bundle de départ (`src/features/sync/pairingHub.ts`) ; refus d'état Rust visible (`state-refused`, `publish-blocked`) ; réarmement bloqué tant qu'un autre appareil est illisible ; journal `orphan-epoch-already-gone` ; plugin iOS folder-bookmark qui supprime le substitut `.icloud` (cause probable, **à confirmer sur l'iPhone**, vérification 8). QA approuvée.
+
+Reste à faire par Ali : les vérifications manuelles 1 à 8 ci-dessous sur l'iPhone en 0.3.3. Si la vérification 8 infirme l'hypothèse du substitut, la dette de `docs/dettes.md` reste ouverte.
 
 ## Vérifications manuelles d'Ali (iPhone, ordre 5)
 
