@@ -13,7 +13,7 @@ import { useAppStatusStore, type StatusSource } from '../app/appStatus';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { clearMarkerFailedMemo, peekMarkerFailedCode } from '../settings/restoreMemoPeek';
-import { onPairingChange, readJoinFailure } from './pairingStatus';
+import { onPairingChange, readJoinFailure } from './pairingHub';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
