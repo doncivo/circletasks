@@ -1,9 +1,9 @@
 import { PAIRING_RESCAN_MS, PAIRING_VALIDITY_MS } from '../../domain/sync/limits';
-import type { JoinFailureFact } from '../../domain/syncBanners';
 import { syncErrorCodeOf, type SyncErrorCode, type SyncPlatform } from '../../platform/sync/types';
 import type { PlainMessageKey } from '../../i18n';
 import type { AppContainer } from '../app/container';
 import { JOIN_META } from '../../sync';
+import { hubOf, notify, parseJoinView, readMetaResult, storageResult, type JoinView } from './pairingHub';
 
 /**
  * Texte d'un échec d'ouverture de la fenêtre `pairing` (jamais une boîte bloquante, Y-06 critère 4). Codes distincts (revue 2) :
@@ -51,47 +51,12 @@ export function pairingOpenErrorKey(code: SyncErrorCode, mode: 'show' | 'import'
 export const PAIRING_FAILURE_META = 'pairingFailure';
 /** Clé de `sync_meta` de l'arrivée en cours : `JOIN_META` du moteur (Y-TECH-02 : une seule constante). */
 export { JOIN_META };
+// Partie chargée au départ (abonnés, `sync_meta`, arrivée en échec) : `pairingHub.ts`, réexportée ici pour les écrans.
+export { onPairingChange, pairingStorageFailed, readJoinFailure, type JoinView, type PairingEvent } from './pairingHub';
 
 export interface PairingFailure {
   readonly mode: 'show' | 'import';
   readonly code: SyncErrorCode;
-}
-
-export interface JoinView {
-  readonly done: number;
-  readonly total: number;
-  readonly failure: string | null;
-}
-
-/** Lecture ou écriture de `sync_meta` en échec (aucun échec silencieux) : vrai jusqu'au prochain accès réussi. */
-function storageResult(container: AppContainer, failed: boolean): void {
-  const hub = hubOf(container);
-  if (hub.storageFailed === failed) return;
-  hub.storageFailed = failed;
-  notify(container);
-}
-
-export function pairingStorageFailed(container: AppContainer): boolean {
-  return hubOf(container).storageFailed;
-}
-
-/** Lecture de `sync_meta` : valeur analysée et `readable` faux si la base n'a pas répondu (signalé par `storageResult`). */
-async function readMetaResult(container: AppContainer, key: string): Promise<{ readonly value: unknown; readonly readable: boolean }> {
-  let raw: string | null;
-  try {
-    raw = await container.data.repos.sync.getMeta(key);
-  } catch {
-    storageResult(container, true);
-    return { value: null, readable: false };
-  }
-  storageResult(container, false);
-  if (raw === null) return { value: null, readable: true };
-  try {
-    return { value: JSON.parse(raw) as unknown, readable: true };
-  } catch {
-    // Valeur illisible (écrite par une version plus ancienne ?) : traitée comme absente, jamais comme une panne de la base.
-    return { value: null, readable: true };
-  }
 }
 
 async function readMeta(container: AppContainer, key: string): Promise<unknown> {
@@ -107,6 +72,10 @@ async function writeMeta(container: AppContainer, key: string, value: unknown): 
   }
 }
 
+export async function readJoinView(container: AppContainer): Promise<JoinView | null> {
+  return parseJoinView(await readMeta(container, JOIN_META));
+}
+
 export async function readPairingFailure(container: AppContainer): Promise<PairingFailure | null> {
   const value = await readMeta(container, PAIRING_FAILURE_META);
   if (typeof value !== 'object' || value === null) return null;
@@ -115,59 +84,7 @@ export async function readPairingFailure(container: AppContainer): Promise<Pairi
   return { mode, code: syncErrorCodeOf({ code }) };
 }
 
-function parseJoinView(value: unknown): JoinView | null {
-  if (typeof value !== 'object' || value === null) return null;
-  const { done, total, failure } = value as Record<string, unknown>;
-  if (typeof done !== 'number' || typeof total !== 'number') return null;
-  return { done, total, failure: typeof failure === 'string' ? failure : null };
-}
-
-export async function readJoinView(container: AppContainer): Promise<JoinView | null> {
-  return parseJoinView(await readMeta(container, JOIN_META));
-}
-
-/**
- * Arrivée en échec pour le bandeau A-09 (critère 9 f) : même lecture et même analyse que `JoinProgress` (une seule source, revue 6) ;
- * `readable` faux si la base n'a pas répondu (l'appelant garde alors l'état précédent et signale la lecture en échec).
- */
-export async function readJoinFailure(container: AppContainer): Promise<{ readonly failure: JoinFailureFact | null; readonly readable: boolean }> {
-  const { value, readable } = await readMetaResult(container, JOIN_META);
-  const view = parseJoinView(value);
-  return { failure: view?.failure ? { done: view.done, total: view.total, failure: view.failure } : null, readable };
-}
-
 // --- abonnés et relance pendant l'affichage --------------------------------------------------------------------------------------
-
-interface PairingHub {
-  readonly listeners: Set<(event: PairingEvent) => void>;
-  stopWatch: (() => void) | null;
-  storageFailed: boolean;
-}
-
-const hubs = new WeakMap<AppContainer, PairingHub>();
-
-function hubOf(container: AppContainer): PairingHub {
-  let hub = hubs.get(container);
-  if (!hub) {
-    hub = { listeners: new Set(), stopWatch: null, storageFailed: false };
-    hubs.set(container, hub);
-  }
-  return hub;
-}
-
-/** `changed` : échec gardé ou effacé ; `paired` : appareil associé (`sync-paired`) ; `paired-sync-failed` : associé, mais le cycle qui suit a échoué. */
-export type PairingEvent = 'changed' | 'paired' | 'paired-sync-failed';
-
-/** Changement de l'état d'association ; renvoie le désabonnement. */
-export function onPairingChange(container: AppContainer, listener: (event: PairingEvent) => void): () => void {
-  const hub = hubOf(container);
-  hub.listeners.add(listener);
-  return () => hub.listeners.delete(listener);
-}
-
-function notify(container: AppContainer, event: PairingEvent = 'changed'): void {
-  for (const listener of hubOf(container).listeners) listener(event);
-}
 
 /**
  * Ouvre la fenêtre `pairing` depuis `main`. Réussite : échec gardé effacé ; en mode `show`, relance d'un cycle toutes les 10 s pendant

@@ -1,7 +1,10 @@
 import type { EpochId } from '../domain/sync/format';
 import { hlcDevice } from '../domain/sync/parse';
 import { isCycleInterrupted } from './deadline';
-import type { DeviceScan } from '../platform/sync/types';
+import type { DeviceScan, FolderScan } from '../platform/sync/types';
+import type { DeviceId } from '../domain/types';
+import type { PublishedDeviceState } from '../domain/sync/format';
+import { relistedOrphanEpochs } from '../domain/sync/orphanRelist';
 import type { SyncDeps } from './deps';
 import { queueOwnRowsForRepublish } from './epochSwitch';
 import { META, readJson, writeJson } from './meta';
@@ -80,4 +83,47 @@ export async function retryOrphanDeletion(deps: SyncDeps, ownScan: DeviceScan | 
     if (isCycleInterrupted(error)) throw error;
     logger.log('orphan-epoch-delete-failed', { code: syncErrorCodeOf(error) });
   }
+}
+
+/**
+ * Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : mémo `orphanEpoch` perdu (cause racine : substitut `.icloud` d'un fichier évincé que le plugin ne
+ * supprimait pas) alors qu'une époque jamais annoncée ne garde que des instantanés dans son dossier : réarmé, puis supprimé par la voie unique
+ * (`retryOrphanDeletion`). Jamais sans son propre état publié connu, jamais tant qu'un autre appareil non oublié a un état qui ne se lit pas
+ * à ce scan (revue, point 2 : son annonce échapperait au contrôle, et `sync_delete_own` ne protège que l'époque courante) : illisible, dans
+ * le nuage, en attente (`unreadable`), ou non accepté (étranger, rejoué, trop grand, version plus récente). Un dossier sans `state.ctx` ni
+ * fichier n'annonce rien. Le moteur a déjà vérifié : aucune réinitialisation, mémo nul, au moins une époque candidate listée.
+ */
+export async function relistOrphanEpoch(
+  deps: SyncDeps,
+  input: {
+    readonly scan: FolderScan;
+    readonly ownScan: DeviceScan | null;
+    readonly currentEpoch: EpochId;
+    /** Son propre état publié (écrit dans ce cycle, sinon lu au scan). */
+    readonly own: PublishedDeviceState | null;
+    /** Époques des états acceptés des autres appareils et de leurs accusés sur soi. */
+    readonly announced: readonly EpochId[];
+    readonly accepted: ReadonlyMap<DeviceId, PublishedDeviceState>;
+    readonly forgotten: { has(id: DeviceId): boolean };
+    /** Nombre d'appareils dont l'état ne se lit pas à ce scan (`unreadableDevices`). */
+    readonly unreadable: number;
+  },
+): Promise<void> {
+  const { data, logger, deviceId: self } = deps;
+  const othersReadable =
+    input.unreadable === 0 &&
+    input.scan.devices.every((d) => d.deviceId === self || input.forgotten.has(d.deviceId) || input.accepted.has(d.deviceId) || (d.stateStatus === 'missing' && d.epochs.length === 0 && d.pending.length === 0));
+  if (!othersReadable) return;
+  const first = relistedOrphanEpochs({
+    self,
+    ownEpochs: input.ownScan?.epochs ?? [],
+    currentEpoch: input.currentEpoch,
+    localEpoch: await readJson<EpochId>(data.repos, META.epoch),
+    ownAnnounced: input.own?.epoch ?? null,
+    announced: input.announced,
+  })[0];
+  if (first === undefined) return;
+  await writeJson(data.repos, META.orphanEpoch, { epoch: first });
+  // Époque tronquée (numéro et 8 premiers caractères de l'ouvreur) : lisible dans l'export, jamais masquée comme un jeton.
+  logger.log('orphan-epoch-relisted', { epoch: first.slice(0, 14) });
 }

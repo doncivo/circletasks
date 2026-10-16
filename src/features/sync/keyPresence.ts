@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
-import { onPairingChange } from './pairingStatus';
+import { onPairingChange } from './pairingHub';
 import { syncStore } from './syncStore';
 
 /**

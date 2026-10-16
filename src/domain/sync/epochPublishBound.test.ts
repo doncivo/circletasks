@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import table from '../../../tests/fixtures/sync/publish-bound.json';
 import type { DeviceId } from '../types';
 import { epochId, type EpochId } from './format';
-import { canPublish, listedFilesForPublish, relistedOrphanEpochs, type OwnEpochListing } from './epoch';
+import { canPublish, listedFilesForPublish, type OwnEpochListing } from './epoch';
+import { relistedOrphanEpochs } from './orphanRelist';
 
 /**
  * Y-IOS-02-FIX-02 (ADR 0011 §24 point 10) : règle de comptage des fichiers listés qui bornent la publication (critères 1 à 5) et choix des
