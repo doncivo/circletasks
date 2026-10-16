@@ -44,6 +44,9 @@ private struct ActionSpec: Codable {
 private struct CategorySpec: Codable {
   let id: String
   let actions: [ActionSpec]
+  /// Texte d'iOS quand les aperçus sont masqués (écran verrouillé). Facultatif : un fichier de catégories d'une version
+  /// précédente, sans ce champ, se décode toujours (nil).
+  let hiddenPreviewsBodyPlaceholder: String?
 }
 
 private struct RegisterArgs: Decodable {
@@ -375,8 +378,15 @@ class NotificationActionsPlugin: Plugin {
         actions.append(
           UNNotificationAction(identifier: spec.id, title: spec.title, options: spec.foreground ? [.foreground] : []))
       }
-      categories.insert(
-        UNNotificationCategory(identifier: type.id, actions: actions, intentIdentifiers: [], options: []))
+      if let placeholder = type.hiddenPreviewsBodyPlaceholder, !placeholder.isEmpty {
+        categories.insert(
+          UNNotificationCategory(
+            identifier: type.id, actions: actions, intentIdentifiers: [],
+            hiddenPreviewsBodyPlaceholder: placeholder, options: []))
+      } else {
+        categories.insert(
+          UNNotificationCategory(identifier: type.id, actions: actions, intentIdentifiers: [], options: []))
+      }
     }
     UNUserNotificationCenter.current().setNotificationCategories(categories)
   }

@@ -17,6 +17,11 @@ export interface ActionSpec {
 export interface ActionTypeSpec {
   readonly id: string;
   readonly actions: readonly ActionSpec[];
+  /**
+   * Texte affiché par iOS à la place du contenu quand les aperçus sont masqués (écran verrouillé, réglage « Si déverrouillé »).
+   * Ne contient jamais le titre d'un élément : c'est précisément ce qu'iOS masque. Absent : texte iOS par défaut (« Notification »).
+   */
+  readonly hiddenPreviewsBodyPlaceholder?: string;
 }
 
 /** Contenu du fichier natif, lu sans l'effacer. */

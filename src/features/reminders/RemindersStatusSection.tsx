@@ -120,6 +120,11 @@ export function RemindersStatusSection() {
         </p>
       )}
       {availability === 'available' && <p className="ct-recap__statusLine">{t('reminders.status.zoneLimit')}</p>}
+      {iphone && (
+        <p className="ct-recap__statusLine">
+          {t('reminders.status.previewsHelp')}
+        </p>
+      )}
     </section>
   );
 }
