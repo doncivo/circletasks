@@ -120,6 +120,10 @@ fn n03_file_format_keys_are_shared_by_swift_and_ts() {
         assert!(swift_code().contains(field), "{field}");
     }
     assert!(ADAPTER_TS.contains("count: lines, writeFailures"));
+    // N-IOS-FIX-01 : texte des aperçus masqués, facultatif des deux côtés (fichier de catégories ancien toujours lisible).
+    assert!(swift_code().contains("let hiddenPreviewsBodyPlaceholder: String?"));
+    assert!(swift_code().contains("hiddenPreviewsBodyPlaceholder: placeholder"));
+    assert!(ADAPTER_TS.contains("hiddenPreviewsBodyPlaceholder: type.hiddenPreviewsBodyPlaceholder"));
     // Revue : `status` rend l'indicateur relevé sur didFinishLaunching, que l'adaptateur exige.
     assert!(swift_code().contains("\"delegateAtLaunch\": atLaunch") && swift_code().contains("UIApplication.didFinishLaunchingNotification"));
     assert!(ADAPTER_TS.contains("value['delegateAtLaunch']"));

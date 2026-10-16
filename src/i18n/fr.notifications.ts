@@ -26,6 +26,12 @@ export const notificationsFr = {
     done: 'Fait',
     snooze: '+15 min',
   },
+  // N-IOS-FIX-01 : texte qu’iOS affiche à la place du contenu quand les aperçus sont masqués (écran verrouillé). Aucun titre ici.
+  hiddenPreview: {
+    task: 'Rappel CircleTasks : déverrouillez pour voir la tâche',
+    routine: 'Rappel CircleTasks : déverrouillez pour voir la routine',
+    event: 'Rappel CircleTasks : déverrouillez pour voir l’événement',
+  },
 } as const;
 
 /** `reminders.status` : état des rappels (Réglages > Rappels, bandeau de l'app). */
@@ -51,6 +57,8 @@ export const remindersStatusFr = {
   zoneChanged: 'Fuseau modifié : rappels recalculés à {time}',
   ledgerRebuilt: 'Registre des rappels reconstruit à {time}',
   zoneLimit: 'Après un changement de fuseau, ouvrez CircleTasks : les rappels sont recalculés à l’ouverture.',
+  // N-IOS-FIX-01 : cause du titre masqué sur l'écran verrouillé (réglage iOS, pas un défaut de l'app).
+  previewsHelp: 'Sur l’écran verrouillé, iOS masque le contenu des rappels tant que l’iPhone n’est pas déverrouillé. Pour voir le titre du rappel : Réglages iOS › Notifications › CircleTasks › Afficher les aperçus › Toujours.',
   // N-07 : avertissement du PC (le PC n'envoie aucune notification, il avertit seulement).
   warnStale: 'L’iPhone ne s’est pas synchronisé depuis plus de 2 h : ce rappel pourrait ne pas sonner à l’heure',
   warnNoIphone: 'Aucun iPhone associé : ce rappel ne sonnera pas',

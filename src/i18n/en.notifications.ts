@@ -23,6 +23,11 @@ export const notificationsEn: Messages['notifications'] = {
     done: 'Done',
     snooze: '+15 min',
   },
+  hiddenPreview: {
+    task: 'CircleTasks reminder: unlock to see the task',
+    routine: 'CircleTasks reminder: unlock to see the routine',
+    event: 'CircleTasks reminder: unlock to see the event',
+  },
 };
 
 export const remindersStatusEn: Messages['reminders']['status'] = {
@@ -47,6 +52,7 @@ export const remindersStatusEn: Messages['reminders']['status'] = {
   zoneChanged: 'Time zone changed: reminders recomputed at {time}',
   ledgerRebuilt: 'Reminder register rebuilt at {time}',
   zoneLimit: 'After a time zone change, open CircleTasks: reminders are recomputed on opening.',
+  previewsHelp: 'On the lock screen, iOS hides the content of reminders until the iPhone is unlocked. To see the reminder title: iOS Settings › Notifications › CircleTasks › Show Previews › Always.',
   warnStale: 'The iPhone has not synced for over 2 h: this reminder may not ring on time',
   warnNoIphone: 'No iPhone paired: this reminder will not ring',
   summaryStaleOne: 'The iPhone has not synced for over 2 h: 1 reminder in the next 2 hours may not ring on time',

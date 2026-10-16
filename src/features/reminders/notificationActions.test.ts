@@ -85,6 +85,22 @@ describe('N-03 : « Fait » et « +15 min » depuis la notification', () => {
     expect(source.calls.filter((call) => call === 'registerActionTypes')).toHaveLength(1);
   });
 
+  it('N-IOS-FIX-01 : chaque catégorie porte un texte d’aperçu masqué tiré de i18n, sans titre d’élément', async () => {
+    const specs = actionTypeSpecs();
+    expect(specs.map((spec) => [spec.id, spec.hiddenPreviewsBodyPlaceholder])).toEqual([
+      ['ct.task', 'Rappel CircleTasks : déverrouillez pour voir la tâche'],
+      ['ct.routine', 'Rappel CircleTasks : déverrouillez pour voir la routine'],
+      ['ct.event', 'Rappel CircleTasks : déverrouillez pour voir l’événement'],
+    ]);
+    expect(new Set(specs.map((spec) => spec.hiddenPreviewsBodyPlaceholder)).size).toBe(3);
+    // Le texte ne dépend d'aucune donnée : identique avant et après la création d'une tâche.
+    const before = specs.map((spec) => spec.hiddenPreviewsBodyPlaceholder);
+    await seedTask('Titre secret');
+    await pass();
+    expect(actionTypeSpecs().map((spec) => spec.hiddenPreviewsBodyPlaceholder)).toEqual(before);
+    expect(source.registered.every((spec) => spec.hiddenPreviewsBodyPlaceholder !== undefined && !spec.hiddenPreviewsBodyPlaceholder.includes('%'))).toBe(true);
+  });
+
   it('critère 1 : chaque rappel porte la catégorie de sa nature, le récapitulatif aucune', async () => {
     await seedTask();
     await pass();

@@ -42,11 +42,19 @@ import { statusController } from './notificationStatus';
 
 const ACTION_TITLE_KEY = { done: 'notifications.action.done', snooze15: 'notifications.action.snooze' } as const;
 
+/** Texte iOS des aperçus masqués par catégorie (N-IOS-FIX-01) : jamais le titre de l'élément. */
+const HIDDEN_PREVIEW_KEY = {
+  task: 'notifications.hiddenPreview.task',
+  routine: 'notifications.hiddenPreview.routine',
+  event: 'notifications.hiddenPreview.event',
+} as const;
+
 /** Catégories et actions, titres en français depuis `src/i18n` ; toutes au premier plan (l'app s'ouvre). */
 export function actionTypeSpecs(): ActionTypeSpec[] {
   return (Object.keys(ACTION_TYPE_ID) as (keyof typeof ACTION_TYPE_ID)[]).map((category) => ({
     id: ACTION_TYPE_ID[category],
     actions: ACTIONS_BY_CATEGORY[category].map((id) => ({ id, title: t(ACTION_TITLE_KEY[id]), foreground: true as const })),
+    hiddenPreviewsBodyPlaceholder: t(HIDDEN_PREVIEW_KEY[category]),
   }));
 }
 
