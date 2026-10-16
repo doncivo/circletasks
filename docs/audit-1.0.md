@@ -1,0 +1,104 @@
+# Audit complet du code avant la 1.0 — rapport unique
+
+Date : 2026-10-16. Base auditée : `origin/main` 7737b3b2 (version 0.3.2). Onze auditeurs en lecture seule (sync-icloud, security-privacy, ios-mobile, notifications, domain-logic, data-model, ui-design-system, accessibility-i18n, qa-test, code-reviewer, architect), un rapport par domaine consolidé ici. Aucune correction n'a été appliquée hors priorité 1 et hors le correctif des aperçus iOS déjà écrit sur sa branche (non fusionné). Les rapports détaillés par domaine sont résumés en annexe.
+
+Règle de lecture : **bloquant** = perte de données, synchro ou rappel qui s'arrête sans issue, faille de sécurité, écran inutilisable ; **important** = défaut visible ou dette qui fera échouer la 1.0 dans un cas réel courant ; **mineur** = qualité, documentation, cas rare.
+
+## 1. Chiffres
+
+| Gravité | Constats (dédoublonnés) | Estimation |
+|---|---|---|
+| Bloquant | 14 | 100 à 125 h (dont 24 à 40 h pour le job Swift/simulateur) |
+| Important | 78 | 220 à 250 h |
+| Mineur | ~95 | 90 à 100 h |
+| **Total** | **~187** | **410 à 475 h** |
+
+Socle minimal recommandé avant la 1.0 (section 5) : **60 à 75 h**.
+
+## 2. Priorité 1 : `own-state-unknown` en boucle sur l'iPhone
+
+**Cause prouvée** (journaux iPhone croisés avec le dossier iCloud et la base du PC) : l'iPhone (ef50b6f7) a abandonné son époque orpheline `e0001-ef50…` en 0.2.3 et rejoint l'époque du PC `e0001-56d4…` (il lit bien le journal du PC). Mais le fichier `devices/ef50…/e0001-ef50…/s-00000001.cts` du 8 octobre est toujours dans iCloud, et l'intention de suppression `sync_meta.orphanEpoch` a été effacée avant 0.3.0 (aucun `orphan-epoch-delete-failed` dans les 82 entrées). Ce seul instantané compte dans `listedFiles` : `canPublish` refuse pour toujours (pas d'état, pas d'accusé, `stateSeq` 0, un fichier listé). Rust, lui, ignore déjà un instantané seul dans une époque non courante.
+
+**Pourquoi le mémo a été effacé sans que le fichier parte** (trouvé en revue) : iOS avait évincé le fichier (« optimiser le stockage ») en ne laissant localement qu'un substitut `.s-00000001.cts.icloud`. Le listing du plugin Swift le présente sous son vrai nom, mais `remove` ne cherche que le vrai nom, ne touche pas au substitut et répond « rien supprimé » : la suppression était considérée faite, le mémo effacé, le fichier toujours dans iCloud. Le correctif fait supprimer le substitut par écriture coordonnée (`forDeleting`), ce qui propage la suppression à iCloud. Point à confirmer sur l'iPhone (aucun Mac pour exécuter le Swift).
+
+**Correctif Y-IOS-02-FIX-02** (PR #36 fusionnée dans `main` le 2026-10-16 après suite verte ; version 0.3.3 PC et iPhone en préparation pour la vérification sur l'appareil ; la CI a d'abord refusé le bundle de départ à 350,3 Ko, ramené à 349,67 Ko en chargeant le réarmement à la demande et en sortant `pairingStatus` du départ, ce qui confirme l'important « bundle saturé » de la section 4) : (1) règle de comptage alignée sur Rust : comptent les segments de toute époque et les instantanés de l'époque courante, d'une époque annoncée par une source authentifiée ou d'une époque qui a un segment ; un instantané seul d'une époque non courante jamais annoncée ne compte pas ; (2) réarmement automatique de la suppression quand une telle époque, ouverte ici et plus récente que l'époque courante, réapparaît (`orphan-epoch-relisted`, hors réinitialisation) ; (3) `publish-deferred` journalise la cause réelle (`reason`, statut de l'état propre, fichiers comptés et ignorés, accusés, `stateSeq`). Tests : 30 nouveaux tests Vitest (scénario exact de l'iPhone, suppression en échec puis réussie, cycle interrompu, listing transitoire, non-régressions), 3 d'entre eux échouent avec l'ancienne règle ; table de cas partagée Vitest/Rust (`tests/fixtures/sync/publish-bound.json`), 2 tests Rust ; module synchro 1 628 verts (un dépassement de 5 s sous charge, hors périmètre, reproduit vert seul) ; lint et typage propres. Sortie au premier cycle après mise à jour, sans réassociation ni réinitialisation. ADR 0011 §24 point 10.
+
+**Cousin direct à traiter dans la même famille** (bloquant S2 ci-dessous) : la même impasse se produit si la première publication est coupée entre l'ajout du segment et l'écriture de l'état (cycle `hide` de l'iPhone) : le segment compte, et l'appareil ne publie plus jamais. Le correctif de l'instantané ne le couvre pas.
+
+## 3. Bloquants (14)
+
+| # | Domaine | Constat | Pourquoi aucun test ne l'a vu | Correction | h |
+|---|---|---|---|---|---|
+| B1 | Synchro | **Priorité 1** : instantané orphelin resté dans iCloud → `canPublish` refuse pour toujours (section 2). | Faux iCloud où la suppression réussit toujours et se propage instantanément ; `orphan-epoch-cleared` sur un seul listage jamais testé. | Y-IOS-02-FIX-02 (en cours). | 6 (en cours) |
+| B2 | Synchro | **Impasse de première publication** (`epoch.ts:89-92`, `engine.ts:542-566`) : segment écrit, état non écrit (échéance `hide`, app tuée, `io`) → aucun état, aucun accusé, un fichier listé → `publish-blocked` pour toujours, `inflight` jamais résolu, aucune action dans Détails. Rust connaît la tête et accepterait. | `crashPoints` part d'appareils déjà publiés ; `hideDeadline` publie avant les coupures ; `joinAfterRecords.test.ts:97` valide l'impasse comme attendu. | Tête locale (`META.head`/`stateSeq`) comme borne, Rust juge ; résoudre `inflight` hors `publishAllowed` ; scénario `crashPoints` ; ADR §1.4. | 5 |
+| B3 | Synchro | **Lecture en échec muette et « À jour »** (`reader.ts:133`, `engine.ts:833,845,1007`) : `readJournal` en `io`/`bad-header`/`decrypt-failed` → `allRead=false` seulement ; `lastSyncAt` avance, « À jour · à l'instant », entretien sauté. Fréquent sur Windows (verrous iCloud). | Aucun test ne fait échouer `readJournal` pendant un cycle. | `'error'` = avertissement par appareil, `lastSyncAt` gelé, `io` dans `errorStreak`. | 3 |
+| B4 | Synchro | **Perte silencieuse au report d'époque** (`apply.ts:343-344`, `epochSwitch.ts:266,290`) : enfant non lu d'un parent lu puis remplacé (restauration « Appliquer partout ») → `reapply` avec `noPark` → `removeParked` efface : la tâche disparaît des deux appareils sans journal. Contredit ADR §24.6. | `epochCarryGuard` et `restore.test.ts` ne reportent que des lignes sans parent remplacé. | Garder en `sync_parked` (`missing-parent`, visible) ou rattacher à « Sans projet » ; `received-unapplied`. | 4 |
+| B5 | Synchro / échec silencieux | **Échecs de suppression invisibles** (`orphanEpoch.ts:75-78`, `maintenance.ts:177,191`, `engine.ts:977`) : `orphan-epoch-delete-failed` et `delete-own-failed` seulement journalisés ; le dossier iCloud grossit jusqu'à `folder-too-large`. Y-IOS-02-FIX-01 jamais commencée. | Tests vérifient le journal, pas un état visible ; `memory.ts` ne fait jamais échouer `deleteOwn`. | Livrer Y-IOS-02-FIX-01 étendue à `delete-own-failed` ; test de contrat « tout code `*-failed` est classé transitoire ou durable→état visible ». | 10–14 + 3 |
+| B6 | iOS | **Synchro figée sans erreur sur un appel iCloud qui ne répond pas** (`folder-bookmark/src/lib.rs:41`, `service.rs:841-860`, `FolderBookmarkPlugin.swift:409-416,755-758,832-842`) : `run_mobile_plugin` sans délai (seuls Vision/Speech/ct-files sont protégés), verrou `inner` tenu, `download` avale l'échec puis lecture coordonnée qui attend un téléchargement hors ligne : « Synchro en cours » jusqu'à relance. | Faux transport Windows répond toujours ; Swift jamais exécuté. | `call_with_deadline` sur le transport (→ `cloud-pending`), garde + `NSFileCoordinator.cancel()`, `"error"` traité comme `cloud` ; test transport muet. | 7 |
+| B7 | Sécurité | **Plugin SQL ouvert** (`capabilities/default.json:6`, `vendor/tauri-plugin-sql wrapper.rs:96,345-351,380`) : `load` accepte tout chemin (absolu, `..`), `execute` accepte `ATTACH`/`VACUUM INTO` : une dépendance npm compromise dans `main` écrit un `.hta` dans le dossier Démarrage et sort de la WebView (lecture du coffre : clé de synchro, jetons). | `config.rs` ne vérifie que les noms de permissions ; aucun test de `load` avec chemin absolu ni `ATTACH` ; e2e en pilote mémoire. | Refuser tout sauf `sqlite:circletasks.db` ; `SQLITE_LIMIT_ATTACHED=0` + authorizer ; tests de refus. | 5 |
+| B8 | Données + métier | **Tâches récurrentes dupliquées et report avant synchro** (`recurrenceUseCases.ts:103`, `dayRollover.ts:80`, `App.tsx:249-281`) : le report et la génération d'occurrences tournent avant la première synchro sur chaque appareil : occurrence k+1 créée deux fois (UUID aléatoires, même `(recurrence_id, series_index)`), tâche terminée sur le PC re-datée « reportée » par l'iPhone, report manuel écrasé. | Simulateur deux appareils sans récurrence ; tests de report mono-base ; fiche T-06 « résultat identique donc sans conflit ». | Attendre le premier cycle de synchro (ou échec visible, 10–15 s) avant `rollover.start()` ; identifiants d'occurrence déterministes (UUID v5) ; jamais reporter une tâche `done` ; migration 0019 de nettoyage ; test deux appareils. | 12–16 |
+| B9 | Notifications | **Une routine n'a qu'une occurrence planifiée par avance** (`notificationPlan.ts:268-284`) : rappel ignoré sans ouvrir l'app → plus rien le surlendemain, alors que Réglages dit « Tous les rappels sont planifiés ». | Test encode N-TECH-01 critère 12 ; aucun test « app fermée deux jours ». | K occurrences par routine (7 jours, plafond équitable), couverture par nature. **Décision d'Ali à reconfirmer** (N-TECH-01). | 5 |
+| B10 | Notifications | **Corps sans heure ni espace** (`notificationTexts.ts:187-221`) : « À l'heure » / « Dans 30 min » seulement ; rappel décalé par plage silencieuse dit « À l'heure » ; « +15 min » dit « Dans 30 min » ; journée entière « À l'heure ». Même après le correctif des aperçus, l'écran verrouillé n'affichera pas l'heure. | Tests comparent aux chaînes i18n ; personne n'évalue le texte lu. | Corps `HH:MM · Pro/Perso`, « (prévu 19:30) », « Reporté · 14:00 », date d'événement ; un constructeur testé sur le texte final. | 3 |
+| B11 | UI / accessibilité | **Thème sombre illisible** (`Toast.css:9-10`, `SpacesScreen.css:213-216`, `Switch.css:23,27`) : `accent-on` sur `nav-bg` = 1,09:1 : bandeau « Annuler » (retour de chaque action), bouton principal des projets, interrupteurs. | Captures sombres limitées à Main-Sombre ; `contrast.test.ts` liste fixe ; jsdom sans CSS. | Jeton `--ct-color-on-nav` blanc, jetons d'interrupteur ; test de contraste sur toutes les paires CSS des deux thèmes. | 1,5 + 3 |
+| B12 | iOS / accessibilité | **Taille de texte iOS non suivie** : le PRD (l. 657, 1306) exige `font: -apple-system-body`, absent du code ; `decisions.md:667` « à valider par Ali ». | `IOS-titres.spec.ts:194` force 200 % en JS : simule le résultat, pas le mécanisme. | `@supports (font: -apple-system-body)` + px→rem + `useFitText` ; test WebKit ; checklist. Ou retirer l'exigence du PRD (décision). | 1 (décision) + 8 |
+| B13 | Tests | **Aucune ligne Swift n'est exécutée** (3 703 lignes, 9 plugins) : contrôles statiques par sous-chaînes seulement ; les faux iCloud sont complaisants (suppression toujours réussie et propagée, pas de `.icloud`, pas d'éviction, pas de résurrection) ; l'« iPhone » e2e est un Chromium 440×956 sans toucher, clavier ni safe areas. Les six défauts des séances tombent tous dans ces zones aveugles. | — (c'est la cause) | Faux iCloud hostiles (`FaultPlan`, fixture de conformité partagée, scénario orphelin) 16 h ; atteignabilité au doigt + safe areas 59/34 + `visualViewport` + projet 393×852 12 h ; job macOS XCTest + simulateur 24–40 h. | 52–68 |
+| B14 | Architecture / produit | **Règle de report d'époque appliquée sans validation** (ADR 0011 §9.1 vs §24.6, Q13) : le code applique depuis 0.3.0 « survit tout ce que l'ouvreur n'avait pas lu », encore « à valider par Ali », qui remplace la règle confirmée le 2026-10-05 ; 26 décisions attendent validation « en fin d'ordre ». | Aucun contrôle du statut d'une décision. | Séance de validation avant REL-01 ; récrire §9.1, fermer Q13. | 3–4 + séance |
+
+## 4. Importants (78), par domaine
+
+### Synchro (6, ~20 h)
+Fichier verrouillé un instant → « corrupt » collant (`store.rs:601`, 3 h) · horloge en avance : impasse d'un mois après correction de la date (`hlc.ts:84`, décision ADR §4.4, 6 h) · `writeState` refusé en silence à l'étape 6 (`engine.ts:926`, 2 h) · `missing-parent` sans avertissement (`engine.ts:880-897`, 2 h) · changement d'époque figé sur un instantané supprimé (`epochSwitch.ts:323-350`, 3 h) · `cap-dropped`/`publish-too-large`/`apply-abandoned` journal seul (note > 256 Kio jamais publiée, 4 h).
+
+### Sécurité (1, 3 h)
+Clé de signature des mises à jour exposée au build front (devDependencies) dans `build-windows.yml:94` ; pas de `npm audit` en CI.
+
+### iOS (6, ~15 h)
+Deux sélecteurs de documents, `pickFolder`/`confirm` sans gardes (association bloquée, 3 h) · `"error"` d'état passager converti en `unsafe-folder` permanent (2 h) · clavier absent à la création d'une checklist (`ChecklistForm.tsx:42`, 2 h, même incident que Q-05) · fuite des accès de sécurité au dossier (> 288/jour, 1 h) · `delete`/`upsert` de rappel Apple sans `externalRef` : suppression qui réussit sans supprimer (2 h) · taille de texte iOS (voir B12).
+
+### Notifications (7, ~27 h)
+Titre/corps passés comme clés de localisation (`%` déformés, **à confirmer sur l'iPhone en 15 min**, bloquant si confirmé, 1 + 2 h) · fuseau sans ouverture de l'app (déclencheur à durée absolue, 6 h) · N-07 trop permissif et aveugle aux suppressions/déplacements, résumé PC sur `fire_at` figé (6 h) · `get_pending` ne compare que l'identifiant, « Autorisé » ignore les réglages réels (aperçus, écran verrouillé, Concentration : la classe exacte du bug constaté, 8 h) · fin de Focus tronquée à la minute (faux échec, 1,5 h) · priorité sous 64 (récapitulatifs prennent la moitié des places, rafale du lundi, 3 h) · `delegateAtLaunch` possiblement faux en permanence (1 h, appareil).
+
+### Données (3, ~15 h)
+`transaction-lost` laisse `sync_guard` et des migrations à moitié appliquées (6–8 h) · lot de 500 opérations en une transaction : UI en `transaction-wait-timeout` sur iPhone (mesure, 4–6 h) · un enregistrement fautif bloque toute la synchro (3–4 h).
+
+### Métier (7, ~25 h)
+Réglages `firstWeekday`/`timeFormat` reçus non appliqués avant redémarrage (3 h) · taux 7/30/90 j des routines « X fois par semaine » faux hors semaine ISO (4–6 h) · série cassée par une pause partielle (1,5 h) · avertissement PC N-07 sur `fire_at` figé (4–5 h) · statistiques H-01/H-02 structurellement ~100 % à cause du report nocturne (décision `original_date`, 6–8 h) · tests DST en UTC, fuseau non épinglé, oracles tautologiques (3 h) · seuil de couverture du domaine 80 au lieu de 90 % (0,5 h +).
+
+### Écrans 393 pt (18, ~31 h)
+Encoche cumulée avec le haut fixe (47 pt de décalage) · carte de routine qui déborde à 289 pt · roues d'événement rognées · liste d'Aujourd'hui écrasée en défilement imbriqué (à confirmer en capture) · aucune gestion du clavier (feuilles, pieds collants ; à confirmer sur appareil) · champs 15 pt (zoom iOS) · lignes de Réglages 38 pt, puces 28 pt, ~15 zones tactiles < 44 pt · textes 11–12 pt · icônes et interrupteurs en sombre · polices de l'écran d'association non embarquées (`'DM Sans'` ≠ `'DM Sans Variable'`) · Focus terminé rogné (à confirmer) · dialogues sans hauteur maximale.
+
+### Accessibilité et textes (13, ~39 h)
+Hauteurs fixes et 60 polices en px à 200 % (10 h) · cibles < 44 pt (4 h) · Toast peu annoncé, 5 s non suspendues pour VoiceOver (3 h) · focus perdu sur 8 sous-écrans de Réglages (3 h) · `disabled` sans `aria-busy` (3 h) · codes bruts affichés (« code state-mismatch », contraire ADR 0003, 4 h) · jargon « instantané/époque/schéma » (2 h) · textes en dur dans Rust (page OAuth, boîtes natives, titres de fenêtre, 4 h) · roue des minutes qui réécrit `:05`, jours bornés, sans `spoken` (3 h) · icônes/anneau/bordures sous 3:1 (2 h) · `smooth` sans `reduced-motion` (1 h) · ordre de tabulation (3 h).
+
+### Tests et CI (14, ~70 h)
+WebKit sur 2 specs/120 (10 h) · e2e sur serveur dev, jamais sur le build de production (8 h) · base de test `sqlite-wasm` 3.53 vs SQLite ~3.46 de production, IPC, WAL (8 h) · aucun smoke iPhone (16 h) · publication sur tag sans vérifier « suite verte » (3 h) · ni plancher de tests ni plafond de `skip` (3 h) · seuils de couverture (2 h) · parcours 1 incomplet et dépendant de l'horloge (3 h) · parcours 2 PRD absent (PC → synchro → rappel iPhone → Fait, 8 h) · `matchMedia`/CSS absents en jsdom (4 h) · largeurs 393/390 jamais testées, pc 1440 au lieu de 1280 (2 h) · 26 `waitForTimeout` et ~60 `setTimeout` de « preuve par absence » (6 h) · `memory.ts` seul faux pour tout, conformité Rust sur 3 cas (8 h) · checklist ordre 5 sans texte verrouillé, fichiers évincés, clavier, roue, safe areas, app tuée (1 h) · budgets perf sans IPC (4 h) · fuseau non épinglé en CI (3 h).
+
+### Code, ADR, architecture (21, ~55 h)
+Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNAMIC_IMPORT` (2 h) · lecture stricte de l'état : toute extension après 1.0 impose `sm` 2 (ADR avant le tag, 2 + 6–8 h) · règles de protocole en trois exemplaires, 9/37 constantes comparées (3 h) · ADR 0011 contradictoire (nombre de commandes, §9.1/§24.6, maîtrise Rust/TS, 4–6 h) · backlog et dettes faux (stories livrées « à faire », 2 h) · commandes de sauvegarde non documentées (1 h) · marqueur de restauration écrit avant l'échange, `local:true` sans garde (3 h) · ADR 0002 périmé, plugin SQL copié sans procédure, pont JS `^2.5.0` (2 h) · règle métier Rappels Apple dans une feature avec `localeCompare` (4 h) · `import('@tauri-apps/…')` dans une feature (1 h) · `Brand<Id>` qui se réduit à `never` (8 h) · taille d'installeur non mesurée depuis 0.1.0 (1 h) · démarrage à froid jamais mesuré (2 h) · licences incomplètes (1,5 h) · somme des têtes non surveillée (2 h).
+
+## 5. Socle minimal recommandé avant la 1.0 (60 à 75 h)
+
+1. **Synchro, famille des impasses** : B1 (en cours), B2, B3, B5 réduit à « échec durable visible » : 20 à 25 h.
+2. **Sécurité** : B7 (plugin SQL) : 5 h. Signature hors du build front : 3 h.
+3. **iOS** : B6 (délai sur le transport iCloud) : 7 h. Clavier checklist + gardes du sélecteur : 5 h.
+4. **Données/métier** : B8 (report après synchro + identifiants déterministes + migration de nettoyage) : 12 à 16 h.
+5. **Notifications** : B10 (corps avec heure et espace) : 3 h ; aperçus masqués (déjà écrit, N-IOS-FIX-01) ; essai des `%` sur l'iPhone : 1 h ; B9 selon décision : 5 h.
+6. **Sombre** : B11 : 1,5 h + garde-fou 3 h.
+7. **Tests, le minimum qui aurait vu les défauts des séances** : faux iCloud hostiles + scénario orphelin : 16 h ; projet 393×852 avec safe areas et atteignabilité : 12 h.
+
+Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, découpage d'`engine.ts`, Dynamic Type (si Ali retire l'exigence), consolidation des ADR, pluriels/insécables, anglais.
+
+## 6. Décisions à trancher par Ali
+
+1. Routines : une occurrence par avance (N-TECH-01) ou fenêtre de 7 jours (B9).
+2. Taille de texte iOS : implémenter ou retirer du PRD (B12).
+3. Règle de report d'époque §24.6 : valider ou revenir à §9.1 (B14) ; plus 25 autres décisions « en fin d'ordre ».
+4. Statistiques : conserver la date d'origine des tâches reportées (migration) ou documenter la limite.
+5. Roue des minutes : pas de 5 (T-14 critère 3, voulu) ou pas de 1 ; et la réécriture `10:03 → 10:05`.
+6. Format 12 h proposé dans Apparence alors que la règle du projet est 24 h.
+7. Anglais : réglage de langue jamais branché (2 564 clés inatteignables) : livrer ou documenter « français seul ».
+8. Extension du format publié après la 1.0 : objet `ext` ignoré ou `sm` 2 obligatoire.
+
+## Annexe : rapports détaillés
+
+Les onze rapports détaillés (tableaux fichier:ligne, scénarios, corrections) sont dans `docs/audits/2026-10-16/` ; ce document en est la consolidation dédoublonnée. Domaines : sécurité (8 constats), données (18), code/ADR (29), iOS (13 + 28 points non testables sans appareil), synchro (14), QA (28 + parcours PRD), notifications (15), métier (20), architecture (20 + 8 ADR à écrire), écrans 393 (34), accessibilité (24).
