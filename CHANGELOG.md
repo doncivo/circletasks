@@ -1,5 +1,10 @@
 # Journal des versions
 
+## 0.3.3
+
+- Synchronisation : la publication d'un appareil bloquée par un instantané d'ancienne époque resté dans iCloud se débloque seule au premier cycle, sans réassociation ; la cause réelle d'un refus de publication est journalisée ; un fichier iCloud évincé est correctement supprimé par l'app sur iPhone.
+- Vérification à faire par Ali sur l'iPhone (fiche docs/stories/Y-IOS-02-FIX-02.md, section « Vérifications manuelles d'Ali ») : après la mise à jour 0.3.2 vers 0.3.3 par SideStore, le bandeau « Cet appareil n'a pas encore publié son état » disparaît au premier cycle, le PC voit l'iPhone dans Réglages > Synchronisation > Détails, une tâche créée d'un côté apparaît de l'autre, le fichier `s-00000001.cts` de l'ancienne époque a disparu d'iCloud Drive, et les journaux exportés montrent `orphan-epoch-relisted` puis `orphan-epoch-deleted`.
+
 ## 0.3.2
 
 - iPhone : la roue des heures de « Nouvelle tâche » se règle au doigt (elle restait bloquée sur « 01 ») ; les rappels se cochent dès qu'une heure est posée.
