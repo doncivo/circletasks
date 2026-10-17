@@ -1,6 +1,6 @@
 # REL-TECH-02 — La désinstallation ne supprime jamais les données de l'application
 
-Module : Livraison unique · Ordre de construction : transverse (avant REL-03) · Agent : **ci-release** (crochet, build NSIS en CI, smoke étendu) + **qa-test** · Statut : à faire (2026-10-17)
+Module : Livraison unique · Ordre de construction : transverse (avant REL-03) · Agent : **ci-release** (crochet, build NSIS en CI, smoke étendu) + **qa-test** · Statut : fait côté code, CI verte (run 39030179275, 2026-10-17) ; revue et fusion en attente
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md). Constat B15 de l'audit, décision 9 d'Ali du 2026-10-17 : crochet NSIS, pas de modèle personnalisé ; « une case visible mais inerte me suffit ».
 Dépend de : REL-TECH-01 (job `smoke-windows`, `playwright.smoke.config.ts`, `tests/smoke/window-capture.ps1`, ADR 0016). Ne touche ni `src/domain` ni `src/db`.
 Estimation de l'audit : crochet 1 h, garde-fou 1 h, smoke étendu 4 h, documentation 1 h.
@@ -80,3 +80,34 @@ Estimation de l'audit : crochet 1 h, garde-fou 1 h, smoke étendu 4 h, documenta
 - Preuve de détection : critères 5 et 12.
 - Revue : code-reviewer approuve ; aucun fichier écrit hors du dépôt ; aucun secret ; aucun test désactivé ni délai allongé.
 - Clôture refusée si un critère manque : le product-owner vérifie les 13 critères avant « fait ».
+
+## Vérification (branche rel-tech-02, 2026-10-17)
+
+| Critère | Résultat |
+| --- | --- |
+| 1 | `src-tauri/windows/hooks.nsh` : seule `NSIS_HOOK_PREUNINSTALL`, `StrCpy $DeleteAppDataCheckboxState 0`, commentaire (incident, B15, décision 9, case ignorée volontairement, modèle amont et tag `tauri-cli-v2.12.1`). |
+| 2 | `installerHooks: "./windows/hooks.nsh"` (convention de la doc Tauri 2 ; chemin relatif à `src-tauri`, résolu en absolu par le bundler : `!include "D:acircletaskscircletaskssrc-tauriwindowshooks.nsh"`). `languages` et `installMode` inchangés. |
+| 3 | Héritage constaté sur le script généré par la configuration de fumée : l'`!include` est présent sans redéclaration. |
+| 4 | `tests/nsis/installerScript.test.ts` (`npm run test:nsis`) lit `src-tauri/target/smoke/debug/nsis/x64/installer.nsi`. Écart de forme : le script généré ne contient pas le corps de la macro mais `!insertmacro NSIS_HOOK_PREUNINSTALL` (sous `!ifmacrodef`) et l'`!include` de `hooks.nsh` ; le contrôle porte donc sur l'insertion avant les deux `RmDir /r`, sur le corps de la macro dans le fichier inclus, sur l'existence de `$DeleteAppDataCheckboxState` (Var, `un.ConfirmLeave`, test) et sur l'absence de réaffectation. |
+| 5 | `tests/unit/smoke/nsisScript.test.ts` : conforme, CRLF, variable renommée, crochet après `RmDir`, crochet absent, include absent, variable réaffectée, fichier de crochets dégradé, commentaire. Chaque message nomme la propriété perdue. |
+| 6 | Hors CI : test ignoré avec message ; en CI : échec si le script est absent (vérifié en local avec `CI=true`). Le job construit l'installeur avant. |
+| 7 | `productName: "CircleTasks Smoke"` dans `tauri.smoke.conf.json` ; aucun `createUpdaterArtifacts`, aucun `.sig` ; build `--no-bundle` et `pc-demarrage.spec.ts` inchangés et verts (nom de binaire `circletasks`, titre « CircleTasks »). |
+| 8 à 11 | `tests/smoke/pc-installeur.spec.ts` et `tests/smoke/installer-drive.ps1` : installation `/S`, donnée témoin, réinstallation graphique (case cochée et vérifiée), application installée démarrée (CDP + fenêtre Win32), `uninstall.exe` graphique, dossier d'installation supprimé, nettoyage gardé par `.smoke`. Échec : étape nommée, capture d'écran, capture de fenêtre, contrôles Win32 et arbre UI Automation, processus tués, artefact `smoke-windows`. |
+| 12 | Preuve : crochet vidé au commit 20500f7a, run 39029716402 rouge sur le garde-fou ET sur le smoke (« donnée témoin supprimée par la désinstallation »), crochet remis au commit f8343a1a. Le smoke s'exécute désormais même si le garde-fou échoue (`if: !cancelled()`). |
+| 13 | `docs/install-pc.md` (paragraphe, avertissement en gras, procédure d'effacement), `docs/release-pc.md`, ADR 0006 et 0016 (avenants), CHANGELOG « Non publié », journal, backlog, audit-1.0 et dettes (en cours). Le numéro X.Y.Z sera fixé à la publication. |
+
+Run vert : 39030179275 (tous les jobs, dont `cargo audit` et `Vitest dom` depuis la fusion de la PR #40). Runs intermédiaires : 39024162153 (UI Automation : volets sans patterns), 39024832537 (page finale « Fermer »), 39027366664 et 39027981603 (BM_CLICK sans effet sur « Fermer »), 39028571800 (WM_COMMAND, copie temporaire `Un.exe`).
+
+### Causes trouvées pendant la mise au point
+
+- UI Automation expose les contrôles NSIS en simples volets sans `InvokePattern` ni `TogglePattern` : lecture et actions par l'API Win32 (`EnumChildWindows`, `WM_GETTEXT`, `BM_GETCHECK`) ; UI Automation ne sert plus qu'au rapport d'échec.
+- `MUI_FINISHPAGE_NOAUTOCLOSE` : la page finale porte « Fermer » et non « Terminer ».
+- `BM_CLICK` reste sans effet sur « Fermer » alors que l'installeur répond ; `WM_COMMAND(BN_CLICKED)` envoyé au dialogue principal (ce que fait un bouton) fonctionne et sert pour tous les boutons poussoirs.
+- Lancé sans `_?=`, `uninstall.exe` se copie en `%TEMP%~nsu*.tmpUn.exe` (et non `Au_.exe`).
+- La page « Désinstaller avant d'installer » n'apparaît que si la version installée est plus ancienne : le pilote réécrit `DisplayVersion` du produit de fumée à `0.0.1` (HKCU) avant de relancer l'installeur.
+
+### Limites
+
+- Le crochet protège les versions qui le contiennent : l'ancien désinstalleur (0.1.1 à 0.3.3) garde sa case active au premier passage ; non testable sans publier une version antérieure.
+- La clé `HKCUSoftware<éditeur>CircleTasks` n'est plus supprimée à la désinstallation (le modèle ne la supprime que dans le bloc de la case) ; sans conséquence pour les données.
+- Le pilotage dépend des libellés français du modèle NSIS ; à relire à chaque montée du CLI Tauri.
