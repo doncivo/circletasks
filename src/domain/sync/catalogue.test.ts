@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc, IsoDateTime, LocalDate, RoutineId } from '../types';
 import { SYNC_TABLE_ORDER, epochId, type DeviceAck, type PublishedDeviceState } from './format';
-import { canPublish, folderEpoch, mustCarry, nextEpoch, openingCover, ownBounds, restoreOptions } from './epoch';
+import { canPublish, folderEpoch, nextEpoch, openingCover, ownBounds, restoreOptions } from './epoch';
 import { expectedNaturalId, holidayId, isNaturalId, routineLogId } from './naturalIds';
 import { focusSessionsToClose, routinePausedFrom } from './repairs';
 import { FIXED_SPACE_IDS, SHARED_SETTING_KEYS, SYNC_TABLES, childRelations, isPurgeable, isValidRowId, isValidValue, settingKeyScope, syncColumn, syncTable, tableRank } from './syncTables';
@@ -141,14 +141,10 @@ describe('époques et règle 1 (Y-02 critères 13 à 15)', () => {
     expect(restoreOptions(taken, [null, h(ms + 1)])).toEqual(['apply-everywhere']);
   });
 
-  it('covers[B] après restauration : maximum de la base restaurée et du dernier état publié ; report : champs de soi au-delà', () => {
+  it('covers[B] après restauration : maximum de la base restaurée et du dernier état publié', () => {
     expect(openingCover(ack(1, 2, h(5), 1), ack(2, 0, h(9), 3))).toEqual(ack(2, 0, h(9), 3));
     expect(openingCover(null, ack(2, 0, h(9), 3))).toEqual(ack(2, 0, h(9), 3));
     expect(openingCover(ack(1, 0, h(1), 1, E2), ack(9, 0, h(9), 3))?.epoch).toBe(E2);
-    expect(mustCarry(h(10, B), B, ack(1, 1, h(9, B), 1))).toBe(true);
-    expect(mustCarry(h(9, B), B, ack(1, 1, h(9, B), 1))).toBe(false);
-    expect(mustCarry(h(10, A), B, null)).toBe(false);
-    expect(mustCarry(h(1, B), B, null)).toBe(true);
   });
 });
 

@@ -219,13 +219,9 @@ export function openingCover(restored: DeviceAck | null, published: DeviceAck | 
  * changement d'époque tout ce que l'ouvreur `O` n'avait pas lu, sauf ses propres écritures et celles d'un appareil oublié ; un champ
  * (ou une trace purgée) d'auteur `X` est reporté si `X ≠ O`, `X` non oublié et hlc > `covers[X].hlc` (entrée absente ou sans hlc :
  * tout ce que l'appareil détient de `X`). Seule écriture de cette règle : le prédicat `carries` de `materialize` (`src/sync/epochSwitch.ts`).
- * Cette fonction n'en est que le cas particulier `X = self` (l'ancienne option A, remplacée le 2026-10-17) ; elle n'a aucun appelant
- * en production (seul `catalogue.test.ts` l'exerce) et ne décide d'aucun report.
+ * Y-FIX-04 : `mustCarry` (cas `X = soi`, ancienne option A, sans appelant en production) a été retiré (dette de Y-TECH-04). Sort d'une
+ * ligne reportée dont le parent a été remplacé : `carryParentVerdict` (`epochCarryNotice.ts`, ADR 0011 §28).
  */
-export function mustCarry(fieldHlc: Hlc, self: DeviceId, cover: DeviceAck | null): boolean {
-  if (fieldHlc.slice(21) !== self) return false;
-  return cover === null || cover.hlc === null || fieldHlc > cover.hlc;
-}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Réinitialisation avec une nouvelle clé (Y-11 ; ADR 0011 sections 14.3 et 18 point 2). Mêmes règles que `reset.rs`, même table de
