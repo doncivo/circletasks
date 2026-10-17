@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
-import { createMemorySyncPlatform, MemorySyncFolder, type MemorySyncPlatform, type SyncPlatform } from '../../platform/sync';
+import { createMemorySyncPlatform, MemorySyncFolder, type MemorySyncPlatform } from '../../platform/sync';
 import { PAIRING_PHONE_ID as SELF, publishedPcFolder, type PcWorld } from '../../../tests/fixtures/pairingWorld';
 import { settle } from '../../../tests/setup/settle';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -44,7 +44,11 @@ afterEach(async () => {
   await db.close();
 });
 
-function open(platform: SyncPlatform): { readonly closed: () => number; readonly sync: ReturnType<typeof createFakeSyncService> } {
+/** Plateforme du dernier écran ouvert (pour `scanNow`). */
+let opened: MemorySyncPlatform | null = null;
+
+function open(platform: MemorySyncPlatform): { readonly closed: () => number; readonly sync: ReturnType<typeof createFakeSyncService> } {
+  opened = platform;
   const sync = createFakeSyncService();
   const container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: SELF }), data: db.data, sync, syncPlatform: platform, platform: { runtime: 'tauri', os: 'ios' } });
   let closed = 0;
@@ -58,6 +62,10 @@ function open(platform: SyncPlatform): { readonly closed: () => number; readonly
 
 const scanNow = async (): Promise<void> => {
   fireEvent.click(await screen.findByRole('button', { name: SCREEN.scan }));
+  // Fin réelle du scan (WebCrypto, durée dépendante de la machine : `settle` seul déclarait l'écran stable trop tôt sous charge, CI du
+  // 2026-10-17, S04), puis les mises à jour d'écran qui suivent.
+  const platform = opened;
+  if (platform) await act(() => platform.testing.scanSettled());
   await settle(db.driver);
 };
 
