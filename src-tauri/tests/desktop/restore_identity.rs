@@ -281,8 +281,8 @@ fn y_tech_04_11_without_a_device_setting_the_self_row_of_the_current_database_is
     make_db(&dir.path().join(DB_FILE), None, &[row(CURRENT, true, None, (0, 0))]);
     restore(dir.path(), BACKUP);
     assert_eq!(self_id(&dir.path().join(DB_FILE)), CURRENT);
-    // Aucun réglage dans la base en place : celui du fichier restauré n'est pas inventé ni effacé ici.
-    assert_eq!(device_setting(&dir.path().join(DB_FILE)), Some(format!("\"{FORGOTTEN}\"")));
+    // Aucun réglage dans la base en place : `device.id` est écrit d'après sa ligne `is_self` (revue I2), jamais celui du fichier restauré.
+    assert_eq!(device_setting(&dir.path().join(DB_FILE)), Some(current_setting()));
 }
 
 #[test]
@@ -303,4 +303,21 @@ fn y_tech_04_11_a_current_database_without_identity_or_unreadable_leaves_the_res
     fs::write(&broken, b"ceci n'est pas une base SQLite, aucune en-tete").unwrap();
     carry_device_identity(&broken, &staged).unwrap();
     assert_eq!(dump(&staged), saved);
+}
+
+#[test]
+fn y_tech_04_i1_a_current_database_that_fails_for_another_reason_than_corruption_refuses_the_restoration() {
+    let dir = app_with_forgotten_backup();
+    // Base en place ouvrable mais dont `settings` n'a pas les colonnes attendues : erreur de lecture qui n'est pas une corruption.
+    let live = dir.path().join(DB_FILE);
+    let conn = Connection::open(&live).unwrap();
+    conn.execute_batch("DROP TABLE settings; CREATE TABLE settings (key TEXT PRIMARY KEY);").unwrap();
+    drop(conn);
+    let before = dump(&live);
+    let error = restore_backup_file(&live, &dir.path().join(BACKUP_DIR), BACKUP, APP_SCHEMA_VERSION, "20261017T080000Z", NO_FAIL).unwrap_err();
+    assert_eq!(error.code, "io");
+    assert!(!error.message.contains(env!("CARGO_TARGET_TMPDIR")), "pas de chemin dans le message : {}", error.message);
+    // Rien n'a bougé : la base en place est celle d'avant et aucun fichier préparé ne traîne.
+    assert_eq!(dump(&live), before);
+    assert!(!dir.path().join("circletasks.db.restoring").exists());
 }
