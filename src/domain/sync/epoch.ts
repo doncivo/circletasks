@@ -214,7 +214,14 @@ export function openingCover(restored: DeviceAck | null, published: DeviceAck | 
   return { ...best, hlc: maxHlc(restored.hlc, published.hlc), stateSeq: Math.max(restored.stateSeq, published.stateSeq) };
 }
 
-/** Champ à reporter dans la nouvelle époque (section 9.1 (a)) : écrit par soi, au-delà de ce que l'ouvreur avait lu de soi. */
+/**
+ * Règle de report d'époque en vigueur (ADR 0011 §9.1 (a) et §24 point 6, option B validée par Ali le 2026-10-17, §26) : survit à un
+ * changement d'époque tout ce que l'ouvreur `O` n'avait pas lu, sauf ses propres écritures et celles d'un appareil oublié ; un champ
+ * (ou une trace purgée) d'auteur `X` est reporté si `X ≠ O`, `X` non oublié et hlc > `covers[X].hlc` (entrée absente ou sans hlc :
+ * tout ce que l'appareil détient de `X`). Seule écriture de cette règle : le prédicat `carries` de `materialize` (`src/sync/epochSwitch.ts`).
+ * Cette fonction n'en est que le cas particulier `X = self` (l'ancienne option A, remplacée le 2026-10-17) ; elle n'a aucun appelant
+ * en production (seul `catalogue.test.ts` l'exerce) et ne décide d'aucun report.
+ */
 export function mustCarry(fieldHlc: Hlc, self: DeviceId, cover: DeviceAck | null): boolean {
   if (fieldHlc.slice(21) !== self) return false;
   return cover === null || cover.hlc === null || fieldHlc > cover.hlc;

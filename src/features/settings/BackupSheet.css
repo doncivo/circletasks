@@ -120,6 +120,8 @@
 .ct-backup__versionMain {
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ct-backup__versionTitle {
@@ -130,6 +132,25 @@
 .ct-backup__versionDetails {
   font-size: var(--ct-font-size-text-sm);
   color: var(--ct-color-text-secondary);
+}
+
+/* Y-TECH-04 : appareil et époque passent à la ligne (jamais de points de suspension, lisibles à 393 pt). */
+.ct-backup__versionOrigin,
+.ct-backup__versionEpoch {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+  white-space: normal;
+}
+
+.ct-backup__versionEpoch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ct-space-1) var(--ct-space-2);
+}
+
+.ct-backup__tag--epoch {
+  flex-shrink: 1;
 }
 
 /* Étiquette « Avant mise à jour » : le texte porte le sens, la couleur n'est qu'un renfort. */

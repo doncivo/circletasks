@@ -18,9 +18,12 @@ import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot }
  * Passage à une époque plus récente sans perte (ADR 0011, section 9.1 ; Y-02 critère 14, Y-09 critère 9), sur chaque appareil B qui
  * la voit (restauration « Appliquer partout » d'un autre appareil, ou époques concurrentes) :
  *
- * (a) **matérialisation depuis la base locale** de B, par pages : chaque ligne dont un champ porte une horloge de B au-delà de
- *     `covers[B].hlc` (ce que l'ouvreur avait lu de B), ou un champ en attente dans la file ; chaque identifiant purgé par B au-delà de
- *     `covers[B]` ; le tout gardé dans `sync_parked` (motif `epoch-carry`, jamais abandonné) ;
+ * (a) **matérialisation depuis la base locale** de B, par pages, selon la règle de report validée par Ali le 2026-10-17 (option B,
+ *     ADR 0011 §24 point 6, §26) : survit tout ce que l'ouvreur `O` n'avait pas lu, sauf ses propres écritures et celles d'un appareil
+ *     oublié. B retient chaque ligne dont un champ a pour auteur un appareil `X ≠ O`, `X` non oublié, avec un hlc au-delà de
+ *     `covers[X].hlc` (ce que l'ouvreur avait lu de `X` ; `X` = B compris, mais aussi tout tiers non oublié, par exemple l'ancien PC
+ *     encore associé), ou un champ propre en attente dans la file ; chaque identifiant purgé dont l'auteur vérifie la même règle ; le tout
+ *     gardé dans `sync_parked` (motif `epoch-carry`, jamais abandonné) ;
  * (b) **remplacement** de la base par l'instantané qui ouvre l'époque (la version restaurée porte des hlc anciens et perdrait à la fusion) ;
  *     Y-11 (§9.1 b, réinitialisation) : **fusion** de la section 5.5 (mode `merge`), l'instantané contient tout ce que l'ouvreur a lu jusqu'aux
  *     têtes, rien n'est à imposer ; l'instantané d'ouverture doit alors couvrir chaque oublié retenu jusqu'à sa coupure (accusés de
@@ -29,8 +32,9 @@ import { loadSnapshot, mergeSnapshot, replaceFromSnapshot, type LoadedSnapshot }
  * (d) la publication ordinaire du cycle (triée par hlc croissant) les republie avant toute nouvelle écriture.
  *
  * L'étape en cours est mémorisée (`sync_meta.epochSwitch`) : un arrêt reprend à l'étape interrompue (chaque étape est idempotente).
- * Règle confirmée par Ali : les écritures de B que l'ouvreur avait déjà lues sont remplacées ; celles qu'il n'avait jamais lues et les
- * écritures non publiées sont gardées.
+ * Règle validée par Ali (2026-10-05 pour la restauration, 2026-10-17 pour tous les auteurs, option B) : les écritures que l'ouvreur
+ * avait déjà lues sont remplacées ; celles qu'il n'avait jamais lues, de n'importe quel appareil non oublié autre que lui, et les
+ * écritures non publiées sont gardées. Le report rétablit, il n'efface jamais (limite connue et compte rendu visible : Y-TECH-05).
  */
 
 export type SwitchStep = 'a' | 'b' | 'c' | 'd';

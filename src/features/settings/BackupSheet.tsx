@@ -9,6 +9,8 @@ import { Button, ConfirmDialog, Sheet, useFocusTrap, useLayout } from '../../ui'
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
 import { backupStore } from './backupStore';
+import { backupOriginLabels, backupRowName, type BackupLabelContext } from './backupLabels';
+import { useBackupLabelContext } from './useBackupLabelContext';
 import './BackupSheet.css';
 
 const ERROR_KEYS: Record<Exclude<BackupFailureReason, 'sync-busy' | 'busy' | 'db-open'>, PlainMessageKey> = {
@@ -62,17 +64,27 @@ function BackupWindow({ onClose, children }: { onClose: () => void; children: Re
   );
 }
 
-function VersionRow({ version, disabled, onChoose }: { version: BackupVersion; disabled: boolean; onChoose: () => void }) {
+function VersionRow({ version, context, disabled, onChoose }: { version: BackupVersion; context: BackupLabelContext; disabled: boolean; onChoose: () => void }) {
   const when = formatBackupWhen(version.modifiedMs);
   const size = formatBackupSize(version.size);
   const details =
     version.tasks === null ? t('backup.versionDetailsUnknown', { size }) : version.tasks === 1 ? t('backup.versionDetailsOne', { size }) : t('backup.versionDetails', { size, tasks: version.tasks });
   const tag = version.kind === 'pre-migration' ? t('backup.kindPreMigration') : version.kind === 'pre-restore' ? t('backup.kindPreRestore') : null;
+  const title = t('backup.versionLabel', { date: when.date, time: when.time });
+  // Y-TECH-04 (partie C) : appareil, époque et « autre époque » ; rien quand le service ne fournit pas l'origine.
+  const origin = backupOriginLabels(version, context);
   return (
     <li>
-      <button type="button" className="ct-backup__version" disabled={disabled} onClick={onChoose}>
+      <button type="button" className="ct-backup__version" disabled={disabled} onClick={onChoose} aria-label={backupRowName({ when: title, origin, details, tag })}>
         <span className="ct-backup__versionMain">
-          <span className="ct-backup__versionTitle">{t('backup.versionLabel', { date: when.date, time: when.time })}</span>
+          <span className="ct-backup__versionTitle">{title}</span>
+          {origin && <span className="ct-backup__versionOrigin">{origin.device}</span>}
+          {origin && (origin.epoch || origin.otherEpoch) && (
+            <span className="ct-backup__versionEpoch">
+              {origin.epoch && <span>{origin.epoch}</span>}
+              {origin.otherEpoch && <span className="ct-backup__tag ct-backup__tag--epoch">{origin.otherEpoch}</span>}
+            </span>
+          )}
           <span className="ct-backup__versionDetails">{details}</span>
         </span>
         {tag && <span className="ct-backup__tag">{tag}</span>}
@@ -100,6 +112,7 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
   const restoreError = useFeatureStore(backupStore, (s) => s.restoreError);
   const restartNeeded = useFeatureStore(backupStore, (s) => s.restartNeeded);
   const markerFailure = useFeatureStore(backupStore, (s) => s.markerFailure);
+  const labelContext = useBackupLabelContext();
   const navigate = useNavigationStore((s) => s.navigate);
   const [lastChosen, setLastChosen] = useState<BackupVersion | null>(null);
   const isIos = container.platform.os === 'ios';
@@ -169,7 +182,7 @@ export function BackupSheet({ onClose }: { onClose: () => void }) {
       {versions.length > 0 && (
         <ul className="ct-backup__list" aria-label={t('backup.listLabel')}>
           {versions.map((version) => (
-            <VersionRow key={version.name} version={version} disabled={locked} onChoose={() => setChosen(version)} />
+            <VersionRow key={version.name} version={version} context={labelContext} disabled={locked} onChoose={() => setChosen(version)} />
           ))}
         </ul>
       )}

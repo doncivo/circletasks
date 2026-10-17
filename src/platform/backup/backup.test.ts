@@ -40,6 +40,15 @@ describe('Service de sauvegarde Tauri (P-04)', () => {
     expect(listing.versions.map((v) => v.name)).toEqual(['circletasks-daily-20261003.db']);
   });
 
+  it('liste : deviceId, platform et epoch de Rust (Y-TECH-04 partie C) traversent sans être interprétés, null compris', async () => {
+    const { db } = makeDb();
+    const full = version('circletasks-daily-20261003.db', { deviceId: '56d40a0a-1b2c-4d3e-8f4a-5b6c7d8e9f01', platform: 'windows', epoch: 'e0001-56d40a0a-1b2c-4d3e-8f4a-5b6c7d8e9f01' });
+    const empty = version('circletasks-daily-20261002.db', { deviceId: null, platform: null, epoch: null });
+    const api = makeApi({ list: () => Promise.resolve({ directory: null, entries: [full, empty] }) });
+    const listing = await createTauriBackup({ db, api }).list();
+    expect(listing.versions).toEqual([full, empty]);
+  });
+
   it('sauvegarde quotidienne : point de contrôle WAL, puis la commande avec le jour et le remplacement', async () => {
     const { db, calls } = makeDb();
     const daily = vi.fn(() => {
