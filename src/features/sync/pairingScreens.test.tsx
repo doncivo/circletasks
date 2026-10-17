@@ -41,6 +41,7 @@ beforeEach(async () => {
 afterEach(async () => {
   cleanup();
   vi.restoreAllMocks();
+  opened = null;
   await db.close();
 });
 
@@ -65,7 +66,8 @@ const scanNow = async (): Promise<void> => {
   // Fin réelle du scan (WebCrypto, durée dépendante de la machine : `settle` seul déclarait l'écran stable trop tôt sous charge, CI du
   // 2026-10-17, S04), puis les mises à jour d'écran qui suivent.
   const platform = opened;
-  if (platform) await act(() => platform.testing.scanSettled());
+  if (!platform) throw new Error('scanNow sans écran ouvert : appeler open(platform) d’abord');
+  await act(() => platform.testing.scanSettled());
   await settle(db.driver);
 };
 

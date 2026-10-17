@@ -526,7 +526,8 @@ export interface MemorySyncTesting {
   /**
    * Tests d'écran (PR #40, 2026-10-17) : promesse du dernier `scanAndImport` lancé, résolue quelle qu'en soit l'issue (déjà résolue si
    * aucun scan). L'import passe par WebCrypto, dont la durée dépend de la machine et échappe aux tours de `settle` : un test attend ici
-   * la fin réelle du scan au lieu de compter sur la stabilité du DOM.
+   * la fin réelle du scan au lieu de compter sur la stabilité du DOM. Seul le dernier scan lancé est retenu : deux scans qui se
+   * chevauchent ne sont pas attendus tous les deux (aucun test ne le fait).
    */
   scanSettled(): Promise<void>;
   /**
@@ -684,6 +685,20 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let pairing: PairingInstance | null = null;
   let scanResult: string | null = null;
   let lastScan: Promise<void> = Promise.resolve();
+  /** iPhone : un scan du QR puis l'import de la clé (voir `key.scanAndImport`). */
+  async function runScan(): Promise<ScanImportOutcome> {
+    if (!foreground) return { kind: 'failed', code: 'not-foreground' };
+    if (camera === 'prompt') camera = cameraAnswer;
+    if (camera === 'denied') return { kind: 'camera-denied' };
+    const text = scanResult;
+    scanResult = null;
+    if (text === null) return { kind: 'cancelled' };
+    try {
+      return { kind: 'imported', result: await importKey({ qrText: text }) };
+    } catch (error) {
+      return { kind: 'failed', code: error instanceof SyncPlatformError ? error.code : 'io' };
+    }
+  }
   /** iPhone (§23 point 2) : autorisation de la caméra simulée, réponse à la demande, réglages ouverts. */
   let camera: CameraPermission = 'granted';
   let cameraAnswer: 'granted' | 'denied' = 'granted';
@@ -2419,19 +2434,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       ...(devicePlatform === 'ios'
         ? {
             scanAndImport: (): Promise<ScanImportOutcome> => {
-              const run = (async (): Promise<ScanImportOutcome> => {
-                if (!foreground) return { kind: 'failed', code: 'not-foreground' };
-              if (camera === 'prompt') camera = cameraAnswer;
-              if (camera === 'denied') return { kind: 'camera-denied' };
-              const text = scanResult;
-              scanResult = null;
-              if (text === null) return { kind: 'cancelled' };
-              try {
-                  return { kind: 'imported', result: await importKey({ qrText: text }) };
-                } catch (error) {
-                  return { kind: 'failed', code: error instanceof SyncPlatformError ? error.code : 'io' };
-                }
-              })();
+              const run = runScan();
+              // Tests : `testing.scanSettled()` attend ce scan, quelle qu'en soit l'issue (seul le dernier scan lancé est retenu).
               lastScan = run.then(
                 () => undefined,
                 () => undefined,
