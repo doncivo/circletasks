@@ -9,7 +9,9 @@ import { createSimDevice, pair, setupFirst, syncFolders, taskSnapshot, type SimD
  * file d'envoi de l'autre appareil, ré-signée au nom de l'appareil courant. `carryIdentity` ci-dessous est la jumelle de ce contrat sur les
  * lignes de la copie ; le test joue ensuite les deux choix avec le vrai moteur : identité conservée, aucun code d'erreur de cycle, écriture
  * non publiée de l'autre appareil publiée par l'appareil courant et reçue par un troisième.
- * Preuve de détection : sans `carryIdentity` (`corrected = false`), le test échoue (`restart-required`, écriture jamais publiée).
+ * Preuve de détection : sans la transformation de la file en entrées « ligne entière », l’écriture de l’autre appareil n’est pas reçue quand l’appareil
+ * courant a publié après elle. La reprise de `sync_meta` n’a pas de preuve ici : le moteur simulé se recale seul sur son journal (constaté : tête et
+ * fichiers identiques avec et sans), elle est portée par les tests Rust (`restore_identity_sync.rs`).
  */
 
 const CURRENT = '7d0b7d0b-7d0b-4d0b-8d0b-7d0b7d0b7d0b';
@@ -26,6 +28,12 @@ afterEach(async () => {
   devices = [];
 });
 
+/** Variantes du scénario : la correction complète, ou privée de la transformation de la file en entrées « ligne entière » (preuve de détection explicite). */
+type Variant = 'corrected' | 'no-plus';
+
+/** Parmi les clés d’identité, celles qui portent des numéros de la file d’envoi : remises à zéro, jamais recopiées de la base en place. */
+const QUEUE_META = ['inflight', 'epochSwitch', 'epochCarry'];
+
 /** Clés de `sync_meta` qui décrivent la publication de l'appareil (même liste que `IDENTITY_META_KEYS` de `backup.rs`). */
 const IDENTITY_META = ['epoch', 'stateSeq', 'head', 'inflight', 'lastState', 'snapshot', 'segments', 'epochSwitch', 'epochCarry', 'resume', 'join', 'forgetPublish', 'forgetDeletions', 'ownStateHlcs', 'orphanEpoch', 'orphanTraces', 'orphanTraceHit', 'orphanTraceAck'];
 
@@ -40,7 +48,7 @@ const signedBy = (hlc: unknown, id: string): boolean => typeof hlc === 'string' 
 const restamp = (hlc: string, id: string): string => `${hlc.slice(0, 21)}${id}`;
 
 /** Jumelle TypeScript de `carry_device_identity` sur une copie d'un autre appareil (`other`), pour la base en place `live`. */
-function carryIdentity(other: Copy, live: Copy, current: string, old: string): Copy {
+function carryIdentity(other: Copy, live: Copy, current: string, old: string, variant: Variant = 'corrected'): Copy {
   const out: Copy = new Map([...other].map(([table, rows]) => [table, rows.map((row) => ({ ...row }))]));
   const table = (name: string): Row[] => out.get(name) ?? [];
   // device.id et sync_state.
@@ -63,9 +71,14 @@ function carryIdentity(other: Copy, live: Copy, current: string, old: string): C
       row['device_id'] = current;
     }
   }
-  // État de publication : celui de la base en place.
+  // Chaque ligne de la file devient « ligne entière » (+) : republiée avec un rang neuf, hlc d’origine gardés.
+  if (variant !== 'no-plus') {
+    const rows = [...new Set(table('sync_outbox').filter((e) => e['table_name'] === 'task').map((e) => String(e['row_id'])))];
+    out.set('sync_outbox', [...table('sync_outbox').filter((e) => e['table_name'] !== 'task'), ...rows.map((id, i) => ({ seq: 100_000 + i, table_name: 'task', row_id: id, field: '+' }))]);
+  }
+  // État de publication : celui de la base en place (sauf les numéros de file, remis à zéro).
   const meta = table('sync_meta').filter((r) => !IDENTITY_META.includes(String(r['key'])));
-  meta.push(...(live.get('sync_meta') ?? []).filter((r) => IDENTITY_META.includes(String(r['key']))).map((r) => ({ ...r })));
+  meta.push(...(live.get('sync_meta') ?? []).filter((r) => IDENTITY_META.includes(String(r['key'])) && !QUEUE_META.includes(String(r['key']))).map((r) => ({ ...r })));
   out.set('sync_meta', meta);
   return out;
 }
@@ -118,7 +131,7 @@ async function settle(list: readonly SimDevice[], rounds = 3): Promise<void> {
   syncFolders(devices);
 }
 
-async function scenario(corrected: boolean, option: RestoreOption, publishAfter = false): Promise<{ a: SimDevice; p: SimDevice; unpublishedTitle: string }> {
+async function scenario(variant: Variant, option: RestoreOption, publishAfter = false): Promise<{ a: SimDevice; p: SimDevice; unpublishedTitle: string }> {
   const { a, o, p } = await group();
   await a.createTask('A publiée');
   await settle(devices);
@@ -135,7 +148,7 @@ async function scenario(corrected: boolean, option: RestoreOption, publishAfter 
     await settle([a, p]);
   }
   const live = await backupOf(a);
-  await restore(a, corrected ? carryIdentity(copy, live, CURRENT, OTHER) : copy);
+  await restore(a, carryIdentity(copy, live, CURRENT, OTHER, variant));
   await a.service.chooseRestoreOption(option);
   await settle([a, p]);
   return { a, p, unpublishedTitle };
@@ -143,7 +156,7 @@ async function scenario(corrected: boolean, option: RestoreOption, publishAfter 
 
 describe.each<[RestoreOption, boolean]>([['keep-synced', false], ['apply-everywhere', false], ['keep-synced', true], ['apply-everywhere', true]])('restauration de la copie d’un autre appareil, choix %s, l’appareil courant publie après : %s (Y-TECH-04, B1)', (option, publishAfter) => {
   it('l’appareil garde son identité, aucun cycle ne tombe en erreur, l’écriture non publiée de l’autre appareil est publiée par lui et reçue', async () => {
-    const { a, p, unpublishedTitle } = await scenario(true, option, publishAfter);
+    const { a, p, unpublishedTitle } = await scenario('corrected', option, publishAfter);
     expect(await a.data.repos.settings.get('device.id')).toBe(CURRENT);
     const status = a.service.status();
     expect([status.phase, status.errorCode ?? null]).toEqual(['idle', null]);
@@ -156,16 +169,9 @@ describe.each<[RestoreOption, boolean]>([['keep-synced', false], ['apply-everywh
   });
 });
 
-describe('preuve de détection : la copie d’un autre appareil telle quelle (sans la correction du Rust)', () => {
-  it.each<[RestoreOption]>([['keep-synced'], ['apply-everywhere']])('choix %s : le scénario corrigé échoue sans correction', async (option) => {
-    const worked = await scenario(false, option).then(
-      async ({ a, p, unpublishedTitle }) => {
-        const status = a.service.status();
-        const reached = await p.driver.select('SELECT title FROM task WHERE title = ?', [unpublishedTitle]);
-        return status.phase === 'idle' && (status.errorCode ?? null) === null && reached.length === 1 && String(await a.data.repos.settings.get('device.id')) === CURRENT;
-      },
-      () => false,
-    );
-    expect(worked).toBe(false);
+describe('preuve de détection : les entrées « ligne entière » sont nécessaires', () => {
+  it.each<[RestoreOption]>([['keep-synced']])('sans les entrées « ligne entière » (%s), l’appareil courant ayant publié après : l’écriture n’est pas reçue par le troisième', async (option) => {
+    const { p, unpublishedTitle } = await scenario('no-plus', option, true);
+    expect(await p.driver.select('SELECT title FROM task WHERE title = ?', [unpublishedTitle])).toHaveLength(0);
   });
 });

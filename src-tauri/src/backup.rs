@@ -766,6 +766,11 @@ const IDENTITY_META_KEYS: [&str; 18] = [
     "orphanTraceAck",
 ];
 
+/// Parmi `IDENTITY_META_KEYS`, les clés qui portent des numéros de la file d'envoi (`inflight`, `epochSwitch`, `epochCarry.maxSeq`). La file de la
+/// base restaurée est celle de la COPIE, pas celle de la base en place : ces clés ne sont pas recopiées de la base en place, elles sont remises à
+/// zéro (absentes), sans quoi un changement d'époque en cours au moment de la restauration appliquerait ses bornes à la file de la copie.
+const QUEUE_META_KEYS: [&str; 3] = ["inflight", "epochSwitch", "epochCarry"];
+
 /// Ligne du réglage `device.id` : valeur, `updated_at`, `device_id`, `hlc`.
 type SettingRow = (String, String, String, String);
 
@@ -826,7 +831,7 @@ fn read_current_identity(current_db: &Path) -> Result<Option<CurrentIdentity>, r
         let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
         for row in rows {
             let (key, value) = row?;
-            if IDENTITY_META_KEYS.contains(&key.as_str()) {
+            if IDENTITY_META_KEYS.contains(&key.as_str()) && !QUEUE_META_KEYS.contains(&key.as_str()) {
                 meta.push((key, value));
             }
         }
@@ -863,9 +868,13 @@ fn resign_outbox(conn: &rusqlite::Connection, old: &str, new: &str) -> Result<()
             let rows = stmt.query_map([table], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))).map_err(sql_err)?.collect::<Result<_, _>>().map_err(sql_err)?;
             rows
         };
+        let mut whole_rows: Vec<String> = Vec::new();
         for (row_id, field) in entries {
             let row_hlc: Option<String> = conn.query_row(&format!("SELECT hlc FROM {table} WHERE {key} = ?1"), [&row_id], |r| r.get(0)).ok();
             let Some(row_hlc) = row_hlc else { continue };
+            if !whole_rows.contains(&row_id) {
+                whole_rows.push(row_id.clone());
+            }
             if field == "*" || field == "+" {
                 // Ligne entière (création ou republication) : toutes les horloges de la ligne signées de l'ancien appareil.
                 conn.execute(
@@ -888,6 +897,14 @@ fn resign_outbox(conn: &rusqlite::Connection, old: &str, new: &str) -> Result<()
             if signed_by(&row_hlc, old) {
                 conn.execute(&format!("UPDATE {table} SET hlc = substr(hlc, 1, 21) || ?1, device_id = ?1 WHERE {key} = ?2"), rusqlite::params![new, row_id]).map_err(sql_err)?;
             }
+        }
+        // Chaque ligne de la file devient « ligne entière » (`+`, `ROW_REPUBLISH_FIELD`) : le publieur la republie avec un rang neuf au-dessus de
+        // la tête de l'appareil courant, en gardant le hlc d'origine de chaque champ (mécanisme du report d'époque). Sans cela, une entrée dont le
+        // hlc est ≤ à la tête (l'appareil courant a publié depuis l'écriture de l'autre) serait écartée comme déjà publiée, sans signal. Un hlc
+        // neuf n'est pas une option : il écraserait des écritures plus récentes des autres appareils.
+        for row_id in whole_rows {
+            conn.execute("DELETE FROM sync_outbox WHERE table_name = ?1 AND row_id = ?2", rusqlite::params![table, row_id]).map_err(sql_err)?;
+            conn.execute("INSERT INTO sync_outbox (table_name, row_id, field) VALUES (?1, ?2, '+')", rusqlite::params![table, row_id]).map_err(sql_err)?;
         }
     }
     Ok(())
