@@ -111,3 +111,7 @@ Run vert : 39030179275 (tous les jobs, dont `cargo audit` et `Vitest dom` depuis
 - Le crochet protège les versions qui le contiennent : l'ancien désinstalleur (0.1.1 à 0.3.3) garde sa case active au premier passage ; non testable sans publier une version antérieure.
 - La clé `HKCU\Software\<éditeur>\CircleTasks` n'est plus supprimée à la désinstallation (le modèle ne la supprime que dans le bloc de la case) ; sans conséquence pour les données.
 - Le pilotage dépend des libellés français du modèle NSIS ; à relire à chaque montée du CLI Tauri.
+
+### Essai jetable de l'échéance du pilote (revue du 2026-10-17)
+
+Échéance du pilote réduite à 5 s (commit af1704b9, run 39033655114, rouge) : le pilote a écrit son résultat (`echeance globale du pilote … depassee : arret de l installeur apres « Fermer »`, étape nommée), 7 pièces jointes (captures de chaque page, capture d'écran et arbre des contrôles) AVANT que `spawnSync` n'arrive à sa borne de 300 s. Essai annulé par un commit inverse (jamais de force) ; run vert avant l'essai : 39032887354 (commit 81a31e6b).
