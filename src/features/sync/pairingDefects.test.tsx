@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Y-IOS-02, QA du parcours d'association : défauts D1 à D6 constatés par la QA (PR #15), rouges avant la correction (branche fix-pairing-d1-d6).
 // Chaque test dit l'attendu ; il passe au vert quand le défaut est corrigé, puis rejoint pairingMatrix.test.tsx ou pairingScreens.test.tsx.
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
@@ -132,6 +132,8 @@ describe('D6 écran « Associer au PC » : cause masquée pendant le scan', () =
     phone.testing.setScanResult(await world.qr());
     open(phone);
     fireEvent.click(await screen.findByRole('button', { name: 'Ouvrir la caméra et scanner le code d’association' }));
+    // Fin réelle du scan avant `settle` (WebCrypto, voir pairingScreens.test.tsx).
+    await act(() => phone.testing.scanSettled());
     await settle(db.driver);
     expect(screen.getByTestId('ios-pairing-message').textContent).toMatch(/Trousseau|déverrouill/);
   });
