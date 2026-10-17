@@ -20,7 +20,7 @@ Décision d'Ali du 2026-10-17, mot pour mot : « Le défaut 1 passe avant la 1.0
 ## Décisions retenues
 
 - **Décision d'Ali (2026-10-17) : ouvrir un segment suivant, ne pas télécharger avant d'ajouter.** Sur `cloud-pending` à l'ajout dans le segment de tête propre, le moteur ouvre le segment `max + 1` (comme sur `segment-full`) et ajoute là, avec `expectRecords: 0`.
-- **Règle : l'écriture ne lit jamais iCloud.** Aucun appel `hydrate` ni `read` bloquant sur le chemin de l'ajout au journal. Le téléchargement reste réservé à la lecture et à la fusion, où l'échec est de toute façon visible. Cette règle est consignée dans l'ADR 0011 (avenant §26).
+- **Règle : l'écriture ne lit jamais iCloud.** Aucun appel `hydrate` ni `read` bloquant sur le chemin de l'ajout au journal. Le téléchargement reste réservé à la lecture et à la fusion, où l'échec est de toute façon visible. Cette règle est consignée dans l'ADR 0011 (avenant §27).
 - **Une seule rotation sur `cloud-pending` par cycle** (plafond contre une boucle de création de segments) ; indépendante du compteur `attempt < 2` de `segment-full` / `segment-mismatch`, qui ne change pas.
 - **Si l'ajout échoue encore après la rotation** (le nouveau segment aussi en `cloud-pending`, ou toute autre erreur) : l'échec devient **visible** (avertissement durable dans Détails avec la cause et, au-delà du journal technique, un état lisible dans l'app), conformément à la règle « aucun échec silencieux ». Il se résout au premier ajout réussi.
 - Le segment évincé reste dans iCloud, tel quel, avec son `closed` (nombre d'enregistrements) enregistré dans `state.ctx` (Y-TECH-02). On ne le supprime pas, on ne le réécrit pas.
@@ -82,7 +82,7 @@ Réponse de l'agent d'implémentation : *à remplir avant le premier commit de c
 
 ### Documentation
 
-15. **Alors** : ADR 0011, **avenant §26** (prochain numéro libre après §25, à reconfirmer par l'agent) : règle « l'écriture ne lit jamais iCloud », raison d'Ali (citation), rotation sur `cloud-pending` à l'ajout, plafond d'une rotation par cycle, échec visible, réponse à la section « Raison technique de faire l'inverse ? » ; `docs/dettes.md` : segments courts en nombre, rotation sur une panne durable ; `docs/journal.md` : entrée du jour ; `docs/backlog.md` : statut de Y-IOS-07 ; `docs/audit-1.0.md` : état de B16.
+15. **Alors** : ADR 0011, **avenant §27** (prochain numéro libre après §26 (Y-TECH-04), à reconfirmer par l'agent) : règle « l'écriture ne lit jamais iCloud », raison d'Ali (citation), rotation sur `cloud-pending` à l'ajout, plafond d'une rotation par cycle, échec visible, réponse à la section « Raison technique de faire l'inverse ? » ; `docs/dettes.md` : segments courts en nombre, rotation sur une panne durable ; `docs/journal.md` : entrée du jour ; `docs/backlog.md` : statut de Y-IOS-07 ; `docs/audit-1.0.md` : état de B16.
 
 ## Limites assumées
 
