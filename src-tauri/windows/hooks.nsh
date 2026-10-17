@@ -18,4 +18,5 @@
 ; et le smoke tests/smoke/pc-installeur.spec.ts le constate sur de vraies données. Aucune autre macro de crochet n'est définie ici.
 
 !macro NSIS_HOOK_PREUNINSTALL
+  StrCpy $DeleteAppDataCheckboxState 0
 !macroend
