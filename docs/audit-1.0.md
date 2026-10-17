@@ -9,11 +9,11 @@ Règle de lecture : **bloquant** = perte de données, synchro ou rappel qui s'ar
 | Gravité | Constats (dédoublonnés) | Estimation |
 |---|---|---|
 | Bloquant | 14 | 100 à 125 h (dont 24 à 40 h pour le job Swift/simulateur) |
-| Important | 78 | 220 à 250 h |
+| Important | 80 | 225 à 257 h |
 | Mineur | ~95 | 90 à 100 h |
-| **Total** | **~187** | **410 à 475 h** |
+| **Total** | **~189** | **415 à 482 h** |
 
-Socle minimal recommandé avant la 1.0 (section 5) : **60 à 75 h**.
+Socle minimal recommandé avant la 1.0 (section 5) : **61 à 76 h**.
 
 ## 2. Priorité 1 : `own-state-unknown` en boucle sur l'iPhone
 
@@ -44,7 +44,7 @@ Socle minimal recommandé avant la 1.0 (section 5) : **60 à 75 h**.
 | B13 | Tests | **Aucune ligne Swift n'est exécutée** (3 703 lignes, 9 plugins) : contrôles statiques par sous-chaînes seulement ; les faux iCloud sont complaisants (suppression toujours réussie et propagée, pas de `.icloud`, pas d'éviction, pas de résurrection) ; l'« iPhone » e2e est un Chromium 440×956 sans toucher, clavier ni safe areas. Les six défauts des séances tombent tous dans ces zones aveugles. | — (c'est la cause) | Faux iCloud hostiles (`FaultPlan`, fixture de conformité partagée, scénario orphelin) 16 h ; atteignabilité au doigt + safe areas 59/34 + `visualViewport` + projet 393×852 12 h ; job macOS XCTest + simulateur 24–40 h. | 52–68 |
 | B14 | Architecture / produit | **Règle de report d'époque appliquée sans validation** (ADR 0011 §9.1 vs §24.6, Q13) : le code applique depuis 0.3.0 « survit tout ce que l'ouvreur n'avait pas lu », encore « à valider par Ali », qui remplace la règle confirmée le 2026-10-05 ; 26 décisions attendent validation « en fin d'ordre ». | Aucun contrôle du statut d'une décision. | Séance de validation avant REL-01 ; récrire §9.1, fermer Q13. | 3–4 + séance |
 
-## 4. Importants (78), par domaine
+## 4. Importants (80), par domaine
 
 ### Synchro (6, ~20 h)
 Fichier verrouillé un instant → « corrupt » collant (`store.rs:601`, 3 h) · horloge en avance : impasse d'un mois après correction de la date (`hlc.ts:84`, décision ADR §4.4, 6 h) · `writeState` refusé en silence à l'étape 6 (`engine.ts:926`, 2 h) · `missing-parent` sans avertissement (`engine.ts:880-897`, 2 h) · changement d'époque figé sur un instantané supprimé (`epochSwitch.ts:323-350`, 3 h) · `cap-dropped`/`publish-too-large`/`apply-abandoned` journal seul (note > 256 Kio jamais publiée, 4 h).
@@ -73,6 +73,9 @@ Hauteurs fixes et 60 polices en px à 200 % (10 h) · cibles < 44 pt (4 h) · To
 ### Tests et CI (14, ~70 h)
 WebKit sur 2 specs/120 (10 h) · e2e sur serveur dev, jamais sur le build de production (8 h) · base de test `sqlite-wasm` 3.53 vs SQLite ~3.46 de production, IPC, WAL (8 h) · aucun smoke iPhone (16 h) · publication sur tag sans vérifier « suite verte » (3 h) · ni plancher de tests ni plafond de `skip` (3 h) · seuils de couverture (2 h) · parcours 1 incomplet et dépendant de l'horloge (3 h) · parcours 2 PRD absent (PC → synchro → rappel iPhone → Fait, 8 h) · `matchMedia`/CSS absents en jsdom (4 h) · largeurs 393/390 jamais testées, pc 1440 au lieu de 1280 (2 h) · 26 `waitForTimeout` et ~60 `setTimeout` de « preuve par absence » (6 h) · `memory.ts` seul faux pour tout, conformité Rust sur 3 cas (8 h) · checklist ordre 5 sans texte verrouillé, fichiers évincés, clavier, roue, safe areas, app tuée (1 h) · budgets perf sans IPC (4 h) · fuseau non épinglé en CI (3 h).
 
+### Écrans d'échec par plateforme et installation PC (2, ~6 h) — complément du 2026-10-17
+Vérification demandée par Ali après l'incident PC du 17 octobre (« Impossible d'ouvrir la base de données » sans détail). **L'écran d'ouverture de la base est commun aux deux plateformes** : `App.tsx` monte `DbFailureDetails` (étape, erreur exacte, versions, URL, chemins, mode de journal, « Réessayer », « Copier le détail », restauration d'avant mise à jour) sans condition de plateforme ; seuls diffèrent les textes de consigne (`schemaNewer` SideStore / `schemaNewerPc` page des versions) ; couvert par `dbFailure.test.tsx`, `updateFailure.test.tsx` et l'e2e `db-open-failure.spec.ts` dans les projets `pc` et `iphone`. L'écran vu le 17 octobre venait du binaire **0.1.1** encore installé dans `%LOCALAPPDATA%\CircleTasks` (écran d'avant 0.2.1), pas de la 0.3.3. Relecture de toutes les branches `platform.os` / `detectOs()` des écrans (`src/features`, `src/ui`, `App.tsx`) : une seule asymétrie fonctionnelle. · **Récupération d'une restauration interrompue** : sur PC, boîte système bloquante `MessageBoxW` avec le code puis arrêt de l'app (`desktop.rs:302-330`, ADR 0009 : fenêtre créée après la récupération) ; sur iPhone, écran `RecoveryFailure.tsx` avec texte par cause et action « Mettre les fichiers en conflit de côté » (rien n'est supprimé) puis rechargement. Le PC est plus pauvre : aucune action, texte en dur hors i18n (déjà relevé en accessibilité). Créer la fenêtre avec l'état d'échec et réutiliser l'écran iOS (`backup_set_aside_conflicts` est sans `cfg`) : 4–5 h ; rare, hors socle. · **Installation PC obsolète** : l'installation NSIS est restée en **0.1.1** (4 octobre) alors que le PC tourne la **0.3.1 de debug** (`src-tauri/target/debug`, journal `app-updated ? 0.3.1` du 10 octobre) ; le raccourci de l'Explorateur ouvre la 0.1.1, qui refuse la base en schéma 18 ; le PC n'a jamais reçu 0.3.2 ni 0.3.3, l'updater n'a jamais été exercé sur cette machine (dette « Test d'installation réelle N → N+1 »). Installer la 0.3.3 PC par l'installeur publié, puis N → N+1 par l'updater : 1 h + séance, **au socle** (point 8). Pourquoi l'audit ne l'a pas vu : il lisait le code 0.3.3, où l'asymétrie supposée n'existe pas ; l'état des installations de la machine d'Ali n'était pas dans son périmètre.
+
 ### Code, ADR, architecture (21, ~55 h)
 Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNAMIC_IMPORT` (2 h) · lecture stricte de l'état : toute extension après 1.0 impose `sm` 2 (ADR avant le tag, 2 + 6–8 h) · règles de protocole en trois exemplaires, 9/37 constantes comparées (3 h) · ADR 0011 contradictoire (nombre de commandes, §9.1/§24.6, maîtrise Rust/TS, 4–6 h) · backlog et dettes faux (stories livrées « à faire », 2 h) · commandes de sauvegarde non documentées (1 h) · marqueur de restauration écrit avant l'échange, `local:true` sans garde (3 h) · ADR 0002 périmé, plugin SQL copié sans procédure, pont JS `^2.5.0` (2 h) · règle métier Rappels Apple dans une feature avec `localeCompare` (4 h) · `import('@tauri-apps/…')` dans une feature (1 h) · `Brand<Id>` qui se réduit à `never` (8 h) · taille d'installeur non mesurée depuis 0.1.0 (1 h) · démarrage à froid jamais mesuré (2 h) · licences incomplètes (1,5 h) · somme des têtes non surveillée (2 h).
 
@@ -85,6 +88,7 @@ Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNA
 5. **Notifications** : B10 (corps avec heure et espace) : 3 h ; aperçus masqués (déjà écrit, N-IOS-FIX-01) ; essai des `%` sur l'iPhone : 1 h ; B9 selon décision : 5 h.
 6. **Sombre** : B11 : 1,5 h + garde-fou 3 h.
 7. **Tests, le minimum qui aurait vu les défauts des séances** : faux iCloud hostiles + scénario orphelin : 16 h ; projet 393×852 avec safe areas et atteignabilité : 12 h.
+8. **Installation PC réelle** (ajouté le 2026-10-17) : remplacer la 0.1.1 de `%LOCALAPPDATA%\CircleTasks` par la 0.3.3 publiée, vérifier que le raccourci ouvre la bonne version et que l'updater passe N → N+1 sur la machine d'Ali : 1 h + séance. Le diagnostic d'ouverture de la base est déjà identique sur PC et iPhone (section 4, complément du 2026-10-17) : rien à ajouter au code pour lui.
 
 Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, découpage d'`engine.ts`, Dynamic Type (si Ali retire l'exigence), consolidation des ADR, pluriels/insécables, anglais.
 
