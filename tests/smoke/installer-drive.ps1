@@ -236,8 +236,9 @@ function Get-InstallerPage {
   if (-not $window.Visible) { return $null }
   $radio = Find-Control $window 'radio' 'D.sinstaller avant d.installer'
   if ($radio) { return [pscustomobject]@{ Kind = 'reinstall'; Window = $window; Control = $radio } }
-  $finish = Find-Control $window 'push' '^Terminer$' -EnabledOnly
-  if ($finish) { return [pscustomobject]@{ Kind = 'finish'; Window = $window; Control = $finish } }
+  # Page finale : bouton « Terminer » (MUI) ou « Fermer » (observé en CI le 2026-10-17 avec NOAUTOCLOSE), reconnue à sa case « Lancer <produit> ».
+  $finish = Find-Control $window 'push' '^(Terminer|Fermer)$' -EnabledOnly
+  if ($finish -and (Find-Control $window 'check' '^(Ex.cuter|Lancer)')) { return [pscustomobject]@{ Kind = 'finish'; Window = $window; Control = $finish } }
   $next = Find-Control $window 'push' '^(Suivant|Installer)' -EnabledOnly
   if ($next) { return [pscustomobject]@{ Kind = 'next'; Window = $window; Control = $next } }
   return $null
@@ -258,6 +259,8 @@ function Invoke-ReinstallFlow {
   for ($index = 1; $index -le 16 -and -not $finished; $index++) {
     Enter-Step ('installeur : page ' + $index)
     $page = Wait-Until { Get-InstallerPage } $WorkTimeoutMs ('page de l installeur (page ' + $index + ')')
+    Save-Screen ('installeur-page-' + $index)
+    Write-Note ('page ' + $index + ' (' + $page.Kind + ') : ' + (Get-Signature $page.Window))
     switch ($page.Kind) {
       'reinstall' {
         Enter-Step 'installeur : page « Deja installe », choix « Desinstaller avant d installer »'
@@ -273,7 +276,7 @@ function Invoke-ReinstallFlow {
         Enter-Step 'installeur : page finale (case de lancement decochee, bouton « Terminer »)'
         $run = Find-Control $page.Window 'check' '^(Ex.cuter|Lancer)'
         if ($run) { Set-CheckBox $run $false 'Executer l application' } else { Write-Note 'case de lancement absente de la page finale' }
-        Send-Click $page.Control 'Terminer'
+        Send-Click $page.Control (Format-Name $page.Control.Text)
         Enter-Step 'installeur : fin du processus'
         [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs 'arret de l installeur apres « Terminer »')
         if ($script:InstallerProcess.ExitCode -ne 0) { throw ('code de sortie de l installeur : ' + $script:InstallerProcess.ExitCode) }
@@ -327,6 +330,20 @@ function Stop-SmokeProcesses {
       if (Test-Path -LiteralPath $productKey) { Remove-Item -LiteralPath $productKey -Recurse -Force; Write-Note ('cle supprimee : ' + $productKey) }
     }
   }
+}
+
+# Capture d'écran de tout le bureau, jointe au résultat (une par page de l'installeur : le prochain échec se lit sans rejouer).
+function Save-Screen([string]$Name) {
+  try {
+    $bounds = [System.Windows.Forms.SystemInformation]::VirtualScreen
+    $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+    $file = Join-Path $OutDir (($Action.ToLowerInvariant()) + '-' + $Name + '.png')
+    $bitmap.Save($file, [System.Drawing.Imaging.ImageFormat]::Png)
+    $graphics.Dispose(); $bitmap.Dispose()
+    $script:Files.Add($file)
+  } catch { Write-Note ('capture d ecran impossible : ' + $_.Exception.Message) }
 }
 
 # Échec : capture d'écran, capture de la fenêtre (window-capture.ps1), contrôles Win32 et arbre UI Automation, joints au résultat.
