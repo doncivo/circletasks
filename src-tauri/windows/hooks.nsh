@@ -11,6 +11,8 @@
 ; la suppression des données n'a donc jamais lieu. La case reste affichée, cochée ou non, et ne fait rien : l'état de la case est IGNORÉ
 ; VOLONTAIREMENT (choix d'Ali : « une case visible mais inerte me suffit »). Pour effacer les données, supprimer à la main les deux dossiers
 ; (docs/install-pc.md).
+; Effet de bord connu : le modèle ne supprime la clé HKCU\Software\<éditeur>\CircleTasks (dossier d'installation mémorisé, langue) que dans le bloc de
+; la case ; elle reste donc après toute désinstallation, comme avec la case décochée (cas par défaut). Sans conséquence pour les données.
 ; La mise à jour intégrée (plugin updater, arguments /P /UPDATE) ne lance jamais le désinstalleur : elle n'est pas concernée.
 ;
 ; Modèle amont : crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi, tag tauri-cli-v2.12.1 (`Var DeleteAppDataCheckboxState`, `un.ConfirmLeave`,

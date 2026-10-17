@@ -10,7 +10,7 @@ import { basename, join, resolve } from 'node:path';
  * L'installeur NSIS de fumée (`npm run test:smoke:installer-build`, produit « CircleTasks Smoke », identifiant `.smoke` : jamais
  * `%LOCALAPPDATA%\CircleTasks` ni `%APPDATA%\fr.circletasks.planner`) est exécuté pour de vrai :
  *   (a) installation silencieuse ; (b) donnée témoin dans `%APPDATA%\fr.circletasks.planner.smoke` ;
- *   (c) même installeur en graphique (UI Automation, `installer-drive.ps1`) : « Désinstaller avant d'installer », case « Supprimer les données
+ *   (c) même installeur en graphique (messages Win32 postés par `installer-drive.ps1`) : « Désinstaller avant d'installer », case « Supprimer les données
  *       de l'application » COCHÉE et vérifiée, désinstallation, installation jusqu'à « Terminer » ;
  *   (d) la donnée témoin existe toujours, l'application réinstallée démarre ;
  *   (e) `uninstall.exe` en graphique, case cochée : la donnée témoin existe toujours, le dossier d'installation a disparu ;
@@ -26,8 +26,26 @@ const INSTALLER_DIR = join(TAURI_DIR, 'target', 'smoke', 'debug', 'bundle', 'nsi
 /** Seul identifiant dont les dossiers de données peuvent être effacés (ADR 0016). */
 const SMOKE_IDENTIFIER = 'fr.circletasks.planner.smoke';
 const APP_READY_TIMEOUT_MS = 90_000;
-const SILENT_INSTALL_TIMEOUT_MS = 240_000;
-const DRIVE_TIMEOUT_MS = 600_000;
+/**
+ * Bornes emboîtées (ADR 0016, avenant REL-TECH-02). Durées observées en CI le 2026-10-17 : installation silencieuse et chaque pilotage graphique
+ * en quelques secondes, nettoyage en moins d'une seconde ; les bornes laissent une marge d'un ordre de grandeur et ne sont jamais allongées pour
+ * faire passer un essai. spawnSync bloque la boucle d'événements : test.setTimeout ne peut rien interrompre, chaque appel porte donc sa borne et le
+ * délai du test est la SOMME des bornes (calculée ci-dessous), jamais une valeur indépendante.
+ */
+const SILENT_INSTALL_TIMEOUT_MS = 120_000;
+const DRIVE_TIMEOUT_MS = 300_000;
+/** Part de DRIVE_TIMEOUT_MS réservée aux preuves d'échec du pilote : son échéance globale (-DeadlineMs) est DRIVE_TIMEOUT_MS moins cette marge (30 s pour le nettoyage et la capture d'écran, qui n'ont pas de preuves à écrire). */
+const DRIVE_EVIDENCE_MARGIN_MS = 60_000;
+const CLEANUP_TIMEOUT_MS = 90_000;
+const CAPTURE_TIMEOUT_MS = 120_000;
+const TASKKILL_TIMEOUT_MS = 30_000;
+const SCREENSHOT_TIMEOUT_MS = 60_000;
+const INSTALL_DIR_GONE_TIMEOUT_MS = 30_000;
+const APP_KILL_TIMEOUT_MS = 15_000;
+/** Pire cas cumulé : 2 nettoyages, installation, 2 pilotages, démarrage de l'app (3 attentes + capture), capture d'échec, attentes finales, marge. */
+const TEST_TIMEOUT_MS =
+  2 * CLEANUP_TIMEOUT_MS + SILENT_INSTALL_TIMEOUT_MS + 2 * DRIVE_TIMEOUT_MS + 3 * APP_READY_TIMEOUT_MS + 2 * CAPTURE_TIMEOUT_MS + SCREENSHOT_TIMEOUT_MS +
+  INSTALL_DIR_GONE_TIMEOUT_MS + APP_KILL_TIMEOUT_MS + 3 * TASKKILL_TIMEOUT_MS + 60_000;
 const TAURI_ORIGINS = new Set(['http://tauri.localhost', 'tauri://localhost']);
 
 interface DriveResult {
@@ -72,12 +90,12 @@ function roamingAppData(): string {
   return value;
 }
 
-function runDrive(testInfo: TestInfo, action: 'Reinstall' | 'Uninstall' | 'Cleanup', args: Record<string, string>, timeoutMs: number): DriveResult {
+function runDrive(testInfo: TestInfo, action: 'Reinstall' | 'Uninstall' | 'Cleanup' | 'Screenshot', args: Record<string, string>, timeoutMs: number): DriveResult {
   const resultFile = testInfo.outputPath(`${action.toLowerCase()}-resultat.json`);
   const outDir = testInfo.outputPath('installeur');
   mkdirSync(outDir, { recursive: true });
   rmSync(resultFile, { force: true });
-  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', DRIVE_SCRIPT, '-Action', action, '-OutDir', outDir, '-ResultFile', resultFile];
+  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', DRIVE_SCRIPT, '-Action', action, '-OutDir', outDir, '-ResultFile', resultFile, '-DeadlineMs', String(timeoutMs - (action === 'Reinstall' || action === 'Uninstall' ? DRIVE_EVIDENCE_MARGIN_MS : 30_000))];
   // Une valeur vide désigne un paramètre interrupteur (-RemoveRegistry).
   for (const [name, value] of Object.entries(args)) argv.push(...(value === "" ? [`-${name}`] : [`-${name}`, value]));
   const run = spawnSync('powershell', argv, { encoding: 'utf8', timeout: timeoutMs });
@@ -110,7 +128,7 @@ async function driveOrFail(testInfo: TestInfo, action: 'Reinstall' | 'Uninstall'
 }
 
 function killTree(child: ChildProcess): void {
-  if (child.pid !== undefined && child.exitCode === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { encoding: 'utf8' });
+  if (child.pid !== undefined && child.exitCode === null) spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { encoding: 'utf8', timeout: TASKKILL_TIMEOUT_MS });
 }
 
 async function cdpReachable(port: number): Promise<boolean> {
@@ -136,7 +154,7 @@ interface WindowCapture {
 }
 
 function captureWindow(pid: number, out: string): WindowCapture {
-  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, '-ProcessId', String(pid), '-Out', out], { encoding: 'utf8', timeout: 120_000 });
+  const run = spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', CAPTURE_SCRIPT, '-ProcessId', String(pid), '-Out', out], { encoding: 'utf8', timeout: CAPTURE_TIMEOUT_MS });
   if (run.status !== 0) throw new Error(`window-capture.ps1 a échoué (code ${String(run.status)}) : ${run.stderr}${run.stdout}`);
   const line = run.stdout
     .split(/\r?\n/)
@@ -149,7 +167,7 @@ function captureWindow(pid: number, out: string): WindowCapture {
 
 test("la désinstallation (réinstallation et uninstall.exe, case « Supprimer les données » cochée) conserve les données de l'application", async () => {
   const testInfo = test.info();
-  test.setTimeout(1_200_000);
+  test.setTimeout(TEST_TIMEOUT_MS);
   const { productName, identifier, version, cdpPort } = readConf();
   assertSmokeOnly(productName, identifier);
   const installDir = join(localAppData(), productName);
@@ -170,7 +188,7 @@ test("la désinstallation (réinstallation et uninstall.exe, case « Supprimer l
   const cleanup = async (removeRegistry: boolean): Promise<void> => {
     await browser?.close().catch(() => undefined);
     if (app) killTree(app);
-    const result = runDrive(testInfo, 'Cleanup', { ...baseArgs, Installer: installer, ...(removeRegistry ? { RemoveRegistry: '' } : {}) }, 180_000);
+    const result = runDrive(testInfo, 'Cleanup', { ...baseArgs, Installer: installer, ...(removeRegistry ? { RemoveRegistry: '' } : {}) }, CLEANUP_TIMEOUT_MS);
     await attachDrive(testInfo, result);
     expect.soft(result.ok, `nettoyage des processus de fumée échoué à l'étape « ${result.step} » : ${result.message}`).toBe(true);
   };
@@ -210,6 +228,7 @@ test("la désinstallation (réinstallation et uninstall.exe, case « Supprimer l
       child.on('error', (error) => output.push(`[spawn] ${error.message}\n`));
       child.stdout.on('data', (chunk: Buffer) => output.push(chunk.toString()));
       child.stderr.on('data', (chunk: Buffer) => output.push(chunk.toString()));
+      let captured = false;
       try {
         await expect
           .poll(async () => (child.exitCode !== null ? 'exited' : (await cdpReachable(cdpPort)) ? 'reachable' : 'waiting'), { message: 'WebView2 de l’application installée injoignable par CDP', timeout: APP_READY_TIMEOUT_MS })
@@ -230,15 +249,26 @@ test("la désinstallation (réinstallation et uninstall.exe, case « Supprimer l
         if (!page) throw new Error('page principale introuvable');
         await expect(page.locator('.app-shell')).toHaveAttribute('data-db-status', 'ready', { timeout: APP_READY_TIMEOUT_MS });
         const capture = captureWindow(child.pid ?? 0, testInfo.outputPath('application-installee.png'));
+        captured = true;
         await testInfo.attach('application-installee.json', { body: JSON.stringify(capture), contentType: 'application/json' });
         expect(capture.found, 'fenêtre « CircleTasks » de l’application installée introuvable').toBe(true);
         expect(capture.visible, 'fenêtre de l’application installée invisible').toBe(true);
         expect(capture.iconic, 'fenêtre de l’application installée réduite').toBe(false);
       } finally {
+        // Écran noir de l'ADR 0016 : CDP injoignable ou base pas prête. Tant que l'application tourne, sa fenêtre est capturée avant l'arrêt.
+        if (!captured && child.exitCode === null) {
+          try {
+            const failedCapture = captureWindow(child.pid ?? 0, testInfo.outputPath('application-installee-echec.png'));
+            await testInfo.attach('application-installee-echec.json', { body: JSON.stringify(failedCapture), contentType: 'application/json' });
+            if (existsSync(testInfo.outputPath('application-installee-echec.png'))) await testInfo.attach('application-installee-echec.png', { path: testInfo.outputPath('application-installee-echec.png'), contentType: 'image/png' });
+          } catch (error) {
+            await testInfo.attach('application-installee-echec.txt', { body: String(error), contentType: 'text/plain' });
+          }
+        }
         await browser?.close().catch(() => undefined);
         browser = undefined;
         killTree(child);
-        await expect.poll(() => child.exitCode !== null || child.signalCode !== null, { message: 'application installée toujours active après taskkill', timeout: 15_000 }).toBe(true);
+        await expect.poll(() => child.exitCode !== null || child.signalCode !== null, { message: 'application installée toujours active après taskkill', timeout: APP_KILL_TIMEOUT_MS }).toBe(true);
         if (output.length > 0) await testInfo.attach('application-installee.txt', { body: output.join(''), contentType: 'text/plain' });
         app = undefined;
       }
@@ -248,7 +278,13 @@ test("la désinstallation (réinstallation et uninstall.exe, case « Supprimer l
       const uninstaller = join(installDir, 'uninstall.exe');
       expect(existsSync(uninstaller), `uninstall.exe absent : ${uninstaller}`).toBe(true);
       await driveOrFail(testInfo, 'Uninstall', { ...baseArgs, Installer: uninstaller });
-      await expect.poll(() => existsSync(installDir), { message: `dossier d'installation toujours présent : ${installDir}`, timeout: 30_000 }).toBe(false);
+      try {
+        await expect.poll(() => existsSync(installDir), { message: `dossier d'installation toujours présent : ${installDir}`, timeout: INSTALL_DIR_GONE_TIMEOUT_MS }).toBe(false);
+      } catch (error) {
+        const shot = runDrive(testInfo, 'Screenshot', { ...baseArgs }, SCREENSHOT_TIMEOUT_MS);
+        await attachDrive(testInfo, shot);
+        throw error;
+      }
       expect(existsSync(marker), `donnée témoin supprimée par uninstall.exe : ${marker}`).toBe(true);
       expect(readFileSync(marker, 'utf8'), 'contenu de la donnée témoin modifié').toBe(markerContent);
     });

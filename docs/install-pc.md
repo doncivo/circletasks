@@ -34,7 +34,7 @@ La même case existe quand on désinstalle CircleTasks depuis « Paramètres ›
 
 ### Effacer volontairement les données
 
-Il n'existe plus de désinstallation « avec données ». Pour repartir de zéro : quitter CircleTasks (zone de notification › Quitter), puis supprimer à la main `%APPDATA%r.circletasks.planner` et `%LOCALAPPDATA%r.circletasks.planner` (explorateur de fichiers, ou `Remove-Item -Recurse` dans PowerShell). Rien ne va à la corbeille : copier d'abord `backups` si tu veux le garder.
+Il n'existe plus de désinstallation « avec données ». Pour repartir de zéro : quitter CircleTasks (zone de notification › Quitter), puis supprimer à la main `%APPDATA%\fr.circletasks.planner` et `%LOCALAPPDATA%\fr.circletasks.planner` (explorateur de fichiers, ou `Remove-Item -Recurse` dans PowerShell). Rien ne va à la corbeille : copier d'abord `backups\` si tu veux le garder.
 
 ## Si les données ont été effacées malgré tout
 

@@ -10,6 +10,8 @@ export default defineConfig({
     environment: 'node',
     include: ['tests/nsis/**/*.test.ts'],
     coverage: { enabled: false },
+    // Le motif du test ignoré hors CI (script NSIS absent) doit s'afficher ; la CI force --reporter=default.
+    reporters: ['verbose'],
     maxWorkers: 1,
   },
 });

@@ -5,6 +5,7 @@
 #                        (registre, DisplayVersion), choisit « Désinstaller avant d'installer », coche « Supprimer les données de l'application »
 #                        dans le désinstalleur, désinstalle, puis déroule l'installation jusqu'à « Terminer » (case de lancement décochée).
 #   -Action Uninstall  : lance uninstall.exe (-Installer) en graphique, coche la même case, désinstalle, ferme.
+#   -Action Screenshot : capture d'écran de l'état courant (pièce jointe d'un échec du test hors du pilote).
 #   -Action Cleanup    : tue les processus de fumée (installeur, désinstalleur, application installée) ; -RemoveRegistry retire les clés de fumée.
 #
 # Résultat : fichier JSON UTF-8 (-ResultFile) { ok, action, step, message, log[], files[] } ; code de sortie 0 (ok) ou 1 (échec).
@@ -13,10 +14,11 @@
 #
 # Pourquoi des messages Win32 et pas des patterns UI Automation : constaté en CI le 2026-10-17 (run 39024162153), UI Automation expose les contrôles
 # NSIS comme de simples volets (ControlType.Pane, classe « Button », identifiant = identifiant du contrôle) sans InvokePattern ni TogglePattern.
-# Les fenêtres et leurs libellés sont donc lus et les clics envoyés par l'API Win32 (EnumWindows, EnumChildWindows, WM_GETTEXT, BM_GETCHECK,
-# BM_CLICK), les mêmes messages que ceux d'une personne devant l'écran ; UI Automation ne sert plus qu'à joindre son arbre au rapport d'échec.
-# BM_CLICK est POSTÉ (asynchrone) : sur la page « déjà installé », « Suivant » exécute le désinstalleur (ExecWait) dans le fil de l'interface de
-# l'installeur ; un clic synchrone attendrait la fin d'une désinstallation qu'il faut justement piloter.
+# Lecture : API Win32 (EnumWindows, EnumChildWindows, WM_GETTEXT, BM_GETCHECK).
+# Boutons poussoirs : WM_COMMAND(BN_CLICKED) POSTÉ au dialogue principal avec l'identifiant du bouton (BM_CLICK est resté sans effet sur « Fermer » de la
+# page finale en CI, runs 39027366664 et 39027981603). Cases et radios : BM_CLICK, qui bascule leur état (vérifié par BM_GETCHECK). Tout est POSTÉ
+# (asynchrone) : sur la page « déjà installé », « Suivant » exécute le désinstalleur (ExecWait) dans le fil de l'interface de l'installeur ; un envoi
+# synchrone attendrait la fin d'une désinstallation qu'il faut justement piloter. UI Automation ne sert plus qu'à joindre son arbre au rapport d'échec.
 #
 # Libellés (modèle NSIS de Tauri 2.12.1, `languages: ["French"]`) :
 #   - languages/French.nsh de Tauri : alreadyInstalled « Déja installé. » ; uninstallBeforeInstalling « Désinstaller avant d'installer » ;
@@ -30,7 +32,7 @@
 #
 # Attentes : toujours bornées (Wait-Until : délai maximal, état observable, échec nommant l'étape), jamais de pause fixe.
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('Reinstall', 'Uninstall', 'Cleanup')][string]$Action,
+  [Parameter(Mandatory = $true)][ValidateSet('Reinstall', 'Uninstall', 'Cleanup', 'Screenshot')][string]$Action,
   [Parameter(Mandatory = $true)][string]$ProductName,
   [Parameter(Mandatory = $true)][string]$InstallDir,
   [Parameter(Mandatory = $true)][string]$OutDir,
@@ -39,7 +41,10 @@ param(
   [string]$FakeInstalledVersion = '0.0.1',
   [switch]$RemoveRegistry,
   [int]$PageTimeoutMs = 60000,
-  [int]$WorkTimeoutMs = 180000
+  [int]$WorkTimeoutMs = 180000,
+  # Échéance globale du pilote : dépassée, Wait-Until échoue par le chemin habituel (étape nommée, preuves jointes). Le test la fixe sous sa propre borne
+  # (DRIVE_TIMEOUT_MS moins une marge pour les preuves) : spawnSync tuerait PowerShell avant qu'il écrive son résultat.
+  [int]$DeadlineMs = 240000
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -81,7 +86,7 @@ public static class CtNsis {
     EnumChildWindows(parent, (h, l) => { list.Add(Describe(h)); return true; }, IntPtr.Zero);
     return list;
   }
-  // Ce que fait un bouton : WM_COMMAND(BN_CLICKED) vers le dialogue qui le contient (repli quand BM_CLICK reste sans effet).
+  // Ce que fait un bouton poussoir : WM_COMMAND(BN_CLICKED) vers le dialogue principal (chemin normal des boutons, voir l'en-tête).
   public static void Command(IntPtr button) {
     IntPtr root = button; IntPtr up;
     while ((up = GetParent(root)) != IntPtr.Zero) root = up;
@@ -97,6 +102,7 @@ $script:Log = New-Object System.Collections.Generic.List[string]
 $script:Files = New-Object System.Collections.Generic.List[string]
 $script:Step = 'initialisation'
 $script:InstallerProcess = $null
+$script:Deadline = [DateTime]::UtcNow.AddMilliseconds($DeadlineMs)
 
 function Enter-Step([string]$Name) {
   $script:Step = $Name
@@ -114,6 +120,7 @@ function Wait-Until([scriptblock]$Condition, [int]$TimeoutMs, [string]$What) {
     $found = & $Condition
     if ($found) { return $found }
     if ([DateTime]::UtcNow -ge $limit) { throw ('delai de {0} ms depasse : {1}' -f $TimeoutMs, $What) }
+    if ([DateTime]::UtcNow -ge $script:Deadline) { throw ('echeance globale du pilote ({0} ms) depassee : {1}' -f $DeadlineMs, $What) }
     Start-Sleep -Milliseconds 250
   }
 }
@@ -124,6 +131,13 @@ function Format-Name([string]$Text) { return ($Text -replace '&', '').Trim() }
 function Assert-SmokeOnly {
   if ($ProductName -eq 'CircleTasks' -or $ProductName -notmatch ' Smoke$') { throw ("produit refuse (seul un produit « ... Smoke » est manipule) : " + $ProductName) }
   if ((Split-Path -Leaf $InstallDir) -ne $ProductName) { throw ("dossier d'installation refuse (nom different du produit de fumee) : " + $InstallDir) }
+  if ((Split-Path -Parent $InstallDir) -ne $env:LOCALAPPDATA) { throw ("dossier d'installation refuse (hors de LOCALAPPDATA) : " + $InstallDir) }
+  # Stop-SmokeProcesses tue tout processus dont le chemin est $Installer : installeur de fumee (nom du produit) ou fichier du dossier d'installation.
+  if ($Installer) {
+    $leaf = Split-Path -Leaf $Installer
+    $inside = $Installer.StartsWith($InstallDir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+    if (-not $inside -and $leaf -notmatch ('^' + [regex]::Escape($ProductName) + '_.*-setup\.exe$')) { throw ('installeur refuse (ni dans le dossier d installation ni « ' + $ProductName + '_*-setup.exe ») : ' + $Installer) }
+  }
 }
 
 function Get-ProcessList { return @(Get-CimInstance -ClassName Win32_Process) }
@@ -422,6 +436,7 @@ try {
     'Reinstall' { Invoke-ReinstallFlow }
     'Uninstall' { Invoke-UninstallFlow }
     'Cleanup' { Stop-SmokeProcesses }
+    'Screenshot' { Save-Screen 'etat' }
   }
   $ok = $true
 } catch {

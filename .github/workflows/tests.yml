@@ -413,7 +413,7 @@ jobs:
   smoke-windows:
     name: smoke Windows (binaire réel)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
       PLAYWRIGHT_HTML_OPEN: never
       PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
@@ -437,13 +437,14 @@ jobs:
       # Installeur NSIS de fumée : même configuration et même dossier cargo (target/smoke), donc aucune recompilation Rust ; le CLI télécharge NSIS.
       # Aucune clé de signature : createUpdaterArtifacts n'est activé nulle part dans la configuration de fumée.
       - name: Build de l'installeur NSIS de fumée
+        id: nsis-build
         run: npm run test:smoke:installer-build
       # Garde-fou : le crochet NSIS_HOOK_PREUNINSTALL précède les RmDir /r de Section Uninstall ; en CI, un script absent est un échec.
       - name: Garde-fou du script NSIS généré
         run: npm run test:nsis -- --reporter=default --reporter=json --outputFile.json=vitest-nsis.json
-      # S'exécute même si le garde-fou échoue : les deux niveaux (script généré, données réelles) sont toujours mesurés.
+      # S'exécute même si le garde-fou échoue (les deux niveaux, script généré et données réelles, sont toujours mesurés), mais pas si un build a échoué.
       - name: Test de fumée (CDP, pixels, installation, réinstallation et désinstallation)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.nsis-build.outcome == 'success' }}
         run: npm run test:smoke -- --reporter=github,html,json
       - name: Comptage
         if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}

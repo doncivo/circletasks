@@ -127,6 +127,12 @@ interface DegradedCase {
 const same = (text: string): string => text;
 
 const DEGRADED_CASES: readonly DegradedCase[] = [
+  {
+    name: '!include de hooks.nsh placé après Section Uninstall',
+    installer: (text) => `${text.replace(`!include "${INCLUDE_PATH}"\n`, '')}\n!include "${INCLUDE_PATH}"`,
+    hooks: (h) => h,
+    lost: ['!include de hooks.nsh placé APRÈS Section Uninstall'],
+  },
   { name: 'remise à 1 au lieu de 0 dans la macro', installer: same, hooks: (h) => h.replace(HOOK_BODY, '  StrCpy $DeleteAppDataCheckboxState 1'), lost: [LOST_ZERO] },
   { name: "remise à 0 d'une autre variable", installer: same, hooks: (h) => h.replace(HOOK_BODY, '  StrCpy $UpdateMode 0'), lost: [LOST_ZERO] },
   {
@@ -185,6 +191,11 @@ describe('REL-TECH-02 : garde-fou, cas dégradés supplémentaires', () => {
     expect(degraded !== base || degradedHooks !== hooksLf, 'le cas ne dégrade rien').toBe(true);
     const text = checkInstallerScript(degraded, degradedHooks).join('\n');
     for (const message of lost) expect(text).toContain(message);
+  });
+
+  it('accepte Var /GLOBAL et var en minuscules, comme les autres repères', () => {
+    expect(checkInstallerScript(script().replace('Var DeleteAppDataCheckboxState', 'Var /GLOBAL DeleteAppDataCheckboxState'), HOOKS_FILE)).toEqual([]);
+    expect(checkInstallerScript(script().replace('Var DeleteAppDataCheckboxState', 'var DeleteAppDataCheckboxState'), HOOKS_FILE)).toEqual([]);
   });
 
   it('le conforme reste accepté une fois la table jouée', () => {

@@ -52,7 +52,7 @@ Estimation de l'audit : crochet 1 h, garde-fou 1 h, smoke étendu 4 h, documenta
 
 - Le crochet protège les versions qui le contiennent. Le désinstalleur d'une version antérieure (0.1.1 à 0.3.3) garde la case active : quand on installe la première version avec crochet par-dessus une ancienne en choisissant « Désinstaller avant d'installer », c'est le désinstalleur ANCIEN qui s'exécute et la case reste dangereuse. L'avertissement en gras du guide couvre ce cas ; le smoke ne peut pas le tester sans publier une version antérieure (non couvert).
 - Une désinstallation Windows laisse désormais toujours les dossiers de données ; ce comportement est voulu.
-- Le pilotage UI Automation dépend des textes français du modèle NSIS de Tauri (`languages: French`) ; un changement de libellé par Tauri fait échouer le smoke avec le nom de l'étape (voulu, critère 11).
+- Le pilotage de l'interface (messages Win32) dépend des textes français du modèle NSIS de Tauri (`languages: French`) ; un changement de libellé par Tauri fait échouer le smoke avec le nom de l'étape (voulu, critère 11).
 - CPU du runner : délais bornés mais généreux, jamais allongés pour masquer un échec.
 
 ## Hors de cette story
@@ -86,7 +86,7 @@ Estimation de l'audit : crochet 1 h, garde-fou 1 h, smoke étendu 4 h, documenta
 | Critère | Résultat |
 | --- | --- |
 | 1 | `src-tauri/windows/hooks.nsh` : seule `NSIS_HOOK_PREUNINSTALL`, `StrCpy $DeleteAppDataCheckboxState 0`, commentaire (incident, B15, décision 9, case ignorée volontairement, modèle amont et tag `tauri-cli-v2.12.1`). |
-| 2 | `installerHooks: "./windows/hooks.nsh"` (convention de la doc Tauri 2 ; chemin relatif à `src-tauri`, résolu en absolu par le bundler : `!include "D:acircletaskscircletaskssrc-tauriwindowshooks.nsh"`). `languages` et `installMode` inchangés. |
+| 2 | `installerHooks: "./windows/hooks.nsh"` (convention de la doc Tauri 2 ; chemin relatif à `src-tauri`, résolu en absolu par le bundler : `!include "D:\a\circletasks\circletasks\src-tauri\windows\hooks.nsh"`). `languages` et `installMode` inchangés. |
 | 3 | Héritage constaté sur le script généré par la configuration de fumée : l'`!include` est présent sans redéclaration. |
 | 4 | `tests/nsis/installerScript.test.ts` (`npm run test:nsis`) lit `src-tauri/target/smoke/debug/nsis/x64/installer.nsi`. Écart de forme : le script généré ne contient pas le corps de la macro mais `!insertmacro NSIS_HOOK_PREUNINSTALL` (sous `!ifmacrodef`) et l'`!include` de `hooks.nsh` ; le contrôle porte donc sur l'insertion avant les deux `RmDir /r`, sur le corps de la macro dans le fichier inclus, sur l'existence de `$DeleteAppDataCheckboxState` (Var, `un.ConfirmLeave`, test) et sur l'absence de réaffectation. |
 | 5 | `tests/unit/smoke/nsisScript.test.ts` : conforme, CRLF, variable renommée, crochet après `RmDir`, crochet absent, include absent, variable réaffectée, fichier de crochets dégradé, commentaire. Chaque message nomme la propriété perdue. |
@@ -103,11 +103,11 @@ Run vert : 39030179275 (tous les jobs, dont `cargo audit` et `Vitest dom` depuis
 - UI Automation expose les contrôles NSIS en simples volets sans `InvokePattern` ni `TogglePattern` : lecture et actions par l'API Win32 (`EnumChildWindows`, `WM_GETTEXT`, `BM_GETCHECK`) ; UI Automation ne sert plus qu'au rapport d'échec.
 - `MUI_FINISHPAGE_NOAUTOCLOSE` : la page finale porte « Fermer » et non « Terminer ».
 - `BM_CLICK` reste sans effet sur « Fermer » alors que l'installeur répond ; `WM_COMMAND(BN_CLICKED)` envoyé au dialogue principal (ce que fait un bouton) fonctionne et sert pour tous les boutons poussoirs.
-- Lancé sans `_?=`, `uninstall.exe` se copie en `%TEMP%~nsu*.tmpUn.exe` (et non `Au_.exe`).
+- Lancé sans `_?=`, `uninstall.exe` se copie en `%TEMP%\~nsu*.tmp\Un.exe` (et non `Au_.exe`).
 - La page « Désinstaller avant d'installer » n'apparaît que si la version installée est plus ancienne : le pilote réécrit `DisplayVersion` du produit de fumée à `0.0.1` (HKCU) avant de relancer l'installeur.
 
 ### Limites
 
 - Le crochet protège les versions qui le contiennent : l'ancien désinstalleur (0.1.1 à 0.3.3) garde sa case active au premier passage ; non testable sans publier une version antérieure.
-- La clé `HKCUSoftware<éditeur>CircleTasks` n'est plus supprimée à la désinstallation (le modèle ne la supprime que dans le bloc de la case) ; sans conséquence pour les données.
+- La clé `HKCU\Software\<éditeur>\CircleTasks` n'est plus supprimée à la désinstallation (le modèle ne la supprime que dans le bloc de la case) ; sans conséquence pour les données.
 - Le pilotage dépend des libellés français du modèle NSIS ; à relire à chaque montée du CLI Tauri.

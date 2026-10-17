@@ -15,6 +15,8 @@ export const CHECKBOX_VARIABLE = 'DeleteAppDataCheckboxState';
 /** Dossiers de données que le modèle supprime (`RmDir /r`) quand la case est cochée. */
 const DATA_FOLDERS = ['$APPDATA\\${BUNDLEID}', '$LOCALAPPDATA\\${BUNDLEID}'] as const;
 
+const HOOKS_INCLUDE = /^!include\s+"([^"]*hooks\.nsh)"$/i;
+
 /** Lignes sans les commentaires NSIS (`;` ou `#` en tête de ligne) ni les blancs de bord. */
 function codeLines(text: string): string[] {
   return text
@@ -26,7 +28,7 @@ function codeLines(text: string): string[] {
 /** Chemin du fichier de crochets inclus par le script généré (`!include "…hooks.nsh"`), ou undefined s'il n'est pas inclus. */
 export function findHooksInclude(installer: string): string | undefined {
   for (const line of codeLines(installer)) {
-    const match = /^!include\s+"([^"]*hooks\.nsh)"$/i.exec(line);
+    const match = HOOKS_INCLUDE.exec(line);
     if (match?.[1]) return match[1];
   }
   return undefined;
@@ -53,7 +55,7 @@ export function checkInstallerScript(installer: string, hooks: string | undefine
   const lines = codeLines(installer);
 
   // (c) La variable existe encore : déclarée, alimentée par la page de confirmation du désinstalleur, testée dans Section Uninstall.
-  if (!lines.some((line) => new RegExp(`^Var\\s+${CHECKBOX_VARIABLE}$`).test(line))) {
+  if (!lines.some((line) => new RegExp(`^Var(\\s+/GLOBAL)?\\s+${CHECKBOX_VARIABLE}$`, 'i').test(line))) {
     problems.push(`variable $${CHECKBOX_VARIABLE} non déclarée (Var) : Tauri l'a renommée ou supprimée, le crochet ne remet plus rien à 0`);
   }
   const confirmLeave = block(lines, /^Function\s+un\.ConfirmLeave$/i, /^FunctionEnd$/i) ?? [];
@@ -61,9 +63,13 @@ export function checkInstallerScript(installer: string, hooks: string | undefine
     problems.push(`$${CHECKBOX_VARIABLE} n'est plus alimentée par un.ConfirmLeave : la page de confirmation a changé`);
   }
 
-  // Le fichier de crochets est inclus par le script généré.
-  if (findHooksInclude(installer) === undefined) {
+  // Le fichier de crochets est inclus par le script généré, AVANT Section Uninstall : sinon `!ifmacrodef` y est faux et la macro n'est jamais insérée.
+  const includeIndex = lines.findIndex((line) => HOOKS_INCLUDE.test(line));
+  const sectionIndex = lines.findIndex((line) => /^Section\s+Uninstall$/i.test(line));
+  if (includeIndex < 0) {
     problems.push("le script généré n'inclut pas hooks.nsh (!include) : bundle.windows.nsis.installerHooks n'est plus pris en compte");
+  } else if (sectionIndex >= 0 && includeIndex > sectionIndex) {
+    problems.push("!include de hooks.nsh placé APRÈS Section Uninstall : la macro n'est pas définie à l'insertion (!ifmacrodef faux), le crochet n'est jamais exécuté");
   }
 
   // (a) Le corps de la macro, dans le fichier inclus : remise à 0 de la variable.
