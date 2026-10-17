@@ -22,6 +22,7 @@ mod ocr_vision;
 mod quit;
 mod restore;
 mod restore_hardening;
+mod restore_identity;
 mod restore_ios;
 mod restore_qa_ios;
 mod restore_recovery;
