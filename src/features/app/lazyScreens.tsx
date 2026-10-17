@@ -58,12 +58,21 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
 }
 
 /**
+ * Y-FIX-04 : `onDemand` : bloc chargé seulement quand son hôte le rend (jamais préchargé par `preloadScreens`), sans repli d'écran
+ * (fenêtre en portail : rien n'occupe la place d'un écran pendant les quelques millisecondes du chargement ; un échec montre le message et
+ * « Réessayer » de la frontière d'erreur, jamais rien).
+ */
+interface LazyOptions {
+  readonly onDemand?: boolean;
+}
+
+/**
  * Chaque écran porte sa propre frontière Suspense et d'erreur : un écran voisin déjà affiché (Aujourd'hui à côté d'Un jour) ne se
  * masque pas. Module déjà arrivé (préchargement ou affichage précédent) : rendu direct à la création de l'instance, sans repli ni
  * Suspense ; le choix est fixé pour la vie de l'instance (pas de remontage, donc pas de perte d'état). Le composant paresseux est
  * propre à chaque instance : un « Réessayer » n'en touche aucune autre.
  */
-export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName): ComponentType<P> & { readonly preload: () => Promise<void> } {
+export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName, options: LazyOptions = {}): ComponentType<P> & { readonly preload: () => Promise<void> } {
   let loaded: ComponentType<P> | null = null;
   const remember = (): Promise<{ default: ComponentType<P> }> =>
     loaded
@@ -74,12 +83,12 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName)
             return module;
           })
           .finally(() => markLoaded(name));
-  loaders.push(remember);
+  if (options.onDemand !== true) loaders.push(remember);
   function LazyScreen(props: P): ReactElement {
     const [direct] = useState(() => loaded);
     const [Lazy, setLazy] = useState(() => lazy<ComponentType<P>>(remember));
     const [attempt, setAttempt] = useState(0);
-    const body = direct ? createElement(direct, props) : <Suspense fallback={<Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
+    const body = direct ? createElement(direct, props) : <Suspense fallback={options.onDemand === true ? null : <Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
     return (
       <ScreenErrorBoundary
         key={attempt}

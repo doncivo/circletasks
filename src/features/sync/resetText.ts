@@ -4,49 +4,14 @@ import { t } from '../../i18n';
 import type { SyncDeviceStatus } from '../../platform/sync/types';
 import { forgetDeviceName } from './forgetText';
 import { resetRequiredLine } from './syncText';
+import { resetReason } from './resetReason';
+
+export { resetReason };
 
 /**
  * Textes de Y-11 communs à l'emplacement `reset` de Réglages, à la ligne de Réglages (`statusLine`) et aux bandeaux A-09 (D5 : une seule
  * formulation par état). Jamais de clé, de code brut, de chemin ni de contenu.
  */
-
-/** Raison lisible d'un code de refus ou d'erreur. */
-export function resetReason(code: string): string {
-  switch (code) {
-    case 'vault-unavailable':
-      return t('sync.reset.reasons.vaultUnavailable');
-    case 'key-missing':
-      // Y-IOS-02 : réinitialisation refusée à un appareil sans clé (jamais « coffre indisponible », la clé n'existe pas).
-      return t('sync.reset.reasons.keyMissing');
-    case 'cloud-pending':
-    case 'cloud-error':
-    case 'cloud-provider-stopped':
-      return t('sync.reset.reasons.cloudPending');
-    case 'folder-unreachable':
-    case 'not-local':
-    case 'unsafe-folder':
-    case 'not-configured':
-      return t('sync.reset.reasons.folderUnreachable');
-    case 'key-exhausted':
-      return t('sync.reset.reasons.keyExhausted');
-    case 'state-mismatch':
-      return t('sync.reset.reasons.stateMismatch');
-    case 'not-foreground':
-      return t('sync.reset.reasons.notForeground');
-    case 'rate-limited':
-      return t('sync.reset.reasons.rateLimited');
-    case 'io':
-      return t('sync.reset.reasons.io');
-    case 'key-mismatch':
-      return t('sync.reset.reasons.keyMismatch');
-    case 'invalid-pairing':
-      return t('sync.reset.reasons.invalidPairing');
-    case 'pairing-expired':
-      return t('sync.reset.reasons.pairingExpired');
-    default:
-      return t('sync.reset.reasons.other');
-  }
-}
 
 function stepName(step: string): string {
   switch (step) {

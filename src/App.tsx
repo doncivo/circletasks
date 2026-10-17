@@ -54,7 +54,7 @@ import { OnboardingHost, restoreAppearance, startThemeSync } from './features/se
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
 import { UpdateBanner } from './features/updater';
-import { RestoreChoiceDialog } from './features/sync/RestoreChoiceDialog';
+import { RestoreChoiceHost } from './features/sync/RestoreChoiceHost';
 import { startSyncIntegration } from './features/sync/startSync';
 import { startRemindersLazily } from './features/calendars/appleReminders/loadIntegration';
 import { startNotificationIntegration } from './features/reminders/startNotifications';
@@ -145,8 +145,8 @@ function AppShellContent() {
     >
       <AppStatusBanner />
       <UpdateBanner />
-      {/* Y-02 : choix après une restauration P-04 (aucune synchro ne part avant). */}
-      {container.sync && <RestoreChoiceDialog />}
+      {/* Y-02 : choix après une restauration P-04 (aucune synchro ne part avant) ; Y-FIX-04 : fenêtre et textes chargés à la demande. */}
+      {container.sync && <RestoreChoiceHost />}
       {/* P-05 : assistant de premier lancement (base neuve, app installée). */}
       <OnboardingHost />
       <EventEditorHost />
