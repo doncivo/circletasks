@@ -1,6 +1,6 @@
 # Y-IOS-02-FIX-02 — Publication bloquée par un instantané orphelin resté dans iCloud
 
-Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.2, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine `src/domain/sync/`, journal) et **ios-mobile** (vérification réelle sur l'iPhone, checklist de l'ordre 5) · Relectures : qa-test, code-reviewer · Statut : fait (code), vérification iPhone 0.3.3 en attente (décision d'Ali du 2026-10-16) ; fusionnée dans main (PR #36, suite CI verte), livrée en 0.3.3 PC et iPhone (PR #37, tags v0.3.3 et ios-v0.3.3). Décision d'origine : « corrige cette cause, sans réinitialiser »
+Module : M15 Synchronisation · Ordre de construction : 5 (correctifs de la séance iPhone 0.3.2, **avant REL-01**) · Agents : **sync-icloud** (moteur `src/sync/`, domaine `src/domain/sync/`, journal) et **ios-mobile** (vérification réelle sur l'iPhone, checklist de l'ordre 5) · Relectures : qa-test, code-reviewer · Statut : **fait** (code et vérification réelle sur l'iPhone 0.3.3 consignée par Ali le 2026-10-17, checklist de l'ordre 5) ; fusionnée dans main (PR #36, suite CI verte), livrée en 0.3.3 PC et iPhone (PR #37, tags v0.3.3 et ios-v0.3.3). Décision d'origine : « corrige cette cause, sans réinitialiser »
 Correctif rattaché à **Y-IOS-02** (abandon de l'époque orpheline, ADR 0011 §24 point 4 (e)). Aucun écart au PRD. **Lève le « `canPublish` inchangé » de Y-IOS-02-FIX-01** (fiche du 2026-10-10) : la règle de comptage de `canPublish` change ici, sur décision d'Ali.
 Dépend de : Y-IOS-02 (fait), Y-07 (statuts, journal de synchro). Ne bloque aucune autre story ; Y-IOS-02-FIX-01 reste utile et indépendante (affichage d'un échec de suppression).
 Code en parallèle dans ce worktree : `src/sync`, `src/domain/sync`, tests et ADR 0011 §24 (avenant) ; cette fiche ne touche que `docs/`.
@@ -17,7 +17,7 @@ Correctif décidé : (1) règle de comptage de `canPublish` ; (2) réarmement du
 
 Aucune maquette. Aucun élément visuel nouveau : le bandeau existant « Cet appareil n'a pas encore publié son état » disparaît une fois la publication faite. Relu par Ali sur l'iPhone.
 
-**Périmètre élargi au plugin iOS, cause probable relevée le 2026-10-16** (deuxième relecture, déduite de la lecture du plugin, non prouvée par les journaux, à confirmer sur l'iPhone) : iOS aurait évincé `s-00000001.cts` (« Optimiser le stockage »), seul restait le substitut `.s-00000001.cts.icloud`, listé sous le nom réel ; `remove` du plugin folder-bookmark (`src-tauri/plugins/folder-bookmark/ios/Sources/FolderBookmarkPlugin.swift`) cherchait le nom réel et répondait « rien supprimé », `sync_delete_own` rendait 0, et le moteur journalisait `orphan-epoch-deleted` et effaçait le mémo. Correctif : `remove` supprime le substitut sous la coordination `forDeleting` (`removed: true`), `removeEmptyDir` passe sous `forDeleting` ; faux du plugin (`src-tauri/tests/desktop/support/fake_bookmark.rs`) et test desktop (`sync_publish_bound.rs`). Rust de la synchro (`src-tauri/src/sync/**`) toujours inchangé.
+**Périmètre élargi au plugin iOS, cause relevée le 2026-10-16 et confirmée sur l'iPhone le 2026-10-17** (deuxième relecture, déduite de la lecture du plugin ; confirmée par le journal 0.3.3 : `orphan-epoch-relisted` puis `orphan-epoch-deleted`, fichier disparu d'iCloud) : iOS aurait évincé `s-00000001.cts` (« Optimiser le stockage »), seul restait le substitut `.s-00000001.cts.icloud`, listé sous le nom réel ; `remove` du plugin folder-bookmark (`src-tauri/plugins/folder-bookmark/ios/Sources/FolderBookmarkPlugin.swift`) cherchait le nom réel et répondait « rien supprimé », `sync_delete_own` rendait 0, et le moteur journalisait `orphan-epoch-deleted` et effaçait le mémo. Correctif : `remove` supprime le substitut sous la coordination `forDeleting` (`removed: true`), `removeEmptyDir` passe sous `forDeleting` ; faux du plugin (`src-tauri/tests/desktop/support/fake_bookmark.rs`) et test desktop (`sync_publish_bound.rs`). Rust de la synchro (`src-tauri/src/sync/**`) toujours inchangé.
 
 ## Critères testables
 
@@ -80,7 +80,7 @@ Tests : Vitest (domaine pur pour `canPublish`, moteur sur faux `SyncFs` et horlo
 
 ## Clôture (product-owner, 2026-10-16)
 
-Statut : **fait (code)** ; **vérification iPhone 0.3.3 en attente** (décision d'Ali du 2026-10-16). La story ne passe pas à « fait » complet tant que les vérifications manuelles ci-dessous ne sont pas consignées par Ali.
+Statut : **fait**. Vérifications manuelles 1 à 8 faites par Ali sur l'iPhone en 0.3.3 le 2026-10-17 et consignées dans `docs/stories/_checklist-ordre-5.md` (phase 1, lot Y-IOS). **Cause confirmée sur l'iPhone le 2026-10-17 (0.3.3, journal `circletasks-logs-20261017-0340`)** : au premier cycle après la mise à jour, plus aucun `publish-deferred` ; à 03:39:58 (heure locale) `orphan-epoch-relisted` puis `orphan-epoch-deleted`, aucun `orphan-epoch-already-gone` ; le dossier `e0001-ef50…` a disparu d'iCloud Drive et l'iPhone a publié `state.ctx` et `j-00000001.ctj` dans l'époque du PC. « Test Pc » visible sur l'iPhone, l'iPhone vu par le PC. Sans réassociation ni réinitialisation.
 
 Vérification critère par critère :
 - **Critères 1 à 5** (règle de comptage) : vérifiés par `src/domain/sync/epochPublishBound.test.ts` (cas annoncée / non annoncée, instantané seul / plus segment, époque courante / non courante) et par la parité avec `rebuild_own` dans `src-tauri/tests/desktop/sync_publish_bound.rs` (table `tests/fixtures/sync/publish-bound.json`).
@@ -92,7 +92,7 @@ Vérification critère par critère :
 
 Revue code-reviewer : **trois passes**, approuvée à la troisième. Points traités : réarmement chargé à la demande (bundle de départ ramené de 350,3 à 349,67 Ko après l'incident CI du budget de bundle) ; `pairingStatus` sorti du bundle de départ (`src/features/sync/pairingHub.ts`) ; refus d'état Rust visible (`state-refused`, `publish-blocked`) ; réarmement bloqué tant qu'un autre appareil est illisible ; journal `orphan-epoch-already-gone` ; plugin iOS folder-bookmark qui supprime le substitut `.icloud` (cause probable, **à confirmer sur l'iPhone**, vérification 8). QA approuvée.
 
-Reste à faire par Ali : les vérifications manuelles 1 à 8 ci-dessous sur l'iPhone en 0.3.3. Si la vérification 8 infirme l'hypothèse du substitut, la dette de `docs/dettes.md` reste ouverte.
+Vérifications manuelles 1 à 8 ci-dessous faites le 2026-10-17 : la vérification 8 confirme l'hypothèse du substitut ; la dette correspondante de `docs/dettes.md` est fermée. Restent ouvertes les limites laissées (répétition du journal, réarmement suspendu par un appareil illisible, identifiant d'époque complet dans trois entrées, orpheline plus petite que l'époque courante).
 
 ## Vérifications manuelles d'Ali (iPhone, ordre 5)
 
