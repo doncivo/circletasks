@@ -654,7 +654,7 @@ L'application doit rester rapide, fiable hors ligne et sans perte de données, s
 | Données       | Migrations de base                                        | Sans perte, testées sur la base de la version précédente                                                                                                               |
 | Sécurité      | Jetons et identifiants                                    | Coffre système uniquement ; HTTPS pour tout échange                                                                                                                    |
 | Sécurité      | Verrouillage iPhone                                       | Face ID optionnel à l'ouverture                                                                                                                                        |
-| Accessibilité | Taille de texte                                           | Jusqu'à 200 % ; sur iPhone, police système via `font: -apple-system-body` pour suivre la taille de texte iOS (Dynamic Type ne s'applique pas seul à une webview Tauri) |
+| Accessibilité | Taille de texte                                           | Jusqu'à 200 %. Retiré de la 1.0 (décision d'Ali du 2026-10-17, audit B12) : l'app ne suit pas le réglage iOS de taille de texte (`font: -apple-system-body` non implémenté) ; à revoir après la 1.0. |
 | Accessibilité | Contraste et animations                                   | Contraste AA ; respect de « Réduire les animations »                                                                                                                   |
 | Langue        | Interface                                                 | Français d'abord ; anglais en option                                                                                                                                   |
 | Qualité       | Tests                                                     | Règles métier couvertes à ≥ 80 % ; tests de bout en bout sur les 12 parcours clés ci-dessous                                                                           |
@@ -1303,7 +1303,7 @@ Périmètre : src-tauri/gen/apple, src-tauri/plugins (vision, speech, folder-boo
 - Écran d'appairage : scan du QR code affiché par le PC, repli par saisie de la clé de secours (avec sync-icloud).
 - Écran de logs interne exportable (remplace l'inspecteur Safari).
 - Alerte locale 24 h avant l'expiration des 7 jours (I-02) ; autorisations demandées au premier usage (I-05).
-- Taille de texte iOS suivie via font: -apple-system-body.
+- Taille de texte iOS : retiré de la 1.0 (décision d'Ali du 2026-10-17, audit B12) : l'app ne suit pas le réglage iOS de taille de texte (`font: -apple-system-body` n'est pas implémenté) ; à revoir après la 1.0.
 - Compatibilité Apple ID gratuit : aucune capacité payante (iCloud, push, App Groups, extensions).
 
 Règles : vérifie la documentation Tauri 2 mobile à jour avant tout plugin ; chaque plugin a une interface TypeScript et un repli si indisponible.
