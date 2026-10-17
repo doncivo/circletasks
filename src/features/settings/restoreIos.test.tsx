@@ -37,7 +37,9 @@ describe('P-04-iOS : restauration sur iPhone (mise au calme, mémo, marqueur, é
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     db = await openTestDb(DEVICE, '2026-10-08T08:00:00.000Z');
     sync = createFakeSyncService({ phase: 'idle' });
-    backups = createMemoryBackup({ versions: [VERSION] });
+    // Revue PR #40 (2026-10-17) : la sauvegarde quotidienne créée à l'ouverture de la feuille suit l'horloge du test (8 oct. 2026), jamais le
+    // vrai calendrier ; sinon son libellé « 7 oct. à … » doublait le bouton cherché chaque 7 octobre (et « 17 oct. » sans l'ancre).
+    backups = createMemoryBackup({ versions: [VERSION], nowMs: () => db.clock.nowMs() });
     container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, sync, backups, platform: { runtime: 'tauri', os: 'ios' } });
     integration = null;
     useNavigationStore.setState(INITIAL_NAVIGATION);
@@ -218,7 +220,7 @@ describe('P-04-iOS : restauration sur iPhone (mise au calme, mémo, marqueur, é
     );
     expect(await screen.findByText('Dossier des sauvegardes : Dossier de l’app (non visible dans Fichiers)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Afficher dans le dossier' })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^7 oct\./ }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
     expect(await screen.findByText('Restauration en cours…')).toBeInTheDocument();
     expect(root).toHaveAttribute('inert');

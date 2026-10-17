@@ -30,7 +30,9 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
     window.localStorage.clear();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     db = await openTestDb(DEVICE, '2026-10-08T08:00:00.000Z');
-    backups = createMemoryBackup({ versions: [VERSION] });
+    // Revue PR #40 (2026-10-17) : la sauvegarde quotidienne créée à l'ouverture de la feuille suit l'horloge du test (8 oct. 2026), jamais le
+    // vrai calendrier ; sinon son libellé « 7 oct. à … » doublait le bouton cherché chaque 7 octobre (et « 17 oct. » sans l'ancre).
+    backups = createMemoryBackup({ versions: [VERSION], nowMs: () => db.clock.nowMs() });
     container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, backups, platform: { runtime: 'tauri', os: 'ios' } });
     useNavigationStore.setState(INITIAL_NAVIGATION);
   });
@@ -50,7 +52,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
         <BackupSheet onClose={() => undefined} />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^7 oct\./ }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
     return screen.findByRole('alert');
   }
@@ -66,7 +68,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
     expect(alert.textContent).not.toMatch(/[A-Za-z]:\\|\/var\/|\/private\//);
     expect(within(alert).queryByRole('button', { name: 'Réessayer' })).toBeNull();
     expect(within(alert).queryByRole('button', { name: 'Redémarrer' })).toBeNull();
-    expect(screen.getByRole('button', { name: /^(07\/10|7 oct)/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^7 oct\./ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Fermer' })).toBeEnabled();
     expect(backups.restarts.count).toBe(0);
     expect(window.localStorage.getItem(RESTORE_RESULT_KEY)).toBeNull();
@@ -115,7 +117,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
           <BackupSheet onClose={() => undefined} />
         </AppContainerProvider>,
       );
-      fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^7 oct\./ }));
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
       await screen.findByRole('alert');
       // La reprise du planificateur relance un cycle d'ouverture : la synchro n'est pas restée suspendue.
@@ -134,9 +136,9 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
       </AppContainerProvider>,
     );
     expect(await screen.findByText('Impossible de lire la liste des sauvegardes.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^(07\/10|7 oct)/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^7 oct\./ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Sauvegarder maintenant' }));
-    expect(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^7 oct\./ })).toBeInTheDocument();
     expect(screen.queryByText('Impossible de lire la liste des sauvegardes.')).toBeNull();
   });
 });

@@ -22,7 +22,9 @@ describe('P-04-iOS : défauts', () => {
     window.localStorage.clear();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     db = await openTestDb(DEVICE, '2026-10-08T08:00:00.000Z');
-    backups = createMemoryBackup({ versions: [VERSION] });
+    // Revue PR #40 (2026-10-17) : la sauvegarde quotidienne créée à l'ouverture de la feuille suit l'horloge du test (8 oct. 2026), jamais le
+    // vrai calendrier ; sinon son libellé « 7 oct. à … » doublait le bouton cherché chaque 7 octobre (et « 17 oct. » sans l'ancre).
+    backups = createMemoryBackup({ versions: [VERSION], nowMs: () => db.clock.nowMs() });
     container = createAppContainer({ clock: db.clock, hlc: createHlcClock({ clock: db.clock, deviceId: DEVICE }), data: db.data, backups, platform: { runtime: 'tauri', os: 'ios' } });
   });
   afterEach(async () => {
@@ -40,7 +42,7 @@ describe('P-04-iOS : défauts', () => {
         <BackupSheet onClose={() => undefined} />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^7 oct\./ }));
     const confirm = within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fireEvent.click(confirm);
