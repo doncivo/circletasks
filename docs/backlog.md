@@ -203,7 +203,7 @@ Ordre de construction de l'ordre 5 (fixé le 2026-10-07 ; au plus 2 lots en para
 | ID | Contrôle | Responsable | Statut |
 | --- | --- | --- | --- |
 | REL-TECH-01 | Test de fumée du binaire Windows : le vrai `circletasks.exe` démarre et affiche l'écran du jour (fiche `docs/stories/REL-TECH-01.md`, décision d'Ali du 2026-10-10) | ci-release + qa-test | en cours (2026-10-10, branche smoke-windows) |
-| REL-TECH-02 | La désinstallation ne supprime jamais les données : crochet NSIS `NSIS_HOOK_PREUNINSTALL` (case « Supprimer les données » sans effet), garde-fou sur le script NSIS généré, smoke Windows étendu installation / réinstallation / désinstallation (fiche `docs/stories/REL-TECH-02.md`, audit B15, décision 9 d'Ali du 2026-10-17) | ci-release + qa-test | fait côté code, CI verte (run 39030179275), revue et fusion en attente (2026-10-17, branche rel-tech-02) |
+| REL-TECH-02 | La désinstallation ne supprime jamais les données : crochet NSIS `NSIS_HOOK_PREUNINSTALL` (case « Supprimer les données » sans effet), garde-fou sur le script NSIS généré, smoke Windows étendu installation / réinstallation / désinstallation (fiche `docs/stories/REL-TECH-02.md`, audit B15, décision 9 d'Ali du 2026-10-17) | ci-release + qa-test | fait (PR #41 fusionnée le 2026-10-17, run 39034221587 vert) |
 | REL-01 | Les 12 parcours clés (PRD section 8) verts sur PC et iPhone | qa-test | à faire |
 | REL-02 | Audits sécurité, performance, accessibilité conformes | security-privacy, performance, accessibility-i18n | à faire |
 | REL-03 | Version 1.0.0 taguée, installeur PC et IPA publiés, guide d'installation à jour | ci-release + docs-writer | à faire |
