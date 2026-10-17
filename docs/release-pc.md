@@ -1,5 +1,7 @@
 # Publier une version PC
 
+Installation et mise à jour sur le PC d'Ali, avec l'avertissement sur la case « Supprimer les données de l'application » : `docs/install-pc.md`.
+
 Workflow : `.github/workflows/build-windows.yml` (story D-03, critères 10 et 11, ADR 0006). L'app installée vérifie `https://github.com/doncivo/circletasks-releases/releases/latest/download/latest.json` (`plugins.updater.endpoints` dans `src-tauri/tauri.conf.json`).
 
 ## Réglages à faire une fois (PREP-01)
