@@ -142,3 +142,13 @@ Vérification proposée (agent performance ou desktop-tauri) : comparer la taill
 | --- | --- | --- | --- |
 | 0.1.0 (build local) | 2026-10-02 | 2,70 Mo | `npm run tauri build` |
 | 0.1.0 (release) | 2026-10-05 | 5 491 442 octets (5,24 Mo) | release GitHub v0.1.0 |
+
+## Avenant REL-TECH-02 : la désinstallation ne supprime jamais les données (2026-10-17)
+
+- Constat B15 de l'audit 1.0 : le 2026-10-17, une installation manuelle de la 0.3.3 sur la 0.1.1 (choix « Désinstaller avant d'installer ») a lancé l'ancien désinstalleur NSIS, dont la case « Supprimer les données de l'application » était cochée : `%APPDATA%\fr.circletasks.planner` et `%LOCALAPPDATA%\fr.circletasks.planner` ont été supprimés (base, sauvegardes locales, journal technique). Le banc de cet ADR n'exécutait pas l'installeur NSIS.
+- Décision 9 d'Ali : **crochet NSIS**, pas de modèle personnalisé. `src-tauri/windows/hooks.nsh` (déclaré par `bundle.windows.nsis.installerHooks: "./windows/hooks.nsh"`, chemin relatif à `src-tauri`) définit `NSIS_HOOK_PREUNINSTALL`, insérée en tête de `Section Uninstall` par le modèle de Tauri 2.12.1, avant le bloc `RmDir /r` ; elle fait `StrCpy $DeleteAppDataCheckboxState 0`. La case reste affichée, cochée ou non, et reste **sans effet** (choix d'Ali : « une case visible mais inerte me suffit »).
+- **La mise à jour intégrée n'est pas concernée** : le plugin updater lance l'installeur avec `/P /UPDATE`, qui n'exécute jamais le désinstalleur (`PageLeaveReinstall` : `reinst_done` en mode mise à jour). Le comportement de la section « Updater » de cet ADR est inchangé.
+- **Désinstallation « avec données » impossible par choix** : pour effacer les données, supprimer à la main les deux dossiers (guide `docs/install-pc.md`).
+- Limite : le crochet protège les versions qui le contiennent. Installer la première version avec crochet par-dessus une ancienne en choisissant « Désinstaller avant d'installer » exécute le désinstalleur ANCIEN, dont la case reste active : avertissement dans le guide, non testable sans publier une version antérieure.
+- Effet de bord : le modèle ne supprime la clé `HKCU\Software\<éditeur>\CircleTasks` (dossier d'installation mémorisé, langue) que dans le bloc de la case ; elle reste après toute désinstallation, comme avec la case décochée (cas par défaut). Sans conséquence pour les données.
+- Contrôles : garde-fou statique du script NSIS généré (`tests/smoke/nsisScript.ts`, `tests/nsis/installerScript.test.ts`, cas factices dans `tests/unit/smoke/nsisScript.test.ts`) et test de fumée d'installation, réinstallation et désinstallation réelles (`tests/smoke/pc-installeur.spec.ts`, ADR 0016 avenant REL-TECH-02), tous deux dans le job `smoke-windows`.

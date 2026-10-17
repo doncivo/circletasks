@@ -19,9 +19,11 @@
     "test:perf": "vitest run --config vitest.perf.config.ts",
     "test:perf:e2e": "node scripts/e2e-perf.mjs",
     "test:bundle": "vitest run --config vitest.bundle.config.ts",
+    "test:nsis": "vitest run --config vitest.nsis.config.ts",
     "e2e": "playwright test",
     "visual": "playwright test --config playwright.visual.config.ts",
     "test:smoke:build": "node scripts/smoke/build.mjs",
+    "test:smoke:installer-build": "node scripts/smoke/build.mjs --nsis",
     "test:smoke": "playwright test --config playwright.smoke.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"

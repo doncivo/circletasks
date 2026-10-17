@@ -1,5 +1,11 @@
 # Journal des versions
 
+## Non publié
+
+- Désinstallation : la case « Supprimer les données de l'application » du désinstalleur Windows est désormais sans effet. Vos tâches, vos sauvegardes locales et vos réglages sont toujours conservés, que vous désinstalliez depuis Windows ou que vous choisissiez « Désinstaller avant d'installer ». Pour effacer vos données, supprimez à la main les dossiers de l'application (voir docs/install-pc.md).
+- Attention : cette protection existe à partir de cette version. Avant, cocher cette case supprimait vos données.
+- Qualité : l'installation, la réinstallation et la désinstallation de l'application Windows sont testées à chaque suite sur un vrai installeur.
+
 ## 0.3.3
 
 - Synchronisation : la publication d'un appareil bloquée par un instantané d'ancienne époque resté dans iCloud se débloque seule au premier cycle, sans réassociation ; la cause réelle d'un refus de publication est journalisée ; un fichier iCloud évincé est correctement supprimé par l'app sur iPhone.
