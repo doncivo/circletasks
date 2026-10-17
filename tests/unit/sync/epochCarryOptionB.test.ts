@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { RestoreMarker } from '../../../src/platform/sync/types';
 import type * as EpochSwitch from '../../../src/sync/epochSwitch';
-import type { TaskId } from '../../../src/domain/types';
+import type { DeviceId, TaskId } from '../../../src/domain/types';
 import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, syncFolders, taskSnapshot, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
 /**
@@ -21,7 +21,7 @@ import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, syncFolders, taskSna
 const C_ID = '56d4a1f0-1111-4111-8111-111111111111';
 const B_ID = '7d0b2c3e-2222-4222-8222-222222222222';
 const O_ID = 'ef50e1a2-3333-4333-8333-333333333333';
-const ALL = [C_ID, B_ID, O_ID];
+const ALL = [C_ID, B_ID, O_ID] as DeviceId[];
 
 const injected = vi.hoisted(() => ({ ruleA: false, switches: [] as string[] }));
 
@@ -34,7 +34,7 @@ vi.mock('../../../src/sync/epochSwitch', async (importOriginal) => {
       injected.switches.push(deps.deviceId);
       if (!injected.ruleA) return real.switchEpoch(deps, target, accepted, ownState, onRemoteChanges, options);
       // Règle A (test seulement) : tout autre auteur est traité comme oublié par le prédicat de report ; seul `deps.deviceId` est reporté.
-      const forgotten = new Set([...(options.forgotten ?? []), ...ALL.filter((id) => id !== deps.deviceId)]) as NonNullable<EpochSwitch.SwitchOptions['forgotten']>;
+      const forgotten = new Set<DeviceId>([...(options.forgotten ?? []), ...ALL.filter((id) => id !== deps.deviceId)]);
       return real.switchEpoch(deps, target, accepted, ownState, onRemoteChanges, { ...options, forgotten });
     },
   };
