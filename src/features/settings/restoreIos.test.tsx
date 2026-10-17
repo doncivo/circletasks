@@ -218,7 +218,7 @@ describe('P-04-iOS : restauration sur iPhone (mise au calme, mémo, marqueur, é
     );
     expect(await screen.findByText('Dossier des sauvegardes : Dossier de l’app (non visible dans Fichiers)')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Afficher dans le dossier' })).toBeNull();
-    fireEvent.click(await screen.findByRole('button', { name: /07\/10|7 oct/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
     expect(await screen.findByText('Restauration en cours…')).toBeInTheDocument();
     expect(root).toHaveAttribute('inert');

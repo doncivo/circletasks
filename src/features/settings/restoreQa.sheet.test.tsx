@@ -50,7 +50,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
         <BackupSheet onClose={() => undefined} />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /07\/10|7 oct/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
     return screen.findByRole('alert');
   }
@@ -66,7 +66,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
     expect(alert.textContent).not.toMatch(/[A-Za-z]:\\|\/var\/|\/private\//);
     expect(within(alert).queryByRole('button', { name: 'Réessayer' })).toBeNull();
     expect(within(alert).queryByRole('button', { name: 'Redémarrer' })).toBeNull();
-    expect(screen.getByRole('button', { name: /07\/10|7 oct/ })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /^(07\/10|7 oct)/ })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Fermer' })).toBeEnabled();
     expect(backups.restarts.count).toBe(0);
     expect(window.localStorage.getItem(RESTORE_RESULT_KEY)).toBeNull();
@@ -115,7 +115,7 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
           <BackupSheet onClose={() => undefined} />
         </AppContainerProvider>,
       );
-      fireEvent.click(await screen.findByRole('button', { name: /07\/10|7 oct/ }));
+      fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
       fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' }));
       await screen.findByRole('alert');
       // La reprise du planificateur relance un cycle d'ouverture : la synchro n'est pas restée suspendue.
@@ -134,9 +134,9 @@ describe('P-04-iOS QA : états d’échec de la restauration, une action utile c
       </AppContainerProvider>,
     );
     expect(await screen.findByText('Impossible de lire la liste des sauvegardes.')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /07\/10|7 oct/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(07\/10|7 oct)/ })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Sauvegarder maintenant' }));
-    expect(await screen.findByRole('button', { name: /07\/10|7 oct/ })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ })).toBeInTheDocument();
     expect(screen.queryByText('Impossible de lire la liste des sauvegardes.')).toBeNull();
   });
 });

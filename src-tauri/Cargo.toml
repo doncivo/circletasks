@@ -105,7 +105,8 @@ libc = "0.2"
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
 tauri-plugin-autostart = "2"
-tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "zip"] }
+# Sans la fonctionnalité `zip` du plugin (2026-10-17, avis RUSTSEC-2026-0367/0368/0369 sur la crate zip 4) : nos mises à jour PC sont des installeurs NSIS `-setup.exe`, jamais des archives zip ; la fonctionnalité ne servait qu'à `extract_zip`.
+tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls"] }
 tauri-plugin-process = "2"
 tauri-plugin-opener = "2"
 # Export (H-03) : « Enregistrer sous » système, ouvert et écrit par Rust (src/export.rs) ; la WebView n'a ni dialog ni fs.

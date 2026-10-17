@@ -40,7 +40,7 @@ describe('P-04-iOS : défauts', () => {
         <BackupSheet onClose={() => undefined} />
       </AppContainerProvider>,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /07\/10|7 oct/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /^(07\/10|7 oct)/ }));
     const confirm = within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Restaurer' });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     fireEvent.click(confirm);

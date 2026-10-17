@@ -9,9 +9,9 @@ Règle de lecture : **bloquant** = perte de données, synchro ou rappel qui s'ar
 | Gravité | Constats (dédoublonnés) | Estimation |
 |---|---|---|
 | Bloquant | 15 | 106 à 134 h (dont 24 à 40 h pour le job Swift/simulateur) |
-| Important | 80 | 225 à 257 h |
+| Important | 81 | 227 à 260 h |
 | Mineur | ~95 | 90 à 100 h |
-| **Total** | **~190** | **421 à 491 h** |
+| **Total** | **~191** | **423 à 494 h** |
 
 Socle minimal recommandé avant la 1.0 (section 5) : **67 à 85 h**.
 
@@ -45,10 +45,10 @@ Socle minimal recommandé avant la 1.0 (section 5) : **67 à 85 h**.
 | B14 | Architecture / produit | **Règle de report d'époque appliquée sans validation** (ADR 0011 §9.1 vs §24.6, Q13) : le code applique depuis 0.3.0 « survit tout ce que l'ouvreur n'avait pas lu », encore « à valider par Ali », qui remplace la règle confirmée le 2026-10-05 ; 26 décisions attendent validation « en fin d'ordre ». | Aucun contrôle du statut d'une décision. | Séance de validation avant REL-01 ; récrire §9.1, fermer Q13. | 3–4 + séance |
 | B15 | Livraison / installeur (ajouté le 2026-10-17) | **L'installeur manuel peut effacer les données en un clic.** Le désinstalleur NSIS (modèle Tauri 2.12.1, identique pour 0.1.1 et 0.3.3) affiche une case « Supprimer les données de l'application » ; lancé à la main par la page « Désinstaller avant d'installer » de l'installeur, il supprime `%APPDATA%\fr.circletasks.planner` et `%LOCALAPPDATA%\fr.circletasks.planner` (base, sauvegardes locales, journal, réglages, consentements). Vécu le 2026-10-17 à 10:54:35 (journal NTFS) : base recréée vide, données reprises depuis iCloud comme **nouvel appareil**, sauvegardes et journal perdus. La mise à jour intégrée (`/P /UPDATE`) est sûre : elle ne lance pas le désinstalleur. | Aucun test n'exécute l'installeur ni le désinstalleur réels ; le smoke Windows (REL-TECH-01) lance le binaire extrait ; la dette « installation réelle N → N+1 » n'a jamais été jouée ; le guide d'installation PC n'existait pas. | (a) Guide `docs/install-pc.md` avec l'avertissement en gras (fait le 2026-10-17). (b) Crochet `bundle.windows.nsis.installerHooks` : macro `NSIS_HOOK_PREUNINSTALL` qui force `StrCpy $DeleteAppDataCheckboxState 0` ; inséré en tête de `Section Uninstall`, avant le bloc de suppression : la case devient inerte quelle que soit la saisie, 1 h. (c) Ou modèle `bundle.windows.nsis.template` personnalisé (copie du modèle 2.12.1 sans `un.ConfirmShow` ni le bloc `RmDir /r`) : case retirée, 3 h plus suivi à chaque montée du CLI Tauri. (d) Smoke Windows étendu : installer N, écrire une donnée, installer N+1 à la main avec « Désinstaller avant d'installer », puis désinstaller : `%APPDATA%\fr.circletasks.planner` doit survivre, 4 h. | 6–9 |
 
-## 4. Importants (80), par domaine
+## 4. Importants (81), par domaine
 
-### Synchro (6, ~20 h)
-Fichier verrouillé un instant → « corrupt » collant (`store.rs:601`, 3 h) · horloge en avance : impasse d'un mois après correction de la date (`hlc.ts:84`, décision ADR §4.4, 6 h) · `writeState` refusé en silence à l'étape 6 (`engine.ts:926`, 2 h) · `missing-parent` sans avertissement (`engine.ts:880-897`, 2 h) · changement d'époque figé sur un instantané supprimé (`epochSwitch.ts:323-350`, 3 h) · `cap-dropped`/`publish-too-large`/`apply-abandoned` journal seul (note > 256 Kio jamais publiée, 4 h).
+### Synchro (7, ~23 h)
+Fichier verrouillé un instant → « corrupt » collant (`store.rs:601`, 3 h) · horloge en avance : impasse d'un mois après correction de la date (`hlc.ts:84`, décision ADR §4.4, 6 h) · `writeState` refusé en silence à l'étape 6 (`engine.ts:926`, 2 h) · `missing-parent` sans avertissement (`engine.ts:880-897`, 2 h) · changement d'époque figé sur un instantané supprimé (`epochSwitch.ts:323-350`, 3 h) · `cap-dropped`/`publish-too-large`/`apply-abandoned` journal seul (note > 256 Kio jamais publiée, 4 h) · **aucun acquittement d'un conflit sans restauration** (`ConflictList.tsx`, ajouté le 2026-10-17 à la demande d'Ali) : la seule action est « Restaurer », qui remet la valeur écartée et marque le conflit résolu ; un conflit dont la valeur gardée convient reste listé pour toujours, `resolved_at` n'est écrit que par la restauration ; vécu avec deux conflits cosmétiques sur la couleur des espaces après la reprise du 17 octobre. Action « Garder cette valeur » qui pose `resolved_at` sans écriture métier, et test (2–3 h).
 
 ### Sécurité (1, 3 h)
 Clé de signature des mises à jour exposée au build front (devDependencies) dans `build-windows.yml:94` ; pas de `npm audit` en CI.
@@ -104,7 +104,7 @@ Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, déc
 6. Format 12 h proposé dans Apparence alors que la règle du projet est 24 h.
 7. Anglais : réglage de langue jamais branché (2 564 clés inatteignables) : livrer ou documenter « français seul ».
 8. Extension du format publié après la 1.0 : objet `ext` ignoré ou `sm` 2 obligatoire.
-9. Installeur (B15) : crochet seul (la case reste visible mais ne fait plus rien, aucun écart avec le modèle Tauri) ou modèle NSIS personnalisé (case retirée, 978 lignes à suivre à chaque montée du CLI). Recommandation : le crochet tout de suite, le modèle seulement si la case visible gêne.
+9. Installeur (B15) : crochet seul (la case reste visible mais ne fait plus rien, aucun écart avec le modèle Tauri) ou modèle NSIS personnalisé (case retirée, 978 lignes à suivre à chaque montée du CLI). **Tranchée le 2026-10-17 : le crochet** (« une case visible mais inerte me suffit ») ; smoke Windows étendu accepté ; story REL-TECH-02.
 
 ## Annexe : rapports détaillés
 
