@@ -92,12 +92,14 @@ Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNA
 8. **Installation PC réelle** (ajouté le 2026-10-17) : remplacer la 0.1.1 de `%LOCALAPPDATA%\CircleTasks` par la 0.3.3 publiée, vérifier que le raccourci ouvre la bonne version et que l'updater passe N → N+1 sur la machine d'Ali : 1 h + séance. Le diagnostic d'ouverture de la base est déjà identique sur PC et iPhone (section 4, complément du 2026-10-17) : rien à ajouter au code pour lui.
 9. **Installeur sans piège** (décision d'Ali du 2026-10-17, B15 ; état : fait, REL-TECH-02, PR #41 fusionnée le 2026-10-17) : avertissement en gras dans `docs/install-pc.md` (fait) ; crochet `NSIS_HOOK_PREUNINSTALL` qui neutralise la suppression des données (1 h) ; modèle NSIS personnalisé sans la case si Ali le tranche (3 h, décision 9) ; smoke Windows étendu à l'installation N → N+1 manuelle et à la désinstallation, avec survie du dossier de données (4 h).
 
+**Palier retenu par Ali le 2026-10-17** : palier « raisonnable » plus les faux iCloud hostiles de B13, soit 82 à 90 h (ordre inversé par rapport à la liste ci-dessus). Ordre d'exécution : (1) B13, banc des faux iCloud hostiles, d'abord (Y-TECH-03, 16 h) ; (2) B14 : séance de validation de la règle de report d'époque, choix d'Ali en deux options, puis implémentation, puis B4 (Y-TECH-04, Y-FIX-04) ; (3) B2, B3, B5 réduit, B6, chacun avec son test dans le banc (Y-FIX-02, Y-FIX-03, Y-IOS-02-FIX-01, Y-IOS-05) ; (4) B8 (T-TECH-01) ; (5) B7 (SEC-01) ; (6) B9, B10, B11 (N-TECH-02, N-FIX-02, UI-FIX-01) ; (7) B12 : exigence retirée du PRD (PRD-01). Plus les quatre points restants : essai des `%` sur l'iPhone (N-IOS-CHK-01), clé de signature hors du build front (CI-SEC-01), clavier checklist (C-FIX-01), gardes du sélecteur iOS (Y-IOS-06). Deux règles : aucun bloquant n'est clos sans un test qui échoue avant le correctif et passe après ; arrêt et alerte à Ali si une estimation dérape de plus de 50 %. Si le banc révèle d'autres défauts de la même famille, ils sont remontés à Ali avant de continuer. Voir `docs/decisions.md` (2026-10-17) et `docs/backlog.md` (section « Palier 1.0 »).
+
 Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, découpage d'`engine.ts`, Dynamic Type (si Ali retire l'exigence), consolidation des ADR, pluriels/insécables, anglais.
 
 ## 6. Décisions à trancher par Ali
 
-1. Routines : une occurrence par avance (N-TECH-01) ou fenêtre de 7 jours (B9).
-2. Taille de texte iOS : implémenter ou retirer du PRD (B12).
+1. Routines : une occurrence par avance (N-TECH-01) ou fenêtre de 7 jours (B9). **Tranchée le 2026-10-17 : fenêtre de 7 jours** (« B9 : oui, je confirme la fenêtre de 7 jours ») ; story N-TECH-02, qui remplace le critère 12 de N-TECH-01.
+2. Taille de texte iOS : implémenter ou retirer du PRD (B12). **Tranchée le 2026-10-17 : retirée du PRD, à revoir après la 1.0** (« B12 : retire l'exigence du PRD, on verra après la 1.0 ») ; story PRD-01 (faite : PRD lignes 657 et 1306).
 3. Règle de report d'époque §24.6 : valider ou revenir à §9.1 (B14) ; plus 25 autres décisions « en fin d'ordre ».
 4. Statistiques : conserver la date d'origine des tâches reportées (migration) ou documenter la limite.
 5. Roue des minutes : pas de 5 (T-14 critère 3, voulu) ou pas de 1 ; et la réécriture `10:03 → 10:05`.
