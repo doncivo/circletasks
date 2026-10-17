@@ -122,7 +122,7 @@ Rapport de la phase A (côté TypeScript, 2026-10-17), à remettre à Ali avant 
 - Plan de pannes : `tests/fixtures/sync/fault-plan.json` (schéma décrit dans son `$comment`, un plan d'exemple par effet, plans des scénarios), lu strictement par `src/platform/sync/faultPlan.ts` ; effet `mute` ajouté aux six effets du critère 1 pour le scénario 5.
 - `memory.ts` : `MemorySyncFolder.armFaults(plan)`, `disarmFaults()`, `advanceCycle()`, `evict()`, `faultLog()`, `unfiredFaults()`, `mutedCalls()`, `releaseMuted(id, 'complete' | code)` ; points de panne dans le listage du scan, les lectures d'état, de segment et d'instantané, l'hydratation, les écritures (segment, état, `.tmp` et renommage d'instantané) et `deleteOwn` (fichier par fichier, comme `delete_own` de Rust). Sans plan armé : comportement identique (suite du module verte sans changement d'attente, aucun tour de micro-tâche ajouté). Non gardés en phase A (listés pour la dette) : `forget.deleteFiles` (suppression des fichiers d'un appareil oublié), les lectures internes de `rebuildOwn` hors scan pour une panne muette.
 - `syncCloudSim.propagate` : suppression transmise aussitôt par défaut, différée par `deferDeletions`, refusée tant qu'une suppression « acceptée mais non propagée » de l'émetteur attend son retour.
-- Conformité : `faultCases` (14 cas) ajoutés à `syncfs-conformance.json`, rejoués sur `memory.ts` par une vue fichier passant par les mêmes points de panne ; `cases` d'origine inchangés (le Rust actuel ne lit que `cases` : il reste vert, il rejouera `faultCases` en phase B). Preuve jetable du critère 17 côté TypeScript : un attendu faussé (`faultCases[2]`, étape 5) fait échouer la lecture TypeScript avec le nom du cas, puis la fixture est restaurée.
+- Conformité : `faultCases` (14 cas en phase A, 15 après la revue I4) ajoutés à `syncfs-conformance.json`, rejoués sur `memory.ts` par une vue fichier passant par les mêmes points de panne ; `cases` d'origine inchangés (le Rust actuel ne lit que `cases` : il reste vert, il rejouera `faultCases` en phase B). Preuve jetable du critère 17 côté TypeScript : un attendu faussé (`faultCases[2]`, étape 5) fait échouer la lecture TypeScript avec le nom du cas, puis la fixture est restaurée.
 - Écart d'adresse relevé à la reconfirmation : `memory.ts` compte maintenant environ 3 000 lignes (2 588 avant la story) ; `MemFs::remove_file` et `fake_bookmark.rs` aux adresses de l'audit (non modifiés en phase A).
 
 ### Scénarios du banc
@@ -136,11 +136,12 @@ Rapport de la phase A (côté TypeScript, 2026-10-17), à remettre à Ali avant 
 | 3 lecture d'un journal en `io` (B3) | **rouge**, non suivi (`scenario3ReadIo.test.ts`) | `read` en `io` au rang 1 sur `devices/56d4…/*/j-*.ctj` (plan `scenario-3-lecture-io`) | `src/sync/reader.ts:133` (`finish('error')`) → `src/sync/engine.ts:857` (`allRead = false` seulement) → `src/sync/engine.ts:1044` : `lastSyncAt` enregistré (ni `publishError` ni attente) | `expect(failed.lastSyncAt).toBe(lastSyncAt)` (ligne 51) : reçu `08:01`, attendu `08:00` | Y-FIX-03 |
 | 4 suppression en échec durable (B5) | **rouge** (2 tests), non suivi (`scenario4DurableDelete.test.ts`) | `remove` en `io` à chaque rang (`times: all`), instantané orphelin puis ancien instantané propre | journal seulement : `src/sync/orphanEpoch.ts:84`, `src/sync/engine.ts:1029` (`orphan-epoch-delete-failed`), `src/sync/engine.ts:1004` (`delete-own-failed` kind `s` par `.catch`), `src/sync/maintenance.ts:177` et `:191` ; statut `idle`, aucun avertissement, « À jour » | `expect(visible(status, …)).toBe(true)` (lignes 38 et 60) | Y-IOS-02-FIX-01 (B5 réduit) |
 | 5 transport muet (B6) | **rouge**, non suivi (`scenario5MuteTransport.test.ts`) | `list` muet au rang 1 sur `devices/56d4…/` (plan `scenario-5-transport-muet`) | aucune échéance par appel : le scan reste en suspens (`src/sync/engine.ts:260` attend `platform.scan` sans borne ; `memory.ts` modélise le Rust actuel, sans `call_with_deadline`) ; le cycle ne se termine pas après 500 tours comptés | `expect(muted).toEqual([])` (ligne 52) | Y-IOS-05 (le correctif modélise aussi l'échéance dans `memory.ts`) |
+| 6 segment de tête de l'iPhone évincé (défaut nouveau n° 1, revue S6) | **rouge**, non suivi (`tests/unit/sync/hostile/scenario6EvictedHeadSegment.test.ts`) | `list` en `placeholder` au rang 1 sur `devices/ef50…/*/j-*.ctj`, téléchargement simulé de 1 s | l'ajout lit le segment de tête sans hydratation (`src-tauri/src/sync/store.rs:1185` ; même règle dans `memory.ts`) et répond `cloud-pending` ; le moteur ne rouvre un segment que sur `segment-full` / `segment-mismatch` (`src/sync/publisher.ts:450`) ; `pin` ne fait rien sur iOS (`src-tauri/src/sync/bookmark.rs:331`) : `publish-failed { cloud-pending }` à chaque cycle, « iCloud ne répond pas » | `expect(publish-failed…).toBeLessThan(3)` (ligne 54) : 3 sur 3 cycles | story à créer (gravité à trancher par Ali) |
 | critère 18 (tout faux rejoue la fixture) | **vert depuis la phase B**, commité (`tests/unit/sync/hostile/fakesLoadFixtures.test.ts`) ; rouge en phase A pour `MemFs` et `fake_bookmark` (aucun fichier Rust ne faisait `include_str!` de `fault-plan.json`) | — | `sync_fs_conformance.rs` charge les deux fixtures et exerce `MemFs`, `FakePlugin` et `FaultyStd` | — | Y-TECH-03 phase B |
 
 ### Défauts nouveaux de la même famille (pannes iCloud mal gérées), à remonter à Ali avant l'étape 2
 
-1. **Bloquant (iOS)** : segment de tête de l'appareil évincé par iOS (« optimiser le stockage ») : l'ajout lit le segment sans hydratation (`src-tauri/src/sync/store.rs:1185`, `fs.read(&path, MAX_SEGMENT_BYTES, false)` ; même règle dans `memory.ts`, `existing.availability !== 'local'`) et répond `cloud-pending` ; le moteur ne télécharge pas ce fichier et n'ouvre pas de segment suivant : `publish-failed { cloud-pending }` à chaque cycle, statut « iCloud ne répond pas : vos modifications seront envoyées au retour » pour toujours, les écritures de l'iPhone n'arrivent jamais au PC, même quand le téléchargement est possible (sonde jetable, deux variantes : sans téléchargement et téléchargement en 1 s). Aucune perte locale, mais synchro sortante figée sans cause réelle affichée. Correctif à décider (hydratation du segment de tête avant l'ajout, ou rotation vers `max + 1` sur `cloud-pending`) ; aucune story existante ne le couvre.
+1. **Bloquant (iOS), gravité à trancher par Ali** (elle dépend du moment où iOS évince un fichier encore actif : le segment de tête reçoit des ajouts à chaque modification, mais un iPhone peu utilisé pendant des jours peut le voir évincé) ; scénario rouge `scenario6EvictedHeadSegment.test.ts` (non suivi, revue S6) : segment de tête de l'appareil évincé par iOS (« optimiser le stockage ») : l'ajout lit le segment sans hydratation (`src-tauri/src/sync/store.rs:1185`, `fs.read(&path, MAX_SEGMENT_BYTES, false)` ; même règle dans `memory.ts`, `existing.availability !== 'local'`) et répond `cloud-pending` ; le moteur ne télécharge pas ce fichier et n'ouvre pas de segment suivant : `publish-failed { cloud-pending }` à chaque cycle, statut « iCloud ne répond pas : vos modifications seront envoyées au retour » pour toujours, les écritures de l'iPhone n'arrivent jamais au PC, même quand le téléchargement est possible (sonde jetable de la phase A, deux variantes : sans téléchargement et téléchargement en 1 s ; devenue le scénario 6 ; `publisher.ts:450` ne rouvre un segment que sur `segment-full` ou `segment-mismatch`, `bookmark.rs:331` : `pin` sans effet sur iOS). Aucune perte locale, mais synchro sortante figée sans cause réelle affichée. Correctif à décider (hydratation du segment de tête avant l'ajout, ou rotation vers `max + 1` sur `cloud-pending`) ; aucune story existante ne le couvre.
 2. **Important** : suppression acceptée mais non propagée de ses anciens instantanés (le fichier revient) : le moteur les resupprime à chaque nouvel instantané, ils reviennent, le dossier grossit sans fin (s-1 à s-6 après 5 semaines au lieu de 2) avec « À jour » : même famille que B5 (échec de suppression invisible), mais aucun code `*-failed` n'est émis puisque la suppression répond « réussie ». À couvrir dans Y-IOS-02-FIX-01 (fichier revenu après suppression = échec durable visible) ou en story dédiée.
 3. **Important (observation du scénario 1 c)** : avec un plugin qui laisse un substitut (mode historique, ou toute suppression que iCloud ne fait pas), le moteur réarme puis journalise `orphan-epoch-already-gone` à chaque cycle sans jamais rien rendre visible ; même famille que B5, à couvrir dans Y-IOS-02-FIX-01.
 
@@ -173,7 +174,7 @@ Cinq cas, tous pour `StdFs` (« un disque local n'a ni fichier évincé, ni subs
 
 ### Divergences constatées
 
-- **Entre `memory.ts` et le Rust de production : aucune** (les 14 cas passent à l'identique sur les quatre implémentations, preuve du 17 comprise).
+- **Entre `memory.ts` et le Rust de production : aucune** (les 14 cas de la phase B passent à l'identique sur les quatre implémentations, preuve du 17 comprise).
 - **Entre les faux eux-mêmes** (comptage des rangs, pas de comportement de production) : voir ADR 0011 §25 point 6 et `docs/dettes.md` (rang `read` de `fake_bookmark` compté sur un fichier local seulement ; `read_head` compté comme une lecture ; un rang `write` par morceau de 1 Mio).
 
 ### Mesures de la phase B
@@ -185,3 +186,50 @@ Cinq cas, tous pour `StdFs` (« un disque local n'a ni fichier évincé, ni subs
 - Aucun code de production touché (`src-tauri/src`, `src/`) en phase B. Bundle de départ : inchangé (aucun fichier de `src/` modifié en phase B), mesure de la phase A : 349,7 Ko.
 - Aucun `#[ignore]`, délai, nouvelle attente ni nouvelle tentative ajouté (vérifié par `y_tech_03_4_the_bank_files_contain_no_delay_no_retry_and_no_skipped_test` sur les trois fichiers Rust du banc).
 - Temps passé en phase B : environ 3 h 30 (estimation de la phase B : 6 h).
+
+## Revue (corrections avant fusion, 2026-10-17)
+
+Relecture « approuvée sous réserve » : corrections appliquées sur la même branche, sans réécrire de commit.
+
+- **I1** : hygiène complétée. `sync_fault_plan.rs` contrôle aussi `support/fake_bookmark.rs` et `sync_support.rs`, motifs `Instant::now` et `SystemTime::now` ajoutés ; `faultPlan.test.ts` contrôle aussi `fakesLoadFixtures.test.ts` et `memory.ts` en entier (seule ligne exemptée, vérifiée présente une fois : l'horloge par défaut `Date.now` du mode dev, antérieure à la story ; les lignes de Y-TECH-03 sont donc contrôlées a fortiori), motifs `test.skip`, `it.skipIf`, `describe.todo`, `runIf`, `fails`, `xtest`, `xdescribe` ajoutés et vérifiés par un test des motifs.
+- **I2** : table commune des refus `tests/fixtures/sync/fault-plan-invalid.json` (51 couples `{ planText, message }`), lue par `faultPlan.test.ts` et `sync_fault_plan.rs`, message identique exigé. Divergences alignées : `removeLeavesPlaceholder: null` refusé des deux côtés ; `nth: 1.0` (et `1e0`, `times: 2.0`, `resurrectAfterCycles: 1.0`) refusés des deux côtés (`parseFaultPlanText` / `parseFaultPlanFile` lisent le texte source) ; valeur non textuelle citée par son JSON compact des deux côtés (`« 3 »`, `« null »`, `« undefined »` si absente).
+- **I3** : limite de la vue `memoryView` écrite dans l'ADR 0011 §25 point 5 et dans `docs/dettes.md`.
+- **I4** : cas `faultCases` « lecture sans hydratation d'un fichier dans le nuage : le rang est consommé » (15 cas) ; `BookmarkFs` déclaré `notApplicable` (capacité `read-rank-without-hydration` absente : aucun appel au plugin à compter) ; contrainte notée dans `docs/dettes.md` pour Y-IOS-05 et Y-FIX-03 ; ADR §25 point 6.
+- **S6** : scénario 6 écrit, rouge, non suivi (voir le tableau des scénarios).
+- **Mineurs** : m1 en-tête de `faultPlan.ts` corrigé, bundle mesuré en octets ; m2 `keepPrevious` typé par `isEpochId`, `state.next.ctx` ignoré et dit ; m3 test 18 : marqueur de rejeu exigé (`run_fault_table(` / `armFaults(`), comparaison du fichier à lui-même retirée ; m4 `FaultyStd::append` : `.expect(...)` au lieu de `let _ =` ; m5 téléchargement d'un substitut : même règle de délai que pour un nœud `cloud` ; m6 `#![allow(dead_code)]` retiré de `fault_plan.rs` (aucun élément mort : aucun avertissement sans lui) ; m7 `muteHit` privé (`takeMuteHit`), double comptage après libération `complete` documenté ; m8 scénario 5 : `settled` puis `cloud-pending` assertés d'abord, échéance à compter et non à chronométrer.
+
+### Critères (28)
+
+| Critère | État |
+|---|---|
+| 1 schéma du plan | fait (TS et Rust, table commune des refus) |
+| 2 seule la première suppression du fichier désigné échoue | fait (memory.ts, MemFs, fake_bookmark) |
+| 3 entrée non rejouable refusée en la nommant | fait |
+| 4 déterminisme, aucun délai ni retry ni skip | fait (hygiène TS et Rust étendue, revue I1) |
+| 5 à 11 faux TypeScript et syncCloudSim | faits |
+| 12 MemFs | fait (phase B) |
+| 13 fake_bookmark, substitut | fait (phase B) |
+| 14 mode historique | fait (phase B) |
+| 15 pannes par rang sur fake_bookmark, `delay_ms` inutilisé | fait (phase B ; m5 aligne la durée du substitut) |
+| 16 conformité sur quatre implémentations | fait (15 cas ; `notApplicable` : StdFs × 6, BookmarkFs × 1 ; limite de la vue TS, I3) |
+| 17 cas faussé : les deux lectures échouent | fait (preuves jetables des phases A et B) |
+| 18 tout faux rejoue la fixture | fait (marqueur de rejeu exigé, m3) |
+| 19 scénario 1 (a, b, c) | fait |
+| 20 scénario 2 (B2) | écrit, rouge, non suivi : en attente de Y-FIX-02 |
+| 21 scénario 3 (B3) | écrit, rouge, non suivi : en attente de Y-FIX-03 |
+| 22 scénario 4 (B5) | écrit, rouge, non suivi : en attente de Y-IOS-02-FIX-01 |
+| 23 scénario 5 (B6) | partie TypeScript écrite, rouge, non suivie : en attente de Y-IOS-05 ; **partie `fake_bookmark` (effet `mute`) reportée à Y-IOS-05** (refusée à l'armement par les faux Rust, ADR §25 point 2) |
+| 24 scénarios rouges non suivis, jamais désactivés | fait (scénarios 2 à 6) |
+| 25 rapport des défauts révélés | écrit (section ci-dessus) : **à remettre à Ali**, réponse attendue avant l'étape 2 |
+| 26 non-régression | locale verte (voir ci-dessous) ; **CI à venir** (PR #44, statut « suite verte » attendu) |
+| 27 bundle de départ inchangé | fait : 358 045 octets gzip (349,65 Ko), marge 355 octets ; aucun bloc du build ne contient le plan de pannes |
+| 28 documentation | ADR 0011 §25, `docs/dettes.md`, `docs/journal.md` faits ; **`docs/backlog.md` encore « en cours »** (passage à « fait » à la clôture) |
+
+### Mesures après la revue
+
+- `CT_TEST_WORKERS=1 npx vitest run src/platform/sync src/features/sync tests/sim tests/unit/sync --coverage.enabled=false` (scénarios 2 à 6 mis de côté dans le worktree) : 155 fichiers, 2 047 tests, tous verts.
+- Scénarios rouges seuls (2 à 6) : 5 fichiers, 6 tests rouges.
+- `cd src-tauri && cargo test --test desktop --features test-hooks -- sync_` : 347 réussis, 0 échoué, 2 ignorés d'origine (`sync_crypto::print_rust_sealed`, `sync_folder::y01_14_real_icloud_placeholder_is_hydrated_on_the_checked_handle`), 407 filtrés.
+- `npm run lint`, `npm run typecheck` : verts.
+- Bundle de départ : `startBundle.test.ts` vert (8 tests, « 86 blocs, 349,7 Ko ») ; mesure exacte sur le même build (manifeste, blocs statiques depuis `index.html`) : **358 045 octets gzip**, seuil 358 400, marge 355 octets.
+
