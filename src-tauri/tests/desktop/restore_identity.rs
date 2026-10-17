@@ -5,7 +5,7 @@
 use std::fs;
 use std::path::Path;
 
-use circletasks_lib::backup::{restore_backup_file, RestoreStep, APP_SCHEMA_VERSION, BACKUP_DIR, DB_FILE};
+use circletasks_lib::backup::{carry_device_identity, restore_backup_file, RestoreStep, APP_SCHEMA_VERSION, BACKUP_DIR, DB_FILE};
 use circletasks_lib::startup_gate::{recover_and_settle, restore_local_rollback, restore_with_provisional_marker};
 use rusqlite::Connection;
 
@@ -268,4 +268,39 @@ fn y_tech_04_12_a_refused_restoration_leaves_the_database_and_its_identity_untou
     assert!(restore_backup_file(&dir.path().join(DB_FILE), &dir.path().join(BACKUP_DIR), BACKUP, APP_SCHEMA_VERSION, "20261017T080000Z", NO_FAIL).is_err());
     assert_eq!(dump(&dir.path().join(DB_FILE)), before);
     assert_eq!(self_id(&dir.path().join(DB_FILE)), CURRENT);
+}
+
+// --- cas limites de la lecture de l'identité courante ---
+
+#[test]
+fn y_tech_04_11_without_a_device_setting_the_self_row_of_the_current_database_is_the_identity() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join(BACKUP), Some(FORGOTTEN), &[row(FORGOTTEN, true, Some("e0001-56d40a0a"), (3, 7))]);
+    make_db(&dir.path().join(DB_FILE), None, &[row(CURRENT, true, None, (0, 0))]);
+    restore(dir.path(), BACKUP);
+    assert_eq!(self_id(&dir.path().join(DB_FILE)), CURRENT);
+    // Aucun réglage dans la base en place : celui du fichier restauré n'est pas inventé ni effacé ici.
+    assert_eq!(device_setting(&dir.path().join(DB_FILE)), Some(format!("\"{FORGOTTEN}\"")));
+}
+
+#[test]
+fn y_tech_04_11_a_current_database_without_identity_or_unreadable_leaves_the_restored_file_as_it_is() {
+    let dir = scratch();
+    let backups = dir.path().join(BACKUP_DIR);
+    fs::create_dir_all(&backups).unwrap();
+    make_db(&backups.join(BACKUP), Some(FORGOTTEN), &[row(FORGOTTEN, true, Some("e0001-56d40a0a"), (3, 7))]);
+    let saved = dump(&backups.join(BACKUP));
+    // Aucune identité dans la base en place.
+    make_db(&dir.path().join(DB_FILE), None, &[]);
+    restore(dir.path(), BACKUP);
+    assert_eq!(dump(&dir.path().join(DB_FILE)), saved);
+    // Base en place illisible : rien à protéger, le fichier préparé reste tel quel (la fonction ne refuse pas la restauration).
+    let staged = dir.path().join("prepare.db");
+    fs::copy(backups.join(BACKUP), &staged).unwrap();
+    let broken = dir.path().join("cassee.db");
+    fs::write(&broken, b"ceci n'est pas une base SQLite, aucune en-tete").unwrap();
+    carry_device_identity(&broken, &staged).unwrap();
+    assert_eq!(dump(&staged), saved);
 }

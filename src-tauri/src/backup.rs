@@ -672,6 +672,123 @@ pub fn carry_app_lock(current_db: &Path, staged: &Path) -> Result<(), BackupErro
     Ok(())
 }
 
+/// Réglage local qui porte l'identité de l'appareil au démarrage (`device.id`, valeur JSON texte).
+const DEVICE_ID_SETTING_KEY: &str = "device.id";
+
+/// Ligne du réglage `device.id` : valeur, `updated_at`, `device_id`, `hlc`.
+type SettingRow = (String, String, String, String);
+
+/// Identité de l'appareil dans la base EN PLACE : réglage local `device.id` (source du démarrage), à défaut la ligne `is_self = 1` de `sync_state`.
+struct CurrentIdentity {
+    id: String,
+    /// Ligne complète du réglage `device.id`, si elle existe et désigne l'appareil.
+    setting: Option<SettingRow>,
+    /// Plateforme et version d'app de la ligne propre de `sync_state`, si elle existe.
+    platform: Option<String>,
+    app_version: Option<String>,
+}
+
+fn has_table(conn: &rusqlite::Connection, table: &str) -> Result<bool, rusqlite::Error> {
+    Ok(conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [table], |r| r.get::<_, u64>(0))? == 1)
+}
+
+/// Identité de la base `current_db`, lue en lecture seule : `None` si elle n'en désigne aucune.
+fn read_current_identity(current_db: &Path) -> Result<Option<CurrentIdentity>, rusqlite::Error> {
+    let conn = open_read_only(current_db)?;
+    let setting: Option<SettingRow> = if has_table(&conn, "settings")? {
+        let mut stmt = conn.prepare("SELECT value, updated_at, device_id, hlc FROM settings WHERE key = ?1")?;
+        let mut rows = stmt.query([DEVICE_ID_SETTING_KEY])?;
+        match rows.next()? {
+            Some(row) => Some((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            None => None,
+        }
+    } else {
+        None
+    };
+    let own_row: Option<(String, Option<String>, Option<String>)> = if has_table(&conn, "sync_state")? {
+        let mut stmt = conn.prepare("SELECT device_id, platform, app_version FROM sync_state WHERE is_self = 1 ORDER BY device_id LIMIT 1")?;
+        let mut rows = stmt.query([])?;
+        match rows.next()? {
+            Some(row) => Some((row.get(0)?, row.get(1)?, row.get(2)?)),
+            None => None,
+        }
+    } else {
+        None
+    };
+    // Valeur du réglage : texte JSON (`"uuid"`) ; une valeur non JSON est lue telle quelle, `null` ou vide ne désigne personne.
+    let from_setting = setting.as_ref().and_then(|(raw, ..)| serde_json::from_str::<Option<String>>(raw).unwrap_or_else(|_| Some(raw.clone()))).filter(|id| !id.is_empty());
+    let (platform, app_version) = own_row.as_ref().map_or((None, None), |(_, platform, version)| (platform.clone(), version.clone()));
+    let id = from_setting.clone().or_else(|| own_row.map(|(id, ..)| id));
+    Ok(id.map(|id| CurrentIdentity { setting: from_setting.and(setting), platform, app_version, id }))
+}
+
+/// Y-TECH-04 partie B : une restauration ne change JAMAIS l'identité de l'appareil (décision d'Ali, 2026-10-17). L'identité vient de la base en
+/// place (`current_db`), jamais du fichier restauré ; elle est réécrite dans le fichier PRÉPARÉ (`staged`) AVANT l'échange, de sorte qu'aucun
+/// instant ne laisse la base en place avec l'identité d'un autre appareil (un arrêt brutal, à n'importe quel point, laisse l'ancienne base ou la
+/// nouvelle déjà corrigée) :
+/// - le réglage local `device.id` du fichier préparé est remplacé par celui de la base en place (c'est lui que le démarrage lit) ;
+/// - dans `sync_state`, la ligne `is_self = 1` d'un autre identifiant passe à `is_self = 0` (jamais supprimée, ses positions restent) ;
+/// - la ligne de l'identité courante devient la ligne propre : créée SANS position (époque nulle, curseur à zéro, aucun accusé) si la base
+///   restaurée ne la connaît pas ; si elle la connaissait comme un pair, remise sans position (la position qu'un autre appareil avait de nous
+///   n'est pas la nôtre) et à l'état `active` (on ne se déclare jamais oublié soi-même).
+///
+/// Idempotente : une seconde application ne change rien. Même identité des deux côtés : aucune ligne modifiée (comportement d'avant). Base en
+/// place absente, sans identité ou illisible : rien à protéger, rien n'est modifié (l'illisibilité est journalisée). Échec d'écriture -> `io` :
+/// la restauration est refusée avant l'échange.
+pub fn carry_device_identity(current_db: &Path, staged: &Path) -> Result<(), BackupError> {
+    if !current_db.is_file() {
+        return Ok(());
+    }
+    let identity = match read_current_identity(current_db) {
+        Ok(Some(identity)) => identity,
+        Ok(None) => return Ok(()),
+        Err(_) => {
+            crate::applog::write("backup", "identity-unreadable");
+            return Ok(());
+        }
+    };
+    let conn = rusqlite::Connection::open(staged).map_err(sql_err)?;
+    conn.pragma_update(None, "trusted_schema", "OFF").map_err(sql_err)?;
+    let tx = conn.unchecked_transaction().map_err(sql_err)?;
+    if let Some((value, updated_at, device_id, hlc)) = &identity.setting {
+        if has_table(&tx, "settings").map_err(sql_err)? {
+            // Sans effet si le fichier préparé porte déjà la même valeur (même identité : aucune ligne modifiée).
+            let staged_value: Option<String> = tx.query_row("SELECT value FROM settings WHERE key = ?1", [DEVICE_ID_SETTING_KEY], |r| r.get(0)).ok();
+            if staged_value.as_deref() != Some(value.as_str()) {
+                tx.execute(
+                    "INSERT INTO settings (key, value, updated_at, device_id, hlc) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, device_id = excluded.device_id, hlc = excluded.hlc",
+                    rusqlite::params![DEVICE_ID_SETTING_KEY, value, updated_at, device_id, hlc],
+                )
+                .map_err(sql_err)?;
+            }
+        }
+    }
+    // Sauvegarde d'un schéma antérieur à `sync_state` : la migration la créera, le moteur écrira la ligne propre au premier cycle.
+    if has_table(&tx, "sync_state").map_err(sql_err)? {
+        let id = identity.id.as_str();
+        tx.execute("UPDATE sync_state SET is_self = 0 WHERE is_self = 1 AND device_id <> ?1", [id]).map_err(sql_err)?;
+        let known: Option<bool> = tx.query_row("SELECT is_self FROM sync_state WHERE device_id = ?1", [id], |r| r.get(0)).ok();
+        match known {
+            Some(true) => {}
+            Some(false) => {
+                tx.execute(
+                    "UPDATE sync_state SET is_self = 1, epoch = NULL, cursor_segment = 0, cursor_record = 0, ack_hlc = NULL, status = 'active' WHERE device_id = ?1",
+                    [id],
+                )
+                .map_err(sql_err)?;
+            }
+            None => {
+                tx.execute(
+                    "INSERT INTO sync_state (device_id, is_self, platform, app_version, status) VALUES (?1, 1, ?2, ?3, 'active')",
+                    rusqlite::params![id, identity.platform, identity.app_version],
+                )
+                .map_err(sql_err)?;
+            }
+        }
+    }
+    tx.commit().map_err(sql_err)
+}
+
 /// Jeton de restauration que porte une base : l'`application_id` de son en-tête SQLite (32 bits, inutilisé par l'app). La base en place PORTE
 /// la preuve de la restauration : elle ne dépend d'aucun fichier voisin.
 ///
@@ -946,6 +1063,8 @@ pub fn restore_backup_file(
         .and_then(|_| reset_triggers(&staged))
         // P-04-iOS critère 11 : la valeur actuelle du verrouillage prévaut, recopiée sur le fichier préparé AVANT l'échange.
         .and_then(|()| carry_app_lock(db_path, &staged))
+        // Y-TECH-04 : l'identité de l'appareil (`device.id`, ligne `is_self`) est celle de la base en place, jamais celle du fichier restauré.
+        .and_then(|()| carry_device_identity(db_path, &staged))
         // Jeton de restauration dans le fichier préparé : la base en place prouvera que CETTE restauration a eu lieu.
         .and_then(|()| stamp_restore_token(&staged, db_path).map(|_| ()))
         .and_then(|()| hook(RestoreStep::Staged).map_err(io_err));
