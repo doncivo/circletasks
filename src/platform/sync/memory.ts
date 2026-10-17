@@ -109,6 +109,7 @@ import {
   type ResetPreconditionDevice,
 } from '../../domain/sync/epoch';
 import { DEVICE_EXPIRY_MS, HYDRATE_CYCLE_TIMEOUT_MS, HYDRATE_FILE_TIMEOUT_MS } from '../../domain/sync/limits';
+import { FaultCounters, parseFaultPlan, type FaultCode, type FaultEntry, type FaultFiring, type FaultPlan } from './faultPlan';
 
 /**
  * Implémentation mémoire de `SyncPlatform` (ADR 0011, section 0 ; Y-01, Y-02, Y-06, Y-08) pour Vitest, Playwright et le navigateur de
@@ -143,6 +144,11 @@ interface MemFile {
   availability: FileAvailability;
   /** Octets ajoutés à la taille annoncée (crochet `addBytes`). */
   extraBytes: number;
+  /**
+   * Y-TECH-03 : fichier évincé par iOS (« optimiser le stockage ») : sur le disque, seul le substitut `.<nom>.icloud` existe ; listé sous son
+   * vrai nom en disponibilité `cloud` (comme le plugin folder-bookmark). Effacé par une hydratation réussie. Absent : faux.
+   */
+  placeholder?: boolean;
 }
 
 interface EpochDir {
@@ -164,6 +170,24 @@ export interface StateFileCopy {
   readonly deviceId: string;
   readonly file: MemFile | null;
 }
+
+/** Y-TECH-03 : appel muet en suspens. */
+interface MutedCall {
+  readonly id: string;
+  readonly call: string;
+  readonly rerun: () => void;
+  readonly fail: (code: FaultCode) => void;
+}
+
+/** Y-TECH-03 : panne muette déclenchée (levée par le point de panne, attrapée par l'enveloppe de l'appel de lecture). */
+export class MutedSignal extends Error {
+  override readonly name = 'MutedSignal';
+  constructor(readonly entry: FaultEntry) {
+    super(`panne muette « ${entry.id} »`);
+  }
+}
+
+const emptyDir = (): DeviceDir => ({ state: null, nextState: null, epochs: new Map(), strays: 0 });
 
 /** Taille arbitraire d'une ligne incomplète simulée. */
 const PARTIAL_TAIL_BYTES = 100;
@@ -190,6 +214,252 @@ export class MemorySyncFolder {
     readonly kind: SyncFolderInfo['kind'] = 'icloud',
   ) {}
 
+  // --- Y-TECH-03 : pannes d'iCloud (plan de pannes, `tests/fixtures/sync/fault-plan.json`) --------------------------------------------
+
+  /** Plan de pannes armé (null : faux complaisant, comportement d'avant la story, celui du mode dev). */
+  private faultCounters: FaultCounters | null = null;
+  /** Suppressions acceptées mais non propagées, rendues après `left` appels de `advanceCycle()`. */
+  private readonly resurrections: { readonly deviceId: string; readonly file: string; readonly copy: MemFile; left: number }[] = [];
+  /** Appels muets en suspens (promesse jamais résolue tant que le test ne la libère pas). */
+  private readonly muted: MutedCall[] = [];
+  /** Panne muette déclenchée pendant l'appel en cours (lue par l'enveloppe des appels de lecture, même si l'erreur a été avalée). */
+  muteHit: FaultEntry | null = null;
+
+  /**
+   * Arme un plan de pannes (objet de `fault-plan.json` ou construit par le test), lu strictement : une entrée que ce faux ne sait pas rejouer
+   * fait échouer l'armement avec un message qui la nomme. Remplace le plan précédent, compteurs à zéro ; résurrections en attente et appels
+   * muets en suspens conservés. Sans plan, le faux se comporte exactement comme avant la story.
+   */
+  armFaults(plan: unknown): FaultPlan {
+    const parsed = parseFaultPlan(plan);
+    this.faultCounters = new FaultCounters(parsed);
+    return parsed;
+  }
+
+  /** Retire le plan : le faux redevient complaisant (résurrections en attente conservées). */
+  disarmFaults(): void {
+    this.faultCounters = null;
+  }
+
+  /** Pannes rejouées depuis l'armement (ordre, entrée, chemin, rang). */
+  faultLog(): readonly FaultFiring[] {
+    return this.faultCounters?.fired() ?? [];
+  }
+
+  /** Entrées du plan jamais déclenchées. */
+  unfiredFaults(): readonly string[] {
+    return this.faultCounters?.unfired() ?? [];
+  }
+
+  /** Un plan de pannes est-il armé ? */
+  get faultsArmed(): boolean {
+    return this.faultCounters !== null;
+  }
+
+  /** Mode historique du plugin (option `removeLeavesPlaceholder` du plan) : `remove` du vrai nom laisse le substitut, rien supprimé. */
+  get removeLeavesPlaceholder(): boolean {
+    return this.faultCounters?.plan.options.removeLeavesPlaceholder ?? false;
+  }
+
+  /**
+   * Point de panne : un appel de `op` sur `path` (`devices/<appareil>/<fichier>`, `/` final pour un dossier). Rend l'entrée déclenchée, ou
+   * null (aucun plan, ou rien à ce rang). Une panne muette lève `MutedSignal` (attrapée par l'enveloppe de l'appel, qui le met en suspens).
+   */
+  faultAt(op: FaultEntry['op'], path: string): FaultEntry | null {
+    const entry = this.faultCounters?.hit(op, path) ?? null;
+    if (entry?.effect === 'mute') {
+      this.muteHit = entry;
+      throw new MutedSignal(entry);
+    }
+    return entry;
+  }
+
+  /**
+   * Listage d'un dossier d'appareil (`epoch` null) ou d'époque : panne du dossier (`error` : rejet avec le code ; `mute`), puis, pour chaque
+   * fichier listé, un appel `list` sur son chemin (`placeholder` : évincé avant d'être présenté, sous son vrai nom en `cloud`).
+   */
+  listGate(deviceId: string, epoch: EpochId | null): void {
+    if (!this.faultCounters) return;
+    const base = `devices/${deviceId}/`;
+    const failed = this.faultAt('list', epoch === null ? base : `${base}${epoch}/`);
+    if (failed?.effect === 'error' && failed.code) throw new SyncPlatformError(failed.code);
+    const dir = this.devices.get(deviceId);
+    if (!dir) return;
+    const files: [string, MemFile][] = [];
+    if (epoch === null) {
+      if (dir.state) files.push([STATE_FILE, dir.state]);
+      if (dir.nextState) files.push([STATE_NEXT_FILE, dir.nextState]);
+    } else {
+      const epochDir = dir.epochs.get(epoch);
+      for (const [n, file] of epochDir?.segments ?? []) files.push([`${epoch}/${segmentFileName(n)}`, file]);
+      for (const [n, file] of epochDir?.snapshots ?? []) files.push([`${epoch}/${snapshotFileName(n)}`, file]);
+    }
+    for (const [name, file] of files.sort(([a], [b]) => (a < b ? -1 : 1))) {
+      if (this.faultAt('list', `${base}${name}`)?.effect === 'placeholder') {
+        file.availability = 'cloud';
+        file.placeholder = true;
+      }
+    }
+  }
+
+  /**
+   * Lecture du contenu d'un fichier présent (avant l'hydratation, comme Rust : statut, taille, puis téléchargement) : `error` rendue à
+   * l'appelant qui la traduit comme Rust (`io` d'un état : illisible ; d'un segment ou d'un instantané : rejet) ; `overwrite-before-read` :
+   * l'autre appareil a remplacé le fichier entre le listage et la lecture (lignes du plan, en-tête gardé) ; `evict-after-read` rendue à
+   * l'appelant, qui évince après la lecture réussie (`evictAfterRead`).
+   */
+  readGate(deviceId: string, file: string, found: MemFile = this.mustFind(deviceId, file)): FaultEntry | null {
+    const entry = this.faultAt('read', `devices/${deviceId}/${file}`);
+    if (entry?.effect === 'overwrite-before-read') {
+      const sm = found.lines[0]?.sm ?? found.header.sm;
+      const sv = found.lines[0]?.sv ?? 1;
+      found.lines.splice(0, found.lines.length, ...(entry.content ?? []).map((text) => makeLine(text, sm, sv)));
+      found.partialTail = false;
+    }
+    return entry;
+  }
+
+  /** Après une lecture réussie : évincé si l'entrée le demande (iOS « optimiser le stockage »). */
+  evictAfterRead(entry: FaultEntry | null, found: MemFile): void {
+    if (entry?.effect !== 'evict-after-read') return;
+    found.availability = 'cloud';
+    found.placeholder = true;
+  }
+
+  /** Hydratation tentée d'un fichier `cloud` : vrai si le téléchargement échoue (`download-error`), le fichier reste `cloud`. */
+  hydrateFails(deviceId: string, file: string): boolean {
+    return this.faultAt('hydrate', `devices/${deviceId}/${file}`)?.effect === 'download-error';
+  }
+
+  /** Écriture (ajout à un segment, état, pages d'un instantané) : entrée `error` armée, ou null. */
+  writeGate(deviceId: string, file: string): FaultEntry | null {
+    return this.faultAt('write', `devices/${deviceId}/${file}`);
+  }
+
+  /** Renommage final (validation d'un instantané) : entrée `error` armée, ou null. */
+  renameGate(deviceId: string, file: string): FaultEntry | null {
+    return this.faultAt('rename', `devices/${deviceId}/${file}`);
+  }
+
+  /**
+   * Suppression d'un fichier présent, pannes comprises : `error` → rejet avec le code, le fichier reste listé et lisible ; mode historique et
+   * substitut → rien supprimé (faux), le substitut reste ; `accept-not-propagated` → supprimé localement, revient après N cycles (0 : jamais).
+   * Rend vrai si un fichier a été supprimé.
+   */
+  removeWithFaults(deviceId: string, file: string): boolean {
+    const found = findFile(this.devices.get(deviceId) ?? emptyDir(), file);
+    if (!found) return false;
+    const entry = this.faultAt('remove', `devices/${deviceId}/${file}`);
+    if (entry?.effect === 'error' && entry.code) throw new SyncPlatformError(entry.code);
+    if (found.placeholder === true && this.removeLeavesPlaceholder) return false;
+    if (entry?.effect === 'accept-not-propagated') this.holdForResurrection(deviceId, file, found, entry.resurrectAfterCycles ?? 0);
+    this.removeFile(deviceId, file);
+    return true;
+  }
+
+  /**
+   * Un cycle d'iCloud (compteur explicite, jamais une durée) : chaque suppression acceptée mais non propagée se rapproche de son retour ;
+   * arrivée à zéro, le fichier revient sous le même nom avec le même contenu. Rend le nombre de fichiers revenus.
+   */
+  advanceCycle(): number {
+    let back = 0;
+    for (const r of [...this.resurrections]) {
+      r.left -= 1;
+      if (r.left > 0) continue;
+      this.resurrections.splice(this.resurrections.indexOf(r), 1);
+      if (this.restoreFile(r.deviceId, r.file, r.copy)) back += 1;
+    }
+    return back;
+  }
+
+  /** Suppressions non propagées encore en attente pour un appareil (noms `state.ctx` ou `<époque>/<nom>`). */
+  pendingResurrections(deviceId: string): readonly string[] {
+    return this.resurrections.filter((r) => r.deviceId === deviceId).map((r) => r.file);
+  }
+
+  private holdForResurrection(deviceId: string, file: string, copy: MemFile, cycles: number): void {
+    if (cycles > 0) this.resurrections.push({ deviceId, file, copy: cloneFile(copy), left: cycles });
+  }
+
+  /** Remet un fichier sous son nom (dossiers recréés au besoin) ; faux si le nom n'est pas strict. */
+  private restoreFile(deviceId: string, file: string, copy: MemFile): boolean {
+    this.addDeviceFolder(deviceId);
+    const dir = this.devices.get(deviceId);
+    if (!dir) return false;
+    if (file === STATE_FILE) dir.state = cloneFile(copy);
+    else if (file === STATE_NEXT_FILE) dir.nextState = cloneFile(copy);
+    else {
+      const where = splitFile(file);
+      if (!where) return false;
+      let epochDir = dir.epochs.get(where.epoch);
+      if (!epochDir) {
+        epochDir = { segments: new Map(), snapshots: new Map() };
+        dir.epochs.set(where.epoch, epochDir);
+      }
+      (where.kind === 'segment' ? epochDir.segments : epochDir.snapshots).set(where.n, cloneFile(copy));
+    }
+    return true;
+  }
+
+  /**
+   * Table de conformité (vue fichier de `syncFsConformance.test.ts`) : pose un fichier de nom strict dont les lignes sont `lines` (en-tête
+   * synthétique déduit du nom), remplaçant l'existant.
+   */
+  putLines(deviceId: string, file: string, lines: readonly string[], availability: FileAvailability = 'local'): void {
+    const where = file === STATE_FILE || file === STATE_NEXT_FILE ? null : splitFile(file);
+    if (!where && file !== STATE_FILE && file !== STATE_NEXT_FILE) throw new RangeError('nom non strict');
+    const header: FileHeader = { f: where === null ? 'ct-state' : where.kind === 'segment' ? 'ct-j' : 'ct-s', sm: SYNC_FORMAT_MAJOR, kid: 'conformance', dev: deviceId as FileHeader['dev'], e: where?.epoch ?? ('e0001-00000000-0000-4000-8000-000000000000' as EpochId), n: where?.n ?? 1 };
+    this.restoreFile(deviceId, file, { header, lines: lines.map((text) => makeLine(text, SYNC_FORMAT_MAJOR, 1)), partialTail: false, availability, extraBytes: 0 });
+  }
+
+  /** iOS évince le fichier (substitut `.<nom>.icloud`) : listé sous son vrai nom en `cloud`, lisible après une hydratation. */
+  evict(deviceId: string, file: string): void {
+    const found = this.mustFind(deviceId, file);
+    found.availability = 'cloud';
+    found.placeholder = true;
+  }
+
+  /** Le fichier est-il un substitut évincé ? */
+  isPlaceholder(deviceId: string, file: string): boolean {
+    return this.mustFind(deviceId, file).placeholder === true;
+  }
+
+  /** Disponibilité annoncée par le listage. */
+  availabilityOf(deviceId: string, file: string): FileAvailability {
+    return this.mustFind(deviceId, file).availability;
+  }
+
+  /** Taille annoncée par le listage (en-tête, lignes chiffrées, ligne incomplète, octets ajoutés). */
+  fileSize(deviceId: string, file: string): number {
+    return fileBytes(this.mustFind(deviceId, file));
+  }
+
+  /** Met en attente un appel muet ; `rerun` rejoue l'appel quand le test le libère (`releaseMuted(id, 'complete')`). */
+  suspend<T>(entry: FaultEntry, call: string, rerun: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      this.muted.push({ id: entry.id, call, rerun: () => void rerun().then(resolve, reject), fail: (code) => reject(new SyncPlatformError(code)) });
+    });
+  }
+
+  /** Appels muets en suspens (entrée du plan, nom de l'appel). */
+  mutedCalls(): readonly { readonly id: string; readonly call: string }[] {
+    return this.muted.map((m) => ({ id: m.id, call: m.call }));
+  }
+
+  /**
+   * Fait aboutir le plus ancien appel muet de l'entrée `id`, sur ordre du test (compteur, jamais un délai) : `complete` rejoue l'appel ; un
+   * code le rejette avec ce code (`cloud-pending` : réponse d'un transport borné à son échéance). Faux si aucun appel de l'entrée n'attend.
+   */
+  releaseMuted(id: string, outcome: 'complete' | FaultCode): boolean {
+    const index = this.muted.findIndex((m) => m.id === id);
+    const call = this.muted[index];
+    if (!call) return false;
+    this.muted.splice(index, 1);
+    if (outcome === 'complete') call.rerun();
+    else call.fail(outcome);
+    return true;
+  }
+
   /** Dossier d'appareil vide (nom quelconque : un nom non UUID est ignoré par `scan`). */
   addDeviceFolder(name: string): void {
     if (!this.devices.has(name)) this.devices.set(name, { state: null, nextState: null, epochs: new Map(), strays: 0 });
@@ -206,7 +476,10 @@ export class MemorySyncFolder {
   }
 
   setAvailability(deviceId: string, file: string, availability: FileAvailability): void {
-    this.mustFind(deviceId, file).availability = availability;
+    const found = this.mustFind(deviceId, file);
+    found.availability = availability;
+    // Y-TECH-03 : un fichier rendu local (téléchargé) n'est plus un substitut.
+    if (availability === 'local') found.placeholder = false;
   }
 
   setPartialTail(deviceId: string, file: string, partial: boolean): void {
@@ -707,11 +980,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   let hydrationDelay: number | null = null;
   let hydrationLeft = HYDRATE_CYCLE_TIMEOUT_MS;
   /** Fichier lisible localement, après un téléchargement simulé s'il est dans le nuage et que le budget le permet. */
-  const hydrated = (file: MemFile): boolean => {
+  const hydrated = (file: MemFile, deviceId: string, name: string): boolean => {
+    // Y-TECH-03 : téléchargement armé en échec (`download-error`, rang d'appel) : le fichier reste dans le nuage, aucun budget consommé.
+    if (file.availability === 'cloud' && folder?.hydrateFails(deviceId, name) === true) return false;
     if (file.availability === 'cloud' && hydrationDelay !== null) {
       const allowed = Math.min(HYDRATE_FILE_TIMEOUT_MS, hydrationLeft);
       if (allowed > 0 && hydrationDelay <= allowed) {
         file.availability = 'local';
+        file.placeholder = false;
         hydrationLeft -= hydrationDelay;
       } else {
         hydrationLeft -= allowed;
@@ -719,6 +995,36 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     return file.availability === 'local';
   };
+  /**
+   * Y-TECH-03 : appel de lecture enveloppé : une panne muette armée le met en suspens (promesse jamais résolue tant que le test ne la libère
+   * pas par `MemorySyncFolder.releaseMuted`), même si le signal a été avalé en chemin. Sans plan armé : l'appel tel quel.
+   */
+  const muteable =
+    <A, R>(call: string, run: (arg: A) => Promise<R>) =>
+    (arg: A): Promise<R> =>
+      // Sans plan armé : la promesse de l'appel elle-même (aucun tour de micro-tâche ajouté, comportement d'avant la story).
+      folder?.faultsArmed === true ? suspendable(call, run, arg) : run(arg);
+  const suspendable = async <A, R>(call: string, run: (arg: A) => Promise<R>, arg: A): Promise<R> => {
+      const f = folder;
+      if (f) f.muteHit = null;
+      let result: R;
+      try {
+        result = await run(arg);
+      } catch (error) {
+        const hit = error instanceof MutedSignal ? error.entry : f?.muteHit;
+        if (f && hit) {
+          f.muteHit = null;
+          return f.suspend(hit, call, () => run(arg));
+        }
+        throw error;
+      }
+      if (f?.muteHit) {
+        const hit = f.muteHit;
+        f.muteHit = null;
+        return f.suspend(hit, call, () => run(arg));
+      }
+      return result;
+    };
   /** `pairedBy` mémorisé à l'import quand l'appareil n'est pas encore lié (reporté dans `own.json` à la liaison). */
   let pendingPairedBy: DeviceId | null = null;
   /** `sync/forgotten.json` (Y-10, §18 point 3) : liste maître, terminés ; lié au dossier et à l'identité (l'anti-rejeu est `accepted`). */
@@ -952,8 +1258,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const fromNext = which === 'next';
     const file = fromNext ? dir.nextState : dir.state;
     if (!file) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'missing', fromNext };
-    if (!hydrated(file)) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
+    // Y-TECH-03 : lecture armée en échec, comme `read_state_inner` de Rust : `cloud-pending` → en attente, toute autre erreur → illisible.
+    const name = fromNext ? STATE_NEXT_FILE : STATE_FILE;
+    const fault = folder?.readGate(deviceId, name, file) ?? null;
+    if (fault?.effect === 'error') return { kid: null, state: null, status: fault.code === 'cloud-pending' ? 'cloud-pending' : 'corrupt', fromNext };
+    if (!hydrated(file, deviceId, name)) return { kid: fromNext ? null : anyKid(dir), state: null, status: 'cloud-pending', fromNext };
     const read = readFileState(deviceId, file, kids, remember, replay);
+    folder?.evictAfterRead(fault, file);
     return { ...read, fromNext };
   };
 
@@ -1021,6 +1332,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
   // --- scan ---------------------------------------------------------------------------------------------------------------------
 
   const scanDevice = (deviceId: DeviceId, dir: DeviceDir, kid: string): { readonly scan: DeviceScan; readonly incomplete: boolean } => {
+    // Y-TECH-03 : listage du dossier de l'appareil puis de chaque époque (comme `list_device_top` et `list_epochs` de Rust, avant la
+    // lecture de l'état) : erreur armée → le scan échoue avec son code ; substitut armé → présenté sous son vrai nom en `cloud`.
+    folder?.listGate(deviceId, null);
+    for (const epoch of [...dir.epochs.keys()].sort(compareEpochs)) folder?.listGate(deviceId, epoch);
     const read = readState(deviceId, dir, kid, true);
     let incomplete = (dir.state ? 1 : 0) + dir.epochs.size + dir.strays > MAX_SCAN_ENTRIES_PER_FOLDER;
     const epochs: EpochListing[] = [];
@@ -1174,6 +1489,8 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     let segment = Math.max(1, r.from.segment);
     let record = r.from.segment === 0 ? 0 : r.from.record;
     let status: ReadPage['status'] = 'complete';
+    let opened: number | null = null;
+    const evictions: [FaultEntry, MemFile][] = [];
     // Y-TECH-02 (§21 point 2) : nombre d'enregistrements annoncé de chaque segment clos (sans entrée : règle d'avant).
     const closedCount = (n: number): number | null => (n < head.segment ? (state.closed?.find((c) => c.segment === n)?.records ?? null) : null);
     for (;;) {
@@ -1186,9 +1503,22 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         continue;
       }
       const file = epochDir?.segments.get(segment);
+      const name = `${r.epoch}/${segmentFileName(segment)}`;
+      // Y-TECH-03 : une lecture par segment et par appel (comme Rust) ; erreur armée traduite comme `read_journal` : `io` rejeté,
+      // `cloud-pending` en attente ; éviction après la lecture, appliquée à la fin de l'appel.
+      if (file && opened !== segment) {
+        opened = segment;
+        const fault = f.readGate(r.deviceId, name, file);
+        if (fault?.effect === 'error') {
+          if (fault.code !== 'cloud-pending') fail(fault.code ?? 'io');
+          status = 'cloud-pending';
+          break;
+        }
+        if (fault?.effect === 'evict-after-read') evictions.push([fault, file]);
+      }
       // Segment annoncé absent ou dans le nuage : en attente d'iCloud. Un numéro manquant n'est jamais sauté (choix conservateur :
       // un fichier pas encore arrivé ne se distingue pas d'un trou).
-      if (!file || !hydrated(file)) {
+      if (!file || !hydrated(file, r.deviceId, name)) {
         status = 'cloud-pending';
         break;
       }
@@ -1221,6 +1551,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       bytes += size;
       record += 1;
     }
+    for (const [fault, file] of evictions) f.evictAfterRead(fault, file);
     return { records, next: { segment, record }, status };
   };
 
@@ -1239,13 +1570,21 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     // Seuls les instantanés annoncés par l'état authentifié sont lus (le dernier annoncé et les plus anciens gardés).
     if (!state || state.epoch !== r.epoch || !state.snapshot || r.seq > state.snapshot.seq) return { records: [], next: from, status: 'cloud-pending' };
     const file = f.devices.get(r.deviceId)?.epochs.get(r.epoch)?.snapshots.get(r.seq);
-    if (!file || !hydrated(file)) return { records: [], next: from, status: 'cloud-pending' };
+    const name = `${r.epoch}/${snapshotFileName(r.seq)}`;
+    // Y-TECH-03 : erreur armée traduite comme Rust (`io` rejeté, `cloud-pending` en attente) ; éviction après la lecture réussie.
+    const fault = file ? f.readGate(r.deviceId, name, file) : null;
+    if (fault?.effect === 'error') {
+      if (fault.code !== 'cloud-pending') fail(fault.code ?? 'io');
+      return { records: [], next: from, status: 'cloud-pending' };
+    }
+    if (!file || !hydrated(file, r.deviceId, name)) return { records: [], next: from, status: 'cloud-pending' };
     checkFileForRead(file, kid, MAX_SNAPSHOT_BYTES);
     if (file.header.f !== 'ct-s' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== r.seq) fail('bad-header');
     if (r.tail === true) {
       const last = file.lines[file.lines.length - 1];
       if (file.partialTail || !last) return { records: [], next: from, status: 'cloud-pending' };
       if (last.corrupt) return { records: [], next: { segment: r.seq, record: file.lines.length - 1 }, status: 'truncated' };
+      f.evictAfterRead(fault, file);
       return { records: [last.text], next: { segment: r.seq, record: file.lines.length }, status: 'complete' };
     }
     const records: string[] = [];
@@ -1269,6 +1608,7 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       index += 1;
     }
     if (status === 'complete' && file.partialTail) status = 'cloud-pending';
+    f.evictAfterRead(fault, file);
     return { records, next: { segment: r.seq, record: index }, status };
   };
 
@@ -1366,11 +1706,21 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     if (sameEpoch && o.maxHlc !== null && r.maxHlc <= o.maxHlc) fail('hlc-order');
     checkBudget(lines.length, toNext);
 
+    // Y-TECH-03 : écriture refusée (`io`, `cloud-pending`) : rien d'écrit (ajout atomique), sauf `partialLastLine` demandé par le plan :
+    // les lignes complètes sont là, la dernière est coupée (ligne incomplète), et `own.json` n'avance pas.
+    const segmentName = `${r.epoch}/${segmentFileName(r.segment)}`;
+    const refused = f.writeGate(self, segmentName);
+    if (refused?.effect === 'error' && refused.partialLastLine !== true) fail(refused.code ?? 'io');
     const dir = epochDirOf(f, self, r.epoch);
     let file = dir.segments.get(r.segment);
     if (!file) {
       file = { header: { f: 'ct-j', sm: SYNC_FORMAT_MAJOR, kid, dev: self, e: r.epoch, n: r.segment }, lines: [], partialTail: false, availability: 'local', extraBytes: 0 };
       dir.segments.set(r.segment, file);
+    }
+    if (refused?.effect === 'error') {
+      file.lines.push(...lines.slice(0, -1));
+      file.partialTail = true;
+      fail(refused.code ?? 'io');
     }
     const firstRecord = file.lines.length;
     file.lines.push(...lines);
@@ -1430,6 +1780,12 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       fail('state-mismatch');
     }
     checkBudget(1, toNext);
+    // Y-TECH-03 : écriture de l'état refusée : remplacement atomique, l'ancien `state.ctx` reste entier (aucun octet partiel).
+    const refused = f.writeGate(self, toNext ? STATE_NEXT_FILE : STATE_FILE);
+    if (refused?.effect === 'error') {
+      if (refused.partialLastLine === true) throw new Error(`plan de pannes, entrée « ${refused.id} » : partialLastLine impossible sur un remplacement atomique (state.ctx)`);
+      fail(refused.code ?? 'io');
+    }
     f.addDeviceFolder(self);
     const dir = f.devices.get(self);
     if (!dir) return fail('io');
@@ -1482,6 +1838,14 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     nextWriter += 1;
     const handle = nextWriter;
     openWriters.set(handle, { epoch: r.epoch, seq: r.seq });
+    // Y-TECH-03 : écriture du `.tmp` refusée (première page) : écrivain abandonné, rien de visible sous le nom final.
+    const snapshotName = `${r.epoch}/${snapshotFileName(r.seq)}`;
+    const refused = f.writeGate(self, snapshotName);
+    if (refused?.effect === 'error') {
+      openWriters.delete(handle);
+      if (refused.partialLastLine === true) throw new Error(`plan de pannes, entrée « ${refused.id} » : partialLastLine impossible sur un instantané (.tmp puis renommage)`);
+      fail(refused.code ?? 'io');
+    }
     const header: FileHeader = { f: 'ct-s', sm: SYNC_FORMAT_MAJOR, kid, dev: self, e: r.epoch, n: r.seq };
     const lines: MemLine[] = [];
     let bytes = headerBytes(header);
@@ -1507,6 +1871,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     // sync_snapshot_commit : renommage atomique.
     openWriters.delete(handle);
+    // Y-TECH-03 : renommage refusé : le `.tmp` est abandonné, aucun instantané visible.
+    const renameRefused = f.renameGate(self, snapshotName);
+    if (renameRefused?.effect === 'error') fail(renameRefused.code ?? 'io');
     epochDirOf(f, self, r.epoch).snapshots.set(r.seq, { header, lines, partialTail: false, availability: 'local', extraBytes: 0 });
     addSealed(lines.length, toNext);
   };
@@ -1528,14 +1895,36 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     }
     const dir = f.devices.get(self);
     let deleted = 0;
+    // Y-TECH-03 : fichier par fichier comme `delete_own` de Rust (listage de l'époque, `remove_file` de chaque nom strict, puis dossier
+    // vide supprimé) : la première suppression en échec rejette l'appel avec son code (les précédentes restent faites, et l'entrée `closed`
+    // des segments déjà traités est retirée comme dans Rust) ; un substitut laissé par le mode historique garde le dossier. Sans plan :
+    // même résultat qu'avant la story.
+    const done = new Set<number>();
+    const failWith = (error: unknown): never => {
+      o.closed = o.closed.filter((c) => !done.has(c.segment));
+      throw error;
+    };
     for (const ref of files) {
       const epochDir = dir?.epochs.get(ref.epoch);
       if (!dir || !epochDir) continue;
       if (ref.kind === 'epoch') {
-        deleted += epochDir.segments.size + epochDir.snapshots.size;
-        dir.epochs.delete(ref.epoch);
-      } else if (ref.n !== undefined && (ref.kind === 'j' ? epochDir.segments : epochDir.snapshots).delete(ref.n)) {
-        deleted += 1;
+        f.listGate(self, ref.epoch);
+        const names = [...[...epochDir.segments.keys()].map((n) => `${ref.epoch}/${segmentFileName(n)}`), ...[...epochDir.snapshots.keys()].map((n) => `${ref.epoch}/${snapshotFileName(n)}`)].sort();
+        for (const name of names) {
+          try {
+            if (f.removeWithFaults(self, name)) deleted += 1;
+          } catch (error) {
+            failWith(error);
+          }
+        }
+        if (epochDir.segments.size + epochDir.snapshots.size === 0) dir.epochs.delete(ref.epoch);
+      } else if (ref.n !== undefined) {
+        try {
+          if (f.removeWithFaults(self, `${ref.epoch}/${ref.kind === 'j' ? segmentFileName(ref.n) : snapshotFileName(ref.n)}`)) deleted += 1;
+        } catch (error) {
+          failWith(error);
+        }
+        if (ref.kind === 'j' && ref.epoch === o.epoch) done.add(ref.n);
       }
     }
     // Y-TECH-02 : l'entrée `closed` d'un segment supprimé de l'époque courante est retirée (partie avec la réécriture suivante).
@@ -1722,7 +2111,11 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     const state = read?.status === 'ok' ? read.state : null;
     if (!state?.snapshot) return 'none';
     const file = f.devices.get(self)?.epochs.get(state.epoch)?.snapshots.get(state.snapshot.seq);
-    if (!file || !hydrated(file)) return 'cloud-pending';
+    const name = `${state.epoch}/${snapshotFileName(state.snapshot.seq)}`;
+    const fault = file ? f.readGate(self, name, file) : null;
+    if (fault?.effect === 'error') return fault.code === 'cloud-pending' ? 'cloud-pending' : 'unreadable';
+    if (!file || !hydrated(file, self, name)) return 'cloud-pending';
+    f.evictAfterRead(fault, file);
     const last = file.lines[file.lines.length - 1];
     if (file.partialTail || !last) return 'cloud-pending';
     const end = last.corrupt ? null : parseSnapshotRecord(last.text);
@@ -2472,12 +2865,13 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
         pendingPairedBy = null;
       }
     },
-    scan,
-    readJournal,
+    // Y-TECH-03 : appels de lecture enveloppés (panne muette du plan de pannes) ; sans plan armé, l'appel tel quel.
+    scan: muteable('scan', scan),
+    readJournal: muteable('readJournal', readJournal),
     appendJournal,
     writeState,
     writeSnapshot,
-    readSnapshot,
+    readSnapshot: muteable('readSnapshot', readSnapshot),
     deleteOwn,
     abandonOrphanEpoch,
     restoreMarker: {

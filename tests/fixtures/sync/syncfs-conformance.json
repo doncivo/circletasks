@@ -3,7 +3,11 @@
     "Table de conformité de SyncFs (ADR 0011 §22 point 4 ; Y-IOS-01 critère 2) : une table, trois implémentations (StdFs sur un dossier temporaire, BookmarkFs sur le faux du plugin, SyncFs en mémoire des tests), mêmes résultats attendus. Rejouée par src-tauri/tests/desktop/sync_fs_conformance.rs ; les cas observables par SyncPlatform (absent, partiel, nuage) sont rejoués par src/platform/sync/syncFsConformance.test.ts sur memory.ts.",
     "setup : mkdir (dossier), file (texte, cloud facultatif, delayMs : durée simulée du téléchargement), link (lien symbolique sous la racine). requires : capacités exigées (cloud, links) ; une implémentation qui ne peut pas les produire saute le cas (StdFs : cloud ; mémoire : links).",
     "steps : op (list, read, readFrom, readHead, append, writeAtomic, rename, createDir, remove, removeEmptyDir, makeLink), puis expect : ok, names (liste triée « nom » ou « nom/ » pour un dossier, « nom! » pour une entrée en erreur, « nom~ » pour une entrée dans le nuage), text, eof, size, removed, ou error (not-found, exists, unsafe, cloud-pending, too-large) ou errorCode (code SyncErrorCode, quand les implémentations diffèrent par la variante mais pas par le code).",
-    "observable : cas rejoué aussi sur memory.ts (statut de readJournal et readSnapshot)."
+    "observable : cas rejoué aussi sur memory.ts (statut de readJournal et readSnapshot).",
+    "Y-TECH-03 (B13) : faultCases, cas de pannes d'iCloud armés par un plan au format de tests/fixtures/sync/fault-plan.json (champ plan, lu par le même analyseur strict que le plan de référence) : suppression en échec, résurrection après N cycles, éviction après lecture, substitut .<nom>.icloud en mode correct et historique, écriture refusée, écrasement entre listage et lecture, téléchargement en échec, lecture et listage en échec. Chaque cas : plan, setup (comme cases ; textes en lignes complètes terminées par \\n), steps, requires facultatif.",
+    "faultCases, opérations : celles de cases (list, read, writeAtomic, append, remove) plus advanceCycle (un cycle d'iCloud : compteur des résurrections, attendu { ok: true }). Noms d'erreur attendus (error) : io, cloud-pending, cloud-error (téléchargement en échec, FsError::CloudError).",
+    "faultCases, rejeu : memory.ts par une vue fichier sur MemorySyncFolder qui passe par les mêmes points de panne que la plateforme (src/platform/sync/syncFsConformance.test.ts, tous les cas) ; MemFs et BookmarkFs sur fake_bookmark (phase B, sync_fs_conformance.rs, qui ne lit aujourd'hui que cases) ; StdFs : requires cloud → non applicable (un vrai disque n'a pas de fichier dans le nuage, comme la table de base) ; les autres cas exigent une enveloppe d'injection de pannes que la phase B ajoute, ou déclare non applicable avec sa raison (champ notApplicable : { implémentation: raison }) : jamais ignorés en silence.",
+    "Non applicables à la table, couverts ailleurs : la panne muette (un appel sans retour ne se rejoue pas pas à pas) : src/platform/sync/memoryFaults.test.ts et scénario 5 ; la ligne incomplète laissée par un ajout coupé (partialLastLine : memory.ts garde la présence d'une ligne incomplète, pas son texte) : memoryFaults.test.ts."
   ],
   "cases": [
     {
@@ -149,6 +153,171 @@
         { "op": "makeLink", "path": ["devices", "a"], "expect": { "ok": true } },
         { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "error": "unsafe" } },
         { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "pirate", "expect": { "error": "unsafe" } }
+      ]
+    }
+  ],
+  "faultCases": [
+    {
+      "name": "suppression en échec io, le fichier reste, la seconde réussit",
+      "plan": { "name": "remove-io", "faults": [{ "id": "remove-s1-io", "op": "remove", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "error", "code": "io" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" },{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "segment\n" }],
+      "steps": [
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "expect": { "removed": true }},
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "error": "io" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "limit": 100, "hydrate": false, "expect": { "text": "instantane\n" } },
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }}
+      ]
+    },
+    {
+      "name": "suppression en échec cloud-pending, la seconde réussit",
+      "plan": { "name": "remove-pending", "faults": [{ "id": "remove-s1-pending", "op": "remove", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "error", "code": "cloud-pending" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
+      "steps": [
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "error": "cloud-pending" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts"] }},
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }}
+      ]
+    },
+    {
+      "name": "suppression acceptée non propagée : revient après 2 cycles",
+      "plan": { "name": "resurrect-2", "faults": [{ "id": "remove-s1-back", "op": "remove", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "accept-not-propagated", "resurrectAfterCycles": 2 }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
+      "steps": [
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }},
+        { "op": "advanceCycle", "expect": { "ok": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }},
+        { "op": "advanceCycle", "expect": { "ok": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "limit": 100, "hydrate": false, "expect": { "text": "instantane\n" } }
+      ]
+    },
+    {
+      "name": "suppression acceptée, N = 0 : ne revient jamais",
+      "plan": { "name": "resurrect-0", "faults": [{ "id": "remove-s1-gone", "op": "remove", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "accept-not-propagated", "resurrectAfterCycles": 0 }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
+      "steps": [
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }},
+        { "op": "advanceCycle", "expect": { "ok": true }},
+        { "op": "advanceCycle", "expect": { "ok": true }},
+        { "op": "advanceCycle", "expect": { "ok": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }}
+      ]
+    },
+    {
+      "name": "éviction après lecture : substitut listé en nuage, relu après hydratation",
+      "requires": ["cloud"],
+      "plan": { "name": "evict", "faults": [{ "id": "evict-j1", "op": "read", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "evict-after-read" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\nl2\n" }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "l1\nl2\n" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj~"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "error": "cloud-pending" } },
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": true, "expect": { "text": "l1\nl2\n" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj"] }}
+      ]
+    },
+    {
+      "name": "substitut au listage : vrai nom en nuage, supprimé avec le vrai nom (mode correct)",
+      "requires": ["cloud"],
+      "plan": { "name": "placeholder", "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "placeholder" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts~"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "limit": 100, "hydrate": false, "expect": { "error": "cloud-pending" } },
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }}
+      ]
+    },
+    {
+      "name": "substitut en mode historique : rien supprimé, il reste listé",
+      "requires": ["cloud"],
+      "plan": { "name": "placeholder-historique", "options": { "removeLeavesPlaceholder": true }, "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "placeholder" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts~"] }},
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": false }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["s-00000001.cts~"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "limit": 100, "hydrate": true, "expect": { "text": "instantane\n" } },
+        { "op": "remove", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "expect": { "removed": true }},
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": [] }}
+      ]
+    },
+    {
+      "name": "substitut lu avec hydratation : téléchargé puis local",
+      "requires": ["cloud"],
+      "plan": { "name": "placeholder-hydrate", "faults": [{ "id": "placeholder-st", "op": "list", "file": "devices/a/state.ctx", "nth": 1, "effect": "placeholder" }] },
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat\n" }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["state.ctx~"] }},
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": true, "expect": { "text": "etat\n" } },
+        { "op": "list", "path": ["devices", "a"], "expect": { "names": ["state.ctx"] }}
+      ]
+    },
+    {
+      "name": "écrasé par l’autre appareil entre listage et lecture",
+      "plan": { "name": "overwrite", "faults": [{ "id": "overwrite-j1", "op": "read", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "overwrite-before-read", "content": ["autre", "appareil"] }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n" }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "autre\nappareil\n" } },
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "autre\nappareil\n" } }
+      ]
+    },
+    {
+      "name": "écriture de l’état refusée : ancien état entier, aucun octet partiel",
+      "plan": { "name": "write-refused", "faults": [{ "id": "write-st-io", "op": "write", "file": "devices/a/state.ctx", "nth": 1, "effect": "error", "code": "io" },{ "id": "write-st-pending", "op": "write", "file": "devices/a/state.ctx", "nth": 2, "effect": "error", "code": "cloud-pending" }] },
+      "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "ancien\n" }],
+      "steps": [
+        { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "nouveau\n", "expect": { "error": "io" } },
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "ancien\n" } },
+        { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "nouveau\n", "expect": { "error": "cloud-pending" } },
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "ancien\n" } },
+        { "op": "writeAtomic", "path": ["devices", "a", "state.ctx"], "text": "nouveau\n", "expect": { "ok": true }},
+        { "op": "read", "path": ["devices", "a", "state.ctx"], "limit": 100, "hydrate": false, "expect": { "text": "nouveau\n" } }
+      ]
+    },
+    {
+      "name": "ajout à un segment refusé : aucun octet ajouté",
+      "plan": { "name": "append-refused", "faults": [{ "id": "append-j1-pending", "op": "write", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "error", "code": "cloud-pending" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n" }],
+      "steps": [
+        { "op": "append", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l2\n", "create": false, "expect": { "error": "cloud-pending" } },
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "l1\n" } },
+        { "op": "append", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l2\n", "create": false, "expect": { "ok": true }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "l1\nl2\n" } }
+      ]
+    },
+    {
+      "name": "téléchargement en échec : reste en nuage, réussi au rang suivant",
+      "requires": ["cloud"],
+      "plan": { "name": "download-error", "faults": [{ "id": "download-j1", "op": "hydrate", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "download-error" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n", "cloud": true }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": true, "expect": { "error": "cloud-error" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj~"] }},
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": true, "expect": { "text": "l1\n" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj"] }}
+      ]
+    },
+    {
+      "name": "lecture en échec io au rang 1 seulement",
+      "plan": { "name": "read-io", "faults": [{ "id": "read-j1-io", "op": "read", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "error", "code": "io" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n" }],
+      "steps": [
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "error": "io" } },
+        { "op": "read", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "limit": 100, "hydrate": false, "expect": { "text": "l1\n" } }
+      ]
+    },
+    {
+      "name": "listage d’un dossier en échec io au rang 1",
+      "plan": { "name": "list-io", "faults": [{ "id": "list-epoch-io", "op": "list", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/", "nth": 1, "effect": "error", "code": "io" }] },
+      "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n" }],
+      "steps": [
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "error": "io" } },
+        { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj"] }}
       ]
     }
   ]
