@@ -1,0 +1,114 @@
+{
+  "$comment": [
+    "Plan de pannes d'iCloud (« FaultPlan », Y-TECH-03, B13 de docs/audit-1.0.md). Un seul format, lu tel quel par les trois faux iCloud du dépôt : src/platform/sync/memory.ts (MemorySyncFolder.armFaults, lecture stricte par src/platform/sync/faultPlan.ts), MemFs (src-tauri/tests/desktop/sync_support.rs) et fake_bookmark (src-tauri/tests/desktop/support/fake_bookmark.rs), ces deux derniers par include_str! de ce fichier (phase B). Règle du projet : aucune panne n'est armée par le temps ; un rang d'appel et un compteur de cycles seulement.",
+    "Racine : { $comment, schema (1), plans: [plan] }. Plan : { name (texte unique, obligatoire), about (texte, facultatif), options (facultatif), faults: [entrée] }. Aucun autre champ (refus).",
+    "options.removeLeavesPlaceholder (booléen, faux par défaut) : mode historique du plugin folder-bookmark d'avant Y-IOS-02-FIX-02 : remove du vrai nom d'un fichier évincé (substitut .<nom>.icloud) répond « rien supprimé » (removed=false, sans erreur) et le substitut reste, listé au listage suivant. Mode correct (défaut) : remove du vrai nom supprime aussi le substitut (removed=true). Réservé aux tests de régression du bug du 8 octobre.",
+    "Entrée : id (texte unique dans le plan, obligatoire), op, file, nth, times, effect, puis les paramètres de l'effet, about (texte, facultatif). Tout autre champ est refusé ; un champ de durée (nom contenant ms, delay, timeout, duration, wait, sleep, date, clock, seconds, ou finissant par at ou time) est refusé avec un message dédié.",
+    "op : list (listage d'un dossier ; pour un fichier, chaque listage où il apparaît compte un appel sur son chemin), read (lecture du contenu d'un fichier présent, avant le téléchargement éventuel, comme Rust : statut, taille, puis téléchargement), hydrate (téléchargement d'un fichier « dans le nuage », compté seulement s'il est tenté), write (ajout à un segment, écriture atomique d'un état, première page du .tmp d'un instantané), rename (renommage final : .tmp d'instantané vers son nom), remove (suppression d'un fichier ; une suppression d'époque est une suite de remove, un par fichier, dans l'ordre des noms).",
+    "file : chemin sous la racine CircleTasks, composants séparés par /, premier composant devices ; * remplace toute suite de caractères DANS un composant (jamais /). Un dossier se termine par / (seulement pour list en error ou mute). Aucun horodatage (date ISO ou nombre de 10 chiffres ou plus : refus).",
+    "nth : rang (entier >= 1, obligatoire) du premier appel touché ; chaque appel de op sur un chemin qui correspond incrémente le compteur de l'entrée, même si une autre entrée l'emporte. times : nombre d'appels consécutifs touchés à partir de nth (entier >= 1, 1 par défaut) ou \"all\" (tous les suivants). Plusieurs entrées déclenchées par le même appel : la première du plan l'emporte.",
+    "Effets et opérations qui les acceptent (toute autre combinaison est refusée au chargement, message qui nomme l'entrée) : list → error, mute, placeholder ; read → error, mute, evict-after-read, overwrite-before-read ; hydrate → download-error, mute ; write → error ; rename → error ; remove → error, accept-not-propagated.",
+    "error { code: io | cloud-pending } : l'appel échoue avec ce code, rien n'est modifié (remove : le fichier reste listé et lisible ; write : aucun octet partiel, écriture atomique conservée, sauf partialLastLine: true, réservé à un segment *.ctj : les lignes complètes de l'ajout sont écrites, la dernière est coupée (ligne incomplète), puis l'appel échoue). Traduction au niveau SyncPlatform, comme store.rs : lecture d'un segment ou d'un instantané en io → rejet io, en cloud-pending → statut cloud-pending ; lecture d'un état en io → statut corrupt, en cloud-pending → statut cloud-pending ; listage → le scan échoue avec le code.",
+    "accept-not-propagated { resurrectAfterCycles: N (entier >= 0) } : remove répond removed=true et le fichier disparaît du listage local, mais iCloud n'a pas reçu la suppression : après exactement N appels de advanceCycle() (compteur du faux ou du simulateur, jamais une durée), le fichier revient sous le même nom avec le même contenu. N = 0 : il ne revient jamais (suppression ordinaire, cas de référence). Dans le simulateur à deux dossiers (tests/sim/syncCloudSim.ts), une telle suppression en attente n'est pas transmise à l'autre dossier.",
+    "evict-after-read : après la lecture réussie, iOS évince le fichier (« optimiser le stockage ») : seul le substitut .<nom>.icloud reste ; le listage le présente sous son vrai nom en disponibilité cloud (« nom~ » dans la table de conformité) ; une nouvelle lecture sans hydratation rend cloud-pending, avec hydratation elle le télécharge (puis il est local).",
+    "placeholder (op list, file désigne un fichier) : au n-ième listage où le fichier apparaît, il est présenté évincé (substitut, sous son vrai nom, cloud), comme evict-after-read mais sans lecture préalable.",
+    "overwrite-before-read { content: [lignes] } : entre le listage et la lecture, l'autre appareil a remplacé le fichier : la lecture rend content (lignes complètes, chacune suivie de \\n pour un faux octet à octet ; enregistrements en clair pour memory.ts, en-tête gardé) et non le contenu listé ; le listage suivant montre la nouvelle taille.",
+    "download-error (op hydrate) : le téléchargement échoue (FsError::CloudError, « cloud-error » au niveau SyncFs ; statut cloud-pending au niveau SyncPlatform, comme store.rs) ; le fichier reste cloud ; l'appel suivant n'est touché que si son rang est couvert par l'entrée (times).",
+    "mute (op list, read ou hydrate) : l'appel ne répond jamais (promesse jamais résolue dans memory.ts ; appel sans retour dans fake_bookmark). Le test le fait aboutir par compteur, jamais par une attente : MemorySyncFolder.mutedCalls() liste les appels en suspens, releaseMuted(id, 'complete') rejoue l'appel (entrée consommée), releaseMuted(id, code) le rejette avec ce code (réponse d'un transport borné à son échéance). memory.ts : seuls scan, readJournal et readSnapshot sont enveloppés ; ailleurs le signal remonte en erreur qui nomme l'entrée (jamais avalé).",
+    "Déterminisme : deux exécutions du même plan et de la même suite d'appels donnent le même journal des pannes (faultLog : id, op, chemin, rang) et les mêmes résultats.",
+    "Plans d'exemple ci-dessous : un par effet (critère 1), puis les plans des scénarios du banc (scenario-*), rejoués par tests/unit/sync/hostile/."
+  ],
+  "schema": 1,
+  "plans": [
+    {
+      "name": "exemple-error-io",
+      "about": "Première suppression de l'instantané orphelin en échec io, la suivante réussit (critères 2 et 5).",
+      "faults": [{ "id": "remove-s1-io", "op": "remove", "file": "devices/*/e0001-*/s-00000001.cts", "nth": 1, "effect": "error", "code": "io" }]
+    },
+    {
+      "name": "exemple-error-cloud-pending",
+      "about": "Écriture de l'état refusée dans le nuage (critère 9).",
+      "faults": [{ "id": "write-state-pending", "op": "write", "file": "devices/*/state.ctx", "nth": 1, "effect": "error", "code": "cloud-pending" }]
+    },
+    {
+      "name": "exemple-write-partial",
+      "about": "Ajout à un segment coupé : lignes complètes écrites, dernière incomplète, appel en échec (critère 9, partialLastLine).",
+      "faults": [{ "id": "append-partial", "op": "write", "file": "devices/*/*/j-*.ctj", "nth": 1, "effect": "error", "code": "io", "partialLastLine": true }]
+    },
+    {
+      "name": "exemple-accept-not-propagated",
+      "about": "Suppression acceptée puis le fichier revient après 2 cycles (critère 6).",
+      "faults": [{ "id": "remove-s1-back", "op": "remove", "file": "devices/*/*/s-00000001.cts", "nth": 1, "effect": "accept-not-propagated", "resurrectAfterCycles": 2 }]
+    },
+    {
+      "name": "exemple-accept-never-back",
+      "about": "Cas de référence : N = 0, le fichier ne revient jamais (comportement d'avant la story).",
+      "faults": [{ "id": "remove-s1-gone", "op": "remove", "file": "devices/*/*/s-00000001.cts", "nth": 1, "effect": "accept-not-propagated", "resurrectAfterCycles": 0 }]
+    },
+    {
+      "name": "exemple-evict-after-read",
+      "about": "Segment évincé après sa première lecture (critère 7).",
+      "faults": [{ "id": "evict-j1", "op": "read", "file": "devices/*/*/j-00000001.ctj", "nth": 1, "effect": "evict-after-read" }]
+    },
+    {
+      "name": "exemple-placeholder",
+      "about": "Instantané présenté évincé (substitut sous son vrai nom, cloud) au premier listage.",
+      "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/*/*/s-00000001.cts", "nth": 1, "effect": "placeholder" }]
+    },
+    {
+      "name": "exemple-placeholder-historique",
+      "about": "Mode historique : remove du vrai nom laisse le substitut (bug du 8 octobre, critère 14).",
+      "options": { "removeLeavesPlaceholder": true },
+      "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/*/*/s-00000001.cts", "nth": 1, "effect": "placeholder" }]
+    },
+    {
+      "name": "exemple-overwrite-before-read",
+      "about": "Fichier remplacé par l'autre appareil entre le listage et la lecture (critère 8).",
+      "faults": [{ "id": "overwrite-j1", "op": "read", "file": "devices/*/*/j-00000001.ctj", "nth": 1, "effect": "overwrite-before-read", "content": ["{\"k\":\"ops\",\"n\":9}"] }]
+    },
+    {
+      "name": "exemple-download-error",
+      "about": "Premier téléchargement en échec, le second réussit (critère 11).",
+      "faults": [{ "id": "download-j1", "op": "hydrate", "file": "devices/*/*/j-00000001.ctj", "nth": 1, "effect": "download-error" }]
+    },
+    {
+      "name": "exemple-mute",
+      "about": "Listage du dossier d'un appareil sans réponse (scénario 5).",
+      "faults": [{ "id": "mute-list", "op": "list", "file": "devices/*/", "nth": 1, "effect": "mute" }]
+    },
+    {
+      "name": "scenario-1-orphelin",
+      "about": "Scénario 1 (B1, 8 octobre) : instantané orphelin évincé, première suppression en échec io.",
+      "faults": [
+        { "id": "orphan-placeholder", "op": "list", "file": "devices/ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/e0001-ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/s-00000001.cts", "nth": 1, "effect": "placeholder" },
+        { "id": "orphan-remove-io", "op": "remove", "file": "devices/ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/e0001-ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/s-00000001.cts", "nth": 1, "effect": "error", "code": "io" }
+      ]
+    },
+    {
+      "name": "scenario-1-orphelin-historique",
+      "about": "Scénario 1 (c) : même état, plugin en mode historique (le substitut reste).",
+      "options": { "removeLeavesPlaceholder": true },
+      "faults": [{ "id": "orphan-placeholder", "op": "list", "file": "devices/ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/e0001-ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/s-00000001.cts", "nth": 1, "effect": "placeholder" }]
+    },
+    {
+      "name": "scenario-3-lecture-io",
+      "about": "Scénario 3 (B3) : lecture du journal de l'autre appareil en échec io au rang 1.",
+      "faults": [{ "id": "read-journal-io", "op": "read", "file": "devices/56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa/*/j-*.ctj", "nth": 1, "effect": "error", "code": "io" }]
+    },
+    {
+      "name": "scenario-4-orphelin-durable",
+      "about": "Scénario 4 (B5) : suppression de l'instantané orphelin en échec à chaque rang.",
+      "faults": [{ "id": "orphan-remove-always", "op": "remove", "file": "devices/ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb/*/s-00000001.cts", "nth": 1, "times": "all", "effect": "error", "code": "io" }]
+    },
+    {
+      "name": "scenario-4-instantane-propre-durable",
+      "about": "Scénario 4 (B5) : suppression d'un ancien instantané propre en échec à chaque rang (delete-own-failed).",
+      "faults": [{ "id": "own-remove-always", "op": "remove", "file": "devices/56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa/*/s-00000001.cts", "nth": 1, "times": "all", "effect": "error", "code": "io" }]
+    },
+    {
+      "name": "scenario-5-transport-muet",
+      "about": "Scénario 5 (B6) : listage du dossier de l'autre appareil sans réponse au rang 1.",
+      "faults": [{ "id": "mute-list-pc", "op": "list", "file": "devices/56d4eec1-aaaa-4aaa-8aaa-aaaaaaaaaaaa/", "nth": 1, "effect": "mute" }]
+    }
+  ]
+}

@@ -15,6 +15,8 @@ use circletasks_lib::sync::service::{FolderBackend, SyncCore, SyncOptions};
 use circletasks_lib::sync::{fail, SyncCode, SyncResult};
 use circletasks_lib::vault::MemoryVault;
 
+use crate::support::fault_plan::{self, Armed, Code, Effect, Entry, Firing, Op, Plan};
+
 pub const DEV_A: &str = "3f2b8c1e-5a7d-4e9b-9c2a-1b2c3d4e5f60";
 pub const DEV_B: &str = "7d4e1a2b-3c5f-4a6b-8d7e-9f0a1b2c3d4e";
 pub const DEV_C: &str = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
@@ -38,6 +40,38 @@ enum Node {
     File { bytes: Vec<u8>, availability: Availability, extra: u64 },
 }
 
+/// Pannes d'iCloud armées par un plan (Y-TECH-03, `tests/fixtures/sync/fault-plan.json`) : sans plan, le faux est complaisant, comme avant.
+#[derive(Default)]
+struct MemFaults {
+    armed: Option<Armed>,
+    /// Fichiers évincés par iOS (« optimiser le stockage ») : l'équivalent du substitut `.<nom>.icloud`, listé sous son vrai nom en `cloud`.
+    evicted: BTreeSet<String>,
+    /// Évictions décidées à la lecture, exécutées à la fin de la lecture (dernière page).
+    evict_pending: BTreeSet<String>,
+    /// Suppressions acceptées mais non propagées : le fichier revient après `left` appels de `advance_cycle`.
+    back: Vec<Resurrection>,
+}
+
+struct Resurrection {
+    key: String,
+    node: Node,
+    evicted: bool,
+    left: u64,
+}
+
+impl MemFaults {
+    fn hit(&mut self, op: Op, path: &str) -> Option<Entry> {
+        self.armed.as_mut().and_then(|armed| armed.hit(op, path))
+    }
+}
+
+fn code_error(code: Code) -> FsError {
+    match code {
+        Code::Io => FsError::Io,
+        Code::CloudPending => FsError::CloudPending,
+    }
+}
+
 /// Dossier simulé : chemins `a/b/c`, fichiers « dans le nuage », erreurs d'hydratation, échec de revalidation.
 #[derive(Default)]
 pub struct MemFs {
@@ -56,6 +90,7 @@ pub struct MemFs {
     /// Lectures d'en-tête (`read_head`) et cycles d'hydratation ouverts (`start_cycle`).
     pub head_reads: AtomicUsize,
     pub cycles: AtomicUsize,
+    faults: Mutex<MemFaults>,
 }
 
 fn key(parts: &[&str]) -> String {
@@ -73,6 +108,7 @@ impl MemFs {
             nodes.entry(key(&parts[..i])).or_insert(Node::Dir);
         }
         nodes.insert(key(parts), Node::File { bytes: bytes.to_vec(), availability: Availability::Local, extra: 0 });
+        self.faults.lock().unwrap().evicted.remove(&key(parts));
     }
 
     pub fn mkdir(&self, parts: &[&str]) {
@@ -129,6 +165,96 @@ impl MemFs {
         self.nodes.lock().unwrap().keys().cloned().collect()
     }
 
+    // --- Y-TECH-03 : pannes d'iCloud armées par un plan ---------------------------------------------------------------------------
+
+    /// Arme un plan de pannes (remplace le précédent, compteurs à zéro). Une entrée que ce faux ne sait pas rejouer (`mute`) est refusée
+    /// avec un message qui la nomme.
+    pub fn arm(&self, plan: Plan) -> Result<(), String> {
+        fault_plan::refuse_unreplayable(&plan, "MemFs")?;
+        self.faults.lock().unwrap().armed = Some(Armed::new(plan));
+        Ok(())
+    }
+
+    /// Arme un plan de `fault-plan.json` par son nom.
+    pub fn arm_reference(&self, name: &str) -> Result<(), String> {
+        self.arm(fault_plan::reference_plan(name))
+    }
+
+    /// Retire le plan : le faux redevient complaisant (résurrections en attente conservées).
+    pub fn disarm(&self) {
+        self.faults.lock().unwrap().armed = None;
+    }
+
+    /// Pannes rejouées depuis l'armement (entrée, opération, chemin, rang).
+    pub fn fired(&self) -> Vec<Firing> {
+        self.faults.lock().unwrap().armed.as_ref().map(Armed::fired).unwrap_or_default()
+    }
+
+    /// Entrées du plan jamais déclenchées.
+    pub fn unfired(&self) -> Vec<String> {
+        self.faults.lock().unwrap().armed.as_ref().map(Armed::unfired).unwrap_or_default()
+    }
+
+    /// Un cycle d'iCloud (compteur explicite, jamais une durée) : chaque suppression acceptée mais non propagée se rapproche de son retour ;
+    /// arrivée à zéro, le fichier revient sous le même nom avec le même contenu. Rend le nombre de fichiers revenus.
+    pub fn advance_cycle(&self) -> usize {
+        let mut nodes = self.nodes.lock().unwrap();
+        let mut faults = self.faults.lock().unwrap();
+        for pending in &mut faults.back {
+            pending.left -= 1;
+        }
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut faults.back).into_iter().partition(|p| p.left == 0);
+        faults.back = waiting;
+        let count = due.len();
+        for back in due {
+            let parts: Vec<&str> = back.key.split('/').collect();
+            for i in 1..parts.len() {
+                nodes.entry(parts[..i].join("/")).or_insert(Node::Dir);
+            }
+            if back.evicted {
+                faults.evicted.insert(back.key.clone());
+            }
+            nodes.insert(back.key, back.node);
+        }
+        count
+    }
+
+    /// Fichier évincé par le plan (substitut) ?
+    pub fn is_evicted(&self, parts: &[&str]) -> bool {
+        self.faults.lock().unwrap().evicted.contains(&key(parts))
+    }
+
+    /// Panne de lecture d'un fichier présent, avant l'hydratation : `error` rendue à l'appelant ; `overwrite-before-read` remplace le contenu
+    /// (l'autre appareil a écrit entre le listage et la lecture) ; rend vrai si le fichier doit être évincé après la lecture.
+    fn read_gate(&self, path: &str, bytes: &mut Vec<u8>) -> Result<bool, FsError> {
+        match self.faults.lock().unwrap().hit(Op::Read, path).map(|entry| entry.effect) {
+            Some(Effect::Error(code)) => Err(code_error(code)),
+            Some(Effect::OverwriteBeforeRead { content }) => {
+                *bytes = fault_plan::overwrite_bytes(&content);
+                Ok(false)
+            }
+            Some(Effect::EvictAfterRead) => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    /// Téléchargement tenté d'un fichier dans le nuage : `download-error` armé → `CloudError`, le fichier reste dans le nuage.
+    fn hydrate_gate(&self, path: &str) -> Result<(), FsError> {
+        match self.faults.lock().unwrap().hit(Op::Hydrate, path).map(|entry| entry.effect) {
+            Some(Effect::DownloadError) => Err(FsError::CloudError),
+            _ => Ok(()),
+        }
+    }
+
+    /// Écriture refusée par le plan : (erreur, ligne incomplète laissée par un ajout coupé).
+    fn write_gate(&self, path: &str) -> Option<(FsError, bool)> {
+        let entry = self.faults.lock().unwrap().hit(Op::Write, path)?;
+        match entry.effect {
+            Effect::Error(code) => Some((code_error(code), entry.partial_last_line)),
+            _ => None,
+        }
+    }
+
     fn parent_exists(nodes: &BTreeMap<String, Node>, parts: &[&str]) -> bool {
         parts.len() <= 1 || matches!(nodes.get(&key(&parts[..parts.len() - 1])), Some(Node::Dir))
     }
@@ -161,10 +287,29 @@ impl SyncFs for SharedFs {
     }
 
     fn list(&self, dir: &[&str], max: usize) -> Result<Listing, FsError> {
-        let nodes = self.0.nodes.lock().unwrap();
+        let mut nodes = self.0.nodes.lock().unwrap();
         let prefix = key(dir);
         if !dir.is_empty() && !matches!(nodes.get(&prefix), Some(Node::Dir)) {
             return Err(FsError::NotFound);
+        }
+        {
+            // Pannes du plan : le dossier (`error`), puis un appel `list` par fichier listé (`placeholder` : évincé avant d'être présenté).
+            let mut faults = self.0.faults.lock().unwrap();
+            if faults.armed.is_some() {
+                if let Some(Effect::Error(code)) = faults.hit(Op::List, &format!("{prefix}/")).map(|entry| entry.effect) {
+                    return Err(code_error(code));
+                }
+                let inside = |path: &String| if dir.is_empty() { !path.contains('/') } else { path.strip_prefix(&format!("{prefix}/")).is_some_and(|rest| !rest.contains('/')) };
+                let files: Vec<String> = nodes.iter().filter(|(path, node)| inside(path) && matches!(node, Node::File { .. })).map(|(path, _)| path.clone()).collect();
+                for file in files {
+                    if let Some(Effect::Placeholder) = faults.hit(Op::List, &file).map(|entry| entry.effect) {
+                        if let Some(Node::File { availability, .. }) = nodes.get_mut(&file) {
+                            *availability = Availability::Cloud;
+                        }
+                        faults.evicted.insert(file);
+                    }
+                }
+            }
         }
         let mut listing = Listing::default();
         for (path, node) in nodes.iter() {
@@ -186,7 +331,9 @@ impl SyncFs for SharedFs {
         self.0.reads.fetch_add(1, Ordering::SeqCst);
         self.0.read_log.lock().unwrap().push(key(file));
         let mut nodes = self.0.nodes.lock().unwrap();
-        let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&key(file)) else { return Err(FsError::NotFound) };
+        let path = key(file);
+        let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&path) else { return Err(FsError::NotFound) };
+        let evict = self.0.read_gate(&path, bytes)?;
         if bytes.len() as u64 + *extra > limit {
             return Err(FsError::TooLarge);
         }
@@ -198,11 +345,18 @@ impl SyncFs for SharedFs {
                 if let Some(error) = self.0.hydrate_error.lock().unwrap().take() {
                     return Err(error);
                 }
+                self.0.hydrate_gate(&path)?;
                 *availability = Availability::Local;
+                self.0.faults.lock().unwrap().evicted.remove(&path);
             }
             Availability::Local => {}
         }
-        Ok(bytes.clone())
+        let out = bytes.clone();
+        if evict {
+            *availability = Availability::Cloud;
+            self.0.faults.lock().unwrap().evicted.insert(path);
+        }
+        Ok(out)
     }
 
     /// Lecture positionnée (ADR 0011 §22 point 4) : mêmes règles que `read` (taille annoncée, nuage, hydratation, erreur injectée). Une
@@ -213,7 +367,10 @@ impl SyncFs for SharedFs {
             self.0.read_log.lock().unwrap().push(key(file));
         }
         let mut nodes = self.0.nodes.lock().unwrap();
-        let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&key(file)) else { return Err(FsError::NotFound) };
+        let path = key(file);
+        let Some(Node::File { bytes, availability, extra }) = nodes.get_mut(&path) else { return Err(FsError::NotFound) };
+        // Une lecture par pages compte comme un seul appel `read` du plan (celui qui commence à l'octet 0).
+        let evict = if offset == 0 { self.0.read_gate(&path, bytes)? } else { false };
         match *availability {
             Availability::Error => return Err(FsError::Unsafe),
             Availability::Cloud if !hydrate => return Err(FsError::CloudPending),
@@ -222,7 +379,9 @@ impl SyncFs for SharedFs {
                 if let Some(error) = self.0.hydrate_error.lock().unwrap().take() {
                     return Err(error);
                 }
+                self.0.hydrate_gate(&path)?;
                 *availability = Availability::Local;
+                self.0.faults.lock().unwrap().evicted.remove(&path);
             }
             Availability::Local => {}
         }
@@ -231,6 +390,15 @@ impl SyncFs for SharedFs {
         let end = start.saturating_add(max).min(bytes.len());
         let out = bytes[start..end].to_vec();
         let eof = out.len() < max || offset + out.len() as u64 >= size;
+        // Éviction après lecture : exécutée à la fin du fichier (dernière page).
+        let mut faults = self.0.faults.lock().unwrap();
+        if evict {
+            faults.evict_pending.insert(path.clone());
+        }
+        if eof && faults.evict_pending.remove(&path) {
+            *availability = Availability::Cloud;
+            faults.evicted.insert(path);
+        }
         Ok(Chunk { bytes: out, size, eof })
     }
 
@@ -240,14 +408,27 @@ impl SyncFs for SharedFs {
         if !MemFs::parent_exists(&nodes, file) {
             return Err(FsError::NotFound);
         }
-        match (nodes.get_mut(&key(file)), mode) {
+        let path = key(file);
+        match (nodes.get_mut(&path), mode) {
             (Some(_), AppendMode::CreateNew) => Err(FsError::Exists),
             (Some(Node::File { bytes, .. }), AppendMode::Existing) => {
+                if let Some((error, partial)) = self.0.write_gate(&path) {
+                    if partial {
+                        bytes.extend_from_slice(&fault_plan::partial_tail(data));
+                    }
+                    return Err(error);
+                }
                 bytes.extend_from_slice(data);
                 Ok(())
             }
             (None, AppendMode::CreateNew) => {
-                nodes.insert(key(file), Node::File { bytes: data.to_vec(), availability: Availability::Local, extra: 0 });
+                if let Some((error, partial)) = self.0.write_gate(&path) {
+                    if partial {
+                        nodes.insert(path, Node::File { bytes: fault_plan::partial_tail(data), availability: Availability::Local, extra: 0 });
+                    }
+                    return Err(error);
+                }
+                nodes.insert(path, Node::File { bytes: data.to_vec(), availability: Availability::Local, extra: 0 });
                 Ok(())
             }
             _ => Err(FsError::NotFound),
@@ -260,7 +441,11 @@ impl SyncFs for SharedFs {
         if !MemFs::parent_exists(&nodes, file) {
             return Err(FsError::NotFound);
         }
+        if let Some((error, _)) = self.0.write_gate(&key(file)) {
+            return Err(error);
+        }
         nodes.insert(key(file), Node::File { bytes: data.to_vec(), availability: Availability::Local, extra: 0 });
+        self.0.faults.lock().unwrap().evicted.remove(&key(file));
         Ok(())
     }
 
@@ -268,10 +453,21 @@ impl SyncFs for SharedFs {
         let mut nodes = self.0.nodes.lock().unwrap();
         let mut a: Vec<&str> = dir.to_vec();
         a.push(from);
-        let node = nodes.remove(&key(&a)).ok_or(FsError::NotFound)?;
         let mut b: Vec<&str> = dir.to_vec();
         b.push(to);
+        if nodes.contains_key(&key(&a)) {
+            let refused = self.0.faults.lock().unwrap().hit(Op::Rename, &key(&b));
+            if let Some(Effect::Error(code)) = refused.map(|entry| entry.effect) {
+                return Err(code_error(code));
+            }
+        }
+        let node = nodes.remove(&key(&a)).ok_or(FsError::NotFound)?;
         nodes.insert(key(&b), node);
+        let mut faults = self.0.faults.lock().unwrap();
+        faults.evicted.remove(&key(&b));
+        if faults.evicted.remove(&key(&a)) {
+            faults.evicted.insert(key(&b));
+        }
         Ok(())
     }
 
@@ -282,7 +478,30 @@ impl SyncFs for SharedFs {
 
     fn remove_file(&self, file: &[&str]) -> Result<bool, FsError> {
         let mut nodes = self.0.nodes.lock().unwrap();
-        Ok(matches!(nodes.remove(&key(file)), Some(Node::File { .. })))
+        let path = key(file);
+        if matches!(nodes.get(&path), Some(Node::File { .. })) {
+            // Pannes du plan : `error` (le fichier reste listé et lisible), mode historique d'un substitut (rien supprimé),
+            // `accept-not-propagated` (supprimé ici, revient après N cycles ; N = 0 : jamais).
+            let mut faults = self.0.faults.lock().unwrap();
+            let entry = faults.hit(Op::Remove, &path);
+            if let Some(Effect::Error(code)) = entry.as_ref().map(|e| &e.effect) {
+                return Err(code_error(*code));
+            }
+            let evicted = faults.evicted.remove(&path);
+            if evicted && faults.armed.as_ref().is_some_and(|armed| armed.plan.remove_leaves_placeholder) {
+                faults.evicted.insert(path);
+                return Ok(false);
+            }
+            let node = nodes.remove(&path).expect("fichier présent");
+            if let Some(Effect::AcceptNotPropagated { resurrect_after_cycles }) = entry.map(|e| e.effect) {
+                if resurrect_after_cycles > 0 {
+                    faults.back.push(Resurrection { key: path, node, evicted, left: resurrect_after_cycles });
+                }
+            }
+            return Ok(true);
+        }
+        nodes.remove(&path);
+        Ok(false)
     }
 
     fn remove_empty_dir(&self, dir: &[&str]) -> Result<(), FsError> {

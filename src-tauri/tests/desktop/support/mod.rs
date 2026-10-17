@@ -12,5 +12,6 @@ pub fn applog_dir_lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 pub mod fake_bookmark;
+pub mod fault_plan;
 pub mod fake_web_auth;
 pub mod http_mock;

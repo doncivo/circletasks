@@ -6,8 +6,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc } from '../../domain/types';
-import { epochId, type DeviceAck, type PublishedDeviceState } from '../../domain/sync/format';
+import { epochId, type DeviceAck, type EpochId, type PublishedDeviceState } from '../../domain/sync/format';
 import { createMemorySyncPlatform, MemorySyncFolder, type MemorySyncPlatform } from './memory';
+import { SyncPlatformError } from './types';
 
 const A = '0f8fad5b-d9cb-469f-a165-70867728950e' as DeviceId;
 const B = '7c9e6679-7425-40de-944b-e07fc1f90ae7' as DeviceId;
@@ -136,4 +137,143 @@ describe('sync_scan({ hydrateBudgetMs }) sur memory.ts (ADR 0011 §22 point 4)',
     expect((await journal(b)).status).toBe('complete');
     expect(b.testing.hydrationBudgetLeft()).toBe(150_000);
   });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Y-TECH-03 (B13, critère 16) : cas de pannes de la table (`faultCases`) rejoués sur memory.ts par une vue fichier de `MemorySyncFolder`
+// qui passe par les mêmes points de panne que la plateforme (listage, lecture, hydratation, écriture, suppression, cycles d'iCloud).
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+interface FaultStep {
+  readonly op: string;
+  readonly path?: readonly string[];
+  readonly text?: string;
+  readonly create?: boolean;
+  readonly hydrate?: boolean;
+  readonly expect: { readonly ok?: boolean; readonly names?: readonly string[]; readonly text?: string; readonly removed?: boolean; readonly error?: string };
+}
+interface FaultCase {
+  readonly name: string;
+  readonly requires?: readonly string[];
+  readonly plan: unknown;
+  readonly setup: readonly { readonly file: readonly string[]; readonly text: string; readonly cloud?: boolean }[];
+  readonly steps: readonly FaultStep[];
+  readonly notApplicable?: Record<string, string>;
+}
+const faultCases = (JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'tests', 'fixtures', 'sync', 'syncfs-conformance.json'), 'utf8')) as { readonly faultCases: readonly FaultCase[] }).faultCases;
+
+/** Résultat d'une étape, comparable à `expect`. */
+type Outcome = { readonly ok: true } | { readonly names: string[] } | { readonly text: string } | { readonly removed: boolean } | { readonly error: string };
+
+/** Lignes complètes d'un texte de la table (`a\nb\n` → `a`, `b`). */
+function linesOf(text: string): string[] {
+  if (!text.endsWith('\n')) throw new Error(`texte de la table sans \\n final : ${JSON.stringify(text)}`);
+  return text.slice(0, -1).split('\n');
+}
+
+/** Vue fichier de `MemorySyncFolder` : `devices/<appareil>/<nom strict>` ; erreurs rendues par leur nom (`io`, `cloud-pending`, `cloud-error`). */
+function memoryView(folder: MemorySyncFolder): { put(path: readonly string[], text: string, cloud: boolean): void; step(step: FaultStep): Outcome } {
+  const where = (path: readonly string[]): { deviceId: string; file: string } => {
+    if (path[0] !== 'devices' || path.length < 2) throw new Error(`chemin hors de devices/ : ${path.join('/')}`);
+    return { deviceId: path[1] as string, file: path.slice(2).join('/') };
+  };
+  const exists = (deviceId: string, file: string): boolean => folder.fileNames(deviceId).includes(file);
+  const step = (s: FaultStep): Outcome => {
+    if (s.op === 'advanceCycle') {
+      folder.advanceCycle();
+      return { ok: true };
+    }
+    const { deviceId, file } = where(s.path ?? []);
+    switch (s.op) {
+      case 'list': {
+        // Dossier d'appareil (`file` vide) ou d'époque.
+        const epoch = file === '' ? null : (file as EpochId);
+        folder.listGate(deviceId, epoch);
+        const names = folder
+          .fileNames(deviceId)
+          .filter((n) => (epoch === null ? !n.includes('/') : n.startsWith(`${epoch}/`)))
+          .map((n) => {
+            const base = epoch === null ? n : n.slice(epoch.length + 1);
+            return folder.availabilityOf(deviceId, n) === 'cloud' ? `${base}~` : base;
+          });
+        if (epoch === null) names.push(...[...(folder.devices.get(deviceId)?.epochs.keys() ?? [])].map((e) => `${e}/`));
+        return { names: names.sort() };
+      }
+      case 'read': {
+        if (!exists(deviceId, file)) return { error: 'not-found' };
+        const fault = folder.readGate(deviceId, file);
+        if (fault?.effect === 'error') return { error: fault.code ?? 'io' };
+        if (folder.availabilityOf(deviceId, file) === 'cloud') {
+          if (s.hydrate !== true) return { error: 'cloud-pending' };
+          if (folder.hydrateFails(deviceId, file)) return { error: 'cloud-error' };
+          folder.setAvailability(deviceId, file, 'local');
+        }
+        const text = folder.records(deviceId, file).map((l) => `${l}\n`).join('');
+        if (fault?.effect === 'evict-after-read') folder.evict(deviceId, file);
+        return { text };
+      }
+      case 'writeAtomic': {
+        const refused = folder.writeGate(deviceId, file);
+        if (refused?.effect === 'error') return { error: refused.code ?? 'io' };
+        folder.putLines(deviceId, file, linesOf(s.text ?? ''));
+        return { ok: true };
+      }
+      case 'append': {
+        if (s.create === true && exists(deviceId, file)) return { error: 'exists' };
+        if (s.create !== true && !exists(deviceId, file)) return { error: 'not-found' };
+        const refused = folder.writeGate(deviceId, file);
+        if (refused?.effect === 'error') return { error: refused.code ?? 'io' };
+        folder.putLines(deviceId, file, [...(exists(deviceId, file) ? folder.records(deviceId, file) : []), ...linesOf(s.text ?? '')]);
+        return { ok: true };
+      }
+      case 'remove':
+        return { removed: folder.removeWithFaults(deviceId, file) };
+      default:
+        throw new Error(`opération inconnue de la vue mémoire : ${s.op}`);
+    }
+  };
+  return {
+    put(path, text, cloud) {
+      const { deviceId, file } = where(path);
+      folder.putLines(deviceId, file, linesOf(text), cloud ? 'cloud' : 'local');
+    },
+    step(s) {
+      try {
+        return step(s);
+      } catch (error) {
+        if (error instanceof SyncPlatformError) return { error: error.code };
+        throw error;
+      }
+    },
+  };
+}
+
+describe('Y-TECH-03 : cas de pannes de la table de conformité rejoués sur memory.ts (critère 16)', () => {
+  it('la table porte des cas de pannes, chacun avec un plan valide, aucun déclaré non applicable à memory.ts', () => {
+    expect(faultCases.length).toBeGreaterThanOrEqual(12);
+    for (const c of faultCases) {
+      expect(() => new MemorySyncFolder().armFaults(c.plan), c.name).not.toThrow();
+      expect(c.notApplicable?.['memory.ts'], c.name).toBeUndefined();
+    }
+  });
+
+  it('les plans de référence de fault-plan.json s’arment sur memory.ts par le même analyseur que les plans de la table', () => {
+    const reference = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'tests', 'fixtures', 'sync', 'fault-plan.json'), 'utf8')) as { readonly plans: readonly unknown[] };
+    expect(reference.plans.length).toBeGreaterThan(0);
+    for (const p of reference.plans) expect(() => new MemorySyncFolder().armFaults(p)).not.toThrow();
+  });
+
+  for (const c of faultCases) {
+    it(c.name, () => {
+      const folder = new MemorySyncFolder();
+      const view = memoryView(folder);
+      for (const item of c.setup) view.put(item.file, item.text, item.cloud === true);
+      folder.armFaults(c.plan);
+      c.steps.forEach((s, index) => {
+        expect(view.step(s), `memory.ts : « ${c.name} », étape ${String(index)}`).toEqual(s.expect);
+      });
+      // Aucune panne armée restée sans effet (une entrée jamais déclenchée serait une panne ignorée en silence).
+      expect(folder.unfiredFaults(), c.name).toEqual([]);
+    });
+  }
 });

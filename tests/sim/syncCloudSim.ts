@@ -1,5 +1,5 @@
 import { MemorySyncFolder } from '../../src/platform/sync/memory';
-import { STATE_FILE, parseSyncFileName, segmentFileName } from '../../src/domain/sync/format';
+import { STATE_FILE, isEpochId, parseSyncFileName, segmentFileName } from '../../src/domain/sync/format';
 
 /**
  * « iCloud » simulé à deux dossiers (ADR 0011, section 12 ; Y-02, Y-05, Y-09) : chaque appareil a **son propre** dossier
@@ -27,6 +27,11 @@ export interface PropagateOptions {
   readonly conflictCopy?: boolean;
   /** `state.ctx` du destinataire laissé dans sa version précédente (iCloud relivre un ancien état). */
   readonly staleState?: boolean;
+  /**
+   * Y-TECH-03 : suppressions de l'émetteur pas encore transmises (différées) : fichiers absents chez `from` mais gardés chez `to` dans leur
+   * version précédente (noms `state.ctx` ou `<époque>/<nom>`) ; transmises au prochain `propagate` sans cette option.
+   */
+  readonly deferDeletions?: readonly string[];
 }
 
 export function createSimFolder(): MemorySyncFolder {
@@ -51,7 +56,13 @@ export function propagate(from: MemorySyncFolder, to: MemorySyncFolder, deviceId
     (parsed.kind === 'segment' ? dir.segments : dir.snapshots).delete(parsed.n);
   }
   if (options.staleState) copy.state = previousState ? structuredClone(previousState) : null;
+  // Y-TECH-03 (plan de pannes) : suppression par défaut transmise aussitôt (le dossier recopié ne contient plus le fichier) ; différée par
+  // `deferDeletions` ; refusée tant qu'une suppression « acceptée mais non propagée » de l'émetteur attend son retour (`accept-not-propagated`
+  // du plan) : iCloud ne l'a jamais reçue, le destinataire garde sa version.
+  const previous = to.devices.get(deviceId);
+  const kept = [...(options.deferDeletions ?? []), ...from.pendingResurrections(deviceId)];
   to.devices.set(deviceId, copy);
+  if (previous) for (const name of kept) keepPrevious(previous, copy, name);
   if (options.conflictCopy) to.addStrayEntries(deviceId, 1);
   if (options.placeholder) {
     for (const name of to.fileNames(deviceId)) to.setAvailability(deviceId, name, 'cloud');
@@ -66,6 +77,32 @@ export function propagate(from: MemorySyncFolder, to: MemorySyncFolder, deviceId
       }
     }
   }
+}
+
+/**
+ * Remet dans `copy` le fichier `name` de la version précédente du destinataire, s'il y était et qu'il manque à la copie. Noms pris en
+ * charge : `state.ctx` et `<époque>/<segment ou instantané>` ; tout autre nom, dont `state.next.ctx` (état d'une réinitialisation, jamais
+ * supprimé par le moteur ni armé par un scénario du banc), est ignoré.
+ */
+function keepPrevious(previous: DeviceDir, copy: DeviceDir, name: string): void {
+  if (name === STATE_FILE) {
+    if (!copy.state && previous.state) copy.state = structuredClone(previous.state);
+    return;
+  }
+  const [epoch, file] = name.split('/');
+  const parsed = file ? parseSyncFileName(file) : null;
+  if (!isEpochId(epoch) || !parsed || parsed.kind === 'state') return;
+  const before = previous.epochs.get(epoch);
+  if (!before) return;
+  const source = parsed.kind === 'segment' ? before.segments.get(parsed.n) : before.snapshots.get(parsed.n);
+  if (!source) return;
+  let target = copy.epochs.get(epoch);
+  if (!target) {
+    target = { segments: new Map(), snapshots: new Map() };
+    copy.epochs.set(epoch, target);
+  }
+  const map = parsed.kind === 'segment' ? target.segments : target.snapshots;
+  if (!map.has(parsed.n)) map.set(parsed.n, structuredClone(source));
 }
 
 /**
