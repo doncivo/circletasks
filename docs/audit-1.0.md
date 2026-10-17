@@ -8,12 +8,12 @@ Règle de lecture : **bloquant** = perte de données, synchro ou rappel qui s'ar
 
 | Gravité | Constats (dédoublonnés) | Estimation |
 |---|---|---|
-| Bloquant | 14 | 100 à 125 h (dont 24 à 40 h pour le job Swift/simulateur) |
+| Bloquant | 15 | 106 à 134 h (dont 24 à 40 h pour le job Swift/simulateur) |
 | Important | 80 | 225 à 257 h |
 | Mineur | ~95 | 90 à 100 h |
-| **Total** | **~189** | **415 à 482 h** |
+| **Total** | **~190** | **421 à 491 h** |
 
-Socle minimal recommandé avant la 1.0 (section 5) : **61 à 76 h**.
+Socle minimal recommandé avant la 1.0 (section 5) : **67 à 85 h**.
 
 ## 2. Priorité 1 : `own-state-unknown` en boucle sur l'iPhone
 
@@ -25,7 +25,7 @@ Socle minimal recommandé avant la 1.0 (section 5) : **61 à 76 h**.
 
 **Cousin direct à traiter dans la même famille** (bloquant S2 ci-dessous) : la même impasse se produit si la première publication est coupée entre l'ajout du segment et l'écriture de l'état (cycle `hide` de l'iPhone) : le segment compte, et l'appareil ne publie plus jamais. Le correctif de l'instantané ne le couvre pas.
 
-## 3. Bloquants (14)
+## 3. Bloquants (15)
 
 | # | Domaine | Constat | Pourquoi aucun test ne l'a vu | Correction | h |
 |---|---|---|---|---|---|
@@ -43,6 +43,7 @@ Socle minimal recommandé avant la 1.0 (section 5) : **61 à 76 h**.
 | B12 | iOS / accessibilité | **Taille de texte iOS non suivie** : le PRD (l. 657, 1306) exige `font: -apple-system-body`, absent du code ; `decisions.md:667` « à valider par Ali ». | `IOS-titres.spec.ts:194` force 200 % en JS : simule le résultat, pas le mécanisme. | `@supports (font: -apple-system-body)` + px→rem + `useFitText` ; test WebKit ; checklist. Ou retirer l'exigence du PRD (décision). | 1 (décision) + 8 |
 | B13 | Tests | **Aucune ligne Swift n'est exécutée** (3 703 lignes, 9 plugins) : contrôles statiques par sous-chaînes seulement ; les faux iCloud sont complaisants (suppression toujours réussie et propagée, pas de `.icloud`, pas d'éviction, pas de résurrection) ; l'« iPhone » e2e est un Chromium 440×956 sans toucher, clavier ni safe areas. Les six défauts des séances tombent tous dans ces zones aveugles. | — (c'est la cause) | Faux iCloud hostiles (`FaultPlan`, fixture de conformité partagée, scénario orphelin) 16 h ; atteignabilité au doigt + safe areas 59/34 + `visualViewport` + projet 393×852 12 h ; job macOS XCTest + simulateur 24–40 h. | 52–68 |
 | B14 | Architecture / produit | **Règle de report d'époque appliquée sans validation** (ADR 0011 §9.1 vs §24.6, Q13) : le code applique depuis 0.3.0 « survit tout ce que l'ouvreur n'avait pas lu », encore « à valider par Ali », qui remplace la règle confirmée le 2026-10-05 ; 26 décisions attendent validation « en fin d'ordre ». | Aucun contrôle du statut d'une décision. | Séance de validation avant REL-01 ; récrire §9.1, fermer Q13. | 3–4 + séance |
+| B15 | Livraison / installeur (ajouté le 2026-10-17) | **L'installeur manuel peut effacer les données en un clic.** Le désinstalleur NSIS (modèle Tauri 2.12.1, identique pour 0.1.1 et 0.3.3) affiche une case « Supprimer les données de l'application » ; lancé à la main par la page « Désinstaller avant d'installer » de l'installeur, il supprime `%APPDATA%\fr.circletasks.planner` et `%LOCALAPPDATA%\fr.circletasks.planner` (base, sauvegardes locales, journal, réglages, consentements). Vécu le 2026-10-17 à 10:54:35 (journal NTFS) : base recréée vide, données reprises depuis iCloud comme **nouvel appareil**, sauvegardes et journal perdus. La mise à jour intégrée (`/P /UPDATE`) est sûre : elle ne lance pas le désinstalleur. | Aucun test n'exécute l'installeur ni le désinstalleur réels ; le smoke Windows (REL-TECH-01) lance le binaire extrait ; la dette « installation réelle N → N+1 » n'a jamais été jouée ; le guide d'installation PC n'existait pas. | (a) Guide `docs/install-pc.md` avec l'avertissement en gras (fait le 2026-10-17). (b) Crochet `bundle.windows.nsis.installerHooks` : macro `NSIS_HOOK_PREUNINSTALL` qui force `StrCpy $DeleteAppDataCheckboxState 0` ; inséré en tête de `Section Uninstall`, avant le bloc de suppression : la case devient inerte quelle que soit la saisie, 1 h. (c) Ou modèle `bundle.windows.nsis.template` personnalisé (copie du modèle 2.12.1 sans `un.ConfirmShow` ni le bloc `RmDir /r`) : case retirée, 3 h plus suivi à chaque montée du CLI Tauri. (d) Smoke Windows étendu : installer N, écrire une donnée, installer N+1 à la main avec « Désinstaller avant d'installer », puis désinstaller : `%APPDATA%\fr.circletasks.planner` doit survivre, 4 h. | 6–9 |
 
 ## 4. Importants (80), par domaine
 
@@ -79,7 +80,7 @@ Vérification demandée par Ali après l'incident PC du 17 octobre (« Impossibl
 ### Code, ADR, architecture (21, ~55 h)
 Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNAMIC_IMPORT` (2 h) · lecture stricte de l'état : toute extension après 1.0 impose `sm` 2 (ADR avant le tag, 2 + 6–8 h) · règles de protocole en trois exemplaires, 9/37 constantes comparées (3 h) · ADR 0011 contradictoire (nombre de commandes, §9.1/§24.6, maîtrise Rust/TS, 4–6 h) · backlog et dettes faux (stories livrées « à faire », 2 h) · commandes de sauvegarde non documentées (1 h) · marqueur de restauration écrit avant l'échange, `local:true` sans garde (3 h) · ADR 0002 périmé, plugin SQL copié sans procédure, pont JS `^2.5.0` (2 h) · règle métier Rappels Apple dans une feature avec `localeCompare` (4 h) · `import('@tauri-apps/…')` dans une feature (1 h) · `Brand<Id>` qui se réduit à `never` (8 h) · taille d'installeur non mesurée depuis 0.1.0 (1 h) · démarrage à froid jamais mesuré (2 h) · licences incomplètes (1,5 h) · somme des têtes non surveillée (2 h).
 
-## 5. Socle minimal recommandé avant la 1.0 (60 à 75 h)
+## 5. Socle minimal recommandé avant la 1.0 (67 à 85 h)
 
 1. **Synchro, famille des impasses** : B1 (en cours), B2, B3, B5 réduit à « échec durable visible » : 20 à 25 h.
 2. **Sécurité** : B7 (plugin SQL) : 5 h. Signature hors du build front : 3 h.
@@ -89,6 +90,7 @@ Bundle de départ à 349,9/350 Ko (6–10 h, trois leviers) · `INEFFECTIVE_DYNA
 6. **Sombre** : B11 : 1,5 h + garde-fou 3 h.
 7. **Tests, le minimum qui aurait vu les défauts des séances** : faux iCloud hostiles + scénario orphelin : 16 h ; projet 393×852 avec safe areas et atteignabilité : 12 h.
 8. **Installation PC réelle** (ajouté le 2026-10-17) : remplacer la 0.1.1 de `%LOCALAPPDATA%\CircleTasks` par la 0.3.3 publiée, vérifier que le raccourci ouvre la bonne version et que l'updater passe N → N+1 sur la machine d'Ali : 1 h + séance. Le diagnostic d'ouverture de la base est déjà identique sur PC et iPhone (section 4, complément du 2026-10-17) : rien à ajouter au code pour lui.
+9. **Installeur sans piège** (décision d'Ali du 2026-10-17, B15) : avertissement en gras dans `docs/install-pc.md` (fait) ; crochet `NSIS_HOOK_PREUNINSTALL` qui neutralise la suppression des données (1 h) ; modèle NSIS personnalisé sans la case si Ali le tranche (3 h, décision 9) ; smoke Windows étendu à l'installation N → N+1 manuelle et à la désinstallation, avec survie du dossier de données (4 h).
 
 Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, découpage d'`engine.ts`, Dynamic Type (si Ali retire l'exigence), consolidation des ADR, pluriels/insécables, anglais.
 
@@ -102,6 +104,7 @@ Reporté après la 1.0 sans risque immédiat : job macOS XCTest/simulateur, déc
 6. Format 12 h proposé dans Apparence alors que la règle du projet est 24 h.
 7. Anglais : réglage de langue jamais branché (2 564 clés inatteignables) : livrer ou documenter « français seul ».
 8. Extension du format publié après la 1.0 : objet `ext` ignoré ou `sm` 2 obligatoire.
+9. Installeur (B15) : crochet seul (la case reste visible mais ne fait plus rien, aucun écart avec le modèle Tauri) ou modèle NSIS personnalisé (case retirée, 978 lignes à suivre à chaque montée du CLI). Recommandation : le crochet tout de suite, le modèle seulement si la case visible gêne.
 
 ## Annexe : rapports détaillés
 
