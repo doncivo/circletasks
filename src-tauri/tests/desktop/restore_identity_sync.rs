@@ -128,6 +128,9 @@ fn app_with_synced_backup() -> tempfile::TempDir {
             ("stateSeq", "4"),
             ("head", "{\"epoch\":\"e0001-56d40a0a\",\"segment\":2,\"record\":5,\"hlc\":\"h\",\"stateSeq\":4}"),
             ("ownStateHlcs", "[[4,\"y\"]]"),
+            ("inflight", "{\"maxSeq\":2}"),
+            ("epochCarry", "{\"maxSeq\":3}"),
+            ("epochSwitch", "{\"target\":\"e0002\"}"),
             ("purgeHorizon", "\"001791187200000-0000-bbbb\""),
         ],
     );
@@ -150,8 +153,8 @@ fn y_tech_04_b1_the_unpublished_writes_of_the_other_device_are_resigned_with_the
     // Ce qui était déjà publié (pair ou autre appareil) n'est pas touché.
     assert_eq!(setting_hlc(&db, "general.timeFormat"), (hlc(1_791_000_000_004, PEER), PEER.to_owned()));
     assert_eq!(setting_hlc(&db, "general.firstWeekday"), (hlc(1_791_000_000_005, FORGOTTEN), FORGOTTEN.to_owned()));
-    // La file d'envoi garde les mêmes entrées (rien n'est perdu, rien n'est ajouté par les déclencheurs) et la garde est levée.
-    assert_eq!(outbox_of(&db), vec![("general.theme".to_owned(), "*".to_owned()), ("general.locale".to_owned(), "value".to_owned())]);
+    // La file d'envoi de l'autre appareil devient « ligne entière » (`+`) : republiée avec un rang neuf au-dessus de la tête, hlc d'origine gardés.
+    assert_eq!(outbox_of(&db), vec![("general.theme".to_owned(), "+".to_owned()), ("general.locale".to_owned(), "+".to_owned())]);
     assert_eq!(Connection::open(&db).unwrap().query_row("SELECT COUNT(*) FROM sync_guard", [], |r| r.get::<_, i64>(0)).unwrap(), 0);
 }
 
@@ -167,7 +170,8 @@ fn y_tech_04_b1_the_publication_state_of_the_other_device_is_replaced_by_the_one
     assert_eq!(get("ownStateHlcs"), Some("[[4,\"y\"]]"));
     assert_eq!(get("epoch"), Some("\"e0001-56d40a0a\""));
     // Ce que l'appareil courant n'a pas est absent (jamais la valeur de l'autre appareil).
-    for key in ["snapshot", "segments", "orphanTraces"] {
+    // Les numéros de file (`inflight`, `epochCarry`, `epochSwitch`) visent la file d'envoi de la base en place, qui est remplacée par celle de la copie : remis à zéro.
+    for key in ["snapshot", "segments", "orphanTraces", "inflight", "epochCarry", "epochSwitch"] {
         assert_eq!(get(key), None, "{key}");
     }
     // Le reste de la méta vient de la sauvegarde.

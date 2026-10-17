@@ -118,7 +118,7 @@ async function settle(list: readonly SimDevice[], rounds = 3): Promise<void> {
   syncFolders(devices);
 }
 
-async function scenario(corrected: boolean, option: RestoreOption): Promise<{ a: SimDevice; p: SimDevice; unpublishedTitle: string }> {
+async function scenario(corrected: boolean, option: RestoreOption, publishAfter = false): Promise<{ a: SimDevice; p: SimDevice; unpublishedTitle: string }> {
   const { a, o, p } = await group();
   await a.createTask('A publiée');
   await settle(devices);
@@ -128,6 +128,12 @@ async function scenario(corrected: boolean, option: RestoreOption): Promise<{ a:
   const unpublishedTitle = 'O non publiée';
   await o.createTask(unpublishedTitle);
   const copy = await backupOf(o);
+  if (publishAfter) {
+    // Cas réel du 17 octobre : l’appareil courant publie APRÈS l’écriture non publiée de l’autre (sa tête dépasse le hlc d’origine).
+    a.clock.advance(60_000);
+    await a.createTask('A publiée après');
+    await settle([a, p]);
+  }
   const live = await backupOf(a);
   await restore(a, corrected ? carryIdentity(copy, live, CURRENT, OTHER) : copy);
   await a.service.chooseRestoreOption(option);
@@ -135,9 +141,9 @@ async function scenario(corrected: boolean, option: RestoreOption): Promise<{ a:
   return { a, p, unpublishedTitle };
 }
 
-describe.each<[RestoreOption]>([['keep-synced'], ['apply-everywhere']])('restauration de la copie d’un autre appareil, choix %s (Y-TECH-04, B1)', (option) => {
+describe.each<[RestoreOption, boolean]>([['keep-synced', false], ['apply-everywhere', false], ['keep-synced', true], ['apply-everywhere', true]])('restauration de la copie d’un autre appareil, choix %s, l’appareil courant publie après : %s (Y-TECH-04, B1)', (option, publishAfter) => {
   it('l’appareil garde son identité, aucun cycle ne tombe en erreur, l’écriture non publiée de l’autre appareil est publiée par lui et reçue', async () => {
-    const { a, p, unpublishedTitle } = await scenario(true, option);
+    const { a, p, unpublishedTitle } = await scenario(true, option, publishAfter);
     expect(await a.data.repos.settings.get('device.id')).toBe(CURRENT);
     const status = a.service.status();
     expect([status.phase, status.errorCode ?? null]).toEqual(['idle', null]);
