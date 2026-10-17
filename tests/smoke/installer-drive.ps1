@@ -132,7 +132,7 @@ function Test-UnderInstallDir([string]$Path) {
   return ($Path -and $Path.StartsWith($InstallDir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase))
 }
 
-# Processus du désinstalleur : uninstall.exe du dossier d'installation, ou sa copie temporaire Au_.exe (lancement sans _?=).
+# Processus du désinstalleur : uninstall.exe du dossier d'installation, ou sa copie temporaire Un.exe (lancement sans _?= : observé en CI, Un.exe dans ~nsu*.tmp).
 function Get-UninstallerPids {
   $ids = @()
   $expected = Join-Path $InstallDir 'uninstall.exe'
@@ -140,7 +140,7 @@ function Get-UninstallerPids {
     $path = [string]$proc.ExecutablePath
     $line = [string]$proc.CommandLine
     $isStub = ($path -and [string]::Equals($path, $expected, [StringComparison]::OrdinalIgnoreCase))
-    $isCopy = ($proc.Name -eq 'Au_.exe' -and $line.IndexOf($InstallDir, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+    $isCopy = ($proc.Name -in 'Un.exe', 'Au_.exe' -and $line.IndexOf($InstallDir, [StringComparison]::OrdinalIgnoreCase) -ge 0)
     if ($isStub -or $isCopy) { $ids += [int]$proc.ProcessId }
   }
   return $ids
@@ -182,8 +182,9 @@ function Get-Signature($Window) {
   return ((Get-Visible $Window | ForEach-Object { '{0}:{1}:{2}:{3}' -f $_.Id, $_.Cls, (Format-Name $_.Text), $_.Enabled }) -join '|')
 }
 
+# Bouton poussoir : WM_COMMAND(BN_CLICKED) vers le dialogue principal (BM_CLICK est resté sans effet sur « Fermer » en CI).
 function Send-Click($Control, [string]$What) {
-  [CtNsis]::Click($Control.H)
+  [CtNsis]::Command($Control.H)
   Write-Note ('clic : ' + $What)
 }
 
@@ -283,19 +284,12 @@ function Invoke-ReinstallFlow {
         Enter-Step 'installeur : page finale (case de lancement decochee, bouton « Terminer »)'
         $run = Find-Control $page.Window 'check' '^(Ex.cuter|Lancer)'
         if ($run) { Set-CheckBox $run $false 'Executer l application' } else { Write-Note 'case de lancement absente de la page finale' }
-        Send-Click $page.Control (Format-Name $page.Control.Text)
+        # BM_CLICK reste sans effet sur « Fermer » de la page finale (runs 39027366664, 39027981603 : installeur actif et répondant), alors que
+        # WM_COMMAND(BN_CLICKED) envoyé au dialogue principal, ce que fait réellement un bouton, ferme l'installeur (run 39028571800).
+        [CtNsis]::Command($page.Control.H)
+        Write-Note ('commande envoyee : ' + (Format-Name $page.Control.Text))
         Enter-Step 'installeur : fin du processus'
-        # Le premier clic sur « Fermer » a été sans effet en CI (run 39027366664, fenêtre intacte et active 60 s) : un seul nouvel envoi, après une
-        # attente bornée de 10 s sur l'état observable (processus arrêté), journalisé ; jamais de délai allongé.
-        $closed = $null
-        try { $closed = Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } 10000 'arret de l installeur apres le premier clic' } catch { Write-Note ('premier clic sans effet (installeur actif, Responding=' + $script:InstallerProcess.Responding + ') : renvoi du clic') }
-        if (-not $closed) {
-          $again = Find-Control $page.Window 'push' '^(Terminer|Fermer)$' -EnabledOnly
-          if (-not $again) { throw 'bouton « Fermer » introuvable ou inactif au renvoi du clic' }
-          [CtNsis]::Command($again.H)
-          Write-Note 'renvoi : WM_COMMAND (BN_CLICKED) envoye au dialogue principal'
-          [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs ('arret de l installeur apres le renvoi du clic (Responding=' + $script:InstallerProcess.Responding + ')'))
-        }
+        [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs ('arret de l installeur apres « ' + (Format-Name $page.Control.Text) + ' » (Responding=' + $script:InstallerProcess.Responding + ')'))
         if ($script:InstallerProcess.ExitCode -ne 0) { throw ('code de sortie de l installeur : ' + $script:InstallerProcess.ExitCode) }
         $finished = $true
       }
@@ -328,7 +322,7 @@ function Stop-SmokeProcesses {
     $path = [string]$proc.ExecutablePath
     $line = [string]$proc.CommandLine
     $match = (Test-UnderInstallDir $path) -or ($Installer -and $path -and [string]::Equals($path, $Installer, [StringComparison]::OrdinalIgnoreCase)) -or
-      ($proc.Name -eq 'Au_.exe' -and $line.IndexOf($InstallDir, [StringComparison]::OrdinalIgnoreCase) -ge 0)
+      ($proc.Name -in 'Un.exe', 'Au_.exe' -and $line.IndexOf($InstallDir, [StringComparison]::OrdinalIgnoreCase) -ge 0)
     if ($match -and $proc.ProcessId -ne $PID) { $targets += $proc }
   }
   foreach ($proc in $targets) {
