@@ -145,6 +145,8 @@ fn y_tech_04_b1_the_unpublished_writes_of_the_other_device_are_resigned_with_the
     assert_eq!(clock_of(&db, "general.locale", "value"), Some(hlc(1_791_000_000_003, CURRENT)));
     assert_eq!(clock_of(&db, "general.locale", "*"), Some(hlc(1_791_000_000_002, FORGOTTEN)));
     assert_eq!(setting_hlc(&db, "general.locale"), (hlc(1_791_000_000_003, CURRENT), CURRENT.to_owned()));
+    // Les déclencheurs de capture n'ont pas tourné (garde) : aucune horloge « * » inventée pour la ligne créée.
+    assert_eq!(clock_of(&db, "general.theme", "*"), None);
     // Ce qui était déjà publié (pair ou autre appareil) n'est pas touché.
     assert_eq!(setting_hlc(&db, "general.timeFormat"), (hlc(1_791_000_000_004, PEER), PEER.to_owned()));
     assert_eq!(setting_hlc(&db, "general.firstWeekday"), (hlc(1_791_000_000_005, FORGOTTEN), FORGOTTEN.to_owned()));
