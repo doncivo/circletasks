@@ -9,7 +9,7 @@ import { isStrictHlc } from '../domain/sync/format';
 import { SYNC_TABLES, isPurgeable } from '../domain/sync/syncTables';
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { syncErrorCodeOf, type DeviceScan } from '../platform/sync/types';
-import { applyOps } from './apply';
+import { CARRY_HELD_MARK, applyOps } from './apply';
 import type { SyncDeps } from './deps';
 import { guarded } from './guarded';
 import { META, readJson, writeJson } from './meta';
@@ -95,27 +95,41 @@ export async function purgeDeleted(deps: Pick<SyncDeps, 'data' | 'logger'>, hori
   return { count: total, maxPurged };
 }
 
-/** Rejoue les opérations mises de côté (parent ou ligne absents) ; les retire si elles passent ou sont refusées. */
-export async function retryParked(deps: SyncDeps): Promise<Map<string, Set<string>>> {
+/**
+ * Rejoue les opérations mises de côté (parent ou ligne absents) ; les retire si elles passent ou sont refusées.
+ * Y-FIX-04 (§28) : une opération marquée par le report d'époque (`CARRY_HELD_MARK`) qui ne reste plus en attente est laissée dans
+ * `sync_parked` et rendue dans `stats.released` : le moteur la republie entière et la retire (`epochSwitch.ts`, à la demande) ;
+ * `stats.carryHeld` compte celles qui attendent encore (avertissement `carry-held`).
+ */
+export async function retryParked(deps: SyncDeps, stats?: { carryHeld: number; released: { id: number; table: string; rowId: string }[] }): Promise<Map<string, Set<string>>> {
   const touched = new Map<string, Set<string>>();
   let after = 0;
+  let carryHeld = 0;
   for (;;) {
     const parked = await deps.data.repos.sync.parked(['missing-parent', 'missing-row'], after, PAGE_ROWS);
     if (parked.length === 0) break;
     after = (parked.at(-1) as { id: number }).id;
     const ops: SyncOp[] = [];
+    const marked: boolean[] = [];
     for (const p of parked) {
-      const raw = JSON.parse(p.op) as { t: string; id: string; at: string; f: Record<string, SyncField> };
+      const raw = JSON.parse(p.op) as { t: string; id: string; at: string; f: Record<string, SyncField>; [CARRY_HELD_MARK]?: unknown };
       ops.push({ t: raw.t, id: raw.id, at: raw.at as IsoDateTime, f: new Map(Object.entries(raw.f)) });
+      marked.push(raw[CARRY_HELD_MARK] !== undefined);
     }
     const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
     await guarded(deps.data, async (repos) => {
       const result = await applyOps(repos, ops, { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
-      const done = parked.filter((_, i) => result.outcomes[i] !== 'parked').map((p) => p.id);
+      const done = parked.filter((_, i) => result.outcomes[i] !== 'parked' && !(marked[i] && stats)).map((p) => p.id);
+      for (const [i, p] of parked.entries()) {
+        if (!marked[i] || !stats) continue;
+        if (result.outcomes[i] === 'parked') carryHeld += 1;
+        else stats.released.push({ id: p.id, table: p.table, rowId: p.rowId });
+      }
       await repos.sync.removeParked(done);
       for (const [table, ids] of result.touched) touched.set(table, new Set([...(touched.get(table) ?? []), ...ids]));
     });
   }
+  if (stats) stats.carryHeld = carryHeld;
   return touched;
 }
 

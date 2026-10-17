@@ -46,6 +46,8 @@ export const META = {
   orphanTraceAck: 'orphanTraceAck',
   /** Y-IOS-02 : « Démarrer la synchro depuis cet appareil » confirmé : lève l'attente des autres appareils (clé importée). */
   startHere: 'startHere',
+  /** Y-FIX-04 : notice locale du report d'époque (lignes rattachées ou mises de côté, `epochCarryNotice.ts`), pour Y-TECH-05. */
+  epochCarryNotice: 'epochCarryNotice',
   /** Quatrième revue, point D : repères `[stateSeq, lastSyncHlc]` de ses états publiés (ADR 0011 §5.5, condition 3). */
   ownStateHlcs: 'ownStateHlcs',
 } as const;

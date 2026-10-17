@@ -84,6 +84,8 @@ export const syncEngineEn: Pick<Messages['sync'], 'status' | 'restore'> = {
     warnReceivedUnapplied: 'Some received changes could not be applied (missing item): sync again on the other device',
     incomplete: 'Sync incomplete: see warnings',
     warnAwaitingOthers: 'Waiting for the other devices’ files in iCloud',
+    warnCarryHeld: 'Items set aside: their list or routine was replaced by a restore',
+    warnCarryReattached: 'Tasks moved to “No project”: their project was replaced by a restore',
     progress: 'Syncing: {done} of {total}',
   },
   restore: {

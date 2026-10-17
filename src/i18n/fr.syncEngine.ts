@@ -91,6 +91,8 @@ export const syncEngineFr = {
     warnReceivedUnapplied: 'Des modifications reçues n’ont pas pu être appliquées (élément manquant) : synchronisez de nouveau sur l’autre appareil',
     incomplete: 'Synchro incomplète : voir les avertissements',
     warnAwaitingOthers: 'En attente des fichiers des autres appareils dans iCloud',
+    warnCarryHeld: 'Éléments mis de côté : leur liste ou routine a été remplacée par une restauration',
+    warnCarryReattached: 'Tâches mises dans « Sans projet » : leur projet a été remplacé par une restauration',
   },
   restore: {
     title: 'Restauration : que faire de la synchronisation ?',
