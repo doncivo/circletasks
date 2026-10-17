@@ -61,6 +61,7 @@ public static class CtNsis {
   [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int index);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, StringBuilder l);
   [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr h);
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
   const uint WM_GETTEXT = 0x000D, BM_GETCHECK = 0x00F0, BM_CLICK = 0x00F5;
   static string Text(IntPtr h) { var sb = new StringBuilder(2048); SendMessage(h, WM_GETTEXT, (IntPtr)sb.Capacity, sb); return sb.ToString(); }
@@ -79,6 +80,12 @@ public static class CtNsis {
     var list = new List<CtCtl>();
     EnumChildWindows(parent, (h, l) => { list.Add(Describe(h)); return true; }, IntPtr.Zero);
     return list;
+  }
+  // Ce que fait un bouton : WM_COMMAND(BN_CLICKED) vers le dialogue qui le contient (repli quand BM_CLICK reste sans effet).
+  public static void Command(IntPtr button) {
+    IntPtr root = button; IntPtr up;
+    while ((up = GetParent(root)) != IntPtr.Zero) root = up;
+    if (!PostMessage(root, 0x0111, (IntPtr)GetDlgCtrlID(button), button)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
   }
   public static int Check(IntPtr h) { return (int)SendMessage(h, BM_GETCHECK, IntPtr.Zero, IntPtr.Zero); }
   public static void Click(IntPtr h) { if (!PostMessage(h, BM_CLICK, IntPtr.Zero, IntPtr.Zero)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()); }
@@ -285,7 +292,8 @@ function Invoke-ReinstallFlow {
         if (-not $closed) {
           $again = Find-Control $page.Window 'push' '^(Terminer|Fermer)$' -EnabledOnly
           if (-not $again) { throw 'bouton « Fermer » introuvable ou inactif au renvoi du clic' }
-          Send-Click $again 'Fermer (renvoi)'
+          [CtNsis]::Command($again.H)
+          Write-Note 'renvoi : WM_COMMAND (BN_CLICKED) envoye au dialogue principal'
           [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs ('arret de l installeur apres le renvoi du clic (Responding=' + $script:InstallerProcess.Responding + ')'))
         }
         if ($script:InstallerProcess.ExitCode -ne 0) { throw ('code de sortie de l installeur : ' + $script:InstallerProcess.ExitCode) }
@@ -372,6 +380,10 @@ function Save-FailureEvidence {
     $ids = @(Get-UninstallerPids)
     if ($script:InstallerProcess) { $ids += $script:InstallerProcess.Id }
     $dump = New-Object System.Text.StringBuilder
+    if ($script:InstallerProcess) {
+      foreach ($child in (Get-ProcessList | Where-Object { $_.ParentProcessId -eq $script:InstallerProcess.Id })) { [void]$dump.AppendLine(('PROCESSUS FILS pid={0} nom={1} ligne={2}' -f $child.ProcessId, $child.Name, $child.CommandLine)) }
+      [void]$dump.AppendLine(('INSTALLEUR pid={0} termine={1} repond={2}' -f $script:InstallerProcess.Id, $script:InstallerProcess.HasExited, $script:InstallerProcess.Responding))
+    }
     $captured = 0
     foreach ($window in @(Get-ProductWindows $ids)) {
       [void]$dump.AppendLine(('FENETRE WIN32 h={0} classe={1} titre=« {2} » visible={3}' -f $window.H, $window.Cls, $window.Text, $window.Visible))
