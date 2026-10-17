@@ -223,7 +223,14 @@ export class MemorySyncFolder {
   /** Appels muets en suspens (promesse jamais résolue tant que le test ne la libère pas). */
   private readonly muted: MutedCall[] = [];
   /** Panne muette déclenchée pendant l'appel en cours (lue par l'enveloppe des appels de lecture, même si l'erreur a été avalée). */
-  muteHit: FaultEntry | null = null;
+  private muteHit: FaultEntry | null = null;
+
+  /** Enveloppe des appels de lecture : rend la panne muette déclenchée depuis le dernier appel (et l'efface), ou null. */
+  takeMuteHit(): FaultEntry | null {
+    const hit = this.muteHit;
+    this.muteHit = null;
+    return hit;
+  }
 
   /**
    * Arme un plan de pannes (objet de `fault-plan.json` ou construit par le test), lu strictement : une entrée que ce faux ne sait pas rejouer
@@ -434,7 +441,14 @@ export class MemorySyncFolder {
     return fileBytes(this.mustFind(deviceId, file));
   }
 
-  /** Met en attente un appel muet ; `rerun` rejoue l'appel quand le test le libère (`releaseMuted(id, 'complete')`). */
+  /**
+   * Met en attente un appel muet ; `rerun` rejoue l'appel quand le test le libère (`releaseMuted(id, 'complete')`).
+   *
+   * Double comptage assumé (revue m7) : le rejeu refait l'appel en entier, donc chaque point de panne traversé avant la panne muette
+   * (lectures d'état du scan, listages, hydratations) compte une seconde fois son rang ; l'entrée muette elle-même compte aussi le rejeu
+   * mais ne se redéclenche pas si `times` est épuisé. Un plan qui arme d'autres pannes sur les mêmes chemins doit en tenir compte (ou
+   * libérer par un code, qui ne rejoue rien).
+   */
   suspend<T>(entry: FaultEntry, call: string, rerun: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       this.muted.push({ id: entry.id, call, rerun: () => void rerun().then(resolve, reject), fail: (code) => reject(new SyncPlatformError(code)) });
@@ -1006,23 +1020,17 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       folder?.faultsArmed === true ? suspendable(call, run, arg) : run(arg);
   const suspendable = async <A, R>(call: string, run: (arg: A) => Promise<R>, arg: A): Promise<R> => {
       const f = folder;
-      if (f) f.muteHit = null;
+      f?.takeMuteHit();
       let result: R;
       try {
         result = await run(arg);
       } catch (error) {
-        const hit = error instanceof MutedSignal ? error.entry : f?.muteHit;
-        if (f && hit) {
-          f.muteHit = null;
-          return f.suspend(hit, call, () => run(arg));
-        }
+        const hit = f?.takeMuteHit() ?? (error instanceof MutedSignal ? error.entry : null);
+        if (f && hit) return f.suspend(hit, call, () => run(arg));
         throw error;
       }
-      if (f?.muteHit) {
-        const hit = f.muteHit;
-        f.muteHit = null;
-        return f.suspend(hit, call, () => run(arg));
-      }
+      const hit = f?.takeMuteHit() ?? null;
+      if (f && hit) return f.suspend(hit, call, () => run(arg));
       return result;
     };
   /** `pairedBy` mémorisé à l'import quand l'appareil n'est pas encore lié (reporté dans `own.json` à la liaison). */

@@ -4,14 +4,25 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { FAULT_EFFECTS, FAULT_OPS, FaultCounters, FaultPlanError, effectsOf, matchFaultPath, parseFaultPlan } from './faultPlan';
+import { FAULT_EFFECTS, FAULT_OPS, FaultCounters, FaultPlanError, effectsOf, matchFaultPath, parseFaultPlan, parseFaultPlanFile, parseFaultPlanText } from './faultPlan';
 import { MemorySyncFolder } from './memory';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const fixture = JSON.parse(readFileSync(join(root, 'tests', 'fixtures', 'sync', 'fault-plan.json'), 'utf8')) as { readonly $comment: readonly string[]; readonly schema: number; readonly plans: readonly unknown[] };
-const plans = fixture.plans.map((p) => parseFaultPlan(p));
+// Lecture stricte du texte, comme `parse_file` de Rust (nombres non entiers refusés, racine contrôlée).
+const plans = parseFaultPlanFile(readFileSync(join(root, 'tests', 'fixtures', 'sync', 'fault-plan.json'), 'utf8'));
+const invalid = JSON.parse(readFileSync(join(root, 'tests', 'fixtures', 'sync', 'fault-plan-invalid.json'), 'utf8')) as { readonly cases: readonly { readonly name: string; readonly planText: string; readonly message: string }[] };
 
 const entry = (extra: Record<string, unknown>): unknown => ({ name: 'essai', faults: [{ id: 'e1', op: 'remove', file: 'devices/*/state.ctx', nth: 1, effect: 'error', code: 'io', ...extra }] });
+const refusalText = (text: string): string => {
+  try {
+    parseFaultPlanText(text);
+  } catch (error) {
+    if (error instanceof FaultPlanError) return error.message;
+    throw error;
+  }
+  throw new Error('plan accepté à tort');
+};
 const refusal = (plan: unknown): string => {
   try {
     parseFaultPlan(plan);
@@ -61,6 +72,20 @@ describe('Y-TECH-03 : plan de pannes, schéma de la fixture (critère 1)', () =>
   it('chaque plan de la fixture s’arme sur memory.ts', () => {
     for (const plan of fixture.plans) expect(() => new MemorySyncFolder().armFaults(plan)).not.toThrow();
   });
+});
+
+describe('Y-TECH-03 : refus communs avec Rust, table fault-plan-invalid.json (revue I2)', () => {
+  it('la table couvre les divergences relevées par la revue', () => {
+    const names = invalid.cases.map((c) => c.name);
+    for (const name of ['removeLeavesPlaceholder nul', 'rang 1.0', 'opération non textuelle']) expect(names).toContain(name);
+    expect(new Set(names).size).toBe(names.length);
+  });
+  for (const c of invalid.cases) {
+    it(c.name, () => {
+      expect(() => parseFaultPlanText(c.planText)).toThrow(FaultPlanError);
+      expect(refusalText(c.planText)).toBe(c.message);
+    });
+  }
 });
 
 describe('Y-TECH-03 : le schéma refuse (critères 1 et 3)', () => {
@@ -160,7 +185,11 @@ describe('Y-TECH-03 : aucun délai, aucun nouvel essai, aucun test désactivé d
     'tests/unit/sync/hostile/cloudSimDeletions.test.ts',
     'tests/unit/sync/hostile/scenario1Orphan.test.ts',
     'tests/unit/sync/hostile/scenario1OldRule.test.ts',
+    'tests/unit/sync/hostile/fakesLoadFixtures.test.ts',
+    'src/platform/sync/memory.ts',
   ];
+  /** Lignes antérieures à la story, légitimes, retirées avant le contrôle (memory.ts : horloge par défaut du mode dev, injectée partout dans les tests). */
+  const EXEMPT: Readonly<Record<string, readonly string[]>> = { 'src/platform/sync/memory.ts': ['  const now = options.nowMs ?? (() => Date.now());'] };
   const FORBIDDEN: readonly [RegExp, string][] = [
     [/\bsetTimeout\s*\(/, 'setTimeout('],
     [/\bsetInterval\s*\(/, 'setInterval('],
@@ -170,11 +199,22 @@ describe('Y-TECH-03 : aucun délai, aucun nouvel essai, aucun test désactivé d
     [/\bvi\.waitFor\b|\bwaitFor\s*\(/, 'waitFor'],
     [/\bvi\.useFakeTimers\b|\badvanceTimers/, 'minuteries simulées (le banc compte des appels et des cycles)'],
     [/\bretry\b|\bretries\b/, 'nouvel essai'],
-    [/\bit\.skip\b|\bit\.todo\b|\bdescribe\.skip\b|\bxit\b|\.only\s*\(/, 'test désactivé ou isolé'],
+    [/\b(?:it|test|describe)\.(?:skip|skipIf|runIf|todo|fails|only)\b|\bx(?:it|test|describe)\b|\.only\s*\(/, 'test désactivé, conditionnel ou isolé'],
   ];
+  // Les motifs se contrôlent eux-mêmes : chaque nom interdit est reconnu (garde contre un motif mal écrit qui ne trouverait jamais rien).
+  it('les motifs reconnaissent test.skip, it.skipIf, describe.todo, xit et .only(', () => {
+    const disabled = FORBIDDEN.at(-1)?.[0] ?? /$^/;
+    for (const sample of ['test.skip(', 'it.skipIf(', 'describe.todo(', 'it.todo(', 'describe.skip(', 'xit(', 'it.only(']) expect(disabled.test(sample), sample).toBe(true);
+  });
   for (const file of BANK) {
     it(file, () => {
-      const source = stripComments(readFileSync(join(root, file), 'utf8'));
+      let text = readFileSync(join(root, file), 'utf8');
+      for (const line of EXEMPT[file] ?? []) {
+        expect(text.split('\n').filter((l) => l === line), `${file} : ligne exemptée introuvable ou répétée`).toHaveLength(1);
+        text = text.replace(line, '');
+      }
+      // memory.ts est contrôlé en entier, ligne exemptée retirée : les lignes de Y-TECH-03 le sont a fortiori.
+      const source = stripComments(text);
       for (const [pattern, name] of FORBIDDEN) expect(source.match(pattern)?.[0] ?? null, `${file} : ${name}`).toBeNull();
     });
   }

@@ -7,6 +7,7 @@
     "Y-TECH-03 (B13) : faultCases, cas de pannes d'iCloud armés par un plan au format de tests/fixtures/sync/fault-plan.json (champ plan, lu par le même analyseur strict que le plan de référence) : suppression en échec, résurrection après N cycles, éviction après lecture, substitut .<nom>.icloud en mode correct et historique, écriture refusée, écrasement entre listage et lecture, téléchargement en échec, lecture et listage en échec. Chaque cas : plan, setup (comme cases ; textes en lignes complètes terminées par \\n), steps, requires facultatif.",
     "faultCases, opérations : celles de cases (list, read, writeAtomic, append, remove) plus advanceCycle (un cycle d'iCloud : compteur des résurrections, attendu { ok: true }). Noms d'erreur attendus (error) : io, cloud-pending, cloud-error (téléchargement en échec, FsError::CloudError).",
     "faultCases, rejeu : memory.ts par une vue fichier sur MemorySyncFolder qui passe par les mêmes points de panne que la plateforme (src/platform/sync/syncFsConformance.test.ts, tous les cas) ; MemFs, BookmarkFs sur fake_bookmark et StdFs (sync_fs_conformance.rs, phase B) : MemFs et fake_bookmark rejouent les plans eux-mêmes (support/fault_plan.rs, même lecture stricte) ; StdFs passe par une enveloppe d'injection au-dessus du vrai disque (error, accept-not-propagated, overwrite-before-read). Un cas qu'une implémentation ne peut pas rejouer porte notApplicable : { implémentation: raison } (noms : StdFs, BookmarkFs, MemFs, memory.ts) : le rejeu Rust refuse un cas sauté sans cette déclaration, et la déclaration est refusée si la raison est vide : jamais ignoré en silence. StdFs : les cas requires cloud (éviction, substitut, téléchargement en échec) sont déclarés non applicables.",
+    "faultCases, capacité read-rank-without-hydration (revue I4) : une lecture sans hydratation d'un fichier dans le nuage passe par le faux et consomme le rang (memory.ts, MemFs) ; BookmarkFs ne l'a pas (le Rust répond cloud-pending d'après le statut, avant tout appel au plugin) et déclare le cas notApplicable. Règle fixée par le cas « lecture sans hydratation d'un fichier dans le nuage : le rang est consommé ».",
     "Non applicables à la table, couverts ailleurs : la panne muette (un appel sans retour ne se rejoue pas pas à pas) : src/platform/sync/memoryFaults.test.ts et scénario 5 ; la ligne incomplète laissée par un ajout coupé (partialLastLine : memory.ts garde la présence d'une ligne incomplète, pas son texte) : memoryFaults.test.ts."
   ],
   "cases": [
@@ -323,6 +324,18 @@
       "steps": [
         { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "error": "io" } },
         { "op": "list", "path": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e"], "expect": { "names": ["j-00000001.ctj"] }}
+      ]
+    },
+    {
+      "name": "lecture sans hydratation d’un fichier dans le nuage : le rang est consommé",
+      "requires": ["cloud","read-rank-without-hydration"],
+      "notApplicable": {"StdFs":"un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)","BookmarkFs":"BookmarkFs ne demande rien au plugin pour une lecture sans hydratation d'un fichier dans le nuage (le statut « cloud » rend cloud-pending côté Rust, avant tout readFrom) : le faux du plugin ne voit aucun appel à compter ; le rang n'est donc consommé, sur l'iPhone, que par une lecture qui atteint le plugin (règle à respecter par Y-IOS-05 et Y-FIX-03, docs/dettes.md)"},
+      "plan": {"name":"read-rank-cloud","faults":[{"id":"read-j1-io-2","op":"read","file":"devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj","nth":2,"effect":"error","code":"io"}]},
+      "setup": [{"file":["devices","a","e0001-0f8fad5b-d9cb-469f-a165-70867728950e","j-00000001.ctj"],"text":"l1\n","cloud":true}],
+      "steps": [
+        {"op":"read","path":["devices","a","e0001-0f8fad5b-d9cb-469f-a165-70867728950e","j-00000001.ctj"],"limit":100,"hydrate":false,"expect":{"error":"cloud-pending"}},
+        {"op":"read","path":["devices","a","e0001-0f8fad5b-d9cb-469f-a165-70867728950e","j-00000001.ctj"],"limit":100,"hydrate":false,"expect":{"error":"io"}},
+        {"op":"read","path":["devices","a","e0001-0f8fad5b-d9cb-469f-a165-70867728950e","j-00000001.ctj"],"limit":100,"hydrate":true,"expect":{"text":"l1\n"}}
       ]
     }
   ]

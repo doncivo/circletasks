@@ -43,14 +43,20 @@ const NOT_FAKES: Readonly<Record<string, string>> = {
   Never: 'transport jamais appelé (sync_bookmark.rs), garde du faux',
 };
 
-/** Le fichier charge-t-il les deux fixtures (Rust : `include_str!` ; TypeScript : lecture du fichier) ? */
+/**
+ * Marqueur d'un rejeu réel des cas de pannes (revue m3) : charger les fixtures ne suffit pas, le fichier doit aussi armer un plan et rejouer
+ * la table (Rust : `run_fault_table(` ; TypeScript : `armFaults(`).
+ */
+const REPLAY_MARKER = { rs: 'run_fault_table(', ts: 'armFaults(' } as const;
+
+/** Le fichier charge-t-il les deux fixtures (Rust : `include_str!` ; TypeScript : lecture du fichier) et rejoue-t-il les cas de pannes ? */
 function loadsBoth(path: string, lang: 'ts' | 'rs'): boolean {
   const text = read(path);
   const loads = (fixture: string): boolean => {
     const name = fixture.split('/').at(-1) as string;
     return lang === 'rs' ? new RegExp(`include_str!\\([^)]*${name.replace('.', '\\.')}`).test(text) : text.includes('readFileSync') && text.includes(`'${name}'`);
   };
-  return loads(CONFORMANCE) && loads(FAULT_PLAN);
+  return loads(CONFORMANCE) && loads(FAULT_PLAN) && text.includes(REPLAY_MARKER[lang]);
 }
 
 describe('Y-TECH-03 : chaque faux iCloud rejoue syncfs-conformance.json et fault-plan.json (critère 18)', () => {

@@ -82,7 +82,8 @@ impl World for MemWorld {
         false
     }
     fn supports(&self, capability: &str) -> bool {
-        capability == "cloud"
+        // `read-rank-without-hydration` : une lecture sans hydratation d'un fichier dans le nuage passe par le faux (le rang est compté).
+        capability == "cloud" || capability == "read-rank-without-hydration"
     }
     fn before_step(&self) {
         if !self.slow.lock().unwrap().is_empty() {
@@ -141,8 +142,10 @@ impl World for BookmarkWorld {
         self.plugin.link(parts);
         true
     }
-    fn supports(&self, _capability: &str) -> bool {
-        true
+    fn supports(&self, capability: &str) -> bool {
+        // BookmarkFs ne demande rien au plugin pour lire sans hydratation un fichier dans le nuage (statut « cloud » → cloud-pending côté
+        // Rust) : le faux ne voit aucun appel, le rang n'est pas compté (cas déclaré non applicable dans la table, revue I4).
+        capability != "read-rank-without-hydration"
     }
     fn arm(&self, plan: Plan) -> Result<(), String> {
         self.plugin.arm(plan)
@@ -262,7 +265,8 @@ impl SyncFs for FaultyStd {
             if let Some(entry) = self.hit(fault_plan::Op::Write, &fault_plan::file_path(file)) {
                 if let fault_plan::Effect::Error(code) = entry.effect {
                     if entry.partial_last_line {
-                        let _ = self.inner.append(file, &fault_plan::partial_tail(bytes), mode);
+                        // Ajout coupé : les octets partiels doivent arriver sur le disque, sinon le cas ne prouve rien (jamais avalé).
+                        self.inner.append(file, &fault_plan::partial_tail(bytes), mode).expect("écriture de la ligne incomplète armée par le plan");
                     }
                     return Err(plan_error(code));
                 }
@@ -612,8 +616,9 @@ fn y_tech_03_16_fault_cases_on_the_in_memory_sync_fs() {
 #[test]
 fn y_tech_03_16_fault_cases_on_bookmark_fs_with_the_fake_plugin() {
     let (played, declared) = run_fault_table("BookmarkFs", &|| Box::new(BookmarkWorld::new()));
-    assert_eq!(declared, Vec::new(), "BookmarkFs rejoue tous les cas de pannes");
-    assert_eq!(played, fault_case_count());
+    // Un seul cas déclaré : le rang d'une lecture sans hydratation d'un fichier dans le nuage (aucun appel au plugin à compter).
+    assert_eq!(declared.iter().map(|(name, _)| name.as_str()).collect::<Vec<_>>(), ["lecture sans hydratation d’un fichier dans le nuage : le rang est consommé"], "BookmarkFs");
+    assert_eq!(played + declared.len(), fault_case_count());
     assert!(played >= 14, "cas de pannes joués : {played}");
 }
 
@@ -621,8 +626,9 @@ fn y_tech_03_16_fault_cases_on_bookmark_fs_with_the_fake_plugin() {
 #[test]
 fn y_tech_03_16_fault_cases_on_std_fs_through_the_injection_wrapper() {
     let (played, declared) = run_fault_table("StdFs", &|| Box::new(StdWorld::new()));
-    // Les cinq cas qui exigent un fichier dans le nuage (éviction, substitut ×3, téléchargement en échec) sont déclarés non applicables.
-    assert_eq!(declared.len(), 5, "StdFs : cas déclarés non applicables : {declared:?}");
+    // Les six cas qui exigent un fichier dans le nuage (éviction, substitut ×3, téléchargement en échec, rang d'une lecture sans
+    // hydratation) sont déclarés non applicables.
+    assert_eq!(declared.len(), 6, "StdFs : cas déclarés non applicables : {declared:?}");
     assert_eq!(played + declared.len(), fault_case_count());
     assert!(played >= 9, "cas de pannes joués : {played}");
 }
@@ -655,7 +661,6 @@ fn y_tech_03_16_not_applicable_declarations_name_a_known_implementation_and_a_mi
 /// erreur qui nomme le plan et l'entrée.
 #[test]
 fn y_tech_03_18_every_rust_fake_loads_the_conformance_table_and_the_reference_fault_plans() {
-    assert_eq!(REFERENCE_PLANS, fault_plan::FIXTURE, "une seule fixture de plans de pannes");
     let plans = fault_plan::parse_file(REFERENCE_PLANS).expect("fault-plan.json lisible strictement");
     assert!(plans.len() >= 11, "plans de référence : {}", plans.len());
     let table: Value = serde_json::from_str(TABLE).expect("table JSON");

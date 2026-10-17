@@ -118,6 +118,24 @@ fn y_tech_03_3_the_strict_reader_refuses_and_names_the_entry() {
     assert!(fault_plan::parse_file(&json!({ "schema": 2, "plans": [] }).to_string()).unwrap_err().contains("« schema » 1 attendu"));
 }
 
+/// Revue I2 : table commune des refus (`tests/fixtures/sync/fault-plan-invalid.json`), lue aussi par `faultPlan.test.ts` : chaque plan est
+/// refusé avec exactement le même message des deux côtés.
+const INVALID_PLANS: &str = include_str!("../../../tests/fixtures/sync/fault-plan-invalid.json");
+
+#[test]
+fn y_tech_03_3_the_shared_refusal_table_gives_the_same_message_as_typescript() {
+    let table: Value = serde_json::from_str(INVALID_PLANS).expect("fault-plan-invalid.json");
+    let cases = table["cases"].as_array().expect("cases");
+    assert!(cases.len() >= 40, "cas de refus : {}", cases.len());
+    for case in cases {
+        let name = case["name"].as_str().expect("name");
+        let text = case["planText"].as_str().expect("planText");
+        let raw: Value = serde_json::from_str(text).unwrap_or_else(|e| panic!("« {name} » : planText illisible ({e})"));
+        let message = fault_plan::parse_plan(&raw).expect_err(name);
+        assert_eq!(message, case["message"].as_str().expect("message"), "« {name} »");
+    }
+}
+
 #[test]
 fn y_tech_03_3_an_entry_a_fake_cannot_replay_fails_at_arming_and_names_it() {
     let mute = plan(json!([{ "id": "mute-list", "op": "list", "file": "devices/a/", "nth": 1, "effect": "mute" }]));
@@ -470,8 +488,8 @@ fn y_tech_03_4_two_runs_of_the_same_plan_and_calls_give_identical_results_and_lo
 fn y_tech_03_4_the_bank_files_contain_no_delay_no_retry_and_no_skipped_test() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests").join("desktop");
     // Les mots interdits sont construits pour que ce fichier ne se désigne pas lui-même.
-    let forbidden = [format!("thread::{}", "sleep"), format!("#[{}]", "ignore"), format!("{}(", "retry"), format!("{}(", "sleep"), format!("set{}", "Timeout"), format!("tokio::time::{}", "sleep")];
-    for file in ["support/fault_plan.rs", "sync_fault_plan.rs", "sync_fs_conformance.rs"] {
+    let forbidden = [format!("thread::{}", "sleep"), format!("#[{}]", "ignore"), format!("{}(", "retry"), format!("{}(", "sleep"), format!("set{}", "Timeout"), format!("tokio::time::{}", "sleep"), format!("Instant::{}", "now"), format!("SystemTime::{}", "now")];
+    for file in ["support/fault_plan.rs", "support/fake_bookmark.rs", "sync_support.rs", "sync_fault_plan.rs", "sync_fs_conformance.rs"] {
         let text = std::fs::read_to_string(root.join(file)).expect("fichier du banc");
         for word in &forbidden {
             assert!(!text.contains(word.as_str()), "{file} contient « {word} »");

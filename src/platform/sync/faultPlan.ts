@@ -7,8 +7,13 @@
  * que le faux ne sait pas rejouer (opération ou effet inconnu, couple opération/effet non pris en charge, paramètre manquant ou en trop) est
  * refusée au chargement avec un message qui la nomme : jamais une panne ignorée en silence.
  *
- * Module sans effet de bord au chargement (aucune constante construite au niveau du module) : `memory.ts` n'entre pas dans le bundle de
- * départ et ce module non plus.
+ * Module sans effet de bord au chargement : ses constantes de module sont des tableaux littéraux de textes (listes fermées des opérations,
+ * effets et champs) et des fonctions fléchées ; aucun appel ni construction d'objet au chargement (ni `Map`, ni `Set`, les expressions
+ * régulières sont dans les corps de fonction) ; `memory.ts` n'entre pas dans le bundle de départ et ce module non plus.
+ *
+ * Lecture croisée avec Rust (`src-tauri/tests/desktop/support/fault_plan.rs`) : mêmes refus, mêmes messages, table commune
+ * `tests/fixtures/sync/fault-plan-invalid.json`. Un nombre non entier écrit dans le texte (`1.0`, `1e0`) est refusé comme par serde : la
+ * lecture d'un texte passe par `parseFaultPlanText` / `parseFaultPlanFile` (après `JSON.parse`, `1.0` et `1` ne se distinguent plus).
  */
 
 export type FaultOp = 'list' | 'read' | 'write' | 'rename' | 'remove' | 'hydrate';
@@ -76,6 +81,8 @@ const ENTRY_KEYS = ['id', 'op', 'file', 'nth', 'times', 'effect', 'code', 'resur
 /** Noms de champs qui portent une durée ou une heure : refusés avec un message explicite (règle : rang d'appel, jamais le temps). */
 const isDurationKey = (key: string): boolean => /(ms|millis|seconds?|delay|timeout|duration|wait|sleep|time$|at$|date|clock)/i.test(key) && key !== 'times';
 
+/** Valeur citée dans un message : un texte tel quel, sinon son JSON compact (`3`, `null`), `undefined` si absente (comme Rust). */
+const shown = (value: unknown): string => (typeof value === 'string' ? value : value === undefined ? 'undefined' : JSON.stringify(value));
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isRank = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 1;
 const isCount = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
@@ -108,9 +115,9 @@ function parseEntry(raw: unknown, index: number, plan: string, seen: Set<string>
   if (seen.has(id)) throw new FaultPlanError(`${where} : « id » en double`);
   seen.add(id);
   const op = raw['op'];
-  if (typeof op !== 'string' || !(FAULT_OPS as readonly string[]).includes(op)) throw new FaultPlanError(`${where} : opération inconnue « ${String(op)} »`);
+  if (typeof op !== 'string' || !(FAULT_OPS as readonly string[]).includes(op)) throw new FaultPlanError(`${where} : opération inconnue « ${shown(op)} »`);
   const effect = raw['effect'];
-  if (typeof effect !== 'string' || !(FAULT_EFFECTS as readonly string[]).includes(effect)) throw new FaultPlanError(`${where} : effet inconnu « ${String(effect)} »`);
+  if (typeof effect !== 'string' || !(FAULT_EFFECTS as readonly string[]).includes(effect)) throw new FaultPlanError(`${where} : effet inconnu « ${shown(effect)} »`);
   if (!effectsOf(op as FaultOp).includes(effect as FaultEffect)) throw new FaultPlanError(`${where} : effet « ${effect} » non rejouable sur l'opération « ${op} »`);
   if (!('nth' in raw)) throw new FaultPlanError(`${where} : rang « nth » absent`);
   if (!isRank(raw['nth'])) throw new FaultPlanError(`${where} : rang « nth » invalide (entier à partir de 1)`);
@@ -168,12 +175,49 @@ export function parseFaultPlan(raw: unknown): FaultPlan {
   const options = raw['options'] ?? {};
   if (!isObject(options)) throw new FaultPlanError(`plan « ${name} » : « options » objet attendu`);
   for (const key of Object.keys(options)) if (!OPTION_KEYS.includes(key)) throw new FaultPlanError(`plan « ${name} » : option inconnue « ${key} »`);
-  const removeLeavesPlaceholder = options['removeLeavesPlaceholder'] ?? false;
+  // Présente, l'option est un booléen (`null` refusé, comme Rust) ; absente : faux.
+  const removeLeavesPlaceholder = 'removeLeavesPlaceholder' in options ? options['removeLeavesPlaceholder'] : false;
   if (typeof removeLeavesPlaceholder !== 'boolean') throw new FaultPlanError(`plan « ${name} » : « removeLeavesPlaceholder » booléen attendu`);
   const faults = raw['faults'];
   if (!Array.isArray(faults)) throw new FaultPlanError(`plan « ${name} » : « faults » tableau attendu`);
   const seen = new Set<string>();
   return { name, faults: faults.map((entry, index) => parseEntry(entry, index, name, seen)), options: { removeLeavesPlaceholder } };
+}
+
+/**
+ * `JSON.parse` qui refuse comme serde un nombre écrit autrement qu'en entier décimal (`1.0`, `1e0`, `-0`) : il devient `NaN`, refusé
+ * ensuite par le contrôle du champ (rang, `times`, `resurrectAfterCycles`, `schema`) avec le même message que Rust. Les plans ne
+ * portent que des entiers.
+ */
+function parseStrictJson(text: string): unknown {
+  return JSON.parse(text, (_key: string, value: unknown, context?: { readonly source?: string }) =>
+    typeof value === 'number' && typeof context?.source === 'string' && !/^-?(?:0|[1-9]\d*)$/.test(context.source) ? Number.NaN : value,
+  );
+}
+
+/** Lecture stricte d'un plan écrit en texte JSON (fixtures) : nombres non entiers refusés comme par serde. */
+export function parseFaultPlanText(text: string): FaultPlan {
+  return parseFaultPlan(parseStrictJson(text));
+}
+
+/**
+ * Lecture stricte d'un fichier de plans (`{ $comment, schema: 1, plans: [...] }`), mêmes messages que `parse_file` de `fault_plan.rs` :
+ * racine, schéma, noms de plans uniques.
+ */
+export function parseFaultPlanFile(text: string): FaultPlan[] {
+  const root = parseStrictJson(text);
+  if (!isObject(root)) throw new FaultPlanError('fichier de plans : objet attendu');
+  for (const key of Object.keys(root)) if (!['$comment', 'schema', 'plans'].includes(key)) throw new FaultPlanError(`fichier de plans : champ inconnu « ${key} »`);
+  if (root['schema'] !== 1) throw new FaultPlanError('fichier de plans : « schema » 1 attendu');
+  const plans = root['plans'];
+  if (!Array.isArray(plans)) throw new FaultPlanError('fichier de plans : « plans » tableau attendu');
+  const out: FaultPlan[] = [];
+  for (const raw of plans) {
+    const plan = parseFaultPlan(raw);
+    if (out.some((p) => p.name === plan.name)) throw new FaultPlanError(`fichier de plans : plan « ${plan.name} » en double`);
+    out.push(plan);
+  }
+  return out;
 }
 
 /** Le chemin `path` (composants séparés par `/`, `/` final pour un dossier) correspond-il au motif ? Joker `*` dans un composant. */

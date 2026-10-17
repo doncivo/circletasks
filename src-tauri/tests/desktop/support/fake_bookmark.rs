@@ -478,13 +478,19 @@ impl FakePlugin {
                 // Panne du plan `download-error` : comptée seulement si le téléchargement est tenté.
                 let stub = placeholder_key(&path);
                 if !state.nodes.contains_key(&file) {
-                    if let Some(Node::File { bytes, download_error, .. }) = state.nodes.get(&stub).cloned() {
+                    if let Some(Node::File { bytes, download_error, delay_ms, .. }) = state.nodes.get(&stub).cloned() {
                         if bytes.len() as u64 > limit {
                             return reject("too-large");
                         }
                         if download_error || matches!(hit(&mut state.faults, Op::Hydrate, &file).map(|entry| entry.effect), Some(Effect::DownloadError)) {
                             return reject("cloud-error");
                         }
+                        // Même règle de durée que pour un nœud `cloud` (revue m5) : au-delà du délai accordé, `cloud-pending` et le substitut reste.
+                        if delay_ms > timeout {
+                            self.clock.fetch_add(timeout, Ordering::SeqCst);
+                            return reject("cloud-pending");
+                        }
+                        self.clock.fetch_add(delay_ms, Ordering::SeqCst);
                         state.nodes.remove(&stub);
                         state.nodes.insert(file, Node::File { bytes, cloud: false, delay_ms: 0, download_error: false });
                         return ok(json!({}));

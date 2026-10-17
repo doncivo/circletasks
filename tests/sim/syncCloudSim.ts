@@ -1,5 +1,5 @@
 import { MemorySyncFolder } from '../../src/platform/sync/memory';
-import { STATE_FILE, parseSyncFileName, segmentFileName } from '../../src/domain/sync/format';
+import { STATE_FILE, isEpochId, parseSyncFileName, segmentFileName } from '../../src/domain/sync/format';
 
 /**
  * « iCloud » simulé à deux dossiers (ADR 0011, section 12 ; Y-02, Y-05, Y-09) : chaque appareil a **son propre** dossier
@@ -79,7 +79,11 @@ export function propagate(from: MemorySyncFolder, to: MemorySyncFolder, deviceId
   }
 }
 
-/** Remet dans `copy` le fichier `name` de la version précédente du destinataire, s'il y était et qu'il manque à la copie. */
+/**
+ * Remet dans `copy` le fichier `name` de la version précédente du destinataire, s'il y était et qu'il manque à la copie. Noms pris en
+ * charge : `state.ctx` et `<époque>/<segment ou instantané>` ; tout autre nom, dont `state.next.ctx` (état d'une réinitialisation, jamais
+ * supprimé par le moteur ni armé par un scénario du banc), est ignoré.
+ */
 function keepPrevious(previous: DeviceDir, copy: DeviceDir, name: string): void {
   if (name === STATE_FILE) {
     if (!copy.state && previous.state) copy.state = structuredClone(previous.state);
@@ -87,14 +91,15 @@ function keepPrevious(previous: DeviceDir, copy: DeviceDir, name: string): void 
   }
   const [epoch, file] = name.split('/');
   const parsed = file ? parseSyncFileName(file) : null;
-  const before = epoch ? previous.epochs.get(epoch as never) : undefined;
-  if (!epoch || !before || !parsed || parsed.kind === 'state') return;
+  if (!isEpochId(epoch) || !parsed || parsed.kind === 'state') return;
+  const before = previous.epochs.get(epoch);
+  if (!before) return;
   const source = parsed.kind === 'segment' ? before.segments.get(parsed.n) : before.snapshots.get(parsed.n);
   if (!source) return;
-  let target = copy.epochs.get(epoch as never);
+  let target = copy.epochs.get(epoch);
   if (!target) {
     target = { segments: new Map(), snapshots: new Map() };
-    copy.epochs.set(epoch as never, target);
+    copy.epochs.set(epoch, target);
   }
   const map = parsed.kind === 'segment' ? target.segments : target.snapshots;
   if (!map.has(parsed.n)) map.set(parsed.n, structuredClone(source));

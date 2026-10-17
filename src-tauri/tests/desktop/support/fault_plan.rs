@@ -8,8 +8,6 @@
 //!
 //! Aucune panne n'est armée par le temps : un rang d'appel (`nth`, `times`) et un compteur de cycles (`resurrectAfterCycles`) seulement.
 
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 
 use serde_json::Value;
@@ -203,6 +201,16 @@ fn has_long_number(text: &str) -> bool {
     false
 }
 
+/// Valeur citée dans un message : un texte tel quel, sinon son JSON compact (`3`, `null`), `undefined` si absente (comme `shown` de
+/// `faultPlan.ts`).
+fn shown(value: Option<&Value>) -> String {
+    match value {
+        None => "undefined".to_owned(),
+        Some(Value::String(text)) => text.clone(),
+        Some(other) => other.to_string(),
+    }
+}
+
 fn rank(value: Option<&Value>) -> Option<u64> {
     value.and_then(Value::as_u64).filter(|n| *n >= 1)
 }
@@ -226,10 +234,8 @@ fn parse_entry(raw: &Value, index: usize, plan: &str, seen: &mut Vec<String>) ->
         return Err(format!("{at} : « id » en double"));
     }
     seen.push(id.clone());
-    let op_text = raw.get("op").and_then(Value::as_str);
-    let op = op_text.and_then(Op::parse).ok_or_else(|| format!("{at} : opération inconnue « {} »", op_text.unwrap_or("undefined")))?;
-    let effect_text = raw.get("effect").and_then(Value::as_str);
-    let effect_name = effect_text.filter(|e| EFFECTS.contains(e)).ok_or_else(|| format!("{at} : effet inconnu « {} »", effect_text.unwrap_or("undefined")))?;
+    let op = raw.get("op").and_then(Value::as_str).and_then(Op::parse).ok_or_else(|| format!("{at} : opération inconnue « {} »", shown(raw.get("op"))))?;
+    let effect_name = raw.get("effect").and_then(Value::as_str).filter(|e| EFFECTS.contains(e)).ok_or_else(|| format!("{at} : effet inconnu « {} »", shown(raw.get("effect"))))?;
     if !op.effects().contains(&effect_name) {
         return Err(format!("{at} : effet « {effect_name} » non rejouable sur l'opération « {} »", op.name()));
     }
