@@ -42,9 +42,10 @@ param(
   [switch]$RemoveRegistry,
   [int]$PageTimeoutMs = 60000,
   [int]$WorkTimeoutMs = 180000,
-  # Échéance globale du pilote : dépassée, Wait-Until échoue par le chemin habituel (étape nommée, preuves jointes). Le test la fixe sous sa propre borne
-  # (DRIVE_TIMEOUT_MS moins une marge pour les preuves) : spawnSync tuerait PowerShell avant qu'il écrive son résultat.
-  [int]$DeadlineMs = 240000
+  # Échéance globale ABSOLUE du pilote (millisecondes depuis 1970, UTC), fixée par le test juste avant spawnSync : le démarrage de PowerShell est donc
+  # décompté comme il l'est du délai de spawnSync. Dépassée, Wait-Until échoue par le chemin habituel (étape nommée, preuves jointes) ; le test la place
+  # sous sa propre borne, avec une marge pour les preuves : spawnSync tuerait PowerShell avant qu'il écrive son résultat.
+  [Parameter(Mandatory = $true)][long]$DeadlineEpochMs
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName UIAutomationClient
@@ -102,7 +103,7 @@ $script:Log = New-Object System.Collections.Generic.List[string]
 $script:Files = New-Object System.Collections.Generic.List[string]
 $script:Step = 'initialisation'
 $script:InstallerProcess = $null
-$script:Deadline = [DateTime]::UtcNow.AddMilliseconds($DeadlineMs)
+$script:Deadline = [DateTimeOffset]::FromUnixTimeMilliseconds($DeadlineEpochMs).UtcDateTime
 
 function Enter-Step([string]$Name) {
   $script:Step = $Name
@@ -120,7 +121,7 @@ function Wait-Until([scriptblock]$Condition, [int]$TimeoutMs, [string]$What) {
     $found = & $Condition
     if ($found) { return $found }
     if ([DateTime]::UtcNow -ge $limit) { throw ('delai de {0} ms depasse : {1}' -f $TimeoutMs, $What) }
-    if ([DateTime]::UtcNow -ge $script:Deadline) { throw ('echeance globale du pilote ({0} ms) depassee : {1}' -f $DeadlineMs, $What) }
+    if ([DateTime]::UtcNow -ge $script:Deadline) { throw ('echeance globale du pilote ({0}) depassee : {1}' -f $script:Deadline.ToString('HH:mm:ss.fff'), $What) }
     Start-Sleep -Milliseconds 250
   }
 }

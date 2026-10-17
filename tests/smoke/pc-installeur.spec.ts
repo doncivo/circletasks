@@ -34,9 +34,9 @@ const APP_READY_TIMEOUT_MS = 90_000;
  */
 const SILENT_INSTALL_TIMEOUT_MS = 120_000;
 const DRIVE_TIMEOUT_MS = 300_000;
-/** Part de DRIVE_TIMEOUT_MS réservée aux preuves d'échec du pilote : son échéance globale (-DeadlineMs) est DRIVE_TIMEOUT_MS moins cette marge (30 s pour le nettoyage et la capture d'écran, qui n'ont pas de preuves à écrire). */
+/** Part de DRIVE_TIMEOUT_MS réservée aux preuves d'échec du pilote : son échéance globale ABSOLUE (-DeadlineEpochMs, calculée juste avant spawnSync : le démarrage de PowerShell est décompté) est DRIVE_TIMEOUT_MS moins cette marge (30 s pour le nettoyage et la capture d'écran, qui n'ont pas de preuves à écrire). */
 const DRIVE_EVIDENCE_MARGIN_MS = 60_000;
-const CLEANUP_TIMEOUT_MS = 90_000;
+const CLEANUP_TIMEOUT_MS = 180_000;
 const CAPTURE_TIMEOUT_MS = 120_000;
 const TASKKILL_TIMEOUT_MS = 30_000;
 const SCREENSHOT_TIMEOUT_MS = 60_000;
@@ -95,7 +95,7 @@ function runDrive(testInfo: TestInfo, action: 'Reinstall' | 'Uninstall' | 'Clean
   const outDir = testInfo.outputPath('installeur');
   mkdirSync(outDir, { recursive: true });
   rmSync(resultFile, { force: true });
-  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', DRIVE_SCRIPT, '-Action', action, '-OutDir', outDir, '-ResultFile', resultFile, '-DeadlineMs', String(timeoutMs - (action === 'Reinstall' || action === 'Uninstall' ? DRIVE_EVIDENCE_MARGIN_MS : 30_000))];
+  const argv = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', DRIVE_SCRIPT, '-Action', action, '-OutDir', outDir, '-ResultFile', resultFile, '-DeadlineEpochMs', String(Date.now() + timeoutMs - (action === 'Reinstall' || action === 'Uninstall' ? DRIVE_EVIDENCE_MARGIN_MS : 30_000))];
   // Une valeur vide désigne un paramètre interrupteur (-RemoveRegistry).
   for (const [name, value] of Object.entries(args)) argv.push(...(value === "" ? [`-${name}`] : [`-${name}`, value]));
   const run = spawnSync('powershell', argv, { encoding: 'utf8', timeout: timeoutMs });
