@@ -6,7 +6,7 @@
     "observable : cas rejoué aussi sur memory.ts (statut de readJournal et readSnapshot).",
     "Y-TECH-03 (B13) : faultCases, cas de pannes d'iCloud armés par un plan au format de tests/fixtures/sync/fault-plan.json (champ plan, lu par le même analyseur strict que le plan de référence) : suppression en échec, résurrection après N cycles, éviction après lecture, substitut .<nom>.icloud en mode correct et historique, écriture refusée, écrasement entre listage et lecture, téléchargement en échec, lecture et listage en échec. Chaque cas : plan, setup (comme cases ; textes en lignes complètes terminées par \\n), steps, requires facultatif.",
     "faultCases, opérations : celles de cases (list, read, writeAtomic, append, remove) plus advanceCycle (un cycle d'iCloud : compteur des résurrections, attendu { ok: true }). Noms d'erreur attendus (error) : io, cloud-pending, cloud-error (téléchargement en échec, FsError::CloudError).",
-    "faultCases, rejeu : memory.ts par une vue fichier sur MemorySyncFolder qui passe par les mêmes points de panne que la plateforme (src/platform/sync/syncFsConformance.test.ts, tous les cas) ; MemFs et BookmarkFs sur fake_bookmark (phase B, sync_fs_conformance.rs, qui ne lit aujourd'hui que cases) ; StdFs : requires cloud → non applicable (un vrai disque n'a pas de fichier dans le nuage, comme la table de base) ; les autres cas exigent une enveloppe d'injection de pannes que la phase B ajoute, ou déclare non applicable avec sa raison (champ notApplicable : { implémentation: raison }) : jamais ignorés en silence.",
+    "faultCases, rejeu : memory.ts par une vue fichier sur MemorySyncFolder qui passe par les mêmes points de panne que la plateforme (src/platform/sync/syncFsConformance.test.ts, tous les cas) ; MemFs, BookmarkFs sur fake_bookmark et StdFs (sync_fs_conformance.rs, phase B) : MemFs et fake_bookmark rejouent les plans eux-mêmes (support/fault_plan.rs, même lecture stricte) ; StdFs passe par une enveloppe d'injection au-dessus du vrai disque (error, accept-not-propagated, overwrite-before-read). Un cas qu'une implémentation ne peut pas rejouer porte notApplicable : { implémentation: raison } (noms : StdFs, BookmarkFs, MemFs, memory.ts) : le rejeu Rust refuse un cas sauté sans cette déclaration, et la déclaration est refusée si la raison est vide : jamais ignoré en silence. StdFs : les cas requires cloud (éviction, substitut, téléchargement en échec) sont déclarés non applicables.",
     "Non applicables à la table, couverts ailleurs : la panne muette (un appel sans retour ne se rejoue pas pas à pas) : src/platform/sync/memoryFaults.test.ts et scénario 5 ; la ligne incomplète laissée par un ajout coupé (partialLastLine : memory.ts garde la présence d'une ligne incomplète, pas son texte) : memoryFaults.test.ts."
   ],
   "cases": [
@@ -209,6 +209,7 @@
     {
       "name": "éviction après lecture : substitut listé en nuage, relu après hydratation",
       "requires": ["cloud"],
+      "notApplicable": { "StdFs": "un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)" },
       "plan": { "name": "evict", "faults": [{ "id": "evict-j1", "op": "read", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "evict-after-read" }] },
       "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\nl2\n" }],
       "steps": [
@@ -222,6 +223,7 @@
     {
       "name": "substitut au listage : vrai nom en nuage, supprimé avec le vrai nom (mode correct)",
       "requires": ["cloud"],
+      "notApplicable": { "StdFs": "un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)" },
       "plan": { "name": "placeholder", "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "placeholder" }] },
       "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
       "steps": [
@@ -234,6 +236,7 @@
     {
       "name": "substitut en mode historique : rien supprimé, il reste listé",
       "requires": ["cloud"],
+      "notApplicable": { "StdFs": "un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)" },
       "plan": { "name": "placeholder-historique", "options": { "removeLeavesPlaceholder": true }, "faults": [{ "id": "placeholder-s1", "op": "list", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/s-00000001.cts", "nth": 1, "effect": "placeholder" }] },
       "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "s-00000001.cts"], "text": "instantane\n" }],
       "steps": [
@@ -248,6 +251,7 @@
     {
       "name": "substitut lu avec hydratation : téléchargé puis local",
       "requires": ["cloud"],
+      "notApplicable": { "StdFs": "un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)" },
       "plan": { "name": "placeholder-hydrate", "faults": [{ "id": "placeholder-st", "op": "list", "file": "devices/a/state.ctx", "nth": 1, "effect": "placeholder" }] },
       "setup": [{ "file": ["devices", "a", "state.ctx"], "text": "etat\n" }],
       "steps": [
@@ -293,6 +297,7 @@
     {
       "name": "téléchargement en échec : reste en nuage, réussi au rang suivant",
       "requires": ["cloud"],
+      "notApplicable": { "StdFs": "un disque local n'a ni fichier évincé, ni substitut .<nom>.icloud, ni téléchargement : sa disponibilité est toujours « local » (la table de base saute aussi ses cas requires cloud)" },
       "plan": { "name": "download-error", "faults": [{ "id": "download-j1", "op": "hydrate", "file": "devices/a/e0001-0f8fad5b-d9cb-469f-a165-70867728950e/j-00000001.ctj", "nth": 1, "effect": "download-error" }] },
       "setup": [{ "file": ["devices", "a", "e0001-0f8fad5b-d9cb-469f-a165-70867728950e", "j-00000001.ctj"], "text": "l1\n", "cloud": true }],
       "steps": [

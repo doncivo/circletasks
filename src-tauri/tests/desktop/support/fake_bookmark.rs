@@ -15,6 +15,8 @@ use base64::{engine::general_purpose::STANDARD, Engine};
 use circletasks_lib::sync::bookmark::BookmarkTransport;
 use serde_json::{json, Value};
 
+use super::fault_plan::{self, Armed, Effect, Firing, Op, Plan};
+
 pub const CONTRACT: &str = include_str!("../../../../tests/fixtures/sync/folder-bookmark-contract.json");
 /// Racine résolue simulée (chemin canonique d'iCloud Drive/CircleTasks sur l'iPhone).
 pub const ROOT: &str = "/private/var/mobile/Library/Mobile Documents/com~apple~CloudDocs/CircleTasks";
@@ -55,6 +57,30 @@ pub struct FakeState {
     pub confirm_answer: Result<bool, &'static str>,
     /// Appels reçus (nom, arguments).
     pub calls: Vec<(String, Value)>,
+    /// Y-TECH-03 : plan de pannes armé (`tests/fixtures/sync/fault-plan.json`) ; `None` : faux complaisant, comme avant la story.
+    pub faults: Option<Armed>,
+    /// Évictions décidées à la lecture (début du fichier), exécutées à la fin du fichier.
+    pub evict_pending: BTreeSet<String>,
+    /// Suppressions acceptées mais non propagées : le nœud revient sous sa clé après `left` appels de `advance_cycle`.
+    pub back: Vec<Back>,
+}
+
+/// Suppression acceptée par le plugin mais pas propagée par iCloud.
+pub struct Back {
+    pub key: String,
+    pub node: Node,
+    pub left: u64,
+}
+
+fn hit(faults: &mut Option<Armed>, op: Op, path: &str) -> Option<fault_plan::Entry> {
+    faults.as_mut().and_then(|armed| armed.hit(op, path))
+}
+
+/// Remplace un fichier par son substitut `.<nom>.icloud` (évincé par iOS) : même contenu, `cloud`.
+fn evict_node(nodes: &mut BTreeMap<String, Node>, real: &str) {
+    let Some(Node::File { bytes, delay_ms, download_error, .. }) = nodes.remove(real) else { return };
+    let parts: Vec<String> = real.split('/').map(str::to_owned).collect();
+    nodes.insert(placeholder_key(&parts), Node::File { bytes, cloud: true, delay_ms, download_error });
 }
 
 pub struct FakePlugin {
@@ -103,6 +129,9 @@ impl FakePlugin {
                 app_state: "active",
                 confirm_answer: Ok(true),
                 calls: Vec::new(),
+                faults: None,
+                evict_pending: BTreeSet::new(),
+                back: Vec::new(),
             }),
             clock,
             contract: serde_json::from_str(CONTRACT).expect("contrat JSON"),
@@ -168,6 +197,56 @@ impl FakePlugin {
 
     pub fn with<T>(&self, f: impl FnOnce(&mut FakeState) -> T) -> T {
         f(&mut self.state.lock().unwrap())
+    }
+
+    // --- Y-TECH-03 : pannes d'iCloud armées par un plan -------------------------------------------------------------------------
+
+    /// Arme un plan de pannes (remplace le précédent, compteurs à zéro). Une entrée que ce faux ne sait pas rejouer (`mute`) est refusée
+    /// avec un message qui la nomme. Jamais de délai : `delay_ms` n'est pas utilisé par le banc, seuls le nom et le rang d'appel comptent.
+    pub fn arm(&self, plan: Plan) -> Result<(), String> {
+        fault_plan::refuse_unreplayable(&plan, "fake_bookmark")?;
+        self.state.lock().unwrap().faults = Some(Armed::new(plan));
+        Ok(())
+    }
+
+    /// Arme un plan de `fault-plan.json` par son nom.
+    pub fn arm_reference(&self, name: &str) -> Result<(), String> {
+        self.arm(fault_plan::reference_plan(name))
+    }
+
+    /// Retire le plan : le faux redevient complaisant (résurrections en attente conservées).
+    pub fn disarm(&self) {
+        self.state.lock().unwrap().faults = None;
+    }
+
+    /// Pannes rejouées depuis l'armement (entrée, opération, chemin, rang).
+    pub fn fired(&self) -> Vec<Firing> {
+        self.state.lock().unwrap().faults.as_ref().map(Armed::fired).unwrap_or_default()
+    }
+
+    /// Entrées du plan jamais déclenchées.
+    pub fn unfired(&self) -> Vec<String> {
+        self.state.lock().unwrap().faults.as_ref().map(Armed::unfired).unwrap_or_default()
+    }
+
+    /// Un cycle d'iCloud (compteur explicite, jamais une durée) : chaque suppression acceptée mais non propagée se rapproche de son retour ;
+    /// arrivée à zéro, le fichier (ou son substitut) revient sous le même nom avec le même contenu. Rend le nombre de retours.
+    pub fn advance_cycle(&self) -> usize {
+        let mut state = self.state.lock().unwrap();
+        for pending in &mut state.back {
+            pending.left -= 1;
+        }
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut state.back).into_iter().partition(|p| p.left == 0);
+        state.back = waiting;
+        let count = due.len();
+        for back in due {
+            let parts: Vec<&str> = back.key.split('/').collect();
+            for i in 1..parts.len() {
+                state.nodes.entry(parts[..i].join("/")).or_insert(Node::Dir);
+            }
+            state.nodes.insert(back.key, back.node);
+        }
+        count
     }
 
     // --- Contrat ------------------------------------------------------------------------------------------------------------------
@@ -300,6 +379,25 @@ impl FakePlugin {
                     return ok(json!({ "missing": true }));
                 }
                 let prefix = if path.is_empty() { String::new() } else { format!("{}/", key(&path)) };
+                if state.faults.is_some() {
+                    // Pannes du plan : le dossier (`error`), puis un appel `list` par fichier listé (`placeholder` : évincé avant d'être présenté).
+                    if let Some(Effect::Error(code)) = hit(&mut state.faults, Op::List, &format!("{}/", key(&path))).map(|entry| entry.effect) {
+                        return reject(code.name());
+                    }
+                    let files: Vec<String> = state
+                        .nodes
+                        .iter()
+                        .filter(|(k, node)| matches!(node, Node::File { .. }) && k.strip_prefix(&prefix).is_some_and(|rest| !rest.is_empty() && !rest.contains('/')))
+                        .map(|(k, _)| k.clone())
+                        .collect();
+                    for stored in files {
+                        let name = stored.strip_prefix(&prefix).unwrap_or(&stored);
+                        let real = placeholder_target(name).map_or_else(|| stored.clone(), |target| format!("{prefix}{target}"));
+                        if let Some(Effect::Placeholder) = hit(&mut state.faults, Op::List, &real).map(|entry| entry.effect) {
+                            evict_node(&mut state.nodes, &real);
+                        }
+                    }
+                }
                 let mut entries = Vec::new();
                 let mut truncated = false;
                 for (k, node) in &state.nodes {
@@ -329,11 +427,29 @@ impl FakePlugin {
                 if path.is_empty() || !Self::walk(state, &path[..path.len() - 1])? {
                     return ok(json!({ "missing": true }));
                 }
-                match state.nodes.get(&key(&path)) {
-                    None if state.nodes.contains_key(&placeholder_key(&path)) => reject("cloud-pending"),
-                    None => ok(json!({ "missing": true })),
-                    Some(Node::Link) | Some(Node::Dir) => reject("unsafe-folder"),
-                    Some(Node::File { cloud: true, .. }) => reject("cloud-pending"),
+                let file = key(&path);
+                // Pannes du plan, lecture d'un fichier présent et local (une lecture par pages compte comme un seul appel `read` : celui qui
+                // commence à l'octet 0) : `error`, `overwrite-before-read` (l'autre appareil a écrit entre le listage et la lecture),
+                // `evict-after-read` (évincé quand la dernière page est lue).
+                if offset == 0 && state.faults.is_some() && matches!(state.nodes.get(&file), Some(Node::File { cloud: false, .. })) {
+                    match hit(&mut state.faults, Op::Read, &file).map(|entry| entry.effect) {
+                        Some(Effect::Error(code)) => return reject(code.name()),
+                        Some(Effect::OverwriteBeforeRead { content }) => {
+                            if let Some(Node::File { bytes, .. }) = state.nodes.get_mut(&file) {
+                                *bytes = fault_plan::overwrite_bytes(&content);
+                            }
+                        }
+                        Some(Effect::EvictAfterRead) => {
+                            state.evict_pending.insert(file.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                let reply = match state.nodes.get(&file) {
+                    None if state.nodes.contains_key(&placeholder_key(&path)) => return reject("cloud-pending"),
+                    None => return ok(json!({ "missing": true })),
+                    Some(Node::Link) | Some(Node::Dir) => return reject("unsafe-folder"),
+                    Some(Node::File { cloud: true, .. }) => return reject("cloud-pending"),
                     Some(Node::File { bytes, .. }) => {
                         if bytes.len() as u64 > limit {
                             return reject("too-large");
@@ -342,9 +458,13 @@ impl FakePlugin {
                         let end = start.saturating_add(max).min(bytes.len());
                         let data = &bytes[start..end];
                         let eof = data.len() < max || end >= bytes.len();
-                        ok(json!({ "data": STANDARD.encode(data), "size": bytes.len(), "eof": eof }))
+                        (json!({ "data": STANDARD.encode(data), "size": bytes.len(), "eof": eof }), eof)
                     }
+                };
+                if reply.1 && state.evict_pending.remove(&file) {
+                    evict_node(&mut state.nodes, &file);
                 }
+                ok(reply.0)
             }
             "download" => {
                 let path = Self::parts(args, "path")?;
@@ -353,7 +473,24 @@ impl FakePlugin {
                 if path.is_empty() || !Self::walk(state, &path[..path.len() - 1])? {
                     return ok(json!({}));
                 }
-                match state.nodes.get_mut(&key(&path)) {
+                let file = key(&path);
+                // Y-TECH-03 : fichier évincé (seul le substitut `.<nom>.icloud` reste) : télécharger le rend sous son vrai nom, local.
+                // Panne du plan `download-error` : comptée seulement si le téléchargement est tenté.
+                let stub = placeholder_key(&path);
+                if !state.nodes.contains_key(&file) {
+                    if let Some(Node::File { bytes, download_error, .. }) = state.nodes.get(&stub).cloned() {
+                        if bytes.len() as u64 > limit {
+                            return reject("too-large");
+                        }
+                        if download_error || matches!(hit(&mut state.faults, Op::Hydrate, &file).map(|entry| entry.effect), Some(Effect::DownloadError)) {
+                            return reject("cloud-error");
+                        }
+                        state.nodes.remove(&stub);
+                        state.nodes.insert(file, Node::File { bytes, cloud: false, delay_ms: 0, download_error: false });
+                        return ok(json!({}));
+                    }
+                }
+                match state.nodes.get_mut(&file) {
                     Some(Node::File { bytes, cloud, delay_ms, download_error }) => {
                         if bytes.len() as u64 > limit {
                             return reject("too-large");
@@ -362,6 +499,9 @@ impl FakePlugin {
                             return ok(json!({}));
                         }
                         if *download_error {
+                            return reject("cloud-error");
+                        }
+                        if matches!(hit(&mut state.faults, Op::Hydrate, &file).map(|entry| entry.effect), Some(Effect::DownloadError)) {
                             return reject("cloud-error");
                         }
                         if *delay_ms > timeout {
@@ -383,16 +523,37 @@ impl FakePlugin {
                 if path.is_empty() || !Self::walk(state, &path[..path.len() - 1])? {
                     return ok(json!({ "missing": true }));
                 }
-                match (state.nodes.get_mut(&key(&path)), create) {
+                let file = key(&path);
+                // Panne du plan `error` sur l'écriture (après les contrôles d'existence) : rien n'est ajouté, sauf `partialLastLine`.
+                let refused = |faults: &mut Option<Armed>| match hit(faults, Op::Write, &file) {
+                    Some(entry) => match entry.effect {
+                        Effect::Error(code) => Some((code, entry.partial_last_line)),
+                        _ => None,
+                    },
+                    None => None,
+                };
+                match (state.nodes.get_mut(&file), create) {
                     (Some(_), true) => ok(json!({ "exists": true })),
                     (None, false) => ok(json!({ "missing": true })),
                     (Some(Node::File { bytes, cloud: false, .. }), false) => {
+                        if let Some((code, partial)) = refused(&mut state.faults) {
+                            if partial {
+                                bytes.extend_from_slice(&fault_plan::partial_tail(&data));
+                            }
+                            return reject(code.name());
+                        }
                         bytes.extend_from_slice(&data);
                         ok(json!({}))
                     }
                     (Some(_), false) => reject("unsafe-folder"),
                     (None, true) => {
-                        state.nodes.insert(key(&path), Node::File { bytes: data, cloud: false, delay_ms: 0, download_error: false });
+                        if let Some((code, partial)) = refused(&mut state.faults) {
+                            if partial {
+                                state.nodes.insert(file, Node::File { bytes: fault_plan::partial_tail(&data), cloud: false, delay_ms: 0, download_error: false });
+                            }
+                            return reject(code.name());
+                        }
+                        state.nodes.insert(file, Node::File { bytes: data, cloud: false, delay_ms: 0, download_error: false });
                         ok(json!({}))
                     }
                 }
@@ -405,6 +566,9 @@ impl FakePlugin {
                 }
                 if matches!(state.nodes.get(&key(&path)), Some(Node::Link | Node::Dir)) {
                     return reject("unsafe-folder");
+                }
+                if let Some(Effect::Error(code)) = hit(&mut state.faults, Op::Write, &key(&path)).map(|entry| entry.effect) {
+                    return reject(code.name());
                 }
                 state.nodes.insert(key(&path), Node::File { bytes: data, cloud: false, delay_ms: 0, download_error: false });
                 ok(json!({}))
@@ -423,6 +587,9 @@ impl FakePlugin {
                 match state.nodes.get(&key(&a)) {
                     None => reject("io"),
                     Some(Node::File { .. }) => {
+                        if let Some(Effect::Error(code)) = hit(&mut state.faults, Op::Rename, &key(&b)).map(|entry| entry.effect) {
+                            return reject(code.name());
+                        }
                         let node = state.nodes.remove(&key(&a)).unwrap();
                         state.nodes.insert(key(&b), node);
                         ok(json!({}))
@@ -451,19 +618,43 @@ impl FakePlugin {
                 if path.is_empty() || !Self::walk(state, &path[..path.len() - 1])? {
                     return ok(json!({ "removed": false }));
                 }
-                match state.nodes.get(&key(&path)) {
+                let file = key(&path);
+                let stub = placeholder_key(&path);
+                // Y-TECH-03 : pannes du plan sur la suppression d'un fichier présent (ou de son substitut) : `error` (rien n'est supprimé),
+                // `accept-not-propagated` (supprimé ici, revient après N cycles ; N = 0 : jamais).
+                let present = match state.nodes.get(&file) {
+                    None => matches!(state.nodes.get(&stub), Some(Node::File { .. })),
+                    Some(Node::File { .. }) => true,
+                    Some(_) => false,
+                };
+                let fault = if present { hit(&mut state.faults, Op::Remove, &file).map(|entry| entry.effect) } else { None };
+                if let Some(Effect::Error(code)) = &fault {
+                    return reject(code.name());
+                }
+                let hold = |state: &mut FakeState, stored: String, node: Node| {
+                    if let Some(Effect::AcceptNotPropagated { resurrect_after_cycles }) = &fault {
+                        if *resurrect_after_cycles > 0 {
+                            state.back.push(Back { key: stored, node, left: *resurrect_after_cycles });
+                        }
+                    }
+                };
+                match state.nodes.get(&file) {
                     // Y-IOS-02-FIX-02 : contrat Swift attendu (`remove` / `removePlaceholder`) : fichier évincé → son substitut est supprimé
-                    // (coordination `forDeleting`, propagée à iCloud), `removed` vrai. Ce faux ne fait que refléter ce contrat.
-                    None => match state.nodes.get(&placeholder_key(&path)) {
+                    // (coordination `forDeleting`, propagée à iCloud), `removed` vrai. Ce faux ne fait que refléter ce contrat. Mode historique
+                    // du plan (`removeLeavesPlaceholder`, plugin d'avant Y-IOS-02-FIX-02) : rien supprimé, le substitut reste.
+                    None => match state.nodes.get(&stub) {
+                        Some(Node::File { .. }) if state.faults.as_ref().is_some_and(|armed| armed.plan.remove_leaves_placeholder) => ok(json!({ "removed": false })),
                         Some(Node::File { .. }) => {
-                            state.nodes.remove(&placeholder_key(&path));
+                            let node = state.nodes.remove(&stub).expect("substitut présent");
+                            hold(state, stub, node);
                             ok(json!({ "removed": true }))
                         }
                         Some(_) => reject("unsafe-folder"),
                         None => ok(json!({ "removed": false })),
                     },
                     Some(Node::File { .. }) => {
-                        state.nodes.remove(&key(&path));
+                        let node = state.nodes.remove(&file).expect("fichier présent");
+                        hold(state, file, node);
                         ok(json!({ "removed": true }))
                     }
                     Some(_) => reject("unsafe-folder"),
