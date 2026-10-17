@@ -47,7 +47,7 @@
     "longDescription": "CircleTasks : planificateur personnel (tâches, routines, événements, checklists).",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "windows": {
-      "nsis": { "languages": ["French"], "installMode": "currentUser" }
+      "nsis": { "languages": ["French"], "installMode": "currentUser", "installerHooks": "./windows/hooks.nsh" }
     },
     "iOS": {
       "minimumSystemVersion": "18.0"

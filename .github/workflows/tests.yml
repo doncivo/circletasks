@@ -407,10 +407,13 @@ jobs:
   # REL-TECH-01 (ADR 0016) : test de fumée du VRAI binaire Windows. Build debug avec le front embarqué et l'identifiant de fumée
   # (tauri.smoke.conf.json), puis lancement du binaire, observation par CDP et capture des pixels réels de la fenêtre (tests/smoke).
   # Un écran noir au démarrage (2026-10-10) ne peut pas passer : le DOM seul ne suffit pas, les pixels sont contrôlés aussi.
+  # REL-TECH-02 (audit 1.0 B15) : le même job construit l'installeur NSIS de fumée (produit « CircleTasks Smoke », identifiant .smoke, sans clé de
+  # signature), contrôle le script NSIS généré (garde-fou, script absent = échec en CI), puis installe, réinstalle et désinstalle pour de vrai
+  # (tests/smoke/pc-installeur.spec.ts) : la donnée témoin du dossier de données de fumée doit survivre. Aucun secret.
   smoke-windows:
     name: smoke Windows (binaire réel)
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       PLAYWRIGHT_HTML_OPEN: never
       PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/playwright-report.json
@@ -431,7 +434,14 @@ jobs:
       - run: npm ci
       - name: Build debug du binaire (front embarqué, identifiant de fumée)
         run: npm run test:smoke:build
-      - name: Test de fumée (CDP et pixels de la fenêtre)
+      # Installeur NSIS de fumée : même configuration et même dossier cargo (target/smoke), donc aucune recompilation Rust ; le CLI télécharge NSIS.
+      # Aucune clé de signature : createUpdaterArtifacts n'est activé nulle part dans la configuration de fumée.
+      - name: Build de l'installeur NSIS de fumée
+        run: npm run test:smoke:installer-build
+      # Garde-fou : le crochet NSIS_HOOK_PREUNINSTALL précède les RmDir /r de Section Uninstall ; en CI, un script absent est un échec.
+      - name: Garde-fou du script NSIS généré
+        run: npm run test:nsis -- --reporter=default --reporter=json --outputFile.json=vitest-nsis.json
+      - name: Test de fumée (CDP, pixels, installation, réinstallation et désinstallation)
         run: npm run test:smoke -- --reporter=github,html,json
       - name: Comptage
         if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}
@@ -439,6 +449,12 @@ jobs:
         run: |
           mkdir -p "$CI_COUNTS"
           node scripts/ci/test-counts.mjs write playwright playwright-report.json "$CI_COUNTS/smoke-windows.json" "smoke Windows"
+      - name: Comptage du garde-fou NSIS
+        if: ${{ !cancelled() && hashFiles('vitest-nsis.json') != '' }}
+        shell: bash
+        run: |
+          mkdir -p "$CI_COUNTS"
+          node scripts/ci/test-counts.mjs write vitest vitest-nsis.json "$CI_COUNTS/smoke-nsis.json" "garde-fou NSIS"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: failure()
         with:
@@ -446,6 +462,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            src-tauri/target/smoke/debug/nsis/x64/installer.nsi
           retention-days: 7
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: ${{ !cancelled() }}
