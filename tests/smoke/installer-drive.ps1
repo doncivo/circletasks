@@ -278,7 +278,16 @@ function Invoke-ReinstallFlow {
         if ($run) { Set-CheckBox $run $false 'Executer l application' } else { Write-Note 'case de lancement absente de la page finale' }
         Send-Click $page.Control (Format-Name $page.Control.Text)
         Enter-Step 'installeur : fin du processus'
-        [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs 'arret de l installeur apres « Terminer »')
+        # Le premier clic sur « Fermer » a été sans effet en CI (run 39027366664, fenêtre intacte et active 60 s) : un seul nouvel envoi, après une
+        # attente bornée de 10 s sur l'état observable (processus arrêté), journalisé ; jamais de délai allongé.
+        $closed = $null
+        try { $closed = Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } 10000 'arret de l installeur apres le premier clic' } catch { Write-Note ('premier clic sans effet (installeur actif, Responding=' + $script:InstallerProcess.Responding + ') : renvoi du clic') }
+        if (-not $closed) {
+          $again = Find-Control $page.Window 'push' '^(Terminer|Fermer)$' -EnabledOnly
+          if (-not $again) { throw 'bouton « Fermer » introuvable ou inactif au renvoi du clic' }
+          Send-Click $again 'Fermer (renvoi)'
+          [void](Wait-Until { $script:InstallerProcess.Refresh(); if ($script:InstallerProcess.HasExited) { 'ferme' } } $PageTimeoutMs ('arret de l installeur apres le renvoi du clic (Responding=' + $script:InstallerProcess.Responding + ')'))
+        }
         if ($script:InstallerProcess.ExitCode -ne 0) { throw ('code de sortie de l installeur : ' + $script:InstallerProcess.ExitCode) }
         $finished = $true
       }
