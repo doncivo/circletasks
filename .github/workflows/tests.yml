@@ -441,7 +441,9 @@ jobs:
       # Garde-fou : le crochet NSIS_HOOK_PREUNINSTALL précède les RmDir /r de Section Uninstall ; en CI, un script absent est un échec.
       - name: Garde-fou du script NSIS généré
         run: npm run test:nsis -- --reporter=default --reporter=json --outputFile.json=vitest-nsis.json
+      # S'exécute même si le garde-fou échoue : les deux niveaux (script généré, données réelles) sont toujours mesurés.
       - name: Test de fumée (CDP, pixels, installation, réinstallation et désinstallation)
+        if: ${{ !cancelled() }}
         run: npm run test:smoke -- --reporter=github,html,json
       - name: Comptage
         if: ${{ !cancelled() && hashFiles('playwright-report.json') != '' }}
