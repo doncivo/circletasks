@@ -497,6 +497,9 @@ fn crash_then_start(stop: RestoreStep, previous: bool) -> (Option<circletasks_li
     };
     let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| restore_with_provisional_marker(dir.path(), "circletasks-daily-20261007.db", "20261008T080000Z", 1_791_446_400, &hook)));
     assert!(crashed.is_err(), "arrêt simulé");
+    // Journal global : `recover_and_settle` y verse `provisional-marker-settled` ; sans le verrou, cette entrée tombait dans le journal
+    // redirigé par le test « base illisible » (ligne ~752), rouge une fois sur deux (constaté le 2026-10-17, relecture de Y-TECH-03).
+    let _log_dir = crate::support::applog_dir_lock();
     recover_and_settle(dir.path()).expect("récupération");
     (circletasks_lib::sync::marker::read(dir.path()).unwrap(), dir)
 }
@@ -558,6 +561,8 @@ fn crashed_at(stop: Option<RestoreStep>) -> tempfile::TempDir {
 /// Démarrage : récupération puis règlement du marqueur ; rend l'issue de la récupération et le marqueur lu ensuite.
 fn start(dir: &Path) -> (circletasks_lib::backup::Recovery, Option<circletasks_lib::sync::marker::RestoreMarker>) {
     // Chemin de production : `recover_and_settle` (récupération, puis règlement du marqueur d'après la base en place).
+    // Verrou du journal global : même raison que dans `crash_then_start`.
+    let _log_dir = crate::support::applog_dir_lock();
     let recovery = circletasks_lib::startup_gate::recover_and_settle(dir);
     (recovery.expect("récupération"), circletasks_lib::sync::marker::read(dir).unwrap())
 }
@@ -644,6 +649,8 @@ fn cancellation_fails_then_next_launch_cancels(stop: RestoreStep, evidence: &str
     blocker.push(circletasks_lib::sync::names::TEMP_SUFFIX);
     let blocker = std::path::PathBuf::from(blocker);
     fs::create_dir(&blocker).unwrap();
+    // Verrou du journal global pour les trois démarrages : même raison que dans `crash_then_start`.
+    let _log_dir = crate::support::applog_dir_lock();
     // Annulation impossible : la récupération n'est PAS bloquée (la preuve disparaît), le marqueur reste provisoire (jamais confirmé).
     assert_eq!(recover_and_settle(dir.path()).unwrap(), expected);
     assert!(!dir.path().join(evidence).exists(), "la récupération a eu lieu : {evidence} n'est plus là");
@@ -763,6 +770,8 @@ fn p04_ios_marker_with_an_unreadable_database_in_place_stays_provisional_and_blo
     // La base redevient lisible : la décision est reprise, la restauration a bien eu lieu -> confirmée.
     fs::remove_dir(&db).unwrap();
     fs::rename(&aside, &db).unwrap();
+    // `start` reprend le verrou du journal (non réentrant) : le rendre avant, les assertions sur le journal sont faites.
+    drop(_log_dir);
     let (_, marker) = start(dir.path());
     let marker = marker.expect("marqueur");
     assert!(!marker.provisional);
