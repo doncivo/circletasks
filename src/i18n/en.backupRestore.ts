@@ -18,4 +18,11 @@ export const backupRestoreEn: { readonly [K in keyof typeof backupRestoreFr]: st
   recoveryStillFailed: 'Recovery is still impossible: close and reopen CircleTasks. If the message comes back, copy the details.',
   recoveryNoDataDir: 'The app data folder cannot be found: close and reopen CircleTasks. Nothing was changed.',
   recoverySqlPlugin: 'The database module did not start: close and reopen CircleTasks. Your data is untouched.',
+  originThisDevice: 'This device',
+  originUnknown: 'Unknown device',
+  originForgotten: 'forgotten',
+  epochWord: 'epoch',
+  epochOpenedBy: 'opened by',
+  epochOpenerThisDevice: 'this device',
+  epochOther: 'other epoch',
 };

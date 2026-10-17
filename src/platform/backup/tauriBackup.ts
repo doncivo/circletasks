@@ -21,6 +21,10 @@ export interface RawBackupEntry {
   readonly modifiedMs: number;
   readonly tasks: number | null;
   readonly schemaVersion: number | null;
+  /** Y-TECH-04 (partie C) : `deviceId`, `platform`, `epoch` de la sauvegarde, `null` si absents ou illisibles (Rust ne calcule aucun nom). */
+  readonly deviceId?: string | null;
+  readonly platform?: string | null;
+  readonly epoch?: string | null;
 }
 
 /** Aucun paramètre venant de l'interface sauf le jour, le remplacement, un NOM de sauvegarde et l'horodatage ; la version de schéma est une constante de Rust. */

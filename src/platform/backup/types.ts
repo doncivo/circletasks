@@ -19,6 +19,15 @@ export interface BackupVersion {
   /** Tâches non supprimées de la version ; null si elle n'est pas lisible. */
   readonly tasks: number | null;
   readonly schemaVersion: number | null;
+  /**
+   * Y-TECH-04 (partie C) : identité de l'appareil qui a fait la copie (`sync_state`, ligne `is_self = 1` de la sauvegarde), lue par Rust en
+   * lecture seule ; null : absente ou illisible. Champ absent (`undefined`) : service qui ne le fournit pas (rien n'est affiché).
+   */
+  readonly deviceId?: string | null;
+  /** Plateforme écrite par la synchro pour cette identité (texte libre : `windows`, `ios`) ; même règle que `deviceId`. */
+  readonly platform?: string | null;
+  /** Époque de synchro de la copie (`sync_meta.epoch`, identifiant brut `e0001-…`) ; même règle que `deviceId`. */
+  readonly epoch?: string | null;
 }
 
 export interface BackupListing {

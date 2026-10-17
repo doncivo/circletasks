@@ -17,4 +17,11 @@ export const backupRestoreFr = {
   recoveryStillFailed: 'La récupération reste impossible : fermez puis rouvrez CircleTasks. Si le message revient, copiez le détail.',
   recoveryNoDataDir: 'Le dossier des données de l’app est introuvable : fermez puis rouvrez CircleTasks. Rien n’a été modifié.',
   recoverySqlPlugin: 'Le module de base de données n’a pas démarré : fermez puis rouvrez CircleTasks. Vos données ne sont pas touchées.',
+  originThisDevice: 'Cet appareil',
+  originUnknown: 'Appareil inconnu',
+  originForgotten: 'oublié',
+  epochWord: 'époque',
+  epochOpenedBy: 'ouverte par',
+  epochOpenerThisDevice: 'cet appareil',
+  epochOther: 'autre époque',
 } as const;
