@@ -1,6 +1,6 @@
 # REL-TECH-02 — La désinstallation ne supprime jamais les données de l'application
 
-Module : Livraison unique · Ordre de construction : transverse (avant REL-03) · Agent : **ci-release** (crochet, build NSIS en CI, smoke étendu) + **qa-test** · Statut : fait côté code, CI verte (run 39030179275, 2026-10-17) ; revue et fusion en attente
+Module : Livraison unique · Ordre de construction : transverse (avant REL-03) · Agent : **ci-release** (crochet, build NSIS en CI, smoke étendu) + **qa-test** · Statut : **fait** (QA, relecture approuvée en trois passes, PR #41 fusionnée le 2026-10-17, run 39034221587 vert) 
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md). Constat B15 de l'audit, décision 9 d'Ali du 2026-10-17 : crochet NSIS, pas de modèle personnalisé ; « une case visible mais inerte me suffit ».
 Dépend de : REL-TECH-01 (job `smoke-windows`, `playwright.smoke.config.ts`, `tests/smoke/window-capture.ps1`, ADR 0016). Ne touche ni `src/domain` ni `src/db`.
 Estimation de l'audit : crochet 1 h, garde-fou 1 h, smoke étendu 4 h, documentation 1 h.
