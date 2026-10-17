@@ -25,6 +25,9 @@ npm run dev | npm run tauri dev | npm run test | npm run lint | npm run typechec
 - Synchro par journaux chiffrés dans iCloud Drive (hlc, schema_version) ; téléchargement forcé des fichiers avant lecture.
 - Rappels émis sur l'iPhone uniquement ; le PC n'envoie aucune notification de rappel.
 - Pas de secret en clair ; jetons dans le coffre système ; clé updater dans GitHub Secrets.
+- Bundle de départ : plafond 350 Ko gzip (tests/bundle/startBundle.test.ts), jamais relevé. Tout écran, fenêtre, bandeau ou catalogue de
+  textes qui ne sert pas au premier affichage d'Aujourd'hui est en chargement à la demande dès sa création (import dynamique, catalogue
+  i18n chargé avec lui, assertion « hors du départ »), jamais après coup (décision d'Ali du 2026-10-18, docs/audits/2026-10-18-bundle-depart.md).
 
 ## Délégation
 Toujours passer par product-owner pour choisir la story, puis l'agent du module, puis qa-test et code-reviewer.
