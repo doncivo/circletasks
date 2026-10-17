@@ -1,4 +1,4 @@
-﻿# REL-TECH-02 : pilotage de l'interface graphique de l'installeur et du désinstalleur NSIS de fumée par UI Automation (System.Windows.Automation).
+﻿# REL-TECH-02 : pilotage de l'interface graphique de l'installeur et du désinstalleur NSIS de fumée.
 # Appelé par tests/smoke/pc-installeur.spec.ts ; ne touche QUE au produit de fumée (nom se terminant par « Smoke », dossier d'installation du même nom).
 #
 #   -Action Reinstall  : lance l'installeur (-Installer) en graphique sur une installation existante dont la version enregistrée est rendue ancienne
@@ -8,8 +8,15 @@
 #   -Action Cleanup    : tue les processus de fumée (installeur, désinstalleur, application installée) ; -RemoveRegistry retire les clés de fumée.
 #
 # Résultat : fichier JSON UTF-8 (-ResultFile) { ok, action, step, message, log[], files[] } ; code de sortie 0 (ok) ou 1 (échec).
-# Tout échec nomme l'étape (champ step), joint une capture d'écran, la capture de la fenêtre (window-capture.ps1) et l'arbre UI Automation
-# (nom, type, état de chaque contrôle) : le libellé d'un bouton changé par Tauri ou NSIS se lit directement dans l'arbre.
+# Tout échec nomme l'étape (champ step), joint une capture d'écran, la capture de la fenêtre (window-capture.ps1), la liste des contrôles Win32
+# et l'arbre UI Automation (nom, type, identifiant de chaque contrôle) : le libellé d'un bouton changé par Tauri ou NSIS se lit directement dedans.
+#
+# Pourquoi des messages Win32 et pas des patterns UI Automation : constaté en CI le 2026-10-17 (run 39024162153), UI Automation expose les contrôles
+# NSIS comme de simples volets (ControlType.Pane, classe « Button », identifiant = identifiant du contrôle) sans InvokePattern ni TogglePattern.
+# Les fenêtres et leurs libellés sont donc lus et les clics envoyés par l'API Win32 (EnumWindows, EnumChildWindows, WM_GETTEXT, BM_GETCHECK,
+# BM_CLICK), les mêmes messages que ceux d'une personne devant l'écran ; UI Automation ne sert plus qu'à joindre son arbre au rapport d'échec.
+# BM_CLICK est POSTÉ (asynchrone) : sur la page « déjà installé », « Suivant » exécute le désinstalleur (ExecWait) dans le fil de l'interface de
+# l'installeur ; un clic synchrone attendrait la fin d'une désinstallation qu'il faut justement piloter.
 #
 # Libellés (modèle NSIS de Tauri 2.12.1, `languages: ["French"]`) :
 #   - languages/French.nsh de Tauri : alreadyInstalled « Déja installé. » ; uninstallBeforeInstalling « Désinstaller avant d'installer » ;
@@ -18,11 +25,10 @@
 #   - French.nlf de NSIS 3 : ^SetupCaption « Installation de $(^Name) » ; ^UninstallCaption « Désinstallation de $(^Name) » ;
 #     ^NextBtn « &Suivant > » ; ^InstallBtn « &Installer » ; ^UninstallBtn « &Désinstaller » ; ^CloseBtn « &Fermer ».
 #   - MUI2 : bouton de la page finale « &Terminer » ; case « Exécuter <produit> » (MUI_FINISHPAGE_RUN) ; « Créer un raccourci sur le bureau » (createDesktop).
+#   - Page de bienvenue observée en CI : « Bienvenue dans le programme d'installation de CircleTasks Smoke », bouton « Suivant > » (identifiant 1).
 # Les motifs ci-dessous sont en ASCII (« D.sinstaller » pour « Désinstaller ») : PowerShell 5.1 lit mal un script sans BOM, le motif ne dépend pas de l'encodage.
 #
-# Attentes : toujours bornées (Wait-Until : délai maximal, état observable, échec nommant l'étape), jamais de pause fixe. Les clics sont
-# envoyés dans un autre runspace : sur la page « déjà installé », « Suivant » exécute le désinstalleur (ExecWait) dans le fil de l'interface
-# de l'installeur, donc un clic synchrone attendrait la fin d'une désinstallation qu'il faut justement piloter.
+# Attentes : toujours bornées (Wait-Until : délai maximal, état observable, échec nommant l'étape), jamais de pause fixe.
 param(
   [Parameter(Mandatory = $true)][ValidateSet('Reinstall', 'Uninstall', 'Cleanup')][string]$Action,
   [Parameter(Mandatory = $true)][string]$ProductName,
@@ -40,13 +46,48 @@ Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName System.Windows.Forms
+Add-Type -TypeDefinition @'
+using System; using System.Collections.Generic; using System.Text; using System.Runtime.InteropServices;
+public class CtCtl { public IntPtr H; public string Cls; public string Text; public int Id; public uint Style; public bool Visible; public bool Enabled; }
+public static class CtNsis {
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr parent, EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern bool IsWindowEnabled(IntPtr h);
+  [DllImport("user32.dll")] static extern int GetDlgCtrlID(IntPtr h);
+  [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr h, int index);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, StringBuilder l);
+  [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
+  const uint WM_GETTEXT = 0x000D, BM_GETCHECK = 0x00F0, BM_CLICK = 0x00F5;
+  static string Text(IntPtr h) { var sb = new StringBuilder(2048); SendMessage(h, WM_GETTEXT, (IntPtr)sb.Capacity, sb); return sb.ToString(); }
+  static string Class(IntPtr h) { var sb = new StringBuilder(256); GetClassName(h, sb, sb.Capacity); return sb.ToString(); }
+  static CtCtl Describe(IntPtr h) {
+    return new CtCtl { H = h, Cls = Class(h), Text = Text(h), Id = GetDlgCtrlID(h), Style = unchecked((uint)GetWindowLong(h, -16)), Visible = IsWindowVisible(h), Enabled = IsWindowEnabled(h) };
+  }
+  // Fenêtres de premier niveau (visibles ou non : l'installeur se masque pendant la désinstallation) des processus donnés.
+  public static List<CtCtl> TopWindows(int[] pids) {
+    var list = new List<CtCtl>();
+    EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (Array.IndexOf(pids, (int)p) >= 0) list.Add(Describe(h)); return true; }, IntPtr.Zero);
+    return list;
+  }
+  // Tous les descendants (page interne de dialogue comprise), dans l'ordre d'énumération.
+  public static List<CtCtl> Children(IntPtr parent) {
+    var list = new List<CtCtl>();
+    EnumChildWindows(parent, (h, l) => { list.Add(Describe(h)); return true; }, IntPtr.Zero);
+    return list;
+  }
+  public static int Check(IntPtr h) { return (int)SendMessage(h, BM_GETCHECK, IntPtr.Zero, IntPtr.Zero); }
+  public static void Click(IntPtr h) { if (!PostMessage(h, BM_CLICK, IntPtr.Zero, IntPtr.Zero)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()); }
+}
+'@
 
 $CaptureScript = Join-Path $PSScriptRoot 'window-capture.ps1'
-$Auto = [System.Windows.Automation.AutomationElement]
-$Scope = [System.Windows.Automation.TreeScope]
 $script:Log = New-Object System.Collections.Generic.List[string]
 $script:Files = New-Object System.Collections.Generic.List[string]
-$script:Pending = New-Object System.Collections.Generic.List[object]
 $script:Step = 'initialisation'
 $script:InstallerProcess = $null
 
@@ -63,8 +104,7 @@ function Write-Note([string]$Text) {
 function Wait-Until([scriptblock]$Condition, [int]$TimeoutMs, [string]$What) {
   $limit = [DateTime]::UtcNow.AddMilliseconds($TimeoutMs)
   while ($true) {
-    $found = $null
-    try { $found = & $Condition } catch [System.Windows.Automation.ElementNotAvailableException] { $found = $null }
+    $found = & $Condition
     if ($found) { return $found }
     if ([DateTime]::UtcNow -ge $limit) { throw ('delai de {0} ms depasse : {1}' -f $TimeoutMs, $What) }
     Start-Sleep -Milliseconds 250
@@ -99,100 +139,84 @@ function Get-UninstallerPids {
   return $ids
 }
 
-# Fenêtres de dialogue (#32770) des processus donnés dont le titre contient le nom du produit.
+# Fenêtres principales NSIS (#32770 dont le titre contient le nom du produit) des processus donnés.
 function Get-ProductWindows([int[]]$ProcessIds) {
-  $windows = @()
-  foreach ($processId in $ProcessIds) {
-    $condition = New-Object System.Windows.Automation.PropertyCondition($Auto::ProcessIdProperty, $processId)
-    foreach ($window in $Auto::RootElement.FindAll($Scope::Children, $condition)) {
-      if ($window.Current.ClassName -eq '#32770' -and $window.Current.Name.IndexOf($ProductName, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $windows += $window }
-    }
-  }
-  return $windows
+  if (-not $ProcessIds -or $ProcessIds.Count -eq 0) { return @() }
+  return @([CtNsis]::TopWindows($ProcessIds) | Where-Object { $_.Cls -eq '#32770' -and $_.Text.IndexOf($ProductName, [StringComparison]::OrdinalIgnoreCase) -ge 0 })
 }
 
-function Find-Control($Window, $ControlType, [string]$Pattern, [switch]$EnabledOnly) {
-  $condition = New-Object System.Windows.Automation.PropertyCondition($Auto::ControlTypeProperty, $ControlType)
-  foreach ($element in $Window.FindAll($Scope::Descendants, $condition)) {
-    if ((Format-Name $element.Current.Name) -match $Pattern) {
-      if ((-not $EnabledOnly) -or $element.Current.IsEnabled) { return $element }
-    }
+# Contrôles visibles d'une fenêtre. Type d'après le style Win32 : BS_PUSHBUTTON 0/1, BS_CHECKBOX 2/3 (et 3 états 5/6), BS_RADIOBUTTON 4/9.
+function Get-Visible($Window) {
+  return @([CtNsis]::Children($Window.H) | Where-Object { $_.Visible })
+}
+
+function Get-ButtonKind($Control) {
+  if ($Control.Cls -ne 'Button') { return '' }
+  switch ($Control.Style -band 0xF) {
+    { $_ -in 0, 1 } { return 'push' }
+    { $_ -in 2, 3, 5, 6 } { return 'check' }
+    { $_ -in 4, 9 } { return 'radio' }
+    default { return '' }
+  }
+}
+
+function Find-Control($Window, [string]$Kind, [string]$Pattern, [switch]$EnabledOnly) {
+  foreach ($control in (Get-Visible $Window)) {
+    if ((Get-ButtonKind $control) -ne $Kind) { continue }
+    if ((Format-Name $control.Text) -notmatch $Pattern) { continue }
+    if ($EnabledOnly -and -not $control.Enabled) { continue }
+    return $control
   }
   return $null
 }
 
-# Empreinte de la page : type, nom et état d'activation de tous les contrôles ; change à chaque changement de page ou de bouton.
+# Empreinte de la page : identifiant, texte et activation des contrôles visibles ; change à chaque changement de page ou de bouton.
 function Get-Signature($Window) {
-  $parts = @()
-  foreach ($element in $Window.FindAll($Scope::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
-    $parts += ('{0}:{1}:{2}' -f $element.Current.ControlType.ProgrammaticName, (Format-Name $element.Current.Name), $element.Current.IsEnabled)
-  }
-  return ($parts -join '|')
+  return ((Get-Visible $Window | ForEach-Object { '{0}:{1}:{2}:{3}' -f $_.Id, $_.Cls, (Format-Name $_.Text), $_.Enabled }) -join '|')
 }
 
-function Send-Click($Element, [string]$What) {
-  $pattern = $Element.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
-  $shell = [PowerShell]::Create()
-  [void]$shell.AddScript('param($p) $p.Invoke()').AddArgument($pattern)
-  $script:Pending.Add(@{ Shell = $shell; Handle = $shell.BeginInvoke(); What = $What })
+function Send-Click($Control, [string]$What) {
+  [CtNsis]::Click($Control.H)
   Write-Note ('clic : ' + $What)
 }
 
-function Set-CheckBox($Element, [bool]$Wanted, [string]$What) {
-  $toggle = $Element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
-  $target = [System.Windows.Automation.ToggleState]::Off
-  if ($Wanted) { $target = [System.Windows.Automation.ToggleState]::On }
-  if ($toggle.Current.ToggleState -ne $target) { $toggle.Toggle() }
-  [void](Wait-Until { $toggle.Current.ToggleState -eq $target } 5000 ('etat de la case « ' + $What + ' » : ' + $target + ' attendu, ' + $toggle.Current.ToggleState + ' observe'))
-  Write-Note ('case « ' + $What + ' » : ' + $toggle.Current.ToggleState)
+function Set-CheckBox($Control, [bool]$Wanted, [string]$What) {
+  $target = 0
+  if ($Wanted) { $target = 1 }
+  if ([CtNsis]::Check($Control.H) -ne $target) { [CtNsis]::Click($Control.H) }
+  [void](Wait-Until { [CtNsis]::Check($Control.H) -eq $target } 5000 ('etat de la case « ' + $What + ' » : ' + $target + ' attendu, ' + [CtNsis]::Check($Control.H) + ' observe'))
+  Write-Note ('case « ' + $What + ' » : etat ' + [CtNsis]::Check($Control.H))
 }
 
-function Set-RadioButton($Element, [string]$What) {
-  $selection = $Element.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
-  $selection.Select()
-  [void](Wait-Until { $selection.Current.IsSelected } 5000 ('bouton radio « ' + $What + ' » non selectionne'))
+function Set-RadioButton($Control, [string]$What) {
+  [CtNsis]::Click($Control.H)
+  [void](Wait-Until { [CtNsis]::Check($Control.H) -eq 1 } 5000 ('bouton radio « ' + $What + ' » non selectionne'))
   Write-Note ('bouton radio selectionne : ' + $What)
-}
-
-# Les clics terminés doivent l'avoir été sans erreur inattendue ; ceux qui restent bloqués sont arrêtés et signalés.
-function Complete-Pending {
-  foreach ($click in $script:Pending) {
-    $shell = $click.Shell
-    try {
-      if ($click.Handle.IsCompleted) {
-        try { $shell.EndInvoke($click.Handle) | Out-Null } catch { Write-Note ('clic « ' + $click.What + ' » : ' + $_.Exception.Message) }
-      } else {
-        Write-Note ('clic « ' + $click.What + ' » toujours en cours a la fin du script (fenetre fermee avant le retour du clic)')
-        $shell.Stop()
-      }
-    } finally { $shell.Dispose() }
-  }
-  $script:Pending.Clear()
 }
 
 # Dialogue du désinstalleur (confirmation puis désinstallation) : case cochée et vérifiée avant de désinstaller.
 function Invoke-UninstallDialog {
   Enter-Step 'desinstalleur : page de confirmation avec la case « Supprimer les donnees de l application »'
-  $window = Wait-Until {
-    $found = $null
-    foreach ($candidate in @(Get-ProductWindows (Get-UninstallerPids))) {
-      if (Find-Control $candidate ([System.Windows.Automation.ControlType]::CheckBox) 'Supprimer les donn') { $found = $candidate; break }
+  $found = Wait-Until {
+    $result = $null
+    foreach ($candidate in (Get-ProductWindows (Get-UninstallerPids))) {
+      $box = Find-Control $candidate 'check' 'Supprimer les donn'
+      if ($box) { $result = [pscustomobject]@{ Window = $candidate; Box = $box }; break }
     }
-    $found
+    $result
   } $PageTimeoutMs 'fenetre du desinstalleur avec la case « Supprimer les donnees de l application »'
-  $box = Find-Control $window ([System.Windows.Automation.ControlType]::CheckBox) 'Supprimer les donn'
   Enter-Step 'desinstalleur : case « Supprimer les donnees de l application » cochee'
-  Set-CheckBox $box $true 'Supprimer les donnees de l application'
+  Set-CheckBox $found.Box $true 'Supprimer les donnees de l application'
   Enter-Step 'desinstalleur : bouton « Desinstaller »'
-  $button = Find-Control $window ([System.Windows.Automation.ControlType]::Button) '^D.sinstaller$' -EnabledOnly
+  $button = Find-Control $found.Window 'push' '^D.sinstaller$' -EnabledOnly
   if (-not $button) { throw 'bouton « Desinstaller » introuvable ou inactif sur la page de confirmation' }
   Send-Click $button 'Desinstaller'
   Enter-Step 'desinstalleur : desinstallation en cours puis bouton « Fermer »'
   $outcome = Wait-Until {
     $result = $null
     if (@(Get-UninstallerPids).Count -eq 0) { $result = 'termine' } else {
-      foreach ($candidate in @(Get-ProductWindows (Get-UninstallerPids))) {
-        $close = Find-Control $candidate ([System.Windows.Automation.ControlType]::Button) '^Fermer$' -EnabledOnly
+      foreach ($candidate in (Get-ProductWindows (Get-UninstallerPids))) {
+        $close = Find-Control $candidate 'push' '^Fermer$' -EnabledOnly
         if ($close) { $result = $close; break }
       }
     }
@@ -209,11 +233,12 @@ function Get-InstallerPage {
   $windows = @(Get-ProductWindows @($script:InstallerProcess.Id))
   if ($windows.Count -eq 0) { return $null }
   $window = $windows[0]
-  $radio = Find-Control $window ([System.Windows.Automation.ControlType]::RadioButton) 'D.sinstaller avant d.installer'
+  if (-not $window.Visible) { return $null }
+  $radio = Find-Control $window 'radio' 'D.sinstaller avant d.installer'
   if ($radio) { return [pscustomobject]@{ Kind = 'reinstall'; Window = $window; Control = $radio } }
-  $finish = Find-Control $window ([System.Windows.Automation.ControlType]::Button) '^Terminer$' -EnabledOnly
+  $finish = Find-Control $window 'push' '^Terminer$' -EnabledOnly
   if ($finish) { return [pscustomobject]@{ Kind = 'finish'; Window = $window; Control = $finish } }
-  $next = Find-Control $window ([System.Windows.Automation.ControlType]::Button) '^(Suivant|Installer)' -EnabledOnly
+  $next = Find-Control $window 'push' '^(Suivant|Installer)' -EnabledOnly
   if ($next) { return [pscustomobject]@{ Kind = 'next'; Window = $window; Control = $next } }
   return $null
 }
@@ -237,7 +262,7 @@ function Invoke-ReinstallFlow {
       'reinstall' {
         Enter-Step 'installeur : page « Deja installe », choix « Desinstaller avant d installer »'
         Set-RadioButton $page.Control 'Desinstaller avant d installer'
-        $next = Find-Control $page.Window ([System.Windows.Automation.ControlType]::Button) '^Suivant' -EnabledOnly
+        $next = Find-Control $page.Window 'push' '^Suivant' -EnabledOnly
         if (-not $next) { throw 'bouton « Suivant » introuvable ou inactif sur la page « Deja installe »' }
         Send-Click $next 'Suivant (page Deja installe)'
         Invoke-UninstallDialog
@@ -246,7 +271,7 @@ function Invoke-ReinstallFlow {
       }
       'finish' {
         Enter-Step 'installeur : page finale (case de lancement decochee, bouton « Terminer »)'
-        $run = Find-Control $page.Window ([System.Windows.Automation.ControlType]::CheckBox) '^(Ex.cuter|Lancer)'
+        $run = Find-Control $page.Window 'check' '^(Ex.cuter|Lancer)'
         if ($run) { Set-CheckBox $run $false 'Executer l application' } else { Write-Note 'case de lancement absente de la page finale' }
         Send-Click $page.Control 'Terminer'
         Enter-Step 'installeur : fin du processus'
@@ -256,7 +281,7 @@ function Invoke-ReinstallFlow {
       }
       default {
         $signature = Get-Signature $page.Window
-        Send-Click $page.Control ('page ' + $index + ' : ' + (Format-Name $page.Control.Current.Name))
+        Send-Click $page.Control ('page ' + $index + ' : ' + (Format-Name $page.Control.Text))
         Enter-Step ('installeur : changement de la page ' + $index)
         [void](Wait-Until {
           $current = @(Get-ProductWindows @($script:InstallerProcess.Id))
@@ -304,7 +329,7 @@ function Stop-SmokeProcesses {
   }
 }
 
-# Échec : capture d'écran, capture de la fenêtre (window-capture.ps1) et arbre UI Automation, joints au résultat.
+# Échec : capture d'écran, capture de la fenêtre (window-capture.ps1), contrôles Win32 et arbre UI Automation, joints au résultat.
 function Save-FailureEvidence {
   $stamp = $Action.ToLowerInvariant()
   try {
@@ -322,29 +347,38 @@ function Save-FailureEvidence {
     if ($script:InstallerProcess) { $ids += $script:InstallerProcess.Id }
     $dump = New-Object System.Text.StringBuilder
     $captured = 0
+    foreach ($window in @(Get-ProductWindows $ids)) {
+      [void]$dump.AppendLine(('FENETRE WIN32 h={0} classe={1} titre=« {2} » visible={3}' -f $window.H, $window.Cls, $window.Text, $window.Visible))
+      foreach ($control in @([CtNsis]::Children($window.H))) {
+        $state = ''
+        if ((Get-ButtonKind $control) -in 'check', 'radio') { $state = ' etat=' + [CtNsis]::Check($control.H) }
+        [void]$dump.AppendLine(('  classe={0} id={1} style=0x{2:X8} type={3} visible={4} actif={5}{6} texte=« {7} »' -f $control.Cls, $control.Id, $control.Style, (Get-ButtonKind $control), $control.Visible, $control.Enabled, $state, $control.Text))
+      }
+      if ($captured -lt 2) {
+        $captured++
+        $owner = 0
+        foreach ($processId in $ids) { if (@([CtNsis]::TopWindows(@($processId)) | Where-Object { $_.H -eq $window.H }).Count -gt 0) { $owner = $processId } }
+        $png = Join-Path $OutDir ($stamp + '-echec-fenetre-' + $captured + '.png')
+        $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $CaptureScript -ProcessId $owner -Out $png -Title $window.Text 2>&1 | Out-String
+        Write-Note ('window-capture.ps1 : ' + $output.Trim())
+        if (Test-Path -LiteralPath $png) { $script:Files.Add($png) }
+      }
+    }
+    $Auto = [System.Windows.Automation.AutomationElement]
+    $Scope = [System.Windows.Automation.TreeScope]
     foreach ($processId in $ids) {
       $condition = New-Object System.Windows.Automation.PropertyCondition($Auto::ProcessIdProperty, $processId)
       foreach ($window in $Auto::RootElement.FindAll($Scope::Children, $condition)) {
-        [void]$dump.AppendLine(('FENETRE pid={0} classe={1} nom=« {2} » horsEcran={3}' -f $processId, $window.Current.ClassName, $window.Current.Name, $window.Current.IsOffscreen))
+        [void]$dump.AppendLine(('FENETRE UIA pid={0} classe={1} nom=« {2} » horsEcran={3}' -f $processId, $window.Current.ClassName, $window.Current.Name, $window.Current.IsOffscreen))
         foreach ($element in $window.FindAll($Scope::Descendants, [System.Windows.Automation.Condition]::TrueCondition)) {
-          $state = ''
-          try { $state = ' coche=' + $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern).Current.ToggleState } catch { $state = '' }
-          if (-not $state) { try { $state = ' selectionne=' + $element.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern).Current.IsSelected } catch { $state = '' } }
-          [void]$dump.AppendLine(('  {0} nom=« {1} » id={2} classe={3} actif={4}{5}' -f $element.Current.ControlType.ProgrammaticName, $element.Current.Name, $element.Current.AutomationId, $element.Current.ClassName, $element.Current.IsEnabled, $state))
-        }
-        if ($window.Current.ClassName -eq '#32770' -and $captured -lt 2) {
-          $captured++
-          $png = Join-Path $OutDir ($stamp + '-echec-fenetre-' + $captured + '.png')
-          $output = & powershell -NoProfile -ExecutionPolicy Bypass -File $CaptureScript -ProcessId $processId -Out $png -Title $window.Current.Name 2>&1 | Out-String
-          Write-Note ('window-capture.ps1 : ' + $output.Trim())
-          if (Test-Path -LiteralPath $png) { $script:Files.Add($png) }
+          [void]$dump.AppendLine(('  {0} nom=« {1} » id={2} classe={3} actif={4}' -f $element.Current.ControlType.ProgrammaticName, $element.Current.Name, $element.Current.AutomationId, $element.Current.ClassName, $element.Current.IsEnabled))
         }
       }
     }
     $tree = Join-Path $OutDir ($stamp + '-echec-arbre.txt')
     [System.IO.File]::WriteAllText($tree, $dump.ToString(), [System.Text.Encoding]::UTF8)
     $script:Files.Add($tree)
-  } catch { Write-Note ('arbre UI Automation impossible : ' + $_.Exception.Message) }
+  } catch { Write-Note ('arbre des controles impossible : ' + $_.Exception.Message) }
 }
 
 $ok = $false
@@ -362,8 +396,6 @@ try {
   $message = $_.Exception.Message
   Write-Note ('ECHEC a l etape « ' + $script:Step + ' » : ' + $message)
   if ($Action -ne 'Cleanup') { Save-FailureEvidence }
-} finally {
-  try { Complete-Pending } catch { Write-Note ('clics en attente : ' + $_.Exception.Message) }
 }
 $result = [ordered]@{ ok = $ok; action = $Action; step = $script:Step; message = $message; log = @($script:Log); files = @($script:Files) }
 [System.IO.File]::WriteAllText($ResultFile, ($result | ConvertTo-Json -Compress -Depth 4), (New-Object System.Text.UTF8Encoding($false)))
