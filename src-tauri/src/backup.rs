@@ -413,6 +413,12 @@ pub struct BackupEntry {
     pub tasks: Option<u64>,
     /// Version de schéma de la sauvegarde, `None` si illisible.
     pub schema_version: Option<u32>,
+    /// Y-TECH-04 (partie C) : identifiant de l'appareil qui a fait la copie (`sync_state`, ligne `is_self = 1`), `None` si absent ou illisible.
+    pub device_id: Option<String>,
+    /// Plateforme de cet appareil (même ligne), `None` si absente ou illisible.
+    pub platform: Option<String>,
+    /// Époque de synchro de la sauvegarde (`sync_meta`, clé `epoch`, texte JSON décodé), `None` si absente ou illisible.
+    pub epoch: Option<String>,
 }
 
 /// Liste des sauvegardes de `dir`, les plus récentes d'abord. Dossier absent : liste vide. Les fichiers d'autres noms sont ignorés.
@@ -440,8 +446,8 @@ pub fn list_backups_in(dir: &Path) -> Result<Vec<BackupEntry>, BackupError> {
             .ok()
             .and_then(|m| m.duration_since(std::time::UNIX_EPOCH).ok())
             .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
-        let (tasks, schema_version) = if meta.len() > MAX_BACKUP_BYTES { (None, None) } else { read_summary(&path) };
-        entries.push(BackupEntry { name, kind: family.kind(), stamp, size: meta.len(), modified_ms, tasks, schema_version });
+        let BackupSummary { tasks, schema_version, device_id, platform, epoch } = if meta.len() > MAX_BACKUP_BYTES { BackupSummary::default() } else { read_summary(&path) };
+        entries.push(BackupEntry { name, kind: family.kind(), stamp, size: meta.len(), modified_ms, tasks, schema_version, device_id, platform, epoch });
     }
     entries.sort_by(|a, b| b.modified_ms.cmp(&a.modified_ms).then_with(|| b.stamp.cmp(&a.stamp)).then_with(|| b.name.cmp(&a.name)));
     Ok(entries)
@@ -460,20 +466,80 @@ fn open_read_only(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> 
     open_read_only_with(path, DEFAULT_BUSY_MS)
 }
 
-/// Tâches et version de schéma d'une sauvegarde, sans jamais échouer (`None` si illisible). `task` doit être une vraie table (pas une vue
-/// qui exécuterait autre chose) avant tout `COUNT`.
-fn read_summary(path: &Path) -> (Option<u64>, Option<u32>) {
-    let Ok(conn) = open_read_only(path) else { return (None, None) };
+/// URI SQLite `file:` d'un chemin, avec `immutable=1` : tout octet hors `A-Za-z0-9-_.~/:` est codé en `%XX` (`?`, `#`, `%`, espaces, accents).
+/// `None` si le chemin n'est pas en UTF-8.
+fn immutable_uri(path: &Path) -> Option<String> {
+    let text = path.to_str()?.replace('\\', "/");
+    let mut uri = String::from(if text.starts_with('/') { "file:" } else { "file:///" });
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/' | b':') {
+            uri.push(char::from(byte));
+        } else {
+            uri.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    uri.push_str("?immutable=1");
+    Some(uri)
+}
+
+/// Ouverture de LECTURE d'une sauvegarde pour la liste (Y-TECH-04, critère 17) : une copie qui n'a ni `-wal` ni `-shm` (une sauvegarde de l'app,
+/// faite par `VACUUM INTO`, n'en a jamais) est ouverte `immutable=1`, sans verrou ni journal : même une copie dont l'en-tête annonce le mode WAL
+/// ne se voit pas créer de `-wal` ni de `-shm` à côté d'elle. Avec un journal présent (cas anormal) : ouverture en lecture seule ordinaire.
+fn open_for_summary(path: &Path) -> Result<rusqlite::Connection, rusqlite::Error> {
+    if present(&sidecar(path, "-wal")) || present(&sidecar(path, "-shm")) {
+        return open_read_only(path);
+    }
+    let Some(uri) = immutable_uri(path) else { return open_read_only(path) };
+    let conn = rusqlite::Connection::open_with_flags(uri, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_URI)?;
+    conn.busy_timeout(std::time::Duration::from_millis(DEFAULT_BUSY_MS))?;
+    conn.pragma_update(None, "trusted_schema", "OFF")?;
+    Ok(conn)
+}
+
+/// Longueur maximale (octets) d'un identifiant, d'une plateforme ou d'une époque lus dans une sauvegarde.
+const MAX_SUMMARY_TEXT: usize = 128;
+
+/// Ce qu'une sauvegarde dit d'elle-même, lu en lecture seule (chaque champ est `None` s'il est absent ou illisible, jamais une valeur inventée).
+#[derive(Debug, Default)]
+struct BackupSummary {
+    tasks: Option<u64>,
+    schema_version: Option<u32>,
+    device_id: Option<String>,
+    platform: Option<String>,
+    epoch: Option<String>,
+}
+
+/// Tâches, version de schéma, appareil et époque d'une sauvegarde, sans jamais échouer (`None` par champ si illisible). Une table doit être une
+/// vraie table (pas une vue qui exécuterait autre chose) avant toute requête. Y-TECH-04 (partie C) : `sync_state` (ligne `is_self = 1`) donne
+/// `device_id` et `platform` ; `sync_meta` (clé `epoch`, valeur JSON texte décodée) donne `epoch`. Aucune écriture : le fichier est ouvert en
+/// lecture seule (`open_read_only`), un fichier sans `-wal` n'en reçoit pas.
+fn read_summary(path: &Path) -> BackupSummary {
+    let Ok(conn) = open_for_summary(path) else { return BackupSummary::default() };
     let is_table = |name: &str| -> bool {
         conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1", [name], |r| r.get::<_, u64>(0)).is_ok_and(|n| n == 1)
     };
     let tasks = if is_table("task") { conn.query_row("SELECT COUNT(*) FROM task WHERE deleted_at IS NULL", [], |r| r.get::<_, u64>(0)).ok() } else { None };
-    let version = if is_table("schema_migrations") {
+    let schema_version = if is_table("schema_migrations") {
         conn.query_row("SELECT MAX(version) FROM schema_migrations", [], |r| r.get::<_, Option<u32>>(0)).ok().flatten()
     } else {
         None
     };
-    (tasks, version)
+    let (device_id, platform) = if is_table("sync_state") {
+        conn.query_row("SELECT device_id, platform FROM sync_state WHERE is_self = 1 ORDER BY device_id LIMIT 1", [], |r| Ok((r.get::<_, Option<String>>(0)?, r.get::<_, Option<String>>(1)?)))
+            .unwrap_or((None, None))
+    } else {
+        (None, None)
+    };
+    let epoch = if is_table("sync_meta") {
+        conn.query_row("SELECT value FROM sync_meta WHERE key = 'epoch'", [], |r| r.get::<_, String>(0))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<Option<String>>(&raw).ok().flatten())
+    } else {
+        None
+    };
+    // Un texte vide ou démesuré (fichier venu de l'extérieur) n'est pas un identifiant : `None`.
+    let clean = |value: Option<String>| value.filter(|v| !v.is_empty() && v.len() <= MAX_SUMMARY_TEXT);
+    BackupSummary { tasks, schema_version, device_id: clean(device_id), platform: clean(platform), epoch: clean(epoch) }
 }
 
 /// SQL aux espaces ASCII compactés (retours à la ligne et indentation sans effet sur la comparaison ; une espace Unicode, elle, est une différence).
