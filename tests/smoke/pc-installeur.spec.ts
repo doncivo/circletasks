@@ -35,7 +35,7 @@ const APP_READY_TIMEOUT_MS = 90_000;
 const SILENT_INSTALL_TIMEOUT_MS = 120_000;
 const DRIVE_TIMEOUT_MS = 300_000;
 /** Part de DRIVE_TIMEOUT_MS réservée aux preuves d'échec du pilote : son échéance globale ABSOLUE (-DeadlineEpochMs, calculée juste avant spawnSync : le démarrage de PowerShell est décompté) est DRIVE_TIMEOUT_MS moins cette marge (30 s pour le nettoyage et la capture d'écran, qui n'ont pas de preuves à écrire). */
-const DRIVE_EVIDENCE_MARGIN_MS = 295_000;
+const DRIVE_EVIDENCE_MARGIN_MS = 60_000;
 const CLEANUP_TIMEOUT_MS = 180_000;
 const CAPTURE_TIMEOUT_MS = 120_000;
 const TASKKILL_TIMEOUT_MS = 30_000;
