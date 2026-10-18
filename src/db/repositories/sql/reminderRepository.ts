@@ -66,9 +66,11 @@ export function createReminderRepository(db: SqlExecutor, stamper: WriteStamper)
             [input.fireAt, stamp.at, stamp.deviceId, stamp.hlc, match.id],
           );
         } else {
+          // T-TECH-01 : identifiant déterministe d'une occurrence ressuscitée (annulation T-09) : le rappel supprimé est rétabli, jamais réinséré.
           await db.execute(
             `INSERT INTO reminder (id, target_type, target_id, offset_min, fire_at, delivered, created_at, updated_at, deleted_at, device_id, hlc)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, NULL, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET fire_at = excluded.fire_at, delivered = 0, deleted_at = NULL, updated_at = excluded.updated_at, device_id = excluded.device_id, hlc = excluded.hlc`,
             [input.id, target.type, target.id, input.offsetMin, input.fireAt, stamp.at, stamp.at, stamp.deviceId, stamp.hlc],
           );
         }
