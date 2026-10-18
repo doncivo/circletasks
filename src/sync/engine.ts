@@ -622,7 +622,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     };
     const nextState = async (h: DeviceAck): Promise<PublishedDeviceState> => buildState(currentEpoch, h, stateSeq + 1, snapshotMeta, purgeHorizon, await ackMap());
 
-    if (first?.covers) onStateIo = () => deferPublish(true);
+    // Contre-revue S2 : armé seulement pour une borne ouverte par une trace locale (pas pour `openedHere`) ; `bound` ne rend une `source`
+    // que pour une borne ouverte.
+    if (first?.source) onStateIo = () => deferPublish(true);
     // Y-FIX-02 (§30, revue B1, contre-revue S3) : intention d'ajout résolue seulement si la publication est permise par la règle actuelle, ou
     // par la borne locale dont la trace est cette intention (source `inflight`, donc de l'époque courante) ; une borne `local-head` ou
     // `openedHere` ne résout pas une intention d'une autre époque. Refusée, l'intention reste posée, stable, et aucun état n'est écrit.

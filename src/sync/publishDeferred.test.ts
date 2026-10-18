@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createSimDevice, SCHEMA_VERSION, setupFirst, type SimDevice } from '../../tests/sim/syncDevice';
+import { SyncPlatformError } from '../platform/sync/types';
+import { createSyncService, HIDE_SYNC_DEADLINE_MS } from './index';
 import { epochId } from '../domain/sync/format';
 import type { SyncStatusWarning } from '../domain/syncBanners';
 import type { DeviceId } from '../domain/types';
@@ -37,5 +40,37 @@ describe('deferred : cause nommée de publish-blocked (revue M1)', () => {
 
   it('fichier non expliqué : unexplained-files avec son compteur', () => {
     expect(run({ covers: false, source: 'inflight', unexplained: 2 }, false)).toEqual({ reason: 'unexplained-files', warnings: ['publish-blocked', 'unexplained-files'] });
+  });
+});
+
+describe('openedHere et io sur l’état (contre-revue S2)', () => {
+  let device: SimDevice | null = null;
+  afterEach(async () => {
+    await device?.close();
+    device = null;
+  });
+
+  it('échec io de l’état d’une époque ouverte ici et jamais publiée : erreur io visible, aucun publish-deferred trompeur', async () => {
+    const b = await createSimDevice('ef50b6f7-bbbb-4bbb-8bbb-bbbbbbbbbbbb', { name: 'iPhone' });
+    device = b;
+    await setupFirst(b);
+    const service = (platform: typeof b.platform, deadlineProbe?: (unit: string) => void) =>
+      createSyncService({ data: b.data, platform, hlc: b.hlc, clock: b.clock, deviceId: b.id, devicePlatform: 'ios', sv: SCHEMA_VERSION, appVersion: '0.4.0', logger: b.logger, setTimeout: () => 0, clearTimeout: () => undefined, ...(deadlineProbe ? { deadlineProbe } : {}) });
+    // Époque ouverte, instantané écrit, échéance du cycle hide juste avant l'état : exception openedHere au cycle suivant.
+    b.service = service(b.platform, (unit) => {
+      if (unit === 'write-state') b.clock.advance(HIDE_SYNC_DEADLINE_MS);
+    });
+    await b.service.syncNow('hide', { deadlineAt: b.clock.nowMs() + HIDE_SYNC_DEADLINE_MS });
+    expect(b.folder.fileNames(b.id)).not.toContain('state.ctx');
+    await b.restart();
+    b.service = service({ ...b.platform, writeState: () => Promise.reject(new SyncPlatformError('io')) });
+    const before = b.logger.entries.length;
+    await b.service.syncNow('manual');
+    const s = b.service.status();
+    const logged = b.logger.entries.slice(before);
+    expect(logged.filter((e) => e.event === 'own-state-recovered')).toHaveLength(1);
+    expect(s.errorCode).toBe('io');
+    expect(logged.filter((e) => e.event === 'publish-deferred')).toEqual([]);
+    expect(s.warnings ?? []).not.toContain('first-publication-state-refused');
   });
 });
