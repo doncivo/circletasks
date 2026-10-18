@@ -5,7 +5,7 @@
  * présente son état à Rust, qui juge la tête (`write_state` : égale à `own.json`, sinon `state-mismatch`). Un fichier que la trace
  * n'explique pas garde la règle de §24 point 10 (`publish-blocked`).
  *
- * Module pur, chargé seulement par le chemin rare du moteur (`src/sync/firstPublication.ts`, à la demande) : hors du bundle de départ. Aucun
+ * Module pur, importé seulement par le bloc à la demande `src/sync/orphanEpoch.ts` (chemin rare du moteur) : hors du bundle de départ. Aucun
  * import exécutable (types seulement) : un import d'un module du départ le sortirait de son bloc (mesure de Y-FIX-02, +4 016 octets).
  */
 

@@ -542,7 +542,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     /**
      * Y-IOS-02-FIX-02 (critère 11) : avertissement `publish-blocked` : jamais « À jour » ni silence quand cet appareil ne peut pas publier
      * (exigence d'Ali, visible dans Détails et en bandeau), levé avant tout chargement. Y-FIX-02 (§30) : journal `publish-deferred` et cause
-     * nommée (Détails) composés par le bloc à la demande `firstPublication` (chemin rare, bundle de départ).
+     * nommée (Détails) composés par le bloc à la demande `orphanEpoch` (chemin rare, bundle de départ).
      */
     /** Y-FIX-02 : un seul site de chargement du bloc à la demande (chaque `import()` coûte son enveloppe de préchargement au départ). */
     const firstModule = () => import('./orphanEpoch');
