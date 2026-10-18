@@ -1,5 +1,5 @@
 // Y-FIX-04 (critère 13, revue I2) : avertissements du report d'époque d'une ligne dont le parent a été remplacé. `carry-held` (ligne mise de
-// côté) interdit « À jour » ; `carry-report` (compte rendu du changement d'époque, Y-TECH-05, remplace `carry-reattached`) le laisse. Texte de
+// côté) et `carry-report` (compte rendu du changement d'époque, Y-TECH-05, remplace `carry-reattached`) interdisent « À jour ». Texte de
 // `carry-held` : section AVERTISSEMENTS des détails (`warningText`) et bandeau (`syncBannerFor` puis `syncTroubleText`) ; le texte de
 // `carry-report` est composé par un bloc à la demande (`carryReportBannerLine`, `carryReportScenario.test.tsx`) : ni l'un ni l'autre ne le portent.
 import { cleanup, render, screen } from '@testing-library/react';
@@ -48,8 +48,8 @@ describe('avertissements du report d’époque (Y-FIX-04, critère 13)', () => {
     expect(statusLine(status({ warnings: ['carry-held'] }), NOW_MS)).toBe(t('sync.status.incomplete'));
   });
 
-  it('carry-report : « À jour » reste permis', () => {
-    expect(statusLine(status({ warnings: ['carry-report'] }), NOW_MS)).toBe(upToDate());
+  it('carry-report : « Synchro incomplète », jamais « À jour » (ADR 0011 §29 point 5, critère 16)', () => {
+    expect(statusLine(status({ warnings: ['carry-report'] }), NOW_MS)).toBe(t('sync.status.incomplete'));
   });
 
   it('bandeau : les deux avertissements, carry-held d’abord ; le texte de carry-report vient du bloc à la demande', () => {

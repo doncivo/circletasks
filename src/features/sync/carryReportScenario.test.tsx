@@ -4,6 +4,7 @@
 // après un redémarrage simulé de B.
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { t } from '../../i18n';
 import { scenario, type Scenario } from '../../../tests/unit/sync/epochCarryScenario';
 import { syncFolders, warmSimDevices, type SimDevice } from '../../../tests/sim/syncDevice';
 import { AppContainerProvider } from '../app/AppContainerContext';
@@ -71,6 +72,9 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
 
     // Le détail s'ouvre sur le compte rendu non acquitté ; « À jeter » est dans la liste des rétablis.
     const dialog = await screen.findByRole('dialog');
+    // Critère 16 : l'état n'est jamais « À jour » et « voir les avertissements » mène à la ligne du compte rendu, visible dans Détails.
+    expect(screen.getByTestId('sync-status-text').textContent).toBe(t('sync.status.incomplete'));
+    expect(screen.getAllByRole('heading', { name: 'Compte rendu du changement d’époque', hidden: true }).some((h) => h.classList.contains('ct-settings__section'))).toBe(true);
     const restored = within(dialog).getByRole('list', { name: new RegExp(`^${RESTORED_TITLE}`) });
     expect(within(restored).getByText('À jeter')).toBeTruthy();
     expect(within(dialog).getByRole('list', { name: /^Recréés/ })).toBeTruthy();
