@@ -135,6 +135,28 @@ Hypothèses prises pour les « Questions à Ali » (recommandations du product-o
 10. **Pas de `cargo clippy` dans `tests.yml`** : la commande est lancée en local (voir Preuves) ; à ajouter à la CI si Ali le souhaite (hors story).
 11. **Temps** : environ 4 h de travail effectif sur 5 h estimées (alerte à 7 h 30 non atteinte). La compilation du programme complet (5 à 9 minutes par essai de `--test desktop`) a motivé le choix de placer le rejeu des migrations dans le crate du plugin (essai en une minute).
 
+## Revue et audit
+
+Audit `security-privacy` : approuvé (aucun contournement trouvé sur le vrai pool : `ATTACH` par URI, vfs, `:memory:`, temp ; `pragma_*` en sous-requête, `WITH`, `RETURNING`, vue ; commentaires et casse ; `VACUUM` dans un `WITH` ; fonctions absentes de la version embarquée ; chaque connexion protégée, reconnexion comprise). Revue de code : « à corriger », rien de bloquant. Hypothèses sur les « Questions à Ali » : confirmées. Chaque point ci-dessous est un commit.
+
+| Point | Commit | Rouge / vert |
+|---|---|---|
+| I1 : le front émet-il un pragma ou une fonction refusés ? | `88fb11d8` | Test Vitest statique `tests/unit/sqlPragmaScan.test.ts` : parcourt `src/**` (hors tests et `src/i18n`, commentaires retirés), exige que tout `PRAGMA nom` et `pragma_nom` soit dans `PRAGMA_WHITELIST` **lue dans `guard.rs`** (liste unique, constante créée pour l'occasion), et qu'aucune fonction refusée ni `ATTACH` / `VACUUM` n'apparaisse dans du SQL. Rouge : avec `export const TMP_SEC01 = 'PRAGMA user_version';` ajouté temporairement dans `src/db/repositories/common.ts` (retiré), échec `AssertionError: pragma hors liste blanche du plugin SQL … expected [ Array(1) ] to deeply equal []` avec `src/db/repositories/common.ts : PRAGMA user_version`. Vert sur l'arbre propre (3 tests). ADR 0002 complété. Limite connue : la recherche statique ne voit pas un SQL construit à l'exécution. |
+| I2 : fichier cité dans le test de référence | `43d1b06f` | `guard_tests.rs`, pas `sql_closed.rs`. |
+| I3 : assertion toujours vraie | `3608a847` | `assert_eq!(attach_lines, 10)`, renvoi au test du débit d'`applog`. |
+| M1 revue : panic dans le rappel FFI | `03498e7a` | `catch_unwind` (`AssertUnwindSafe`) ; un panic devient `SQLITE_DENY`. |
+| M2 revue : `quick_check` | `f1002788` | Accepté seulement avec argument ; `("quick_check", None)` passe côté refus dans `sec01_8_pragma_white_list_cases`. |
+| M3 revue : contrôle redondant de `connect` | `54c6a32f` | Retiré ; `load` et `connect_in` restent. |
+| M4 revue : accents de `Cargo.toml` | `bef31638` | Corrigés. |
+| M1 audit : objets de schéma persistants | `27ffc0e7` (rouge), `bbd98245` (vert) | Rouge : `CREATE TRIGGER load_extension : refus `function` attendu, mais le plugin a accepté` ; `DEFENSIVE doit valoir 1, TRUSTED_SCHEMA 0 / left: 0 / right: 1`. Vert : `harden` pose `SQLITE_DBCONFIG_DEFENSIVE = 1` et `SQLITE_DBCONFIG_TRUSTED_SCHEMA = 0` (exposés par `libsqlite3-sys`), et `check_statement` refuse à la **création** un déclencheur ou une vue qui contient `load_extension`, `fts3_tokenizer`, `readfile`, `writefile`, `edit(` ou un `pragma_<nom>` hors liste blanche (mots du langage SQL seulement). Constat avant correctif : le déclencheur était créé puis chaque écriture de la table refusée, récupérable par `DROP TRIGGER`. Le rejeu des instructions du front (fts5, déclencheurs, `ALTER TABLE`) passe avec le schéma non fiable. |
+| M2 audit : instructions multiples | (documenté) | `execute` envoie le texte entier à sqlx, qui exécute les instructions une à une : `INSERT …; ATTACH …` exécute l'`INSERT` puis refuse l'`ATTACH`, sans retour arrière du premier. Le front n'envoie jamais d'instructions multiples hors migrations (une instruction par appel, `statements` du migrateur), et une transaction du front est annulée par son `ROLLBACK` ; aucun refus de queue ajouté (le refus se fait à l'instruction fautive, jamais en silence). |
+| M3 audit : second `load` | `2e6b15a2`, test dans `2b453fea` | **Écart volontaire avec la consigne** : le second `load` ferme le pool précédent (`close_previous`) au lieu d'être refusé. Raison : le front recharge sa WebView sans redémarrer Rust (`window.location.reload()` dans `src/platform/relaunch.ts`, `lockLayer.ts`, `SyncDetailsForget.tsx`) puis rappelle `load` alors que l'ancien pool est encore enregistré ; un refus interdirait toute réouverture jusqu'au redémarrage. Le défaut visé (connexion orpheline) est corrigé. À confirmer par Ali ou l'audit. |
+| M4 audit : raison de refus résiduelle | `2b453fea` | `clear_reason` avant chaque `execute` et `select`. Scénario de l'audit non reproduit : le test `sec01_9_a_stale_refusal_reason_never_survives_the_next_call` passe aussi sans le correctif (pas de rouge possible) ; il garde la propriété. |
+| M7 audit : commentaire de `Cargo.toml` | `11930626` | Cite `guard.rs`, `guard_tests.rs`, `commands.rs` et `libsqlite3-sys`. Note : `src/platform/backup/tauriBackup.ts:93` avale l'échec du point de contrôle `wal_checkpoint` (voulu : le pragma est en liste blanche, `VACUUM INTO` lit le WAL). |
+| Dette clippy | `becc9f17` | Une ligne dans `docs/dettes.md` (pas de story maintenant). |
+
+Sauvegardes, export, import et synchro : relus par l'audit, aucune story nécessaire (la ligne « validation des chemins » de « Surfaces vérifiées » est soldée).
+
 ## Fichiers modifiés
 
 - `src-tauri/vendor/tauri-plugin-sql/Cargo.toml` : dépendance optionnelle `libsqlite3-sys` 0.30.1, liée à la fonctionnalité `sqlite`.
@@ -145,7 +167,7 @@ Hypothèses prises pour les « Questions à Ali » (recommandations du product-o
 - `src-tauri/tests/desktop/{sql_closed,main}.rs` : journal `sql-refused` et câblage.
 - `src-tauri/tests/fixtures/front-sql.json` (généré), `tests/unit/sqlFrontReference.test.ts` : référence des instructions du front.
 - `src-tauri/Cargo.lock` : une ligne (`libsqlite3-sys` dans les dépendances de `tauri-plugin-sql`).
-- `docs/stories/SEC-01.md`, `docs/adr/0002-acces-base-et-drivers.md` (avenant SEC-01), `docs/journal.md`.
+- `docs/stories/SEC-01.md`, `docs/adr/0002-acces-base-et-drivers.md` (avenant SEC-01), `docs/journal.md`, `docs/dettes.md`, `tests/unit/sqlPragmaScan.test.ts` (revue), `src-tauri/Cargo.toml` (commentaire).
 - Non touchés : `src/` (aucun fichier), `capabilities/`, `docs/decisions.md`, `docs/backlog.md`, `docs/audit-1.0.md` (à la charge d'Ali).
 
 ## Surfaces vérifiées (préparation de l'audit `security-privacy`)
@@ -166,7 +188,7 @@ Relues dans le code, à confirmer par l'audit :
 - Le crochet de journal est global au processus et posé une seule fois (le premier gagne).
 
 Laissées, hors story (à signaler) :
-- **Validation des chemins des commandes de sauvegarde et de fichiers** (`backup.rs` : `restore_backup`, `check_backup`, `list_backups`, `reveal_backups_folder` ; `export_save_file`, `import_open_file`) : non relue ici (question 3).
+- **Validation des chemins des commandes de sauvegarde et de fichiers** (`backup.rs` : `restore_backup`, `check_backup`, `list_backups`, `reveal_backups_folder` ; `export_save_file`, `import_open_file`) : relues par l'audit, aucune story nécessaire (voir « Revue et audit »).
 - Les autres plugins et commandes (fichiers, shell, notifications, opener) ; la clé de signature (CI-SEC-01).
 - Ce que la WebView peut encore faire dans la base légitime : lire, modifier, supprimer ses données (inhérent), ouvrir une transaction longue.
 - Les fichiers temporaires que SQLite écrit seul (tri volumineux) : non pilotables par le front (`temp_store_directory` refusé).
