@@ -1540,7 +1540,9 @@ appareils. Cela contredisait « le report rétablit, il n'efface jamais » (sect
 3. **`hold` : repli `sync_parked`.** Motif `missing-parent` (existant : **aucune migration**, le `CHECK` de 0015 est inchangé), opération
    complète marquée `carry: 1` dans `op`. `retryParked` la rejoue à chaque cycle comme toute opération mise de côté ; quand le parent
    revient, la ligne est appliquée, **republiée entière** et retirée (`releaseCarried`, une transaction). Avertissement `carry-held` tant
-   qu'au moins une ligne marquée attend : interdit « À jour ».
+   qu'au moins une ligne marquée attend : interdit « À jour ». Ligne **existante** dont le lien obligatoire vise un parent remplacé :
+   l'opération **entière** est mise de côté (titre et autres champs reportés compris), comme à la réception ordinaire ; ils s'appliquent
+   avec elle au retour du parent. Si la liste ou la routine ne revient jamais, `carry-held` dure sans action pour en sortir (dette, Y-TECH-05).
 4. **Le report ne perd jamais.** Une ligne reportée ne sort de `epoch-carry` qu'appliquée, rattachée, mise de côté, ou écartée par une
    règle déjà journalisée (trace plus récente, `parent-purged` d'un lien obligatoire). Parent reporté dans la même passe : appliqué avant
    l'enfant (ordre du catalogue dans `materialize` **et** désormais dans `carryNewer`). Parent à la corbeille dans la sauvegarde : il
@@ -1550,8 +1552,12 @@ appareils. Cela contredisait « le report rétablit, il n'efface jamais » (sect
    Notice locale `sync_meta.epochCarryNotice` (jamais publiée) `{ v: 1, epoch, at, reattached, held, overflow }`, items
    `{ table, rowId, column, parentId, space, label, hlc }` (`label` local seulement), 200 par liste au plus, le reste dans `overflow`,
    cumulée jusqu'à l'acquittement ; écrite dans la transaction de la page de `reapply` (un arrêt brutal à une borne de page donne le même
-   résultat qu'une exécution sans arrêt). Écriture en échec : les données passent quand même, `epoch-carry-notice-failed` est journalisé
-   et `carry-reattached` est levé (jamais muet). Avertissement `carry-reattached` : levé tant que la notice nomme des lignes rattachées ;
+   résultat qu'une exécution sans arrêt). Écriture refusée pour une autre cause : les données passent quand même,
+   `epoch-carry-notice-failed` est journalisé et `carry-reattached` est levé (jamais muet) ; cet indicateur est une **variable du module**
+   (`carryNoticeState.ts`) : il disparaît au redémarrage et, dans le banc, est partagé entre les appareils d'un même processus (le
+   persister est impossible quand le disque est plein ; dette, Y-TECH-05). **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
+   `SQLITE_IOERR`) : l'erreur est relancée, la page est annulée entière (reports compris, SQLite pouvant avoir annulé la transaction) et
+   l'étape (c) reprend au cycle suivant : jamais un retrait des reports hors transaction. Avertissement `carry-reattached` : levé tant que la notice nomme des lignes rattachées ;
    n'interdit pas « À jour ».
 6. **Interface vers Y-TECH-05**, figée par `tests/unit/sync/epochCarryInterface.test.ts` : noms d'événements, motif, clé et forme de la
    notice, marque `carry`. **« J'ai vu » et la liste nommée** (Détails, bandeau) sont **à Y-TECH-05**, comme prévu par la fiche Y-FIX-04 et
@@ -1560,7 +1566,7 @@ appareils. Cela contredisait « le report rétablit, il n'efface jamais » (sect
    de choix après restauration et ses textes (`fr.syncRestore.ts`) sont chargés à la demande pour faire la place (`RestoreChoiceHost`),
    règle « tout nouvel écran qui ne s'affiche pas au démarrage est chargé à la demande par défaut ».
 
-Tests : `tests/unit/sync/epochCarryReplacedParent.test.ts` (critères 1 à 3, rouge en 56b61439 puis vert en 4855e47a),
+Tests : `tests/unit/sync/epochCarryReplacedParent.test.ts` (critères 1 à 3, rouge en 4a324b91 puis vert en ead5d217),
 `epochCarryReplacedParentRules.test.ts`, `epochCarryReplacedParentResume.test.ts`, `epochCarryInterface.test.ts`,
 `src/domain/sync/epochCarryNotice.test.ts`.
 
