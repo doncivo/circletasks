@@ -15,6 +15,8 @@ import { carryLines } from './syncRestoreState';
  * null quand plus rien n'est à montrer (acquitté).
  */
 const appliers = new WeakMap<AppContainer, () => void>();
+/** Contre-revue 7 : numéro de la dernière lecture lancée par conteneur ; une lecture plus ancienne qui se termine après une plus récente est ignorée. */
+const generations = new WeakMap<AppContainer, number>();
 
 async function carryReportLine(container: AppContainer): Promise<{ readonly message: string; readonly onAction: () => void } | null> {
   const { failure, reports } = await carryReportBannerFacts(container.data.repos);
@@ -34,8 +36,12 @@ async function carryReportLine(container: AppContainer): Promise<{ readonly mess
 /** Lit le compte rendu et pose la ligne du bandeau ; `apply` (une fois, par `startSync.ts`) recalcule les bandeaux de l'app. Rejette si la lecture échoue. */
 export async function loadCarryLine(container: AppContainer, apply?: () => void): Promise<void> {
   if (apply) appliers.set(container, apply);
+  const generation = (generations.get(container) ?? 0) + 1;
+  generations.set(container, generation);
   const shown = carryLines.get(container) ?? null;
   const line = await carryReportLine(container);
+  // Une lecture lancée après celle-ci (« J'ai vu », cycle suivant) a déjà posé ou effacé la ligne : la plus récente gagne.
+  if (generations.get(container) !== generation) return;
   // Revue S1 : rien à montrer (acquitté) : l'entrée est **effacée**, jamais gardée à null. `startSync.ts` relit alors la ligne au prochain
   // changement d'état tant que le moteur garde `carry-report` levé : un compte rendu arrivé avant la fin du cycle suivant n'est jamais masqué.
   // Les bandeaux ne sont recalculés que si une ligne était montrée (sinon `startSync.ts` relirait à l'infini).
