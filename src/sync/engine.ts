@@ -16,13 +16,14 @@ import { evaluateForget, finishRejoin, FORGET_META, forgetKnownDevices, forgetPu
 import { pickEligible, readSnapshotEnd, snapshotCandidates, type ForgetCoverage } from './eligible';
 import { addOwnStateMark, decideSegmentGap, type ResumeTried, type SnapshotRef, coversForgotten, eligibleSnapshot, purgeExplainsMissingSegment, forgetGaps, type OwnStateMark, forgetOrder, forgottenDeleteCheck, publishedEpochs, snapshotInEpoch, withoutStaleAcks, type SnapshotEndRead } from '../domain/sync/retention';
 import { publishOutbox, readInflight } from './publisher';
+import type { LocalBound } from '../domain/sync/firstPublication';
 import { storedDeviceStatuses } from './deviceStatus';
 import { readDevice } from './reader';
 import { loadSnapshot, mergeSnapshot, snapshotPages } from './snapshot';
 import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish, openResetEpoch, recordResetFailure, republishWithoutNotice, resetActive, resetLagging, type ResetDirective } from './reset';
 import type { CycleFacts } from './status';
 import { createCycleDeadline, isCycleInterrupted, type DeadlineUnit } from './deadline';
-import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
+import { scanWarnings, type SyncStatusWarning } from '../domain/syncBanners';
 
 /**
  * Cycle de synchronisation (ADR 0011, section 10.2 ; Y-02 critère 3) : 0 préconditions, 1 `scan({ keep })`, 2 règle 1, 3 époque,
@@ -60,10 +61,6 @@ export interface CycleResult extends CycleFacts {
   /** Y-11 (`resetCheck`) : premier appareil pas encore lu jusqu'à sa tête (null : la réinitialisation peut commencer). */
   readonly resetLag?: ReturnType<typeof resetLagging>;
 }
-
-/** Y-IOS-02-FIX-02 : statut de son état propre dans `publish-deferred` quand son dossier n'apparaît pas au scan (liste fermée). */
-const OWN_STATE_ABSENT = 'absent' as const;
-type OwnStateLogStatus = DeviceScan['stateStatus'] | typeof OWN_STATE_ABSENT;
 
 const EMPTY: Omit<CycleResult, 'outcome'> = { errorCode: null, pendingFiles: [], devices: [], keyMismatch: false, folderLabel: null, folderKind: null, lastSyncAt: null, worked: false };
 
@@ -130,22 +127,6 @@ async function acceptStates(deps: SyncDeps, scan: FolderScan, known: Map<string,
     await deps.data.repos.sync.saveState(device.deviceId, { status, ...(device.kid ? { kid: device.kid } : {}) });
   }
   return accepted;
-}
-
-/** Résout une intention d'ajout interrompue (arrêt entre l'ajout et le retrait de la file) : hypothèse « ajout réussi » d'abord. */
-async function resolveInflight(deps: SyncDeps, writeOwnState: (head: DeviceAck) => Promise<boolean>): Promise<void> {
-  const inflight = await readInflight(deps.data.repos);
-  if (!inflight) return;
-  const head: DeviceAck = { epoch: inflight.epoch, segment: inflight.segment, record: inflight.expect + inflight.count, hlc: inflight.maxHlc, stateSeq: 0 };
-  const ok = await writeOwnState(head);
-  await deps.data.transaction(async (repos) => {
-    if (ok) {
-      await repos.sync.clearPublished(inflight.entries);
-      await writeJson(repos, META.head, head);
-    }
-    await writeJson(repos, META.inflight, null);
-  });
-  deps.logger.log('inflight-resolved', { appended: ok });
 }
 
 /**
@@ -309,7 +290,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   const localSeq = (await readJson<number>(repos, META.stateSeq)) ?? 0;
   const pairedBy = ownState?.pairedBy;
   let stateSeq = Math.max(localSeq, ownState?.stateSeq ?? 0, ...acksOnSelf.map((a) => a.stateSeq));
-  const lastStateMeta = await readJson<{ text: string; at: number }>(repos, META.lastState);
+  let lastStateMeta = await readJson<{ text: string; at: number }>(repos, META.lastState);
 
   const buildState = (epoch: EpochId, head: DeviceAck, seq: number, snapshot: { seq: number; endHlc: Hlc } | null, purgeHorizon: Hlc | null, acks: Map<DeviceId, DeviceAck>): PublishedDeviceState => ({
     deviceId: self,
@@ -340,6 +321,8 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
   let publishForget = await forgetPublishPending(repos);
   /** Dernier état écrit dans ce cycle (suppression des fichiers d'un appareil oublié : Rust relit son état sur le disque). */
   let lastWritten: PublishedDeviceState | null = null;
+  /** Y-FIX-02 (§30) : échec (`io`) de l'état pendant une première publication ouverte par la borne locale : visible (`publish-blocked`, cause). */
+  let onStateIo: (() => Promise<void>) | undefined;
 
   /** Écrit son `state.ctx` ; renvoie faux sur `state-mismatch` (hypothèse refusée par Rust). */
   const writeState = async (state: PublishedDeviceState, force: boolean): Promise<boolean> => {
@@ -354,14 +337,15 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // modification ou au rafraîchissement de 30 minutes, et **aussitôt** sur un appareil dont l'état est absent, étranger, illisible ou
     // rejoué : c'est la borne qu'il attend pour republier (règle 1, reconstruction (iii) de `forgotten.json`).
     const forced = force || publishForget || ackSeqAwaited(state, lastWritten ?? ownState, awaitingAckSeq);
-    if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && ownState !== null) return true;
+    if (!forced && lastStateMeta && lastStateMeta.text === comparable && deps.clock.nowMs() - lastStateMeta.at < STATE_REFRESH_MS && (lastWritten ?? ownState) !== null) return true;
     deps.deadline?.check('write-state');
     try {
       await platform.writeState({ sv: deps.sv, state });
       stateSeq = state.stateSeq;
       await data.transaction(async (tx) => {
         await writeJson(tx, META.stateSeq, state.stateSeq);
-        await writeJson(tx, META.lastState, { text: comparable, at: deps.clock.nowMs() });
+        // Y-FIX-02 : un état écrit plus tôt dans ce cycle (reprise d'`inflight`) n'est pas réécrit à l'identique à l'étape 6.
+        await writeJson(tx, META.lastState, (lastStateMeta = { text: comparable, at: deps.clock.nowMs() }));
         // Quatrième revue, point D (§5.5, condition 3) : repère de cet état publié ; une liste illisible (journalisée) est réécrite.
         await writeJson(tx, META.ownStateHlcs, addOwnStateMark(await readOwnStateMarks(tx, logger), state.stateSeq, state.lastSyncHlc, deps.clock.nowMs()));
         if (publishForget) await writeJson(tx, FORGET_META.publish, null);
@@ -375,6 +359,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const code = syncErrorCodeOf(error);
       logger.log('write-state-failed', { code });
       if (code === 'state-mismatch') return false;
+      await onStateIo?.();
       throw error;
     }
   };
@@ -555,40 +540,53 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const listedFiles = listedFilesForPublish(ownScan?.epochs ?? [], { currentEpoch, announced: [...announcedByOthers, ...(ownState ? [ownState.epoch] : [])], ignored: orphanLeft });
     const files = listedFiles.counted;
     /**
-     * Y-IOS-02-FIX-02 (critère 11) : `publish-deferred` avec sa cause réelle, statuts et compteurs seulement (liste fermée des statuts du scan,
-     * jamais de nom de fichier, de clé ni de chemin) ; avertissement `publish-blocked` : jamais « À jour » ni silence quand cet appareil ne peut
-     * pas publier (exigence d'Ali, visible dans Détails et en bandeau). `own-state-missing` : son état est connu comme absent.
+     * Y-IOS-02-FIX-02 (critère 11) : avertissement `publish-blocked` : jamais « À jour » ni silence quand cet appareil ne peut pas publier
+     * (exigence d'Ali, visible dans Détails et en bandeau), levé avant tout chargement. Y-FIX-02 (§30) : journal `publish-deferred` et cause
+     * nommée (Détails) composés par le bloc à la demande `orphanEpoch` (chemin rare, bundle de départ).
      */
-    const deferPublish = (refused: boolean): void => {
-      const state: OwnStateLogStatus = ownScan?.stateStatus ?? OWN_STATE_ABSENT;
-      const reason = refused ? 'state-refused' : state === 'missing' || state === OWN_STATE_ABSENT ? 'own-state-missing' : 'own-state-unknown';
-      logger.log('publish-deferred', { reason, state, files, ignored: listedFiles.ignoredSnapshots, acks: acksOnSelf.length, localSeq });
-      seen.warnings = [...(seen.warnings ?? []), 'publish-blocked'];
+    /**
+     * Y-FIX-02 : un seul site de chargement du bloc à la demande `orphanEpoch` après l'abandon (chaque `import()` coûte son enveloppe de
+     * préchargement au départ) : borne, journal `publish-deferred`, reprise d'`inflight`, réarmement et suppression de l'orpheline.
+     */
+    const firstModule = () => import('./orphanEpoch');
+    const deferPublish = async (refused: boolean): Promise<void> => {
+      const warnings = (seen.warnings = [...(seen.warnings ?? []), 'publish-blocked']);
+      (await firstModule()).deferred(logger, refused, first, facts, warnings);
     };
-    const openedHere =
-      currentEpoch === localEpoch &&
-      folderE === null &&
-      unreadable.length === 0 &&
-      isOrphanEpoch({
-        epoch: localEpoch,
-        ownStateOk: ownState !== null,
-        ownStateStatus: ownScan?.stateStatus,
-        acksOnSelf: acksOnSelf.length,
-        localStateSeq: localSeq,
-        storedSnapshot: storedSnapshot,
-        ownEpochs: ownScan?.epochs ?? [],
-      });
-    const publishAllowed =
+    const ruleAllows =
       canPublish({
         ownStateOk: ownState !== null,
         acksOnSelf: acksOnSelf.length,
         listedFiles: files,
         localStateSeq: localSeq,
       }) ||
-      openedHere ||
       ownScan?.stateStatus === 'foreign' ||
       ownScan?.stateStatus === 'corrupt';
-    if (openedHere && !canPublish({ ownStateOk: false, acksOnSelf: 0, listedFiles: files, localStateSeq: localSeq })) logger.log('own-state-recovered', { epoch: currentEpoch });
+    const inflight = await readInflight(repos);
+    /** Constats de la décision (journal `publish-deferred`, borne locale) : codes et compteurs, jamais un nom de fichier. */
+    // `opened` (`openedHere`, Y-IOS-02) : instantané orphelin ouvert ici. Y-FIX-02 (compensation du bundle de départ) : `orphanProof` est la
+    // même preuve (mêmes entrées) dès que `currentEpoch === localEpoch` (l'ouverture, la reprise, l'abandon et le changement d'époque, seuls à
+    // réécrire `localEpoch` ou `META.snapshot`, rendent cette égalité fausse) ; `unreadable` est vide (sinon attente plus haut, étape (iii)).
+    const facts = {
+      opened: currentEpoch === localEpoch && folderE === null && orphanProof,
+      state: ownScan?.stateStatus,
+      files,
+      ignored: listedFiles.ignoredSnapshots,
+      acks: acksOnSelf.length,
+      localSeq,
+      currentEpoch,
+      inflight,
+      head: localHead,
+      snapshot: storedSnapshot,
+      ownEpochs: ownScan?.epochs ?? [],
+      unreadable: unreadable.length,
+    };
+    /**
+     * Y-FIX-02 (ADR 0011 §30) : première publication interrompue (segment écrit, `state.ctx` jamais écrit) : borne locale, demandée au bloc
+     * à la demande seulement quand la règle actuelle refuse (la règle exige qu'aucun état n'ait été écrit). Rust juge la tête présentée.
+     */
+    const first: LocalBound | null = ruleAllows ? null : (await firstModule()).bound(logger, facts);
+    const publishAllowed = ruleAllows || first?.covers;
     let head: DeviceAck = { epoch: currentEpoch, segment: bounds.head.segment, record: bounds.head.record, hlc: bounds.headHlc, stateSeq: 0 };
     let snapshotMeta = storedSnapshot?.epoch === currentEpoch ? { seq: storedSnapshot.seq, endHlc: storedSnapshot.endHlc } : null;
     const purgeHorizon = await readJson<Hlc>(repos, META.purgeHorizon);
@@ -624,8 +622,15 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     };
     const nextState = async (h: DeviceAck): Promise<PublishedDeviceState> => buildState(currentEpoch, h, stateSeq + 1, snapshotMeta, purgeHorizon, await ackMap());
 
-    if (publishAllowed) {
-      await resolveInflight(deps, async (h) => {
+    // Contre-revue S2 : armé seulement pour une borne ouverte par une trace locale (pas pour `openedHere`) ; `bound` ne rend une `source`
+    // que pour une borne ouverte.
+    if (first?.source) onStateIo = () => deferPublish(true);
+    // Y-FIX-02 (§30, revue B1, contre-revue S3) : intention d'ajout résolue seulement si la publication est permise par la règle actuelle, ou
+    // par la borne locale dont la trace est cette intention (source `inflight`, donc de l'époque courante) ; une borne `local-head` ou
+    // `openedHere` ne résout pas une intention d'une autre époque. Refusée, l'intention reste posée, stable, et aucun état n'est écrit.
+    // `first` est nul exactement quand la règle actuelle permet ; sa `source` n'est rendue que pour une borne ouverte.
+    if (inflight && (!first || first.source === 'inflight')) {
+      await (await firstModule()).resolveInflight(deps, inflight, async (h) => {
         const ok = await writeState(await nextState(h), true);
         if (ok) head = h;
         return ok;
@@ -954,18 +959,18 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       }
       await repos.sync.saveState(self, { epoch: currentEpoch, cursorSegment: head.segment, cursorRecord: head.record, ackHlc: head.hlc, headSegment: head.segment, headRecord: head.record, headHlc: head.hlc });
     } else {
-      deferPublish(false);
+      await deferPublish(false);
     }
 
     // 6. État publié (réécrit s'il a changé, ou s'il a été remplacé par un tiers). Y-11 : l'annonce de l'appareil qui réinitialise est
     // toujours publiée (forcée) tant que l'époque visée n'est pas ouverte.
     const announcing = noticeToPublish(directive, currentEpoch) !== null;
-    const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || ownState?.epoch !== currentEpoch || announcing;
+    const forceState = ownScan?.stateStatus === 'foreign' || ownScan?.stateStatus === 'corrupt' || (lastWritten ?? ownState)?.epoch !== currentEpoch || announcing;
     if (publishAllowed && !(await writeState(await nextState(head), forceState))) {
       // Revue Y-IOS-02-FIX-02, point 1 (§24 point 10 (a)) : état refusé par Rust (`state-mismatch`, déjà journalisé `write-state-failed` ;
       // ou plus de 64 accusés) : jamais « À jour » ni silence. Cas résiduel : `state.ctx` supprimé par un tiers, base restaurée à `stateSeq` 0,
       // aucun accusé, seul un instantané d'une ancienne époque jamais annoncée : le moteur propose `stateSeq` 1, Rust (maître) refuse.
-      deferPublish(true);
+      await deferPublish(true);
     }
     if (announcing && directive.kind === 'initiator') {
       // §14.3 étapes 3 et 4 : annonce publiée sous l'ancienne clé, puis époque visée ouverte sous la nouvelle (instantané, état).
@@ -1032,12 +1037,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       (ownScan?.epochs ?? []).some((e) => e.epoch !== currentEpoch && e.segments.length === 0 && e.snapshots.length > 0) &&
       (await repos.sync.getMeta(META.orphanEpoch)) === null
     ) {
-      await (await import('./orphanEpoch')).relistOrphanEpoch(deps, { scan, ownScan, currentEpoch, own: lastWritten ?? ownState, announced: announcedByOthers, accepted, forgotten: forgetView.order, unreadable: unreadable.length });
+      await (await firstModule()).relistOrphanEpoch(deps, { scan, ownScan, currentEpoch, own: lastWritten ?? ownState, announced: announcedByOthers, accepted, forgotten: forgetView.order, unreadable: unreadable.length });
     }
     // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
     if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) {
       try {
-        await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
+        await (await firstModule()).retryOrphanDeletion(deps, ownScan, currentEpoch);
       } catch (error) {
         // Comme les autres suppressions de l'étape 7 : journalisé, retenté au cycle suivant ; ni la lecture, ni la publication, ni la suppression
         // des fichiers d'un appareil oublié ne sont sautées.
@@ -1120,7 +1125,7 @@ export async function clearSegmentGap(
 
 /** Constats du cycle hors étapes : avertissements du scan, valeur locale illisible relue vide (cinquième revue, points 2 et 5). */
 interface CycleSeen {
-  warnings?: SyncWarningCode[];
+  warnings?: SyncStatusWarning[];
   unreadable?: boolean;
 }
 

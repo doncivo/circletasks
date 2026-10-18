@@ -64,6 +64,13 @@ const SCAN_WARNINGS = ['nonce-budget', 'folder-large', 'too-many-devices', 'scan
  */
 export const SYNC_WARNINGS = ['carry-held', 'carry-report', ...SCAN_WARNINGS, 'publish-blocked', 'received-unapplied', 'awaiting-other-devices'] as const;
 export type SyncWarningCode = (typeof SYNC_WARNINGS)[number];
+/**
+ * Y-FIX-02 (ADR 0011 §30) : cause nommée jointe à `publish-blocked` dans `warnings` (texte de la section AVERTISSEMENTS de Détails, catalogue à
+ * la demande) ; hors de `SYNC_WARNINGS` : jamais un bandeau à part (le bandeau montre `publish-blocked`).
+ */
+export type PublishBlockedCause = 'first-publication-state-refused' | 'unexplained-files';
+/** Codes portés par `warnings` : avertissements et causes de `publish-blocked`. */
+export type SyncStatusWarning = SyncWarningCode | PublishBlockedCause;
 type ScanWarningCode = (typeof SCAN_WARNINGS)[number];
 
 /** Avertissements d'un scan (`FolderScan`), dans l'ordre de `SYNC_WARNINGS`. */
@@ -243,7 +250,7 @@ export interface SyncBannerStatus<D extends SyncBannerDevice = SyncBannerDevice>
   /** Y-11, facultatif. */
   readonly reset?: ResetFacts | null | undefined;
   /** Y-TECH-02 : avertissements du dernier scan, facultatif. */
-  readonly warnings?: readonly SyncWarningCode[] | null | undefined;
+  readonly warnings?: readonly SyncStatusWarning[] | null | undefined;
   /** Y-TECH-02 : une lecture de l'état local par le service a échoué (§19 point 7), facultatif. */
   readonly stateUnreadable?: boolean | undefined;
 }
