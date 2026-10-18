@@ -18,6 +18,7 @@ pub(crate) async fn load<R: Runtime>(
 ) -> Result<String, crate::Error> {
     // CircleTasks (SEC-01) : première instruction de `load`, avant tout accès au disque.
     crate::guard::validate_db_url(&db)?;
+    close_previous(&db_instances, &db).await;
     let pool = DbPool::connect(&db, &app).await?;
 
     if let Some(migrations) = migrations.0.lock().await.remove(&db) {
@@ -79,4 +80,15 @@ pub(crate) async fn select(
 
     let db = instances.get(&db).ok_or(Error::DatabaseNotLoaded(db))?;
     db.select(query, values).await
+}
+
+/// CircleTasks (SEC-01, audit M3) : un second `load` de la même base ferme d'abord le pool précédent au lieu de le laisser orphelin avec
+/// sa connexion ouverte (verrous WAL, deuxième connexion sur le fichier). Il n'est PAS refusé : le front recharge sa WebView
+/// (`window.location.reload()`, `src/platform/relaunch.ts`, verrouillage, oubli de synchro) sans redémarrer le processus Rust, puis
+/// rappelle `load` alors que l'ancien pool est encore enregistré ; un refus empêcherait toute réouverture jusqu'au redémarrage.
+pub(crate) async fn close_previous(instances: &DbInstances, db: &str) {
+    let previous = instances.0.write().await.remove(db);
+    if let Some(previous) = previous {
+        previous.close().await;
+    }
 }
