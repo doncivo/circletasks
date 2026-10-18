@@ -193,7 +193,10 @@ pub(crate) fn decide(action: i32, a1: Option<&str>, a2: Option<&str>) -> Option<
 }
 
 #[cfg(feature = "sqlite")]
-pub(crate) use sqlite::{forget_pool, harden_pool_options, register_pool, sqlite_error};
+#[cfg(all(test, feature = "sqlite"))]
+pub(crate) use sqlite::pending_reason;
+#[cfg(feature = "sqlite")]
+pub(crate) use sqlite::{clear_reason, forget_pool, harden_pool_options, register_pool, sqlite_error};
 
 #[cfg(feature = "sqlite")]
 mod sqlite {
@@ -225,6 +228,20 @@ mod sqlite {
         let mut pools = pools();
         pools.retain(|(k, _)| *k != key);
         pools.push((key, Arc::clone(state)));
+    }
+
+    /// Raison de refus en attente pour ce pool (0 : aucune). Tests seulement.
+    #[cfg(test)]
+    pub(crate) fn pending_reason(pool: &SqlitePool) -> u8 {
+        pools().iter().find(|(k, _)| *k == key(pool)).map_or(0, |(_, s)| s.load(Ordering::SeqCst))
+    }
+
+    /// Remet à zéro la raison de refus en attente, avant chaque `execute` et `select` : une raison notée par un pragma interne d'une
+    /// instruction réussie ne doit pas classer un refus ultérieur (audit M4).
+    pub(crate) fn clear_reason(pool: &SqlitePool) {
+        if let Some((_, state)) = pools().iter().find(|(k, _)| *k == key(pool)) {
+            state.store(0, Ordering::SeqCst);
+        }
     }
 
     /// Retire l'état d'un pool fermé.

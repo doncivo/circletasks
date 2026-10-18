@@ -184,6 +184,7 @@ impl DbPool {
         Ok(match self {
             #[cfg(feature = "sqlite")]
             DbPool::Sqlite(pool) => {
+                crate::guard::clear_reason(pool);
                 let mut query = sqlx::query(&_query);
                 for value in _values {
                     if value.is_null() {
@@ -254,6 +255,7 @@ impl DbPool {
         Ok(match self {
             #[cfg(feature = "sqlite")]
             DbPool::Sqlite(pool) => {
+                crate::guard::clear_reason(pool);
                 let mut query = sqlx::query(&_query);
                 for value in _values {
                     if value.is_null() {

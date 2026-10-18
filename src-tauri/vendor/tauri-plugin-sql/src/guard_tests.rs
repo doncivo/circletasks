@@ -525,3 +525,32 @@ async fn sec01_9_the_connection_is_defensive_and_the_schema_is_not_trusted() {
         assert_eq!(now, i32::from(name == "DEFENSIVE"), "{name} : DEFENSIVE doit valoir 1, TRUSTED_SCHEMA 0");
     }
 }
+
+/// Audit M3 : un second `load` ferme le pool précédent (aucune connexion orpheline) ; il n'est pas refusé, car le front recharge sa
+/// WebView sans redémarrer Rust et rappelle `load`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_3_a_second_load_closes_the_previous_pool() {
+    let fx = Fixture::new("db-reload-").await;
+    let instances = crate::DbInstances::default();
+    instances.0.write().await.insert(crate::guard::ALLOWED_URL.to_string(), DbPool::Sqlite(fx.pool.clone()));
+    assert!(!fx.pool.is_closed());
+    crate::commands::close_previous(&instances, crate::guard::ALLOWED_URL).await;
+    assert!(fx.pool.is_closed(), "l'ancien pool doit être fermé");
+    assert!(instances.0.read().await.is_empty());
+    // Sans pool précédent : sans effet.
+    crate::commands::close_previous(&instances, crate::guard::ALLOWED_URL).await;
+}
+
+/// Audit M4 : une raison de refus notée par un pragma INTERNE d'une instruction qui réussit (par exemple `PRAGMA table_list` émis par
+/// `wal_checkpoint`) ne doit pas rester en attente pour classer, plus tard, un refus sans raison.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_9_a_stale_refusal_reason_never_survives_the_next_call() {
+    let fx = Fixture::new("db-stale-").await;
+    fx.exec("PRAGMA wal_checkpoint(TRUNCATE)").await.unwrap();
+    fx.sel("SELECT 1").await.unwrap();
+    assert_eq!(crate::guard::pending_reason(&fx.pool), 0, "aucune raison ne doit rester après un appel réussi");
+    fx.exec("CREATE TABLE t (id INTEGER PRIMARY KEY)").await.unwrap();
+    fx.exec("PRAGMA wal_checkpoint(TRUNCATE)").await.unwrap();
+    fx.exec("INSERT INTO t DEFAULT VALUES").await.unwrap();
+    assert_eq!(crate::guard::pending_reason(&fx.pool), 0);
+}
