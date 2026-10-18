@@ -7,7 +7,6 @@ export type {
 } from './taskUseCases';
 export { createTaskUseCases } from './createTaskUseCases';
 export { createSeriesUseCases, type SeriesError, type SeriesUseCases } from './seriesUseCases';
-export { TaskDetail } from './TaskDetail';
 export { taskDetailStore, type TaskDetailState, type TaskDetailStatus } from './taskDetailStore';
 export { createCarryOverUseCases, type CarryOverUseCases } from './carryOverUseCases';
 export { createDayRollover, type DayRollover, type DayRolloverOptions, type Timers } from './dayRollover';

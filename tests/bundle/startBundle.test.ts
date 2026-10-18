@@ -71,7 +71,7 @@ describe('bundle de départ (index.html)', () => {
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
   // import statique oublié, un barrel ou un effet de bord ajouté (retrait de « sideEffects » dans package.json compris).
-  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts', 'src/sync/epochCarryReportAck.ts', 'src/sync/orphanEpoch.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
+  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/tasks/TaskDetail.tsx', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts', 'src/sync/epochCarryReportAck.ts', 'src/sync/orphanEpoch.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
     const start = new Set(startChunks().map((chunk) => chunk.file));
     const chunk = manifest[source];
     if (!chunk) throw new Error(`bloc ${source} absent du manifeste`);

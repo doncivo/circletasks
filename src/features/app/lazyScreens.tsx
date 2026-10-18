@@ -64,6 +64,11 @@ class ScreenErrorBoundary extends Component<{ readonly onRetry: () => void; read
  */
 interface LazyOptions {
   readonly onDemand?: boolean;
+  /**
+   * BUNDLE-01 : `'none'` : préchargé comme les écrans, mais sans repli d'écran : hôte monté en permanence qui ne rend rien tant que son
+   * état ne l'appelle pas (fiche de tâche, hôtes de la coquille) ; un repli occuperait sa place dans la mise en page à chaque démarrage.
+   */
+  readonly fallback?: 'screen' | 'none';
 }
 
 /**
@@ -88,7 +93,7 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName,
     const [direct] = useState(() => loaded);
     const [Lazy, setLazy] = useState(() => lazy<ComponentType<P>>(remember));
     const [attempt, setAttempt] = useState(0);
-    const body = direct ? createElement(direct, props) : <Suspense fallback={options.onDemand === true ? null : <Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
+    const body = direct ? createElement(direct, props) : <Suspense fallback={options.onDemand === true || options.fallback === 'none' ? null : <Fallback />}>{createElement(Lazy as unknown as ComponentType<P>, props)}</Suspense>;
     return (
       <ScreenErrorBoundary
         key={attempt}
@@ -109,7 +114,8 @@ export function lazyScreen<P extends object>(load: Loader<P>, name?: ScreenName,
 export const ReportScreen = lazyScreen<{ entry?: 'tasks' | 'routines' }>(() => import('../stats/ReportScreen').then((m) => ({ default: m.ReportScreen })), 'reportscreen');
 export const DoneTasksScreen = lazyScreen<object>(() => import('../tasks/DoneTasksScreen').then((m) => ({ default: m.DoneTasksScreen })), 'donetasksscreen');
 export const TrashScreen = lazyScreen<object>(() => import('../tasks/TrashScreen').then((m) => ({ default: m.TrashScreen })), 'trashscreen');
-export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })), 'taskdetail');
+/** BUNDLE-01 palier 1 : fiche de tâche, montée en permanence par Aujourd'hui, la Semaine, Objectif, Un jour, Terminées et la coquille : sans repli. */
+export const TaskDetail = lazyScreen<object>(() => import('../tasks/TaskDetail').then((m) => ({ default: m.TaskDetail })), 'taskdetail', { fallback: 'none' });
 export const SomedayScreen = lazyScreen<object>(() => import('../someday/SomedayScreen').then((m) => ({ default: m.SomedayScreen })), 'somedayscreen');
 export const GoalsScreen = lazyScreen<object>(() => import('../goals/GoalsScreen').then((m) => ({ default: m.GoalsScreen })), 'goalsscreen');
 export const WeekScreen = lazyScreen<object>(() => import('../week/WeekScreen').then((m) => ({ default: m.WeekScreen })), 'weekscreen');

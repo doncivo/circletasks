@@ -13,7 +13,7 @@ import { useAppContainer, useFeatureStore, useTaskEntities } from '../app/AppCon
 import { useAppStore } from '../app/appStore';
 import { useNavigationStore } from '../app/navigation';
 import { useAnnounceCreation, useDefaultSpaceId } from '../spaces';
-import { TaskDetail } from '../tasks';
+import { TaskDetail } from '../app/lazyScreens';
 import { GoalHistory } from './GoalHistory';
 import { GoalDraft, GoalSection } from './GoalSection';
 import { goalsStore } from './goalsStore';
