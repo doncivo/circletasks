@@ -54,19 +54,41 @@ pub(crate) fn validate_db_url(url: &str) -> Result<(), Error> {
     }
 }
 
-/// Couche 4 : refuse toute instruction qui contient le mot `VACUUM` (à n'importe quelle position, donc aussi après un `;`).
+/// Couche 4 : refuse toute instruction qui contient le mot `VACUUM` (à n'importe quelle position, donc aussi après un `;`), ainsi que,
+/// pour qu'un objet de schéma persistant n'en porte jamais, une fonction refusée (`load_extension`, `fts3_tokenizer`, `readfile`,
+/// `writefile`, `edit(`) ou un `pragma_<nom>` hors liste blanche. Ces derniers sont aussi refusés par l'autorisateur, mais seulement à
+/// l'exécution : le corps d'un `CREATE TRIGGER` ou d'une `CREATE VIEW` n'y est pas soumis à la création, et l'objet bloquerait ensuite
+/// toutes les écritures de sa table (audit M1).
 pub(crate) fn check_statement(sql: &str) -> Result<(), Error> {
-    if mentions_vacuum(sql) {
-        Err(refuse("vacuum"))
-    } else {
-        Ok(())
+    let words = sql_words(sql);
+    if words.iter().any(|(w, _)| w.eq_ignore_ascii_case("vacuum")) {
+        return Err(refuse("vacuum"));
     }
+    for (word, call) in &words {
+        let lower = word.to_ascii_lowercase();
+        if matches!(lower.as_str(), "load_extension" | "fts3_tokenizer" | "readfile" | "writefile") || (lower == "edit" && *call) {
+            return Err(refuse("function"));
+        }
+        #[cfg(feature = "sqlite")]
+        if let Some(pragma) = lower.strip_prefix("pragma_")
+            && !PRAGMA_WHITELIST.contains(&pragma)
+        {
+            return Err(refuse("pragma"));
+        }
+    }
+    Ok(())
 }
 
-/// Le mot `VACUUM` (casse ignorée) apparaît-il comme mot du langage SQL ? Les commentaires `--` et `/* */`, les littéraux `'...'` et les
-/// identifiants `"..."`, `` `...` `` et `[...]` sont ignorés : `SELECT 'vacuum'` et `vacuum_count` ne sont pas des faux refus. Un
-/// littéral ou un commentaire non terminé s'étend jusqu'à la fin du texte, comme dans SQLite.
+/// Le mot `VACUUM` (casse ignorée) apparaît-il comme mot du langage SQL ? (voir [`sql_words`])
+#[cfg(test)]
 pub(crate) fn mentions_vacuum(sql: &str) -> bool {
+    sql_words(sql).iter().any(|(w, _)| w.eq_ignore_ascii_case("vacuum"))
+}
+
+/// Mots du langage SQL de `sql`, avec « suivi d'une parenthèse ouvrante » (appel de fonction). Les commentaires `--` et `/* */`, les
+/// littéraux `'...'` et les identifiants `"..."`, `` `...` `` et `[...]` sont ignorés : `SELECT 'vacuum'` et `vacuum_count` ne sont pas
+/// des faux refus. Un littéral ou un commentaire non terminé s'étend jusqu'à la fin du texte, comme dans SQLite.
+fn sql_words(sql: &str) -> Vec<(String, bool)> {
     let chars: Vec<char> = sql.chars().collect();
     let skip_to = |from: usize, close: &[char]| -> usize {
         let mut i = from;
@@ -79,6 +101,7 @@ pub(crate) fn mentions_vacuum(sql: &str) -> bool {
         chars.len()
     };
     let is_word = |c: char| c.is_alphanumeric() || c == '_' || c == '$' || !c.is_ascii();
+    let mut words = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
@@ -97,15 +120,13 @@ pub(crate) fn mentions_vacuum(sql: &str) -> bool {
             while i < chars.len() && is_word(chars[i]) {
                 i += 1;
             }
-            let word: String = chars[start..i].iter().collect();
-            if word.eq_ignore_ascii_case("vacuum") {
-                return true;
-            }
+            let call = chars[i..].iter().find(|c| !c.is_whitespace()) == Some(&'(');
+            words.push((chars[start..i].iter().collect::<String>(), call));
         } else {
             i += 1;
         }
     }
-    false
+    words
 }
 
 // ------------------------------------------------------------------------------------------------------------------------------
@@ -259,6 +280,16 @@ mod sqlite {
     unsafe fn harden(db: *mut ffi::sqlite3, state: &Arc<AtomicU8>) -> Result<(), String> {
         // SAFETY : `db` valide (contrat). Limite à 0 : `ATTACH` et `VACUUM INTO` échouent même si l'autorisateur est neutralisé.
         unsafe { ffi::sqlite3_limit(db, ffi::SQLITE_LIMIT_ATTACHED, 0) };
+        // Mode défensif (pas d'écriture du schéma ni de corruption volontaire) et schéma non fiable (déclencheurs et vues ne peuvent
+        // appeler que des fonctions « innocuous »). SAFETY : `db` valide ; les deux réglages prennent un entier et un pointeur de retour nul.
+        for op in [ffi::SQLITE_DBCONFIG_DEFENSIVE, ffi::SQLITE_DBCONFIG_TRUSTED_SCHEMA] {
+            let on = c_int::from(op == ffi::SQLITE_DBCONFIG_DEFENSIVE);
+            // SAFETY : voir ci-dessus.
+            let rc = unsafe { ffi::sqlite3_db_config(db, op, on, std::ptr::null_mut::<c_int>()) };
+            if rc != ffi::SQLITE_OK {
+                return Err(format!("sqlite3_db_config({op}) a répondu {rc}"));
+            }
+        }
         // Une part de l'`Arc` est volontairement laissée à l'autorisateur pour la vie du processus (quelques octets par connexion ;
         // le pool recycle sa connexion unique, jamais plus d'une poignée sur toute la vie de l'application).
         let user = Arc::into_raw(Arc::clone(state)).cast_mut().cast::<c_void>();
