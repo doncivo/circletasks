@@ -400,10 +400,10 @@ fn sec01_7_lexical_filter_cases() {
 fn sec01_8_pragma_white_list_cases() {
     use crate::guard::{REASON_PRAGMA, decide};
     let pragma = |name: &str, arg: Option<&str>| decide(libsqlite3_sys::SQLITE_PRAGMA, Some(name), arg);
-    for (name, arg) in [("foreign_keys", None), ("foreign_keys", Some("ON")), ("FOREIGN_KEYS", Some("on")), ("foreign_keys", Some("1")), ("journal_mode", None), ("journal_mode", Some("WAL")), ("journal_mode", Some("wal")), ("wal_checkpoint", None), ("wal_checkpoint", Some("TRUNCATE")), ("data_version", None), ("quick_check", Some("t")), ("quick_check", None)] {
+    for (name, arg) in [("foreign_keys", None), ("foreign_keys", Some("ON")), ("FOREIGN_KEYS", Some("on")), ("foreign_keys", Some("1")), ("journal_mode", None), ("journal_mode", Some("WAL")), ("journal_mode", Some("wal")), ("wal_checkpoint", None), ("wal_checkpoint", Some("TRUNCATE")), ("data_version", None), ("quick_check", Some("t"))] {
         assert_eq!(pragma(name, arg), None, "{name} {arg:?} doit passer");
     }
-    for (name, arg) in [("foreign_keys", Some("OFF")), ("foreign_keys", Some("0")), ("foreign_keys", Some("")), ("journal_mode", Some("DELETE")), ("journal_mode", Some("OFF")), ("data_version", Some("1")), ("writable_schema", None), ("user_version", None), ("table_info", Some("t")), ("", None)] {
+    for (name, arg) in [("foreign_keys", Some("OFF")), ("foreign_keys", Some("0")), ("foreign_keys", Some("")), ("journal_mode", Some("DELETE")), ("journal_mode", Some("OFF")), ("data_version", Some("1")), ("quick_check", None), ("writable_schema", None), ("user_version", None), ("table_info", Some("t")), ("", None)] {
         assert_eq!(pragma(name, arg), Some(REASON_PRAGMA), "{name} {arg:?} doit être refusé");
     }
     assert_eq!(decide(libsqlite3_sys::SQLITE_PRAGMA, None, None), Some(REASON_PRAGMA), "pragma sans nom");

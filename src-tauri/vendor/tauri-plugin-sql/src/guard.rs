@@ -143,7 +143,7 @@ fn pragma_allowed(name: &str, arg: Option<&str>) -> bool {
         // Lecture seule, émise par le module fts5 lui-même (SEC-01 : repérée à l'exécution de la migration 0011), jamais par le front.
         "data_version" => arg.is_none(),
         // Lecture seule, émis par SQLite lui-même pour `ALTER TABLE ... ADD COLUMN ... CHECK` (`pragma_quick_check(table, main)`, migration 0018).
-        "quick_check" => true,
+        "quick_check" => arg.is_some(),
         _ => false,
     }
 }
