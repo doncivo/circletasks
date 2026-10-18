@@ -76,7 +76,7 @@ describe('bundle de départ (index.html)', () => {
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
   // import statique oublié, un barrel ou un effet de bord ajouté (retrait de « sideEffects » dans package.json compris).
-  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
+  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts', 'src/features/sync/SyncDetailsCarryReport.tsx', 'src/features/sync/carryReportBannerLine.ts', 'src/sync/epochCarryReportBanner.ts', 'src/sync/epochCarryReportAck.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
     const start = new Set(startChunks().map((chunk) => chunk.file));
     const chunk = manifest[source];
     if (!chunk) throw new Error(`bloc ${source} absent du manifeste`);
@@ -104,7 +104,9 @@ describe('bundle de départ (index.html)', () => {
   // demande (règle d'Ali du 2026-10-18), aucun octet dans un bloc de départ. Le départ ne porte que le code d'avertissement et la lecture de
   // l'état du bandeau (`carryLines`).
   it('l’écran du compte rendu, son bandeau et leurs textes sont hors du départ', () => {
-    const markers = ['Rétablis alors que vous les aviez supprimés', 'Aucune écriture à reporter', 'Afficher 50 de plus', 'ct-carry__item', 'éléments rétablis : '];
+    // `CarryReportSheet.tsx` et `fr.syncCarryReport.ts` sont importés statiquement par des blocs à la demande : ils n'ont pas d'entrée propre dans le
+    // manifeste, ils sont donc suivis par leurs marqueurs (classes du composant ; textes du catalogue, y compris ceux ajoutés par la revue).
+    const markers = ['Rétablis alors que vous les aviez supprimés', 'Aucune écriture à reporter', 'Afficher 50 de plus', 'ct-carry__item', 'ct-carry__summary', 'ct-carry__overflow', 'Autres éléments : ', 'stockage plein ou illisible', 'éléments rétablis : '];
     const start = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
     for (const chunk of start) for (const marker of markers) expect(readFileSync(join(outDir, chunk.file), 'utf8').includes(marker), `${chunk.file} : ${marker}`).toBe(false);
     for (const marker of markers) expect(Object.values(manifest).some((chunk) => chunk.file.endsWith('.js') && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker)), marker).toBe(true);
