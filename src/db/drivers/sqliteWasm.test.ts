@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SqlDriver } from '../driver';
-import { openSqliteWasmDriver, PREPARED_STATEMENTS_MAX, preparedStatementCount } from './sqliteWasm';
+import { openSqliteWasmDriver, openStatementCount, PREPARED_STATEMENTS_MAX, preparationCount, preparedStatementCount } from './sqliteWasm';
 
 /**
  * Y-TECH-05 (critère 11, durée) : SQLite recompile à chaque préparation les programmes de tous les déclencheurs de la table écrite ;
@@ -34,7 +34,7 @@ describe('pilote SQLite Wasm : instructions préparées', () => {
     const db = await open();
     expect(await db.execute('INSERT INTO t (v) VALUES (?)', ['x'])).toMatchObject({ rowsAffected: 1, lastInsertId: 1 });
     expect(await db.execute('INSERT INTO t (v) VALUES (?)', ['y'])).toMatchObject({ rowsAffected: 1, lastInsertId: 2 });
-    expect(await db.execute('UPDATE t SET v = ? WHERE id <= ?', ['z', 2])).toMatchObject({ rowsAffected: 2 });
+    expect(await db.execute('UPDATE t SET v = ? WHERE id <= ?', ['z', 2])).toMatchObject({ rowsAffected: 2, lastInsertId: 2 });
     expect(await db.select('SELECT id, v FROM t WHERE v = ? ORDER BY id', ['z'])).toEqual([{ id: 1, v: 'z' }, { id: 2, v: 'z' }]);
     expect(await db.select('SELECT id, v FROM t WHERE v = ? ORDER BY id', ['absent'])).toEqual([]);
     expect(await db.select('SELECT id FROM t WHERE id = ?', [2])).toEqual([{ id: 2 }]);
@@ -78,21 +78,27 @@ describe('pilote SQLite Wasm : schéma changé sous une instruction gardée (rev
 });
 
 describe('pilote SQLite Wasm : bornes du cache (revue I2, M2, M3)', () => {
-  it('au plus PREPARED_STATEMENTS_MAX instructions gardées : la moins récemment utilisée est évincée, la récente reste', async () => {
+  it('LRU : la récente reste (aucune nouvelle préparation), la plus ancienne est évincée et finalisée (instructions ouvertes = taille du cache)', async () => {
     const db = await open();
-    await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]);
-    const base = preparedStatementCount(db);
+    const hot = 'SELECT 1 AS hot WHERE ? = ?';
+    const cold = (i: number): string => `SELECT ${String(i)} AS n WHERE ? = ?`;
+    await db.select(hot, [1, 1]);
     for (let i = 0; i < PREPARED_STATEMENTS_MAX + 50; i += 1) {
-      await db.select(`SELECT ${String(i)} AS n WHERE ? = ?`, [1, 1]);
-      if (i % 10 === 0) await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]); // reste récente
-      expect(preparedStatementCount(db)).toBeLessThanOrEqual(PREPARED_STATEMENTS_MAX);
+      await db.select(cold(i), [1, 1]);
+      await db.select(hot, [1, 1]); // reste la plus récente
     }
-    expect(base).toBeGreaterThan(0);
     expect(preparedStatementCount(db)).toBe(PREPARED_STATEMENTS_MAX);
-    const before = preparedStatementCount(db);
-    await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]);
-    expect(preparedStatementCount(db)).toBe(before); // toujours gardée : aucune nouvelle préparation
-    expect(await db.select('SELECT 0 AS n WHERE ? = ?', [1, 1])).toEqual([{ n: 0 }]); // évincée puis préparée à nouveau, résultat juste
+    expect(await openStatementCount(db)).toBe(PREPARED_STATEMENTS_MAX);
+    // « hot » une fois, chaque texte froid une fois : en FIFO, « hot » serait évincée puis préparée à nouveau (compteur plus haut).
+    expect(preparationCount(db)).toBe(1 + PREPARED_STATEMENTS_MAX + 50);
+    const prepares = preparationCount(db);
+    await db.select(hot, [1, 1]);
+    expect(preparationCount(db)).toBe(prepares); // « hot » n'a jamais été évincée
+    await db.select(cold(PREPARED_STATEMENTS_MAX + 49), [1, 1]); // récente : encore gardée
+    expect(preparationCount(db)).toBe(prepares);
+    expect(await db.select(cold(0), [1, 1])).toEqual([{ n: 0 }]); // évincée depuis longtemps : préparée à nouveau, résultat juste
+    expect(preparationCount(db)).toBe(prepares + 1);
+    expect(await openStatementCount(db)).toBe(PREPARED_STATEMENTS_MAX);
   });
 
   it('un même texte avec une liaison puis sans liaison : la liaison précédente est effacée (NULL)', async () => {

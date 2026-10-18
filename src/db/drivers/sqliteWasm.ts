@@ -20,6 +20,7 @@ export const PREPARED_STATEMENTS_MAX = 256;
 let sqlite3Promise: Promise<Sqlite3> | null = null;
 const dbOf = new WeakMap<SqlDriver, Db>();
 const preparedOf = new WeakMap<SqlDriver, ReadonlyMap<string, unknown>>();
+const preparesOf = new WeakMap<SqlDriver, { readonly prepares: number }>();
 
 /**
  * Ouvre une base en mémoire. `image` (obtenue par `exportSqliteWasmImage`) recopie une base déjà migrée au lieu de
@@ -41,17 +42,21 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
   // table (une `UPDATE task` coûtait ~2,4 ms, pour 0,5 ms à l'insertion), et un report de 501 lignes en préparait des dizaines de milliers.
   // Bornée (LRU) : des dépôts construisent leur SQL (`IN (?, …)`, `SET …`) et le tas Wasm ne rétrécit jamais.
   const prepared = new Map<string, Stmt>();
+  const stats = { prepares: 0 };
   const run = <T>(sql: string, params: SqlParams, consume: (stmt: Stmt) => T): T => {
     let stmt = prepared.get(sql);
     if (stmt === undefined) {
-      stmt = db.prepare(sql);
+      // Évincer avant de préparer : si la finalisation échoue, la nouvelle instruction n'est pas encore créée, donc jamais perdue.
       if (prepared.size >= PREPARED_STATEMENTS_MAX) {
         const [oldest] = prepared.keys();
         if (oldest !== undefined) {
-          prepared.get(oldest)?.finalize();
+          const evicted = prepared.get(oldest);
           prepared.delete(oldest);
+          evicted?.finalize();
         }
       }
+      stmt = db.prepare(sql);
+      stats.prepares += 1;
     } else prepared.delete(sql);
     prepared.set(sql, stmt); // le plus récemment utilisé en dernier
     try {
@@ -92,13 +97,31 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
   }, options);
   dbOf.set(driver, db);
   preparedOf.set(driver, prepared);
+  preparesOf.set(driver, stats);
   return driver;
 }
 
 /** Nombre d'instructions préparées gardées (une par texte SQL distinct) : preuve, sans chronomètre, qu'un texte répété n'est pas recompilé. */
 export const preparedStatementCount = (driver: SqlDriver): number => preparedOf.get(driver)?.size ?? 0;
 
-/** Une seule instruction de lecture ou d'écriture de données, sans point-virgule au milieu : seule forme gardée préparée. */
+/** Nombre de préparations réelles par le cache (une par échec du cache) : un texte récent réutilisé ne l'augmente pas. */
+export const preparationCount = (driver: SqlDriver): number => preparesOf.get(driver)?.prepares ?? 0;
+
+/** Instructions encore ouvertes dans SQLite (parcours de `sqlite3_next_stmt`) : égal à la taille du cache si toute évincée est finalisée. */
+export async function openStatementCount(driver: SqlDriver): Promise<number> {
+  const db = dbOf.get(driver);
+  if (db === undefined) throw new Error('Pilote SQLite Wasm inconnu');
+  sqlite3Promise ??= sqlite3InitModule();
+  const sqlite3 = await sqlite3Promise;
+  let n = 0;
+  for (let p = sqlite3.capi.sqlite3_next_stmt(db.pointer as number, 0); p; p = sqlite3.capi.sqlite3_next_stmt(db.pointer as number, p)) n += 1;
+  return n;
+}
+
+/**
+ * Une seule instruction de lecture ou d'écriture de données, sans point-virgule au milieu : seule forme gardée préparée. Un `;` dans un
+ * littéral, ou un commentaire en tête, envoie au chemin non gardé : résultat juste, seulement plus lent.
+ */
 const isSingleStatement = (sql: string): boolean => /^\s*(SELECT|INSERT|UPDATE|DELETE|REPLACE|WITH)\b/i.test(sql) && !/;\s*\S/.test(sql);
 
 /** Image binaire de la base (à passer à `openSqliteWasmDriver`) ; hors transaction. */
