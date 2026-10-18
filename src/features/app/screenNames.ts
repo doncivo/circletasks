@@ -30,4 +30,5 @@ export type ScreenName =
   | 'quiethoursroute'
   | 'restorechoicedialog'
   | 'onboardinghost'
-  | 'searchoverlay';
+  | 'searchoverlay'
+  | 'focushost';

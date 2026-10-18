@@ -146,6 +146,8 @@ export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietH
 export const OnboardingHost = lazyScreen<object>(() => import('../settings/OnboardingHost').then((m) => ({ default: m.OnboardingHost })), 'onboardinghost', { fallback: 'none' });
 /** Recherche (M14) : ouverte sur un geste (Ctrl+K, bouton) ; préchargée, le raccourci existe avant le bloc et son premier usage le charge si besoin. */
 export const SearchOverlay = lazyScreen<object>(() => import('../search/SearchOverlay').then((m) => ({ default: m.SearchOverlay })), 'searchoverlay', { fallback: 'none' });
+/** Focus (M10) : reprise d'une session au démarrage et affichage sur un geste ; préchargé (la reprise attend le repos qui suit le premier rendu). */
+export const FocusHost = lazyScreen<object>(() => import('../focus/FocusHost').then((m) => ({ default: m.FocusHost })), 'focushost', { fallback: 'none' });
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {

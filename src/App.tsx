@@ -22,6 +22,7 @@ import {
   ChecklistsScreen,
   DoneTasksScreen,
   EventsScreen,
+  FocusHost,
   GoalsScreen,
   HolidaySettingsScreen,
   ImportScreen,
@@ -48,7 +49,6 @@ import { startNetworkStatus } from './features/app/appStatus';
 import { registerExternalEventsSource } from './features/calendars';
 import { registerChecklistsSource } from './features/checklists';
 import { EventEditorHost, HolidayDetailHost, registerEventsSource } from './features/events';
-import { FocusHost } from './features/focus';
 import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
 import { registerSearchShortcut } from './features/search';
