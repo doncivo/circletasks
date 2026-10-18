@@ -1316,7 +1316,7 @@ Revue d'ensemble de fin d'ordre 4, tranchée par l'architecte **avant qu'un seco
    - nouvelle époque : liste vidée ; `sync_delete_own` d'un segment : son entrée retirée ; au-delà de 1 024 : la plus ancienne retirée (journal `closed-dropped`, numéro seulement ; ce segment est alors lu selon la règle actuelle) ;
    - reconstruction de `own.json` (section 1.4) : seules les entrées de **son propre `state.ctx` authentifié** de la même époque, de segment inférieur à la tête reconstruite, et qu'aucun accusé authentifié sur soi ne dépasse dans ce segment ; aucune autre entrée n'est inventée (en cas de doute, pas d'entrée : règle actuelle) ;
    - `sync_write_state` : `closed` omis par le moteur → complété depuis `own.json` ; fourni → doit être égal, sinon `state-mismatch`. Le moteur ne le calcule pas et `comparableState` ne le compare pas : il ne change qu'avec `head.segment`, déjà comparé ; un retrait par purge part avec la réécriture suivante. `memory.ts` reproduit ces règles.
-   **Lecture** (`read_journal` de Rust, `memory.ts`) : segment `k` < `head.segment` **avec une entrée** `c` : lire exactement les enregistrements 0 à `c − 1` ; moins de `c` lignes complètes dans le fichier (version ancienne livrée par iCloud, troncature) → **`cloud-pending`**, curseur sur le premier enregistrement manquant, **jamais** de passage à `k+1` (« En attente d'iCloud » ; durable si un tiers a tronqué : visible, comme pour le segment de tête, section 1.5) ; lignes au-delà de `c`, complètes ou non → **ignorées**, passage à `k+1`. **Sans entrée** (état écrit avant cette story, entrée retirée par le plafond) : règle actuelle, inchangée. Segment de tête : inchangé (`head.record`). Un enregistrement de rang < `c` qui ne se déchiffre pas reste `truncated`.
+   **Lecture** (`read_journal` de Rust, `memory.ts`) : segment `k` < `head.segment` **avec une entrée** `c` : lire exactement les enregistrements 0 à `c − 1` ; moins de `c` lignes complètes dans le fichier (version ancienne livrée par iCloud, troncature) → **`cloud-pending`**, curseur sur le premier enregistrement manquant, **jamais** de passage à `k+1` (« En attente d'iCloud » ; durable si un tiers a tronqué : visible, comme pour le segment de tête, section 1.5) ; lignes au-delà de `c`, complètes ou non → **ignorées**, passage à `k+1`. **Sans entrée** (état écrit avant cette story, entrée retirée par le plafond) : règle actuelle, inchangée, sauf une ligne incomplète sous une tête plus grande (§33, Y-FIX-05). Segment de tête : inchangé (`head.record`). Un enregistrement de rang < `c` qui ne se déchiffre pas reste `truncated`.
    **`sm` et `sv`** : `sm` reste **1**, `sv` inchangé (aucune migration). **Compatibilité** :
    - états et segments déjà écrits : lus tels quels (pas de champ → règle actuelle) ; aucun fichier réécrit, aucune conversion ;
    - une version **antérieure** qui lit un état portant `closed` le refuse (schéma strict, `deny_unknown_fields` et `hasStrictJsonShape`) : appareil `corrupt`, visible (bandeau `device-corrupt`), sûr (rien n'est lu de lui, horizon de purge `blocked`, aucune suppression d'oublié) jusqu'à sa mise à jour ;
@@ -1766,6 +1766,41 @@ Tests : `tests/unit/sync/hostile/scenario5MuteTransport.test.ts` (rouge puis ver
 `src/platform/sync/memoryFaults.test.ts`, `src-tauri/tests/desktop/sync_bookmark.rs` (`y_ios_05_*`, câblage rouge puis vert, contrôles
 statiques du Swift) ; commits dans `docs/stories/Y-IOS-05.md`. Non prouvé avant l'iPhone : l'effet réel de `NSFileCoordinator.cancel()` sur une
 coordination en attente d'iCloud (Swift jamais exécuté hors de `build-ios.yml` et de l'appareil ; vérification manuelle d'Ali en mode avion).
+
+### 33. Avenant Y-FIX-05 : segment tronqué jamais clos, tolérance du lecteur (bloquant B18, 2026-10-18, avant le code)
+
+Numéro : §27 reste réservé à Y-IOS-07 et §31 à Y-FIX-03 ; §33 est écrit sans attendre §31. **Constat (audit 1.0, B18)** : un ajout coupé
+net (ligne incomplète, jamais enregistré par Rust : `own.json` inchangé) laisse un segment `k` tronqué ; l'ajout suivant ouvre `k + 1`
+(`max + 1`), mais `append_journal` ne ferme `own.segment` que si `own.record > 0` : `k` n'a jamais d'entrée `closed`. Le lecteur
+(`read_journal`, `memory.ts`) arrivait au bout des lignes complètes de `k`, sans nombre annoncé et avec `partial_tail` : `cloud-pending`
+pour toujours. Le PC restait « En attente d'iCloud » sans rien recevoir, l'iPhone affichait « À jour ».
+
+1. **Règle (amende §21 point 2 (iii) et « Sans entrée : règle actuelle, inchangée »).** Un segment `k` est abandonné et le lecteur passe à
+   `k + 1` lorsque, à la fin de ses lignes complètes : `k < head.segment` (la tête authentifiée est dans un segment plus grand) ; aucune
+   entrée `closed` n'annonce `k` ; le fichier a été lu avec succès (hydraté, en-tête vérifié par `check_header`) et finit sur une ligne
+   incomplète. Les lignes complètes de `k` sont lues et rendues d'abord ; seule la ligne incomplète, que personne n'a annoncée, est
+   abandonnée (l'ajout qui l'a écrite n'a pas été enregistré, ses entrées de file sont republiées dans le segment suivant, §21 point 2).
+   Le saut est journalisé : `segment-tail-skipped`, numéro de segment seulement (Rust : `log::event`, détail = numéro ; faux TypeScript :
+   journal natif de `memory.ts`, `testing.nativeEvents()`). Un curseur déjà posé sur le segment bloqué par l'ancien code repart au cycle
+   suivant, sans réassociation.
+2. **Aucun changement de format, ni d'écriture.** `append_journal` ne change pas ; aucune entrée `closed` à 0 enregistrement : elle est
+   refusée par le schéma (`closed_is_valid`, §21 « `records` ≥ 1 »), l'autoriser serait une extension du texte publié après l'association
+   du premier iPhone (§7.2) qui ferait déclarer l'appareil `corrupt` par les versions en service, et elle ne débloquerait pas les états
+   déjà publiés. `reader.ts` et le moteur ne changent pas. Alternative écartée et conservée : une story de format pourra nommer les
+   segments abandonnés dans l'état.
+3. **Hors de la tolérance (inchangés)** : segment dans le nuage ou absent (`cloud-pending`, jamais sauté sans lecture hydratée) ; segment
+   de tête (`head.record` fait foi) ; segment avec entrée et moins de lignes complètes qu'annoncé (`cloud-pending`, §21) ; ligne complète
+   indéchiffrable (`truncated` à ce rang, rien au-delà) ; en-tête incomplet (`cloud-pending`).
+4. **Risque résiduel, assumé.** Un segment clos sans entrée dont une version plus récente, livrée plus tard par iCloud, aurait plus de
+   lignes complètes qu'une version ancienne finissant sur une ligne incomplète serait sauté une fois. La lecture hydratée rend ce cas
+   improbable (iCloud livre des fichiers entiers) et les états écrits depuis Y-TECH-02 portent une entrée qui l'exclut ; le journal
+   `segment-tail-skipped` permet de retrouver une divergence.
+
+Tests : `tests/fixtures/sync/closed-segments.json` (cas « aucune entrée, ligne incomplète » passé de `cloud-pending` à `complete`, cas du
+segment réduit à son en-tête, segment intermédiaire sans entrée, curseur déjà bloqué, non-régressions nuage, tête et corruption ; rejouée
+par `sync_closed_segments.rs` et `closedSegments.test.ts`), `src-tauri/tests/desktop/sync_store.rs` (`y_fix_05_*` : `append_journal`
+inchangé, aucune entrée à 0, aller-retour état puis lecture), `tests/unit/sync/firstPublicationCrashPoints.test.ts` (critère 5 étendu
+côté PC). Commits dans `docs/stories/Y-FIX-05.md`.
 
 ## Conséquences
 
