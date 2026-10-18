@@ -233,18 +233,23 @@ mod sqlite {
 
     /// Fonction de rappel de SQLite. `user` est le pointeur d'un `AtomicU8` vivant tant que le processus (voir [`harden`]).
     unsafe extern "C" fn authorizer(user: *mut c_void, action: c_int, a1: *const c_char, a2: *const c_char, _a3: *const c_char, _a4: *const c_char) -> c_int {
-        let text = |p: *const c_char| -> Option<String> {
-            // SAFETY : SQLite passe NULL ou une chaîne C terminée, valide pendant l'appel.
-            (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
-        };
-        match decide(action, text(a1).as_deref(), text(a2).as_deref()) {
-            None => ffi::SQLITE_OK,
-            Some(reason) => {
-                // SAFETY : `user` vient de `Arc::into_raw` dans `harden`, jamais libéré.
-                unsafe { &*user.cast::<AtomicU8>() }.store(reason, Ordering::SeqCst);
-                ffi::SQLITE_DENY
+        // Un panic ne doit jamais traverser la frontière FFI (comportement indéfini en `panic = "unwind"`, build de test et de développement) :
+        // il est converti en refus, jamais en autorisation.
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let text = |p: *const c_char| -> Option<String> {
+                // SAFETY : SQLite passe NULL ou une chaîne C terminée, valide pendant l'appel.
+                (!p.is_null()).then(|| unsafe { CStr::from_ptr(p) }.to_string_lossy().into_owned())
+            };
+            match decide(action, text(a1).as_deref(), text(a2).as_deref()) {
+                None => ffi::SQLITE_OK,
+                Some(reason) => {
+                    // SAFETY : `user` vient de `Arc::into_raw` dans `harden`, jamais libéré.
+                    unsafe { &*user.cast::<AtomicU8>() }.store(reason, Ordering::SeqCst);
+                    ffi::SQLITE_DENY
+                }
             }
-        }
+        }))
+        .unwrap_or(ffi::SQLITE_DENY)
     }
 
     /// Couches 2 et 3 sur une connexion : limite d'attachement à 0 et autorisateur.
