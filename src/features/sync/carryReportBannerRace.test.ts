@@ -39,6 +39,8 @@ describe('course entre une lecture du bandeau et « J’ai vu » (contre-revue 7
     const real = container.data.repos.carryReports.bind(container.data.repos);
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => (release = resolve));
+    let reached: () => void = () => undefined;
+    const stale = new Promise<void>((resolve) => (reached = resolve));
     // Première lecture seulement : lit tout de suite l'état d'avant, puis attend la porte avant de le rendre.
     vi.spyOn(container.data.repos, 'carryReports').mockImplementationOnce(async () => {
       const repo = await real();
@@ -46,16 +48,17 @@ describe('course entre une lecture du bandeau et « J’ai vu » (contre-revue 7
         get: (target, key) =>
           key === 'unacknowledged'
             ? async () => {
-                const stale = await target.unacknowledged();
+                const before = await target.unacknowledged();
+                reached();
                 await gate;
-                return stale;
+                return before;
               }
             : (Reflect.get(target, key) as unknown),
       });
     });
     const older = loadCarryLine(container);
-    // Laisse la lecture ancienne atteindre la porte avant « J'ai vu ».
-    await vi.waitFor(() => expect(vi.mocked(container.data.repos.carryReports)).toHaveBeenCalledTimes(1));
+    // La lecture ancienne a vu l'état d'avant (non acquitté) et attend la porte : « J'ai vu » passe maintenant.
+    await stale;
     await (await real()).acknowledge(id, NOW);
     await refreshCarryLine(container);
     expect(carryLines.get(container)).toBeUndefined();
