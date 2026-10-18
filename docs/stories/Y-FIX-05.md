@@ -9,7 +9,7 @@
 | Agents | sync-icloud (lecteur, faux `memory.ts`, banc), desktop-tauri (`read_journal`, tests Rust) ; relecture code-reviewer ; qa-test |
 | Constat | `docs/audit-1.0.md`, B18 (ajouté le 2026-10-18) |
 | Estimation | 3 à 4 h ; alerte à 6 h (règle d'Ali : arrêt et prévenir si l'estimation dérape de plus de 50 %) |
-| Statut | fiche écrite le 2026-10-18, à développer |
+| Statut | développée le 2026-10-18 (rouge f1382253, vert 53b583fc), en attente de qa-test, revue et CI |
 | Branche | `y-fix-05-segment-tronque` ; à rebaser sur `main` une fois Y-FIX-02 fusionnée (dépendance : `tests/unit/sync/firstPublicationCrashPoints.test.ts`) |
 | Règle d'Ali (2026-10-18) | un défaut qui fait perdre des données ou affiche un état faux sans le dire passe avant la 1.0 d'office |
 
@@ -128,26 +128,43 @@ Identifiants **C1 à C14**. Rouge avant : C1, C2, C3, C4, C11 et C12 (et la lect
 
 ## Preuves
 
+Commits : ADR 0011 §33 `9372dbbb` (avant le code) ; **rouge seul `f1382253`** ; **vert `53b583fc`** (correctif Rust `read_journal` et faux `memory.ts`) ; C13 `e9dc4a87`. Aucun run CI (pas de push, consigne).
+
 | Critère | Rouge avant (commit, assertion) | Vert après (commit) | Run CI |
 | --- | --- | --- | --- |
-| C1 | à remplir | à remplir | à remplir |
-| C2 | à remplir | à remplir | à remplir |
-| C3 | à remplir | à remplir | à remplir |
-| C4 | à remplir | à remplir | à remplir |
-| C5 | non-régression (vert avant) | à remplir | à remplir |
-| C6 | non-régression (vert avant) | à remplir | à remplir |
-| C7 | non-régression (vert avant) | à remplir | à remplir |
-| C8 | non-régression (vert avant) | à remplir | à remplir |
-| C9 | partie append verte avant ; lecture rouge | à remplir | à remplir |
-| C10 | non-régression (vert avant) | à remplir | à remplir |
-| C11 | à remplir | à remplir | à remplir |
-| C12 | à remplir | à remplir | à remplir |
-| C13 | existant (vert avant) | à remplir | à remplir |
-| C14 | sans objet | à remplir | à remplir |
+| C1 | `f1382253` ; Rust `sync_closed_segments` : « assertion `left == right` failed: aucune entrée, ligne incomplète sous une tête plus grande ... (Y-FIX-05 C1) ; left: "cloud-pending", right: "complete" » ; Vitest : cloud-pending, (1, 3), 3 | `53b583fc` | à faire |
+| C2 | `f1382253` ; Vitest : cloud-pending, (1, 0), 0 (Rust : même table, arrêtée au premier cas rouge, C1) | `53b583fc` | à faire |
+| C3 | `f1382253` ; Vitest : cloud-pending, (2, 1), 4 | `53b583fc` | à faire |
+| C4 | `f1382253` ; Vitest : cloud-pending, (1, 3), 0 | `53b583fc` | à faire |
+| C5 | non-régression, verte avant (`f1382253`) | `53b583fc` | à faire |
+| C6 | non-régression (cas existant inchangé), verte avant | `53b583fc` | à faire |
+| C7 | non-régression (cas ajouté), verte avant | `53b583fc` | à faire |
+| C8 | non-régression (cas ajouté), verte avant | `53b583fc` | à faire |
+| C9 | `f1382253` ; partie append verte ; lecture du PC : left ("cloud-pending", RecordCursor { segment: 1, record: 0 }, 0), right ("complete", RecordCursor { segment: 2, record: 2 }, 2) | `53b583fc` (et `sync:segment-tail-skipped 1` capturé) | à faire |
+| C10 | `f1382253` ; partie append verte (`own.closed == [(1, 3)]`) ; lecture ajoutée, rouge : left ("cloud-pending", RecordCursor { segment: 2, record: 1 }, 4), right ("complete", RecordCursor { segment: 3, record: 2 }, 6) | `53b583fc` | à faire |
+| C11 | `f1382253` ; « expected Set{ '7a000001-…' } to deeply equal Set{ …(4) } » (le PC ne reçoit rien de l'iPhone) ; variante own.segment ≥ 1 : « expected Set{ …(2) } to deeply equal Set{ …(3) } » | `53b583fc` | à faire |
+| C12 | `f1382253` (même test que C11, non atteint) | `53b583fc` | à faire |
+| C13 | test ajouté dans `firstPublicationCrashPoints.test.ts` (`e9dc4a87`), vert sur le faux d'avant le correctif et après | `e9dc4a87` | à faire |
+| C14 | sans objet | lint, typage propres ; `cargo test --test desktop --features test-hooks` : 800 passés, 0 échec, 2 ignorés (préexistants) ; Vitest du module (`src/sync src/platform/sync tests/unit/sync tests/fixtures waitingLong`) : 1 743 / 1 744, l'échec étant un délai de 5 s dépassé sous charge par `epochCarryReplacedParent` critère 4 (5 030 ms, hors story, vert seul : 14/14) ; `test:bundle` 27/27 (`memory.ts` hors du build livré, `reader.ts` inchangé, départ non touché) | à faire |
 
 ## Écarts
 
-Aucun à ce jour. Écart de méthode déjà tranché dans la fiche : la piste de la revue (fermeture à 0 par Rust) est écartée pour une raison de schéma (D2). Aucun écart avec le PRD.
+1. **Piste de la revue écartée** (fermeture à 0 par Rust) : raison de schéma (D2), inchangé.
+2. **C2 construit par une panne réelle** : la fixture gagne un champ `cut` (ajout coupé par `partialLastLine`, refusé en `io`, jamais enregistré) au lieu de `{ "written": 0, "partial": true }` : même fichier (en-tête et une demi-ligne), produit par le même mécanisme que B18. Champ `readFaults` ajouté pour C5 (téléchargement en échec), car les deux faux téléchargent un fichier `cloud` sans panne armée. Les deux exécutants de la table (`sync_closed_segments.rs`, `closedSegments.test.ts`) lisent ces champs.
+3. **Journal du saut côté TypeScript** : le journal natif de Rust (`log::event`) n'est pas le journal du moteur ; le faux `memory.ts` tient le sien (`testing.nativeEvents()`, crochet de test ajouté au commit rouge, sans comportement) et C11 (d) le lit. Rust : `sync:segment-tail-skipped <n>` (en production, l'identifiant seul, ADR 0014).
+4. **C13 placé dans `firstPublicationCrashPoints.test.ts`** et non dans `src/features/sync/waitingLong.test.tsx` (dossier de Y-FIX-03). **Constat** : pour un seul segment en attente, `pendingFiles` du PC contient deux entrées (le fichier et « appareil/époque », `engine.ts`) : Détails afficherait « 2 fichiers en attente d’iCloud » au lieu de `pendingOne`. Défaut d'affichage préexistant, hors périmètre (moteur), non corrigé : à trancher (Y-FIX-03 ou story dédiée).
+5. **`cargo clippy -D warnings`** échoue sur des fichiers non touchés (`src/backup.rs`, `src/sync/mod.rs:219`, avertissements de tests existants) ; aucun avertissement dans `store.rs`, `sync_store.rs`, `sync_closed_segments.rs`. La CI ne lance pas clippy.
+6. Signature des commits : `Co-Authored-By: Claude Opus 5.5` (consigne de l'environnement), non la ligne demandée par le coordinateur.
+
+## Fichiers modifiés
+
+- `src-tauri/src/sync/store.rs` (`read_journal`, branche « ligne absente »)
+- `src/platform/sync/memory.ts` (même règle, journal natif `nativeEvents`)
+- `tests/fixtures/sync/closed-segments.json` (C1 réécrit, C2 à C5, C7, C8 ; champs `cut`, `readFaults`)
+- `src-tauri/tests/desktop/sync_closed_segments.rs`, `tests/unit/sync/closedSegments.test.ts` (exécutants de la table)
+- `src-tauri/tests/desktop/sync_store.rs` (`y_fix_05_c9_*`, `y_fix_05_c10_*`)
+- `tests/unit/sync/firstPublicationCrashPoints.test.ts` (C11, variante, C12, C13)
+- `docs/adr/0011-synchronisation-icloud.md` (§33, renvoi depuis §21 point 2), `docs/stories/Y-FIX-05.md`, `docs/journal.md`
 
 ## Questions à Ali
 
