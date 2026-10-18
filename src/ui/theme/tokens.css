@@ -82,6 +82,14 @@
   --ct-color-tab-active-bg: #ffffff;
   --ct-color-accent: #3a2a66;
   --ct-color-accent-on: #ffffff;
+  /* Texte et anneau de focus posés sur --ct-color-nav-bg (bandeau « Annuler », bouton principal des projets) : blanc dans les deux thèmes,
+     car --ct-color-accent-on est conçu pour se poser sur --ct-color-accent et non sur nav-bg (UI-FIX-01, audit B11). */
+  --ct-color-on-nav: #ffffff;
+  /* Interrupteur (Reglages.html .sw en clair ; sombre : lavande comme --ct-edit-track, à valider sur la capture Reglages-Sombre). */
+  --ct-color-switch-on: #2e2150;
+  --ct-color-switch-on-thumb: #ffffff;
+  --ct-color-switch-off: #ddd9e4;
+  --ct-color-switch-off-thumb: #ffffff;
   --ct-color-space-pro: #2f6b7a;
   --ct-color-space-perso: #b5483b;
   --ct-color-goal: #3f7fc4;
@@ -172,6 +180,10 @@
     --ct-color-tab-active-bg: #1c1630;
     --ct-color-accent: #c9bee6;
     --ct-color-accent-on: #1c1630;
+    --ct-color-switch-on: #c9bee6;
+    --ct-color-switch-on-thumb: #1c1630;
+    --ct-color-switch-off: #6d6489;
+    --ct-color-switch-off-thumb: #f1eef8;
     --ct-color-space-pro: #7fc3cf;
     --ct-color-space-perso: #f0a091;
     --ct-color-goal: #8db8ec;
@@ -222,6 +234,10 @@
   --ct-color-tab-active-bg: #1c1630;
   --ct-color-accent: #c9bee6;
   --ct-color-accent-on: #1c1630;
+  --ct-color-switch-on: #c9bee6;
+  --ct-color-switch-on-thumb: #1c1630;
+  --ct-color-switch-off: #6d6489;
+  --ct-color-switch-off-thumb: #f1eef8;
   --ct-color-space-pro: #7fc3cf;
   --ct-color-space-perso: #f0a091;
   --ct-color-goal: #8db8ec;
@@ -267,6 +283,10 @@
   --ct-color-tab-active-bg: #ffffff;
   --ct-color-accent: #3a2a66;
   --ct-color-accent-on: #ffffff;
+  --ct-color-switch-on: #2e2150;
+  --ct-color-switch-on-thumb: #ffffff;
+  --ct-color-switch-off: #ddd9e4;
+  --ct-color-switch-off-thumb: #ffffff;
   --ct-color-space-pro: #2f6b7a;
   --ct-color-space-perso: #b5483b;
   --ct-color-goal: #3f7fc4;

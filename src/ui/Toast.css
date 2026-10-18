@@ -7,7 +7,7 @@
   padding: 14px 16px;
   border-radius: var(--ct-radius-lg);
   background: var(--ct-color-nav-bg);
-  color: var(--ct-color-accent-on);
+  color: var(--ct-color-on-nav);
   overflow: hidden;
 }
 
@@ -52,6 +52,6 @@
 }
 
 .ct-toast__action:focus-visible {
-  outline: 2px solid var(--ct-color-accent-on);
+  outline: 2px solid var(--ct-color-on-nav);
   outline-offset: 2px;
 }

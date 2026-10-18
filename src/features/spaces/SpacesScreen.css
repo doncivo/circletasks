@@ -213,7 +213,7 @@
 .ct-projects__button--primary {
   background: var(--ct-color-nav-bg);
   border-color: var(--ct-color-nav-bg);
-  color: var(--ct-color-accent-on);
+  color: var(--ct-color-on-nav);
 }
 
 .ct-projects__error {

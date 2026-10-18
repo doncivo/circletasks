@@ -549,12 +549,12 @@ button.ct-week-event:focus-visible {
   justify-content: center;
   min-height: 58px;
   box-sizing: border-box;
-  border: 2px dashed var(--ct-color-icon-purple);
+  border: 2px dashed var(--ct-color-someday);
   border-radius: var(--ct-radius-md);
   background: var(--ct-color-row-selected);
   font-size: var(--ct-font-size-xs);
   font-weight: var(--ct-font-weight-bold);
-  color: var(--ct-color-icon-purple);
+  color: var(--ct-color-someday);
   text-align: center;
 }
 

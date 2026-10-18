@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { FOCUS_TOKEN_PAIRS, GRAPHIC_TOKEN_PAIRS, TOKEN_PAIRS, contrast, parseHex } from '../../../tests/unit/theme/cssContrastKit';
 
 /**
  * P-02 critère 5 : contraste AA (4,5:1 pour le texte) des paires de jetons, en clair et en sombre, pastilles d'espace comprises
@@ -22,19 +23,8 @@ const light = { ...root, ...block(":root[data-theme='light']") };
 const dark = { ...root, ...block(":root[data-theme='dark']") };
 
 const rgb = (hex: string): [number, number, number] => {
-  const h = hex.replace('#', '');
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-};
-const luminance = ([r, g, b]: [number, number, number]): number => {
-  const [lr, lg, lb] = [r, g, b].map((c) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  }) as [number, number, number];
-  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
-};
-export const contrast = (a: string, b: string): number => {
-  const [x, y] = [luminance(rgb(a)), luminance(rgb(b))].sort((p, q) => q - p) as [number, number];
-  return (x + 0.05) / (y + 0.05);
+  const c = parseHex(hex);
+  return [c.r, c.g, c.b];
 };
 const mixWhite = (hex: string, percent: number): string => {
   const mixed = rgb(hex).map((c) => Math.round(c + (255 - c) * (percent / 100)));
@@ -42,22 +32,9 @@ const mixWhite = (hex: string, percent: number): string => {
 };
 
 type Theme = Record<string, string>;
-const PAIRS: readonly (readonly [string, string])[] = [
-  ['--ct-color-text', '--ct-color-bg'],
-  ['--ct-color-text', '--ct-color-surface-input'],
-  ['--ct-color-text-secondary', '--ct-color-bg'],
-  ['--ct-color-accent', '--ct-color-bg'],
-  ['--ct-color-accent-on', '--ct-color-accent'],
-  ['--ct-color-danger', '--ct-color-danger-bg'],
-  ['--ct-color-achieved-text', '--ct-color-achieved-bg'],
-  ['--ct-color-missed-text', '--ct-color-missed-bg'],
-  ['--ct-color-event-text', '--ct-color-event-bg'],
-  ['--ct-color-event-local-text', '--ct-color-event-local-bg'],
-  ['--ct-color-today-badge', '--ct-color-bg'],
-  ['--ct-color-warning-text', '--ct-color-warning-bg'],
-];
-/** Éléments graphiques (icône d'objectif, maquettes) : 3:1 (WCAG 1.4.11). */
-const GRAPHICS: readonly (readonly [string, string])[] = [['--ct-color-goal', '--ct-color-bg']];
+/** Listes de paires dans `cssContrastKit.ts` (partagées avec l'inventaire de `contrastCss.test.ts`). */
+const PAIRS = TOKEN_PAIRS;
+const GRAPHICS = GRAPHIC_TOKEN_PAIRS;
 
 describe.each([
   ['clair', light],
@@ -86,14 +63,7 @@ describe.each([
   ['clair', light],
   ['sombre', dark],
 ] as const)('contraste AA de l’écran Focus, thème %s', (_name, theme: Theme) => {
-  it.each([
-    ['--ct-focus-on', '--ct-focus-bg'],
-    ['--ct-focus-muted', '--ct-focus-bg'],
-    ['--ct-focus-space', '--ct-focus-bg'],
-    ['--ct-focus-ink', '--ct-focus-arc'],
-    ['--ct-focus-ink', '--ct-focus-on'],
-    ['--ct-focus-on', '--ct-focus-launch-bg'],
-  ] as const)('%s sur %s ≥ 4,5:1', (fg, bg) => {
+  it.each(FOCUS_TOKEN_PAIRS)('%s sur %s ≥ 4,5:1', (fg, bg) => {
     expect(theme[fg], fg).toBeDefined();
     expect(contrast(theme[fg] as string, theme[bg] as string), `${fg} sur ${bg}`).toBeGreaterThanOrEqual(4.5);
   });

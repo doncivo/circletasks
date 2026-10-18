@@ -1,4 +1,4 @@
-/* Switch : interrupteur (maquette Reglages.html .sw). */
+/* Switch : interrupteur (maquette Reglages.html .sw). Couleurs : jetons --ct-color-switch-* uniquement (UI-FIX-01). */
 .ct-switch {
   display: flex;
   align-items: center;
@@ -20,24 +20,43 @@
   height: 28px;
   padding: 3px;
   border-radius: 14px;
-  background: var(--ct-color-switch-off, #ddd9e4);
+  background: var(--ct-color-switch-off);
 }
 
 .ct-switch[data-checked='true'] .ct-switch__track {
-  background: var(--ct-color-nav-bg);
+  background: var(--ct-color-switch-on);
   justify-content: flex-end;
 }
 
 .ct-switch__thumb {
+  box-sizing: border-box;
   width: 22px;
   height: 22px;
   border-radius: 11px;
-  background: #ffffff;
+  background: var(--ct-color-switch-off-thumb);
 }
 
+.ct-switch[data-checked='true'] .ct-switch__thumb {
+  background: var(--ct-color-switch-on-thumb);
+}
+
+/*
+ * Désactivé (ne répond pas) distinct d'éteint (répond) sans dépendre de la couleur : curseur « interdit », pouce creux (contour de 2 px,
+ * sans remplissage, contour de la couleur du texte : le plus sombre en clair, le plus clair en sombre) et opacité 0,5 (UI-FIX-01, critère d'Ali du 2026-10-18). Le contour du pouce d'un interrupteur activé garde la couleur
+ * de son pouce pour rester lisible sur la piste activée.
+ */
 .ct-switch:disabled {
-  cursor: default;
+  cursor: not-allowed;
   opacity: 0.5;
+}
+
+.ct-switch:disabled .ct-switch__thumb {
+  background: transparent;
+  border: 2px solid var(--ct-color-text);
+}
+
+.ct-switch[data-checked='true']:disabled .ct-switch__thumb {
+  border-color: var(--ct-color-switch-on-thumb);
 }
 
 .ct-switch:focus-visible {
