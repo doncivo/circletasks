@@ -32,4 +32,5 @@ export type ScreenName =
   | 'onboardinghost'
   | 'searchoverlay'
   | 'focushost'
-  | 'shortcutshelp';
+  | 'shortcutshelp'
+  | 'updatebanner';

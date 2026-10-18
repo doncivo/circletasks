@@ -43,6 +43,7 @@ import {
   TabsScreen,
   TaskDetail,
   TrashScreen,
+  UpdateBanner,
   WeekScreen,
 } from './features/app/lazyScreens';
 import { AppStatusBanner } from './features/app/AppStatusBanner';
@@ -56,7 +57,6 @@ import { registerSearchShortcut } from './features/search';
 import { restoreAppearance, startThemeSync } from './features/settings';
 import { registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
-import { UpdateBanner } from './features/updater';
 import { RestoreChoiceHost } from './features/sync/RestoreChoiceHost';
 import { startSyncIntegration } from './features/sync/startSync';
 import { startRemindersLazily } from './features/calendars/appleReminders/loadIntegration';

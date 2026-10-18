@@ -150,6 +150,8 @@ export const SearchOverlay = lazyScreen<object>(() => import('../search/SearchOv
 export const FocusHost = lazyScreen<object>(() => import('../focus/FocusHost').then((m) => ({ default: m.FocusHost })), 'focushost', { fallback: 'none' });
 /** Liste des raccourcis (P-08, PC) : ouverte sur Ctrl+/ ; préchargée, le raccourci (registerShellShortcuts) reste dans le départ. */
 export const ShortcutsHelp = lazyScreen<object>(() => import('../shortcuts/ShortcutsHelp').then((m) => ({ default: m.ShortcutsHelp })), 'shortcutshelp', { fallback: 'none' });
+/** Bandeau de mise à jour (D-03) : apparition pilotée par updaterStore (vérification lancée après le premier rendu) ; préchargé. */
+export const UpdateBanner = lazyScreen<object>(() => import('../updater/UpdateBanner').then((m) => ({ default: m.UpdateBanner })), 'updatebanner', { fallback: 'none' });
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {
