@@ -1,6 +1,6 @@
 # Y-FIX-03 — Une lecture de journal en échec n'est plus muette : « À jour » interdit, entretien sauté dit, appareil signalé
 
-Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-02) · Agent : **sync-icloud** (`src/sync/engine.ts`, `src/sync/reader.ts` si besoin, `src/features/sync/syncText.ts`, tests de synchro) · Relecture : code-reviewer · Statut : **fiche écrite, à développer après Y-FIX-02** (fiche rédigée le 2026-10-18)
+Module : M15 Synchronisation · Ordre de construction : palier 1.0, **étape 3** (après Y-FIX-02) · Agent : **sync-icloud** (`src/sync/engine.ts`, `src/sync/reader.ts` si besoin, `src/features/sync/syncText.ts`, tests de synchro) · Relecture : code-reviewer · Statut : **fait sur la branche** (2026-10-18 ; rouge a34805de, vert 7d7c6cb2 ; à fusionner après CI « suite verte » et relecture)
 Story technique, sans équivalent au PRD (écart à noter dans docs/decisions.md). Bloquant **B3** de `docs/audit-1.0.md` (plan d'Ali, étape 3). Aucun écart au PRD ; la règle appliquée est celle de l'ADR 0011 section 24 point 5 (« À jour » interdit sans preuve).
 Dépend de : Y-TECH-03 (fait : banc, plan de pannes, plan `scenario-3-lecture-io` déjà dans `tests/fixtures/sync/fault-plan.json` ligne 94), **Y-FIX-02 fusionnée** (même fichier `engine.ts`, voir « Ordre et dossiers partagés »).
 Estimation : 3 h. Règle d'Ali : arrêt et alerte avant de continuer si l'estimation dérape de plus de 50 % (au-delà de 4 h 30).
@@ -111,20 +111,24 @@ Décisions du product-owner, à valider par Ali (questions en fin de fiche) ; el
 - Aucun fichier écrit hors du dépôt ; aucun secret ; consigne à rappeler à l'agent : fichiers temporaires dans le worktree.
 - Clôture refusée si un critère manque : le product-owner vérifie les 17 critères avant « fait ».
 
-## Preuves (à remplir)
+## Preuves
 
 | Élément | Valeur |
 |---|---|
-| Assertions exactes de `scenario3ReadIo.test.ts` (lues avant le code) | *à compléter* |
-| Scénario 3 rouge avec le code actuel (message d'erreur) | commit, run et message : *à compléter* (attendu d'après Y-TECH-03 : `expect(failed.lastSyncAt).toBe(lastSyncAt)`, reçu `08:01`, attendu `08:00`) |
-| Scénario 3 vert après correctif | commit et run : *à compléter* |
-| Bundle de départ (octets gzip, plafond 358 400 ; départ 358 357) | après chaque commit : *à compléter* |
-| Lignes de `engine.ts` et `reader.ts` reconfirmées après rebase | *à compléter* |
-| Numéro d'avenant ADR libre | *à compléter* (§31 attendu) |
+| Assertions exactes de `scenario3ReadIo.test.ts` (lues avant le code) | `faultLog` = `['read-journal-io']` ; `read-failed` avec `code: 'io'` ; tâche tardive absente ; `expect(failed.lastSyncAt).toBe(lastSyncAt)` ; `statusLine(failed)` sans « À jour » ; signal = `phase === 'error'` **ou** `warnings` non vide **ou** appareil lu non `active` (compatible avec la décision 2, aucun `maintenance-skipped` attendu) ; cycle suivant : tâche lue, « À jour », `lastSyncAt` changé |
+| Scénario 3 rouge avec le code actuel (message d'erreur) | commit `a34805de` (test seul) : `AssertionError: expected '2026-10-05T08:01:00.000Z' to be '2026-10-05T08:00:00.000Z' // Object.is equality`, `scenario3ReadIo.test.ts:51:31` (`expect(failed.lastSyncAt).toBe(lastSyncAt)`) |
+| Scénario 3 vert après correctif | commit `7d7c6cb2` : 1/1 vert ; `readFailure.test.ts` (critères 2 à 12) 45/45 vert |
+| Bundle de départ (octets gzip, plafond 358 400) | après la fusion de `main` : **358 273** ; après `7d7c6cb2` : **358 348 (+75)**, répartition mesurée : `engine.ts` environ +68, `reader.ts` environ +7, règle du critère 9 (`syncText.ts`) environ 0 ; `npm run test:bundle` 27/27 vert ; +75 accepté (plafond respecté, marge libérée par T-TECH-01 et BUNDLE-01) |
+| Lignes de `engine.ts` et `reader.ts` reconfirmées après rebase | `reader.ts` 128-137 (`catch` de `readJournal`) ; `engine.ts` : déclaration de `publishError` et `readFailed` avant la boucle de lecture (733-735), classement après `readDevice` (871-872), publication `publishError ??= result.error` (965), entretien (1010, inchangé), `lastSyncAt` (1072), résultat (1079-1080) |
+| Numéro d'avenant ADR libre | §31 (inséré entre §30 et §32) |
+| Commandes | `CT_TEST_WORKERS=1 npx vitest run src/sync src/domain tests/unit/sync src/features/sync --coverage.enabled=false` : 285 fichiers, 3 652 tests verts ; `npm run typecheck` et `npm run lint` verts |
 
 ## Écarts
 
-Aucun à ce jour.
+1. **Hypothèses sur les questions à Ali** (recommandations appliquées, à confirmer) : question 1, cycle `failed` pour un code passager et appareil `corrupt` pour un code permanent ; question 2, un seul `bad-header` ou `decrypt-failed` suffit ; question 3, pas de nom d'appareil dans la ligne passagère ; question 4, règle « Synchro incomplète » avec un appareil `corrupt` faite (environ 0 octet), rien reporté dans `docs/dettes.md`.
+2. **Codes permanents hors du plan de pannes** : `bad-header` et `decrypt-failed` sont levés par la plateforme simulée (`readJournal` remplacé dans le test), pas par la fixture : le plan commun n'accepte que `io` et `cloud-pending` et il est lu aussi par MemFs et `fake_bookmark.rs` ; l'étendre toucherait `faultPlan.ts` et les faux de Rust, hors périmètre. Le critère 10 est vérifié au niveau de `readDevice` (table de tous les `SYNC_ERROR_CODES`), le moteur par des cas représentatifs.
+3. **Reprise réussie** : un code permanent dont la reprise depuis l'instantané récupère tout gèle quand même `lastSyncAt` pour ce cycle (décision 1) : la ligne dit « À jour · il y a N » avec l'heure ancienne, jamais « à l'instant », puis « À jour · à l'instant » au cycle suivant (testé).
+4. **Bundle net > 0** : +75 octets au lieu de net ≤ 0, accepté par le coordinateur (358 348 / 358 400) ; aucune refactorisation hors de la story. Premier passage local de la suite du module : 16 dépassements de 5 s sous la charge de la machine (mêmes échecs sans le correctif) ; second passage entièrement vert, aucun délai allongé.
 
 ## Questions à Ali (sans bloquer le développement)
 
