@@ -369,6 +369,8 @@ describe('Y-FIX-02 critère 9 : fichier que la trace n’explique pas', () => {
       expect(statusLine(result, b.clock.nowMs())).not.toContain('À jour');
     }
     expect(events(b, 'inflight-resolved')).toHaveLength(0);
+    // Contre-revue S5 : aucune écriture de l'état tentée (ni acceptée, ni refusée).
+    expect(events(b, 'write-state-failed')).toHaveLength(0);
     expect(events(b, 'publish-deferred').map((e) => e.detail)).toEqual([expect.objectContaining({ reason: 'unexplained-files', unexplained: 1 }), expect.objectContaining({ reason: 'unexplained-files', unexplained: 1 })]);
     expect(events(b, 'own-state-recovered')).toHaveLength(0);
   });
