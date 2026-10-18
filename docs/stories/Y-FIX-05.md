@@ -9,7 +9,7 @@
 | Agents | sync-icloud (lecteur, faux `memory.ts`, banc), desktop-tauri (`read_journal`, tests Rust) ; relecture code-reviewer ; qa-test |
 | Constat | `docs/audit-1.0.md`, B18 (ajouté le 2026-10-18) |
 | Estimation | 3 à 4 h ; alerte à 6 h (règle d'Ali : arrêt et prévenir si l'estimation dérape de plus de 50 %) |
-| Statut | développée le 2026-10-18 (rouge f1382253, vert 53b583fc), en attente de qa-test, revue et CI |
+| Statut | développée le 2026-10-18 (rouge 89d5ef7d, vert 528bb5f2), en attente de qa-test, revue et CI |
 | Branche | `y-fix-05-segment-tronque` ; à rebaser sur `main` une fois Y-FIX-02 fusionnée (dépendance : `tests/unit/sync/firstPublicationCrashPoints.test.ts`) |
 | Règle d'Ali (2026-10-18) | un défaut qui fait perdre des données ou affiche un état faux sans le dire passe avant la 1.0 d'office |
 
@@ -128,23 +128,23 @@ Identifiants **C1 à C14**. Rouge avant : C1, C2, C3, C4, C11 et C12 (et la lect
 
 ## Preuves
 
-Commits : ADR 0011 §33 `9372dbbb` (avant le code) ; **rouge seul `f1382253`** ; **vert `53b583fc`** (correctif Rust `read_journal` et faux `memory.ts`) ; C13 `e9dc4a87`. Aucun run CI (pas de push, consigne).
+Commits : ADR 0011 §33 `0a4a75c6` (avant le code) ; **rouge seul `89d5ef7d`** ; **vert `528bb5f2`** (correctif Rust `read_journal` et faux `memory.ts`) ; C13 `253bed8d`. Aucun run CI (pas de push, consigne).
 
 | Critère | Rouge avant (commit, assertion) | Vert après (commit) | Run CI |
 | --- | --- | --- | --- |
-| C1 | `f1382253` ; Rust `sync_closed_segments` : « assertion `left == right` failed: aucune entrée, ligne incomplète sous une tête plus grande ... (Y-FIX-05 C1) ; left: "cloud-pending", right: "complete" » ; Vitest : cloud-pending, (1, 3), 3 | `53b583fc` | à faire |
-| C2 | `f1382253` ; Vitest : cloud-pending, (1, 0), 0 (Rust : même table, arrêtée au premier cas rouge, C1) | `53b583fc` | à faire |
-| C3 | `f1382253` ; Vitest : cloud-pending, (2, 1), 4 | `53b583fc` | à faire |
-| C4 | `f1382253` ; Vitest : cloud-pending, (1, 3), 0 | `53b583fc` | à faire |
-| C5 | non-régression, verte avant (`f1382253`) | `53b583fc` | à faire |
-| C6 | non-régression (cas existant inchangé), verte avant | `53b583fc` | à faire |
-| C7 | non-régression (cas ajouté), verte avant | `53b583fc` | à faire |
-| C8 | non-régression (cas ajouté), verte avant | `53b583fc` | à faire |
-| C9 | `f1382253` ; partie append verte ; lecture du PC : left ("cloud-pending", RecordCursor { segment: 1, record: 0 }, 0), right ("complete", RecordCursor { segment: 2, record: 2 }, 2) | `53b583fc` (et `sync:segment-tail-skipped 1` capturé) | à faire |
-| C10 | `f1382253` ; partie append verte (`own.closed == [(1, 3)]`) ; lecture ajoutée, rouge : left ("cloud-pending", RecordCursor { segment: 2, record: 1 }, 4), right ("complete", RecordCursor { segment: 3, record: 2 }, 6) | `53b583fc` | à faire |
-| C11 | `f1382253` ; « expected Set{ '7a000001-…' } to deeply equal Set{ …(4) } » (le PC ne reçoit rien de l'iPhone) ; variante own.segment ≥ 1 : « expected Set{ …(2) } to deeply equal Set{ …(3) } » | `53b583fc` | à faire |
-| C12 | `f1382253` (même test que C11, non atteint) | `53b583fc` | à faire |
-| C13 | test ajouté dans `firstPublicationCrashPoints.test.ts` (`e9dc4a87`), vert sur le faux d'avant le correctif et après | `e9dc4a87` | à faire |
+| C1 | `89d5ef7d` ; Rust `sync_closed_segments` : « assertion `left == right` failed: aucune entrée, ligne incomplète sous une tête plus grande ... (Y-FIX-05 C1) ; left: "cloud-pending", right: "complete" » ; Vitest : cloud-pending, (1, 3), 3 | `528bb5f2` | à faire |
+| C2 | `89d5ef7d` ; Vitest : cloud-pending, (1, 0), 0 (Rust : même table, arrêtée au premier cas rouge, C1) | `528bb5f2` | à faire |
+| C3 | `89d5ef7d` ; Vitest : cloud-pending, (2, 1), 4 | `528bb5f2` | à faire |
+| C4 | `89d5ef7d` ; Vitest : cloud-pending, (1, 3), 0 | `528bb5f2` | à faire |
+| C5 | non-régression, verte avant (`89d5ef7d`) | `528bb5f2` | à faire |
+| C6 | non-régression (cas existant inchangé), verte avant | `528bb5f2` | à faire |
+| C7 | non-régression (cas ajouté), verte avant | `528bb5f2` | à faire |
+| C8 | non-régression (cas ajouté), verte avant | `528bb5f2` | à faire |
+| C9 | `89d5ef7d` ; partie append verte ; lecture du PC : left ("cloud-pending", RecordCursor { segment: 1, record: 0 }, 0), right ("complete", RecordCursor { segment: 2, record: 2 }, 2) | `528bb5f2` (et `sync:segment-tail-skipped 1` capturé) | à faire |
+| C10 | `89d5ef7d` ; partie append verte (`own.closed == [(1, 3)]`) ; lecture ajoutée, rouge : left ("cloud-pending", RecordCursor { segment: 2, record: 1 }, 4), right ("complete", RecordCursor { segment: 3, record: 2 }, 6) | `528bb5f2` | à faire |
+| C11 | `89d5ef7d` ; « expected Set{ '7a000001-…' } to deeply equal Set{ …(4) } » (le PC ne reçoit rien de l'iPhone) ; variante own.segment ≥ 1 : « expected Set{ …(2) } to deeply equal Set{ …(3) } » | `528bb5f2` | à faire |
+| C12 | `89d5ef7d` (même test que C11, non atteint) | `528bb5f2` | à faire |
+| C13 | test ajouté dans `firstPublicationCrashPoints.test.ts` (`253bed8d`), vert sur le faux d'avant le correctif et après | `253bed8d` | à faire |
 | C14 | sans objet | lint, typage propres ; `cargo test --test desktop --features test-hooks` : 800 passés, 0 échec, 2 ignorés (préexistants) ; Vitest du module (`src/sync src/platform/sync tests/unit/sync tests/fixtures waitingLong`) : 1 743 / 1 744, l'échec étant un délai de 5 s dépassé sous charge par `epochCarryReplacedParent` critère 4 (5 030 ms, hors story, vert seul : 14/14) ; `test:bundle` 27/27 (`memory.ts` hors du build livré, `reader.ts` inchangé, départ non touché) | à faire |
 
 ## Écarts
