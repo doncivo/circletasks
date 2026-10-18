@@ -1,7 +1,7 @@
 import { clearEpochCarryNoticeFailure, epochCarryNoticeFailure } from './carryNoticeState';
 import type { DataAccess, Repositories } from '../db/repositories';
 import type { EpochCarryReport } from '../domain/sync/epochCarryReport';
-import { EPOCH_CARRY_REPORT_FAILED_META, namedCount } from '../domain/sync/epochCarryReportView';
+import { EPOCH_CARRY_REPORT_FAILED_META, parentReplacedCount, recreatedCount, restoredCount } from '../domain/sync/epochCarryReportView';
 
 /**
  * Y-TECH-05 : ce qui lève le bandeau du compte rendu du changement d’époque (`carry-report`), lu par le moteur à chaque cycle et par le
@@ -50,9 +50,14 @@ export async function carryReportRaised(repos: Repositories): Promise<boolean> {
   return failure !== null || reports.length > 0;
 }
 
-/** Nombre exact d’éléments nommés (toutes listes, débordement compris) des comptes rendus du bandeau : « Éléments rétablis : {n} ». */
+/** Nombre exact de lignes rétablies (débordement compris) des comptes rendus du bandeau : « Éléments rétablis : {n} » (ADR 0011 §29 point 5). */
 export function carryReportElements(reports: readonly EpochCarryReport[]): number {
-  return reports.reduce((sum, report) => sum + namedCount(report), 0);
+  return reports.reduce((sum, report) => sum + restoredCount(report), 0);
+}
+
+/** Autres lignes nommées (recréées, rattachées, mises de côté, débordement compris) : dites quand aucune ligne n'est rétablie. */
+export function carryReportOthers(reports: readonly EpochCarryReport[]): number {
+  return reports.reduce((sum, report) => sum + recreatedCount(report) + parentReplacedCount(report), 0);
 }
 
 /** « J’ai vu » sur l’échec d’enregistrement : efface la marque (vrai si elle existait). */

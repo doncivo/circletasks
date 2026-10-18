@@ -17,7 +17,7 @@ import { startSyncIntegration, type SyncIntegration } from './startSync';
 
 const NO_TIMERS = { setInterval: () => 0, clearInterval: () => undefined, setTimeout: () => 0, clearTimeout: () => undefined } as const;
 const SLOTS = { pairing: null, conflicts: null, version: null, forget: null, reset: null } as const;
-const BANNER = /Changement d.époque : éléments rétablis : 2\. Voir le compte rendu/;
+const BANNER = /Changement d.époque : éléments rétablis : 1\. Voir le compte rendu/;
 const RESTORED_TITLE = 'Rétablis alors que vous les aviez supprimés';
 
 let devices: SimDevice[] = [];
@@ -64,7 +64,7 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
     await integration.refreshed();
     view(container);
 
-    // Bandeau durable avec le nombre d'éléments (« À jeter » rétablie, « Test Pc » recréée) et accès au détail.
+    // Bandeau durable avec le nombre d'éléments rétablis (« À jeter » ; « Test Pc », recréée, n'est pas comptée : ADR §29 point 5) et accès au détail.
     const banner = await screen.findByText(BANNER);
     expect(banner).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));

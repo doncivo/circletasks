@@ -74,10 +74,10 @@ for (const kind of ['pc', 'iphone'] as const) {
     await seedReport(page, 1);
     await syncNow(page);
 
-    // Critère 16 : bandeau durable avec le nombre d'éléments (« À jeter » rétablie, « Test Pc » recréée).
+    // Critère 16 : bandeau durable avec le nombre d'éléments rétablis (« À jeter » ; « Test Pc », recréée, n'est pas comptée : ADR 0011 §29 point 5).
     const banner = page.locator('.ct-status-banner').filter({ hasText: BANNER });
     await expect(banner).toBeVisible({ timeout: APP_READY_TIMEOUT_MS });
-    await expect(banner).toContainText('éléments rétablis : 2');
+    await expect(banner).toContainText('éléments rétablis : 1');
     await expectFitsViewport(page, 'Détails de la synchro, bandeau du compte rendu');
     await banner.getByRole('button', { name: VIEW }).click();
 

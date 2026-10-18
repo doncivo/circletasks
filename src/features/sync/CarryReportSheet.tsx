@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { carriedWrites, namedCount } from '../../domain/sync/epochCarryReportView';
+import { carriedWrites, parentReplacedCount, recreatedCount, restoredCount } from '../../domain/sync/epochCarryReportView';
 import type { EpochCarryNamedItem, EpochCarryParentItem, EpochCarryReport } from '../../domain/sync/epochCarryReport';
 import type { DeviceId } from '../../domain/types';
 import { tCarry } from '../../i18n/syncCarryReportText';
@@ -68,7 +68,9 @@ export function CarryReportSheet({ report, devices, onClose, onSeen, seenFailed 
   const [busy, setBusy] = useState(false);
   const name = (id: DeviceId): string => carryDeviceName(id, report.reporter, devices);
   const epoch = carryDateTime(report.createdAt);
-  const restoredTotal = report.restored.length + report.overflowBy.restored;
+  const restoredTotal = restoredCount(report);
+  const recreatedTotal = recreatedCount(report);
+  const parentTotal = parentReplacedCount(report);
   const reattached = report.parentReplaced.filter((item) => item.kind === 'reattached');
   const held = report.parentReplaced.filter((item) => item.kind === 'held');
   const parentKey = (item: EpochCarryParentItem): string => `${item.table}:${item.rowId}:${item.column}`;
@@ -107,7 +109,10 @@ export function CarryReportSheet({ report, devices, onClose, onSeen, seenFailed 
         <p>{carryCauseText(report.cause)}</p>
         <p>{tCarry('openedBy', { device: name(report.opener) })}</p>
         <p>{tCarry('reportedBy', { device: name(report.reporter) })}</p>
-        <p className="ct-carry__count">{tCarry('summary', { count: namedCount(report) })}</p>
+        <p className="ct-carry__count">{tCarry('summary', { count: restoredTotal })}</p>
+        {/* ADR 0011 §29 point 5 : sans ligne rétablie, les autres lignes nommées ont leurs compteurs séparés (jamais confondues avec les rétablies). */}
+        {restoredTotal === 0 && recreatedTotal > 0 && <p className="ct-carry__count">{tCarry('summaryRecreated', { count: recreatedTotal })}</p>}
+        {restoredTotal === 0 && parentTotal > 0 && <p className="ct-carry__count">{tCarry('summaryOthers', { count: parentTotal })}</p>}
         {carriedWrites(report) === 0 ? (
           <p>{tCarry('nothingCarried')}</p>
         ) : (

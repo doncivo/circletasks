@@ -60,6 +60,21 @@ export function namedCount(body: Omit<EpochCarryReportBody, 'authors'>): number 
   return body.restored.length + body.recreated.length + body.parentReplaced.length + body.overflow;
 }
 
+/** Lignes **rétablies** (supprimées chez soi, rendues vivantes), débordement compris : le seul nombre de « Éléments rétablis : {n} » (ADR 0011 §29 point 5). */
+export function restoredCount(body: Pick<EpochCarryReportBody, 'restored' | 'overflowBy'>): number {
+  return body.restored.length + body.overflowBy.restored;
+}
+
+/** Lignes recréées, débordement compris. */
+export function recreatedCount(body: Pick<EpochCarryReportBody, 'recreated' | 'overflowBy'>): number {
+  return body.recreated.length + body.overflowBy.recreated;
+}
+
+/** Lignes rattachées ou mises de côté (parent remplacé), débordement compris. */
+export function parentReplacedCount(body: Pick<EpochCarryReportBody, 'parentReplaced' | 'overflowBy'>): number {
+  return body.parentReplaced.length + body.overflowBy.parentReplaced;
+}
+
 /**
  * « J'ai vu » d'un compte rendu (phase 2) : quand plus aucun compte rendu non acquitté ne nomme de ligne rattachée, la notice perd ses
  * lignes **rattachées** (`carry-reattached` disparaît) ; les lignes mises de côté restent (`carry-held` dure tant qu'elles attendent :

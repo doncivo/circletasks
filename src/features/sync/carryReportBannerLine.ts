@@ -1,7 +1,7 @@
 import { t } from '../../i18n';
 import { tCarry } from '../../i18n/syncCarryReportText';
 import { logFailure } from '../../platform/desktop/log';
-import { carryReportBannerFacts, carryReportElements } from '../../sync/epochCarryReportBanner';
+import { carryReportBannerFacts, carryReportElements, carryReportOthers } from '../../sync/epochCarryReportBanner';
 import type { AppContainer } from '../app/container';
 import { useNavigationStore } from '../app/navigation';
 import { requestCarryReportOpen } from './carryReportOpen';
@@ -9,7 +9,7 @@ import { carryLines } from './syncRestoreState';
 
 /**
  * Y-TECH-05 : texte et action du bandeau durable du compte rendu du changement d'époque (critères 14 et 16), composés hors du départ
- * (bloc à la demande, avec le catalogue `syncCarryReport`). « Changement d'époque : éléments rétablis : {n}. Voir le compte rendu » ; en
+ * (bloc à la demande, avec le catalogue `syncCarryReport`). « Changement d'époque : éléments rétablis : {n}. Voir le compte rendu » (lignes rétablies seulement) ou, quand aucune ne l'est, « … aucun élément supprimé rétabli, autres éléments nommés : {n}. … » ; en
  * cas d'échec d'enregistrement, « Le compte rendu du changement d'époque n'a pas pu être enregistré : {cause} ». « Voir » ouvre Réglages ›
  * Synchronisation › Détails, sur le dernier compte rendu non acquitté. Le résultat est posé dans `carryLines` (lu par `startSync.ts`) :
  * null quand plus rien n'est à montrer (acquitté).
@@ -26,7 +26,9 @@ async function carryReportLine(container: AppContainer): Promise<{ readonly mess
   };
   if (failure) return { message: tCarry('failed', { cause: failure.code }), onAction: open(null) };
   if (reports.length === 0) return null;
-  return { message: tCarry('banner', { count: carryReportElements(reports) }), onAction: open(reports[0]?.id ?? null) };
+  const restored = carryReportElements(reports);
+  const message = restored > 0 ? tCarry('banner', { count: restored }) : tCarry('bannerNoRestored', { count: carryReportOthers(reports) });
+  return { message, onAction: open(reports[0]?.id ?? null) };
 }
 
 /** Lit le compte rendu et pose la ligne du bandeau ; `apply` (une fois, par `startSync.ts`) recalcule les bandeaux de l'app. Rejette si la lecture échoue. */

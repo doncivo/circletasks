@@ -111,7 +111,9 @@ describe('listes nommées (critère 17 d à f)', () => {
     expect(within(held).getByText('Jour de routine')).toBeTruthy();
     // Libellé absent : repli « (sans titre) » et identifiant abrégé (8 caractères).
     expect(within(held).getByText('(sans titre) 99999999')).toBeTruthy();
-    expect(screen.getByText('Éléments rétablis : 5')).toBeTruthy();
+    // ADR §29 point 5 : seules les lignes rétablies sont comptées (2), les recréées et rattachées ont leurs propres compteurs.
+    expect(screen.getByText('Éléments rétablis : 2')).toBeTruthy();
+    expect(screen.queryByText(/^Recréés : \d/)).toBeNull();
   });
 
   it('aucun élément supprimé rétabli : la phrase est en tête, avant le résumé (critère 19)', () => {
@@ -121,6 +123,32 @@ describe('listes nommées (critère 17 d à f)', () => {
     const summary = within(dialog).getByText(/^Époque du /);
     expect(sentence.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(dialog).queryByRole('list', { name: /^Rétablis alors/ })).toBeNull();
+  });
+
+  it('aucun rétabli mais d’autres lignes nommées : jamais « Éléments rétablis : 1 » avec la phrase « aucun », compteurs séparés', () => {
+    open(
+      report({
+        authors: [{ device: PC, fields: 3, rows: 3, tombs: 0, late: 0 }],
+        recreated: [{ table: 'task', rowId: 'r', label: 'Test Pc', by: PC, deletedAt: null, deletedBy: null }],
+        parentReplaced: [
+          { table: 'task', rowId: 'r1', column: 'project_id', parentId: 'P', space: 'pro', label: 'Rattachée', hlc: 'h' as Hlc, kind: 'reattached', cause: 'parent-replaced' },
+          { table: 'task', rowId: 'r2', column: 'project_id', parentId: 'P', space: 'pro', label: 'Mise de côté', hlc: 'h' as Hlc, kind: 'held', cause: 'parent-replaced' },
+        ],
+        overflow: 4,
+        overflowBy: { restored: 0, recreated: 1, parentReplaced: 3 },
+      }),
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Aucun élément supprimé n’a été rétabli')).toBeTruthy();
+    expect(within(dialog).queryByText(/^Éléments rétablis : [1-9]/)).toBeNull();
+    expect(within(dialog).getByText('Recréés : 2')).toBeTruthy();
+    expect(within(dialog).getByText('Rattachés ou mis de côté : 5')).toBeTruthy();
+  });
+
+  it('au moins un rétabli : « Éléments rétablis : n » et pas la phrase « aucun »', () => {
+    open(report({ authors: [{ device: PC, fields: 3, rows: 1, tombs: 0, late: 0 }], restored: [restoredItem(1)], recreated: [{ table: 'task', rowId: 'r', label: 'Test Pc', by: PC, deletedAt: null, deletedBy: null }] }));
+    expect(screen.getByText('Éléments rétablis : 1')).toBeTruthy();
+    expect(screen.queryByText('Aucun élément supprimé n’a été rétabli')).toBeNull();
   });
 
   it('tout à zéro : « Aucune écriture à reporter », aucune liste', () => {

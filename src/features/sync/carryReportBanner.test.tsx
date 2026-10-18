@@ -54,6 +54,26 @@ const body = (labels: readonly string[]): EpochCarryReportBody => ({
   overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 },
 });
 
+/** Compte rendu non acquitté dont aucune ligne n'est rétablie : `recreated` recréées, `parent` rattachées, `overflow` en débordement (recréées). */
+async function seedOthers(epoch: string, createdAt: string, recreated: number, parent: number, overflow = 0): Promise<number> {
+  const reports = await db.data.repos.carryReports();
+  const id = await reports.create(head(epoch, createdAt));
+  const base = body([]);
+  await reports.save(
+    id,
+    {
+      ...base,
+      authors: [{ device: OTHER, fields: recreated + parent, rows: recreated + parent, tombs: 0, late: 0 }],
+      recreated: Array.from({ length: recreated }, (_, i) => ({ table: 'task', rowId: `r-${String(i)}`, label: `R${String(i)}`, by: OTHER, deletedAt: null, deletedBy: null })),
+      parentReplaced: Array.from({ length: parent }, (_, i) => ({ table: 'task', rowId: `p-${String(i)}`, column: 'project_id', parentId: 'P', space: 'pro', label: `P${String(i)}`, hlc: 'h' as never, kind: 'reattached' as const, cause: 'parent-replaced' as const })),
+      overflow,
+      overflowBy: { restored: 0, recreated: overflow, parentReplaced: 0 },
+    },
+    true,
+  );
+  return id;
+}
+
 /** Compte rendu non acquitté avec bandeau (ou sans), semé directement dans la base. */
 async function seed(epoch: string, createdAt: string, labels: readonly string[], banner = true): Promise<number> {
   const reports = await db.data.repos.carryReports();
@@ -91,6 +111,20 @@ describe('bandeau durable (critère 16)', () => {
     await seed('3-a', '2026-10-18T07:30:00.000Z', ['C']);
     await start();
     expect(await screen.findByText(bannerText(3))).toBeTruthy();
+  });
+
+  it('aucune ligne rétablie mais d’autres nommées : « aucun élément supprimé rétabli, autres éléments nommés : n » (recréées, rattachées, débordement compris)', async () => {
+    await seedOthers('2-a', '2026-10-18T07:00:00.000Z', 2, 1, 3);
+    await start();
+    expect(await screen.findByText('Changement d’époque : aucun élément supprimé rétabli, autres éléments nommés : 6. Voir le compte rendu')).toBeTruthy();
+    expect(screen.queryByText(/éléments rétablis : /)).toBeNull();
+  });
+
+  it('un compte rendu avec rétablis et un autre sans : le nombre est celui des seules lignes rétablies', async () => {
+    await seed('2-a', '2026-10-18T07:00:00.000Z', ['A']);
+    await seedOthers('3-a', '2026-10-18T07:30:00.000Z', 4, 0);
+    await start();
+    expect(await screen.findByText(bannerText(1))).toBeTruthy();
   });
 
   it('le moteur ne lève rien : aucun bandeau', async () => {
