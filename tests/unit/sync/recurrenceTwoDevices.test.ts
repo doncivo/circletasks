@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { uuidGenerator } from '../../../src/domain/id';
+import { syncTable } from '../../../src/domain/sync/syncTables';
 import type { TaskId } from '../../../src/domain/types';
+import { createTaskEntities } from '../../../src/features/app/taskEntities';
+import { createRecurrenceUseCases } from '../../../src/features/tasks/recurrenceUseCases';
 import { createSimDevice, pair, setupFirst, syncFolders, type SimDevice } from '../../sim/syncDevice';
 import { bootDevice, createRecurringTask, type BootedDevice, type BootOptions } from '../../sim/syncStartup';
 
@@ -131,6 +135,35 @@ describe('T-TECH-01 scénario B : épreuve de détection (porte forcée ouverte)
       expect(t?.date).toBe('2026-10-24');
       expect(t?.carriedOver).toBe(true);
     }
+  });
+});
+
+describe('T-TECH-01 I2 : identifiant déterministe tombé sur une ligne purgée', () => {
+  it('occurrence purgée sur les deux appareils puis régénérée : identifiant aléatoire, acceptée par l’autre appareil', async () => {
+    const [pc, iphone] = await twoDevices();
+    const { recurrenceId } = await createRecurringTask(pc, 'Prendre les vitamines', { date: '2026-10-23' as never, time: '09:00', offsets: [5, 60] });
+    await settle(pc, iphone);
+    pc.clock.set(DAY_24);
+    const generate = (d: SimDevice) => createRecurrenceUseCases({ clock: d.clock, ids: uuidGenerator, data: d.data, taskEntities: createTaskEntities() }).generateDue();
+    const [first] = await generate(iphone);
+    await settle(pc, iphone);
+    const zId = first?.id as TaskId;
+    expect(await pc.task(zId)).not.toBeNull();
+
+    // Purge physique de l'occurrence (et de ses rappels) sur les deux appareils : traces de suppression, plus de ligne.
+    for (const d of [pc, iphone]) {
+      const reminders = (await d.driver.select<{ id: string }>(`SELECT id FROM reminder WHERE target_id = '${zId}'`)).map((r) => r.id);
+      await d.data.repos.sync.insertTombstones([{ table: 'task', rowId: zId, deletedHlc: d.hlc.now() }, ...reminders.map((rowId) => ({ table: 'reminder', rowId, deletedHlc: d.hlc.now() }))], new Date(d.clock.nowMs()).toISOString() as never);
+      await d.data.repos.sync.deleteRows(syncTable('reminder') as never, reminders);
+      await d.data.repos.sync.deleteRows(syncTable('task') as never, [zId]);
+    }
+    const [again] = await generate(iphone);
+    await settle(pc, iphone);
+
+    expect(again?.id).not.toBe(zId); // l'identifiant déterministe est purgé : identifiant aléatoire
+    const live = `SELECT id FROM task WHERE recurrence_id = '${recurrenceId}' AND series_index = 1 AND deleted_at IS NULL`;
+    expect(await rows(iphone, live)).toHaveLength(1);
+    expect(await rows(pc, live)).toEqual(await rows(iphone, live)); // l'autre appareil a bien reçu la ligne
   });
 });
 
