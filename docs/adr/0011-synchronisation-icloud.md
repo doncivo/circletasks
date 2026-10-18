@@ -1475,7 +1475,7 @@ Story technique Y-IOS-02 (même branche, après Y-IOS-01), décisions du 2026-10
    | **Troisième appareil C jamais lu par `O`** | Tout ce que B (et tout autre détenteur) a de C ; C le reporte aussi lui-même s'il revient. | Rien de C. |
    | **Réinitialisation Y-11** (fusion) | Tout (rien n'est remplacé ; la règle ne trouve que ce qui a été écrit pendant la réinitialisation). | Rien. |
 
-   **Limite connue** : une écriture de X que `O` n'a reçue que par la republication d'un **autre** appareil (après un changement d'époque antérieur), puis que la restauration de `O` a écartée, peut revenir : `covers[X]` ne voit que le journal de X. Elle ne fait que rétablir une valeur, jamais en effacer une. **Contrepartie visible : Y-TECH-05** (`docs/stories/Y-TECH-05.md`) : le report est présenté à l'utilisateur (compte rendu : nombre d'écritures reportées, par appareil, liste nommée de ce qui a été rétabli alors qu'il l'avait supprimé). Selon Ali (2026-10-17), ce risque résiduel n'est acceptable que s'il est visible ; tant que Y-TECH-05 n'est pas livrée, il ne l'est que dans le journal technique (`epoch-carry`). Écart avec Y-09 du PRD (« Un élément supprimé ne réapparaît jamais ») : signalé à Ali, section 26, PRD non modifié.
+   **Limite connue** : une écriture de X que `O` n'a reçue que par la republication d'un **autre** appareil (après un changement d'époque antérieur), puis que la restauration de `O` a écartée, peut revenir : `covers[X]` ne voit que le journal de X. Elle ne fait que rétablir une valeur, jamais en effacer une. **Contrepartie visible : Y-TECH-05** (`docs/stories/Y-TECH-05.md`) : le report est présenté à l'utilisateur (compte rendu : nombre d'écritures reportées, par appareil, liste nommée de ce qui a été rétabli alors qu'il l'avait supprimé). Selon Ali (2026-10-17), ce risque résiduel n'est acceptable que s'il est visible ; avec Y-TECH-05 (section 29), il l'est dans l'application : bandeau durable `carry-report` et écran de détail du compte rendu, en plus du journal technique (`epoch-carry`). Écart avec Y-09 du PRD (« Un élément supprimé ne réapparaît jamais ») : signalé à Ali, section 26, PRD non modifié.
 
    **Une époque vide ne peut plus effacer un appareil oublié** : elle ne peut naître que d'un ouvreur qui n'a lu personne, ce que le point 1 interdit tant qu'un autre appareil est connu ou illisible ; or une déclaration d'oubli vit dans un `state.ctx`, que le point 1 oblige à lire avant d'ouvrir.
 
@@ -1515,7 +1515,7 @@ Story technique Y-IOS-02 (même branche, après Y-IOS-01), décisions du 2026-10
 
 1. **Ce que la décision tranche.** Option A (section 9.1 (a), confirmée le 2026-10-05 : « chacun ne reporte que ses propres écritures ») et option B (section 24 point 6) sont **identiques avec deux appareils actifs** : le seul auteur autre que l'ouvreur est l'appareil qui reporte. Elles **diffèrent avec un troisième auteur non oublié**, situation qui existe dans la fenêtre entre l'arrivée d'un nouvel appareil et l'oubli de l'ancien.
 2. **Exemple réel du 17 octobre.** La tâche « Test Pc » a été créée le 16 octobre sur l'ancien PC `56d4…` ; l'iPhone ne l'avait pas lue ; le nouveau PC `7d0b…` l'avait lue et la détenait ; l'ancien PC n'était pas encore oublié. Au changement d'époque ouvert par l'iPhone (restauration « Appliquer partout »), **l'option A la perd** (personne ne la reporte : le nouveau PC ne reporte que les siennes, l'ancien PC ne revient pas) ; **l'option B la garde** (le nouveau PC la reporte : auteur `56d4… ≠` ouvreur, non oublié, au-delà de `covers[56d4…]`). Le cas est verrouillé par `tests/unit/sync/epochCarryOptionB.test.ts` (trois appareils, horloge déterministe) : vert avec la règle du code ; rouge avec la règle A injectée dans ce seul fichier de test (« Test Pc » disparaît chez l'iPhone et chez le nouveau PC).
-3. **Risque résiduel assumé, à condition qu'il soit visible.** Limite connue de la section 24 point 6 : une valeur écartée par une restauration peut revenir si l'ouvreur ne l'avait reçue que par la republication d'un autre appareil. Le report **rétablit, il n'efface jamais**. Selon Ali, ce risque « n'est acceptable que si je le vois » : contrepartie visible **Y-TECH-05** (compte rendu du report : nombre d'écritures reportées, par appareil, liste nommée de ce qui a été rétabli alors qu'il avait été supprimé). Jusqu'à sa livraison, un report n'est visible que dans le journal technique (`epoch-carry`).
+3. **Risque résiduel assumé, à condition qu'il soit visible.** Limite connue de la section 24 point 6 : une valeur écartée par une restauration peut revenir si l'ouvreur ne l'avait reçue que par la republication d'un autre appareil. Le report **rétablit, il n'efface jamais**. Selon Ali, ce risque « n'est acceptable que si je le vois » : contrepartie visible **Y-TECH-05** (compte rendu du report : nombre d'écritures reportées, par appareil, liste nommée de ce qui a été rétabli alors qu'il avait été supprimé). Avec sa livraison, un report est visible dans l'application (bandeau `carry-report` et écran de détail, section 29), en plus du journal technique (`epoch-carry`).
 4. **Écart avec le PRD, signalé à Ali, PRD non modifié.** Y-09 du PRD dit « Un élément supprimé ne réapparaît jamais ». L'option B admet un rétablissement au changement d'époque (restauration « Appliquer partout », époques concurrentes). Proposition de complément de Y-09, **à valider par Ali, non appliquée** : « sauf au changement d'époque (restauration « Appliquer partout », deux appareils qui ouvrent une époque en même temps) : l'élément est alors rétabli, jamais perdu, et l'application l'indique dans un compte rendu (Y-TECH-05) ». Même démarche pour P-04 (fiche Y-TECH-04, contexte).
 5. **Code et tests.** Commentaires alignés sur l'option B (`src/domain/sync/epoch.ts`, en-tête de `src/sync/epochSwitch.ts`), aucune ligne exécutable modifiée. `mustCarry` (`epoch.ts`) n'est que le cas `X = soi` de la règle (ancienne option A) : aucun appelant en production, exercée seulement par `src/domain/sync/catalogue.test.ts`, attente inchangée ; son retrait est une dette de nettoyage, sans effet sur le comportement. Tri des tests par comportement : aucun test de scénario n'encode l'option A (fiche Y-TECH-04, critère 6).
 6. **Règle d'identité à la restauration (parties B et C de Y-TECH-04, décision d'Ali du 2026-10-17 : « une restauration ne change jamais l'identité de l'appareil »).** L'identité vient de la base en place, jamais du fichier restauré. `carry_device_identity` (`src-tauri/src/backup.rs`) la réécrit **dans la base préparée, avant l'échange** (donc avant tout instant où la base en place porterait l'identité d'un autre appareil ; un arrêt brutal à chaque point du banc `RestoreStep` laisse l'identité courante ; idempotente) : réglage local `device.id` (source du démarrage, comparé à `self` par le moteur) et ligne `sync_state.is_self` (l'ancienne ligne passe à `is_self = 0`, jamais supprimée ; la ligne de l'identité courante est créée sans position, ou remise sans position si la sauvegarde la connaissait comme pair, jamais `{époque cible, 0, 0}`). **Quand la sauvegarde vient d'un autre appareil**, l'état qui porte l'identité suit : les clés de publication de `sync_meta` (tête, `stateSeq`, instantané, segments, repères d'états, époque suivie, traces orphelines : liste de `IDENTITY_META` de `forget.ts` plus `ownStateHlcs`) sont remplacées par celles de la base en place, qui décrivent le journal que le dossier contient déjà (les remettre à zéro réutiliserait des numéros publiés, contraire à la règle 1 de l'ADR 0010), et la file d'envoi de l'autre appareil est **ré-signée** au nom de l'appareil courant (même instant et même compteur, comme « Associer de nouveau ») puis transformée en entrées « ligne entière » (republiées avec un rang neuf, hlc d'origine gardés : une entrée au hlc inférieur à la tête serait sinon écartée comme déjà publiée), sans quoi le publieur, qui n'envoie que les champs signés de l'appareil, les abandonnerait. Un appareil dont la copie porte une identité oubliée ne se déclare jamais oublié. **Trois sources d'identité, une seule vérité** : `settings.device.id` et `sync_state.is_self` (réécrits ici) et `sync/folder.json` `device_id` (figé par `bind_device`, hors de la base, donc intact et cohérent). Base en place corrompue : la restauration reste possible (journalisé) ; toute autre erreur de lecture la refuse (`io`).
@@ -1569,6 +1569,71 @@ appareils. Cela contredisait « le report rétablit, il n'efface jamais » (sect
 Tests : `tests/unit/sync/epochCarryReplacedParent.test.ts` (critères 1 à 3, rouge en 4a324b91 puis vert en ead5d217),
 `epochCarryReplacedParentRules.test.ts`, `epochCarryReplacedParentResume.test.ts`, `epochCarryInterface.test.ts`,
 `src/domain/sync/epochCarryNotice.test.ts`.
+
+### 29. Avenant Y-TECH-05 : compte rendu visible du report d'époque (ajout 2 d'Ali du 2026-10-17, 2026-10-18)
+
+Numéro : §27 reste réservé à Y-IOS-07, §28 est l'avenant de Y-FIX-04. **Constat (séance B14)** : l'option B (section 24 point 6, §26)
+rétablit des lignes que l'ouvreur avait supprimées sans jamais les lui montrer : le journal technique disait `epoch-carry { target, rows }`,
+sans nom, sans auteur, sans date. Ali : « il n'est acceptable que si je le vois ». Le report reste l'opération qui rétablit sans effacer ;
+cet avenant la rend visible, il ne change ni la règle de report ni l'ordre des étapes (a) à (d).
+
+1. **Définitions**, pour une ligne `(table, id)` reportée au passage à l'époque `E` ouverte par `O`, sur l'appareil `B` qui reporte
+   (`src/domain/sync/epochCarryReport.ts`, fonctions pures) : **rétablie** = supprimée dans la base juste après l'étape (b)
+   (`deleted_at` non nul ou trace dans `sync_tombstone`) et vivante après (c) parce qu'un champ reporté l'a emporté ; **recréée** = absente de
+   la base remplacée et rendue vivante par une entrée `'+'` ; **reportée** (compteur seulement) = tout champ, ligne ou trace dont le report a
+   été appliqué. Une suppression de `O` annulée par la restauration (ligne vivante dans la sauvegarde) n'est **pas** rétablie : elle n'est
+   pas listée. Les lignes de l'amorce (espaces Pro et Perso) ne sont jamais comptées ni listées.
+2. **Un compte rendu par appareil et par report**, établi par `B` dans `reapply` : compteurs **par auteur** (`fields`, `rows`, `tombs`, `late`
+   pour les écritures tardives `epoch-carry-late`), listes nommées « rétablies » (libellé, auteur du rétablissement, date et auteur de la
+   suppression écartée), « recréées », et « parent remplacé » copiée de la notice de Y-FIX-04 (§28 point 5 ; une notice antérieure est copiée
+   une seule fois), `cause` (`restore`, `concurrent`, `reset`), `opener`, `reporter`, `mode` (`replace` / `merge`). La correspondance
+   table → colonne de libellé → clé de type est unique dans `src/domain` et couvre toutes les tables publiées (test) ; le texte français des
+   types est dans `src/i18n`.
+3. **Table locale `epoch_carry_report`** (migration **0019**, T-TECH-01 passe à la 0020), jamais publiée dans iCloud, incluse dans les
+   sauvegardes locales comme le reste ; dépôt `src/db/repositories/epochCarryReportRepository.ts` chargé à la demande. **Bornes** : 500 lignes
+   nommées pour les trois listes ensemble, rétablies d'abord, le reste compté (`overflow` total et `overflowBy` par liste, pour un nombre
+   exact) ; 20 comptes rendus gardés, les plus anciens **acquittés** élagués, un non acquitté n'est jamais supprimé. Aucun libellé dans le
+   journal technique exporté (test d'hygiène sur le scénario du point 7).
+4. **Atomicité.** Le compte rendu est créé dans la transaction de la **première page** de (c) (ou de l'étape (d) s'il n'y a rien à reporter),
+   jamais dans une transaction supplémentaire, puis complété page par page ; un arrêt brutal à une borne de page donne le même compte rendu
+   qu'une exécution sans arrêt (reprise sans doublon). `SQLITE_FULL` / `SQLITE_IOERR` : l'erreur est relancée, la page est annulée entière
+   et (c) reprend au cycle suivant (même règle que §28 point 5). Autre refus d'écriture : les données sont reportées quand même, l'événement
+   est journalisé et la marque **persistante** `sync_meta.epochCarryReportFailed` `{ epoch, at, code }` est posée (remplace la variable de
+   module de §28 pour le compte rendu) ; elle est effacée à l'acquittement.
+5. **Bandeau et avertissement.** Code `carry-report` (**remplace** `carry-reattached` dans `SYNC_WARNINGS` ; `carry-held` inchangé), dérivé
+   dans `engine.ts` par un module à la demande (`src/sync/epochCarryReportBanner.ts`) : levé tant qu'il existe un compte rendu avec
+   `acknowledged_at` nul et `banner` vrai, ou que la marque d'échec existe. `banner` vaut vrai si et seulement si mode `replace`, au moins une
+   écriture reportée et au moins une ligne nommée : une fusion (réinitialisation), un report sans écriture ou sans ligne nommée ne lèvent rien
+   (le compte rendu reste lisible dans Détails, « Aucune écriture à reporter »). Le texte du bandeau (nombre d'éléments et accès au détail) et
+   celui de l'échec sont composés par un bloc à la demande (`carryReportBannerLine`) et posés dans le shell en chaîne ; la notice de Y-FIX-04
+   ne lève plus rien seule. Tant que `carry-report` est levé, « À jour » n'est pas affiché seul (critère 16 ; la ligne d'état dit « Synchro
+   incomplète : voir les avertissements », comme `carry-held`). Le nombre du bandeau est celui des éléments **rétablis alors qu'ils avaient été
+   supprimés** (liste « rétablies », débordement compris) ; quand cette liste est vide, le bandeau le dit et donne le nombre des autres lignes
+   nommées (recréées, rattachées, mises de côté).
+6. **Écran et « J'ai vu ».** Réglages > Synchronisation > Détails : ligne « Compte rendu du changement d'époque » (dernier non acquitté, puis
+   historique des 20 derniers), écran à la demande (`CarryReportSheet`, hôte `SyncDetailsCarryReportHost` avec sa propre frontière d'erreur :
+   message, « Réessayer », « Recharger », jamais muet), catalogue `fr/en.syncCarryReport.ts` chargé avec lui. Contenu dans l'ordre de focus :
+   résumé (« Époque du {date} à {heure} » = `created_at` du compte rendu, l'identifiant d'époque ne portant aucune date ; cause ; ouvreur ;
+   reporteur ; écritures par auteur, « Cet appareil », « (oublié) »), les trois listes (pages de 50, « et {n} autres »), puis « J'ai vu ».
+   `acknowledgeEpochCarryReport` acquitte **ce seul** compte rendu dans une transaction, retire de la notice de Y-FIX-04 ses lignes rattachées
+   si plus aucun compte rendu non acquitté ne les nomme, efface la marque d'échec ; le bandeau disparaît immédiatement et ne revient jamais
+   pour ce compte rendu, même après redémarrage.
+7. **Banc à trois appareils** (`tests/unit/sync/epochCarryScenario.ts`) : `A` ouvreur restaure, `B` reporte, `C` troisième auteur non oublié ;
+   « Test Pc » (recréée), « À jeter » (rétablie, supprimée par `A`, restaurée par `C`), « Annulée par la restauration » (absente des listes),
+   3 champs de `C` et 2 de `B`. Assertion d'égalité sur le compte rendu complet (critère 23), convergence quand `C` reporte à son tour (24),
+   épreuve de détection par neutralisation du classement (25, rouge), interface et redémarrage (26, Testing Library puis e2e `pc` et
+   `iphone` 393 pt, compte rendu semé par la prise de test `__ctTest`).
+8. **Bundle de départ** : aucun octet de l'écran, du bandeau composé, du catalogue ni du dépôt dans le départ (assertions dans
+   `tests/bundle/startBundle.test.ts`) ; coût du départ : le texte de la migration 0019 et la dérivation de `carry-report`. **Piège noté** : un
+   bloc à la demande qui importe un module du départ (`lazyScreens.tsx`, `epochCarryReport.ts`) le fait sortir du bloc principal et coûte
+   plusieurs kilo-octets de compression ; d'où l'hôte dédié et la séparation `epochCarryReportView.ts` (vue) / `epochCarryReport.ts` (moteur).
+
+Tests : `tests/unit/sync/epochCarryReport.test.ts` (critère 23 rouge puis vert, 24, 25), `epochCarryReportRules.test.ts`,
+`src/domain/sync/epochCarryReport.test.ts`, `src/db/migrations/0019_epoch_carry_report.test.ts`,
+`src/db/repositories/sql/epochCarryReports.test.ts`, `src/features/sync/carryReportScenario.test.tsx` (critère 26 rouge puis vert),
+`tests/e2e/Y-TECH-05.spec.ts` ; identifiants des commits dans `docs/stories/Y-TECH-05.md`. Dettes : compte du bandeau lu une fois par épisode
+(un second compte rendu pendant un bandeau levé est compté à la relecture suivante) ; `carry-held` sans action pour en sortir (§28) ; libellés
+par parent (jour de routine, pause, rappel, session Focus) en repli « (sans titre) » + identifiant.
 
 ## Conséquences
 

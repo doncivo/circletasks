@@ -92,6 +92,5 @@ export const syncEngineFr = {
     incomplete: 'Synchro incomplète : voir les avertissements',
     warnAwaitingOthers: 'En attente des fichiers des autres appareils dans iCloud',
     warnCarryHeld: 'Éléments mis de côté : leur liste ou routine a été remplacée par une restauration',
-    warnCarryReattached: 'Tâches détachées de leur projet, objectif ou série : remplacés par une restauration',
   },
 } as const;

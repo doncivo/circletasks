@@ -28,3 +28,6 @@ export * from './sql';
 // Y-07 (début)
 export type * from './syncUnknownRepository';
 // Y-07 (fin)
+// Y-TECH-05
+export type * from './epochCarryReportRepository';
+// (fin Y-TECH-05)

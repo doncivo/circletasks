@@ -17,9 +17,10 @@ import { migration0015SyncTables } from './0015_sync_tables';
 import { migration0016SyncNaturalIds } from './0016_sync_natural_ids';
 import { migration0017CalendarAccountUsername } from './0017_calendar_account_username';
 import { migration0018AppleReminders } from './0018_apple_reminders';
+import { migration0019EpochCarryReport } from './0019_epoch_carry_report';
 
 /**
  * Registre ordonné des migrations de l'app. Ajouter chaque nouveau fichier
  * `NNNN_titre.ts` ici, à la fin, sans jamais modifier une entrée publiée.
  */
-export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets, migration0010Holiday, migration0011SearchIndex, migration0012TaskExternalEvent, migration0013FocusSession, migration0014FocusSessionProject, migration0015SyncTables, migration0016SyncNaturalIds, migration0017CalendarAccountUsername, migration0018AppleReminders];
+export const migrations: readonly Migration[] = [migration0001CoreTables, migration0002TaskDoneAtIndex, migration0003TaskSeriesTemplate, migration0004TaskDiscarded, migration0005ExternalCalendar, migration0006RoutinePause, migration0007ProQuietHours, migration0008ChecklistIcon, migration0009EventReminderOffsets, migration0010Holiday, migration0011SearchIndex, migration0012TaskExternalEvent, migration0013FocusSession, migration0014FocusSessionProject, migration0015SyncTables, migration0016SyncNaturalIds, migration0017CalendarAccountUsername, migration0018AppleReminders, migration0019EpochCarryReport];

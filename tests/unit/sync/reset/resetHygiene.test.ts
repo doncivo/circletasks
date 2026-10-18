@@ -78,8 +78,8 @@ describe('aucun délai réel (critère 21)', () => {
 });
 
 describe('ni migration, ni format, ni commande nouvelle (critère 22)', () => {
-  it('18 migrations (aucune ajoutée par Y-11 ; la 18 est celle des Rappels Apple, K-05), sm 1, 25 commandes sync_* dont 3 pour la fenêtre pairing', () => {
-    expect(migrations.at(-1)?.version).toBe(18);
+  it('19 migrations (aucune ajoutée par Y-11 ; la 18 est celle des Rappels Apple, K-05, la 19 le compte rendu du report d’époque, Y-TECH-05), sm 1, 25 commandes sync_* dont 3 pour la fenêtre pairing', () => {
+    expect(migrations.at(-1)?.version).toBe(19);
     expect(SYNC_FORMAT_MAJOR).toBe(1);
     expect(SYNC_COMMANDS).toHaveLength(25);
     expect(SYNC_COMMANDS.filter((c) => SYNC_COMMAND_WINDOWS[c] === 'pairing').sort()).toEqual(['sync_key_import', 'sync_pairing_close', 'sync_pairing_payload']);

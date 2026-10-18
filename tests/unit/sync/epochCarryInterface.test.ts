@@ -18,7 +18,7 @@ describe('interface du report d’époque vers Y-TECH-05', () => {
     expect(META.epochCarryNotice).toBe(EPOCH_CARRY_NOTICE_META);
     expect(CARRY_HELD_MARK).toBe(EPOCH_CARRY_HELD_MARK);
     expect(EPOCH_CARRY_NOTICE_MAX_ITEMS).toBe(200);
-    expect(SYNC_WARNINGS).toContain('carry-reattached');
+    expect(SYNC_WARNINGS).toContain('carry-report');
     expect(SYNC_WARNINGS).toContain('carry-held');
   });
 

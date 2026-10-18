@@ -260,7 +260,8 @@ describe('critère 19 : non-régression (aucune clé Info.plist, plugin, capabil
   });
 
   it('aucune migration de base ajoutée (les migrations des tests sont des fixtures), SYNC_FORMAT_MAJOR inchangé', () => {
-    expect(migrations.at(-1)?.version).toBe(18);
+    // 0019 ajoutée par Y-TECH-05 (2026-10-18) : même gel de non-régression, la dernière migration est la 19.
+    expect(migrations.at(-1)?.version).toBe(19);
     expect(SYNC_FORMAT_MAJOR).toBe(1);
   });
 });

@@ -49,8 +49,8 @@ async function installAtN(page: Page, mode: Mode): Promise<void> {
           await db.execute("INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (99, 'future', '00000000', '2026-10-20T08:00:00.000Z')");
         }
         if (mode !== 'fail' && mode !== 'restore-fails') return db;
-        // Migration volontairement en échec : toute instruction de la dernière migration (colonnes Rappels Apple) est refusée.
-        const refuse = (sql: string): boolean => sql.includes('apple_list_id');
+        // Migration volontairement en échec : toute instruction de la dernière migration (0019, table locale epoch_carry_report, Y-TECH-05) est refusée. Une nouvelle migration oblige à changer ce fragment, les versions ci-dessous et le gel de scripts/ios/i06.test.ts.
+        const refuse = (sql: string): boolean => sql.includes('epoch_carry_report');
         return {
           kind: db.kind,
           execute: (sql: string, params?: unknown[]) => (refuse(sql) ? Promise.reject(new Error('échec simulé de la migration')) : db.execute(sql, params)),
@@ -108,10 +108,10 @@ test.describe('I-06 — mise à jour N vers N+1 (iPhone, base préremplie, versi
     await expect(page.getByRole('alert').first()).toHaveText('Impossible d’ouvrir la base de données.', { timeout: APP_READY_TIMEOUT_MS });
     await expect(page.getByText('Vos données sont intactes. Ne supprimez pas CircleTasks. Envoyez le détail pour obtenir un correctif.')).toBeVisible();
     const detail = page.getByTestId('db-failure-detail');
-    await expect(detail).toContainText('Étape : migration 18');
+    await expect(detail).toContainText('Étape : migration 19');
     await expect(detail).toContainText('Version de l’app : 0.3.0');
-    await expect(detail).toContainText('Schéma de la base : 17 (dernier connu de l’app : 18)');
-    await expect(detail).toContainText('Sauvegarde d’avant la mise à jour : circletasks-pre-migration-v0017-to-v0018-');
+    await expect(detail).toContainText('Schéma de la base : 18 (dernier connu de l’app : 19)');
+    await expect(detail).toContainText('Sauvegarde d’avant la mise à jour : circletasks-pre-migration-v0018-to-v0019-');
     await expect(page.getByRole('button', { name: 'Réessayer' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copier le détail' })).toBeVisible();
     const restore = page.getByRole('button', { name: 'Restaurer la sauvegarde d’avant la mise à jour' });
@@ -129,7 +129,7 @@ test.describe('I-06 — mise à jour N vers N+1 (iPhone, base préremplie, versi
     const readRestored = () => page.evaluate(() => (globalThis as { __ctRestored?: string[] }).__ctRestored ?? []);
     await expect.poll(async () => (await readRestored()).length).toBe(1);
     const restored = await readRestored();
-    expect(restored[0]).toMatch(/^circletasks-pre-migration-v0017-to-v0018-\d{8}T\d{6}Z\.db$/);
+    expect(restored[0]).toMatch(/^circletasks-pre-migration-v0018-to-v0019-\d{8}T\d{6}Z\.db$/);
   });
 
   test('base plus récente que l’app : consigne SideStore, données non modifiées, pas de restauration, jamais de page blanche', async ({ page }) => {

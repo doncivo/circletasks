@@ -50,6 +50,8 @@ export const createSqlRepositories: RepositoryFactory = (executor, stamper) => (
   syncConflicts: createSyncConflictRepository(executor, stamper),
   // Y-04 (fin)
   sync: createSyncRepository(executor, stamper),
+  // Y-TECH-05 : comptes rendus du report d'époque, implémentation chargée à la demande (hors du JavaScript de départ).
+  carryReports: () => import('./epochCarryReports').then((m) => m.createEpochCarryReportRepository(executor)),
   // Y-07 (début)
   // Y-07 (fin)
 });

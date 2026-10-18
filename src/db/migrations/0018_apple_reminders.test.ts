@@ -8,6 +8,8 @@ import { CAPTURE_TABLES_V15 } from './0015_sync_tables';
 import { CAPTURE_TABLES_V18, SHARED_SETTING_KEYS_V18, migration0018AppleReminders } from './0018_apple_reminders';
 import { migrations } from './index';
 
+/** Y-TECH-05 : registre jusqu'à la 0018 (la 0019 suit) : ces tests restent ceux de la 0018. */
+const UP_TO_18 = migrations.slice(0, 18);
 const PRO = '00000000-0000-4000-8000-000000000001';
 const DEV = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const h = (ms: number): string => `${String(ms).padStart(15, '0')}-0000-${DEV}`;
@@ -30,9 +32,10 @@ const triggers = (db: SqlDriver) => db.select<{ name: string; sql: string }>("SE
 describe('migration 0018 : Rappels Apple (K-05 critère 1, ADR 0008 §10.2)', () => {
   it('numéro suivant, sans trou ; rejouable sans effet ; version publiée = dernière migration', async () => {
     expect(migration0018AppleReminders.version).toBe(18);
-    expect(migrations.at(-1)?.version).toBe(18);
+    // Y-TECH-05 : la 0019 suit (compte rendu du report d'époque) ; la 0018 reste à sa place, sans trou.
+    expect(migrations[17]?.version).toBe(18);
     const db = await dbAt(18);
-    expect((await migrate(db, migrations)).applied).toEqual([]);
+    expect((await migrate(db, UP_TO_18)).applied).toEqual([]);
     await db.close();
   });
 
@@ -60,7 +63,7 @@ describe('migration 0018 : Rappels Apple (K-05 critère 1, ADR 0008 §10.2)', ()
     );
     const before = { outbox: await outbox(db), clocks: await db.select('SELECT * FROM sync_field_clock ORDER BY table_name, row_id, field') };
     expect(before.outbox.length).toBeGreaterThan(0);
-    const report = await migrate(db, migrations);
+    const report = await migrate(db, UP_TO_18);
     expect(report.applied).toEqual([18]);
     expect(await db.select('SELECT id, title, source, external_id, apple_list_id, apple_recurring FROM task ORDER BY id')).toEqual([
       { id: 't1', title: 'Facture 2', source: 'local', external_id: null, apple_list_id: null, apple_recurring: 0 },
@@ -157,13 +160,13 @@ describe('QA K-05 : sauvegarde de version 17 restaurée puis migrée (ADR 0008 �
     const before = await db.select('SELECT id, title, status, note, deleted_at, done_at, hlc FROM task ORDER BY id');
     const queued = await outbox(db);
     // Ouverture de la sauvegarde restaurée par l'app de version 18.
-    expect((await migrate(db, migrations)).applied).toEqual([18]);
+    expect((await migrate(db, UP_TO_18)).applied).toEqual([18]);
     expect(await db.select('SELECT id, title, status, note, deleted_at, done_at, hlc FROM task ORDER BY id')).toEqual(before);
     expect(await outbox(db)).toEqual(queued);
     expect(await db.select('PRAGMA integrity_check')).toEqual([{ integrity_check: 'ok' }]);
     expect(await db.select('PRAGMA foreign_key_check')).toEqual([]);
     // Deuxième ouverture : rien à rejouer.
-    expect((await migrate(db, migrations)).applied).toEqual([]);
+    expect((await migrate(db, UP_TO_18)).applied).toEqual([]);
     // L'app écrit dans la base migrée : le nouveau champ est capturé par les déclencheurs recréés, les anciens aussi.
     const marker = (await outbox(db)).length;
     await db.execute("UPDATE task SET apple_list_id = 'L1', source = 'apple_reminders', external_id = 'R1', hlc = ? WHERE id = 'a1'", [h(10)]);
