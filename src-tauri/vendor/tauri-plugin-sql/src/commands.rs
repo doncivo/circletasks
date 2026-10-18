@@ -16,6 +16,8 @@ pub(crate) async fn load<R: Runtime>(
     migrations: State<'_, Migrations>,
     db: String,
 ) -> Result<String, crate::Error> {
+    // CircleTasks (SEC-01) : première instruction de `load`, avant tout accès au disque.
+    crate::guard::validate_db_url(&db)?;
     let pool = DbPool::connect(&db, &app).await?;
 
     if let Some(migrations) = migrations.0.lock().await.remove(&db) {

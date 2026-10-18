@@ -351,3 +351,82 @@ async fn sec01_4_attaching_an_existing_foreign_database_is_refused_and_not_writt
     assert_refused(fx.exec(&format!("ATTACH DATABASE '{sql_path}' AS x")).await, "attach", "execute ATTACH d'un fichier existant");
     assert_refused(fx.sel(&format!("ATTACH DATABASE '{sql_path}' AS x")).await, "attach", "select ATTACH d'un fichier existant");
 }
+
+
+/// Contournement essayé : les fonctions-tables `pragma_*` (lecture d'un pragma par `SELECT`) passent par l'autorisateur comme `PRAGMA`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_8_pragma_table_functions_are_refused_like_pragmas() {
+    let fx = Fixture::new("db-pragma-fn-").await;
+    for sql in ["SELECT * FROM pragma_user_version", "SELECT * FROM pragma_database_list", "SELECT * FROM pragma_table_info('sqlite_master')", "SELECT * FROM pragma_writable_schema"] {
+        assert_refused(fx.sel(sql).await, "pragma", sql);
+    }
+}
+
+/// Défense en profondeur : la limite d'attachement (couche 2) bloque à elle seule `ATTACH` et `VACUUM INTO`, autorisateur retiré et
+/// filtre lexical contourné (appel direct de sqlx sur la connexion).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sec01_6_the_limit_alone_blocks_attach_and_vacuum_into() {
+    let fx = Fixture::new("db-limit-alone-").await;
+    let (attached, attached_sql) = fx.victim("limit-attach.db");
+    let (copy, copy_sql) = fx.victim("limit-copy.db");
+    let mut conn = fx.pool.acquire().await.unwrap();
+    {
+        let mut handle = conn.lock_handle().await.unwrap();
+        // SAFETY : descripteur valide tant que `handle` est tenu ; retire l'autorisateur pour ne tester que la limite.
+        let rc = unsafe { libsqlite3_sys::sqlite3_set_authorizer(handle.as_raw_handle().as_ptr(), None, std::ptr::null_mut()) };
+        assert_eq!(rc, libsqlite3_sys::SQLITE_OK);
+    }
+    let attach = sqlx::query(&format!("ATTACH DATABASE '{attached_sql}' AS x")).execute(&mut *conn).await;
+    assert!(attach.as_ref().is_err_and(|e| e.to_string().contains("too many attached databases")), "ATTACH : {attach:?}");
+    let vacuum = sqlx::query(&format!("VACUUM INTO '{copy_sql}'")).execute(&mut *conn).await;
+    assert!(vacuum.is_err(), "VACUUM INTO doit échouer avec la limite à 0 : {vacuum:?}");
+    assert!(!attached.exists() && !copy.exists());
+}
+
+// --- Fonctions pures : filtre lexical, liste blanche de pragmas, décisions de l'autorisateur ---
+
+#[test]
+fn sec01_7_lexical_filter_cases() {
+    use crate::guard::mentions_vacuum;
+    for yes in ["VACUUM", "vacuum", "VaCuUm INTO 'x'", "SELECT 1;VACUUM", "SELECT 1;\nvacuum", "/**/VACUUM/**/INTO 'x'", "-- c\nVACUUM", "SELECT 'a'; VACUUM", "SELECT \"a\"\"b\"; VACUUM", "SELECT 'a'' ' ; vacuum", "(VACUUM)", "x'00';vacuum"] {
+        assert!(mentions_vacuum(yes), "{yes:?} doit être refusé");
+    }
+    for no in ["", "SELECT 'vacuum'", "SELECT \"vacuum\"", "SELECT [vacuum]", "SELECT `vacuum`", "-- vacuum", "/* vacuum */ SELECT 1", "SELECT vacuum_count", "SELECT avacuum", "SELECT :vacuum, @vacuum, $vacuum", "SELECT 'it''s vacuum'", "/* non terminé vacuum"] {
+        assert!(!mentions_vacuum(no), "{no:?} ne doit pas être refusé");
+    }
+}
+
+#[test]
+fn sec01_8_pragma_white_list_cases() {
+    use crate::guard::{REASON_PRAGMA, decide};
+    let pragma = |name: &str, arg: Option<&str>| decide(libsqlite3_sys::SQLITE_PRAGMA, Some(name), arg);
+    for (name, arg) in [("foreign_keys", None), ("foreign_keys", Some("ON")), ("FOREIGN_KEYS", Some("on")), ("foreign_keys", Some("1")), ("journal_mode", None), ("journal_mode", Some("WAL")), ("journal_mode", Some("wal")), ("wal_checkpoint", None), ("wal_checkpoint", Some("TRUNCATE")), ("data_version", None)] {
+        assert_eq!(pragma(name, arg), None, "{name} {arg:?} doit passer");
+    }
+    for (name, arg) in [("foreign_keys", Some("OFF")), ("foreign_keys", Some("0")), ("foreign_keys", Some("")), ("journal_mode", Some("DELETE")), ("journal_mode", Some("OFF")), ("data_version", Some("1")), ("writable_schema", None), ("user_version", None), ("table_info", Some("t")), ("", None)] {
+        assert_eq!(pragma(name, arg), Some(REASON_PRAGMA), "{name} {arg:?} doit être refusé");
+    }
+    assert_eq!(decide(libsqlite3_sys::SQLITE_PRAGMA, None, None), Some(REASON_PRAGMA), "pragma sans nom");
+}
+
+#[test]
+fn sec01_9_authorizer_decisions_for_functions_and_virtual_tables() {
+    use crate::guard::{REASON_ATTACH, REASON_FUNCTION, REASON_VTABLE, decide};
+    use libsqlite3_sys as ffi;
+    for f in ["load_extension", "LOAD_EXTENSION", "fts3_tokenizer", "readfile", "writefile", "edit"] {
+        assert_eq!(decide(ffi::SQLITE_FUNCTION, None, Some(f)), Some(REASON_FUNCTION), "{f}");
+    }
+    for f in ["lower", "json_extract", "bm25", "highlight"] {
+        assert_eq!(decide(ffi::SQLITE_FUNCTION, None, Some(f)), None, "{f}");
+    }
+    assert_eq!(decide(ffi::SQLITE_CREATE_VTABLE, Some("t"), Some("fts5")), None);
+    assert_eq!(decide(ffi::SQLITE_CREATE_VTABLE, Some("t"), Some("FTS5")), None);
+    assert_eq!(decide(ffi::SQLITE_DROP_VTABLE, Some("t"), Some("fts5")), None);
+    assert_eq!(decide(ffi::SQLITE_CREATE_VTABLE, Some("t"), Some("rtree")), Some(REASON_VTABLE));
+    assert_eq!(decide(ffi::SQLITE_CREATE_VTABLE, Some("t"), None), Some(REASON_VTABLE));
+    assert_eq!(decide(ffi::SQLITE_ATTACH, Some("x.db"), None), Some(REASON_ATTACH));
+    assert_eq!(decide(ffi::SQLITE_DETACH, Some("x"), None), Some(REASON_ATTACH));
+    for action in [ffi::SQLITE_SELECT, ffi::SQLITE_READ, ffi::SQLITE_INSERT, ffi::SQLITE_UPDATE, ffi::SQLITE_DELETE, ffi::SQLITE_CREATE_TABLE, ffi::SQLITE_CREATE_INDEX, ffi::SQLITE_CREATE_TRIGGER, ffi::SQLITE_TRANSACTION, ffi::SQLITE_SAVEPOINT, ffi::SQLITE_RECURSIVE, ffi::SQLITE_ALTER_TABLE, ffi::SQLITE_DROP_TABLE, ffi::SQLITE_ANALYZE, ffi::SQLITE_REINDEX] {
+        assert_eq!(decide(action, Some("t"), Some("c")), None, "action {action}");
+    }
+}
