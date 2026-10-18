@@ -544,7 +544,10 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
      * (exigence d'Ali, visible dans Détails et en bandeau), levé avant tout chargement. Y-FIX-02 (§30) : journal `publish-deferred` et cause
      * nommée (Détails) composés par le bloc à la demande `orphanEpoch` (chemin rare, bundle de départ).
      */
-    /** Y-FIX-02 : un seul site de chargement du bloc à la demande (chaque `import()` coûte son enveloppe de préchargement au départ). */
+    /**
+     * Y-FIX-02 : un seul site de chargement du bloc à la demande `orphanEpoch` après l'abandon (chaque `import()` coûte son enveloppe de
+     * préchargement au départ) : borne, journal `publish-deferred`, reprise d'`inflight`, réarmement et suppression de l'orpheline.
+     */
     const firstModule = () => import('./orphanEpoch');
     const deferPublish = async (refused: boolean): Promise<void> => {
       const warnings = (seen.warnings = [...(seen.warnings ?? []), 'publish-blocked']);
@@ -607,8 +610,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     const nextState = async (h: DeviceAck): Promise<PublishedDeviceState> => buildState(currentEpoch, h, stateSeq + 1, snapshotMeta, purgeHorizon, await ackMap());
 
     if (first?.covers) onStateIo = () => deferPublish(true);
-    // Y-FIX-02 (§30) : intention d'ajout résolue dès qu'elle existe, même si la publication est refusée (Rust juge la tête).
-    if (inflight) {
+    // Y-FIX-02 (§30, revue B1) : intention d'ajout résolue seulement si la publication est permise (règle actuelle ou borne locale de source
+    // `inflight`) ; refusée, l'intention reste posée, stable d'un cycle à l'autre, et aucun état n'est écrit. Rust juge la tête présentée.
+    if (inflight && publishAllowed) {
       await (await firstModule()).resolveInflight(deps, inflight, async (h) => {
         const ok = await writeState(await nextState(h), true);
         if (ok) head = h;
@@ -1016,12 +1020,12 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       (ownScan?.epochs ?? []).some((e) => e.epoch !== currentEpoch && e.segments.length === 0 && e.snapshots.length > 0) &&
       (await repos.sync.getMeta(META.orphanEpoch)) === null
     ) {
-      await (await import('./orphanEpoch')).relistOrphanEpoch(deps, { scan, ownScan, currentEpoch, own: lastWritten ?? ownState, announced: announcedByOthers, accepted, forgotten: forgetView.order, unreadable: unreadable.length });
+      await (await firstModule()).relistOrphanEpoch(deps, { scan, ownScan, currentEpoch, own: lastWritten ?? ownState, announced: announcedByOthers, accepted, forgotten: forgetView.order, unreadable: unreadable.length });
     }
     // Y-IOS-02 (ADR 0011 §24 point 4 (e)) : fichiers de l'orpheline abandonnée, supprimés au mieux (module chargé à la demande).
     if ((await repos.sync.getMeta(META.orphanEpoch)) !== null) {
       try {
-        await (await import('./orphanEpoch')).retryOrphanDeletion(deps, ownScan, currentEpoch);
+        await (await firstModule()).retryOrphanDeletion(deps, ownScan, currentEpoch);
       } catch (error) {
         // Comme les autres suppressions de l'étape 7 : journalisé, retenté au cycle suivant ; ni la lecture, ni la publication, ni la suppression
         // des fichiers d'un appareil oublié ne sont sautées.

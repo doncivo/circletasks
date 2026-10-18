@@ -140,7 +140,7 @@ export async function relistOrphanEpoch(
 
 /*
  * Chemins rares de la décision de publier, demandés par le moteur seulement quand la règle actuelle refuse de publier (`bound`,
- * `deferred`) ou qu'une intention d'ajout existe (`resolveInflight`). Ici plutôt que dans un bloc nouveau (bundle de départ, mesures de
+ * `deferred`) ou qu'une intention d'ajout existe et que la publication est permise (`resolveInflight`). Ici plutôt que dans un bloc nouveau (bundle de départ, mesures de
  * Y-FIX-02) : un bloc nouveau qui importe `meta.ts` ou `epoch.ts` les sort de leur bloc de départ (+4 945 et +4 016 octets), et chaque bloc
  * nouveau ajoute son nom haché au départ ; la règle pure `localBoundCovers` n'importe que des types.
  */
@@ -189,7 +189,7 @@ export function deferred(logger: Logger, refused: boolean, first: LocalBound | n
 
 /**
  * Résout une intention d'ajout interrompue (arrêt entre l'ajout et le retrait de la file) : hypothèse « ajout réussi » d'abord. Y-FIX-02
- * (§30) : appelée dès qu'elle existe, même si la publication est refusée ; Rust juge la tête. Acceptée : file retirée, `META.head` posé ;
+ * (§30, revue B1) : appelée seulement si la publication est permise (sinon l'intention reste posée) ; Rust juge la tête. Acceptée : file retirée, `META.head` posé ;
  * refusée (`state-mismatch`, hypothèse « ajout manqué ») : file gardée, la publication reprend par l'existant ; `inflight` remis à nul dans
  * les deux cas. Une erreur (`io`) remonte avant la transaction : `inflight` est gardé pour le cycle suivant. Chemin rare (arrêt brutal) :
  * dans ce bloc à la demande depuis Y-FIX-02 (bundle de départ).
