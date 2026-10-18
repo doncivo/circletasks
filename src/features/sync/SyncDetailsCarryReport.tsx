@@ -19,7 +19,7 @@ interface Loaded {
 
 /**
  * Ligne « Compte rendu du changement d'époque » de Réglages › Synchronisation › Détails (Y-TECH-05 critères 14, 17 et 18) : les 20
- * derniers comptes rendus (le dernier non acquitté en tête, « Non vu »), chacun ouvrant l'écran de détail ; l'échec d'enregistrement d'un
+ * derniers comptes rendus et tous ceux qui ne sont pas acquittés (du plus récent au plus ancien, « Non vu »), chacun ouvrant l'écran de détail ; l'échec d'enregistrement d'un
  * compte rendu, avec « J'ai vu » qui efface la marque. Absente sans compte rendu ni échec. Bloc à la demande : jamais au départ.
  * Ouverte par le bandeau (« Voir »), elle ouvre d'elle-même le compte rendu non acquitté.
  */
@@ -37,7 +37,13 @@ export function SyncDetailsCarryReport() {
 
   useEffect(() => {
     let alive = true;
-    const read = async (): Promise<Loaded> => ({ reports: await (await container.data.repos.carryReports()).list(EPOCH_CARRY_REPORT_KEEP), failure: await carryReportFailure(container.data.repos) });
+    const read = async (): Promise<Loaded> => {
+      const repo = await container.data.repos.carryReports();
+      // Revue I2 : les non acquittés ne sont jamais élagués, donc tous listés (sinon le bandeau ne pourrait plus disparaître), avec les 20 derniers.
+      const merged = new Map<number, EpochCarryReport>();
+      for (const report of [...(await repo.unacknowledged()), ...(await repo.list(EPOCH_CARRY_REPORT_KEEP))]) merged.set(report.id, report);
+      return { reports: [...merged.values()].sort((a, b) => b.id - a.id), failure: await carryReportFailure(container.data.repos) };
+    };
     read().then(
       (next) => alive && setLoaded(next),
       () => alive && setLoaded('failed'),

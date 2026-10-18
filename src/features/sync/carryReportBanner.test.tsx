@@ -181,11 +181,32 @@ describe('« J’ai vu » (critère 18)', () => {
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
   });
 
-  it('historique : les 20 derniers seulement, du plus récent au plus ancien', async () => {
-    for (let i = 0; i < 22; i += 1) await seed(`${String(i)}-a`, new Date(2026, 9, 1 + (i % 28), 10, i).toISOString(), ['A'], false);
+  it('historique : les 20 derniers acquittés seulement, du plus récent au plus ancien', async () => {
+    const reports = await db.data.repos.carryReports();
+    for (let i = 0; i < 22; i += 1) await reports.acknowledge(await seed(`${String(i)}-a`, new Date(2026, 9, 1 + (i % 28), 10, i).toISOString(), ['A'], false), NOW);
     await start([]);
     expect(await screen.findAllByRole('button', { name: /^Époque du / })).toHaveLength(20);
     expect(screen.getByRole('list', { name: 'Compte rendu du changement d’époque : 20' })).toBeTruthy();
+  });
+
+  // Revue I2 : un compte rendu non acquitté n'est jamais élagué ; il doit rester accessible, sinon le bandeau ne peut plus disparaître.
+  it('21 comptes rendus non acquittés : les 21 sont dans l’historique (le plus ancien aussi), du plus récent au plus ancien, sans doublon', async () => {
+    const reports = await db.data.repos.carryReports();
+    const ids: number[] = [];
+    for (let i = 0; i < 21; i += 1) ids.push(await seed(`${String(i)}-a`, new Date(2026, 9, 1 + i, 10, 0).toISOString(), ['A']));
+    // Deux comptes rendus acquittés plus récents : `list(20)` seul les verrait en tête et pousserait les plus anciens non acquittés dehors.
+    for (let i = 21; i < 23; i += 1) await reports.acknowledge(await seed(`${String(i)}-a`, new Date(2026, 9, 1 + i, 10, 0).toISOString(), ['A'], false), NOW);
+    await start([]);
+    const entries = await screen.findAllByRole('button', { name: /^Époque du / });
+    expect(entries).toHaveLength(23);
+    expect(screen.getByRole('list', { name: 'Compte rendu du changement d’époque : 23' })).toBeTruthy();
+    // Le premier non acquitté (id 1, le plus ancien) est ouvrable et « J'ai vu » l'acquitte.
+    fireEvent.click(entries[entries.length - 1] as HTMLElement);
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'J’ai vu' }));
+    // Une fois acquitté, le plus ancien sort de l'historique (hors des 20 derniers) : la feuille se ferme, les 22 autres restent.
+    await waitForElementToBeRemoved(() => screen.queryByRole('dialog'));
+    expect(screen.getAllByRole('button', { name: /^Époque du / })).toHaveLength(22);
+    expect((await reports.get(ids[0] as number))?.acknowledgedAt).not.toBeNull();
   });
 
   it('sans compte rendu ni échec, la ligne est absente', async () => {
