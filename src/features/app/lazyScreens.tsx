@@ -144,6 +144,8 @@ export const QuietHoursRoute = lazyScreen<object>(() => import('../spaces/QuietH
 // message et « Réessayer » de la frontière d'erreur. Les magasins d'état et les raccourcis (Ctrl+K, Ctrl+/) restent dans le départ.
 /** Assistant de premier lancement (P-05) : ouverture pilotée par l'état ; préchargé (l'assistant n'attend que le repos qui suit le premier rendu). */
 export const OnboardingHost = lazyScreen<object>(() => import('../settings/OnboardingHost').then((m) => ({ default: m.OnboardingHost })), 'onboardinghost', { fallback: 'none' });
+/** Recherche (M14) : ouverte sur un geste (Ctrl+K, bouton) ; préchargée, le raccourci existe avant le bloc et son premier usage le charge si besoin. */
+export const SearchOverlay = lazyScreen<object>(() => import('../search/SearchOverlay').then((m) => ({ default: m.SearchOverlay })), 'searchoverlay', { fallback: 'none' });
 
 /** Charge tous les écrans à la demande, un par un, aux moments d'inactivité (repli 200 ms sur iPhone). Rend l'arrêt. */
 export function preloadScreens(): () => void {

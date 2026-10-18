@@ -33,6 +33,7 @@ import {
   RecapSettingsScreen,
   ReportScreen,
   RoutinesScreen,
+  SearchOverlay,
   SettingsScreen,
   SomedayScreen,
   SpacesScreen,
@@ -50,7 +51,7 @@ import { EventEditorHost, HolidayDetailHost, registerEventsSource } from './feat
 import { FocusHost } from './features/focus';
 import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
-import { SearchOverlay, registerSearchShortcut } from './features/search';
+import { registerSearchShortcut } from './features/search';
 import { restoreAppearance, startThemeSync } from './features/settings';
 import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';

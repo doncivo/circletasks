@@ -29,4 +29,5 @@ export type ScreenName =
   | 'syncdetailsscreen'
   | 'quiethoursroute'
   | 'restorechoicedialog'
-  | 'onboardinghost';
+  | 'onboardinghost'
+  | 'searchoverlay';
