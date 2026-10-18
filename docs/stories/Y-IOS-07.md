@@ -102,7 +102,7 @@ Réponse de l'agent d'implémentation : *à remplir avant le premier commit de c
 
 ## Ordre et dossiers partagés
 
-- `publisher.ts` est aussi touché par Y-FIX-02 (impasse de première publication, `inflight`) : **un seul des deux lots à la fois sur `src/sync/publisher.ts`** ; Y-IOS-07 après Y-FIX-02, ou rebase explicite. `store.rs` est partagé avec Y-IOS-05 (délai sur le transport) pour le seul appel de lecture ; fusion de Y-IOS-05 d'abord s'il y a conflit.
+- `publisher.ts` est aussi touché par Y-FIX-02 (impasse de première publication, `inflight`) : **un seul des deux lots à la fois sur `src/sync/publisher.ts`** ; Y-IOS-07 après Y-FIX-02, ou rebase explicite. `store.rs` n'est pas touché par Y-IOS-05 (son échéance vit dans `bookmark.rs`, `commands_ios.rs`, `limits.rs` et le plugin Swift, fiche Y-IOS-05 du 2026-10-18) : aucun conflit Rust attendu entre les deux stories.
 - `memory.ts` et `fake_bookmark.rs` : seulement si le banc manque d'un point de panne (par exemple un code d'erreur d'ajout distinct) ; toute extension du plan de pannes passe par la fixture commune et ses refus (`fault-plan-invalid.json`).
 
 ## Ordre des sous-tâches

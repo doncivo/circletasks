@@ -1688,6 +1688,55 @@ segment `max + 1` avec la tête de Rust ; c'est l'autre appareil qui attend. Tes
 (`tests/unit/sync/hostile/scenario2CrashBeforeState.test.ts`, rouge puis vert), `firstPublicationCrashPoints.test.ts` (rouge puis vert),
 `src/domain/sync/firstPublication.test.ts` (table `tests/fixtures/sync/first-publication-bound.json`),
 `src/features/sync/publishBlockedCause.test.tsx` ; Rust : `y01_15_write_state_compares_head_paired_by_and_reserved_fields`.
+### 32. Avenant Y-IOS-05 : échéance du transport iOS, garde de coordination et état illisible (bloquant B6, 2026-10-18)
+
+Numéro : §27 reste réservé à Y-IOS-07, §30 à Y-FIX-02 et §31 à Y-FIX-03 (pas encore écrits à la date de cet avenant) ; §32 est écrit
+d'abord, sans attendre les deux précédents. **Constat (audit 1.0, B6)** : un appel du plugin folder-bookmark qui ne répond jamais
+(`run_mobile_plugin` sans délai, `NSFileCoordinator` sans annulation, file série de Swift) laissait la synchro de l'iPhone sur « Synchro en
+cours » jusqu'à la relance de l'app, sans erreur : un échec silencieux.
+
+1. **Trois couches, une seule sortie.** Swift : chaque coordination (`coordinatedRead`, `Write`, `Delete`, `Move`) arme une garde de
+   **15 s** (`coordinationGuardSeconds`, classe `CoordinationGuard` : `DispatchWorkItem` sur une file globale, `coordinator.cancel()`,
+   drapeau sous verrou, désarmée au retour de `coordinate`). Rust : `DeadlineTransport` (`src-tauri/src/sync/bookmark.rs`) entoure
+   `PluginTransport` dans `commands_ios.rs`, sous `BookmarkFs`, `BookmarkBackend` et `IosConsentUi`, et passe chaque appel par
+   `call_with_deadline` : **20 s** par commande de fichier, `timeoutMs` + **5 s** pour `download`, `pickFolder` et `confirm` exclus (fil
+   appelant, sans borne). Constantes dans `limits.rs` (`BOOKMARK_CALL_DEADLINE_MS`, `BOOKMARK_DOWNLOAD_MARGIN_MS`,
+   `BOOKMARK_MAX_ABANDONED_CALLS`), injectables (`DeadlineTransport::with_limits`). Faux TypeScript (`memory.ts`) : un appel muet encore en
+   suspens après `MUTE_DEADLINE_TURNS = 100` tours de micro-tâche est rejeté ; compteur, jamais de minuterie ni d'horloge réelle. Partout la
+   sortie est `cloud-pending` (aucun code nouveau) : phase `waiting-icloud`, « En attente d’iCloud », puis `errorStreak`, `retryAt` et
+   `waitingSince` (§22 point 6 et Y-IOS-02), jamais un arrêt. 15 s < 20 s < 25 s (borne du cycle en arrière-plan) : Swift répond d'abord.
+2. **Issue d'une coordination gardée** : le résultat du corps s'il existe (une annulation ne défait pas un corps commencé) ; sinon
+   `cloud-pending` si la garde a tiré et que `coordinate` a fini par l'annulation (`NSUserCancelledError` du domaine Cocoa, ou aucune
+   erreur ; revue S2) ; sinon `io`, y compris une autre erreur arrivée en même temps que la garde. La garde ne répond jamais à l'appel : la réponse reste unique, celle de `onFiles`.
+3. **Appel abandonné.** Le fil de `call_with_deadline` reste bloqué jusqu'à la réponse de Swift, qui est jetée. Une place par file de Swift
+   (file série des fichiers ; fil principal pour `appState`, `OFF_QUEUE_COMMANDS`, revue I1), réservée sous le verrou du contrôle avant
+   l'envoi et rendue à la réponse, même tardive (revue S1) : au plus **un** appel en vol, donc au plus un abandonné, par file. Une
+   commande sans place attend au plus son échéance ; si la place est tenue par un appel abandonné, elle répond `cloud-pending` aussitôt,
+   sans être envoyée (la file série de Swift la ferait attendre derrière lui), journal `bookmark-call-skipped`. `appState` n'est donc
+   jamais refusé derrière un appel de fichier abandonné (sinon `owner_ready` rendrait faux et toute action confirmée échouerait en
+   `not-foreground`), et un `appState` abandonné ne ferme pas la file des fichiers. L'échéance inscrit `bookmark-call-timeout` avec le seul
+   nom de la commande. **Effet d'une écriture tardive** (revue I2) : jeter la réponse ne défait rien ; un `append`, `writeAtomic`,
+   `rename` ou `remove` abandonné peut avoir écrit, et une réponse arrivée juste après l'échéance est rendue en échec alors que l'écriture
+   a eu lieu. Garantie : aucune double écriture silencieuse. Au cycle suivant, `append_journal` (`store.rs`) relit le segment, y voit plus
+   d'enregistrements que `expect_records` et rend `segment-mismatch` sans écrire ; le moteur passe au segment suivant, comme après un arrêt
+   brutal juste après l'écriture (enregistrement relu deux fois au plus, application idempotente par hlc). Test
+   `y_ios_05_12_late_append_effect_is_caught_by_segment_mismatch`. Le verrou `inner` de `SyncCore` n'est plus tenu au-delà de l'échéance
+   (`scan_inner` rend `cloud-pending` comme toute erreur) ; `service.rs` et `store.rs` ne changent pas.
+4. **État illisible traité comme `cloud`, lien conservé.** `availability()` rend `cloud` quand `resourceValues` échoue ; `readFrom` refuse
+   tout état autre que `local` par `cloud-pending` avant la coordination ; `download` sur un état illisible rend `cloud-pending` (plus `[:]`).
+   `"error"` n'est plus produit que pour un lien symbolique (état d'un élément, entrée listée), qui reste `unsafe-folder` côté Rust : une
+   panne durable légitime. Contrat JSON inchangé (mêmes trois valeurs).
+5. **Forme du faux Rust (réponse au point 2 de §25).** L'effet `mute` reste refusé par `MemFs` et `fake_bookmark`. Les tests de l'échéance
+   emploient un transport muet dédié, `MutedTransport` (`src-tauri/tests/desktop/sync_bookmark.rs` : bloque une commande désignée sur un
+   canal jusqu'à sa libération par le test, sinon répond comme `FakePlugin`), inscrit avec sa raison aux exemptions de
+   `tests/unit/sync/hostile/fakesLoadFixtures.test.ts`. Échéance de test à `Duration::ZERO` (un appel muet ne répond jamais : `Timeout`
+   déterministe) ; attentes sur condition (`Condvar`) bornées par un garde-fou qui fait échouer le test ; aucune assertion sur une durée.
+   Aucun champ ajouté au plan de pannes.
+
+Tests : `tests/unit/sync/hostile/scenario5MuteTransport.test.ts` (rouge puis vert), `scenario5MuteFollowUp.test.ts`,
+`src/platform/sync/memoryFaults.test.ts`, `src-tauri/tests/desktop/sync_bookmark.rs` (`y_ios_05_*`, câblage rouge puis vert, contrôles
+statiques du Swift) ; commits dans `docs/stories/Y-IOS-05.md`. Non prouvé avant l'iPhone : l'effet réel de `NSFileCoordinator.cancel()` sur une
+coordination en attente d'iCloud (Swift jamais exécuté hors de `build-ios.yml` et de l'appareil ; vérification manuelle d'Ali en mode avion).
 
 ## Conséquences
 
