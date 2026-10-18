@@ -2,12 +2,16 @@
 //! plugin (hydratation et budgets, liens, signet obsolète ou perdu, dossier déplacé), `BookmarkBackend` dans `SyncCore` (`folder.json`,
 //! chemin jamais rendu), `sync_scan({ hydrateBudgetMs })`, et lecture en flux de la fin d'un instantané (`read_from`, mémoire bornée).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
+use std::thread::ThreadId;
+use std::time::Duration;
 
-use circletasks_lib::sync::bookmark::{choose_with_picker, ios_core, BookmarkBackend, BookmarkFs, BookmarkTransport, PLUGIN_COMMANDS, PLUGIN_REJECT_CODES};
+use circletasks_lib::sync::bookmark::{
+    choose_with_picker, deadline_for, ios_core, BookmarkBackend, BookmarkFs, BookmarkTransport, DeadlineLimits, DeadlineTransport, PLUGIN_COMMANDS, PLUGIN_REJECT_CODES, UNBOUNDED_COMMANDS,
+};
 use circletasks_lib::sync::crypto::{FileHeader, HeaderKind, MasterKey};
 use circletasks_lib::sync::files::{AppendMode, Chunk, FsError, Listing, SyncFs};
 use circletasks_lib::sync::folder::{config_dir, read_config_file, FolderRecord, FOLDER_FILE};
@@ -708,4 +712,396 @@ fn y_ios_05_14_production_transport_is_wrapped_by_the_deadline() {
     }
     let expected: BTreeSet<String> = ["lib.rs", "sync/bookmark.rs", "sync/commands_ios.rs"].iter().map(|s| (*s).to_owned()).collect();
     assert_eq!(users, expected, "seuls lib.rs (init), bookmark.rs (PluginTransport) et commands_ios.rs (câblage) nomment le plugin");
+}
+
+/// Y-IOS-05 (décision 8, ADR 0011 §32, réponse au point 2 de §25) : transport muet dédié. Pour la commande désignée (`"*"` : toute
+/// commande), l'appel est noté puis bloque sur un canal jusqu'à ce que le test l'y libère (ou abandonne le canal), et répond alors comme
+/// `fake_bookmark` ; les autres commandes répondent aussitôt comme `fake_bookmark`, ou par la réponse imposée (`script`). L'effet `mute`
+/// reste refusé par `MemFs` et `fake_bookmark` : ce faux n'existe que pour l'échéance de `DeadlineTransport`.
+struct MutedTransport {
+    plugin: Arc<FakePlugin>,
+    muted: Option<&'static str>,
+    release: Mutex<mpsc::Receiver<()>>,
+    script: Mutex<BTreeMap<String, Result<Value, String>>>,
+    received: Mutex<Vec<(String, Value, ThreadId)>>,
+    arrived: Condvar,
+}
+
+/// Libération des appels muets (un envoi : un appel ; abandon du canal : tous, et les suivants ne bloquent plus).
+struct Release(mpsc::Sender<()>);
+
+/// Garde-fou des attentes sur condition : jamais atteint quand le test passe ; s'il l'est, le test échoue.
+const GUARD: Duration = Duration::from_secs(30);
+
+impl MutedTransport {
+    fn new(plugin: Arc<FakePlugin>, muted: Option<&'static str>) -> (Arc<Self>, Release) {
+        let (sender, receiver) = mpsc::channel();
+        let transport = Arc::new(Self { plugin, muted, release: Mutex::new(receiver), script: Mutex::new(BTreeMap::new()), received: Mutex::new(Vec::new()), arrived: Condvar::new() });
+        (transport, Release(sender))
+    }
+
+    fn received(&self) -> Vec<(String, Value, ThreadId)> {
+        self.received.lock().unwrap().clone()
+    }
+
+    fn commands(&self) -> Vec<String> {
+        self.received().into_iter().map(|(c, _, _)| c).collect()
+    }
+
+    /// Attend (sur condition) que `count` appels soient arrivés ; faux si le garde-fou expire.
+    fn wait_received(&self, count: usize) -> bool {
+        let received = self.received.lock().unwrap();
+        let (received, _) = self.arrived.wait_timeout_while(received, GUARD, |r| r.len() < count).unwrap();
+        received.len() >= count
+    }
+}
+
+impl BookmarkTransport for MutedTransport {
+    fn call(&self, command: &str, args: Value) -> Result<Value, String> {
+        self.received.lock().unwrap().push((command.to_owned(), args.clone(), std::thread::current().id()));
+        self.arrived.notify_all();
+        if self.muted.is_some_and(|m| m == "*" || m == command) {
+            let _ = self.release.lock().unwrap().recv();
+        }
+        if let Some(answer) = self.script.lock().unwrap().get(command) {
+            return answer.clone();
+        }
+        self.plugin.call(command, args)
+    }
+}
+
+fn zero() -> DeadlineLimits {
+    DeadlineLimits { file_call: Duration::ZERO, download_margin: Duration::ZERO, max_abandoned: 1 }
+}
+
+/// Échéance large (transmission) : jamais atteinte par un transport qui répond aussitôt, donc aucune attente réelle.
+fn wide() -> DeadlineLimits {
+    DeadlineLimits { file_call: Duration::from_secs(3_600), download_margin: Duration::from_secs(3_600), max_abandoned: 1 }
+}
+
+struct DeadlineRig {
+    muted: Arc<MutedTransport>,
+    deadline: Arc<DeadlineTransport>,
+    fs: BookmarkFs,
+    release: Option<Release>,
+}
+
+/// `BookmarkFs` sur `DeadlineTransport` sur `MutedTransport` ; racine déjà résolue dans la session : la commande appelée est la première.
+fn deadline_rig(muted: Option<&'static str>, limits: DeadlineLimits) -> DeadlineRig {
+    let clock = Arc::new(AtomicU64::new(NOW));
+    let plugin = FakePlugin::new(clock.clone());
+    plugin.with(|s| s.session = true);
+    let (transport, release) = MutedTransport::new(plugin, muted);
+    let deadline = Arc::new(DeadlineTransport::with_limits(transport.clone(), limits));
+    let now = clock.clone();
+    let fs = BookmarkFs::new(deadline.clone(), ROOT.to_owned(), BOOKMARK.to_owned(), Arc::new(Mutex::new(None)), Arc::new(move || now.load(Ordering::SeqCst)));
+    DeadlineRig { muted: transport, deadline, fs, release: Some(release) }
+}
+
+/// Critère 10 : échéance par commande, fonction pure.
+#[test]
+fn y_ios_05_10_deadline_for_each_command() {
+    let limits = DeadlineLimits::default();
+    assert_eq!(limits.file_call, Duration::from_secs(20));
+    assert_eq!(limits.download_margin, Duration::from_secs(5));
+    assert_eq!(limits.max_abandoned, 1);
+    let file = Some(Duration::from_secs(20));
+    let cases: Vec<(&str, Value, Option<Duration>)> = vec![
+        ("resolve", json!({ "bookmark": BOOKMARK }), file),
+        ("status", json!({ "path": ["devices"] }), file),
+        ("list", json!({ "path": [], "max": 10 }), file),
+        ("readFrom", json!({}), file),
+        ("append", json!({}), file),
+        ("writeAtomic", json!({}), file),
+        ("rename", json!({}), file),
+        ("createDir", json!({}), file),
+        ("remove", json!({}), file),
+        ("removeEmptyDir", json!({}), file),
+        ("appState", json!({}), file),
+        ("download", json!({ "timeoutMs": 60_000 }), Some(Duration::from_secs(65))),
+        ("download", json!({ "timeoutMs": 1_500 }), Some(Duration::from_millis(6_500))),
+        ("download", json!({}), file),
+        ("download", json!({ "timeoutMs": "60000" }), file),
+        ("download", json!({ "timeoutMs": -1 }), file),
+        ("download", json!({ "timeoutMs": 1.5 }), file),
+        ("pickFolder", json!({}), None),
+        ("confirm", json!({ "title": "t" }), None),
+        ("inconnue", json!({}), file),
+    ];
+    for (command, args, expected) in cases {
+        assert_eq!(deadline_for(command, &args, &limits), expected, "{command} {args}");
+    }
+    // Toute commande du contrat est bornée, sauf les deux d'interaction.
+    for command in PLUGIN_COMMANDS {
+        assert_eq!(deadline_for(command, &json!({}), &limits).is_none(), UNBOUNDED_COMMANDS.contains(&command), "{command}");
+    }
+    assert_eq!(UNBOUNDED_COMMANDS, ["pickFolder", "confirm"]);
+}
+
+/// Critère 7 : transmission fidèle des 14 commandes (arguments identiques, réponse et code de rejet inchangés), échéance large.
+#[test]
+fn y_ios_05_7_every_command_passes_through_unchanged() {
+    let clock = Arc::new(AtomicU64::new(NOW));
+    let (transport, _release) = MutedTransport::new(FakePlugin::new(clock), None);
+    let deadline = DeadlineTransport::with_limits(transport.clone(), wide());
+    for (i, command) in PLUGIN_COMMANDS.iter().enumerate() {
+        let args = json!({ "path": ["devices", format!("n{i}")], "timeoutMs": 10, "n": i });
+        let answer = json!({ "command": command, "entries": [{ "name": "x", "isDir": false }], "n": i });
+        transport.script.lock().unwrap().insert((*command).to_owned(), Ok(answer.clone()));
+        assert_eq!(deadline.call(command, args.clone()), Ok(answer), "{command} : réponse");
+        let (seen, seen_args, _) = transport.received().pop().unwrap();
+        assert_eq!((seen.as_str(), seen_args), (*command, args), "{command} : arguments");
+        for code in ["not-configured", "cloud-pending", "cloud-error", "too-large", "io", "unsafe-folder"] {
+            transport.script.lock().unwrap().insert((*command).to_owned(), Err(code.to_owned()));
+            assert_eq!(deadline.call(command, json!({})), Err(code.to_owned()), "{command} : code {code}");
+        }
+    }
+    assert_eq!(deadline.abandoned(), 0);
+}
+
+/// Critère 8 : un appel muet rend `cloud-pending` sans attendre sa réponse (échéance `Duration::ZERO`), pour chaque accès de `BookmarkFs`.
+#[test]
+fn y_ios_05_8_muted_call_is_cloud_pending_at_the_deadline() {
+    type Access = fn(&BookmarkFs) -> Result<(), FsError>;
+    let accesses: [(&'static str, Access); 5] = [
+        ("list", |fs| fs.list(&["devices"], 10).map(|_| ())),
+        ("status", |fs| fs.read(&["devices", DEV_A, "state.ctx"], 1024, true).map(|_| ())),
+        ("readFrom", |fs| fs.read_head(&["devices", DEV_A, "state.ctx"], 1024).map(|_| ())),
+        ("append", |fs| fs.append(&["devices", DEV_A, "j.tmp"], b"x\n", AppendMode::Existing)),
+        ("resolve", |fs| fs.check_root()),
+    ];
+    for (command, access) in accesses {
+        let mut rig = deadline_rig(Some(command), zero());
+        assert_eq!(access(&rig.fs), Err(FsError::CloudPending), "{command}");
+        assert!(rig.muted.wait_received(1));
+        assert_eq!(rig.muted.commands(), vec![command.to_owned()], "{command} : seul appel envoyé, le muet");
+        assert_eq!(rig.deadline.abandoned(), 1, "{command} : appel abandonné compté");
+        drop(rig.release.take());
+        assert!(rig.deadline.wait_abandoned(0, GUARD), "{command} : réponse tardive reçue, compteur rendu");
+    }
+}
+
+/// Critères 8 (par `ios_core`) et 9 : le scan d'un service de l'iPhone dont l'appel ne répond pas rend `cloud-pending`, et une autre
+/// commande qui prend le verrou `inner` (`listed_devices`), appelée depuis un autre fil, n'attend pas derrière lui.
+#[test]
+fn y_ios_05_8_9_scan_is_cloud_pending_and_the_core_lock_is_released() {
+    let p = phone();
+    p.choose();
+    p.plugin.with(|s| s.session = false);
+    // Toute commande muette : le premier appel du cycle (`resolve` du contrôle du dossier) ne répond pas ; les suivants ne partent pas.
+    let (transport, release) = MutedTransport::new(p.plugin.clone(), Some("*"));
+    let deadline = Arc::new(DeadlineTransport::with_limits(transport.clone(), zero()));
+    let now = p.clock.clone();
+    let (core, _backend) = ios_core(p.base.path().to_path_buf(), deadline.clone(), p.vault.clone(), FakeUi::new(), Arc::new(move || now.load(Ordering::SeqCst)));
+    assert_eq!(code(core.scan(&[])), SyncCode::CloudPending);
+    assert_eq!(deadline.abandoned(), 1);
+    let (sender, receiver) = mpsc::channel();
+    let other = core.clone();
+    std::thread::spawn(move || {
+        let _ = sender.send(other.listed_devices().map_err(|e| e.code));
+    });
+    let listed = receiver.recv_timeout(GUARD).expect("listed_devices bloqué derrière le scan abandonné");
+    assert!(matches!(listed, Ok(_) | Err(SyncCode::CloudPending)), "{listed:?}");
+    assert!(transport.wait_received(1));
+    assert_eq!(transport.commands().len(), 1, "un seul appel envoyé (le muet), les suivants refusés sans envoi");
+    drop(release);
+    assert!(deadline.wait_abandoned(0, GUARD));
+}
+
+/// Critère 11 : `pickFolder` et `confirm` passent sur le fil appelant, jamais rejetés par l'échéance (même `Duration::ZERO`, même avec un
+/// appel abandonné en attente).
+#[test]
+fn y_ios_05_11_interaction_commands_run_on_the_calling_thread_without_deadline() {
+    let mut rig = deadline_rig(Some("list"), zero());
+    for command in UNBOUNDED_COMMANDS {
+        rig.muted.script.lock().unwrap().insert(command.to_owned(), Ok(json!({ "ok": command })));
+    }
+    for pass in ["sans appel abandonné", "avec un appel abandonné"] {
+        for command in UNBOUNDED_COMMANDS {
+            assert_eq!(rig.deadline.call(command, json!({})), Ok(json!({ "ok": command })), "{command} {pass}");
+            let (_, _, thread) = rig.muted.received().into_iter().rev().find(|(seen, _, _)| seen == command).unwrap();
+            assert_eq!(thread, std::thread::current().id(), "{command} {pass} : fil appelant");
+        }
+        if pass == "sans appel abandonné" {
+            assert_eq!(rig.fs.list(&["devices"], 10).map(|_| ()), Err(FsError::CloudPending));
+            // Le listage muet est noté par son propre fil : attendu avant de poursuivre.
+            assert!(rig.muted.wait_received(3));
+            assert_eq!(rig.deadline.abandoned(), 1);
+        }
+    }
+    drop(rig.release.take());
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+}
+
+/// Critère 12 : tant que l'appel abandonné n'a pas répondu, toute commande bornée rend `cloud-pending` sans atteindre le transport ; sa
+/// réponse tardive est jetée sans effet, le compteur retombe à 0 et la commande suivante atteint de nouveau le transport.
+#[test]
+fn y_ios_05_12_one_abandoned_call_then_immediate_cloud_pending_until_it_answers() {
+    let mut rig = deadline_rig(Some("list"), zero());
+    assert_eq!(rig.fs.list(&["devices"], 10).map(|_| ()), Err(FsError::CloudPending));
+    assert!(rig.muted.wait_received(1));
+    assert_eq!(rig.deadline.abandoned(), 1);
+    for command in ["status", "readFrom", "append", "resolve", "download", "list"] {
+        assert_eq!(rig.deadline.call(command, json!({ "timeoutMs": 1 })), Err("cloud-pending".to_owned()), "{command}");
+    }
+    assert_eq!(rig.muted.commands(), vec!["list".to_owned()], "aucune commande envoyée derrière l'appel abandonné");
+    // Réponse tardive valide (le faux répond au listage) : jetée, aucune erreur ni panique, le compteur retombe.
+    rig.release.as_ref().unwrap().0.send(()).unwrap();
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+    rig.muted.script.lock().unwrap().insert("status".to_owned(), Ok(json!({ "exists": false })));
+    // Échéance nulle : la réponse peut arriver après l'échéance ; seul compte que la commande atteigne le transport.
+    let _ = rig.deadline.call("status", json!({ "path": ["devices"] }));
+    assert!(rig.muted.wait_received(2));
+    assert_eq!(rig.muted.commands(), vec!["list".to_owned(), "status".to_owned()]);
+    drop(rig.release.take());
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+}
+
+/// Critère 13 : l'échéance inscrit `bookmark-call-timeout` avec le seul nom de la commande ; aucune ligne ne porte un chemin, un nom de
+/// fichier, un signet ou un argument.
+#[test]
+fn y_ios_05_13_timeout_log_names_the_command_only() {
+    let capture = circletasks_lib::sync::log::capture();
+    let mut rig = deadline_rig(Some("readFrom"), zero());
+    assert_eq!(rig.fs.read_head(&["devices", DEV_A, "state.ctx"], 1024).map(|_| ()), Err(FsError::CloudPending));
+    assert_eq!(rig.deadline.call("status", json!({ "path": ["devices", DEV_A, "state.ctx"] })), Err("cloud-pending".to_owned()));
+    let lines = capture.lines();
+    assert!(lines.contains(&"sync:bookmark-call-timeout readFrom".to_owned()), "{lines:?}");
+    assert!(lines.contains(&"sync:bookmark-call-skipped status".to_owned()), "{lines:?}");
+    // La capture voit tous les fils (tests parallèles compris) : seules les lignes de l'échéance sont contrôlées, et entièrement.
+    for line in lines.iter().filter(|l| l.starts_with("sync:bookmark-call-")) {
+        let mut parts = line.split(' ');
+        assert!(matches!(parts.next(), Some("sync:bookmark-call-timeout" | "sync:bookmark-call-skipped")), "{line}");
+        assert!(parts.next().is_some_and(|detail| PLUGIN_COMMANDS.contains(&detail)), "{line}");
+        assert_eq!(parts.next(), None, "{line}");
+        for secret in [ROOT, BOOKMARK, DEV_A, "state.ctx", "devices"] {
+            assert!(!line.contains(secret), "fuite dans le journal : {line}");
+        }
+    }
+    drop(rig.release.take());
+    assert!(rig.deadline.wait_abandoned(0, GUARD));
+}
+
+/// Corps d'une fonction Swift privée (`private func <name><`), jusqu'à la fonction suivante.
+fn swift_private_func(name: &str) -> String {
+    let code = swift_code();
+    let start = code.find(&format!("private func {name}<")).unwrap_or_else(|| panic!("fonction Swift absente : {name}"));
+    let rest = &code[start..];
+    let end = rest[1..].find("\n  private func ").or_else(|| rest[1..].find("\n  @objc public func ")).map_or(rest.len(), |i| i + 1);
+    rest[..end].to_owned()
+}
+
+/// Corps de la garde `CoordinationGuard` (classe de premier niveau).
+fn swift_guard_class() -> String {
+    let code = swift_code();
+    let start = code.find("private final class CoordinationGuard {").expect("CoordinationGuard absente");
+    let end = code[start..].find("\n}\n").expect("fin de CoordinationGuard");
+    code[start..start + end].to_owned()
+}
+
+/// Critère 15 : chacune des quatre coordinations arme la garde avant `coordinate`, la désarme au retour, et rend son issue par
+/// `settle` (résultat du corps, sinon `cloud-pending` si la garde a tiré, sinon `io`) ; la garde appelle `coordinator.cancel()` après
+/// `coordinationGuardSeconds` par un `DispatchWorkItem`, sous verrou. Garde factorisée (une classe, quatre usages) : écart noté à la fiche.
+#[test]
+fn y_ios_05_15_every_coordination_is_guarded_and_cancelled() {
+    let guard = swift_guard_class();
+    for piece in ["DispatchWorkItem", "asyncAfter(deadline: .now() + seconds, execute: item)", "coordinator.cancel()", "lock.lock()", "didFire = true", "item?.cancel()"] {
+        assert!(guard.contains(piece), "CoordinationGuard : {piece}");
+    }
+    let settle = &guard[guard.find("func settle<T>(").expect("settle")..];
+    let (result, pending, io) = (settle.find("return try result.get()").unwrap(), settle.find("if fired {").unwrap(), settle.find("throw Failure(code: .io)").unwrap());
+    assert!(result < pending && pending < io, "ordre : résultat du corps, puis cloud-pending si la garde a tiré, puis io");
+    assert!(settle[pending..io].contains("throw Failure(code: .cloudPending)"));
+    let code = swift_code();
+    assert_eq!(code.matches("coordinator.cancel()").count(), 1, "cancel() seulement dans la garde");
+    assert_eq!(code.matches("CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)").count(), 4);
+    assert_eq!(code.matches("coordinationGuard.disarm()").count(), 4);
+    assert_eq!(code.matches("return try coordinationGuard.settle(outcome, coordinationError)").count(), 4);
+    for name in ["coordinatedRead", "coordinatedWrite", "coordinatedDelete", "coordinatedMove"] {
+        let body = swift_private_func(name);
+        let (arm, coordinate, disarm, settle) = (
+            body.find("let coordinationGuard = CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)").unwrap_or_else(|| panic!("{name} : garde armée")),
+            body.find("coordinator.coordinate(").unwrap_or_else(|| panic!("{name} : coordinate")),
+            body.find("coordinationGuard.disarm()").unwrap_or_else(|| panic!("{name} : garde désarmée")),
+            body.find("return try coordinationGuard.settle(outcome, coordinationError)").unwrap_or_else(|| panic!("{name} : issue")),
+        );
+        assert!(arm < coordinate && coordinate < disarm && disarm < settle, "{name} : armée avant coordinate, désarmée au retour, puis issue");
+        assert!(!body.contains("if coordinationError != nil"), "{name} : plus de code io décidé avant le résultat du corps");
+    }
+}
+
+/// Critère 16 : réponse unique ; la garde ne répond jamais à l'appel, `invoke.resolve` et `invoke.reject` n'existent que dans `onFiles`,
+/// `reject` et les commandes d'interaction (`pickFolder`, `confirm`, `appState`).
+#[test]
+fn y_ios_05_16_the_guard_never_answers_the_call() {
+    let guard = swift_guard_class();
+    assert!(!guard.contains("invoke"), "la garde ne touche jamais à l'appel");
+    let code = swift_code();
+    let mut owners = BTreeSet::new();
+    for needle in ["invoke.resolve(", "invoke.reject("] {
+        for (at, _) in code.match_indices(needle) {
+            let before = &code[..at];
+            let private = before.rfind("private func ").map(|i| (i, &before[i + "private func ".len()..]));
+            let public = before.rfind("@objc public func ").map(|i| (i, &before[i + "@objc public func ".len()..]));
+            let (_, rest) = [private, public].into_iter().flatten().max_by_key(|(i, _)| *i).expect("fonction englobante");
+            owners.insert(rest[..rest.find(|c: char| !c.is_alphanumeric()).unwrap()].to_owned());
+        }
+    }
+    let expected: BTreeSet<String> = ["onFiles", "reject", "pickFolder", "confirm", "appState"].iter().map(|s| (*s).to_owned()).collect();
+    assert_eq!(owners, expected);
+}
+
+/// Critère 17 : `"error"` d'un état illisible devient `cloud` ; `readFrom` refuse tout état autre que `local` avant la coordination ;
+/// `download` sur un état illisible rend `cloud-pending` (plus `[:]`) ; `"error"` ne vient plus que d'un lien symbolique.
+#[test]
+fn y_ios_05_17_unreadable_state_is_cloud_and_links_stay_error() {
+    let code = swift_code();
+    let availability = &code[code.find("private func availability(").unwrap()..];
+    let availability = &availability[..availability.find("\n  }\n").unwrap()];
+    assert!(availability.contains("else {\n      return \"cloud\"\n    }"), "état illisible : cloud");
+    assert!(!availability.contains("\"error\""));
+    let read_from = swift_method("readFrom");
+    let refuse = read_from.find("if self.availability(url) != \"local\" {").expect("readFrom : tout état non local refusé");
+    assert!(read_from[refuse..].trim_start_matches(|c| c != '\n').trim_start().starts_with("throw Failure(code: .cloudPending)"));
+    assert!(refuse < read_from.find("self.coordinatedRead(").unwrap(), "refus avant la coordination");
+    let download = swift_method("download");
+    let values = download.find("let values = try? item.resourceValues(").expect("download : état lu");
+    let unreadable = &download[values..download.find("let announced").unwrap()];
+    assert!(unreadable.contains("else {\n        throw Failure(code: .cloudPending)\n      }"), "download : état illisible, cloud-pending");
+    assert!(!download.contains("values?."), "download : plus d'état optionnel avalé");
+    // `"error"` : les deux liens symboliques seulement (état d'un élément, entrée listée).
+    assert_eq!(code.matches("\"error\"").count(), 2);
+    for (at, _) in code.match_indices("\"availability\": \"error\"") {
+        let before = &code[..at];
+        // Ligne précédente : le test du lien symbolique.
+        let line_start = before.trim_end_matches(|c| c != '\n').trim_end_matches('\n');
+        let previous = &line_start[line_start.rfind('\n').map_or(0, |i| i + 1)..];
+        assert_eq!(previous.trim(), "if self.isLink(st.st_mode) {", "« error » hors d'un lien symbolique");
+    }
+}
+
+/// Critère 18 : cohérence des valeurs entre les trois couches (garde Swift < échéance Rust < cycle en arrière-plan) et une seule sortie,
+/// `cloud-pending`, pour le décorateur Rust et le faux TypeScript.
+#[test]
+fn y_ios_05_18_layer_values_are_consistent() {
+    use circletasks_lib::sync::bookmark::DEADLINE_CODE;
+    use circletasks_lib::sync::limits::{BOOKMARK_CALL_DEADLINE_MS, BOOKMARK_DOWNLOAD_MARGIN_MS, BOOKMARK_MAX_ABANDONED_CALLS};
+    const MEMORY_TS: &str = include_str!("../../../src/platform/sync/memory.ts");
+    let code = swift_code();
+    let line = code.lines().find(|l| l.contains("private let coordinationGuardSeconds: Double = ")).expect("coordinationGuardSeconds");
+    let swift_seconds: f64 = line.rsplit("= ").next().unwrap().trim().parse().unwrap();
+    assert_eq!(swift_seconds, 15.0);
+    let background_cycle_ms = 25_000;
+    assert!(swift_seconds * 1000.0 < BOOKMARK_CALL_DEADLINE_MS as f64, "garde Swift < échéance Rust");
+    assert!(BOOKMARK_CALL_DEADLINE_MS < background_cycle_ms, "échéance Rust < borne du cycle en arrière-plan (§22 point 6)");
+    assert_eq!((BOOKMARK_DOWNLOAD_MARGIN_MS, BOOKMARK_MAX_ABANDONED_CALLS), (5_000, 1));
+    let turns_line = MEMORY_TS.lines().find(|l| l.starts_with("export const MUTE_DEADLINE_TURNS = ")).expect("MUTE_DEADLINE_TURNS exporté");
+    let turns: u32 = turns_line.trim_end_matches(';').rsplit("= ").next().unwrap().parse().unwrap();
+    assert!(turns > 50 && turns < 500, "{turns}");
+    // Table commune d'une ligne : la même sortie des deux côtés.
+    let suspend = &MEMORY_TS[MEMORY_TS.find("  suspend<T>(").unwrap()..MEMORY_TS.find("  mutedCalls(): ").unwrap()];
+    for (layer, exit) in [("DeadlineTransport (Rust)", DEADLINE_CODE.to_owned()), ("memory.ts (TypeScript)", if suspend.contains("muted.fail('cloud-pending')") { "cloud-pending".to_owned() } else { String::new() })] {
+        assert_eq!(exit, "cloud-pending", "{layer}");
+    }
+    assert!(PLUGIN_REJECT_CODES.contains(&DEADLINE_CODE));
 }

@@ -13,20 +13,24 @@
 //!   `bookmark-unknown-code`. L'absence (`missing`, `removed: false`) et la présence (`exists`) ne sont pas des erreurs du plugin.
 //! - Budget d'hydratation : 60 s par fichier, 3 minutes par cycle (moins pour `hydrateBudgetMs`), tenu ici sur l'horloge injectée.
 //! - `not-configured` (racine pas encore résolue dans la session du plugin) : un `resolve` puis un seul nouvel essai, sinon `Unreachable`.
+//! - Échéance (Y-IOS-05, ADR 0011 §32) : `DeadlineTransport` borne chaque appel (20 s, `download` : `timeoutMs` + 5 s ; `pickFolder` et
+//!   `confirm` exclus) et rend `cloud-pending` à l'échéance ; un seul appel abandonné à la fois.
 //!
 //! Compilé sous `cfg(any(target_os = "ios", feature = "test-hooks"))` : présent dans les tests Windows, absent du binaire PC livré.
 
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde_json::{json, Value};
 
 use super::files::{is_safe_component, AppendMode, Availability, Chunk, FsEntry, FsError, Listing, SyncFs};
 use super::folder::{CheckedFolder, FolderKind, FolderRecord};
-use super::limits::{HYDRATE_CYCLE_TIMEOUT_MS, HYDRATE_FILE_TIMEOUT_MS, MAX_PLUGIN_CHUNK_BYTES};
+use super::limits::{BOOKMARK_CALL_DEADLINE_MS, BOOKMARK_DOWNLOAD_MARGIN_MS, BOOKMARK_MAX_ABANDONED_CALLS, HYDRATE_CYCLE_TIMEOUT_MS, HYDRATE_FILE_TIMEOUT_MS, MAX_PLUGIN_CHUNK_BYTES};
 use super::service::{Clock, FolderBackend};
 use super::{fail, log, SyncCode, SyncError, SyncResult};
+use crate::mobile_call::{call_with_deadline, CallError};
 
 /// Transport des commandes du plugin : nom exact de la méthode Swift (lowerCamelCase), arguments JSON ; erreur = code rejeté.
 pub trait BookmarkTransport: Send + Sync {
@@ -443,6 +447,170 @@ pub fn import_ios(core: &super::service::SyncCore, qr_text: Option<String>, reco
         }
     };
     core.key_import(input, 0)
+}
+
+// ------------------------------------------------------------------------------------------------------------------------------
+// Y-IOS-05 (B6, ADR 0011 §32) : échéance de chaque appel du plugin
+// ------------------------------------------------------------------------------------------------------------------------------
+
+/// Commandes d'interaction de l'utilisateur (sélecteur, alerte) : durée sans borne, jamais soumises à l'échéance.
+pub const UNBOUNDED_COMMANDS: [&str; 2] = ["pickFolder", "confirm"];
+
+/// Code rendu à l'échéance (et tant qu'un appel abandonné n'a pas répondu) : l'attente d'iCloud existante, jamais un nouveau code.
+pub const DEADLINE_CODE: &str = "cloud-pending";
+
+/// Échéances d'un appel (production : `limits.rs` ; les tests injectent `Duration::ZERO` ou une échéance large).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DeadlineLimits {
+    /// Commande de fichier.
+    pub file_call: Duration,
+    /// Ajoutée au `timeoutMs` de `download`.
+    pub download_margin: Duration,
+    /// Appels abandonnés tolérés à la fois.
+    pub max_abandoned: usize,
+}
+
+impl Default for DeadlineLimits {
+    fn default() -> Self {
+        Self {
+            file_call: Duration::from_millis(BOOKMARK_CALL_DEADLINE_MS),
+            download_margin: Duration::from_millis(BOOKMARK_DOWNLOAD_MARGIN_MS),
+            max_abandoned: BOOKMARK_MAX_ABANDONED_CALLS,
+        }
+    }
+}
+
+/// Échéance d'une commande : `None` pour une commande d'interaction ; `timeoutMs + marge` pour `download` (`timeoutMs` absent ou
+/// invalide : l'échéance de fichier) ; l'échéance de fichier pour toute autre commande, inconnue comprise.
+pub fn deadline_for(command: &str, args: &Value, limits: &DeadlineLimits) -> Option<Duration> {
+    if UNBOUNDED_COMMANDS.contains(&command) {
+        return None;
+    }
+    if command == "download" {
+        if let Some(ms) = args.get("timeoutMs").and_then(Value::as_u64) {
+            return Some(Duration::from_millis(ms).saturating_add(limits.download_margin));
+        }
+    }
+    Some(limits.file_call)
+}
+
+/// Appels abandonnés à l'échéance dont la réponse de Swift n'est pas encore arrivée.
+#[derive(Default)]
+struct Abandoned {
+    count: Mutex<usize>,
+    changed: Condvar,
+}
+
+impl Abandoned {
+    fn lock(&self) -> std::sync::MutexGuard<'_, usize> {
+        self.count.lock().unwrap_or_else(|e| e.into_inner())
+    }
+}
+
+/// État d'un appel borné, partagé par l'appelant et le fil de l'appel.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CallState {
+    Waiting,
+    Abandoned,
+    Answered,
+}
+
+/// Fin de l'appel sur son fil (réponse, même tardive, ou panique) : un appel abandonné rend sa place au compteur.
+struct Answered {
+    state: Arc<Mutex<CallState>>,
+    abandoned: Arc<Abandoned>,
+}
+
+impl Drop for Answered {
+    fn drop(&mut self) {
+        let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        if *state == CallState::Abandoned {
+            let mut count = self.abandoned.lock();
+            *count = count.saturating_sub(1);
+            self.abandoned.changed.notify_all();
+        }
+        *state = CallState::Answered;
+    }
+}
+
+/// Décorateur de tout transport du plugin (`commands_ios.rs` l'enroule autour de `PluginTransport`, sous `BookmarkFs`, `BookmarkBackend`
+/// et `IosConsentUi`) : chaque commande de fichier passe par `call_with_deadline` ; à l'échéance, `cloud-pending` et le journal
+/// `bookmark-call-timeout` (nom de la commande seul). La réponse tardive est jetée (`mobile_call.rs`). Tant que `max_abandoned` appels
+/// abandonnés n'ont pas répondu, toute commande bornée répond `cloud-pending` aussitôt, sans être envoyée (la file série de Swift la ferait
+/// attendre derrière). `pickFolder` et `confirm` passent sur le fil appelant, sans échéance.
+pub struct DeadlineTransport {
+    inner: Arc<dyn BookmarkTransport>,
+    limits: DeadlineLimits,
+    abandoned: Arc<Abandoned>,
+}
+
+impl DeadlineTransport {
+    pub fn new(inner: Arc<dyn BookmarkTransport>) -> Self {
+        Self::with_limits(inner, DeadlineLimits::default())
+    }
+
+    pub fn with_limits(inner: Arc<dyn BookmarkTransport>, limits: DeadlineLimits) -> Self {
+        Self { inner, limits, abandoned: Arc::new(Abandoned::default()) }
+    }
+
+    /// Appels abandonnés en attente de leur réponse.
+    pub fn abandoned(&self) -> usize {
+        *self.abandoned.lock()
+    }
+
+    /// Tests : attend (sur condition, jamais en boucle) que le compteur vaille `count`, au plus `guard` (garde-fou : faux s'il expire).
+    #[cfg(feature = "test-hooks")]
+    pub fn wait_abandoned(&self, count: usize, guard: Duration) -> bool {
+        let current = self.abandoned.lock();
+        let (current, _) = self.abandoned.changed.wait_timeout_while(current, guard, |n| *n != count).unwrap_or_else(|e| e.into_inner());
+        *current == count
+    }
+}
+
+/// Nom de commande pour le journal : un nom du contrat, sinon `invalid` (jamais un texte libre).
+fn command_label(command: &str) -> &str {
+    if PLUGIN_COMMANDS.contains(&command) {
+        command
+    } else {
+        "invalid"
+    }
+}
+
+impl BookmarkTransport for DeadlineTransport {
+    fn call(&self, command: &str, args: Value) -> Result<Value, String> {
+        let Some(deadline) = deadline_for(command, &args, &self.limits) else {
+            return self.inner.call(command, args);
+        };
+        if *self.abandoned.lock() >= self.limits.max_abandoned {
+            log::event("bookmark-call-skipped", command_label(command));
+            return Err(DEADLINE_CODE.to_owned());
+        }
+        let state = Arc::new(Mutex::new(CallState::Waiting));
+        let answered = Answered { state: state.clone(), abandoned: self.abandoned.clone() };
+        let inner = self.inner.clone();
+        let name = command.to_owned();
+        let outcome = call_with_deadline(
+            move || {
+                let _answered = answered;
+                inner.call(&name, args)
+            },
+            deadline,
+        );
+        match outcome {
+            Ok(value) => Ok(value),
+            Err(CallError::Rejected(code)) => Err(code),
+            Err(CallError::Timeout) => {
+                let mut state = state.lock().unwrap_or_else(|e| e.into_inner());
+                // Réponse arrivée juste après l'échéance : rien à compter, elle est jetée.
+                if *state == CallState::Waiting {
+                    *state = CallState::Abandoned;
+                    *self.abandoned.lock() += 1;
+                }
+                log::event("bookmark-call-timeout", command_label(command));
+                Err(DEADLINE_CODE.to_owned())
+            }
+        }
+    }
 }
 
 /// Transport de production : le plugin Swift (`tauri-plugin-folder-bookmark`), appelé par `run_mobile_plugin` (bloquant : toujours depuis

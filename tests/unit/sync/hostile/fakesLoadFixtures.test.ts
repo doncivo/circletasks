@@ -41,6 +41,8 @@ const NOT_FAKES: Readonly<Record<string, string>> = {
   SharedPlugin: 'enveloppe partagée de FakePlugin (fake_bookmark.rs), aucun comportement propre',
   VirtualSnapshot: 'instantané virtuel de lecture en flux (sync_bookmark.rs), list/read hors de son test « unreachable »',
   Never: 'transport jamais appelé (sync_bookmark.rs), garde du faux',
+  MutedTransport:
+    'transport muet dédié aux tests de l’échéance (sync_bookmark.rs, Y-IOS-05, ADR 0011 §32) : bloque une commande désignée jusqu’à sa libération par le test, sinon répond comme FakePlugin ; l’effet mute reste refusé par MemFs et fake_bookmark (un appel synchrone sans retour ne se rejoue pas sans attente)',
 };
 
 /**

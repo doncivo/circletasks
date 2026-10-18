@@ -37,6 +37,57 @@ private struct Failure: Error {
   let code: Code
 }
 
+/// Garde d'une coordination de fichier (Y-IOS-05, B6, ADR 0011 §32) : au bout de `seconds`, appelle `coordinator.cancel()` et lève
+/// `fired` (protégé par un verrou), pour qu'une coordination bloquée (fichier évincé hors ligne, autre processus) rende la file des
+/// fichiers. Ne répond jamais elle-même à l'appel : la réponse reste unique, celle de `onFiles`. Désarmée dès le retour de `coordinate`.
+private final class CoordinationGuard {
+  private let lock = NSLock()
+  private var didFire = false
+  private var item: DispatchWorkItem?
+
+  init(_ coordinator: NSFileCoordinator, seconds: Double) {
+    let item = DispatchWorkItem { [weak self] in
+      self?.fire(coordinator)
+    }
+    self.item = item
+    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + seconds, execute: item)
+  }
+
+  private func fire(_ coordinator: NSFileCoordinator) {
+    lock.lock()
+    didFire = true
+    lock.unlock()
+    coordinator.cancel()
+  }
+
+  /// La garde a tiré (coordination annulée).
+  var fired: Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return didFire
+  }
+
+  /// Au retour de `coordinate` : la garde ne tire plus.
+  func disarm() {
+    item?.cancel()
+    item = nil
+  }
+
+  /// Issue d'une coordination : le résultat du corps s'il existe (une annulation ne défait pas un corps commencé) ; sinon
+  /// `cloud-pending` si la garde a tiré ; sinon `io` (erreur de coordination sans garde, comme avant).
+  func settle<T>(_ outcome: Result<T, Error>?, _ error: NSError?) throws -> T {
+    if let result = outcome {
+      return try result.get()
+    }
+    if fired {
+      throw Failure(code: .cloudPending)
+    }
+    // Erreur de coordination sans garde (ou corps jamais exécuté) : `io`, jamais le texte de l'erreur système.
+    _ = error
+    throw Failure(code: .io)
+  }
+}
+
 struct ResolveArgs: Decodable {
   let bookmark: String
 }
@@ -127,6 +178,9 @@ class FolderBookmarkPlugin: Plugin {
   private var backgroundGuard: DispatchWorkItem?
   /// Fin forcée de la tâche d'arrière-plan, au plus tard 28 s après son ouverture (§22 point 6).
   private let backgroundGuardSeconds: Double = 28
+  /// Garde de chaque coordination de fichier (Y-IOS-05, ADR 0011 §32) : 15 s, plus courte que l'échéance de Rust (20 s,
+  /// `DeadlineTransport`) pour que Swift réponde d'abord, et proprement (`cloud-pending`).
+  private let coordinationGuardSeconds: Double = 15
   /// Sondage de l'état de téléchargement (ms).
   private let downloadPollMs: Int = 250
   /// Alerte de confirmation affichée et sa réponse (fil principal) : fermée et rendue comme refus au passage en arrière-plan.
@@ -385,7 +439,8 @@ class FolderBookmarkPlugin: Plugin {
     return true
   }
 
-  /// Disponibilité locale d'un élément : `cloud` si iCloud ne l'a pas encore téléchargé, `error` si l'état est illisible.
+  /// Disponibilité locale d'un élément : `cloud` si iCloud ne l'a pas encore téléchargé ou si l'état est illisible (Y-IOS-05 : transitoire,
+  /// jamais `error`, réservé aux liens symboliques).
   private func availability(_ url: URL) -> String {
     var item = url
     item.removeAllCachedResourceValues()
@@ -394,7 +449,7 @@ class FolderBookmarkPlugin: Plugin {
         .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey,
       ])
     else {
-      return "error"
+      return "cloud"
     }
     if values.isUbiquitousItem != true {
       return "local"
@@ -411,16 +466,12 @@ class FolderBookmarkPlugin: Plugin {
     var coordinationError: NSError?
     var outcome: Result<T, Error>?
     let options: NSFileCoordinator.ReadingOptions = metadataOnly ? [.immediatelyAvailableMetadataOnly] : []
+    let coordinationGuard = CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)
     coordinator.coordinate(readingItemAt: url, options: options, error: &coordinationError) { _ in
       outcome = Result<T, Error>(catching: { try body() })
     }
-    if coordinationError != nil {
-      throw Failure(code: .io)
-    }
-    guard let result = outcome else {
-      throw Failure(code: .io)
-    }
-    return try result.get()
+    coordinationGuard.disarm()
+    return try coordinationGuard.settle(outcome, coordinationError)
   }
 
   /// Écriture coordonnée (`replacing` : remplacement atomique).
@@ -429,16 +480,12 @@ class FolderBookmarkPlugin: Plugin {
     var coordinationError: NSError?
     var outcome: Result<T, Error>?
     let options: NSFileCoordinator.WritingOptions = replacing ? [.forReplacing] : []
+    let coordinationGuard = CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)
     coordinator.coordinate(writingItemAt: url, options: options, error: &coordinationError) { _ in
       outcome = Result<T, Error>(catching: { try body() })
     }
-    if coordinationError != nil {
-      throw Failure(code: .io)
-    }
-    guard let result = outcome else {
-      throw Failure(code: .io)
-    }
-    return try result.get()
+    coordinationGuard.disarm()
+    return try coordinationGuard.settle(outcome, coordinationError)
   }
 
   /// Suppression coordonnée (`forDeleting`, Y-IOS-02-FIX-02) : iCloud propage la suppression de l'élément, y compris d'un fichier évincé
@@ -447,16 +494,12 @@ class FolderBookmarkPlugin: Plugin {
     let coordinator = NSFileCoordinator(filePresenter: nil)
     var coordinationError: NSError?
     var outcome: Result<T, Error>?
+    let coordinationGuard = CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)
     coordinator.coordinate(writingItemAt: url, options: .forDeleting, error: &coordinationError) { _ in
       outcome = Result<T, Error>(catching: { try body() })
     }
-    if coordinationError != nil {
-      throw Failure(code: .io)
-    }
-    guard let result = outcome else {
-      throw Failure(code: .io)
-    }
-    return try result.get()
+    coordinationGuard.disarm()
+    return try coordinationGuard.settle(outcome, coordinationError)
   }
 
   /// Renommage coordonné (revue, audit) : source `forMoving`, destination `forReplacing`, le coordinateur prévenu du déplacement.
@@ -464,6 +507,7 @@ class FolderBookmarkPlugin: Plugin {
     let coordinator = NSFileCoordinator(filePresenter: nil)
     var coordinationError: NSError?
     var outcome: Result<T, Error>?
+    let coordinationGuard = CoordinationGuard(coordinator, seconds: coordinationGuardSeconds)
     coordinator.coordinate(
       writingItemAt: from, options: .forMoving, writingItemAt: to, options: .forReplacing, error: &coordinationError
     ) { source, destination in
@@ -473,13 +517,8 @@ class FolderBookmarkPlugin: Plugin {
         coordinator.item(at: source, didMoveTo: destination)
       }
     }
-    if coordinationError != nil {
-      throw Failure(code: .io)
-    }
-    guard let result = outcome else {
-      throw Failure(code: .io)
-    }
-    return try result.get()
+    coordinationGuard.disarm()
+    return try coordinationGuard.settle(outcome, coordinationError)
   }
 
   /// Écrit tous les octets sur `fd`, puis `fsync`.
@@ -770,7 +809,8 @@ class FolderBookmarkPlugin: Plugin {
       if try !self.checkChain(rootPath, dir, name) {
         return ["missing": true]
       }
-      if self.availability(url) == "cloud" {
+      // Y-IOS-05 : tout état autre que `local` est refusé avant la coordination (qui attendrait un téléchargement hors ligne).
+      if self.availability(url) != "local" {
         throw Failure(code: .cloudPending)
       }
       return try self.coordinatedRead(url, metadataOnly: false) { () throws -> JsonObject in
@@ -847,15 +887,20 @@ class FolderBookmarkPlugin: Plugin {
       let url = self.itemURL(root, input.path)
       var item = url
       item.removeAllCachedResourceValues()
-      let values = try? item.resourceValues(forKeys: [
-        .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey, .totalFileSizeKey,
-      ])
+      // Y-IOS-05 : état illisible : transitoire (`cloud-pending`), jamais « rien à télécharger ».
+      guard
+        let values = try? item.resourceValues(forKeys: [
+          .isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey, .fileSizeKey, .totalFileSizeKey,
+        ])
+      else {
+        throw Failure(code: .cloudPending)
+      }
       // Taille annoncée au-delà de la borne : aucun téléchargement.
-      let announced = values?.totalFileSize ?? values?.fileSize
+      let announced = values.totalFileSize ?? values.fileSize
       if let size = announced, Int64(size) > input.limit {
         throw Failure(code: .tooLarge)
       }
-      if values?.isUbiquitousItem != true || values?.ubiquitousItemDownloadingStatus == URLUbiquitousItemDownloadingStatus.current {
+      if values.isUbiquitousItem != true || values.ubiquitousItemDownloadingStatus == URLUbiquitousItemDownloadingStatus.current {
         return [:]
       }
       do {

@@ -12,7 +12,7 @@ use std::sync::{Arc, OnceLock};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, Runtime, State, WebviewWindow};
 
-use super::bookmark::{choose_with_picker, import_ios, ios_core, BookmarkBackend, BookmarkTransport, PluginTransport};
+use super::bookmark::{choose_with_picker, import_ios, ios_core, BookmarkBackend, BookmarkTransport, DeadlineTransport, PluginTransport};
 use super::consent::ConsentUi;
 use super::consent_ios::IosConsentUi;
 use crate::vault_ios::CachedVault;
@@ -52,10 +52,11 @@ pub const IOS_SYNC_COMMANDS: [&str; 22] = [
     "sync_reset_key",
 ];
 
-/// Transport du plugin folder-bookmark, géré par son `init()` (`lib.rs`, bloc iOS).
+/// Transport du plugin folder-bookmark, géré par son `init()` (`lib.rs`, bloc iOS), sous l'échéance de `DeadlineTransport` (Y-IOS-05,
+/// ADR 0011 §32) : tout appel du plugin y passe, `pickFolder` et `confirm` exceptés par le décorateur lui-même.
 fn plugin_transport<R: Runtime>(app: &AppHandle<R>) -> SyncResult<Arc<dyn BookmarkTransport>> {
     let plugin = app.try_state::<tauri_plugin_folder_bookmark::FolderBookmark<R>>().ok_or(SyncError::new(SyncCode::Io))?;
-    Ok(Arc::new(PluginTransport(plugin.inner().clone())))
+    Ok(Arc::new(DeadlineTransport::new(Arc::new(PluginTransport(plugin.inner().clone())))))
 }
 
 /// Confirmation native de l'iPhone (§23 point 3) : `UIAlertController` du plugin folder-bookmark, textes lus par Rust.
