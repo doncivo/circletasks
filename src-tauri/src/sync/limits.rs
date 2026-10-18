@@ -97,5 +97,5 @@ pub const MAX_STATE_CANDIDATES: usize = 64;
 pub const BOOKMARK_CALL_DEADLINE_MS: u64 = 20_000;
 /// `download` : `timeoutMs` de l'appel plus cette marge (le plugin rend lui-même `cloud-pending` à `timeoutMs`).
 pub const BOOKMARK_DOWNLOAD_MARGIN_MS: u64 = 5_000;
-/// Appels abandonnés à l'échéance tolérés à la fois (fil bloqué jusqu'à la réponse de Swift) ; au-delà, `cloud-pending` aussitôt, sans envoi.
+/// Places par file de Swift (fichiers, fil principal) : appels en vol ou abandonnés à l'échéance tolérés à la fois (fil bloqué jusqu'à la réponse de Swift) ; sans place libre, `cloud-pending` sans envoi (après attente bornée par l'échéance si la place est tenue par un appel en vol).
 pub const BOOKMARK_MAX_ABANDONED_CALLS: usize = 1;
