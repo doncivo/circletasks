@@ -1,0 +1,109 @@
+/* Compte rendu du changement d'époque (Y-TECH-05) : lignes de Réglages et feuille de détail, jetons du thème, sans élément visuel nouveau. */
+.ct-carry__history,
+.ct-carry__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ct-carry__entry {
+  min-height: var(--ct-hit-target-min);
+  text-align: left;
+}
+
+.ct-carry__entryText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ct-carry__problem {
+  flex-wrap: wrap;
+}
+
+.ct-carry__problem > span {
+  flex: 1 1 12rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Feuille : défilement vertical, aucun défilement horizontal sur 393 pt, retours à la ligne sans troncature (noms d'appareil compris). */
+.ct-carry {
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+}
+
+.ct-carry__top {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ct-carry__close,
+.ct-carry__seen,
+.ct-carry__more {
+  min-height: var(--ct-hit-target-min);
+}
+
+.ct-carry__title {
+  margin: 0;
+  font-family: var(--ct-font-title);
+  font-size: var(--ct-font-size-heading-sm);
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-carry__block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ct-carry__block > p {
+  margin: 0;
+}
+
+.ct-carry__epoch,
+.ct-carry__count {
+  font-weight: var(--ct-font-weight-bold);
+}
+
+.ct-carry__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--ct-color-border);
+  min-width: 0;
+  font-size: var(--ct-font-size-text);
+}
+
+.ct-carry__kind {
+  font-size: var(--ct-font-size-xs);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-carry__label {
+  font-weight: var(--ct-font-weight-bold);
+  min-width: 0;
+}
+
+.ct-carry__meta {
+  flex-basis: 100%;
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-carry__overflow {
+  font-size: var(--ct-font-size-text-sm);
+  color: var(--ct-color-text-secondary);
+}
+
+.ct-carry__footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+}

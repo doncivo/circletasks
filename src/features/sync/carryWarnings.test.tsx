@@ -1,6 +1,7 @@
 // Y-FIX-04 (critère 13, revue I2) : avertissements du report d'époque d'une ligne dont le parent a été remplacé. `carry-held` (ligne mise de
-// côté) interdit « À jour » ; `carry-reattached` (tâche détachée) le laisse. Les deux textes : section AVERTISSEMENTS des détails
-// (`warningText`) et bandeau (`syncBannerFor` puis `syncTroubleText`). « J'ai vu » et la liste nommée : Y-TECH-05.
+// côté) interdit « À jour » ; `carry-report` (compte rendu du changement d'époque, Y-TECH-05, remplace `carry-reattached`) le laisse. Texte de
+// `carry-held` : section AVERTISSEMENTS des détails (`warningText`) et bandeau (`syncBannerFor` puis `syncTroubleText`) ; le texte de
+// `carry-report` est composé par un bloc à la demande (`carryReportBannerLine`, `carryReportScenario.test.tsx`) : ni l'un ni l'autre ne le portent.
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
@@ -21,7 +22,7 @@ const SELF = asEntityId<DeviceId>('60000000-0000-4000-8000-0000000000f4');
 const NOW = '2026-10-18T08:02:00.000Z';
 const NOW_MS = Date.parse(NOW);
 const NO_PERSISTED = { join: null, devices: null, blocking: null, readFailed: false } as const;
-const SLOTS = { pairing: null, conflicts: null, version: null, forget: null, reset: null } as const;
+const SLOTS = { pairing: null, conflicts: null, version: null, forget: null, reset: null, carryReport: null } as const;
 
 let db: TestDb;
 let container: AppContainer;
@@ -47,20 +48,19 @@ describe('avertissements du report d’époque (Y-FIX-04, critère 13)', () => {
     expect(statusLine(status({ warnings: ['carry-held'] }), NOW_MS)).toBe(t('sync.status.incomplete'));
   });
 
-  it('carry-reattached : « À jour » reste permis', () => {
-    expect(statusLine(status({ warnings: ['carry-reattached'] }), NOW_MS)).toBe(upToDate());
+  it('carry-report : « À jour » reste permis', () => {
+    expect(statusLine(status({ warnings: ['carry-report'] }), NOW_MS)).toBe(upToDate());
   });
 
-  it('bandeau : les deux avertissements, carry-held d’abord, avec leur texte', () => {
-    const banners = syncBannerFor<SyncDeviceStatus, SyncStatus>(status({ warnings: ['carry-reattached', 'carry-held'], devices: [] }), NO_PERSISTED);
-    expect(banners.troubles.map((x) => x.code)).toEqual(['carry-held', 'carry-reattached']);
-    expect(banners.troubles.map((x) => syncTroubleText(x, banners.textStatus, [], 0))).toEqual([t('sync.status.warnCarryHeld'), t('sync.status.warnCarryReattached')]);
+  it('bandeau : les deux avertissements, carry-held d’abord ; le texte de carry-report vient du bloc à la demande', () => {
+    const banners = syncBannerFor<SyncDeviceStatus, SyncStatus>(status({ warnings: ['carry-report', 'carry-held'], devices: [] }), NO_PERSISTED);
+    expect(banners.troubles.map((x) => x.code)).toEqual(['carry-held', 'carry-report']);
+    expect(banners.troubles.map((x) => syncTroubleText(x, banners.textStatus, [], 0))).toEqual([t('sync.status.warnCarryHeld'), '']);
     expect(warningText('carry-held')).toBe(t('sync.status.warnCarryHeld'));
-    expect(warningText('carry-reattached')).toBe(t('sync.status.warnCarryReattached'));
   });
 
-  it('section AVERTISSEMENTS des détails : les deux textes', () => {
-    syncStore.get(container).setState({ status: status({ warnings: ['carry-held', 'carry-reattached'] }) });
+  it('section AVERTISSEMENTS des détails : carry-held y figure, carry-report a sa propre ligne (compte rendu)', () => {
+    syncStore.get(container).setState({ status: status({ warnings: ['carry-held', 'carry-report'] }) });
     render(
       <AppContainerProvider container={container}>
         <SyncDetailsScreen slots={SLOTS} />
@@ -68,6 +68,6 @@ describe('avertissements du report d’époque (Y-FIX-04, critère 13)', () => {
     );
     expect(screen.getByText(t('sync.status.sectionWarnings'))).toBeTruthy();
     expect(screen.getByText(t('sync.status.warnCarryHeld'))).toBeTruthy();
-    expect(screen.getByText(t('sync.status.warnCarryReattached'))).toBeTruthy();
+    expect(document.querySelector('[data-warning="carry-report"]')).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import type { DataAccess } from '../db/repositories';
 import { EPOCH_CARRY_NOTICE_META, parseEpochCarryNotice } from '../domain/sync/epochCarryNotice';
-import { noticeAfterAcknowledge } from '../domain/sync/epochCarryReport';
+import { noticeAfterAcknowledge } from '../domain/sync/epochCarryReportView';
 import type { IsoDateTime } from '../domain/types';
 
 /**

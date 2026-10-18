@@ -250,8 +250,9 @@ export function warningText(code: SyncWarningCode): string {
       return t('sync.status.warnAwaitingOthers');
     case 'carry-held':
       return t('sync.status.warnCarryHeld');
-    case 'carry-reattached':
-      return t('sync.status.warnCarryReattached');
+    case 'carry-report':
+      // Y-TECH-05 : texte (nombre d'éléments, échec) composé par le bloc à la demande `carryReportBannerLine`, jamais au départ.
+      return '';
   }
 }
 

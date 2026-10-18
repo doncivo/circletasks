@@ -83,17 +83,17 @@ describe('Y-TECH-05 : constitution et persistance du compte rendu', () => {
     expect(report?.parentReplaced).toMatchObject([{ table: 'task', rowId: t?.id, column: 'project_id', parentId: P_ID, label: 'Tâche 0' }]);
   });
 
-  it('contrat de la phase 2 : « J’ai vu » acquitte ce seul compte rendu ; la notice perd ses lignes rattachées, carry-reattached disparaît', async () => {
+  it('contrat de la phase 2 : « J’ai vu » acquitte ce seul compte rendu ; la notice perd ses lignes rattachées, carry-report disparaît', async () => {
     const [, b] = await replacedParent(1);
     await rounds(devices);
-    expect((await b.cycle()).warnings ?? []).toContain('carry-reattached');
+    expect((await b.cycle()).warnings ?? []).toContain('carry-report');
     const [report] = await reportsOf(b);
     const at = new Date(b.clock.nowMs()).toISOString() as IsoDateTime;
     expect(await acknowledgeEpochCarryReport(b.data, report?.id ?? -1, at)).toBe(true);
     expect(await acknowledgeEpochCarryReport(b.data, report?.id ?? -1, at)).toBe(false);
     expect((await reportsOf(b))[0]?.acknowledgedAt).toBe(at);
     expect(await b.data.repos.sync.getMeta('epochCarryNotice')).toBeNull();
-    expect((await b.cycle()).warnings ?? []).not.toContain('carry-reattached');
+    expect((await b.cycle()).warnings ?? []).not.toContain('carry-report');
   });
 
   it('critère 9 : une notice antérieure (version sans compte rendu) est copiée une seule fois dans le compte rendu suivant', async () => {
@@ -264,7 +264,7 @@ describe('Y-TECH-05 : échec d’écriture du compte rendu (critère 14)', () =>
     expect(await b.data.repos.sync.parkedCount(['epoch-carry'])).toBe(0);
     expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_FAILED_EVENT).map((e) => e.detail)).toEqual([{ code: 'ReportRefused' }]);
     expect(JSON.parse((await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)) ?? 'null')).toMatchObject({ code: 'ReportRefused', epoch: expect.stringMatching(/^e0002-/) as string });
-    expect((await b.cycle()).warnings ?? []).toContain('carry-reattached');
+    expect((await b.cycle()).warnings ?? []).toContain('carry-report');
     expect(await b.driver.select('SELECT id FROM epoch_carry_report')).toEqual([]);
   });
 

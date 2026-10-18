@@ -18,14 +18,14 @@
 import type { DeviceId, Hlc, IsoDateTime } from '../types';
 import type { EpochCarryNotice, EpochCarryNoticeItem } from './epochCarryNotice';
 import { hlcDevice, hlcIso } from './parse';
-import { SYNC_TABLES, type SyncTableName } from './syncTables';
+import { carriedWrites, carryReportTableEntry, namedCount } from './epochCarryReportView';
+import { SYNC_TABLES } from './syncTables';
+
+// Parties lues par l'interface (module sans import d'exécution, `epochCarryReportView.ts`), réexportées ici : une seule adresse pour les règles.
+export { CARRY_REPORT_TABLES, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_KEEP, carriedWrites, carryReportKind, namedCount, noticeAfterAcknowledge, shortRowId } from './epochCarryReportView';
 
 /** Lignes nommées gardées par compte rendu (toutes listes) ; le reste est compté dans `overflow`. */
 export const EPOCH_CARRY_REPORT_MAX_NAMED = 500;
-/** Comptes rendus gardés : au-delà, les plus anciens **acquittés** sont supprimés ; un non acquitté ne l'est jamais. */
-export const EPOCH_CARRY_REPORT_KEEP = 20;
-/** Clé de `sync_meta` (locale) : le compte rendu d'un report n'a pas pu être enregistré (persistant, levé jusqu'au compte rendu suivant). */
-export const EPOCH_CARRY_REPORT_FAILED_META = 'epochCarryReportFailed';
 /** Événement du journal technique en cas d'échec d'écriture (code d'erreur seulement, jamais un libellé). */
 export const EPOCH_CARRY_REPORT_FAILED_EVENT = 'epoch-carry-report-failed';
 
@@ -107,54 +107,17 @@ export interface EpochCarryReport extends EpochCarryReportHead, EpochCarryReport
 
 export const EMPTY_CARRY_REPORT_BODY: EpochCarryReportBody = { authors: [], restored: [], recreated: [], parentReplaced: [], overflow: 0, overflowBy: { restored: 0, recreated: 0, parentReplaced: 0 } };
 
-/**
- * Correspondance unique table publiée → colonne de libellé (null : aucune, repli) et clé du type d'élément en français (`kind`, clé de
- * texte du catalogue i18n de l'écran : « Tâche », « Projet »… ; aucun texte ici, CLAUDE.md « textes dans src/i18n »). Un test échoue si
- * une table du catalogue de synchro manque.
- */
-export const CARRY_REPORT_TABLES: { readonly [K in SyncTableName]: { readonly label: string | null; readonly kind: string } } = {
-  space: { label: 'name', kind: 'space' },
-  project: { label: 'name', kind: 'project' },
-  recurrence: { label: null, kind: 'recurrence' },
-  goal: { label: 'title', kind: 'goal' },
-  task: { label: 'title', kind: 'task' },
-  routine: { label: 'title', kind: 'routine' },
-  routine_log: { label: null, kind: 'routineLog' },
-  routine_pause: { label: null, kind: 'routinePause' },
-  reminder: { label: null, kind: 'reminder' },
-  event: { label: 'title', kind: 'event' },
-  checklist: { label: 'title', kind: 'checklist' },
-  checklist_item: { label: 'text', kind: 'checklistItem' },
-  focus_session: { label: null, kind: 'focusSession' },
-  calendar_account: { label: 'label', kind: 'calendarAccount' },
-  holiday: { label: 'name', kind: 'holiday' },
-  settings: { label: null, kind: 'settings' },
-};
-
-const tableEntry = (table: string): { readonly label: string | null; readonly kind: string } | undefined =>
-  Object.prototype.hasOwnProperty.call(CARRY_REPORT_TABLES, table) ? CARRY_REPORT_TABLES[table as SyncTableName] : undefined;
-
 /** Libellé local d'une ligne (colonne de la correspondance) ; null si la table n'en a pas ou si la valeur est vide : repli. */
 export function carryReportLabel(table: string, values: ReadonlyMap<string, unknown>): string | null {
-  const column = tableEntry(table)?.label;
+  const column = carryReportTableEntry(table)?.label;
   if (!column) return null;
   const value = values.get(column);
   return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
-/** Identifiant abrégé du repli « (sans titre) » : 8 premiers caractères. */
-export function shortRowId(rowId: string): string {
-  return rowId.slice(0, 8);
-}
-
-/** Clé du type d'élément (« Tâche »…) ; table inconnue : `other`. */
-export function carryReportKind(table: string): string {
-  return tableEntry(table)?.kind ?? 'other';
-}
-
 /** Tables du catalogue de synchro absentes de la correspondance (test : toujours vide). */
 export function missingCarryReportTables(): string[] {
-  return SYNC_TABLES.map((t) => t.name).filter((name) => tableEntry(name) === undefined);
+  return SYNC_TABLES.map((t) => t.name).filter((name) => carryReportTableEntry(name) === undefined);
 }
 
 /** État d'une ligne avant (juste après l'étape (b)) ou après l'application de son report. */
@@ -210,16 +173,6 @@ export function addCarriedCount(authors: readonly EpochCarryAuthorCount[], op: C
     }
   }
   return out;
-}
-
-/** Nombre total d'écritures reportées (champs, traces, tardives) : zéro, aucun bandeau (critère 8). */
-export function carriedWrites(body: Pick<EpochCarryReportBody, 'authors'>): number {
-  return body.authors.reduce((sum, a) => sum + a.fields + a.tombs + a.late, 0);
-}
-
-/** Lignes nommées (listes et débordement). */
-export function namedCount(body: Omit<EpochCarryReportBody, 'authors'>): number {
-  return body.restored.length + body.recreated.length + body.parentReplaced.length + body.overflow;
 }
 
 /**
@@ -309,17 +262,6 @@ export function noticeItemsNotReported(notice: EpochCarryNotice | null, reports:
   if (!notice) return [];
   const known = new Set(reports.flatMap((r) => r.parentReplaced.map(parentKey)));
   return parentItemsOf(notice.reattached, notice.held).filter((item) => !known.has(parentKey(item)));
-}
-
-/**
- * « J'ai vu » d'un compte rendu (phase 2) : quand plus aucun compte rendu non acquitté ne nomme de ligne rattachée, la notice perd ses
- * lignes **rattachées** (`carry-reattached` disparaît) ; les lignes mises de côté restent (`carry-held` dure tant qu'elles attendent :
- * Y-FIX-04 critère 13 b). Null si elle ne nomme plus rien.
- */
-export function noticeAfterAcknowledge(notice: EpochCarryNotice | null, unacknowledged: readonly Pick<EpochCarryReportBody, 'parentReplaced'>[]): EpochCarryNotice | null {
-  if (!notice) return null;
-  if (unacknowledged.some((r) => r.parentReplaced.some((item) => item.kind === 'reattached'))) return notice;
-  return notice.held.length === 0 ? null : { ...notice, reattached: [], overflow: 0 };
 }
 
 /**

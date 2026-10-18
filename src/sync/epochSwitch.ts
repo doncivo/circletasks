@@ -268,7 +268,7 @@ const maxOwn = (op: CarriedOp): Hlc => op.own.map((name) => (op.f[name] as SyncF
 /**
  * Y-FIX-04 (§28) : notice locale complétée dans la transaction de la page (`sync_meta.epochCarryNotice`, jamais publiée). Une écriture
  * refusée pour une autre cause ne bloque pas le report (les données passent avant leur compte rendu) : journalisée, et l'avertissement
- * `carry-reattached` est levé sans liste (`carryNoticeState.ts`), jamais muet. **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
+ * l'indicateur `carryNoticeState.ts` lève `carry-report` (Y-TECH-05), jamais muet. **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
  * `SQLITE_IOERR`) : SQLite peut avoir annulé toute la transaction ; l'erreur est relancée, la page est annulée entière (reports compris)
  * et l'étape (c) reprend au cycle suivant : jamais un `removeParked` hors transaction.
  */
@@ -500,7 +500,7 @@ async function recordCarryReport(deps: SyncDeps, repos: Repositories, epoch: Epo
 /**
  * Compte rendu impossible à écrire (autre cause que le stockage) : les données passent avant leur compte rendu. Jamais muet : événement
  * (code seulement, aucun libellé), marque persistante `sync_meta.epochCarryReportFailed` (avertissement de la phase 2) et, dès maintenant,
- * l'indicateur de Y-FIX-04 qui lève `carry-reattached`.
+ * l'indicateur de Y-FIX-04 (`carryNoticeState.ts`) qui lève `carry-report`.
  */
 async function reportFailed(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, error: unknown): Promise<void> {
   const raw = (error as { code?: unknown } | null)?.code;
@@ -651,11 +651,6 @@ export async function switchEpoch(
   });
   deps.logger.log('epoch-switched', { target });
   return 'done';
-}
-
-/** La notice locale nomme-t-elle des lignes rattachées non acquittées (avertissement `carry-reattached`) ? */
-export function hasReattached(raw: string): boolean {
-  return (parseEpochCarryNotice(raw)?.reattached.length ?? 0) > 0;
 }
 
 /**

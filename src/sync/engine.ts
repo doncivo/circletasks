@@ -23,7 +23,6 @@ import { allowedSwitchTarget, clearResetFailure, evaluateReset, noticeToPublish,
 import type { CycleFacts } from './status';
 import { createCycleDeadline, isCycleInterrupted, type DeadlineUnit } from './deadline';
 import { scanWarnings, type SyncWarningCode } from '../domain/syncBanners';
-import { epochCarryNoticeFailure } from './carryNoticeState';
 
 /**
  * Cycle de synchronisation (ADR 0011, section 10.2 ; Y-02 critère 3) : 0 préconditions, 1 `scan({ keep })`, 2 règle 1, 3 époque,
@@ -931,9 +930,9 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
     // La garde ne sert que jusqu'à la fin de la reprise qui suit l'abandon : ensuite les traces mémorisées sont vidées.
     if (resumed && allRead && (await repos.sync.getMeta(META.orphanTraces)) !== null) await writeJson(repos, META.orphanTraces, null);
     if ((await repos.sync.getMeta(META.orphanTraceHit)) !== null) seen.warnings = [...(seen.warnings ?? []), 'received-unapplied'];
-    // Y-FIX-04 (§28) : lignes reportées rattachées à « Sans projet » (notice non acquittée), ou notice impossible à écrire : visible jusqu'à « J'ai vu ».
-    const carryNotice = await repos.sync.getMeta(META.epochCarryNotice);
-    if (epochCarryNoticeFailure() || (carryNotice !== null && (await import('./epochSwitch')).hasReattached(carryNotice))) seen.warnings = [...(seen.warnings ?? []), 'carry-reattached'];
+    // Y-TECH-05 : compte rendu du changement d'époque non acquitté qui lève le bandeau (lignes rétablies, recréées, rattachées à « Sans projet »),
+    // ou échec d'enregistrement du compte rendu : visible jusqu'à « J'ai vu » (remplace la dérivation de Y-FIX-04 depuis la notice).
+    if (await (await import('./epochCarryReportBanner')).carryReportRaised(repos)) seen.warnings = [...(seen.warnings ?? []), 'carry-report'];
 
     // 5. Publication.
     let publishError: string | null = null;

@@ -17,7 +17,7 @@ import { onPairingChange, readJoinFailure } from './pairingHub';
 import { applyRemoteChanges } from './remoteChanges';
 import { clearReloadRetry, coversChanges, mergeChanges, setReloadRetry } from './reloadRetry';
 import { syncStore } from './syncStore';
-import { markerFailures, schedulers } from './syncRestoreState';
+import { carryLines, markerFailures, schedulers } from './syncRestoreState';
 import { deviceName, deviceStatusText, formatCount, statusLine, waitingLong, warningText } from './syncText';
 import { forgetFailureText, forgetPendingBanner } from './forgetText';
 import { resetProgressBanner, resetReminderText } from './resetText';
@@ -95,7 +95,7 @@ export function syncTroubleText(trouble: SyncTrouble<SyncDeviceStatus>, textStat
     case 'received-unapplied':
     case 'awaiting-other-devices':
     case 'carry-held':
-    case 'carry-reattached':
+    case 'carry-report':
       return warningText(trouble.code);
   }
 }
@@ -202,11 +202,26 @@ export function startSyncIntegration(container: AppContainer, env: SyncIntegrati
     const nowMs = container.clock.nowMs();
     const banners = syncBannerFor(current, { ...persisted, readFailed: persisted.readFailed || writeFailed, reloadFailed }, settled);
 
-    const [first, ...others] = banners.troubles;
+    // Y-TECH-05 : le bandeau du compte rendu attend son texte, composé par un bloc à la demande (`carryLines`) ; acquitté, il disparaît tout de suite.
+    if (!banners.troubles.some((x) => x.code === 'carry-report')) carryLines.delete(container);
+    else if (!carryLines.has(container)) {
+      carryLines.set(container, null);
+      import('./carryReportBannerLine')
+        .then((module) => module.loadCarryLine(container, () => disposed || safely(applyBanners)))
+        .catch((error: unknown) => {
+          // Bloc ou lecture en échec : journalisé, jamais de bandeau muet (texte générique des détails de la synchro).
+          logFailure('sync', error);
+          carryLines.set(container, { message: t('sync.status.errorGeneric'), onAction: openSettings });
+          safely(applyBanners);
+        });
+    }
+    const carry = carryLines.get(container);
+    const [first, ...others] = banners.troubles.filter((x) => x.code !== 'carry-report' || carry);
+    const own = first?.code === 'carry-report' ? carry : null;
     const marker = markerFailures.get(container);
     // P-04-iOS critère 12 : la restauration est faite, mais la synchro n'est pas suspendue : ce bandeau prime tant qu'il n'est pas résolu.
     if (marker) put('syncTrouble', { detail: 'restore-marker-failed', message: `${t('backup.markerFailed')} ${t('backup.errorCode', { code: marker.code })}`, more: 0, onAction: openSettings });
-    else if (first) put('syncTrouble', { detail: first.code, message: syncTroubleText(first, banners.textStatus, banners.devices, nowMs), more: others.length, onAction: actionFor(first) });
+    else if (first) put('syncTrouble', { detail: first.code, message: own ? own.message : syncTroubleText(first, banners.textStatus, banners.devices, nowMs), more: others.length, onAction: own ? own.onAction : actionFor(first) });
     else put('syncTrouble', null);
 
     // Critère 9 e : cause connue, texte de la ligne de Réglages (sans l'échec de réintégration, montré par `updateRequired`).

@@ -2,7 +2,7 @@
 // Le vrai service de synchro de B (banc à trois appareils) alimente l'intégration (bandeau) et l'écran de détails : le bandeau est levé,
 // l'écran montre « À jeter » dans « Rétablis alors que vous les aviez supprimés », « J'ai vu » retire le bandeau, et il ne revient pas
 // après un redémarrage simulé de B.
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { scenario, type Scenario } from '../../../tests/unit/sync/epochCarryScenario';
 import { syncFolders, warmSimDevices, type SimDevice } from '../../../tests/sim/syncDevice';
@@ -66,7 +66,7 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
     // Bandeau durable avec le nombre d'éléments (« À jeter » rétablie, « Test Pc » recréée) et accès au détail.
     const banner = await screen.findByText(BANNER);
     expect(banner).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Voir' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Voir le problème de synchronisation' }));
     expect(useNavigationStore.getState().route).toMatchObject({ tab: 'settings', screen: 'sync' });
 
     // Le détail s'ouvre sur le compte rendu non acquitté ; « À jeter » est dans la liste des rétablis.
@@ -80,7 +80,9 @@ describe('Y-TECH-05 critère 26 : bandeau, écran et « J’ai vu » du compte r
     await act(async () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'J’ai vu' }));
     });
-    await waitFor(() => expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined());
+    // Le compte rendu reste lisible (« Vu le … ») et le bandeau a disparu sans attendre le cycle suivant.
+    expect(await within(dialog).findByText(/^Vu le /)).toBeTruthy();
+    expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
     expect(screen.queryByText(BANNER)).toBeNull();
     const [report] = await (await s.b.data.repos.carryReports()).list(20);
     expect(report?.acknowledgedAt).not.toBeNull();

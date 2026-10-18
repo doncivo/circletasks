@@ -4,6 +4,7 @@ import { t } from '../../i18n';
 import { Icon } from '../../ui';
 import { useAppContainer, useFeatureStore } from '../app/AppContainerContext';
 import { useNavigationStore } from '../app/navigation';
+import { SyncDetailsCarryReportHost } from './SyncDetailsCarryReportHost';
 import { SyncDetailsConflicts } from './SyncDetailsConflicts';
 import { SyncDetailsForget, SyncDeviceForgetAction } from './SyncDetailsForget';
 import { SyncDetailsFolder } from './SyncDetailsFolder';
@@ -29,6 +30,11 @@ export interface SyncDetailsSlots {
   readonly forget?: ReactNode;
   /** Y-11 : réinitialisation de la synchronisation. */
   readonly reset?: ReactNode;
+  /**
+   * Y-TECH-05 : ligne du compte rendu du changement d'époque et son écran de détail (`SyncDetailsCarryReport`, avec leurs textes) : bloc à la
+   * demande (`SyncDetailsCarryReportHost`).
+   */
+  readonly carryReport?: ReactNode;
 }
 
 /**
@@ -44,6 +50,8 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
   const status = useFeatureStore(syncStore, (s) => s.status);
   const nowMs = container.clock.nowMs();
   const key = useKeyInfo();
+  // `carry-report` est montré par sa propre ligne (compte rendu du changement d'époque), pas dans cette liste.
+  const shownWarnings = (status.warnings ?? []).filter((code) => code !== 'carry-report');
   return (
     <div className="ct-settings ct-sync">
       <div className="ct-sync__topRow">
@@ -104,7 +112,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         )
       )}
       {slots.forget ?? <SyncDetailsForget />}
-      {(status.stateUnreadable === true || (status.warnings?.length ?? 0) > 0) && (
+      {(status.stateUnreadable === true || shownWarnings.length > 0) && (
         <>
           <h2 className="ct-settings__section">{t('sync.status.sectionWarnings')}</h2>
           <ul className="ct-sync__warnings">
@@ -113,7 +121,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
                 {t('status.syncStateUnreadable')}
               </li>
             )}
-            {(status.warnings ?? []).map((code) => (
+            {shownWarnings.map((code) => (
               <li key={code} className="ct-settings__row" data-warning={code}>
                 {warningText(code)}
               </li>
@@ -141,6 +149,7 @@ export function SyncDetailsScreen({ slots = {} }: { readonly slots?: SyncDetails
         </span>
       </div>
       {slots.conflicts ?? <SyncDetailsConflicts />}
+      {slots.carryReport === undefined ? <SyncDetailsCarryReportHost /> : slots.carryReport}
       {slots.reset ?? <SyncDetailsReset />}
     </div>
   );

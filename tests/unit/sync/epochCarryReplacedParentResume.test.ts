@@ -198,7 +198,7 @@ describe('Y-FIX-04 : reprise et convergence (critères 9, 10, 14)', () => {
     expect(await noticeOf(b)).toBeNull();
     expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-notice-failed').map((e) => e.detail)).toEqual([{ code: 'NoticeRefused' }]);
     expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-reattached').map((e) => e.detail)).toEqual([{ table: 'task', column: 'project_id', count: 1 }]);
-    expect((await b.cycle()).warnings ?? []).toContain('carry-reattached');
+    expect((await b.cycle()).warnings ?? []).toContain('carry-report');
   });
 
   it.each([
