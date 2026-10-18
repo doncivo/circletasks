@@ -5286,6 +5286,7 @@ version = "2.5.0"
 dependencies = [
  "futures-core",
  "indexmap 2.14.2",
+ "libsqlite3-sys",
  "log",
  "rust_decimal",
  "serde",

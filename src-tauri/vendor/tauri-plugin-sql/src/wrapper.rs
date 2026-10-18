@@ -79,6 +79,21 @@ impl DbPool {
         conn_url: &str,
         _app: &AppHandle<R>,
     ) -> Result<Self, crate::Error> {
+        // CircleTasks (SEC-01) : l'URL est contrôlée AVANT toute lecture de chemin, création de dossier ou de fichier.
+        crate::guard::validate_db_url(conn_url)?;
+        #[cfg(feature = "sqlite")]
+        let app_dir = || _app.path().app_config_dir().expect("No App config path was found!");
+        #[cfg(not(feature = "sqlite"))]
+        let app_dir = std::path::PathBuf::new;
+        Self::connect_in(conn_url, app_dir).await
+    }
+
+    /// `connect` avec le dossier de données fourni par l'appelant (testable sans `AppHandle`, donc sans toucher au profil de l'utilisateur).
+    pub(crate) async fn connect_in(
+        conn_url: &str,
+        _app_dir: impl FnOnce() -> std::path::PathBuf,
+    ) -> Result<Self, crate::Error> {
+        crate::guard::validate_db_url(conn_url)?;
         match conn_url
             .split_once(':')
             .ok_or_else(|| crate::Error::InvalidDbUrl(conn_url.to_string()))?
@@ -86,10 +101,7 @@ impl DbPool {
         {
             #[cfg(feature = "sqlite")]
             "sqlite" => {
-                let app_path = _app
-                    .path()
-                    .app_config_dir()
-                    .expect("No App config path was found!");
+                let app_path = _app_dir();
 
                 create_dir_all(&app_path).expect("Couldn't create app config dir");
 

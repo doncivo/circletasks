@@ -21,6 +21,7 @@
 mod commands;
 mod decode;
 mod error;
+mod guard;
 mod wrapper;
 
 pub use error::Error;
@@ -257,3 +258,6 @@ impl Builder {
             .build()
     }
 }
+
+#[cfg(all(test, feature = "sqlite"))]
+mod guard_tests;

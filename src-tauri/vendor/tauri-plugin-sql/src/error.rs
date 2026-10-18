@@ -34,6 +34,11 @@ pub enum Error {
     /// n'est ni ouverte ni créée (une base vide masquerait la vraie).
     #[error("restore-pending: database not opened while a restore is pending")]
     RestorePending,
+    /// CircleTasks (SEC-01, bloquant B7) : le plugin refuse l'appel (URL de base autre que `sqlite:circletasks.db`, `ATTACH`, `DETACH`,
+    /// `VACUUM`, pragma hors liste blanche, fonction ou table virtuelle dangereuse). Contient un **code stable** (`url`, `attach`,
+    /// `vacuum`, `pragma`, `function`, `vtable`, `auth`), jamais le texte SQL ni l'URL (ils peuvent contenir des chemins ou des données).
+    #[error("sql-refused: {0}")]
+    Refused(&'static str),
 }
 
 impl Serialize for Error {
