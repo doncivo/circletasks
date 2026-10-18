@@ -505,6 +505,7 @@ async function cycleSteps(deps: SyncDeps, hooks: CycleHooks, options: CycleOptio
       const { switchEpoch } = await import('./epochSwitch');
       const switched = await switchEpoch(deps, target, live, ownState, hooks.onRemoteChanges, {
         mode: merge ? 'merge' : 'replace',
+        reset: inReset,
         knows: await knowsFrom(repos, logger),
         forgotten: new Set(forgetView.order.keys()),
         coverage: { master: forgetView.master, ackers: withoutStaleAcks([...live.values(), ...(ownState ? [ownState] : [])], published(ownState)) },

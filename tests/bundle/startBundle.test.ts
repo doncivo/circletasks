@@ -76,7 +76,7 @@ describe('bundle de départ (index.html)', () => {
 
   // PERF-02 (ADR 0001, avenant) : chrono-node, le catalogue anglais et les écrans à la demande ne reviennent pas dans le départ par un
   // import statique oublié, un barrel ou un effet de bord ajouté (retrait de « sideEffects » dans package.json compris).
-  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx'])('%s est un bloc à la demande, hors du départ', (source) => {
+  it.each(['src/domain/chronoAbsolute.ts', 'src/i18n/en.ts', 'src/features/settings/SettingsScreen.tsx', 'src/features/capture/scan/ScanDialog.tsx', 'src/features/sync/RestoreChoiceDialog.tsx', 'src/db/repositories/sql/epochCarryReports.ts'])('%s est un bloc à la demande, hors du départ', (source) => {
     const start = new Set(startChunks().map((chunk) => chunk.file));
     const chunk = manifest[source];
     if (!chunk) throw new Error(`bloc ${source} absent du manifeste`);
@@ -90,6 +90,14 @@ describe('bundle de départ (index.html)', () => {
     const start = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
     for (const chunk of start) expect(readFileSync(join(outDir, chunk.file), 'utf8').includes(marker), chunk.file).toBe(false);
     expect(Object.values(manifest).some((chunk) => chunk.file.endsWith('.js') && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker))).toBe(true);
+  });
+
+  // Y-TECH-05 : constitution du compte rendu du report d'époque (règles, écriture, dépôt) : jamais dans un bloc de départ.
+  it('le compte rendu du report d’époque est hors du départ', () => {
+    const markers = ['epoch-carry-report-failed', 'UPDATE epoch_carry_report SET acknowledged_at'];
+    const start = startChunks().filter((chunk) => chunk.file.endsWith('.js'));
+    for (const chunk of start) for (const marker of markers) expect(readFileSync(join(outDir, chunk.file), 'utf8').includes(marker), `${chunk.file} : ${marker}`).toBe(false);
+    for (const marker of markers) expect(Object.values(manifest).some((chunk) => chunk.file.endsWith('.js') && readFileSync(join(outDir, chunk.file), 'utf8').includes(marker)), marker).toBe(true);
   });
 
   it('le graphique du rapport (Recharts) est un bloc à la demande, hors du départ', () => {

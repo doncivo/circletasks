@@ -29,6 +29,12 @@ export const EPOCH_CARRY_REPORT_FAILED_META = 'epochCarryReportFailed';
 /** Événement du journal technique en cas d'échec d'écriture (code d'erreur seulement, jamais un libellé). */
 export const EPOCH_CARRY_REPORT_FAILED_EVENT = 'epoch-carry-report-failed';
 
+/**
+ * Auteur des lignes de l'amorce (espaces Pro et Perso, identiques sur chaque appareil : `SEED_DEVICE_ID` de `src/db/seed`, égalité testée) :
+ * jamais compté (leur report ne change rien et n'est l'écriture d'aucun appareil).
+ */
+export const SEED_AUTHOR = '00000000-0000-4000-8000-000000000000' as DeviceId;
+
 /** Cause du changement d'époque : restauration « Appliquer partout », époques concurrentes, réinitialisation (Y-11). */
 export type EpochCarryCause = 'restore' | 'concurrent' | 'reset';
 export type EpochCarryMode = 'replace' | 'merge';
@@ -170,7 +176,7 @@ export interface CarriedOpCount {
   readonly late?: boolean;
 }
 
-/** Compteurs par auteur complétés d'une opération ; ordre d'apparition des auteurs conservé (puis trié par l'enregistrement). */
+/** Compteurs par auteur complétés d'une opération (auteur de l'amorce ignoré) ; ordre d'apparition des auteurs conservé (puis trié par l'enregistrement). */
 export function addCarriedCount(authors: readonly EpochCarryAuthorCount[], op: CarriedOpCount): EpochCarryAuthorCount[] {
   const out = authors.map((a) => ({ ...a }));
   const entry = (device: DeviceId): { device: DeviceId; fields: number; rows: number; tombs: number; late: number } => {
@@ -186,7 +192,7 @@ export function addCarriedCount(authors: readonly EpochCarryAuthorCount[], op: C
     return out;
   }
   const byAuthor = new Map<DeviceId, number>();
-  for (const hlc of op.fields) byAuthor.set(hlcDevice(hlc), (byAuthor.get(hlcDevice(hlc)) ?? 0) + 1);
+  for (const hlc of op.fields) if (hlcDevice(hlc) !== SEED_AUTHOR) byAuthor.set(hlcDevice(hlc), (byAuthor.get(hlcDevice(hlc)) ?? 0) + 1);
   for (const [device, fields] of byAuthor) {
     const e = entry(device);
     if (op.late) e.late += 1;

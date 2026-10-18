@@ -16,11 +16,13 @@ import {
   noticeAfterAcknowledge,
   noticeItemsNotReported,
   parentItemsOf,
+  SEED_AUTHOR,
   shortRowId,
   type EpochCarryNamedItem,
   type EpochCarryReportBody,
 } from './epochCarryReport';
 import { SYNC_TABLES, syncColumn } from './syncTables';
+import { SEED_DEVICE_ID } from '../../db/seed/defaultSpaces';
 
 /** Y-TECH-05 (critères 1 à 5, 7, 8, 11, 15) : règles pures du compte rendu du report d'époque. */
 
@@ -86,6 +88,12 @@ describe('classement rétablie / recréée (critères 2 à 4)', () => {
 });
 
 describe('compteurs par auteur (critère 1)', () => {
+  it('les lignes de l’amorce (identiques partout) ne sont jamais comptées', () => {
+    expect(SEED_AUTHOR).toBe(SEED_DEVICE_ID);
+    expect(addCarriedCount([], { fields: [h(1, SEED_AUTHOR), h(2, SEED_AUTHOR)] })).toEqual([]);
+    expect(addCarriedCount([], { fields: [h(1, SEED_AUTHOR), h(2, B)] })).toEqual([{ device: B, fields: 1, rows: 1, tombs: 0, late: 0 }]);
+  });
+
   it('champs et lignes distinctes par auteur, traces à part, écritures tardives à part', () => {
     let authors = addCarriedCount([], { fields: [h(1, C), h(2, C), h(3, C), h(4, B), h(5, B)] });
     authors = addCarriedCount(authors, { fields: [h(6, C)] });

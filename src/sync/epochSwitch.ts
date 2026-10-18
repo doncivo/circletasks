@@ -5,6 +5,27 @@ import { SYNC_TABLES, settingKeyScope, syncTable, tableRank, type SyncTable } fr
 import type { DeviceId, Hlc, IsoDateTime } from '../domain/types';
 import { coversForgotten } from '../domain/sync/retention';
 import { EPOCH_CARRY_HELD_EVENT, EPOCH_CARRY_NOTICE_META, EPOCH_CARRY_REATTACHED_EVENT, addToEpochCarryNotice, carryLabel, carryParentVerdict, countByLink, parseEpochCarryNotice, type EpochCarryNoticeItem } from '../domain/sync/epochCarryNotice';
+import {
+  EMPTY_CARRY_REPORT_BODY,
+  EPOCH_CARRY_REPORT_FAILED_EVENT,
+  EPOCH_CARRY_REPORT_FAILED_META,
+  EPOCH_CARRY_REPORT_KEEP,
+  addCarriedCount,
+  addNamed,
+  carryCause,
+  carryReportBanner,
+  carryReportLabel,
+  classifyCarriedRow,
+  noticeItemsNotReported,
+  parentItemsOf,
+  type CarriedOpCount,
+  type CarryRowState,
+  type EpochCarryMode,
+  type EpochCarryNamedItem,
+  type EpochCarryParentItem,
+  type EpochCarryReportBody,
+  type EpochCarryReportHead,
+} from '../domain/sync/epochCarryReport';
 import { applyOps, type ApplyContext, type CarryPolicy } from './apply';
 import { markEpochCarryNoticeFailure } from './carryNoticeState';
 import type { SyncDeps } from './deps';
@@ -47,6 +68,8 @@ interface SwitchProgress {
   readonly from: { readonly deviceId: DeviceId; readonly seq: number };
   /** Plus grand numéro de la file au début de (a) : (b) ne vide la file que jusqu'à lui. */
   readonly maxSeq: number;
+  /** Y-TECH-05 : compte rendu de ce report, créé au début de (c) (null : création impossible, échec journalisé et visible). */
+  readonly report?: number | null;
 }
 
 /** Opération reportée : ligne complète (pour pouvoir la recréer) et champs écrits par cet appareil ; ou identifiant purgé. */
@@ -57,12 +80,16 @@ interface CarriedOp {
   readonly f: Record<string, SyncField>;
   readonly own: readonly string[];
   readonly tomb?: Hlc;
+  /** Y-TECH-05 : reporté par `carryNewer` (écriture locale faite pendant le changement) : compté à part dans le compte rendu. */
+  readonly late?: 1;
 }
 
 /** Arrêt simulé entre deux étapes (tests de reprise). */
 export interface SwitchTestHooks {
   /** Peut écrire dans la base (écriture locale pendant le changement) ou lever (arrêt simulé). */
   afterStep?: (step: SwitchStep) => void | Promise<void>;
+  /** Y-TECH-05 (critère 25) : classement remplacé (épreuve de détection du banc). */
+  classify?: typeof classifyCarriedRow;
 }
 
 let testHooks: SwitchTestHooks = {};
@@ -228,7 +255,7 @@ async function carryNewer(deps: SyncDeps, repos: Repositories): Promise<void> {
       if (!row) continue;
       const op = carriedOf(t, row, (name, hlc) => hlcDevice(hlc) === deps.deviceId && pendingHas(fields, name));
       if (!op) continue;
-      await repos.sync.park('epoch-carry', t.name, id, maxOwn(op), JSON.stringify(op), now);
+      await repos.sync.park('epoch-carry', t.name, id, maxOwn(op), JSON.stringify({ ...op, late: 1 }), now);
       carried += 1;
     }
   }
@@ -291,7 +318,7 @@ function carryPolicy(op: CarriedOp, reattached: EpochCarryNoticeItem[], held: Ep
  * (`missing-parent`, lien obligatoire) ; une ligne reportée n'est retirée de `epoch-carry` qu'appliquée, mise de côté, ou écartée par une
  * règle journalisée (trace plus récente, `parent-purged`) ; plus aucun chemin « ni appliquée, ni gardée, ni journalisée ».
  */
-async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<string>>> {
+async function reapply(deps: SyncDeps, epoch: EpochId, mode: EpochCarryMode, report: ReportSlot): Promise<Map<string, Set<string>>> {
   const touched = new Map<string, Set<string>>();
   const reattachedAll: EpochCarryNoticeItem[] = [];
   const heldAll: EpochCarryNoticeItem[] = [];
@@ -307,11 +334,13 @@ async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<
     await guarded(deps.data, async (repos) => {
       const reattached: EpochCarryNoticeItem[] = [];
       const held: EpochCarryNoticeItem[] = [];
+      const found: PageReport = { counts: [], restored: [], recreated: [], dropped: [] };
       for (const parked of page) {
         const op = JSON.parse(parked.op) as CarriedOp;
         const t = syncTable(op.t);
         if (!t) continue;
         if (op.tomb !== undefined) {
+          found.counts.push({ fields: [], tomb: op.tomb });
           // Ligne présente : purgée avec ses rappels, sauf si elle a encore des enfants (écartée, journalisée) ; absente : trace seule.
           if ((await repos.sync.existingIds(t, [op.id])).has(op.id)) {
             const done = await purgeRows(repos, t, [{ id: op.id, deletedHlc: op.tomb }], now, deps.logger, { reattach: (table, ids) => ids.forEach((id) => addTouched(touched, table, id)) });
@@ -323,10 +352,14 @@ async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<
           continue;
         }
         const existed = (await repos.sync.existingIds(t, [op.id])).has(op.id);
+        found.counts.push({ fields: op.own.map((name) => (op.f[name] as SyncField)[1]), ...(op.late === 1 ? { late: true } : {}) });
+        // Y-TECH-05 : état de la ligne juste après (b) (remplacement seulement : en fusion rien n'est remplacé, rien n'est « rétabli »).
+        const before = mode === 'replace' ? await carryRowState(repos, t, op.id) : null;
         // Ligne présente : seuls ses propres champs ; ligne absente : la ligne entière, pour pouvoir la recréer.
         const fields = Object.entries(op.f).filter(([name]) => !existed || op.own.includes(name));
         const syncOp: SyncOp = { t: op.t, id: op.id, at: op.at, f: new Map(fields) };
         await applyOps(repos, [syncOp], { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, carry: carryPolicy(op, reattached, held) });
+        if (before) await classifyRow(repos, t, op.id, before.state, found);
         // Ligne absente après l'application : mise de côté par `applyOps` (`missing-parent` ou `missing-row`, marquée), ou écartée par une
         // règle documentée et journalisée (trace plus récente, `parent-purged` d'un lien obligatoire) ; jamais perdue en silence.
         if (!(await repos.sync.existingIds(t, [op.id])).has(op.id)) continue;
@@ -355,6 +388,9 @@ async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<
       }
       // Notice et retrait des reports de la page dans la même transaction (reprise après arrêt : ni perte ni doublon).
       if (reattached.length > 0 || held.length > 0) await recordCarryNotice(deps, repos, epoch, now, reattached, held);
+      // Y-TECH-05 : compte rendu complété dans la même transaction (reprise après arrêt : aucune ligne comptée deux fois ni oubliée).
+      if (report.id === undefined) report.id = await createCarryReport(deps, repos, report, now);
+      if (report.id !== null) report.id = await recordCarryReport(deps, repos, epoch, now, report.id, found, parentItemsOf(reattached, held));
       await repos.sync.removeParked(page.map((p) => p.id));
       reattachedAll.push(...reattached);
       heldAll.push(...held);
@@ -364,6 +400,118 @@ async function reapply(deps: SyncDeps, epoch: EpochId): Promise<Map<string, Set<
   for (const entry of countByLink(reattachedAll)) deps.logger.log(EPOCH_CARRY_REATTACHED_EVENT, entry);
   for (const entry of countByLink(heldAll)) deps.logger.log(EPOCH_CARRY_HELD_EVENT, entry);
   return touched;
+}
+
+/** Y-TECH-05 : relevé d'une page de `reapply` pour le compte rendu. */
+interface PageReport {
+  readonly counts: CarriedOpCount[];
+  readonly restored: EpochCarryNamedItem[];
+  readonly recreated: EpochCarryNamedItem[];
+  readonly dropped: { readonly table: string; readonly rowId: string }[];
+}
+
+/** État d'une ligne : vivante, supprimée (`deleted_at`, horloge du champ), purgée (trace) ou absente ; valeurs pour le libellé local. */
+async function carryRowState(repos: Repositories, t: SyncTable, id: string): Promise<{ readonly state: CarryRowState; readonly values: ReadonlyMap<string, unknown> | null }> {
+  const row = (await repos.sync.readRowsWithClocks(t, [id])).get(id);
+  if (row) {
+    const hlc = (row.clocks.get('deleted_at') ?? row.clocks.get('*'))?.hlc ?? row.hlc;
+    const deleted = t.columns.some((c) => c.name === 'deleted_at') && (row.values.get('deleted_at') ?? null) !== null;
+    return { state: { kind: deleted ? 'deleted' : 'alive', hlc }, values: row.values };
+  }
+  const tomb = (await repos.sync.tombstones(t.name, [id])).get(id);
+  return { state: tomb === undefined ? { kind: 'absent' } : { kind: 'purged', hlc: tomb }, values: null };
+}
+
+/** Classement d'une ligne après l'application de son report (`src/domain`) ; une ligne de nouveau supprimée sort des listes. */
+async function classifyRow(repos: Repositories, t: SyncTable, id: string, before: CarryRowState, page: PageReport): Promise<void> {
+  const after = await carryRowState(repos, t, id);
+  const verdict = (testHooks.classify ?? classifyCarriedRow)(t.name, id, after.values ? carryReportLabel(t.name, after.values) : null, before, after.state);
+  if (verdict) page[verdict.list].push(verdict.item);
+  else if (after.state.kind !== 'alive') page.dropped.push({ table: t.name, rowId: id });
+}
+
+/**
+ * Compte rendu du report en cours : `id` lu dans `sync_meta.epochSwitch` (reprise après arrêt : le même compte rendu est complété),
+ * `undefined` tant qu'il n'est pas créé, null si sa création a échoué (journalisé et visible). En-tête établi avant toute écriture.
+ */
+interface ReportSlot {
+  id: number | null | undefined;
+  readonly head: EpochCarryReportHead;
+  readonly progress: SwitchProgress;
+}
+
+async function reportSlot(deps: SyncDeps, progress: SwitchProgress, target: EpochId, options: SwitchOptions): Promise<ReportSlot> {
+  // Époque quittée : `sync_meta.epoch` n'est remplacée qu'à l'étape (d), dans sa transaction.
+  const from = await readJson<EpochId>(deps.data.repos, META.epoch);
+  const parsed = parseEpochId(target);
+  const head: EpochCarryReportHead = {
+    epoch: target,
+    cause: carryCause({ mode: options.mode, reset: options.reset === true, fromN: (from === null ? null : parseEpochId(from)?.n) ?? null, targetN: parsed?.n ?? 0 }),
+    reporter: deps.deviceId,
+    opener: parsed?.opener ?? progress.from.deviceId,
+    mode: options.mode,
+    createdAt: new Date(deps.clock.nowMs()).toISOString() as IsoDateTime,
+  };
+  return { id: progress.report, head, progress };
+}
+
+/**
+ * Création du compte rendu dans la transaction de la **première page** de (c), ou dans celle de l'étape (d) si rien n'est à reporter :
+ * jamais une transaction de plus. Son numéro est mémorisé dans `sync_meta.epochSwitch` dans la même transaction. Y sont copiés les items
+ * d'une notice de Y-FIX-04 qu'aucun compte rendu ne nomme encore ; les plus anciens acquittés au-delà de 20 sont supprimés. Disque plein
+ * ou erreur d'entrée-sortie : relancé (la transaction est annulée, reprise au cycle suivant) ; autre échec : le report se fait quand même,
+ * l'échec est journalisé et visible (`reportFailed`).
+ */
+async function createCarryReport(deps: SyncDeps, repos: Repositories, slot: ReportSlot, now: IsoDateTime): Promise<number | null> {
+  try {
+    const reports = await repos.carryReports();
+    const id = await reports.create({ ...slot.head, createdAt: now });
+    const earlier = noticeItemsNotReported(parseEpochCarryNotice(await repos.sync.getMeta(EPOCH_CARRY_NOTICE_META)), await reports.list(1_000));
+    if (earlier.length > 0) await reports.save(id, addNamed(EMPTY_CARRY_REPORT_BODY, { parentReplaced: earlier }), false);
+    await reports.prune(EPOCH_CARRY_REPORT_KEEP);
+    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: id } satisfies SwitchProgress);
+    return id;
+  } catch (error) {
+    if (isStorageFailure(error)) throw error;
+    await reportFailed(deps, repos, slot.head.epoch as EpochId, now, error);
+    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: null } satisfies SwitchProgress).catch(() => undefined);
+    return null;
+  }
+}
+
+/** Compteurs et listes de la page ajoutés au compte rendu (même transaction que le retrait des reports) ; null s'il n'a pas pu être écrit. */
+async function recordCarryReport(deps: SyncDeps, repos: Repositories, epoch: EpochId, now: IsoDateTime, id: number, page: PageReport, parentReplaced: readonly EpochCarryParentItem[]): Promise<number | null> {
+  try {
+    const reports = await repos.carryReports();
+    const current = await reports.get(id);
+    if (!current) throw Object.assign(new Error('compte rendu absent'), { name: 'ReportMissing' });
+    let authors = current.authors;
+    for (const count of page.counts) authors = addCarriedCount(authors, count);
+    const body: EpochCarryReportBody = addNamed({ ...current, authors }, { restored: page.restored, recreated: page.recreated, parentReplaced, dropped: page.dropped });
+    await reports.save(id, body, carryReportBanner(current.mode, body));
+    return id;
+  } catch (error) {
+    if (isStorageFailure(error)) throw error;
+    await reportFailed(deps, repos, epoch, now, error);
+    return null;
+  }
+}
+
+/**
+ * Compte rendu impossible à écrire (autre cause que le stockage) : les données passent avant leur compte rendu. Jamais muet : événement
+ * (code seulement, aucun libellé), marque persistante `sync_meta.epochCarryReportFailed` (avertissement de la phase 2) et, dès maintenant,
+ * l'indicateur de Y-FIX-04 qui lève `carry-reattached`.
+ */
+async function reportFailed(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, error: unknown): Promise<void> {
+  const raw = (error as { code?: unknown } | null)?.code;
+  const code = typeof raw === 'string' ? raw : error instanceof Error ? error.name : 'unknown';
+  deps.logger.log(EPOCH_CARRY_REPORT_FAILED_EVENT, { code });
+  markEpochCarryNoticeFailure();
+  try {
+    await repos.sync.setMeta(EPOCH_CARRY_REPORT_FAILED_META, JSON.stringify({ epoch, at, code }));
+  } catch {
+    // Journal et indicateur ci-dessus : l'échec reste visible.
+  }
 }
 
 function addTouched(touched: Map<string, Set<string>>, table: string, id: string): void {
@@ -376,6 +524,8 @@ function addTouched(touched: Map<string, Set<string>>, table: string, id: string
  */
 export interface SwitchOptions {
   readonly mode: 'replace' | 'merge';
+  /** Y-TECH-05 : changement d'époque d'une réinitialisation (Y-11), même par remplacement : cause « reset » du compte rendu. */
+  readonly reset?: boolean;
   readonly knows?: ApplyContext['knows'];
   /** Appareils oubliés (ordre total) : leurs écritures au-delà de la coupure ne sont jamais reportées par la garde générale. */
   readonly forgotten?: ReadonlySet<DeviceId>;
@@ -455,8 +605,10 @@ export async function switchEpoch(
     await advance('c');
     await testHooks.afterStep?.('b');
   }
+  const report = await reportSlot(deps, progress, target, options);
   if (progress.step === 'c') {
-    const touched = await reapply(deps, target);
+    const touched = await reapply(deps, target, options.mode, report);
+    if (report.id !== undefined) progress = { ...progress, report: report.id };
     if (touched.size > 0) onRemoteChanges(touched);
     await advance('d');
     await testHooks.afterStep?.('c');
@@ -470,6 +622,8 @@ export async function switchEpoch(
   if (!loaded) return 'error';
   const covers: ReadonlyMap<DeviceId, DeviceAck> = loaded.end.covers;
   await deps.data.transaction(async (tx) => {
+    // Y-TECH-05 : report sans aucune page (rien à reporter) : compte rendu à zéro, créé ici, dans la transaction qui termine le changement.
+    if (report.id === undefined) report.id = await createCarryReport(deps, tx, report, new Date(deps.clock.nowMs()).toISOString() as IsoDateTime);
     for (const row of await tx.sync.getStates()) {
       // §18.14 « accusés figés à l'import » (seconde revue, bloquant) : dans une réinitialisation (fusion), la position en `n` de tout
       // appareil encore en `n` est gardée ; elle ne passe à `n+1` qu'à sa première lecture dans `n+1` (jamais d'accusé « début de
