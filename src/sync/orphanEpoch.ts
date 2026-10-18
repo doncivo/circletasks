@@ -176,12 +176,13 @@ const OWN_STATE_ABSENT = 'absent';
 /**
  * Y-IOS-02-FIX-02 (critère 11), Y-FIX-02 (§30) : journal `publish-deferred` avec sa cause réelle, statuts et compteurs seulement (liste
  * fermée des statuts du scan, jamais de nom de fichier, de clé ni de chemin). `own-state-missing` : son état est connu comme absent ;
- * `first-publication-state-refused` : état refusé (ou `io`) pendant la première publication ouverte par la borne locale ;
+ * `first-publication-state-refused` : état refusé (ou `io`) pendant la première publication ouverte par la borne locale (trace `inflight`
+ * ou `local-head` ; revue M1 : un refus de l'exception `openedHere`, `source` nulle, garde `state-refused`) ;
  * `unexplained-files` : fichier que la trace locale n'explique pas. La cause nommée est jointe à `warnings`, après `publish-blocked`.
  */
 export function deferred(logger: Logger, refused: boolean, first: LocalBound | null, facts: PublishFacts, warnings: SyncStatusWarning[]): void {
   const state = facts.state ?? OWN_STATE_ABSENT;
-  const cause: PublishBlockedCause | null = refused ? (first?.covers ? 'first-publication-state-refused' : null) : first?.unexplained ? 'unexplained-files' : null;
+  const cause: PublishBlockedCause | null = refused ? (first?.covers && first.source !== null ? 'first-publication-state-refused' : null) : first?.unexplained ? 'unexplained-files' : null;
   const reason = cause ?? (refused ? 'state-refused' : state === 'missing' || state === OWN_STATE_ABSENT ? 'own-state-missing' : 'own-state-unknown');
   logger.log('publish-deferred', { reason, state, files: facts.files, ignored: facts.ignored, acks: facts.acks, localSeq: facts.localSeq, ...(first?.unexplained ? { unexplained: first.unexplained } : {}) });
   if (cause) warnings.push(cause);
