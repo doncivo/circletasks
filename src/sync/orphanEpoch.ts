@@ -1,16 +1,22 @@
-import type { EpochId } from '../domain/sync/format';
+import type { DeviceAck, EpochId } from '../domain/sync/format';
 import { hlcDevice } from '../domain/sync/parse';
 import { isCycleInterrupted } from './deadline';
 import type { DeviceScan, FolderScan } from '../platform/sync/types';
+import { localBoundCovers, type LocalBound, type LocalBoundInput } from '../domain/sync/firstPublication';
+import type { PublishBlockedCause, SyncStatusWarning } from '../domain/syncBanners';
 import type { DeviceId } from '../domain/types';
 import type { PublishedDeviceState } from '../domain/sync/format';
 import { relistedOrphanEpochs } from '../domain/sync/orphanRelist';
 import type { SyncDeps } from './deps';
 import { queueOwnRowsForRepublish } from './epochSwitch';
 import { META, readJson, writeJson } from './meta';
+import type { Inflight } from './publisher';
 import { syncErrorCodeOf, type SyncErrorCode } from '../platform/sync/types';
 
 /**
+ * Y-FIX-02 (ADR 0011 §30) : ce module porte aussi la reprise de l'état jamais écrit (exception `openedHere`, borne locale de la première
+ * publication, intention d'ajout interrompue) et le journal `publish-deferred` (fin du fichier).
+ *
  * Abandon d'une époque orpheline (ADR 0011 §24 point 4, étapes (a) à (c)). Module chargé **à la demande** par le moteur (cas rare : taille du
  * bundle de départ). Étapes idempotentes, reprises à l'étape interrompue :
  * (a) lignes remises dans la file d'envoi, traces purgées mémorisées (garde `orphan-trace-hit`), intention `orphanEpoch` ;
@@ -126,4 +132,81 @@ export async function relistOrphanEpoch(
   await writeJson(data.repos, META.orphanEpoch, { epoch: first });
   // Époque tronquée (numéro et 8 premiers caractères de l'ouvreur) : lisible dans l'export, jamais masquée comme un jeton.
   logger.log('orphan-epoch-relisted', { epoch: first.slice(0, 14) });
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Y-FIX-02 (ADR 0011 §30) : reprise de l'état jamais écrit (instantané orphelin, segment écrit sans state.ctx) et journal de la décision
+// ---------------------------------------------------------------------------------------------------------------------------------
+
+/*
+ * Chemins rares de la décision de publier, demandés par le moteur seulement quand la règle actuelle refuse de publier (`bound`,
+ * `deferred`) ou qu'une intention d'ajout existe et que la publication est permise (`resolveInflight`). Ici plutôt que dans un bloc nouveau (bundle de départ, mesures de
+ * Y-FIX-02) : un bloc nouveau qui importe `meta.ts` ou `epoch.ts` les sort de leur bloc de départ (+4 945 et +4 016 octets), et chaque bloc
+ * nouveau ajoute son nom haché au départ ; la règle pure `localBoundCovers` n'importe que des types.
+ */
+
+/** Constats de la décision, construits une fois par le moteur (codes et compteurs seulement). */
+export interface PublishFacts extends LocalBoundInput {
+  /** Y-IOS-02 (`openedHere`) : époque ouverte ici dont l'état n'a jamais été écrit (instantané orphelin, preuve `isOrphanEpoch`). */
+  readonly opened: boolean;
+  readonly state: DeviceScan['stateStatus'] | undefined;
+  readonly ignored: number;
+  readonly acks: number;
+}
+
+type Logger = SyncDeps['logger'];
+
+/**
+ * Y-IOS-02 (`openedHere`, journal `own-state-recovered { epoch }`) puis Y-FIX-02 : borne locale (règle pure `localBoundCovers`) ; ouverte :
+ * journal `own-state-recovered { epoch, source }`. `openedHere` implique son instantané compté : `canPublish` seul l'a refusé, c'est une reprise.
+ */
+// Contre-revue S3 : `source` n'est rendue que pour une borne ouverte (fermée : null), si bien que le moteur ne résout une intention par la
+// borne que si `source === 'inflight'` (trace de l'époque courante), et ne nomme la cause d'un refus que si `source` n'est pas nulle.
+export function bound(logger: Logger, facts: PublishFacts): LocalBound {
+  if (facts.opened) {
+    logger.log('own-state-recovered', { epoch: facts.currentEpoch });
+    return { covers: true, source: null, unexplained: 0 };
+  }
+  const bound = localBoundCovers(facts);
+  if (!bound.covers) return { ...bound, source: null };
+  logger.log('own-state-recovered', { epoch: facts.currentEpoch, source: bound.source });
+  return bound;
+}
+
+/** Y-IOS-02-FIX-02 : statut de son état propre dans `publish-deferred` quand son dossier n'apparaît pas au scan (liste fermée). */
+const OWN_STATE_ABSENT = 'absent';
+
+/**
+ * Y-IOS-02-FIX-02 (critère 11), Y-FIX-02 (§30) : journal `publish-deferred` avec sa cause réelle, statuts et compteurs seulement (liste
+ * fermée des statuts du scan, jamais de nom de fichier, de clé ni de chemin). `own-state-missing` : son état est connu comme absent ;
+ * `first-publication-state-refused` : état refusé (ou `io`) pendant la première publication ouverte par la borne locale (trace `inflight`
+ * ou `local-head` ; revue M1 : un refus de l'exception `openedHere`, `source` nulle, garde `state-refused`) ;
+ * `unexplained-files` : fichier que la trace locale n'explique pas. La cause nommée est jointe à `warnings`, après `publish-blocked`.
+ */
+export function deferred(logger: Logger, refused: boolean, first: LocalBound | null, facts: PublishFacts, warnings: SyncStatusWarning[]): void {
+  const state = facts.state ?? OWN_STATE_ABSENT;
+  const cause: PublishBlockedCause | null = refused ? (first?.covers && first.source !== null ? 'first-publication-state-refused' : null) : first?.unexplained ? 'unexplained-files' : null;
+  const reason = cause ?? (refused ? 'state-refused' : state === 'missing' || state === OWN_STATE_ABSENT ? 'own-state-missing' : 'own-state-unknown');
+  logger.log('publish-deferred', { reason, state, files: facts.files, ignored: facts.ignored, acks: facts.acks, localSeq: facts.localSeq, ...(first?.unexplained ? { unexplained: first.unexplained } : {}) });
+  if (cause) warnings.push(cause);
+}
+
+/**
+ * Résout une intention d'ajout interrompue (arrêt entre l'ajout et le retrait de la file) : hypothèse « ajout réussi » d'abord. Y-FIX-02
+ * (§30, revue B1) : appelée seulement si la publication est permise (sinon l'intention reste posée) ; Rust juge la tête. Acceptée : file retirée, `META.head` posé ;
+ * refusée (`state-mismatch`, hypothèse « ajout manqué ») : file gardée, la publication reprend par l'existant ; `inflight` remis à nul dans
+ * les deux cas. Une erreur (`io`) remonte avant la transaction : `inflight` est gardé pour le cycle suivant. Chemin rare (arrêt brutal) :
+ * dans ce bloc à la demande depuis Y-FIX-02 (bundle de départ).
+ */
+export async function resolveInflight(deps: SyncDeps, inflight: Inflight, writeOwnState: (head: DeviceAck) => Promise<boolean>): Promise<void> {
+  const head: DeviceAck = { epoch: inflight.epoch, segment: inflight.segment, record: inflight.expect + inflight.count, hlc: inflight.maxHlc, stateSeq: 0 };
+  const ok = await writeOwnState(head);
+  await deps.data.transaction(async (repos) => {
+    if (ok) {
+      await repos.sync.clearPublished(inflight.entries);
+      await writeJson(repos, META.head, head);
+    }
+    await writeJson(repos, META.inflight, null);
+  });
+  deps.logger.log('inflight-resolved', { appended: ok });
 }
