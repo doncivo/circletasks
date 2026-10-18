@@ -192,6 +192,13 @@ const emptyDir = (): DeviceDir => ({ state: null, nextState: null, epochs: new M
 /** Taille arbitraire d'une ligne incomplète simulée. */
 const PARTIAL_TAIL_BYTES = 100;
 
+/**
+ * Y-IOS-05 (B6, ADR 0011 §32) : échéance d'un appel muet, en tours de micro-tâche (un compteur, jamais une durée) ; à l'échéance l'appel
+ * encore en suspens est rejeté `cloud-pending`, comme le transport borné de l'iPhone (Rust, 20 s). Entre 50 (attente des tests du
+ * mécanisme) et 500 (`CALL_DEADLINE_TURNS` du scénario 5, qui laisse au cycle le temps de se terminer).
+ */
+export const MUTE_DEADLINE_TURNS = 100;
+
 const cloneFile = (file: MemFile): MemFile => ({ ...file, lines: file.lines.map((line) => ({ ...line })) });
 
 /**
@@ -220,7 +227,7 @@ export class MemorySyncFolder {
   private faultCounters: FaultCounters | null = null;
   /** Suppressions acceptées mais non propagées, rendues après `left` appels de `advanceCycle()`. */
   private readonly resurrections: { readonly deviceId: string; readonly file: string; readonly copy: MemFile; left: number }[] = [];
-  /** Appels muets en suspens (promesse jamais résolue tant que le test ne la libère pas). */
+  /** Appels muets en suspens : libérés par le test (`releaseMuted`) ou rejetés `cloud-pending` après `MUTE_DEADLINE_TURNS` tours. */
   private readonly muted: MutedCall[] = [];
   /** Panne muette déclenchée pendant l'appel en cours (lue par l'enveloppe des appels de lecture, même si l'erreur a été avalée). */
   private muteHit: FaultEntry | null = null;
@@ -451,7 +458,16 @@ export class MemorySyncFolder {
    */
   suspend<T>(entry: FaultEntry, call: string, rerun: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-      this.muted.push({ id: entry.id, call, rerun: () => void rerun().then(resolve, reject), fail: (code) => reject(new SyncPlatformError(code)) });
+      const muted: MutedCall = { id: entry.id, call, rerun: () => void rerun().then(resolve, reject), fail: (code) => reject(new SyncPlatformError(code)) };
+      this.muted.push(muted);
+      // Y-IOS-05 (B6) : échéance du transport COMPTÉE en tours de micro-tâche, jamais chronométrée ; encore en suspens : cloud-pending.
+      void (async () => {
+        for (let turn = 0; turn < MUTE_DEADLINE_TURNS; turn += 1) await Promise.resolve();
+        const index = this.muted.indexOf(muted);
+        if (index < 0) return;
+        this.muted.splice(index, 1);
+        muted.fail('cloud-pending');
+      })();
     });
   }
 
@@ -1010,8 +1026,9 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
     return file.availability === 'local';
   };
   /**
-   * Y-TECH-03 : appel de lecture enveloppé : une panne muette armée le met en suspens (promesse jamais résolue tant que le test ne la libère
-   * pas par `MemorySyncFolder.releaseMuted`), même si le signal a été avalé en chemin. Sans plan armé : l'appel tel quel.
+   * Y-TECH-03 : appel de lecture enveloppé : une panne muette armée le met en suspens, même si le signal a été avalé en chemin ; le test le
+   * libère par `MemorySyncFolder.releaseMuted`, sinon il est rejeté `cloud-pending` après `MUTE_DEADLINE_TURNS` tours de micro-tâche
+   * (échéance comptée, Y-IOS-05). Sans plan armé : l'appel tel quel.
    */
   const muteable =
     <A, R>(call: string, run: (arg: A) => Promise<R>) =>

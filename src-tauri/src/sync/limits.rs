@@ -91,3 +91,11 @@ pub const MAX_SCAN_ENTRIES_TOTAL: usize = 50_000;
 pub const MAX_EPOCHS_PER_DEVICE: usize = 64;
 /// `state.ctx` d'appareils non protégés lus au plus par opération (candidats au plafond de 16 dossiers, import, reconstruction).
 pub const MAX_STATE_CANDIDATES: usize = 64;
+
+/// Y-IOS-05 (B6, ADR 0011 §32) : échéance d'un appel de fichier au plugin folder-bookmark (Rust, seconde ligne derrière la garde de
+/// coordination de 15 s du Swift) ; tient dans la borne de 25 s du cycle en arrière-plan (§22 point 6). Au-delà : `cloud-pending`.
+pub const BOOKMARK_CALL_DEADLINE_MS: u64 = 20_000;
+/// `download` : `timeoutMs` de l'appel plus cette marge (le plugin rend lui-même `cloud-pending` à `timeoutMs`).
+pub const BOOKMARK_DOWNLOAD_MARGIN_MS: u64 = 5_000;
+/// Places par file de Swift (fichiers, fil principal) : appels en vol ou abandonnés à l'échéance tolérés à la fois (fil bloqué jusqu'à la réponse de Swift) ; sans place libre, `cloud-pending` sans envoi (après attente bornée par l'échéance si la place est tenue par un appel en vol).
+pub const BOOKMARK_MAX_ABANDONED_CALLS: usize = 1;

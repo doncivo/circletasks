@@ -1,9 +1,10 @@
 // Y-TECH-03 (B13 de docs/audit-1.0.md), critères 2, 4 à 9 et 11 : `MemorySyncFolder` armé d'un plan de pannes, vu par `SyncPlatform`
 // (mêmes traductions que store.rs). Horloge injectée, rangs d'appel et cycles comptés : aucune attente réelle.
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { DeviceId, Hlc } from '../../domain/types';
 import { epochId, type DeviceAck, type PublishedDeviceState } from '../../domain/sync/format';
-import { createMemorySyncPlatform, MemorySyncFolder, type MemorySyncPlatform } from './memory';
+import { createMemorySyncPlatform, MemorySyncFolder, MUTE_DEADLINE_TURNS, type MemorySyncPlatform } from './memory';
 
 const A = '0f8fad5b-d9cb-469f-a165-70867728950e' as DeviceId;
 const B = '7c9e6679-7425-40de-944b-e07fc1f90ae7' as DeviceId;
@@ -279,6 +280,48 @@ describe('Y-TECH-03 : panne muette (scénario 5, mécanisme)', () => {
     expect(folder.releaseMuted('mute-read', 'cloud-pending')).toBe(true);
     await expect(call.result).rejects.toMatchObject({ code: 'cloud-pending' });
     expect(folder.releaseMuted('mute-read', 'complete')).toBe(false);
+  });
+});
+
+describe('Y-IOS-05 (B6) : échéance comptée du faux (critères 2 et 4)', () => {
+  it('critère 4 : tout appel enveloppé encore en suspens à MUTE_DEADLINE_TURNS tours est rejeté cloud-pending, puis rien n’attend', async () => {
+    const { folder, b } = await twoDevices();
+    folder.armFaults(plan([
+      { id: 'mute-read', op: 'read', file: at(SEGMENT), nth: 1, effect: 'mute' },
+      { id: 'mute-snapshot', op: 'read', file: at(S2), nth: 1, effect: 'mute' },
+      // Le listage d'époque (`listGate`) n'est traversé que par `scan` : troisième appel enveloppé.
+      { id: 'mute-epoch', op: 'list', file: `${at(E1)}/`, nth: 1, effect: 'mute' },
+    ]));
+    // Un appel après l'autre (le faux n'attribue la panne muette qu'à l'appel en cours).
+    const calls: [string, () => Promise<unknown>][] = [
+      ['mute-read', () => journal(b)],
+      ['mute-snapshot', () => b.readSnapshot({ deviceId: A, epoch: E1, seq: 2, fromRecord: 0, tail: true })],
+      ['mute-epoch', () => b.scan({ keep: [] })],
+    ];
+    for (const [id, run] of calls) {
+      const call = watch(run());
+      const outcome = call.result.then(() => 'résolu', (error: unknown) => (error as { code?: string }).code);
+      await turns(MUTE_DEADLINE_TURNS - 10);
+      expect(call.settled(), id).toBe(false);
+      expect(folder.mutedCalls().map((m) => m.id)).toEqual([id]);
+      await turns(MUTE_DEADLINE_TURNS);
+      expect(await outcome, id).toBe('cloud-pending');
+      expect(folder.mutedCalls()).toEqual([]);
+    }
+    for (const id of ['mute-read', 'mute-snapshot', 'mute-epoch']) expect(folder.releaseMuted(id, 'complete'), id).toBe(false);
+  });
+
+  it('critère 2 : l’échéance est un compteur exporté (entier, 50 < n < 500), memory.ts n’ajoute ni minuterie ni horloge réelle', () => {
+    expect(Number.isInteger(MUTE_DEADLINE_TURNS)).toBe(true);
+    expect(MUTE_DEADLINE_TURNS).toBeGreaterThan(50);
+    expect(MUTE_DEADLINE_TURNS).toBeLessThan(500);
+    const source = readFileSync(new URL('./memory.ts', import.meta.url), 'utf8');
+    // Présents avant la story (horloge par défaut du faux, ligne 961 ; date d'un échec d'import, ligne 2665) : comptes figés, rien d'ajouté.
+    const baseline: Record<string, number> = { setTimeout: 0, setInterval: 0, 'Date.now': 1, 'performance.now': 0, 'new Date': 1 };
+    for (const [token, count] of Object.entries(baseline)) expect(source.split(token).length - 1, token).toBe(count);
+    const suspend = source.slice(source.indexOf('  suspend<T>('), source.indexOf('  mutedCalls(): '));
+    expect(suspend).toContain('MUTE_DEADLINE_TURNS');
+    for (const token of Object.keys(baseline)) expect(suspend.includes(token), token).toBe(false);
   });
 });
 
