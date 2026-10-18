@@ -10,7 +10,7 @@ import { migrations } from '../../src/db/migrations';
 /**
  * SEC-01 critère 11 : fichier de référence des instructions SQL que le front envoie réellement au plugin SQL pour ouvrir la base
  * (table de suivi, toutes les migrations, tables, index, déclencheurs, table virtuelle fts5). Le test Rust
- * `src-tauri/tests/desktop/sql_closed.rs` les rejoue sur un pool avec l'autorisateur actif : un refus de l'une d'elles (nouvelle
+ * `src-tauri/vendor/tauri-plugin-sql/src/guard_tests.rs` les rejoue sur un pool avec l'autorisateur actif : un refus de l'une d'elles (nouvelle
  * migration utilisant un pragma, une fonction ou un module refusés) fait échouer la CI. Le fichier est GÉNÉRÉ, jamais écrit à la main :
  * ce test échoue s'il est périmé ; `CT_UPDATE_SQL_REFERENCE=1 npx vitest run tests/unit/sqlFrontReference.test.ts` le régénère.
  */
