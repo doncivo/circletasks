@@ -497,7 +497,7 @@ async function createCarryReport(deps: SyncDeps, repos: Repositories, slot: Repo
 
 /**
  * Retire un compte rendu qui n'a pu être complété. `onlyEmpty` : seulement s'il ne contient encore rien (une page suivante en échec garde
- * ce que les pages précédentes y ont écrit). Un retrait impossible est journalisé : l'échec du compte rendu reste visible par sa marque.
+ * ce que les pages précédentes y ont écrit). Un retrait impossible est journalisé (stockage plein ou erreur d'entrée-sortie : relancé) : l'échec du compte rendu reste visible par sa marque.
  */
 async function discardReport(deps: SyncDeps, repos: Repositories, id: number, onlyEmpty: boolean): Promise<void> {
   try {
@@ -508,6 +508,8 @@ async function discardReport(deps: SyncDeps, repos: Repositories, id: number, on
     }
     await reports.remove(id);
   } catch (error) {
+    // Contre-revue 6 (b) : disque plein ou erreur d'entrée-sortie relancé (page annulée, reprise au cycle suivant), comme partout ailleurs.
+    if (isStorageFailure(error)) throw error;
     deps.logger.log(EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT, { code: errorCode(error) });
   }
 }

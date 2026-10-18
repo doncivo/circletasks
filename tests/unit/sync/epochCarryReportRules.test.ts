@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { DbError } from '../../../src/db/driver';
-import { EPOCH_CARRY_REPORT_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT, type EpochCarryReport } from '../../../src/domain/sync/epochCarryReport';
+import { EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT, type EpochCarryReport } from '../../../src/domain/sync/epochCarryReport';
 import { EPOCH_CARRY_REPORT_READ_FAILED_EVENT } from '../../../src/domain/sync/epochCarryReportView';
 import { syncTable } from '../../../src/domain/sync/syncTables';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
@@ -324,6 +324,34 @@ describe('Y-TECH-05 : échec d’écriture du compte rendu (critère 14)', () =>
     expect(report?.authors).toEqual([{ device: B_ID, fields: TASK_COLUMNS, rows: 1, tombs: 0, late: 0 }]);
     expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT).map((e) => e.detail)).toEqual([{ code: 'ReportRefused' }]);
     expect(await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)).toBeNull();
+  });
+
+  // Contre-revue 6 (a) : UPDATE et DELETE refusés ensemble : la ligne créée ne peut être retirée ; l'échec de retrait est journalisé et la marque d'échec posée.
+  it('contre-revue 6 (a) : UPDATE et DELETE refusés ensemble : retrait impossible journalisé, marque d’échec posée, données reportées', async () => {
+    const expectedTasks = await referenceTasks();
+    const [a, b] = await replacedParent(1);
+    failReportWrites(b, refused, new RegExp(`${ONLY_UPDATE.source}|${ONLY_DELETE.source}`, 'i'));
+    await rounds(devices);
+    expect((await rowsOf(a, 'task')).map((row) => ({ ...(row as object), hlc: null }))).toEqual(expectedTasks);
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT).map((e) => e.detail)).toEqual([{ code: 'ReportRefused' }]);
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_FAILED_EVENT).map((e) => e.detail)).toEqual([{ code: 'ReportRefused' }]);
+    expect(JSON.parse((await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)) ?? 'null')).toMatchObject({ code: 'ReportRefused' });
+    expect((await b.cycle()).warnings ?? []).toContain('carry-report');
+  });
+
+  // Contre-revue 6 (b) : le retrait de la ligne échoue par stockage plein : relancé (la page est annulée entière, reprise au cycle suivant), jamais avalé.
+  it('contre-revue 6 (b) : retrait de la ligne en stockage plein : relancé, page annulée, reprise au cycle suivant, compte rendu complet', async () => {
+    const [, b] = await replacedParent(1);
+    failReportWrites(b, refused, ONLY_UPDATE);
+    const full = 'SQLITE_FULL: database or disk is full';
+    const disarmDelete = failReportWrites(b, () => new DbError('unknown', full, { cause: new Error(full) }), ONLY_DELETE);
+    await b.cycle();
+    expect(await b.data.repos.sync.parkedCount(['epoch-carry'])).toBeGreaterThan(0);
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT)).toEqual([]);
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_FAILED_EVENT)).toEqual([]);
+    disarmDelete();
+    await rounds(devices);
+    expect(await b.data.repos.sync.parkedCount(['epoch-carry'])).toBe(0);
   });
 
   it.each([
