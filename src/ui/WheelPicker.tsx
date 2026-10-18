@@ -103,7 +103,7 @@ export function WheelPicker({ label, items, index, onChange, disabled = false, p
     }
     if (!positioned.current) {
       positioned.current = true;
-      // L'image qui suit le montage précède son premier affichage ; un défilement du doigt avant elle (impossible sans affichage) l'emporte.
+      // L'image qui suit le montage précède son premier affichage ; un défilement du doigt posé avant elle l'emporte ; un `scroll` sans doigt avant elle (calage scroll-snap de WebKit) est ignoré.
       frame.current = window.requestAnimationFrame(() => {
         frame.current = null;
         if (!userScrolled.current) position();

@@ -59,14 +59,26 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
-    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
-    fireEvent.pointerDown(viewport);
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
-    fireEvent.pointerUp(viewport);
     expect(onChange).not.toHaveBeenCalled(); // attend la fin du défilement
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+  });
+
+  it('après la première image, un défilement sans doigt (élan iOS après pointercancel) est un geste : choix posé, scrollTop non recalé', () => {
+    const onChange = vi.fn();
+    render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
+    const viewport = screen.getByText('01').parentElement as HTMLElement;
+    act(() => void vi.advanceTimersByTime(16));
+    fireEvent.pointerCancel(viewport);
+    viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
+    fireEvent.scroll(viewport);
+    act(() => void vi.advanceTimersByTime(120));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
+    expect(viewport.scrollTop).toBe(WHEEL_ITEM_HEIGHT * 2 + 5);
   });
 
   it('grisée : ni clavier, ni toucher, ni défilement, annoncée désactivée', () => {
@@ -97,11 +109,10 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
-    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
-    fireEvent.pointerDown(viewport);
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
-    fireEvent.pointerUp(viewport);
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
     rerender(<WheelPicker label="Heures" items={items} index={2} onChange={onChange} />);
@@ -115,11 +126,10 @@ describe('WheelPicker (T-14, critère 6)', () => {
     const onChange = vi.fn();
     const { rerender } = render(<WheelPicker label="Heures" items={items} index={0} onChange={onChange} />);
     const viewport = screen.getByText('01').parentElement as HTMLElement;
-    // Le doigt pose la roue : un défilement avant la première image n'est un geste que s'il y a un doigt (T-14-FIX-02).
-    fireEvent.pointerDown(viewport);
+    // Première image écoulée ; le défilement natif (élan iOS après pointercancel) arrive sans pointerdown : c'est un geste (T-14-FIX-02).
+    act(() => void vi.advanceTimersByTime(16));
     viewport.scrollTop = WHEEL_ITEM_HEIGHT * 2 + 5;
     fireEvent.scroll(viewport);
-    fireEvent.pointerUp(viewport);
     act(() => void vi.advanceTimersByTime(120));
     expect(onChange).toHaveBeenCalledExactlyOnceWith(2);
     rerender(<WheelPicker label="Heures" items={items} index={1} onChange={onChange} />);
