@@ -28,6 +28,12 @@ export { CARRY_REPORT_TABLES, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT
 export const EPOCH_CARRY_REPORT_MAX_NAMED = 500;
 /** Événement du journal technique en cas d'échec d'écriture (code d'erreur seulement, jamais un libellé). */
 export const EPOCH_CARRY_REPORT_FAILED_EVENT = 'epoch-carry-report-failed';
+/** Journal technique (code d'erreur seulement) : élagage des anciens comptes rendus impossible (le compte rendu du report reste complet). */
+export const EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT = 'epoch-carry-report-prune-failed';
+/** Journal technique : retrait d'un compte rendu non complété impossible (l'échec du compte rendu reste visible par sa marque). */
+export const EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT = 'epoch-carry-report-discard-failed';
+/** Journal technique : mémorisation de « pas de compte rendu » dans l'avancement du changement d'époque impossible (le report continue). */
+export const EPOCH_CARRY_REPORT_PROGRESS_FAILED_EVENT = 'epoch-carry-report-progress-failed';
 
 /**
  * Auteur des lignes de l'amorce (espaces Pro et Perso, identiques sur chaque appareil : `SEED_DEVICE_ID` de `src/db/seed`, égalité testée) :

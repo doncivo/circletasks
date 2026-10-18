@@ -95,6 +95,9 @@ export function createEpochCarryReportRepository(db: SqlExecutor): EpochCarryRep
     async acknowledge(id, at) {
       return (await db.execute('UPDATE epoch_carry_report SET acknowledged_at = ? WHERE id = ? AND acknowledged_at IS NULL', [at, id])).rowsAffected > 0;
     },
+    async remove(id) {
+      await db.execute('DELETE FROM epoch_carry_report WHERE id = ?', [id]);
+    },
     async prune(keep) {
       return (await db.execute('DELETE FROM epoch_carry_report WHERE acknowledged_at IS NOT NULL AND id NOT IN (SELECT id FROM epoch_carry_report ORDER BY id DESC LIMIT ?)', [keep])).rowsAffected;
     },

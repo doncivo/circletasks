@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { DbError } from '../../../src/db/driver';
-import { EPOCH_CARRY_REPORT_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_META, type EpochCarryReport } from '../../../src/domain/sync/epochCarryReport';
+import { EPOCH_CARRY_REPORT_FAILED_EVENT, EPOCH_CARRY_REPORT_FAILED_META, EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT, type EpochCarryReport } from '../../../src/domain/sync/epochCarryReport';
 import { syncTable } from '../../../src/domain/sync/syncTables';
 import type { DeviceId, IsoDateTime } from '../../../src/domain/types';
 import { clearEpochCarryNoticeFailure } from '../../../src/sync/carryNoticeState';
@@ -228,13 +228,13 @@ describe('Y-TECH-05 : reprise après arrêt brutal (critère 6)', () => {
 
 describe('Y-TECH-05 : échec d’écriture du compte rendu (critère 14)', () => {
   /** Toute écriture dans `epoch_carry_report` sur B échoue par `refuse()` tant que `armed` est vrai. */
-  function failReportWrites(b: SimDevice, refuse: () => Error): () => void {
+  function failReportWrites(b: SimDevice, refuse: () => Error, only: RegExp = /epoch_carry_report/i): () => void {
     let armed = true;
     type Exec = { execute: (sql: string, params?: readonly unknown[]) => Promise<unknown> };
     const failing = (target: Exec): Exec => {
       const execute = target.execute.bind(target);
       return new Proxy(target, {
-        get: (obj, key) => (key === 'execute' ? (sql: string, params?: readonly unknown[]) => (armed && /epoch_carry_report/i.test(sql) ? Promise.reject(refuse()) : execute(sql, params)) : (Reflect.get(obj, key) as unknown)),
+        get: (obj, key) => (key === 'execute' ? (sql: string, params?: readonly unknown[]) => (armed && only.test(sql) ? Promise.reject(refuse()) : execute(sql, params)) : (Reflect.get(obj, key) as unknown)),
       });
     };
     const driver = b.driver as unknown as Exec & { transaction: (fn: (tx: Exec) => Promise<unknown>) => Promise<unknown> };
@@ -266,6 +266,45 @@ describe('Y-TECH-05 : échec d’écriture du compte rendu (critère 14)', () =>
     expect(JSON.parse((await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)) ?? 'null')).toMatchObject({ code: 'ReportRefused', epoch: expect.stringMatching(/^e0002-/) as string });
     expect((await b.cycle()).warnings ?? []).toContain('carry-report');
     expect(await b.driver.select('SELECT id FROM epoch_carry_report')).toEqual([]);
+  });
+
+  // Revue I1 : seule une étape APRÈS la création de la ligne échoue (UPDATE ou DELETE refusé, jamais l'INSERT) : aucune ligne orpheline
+  // (compteurs à zéro, non acquittée, jamais élaguée, « Non vu » avec « Aucune écriture à reporter »).
+  const refused = () => Object.assign(new Error('compte rendu refusé'), { name: 'ReportRefused' });
+  const ONLY_UPDATE = /^\s*UPDATE\s+epoch_carry_report/i;
+  const ONLY_DELETE = /^\s*DELETE\s+FROM\s+epoch_carry_report/i;
+
+  it('revue I1 : UPDATE refusé (écriture des compteurs de la première page) : la ligne créée est retirée, échec visible, données reportées', async () => {
+    const expectedTasks = await referenceTasks();
+    const [a, b] = await replacedParent(1);
+    failReportWrites(b, refused, ONLY_UPDATE);
+    await rounds(devices);
+    expect((await rowsOf(a, 'task')).map((row) => ({ ...(row as object), hlc: null }))).toEqual(expectedTasks);
+    expect(await b.driver.select('SELECT id FROM epoch_carry_report')).toEqual([]);
+    expect(JSON.parse((await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)) ?? 'null')).toMatchObject({ code: 'ReportRefused' });
+    expect((await b.cycle()).warnings ?? []).toContain('carry-report');
+  });
+
+  it('revue I1 : UPDATE refusé à la copie d’une notice antérieure (étape de création) : la ligne créée est retirée aussi', async () => {
+    const [, b] = await replacedParent(1);
+    const old = { table: 'task', rowId: '99999999-0000-4000-8000-000000000000', column: 'project_id', parentId: 'p-ancien', space: 'pro', label: 'Ancienne', hlc: `000000000000001-0000-${B_ID}` };
+    await b.data.repos.sync.setMeta('epochCarryNotice', JSON.stringify({ v: 1, epoch: 'e0001-x', at: 'x', reattached: [old], held: [], overflow: 0 }));
+    failReportWrites(b, refused, ONLY_UPDATE);
+    await rounds(devices);
+    expect(await b.driver.select('SELECT id FROM epoch_carry_report')).toEqual([]);
+    expect(JSON.parse((await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)) ?? 'null')).toMatchObject({ code: 'ReportRefused' });
+  });
+
+  it('revue I1 : DELETE refusé (élagage) : le compte rendu reste complet et rattaché à la suite du report, l’échec d’élagage est journalisé', async () => {
+    const [, b] = await replacedParent(1);
+    failReportWrites(b, refused, ONLY_DELETE);
+    await rounds(devices);
+    const [report] = await reportsOf(b);
+    expect(await b.driver.select('SELECT id FROM epoch_carry_report')).toHaveLength(1);
+    expect(report?.recreated.map((i) => i.label)).toEqual(['Tâche 0']);
+    expect(report?.authors).toEqual([{ device: B_ID, fields: TASK_COLUMNS, rows: 1, tombs: 0, late: 0 }]);
+    expect(b.logger.entries.filter((e) => e.event === EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT).map((e) => e.detail)).toEqual([{ code: 'ReportRefused' }]);
+    expect(await b.data.repos.sync.getMeta(EPOCH_CARRY_REPORT_FAILED_META)).toBeNull();
   });
 
   it.each([

@@ -7,15 +7,19 @@ import { coversForgotten } from '../domain/sync/retention';
 import { EPOCH_CARRY_HELD_EVENT, EPOCH_CARRY_NOTICE_META, EPOCH_CARRY_REATTACHED_EVENT, addToEpochCarryNotice, carryLabel, carryParentVerdict, countByLink, parseEpochCarryNotice, type EpochCarryNoticeItem } from '../domain/sync/epochCarryNotice';
 import {
   EMPTY_CARRY_REPORT_BODY,
+  EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT,
   EPOCH_CARRY_REPORT_FAILED_EVENT,
   EPOCH_CARRY_REPORT_FAILED_META,
   EPOCH_CARRY_REPORT_KEEP,
+  EPOCH_CARRY_REPORT_PROGRESS_FAILED_EVENT,
+  EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT,
   addCarriedCount,
   addNamed,
   carryCause,
   carryReportBanner,
   carryReportLabel,
   classifyCarriedRow,
+  namedCount,
   noticeItemsNotReported,
   parentItemsOf,
   type CarriedOpCount,
@@ -463,19 +467,48 @@ async function reportSlot(deps: SyncDeps, progress: SwitchProgress, target: Epoc
  * l'échec est journalisé et visible (`reportFailed`).
  */
 async function createCarryReport(deps: SyncDeps, repos: Repositories, slot: ReportSlot, now: IsoDateTime): Promise<number | null> {
+  let created: number | null = null;
   try {
     const reports = await repos.carryReports();
-    const id = await reports.create({ ...slot.head, createdAt: now });
+    created = await reports.create({ ...slot.head, createdAt: now });
     const earlier = noticeItemsNotReported(parseEpochCarryNotice(await repos.sync.getMeta(EPOCH_CARRY_NOTICE_META)), await reports.list(1_000));
-    if (earlier.length > 0) await reports.save(id, addNamed(EMPTY_CARRY_REPORT_BODY, { parentReplaced: earlier }), false);
-    await reports.prune(EPOCH_CARRY_REPORT_KEEP);
-    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: id } satisfies SwitchProgress);
-    return id;
+    if (earlier.length > 0) await reports.save(created, addNamed(EMPTY_CARRY_REPORT_BODY, { parentReplaced: earlier }), false);
+    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: created } satisfies SwitchProgress);
   } catch (error) {
     if (isStorageFailure(error)) throw error;
+    // Revue I1 : la ligne créée ne sera jamais complétée ni rattachée : retirée (sinon « Non vu » et « Aucune écriture à reporter », jamais élaguée).
+    if (created !== null) await discardReport(deps, repos, created, false);
     await reportFailed(deps, repos, slot.head.epoch as EpochId, now, error);
-    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: null } satisfies SwitchProgress).catch(() => undefined);
+    await writeJson(repos, META.epochSwitch, { ...slot.progress, step: 'c', report: null } satisfies SwitchProgress).catch((writeError: unknown) => {
+      // Le report continue sans compte rendu : l'échec reste visible par la marque ci-dessus ; celui-ci s'ajoute au journal.
+      deps.logger.log(EPOCH_CARRY_REPORT_PROGRESS_FAILED_EVENT, { code: errorCode(writeError) });
+    });
     return null;
+  }
+  // Élagage des plus anciens acquittés : ménage, jamais une raison de perdre le compte rendu (échec journalisé, stockage plein relancé).
+  try {
+    await (await repos.carryReports()).prune(EPOCH_CARRY_REPORT_KEEP);
+  } catch (error) {
+    if (isStorageFailure(error)) throw error;
+    deps.logger.log(EPOCH_CARRY_REPORT_PRUNE_FAILED_EVENT, { code: errorCode(error) });
+  }
+  return created;
+}
+
+/**
+ * Retire un compte rendu qui n'a pu être complété. `onlyEmpty` : seulement s'il ne contient encore rien (une page suivante en échec garde
+ * ce que les pages précédentes y ont écrit). Un retrait impossible est journalisé : l'échec du compte rendu reste visible par sa marque.
+ */
+async function discardReport(deps: SyncDeps, repos: Repositories, id: number, onlyEmpty: boolean): Promise<void> {
+  try {
+    const reports = await repos.carryReports();
+    if (onlyEmpty) {
+      const current = await reports.get(id);
+      if (!current || current.authors.length > 0 || namedCount(current) > 0) return;
+    }
+    await reports.remove(id);
+  } catch (error) {
+    deps.logger.log(EPOCH_CARRY_REPORT_DISCARD_FAILED_EVENT, { code: errorCode(error) });
   }
 }
 
@@ -493,6 +526,8 @@ async function recordCarryReport(deps: SyncDeps, repos: Repositories, epoch: Epo
   } catch (error) {
     if (isStorageFailure(error)) throw error;
     await reportFailed(deps, repos, epoch, now, error);
+    // Revue I1 : première page en échec, la ligne vient d'être créée et est vide : retirée (une ligne déjà remplie par une page précédente reste).
+    await discardReport(deps, repos, id, true);
     return null;
   }
 }
@@ -502,9 +537,14 @@ async function recordCarryReport(deps: SyncDeps, repos: Repositories, epoch: Epo
  * (code seulement, aucun libellé), marque persistante `sync_meta.epochCarryReportFailed` (avertissement de la phase 2) et, dès maintenant,
  * l'indicateur de Y-FIX-04 (`carryNoticeState.ts`) qui lève `carry-report`.
  */
-async function reportFailed(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, error: unknown): Promise<void> {
+/** Code d'une erreur (jamais un libellé) : `code` de l'erreur, sinon son nom. */
+function errorCode(error: unknown): string {
   const raw = (error as { code?: unknown } | null)?.code;
-  const code = typeof raw === 'string' ? raw : error instanceof Error ? error.name : 'unknown';
+  return typeof raw === 'string' ? raw : error instanceof Error ? error.name : 'unknown';
+}
+
+async function reportFailed(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, error: unknown): Promise<void> {
+  const code = errorCode(error);
   deps.logger.log(EPOCH_CARRY_REPORT_FAILED_EVENT, { code });
   markEpochCarryNoticeFailure();
   try {

@@ -18,6 +18,8 @@ export interface EpochCarryReportRepository {
   unacknowledged(): Promise<EpochCarryReport[]>;
   /** « J'ai vu » : `acknowledged_at = at` si le compte rendu n'était pas acquitté ; vrai s'il l'a été par cet appel. */
   acknowledge(id: number, at: IsoDateTime): Promise<boolean>;
+  /** Retire un compte rendu (celui qui vient d'être créé et n'a pu être complété : jamais une ligne vide orpheline). */
+  remove(id: number): Promise<void>;
   /** Supprime les comptes rendus **acquittés** hors des `keep` plus récents ; un non acquitté n'est jamais supprimé. Renvoie le nombre supprimé. */
   prune(keep: number): Promise<number>;
 }
