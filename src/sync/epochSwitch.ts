@@ -239,9 +239,11 @@ async function carryNewer(deps: SyncDeps, repos: Repositories): Promise<void> {
 const maxOwn = (op: CarriedOp): Hlc => op.own.map((name) => (op.f[name] as SyncField)[1]).reduce((a, b) => (b > a ? b : a));
 
 /**
- * Y-FIX-04 (§28) : notice locale complétée dans la transaction de la page (`sync_meta.epochCarryNotice`, jamais publiée). Une écriture en
- * échec ne bloque pas le report (les données passent avant leur compte rendu) : journalisée, et l'avertissement `carry-reattached` est
- * levé sans liste (`carryNoticeState.ts`), jamais muet.
+ * Y-FIX-04 (§28) : notice locale complétée dans la transaction de la page (`sync_meta.epochCarryNotice`, jamais publiée). Une écriture
+ * refusée pour une autre cause ne bloque pas le report (les données passent avant leur compte rendu) : journalisée, et l'avertissement
+ * `carry-reattached` est levé sans liste (`carryNoticeState.ts`), jamais muet. **Disque plein ou erreur d'entrée-sortie** (`SQLITE_FULL`,
+ * `SQLITE_IOERR`) : SQLite peut avoir annulé toute la transaction ; l'erreur est relancée, la page est annulée entière (reports compris)
+ * et l'étape (c) reprend au cycle suivant : jamais un `removeParked` hors transaction.
  */
 async function recordCarryNotice(deps: SyncDeps, repos: Repositories, epoch: EpochId, at: IsoDateTime, reattached: readonly EpochCarryNoticeItem[], held: readonly EpochCarryNoticeItem[]): Promise<void> {
   try {
@@ -250,9 +252,18 @@ async function recordCarryNotice(deps: SyncDeps, repos: Repositories, epoch: Epo
     if (raw !== null && previous === null) deps.logger.log('epoch-carry-notice-unreadable', {});
     await repos.sync.setMeta(EPOCH_CARRY_NOTICE_META, JSON.stringify(addToEpochCarryNotice(previous, { epoch, at, reattached, held })));
   } catch (error) {
+    if (isStorageFailure(error)) throw error;
     deps.logger.log('epoch-carry-notice-failed', { code: error instanceof Error ? error.name : 'unknown' });
     markEpochCarryNoticeFailure();
   }
+}
+
+/** Disque plein ou erreur d'entrée-sortie de SQLite (message brut, ou cause d'une `DbError` du driver). */
+export function isStorageFailure(error: unknown): boolean {
+  for (let e: unknown = error, depth = 0; e instanceof Error && depth < 4; e = e.cause, depth += 1) {
+    if (/SQLITE_FULL|SQLITE_IOERR|database or disk is full|disk I\/O error/i.test(e.message)) return true;
+  }
+  return false;
 }
 
 /**

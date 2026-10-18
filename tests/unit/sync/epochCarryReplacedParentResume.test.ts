@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { DbError } from '../../../src/db/driver';
 import { clearEpochCarryNoticeFailure } from '../../../src/sync/carryNoticeState';
 import { setEpochSwitchTestHooks, type SwitchStep } from '../../../src/sync/epochSwitch';
 import { armCrash, type CrashProbe } from '../../sim/syncCrash';
@@ -10,7 +11,8 @@ import { P_ID, applyEverywhere, backupOf, projectP, readByBoth, rounds, rowsOf, 
  * Critère 9 : arrêt brutal (`armCrash`) à chaque borne de page de `reapply` (avant la première page, entre les deux pages, après la dernière) :
  * résultat identique à une exécution sans arrêt, notice sans doublon, aucune ligne perdue ni rattachée deux fois.
  * Critère 10 : second changement d'époque : aucun doublon, le parent remplacé ne revient pas.
- * Critère 14 : écriture de la notice en échec : données reportées comme sans panne, avertissement visible, journal.
+ * Critère 14 : écriture de la notice refusée : données reportées comme sans panne, avertissement visible, journal ; disque plein ou erreur
+ * d'entrée-sortie (revue I5) : page annulée entière, reprise au cycle suivant, rien de perdu.
  */
 
 /** 501 tâches de B sous P : deux pages de `reapply` (500 + 1). */
@@ -151,7 +153,8 @@ describe('Y-FIX-04 : reprise et convergence (critères 9, 10, 14)', () => {
     expect(await noticeOf(a)).toBeNull();
   });
 
-  it('critère 14 : écriture de la notice en échec (disque plein simulé) : données reportées comme sans panne, avertissement visible', async () => {
+  /** Scénario du critère 1 (une tâche) ; toute écriture de la clé `epochCarryNotice` sur B échoue par `refuse()` tant que `armed` est vrai. */
+  async function noticeFailureScenario(refuse: () => Error): Promise<{ a: SimDevice; b: SimDevice; t: string; disarm: () => void }> {
     const [a, b] = await twoDevices();
     devices = [a, b];
     const copy = await backupOf(a);
@@ -161,32 +164,57 @@ describe('Y-FIX-04 : reprise et convergence (critères 9, 10, 14)', () => {
     const [t] = await b.data.repos.tasks.createMany(tasksUnder(P_ID, 1));
     await b.cycle();
     await applyEverywhere(a, copy);
-    // Toute écriture de la clé `epochCarryNotice` échoue sur B (SQLITE_FULL simulé).
+    let armed = true;
     type Exec = { execute: (sql: string, params?: readonly unknown[]) => Promise<unknown> };
-    const full = (target: Exec): Exec => {
+    const failing = (target: Exec): Exec => {
       const execute = target.execute.bind(target);
       return new Proxy(target, {
         get: (obj, key) =>
           key === 'execute'
-            ? (sql: string, params?: readonly unknown[]) =>
-                /INSERT INTO sync_meta/i.test(sql) && params?.[0] === 'epochCarryNotice' ? Promise.reject(Object.assign(new Error('database or disk is full'), { name: 'SqliteFull' })) : execute(sql, params)
+            ? (sql: string, params?: readonly unknown[]) => (armed && /INSERT INTO sync_meta/i.test(sql) && params?.[0] === 'epochCarryNotice' ? Promise.reject(refuse()) : execute(sql, params))
             : (Reflect.get(obj, key) as unknown),
       });
     };
     const driver = b.driver as unknown as Exec & { transaction: (fn: (tx: Exec) => Promise<unknown>) => Promise<unknown> };
     const transaction = driver.transaction.bind(b.driver);
-    driver.transaction = (fn) => transaction((tx) => fn(full(tx)));
-    await rounds(devices);
+    driver.transaction = (fn) => transaction((tx) => fn(failing(tx)));
+    return { a, b, t: String(t?.id), disarm: () => (armed = false) };
+  }
+
+  async function expectReattached(a: SimDevice, b: SimDevice, t: string): Promise<void> {
     for (const d of [a, b]) {
-      const row = await d.task(t?.id as never);
+      const row = await d.task(t as never);
       expect(row?.deletedAt, d.name).toBeNull();
       expect(row?.projectId, d.name).toBeNull();
     }
     expect(await rowsOf(a, 'task')).toEqual(await rowsOf(b, 'task'));
+    expect(await b.data.repos.sync.parkedCount(['epoch-carry'])).toBe(0);
+  }
+
+  it('critère 14 : écriture de la notice refusée (autre cause que le stockage) : données reportées comme sans panne, avertissement visible', async () => {
+    const { a, b, t } = await noticeFailureScenario(() => Object.assign(new Error('notice refusée'), { name: 'NoticeRefused' }));
+    await rounds(devices);
+    await expectReattached(a, b, t);
     expect(await noticeOf(b)).toBeNull();
-    expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-notice-failed').map((e) => e.detail)).toEqual([{ code: 'SqliteFull' }]);
+    expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-notice-failed').map((e) => e.detail)).toEqual([{ code: 'NoticeRefused' }]);
     expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-reattached').map((e) => e.detail)).toEqual([{ table: 'task', column: 'project_id', count: 1 }]);
     expect((await b.cycle()).warnings ?? []).toContain('carry-reattached');
-    expect((await b.data.repos.sync.parkedCount(['epoch-carry']))).toBe(0);
+  });
+
+  it.each([
+    ['SQLITE_FULL', 'SQLITE_FULL: database or disk is full'],
+    ['SQLITE_IOERR', 'SQLITE_IOERR: disk I/O error'],
+  ])('critère 14 (revue I5) : %s pendant la notice : la page entière est annulée (reports gardés), reprise au cycle suivant, rien de perdu', async (_code, message) => {
+    const { a, b, t, disarm } = await noticeFailureScenario(() => new DbError('unknown', message, { cause: new Error(message) }));
+    syncFolders(devices);
+    await b.cycle();
+    // Rien n'est retiré hors transaction : le report de T est toujours là, aucune notice, aucun journal « notice en échec ».
+    expect(await b.data.repos.sync.parkedCount(['epoch-carry'])).toBeGreaterThan(0);
+    expect(await noticeOf(b)).toBeNull();
+    expect(b.logger.entries.filter((e) => e.event === 'epoch-carry-notice-failed')).toEqual([]);
+    disarm();
+    await rounds(devices);
+    await expectReattached(a, b, t);
+    expect((await noticeOf(b))?.reattached.map((i) => i.rowId)).toEqual([t]);
   });
 });

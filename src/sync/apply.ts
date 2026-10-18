@@ -81,7 +81,7 @@ interface CachedRow {
 }
 
 /** `carry` : opération mise de côté par le report d'époque (republiée entière quand elle s'applique, Y-FIX-04). */
-const opText = (op: SyncOp, carry?: unknown): string => {
+const opText = (op: SyncOp, carry: boolean): string => {
   const f: Record<string, SyncField> = {};
   for (const [name, field] of op.f) f[name] = field;
   return JSON.stringify({ t: op.t, id: op.id, at: op.at, f, ...(carry ? { [CARRY_HELD_MARK]: 1 } : {}) });
@@ -303,7 +303,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         // trace au moins aussi récente que celle du rappel (purgé avec elle) ; mis de côté tant que la cible est encore une trace.
         const verdict = await reminderTargetRestored(fields, tomb);
         if (verdict === 'pending') {
-          if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry), ctx.now);
+          if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry !== undefined), ctx.now);
           outcomes.push('parked');
           continue;
         }
@@ -368,7 +368,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
         } else if (ctx.noPark) {
           outcomes.push('parked');
         } else {
-          await sync.park(full ? 'missing-parent' : 'missing-row', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry), ctx.now);
+          await sync.park(full ? 'missing-parent' : 'missing-row', t.name, op.id, maxOf([...fields.values()].map((f) => f[1])), opText({ ...op, f: fields }, ctx.carry !== undefined), ctx.now);
           outcomes.push('parked');
         }
         continue;
@@ -456,7 +456,7 @@ export async function applyOps(repos: Repositories, ops: readonly SyncOp[], ctx:
       updateParents = await parentsPresent(t, new Map([...applied].map(([n, f]) => [n, f[0]])));
     }
     if (updateParents !== 'ok') {
-      if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...applied.values()].map((f) => f[1])), opText({ ...op, f: applied }, ctx.carry), ctx.now);
+      if (!ctx.noPark) await sync.park('missing-parent', t.name, op.id, maxOf([...applied.values()].map((f) => f[1])), opText({ ...op, f: applied }, ctx.carry !== undefined), ctx.now);
       outcomes.push('parked');
       continue;
     }

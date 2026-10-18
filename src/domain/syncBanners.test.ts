@@ -202,3 +202,14 @@ describe('revue A-09 : lecture en échec, attente gardée, phase bloquante persi
     expect(banners.textStatus).toBe(status);
   });
 });
+
+describe('Y-FIX-04 : avertissements du report d’époque (critère 13)', () => {
+  it('carry-held puis carry-reattached, avant les avertissements du scan, après tout échec ; levés même en phase idle', () => {
+    expect(SYNC_TROUBLE_ORDER.indexOf('carry-held')).toBeLessThan(SYNC_TROUBLE_ORDER.indexOf('carry-reattached'));
+    expect(SYNC_TROUBLE_ORDER.indexOf('carry-reattached')).toBeLessThan(SYNC_TROUBLE_ORDER.indexOf('nonce-budget'));
+    expect(SYNC_TROUBLE_ORDER.indexOf('error')).toBeLessThan(SYNC_TROUBLE_ORDER.indexOf('carry-held'));
+    const banners = syncBannerFor({ phase: 'idle', devices: [], warnings: ['scan-incomplete', 'carry-reattached', 'carry-held'] }, NONE);
+    expect(banners.troubles.map((x) => x.code)).toEqual(['carry-held', 'carry-reattached', 'scan-incomplete']);
+    expect(syncBannerFor({ phase: 'error', devices: [], warnings: ['carry-held'] }, NONE).troubles.map((x) => x.code)).toEqual(['error', 'carry-held']);
+  });
+});

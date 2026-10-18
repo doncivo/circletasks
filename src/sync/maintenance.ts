@@ -101,7 +101,7 @@ export async function purgeDeleted(deps: Pick<SyncDeps, 'data' | 'logger'>, hori
  * `sync_parked` et rendue dans `stats.released` : le moteur la republie entière et la retire (`epochSwitch.ts`, à la demande) ;
  * `stats.carryHeld` compte celles qui attendent encore (avertissement `carry-held`).
  */
-export async function retryParked(deps: SyncDeps, stats?: { carryHeld: number; released: { id: number; table: string; rowId: string }[] }): Promise<Map<string, Set<string>>> {
+export async function retryParked(deps: SyncDeps, stats: { carryHeld: number; released: { id: number; table: string; rowId: string }[] }): Promise<Map<string, Set<string>>> {
   const touched = new Map<string, Set<string>>();
   let after = 0;
   let carryHeld = 0;
@@ -119,9 +119,9 @@ export async function retryParked(deps: SyncDeps, stats?: { carryHeld: number; r
     const now = new Date(deps.clock.nowMs()).toISOString() as IsoDateTime;
     await guarded(deps.data, async (repos) => {
       const result = await applyOps(repos, ops, { localSv: deps.sv, remoteSv: deps.sv, now, knows: () => true, logger: deps.logger, noPark: true });
-      const done = parked.filter((_, i) => result.outcomes[i] !== 'parked' && !(marked[i] && stats)).map((p) => p.id);
+      const done = parked.filter((_, i) => result.outcomes[i] !== 'parked' && !marked[i]).map((p) => p.id);
       for (const [i, p] of parked.entries()) {
-        if (!marked[i] || !stats) continue;
+        if (!marked[i]) continue;
         if (result.outcomes[i] === 'parked') carryHeld += 1;
         else stats.released.push({ id: p.id, table: p.table, rowId: p.rowId });
       }
@@ -129,7 +129,7 @@ export async function retryParked(deps: SyncDeps, stats?: { carryHeld: number; r
       for (const [table, ids] of result.touched) touched.set(table, new Set([...(touched.get(table) ?? []), ...ids]));
     });
   }
-  if (stats) stats.carryHeld = carryHeld;
+  stats.carryHeld = carryHeld;
   return touched;
 }
 

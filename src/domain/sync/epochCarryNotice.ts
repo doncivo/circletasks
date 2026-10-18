@@ -4,7 +4,7 @@
  * `sync_meta.epochCarryNotice` (jamais publiée), noms d'événements, motif et marque des lignes mises de côté.
  *
  * Module pur : règle tirée du catalogue (`parents`, `nullable`), sans table de cas écrite à la main ; notice bornée et cumulée. Aucune I/O.
- * Importé seulement par des modules chargés à la demande (`epochSwitch.ts`, `carryRelease.ts`) : hors du JavaScript de départ. Les deux
+ * Importé seulement par un module chargé à la demande (`epochSwitch.ts`) : hors du JavaScript de départ. Les deux
  * noms lus au démarrage sont recopiés (`META.epochCarryNotice`, `CARRY_HELD_MARK` de `apply.ts`) et leur égalité est vérifiée par test.
  */
 
@@ -60,7 +60,6 @@ export function parseEpochCarryNotice(raw: string | null): EpochCarryNotice | nu
     return null;
   }
 }
-
 
 /**
  * Verdict d'un lien parent au report d'époque : `keep` (parent présent : appliqué tel quel) ; `detach` (lien **facultatif**, parent absent :
