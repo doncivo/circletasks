@@ -36,6 +36,7 @@ import {
   RoutinesScreen,
   SearchOverlay,
   SettingsScreen,
+  ShortcutsHelp,
   SomedayScreen,
   SpacesScreen,
   SyncDetailsScreen,
@@ -53,7 +54,7 @@ import { registerGoalsSource } from './features/goals';
 import { registerRoutinesSource } from './features/routines';
 import { registerSearchShortcut } from './features/search';
 import { restoreAppearance, startThemeSync } from './features/settings';
-import { ShortcutsHelp, registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
+import { registerEscapeFallback, registerShellShortcuts } from './features/shortcuts';
 import { persistSpaceFilter, registerSpaceShortcuts, restoreSpaceFilter } from './features/spaces';
 import { UpdateBanner } from './features/updater';
 import { RestoreChoiceHost } from './features/sync/RestoreChoiceHost';

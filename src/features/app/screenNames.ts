@@ -31,4 +31,5 @@ export type ScreenName =
   | 'restorechoicedialog'
   | 'onboardinghost'
   | 'searchoverlay'
-  | 'focushost';
+  | 'focushost'
+  | 'shortcutshelp';
