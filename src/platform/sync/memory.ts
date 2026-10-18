@@ -1555,7 +1555,10 @@ export function createMemorySyncPlatform(options: MemorySyncOptions = {}): Memor
       if (file.header.f !== 'ct-j' || file.header.dev !== r.deviceId || file.header.e !== r.epoch || file.header.n !== segment) fail('bad-header');
       if (record >= file.lines.length) {
         // Segment clos avec entrée : il en manque (version ancienne livrée par iCloud, troncature) → attente, jamais le segment suivant.
-        if (count === null && segment < head.segment && !file.partialTail) {
+        // Sans entrée, sous une tête plus grande : segment suivant. Y-FIX-05 (§33, B18) : y compris après une ligne incomplète (ajout
+        // coupé jamais enregistré, fichier lu en entier) : seule cette ligne est abandonnée ; saut journalisé (numéro seulement).
+        if (count === null && segment < head.segment) {
+          if (file.partialTail) nativeLog.push({ event: 'segment-tail-skipped', detail: { segment } });
           segment += 1;
           record = 0;
           continue;

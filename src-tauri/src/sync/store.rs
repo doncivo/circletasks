@@ -968,7 +968,13 @@ impl<'a> Store<'a> {
                 }
                 let Some(line) = file.lines.get(record as usize) else {
                     // Segment clos avec entrée : il en manque (version ancienne livrée par iCloud, troncature) → attente, jamais le suivant.
-                    if count.is_none() && segment < head.segment && !file.partial_tail {
+                    // Sans entrée, sous une tête plus grande : segment suivant. Y-FIX-05 (ADR 0011 §33, B18) : y compris après une ligne
+                    // incomplète (ajout coupé que Rust n'a jamais enregistré, fichier lu en entier) : seule cette ligne, jamais annoncée, est
+                    // abandonnée ; saut journalisé (numéro de segment seulement).
+                    if count.is_none() && segment < head.segment {
+                        if file.partial_tail {
+                            log::event("segment-tail-skipped", &segment.to_string());
+                        }
                         segment += 1;
                         record = 0;
                         continue 'outer;
