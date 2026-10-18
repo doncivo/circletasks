@@ -1,9 +1,10 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { statusLine } from '../../../src/features/sync/syncText';
 import { syncBannerFor } from '../../../src/domain/syncBanners';
-import type { TaskId } from '../../../src/domain/types';
+import type { DeviceId, TaskId } from '../../../src/domain/types';
 import { SyncPlatformError, type SyncDeviceStatus, type SyncPlatform, type SyncStatus } from '../../../src/platform/sync/types';
 import { createSyncService, HIDE_SYNC_DEADLINE_MS } from '../../../src/sync';
+import { epochId } from '../../../src/domain/sync/format';
 import { armCrash } from '../../sim/syncCrash';
 import { createSimDevice, pair, SCHEMA_VERSION, setupFirst, syncFolders, taskSnapshot, warmSimDevices, type SimDevice } from '../../sim/syncDevice';
 
@@ -320,6 +321,24 @@ describe('Y-FIX-02 critère 7 : échéance du cycle hide entre la transaction d�
     expect(b.service.status().warnings ?? []).not.toContain('publish-blocked');
     expect(events(b, 'publish-deferred')).toHaveLength(0);
     await expectConverged(a, b);
+  });
+});
+
+describe('Y-FIX-02 contre-revue S3 : intention d’une autre époque pendant une borne de source local-head', () => {
+  it('l’intention n’est ni résolue ni republiée ; l’état est publié par la tête locale', async () => {
+    const ranks = await writeRanks();
+    const { b, stateSeqs } = await crashAt(ranks.state);
+    const head = await meta<{ hlc: string }>(b, 'head');
+    // Intention d'une autre époque (reste d'avant un changement d'époque), même forme que celle de `publishOutbox`.
+    const stale = { epoch: epochId(1, B_ID as DeviceId), segment: 1, expect: 0, count: 1, maxHlc: head?.hlc, entries: [] };
+    await b.data.repos.sync.setMeta('inflight', JSON.stringify(stale));
+    const result = await b.cycle();
+    expect(events(b, 'inflight-resolved')).toHaveLength(0);
+    expect(await meta(b, 'inflight')).toEqual(stale);
+    expect(events(b, 'own-state-recovered').map((e) => e.detail)).toEqual([{ epoch: expect.any(String), source: 'local-head' }]);
+    expect(stateSeqs).toEqual([1]);
+    expect(segments(b)).toHaveLength(1);
+    expect(result.warnings ?? []).not.toContain('publish-blocked');
   });
 });
 
