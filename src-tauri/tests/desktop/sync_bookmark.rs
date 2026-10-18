@@ -881,10 +881,12 @@ fn y_ios_05_8_muted_call_is_cloud_pending_at_the_deadline() {
     }
 }
 
-/// Critères 8 (par `ios_core`) et 9 : le scan d'un service de l'iPhone dont l'appel ne répond pas rend `cloud-pending`, et une autre
-/// commande qui prend le verrou `inner` (`listed_devices`), appelée depuis un autre fil, n'attend pas derrière lui.
+/// Critères 8 (par `ios_core`) et 9 : le scan d'un service de l'iPhone dont l'appel ne répond pas **rend la main** à l'échéance, avec
+/// `cloud-pending` ; ensuite, une autre commande qui prend le verrou `inner` (`listed_devices`), appelée depuis un autre fil, n'attend pas :
+/// le verrou n'est pas tenu au-delà du retour du scan. Ce test ne prouve pas qu'une commande lancée **pendant** l'attente du scan passe :
+/// elle attend `inner` au plus l'échéance (20 s en production).
 #[test]
-fn y_ios_05_8_9_scan_is_cloud_pending_and_the_core_lock_is_released() {
+fn y_ios_05_8_9_scan_returns_at_the_deadline_and_releases_the_core_lock() {
     let p = phone();
     p.choose();
     p.plugin.with(|s| s.session = false);
