@@ -5,7 +5,6 @@ import type { NewTask } from '../../domain/model';
 import { asEntityId, asLocalDate, type DeviceId, type RecurrenceId, type TaskId } from '../../domain/types';
 import { SPACE_PRO_ID } from '../../db/seed/defaultSpaces';
 import { openTestDb, type TestDb } from '../../db/repositories/sql/testSetup';
-import type { SyncPlatform } from '../../platform/sync/types';
 import { startSyncIntegration } from '../sync/startSync';
 import { createFakeSyncService, type FakeSyncService } from '../sync/testKit';
 import { useAppStatusStore } from './appStatus';
@@ -47,8 +46,6 @@ function fakeTimers() {
   };
 }
 
-const platformWith = (configured: boolean): SyncPlatform => ({ folder: { info: () => Promise.resolve({ configured, label: null, kind: 'icloud', pinned: false }) } }) as unknown as SyncPlatform;
-
 describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () => {
   let db: TestDb;
   let sync: FakeSyncService;
@@ -63,6 +60,7 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
     await db.data.repos.recurrences.create({ id: RULE, freq: 'daily', interval: 1, weekdays: [], monthDay: null, nthWeekday: null, until: null, count: null });
     const base: NewTask = { id: LATE, spaceId: SPACE_PRO_ID, projectId: null, title: 'En retard', note: '', date: asLocalDate('2026-09-22'), time: null, status: 'todo', doneAt: null, sortOrder: 1, carriedOver: false, recurrenceId: RULE, seriesIndex: 0, seriesTemplate: null, goalId: null, icon: null, someday: false, source: 'local', externalId: null, appleListId: null, appleRecurring: false, externalEventId: null };
     await db.data.repos.tasks.create(base);
+    await db.data.repos.sync.saveState('60000000-0000-4000-8000-0000000000a9', {}); // synchro configurée : un appareil connu dans l'état local
   });
   afterEach(async () => {
     for (const item of toDispose.splice(0)) item.dispose();
@@ -75,7 +73,7 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
       clock: db.clock,
       hlc: createHlcClock({ clock: createManualClock(0), deviceId: DEVICE }),
       data: db.data,
-      ...(parts.sync === false ? {} : { sync, syncPlatform: platformWith(parts.configured ?? true) }),
+      ...(parts.sync === false ? {} : { sync }),
     });
   const late = () => db.data.repos.tasks.getById(LATE);
   const seriesCount = () => db.data.repos.tasks.listByRecurrence(RULE).then((rows) => rows.length);
@@ -118,6 +116,24 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
     sync.setStatus({ phase: 'idle', lastSyncAt: '2026-09-23T10:00:00.000Z' as never });
     await second.firstCheck;
     expect(await liveDuplicates()).toBe(1); // cycle réussi : nettoyé avant le report
+  });
+
+  it('I1 : folder.info() qui ne répond jamais ne bloque pas le premier rendu ; le report part après 12 s', async () => {
+    const never = createAppContainer({
+      clock: db.clock,
+      hlc: createHlcClock({ clock: createManualClock(0), deviceId: DEVICE }),
+      data: db.data,
+      sync,
+      syncPlatform: { folder: { info: () => new Promise(() => undefined) } } as never,
+    });
+    const { env } = fakeEnv(timers);
+    const startup = startAppStartup(never, env);
+    toDispose.push(startup);
+    await startup.ready; // sans la correction : suspendu sur folder.info()
+    expect(await late()).toMatchObject({ carriedOver: false });
+    timers.fire();
+    await startup.firstCheck;
+    expect(await late()).toMatchObject({ carriedOver: true });
   });
 
   it('critère 6 : un cycle en cours (phase syncing, progression) n’ouvre pas la porte', async () => {
@@ -165,7 +181,8 @@ describe('porte de synchro du premier report (T-TECH-01 critères 6 à 10)', () 
   });
 
   it('critère 8 : aucune synchro configurée : le report part tout de suite, aucune minuterie armée, ready l’attend', async () => {
-    for (const c of [container({ configured: false }), container({ sync: false })]) {
+    await db.driver.execute('DELETE FROM sync_state');
+    for (const c of [container(), container({ sync: false })]) {
       const t = fakeTimers();
       const { env } = fakeEnv(t);
       const startup = startAppStartup(c, env);

@@ -1,4 +1,6 @@
-import type { SyncEngineService, SyncPlatform } from '../../platform/sync/types';
+import type { SyncRepository } from '../../db/repositories';
+import { logFailure } from '../../platform/desktop/log';
+import type { SyncEngineService } from '../../platform/sync/types';
 import type { Timers } from '../tasks/dayRollover';
 
 /**
@@ -33,12 +35,15 @@ const defaultTimers: Timers = {
 };
 
 /** Une seule porte par démarrage : la minuterie de 12 s est armée ici, une fois. */
-export async function startFirstCycleGate(sync: SyncEngineService, platform: SyncPlatform, timers: Timers = defaultTimers): Promise<FirstCycleGate> {
+export async function startFirstCycleGate(sync: SyncEngineService, repo: Pick<SyncRepository, 'getStates'>, timers: Timers = defaultTimers): Promise<FirstCycleGate> {
+  // « Synchro configurée » = au moins un appareil connu dans l'état local (`sync_state`, écrit par le premier cycle) : une lecture de la base,
+  // jamais un appel natif (le verrou du service Rust et iCloud Drive pourraient suspendre le premier rendu, I1).
   let configured = true;
   try {
-    configured = (await platform.folder.info()).configured;
-  } catch {
-    // Dossier illisible : on attend le cycle, qui rend l'échec visible (aucun report sur un état inconnu).
+    configured = (await repo.getStates()).length > 0;
+  } catch (error) {
+    // État illisible : on attend le cycle (qui rend l'échec visible), au plus 12 s ; jamais de report sur un état inconnu sans trace.
+    logFailure('sync', error);
   }
   if (!configured) return NO_GATE;
   const initial = sync.status();
@@ -46,7 +51,9 @@ export async function startFirstCycleGate(sync: SyncEngineService, platform: Syn
   const outcome = new Promise<GateOutcome>((resolve) => {
     open = resolve;
   });
-  const stop = sync.subscribe(() => {
+  let stop: () => void = () => undefined;
+  const timer = timers.setTimeout(() => close('timeout'), FIRST_CYCLE_GATE_MS);
+  stop = sync.subscribe(() => {
     const status = sync.status();
     // Conclu : plus de cycle en cours, et l'état a changé depuis le démarrage (heure de dernière synchro, ou phase d'échec).
     if (status.phase === 'syncing' || status.progress !== null) return;
@@ -54,7 +61,6 @@ export async function startFirstCycleGate(sync: SyncEngineService, platform: Syn
     // Réussi seulement si le cycle est complet (phase idle) et a daté la synchro ; fichiers iCloud en attente (waiting-icloud) ou échec : failed.
     close(status.phase === 'idle' && status.lastSyncAt !== initial.lastSyncAt ? 'done' : 'failed');
   });
-  const timer = timers.setTimeout(() => close('timeout'), FIRST_CYCLE_GATE_MS);
   function close(result: GateOutcome): void {
     stop();
     timers.clearTimeout(timer);

@@ -59,7 +59,7 @@ const noop = (): void => undefined;
 
 export interface BootOptions {
   /**
-   * Épreuve de détection du scénario B (T-TECH-01 critère 12) : porte de synchro forcée ouverte, c'est-à-dire démarrage sans plateforme de
+   * Épreuve de détection du scénario B (T-TECH-01 critère 12) : porte de synchro forcée ouverte, c'est-à-dire démarrage sans service de
    * synchro côté `startAppStartup` (premier contrôle immédiat, comme avant la story) ; l'intégration de la synchro, elle, démarre normalement.
    */
   readonly forceOpenGate?: boolean;
@@ -75,7 +75,7 @@ export async function bootDevice(device: SimDevice, options: BootOptions = {}): 
   const container = createAppContainer({ clock: device.clock, hlc: device.hlc, data: device.data, sync: device.service, syncPlatform: device.platform });
   const document = { addEventListener: noop, removeEventListener: noop, visibilityState: 'visible' as DocumentVisibilityState };
   const env = { document, window: { addEventListener: noop, removeEventListener: noop }, timers: { setInterval: () => 0, clearInterval: noop }, gateTimers: { setTimeout: () => 0, clearTimeout: noop } } as unknown as StartupEnv;
-  const startup = startAppStartup(options.forceOpenGate ? { ...container, syncPlatform: null } : container, env);
+  const startup = startAppStartup(options.forceOpenGate ? { ...container, sync: null } : container, env);
   await startup.ready;
   const integration = startSyncIntegration(container, { document, clock: device.clock, setInterval: () => 0, clearInterval: noop, setTimeout: () => 0, clearTimeout: noop });
   return {

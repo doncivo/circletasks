@@ -124,10 +124,10 @@ export function startAppStartup(
   const ready = timeZone
     .check()
     .then(async () => {
-      const { sync, syncPlatform } = container;
-      if (disposed || !sync || !syncPlatform) return null;
+      const { sync } = container;
+      if (disposed || !sync) return null;
       // Module à la demande ; s'il ne charge pas, le journal le dit et le premier contrôle part tout de suite (comportement d'avant).
-      return import('./syncGate').then((module) => module.startFirstCycleGate(sync, syncPlatform, env.gateTimers), (error: unknown) => (logFailure('sync', error), null));
+      return import('./syncGate').then((module) => module.startFirstCycleGate(sync, container.data.repos.sync, env.gateTimers), (error: unknown) => (logFailure('sync', error), null));
     })
     .then((opened) => {
       gate = opened;
