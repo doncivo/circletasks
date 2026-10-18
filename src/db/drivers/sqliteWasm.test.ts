@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { SqlDriver } from '../driver';
-import { openSqliteWasmDriver, preparedStatementCount } from './sqliteWasm';
+import { openSqliteWasmDriver, PREPARED_STATEMENTS_MAX, preparedStatementCount } from './sqliteWasm';
 
 /**
  * Y-TECH-05 (critère 11, durée) : SQLite recompile à chaque préparation les programmes de tous les déclencheurs de la table écrite ;
@@ -74,5 +74,40 @@ describe('pilote SQLite Wasm : schéma changé sous une instruction gardée (rev
     await db.execute('DROP TABLE t');
     await db.execute('ALTER TABLE t2 RENAME TO t');
     expect(await db.select('SELECT * FROM t ORDER BY id')).toEqual([{ id: 1, w: null }]);
+  });
+});
+
+describe('pilote SQLite Wasm : bornes du cache (revue I2, M2, M3)', () => {
+  it('au plus PREPARED_STATEMENTS_MAX instructions gardées : la moins récemment utilisée est évincée, la récente reste', async () => {
+    const db = await open();
+    await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]);
+    const base = preparedStatementCount(db);
+    for (let i = 0; i < PREPARED_STATEMENTS_MAX + 50; i += 1) {
+      await db.select(`SELECT ${String(i)} AS n WHERE ? = ?`, [1, 1]);
+      if (i % 10 === 0) await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]); // reste récente
+      expect(preparedStatementCount(db)).toBeLessThanOrEqual(PREPARED_STATEMENTS_MAX);
+    }
+    expect(base).toBeGreaterThan(0);
+    expect(preparedStatementCount(db)).toBe(PREPARED_STATEMENTS_MAX);
+    const before = preparedStatementCount(db);
+    await db.select('SELECT 1 AS hot WHERE ? = ?', [1, 1]);
+    expect(preparedStatementCount(db)).toBe(before); // toujours gardée : aucune nouvelle préparation
+    expect(await db.select('SELECT 0 AS n WHERE ? = ?', [1, 1])).toEqual([{ n: 0 }]); // évincée puis préparée à nouveau, résultat juste
+  });
+
+  it('un même texte avec une liaison puis sans liaison : la liaison précédente est effacée (NULL)', async () => {
+    const db = await open();
+    expect(await db.select('SELECT ? AS x', ['a'])).toEqual([{ x: 'a' }]);
+    expect(await db.select('SELECT ? AS x')).toEqual([{ x: null }]);
+  });
+
+  it('instruction en échec : l’erreur d’origine remonte, le cache garde la même instruction, réutilisable', async () => {
+    const db = await open();
+    await db.execute('INSERT INTO t (id, v) VALUES (?, ?)', [1, 'a']);
+    const count = preparedStatementCount(db);
+    await expect(db.execute('INSERT INTO t (id, v) VALUES (?, ?)', [1, 'b'])).rejects.toThrow(/UNIQUE|constraint/i);
+    expect(preparedStatementCount(db)).toBe(count);
+    expect(await db.execute('INSERT INTO t (id, v) VALUES (?, ?)', [2, 'b'])).toMatchObject({ rowsAffected: 1 });
+    expect(preparedStatementCount(db)).toBe(count);
   });
 });

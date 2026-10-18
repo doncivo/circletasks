@@ -11,6 +11,10 @@ import { createSerializedDriver, type SerializedDriverOptions } from '../seriali
 
 type Sqlite3 = Awaited<ReturnType<typeof sqlite3InitModule>>;
 type Db = InstanceType<Sqlite3['oo1']['DB']>;
+type Stmt = ReturnType<Db['prepare']>;
+
+/** Plafond des instructions gardées (moins récemment utilisée évincée et finalisée). */
+export const PREPARED_STATEMENTS_MAX = 256;
 
 /** Le module WebAssembly est compilé une seule fois par processus ; chaque base reste indépendante. */
 let sqlite3Promise: Promise<Sqlite3> | null = null;
@@ -35,15 +39,27 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
 
   // Instructions préparées gardées par texte SQL : SQLite recompile à chaque préparation les programmes de tous les déclencheurs de la
   // table (une `UPDATE task` coûtait ~2,4 ms, pour 0,5 ms à l'insertion), et un report de 501 lignes en préparait des dizaines de milliers.
-  const prepared = new Map<string, ReturnType<Db['prepare']>>();
-  const run = <T>(sql: string, params: SqlParams, consume: (stmt: ReturnType<Db['prepare']>) => T): T => {
-    const cached = prepared.get(sql);
-    const stmt = cached ?? db.prepare(sql);
-    if (cached === undefined) prepared.set(sql, stmt);
+  // Bornée (LRU) : des dépôts construisent leur SQL (`IN (?, …)`, `SET …`) et le tas Wasm ne rétrécit jamais.
+  const prepared = new Map<string, Stmt>();
+  const run = <T>(sql: string, params: SqlParams, consume: (stmt: Stmt) => T): T => {
+    let stmt = prepared.get(sql);
+    if (stmt === undefined) {
+      stmt = db.prepare(sql);
+      if (prepared.size >= PREPARED_STATEMENTS_MAX) {
+        const [oldest] = prepared.keys();
+        if (oldest !== undefined) {
+          prepared.get(oldest)?.finalize();
+          prepared.delete(oldest);
+        }
+      }
+    } else prepared.delete(sql);
+    prepared.set(sql, stmt); // le plus récemment utilisé en dernier
     try {
       if (params.length > 0) stmt.bind(params);
       return consume(stmt);
     } finally {
+      // Après un `step` en échec, `reset` relance la même erreur (même classe, même code, même message que `db.exec`) : elle remplace
+      // celle du `try` et reste la bonne ; l'instruction est bien remise à zéro. À ne pas « corriger ».
       stmt.reset(true);
     }
   };
@@ -58,17 +74,20 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
     },
     select: async (sql, params) => {
       if (!isSingleStatement(sql)) return db.selectObjects(sql, [...params]) as SqlRow[];
+      // Colonnes lues après chaque `step` : SQLite ne reprépare une instruction gardée (schéma changé) qu'au `step`.
       return run(sql, params, (stmt) => {
-        // Colonnes lues après chaque `step` : SQLite ne reprépare une instruction gardée (schéma changé) qu'au `step`.
         const rows: SqlRow[] = [];
         while (stmt.step()) rows.push(stmt.get(Object.create(null) as Record<string, never>) as unknown as SqlRow);
         return rows;
       });
     },
     close: async () => {
-      for (const stmt of prepared.values()) stmt.finalize();
-      prepared.clear();
-      db.close();
+      try {
+        for (const stmt of prepared.values()) stmt.finalize();
+      } finally {
+        prepared.clear();
+        db.close();
+      }
     },
   }, options);
   dbOf.set(driver, db);
