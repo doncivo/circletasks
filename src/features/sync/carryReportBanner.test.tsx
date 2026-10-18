@@ -1,7 +1,7 @@
 // Y-TECH-05, critères 14, 16, 18 et 19 : bandeau durable du compte rendu du changement d'époque, ligne et historique de Détails,
 // « J'ai vu » (ce seul compte rendu), échec d'enregistrement visible. Base réelle (SQLite Wasm), faux service de synchro dont l'état porte
 // l'avertissement `carry-report` que le moteur lève (le moteur réel est exercé par `carryReportScenario.test.tsx`).
-import { cleanup, fireEvent, render, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitForElementToBeRemoved, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHlcClock } from '../../domain/hlc';
 import type { EpochCarryReportBody, EpochCarryReportHead } from '../../domain/sync/epochCarryReport';
@@ -171,6 +171,25 @@ describe('« J’ai vu » (critère 18)', () => {
     expect(useAppStatusStore.getState().sources.syncTrouble).toBeUndefined();
     expect(screen.queryByText(/Changement d.époque : éléments rétablis/)).toBeNull();
     expect(screen.getAllByText(/^Vu le /).length).toBeGreaterThanOrEqual(2);
+  });
+
+  // Revue S1 : le bandeau, acquitté, ne doit pas masquer un compte rendu arrivé au cycle suivant alors que l'avertissement est resté levé.
+  it('après le dernier « J’ai vu », un nouveau compte rendu arrivé au cycle suivant lève de nouveau le bandeau', async () => {
+    await seed('2-a', '2026-10-18T07:00:00.000Z', ['A']);
+    await start();
+    expect(await screen.findByText(bannerText(1))).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: /^Époque du / }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'J’ai vu' }));
+    expect(await within(dialog).findByText(/^Vu le /)).toBeTruthy();
+    expect(screen.queryByText(/Changement d.époque : éléments rétablis/)).toBeNull();
+    await seed('3-a', '2026-10-18T07:30:00.000Z', ['B', 'C']);
+    // Cycle suivant : le moteur lève toujours `carry-report` (nouveau compte rendu non acquitté).
+    await act(async () => {
+      sync.setStatus({ lastSyncAt: '2026-10-18T08:05:00.000Z' as IsoDateTime, warnings: ['carry-report'] as never });
+      await integration?.refreshed();
+    });
+    expect(await screen.findByText(bannerText(2))).toBeTruthy();
   });
 
   it('compte rendu sans élément rétabli : lisible dans l’historique, aucun bandeau (critère 19)', async () => {

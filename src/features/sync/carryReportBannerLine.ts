@@ -34,8 +34,14 @@ async function carryReportLine(container: AppContainer): Promise<{ readonly mess
 /** Lit le compte rendu et pose la ligne du bandeau ; `apply` (une fois, par `startSync.ts`) recalcule les bandeaux de l'app. Rejette si la lecture échoue. */
 export async function loadCarryLine(container: AppContainer, apply?: () => void): Promise<void> {
   if (apply) appliers.set(container, apply);
-  carryLines.set(container, await carryReportLine(container));
-  appliers.get(container)?.();
+  const shown = carryLines.get(container) ?? null;
+  const line = await carryReportLine(container);
+  // Revue S1 : rien à montrer (acquitté) : l'entrée est **effacée**, jamais gardée à null. `startSync.ts` relit alors la ligne au prochain
+  // changement d'état tant que le moteur garde `carry-report` levé : un compte rendu arrivé avant la fin du cycle suivant n'est jamais masqué.
+  // Les bandeaux ne sont recalculés que si une ligne était montrée (sinon `startSync.ts` relirait à l'infini).
+  if (line) carryLines.set(container, line);
+  else carryLines.delete(container);
+  if (line || shown) appliers.get(container)?.();
 }
 
 /**
