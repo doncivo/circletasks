@@ -59,16 +59,9 @@ export async function openSqliteWasmDriver(options: SerializedDriverOptions = {}
     select: async (sql, params) => {
       if (!isSingleStatement(sql)) return db.selectObjects(sql, [...params]) as SqlRow[];
       return run(sql, params, (stmt) => {
-        const names = stmt.getColumnNames([]);
+        // Colonnes lues après chaque `step` : SQLite ne reprépare une instruction gardée (schéma changé) qu'au `step`.
         const rows: SqlRow[] = [];
-        while (stmt.step()) {
-          const values = stmt.get([]);
-          const row = Object.create(null) as SqlRow;
-          names.forEach((name, i) => {
-            row[name] = values[i] as SqlRow[string];
-          });
-          rows.push(row);
-        }
+        while (stmt.step()) rows.push(stmt.get(Object.create(null) as Record<string, never>) as unknown as SqlRow);
         return rows;
       });
     },

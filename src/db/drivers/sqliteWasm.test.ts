@@ -61,3 +61,18 @@ describe('pilote SQLite Wasm : instructions préparées', () => {
     expect(preparedStatementCount(db) - before).toBe(1);
   });
 });
+
+describe('pilote SQLite Wasm : schéma changé sous une instruction gardée (revue B1)', () => {
+  it('le même SELECT * déjà gardé relit les colonnes actuelles après ALTER puis après une reconstruction de table', async () => {
+    const db = await open();
+    await db.execute('INSERT INTO t (id, v) VALUES (?, ?)', [1, 'a']);
+    expect(await db.select('SELECT * FROM t ORDER BY id')).toEqual([{ id: 1, v: 'a' }]);
+    await db.execute('ALTER TABLE t ADD COLUMN w TEXT');
+    expect(await db.select('SELECT * FROM t ORDER BY id')).toEqual([{ id: 1, v: 'a', w: null }]);
+    await db.execute('CREATE TABLE t2 (id INTEGER PRIMARY KEY, w TEXT)');
+    await db.execute('INSERT INTO t2 (id, w) SELECT id, w FROM t');
+    await db.execute('DROP TABLE t');
+    await db.execute('ALTER TABLE t2 RENAME TO t');
+    expect(await db.select('SELECT * FROM t ORDER BY id')).toEqual([{ id: 1, w: null }]);
+  });
+});
